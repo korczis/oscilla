@@ -1,0 +1,62 @@
+# Review verdict for pull request #276: the WebKit Tone→Sweep boundary failure is a transport
+# race, fixed by a late voice keeping its grid (branch test/studio-tone-sweep-boundary-webkit).
+# Reviewed head 4e64468f93d6 (== origin at fetch); merge base origin/main b67d1e580e0f. Built by
+# oscilla-b0's session; reviewed by dev-68.
+#
+# The digest: the base branch's scripts/review-verdict.mjs (git archive origin/main scripts into a
+# temporary directory), `--content --base-branch origin/main` and `--repo . --head HEAD --content
+# --list --base-branch origin/main`, over the one guarded path the pull request changes,
+# src/js/studio/transport.js: 228618e7...6fe, which matches the builder's.
+#
+# Lenses:
+# (a) The join is click-free on its own: the out gain of a late voice (keepGrid) is set to
+#     GAIN_FLOOR (never 0) at the grid start, held at GAIN_FLOOR at joinAt and ramped linearly to 1
+#     over EDGE_S (3 ms); no setTargetAtTime anywhere on that path. joinAt is computed after
+#     scheduling from max(currentTime, renderedTimeAtLeast) + max(STOP_LEAD_S, 2 quanta), on a
+#     quantum boundary, so it is never in the past when it is scheduled. A stop inside the join
+#     edge holds the edge's value (joinValueAt) and fades from there: tested. A stop BEFORE the
+#     join is not handled: R-1.
+# (b) Every other compileSequence caller is unchanged: sequencer/editor.js:317, compiler.js:948
+#     (preview) and the offline renderer pass no keepGrid; keepGrid is opt-in (=== true), realtime
+#     only, and only when the grid start is already past, so for those callers start, initAt and
+#     every schedule are byte-identical to base (initAt = min(now, start) = now when start >= now).
+# (c) Events in the past on a late voice: AudioParam timelines are evaluated at the render
+#     position by spec (a past setValue/ramp gives the value the timeline has there) in all three
+#     engines, and the out gain holds GAIN_FLOOR until joinAt, so whatever an engine does with
+#     the past part is silent. What remains: oscillators started in the past start at once with
+#     a phase other than an on-time start's, which is inaudible for a single voice.
+# (d) The 'joined-late' record (transport.js:664) is accurate (from = the clip's grid start,
+#     to = the scheduled joinAt, at = currentTime) and bounded: one per compiled late voice, in
+#     the decision log that record() caps at 500 (transport.js:262).
+# (e) The fixture is not loosened: the boundary and end checks are unchanged; only the onset
+#     prediction multiplies by the join edge taken from the transport's own record, and the
+#     detection window grows by the join. (It trusts the scheduled joinAt, which (d) shows is
+#     what was scheduled.)
+# (f) Runs (scratch git-archive copy, existing node_modules, nothing installed):
+#     sequencer-compiler + v31-studio-transport 63/63. Mutations, each restored: keepGrid off in
+#     the transport fails 1; no floor hold (out gain set to 1 at the grid start) fails 1; the
+#     join a step instead of the EDGE_S ramp fails 2. The full unit suite in the scratch copy
+#     reports 11 failures, all artifacts of a copy without .git (tracked-file, README and
+#     version-literal checks) and one timing budget under load ~70; the builder's npm test is
+#     3279/0. No browser run here (disk near the floor, load ~70).
+# (g) Out of scope, noted: the Firefox Studio onset leg's 2/8 failures under load ~70 (the join
+#     path is not taken there per the builder) and the pre-existing "cutoff automation 8th
+#     harmonic" failure when the graph start renders > 100 ms late (LFO phase), which is on main
+#     too and wants its own issue.
+#
+# R-1 was reproduced with the PR's own fake context (compileRef, keepGrid, a frozen performance
+# clock): currentTime 1.023800, joinAt 1.045333, stop(at = 1.033333), i.e. at 12 ms before the
+# join. The out gain's timeline becomes floor@1.010104, floor@1.033333 (the hold),
+# floor@1.045333 (the fade's end AND the join's hold), ramp to 1 by 1.048333, and nothing after;
+# the sources stop at 1.055333. So after STOP the voice rises to full gain for about 7 ms and is
+# then cut at full gain.
+#
+# Open: R-1 (P2). Verdict changes.
+schema: review-verdict/v1
+pr: 276
+verdict: changes
+reviewer: "dev-68 (Claude Opus 5.5 session 4f90795d); did not build, merge or edit this change; wrote only this file"
+content: 228618e787117d0c3b6094784babdee29ba4b200c24e62640d64a9333569fb6e
+findings:
+  - { id: R-1, severity: P2, status: open, title: "A stop whose time precedes a late voice's join leaves the join ramp scheduled, so the voice rises to full gain after STOP and is cut there (src/js/sequencer/compiler.js:776 with :906-909). stop() inserts hold+fade (joinValueAt(t) = GAIN_FLOOR for t <= joinAt) but never cancels the pending setValueAtTime(GAIN_FLOOR, joinAt) + linearRamp(1, joinAt + EDGE_S). When t + STOP_RAMP_S <= joinAt + EDGE_S and the sources' stopAt = t + STOP_RAMP_S + STOP_PAD_S > joinAt + EDGE_S, i.e. t in (joinAt - 19 ms, joinAt - 9 ms), the gain ramps to 1 after the fade and the sources stop at full gain: ~7 ms of full-level sound after STOP ending in a hard cut, against audio-engine-discipline ('stop() ramps down, cancels future automation'; 'gain never hard-switches from nonzero to zero'). Reachable: the transport's STOP time is stopTime(ctx.currentTime) (timeline-compiler.js:159) while joinAt is rounded from max(currentTime, renderedTimeAtLeast) (compiler.js:905), which runs ahead of currentTime by up to the output latency (clock.js, bounded to ~50-200 ms); edits' release/retime times come from safeHorizon(currentTime) the same way. A STOP or edit within that window after a late join hits it. Fix: in stop(), when joinAt !== null and t < joinAt, cancel the join (out.gain.cancelScheduledValues(t) is safe there: the out gain is a constant GAIN_FLOOR before joinAt, so the Chromium freeze the header describes cannot step it) and fade from the floor, or start the stop no earlier than joinAt + EDGE_S; add a test with stop(at) before joinAt asserting no event raises the gain after the fade." }
+  - { id: R-2, severity: P3, status: open, title: "No test covers a stop before the join (tests/unit/sequencer-compiler.test.mjs, keepGrid test): the stop is exercised only inside the join edge (at = join + EDGE_S/2), which is why R-1 passes the suite." }
