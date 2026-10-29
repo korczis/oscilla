@@ -1,10 +1,15 @@
 // Fixture for tests/browser/v31-studio-offline.cjs: bundled with esbuild (IIFE) into one classic
 // <script> of a single file:// page. It renders the shipped Studio templates (§256) through
 // src/js/studio/offline.js (the Studio runtime on an OfflineAudioContext through
-// audio/offline-renderer.js) and returns plain numbers; the runner asserts.
+// audio/offline-renderer.js) and returns plain numbers; the runner asserts. T.voice renders the
+// K010-K013 voice-node graphs below the same way, and T.response reads a filter stage's own
+// response probe (the browser's getFrequencyResponse).
 
 import { templateModel } from '../../../src/js/studio/templates/index.js';
 import { renderStudioOffline } from '../../../src/js/studio/offline.js';
+import { STUDIO_KIND, normalizeStudio } from '../../../src/js/studio/schema.js';
+import { createFilterStage } from '../../../src/js/audio/filters.js';
+import { MAX_OUTPUT_GAIN } from '../../../src/js/core/constants.js';
 
 /** Amplitude of the f component of data (Goertzel, Hann window, amplitude-normalized). */
 function amplitudeAt(data, f, sr) {
@@ -72,4 +77,57 @@ window.T = {
     }
     return out;
   },
+
+  /** A K010-K013 voice graph (VOICES below), rendered offline: plain numbers per probe. */
+  async voice(name, opts = {}) {
+    const v = VOICES[name](opts);
+    const model = normalizeStudio({ kind: STUDIO_KIND, schemaVersion: 1,
+      graph: { nodes: v.nodes.map(([id, type, params]) => ({ id, type,
+        position: { x: 0, y: 0 }, params })),
+      edges: v.edges.map(([id, from, fp, to, tp, props]) => ({ id, from: { node: from, port: fp },
+        to: { node: to, port: tp }, ...(props ? { props } : {}) })) } });
+    const r = await renderStudioOffline(model, { duration: 1, channels: 1 });
+    if (!r.ok) return { ok: false, errors: r.errors, limitations: r.limitations };
+    const b = r.buffer;
+    const sr = b.sampleRate;
+    const win = slice(b, r.startTime + 0.2, r.startTime + 0.8);
+    const amp = {};
+    for (const f of v.probe || []) amp[f] = amplitudeAt(win, f, sr);
+    return { ok: true, sampleRate: sr, stats: r.stats, amp, ceiling: MAX_OUTPUT_GAIN };
+  },
+  /** A filter stage's response (dB) at freqs, on an OfflineAudioContext at its default rate. */
+  response(cfg, freqs) {
+    const ctx = new OfflineAudioContext(1, 128, 48000);
+    const stage = createFilterStage(ctx, cfg);
+    const { magDb } = stage.getResponse(Float32Array.from(freqs));
+    stage.dispose();
+    return Array.from(magDb);
+  },
+};
+
+// The voice graphs (ids, types, params; edges [id, from, port, to, port, props]).
+const VOICES = {
+  // K010: a 1 kHz sine whose frequency a 440 Hz LFO moves by ±0.1 octave (log mapping).
+  fm: () => ({
+    nodes: [['osc', 'oscillator', { frequency: 1000 }], ['lfo', 'lfo', { rate: 440 }],
+      ['out', 'master', {}]],
+    edges: [['e1', 'osc', 'audio', 'out', 'audio'],
+      ['e2', 'lfo', 'control', 'osc', 'frequency', { mapping: 'log', depth: 0.1 }]],
+    probe: [1000, 560, 1440, 1220],
+  }),
+  // K012: a full-scale 110 Hz sawtooth through Drive at 100 %, trim 1, into a Master Output at
+  // its highest level (MAX_OUTPUT_GAIN, the engine's hard ceiling).
+  drive: () => ({
+    nodes: [['osc', 'oscillator', { waveform: 'sawtooth', frequency: 110 }],
+      ['drive', 'drive', { drive: 1, trim: 1 }], ['out', 'master', { level: MAX_OUTPUT_GAIN }]],
+    edges: [['e1', 'osc', 'audio', 'drive', 'audio'], ['e2', 'drive', 'audio', 'out', 'audio']],
+  }),
+  // K013: a Macro at `value` opens a 300 Hz low-pass by up to 4 kHz (unipolar edge).
+  macro: ({ value }) => ({
+    nodes: [['osc', 'oscillator', { waveform: 'sawtooth', frequency: 220 }],
+      ['f', 'filter', { frequency: 300 }], ['m', 'macro', { value }], ['out', 'master', {}]],
+    edges: [['e1', 'osc', 'audio', 'f', 'audio'], ['e2', 'f', 'audio', 'out', 'audio'],
+      ['e3', 'm', 'control', 'f', 'frequency', { depth: 4000, polarity: 'unipolar' }]],
+    probe: [2200],
+  }),
 };

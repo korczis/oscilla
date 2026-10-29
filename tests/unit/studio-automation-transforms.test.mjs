@@ -177,8 +177,9 @@ const ROWS = [
     param: level, ...levelLane(1) },
   { type: 'sequence', key: 'level', unit: '', scale: 'linear', min: 0, max: 1, display: 'db',
     param: level, ...levelLane(1) },
-  { type: 'lfo', key: 'rate', unit: 'Hz', scale: 'log', min: 0.01, max: 100, display: 'log',
-    param: (h) => osc(h).frequency, ...rateLane },
+  // K010: an audio-rate LFO; a lane above 0.95 x Nyquist is clamped there, as a frequency is.
+  { type: 'lfo', key: 'rate', unit: 'Hz', scale: 'log', min: 0.01, max: FREQUENCY_MAX,
+    display: 'log', param: (h) => osc(h).frequency, ...freqLane },
   { type: 'random', key: 'rate', unit: 'Hz', scale: 'log', min: 0.01, max: 100, display: 'log',
     param: (h) => h.outputs.control.playbackRate, toAudio: controlPlaybackRate, ...rateLane },
   { type: 'step-modulator', key: 'rate', unit: 'Hz', scale: 'log', min: 0.01, max: 100,
@@ -200,6 +201,15 @@ const ROWS = [
     param: (h) => h.outputs.audio.pan, ...panLane },
   split('panA', -1), split('panB', -1), split('levelA', 0), split('levelB', 0),
   mixerLevel(1), mixerLevel(2), mixerLevel(3), mixerLevel(4),
+  // K012: the Drive trim is its output gain, linear.
+  { type: 'drive', key: 'trim', unit: '', scale: 'linear', min: 0, max: 1, display: 'linear',
+    param: level, points: [[0, 0.25, 'step'], [1, 1, 'linear'], [2, 0, 'linear']],
+    checks: () => [[0, 0.25], [0.5, 0.625], [1, 1], [1.5, 0.5], [2, 0]] },
+  // K013: the Macro value is its ConstantSourceNode offset, 0..1.
+  { type: 'macro', key: 'value', unit: '', scale: 'linear', min: 0, max: 1, display: 'linear',
+    param: (h) => h.outputs.control.offset,
+    points: [[0, 0, 'step'], [1, 1, 'linear'], [2, 0.25, 'linear']],
+    checks: () => [[0, 0], [0.5, 0.5], [1, 1], [1.5, 0.625], [2, 0.25]] },
 
   // #78: a log-mapped frequency edge with a constant +1 octave offset puts 1200 constant cents
   // on the detune AudioParam; the detune lane keeps them (lane + 1200 ct, frequency x 2).

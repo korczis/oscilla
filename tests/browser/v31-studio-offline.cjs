@@ -15,6 +15,14 @@
 //     (220 Hz dominant, a non-harmonic 311 Hz probe < −30 dB) then the Sweep (311 Hz dominant
 //     at 1.5 s, 440 Hz at 2.0 s, the free-running 220 Hz carrier < −30 dB: pattern-played);
 //     Measurement Sweep is refused (live Microphone) with that limitation.
+//   K010-K013 voice nodes, each graph rendered at the renderer's own rate (no rate assumed):
+//     a 440 Hz LFO on a 1 kHz carrier (log, ±0.1 octave) puts sidebands at fc ± 440 Hz above
+//     −40 dB re the carrier and > 20 dB over a 1220 Hz non-sideband probe; Drive at 100 % on a
+//     full-scale sawtooth behind a Master Output at its highest level (MAX_OUTPUT_GAIN, the
+//     live engine's ceiling) peaks at or below that ceiling with no clipped sample; a Macro at
+//     1 opens a 300 Hz low-pass so that the 2.2 kHz harmonic is > 10 dB above the Macro at 0;
+//     the filter stage's response probe gives a low-shelf's gain within 0.5 dB (below the
+//     corner, and 0 dB above it) and an all-pass flat within 0.1 dB from 20 Hz to 20 kHz.
 //   no console error or page error.
 'use strict';
 
@@ -97,6 +105,33 @@ async function runOne(name, url) {
     check(name, 'Measurement Sweep refused: live Microphone',
       m.ok === false && /Microphone 1 is a live input/.test(m.limitations[0]),
       JSON.stringify(m.limitations));
+
+    const fm = await page.evaluate(() => window.T.voice('fm'));
+    const re = (x, ref) => 20 * Math.log10(Math.max(1e-12, x) / Math.max(1e-12, ref));
+    const fa = fm.amp || {};
+    check(name, 'K010 a 440 Hz LFO puts sidebands at fc ± 440 Hz (log FM, ±0.1 octave)',
+      fm.ok && re(fa[560], fa[1000]) > -40 && re(fa[1440], fa[1000]) > -40
+        && re(fa[1440], fa[1220]) > 20 && re(fa[560], fa[1220]) > 20,
+      `${fm.sampleRate} Hz: 560 ${re(fa[560], fa[1000]).toFixed(1)} dB, 1440 `
+        + `${re(fa[1440], fa[1000]).toFixed(1)} dB re carrier; 1220 `
+        + `${re(fa[1220], fa[1000]).toFixed(1)} dB`);
+    const dr = await page.evaluate(() => window.T.voice('drive'));
+    check(name, 'K012 Drive at 100 % behind Master at the ceiling level peaks below the ceiling',
+      dr.ok && dr.stats.peak <= dr.ceiling && dr.stats.peak > dr.ceiling * 0.5
+        && dr.stats.clippedSamples === 0, `${JSON.stringify(dr.stats)}, ceiling ${dr.ceiling}`);
+    const m0 = await page.evaluate(() => window.T.voice('macro', { value: 0 }));
+    const m1 = await page.evaluate(() => window.T.voice('macro', { value: 1 }));
+    check(name, 'K013 a Macro at 1 opens the cutoff: 2.2 kHz > 10 dB over the Macro at 0',
+      m0.ok && m1.ok && re(m1.amp[2200], m0.amp[2200]) > 10,
+      `${re(m1.amp[2200], m0.amp[2200]).toFixed(1)} dB`);
+    const shelf = await page.evaluate(() => window.T.response({ type: 'lowshelf',
+      frequency: 500, gain: 6 }, [30, 15000]));
+    check(name, 'K011 low-shelf +6 dB: 6 dB below the corner, 0 dB above it (±0.5 dB)',
+      Math.abs(shelf[0] - 6) <= 0.5 && Math.abs(shelf[1]) <= 0.5, JSON.stringify(shelf));
+    const ap = await page.evaluate(() => window.T.response({ type: 'allpass', frequency: 1000,
+      Q: 1 }, [20, 63, 200, 632, 1000, 2000, 6325, 20000]));
+    check(name, 'K011 all-pass magnitude is flat within 0.1 dB, 20 Hz to 20 kHz',
+      ap.every((x) => Math.abs(x) <= 0.1), JSON.stringify(ap));
     check(name, 'no console errors', errors.length === 0, errors.join(' | '));
   } catch (err) {
     check(name, 'run completed', false, err && err.stack);

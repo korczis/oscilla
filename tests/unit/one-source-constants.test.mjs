@@ -277,8 +277,12 @@ test('the derived copy is byte-identical to the text it replaced', async () => {
   const { NODE_REGISTRY } = await import('../../src/js/studio/registry.js');
   const texts = NODE_REGISTRY.list().map((d) => (d.help && d.help.constraints) || '')
     .filter((t) => /Nyquist/.test(t));
-  assert.ok(texts.includes('Q is linear for every type; gain applies to peaking only. Cutoff is '
-    + 'limited to 0.95 × the digital Nyquist limit.'), texts.join(' | '));
+  assert.ok(texts.includes('Q is linear for every type and ignored by the shelves; gain applies '
+    + 'to peaking and the shelves only. Cutoff is limited to 0.95 × the digital Nyquist limit.'),
+  texts.join(' | '));
+  assert.ok(texts.includes('A modulation path may not lead back to its own source. Rate is '
+    + 'limited to 0.95 × the digital Nyquist limit of the running audio context.'),
+  texts.join(' | '));
   assert.ok(texts.includes('Frequencies are limited to 0.95 × the digital Nyquist limit of the '
     + 'running audio context.'), texts.join(' | '));
 
