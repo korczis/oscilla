@@ -43,10 +43,15 @@ function fixture(t, { programs = PROGRAMS } = {}) {
     'src/value.mjs': 'export const value = () => 1;\n',
     'README.md': 'fixture\n',
   });
+  // what actions/checkout fetches: the base branch as a remote-tracking ref
+  repo.git('update-ref', BASE, 'main');
   repo.branch('pr');
   return repo;
 }
-const VERDICT = ['--pr', '42', '--base-branch', 'main'];
+const BASE = 'refs/remotes/origin/main';
+const VERDICT = ['--pr', '42', '--base-branch', BASE];
+const judged = (program) => new RegExp(`base-rule: scripts/${program}\\.mjs of ${BASE}`
+  + ' \\([0-9a-f]{12}\\) judges this pull request');
 
 test('a PR that deletes the audio entry from GUARDED is judged by main\'s list', (t) => {
   const repo = fixture(t);
@@ -56,9 +61,9 @@ test('a PR that deletes the audio entry from GUARDED is judged by main\'s list',
     'src/js/audio/audio-engine.js': 'export const gain = 0.5;\n',
     'scripts/review-verdict.mjs': edited,
   });
-  const r = sh(repo, 'main', 'scripts/review-verdict.mjs', ...VERDICT);
+  const r = sh(repo, BASE, 'scripts/review-verdict.mjs', ...VERDICT);
   assert.equal(r.status, 1, r.out);
-  assert.match(r.out, /base-rule: scripts\/review-verdict\.mjs of main \([0-9a-f]{12}\) judges/);
+  assert.match(r.out, judged('review-verdict'));
   assert.match(r.out, /src\/js\/audio\/audio-engine\.js/);
   assert.match(r.out, /REFUSED: \.ai\/repo\/reviews\/42\.yaml is not in the head commit/);
   // and the edited copy still sees its own file as guarded, since the list names it
@@ -77,7 +82,7 @@ test('a PR that replaces the program with one that always accepts is refused', (
   });
   assert.equal(own(repo, 'scripts/review-verdict.mjs', ...VERDICT).status, 0,
     'the PR\'s own copy lets it through: this is what must not judge');
-  const verdict = sh(repo, 'main', 'scripts/review-verdict.mjs', ...VERDICT);
+  const verdict = sh(repo, BASE, 'scripts/review-verdict.mjs', ...VERDICT);
   assert.equal(verdict.status, 1, verdict.out);
   assert.match(verdict.out, /scripts\/review-verdict\.mjs\n/);
   assert.match(verdict.out, /REFUSED/);
@@ -85,10 +90,10 @@ test('a PR that replaces the program with one that always accepts is refused', (
   const pr = path.join(repo.dir, '..', `${path.basename(repo.dir)}.pr.json`);
   t.after(() => spawnSync('rm', ['-f', pr]));
   writeFileSync(pr, JSON.stringify({ title: 'fix(x): tidy', body: '' }));
-  const first = sh(repo, 'main', 'scripts/fail-first.mjs', '--pr-json', pr,
-    '--base-branch', 'main');
+  const first = sh(repo, BASE, 'scripts/fail-first.mjs', '--pr-json', pr,
+    '--base-branch', BASE);
   assert.equal(first.status, 1, first.out);
-  assert.match(first.out, /base-rule: scripts\/fail-first\.mjs of main/);
+  assert.match(first.out, judged('fail-first'));
   assert.match(first.out, /tidy\.test\.mjs: passes without the change - not evidence/);
 });
 
@@ -101,19 +106,19 @@ test('a PR that replaces pr-metadata.mjs with one that always passes is refused 
   t.after(() => spawnSync('rm', ['-f', pr]));
   writeFileSync(pr, JSON.stringify({ number: 42, title: 'chore(x): tidy', headRefName: 'pr',
     body: '' }));
-  const args = ['--pr-json', pr, '--head', 'HEAD', '--base', 'main', '--check'];
+  const args = ['--pr-json', pr, '--head', 'HEAD', '--base', BASE, '--check'];
   assert.equal(own(repo, 'scripts/pr-metadata.mjs', ...args).status, 0,
     'the PR\'s own copy lets it through: this is what must not judge');
-  const r = sh(repo, 'main', 'scripts/pr-metadata.mjs', ...args);
+  const r = sh(repo, BASE, 'scripts/pr-metadata.mjs', ...args);
   assert.equal(r.status, 1, r.out);
-  assert.match(r.out, /base-rule: scripts\/pr-metadata\.mjs of main \([0-9a-f]{12}\) judges/);
+  assert.match(r.out, judged('pr-metadata'));
   assert.match(r.out, /plan-id-missing: /);
 });
 
 test('the program\'s exit status and output pass through when it accepts', (t) => {
   const repo = fixture(t);
   repo.commit('docs', { 'README.md': 'fixture, documented\n' });
-  const r = sh(repo, 'main', 'scripts/review-verdict.mjs', ...VERDICT);
+  const r = sh(repo, BASE, 'scripts/review-verdict.mjs', ...VERDICT);
   assert.equal(r.status, 0, r.out);
   assert.match(r.out, /none of the 1 changed path\(s\) is guarded; no verdict needed/);
 });
@@ -124,17 +129,62 @@ test('only where the base has no program does the checkout\'s copy judge, with a
     ...Object.fromEntries(PROGRAMS.map((p) => [p, real(p)])),
     'src/js/audio/audio-engine.js': 'export const gain = 0.5;\n',
   });
-  const r = sh(repo, 'main', 'scripts/review-verdict.mjs', ...VERDICT);
+  const r = sh(repo, BASE, 'scripts/review-verdict.mjs', ...VERDICT);
   assert.equal(r.status, 1, r.out);
-  assert.match(r.out, /::warning::base-rule: main \([0-9a-f]{12}\) has no scripts\/review-verdict/);
+  assert.match(r.out,
+    /::warning::base-rule: refs\/remotes\/origin\/main \([0-9a-f]{12}\) has no scripts\/review/);
   assert.match(r.out, /REFUSED/);
 });
 
 test('any other program, and a base that does not exist, are refused', (t) => {
   const repo = fixture(t);
-  assert.equal(sh(repo, 'main', 'scripts/build.mjs').status, 2);
-  assert.notEqual(sh(repo, 'no-such-ref', 'scripts/review-verdict.mjs', ...VERDICT).status, 0);
+  assert.equal(sh(repo, BASE, 'scripts/build.mjs').status, 2);
+  assert.notEqual(sh(repo, 'refs/remotes/origin/no-such-ref', 'scripts/review-verdict.mjs',
+    ...VERDICT).status, 0);
   assert.notEqual(sh(repo).status, 0);
+});
+
+// R2 (review of #255): git looks a short name up in refs/tags/ before refs/remotes/, and the
+// checkout fetches tags, so a pushed tag named origin/main shadowed the base branch and the
+// pull request's own program judged it.
+test('a tag named origin/main does not let the PR\'s own program judge (R2)', (t) => {
+  const repo = fixture(t);
+  repo.commit('change', {
+    'src/js/audio/audio-engine.js': 'export const gain = 0.5;\n',
+    'scripts/review-verdict.mjs': "console.log('review-verdict: accepted');\n",
+  });
+  repo.git('tag', 'origin/main', 'HEAD');
+  const accepted = /review-verdict: accepted/;
+  // the unqualified name every caller passed: refused before anything runs
+  const short = sh(repo, 'origin/main', 'scripts/review-verdict.mjs', ...VERDICT);
+  assert.equal(short.status, 2, short.out);
+  assert.match(short.out,
+    /base-rule: origin\/main is not a remote-tracking ref \(refs\/remotes\/\.\.\.\)/);
+  assert.doesNotMatch(short.out, accepted);
+  // qualified, while the tag shadows its short name: refused as ambiguous
+  const shadowed = sh(repo, BASE, 'scripts/review-verdict.mjs', ...VERDICT);
+  assert.equal(shadowed.status, 2, shadowed.out);
+  assert.match(shadowed.out,
+    /base-rule: refs\/remotes\/origin\/main is ambiguous: refs\/tags\/origin\/main shadows/);
+  assert.doesNotMatch(shadowed.out, accepted);
+  // without the tag the base's program judges, by its ref or by its full commit name
+  repo.git('tag', '-d', 'origin/main');
+  const r = sh(repo, BASE, 'scripts/review-verdict.mjs', ...VERDICT);
+  assert.equal(r.status, 1, r.out);
+  assert.match(r.out, judged('review-verdict'));
+  assert.match(r.out, /REFUSED/);
+  const sha = repo.git('rev-parse', 'main');
+  const bySha = sh(repo, sha, 'scripts/review-verdict.mjs', ...VERDICT);
+  assert.equal(bySha.status, 1, bySha.out);
+  assert.match(bySha.out, /REFUSED/);
+  // nothing else names a base: a branch, a tag, HEAD, an abbreviated commit, an expression
+  repo.git('tag', 'v1', 'main');
+  for (const ref of ['main', 'refs/heads/main', 'refs/tags/v1', 'HEAD', sha.slice(0, 12),
+    `${BASE}~0`, `${BASE}/`]) {
+    const x = sh(repo, ref, 'scripts/review-verdict.mjs', ...VERDICT);
+    assert.equal(x.status, 2, `${ref}: ${x.out}`);
+    assert.doesNotMatch(x.out, accepted, ref);
+  }
 });
 
 test('a program started through a symlinked directory still runs, not exit 0 unrun', (t) => {
