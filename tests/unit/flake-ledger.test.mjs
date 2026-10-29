@@ -1,9 +1,11 @@
 // scripts/flake-ledger.mjs (plan issue E010): the ledger of CI checks that failed on an earlier
 // attempt of a workflow run and passed on a re-run. The entries are checked on fixture API
-// responses (a failed first attempt and a passing second, a first attempt alone, a job carried
-// over by a re-run of the failed jobs, a job still failing, the gate still running), the reads
-// against a stubbed fetch (pages, retries, an API that stays down), the program as the gate
-// job runs it, and the gate job of ci.yml itself.
+// responses (a failed first attempt and a passing second, a job that passed on both, a first
+// attempt alone, a job carried over by a re-run of the failed jobs, a job still failing, the
+// gate still running, a later re-run of a job that already passed), the reads against a stubbed
+// fetch (pages, retries, an API that stays down), the program as the flake-ledger job runs it,
+// and the two jobs of ci.yml themselves: the ledger is its own job, and the gate's verdict,
+// run as ci.yml states it, is the same whatever the ledger job's result.
 //   node --test tests/unit/flake-ledger.test.mjs
 
 import test from 'node:test';
@@ -38,6 +40,7 @@ const FAILED_FIRST = {
     job('V1 engine (firefox)', 1, 'failure',
       [step('Install the browser', 'success'), step(ENGINE, 'failure')]),
     job('V1 engine (chromium)', 1, 'success'),
+    job('V1 engine (webkit)', 1, 'success'),
     job('gate', 1, 'failure', [step('Every release-gate job passed', 'failure')]),
   ],
   2: [
@@ -46,6 +49,8 @@ const FAILED_FIRST = {
     job('V1 engine (firefox)', 2, 'success',
       [step('Install the browser', 'success'), step(ENGINE, 'success')]),
     job('V1 engine (chromium)', 1, 'success'),
+    // A re-run of all jobs runs this one again: it passed on both attempts, so it is no flake.
+    job('V1 engine (webkit)', 2, 'success'),
     job('gate', 2, null, [], 'in_progress'),
   ],
 };
@@ -62,6 +67,44 @@ test('a check that failed on the first attempt and passed on the second is one e
   assert.deepEqual([e.now.attempt, e.now.conclusion], [2, 'success']);
   assert.deepEqual(e.failedAttempts, [1]);
   assert.equal(e.cause, UNCLASSIFIED);
+});
+
+test('a job that passed on every attempt it ran is no entry (R-2)', () => {
+  const attempts = {
+    1: [job('studio (webkit)', 1, 'success'), job('studio (firefox)', 1, 'success')],
+    2: [job('studio (webkit)', 2, 'success'), job('studio (firefox)', 2, 'success')],
+  };
+  assert.deepEqual(ledger({ attempts, current: 2 }), []);
+  assert.deepEqual(ledger({ attempts: FAILED_FIRST, current: 2 }).map((e) => e.job),
+    ['V1 engine (firefox)']);
+});
+
+test('a job is judged against its own last earlier run, so a pass is recorded once (R-3)', () => {
+  // Attempt 2 re-ran the failed job and it passed; attempt 3 re-ran every job.
+  const failPassPass = {
+    1: [job('suites (webkit)', 1, 'failure', [step('DSP suite', 'failure')])],
+    2: [job('suites (webkit)', 2, 'success')],
+    3: [job('suites (webkit)', 3, 'success')],
+  };
+  assert.equal(ledger({ attempts: failPassPass, current: 2 }).length, 1);
+  assert.deepEqual(ledger({ attempts: failPassPass, current: 3 }), []);
+  // Carried over by attempt 2 (listed with run_attempt 1), its last earlier run is attempt 1.
+  const carried = {
+    1: [job('suites (webkit)', 1, 'failure', [step('DSP suite', 'failure')])],
+    2: [job('suites (webkit)', 1, 'failure', [step('DSP suite', 'failure')])],
+    3: [job('suites (webkit)', 3, 'success')],
+  };
+  const [c] = ledger({ attempts: carried, current: 3 });
+  assert.deepEqual([c.earlier.attempt, c.failedAttempts], [1, [1]]);
+  // An earlier failure before a pass is history, not this attempt's flake.
+  const passFailPass = {
+    1: [job('suites (webkit)', 1, 'failure')],
+    2: [job('suites (webkit)', 2, 'success')],
+    3: [job('suites (webkit)', 3, 'failure', [step('DSP suite', 'failure')])],
+    4: [job('suites (webkit)', 4, 'success')],
+  };
+  const [p] = ledger({ attempts: passFailPass, current: 4 });
+  assert.deepEqual([p.earlier.attempt, p.failedAttempts, p.steps], [3, [3], ['DSP suite']]);
 });
 
 test('a first attempt has no ledger', () => {
@@ -158,7 +201,7 @@ test('a failed request is retried; an API that stays down refuses', async () => 
   const flaky = stubFetch(FAILED_FIRST, { flaky: 1 });
   const ok = await readAttempts({ repo: 'o/r', run: 7, current: 2, fetch: flaky.fetch,
     retryDelayMs: 0 });
-  assert.equal(ok[2].length, 4);
+  assert.equal(ok[2].length, 5);
   const down = stubFetch(FAILED_FIRST, { down: true });
   await assert.rejects(
     readAttempts({ repo: 'o/r', run: 7, current: 2, fetch: down.fetch, tries: 3, retryDelayMs: 0 }),
@@ -220,26 +263,57 @@ test('the program refuses a missing or malformed argument with exit 2', () => {
   assert.equal(run('--help').status, 0);
 });
 
-test('the gate job records the ledger only on a re-run, before its verdict', () => {
-  const ci = parseYaml(readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8'));
-  const gate = ci.jobs.gate;
-  assert.deepEqual(gate.permissions, { contents: 'read', actions: 'read' });
-  const steps = gate.steps;
-  const ledgerAt = steps.findIndex((s) => /scripts\/flake-ledger\.mjs/.test(s.run ?? ''));
-  const verdictAt = steps.findIndex((s) => s.name === 'Every release-gate job passed');
-  assert.ok(ledgerAt >= 0 && verdictAt > ledgerAt, 'the ledger runs before the verdict');
-  const s = steps[ledgerAt];
+const CI = parseYaml(readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8'));
+const GATE = CI.jobs.gate;
+const LEDGER_JOB = 'flake-ledger';
+const VERDICT = 'Every release-gate job passed';
+
+test('the ledger is its own job, after every judged job, on a re-run only (R-1, R-4)', () => {
+  const fl = CI.jobs[LEDGER_JOB];
+  assert.ok(fl, `ci.yml has a ${LEDGER_JOB} job`);
+  // A step of the gate that fails fails the gate, whatever its verdict, and project.ci-bounded
+  // forbids continue-on-error: so the gate runs its verdict and nothing else, and reads nothing.
+  assert.deepEqual(GATE.steps.map((s) => s.name ?? s.uses), [VERDICT]);
+  assert.equal(GATE.permissions, undefined);
+  assert.ok(GATE.needs.includes(LEDGER_JOB), 'gate needs every job (project.ci-bounded)');
+  // The ledger runs when every job the gate judges has finished, whether or not they passed.
+  assert.equal(fl.if, '${{ always() && fromJSON(github.run_attempt) > 1 }}');
+  assert.deepEqual([...fl.needs].sort(), GATE.needs.filter((j) => j !== LEDGER_JOB).sort());
+  assert.deepEqual(fl.permissions, { contents: 'read', actions: 'read' });
+  assert.ok(Number(fl['timeout-minutes']) > 0);
+  const s = fl.steps.find((x) => /scripts\/flake-ledger\.mjs/.test(x.run ?? ''));
   assert.match(s.run, /--attempt "\$GITHUB_RUN_ATTEMPT"/);
   assert.match(s.run, /--out flake-ledger\.json/);
   assert.match(s.run, /GITHUB_STEP_SUMMARY/);
+  assert.equal(s.env.GH_TOKEN, '${{ github.token }}');
   assert.ok(Number(s['timeout-minutes']) > 0);
-  // Everything before the verdict runs only on a re-run; the verdict always runs.
-  for (const before of steps.slice(0, verdictAt)) {
-    assert.match(String(before.if), /fromJSON\(github\.run_attempt\) > 1/,
-      before.name ?? before.uses);
-  }
-  assert.equal(steps[verdictAt].if, undefined);
-  const upload = steps.find((x) => /upload-artifact/.test(x.uses ?? ''));
-  assert.equal(upload.with.name, 'flake-ledger');
+  const upload = fl.steps.find((x) => /upload-artifact/.test(x.uses ?? ''));
+  // One artifact per attempt: a second re-run's upload does not collide with the first's.
+  assert.equal(upload.with.name, 'flake-ledger-${{ github.run_attempt }}');
   assert.equal(upload.with.path, 'flake-ledger.json');
+});
+
+/** The exit status of the gate's verdict step, run as ci.yml states it, over `needs`. */
+function verdict(needs) {
+  const step = GATE.steps.find((s) => s.name === VERDICT);
+  const r = spawnSync('bash', ['--noprofile', '--norc', '-eo', 'pipefail', '-c', step.run], {
+    encoding: 'utf8', env: { ...process.env, RESULTS: JSON.stringify(needs) },
+  });
+  assert.equal(r.error, undefined, 'bash and jq run');
+  return r.status;
+}
+
+test('the gate verdict is the same whatever the ledger job did (R-1)', () => {
+  const judged = GATE.needs.filter((j) => j !== LEDGER_JOB);
+  const all = (result) => Object.fromEntries(judged.map((j) => [j, { result }]));
+  for (const ledgerResult of ['success', 'failure', 'cancelled', 'skipped']) {
+    const needs = { ...all('success'), [LEDGER_JOB]: { result: ledgerResult } };
+    assert.equal(verdict(needs), 0, `every judged job passed, ledger ${ledgerResult}`);
+    for (const j of judged) {
+      for (const bad of ['failure', 'cancelled', 'skipped']) {
+        assert.equal(verdict({ ...needs, [j]: { result: bad } }), 1,
+          `${j} ${bad}, ledger ${ledgerResult}`);
+      }
+    }
+  }
 });

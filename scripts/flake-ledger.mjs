@@ -3,13 +3,18 @@
 // workflow run and passed on this one. No browser suite or check is retried inside the harness
 // (tests/browser/lib/suite.cjs has no retry, and adding one would hide failures and change
 // project.suite-harness), so a re-run of the run is the only way a check passes on retry, and
-// this records it. The `gate` job of .github/workflows/ci.yml runs it when github.run_attempt is
-// above 1, after every other job of the attempt has finished; it appends the Markdown to the step
-// summary and uploads the JSON as the artifact `flake-ledger`.
+// this records it. The `flake-ledger` job of .github/workflows/ci.yml runs it when
+// github.run_attempt is above 1, after every job the gate judges has finished; it appends the
+// Markdown to the step summary and uploads the JSON as the artifact
+// `flake-ledger-<attempt>`. It is a job of its own, and the gate's verdict leaves its result
+// out, so nothing the ledger does can change the required check.
 //
-// For every job this attempt ran that succeeded, and that failed or timed out on an earlier
-// attempt of the same run, one entry names the check (the job and the step that failed), the
-// browser of its matrix leg, the earlier attempt's outcome and this one's, and a cause class.
+// For every job this attempt ran that succeeded, and whose own last earlier run (the latest
+// earlier attempt in which it ran) failed or timed out, one entry names the check (the job and
+// the step that failed), the browser of its matrix leg, the earlier attempt's outcome and this
+// one's, and a cause class. A job that passed on its last earlier run is no entry, so a pass
+// on retry is recorded once, on the attempt where it happened, and a later re-run of every job
+// does not record it again.
 // The cause is `unclassified` until a person classifies it as product, browser,
 // infrastructure or test defect. The ledger feeds one decision: whether a flaky check is fixed
 // in the product, in the test, or recorded as infrastructure, against the recorded debt of
@@ -22,8 +27,8 @@
 // The jobs of each attempt are read from the GitHub REST API
 // (GET /repos/{repo}/actions/runs/{run}/attempts/{n}/jobs, which needs `actions: read`); every
 // request is bounded by REQUEST_TIMEOUT_MS and tried REQUEST_TRIES times (project.ci-bounded).
-// The ledger reports and never fails the gate: when the API cannot be read it prints a
-// workflow warning and a summary line saying so, and exits 0.
+// When the API cannot be read it prints a workflow warning and a summary line saying so, and
+// exits 0; any other failure fails the flake-ledger job, which the gate does not judge.
 //
 //   node scripts/flake-ledger.mjs --repo <owner/name> --run <id> --attempt <n> [--out <file>]
 //
@@ -72,10 +77,14 @@ export function ledger({ attempts, current }) {
   const entries = [];
   for (const job of ranIn(current)) {
     if (job.status !== 'completed' || job.conclusion !== 'success') continue;
+    // The job's earlier runs, newest first, back to its last earlier success: the failures in
+    // a row just before this pass. Empty when its last earlier run passed or it never ran.
     const failures = [];
-    for (let n = 1; n < current; n += 1) {
+    for (let n = current - 1; n >= 1; n -= 1) {
       const earlier = ranIn(n).find((j) => j.name === job.name);
-      if (earlier && FAILED.has(earlier.conclusion)) failures.push({ n, job: earlier });
+      if (!earlier) continue;
+      if (!FAILED.has(earlier.conclusion)) break;
+      failures.unshift({ n, job: earlier });
     }
     if (!failures.length) continue;
     const last = failures[failures.length - 1];
