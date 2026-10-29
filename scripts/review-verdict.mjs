@@ -48,8 +48,9 @@ export const SCHEMA = 'review-verdict/v1';
 /**
  * A changed path matching one of these needs a verdict. A trailing `*` matches any suffix;
  * an entry without one is that file. The first group is the product code where review found
- * defects the suites passed (#139 measurement, calibration and its UI; #140 Studio; #149
- * experiments and findings); the second is what proves a build, a deployment and a release
+ * defects the suites passed (#139 measurement, calibration and its UI, whose MEASURE adapter
+ * src/js/ui/measure.js is composed of the modules under src/js/ui/measure/ since E002; #140
+ * Studio; #149 experiments and findings); the second is what proves a build, a deployment and a release
  * (the build and pack scripts, the deploy stamp and its verifiers, the release scripts and
  * the release rules' tests); the third is what enforces the process rules
  * (project.ci-bounded, project.fail-first, project.review-verdict): the workflows and
@@ -65,6 +66,7 @@ export const GUARDED = [
   'src/js/core/storage*',
   'src/js/core/safety*',
   'src/js/ui/measure.js',
+  'src/js/ui/measure/*',
   'src/js/ui/experiments.js',
   'src/js/ui/findings.js',
 
