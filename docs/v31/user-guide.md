@@ -19,7 +19,7 @@ pressure.
    Filter Automation, Stereo Beat and Measurement Sweep. **Open** replaces the current Studio;
    if it has unsaved changes the dialog says so first.
 3. **Play** (Space) plays the graph and the timeline; **Stop** (Esc) releases every node. The
-   Playground voice and Studio are exclusive: starting one stops the other. For a screen
+   Playground voice, the Sequencer and Studio are exclusive: starting one stops the others. For a screen
    reader the button is always "Play the Studio", a toggle that reads as pressed while the
    Studio plays.
 

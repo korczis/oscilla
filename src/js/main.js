@@ -55,6 +55,7 @@ import { registerOscillaUi, workspaceTitle } from './ui/app.js';
 import { keyGuard, openModal, closeModal, watchDialogs, focusSafely } from './ui/dialogs.js';
 import { instrumentTakesSpace, isSpace } from './ui/shortcuts.js';
 import { createWorkbench } from './ui/workbench.js';
+import { createOutputOwner } from './ui/output-owner.js';
 import { createNavigation, v1ModeFor } from './ui/navigation.js';
 import { createUnsavedGuard } from './ui/unsaved.js';
 import { createMeasureUi } from './ui/measure.js';
@@ -117,6 +118,8 @@ const adapter = {
     return () => adapterListeners.delete(fn);
   },
   getDestination: () => engine.master,
+  // The sequencer takes the output through the one owner table (ui/output-owner.js, C002).
+  claimOutput: () => claimOutput('sequencer'),
   getStereoRouter: () => (liveRouter ? liveRouter.router : null),
   // The mic lab's nodes are built and accounted by the engine (audio-engine-discipline).
   attachMicrophone: (stream, opts) => engine.attachMicrophone(stream, opts),
@@ -199,27 +202,17 @@ function labVizInputs(plan) {
 }
 bridge.labInputs = labVizInputs;
 
+// One output owner at a time (C002): the instrument, the sequencer, the Studio, a measurement.
+const { claimOutput, stopPlayback, stopSequence } = createOutputOwner({ app: () => app,
+  sequencer: () => (labs.sequencer ? labs.sequencer.editor : null), changed: notifyAdapter });
+
 const basePlay = engine.play.bind(engine);
 engine.play = (plan, o = {}) => {
   // Playground and Measure share one output (spec §74): no instrument voice while a measurement
   // owns it. The measurement itself never calls play (capture.js schedules its own source).
-  if (app && app.measureOwnsOutput()) {
-    app.notify('info', 'Measurement in progress', 'The output belongs to the measurement: stop '
-      + 'it (Esc) before playing.');
-    return null;
-  }
+  if (claimOutput('instrument') !== true) return null;
   return basePlay(plan, { ...o, ...v2PlayOptions(plan, engine.ctx, true) });
 };
-
-/**
- * Measure (and Studio PLAY) take the output: stop the instrument and the sequencer (their
- * voices fade), and a playing Studio (V3.1; it is not playing while it claims the output).
- */
-function stopPlayback(cmp) {
-  if (cmp.seqPlaying && labs.sequencer) labs.sequencer.editor.stop();
-  if (cmp.playing) cmp.stopNow();
-  if (typeof cmp.studioOwnsOutput === 'function' && cmp.studioOwnsOutput()) cmp.studioStop();
-}
 
 /** Revert the sounding voice from a PeriodicWave to its oscillator type (additive off). */
 function clearPeriodicWave() {
@@ -532,9 +525,7 @@ function integrationInit() {
   const unlock = () => { if (engine.isSupported()) cmp.ensureAudio(); };
   window.addEventListener('pointerdown', unlock, { capture: true });
   window.addEventListener('keydown', unlock, { capture: true });
-  const stopSequencer = () => {
-    if (cmp.seqPlaying && labs.sequencer) labs.sequencer.editor.stop();
-  };
+  const stopSequencer = () => stopSequence(cmp); // the editor's live state (C001, C002)
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       stopSequencer();

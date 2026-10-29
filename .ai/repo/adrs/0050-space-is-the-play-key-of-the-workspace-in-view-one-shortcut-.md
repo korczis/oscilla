@@ -22,11 +22,13 @@ related:
   - file:src/js/ui/studio/graph-keys.js
   - file:src/js/ui/studio/workspace.js
   - file:src/js/ui/workbench.js
+  - file:src/js/sequencer/editor.js
   - file:src/index.html
   - file:docs/v31/user-guide.md
   - test:tests/unit/v4-shortcuts.test.mjs
   - test:tests/unit/v31-studio-docs.test.mjs
   - test:tests/browser/navigation.cjs
+  - test:tests/browser/app.cjs
 provenance:
   origin: extracted
   derived_from:
@@ -189,3 +191,21 @@ Proposed:
       the workspace and its Space meaning, each key once, with Studio's note.
 - Revisit this decision if a workspace without an owner gains a transport, such as a Measure
   keyboard start, or if the timeline's items stop carrying `role="button"`.
+
+## Amendment 2026-10-29: Space while a sequence plays (C002)
+
+Plan issue C002 makes the output one owner's at a time: the instrument, the sequencer, the
+Studio transport and a measurement. `main.js` decides from one table (`OUTPUT_YIELDS`) that
+the `engine.play` wrapper and the sequencer's `claimOutput()` share.
+
+- **Space in the Sequencer workspace stops a playing loop.** Space there is the instrument's
+  Hold to Play, unchanged. The instrument's voice takes the output, so a playing sequence
+  (looped or not) stops with its click-free fade before the tone starts. Releasing Space stops
+  the tone and does not restart the sequence. Space never starts or toggles the sequencer: its
+  Play and Stop buttons do that, and Escape stops it from every workspace.
+- **The sequencer's Play takes the output the same way.** It releases a sounding instrument
+  voice and stops a playing Studio before the first pass is scheduled. While a measurement
+  owns the output it is refused with the instrument's notice, "Measurement in progress", and
+  the reason is shown on the Play button and in the sequencer's message line.
+- Confirmation: `tests/unit/sequencer-editor.test.mjs` (the C002 cases) and
+  `one-output-owner` and `seq-refused-during-measure` in `tests/browser/app.cjs`.
