@@ -212,14 +212,15 @@ test('round 4: the specs inside lock entries, a lone CR, a tarball name, node_mo
     assert.ok(found.some((p) => /:2: (git|registry) names/.test(p)), found.join('; '));
   }
   assert.deepEqual(npmrcProblems('audit=false\r\n').map((p) => /carriage/.test(p)), [true]);
-  // R25: a node_modules symlink always, and any node_modules before the install
+  // R25: before the install any node_modules, a symlink above all; after it, the harness's
   const dir = mkdtempSync(path.join(os.tmpdir(), 'oscilla-install-guard-modules-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'x' }));
   writeFileSync(path.join(dir, 'package-lock.json'), lock({ resolved: TARBALL, integrity: HASH }));
   assert.deepEqual(guard(dir, { beforeInstall: true }), []);
   symlinkSync(os.tmpdir(), path.join(dir, 'node_modules'));
-  assert.match(guard(dir).join('\n'), /node_modules is a symbolic link/);
+  assert.match(guard(dir, { beforeInstall: true }).join('\n'), /node_modules is a symbolic link/);
+  assert.deepEqual(guard(dir), [], 'a linked node_modules after the install is the harness\'s');
   rmSync(path.join(dir, 'node_modules'));
   mkdirSync(path.join(dir, 'node_modules'));
   assert.deepEqual(guard(dir), []);

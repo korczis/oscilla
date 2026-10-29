@@ -32,9 +32,9 @@
 //              name (`evil.tgz`) is a file of the checkout, not a registry name (R24)
 //   npmrc      any carriage return: npm's ini splits lines on [\r\n]+, so a key after a lone
 //              CR is a line of its own to npm (round 4, R18)
-//   modules    a node_modules at the checkout's root that is a symbolic link (npm ci empties
-//              what it points to, R25), and with --before-install any node_modules at all
-//              (in CI the install has not run yet, so one there was committed)
+//   modules    with --before-install (the judge's install), any node_modules at the
+//              checkout's root: the install has not run yet, so the pull request committed
+//              it, and a symbolic link there makes npm ci empty what it points to (R25)
 // So nothing is resolved outside the registry, and what comes from it is checked against the
 // lockfile's sha512: the guard trusts the registry and those hashes (esbuild's platform
 // binary is such a package). Tested by tests/unit/install-guard.test.mjs and the replay of
@@ -239,10 +239,10 @@ export function guard(repo, { beforeInstall = false } = {}) {
   } catch {
     // none: what a fresh checkout has
   }
-  if (stat?.isSymbolicLink()) {
-    out.push('node_modules is a symbolic link: npm ci would empty the directory it points to');
-  } else if (stat && beforeInstall) {
-    out.push('node_modules exists before the install: the pull request committed it');
+  if (stat && beforeInstall) {
+    out.push(stat.isSymbolicLink()
+      ? 'node_modules is a symbolic link: npm ci would empty the directory it points to'
+      : 'node_modules exists before the install: the pull request committed it');
   }
   const read = (rel) => readFileSync(path.join(repo, rel), 'utf8');
   const locks = ['npm-shrinkwrap.json', 'package-lock.json']
