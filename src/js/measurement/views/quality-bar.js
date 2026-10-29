@@ -235,7 +235,11 @@ function runClipping(s, peak) {
       + 'so clipping was not checked.');
     s.peakUnchecked = true;
   } else if (!s.peakUnchecked) {
-    s.clipping = item('ok', 'NONE', `${run}: peak ${fixedText(peak, 3)}, no sample at or above `
+    // A peak just below the threshold (0.97996) is truncated, never rounded up to "0.980".
+    const rounded = fixedText(peak, 3);
+    const shown = Number(rounded) < CLIP_THRESHOLD ? rounded
+      : fixedText(Math.floor(peak * 1000) / 1000, 3);
+    s.clipping = item('ok', 'NONE', `${run}: peak ${shown}, no sample at or above `
       + `${CLIP_THRESHOLD} of digital full scale (${ANALOG_CLIP_NOTE}).`);
   }
 }
@@ -260,7 +264,9 @@ function liveChunk(s, c, phase) {
   if (clipped) {
     s.clipping = item('fail', 'DETECTED', 'The live input reached full scale.');
     s.clipSeen = true;
-  } else if (Number.isFinite(c.peak) && !s.clipSeen && s.clipping.status !== 'fail') {
+  } else if (Number.isFinite(c.peak) && !s.clipSeen && !s.railSeen && !s.peakUnchecked
+    && s.clipping.status !== 'fail') {
+    // A live chunk never clears an earlier run's AT RAIL or NOT CHECKED (T016).
     s.clipping = item('ok', 'NONE', `Live peak ${fixedText(c.peak, 3)} of digital full scale so `
       + `far (${ANALOG_CLIP_NOTE}).`);
   }

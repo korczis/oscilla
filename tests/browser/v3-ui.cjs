@@ -21,9 +21,10 @@
 //                           fallback), the seven steps, quality bar (CLIPPING NONE from the run
 //                           event's peak, naming 0.98 of full scale, while the assessment has no
 //                           CLIPPING_NOT_EXCLUDED; every item inside 390 x 844, T016), quality
-//                           status with reasons, response / IR summaries, TEST CONTEXT banner, one announcement per stage and no
-//                           progress chatter, save, repeat (new experiment, repeatOf), 0 engine
-//                           and io nodes, sources, captures and ports afterwards
+//                           status with reasons, response / IR summaries, TEST CONTEXT banner,
+//                           one announcement per stage and no progress chatter, save, repeat
+//                           (new experiment, repeatOf), 0 engine and io nodes, sources, captures
+//                           and ports afterwards
 //   abort-stages            abort in PREFLIGHT, NOISE_CHECK, ARMED, MEASURING and ANALYZING via
 //                           Escape, STOP, page hide and leaving the workspace: ABORTED, the
 //                           stopped announcement, 0 nodes/sources/captures/ports after

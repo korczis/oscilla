@@ -200,3 +200,61 @@ test('T016 negative: a real clip region still shows CLIPPING DETECTED', async ()
   assert.equal(c.text, 'CLIPPING DETECTED');
   assert.equal(c.status, 'fail');
 });
+
+/** Run the real engine on an io whose stimulus captures are rewritten by `rewrite`. */
+async function measureRewritten(rewrite) {
+  const events = [];
+  const io = createFakeIo();
+  const runStimulus = io.runStimulus;
+  io.runStimulus = async (...args) => rewrite(await runStimulus(...args));
+  const engine = createMeasurementEngine({ io, onEvent: (e) => events.push(e),
+    assess: assessMeasurement });
+  const result = await engine.measure({
+    stimulus: { kind: 'log-sweep', duration: 1, level: 0.25, f1: 20, f2: 20000 }, repeats: 1,
+    analysis: { noiseCheckS: 0.5, preRollS: 0.25, postRollS: 0.5, gapS: 0.2 } });
+  return { events, result };
+}
+
+test('T016 engine: a capture with non-finite samples carries no peak and is NOT CHECKED',
+  async () => {
+    const { events } = await measureRewritten((cap) => {
+      const samples = Float32Array.from(cap.samples);
+      samples[1000] = NaN;
+      return { ...cap, samples };
+    });
+    const run = events.find((e) => e.type === 'run');
+    assert.ok(run.reasons.some((r) => r.code === 'NON_FINITE'), JSON.stringify(run.reasons));
+    // The finite samples peak near 0.25, but a sample that is not a number was not checked.
+    assert.equal(run.peak, null);
+    const c = clippingOf(reduceAll(events));
+    assert.equal(c.text, 'CLIPPING NOT CHECKED');
+    assert.equal(c.status, 'unknown');
+  });
+
+test('T016 engine: an empty capture carries no peak and is never CLIPPING NONE', async () => {
+  const { events } = await measureRewritten((cap) => ({ ...cap, samples: new Float32Array(0),
+    integrity: { expectedFrames: 0, receivedFrames: 0, discontinuities: 0 } }));
+  const run = events.find((e) => e.type === 'run');
+  assert.equal(run.peak, null);
+  assert.notEqual(clippingOf(reduceAll(events)).value, 'NONE');
+});
+
+test('T016: a live chunk peak never clears an earlier AT RAIL or NOT CHECKED', () => {
+  const chunk = { type: 'progress', run: 1, phase: 'sweep', overall: 0.5,
+    capture: { frames: 10, framesTotal: 20, peak: 0.3 } };
+  const rail = clippingOf(reduceAll([runEvent(0, { peak: 0.995 }), chunk]));
+  assert.equal(rail.text, 'CLIPPING AT RAIL');
+  const unknown = clippingOf(reduceAll([runEvent(0), chunk]));
+  assert.equal(unknown.text, 'CLIPPING NOT CHECKED');
+  // Before any run, a live chunk peak below the threshold is still NONE "so far".
+  assert.equal(clippingOf(reduceAll([chunk])).text, 'CLIPPING NONE');
+});
+
+test('T016: NONE never shows a peak rounded up to the threshold it is below', () => {
+  const c = clippingOf(reduceAll([runEvent(0, { peak: 0.97996 })]));
+  assert.equal(c.text, 'CLIPPING NONE');
+  assert.match(c.detail, /peak 0\.979,/);
+  // Away from the threshold the peak is rounded as everywhere else (a Float32 0.57 is 0.5699…).
+  assert.match(clippingOf(reduceAll([runEvent(0, { peak: Math.fround(0.57) })])).detail,
+    /peak 0\.570,/);
+});
