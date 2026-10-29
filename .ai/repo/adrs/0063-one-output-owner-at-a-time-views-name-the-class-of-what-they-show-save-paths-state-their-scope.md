@@ -12,7 +12,7 @@ tags:
   - persistence
 related:
   - file:.ai/repo/adrs/0002-voice-replacement-and-output-ceiling.md
-  - file:.ai/repo/adrs/0004-continuous-playback-requires-opt-in.md
+  - file:.ai/repo/adrs/0004-continuous-repeat-schedule-window.md
   - file:.ai/repo/adrs/0005-safety-limit-scope.md
   - file:.ai/repo/adrs/0017-relative-levels-spl-only-when-calibrated.md
   - file:.ai/repo/adrs/0023-schema-versions-independent-of-product-version.md
@@ -82,8 +82,8 @@ here rather than in each issue.
    instrument as its reference while the measurement owns the capture, so a measurement in that
    context does not stop the instrument (`measure.js:1340-1342`). Every node an owner plays is
    counted by the engine, and the census is 0 after every stop (`project.audio-engine-discipline`
-   v2). The safety limit (ADR 0005) and the continuous permission (ADR 0004) apply to every owner
-   that plays an open signal. A held key or MIDI note follows the amendment of ADR 0005 that K026
+   v2). The safety limit and the continuous-playback permission (ADR 0005, the repeat window of ADR
+   0004) apply to every owner that plays an open signal. A held key or MIDI note follows the amendment of ADR 0005 that K026
    records, once that amendment is accepted.
 2. **Value classes.** Every number, curve or state a view shows is one of: *setpoint* (requested
    by the user), *computed* (closed form from a setpoint or plan), *observed, digital output*
