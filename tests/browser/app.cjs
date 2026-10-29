@@ -1575,6 +1575,8 @@ function defineChecks() {
   def('spectrogram-no-backfill', async ({ page }) => {
     const TONE_HZ = 1000;
     const GAP_S = 3;
+    // The checks after this one expect the workspace it started in.
+    const startMode = await page.evaluate(() => document.querySelector('#osc-app').dataset.mode);
     await H.navTo(page, 'analyzer');
     await page.waitForFunction(() => document.querySelector('#osc-app').dataset.mode
       === 'analyzer', null, { timeout: 8000 });
@@ -1653,7 +1655,11 @@ function defineChecks() {
       await setHidden(false);
     }
     const paused = await page.evaluate(() => window.OSCILLA.app.vizPaused);
-    return { ok: res.pause.ok && res.hidden.ok && paused === false, paused, ...res };
+    await H.stopAll(page);
+    await H.navTo(page, startMode);
+    await page.waitForFunction((w) => document.querySelector('#osc-app').dataset.mode === w,
+      startMode, { timeout: 8000 });
+    return { ok: res.pause.ok && res.hidden.ok && paused === false, paused, startMode, ...res };
   });
 
   def('labs-basic', async ({ page }) => {
