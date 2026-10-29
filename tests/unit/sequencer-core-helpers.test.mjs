@@ -14,13 +14,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as seq from '../../src/js/sequencer/model.js';
-import { createSequence, normalizeBlock, setTempo, SEQ_MIN_FREQUENCY } from '../../src/js/sequencer/model.js';
+import {
+  createSequence, normalizeBlock, setTempo, SEQ_MIN_FREQUENCY,
+} from '../../src/js/sequencer/model.js';
 import { lfoShape as compilerLfoShape } from '../../src/js/sequencer/compiler.js';
 import * as math from '../../src/js/core/math.js';
 import * as freq from '../../src/js/core/frequency.js';
 import { lfoShape as patternsLfoShape } from '../../src/js/audio/patterns.js';
 
-const ODD = [NaN, Infinity, -Infinity, 0, -0, -5, 1e-9, 0.25, 1, 2.5, 440, 1e6, undefined, null, '7', ''];
+const ODD = [NaN, Infinity, -Infinity, 0, -0, -5, 1e-9, 0.25, 1, 2.5, 440, 1e6,
+  undefined, null, '7', ''];
 
 test('E041 pin: clamp, isNum, toNumber, toInt, pick and sig give the core results', () => {
   for (const v of ODD) {
@@ -38,7 +41,7 @@ test('E041 pin: clamp, isNum, toNumber, toInt, pick and sig give the core result
   assert.equal(seq.pick('z', ['a', 'b'], 'a'), 'a');
 });
 
-test('E041 pin: round agrees with core off the ties, and stored 3-decimal values are fixed points', () => {
+test('E041 pin: round agrees with core off the ties; stored 3-decimal values are fixed', () => {
   for (const v of [0, 1, 2.5, 440, 440.0004, 440.0006, -3.2, 120.125, 31.075, 1234.5678]) {
     assert.equal(seq.round(v, 3), math.round(v, 3), `round(${v}, 3)`);
   }
@@ -57,11 +60,13 @@ test('E041 pin: mulberry32 draws the same stream as core', () => {
 });
 
 test('E041 pin: the log mapping is core\'s, with the sequencer floor for an invalid range', () => {
-  const ranges = [[20, 20000], [20, 8000], [100, 100], [0, 1000], [-5, 1000], [NaN, 1000], [20, NaN]];
+  const ranges = [[20, 20000], [20, 8000], [100, 100], [0, 1000], [-5, 1000], [NaN, 1000],
+    [20, NaN]];
   const xs = [NaN, -1, 0, 0.25, 0.5, 1, 1.5, Infinity, 440, 19, 25000];
   for (const [lo, hi] of ranges) {
     for (const x of xs) {
-      assert.ok(Object.is(seq.frequencyToNormalized(x, lo, hi), freq.frequencyToNormalized(x, lo, hi)),
+      const n = freq.frequencyToNormalized(x, lo, hi);
+      assert.ok(Object.is(seq.frequencyToNormalized(x, lo, hi), n),
         `frequencyToNormalized(${x}, ${lo}, ${hi})`);
       const got = seq.normalizedToFrequency(x, lo, hi);
       const want = lo > 0 ? freq.normalizedToFrequency(x, lo, hi) : SEQ_MIN_FREQUENCY;
@@ -71,7 +76,9 @@ test('E041 pin: the log mapping is core\'s, with the sequencer floor for an inva
 });
 
 test('E041 pin: formatMs and lfoShape give the owners\' results', () => {
-  for (const v of [NaN, 0, 5, 999.4, 1000, 1500, 30000]) assert.equal(seq.formatMs(v), freq.formatMs(v));
+  for (const v of [NaN, 0, 5, 999.4, 1000, 1500, 30000]) {
+    assert.equal(seq.formatMs(v), freq.formatMs(v));
+  }
   for (const shape of ['sine', 'triangle', 'other']) {
     for (let k = -8; k <= 24; k++) {
       const p = k / 8 + 0.03;
@@ -81,15 +88,18 @@ test('E041 pin: formatMs and lfoShape give the owners\' results', () => {
 });
 
 test('E041 pin: a seeded sequence with a random block normalizes to itself', () => {
-  const m = createSequence({ seed: 7, blocks: [{ type: 'random', params: {} }, { type: 'sweep', params: { startHz: 20, endHz: 8000 } }] },
+  const blocks = [{ type: 'random', params: {} },
+    { type: 'sweep', params: { startHz: 20, endHz: 8000 } }];
+  const m = createSequence({ seed: 7, blocks },
     { sampleRate: 48000 });
   assert.equal(m.blocks.length, 2);
   const again = createSequence(JSON.parse(JSON.stringify(m)), { sampleRate: 48000 });
   assert.deepEqual(again, m);
 });
 
-test('E041 fix: a decimal tie rounds up in a sequencer block, as core rounds it (S079 carry-over)', () => {
-  const { block } = normalizeBlock({ type: 'tone', durationMs: 16.0005, params: { freq: 32.0025 } });
+test('E041 fix: a decimal tie in a block rounds up, as core rounds it (S079 carry-over)', () => {
+  const { block } = normalizeBlock({ type: 'tone', durationMs: 16.0005,
+    params: { freq: 32.0025 } });
   assert.equal(block.params.freq, 32.003);
   assert.equal(block.durationMs, 16.001);
   assert.equal(seq.round(8.575, 2), 8.58);
@@ -101,7 +111,8 @@ test('E041 fix: a tempo tie rounds as core rounds it', () => {
 });
 
 test('E041: one owner, the sequencer re-exports core\'s helpers and the patterns lfoShape', () => {
-  for (const name of ['clamp', 'isNum', 'toNumber', 'toInt', 'pick', 'round', 'sig', 'mulberry32']) {
+  const names = ['clamp', 'isNum', 'toNumber', 'toInt', 'pick', 'round', 'sig', 'mulberry32'];
+  for (const name of names) {
     assert.equal(seq[name], math[name], `sequencer/model.js ${name} is core/math.js ${name}`);
   }
   assert.equal(seq.frequencyToNormalized, freq.frequencyToNormalized);
