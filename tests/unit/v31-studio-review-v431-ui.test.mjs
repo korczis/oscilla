@@ -171,7 +171,7 @@ test('V431 A5/X3 gain: Filter gain modulation is heard on a peaking or shelf fil
       assert.equal(routesOf(model).routes.get(ids.g).state, 'live');
     } else {
       assert.match(why,
-        /^Filter gain applies to peaking and the shelves only; a .+ filter ignores it\.$/);
+        /^Filter gain applies to peaking and the shelves only; an? .+ filter ignores it\.$/);
       assert.equal(routesOf(model).routes.get(ids.g).state, 'no-effect', type);
     }
   }

@@ -155,11 +155,14 @@ test('the scanner blanks comments, strings and regular expressions and keeps the
  *                   stored result, equal in value to the generation limit but not bound to it,
  *                   so a change of the generation limit can never alter band selection of an
  *                   existing method without a new algorithm id.
+ *   drive.js        DRIVE_CLIP, the Drive stage's output bound: an amplitude (the clip curve
+ *                   holds the output at 0.95 of full scale), not a fraction of Nyquist (K012).
  */
 const NOT_THE_NYQUIST_FACTOR = [
   { file: 'src/js/measurement/spectrum.js', line: /overlap\s*<=\s*0\.95/ },
   { file: 'src/js/charts/measure-charts.js', line: /withAlpha\(\w+, 0\.95\)/ },
   { file: 'src/js/measurement/rta.js', line: /^export const NYQUIST_FRACTION = 0\.95;$/ },
+  { file: 'src/js/audio/drive.js', line: /^export const DRIVE_CLIP = 0\.95;$/ },
 ];
 
 test('0.95 × Nyquist is SAFE_NYQUIST_FACTOR of core/constants.js, never a literal elsewhere', () => {

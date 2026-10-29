@@ -78,7 +78,10 @@ window.T = {
     return out;
   },
 
-  /** A K010-K013 voice graph (VOICES below), rendered offline: plain numbers per probe. */
+  /**
+   * A K010-K013 voice graph (VOICES below), rendered offline (at opts.sampleRate, else the
+   * renderer's own rate): plain numbers per probe.
+   */
   async voice(name, opts = {}) {
     const v = VOICES[name](opts);
     const model = normalizeStudio({ kind: STUDIO_KIND, schemaVersion: 1,
@@ -86,7 +89,8 @@ window.T = {
         position: { x: 0, y: 0 }, params })),
       edges: v.edges.map(([id, from, fp, to, tp, props]) => ({ id, from: { node: from, port: fp },
         to: { node: to, port: tp }, ...(props ? { props } : {}) })) } });
-    const r = await renderStudioOffline(model, { duration: 1, channels: 1 });
+    const r = await renderStudioOffline(model, { duration: 1, channels: 1,
+      ...(opts.sampleRate ? { sampleRate: opts.sampleRate } : {}) });
     if (!r.ok) return { ok: false, errors: r.errors, limitations: r.limitations };
     const b = r.buffer;
     const sr = b.sampleRate;
@@ -115,12 +119,21 @@ const VOICES = {
       ['e2', 'lfo', 'control', 'osc', 'frequency', { mapping: 'log', depth: 0.1 }]],
     probe: [1000, 560, 1440, 1220],
   }),
-  // K012: a full-scale 110 Hz sawtooth through Drive at 100 %, trim 1, into a Master Output at
-  // its highest level (MAX_OUTPUT_GAIN, the engine's hard ceiling).
-  drive: () => ({
-    nodes: [['osc', 'oscillator', { waveform: 'sawtooth', frequency: 110 }],
-      ['drive', 'drive', { drive: 1, trim: 1 }], ['out', 'master', { level: MAX_OUTPUT_GAIN }]],
-    edges: [['e1', 'osc', 'audio', 'drive', 'audio'], ['e2', 'drive', 'audio', 'out', 'audio']],
+  // K012: a full-scale source through Drive at 100 %, trim 1, into a Master Output at its
+  // highest level (MAX_OUTPUT_GAIN, the engine's hard ceiling). `source` is an oscillator
+  // ({ waveform, frequency }) or, with { noise: color }, Noise at level 1.
+  drive: ({ waveform = 'sawtooth', frequency = 110, noise = null } = {}) => ({
+    nodes: [noise ? ['src', 'noise', { color: noise, level: 1 }]
+      : ['src', 'oscillator', { waveform, frequency }],
+    ['drive', 'drive', { drive: 1, trim: 1 }], ['out', 'master', { level: MAX_OUTPUT_GAIN }]],
+    edges: [['e1', 'src', 'audio', 'drive', 'audio'], ['e2', 'drive', 'audio', 'out', 'audio']],
+  }),
+  // K011: a sine at `tone` Hz through a Studio Filter of `type` (a shelf) at 1 kHz, `gain` dB.
+  shelf: ({ type, gain, tone }) => ({
+    nodes: [['osc', 'oscillator', { frequency: tone }],
+      ['f', 'filter', { type, frequency: 1000, gain }], ['out', 'master', {}]],
+    edges: [['e1', 'osc', 'audio', 'f', 'audio'], ['e2', 'f', 'audio', 'out', 'audio']],
+    probe: [tone],
   }),
   // K013: a Macro at `value` opens a 300 Hz low-pass by up to 4 kHz (unipolar edge).
   macro: ({ value }) => ({

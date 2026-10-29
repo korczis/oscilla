@@ -17,7 +17,7 @@ import { DEFAULT_ADSR, MIN_SEGMENT_S } from '../../audio/envelope.js';
 import { DEFAULT_PATTERN_PARAMS } from '../../audio/patterns.js';
 import { definePort } from '../ports.js';
 import {
-  AUDIBLE_SOFT_RANGE, CATEGORIES, FREQUENCY_MAX_HZ, boolParam, defineNode, enumParam,
+  CATEGORIES, FREQUENCY_MAX_HZ, boolParam, defineNode, enumParam,
   integerParam, listParam, numberParam, optionLabel, parts, pct, secondsParam, secs, num,
 } from './common.js';
 
@@ -27,6 +27,11 @@ const rate = (def, modDepth, opts = {}) => numberParam('rate', 'Rate', {
   min: 0.01, max: 100, unit: 'Hz', scale: 'log', default: def, automatable: true,
   modulatable: true, modDepth, ...opts,
 });
+/**
+ * The Inspector slider's range for the LFO rate: the four decades of slow modulation it had
+ * before K010, so the slider keeps its resolution there; an audio rate (FM, AM) is typed.
+ */
+export const LFO_SLIDER_RANGE = Object.freeze([0.01, 100]);
 const randomPeriodS = (DEFAULT_PATTERN_PARAMS.random.toneMs + DEFAULT_PATTERN_PARAMS.random.gapMs)
   / 1000;
 
@@ -41,7 +46,7 @@ export const lfo = defineNode({
   params: [
     enumParam('shape', 'Shape', WAVEFORMS.map((w) => [w, WAVEFORM_LABELS[w]]), 'sine'),
     rate(DEFAULT_PATTERN_PARAMS.wobble.rate, 1, { max: FREQUENCY_MAX_HZ,
-      softRange: [0.01, AUDIBLE_SOFT_RANGE[1]] }),
+      softRange: LFO_SLIDER_RANGE }),
   ],
   summary(p) {
     return parts(optionLabel(lfo, 'shape', p.shape), `${num(p.rate)} Hz`);
@@ -49,7 +54,8 @@ export const lfo = defineNode({
   capabilities: { realtime: true, offline: true },
   compiler: 'audio/modulation.js#buildLfo',
   help: {
-    what: 'A modulation oscillator, from slow sweeps to audio rate (FM, AM).',
+    what: 'A modulation oscillator, from slow sweeps to audio rate (FM, AM). The rate slider '
+      + `spans ${LFO_SLIDER_RANGE[0]}-${LFO_SLIDER_RANGE[1]} Hz; an audio rate is typed.`,
     inputs: 'Rate accepts modulation from another modulator.',
     outputs: 'Control, −1 to 1; the connection sets depth and polarity.',
     constraints: 'A modulation path may not lead back to its own source. Rate is limited to '

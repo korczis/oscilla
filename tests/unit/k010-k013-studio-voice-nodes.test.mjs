@@ -4,7 +4,8 @@
 //   K010  LFO rate at audio rate: up to FREQUENCY_MAX_HZ in the model, clamped to 0.95 x
 //         Nyquist of the running context through hooks.clampFrequency, and reported
 //   K011  Filter types low-shelf, high-shelf and all-pass; brown noise
-//   K012  Drive: a tanh WaveShaper (4x oversampling) between a drive gain and a trim <= 1
+//   K012  Drive: a tanh WaveShaper (4x oversampling) between a drive gain and a trim <= 1,
+//         then a clip (WaveShaper, no oversampling) that holds the output at DRIVE_CLIP
 //   K013  Macro: one ConstantSourceNode 0..1, automatable, with a CONTROL output
 // On the real AudioEngine with the recording fake context of sequencer-fake-audio.mjs, at
 // 44.1 and 48 kHz. Real rendering (FM sidebands, shelf and all-pass responses, the Drive peak)
@@ -20,8 +21,8 @@ import {
 } from '../../src/js/audio/filters.js';
 import { createNoiseBuffer, noiseSamples } from '../../src/js/audio/noise.js';
 import {
-  DRIVE_CURVE_SIZE, DRIVE_HEADROOM, DRIVE_MAX_DB, DRIVE_SPAN, createDriveStage, driveCurve,
-  driveGain,
+  DRIVE_CLIP, DRIVE_CLIP_CURVE_SIZE, DRIVE_CURVE_SIZE, DRIVE_HEADROOM, DRIVE_MAX_DB, DRIVE_SPAN,
+  clipCurve, createDriveStage, driveCurve, driveGain,
 } from '../../src/js/audio/drive.js';
 import { createIdGenerator, createStudioStore } from '../../src/js/studio/actions.js';
 import {
@@ -33,6 +34,9 @@ import { NODE_REGISTRY as R, searchNodeTypes } from '../../src/js/studio/registr
 import { createStudioRuntime } from '../../src/js/studio/runtime.js';
 import { validateStudioModel } from '../../src/js/studio/validate.js';
 import { edgeEffectReason } from '../../src/js/ui/studio/graph-view.js';
+import {
+  SLIDER_STEPS, parseParamInput, sliderRange, sliderToValue, valueToSlider,
+} from '../../src/js/ui/studio/inspector.js';
 import { StudioFakeContext, createFakeAudioEnv } from './sequencer-fake-audio.mjs';
 
 const RATES = [44100, 48000];
@@ -99,6 +103,12 @@ test('K010 the LFO rate reaches audio rate in the model; Random and Step stay at
   assert.equal(R.param('random', 'rate').max, 100);
   assert.equal(R.param('step-modulator', 'rate').max, 100);
   assert.match(R.get('lfo').help.constraints, /0\.95 × the digital Nyquist limit/);
+  // The Inspector slider keeps the four decades of slow rates; an audio rate is typed.
+  assert.deepEqual(sliderRange(p), { lo: 0.01, hi: 100, log: true });
+  assert.equal(sliderToValue(p, SLIDER_STEPS), 100);
+  assert.deepEqual(parseParamInput(p, '2000 Hz'), { ok: true, value: 2000 });
+  assert.equal(valueToSlider(p, 2000), SLIDER_STEPS, 'a typed audio rate pins the slider end');
+  assert.match(R.get('lfo').help.what, /slider spans 0\.01-100 Hz; an audio rate is typed/);
 });
 
 test('K010 an LFO at 440 Hz into the oscillator frequency (log) validates and plays at 440 Hz',
@@ -204,6 +214,33 @@ test('K011 a shelf takes gain modulation and refuses Q with the one reason every
   s.runtime.stop();
 });
 
+test('K011 an all-pass ignores gain: one statement of usesQ/usesGain, a correct article', () => {
+  for (const type of FILTER_TYPES) {
+    assert.equal(qIsUsed(type), usesQ(type), type);
+    assert.equal(gainIsUsed(type), usesGain(type), type);
+  }
+  assert.equal(qIsUsed, usesQ, 'clip-targets.js re-exports audio/filters.js usesQ');
+  assert.equal(gainIsUsed, usesGain, 'clip-targets.js re-exports audio/filters.js usesGain');
+  const store = newStore();
+  const b = builder(store);
+  const osc = b.add('oscillator');
+  const ap = b.add('filter', { type: 'allpass' });
+  const lp = b.add('filter');
+  const master = b.add('master');
+  const lfo = b.add('lfo');
+  b.connect(osc, 'audio', ap, 'audio');
+  b.connect(ap, 'audio', lp, 'audio');
+  b.connect(lp, 'audio', master, 'audio');
+  const ga = b.connect(lfo, 'control', ap, 'gain', { depth: 3 });
+  const gl = b.connect(lfo, 'control', lp, 'gain', { depth: 3 });
+  const model = store.getModel();
+  const edge = (id) => model.graph.edges.find((x) => x.id === id);
+  assert.equal(edgeEffectReason(model, edge(ga)),
+    'Filter gain applies to peaking and the shelves only; an All-pass filter ignores it.');
+  assert.equal(edgeEffectReason(model, edge(gl)),
+    'Filter gain applies to peaking and the shelves only; a Low-pass filter ignores it.');
+});
+
 test('K011 a type change to a shelf or all-pass is the crossfaded node replace', () => {
   const store = newStore();
   const b = builder(store);
@@ -290,6 +327,18 @@ test('K011 brown noise is level-matched, seamless at the loop and needs the samp
   assert.ok(peak <= 0.99 + 1e-6, `peak ${peak}`);
   assert.ok(rms > 0.05 && rms <= 0.2 + 1e-6, `rms ${rms}`);
   assert.ok(Math.abs(x[0] - x[x.length - 1]) <= step, 'no step at the loop point');
+  // No DC: the integrator's mean is removed (it was −17 to −29 dB re the RMS by seed).
+  for (const [seed, len] of [[3, sr * 2], [1, sr * 4], [11, sr], [20261001, sr * 2]]) {
+    const y = noiseSamples(len, { color: 'brown', seed, sampleRate: sr });
+    let m = 0;
+    let q = 0;
+    for (let i = 0; i < y.length; i++) {
+      m += y[i];
+      q += y[i] * y[i];
+    }
+    const dcDb = 20 * Math.log10(Math.abs(m / y.length) / Math.sqrt(q / y.length));
+    assert.ok(dcDb < -80, `seed ${seed}, ${len}: DC ${dcDb.toFixed(1)} dB re RMS`);
+  }
   assert.deepEqual(noiseSamples(4096, { color: 'brown', seed: 3, sampleRate: sr }),
     noiseSamples(4096, { color: 'brown', seed: 3, sampleRate: sr }), 'deterministic');
   assert.throws(() => noiseSamples(1024, { color: 'brown', seed: 3 }), /sample rate/);
@@ -332,8 +381,9 @@ test('K012 the Drive curve is odd, monotone and below full scale; trim is at mos
     if (i) assert.ok(c[i] >= c[i - 1], 'monotone');
     peak = Math.max(peak, Math.abs(c[i]));
   }
-  // Room for the 4x resampling filter's overshoot (up to ~18 % of a hard-saturated edge).
-  assert.ok(peak < DRIVE_HEADROOM && peak * 1.18 < 1, `peak ${peak}`);
+  // Room for the 4x resampling filter's ordinary overshoot (17 % on a sawtooth); the clip
+  // bounds the rest (next test).
+  assert.ok(peak < DRIVE_HEADROOM, `peak ${peak}`);
   // The curve spans DRIVE_SPAN: input x in [-1, 1] maps to 0.8 tanh(DRIVE_SPAN x).
   assert.ok(Math.abs(c[c.length - 1] - DRIVE_HEADROOM * Math.tanh(DRIVE_SPAN)) < 1e-6);
   assert.equal(driveGain(0), 1);
@@ -344,7 +394,37 @@ test('K012 the Drive curve is odd, monotone and below full scale; trim is at mos
   assert.equal(R.param('drive', 'drive').max, 1);
 });
 
-test('K012 createDriveStage: drive gain, 4x oversampled tanh shaper, trim, all tracked', () => {
+/** A WaveShaperNode's curve at x with oversample 'none' (Web Audio: linear interpolation). */
+function shape(curve, x) {
+  const n = curve.length;
+  if (x <= -1) return curve[0];
+  if (x >= 1) return curve[n - 1];
+  const v = ((n - 1) / 2) * (x + 1);
+  const k = Math.floor(v);
+  const f = v - k;
+  return k >= n - 1 ? curve[n - 1] : (1 - f) * curve[k] + f * curve[k + 1];
+}
+
+test('K012 the clip curve bounds every input at DRIVE_CLIP and is the identity inside it', () => {
+  const c = clipCurve();
+  assert.equal(c.length, DRIVE_CLIP_CURVE_SIZE);
+  assert.ok(DRIVE_CLIP < 1);
+  // The 4x resampler's overshoot reaches about 1.6 x the tanh curve's peak (white noise, HF
+  // sines); whatever reaches the clip, inside or far beyond [-1, 1], leaves at most DRIVE_CLIP.
+  let worst = 0;
+  for (let i = -4000; i <= 4000; i++) {
+    const x = i / 1000;
+    const y = shape(c, x);
+    worst = Math.max(worst, Math.abs(y));
+    if (Math.abs(x) <= DRIVE_CLIP) assert.ok(Math.abs(y - x) < 1e-6, `identity at ${x}: ${y}`);
+    else assert.ok(Math.abs(Math.abs(y) - DRIVE_CLIP) < 1e-6, `clipped at ${x}: ${y}`);
+  }
+  assert.ok(worst <= DRIVE_CLIP + 1e-7, `worst ${worst}`);
+  // The tanh curve's ordinary overshoot (17 % on a sawtooth) stays below the clip.
+  assert.ok(DRIVE_HEADROOM * 1.17 < DRIVE_CLIP);
+});
+
+test('K012 createDriveStage: drive gain, 4x tanh shaper, trim, then the clip, tracked', () => {
   const ctx = new StudioFakeContext({ sampleRate: 48000 });
   const tracked = [];
   const track = (n) => {
@@ -354,13 +434,17 @@ test('K012 createDriveStage: drive gain, 4x oversampled tanh shaper, trim, all t
   const st = createDriveStage(ctx, { drive: 1, trim: 3 }, { track });
   assert.equal(st.shaper.oversample, '4x');
   assert.equal(st.shaper.curve.length, DRIVE_CURVE_SIZE);
-  assert.deepEqual(new Set(tracked), new Set([st.input, st.shaper, st.output]));
-  assert.ok(st.input.outputs.includes(st.shaper) && st.shaper.outputs.includes(st.output));
+  assert.equal(st.clip.oversample, 'none', 'nothing after the clip resamples');
+  assert.deepEqual(Array.from(st.clip.curve), Array.from(clipCurve()));
+  assert.equal(st.output, st.clip, 'the clip is the last node: a trim edge is bounded too');
+  assert.deepEqual(new Set(tracked), new Set([st.input, st.shaper, st.trim, st.clip]));
+  assert.ok(st.input.outputs.includes(st.shaper) && st.shaper.outputs.includes(st.trim)
+    && st.trim.outputs.includes(st.clip));
   assert.ok(Math.abs(lastValue(st.input.gain) - driveGain(1) / DRIVE_SPAN) < 1e-9);
-  assert.equal(lastValue(st.output.gain), 1, 'trim above 1 is held at 1');
+  assert.equal(lastValue(st.trim.gain), 1, 'trim above 1 is held at 1');
   st.update({ drive: 0, trim: 0.25 });
   assert.ok(Math.abs(lastValue(st.input.gain) - 1 / DRIVE_SPAN) < 1e-9);
-  assert.equal(lastValue(st.output.gain), 0.25);
+  assert.equal(lastValue(st.trim.gain), 0.25);
   st.dispose();
   assert.ok(tracked.every((n) => n.disconnected));
 });

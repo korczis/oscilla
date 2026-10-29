@@ -40,6 +40,7 @@
 // tests/unit/v4-clip-target-policy.test.mjs proves the store, the UI and the transport give this
 // verdict for every node type, clip kind, action and parameter in the registry.
 
+import { usesGain, usesQ } from '../audio/filters.js';
 import { NODE_REGISTRY } from './registry.js';
 import { EVENT_ACTIONS, MEASUREMENT_ACTIONS } from './schema.js';
 
@@ -63,16 +64,16 @@ export function qIsDecibels(type) {
 
 /**
  * Whether Web Audio uses a biquad's gain AudioParam for a filter type (only the peaking and
- * shelving types do), so that driving it changes the sound.
+ * shelving types do), so that driving it changes the sound: audio/filters.js usesGain, the one
+ * statement of it.
  */
-export function gainIsUsed(type) {
-  return type === 'peaking' || type === 'lowshelf' || type === 'highshelf';
-}
+export const gainIsUsed = usesGain;
 
-/** Whether Web Audio uses a biquad's Q AudioParam for a filter type (the shelves ignore it). */
-export function qIsUsed(type) {
-  return type !== 'lowshelf' && type !== 'highshelf';
-}
+/**
+ * Whether Web Audio uses a biquad's Q AudioParam for a filter type (the shelves ignore it):
+ * audio/filters.js usesQ.
+ */
+export const qIsUsed = usesQ;
 
 /** How a pattern clip plays, by target node type (absent: it does not play). */
 const PATTERN_PLAY = Object.freeze({ sequence: 'sequence', oscillator: 'pattern-played' });

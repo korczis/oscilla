@@ -17,12 +17,15 @@
 //     Measurement Sweep is refused (live Microphone) with that limitation.
 //   K010-K013 voice nodes, each graph rendered at the renderer's own rate (no rate assumed):
 //     a 440 Hz LFO on a 1 kHz carrier (log, ±0.1 octave) puts sidebands at fc ± 440 Hz above
-//     −40 dB re the carrier and > 20 dB over a 1220 Hz non-sideband probe; Drive at 100 % on a
-//     full-scale sawtooth behind a Master Output at its highest level (MAX_OUTPUT_GAIN, the
-//     live engine's ceiling) peaks at or below that ceiling with no clipped sample; a Macro at
+//     −40 dB re the carrier and > 20 dB over a 1220 Hz non-sideband probe; Drive at 100 % on
+//     110 and 1760 Hz sawtooths, 10 kHz, 15 kHz and 0.45 x rate sines and white noise, at 44.1
+//     and 48 kHz, behind a Master Output at its highest level (MAX_OUTPUT_GAIN, the live
+//     engine's ceiling) peaks at or below that ceiling with no clipped sample; a Macro at
 //     1 opens a 300 Hz low-pass so that the 2.2 kHz harmonic is > 10 dB above the Macro at 0;
-//     the filter stage's response probe gives a low-shelf's gain within 0.5 dB (below the
-//     corner, and 0 dB above it) and an all-pass flat within 0.1 dB from 20 Hz to 20 kHz.
+//     the filter stage's response probe gives a low-shelf's and a high-shelf's gain (±6 dB)
+//     within 0.5 dB on the shelf and 0 dB off it, the same shelves rendered through the Studio
+//     graph move a 40 Hz or 16 kHz tone by their gain within 0.5 dB, and an all-pass is flat
+//     within 0.1 dB from 20 Hz to 20 kHz.
 //   no console error or page error.
 'use strict';
 
@@ -38,6 +41,18 @@ const i = argv.indexOf('--browsers');
 const RUN = suite.open({ name: 'v31-studio-offline',
   browsers: i >= 0 && argv[i + 1] ? argv[i + 1] : undefined });
 const playwright = RUN.playwright;
+
+// K012 inputs: the ordinary case, a high note's sawtooth, sines whose saturated square keeps
+// only its fundamental after the 4x down-sampling (10 and 15 kHz, 0.45 x the rate) and
+// full-scale white noise (the resampler's largest overshoot; review of #267).
+const DRIVE_SOURCES = (sr) => [
+  { label: 'a 110 Hz sawtooth', waveform: 'sawtooth', frequency: 110 },
+  { label: 'a 1760 Hz sawtooth', waveform: 'sawtooth', frequency: 1760 },
+  { label: 'a 10 kHz sine', waveform: 'sine', frequency: 10000 },
+  { label: 'a 15 kHz sine', waveform: 'sine', frequency: 15000 },
+  { label: `a ${Math.round(0.45 * sr)} Hz sine`, waveform: 'sine', frequency: 0.45 * sr },
+  { label: 'white noise', noise: 'white' },
+];
 const BROWSERS = RUN.browsers;
 const ENTRY = path.join(__dirname, 'fixtures', 'v31-studio-offline-entry.js');
 // Goertzel with a Hann window over 0.6 s (264 periods of 440 Hz) reads a steady sine's amplitude
@@ -115,10 +130,20 @@ async function runOne(name, url) {
       `${fm.sampleRate} Hz: 560 ${re(fa[560], fa[1000]).toFixed(1)} dB, 1440 `
         + `${re(fa[1440], fa[1000]).toFixed(1)} dB re carrier; 1220 `
         + `${re(fa[1220], fa[1000]).toFixed(1)} dB`);
-    const dr = await page.evaluate(() => window.T.voice('drive'));
-    check(name, 'K012 Drive at 100 % behind Master at the ceiling level peaks below the ceiling',
-      dr.ok && dr.stats.peak <= dr.ceiling && dr.stats.peak > dr.ceiling * 0.5
-        && dr.stats.clippedSamples === 0, `${JSON.stringify(dr.stats)}, ceiling ${dr.ceiling}`);
+    // The K012 check requests both render rates and asserts each back (dr.sampleRate === sr).
+    // timing-allow: OfflineAudioContext render rates this check requests and asserts back
+    for (const sr of [44100, 48000]) {
+      for (const src of DRIVE_SOURCES(sr)) {
+        const dr = await page.evaluate((o) => window.T.voice('drive', o),
+          { ...src, sampleRate: sr });
+        const loud = src.waveform === 'sawtooth' && src.frequency === 110;
+        check(name, `K012 Drive at 100 % on ${src.label} at ${sr} Hz behind Master at the `
+          + 'ceiling level peaks at or below the ceiling',
+          dr.ok && dr.sampleRate === sr && dr.stats.peak <= dr.ceiling
+            && (!loud || dr.stats.peak > dr.ceiling * 0.5) && dr.stats.clippedSamples === 0,
+          `${JSON.stringify(dr.stats)}, ceiling ${dr.ceiling}`);
+      }
+    }
     const m0 = await page.evaluate(() => window.T.voice('macro', { value: 0 }));
     const m1 = await page.evaluate(() => window.T.voice('macro', { value: 1 }));
     check(name, 'K013 a Macro at 1 opens the cutoff: 2.2 kHz > 10 dB over the Macro at 0',
@@ -128,6 +153,26 @@ async function runOne(name, url) {
       frequency: 500, gain: 6 }, [30, 15000]));
     check(name, 'K011 low-shelf +6 dB: 6 dB below the corner, 0 dB above it (±0.5 dB)',
       Math.abs(shelf[0] - 6) <= 0.5 && Math.abs(shelf[1]) <= 0.5, JSON.stringify(shelf));
+    const shelfN = await page.evaluate(() => window.T.response({ type: 'lowshelf',
+      frequency: 500, gain: -6 }, [30, 15000]));
+    check(name, 'K011 low-shelf −6 dB: −6 dB below the corner, 0 dB above it (±0.5 dB)',
+      Math.abs(shelfN[0] + 6) <= 0.5 && Math.abs(shelfN[1]) <= 0.5, JSON.stringify(shelfN));
+    for (const g of [6, -6]) {
+      const hs = await page.evaluate((gain) => window.T.response({ type: 'highshelf',
+        frequency: 1000, gain }, [40, 18000]), g);
+      check(name, `K011 high-shelf ${g} dB: 0 dB below the corner, ${g} dB above it (±0.5 dB)`,
+        Math.abs(hs[0]) <= 0.5 && Math.abs(hs[1] - g) <= 0.5, JSON.stringify(hs));
+    }
+    // Through the Studio graph: a tone's level with the shelf at `gain` re the same graph at 0 dB.
+    for (const [type, gain, tone] of [['lowshelf', 6, 40], ['lowshelf', -6, 40],
+      ['highshelf', 6, 16000], ['highshelf', -6, 16000]]) {
+      const on = await page.evaluate((o) => window.T.voice('shelf', o), { type, gain, tone });
+      const flat = await page.evaluate((o) => window.T.voice('shelf', o),
+        { type, gain: 0, tone });
+      const d = on.ok && flat.ok ? re(on.amp[tone], flat.amp[tone]) : NaN;
+      check(name, `K011 Studio ${type} ${gain} dB at 1 kHz: a ${tone} Hz tone moves by `
+        + `${gain} dB (±0.5 dB)`, Math.abs(d - gain) <= 0.5, `${d.toFixed(2)} dB`);
+    }
     const ap = await page.evaluate(() => window.T.response({ type: 'allpass', frequency: 1000,
       Q: 1 }, [20, 63, 200, 632, 1000, 2000, 6325, 20000]));
     check(name, 'K011 all-pass magnitude is flat within 0.1 dB, 20 Hz to 20 kHz',

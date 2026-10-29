@@ -167,8 +167,9 @@ export function edgeEffectReason(model, edge, registry = NODE_REGISTRY) {
   if (edge.to.port === 'gain' && !gainIsUsed(type)) {
     const p = registry.param(b.type, 'type');
     const o = p && (p.options || []).find((x) => x[0] === type);
-    return `Filter gain applies to peaking and the shelves only; a ${o ? o[1] : type} filter `
-      + 'ignores it.';
+    const label = o ? o[1] : String(type);
+    return `Filter gain applies to peaking and the shelves only; ${/^[aeiou]/i.test(label)
+      ? 'an' : 'a'} ${label} filter ignores it.`;
   }
   return null;
 }

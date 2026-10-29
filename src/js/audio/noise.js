@@ -10,8 +10,10 @@
 // Brown (K011): uniform white through a leaky integrator y[n] = a·y[n−1] + w[n] with
 // a = exp(−2π·BROWN_CORNER_HZ / sampleRate), so the spectrum falls 6 dB per octave above the
 // corner (1/f², within 0.3 dB up to 6 kHz at 44.1 and 48 kHz) and the leak keeps it bounded;
-// a needs the context's sample rate, which is never assumed. Two passes, as for pink.
-// Both colours are scaled to the same RMS (−14 dBFS by default, peak kept below 0.99) so
+// a needs the context's sample rate, which is never assumed. Two passes, as for pink; the
+// integrator's mean (a DC offset of up to about −17 dB re the RMS on a short buffer) is then
+// subtracted, which keeps the loop seamless (a constant shift of every sample).
+// All three colours are scaled to the same RMS (−14 dBFS by default, peak kept below 0.99) so
 // switching colour in the lab does not change the level by itself.
 
 import { applyAdsr, releaseAt, MIN_SEGMENT_S } from './envelope.js';
@@ -68,7 +70,7 @@ export function fillPink(out, rng) {
   return out;
 }
 
-/** Brown noise into out at sampleRate (leaky integrator over uniform white, seamless). */
+/** Brown noise into out at sampleRate (leaky integrator over uniform white, seamless, no DC). */
 export function fillBrown(out, rng, sampleRate) {
   if (!(sampleRate > 0)) throw new RangeError('Brown noise needs the sample rate of its context');
   const n = out.length;
@@ -76,12 +78,18 @@ export function fillBrown(out, rng, sampleRate) {
   fillWhite(white, rng);
   const a = Math.exp((-2 * Math.PI * BROWN_CORNER_HZ) / sampleRate);
   let y = 0;
+  let sum = 0;
   for (let pass = 0; pass < 2; pass++) {
     for (let i = 0; i < n; i++) {
       y = a * y + white[i];
-      if (pass === 1) out[i] = y;
+      if (pass === 1) {
+        out[i] = y;
+        sum += y;
+      }
     }
   }
+  const mean = n ? sum / n : 0;
+  for (let i = 0; i < n; i++) out[i] -= mean;
   return out;
 }
 

@@ -201,9 +201,9 @@ const ROWS = [
     param: (h) => h.outputs.audio.pan, ...panLane },
   split('panA', -1), split('panB', -1), split('levelA', 0), split('levelB', 0),
   mixerLevel(1), mixerLevel(2), mixerLevel(3), mixerLevel(4),
-  // K012: the Drive trim is its output gain, linear.
+  // K012: the Drive trim is its trim gain (before the clip that is its output), linear.
   { type: 'drive', key: 'trim', unit: '', scale: 'linear', min: 0, max: 1, display: 'linear',
-    param: level, points: [[0, 0.25, 'step'], [1, 1, 'linear'], [2, 0, 'linear']],
+    param: (h) => h.info.stage.trim.gain, points: [[0, 0.25, 'step'], [1, 1, 'linear'], [2, 0, 'linear']],
     checks: () => [[0, 0.25], [0.5, 0.625], [1, 1], [1.5, 0.5], [2, 0]] },
   // K013: the Macro value is its ConstantSourceNode offset, 0..1.
   { type: 'macro', key: 'value', unit: '', scale: 'linear', min: 0, max: 1, display: 'linear',

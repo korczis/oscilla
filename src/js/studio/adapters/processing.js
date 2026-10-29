@@ -233,19 +233,19 @@ export const drive = {
   compiler: 'audio/drive.js#createDriveStage',
   structural: [],
   create({ ctx, acct, params }) {
-    // audio/drive.js: drive gain → tanh WaveShaper (4x oversampling) → trim ≤ 1 (K012).
+    // audio/drive.js: drive gain → tanh WaveShaper (4x) → trim → clip at DRIVE_CLIP (K012).
     const stage = createDriveStage(ctx, params, { track: acct.track });
     const trimOf = (v) => Math.min(1, Math.max(0, v));
     return {
       inputs: { audio: stage.input },
       outputs: { audio: stage.output },
       outputRange: {},
-      modTarget: (key, mapping) => (key === 'trim' ? linearOnly(stage.output.gain)(key, mapping)
+      modTarget: (key, mapping) => (key === 'trim' ? linearOnly(stage.trim.gain)(key, mapping)
         : { reason: `${key} is not modulatable` }),
       applyBase(b, immediate, owned, w) {
         // The static trim (edge offsets included) is held at 0..1, as createDriveStage holds it.
         if (free(owned, 'trim')) {
-          setParam(stage.output.gain, trimOf(b.trim.value), immediate, ctx.currentTime, w,
+          setParam(stage.trim.gain, trimOf(b.trim.value), immediate, ctx.currentTime, w,
             'trim');
         }
       },

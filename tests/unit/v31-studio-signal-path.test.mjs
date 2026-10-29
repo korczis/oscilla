@@ -279,6 +279,17 @@ test('the Playground voice graph is the voice the engine builds', () => {
   assert.equal(nodeOf(m, ID.master).params.level, i.gain);
 });
 
+test('values beyond a Studio range stay as they sound; such a model is reported invalid', () => {
+  // Since K010 the AM and FM rates are inside the LFO's range (next test); the Envelope's
+  // attack still stops at 10 s, so a 20 s attack is kept as it is and reported.
+  const i = inputsOf(cfg({ pattern: 'tone' }), { attack: 20000 });
+  const { voice } = project(i, NO_LAB);
+  assert.equal(voice.model.graph.nodes.find((n) => n.id === ID.envelope).params.attack, 20);
+  const v = validateStudioModel(voice.model);
+  assert.equal(v.ok, false);
+  assert.deepEqual(v.errors.map((e) => [e.code, e.nodeId]), [['invalid-param', ID.envelope]]);
+});
+
 test('K010: AM and FM voices with an audio-rate modulator are valid Studio models', () => {
   // The Playground's own maxima: FM 2 kHz, AM 500 Hz (audio/patterns.js). Before K010 the LFO
   // stopped at 100 Hz and such a voice did not validate (the V605 obstacle).

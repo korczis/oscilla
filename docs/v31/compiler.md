@@ -54,7 +54,7 @@ The runtime never creates an AudioContext or an output chain. It takes the appli
 | Pan | `audio/stereo.js#createStereoRouter` | StereoPannerNode on a 1-channel input (the engine's `buildDual` panner); fallback `createStereoRouter` 'pan' mode |
 | Stereo Split | `audio/stereo.js#createStereoRouter` | `createStereoRouter` |
 | Mixer | `audio/audio-engine.js#AudioEngine` | one level GainNode per input into a sum (the only summing node, §188) |
-| Drive | `audio/drive.js#createDriveStage` | drive GainNode → tanh WaveShaperNode (`oversample` 4x, the curve scaled by `DRIVE_HEADROOM` for the resampling overshoot) → trim GainNode ≤ 1 (K012) |
+| Drive | `audio/drive.js#createDriveStage` | drive GainNode → tanh WaveShaperNode (`oversample` 4x, the curve scaled by `DRIVE_HEADROOM` for the ordinary resampling overshoot) → trim GainNode ≤ 1 → clip WaveShaperNode (`oversample` none, identity inside ±`DRIVE_CLIP` 0.95, held there beyond): the output peak is at most 0.95 whatever the input, drive or trim edge (K012) |
 | Scope, Spectrum, Meter | `analysis/analyser.js#createAnalyserReader` | AnalyserNode + `createAnalyserReader` |
 | Spectrogram | `analysis/spectrogram.js#createSpectrogram` | AnalyserNode + reader; the view binds `createSpectrogram(canvas)` |
 | RTA | `measurement/rta.js#createRtaAverager` | AnalyserNode + reader + `createRtaAverager` |

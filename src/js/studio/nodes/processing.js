@@ -7,6 +7,7 @@
 // INVARIANT (§188): Mixer is the only node whose audio inputs are meant to be summed; every
 // other audio input accepts one connection, so accidental summing cannot happen.
 
+import { DRIVE_CLIP } from '../../audio/drive.js';
 import { DEFAULT_FILTER, FILTER_TYPES, usesGain } from '../../audio/filters.js';
 import { SAFE_NYQUIST_FACTOR_TEXT } from '../../core/constants.js';
 import { definePort } from '../ports.js';
@@ -217,14 +218,17 @@ export const drive = defineNode({
   },
   capabilities: { realtime: true, offline: true },
   compiler: 'audio/drive.js#createDriveStage',
-  reuses: ['audio/drive.js#driveCurve'],
+  reuses: ['audio/drive.js#driveCurve', 'audio/drive.js#clipCurve'],
   help: {
-    what: 'Soft saturation: a tanh curve on a wave shaper with 4× oversampling, then a trim.',
+    what: 'Soft saturation: a tanh curve on a wave shaper with 4× oversampling, then a trim '
+      + 'and a hard clip.',
     inputs: 'Audio; trim accepts modulation.',
-    outputs: 'Audio.',
+    outputs: `Audio, at most ${DRIVE_CLIP} in magnitude.`,
     constraints: 'Drive 0-100 % adds 0-36 dB in front of the curve, which keeps 1.9 dB of '
-      + 'headroom for the oversampling filter; trim is at most 1, a modulation edge on it adds '
-      + 'to that, and the output ceiling still applies at Master.',
+      + 'headroom for the oversampling filter\'s usual overshoot; trim is at most 1, and a '
+      + `modulation edge on it adds to that. A hard clip at ${DRIVE_CLIP} after the trim cuts `
+      + `the larger overshoot of noise and high notes, so the Drive output never exceeds `
+      + `${DRIVE_CLIP}.`,
   },
 });
 
