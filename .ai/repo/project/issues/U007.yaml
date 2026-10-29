@@ -6,7 +6,7 @@ title: "Every workspace works at phone width"
 slug: every-workspace-works-at-phone-width
 priority: p2
 profile: implementation
-objective: "Fix what the audit records at 390x844: no horizontal page scroll, controls reachable, panels stacked, the Studio's subviews switchable; extend tests/browser/layout.cjs or ui-current.cjs to every workspace at that size."
+objective: "Resolves docs/ui-audit.md A12. Fix what the audit records at 390x844: no horizontal page scroll, controls reachable, panels stacked, the Studio's subviews switchable; extend tests/browser/layout.cjs or ui-current.cjs to every workspace at that size."
 why: "Audit 2026-10-28 (390x844 findings)."
 scope:
   - "src/styles"

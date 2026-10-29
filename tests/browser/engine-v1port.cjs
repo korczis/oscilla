@@ -604,6 +604,101 @@ async function runBrowser() {
     await context.close();
   }
 
+  // ------------------------------------------------------------------ §80 pattern test matrix
+  // S080: every pattern of section 80 (V1 specification sections 64-95) through trigger, stop,
+  // retrigger, rapid interruption and page navigation, with no stuck audio. The section's names
+  // map onto PATTERNS: tone -> tone and finite, sweep -> sweepUp and sweepDown, ping-pong ->
+  // pingpong, AM -> am, FM -> fm, custom sequence -> sequence; every listed pattern has a
+  // counterpart, and the test fails if one goes missing. Page navigation is V1's mode switch: it
+  // does not stop the sound by design (only MEASURE and Studio take the output, src/js/main.js),
+  // so the check is that the voice stays tracked through it and stops to an empty graph.
+  // "Empty" is both counts: the engine's activeNodeCount and the in-page census of started
+  // oscillators (window.__T), with every stop taking effect within the release bound.
+  section('§80 pattern test matrix');
+  {
+    const SECTION_80 = ['tone', 'pulse', 'burst', 'sweepUp', 'sweepDown', 'pingpong', 'chirp',
+      'siren', 'alternating', 'wobble', 'am', 'fm', 'random', 'octave', 'sequence'];
+    const { page, problems, context } = await openPage(browser);
+    await startAudio(page);
+    const ids = await app(page, (a, e, O) => O.PATTERNS.map((p) => p.id));
+    for (const id of SECTION_80) {
+      check(`§80 ${id}: the pattern exists`, ids.includes(id), ids.join(','));
+    }
+    const RELEASE_S = 0.03;
+    const bound = RELEASE_S + 0.05;
+    for (const id of ids) {
+      const r = await app(page, async (a, e, O, T, arg) => {
+        const out = {};
+        // Wait, against a wall-clock deadline, until the voice has started an oscillator.
+        const started = async (before, ms) => {
+          const wall = Date.now();
+          while (T.oscs.length === before) {
+            if (Date.now() - wall > ms) return false;
+            await sleep(2);
+          }
+          return true;
+        };
+        const go = () => (a.isProgrammed ? a.trigger() : a.play('hold'));
+        a.setMode('playground');
+        a.release = arg.releaseMs;
+        a.setFrequency(440);
+        a.setPattern(arg.id);
+        out.programmed = a.isProgrammed;
+        // trigger, then stop
+        let n = T.oscs.length;
+        go();
+        out.triggerStarted = await started(n, 3000);
+        let tS = e.ctx.currentTime;
+        a.stop();
+        out.stop = await gone(tS, 1);
+        // retrigger: a second start while the first sounds replaces it; the first may still be
+        // in its release, so at most two voices overlap (as the gain-cap section bounds them)
+        n = T.oscs.length;
+        go();
+        await started(n, 3000);
+        n = T.oscs.length;
+        go();
+        out.retriggerStarted = await started(n, 3000);
+        out.retriggerVoices = e.voices.size;
+        tS = e.ctx.currentTime;
+        a.stop();
+        out.retrigger = await gone(tS, 1);
+        // rapid interruption: eight starts, each stopped in the same task
+        for (let i = 0; i < 8; i++) {
+          go();
+          a.stop();
+        }
+        tS = e.ctx.currentTime;
+        out.rapid = await gone(tS, 1);
+        // page navigation while sounding: the voice stays tracked, then stops to nothing
+        n = T.oscs.length;
+        go();
+        out.navStarted = await started(n, 3000);
+        a.setMode('learn');
+        out.navTracked = e.voices.size >= 1 && T.liveOscs() >= 1;
+        tS = e.ctx.currentTime;
+        a.stop();
+        out.nav = await gone(tS, 1);
+        a.setMode('playground');
+        return out;
+      }, { id, releaseMs: RELEASE_S * 1000 });
+      check(`§80 ${id}: trigger starts the pattern`, r.triggerStarted, JSON.stringify(r));
+      check(`§80 ${id}: stop leaves no node`, tornDown(r.stop, bound), JSON.stringify(r.stop));
+      check(`§80 ${id}: retrigger overlaps at most two voices (the old one releasing)`,
+        r.retriggerStarted && r.retriggerVoices <= 2, JSON.stringify(r));
+      check(`§80 ${id}: stop after a retrigger leaves no node`, tornDown(r.retrigger, bound),
+        JSON.stringify(r.retrigger));
+      check(`§80 ${id}: eight rapid start/stop pairs leave no node`, tornDown(r.rapid, bound),
+        JSON.stringify(r.rapid));
+      check(`§80 ${id}: navigation keeps the voice tracked`, r.navStarted && r.navTracked,
+        JSON.stringify(r));
+      check(`§80 ${id}: stop after navigation leaves no node`, tornDown(r.nav, bound),
+        JSON.stringify(r.nav));
+    }
+    check('no console problems (§80 pattern matrix)', problems.length === 0, problems.join(' | '));
+    await context.close();
+  }
+
   section('gain cap');
   {
     const { page, problems, context } = await openPage(browser);
