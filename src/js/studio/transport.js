@@ -103,6 +103,7 @@
 // PLAY. When the Playground starts, the UI calls transport.stop().
 
 import { STOP_PAD_S, compileSequence } from '../sequencer/compiler.js';
+import { RENDER_QUANTUM } from '../core/constants.js';
 import { NODE_REGISTRY } from './registry.js';
 import { createEngineHooks } from './adapters/engine-hooks.js';
 import { PARAM_TAU_S } from './adapters/nodes.js';
@@ -618,6 +619,61 @@ export function createStudioTransport({
     unplayed.set(it.clipId, { code, reason });
   }
 
+  /**
+   * compileSequence on node handle `h`'s accounting, into `dest` from `t0` (opts: offset,
+   * waveform; `fade`, a gain the voice plays through, leaves the accounting with the voice).
+   */
+  function voiceOn(h, sequence, dest, t0, { offset = 0, waveform, fade = null } = {}) {
+    const acct = h.acct;
+    const own = fade ? [fade] : [];
+    return compileSequence(sequence, hooks.ctx, dest, t0, {
+      timers: hooks.timers,
+      offset,
+      waveform,
+      track: (node) => {
+        own.push(node);
+        return acct.track(node);
+      },
+      source: (node) => acct.source(node),
+      // A finished voice leaves the engine accounting at once (long loops never accumulate).
+      onEnded: () => {
+        if (fade) {
+          try { fade.disconnect(); } catch (e) { /* already gone */ }
+        }
+        for (const x of own) acct.untrack(x);
+        own.length = 0;
+      },
+    });
+  }
+
+  /**
+   * A sounding pattern voice whose node the runtime rebuilt (H001: an Oscillator's waveform is
+   * structural, so the Inspector's waveform edit replaces the node): the old voice plays into
+   * the old node's pattern bus and fades out with its routes (the runtime's crossfade), which
+   * left the clip silent until its next trigger. Its item continues on the new node from `t`
+   * (at or after the edit's horizon, on a render quantum): the same compiled sequence from the
+   * offset it has reached there, with the node's waveform now, faded in from 0 over the
+   * runtime's crossfade while the old one fades out. -> true when it continues.
+   */
+  function continueVoice(v, t) {
+    const h = ready(v.nodeId);
+    const dest = destOf(v.item);
+    const n = nodeOf(model, v.nodeId);
+    if (!h || !h.acct || !dest || !n || v.item.type !== 'pattern'
+      || t >= v.item.endTime - STUDIO_XFADE_S) return false;
+    const ctx = hooks.ctx;
+    const fade = h.acct.track(ctx.createGain());
+    fade.gain.value = 0;
+    fade.gain.setValueAtTime(0, ctx.currentTime);
+    fade.connect(dest);
+    const voice = voiceOn(h, v.item.sequence, fade, t, { offset: t - v.item.startTime,
+      waveform: n.params.waveform, fade });
+    fade.gain.setValueAtTime(0, voice.t0);
+    fade.gain.linearRampToValueAtTime(1, voice.t0 + STUDIO_XFADE_S);
+    voices.set(v.key, { ...v, voice, handle: h, dest, replacedNoted: false });
+    return true;
+  }
+
   function playPattern(it) {
     const n = nodeOf(model, it.target);
     if (!n) return skip(it, 'no-target', TRANSPORT_TEXT.noTarget);
@@ -637,21 +693,7 @@ export function createStudioTransport({
     if (!dest || !h.acct) {
       return skip(it, 'pattern-target', TRANSPORT_TEXT.patternTarget(n.metadata.name));
     }
-    const acct = h.acct;
-    const own = [];
-    const voice = compileSequence(it.sequence, hooks.ctx, dest, it.startTime, {
-      timers: hooks.timers,
-      track: (node) => {
-        own.push(node);
-        return acct.track(node);
-      },
-      source: (node) => acct.source(node),
-      // A finished voice leaves the engine accounting at once (long loops never accumulate).
-      onEnded: () => {
-        for (const x of own) acct.untrack(x);
-        own.length = 0;
-      },
-    });
+    const voice = voiceOn(h, it.sequence, dest, it.startTime);
     voices.set(it.key, { key: it.key, item: it, voice, nodeId: it.target, handle: h, dest });
     unplayed.delete(it.clipId);
     for (const env of triggerEnvelopes(model, it.target)) {
@@ -1155,10 +1197,25 @@ export function createStudioTransport({
     // A future voice the scheduler kept is rebuilt when the node it plays into was replaced
     // (or its pattern bus changed): it never started, so it is discarded unheard.
     const replay = [];
+    // A sounding voice continues on its rebuilt node (continueVoice) from a render quantum at
+    // or after the horizon, where the runtime's crossfade time (hooks.soon) lands too.
+    let resume = null;
+    const resumeAt = () => {
+      const q = RENDER_QUANTUM / hooks.ctx.sampleRate;
+      if (resume === null) resume = Math.max(hooks.soon(), Math.ceil(plan.horizon / q - 1e-9) * q);
+      return resume;
+    };
     for (const key of plan.keep) {
       const v = voices.get(key);
-      if (!v || v.item.startTime < plan.horizon) continue;
+      if (!v) continue;
       if (v.handle === ready(v.nodeId) && v.dest === destOf(v.item)) continue;
+      if (v.item.startTime < plan.horizon) {
+        if (!v.voice.ended && !v.voice.stopping && continueVoice(v, resumeAt())) {
+          record({ key, clipId: v.item.clipId, decision: 'continue', at: resume,
+            reason: 'node-replaced' });
+        }
+        continue;
+      }
       cancelItem(key, touched);
       replay.push(v.item);
       record({ key, clipId: v.item.clipId, decision: 'cancel', reason: 'node-replaced' });

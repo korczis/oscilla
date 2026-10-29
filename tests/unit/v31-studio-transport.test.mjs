@@ -450,13 +450,72 @@ test('Basic Synth: a rebuilt node keeps its lane and its pattern clips (node-rep
   assert.notEqual(osc, oldOsc);
   assert.deepEqual(osc.modTarget('level', 'linear').param.calls.at(-1),
     ['setValueAtTime', ROUTE_FLOOR, now]);
+  // The sounding Tone continues on it from the edit (H001, the next test), the Sweep after it.
   const square = voiceCarriers(s, 'square');
-  assert.deepEqual(square.map((o) => o.startAt), [at(bF, 1)]);
+  assert.deepEqual(square.slice(1).map((o) => o.startAt), [at(bF, 1)]);
+  assert.ok(square[0].startAt >= horizon && square[0].startAt < at(bF, 1));
   const route = s.runtime.edges.get('edge-1').gain;
-  assert.ok(reach(square[0]).has(route), 'into the new route');
+  assert.ok(reach(square[1]).has(route), 'into the new route');
   assert.ok(r.plan.decisions.some((d) => d.clipId === 'clip-2' && d.decision === 'cancel'));
   assert.ok(s.transport.debugInfo().decisions.some((d) => d.clipId === 'clip-1'
     && d.reason === 'node-replaced'));
+});
+
+test('H001: a waveform edit while a pattern clip sounds continues the clip on the rebuilt '
+  + 'oscillator, faded in, with the new waveform; nothing leaks', async () => {
+  // The Inspector's Waveform select dispatches NODE_PARAM_SET osc-1 waveform; `waveform` is
+  // structural (adapters/nodes.js), so the runtime rebuilds the oscillator and crossfades its
+  // routes. The Tone voice sounding into the old node's pattern bus faded out with them, and the
+  // oscillator stayed silent until the Sweep clip (G1 dead-controls-9: -107 dB at 0.8 s).
+  const s = setup();
+  const { baseTime: b } = ok(s.transport.start());
+  const bF = Math.round(b * SR);
+  s.fx.advance(0.4); // inside clip-1, Tone 220 Hz from b to b + 1 s
+  const tone = voiceCarriers(s, 'sawtooth');
+  assert.equal(tone.length, 1);
+  dispatch(s, { type: 'NODE_PARAM_SET', nodeId: 'osc-1', key: 'waveform', value: 'square' });
+  const now = s.ctx.currentTime;
+  const horizon = frameCeil(now + SAFE_HORIZON_S, SR);
+  const r = s.transport.sync();
+  assert.deepEqual(r.applied.ops.filter((o) => o.op === 'node-replace').map((o) => o.id),
+    ['osc-1']);
+  const q = 128 / SR;
+  const cont = voiceCarriers(s, 'square').filter((o) => o.startAt < at(bF, 1));
+  assert.equal(cont.length, 1, 'the rest of the Tone plays on the new oscillator');
+  const t0 = cont[0].startAt;
+  assert.ok(t0 >= horizon && t0 < horizon + 2 * q + EPS, `continued at ${t0} from ${horizon}`);
+  near(t0 / q, Math.round(t0 / q), 1e-6);
+  // The same clip from where it is: 220 Hz, the envelope at its sustain (not from the floor),
+  // and its carrier ends with the clip.
+  assert.ok(cont[0].frequency.scheduled.some((e) => e.t === t0 && e.value === 220));
+  const env = cont[0].outputs[0].outputs[0].gain.scheduled;
+  assert.ok(env.some((e) => e.t === t0 && e.ramp === 'set' && e.value === 1), 'sustain at t0');
+  assert.ok(cont[0].stopAt > at(bF, 1) - EPS && cont[0].stopAt < at(bF, 1) + STOP_PAD_S + EPS);
+  // Into the new node's pattern bus and its new routes, through a gain faded 0 -> 1 over the
+  // runtime's crossfade from t0, while the old voice's routes fade out.
+  const route = s.runtime.edges.get('edge-1').gain;
+  assert.ok(reach(cont[0]).has(route), 'into the new route');
+  const fade = [...reach(cont[0])].find((n) => n.kind === 'gain' && n.gain.calls.some((c) =>
+    c[0] === 'linearRampToValueAtTime' && c[1] === 1 && c[2] === t0 + STUDIO_XFADE_S));
+  assert.ok(fade, 'a fade-in gain on the continued voice');
+  assert.deepEqual(fade.gain.events.map((e) => [e.ramp, e.value]).slice(-2),
+    [['set', 0], ['linear', 1]]);
+  assert.equal(fade.gain.events.at(-2).t, t0);
+  assert.ok(!reach(tone[0]).has(route), 'the old voice stays on the old routes');
+  assert.ok(s.transport.debugInfo().decisions.some((d) => d.clipId === 'clip-1'
+    && d.decision === 'continue' && d.reason === 'node-replaced' && d.at === t0));
+  assert.equal(s.store.getModel().graph.nodes.find((n) => n.id === 'osc-1').params.waveform,
+    'square', 'the model holds the edit');
+  // The Sweep still plays on the new node, and STOP leaves nothing behind.
+  s.fx.advance(1.0);
+  assert.deepEqual(voiceCarriers(s, 'square').map((o) => o.startAt), [t0, at(bF, 1)]);
+  const done = s.transport.stop();
+  s.fx.advance(0.5);
+  const counts = await done;
+  assert.deepEqual([counts.nodes, counts.sources, counts.engineNodes, counts.engineSources,
+    counts.voices], [0, 0, 0, 0, 0]);
+  assert.equal(s.ctx.liveAllSources, 0, 'every source of the context has ended');
+  assert.equal(s.fx.timers.size, 0, 'no timer left behind');
 });
 
 test('Basic Synth: STOP releases everything, holds automation, leaves the model; no leaks',

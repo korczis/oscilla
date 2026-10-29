@@ -33,6 +33,17 @@
 //                        politely ("Runtime: Failed"); STOP state is "Not applied" again
 //   phone                390 x 844 touch: the Inspector subview shows the Runtime section within
 //                        the width (no horizontal overflow)
+//   waveform-live        H001 (G1 dead-controls-9): the Subtractive Synth playing, Oscillator 1's
+//                        Waveform changed to Square in its Inspector select inside the Tone
+//                        clip (lengthened to TONE_S, edited from 0.25 s): the Tone keeps
+//                        sounding on the output tap from 0.1 s to 0.6 s after the edit, its RMS
+//                        above FLOOR_DB and within LEVEL_DB of
+//                        its level before the edit (it fell to the floor, -107 dB, until the
+//                        Sweep: the rebuilt oscillator dropped the sounding voice); no click
+//                        across the switch (the largest one-sample step around it within
+//                        CLICK_MAX times the larger of the steady windows' own); the model
+//                        holds square and the runtime has applied its revision
+//   waveform-live-phone  the same at 390 x 844 touch, the select in the Inspector subview
 //   trace-edit           an edit while playing: the Trace section (a real h5 heading, an
 //                        ordered list) shows it first as "<op> · Change ... Detune · committed,
 //                        revision n"; opened from the keyboard (focus, Enter) its steps say in
@@ -82,6 +93,13 @@ const RT = '[data-osc="studio.inspector.runtime"]';
 // the engine and Studio audio tests' measure and bound (v31-studio-audio.cjs CLICK_MAX).
 const CLICK_MAX = 3;
 const TR = '[data-osc="studio.inspector.trace"]';
+// waveform-live: the Tone's RMS after the edit stays above this floor (dBFS; it plays about
+// -31 dB on the tap, and fell to -107 dB without the H001 fix) and within LEVEL_DB of its level
+// before the edit (a square wave carries more power than the sawtooth: about +4 dB measured).
+const FLOOR_DB = -60;
+const TONE_S = 4;
+const LEVEL_DB = 12;
+const dbOf = (x) => 20 * Math.log10(Math.max(x, 1e-12));
 
 const H = {
   verdict: (conds) => {
@@ -239,6 +257,95 @@ const H = {
     }
     return { max, peak, n, gaps, sr };
   }, [t0, t1]),
+  /** RMS of the tapped audio in [t0, t1) (context seconds) and the frames it covers. */
+  rms: (page, t0, t1) => page.evaluate(([a, b]) => {
+    const sr = window.OSCILLA.engine.ctx.sampleRate;
+    const f0 = Math.round(a * sr);
+    const f1 = Math.round(b * sr);
+    let sum = 0; let n = 0;
+    for (const c of window.__rtTap) {
+      const lo = Math.max(f0, c.f);
+      const hi = Math.min(f1, c.f + c.L.length);
+      for (let k = lo; k < hi; k += 1) { const v = c.L[k - c.f]; sum += v * v; n += 1; }
+    }
+    return { rms: n ? Math.sqrt(sum / n) : 0, n, want: f1 - f0 };
+  }, [t0, t1]),
+  /** The last context time the output tap has delivered. */
+  tapped: (page) => page.evaluate(() => {
+    const sr = window.OSCILLA.engine.ctx.sampleRate;
+    return (window.__rtTap || []).reduce((m, c) => Math.max(m, (c.f + c.L.length) / sr), 0);
+  }),
+  /** The audio clock and the Studio playhead, read together. */
+  clock: (page) => page.evaluate(() => ({ t: window.OSCILLA.engine.ctx.currentTime,
+    p: window.OSCILLA.studio.transport.playhead().position })),
+  /**
+   * H001: play the Subtractive Synth, change Oscillator 1's Waveform in the Inspector inside
+   * the Tone clip (0-1 s), and measure the Tone on the output tap before and after.
+   */
+  waveformLive: async (page, label) => {
+    const sel = '#osc-si-osc-1-waveform';
+    await H.fresh(page);
+    // The Tone clip lasts TONE_S (the Sweep after it), so a slow host still edits inside it.
+    await page.evaluate((d) => {
+      const st = window.OSCILLA.studio.store;
+      st.dispatch({ type: 'CLIP_MOVE', clipId: 'clip-2', start: d });
+      st.dispatch({ type: 'CLIP_RESIZE', clipId: 'clip-1', duration: d });
+    }, TONE_S);
+    await H.select(page, ['osc-1']);
+    if (await page.evaluate(() => window.matchMedia('(max-width: 767px)').matches)) {
+      await page.evaluate(() => window.OSCILLA.app.studioSetSubview('inspector'));
+      await H.frames(page);
+    }
+    await page.waitForSelector(sel, { state: 'visible', timeout: 5000 });
+    const was = await page.$eval(sel, (el) => el.value);
+    // The tap is on the engine's context before PLAY, so it holds the Tone from its start.
+    await page.evaluate(() => window.OSCILLA.app.ensureAudio());
+    await H.tap(page);
+    await page.click('[data-osc="studio.play"]');
+    await until(() => page.evaluate(() => window.OSCILLA.studio.transport.playing),
+      { ms: 10000, what: `${label}: PLAY starts the Studio transport` });
+    const ask = await until(async () => {
+      const c = await H.clock(page);
+      return c.p >= 0.25 && c;
+    }, { ms: 10000, what: `${label}: the Tone clip plays to 0.25 s` });
+    await page.selectOption(sel, 'square');
+    const edit = await H.clock(page); // the edit landed between `ask` and here
+    const base = edit.t - edit.p; // the context time of timeline position 0
+    const pre = [ask.t - 0.15, ask.t - 0.03];
+    const post = [edit.t + 0.1, edit.t + 0.6];
+    await until(async () => (await H.tapped(page)) >= post[1],
+      { ms: 10000, what: `${label}: the output tap reaches 0.6 s after the edit` });
+    const before = await H.rms(page, pre[0], pre[1]);
+    const after = await H.rms(page, post[0], post[1]);
+    const around = await H.steps(page, ask.t, edit.t + 0.1);
+    const steadyPre = await H.steps(page, pre[0], pre[1]);
+    const steadyPost = await H.steps(page, post[0], post[1]);
+    const model = await page.evaluate(() => window.OSCILLA.studio.model.graph.nodes
+      .find((n) => n.id === 'osc-1').params.waveform);
+    // The Inspector shows Oscillator 1, not the Runtime section: its verdict from the runtime.
+    const sync = await page.evaluate(() => {
+      const s = window.OSCILLA.studio;
+      const a = s.runtime.applied();
+      return { applied: a && a.revision, revision: s.store.getRevision() };
+    });
+    await page.evaluate(() => window.OSCILLA.app.studioStop());
+    const d = { was, editAt: [ask.p, edit.p], beforeDb: dbOf(before.rms), afterDb: dbOf(after.rms),
+      covered: [before.n / before.want, after.n / after.want], click: around.max,
+      steady: Math.max(steadyPre.max, steadyPost.max), model, sync,
+      clips: await page.evaluate(() => window.OSCILLA.studio.model.timeline.clips
+        .map((c) => [c.id, c.start, c.duration])) };
+    return { ...H.verdict({
+      sawtooth: was === 'sawtooth',
+      lengthened: d.clips.some(([id, at, len]) => id === 'clip-1' && at === 0 && len === TONE_S),
+      editInTone: post[1] < base + TONE_S - 0.05,
+      tapped: before.n >= 0.9 * before.want && after.n >= 0.9 * after.want,
+      sounds: d.afterDb > FLOOR_DB,
+      level: Math.abs(d.afterDb - d.beforeDb) <= LEVEL_DB,
+      noClick: around.n > 0 && around.max <= CLICK_MAX * d.steady,
+      model: model === 'square',
+      inSync: sync.applied === sync.revision,
+    }), ...d };
+  },
   /** The next createBiquadFilter on the engine's context throws (one shot). */
   failNextBiquad: (page) => page.evaluate(() => {
     const ctx = window.OSCILLA.engine.ctx;
@@ -505,6 +612,24 @@ function defineChecks() {
         within: fit.left >= 0 && fit.right <= fit.vw + 0.5 && fit.scroll <= fit.vw,
         noOverflow: !fit.overflow,
       }), rv, fit };
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  def('waveform-live', ({ page }) => H.waveformLive(page, 'waveform-live'));
+
+  def('waveform-live-phone', async ({ browser, baseUrl, browserName }) => {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true,
+      isMobile: browserName !== 'firefox' });
+    const page = await ctx.newPage();
+    page.setDefaultTimeout(10000);
+    try {
+      await page.goto(baseUrl, { waitUntil: 'load' });
+      await page.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
+      await page.evaluate(() => { const a = window.OSCILLA.app; a.alerts = [];
+        if (!a.safetyCollapsed) a.collapseSafety(); });
+      return await H.waveformLive(page, 'waveform-live-phone');
     } finally {
       await ctx.close();
     }

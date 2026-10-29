@@ -360,6 +360,57 @@ test('compileSequence: automation applied to the graph equals planSequence', () 
   assert.deepEqual(strip(amp.gain.events), shift(ofKind(plan, 'am')));
 });
 
+test('compileSequence offset: the rest of the sequence from the offset, values exact (H001)',
+  () => {
+  // A Studio pattern voice continued on a rebuilt node (transport.js continueVoice) plays the
+  // same compiled sequence from the offset it has reached.
+  let m = referenceSequence({ sampleRate: SR });
+  for (const t of ['siren', 'am', 'fm']) m = addBlock(m, t, { durationMs: 250, sampleRate: SR });
+  const full = new FakeContext({ sampleRate: SR, currentTime: 1 });
+  const ref = compileSequence(m, full, full.destination, 1, { timers: null });
+  const tl = ref.timeline;
+  const siren = tl.blocks[5];
+  const offset = siren.start + 0.1; // inside the siren block: its LFO is sounding
+  const ctx = new FakeContext({ sampleRate: SR, currentTime: 2 });
+  const voice = compileSequence(m, ctx, ctx.destination, 2, { timers: null, offset,
+    waveform: 'square' });
+  assert.equal(voice.t0, 2);
+  assert.equal(voice.offset, offset);
+  assertNear(voice.duration, tl.duration - offset, 1e-12);
+  assertNear(voice.endTime, 2 - offset + tl.duration, 1e-12);
+  // Sources: the carrier and the siren LFO start at t0; the AM and FM modulators at their block
+  // starts; nothing that ended before the offset is created.
+  const oscs = ctx.oscillators;
+  assert.equal(oscs.length, 4, 'carrier + siren LFO + AM LFO + FM modulator');
+  assert.equal(oscs[0].type, 'square', 'the waveform override');
+  assert.deepEqual(oscs.slice(0, 2).map((o) => o.startAt), [2, 2]);
+  for (const [i, o] of oscs.slice(1).entries()) {
+    const blk = tl.blocks[5 + i];
+    assertNear(o.stopAt, 2 - offset + blk.end, 1e-12);
+    if (i > 0) assertNear(o.startAt, 2 - offset + blk.start, 1e-12);
+  }
+  assertNear(oscs[0].stopAt, voice.endTime + STOP_PAD_S, 1e-12);
+  // Every automated parameter has the full voice's value at the same sequence time.
+  const params = (c) => {
+    const [amp, env] = c.created.filter((n) => n.kind === 'gain');
+    return { freq: c.oscillators[0].frequency, env: env.gain, amp: amp.gain };
+  };
+  const a = params(full);
+  const b = params(ctx);
+  for (const k of Object.keys(a)) {
+    for (let x = offset; x < tl.duration; x += 0.0371) {
+      const want = automationValueAt(a[k].events, 1 + x, null);
+      const got = automationValueAt(b[k].events, 2 - offset + x, null);
+      assertNear(got, want, 1e-9, `${k} at sequence time ${x}`);
+    }
+  }
+  // An offset at or past the end plays nothing.
+  const c2 = new FakeContext({ sampleRate: SR, currentTime: 2 });
+  const none = compileSequence(m, c2, c2.destination, 2, { timers: null, offset: tl.duration });
+  assert.equal(none.ended, true);
+  assert.equal(c2.oscillators.length, 0);
+});
+
 test('natural end: ended events release every node and call onEnded once', () => {
   const { ctx, voice, ended } = compileRef();
   ctx.advance(voice.endTime);

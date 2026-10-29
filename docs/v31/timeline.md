@@ -416,7 +416,12 @@ through `runtime.apply` first; then:
 - a node rebuilt by the runtime (`node-replace`): its lane continues on the new AudioParam from
   the horizon with the exact value there (`rebind`); a pattern-played oscillator is claimed
   again (built silent, so at once); voices sounding into the old node fade with the runtime's
-  crossfade (recorded as `release`, reason `node-replaced`) and the future ones are rebuilt on
+  crossfade (recorded as `release`, reason `node-replaced`) and continue on the new node from a
+  render quantum at or after the horizon (H001; `continue`, reason `node-replaced`): the same
+  compiled sequence from the offset it has reached (`compileSequence` `offset`), with the
+  node's waveform now, faded in from 0 over the crossfade through a gain on the new node's
+  accounting, so an Inspector waveform edit is heard at once instead of silencing the clip until
+  its next trigger; the future ones are rebuilt on
   the new node: a waveform change compiles a new sequence (`cancel` + `schedule`), and a kept
   future voice whose node or pattern bus was replaced is discarded unheard and played again
   (`cancel`, reason `node-replaced`);
