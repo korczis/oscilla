@@ -86,9 +86,12 @@ changed.
   durations.
 - **Filter Lab:** biquad filters with a response chart drawn from the browser's own filter
   response. Cutoff and Q can be dragged on the chart.
-- **ADSR:** an attack/decay/sustain/release envelope with a draggable graph.
+- **ADSR:** an attack/decay/sustain/release envelope with a draggable graph. It shapes every
+  note: a held tone, a finite tone and each step of a programmed pattern, where it shrinks to
+  fit a short step.
 - **Additive synthesis:** a harmonic editor. The bars you see are the same coefficients that
-  build the waveform you hear.
+  build the waveform you hear. It applies to single-oscillator sources, not to the dual
+  oscillator.
 - **Phase, Lissajous and stereo:** A/B phase views, a Lissajous figure, a correlation meter and
   stereo routing (split, panned or mono).
 - **Bioacoustics:** approximate hearing ranges and call examples for humans and several animal

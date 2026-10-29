@@ -1647,6 +1647,170 @@ function defineChecks() {
     return { ok, ...out };
   });
 
+  // ---- C007: the labs' play options are built in one place and the current lab state wins
+  // (src/js/audio/lab-play-options.js). Each check is a finding's reproduction (PACK 03
+  // engine-sync-1, -6, -7) and judges engine state the views also read, not a fixed delay.
+  const quiet = (page, what) => until(() => H.nodes(page).then((n) => n === 0),
+    { ms: 8000, what });
+  const newVoice = (page, id, what) => until(() => page.evaluate((old) => {
+    const e = window.OSCILLA.engine;
+    const v = e.voice;
+    return v && !v.ended && v.id !== old ? { id: v.id } : null;
+  }, id), { ms: 10000, what });
+
+  // engine-sync-1: a pattern change restarts the voice with a copy of its options; a lab
+  // switched off while it sounded must stay off on the restarted voice.
+  def('restart-follows-labs', async ({ page }) => {
+    await H.continuous(page, true);
+    const res = {};
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.setWaveform('sine'); a.setPattern('tone'); a.setFrequency(440);
+    });
+    await page.click('#osc-add-enable');
+    await page.evaluate(() => { const a = window.OSCILLA.app; a.holding = true; a.play('hold'); });
+    const v1 = await newVoice(page, 0, 'restart-follows-labs: held tone with Additive');
+    res.withAdditive = await page.evaluate(() => window.OSCILLA.engine.voice.carrier.type);
+    await page.click('#osc-add-enable'); // Additive off while it sounds
+    await until(() => page.evaluate(() => {
+      const v = window.OSCILLA.engine.voice;
+      return v && !v.periodicWave && v.carrier.type === 'sine';
+    }), { ms: 5000, what: 'restart-follows-labs: Additive off reaches the sounding carrier' });
+    await page.evaluate(() => window.OSCILLA.app.setPattern('finite')); // a restart
+    const v2 = await newVoice(page, v1.id, 'restart-follows-labs: voice restarted (Additive)');
+    res.afterAdditive = await page.evaluate(() => {
+      const v = window.OSCILLA.engine.voice;
+      return { lab: window.OSCILLA.labs.additive.enabled, pw: !!v.periodicWave,
+        carrier: v.carrier.type };
+    });
+    await page.evaluate(() => window.OSCILLA.app.stopNow());
+    await quiet(page, 'restart-follows-labs: quiet after the Additive case');
+    await page.evaluate(() => {
+      window.OSCILLA.app.setPattern('tone');
+      window.OSCILLA.labs.envelope.update({ adsr: { a: 0.01, d: 0.1, s: 0.6, r: 0.3 },
+        enabled: true });
+      const a = window.OSCILLA.app; a.holding = true; a.play('hold');
+    });
+    const v3 = await newVoice(page, v2.id, 'restart-follows-labs: held tone with the Envelope');
+    res.withEnvelope = await page.evaluate(() => window.OSCILLA.engine.voice.adsr);
+    await page.evaluate(() => {
+      window.OSCILLA.labs.envelope.update({ enabled: false }); // Envelope off while it sounds
+      window.OSCILLA.app.setPattern('finite');
+    });
+    await newVoice(page, v3.id, 'restart-follows-labs: voice restarted (Envelope)');
+    res.afterEnvelope = await page.evaluate(() => {
+      const v = window.OSCILLA.engine.voice;
+      return { lab: window.OSCILLA.labs.envelope.enabled, adsr: v.adsr,
+        stepEnvelope: typeof v.opts.stepEnvelope, viz: window.OSCILLA.viz.labInputs(v.plan).adsr };
+    });
+    await page.evaluate(() => { window.OSCILLA.app.stopNow(); window.OSCILLA.app.setPattern('tone'); });
+    await quiet(page, 'restart-follows-labs: quiet at the end');
+    const ok = res.withAdditive === 'custom' && !res.afterAdditive.lab && !res.afterAdditive.pw
+      && res.afterAdditive.carrier === 'sine' && !!res.withEnvelope && !res.afterEnvelope.lab
+      && res.afterEnvelope.adsr === null && res.afterEnvelope.stepEnvelope !== 'function'
+      && res.afterEnvelope.viz === null;
+    return { ok, ...res };
+  });
+
+  // engine-sync-6: Additive does not apply to a dual plan, live included: switching it on while
+  // a dual voice sounds leaves both oscillators as a fresh dual voice has them.
+  def('additive-skips-dual', async ({ page }) => {
+    await H.continuous(page, true);
+    const res = {};
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.source = 'dual'; a.setStereo(false); a.setDualFreq('a', '300'); a.setDualFreq('b', '1111');
+      a.holding = true; a.play('hold');
+    });
+    await until(() => page.evaluate(() => {
+      const v = window.OSCILLA.engine.voice;
+      return !!(v && !v.ended && v.plan.type === 'dual');
+    }), { ms: 10000, what: 'additive-skips-dual: dual voice sounding' });
+    res.before = await page.evaluate(() => {
+      const v = window.OSCILLA.engine.voice;
+      return [v.live.A.osc.type, v.live.B.osc.type];
+    });
+    await page.click('#osc-add-enable'); // Additive on while the dual voice sounds
+    res.live = await until(() => page.evaluate(() => {
+      const O = window.OSCILLA;
+      const v = O.engine.voice;
+      if (!O.labs.additive.enabled || !v) return null;
+      return { types: [v.live.A.osc.type, v.live.B.osc.type], pw: !!v.periodicWave,
+        viz: O.viz.labInputs(v.plan).additive,
+        refused: O.engine.setPeriodicWave(O.labs.additive.periodicWave(O.engine.ctx)) === false };
+    }), { ms: 5000, what: 'additive-skips-dual: Additive on reached the lab' });
+    await page.evaluate(() => window.OSCILLA.app.stopNow());
+    await quiet(page, 'additive-skips-dual: quiet');
+    await page.click('#osc-add-enable');
+    await page.evaluate(() => { window.OSCILLA.app.source = 'single'; });
+    const ok = res.before.join() === 'sine,sine' && res.live.types.join() === 'sine,sine'
+      && !res.live.pw && res.live.viz === null && res.live.refused;
+    return { ok, ...res };
+  });
+
+  // engine-sync-7: with the Envelope on, a finite tone and a steps pattern take the whole ADSR
+  // (decay and sustain included), as a held tone does, and the views say so.
+  def('adsr-reaches-programmed', async ({ page }) => {
+    await H.continuous(page, true);
+    const res = {};
+    const duration = await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      const was = a.duration;
+      a.setWaveform('sine'); a.setFrequency(440); a.duration = 5000; a.setPattern('finite');
+      return was;
+    });
+    const midNote = async (on, what) => {
+      await page.evaluate((env) => {
+        window.OSCILLA.labs.envelope.update({ adsr: { a: 0.01, d: 0.1, s: 0.1, r: 0.3 },
+          enabled: env });
+        window.OSCILLA.app.trigger();
+      }, on);
+      // the analyser reads the last ~40 ms: anywhere between 0.5 s and 4 s is mid-note
+      const got = await until(() => page.evaluate(() => {
+        const e = window.OSCILLA.engine;
+        const v = e.voice;
+        if (!v || v.ended) return null;
+        const t = e.ctx.currentTime - v.t0;
+        if (t < 0.5 || t > 4) return null;
+        const d = new Float32Array(e.analyser.fftSize);
+        e.analyser.getFloatTimeDomainData(d);
+        let pk = 0;
+        for (let i = 0; i < d.length; i++) pk = Math.max(pk, Math.abs(d[i]));
+        return { peak: pk, adsr: v.adsr, env: e._valueAt(v.env, e.ctx.currentTime),
+          viz: window.OSCILLA.viz.labInputs(v.plan).adsr };
+      }), { ms: 15000, what });
+      await page.evaluate(() => window.OSCILLA.app.stopNow());
+      await quiet(page, `${what}: quiet`);
+      return got;
+    };
+    res.off = await midNote(false, 'adsr-reaches-programmed: finite tone, Envelope off');
+    res.on = await midNote(true, 'adsr-reaches-programmed: finite tone, Envelope on');
+    res.ratio = res.off.peak > 0 ? res.on.peak / res.off.peak : null;
+    // steps: every step holds at the sustain after its attack and decay
+    res.steps = await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.setPattern('sequence');
+      a.trigger();
+      const e = window.OSCILLA.engine;
+      const v = e.voice;
+      const levels = v.plan.steps.filter((s) => s.dur > 0.24)
+        .map((s) => e._valueAt(v.env, v.t0 + s.t + 0.12));
+      return { type: v.plan.type, levels, viz: window.OSCILLA.viz.labInputs(v.plan).adsr };
+    });
+    await page.evaluate((was) => {
+      const a = window.OSCILLA.app;
+      a.stopNow(); a.duration = was; a.setPattern('tone');
+      window.OSCILLA.labs.envelope.update({ enabled: false });
+    }, duration);
+    await quiet(page, 'adsr-reaches-programmed: quiet at the end');
+    const near = (x, want) => Math.abs(x - want) < 0.01;
+    const ok = !res.off.adsr && near(res.off.env, 1) && !!res.on.adsr && near(res.on.env, 0.1)
+      && !!res.on.viz && res.ratio !== null && res.ratio < 0.2 && res.ratio > 0.05
+      && res.steps.type === 'steps' && res.steps.levels.length > 0
+      && res.steps.levels.every((l) => near(l, 0.1)) && !!res.steps.viz;
+    return { ok, ...res };
+  });
+
   // ---- accessibility residuals of the final V1 probe (WCAG 2.4.11, focus loss, overlap)
   def('a11y-alerts-never-cover-focus', async ({ page, browserName, run }) => {
     const res = {};

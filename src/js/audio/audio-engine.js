@@ -35,8 +35,9 @@
 //                    create nodes through track/source. engine.updateInserts(cfgs) updates the
 //                    sounding voice; dispose() runs at voice cleanup.
 //     o.periodicWave a PeriodicWave for the carrier of const/steps/ramps/lfo/am/fm plans
-//                    (additive synthesis); engine.setPeriodicWave(wave) changes it live and
-//                    engine.clearPeriodicWave() returns to plan.wave with a click-free dip.
+//                    (additive synthesis; never dual); engine.setPeriodicWave(wave) changes it
+//                    live (refused for a dual voice) and engine.clearPeriodicWave() returns to
+//                    plan.wave with a click-free dip.
 //     o.adsr         { a, d, s, r } (seconds, sustain 0..1): attack/release times come from it
 //                    and it is handed to the envelope function (see voice.js v1OpenEnvelope);
 //                    the default envelope uses only a and r. Install the DSP ADSR with
@@ -54,7 +55,9 @@
 //   attachMicrophone(stream, opts) / detachMicrophone(): the analysis graph of a stream the
 //   caller opened (mic lab), built through the engine's mic accounting (micNodeCount).
 //   A replacement voice (_restart) is started through this.play with the voice's own options,
-//   so a wrapper installed on the instance (main.js) re-applies the V2 options.
+//   so a wrapper installed on the instance (main.js) re-applies the V2 options. That wrapper
+//   spreads audio/lab-play-options.js over them, which names every V2 key (value or null): a
+//   lab switched off while the voice sounded stays off on the replacement (C007).
 //   snapshot(out?)   plain read-only engine state for the visualization (risk 3).
 
 import {
@@ -913,10 +916,14 @@ export class AudioEngine {
     return true;
   }
 
-  /** Swap the carrier's PeriodicWave of the sounding voice (additive synthesis, live). */
+  /**
+   * Swap the carrier's PeriodicWave of the sounding voice (additive synthesis, live). A dual
+   * voice is refused (false): additive does not apply to dual plans (main.js labPlayOptions), and
+   * its carrier is oscillator A only, so a wave there would change A and leave B (C007).
+   */
   setPeriodicWave(wave) {
     const v = this.voice;
-    if (!v || v.ended || !v.carrier || !wave) return false;
+    if (!v || v.ended || !v.carrier || !wave || (v.plan && v.plan.type === 'dual')) return false;
     v.periodicWave = wave;
     v.carrier.setPeriodicWave(wave);
     return true;
