@@ -12,7 +12,8 @@
 //   exponentially to 0, and the oscillator stops only after the gain has reached the floor.
 // - The 0.95 x Nyquist bound comes from the running context: a note at or above it is refused.
 // - Note Off, velocity 0, retrigger, All Sound Off, All Notes Off, omni channels, the safety
-//   limit, and every way the notes stop leave zero engine nodes and zero live sources.
+//   limit (a held note is exempt, ADR 0062), and every way the notes stop leave zero engine
+//   nodes and zero live sources.
 // - support.js listens to each connected input and says when one goes away.
 // - A note is refused, said once per owner, while a measurement, a level reference capture,
 //   the Studio or the sequencer owns the output.
@@ -263,23 +264,24 @@ test('the 0.95 x Nyquist bound comes from the running context: a note above it i
 });
 
 // ---------------------------------------------------------------------------- safety limit
-test('without the continuous permission a held note ends at the safety limit, as HOLD does', () => {
+test('a MIDI note is held (ADR 0062): past the safety limit until its Note Off', () => {
   const r = rig({ settings: { continuous: false, limitS: 2 } });
   const e = r.notes.handle(on(60));
-  assert.equal(e.result.limited, true);
+  assert.equal(e.result.limited, false, 'a held note is not cut at the limit');
   const [v] = voices(r.ctx, r.engine);
-  const last = v.env.gain.events.at(-1);
-  assert.deepEqual([last.ramp, last.value], ['linear', GAIN_FLOOR]);
-  assert.ok(Math.abs(last.t - v.start - 2) < 1e-9, 'the envelope ends at the limit');
-  assert.ok(v.stop > last.t && v.stop - last.t < 0.02);
-  r.fake.advance(3);
-  assert.ok(allGone(r), 'freed at the limit with the key still down');
+  assert.equal(v.stop, Infinity, 'no scheduled end while the key is down');
+  r.fake.advance(5);
+  assert.equal(r.engine.noteCount, 1, 'still sounding past the 2 s limit');
+  assert.equal(r.engine.revokeContinuous(), 0, 'not lengthened by the permission: not revoked');
+  r.notes.handle(off(60));
+  r.fake.advance(1);
+  assert.ok(allGone(r), 'the Note Off frees it');
 
   const c = rig({ settings: { continuous: true } });
   c.notes.handle(on(60));
-  assert.equal(voices(c.ctx, c.engine)[0].stop, Infinity, 'open with the permission');
+  assert.equal(voices(c.ctx, c.engine)[0].stop, Infinity, 'open with the permission too');
   c.fake.advance(3);
-  assert.equal(c.engine.revokeContinuous(), 1, 'withdrawing the permission releases it');
+  c.notes.silence();
   c.fake.advance(1);
   assert.ok(allGone(c));
 });
@@ -490,7 +492,7 @@ test('the component part: Playground settings per note, a refusal said, every st
   const [v] = voices(r.ctx, r.engine);
   assert.equal(v.osc.type, 'triangle', 'the Playground waveform');
   assert.ok(Math.abs(v.env.gain.events[2].t - v.start - 0.02) < 1e-9, 'attack from ms');
-  assert.ok(v.stop < Infinity, 'the safety limit applies without the continuous permission');
+  assert.equal(v.stop, Infinity, 'held (ADR 0062): no end at the safety limit');
   r.fake.advance(0.1);
   const held = (fn) => {
     port.send([0x90, 60, 100]);
@@ -502,6 +504,7 @@ test('the component part: Playground settings per note, a refusal said, every st
   held(() => { doc.hidden = true; fire('doc:visibilitychange'); doc.hidden = false; });
   held(() => fire('win:pagehide'));
   held(() => fire('win:keydown', { key: 'Escape' }));
+  held(() => fire('win:blur')); // ADR 0062: a Note Off may never come while away
   held(() => assert.equal(cmp.midiAllOff(), 1, 'stopPlayback (main.js) silences MIDI'));
   measuring = true;
   port.send([0x90, 60, 100]);

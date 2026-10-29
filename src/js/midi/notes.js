@@ -15,9 +15,11 @@
 //   anything else (CC 64 sustain     ignored: not part of the first version (ADR 0058, V502 note)
 //     included), or a message
 //     without a status byte
-// Everything stops (within ESCAPE_RELEASE_S) when any listened-to input is lost (every note,
-// not only that input's), the access is withdrawn or replaced, the page is hidden, Escape is
-// pressed, Measure or Studio PLAY takes the output, or the sequencer starts. A note is refused
+// A note is held (ADR 0062, amending ADR 0005): it sounds until its Note Off, past the safety
+// limit, under the same output ceiling. Everything stops (within ESCAPE_RELEASE_S) when any
+// listened-to input is lost (every note, not only that input's), the access is withdrawn or
+// replaced, the window loses the focus, the page is hidden, Escape is pressed, Measure or
+// Studio PLAY takes the output, or the sequencer starts. A note is refused
 // while a measurement, a level reference capture, the Studio transport or the sequencer owns
 // the output (ownedBy, src/js/midi/ui.js MIDI_REFUSED).
 // The Labs stages that play() adds (filter, ADSR, additive) do not apply to notes.
@@ -62,36 +64,53 @@ export function parseMidiMessage(data) {
  * `ownedBy()` names who owns the output ('measurement', 'reference', 'studio',
  * 'sequencer') or returns null; `refused(by)`
  * is told once per run of refused notes (the caller says so to the user).
+ * The MIDI inputs and the on-screen and computer keyboard (K026, src/js/midi/keyboard.js) play
+ * through the same layer, each with its own `source` in the note key.
  */
 export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () => null,
   refused = () => {} } = {}) {
   let refusing = null;
-  const keyOf = (source, e) => `${source}:${e.channel}:${e.note}`;
+  const keyOf = (source, channel, note) => `${source}:${channel}:${note}`;
+
+  /** Note `note` (0-127) at `velocity` (1-127) from `source`: { ok, reason? | id, ... }. */
+  function noteOn(note, velocity, source = 0, channel = 0) {
+    if (!engine) return { ok: false, reason: 'no-audio' };
+    const by = ownedBy();
+    if (by) {
+      if (refusing !== by) refused(by);
+      refusing = by;
+      return { ok: false, reason: by };
+    }
+    refusing = null;
+    const s = settings() || {};
+    const result = engine.noteOn(keyOf(source, channel, note), {
+      freq: midiToFrequency(note, s.a4 > 0 ? s.a4 : 440),
+      level: velocityLevel(velocity),
+      wave: WAVEFORMS.includes(s.waveform) ? s.waveform : 'sine',
+      attackS: s.attackS, releaseS: s.releaseS, limitS: s.limitS, continuous: !!s.continuous,
+      held: true,
+    });
+    if (result && result.ok && typeof engine.resume === 'function') engine.resume();
+    return result;
+  }
+
+  /** Release note `note` from `source` with its release time; false when it is not sounding. */
+  function noteOff(note, source = 0, channel = 0) {
+    return engine ? engine.noteOff(keyOf(source, channel, note)) : false;
+  }
 
   return {
+    noteOn,
+    noteOff,
+
     /** A message from input `source` (any stable id of the input). Returns the event. */
     handle(data, source = 0) {
       const e = parseMidiMessage(data);
       if (!engine) return e;
       if (e.kind === 'note-on') {
-        const by = ownedBy();
-        if (by) {
-          if (refusing !== by) refused(by);
-          refusing = by;
-          e.result = { ok: false, reason: by };
-          return e;
-        }
-        refusing = null;
-        const s = settings() || {};
-        e.result = engine.noteOn(keyOf(source, e), {
-          freq: midiToFrequency(e.note, s.a4 > 0 ? s.a4 : 440),
-          level: velocityLevel(e.velocity),
-          wave: WAVEFORMS.includes(s.waveform) ? s.waveform : 'sine',
-          attackS: s.attackS, releaseS: s.releaseS, limitS: s.limitS, continuous: !!s.continuous,
-        });
-        if (e.result && e.result.ok && typeof engine.resume === 'function') engine.resume();
+        e.result = noteOn(e.note, e.velocity, source, e.channel);
       } else if (e.kind === 'note-off') {
-        engine.noteOff(keyOf(source, e));
+        noteOff(e.note, source, e.channel);
       } else if (e.kind === 'all-sound-off' || e.kind === 'all-notes-off') {
         engine.notesOff(e.kind === 'all-sound-off');
       }

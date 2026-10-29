@@ -785,10 +785,11 @@ claims:
   - id: keyboard-held-notes
     claim: 'A note held on the computer keyboard, the on-screen keyboard or a MIDI key sounds past the playback limit only while it is held, under the output ceiling, and is released on blur, page hide and Escape.'
     source: .ai/repo/adrs/0062-a-held-key-or-midi-note-is-exempt-from-the-playback-limit-while-held.md
-    implementation: '-'
-    test: '-'
-    status: planned
-    note: 'Issue K026 (owner decision D3, amending ADR 0005).'
+    implementation: src/js/midi/keyboard-ui.js
+    test: tests/unit/keyboard-held-notes.test.mjs
+    status: guaranteed
+    responsibility: product
+    note: 'Issue K026 (owner decision D3, amending ADR 0005). The engine side is src/js/audio/audio-engine.js noteOn({ held: true }); the MIDI layer (src/js/midi/notes.js) and the keyboard pass it. tests/browser/midi.cjs (midi-seam-notes, keyboard-qwerty) holds MIDI and computer-keyboard notes past the limit and releases them by blur and Escape in Chromium, Firefox and WebKit from file:// and the /oscilla/ sub-path; visibilitychange and pagehide are proven on the fake context only.'
 
   - id: midi-response-deterministic
     claim: 'A MIDI response mode will produce the same output events for the same input events, scheduled on the audio clock, with no network call or model inference in the path.'

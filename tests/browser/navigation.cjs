@@ -55,6 +55,11 @@
 //                     workspace in view and lists that workspace's keys (Studio: its table, the
 //                     timeline keys and the note on keyboard paths) and the global ones; no key
 //                     is listed twice in one view and a kbd holds keys only
+//   keyboard-link     (K026) the link key `kbd` arms the keyboard of the view a link opens:
+//                     `#m=playground&kbd=1` arms the Playground only (Arm keys pressed, the keys
+//                     shown) and the key leaves the address with the first workspace change;
+//                     `#m=studio&kbd=1` arms the Studio only, and a link set in the page arms
+//                     the Playground beside it; `#m=measure&kbd=1` arms nothing and shows no keys
 //   no-console-errors
 'use strict';
 const { serveDist } = require('./lib/serve.cjs');
@@ -894,6 +899,40 @@ function defineChecks() {
         && measure.rows.includes('measure-abort') && !measure.rows.includes('trigger')
         && !measure.rows.includes('quick-add'),
     }), repeated, prose, lists, play, studio, measure };
+  });
+
+  def('keyboard-link', async (ctx) => {
+    const read = (page) => page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      const el = document.querySelector('[data-osc="keyboard"]');
+      const arm = document.querySelector('[data-osc="keyboard.arm"]');
+      return { workspace: a.workspace, armed: { ...a.kbdArmed }, here: a.kbdArmedHere,
+        shown: !!el && el.getClientRects().length > 0,
+        pressed: arm ? arm.getAttribute('aria-pressed') : null, hash: window.location.hash };
+    });
+    const play = await H.open(ctx, `${ctx.baseUrl}#m=playground&kbd=1`);
+    const p1 = await read(play);
+    await H.navTo(play, 'measure');
+    const away = await H.until(() => read(play), (s) => s.workspace === 'measure');
+    await play.close();
+    const studio = await H.open(ctx, `${ctx.baseUrl}#m=studio&kbd=1`);
+    const s1 = await read(studio);
+    await studio.evaluate(() => { window.location.hash = 'm=playground&kbd=1'; });
+    const s2 = await H.until(() => read(studio), (s) => s.workspace === 'playground');
+    await studio.close();
+    const none = await H.open(ctx, `${ctx.baseUrl}#m=measure&kbd=1`);
+    const m1 = await read(none);
+    await none.close();
+    return { ...H.verdict({
+      playgroundArmed: p1.workspace === 'playground' && p1.here && p1.shown
+        && p1.pressed === 'true' && !p1.armed.studio,
+      leavesTheAddress: away.workspace === 'measure' && !/kbd=/.test(away.hash) && !away.shown,
+      studioArmed: s1.workspace === 'studio' && s1.here && s1.armed.studio
+        && !s1.armed.playground && s1.shown,
+      linkInPage: s2.workspace === 'playground' && s2.armed.playground && s2.armed.studio,
+      measureNone: m1.workspace === 'measure' && !m1.here && !m1.armed.playground
+        && !m1.armed.studio && !m1.shown,
+    }), p1, away, s1, s2, m1 };
   });
 
   def('no-console-errors', async (ctx) => ({ ok: ctx.errors.length === 0,
