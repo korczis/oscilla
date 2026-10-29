@@ -10,6 +10,8 @@
 //   onChange(cb)          → called when any of the above changes; may return an unsubscribe
 // Optional extras the controllers use when present:
 //   getDestination()      → AudioNode the sequencer plays into (default ctx.destination)
+//   claimOutput()         → true, or a reason string: the sequencer asks before it schedules
+//                           (and before each loop pass); a reason refuses (C002)
 //   getStereoRouter()     → audio/stereo.js router while stereo plays (Phase & Stereo live data)
 //   ensureContext()       → Promise<AudioContext> created in the current user gesture (mic)
 //   attachMicrophone(stream) → AnalyserNode, detachMicrophone()   engine-owned mic graph

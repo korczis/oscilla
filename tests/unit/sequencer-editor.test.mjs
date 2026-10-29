@@ -233,6 +233,73 @@ test('loop: the next pass starts exactly at the previous end; stop cancels queue
   assert.equal(ed.playing, false);
 });
 
+// C002 (coupling-1, -2, -3): one output owner at a time. The editor asks the adapter for the
+// output before it schedules anything, and again before every loop pass.
+test('C002: a refused claimOutput plays nothing and says why', () => {
+  const { ctx, ed, log } = setup({ claimOutput: () => false });
+  assert.equal(ed.play(), false);
+  assert.equal(ed.playing, false);
+  assert.equal(ctx.oscillators.length, 0, 'no source created on the context');
+  assert.ok(ed.error.length > 0, 'a refusal is never silent');
+  assert.ok(!log.includes('resume') && !log.some((e) => e[0] === 'start'), 'nothing resumed');
+  const named = setup({ claimOutput: () => 'Measurement in progress' });
+  assert.equal(named.ed.play(), false);
+  assert.equal(named.ed.error, 'Measurement in progress');
+  assert.equal(named.ctx.oscillators.length, 0);
+  assert.equal(named.ed.togglePlay(), false, 'the toggle is refused the same way');
+  assert.equal(named.ed.playing, false);
+});
+
+test('C002: claimOutput is asked before the first pass is scheduled', () => {
+  const asked = [];
+  let ctxRef = null;
+  const { ctx, ed } = setup({
+    claimOutput: () => {
+      asked.push(ctxRef.oscillators.length);
+      return true;
+    },
+  });
+  ctxRef = ctx;
+  assert.equal(ed.play(), true);
+  assert.deepEqual(asked, [0], 'one claim, made while nothing was scheduled');
+  assert.equal(ed.error, '');
+  assert.ok(ctx.oscillators.length > 0);
+  ed.stop();
+  ctx.advance(ctx.currentTime + 0.1);
+  assert.deepEqual(ed.stats(), { voices: 0, activeSourceCount: 0, activeNodeCount: 0 });
+});
+
+test('C002: every loop pass claims the output; a refusal stops the loop', () => {
+  let answer = true;
+  let claims = 0;
+  const { ctx, ed, timers } = setup({
+    claimOutput: () => {
+      claims += 1;
+      return answer;
+    },
+  });
+  ed.setLoop(true);
+  assert.equal(ed.play(), true);
+  const first = ed.currentPassTiming();
+  const atStart = claims;
+  ctx.currentTime = first.t0 + 1.5;
+  timers.runUntil(1500);
+  assert.equal(ed.stats().voices, 2, 'second pass queued');
+  assert.ok(claims > atStart, 'the second pass was claimed');
+  answer = 'Measurement in progress';
+  ctx.advance(first.t0 + first.duration + 0.1);
+  ctx.currentTime += 1.5;
+  const before = ctx.oscillators.length;
+  timers.runUntil(3600);
+  assert.equal(ctx.oscillators.length, before, 'the refused pass is not scheduled');
+  assert.equal(ed.playing, false);
+  assert.equal(ed.error, 'Measurement in progress');
+  ctx.advance(ctx.currentTime + 0.1);
+  assert.deepEqual(ed.stats(), { voices: 0, activeSourceCount: 0, activeNodeCount: 0 });
+  assert.equal(ctx.liveSources, 0);
+  assert.equal(timers.size, 0);
+});
+
 test('errors: no engine, empty sequence; record only when the adapter provides it', () => {
   const noEngine = createSequencerEditor({ timers: null });
   assert.equal(noEngine.play(), false);

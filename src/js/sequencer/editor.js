@@ -13,6 +13,10 @@
 //   ctx | getContext(),            the running AudioContext (the engine creates it in the gesture)
 //   destination | getDestination(), the node the sequence plays into (e.g. engine master input)
 //   resume?(),                     resume a suspended context
+//   claimOutput?(),                take the shared output before anything is scheduled (C002):
+//                                  true grants it; false or a reason string refuses, and the
+//                                  editor then schedules nothing and sets `error` to the reason.
+//                                  Asked by play() and again before every loop pass.
 //   onStart?({ t0, duration }),    playback started (status bar)
 //   onEnded?({ stopped }),         playback fully ended (natural end or after a stop fade)
 //   onRecord?(sequenceJson),       the record-style button: hand the sequence to the WAV export
@@ -352,6 +356,11 @@ export function createSequencerEditor(options = {}) {
         priv.lastEnd - ctx.currentTime < LOOKAHEAD_S &&
         queued < MAX_QUEUED_PASSES
       ) {
+        // A loop never schedules into an output another owner took meanwhile (C002).
+        if (!self._claimOutput()) {
+          self.stop();
+          return;
+        }
         const v = self._schedulePass(ctx, Math.max(priv.lastEnd, ctx.currentTime + START_OFFSET_S));
         if (!v) {
           self.stop();
@@ -364,6 +373,24 @@ export function createSequencerEditor(options = {}) {
         priv.loopTimer = null;
         self._pump();
       }, wait);
+    },
+    /**
+     * Ask the adapter for the output (claimOutput, C002). True when granted or when the adapter
+     * has no claim; on a refusal `error` holds the reason and false is returned.
+     */
+    _claimOutput() {
+      if (!engine || typeof engine.claimOutput !== 'function') return true;
+      let answer;
+      try {
+        answer = engine.claimOutput();
+      } catch (e) {
+        answer = String((e && e.message) || e);
+      }
+      if (answer === true) return true;
+      const self = priv.self || this;
+      self.error = typeof answer === 'string' && answer
+        ? answer : 'The output belongs to another source: stop it first.';
+      return false;
     },
     /** Start (or restart) playback from the first block. Returns true when audio was scheduled. */
     play() {
@@ -378,6 +405,7 @@ export function createSequencerEditor(options = {}) {
         this.error = 'Add a block first.';
         return false;
       }
+      if (!this._claimOutput()) return false; // nothing resumed or scheduled (C002)
       this._stopVoices();
       if (typeof engine.resume === 'function') {
         try {

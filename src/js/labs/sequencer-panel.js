@@ -158,6 +158,8 @@ export function mount(rootEl, adapter) {
         if (ctx && ctx.state === 'suspended') return ctx.resume();
         return null;
       },
+      // One output owner at a time (C002): the app decides before anything is scheduled.
+      claimOutput: () => (adapter.claimOutput ? adapter.claimOutput() : true),
     },
   });
 
