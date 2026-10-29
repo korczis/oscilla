@@ -24,7 +24,7 @@ const WRAPPER = path.join(ROOT, '.github', 'scripts', 'base-rule.sh');
 const PROGRAMS = ['scripts/review-verdict.mjs', 'scripts/fail-first.mjs',
   'scripts/git-ref.mjs', 'scripts/yaml-subset.mjs', 'scripts/pr-metadata.mjs',
   'scripts/release-analyze.mjs', 'scripts/release-metadata.mjs', 'scripts/shell-words.mjs',
-  'scripts/install-guard.mjs', 'scripts/judge-isolation.mjs'];
+  'scripts/judge-isolation.mjs'];
 const real = (rel) => readFileSync(path.join(ROOT, rel), 'utf8');
 
 const ENV = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' };
@@ -212,16 +212,17 @@ test('a program started through a symlinked directory still runs, not exit 0 unr
 // R12, R22 (review of #255, rounds 2-4): what runs before the judge in its job could take it
 // over: a postinstall of the pull request's package.json, the `prepare` of a git dependency
 // (which `npm ci --ignore-scripts` still runs, R17), a helper program a PR .npmrc names
-// (`git=./evil.sh`, R18), or both at once from a guard-clean tree (a git spec nested in a
-// registry entry and a `git=` after a lone CR, R22), which rewrote the extracted judge. So in
+// (`git=./evil.sh`, R18), or both at once (R22), which rewrote the extracted judge. So in
 // round 4 nothing of the pull request runs before the judge, and the judge (the base's
-// fail-first.mjs) runs the guard and the install itself. Here every job of ci.yml and
+// fail-first.mjs) runs the install itself; since round 8 it has read and written everything it
+// judges from git first, and installs into the extracted head tree, never the checkout, as a
+// child like the tests. Here every job of ci.yml and
 // metadata.yml that runs base-rule.sh is run as the runner runs it, its steps in order: each
 // `run` through its step's shell (bash -eo pipefail unless `shell:` says otherwise), what a
 // step writes to $GITHUB_ENV and $GITHUB_PATH applied to the steps after it, $GITHUB_OUTPUT
 // read into `steps.<id>.outputs`, setup-node putting this node's directory on PATH and the
 // checkout being the fixture; npm runs for real, offline (a git dependency is a git+file: URL
-// of a fixture repository; CI's would be github:, which the guard refuses the same way).
+// of a fixture repository; CI's would be github:).
 const WRAPPER_REL = '.github/scripts/base-rule.sh';
 const HOSTILE_SH = String.raw`#!/bin/sh
 # what a pull request's code can do to the job that judges it (review of #255, R12, R17-R22)
@@ -237,6 +238,7 @@ for vector in "$@"; do
       echo "$PWD/.hostile" >> "$GITHUB_PATH" ;;
     env) echo "NODE_OPTIONS=--require $PWD/hostile.cjs" >> "$GITHUB_ENV"
       echo "BASH_ENV=$PWD/hostile-bash-env.sh" >> "$GITHUB_ENV" ;;
+    ran=*) echo ran > "${'$'}{vector#ran=}" ;;
     judge)
       # read-only does not stop the same user (R22)
       chmod -R u+w "$RUNNER_TEMP/judge"
@@ -256,9 +258,6 @@ const PKG = (scripts, dependencies) => `${JSON.stringify({ name: 'fixture', vers
   private: true, scripts, ...(dependencies ? { dependencies } : {}) }, null, 2)}\n`;
 // a test the pull request adds, so that the fail-first judge gets as far as its install
 const PR_TEST = "import test from 'node:test';\ntest('nothing to see', () => {});\n";
-const sha512 = (file) => `sha512-${createHash('sha512').update(readFileSync(file))
-  .digest('base64')}`;
-
 /** A git repository with one package whose `prepare` runs the PR's hostile.sh: its spec. */
 function gitDependency(t, vectors, name = 'dep') {
   const dep = gitRepo('oscilla-base-rule-gitdep-');
@@ -270,35 +269,11 @@ function gitDependency(t, vectors, name = 'dep') {
 }
 
 /**
- * A registry tarball of `pkg` (a package.json object) put into the npm cache `cache`, so that
- * an offline npm installs it as from https://registry.npmjs.org/: its lock entry.
- */
-function registryPackage(t, cache, pkg) {
-  const dir = mkdtempSync(path.join(os.tmpdir(), 'oscilla-base-rule-pkg-'));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  mkdirSync(path.join(dir, 'package'));
-  writeFileSync(path.join(dir, 'package', 'package.json'), `${JSON.stringify(pkg)}\n`);
-  const tgz = path.join(dir, `${pkg.name}-${pkg.version}.tgz`);
-  assert.equal(spawnSync('tar', ['-czf', tgz, '-C', dir, 'package']).status, 0);
-  const add = spawnSync('npm', ['cache', 'add', tgz], { encoding: 'utf8',
-    env: { ...NPM_ENV, npm_config_cache: cache } });
-  assert.equal(add.status, 0, add.stderr);
-  return { version: pkg.version, integrity: sha512(tgz),
-    resolved: `https://registry.npmjs.org/${pkg.name}/-/${pkg.name}-${pkg.version}.tgz` };
-}
-// npm as the tests start it: without this test run's own npm settings
-const NPM_ENV = Object.fromEntries(Object.entries(ENV).filter(([k]) => !/^npm_|^INIT_CWD$/i
-  .test(k) && k !== 'NODE_OPTIONS'));
-
-/**
  * main: the real programs and wrapper, a package; the PR adds a test and carries hostile code
  * reached by `route`: `postinstall` (its package.json), `git-dependency` (a dependency's
- * prepare, R17), `npmrc` (a .npmrc `git=` with a git dependency to make npm call it, R18) or
- * `nested` (the reproduction of R22: a registry entry whose own optionalDependencies name a git
- * spec, and `git=` after a lone CR in .npmrc, from a tree round 3's guard passed). `cache`: the
- * npm cache the nested route's registry packages go into.
+ * prepare, R17) or `npmrc` (a .npmrc `git=` with a git dependency to make npm call it, R18).
  */
-function hostileFixture(t, vectors, route = 'postinstall', cache = null) {
+function hostileFixture(t, vectors, route = 'postinstall') {
   const repo = gitRepo('oscilla-base-rule-r12-');
   t.after(() => repo.dispose());
   repo.commit('base', {
@@ -321,18 +296,6 @@ function hostileFixture(t, vectors, route = 'postinstall', cache = null) {
   const evil = `#!/bin/sh\nsh ./hostile.sh ${vectors.join(' ')}\nexec git "$@"\n`;
   if (route === 'postinstall') {
     files['package.json'] = PKG({ postinstall: `sh hostile.sh ${vectors.join(' ')}` });
-  } else if (route === 'nested') {
-    const spec = gitDependency(t, [], 'b');
-    const a = registryPackage(t, cache, { name: 'a', version: '1.0.0',
-      optionalDependencies: { b: spec } });
-    const b = registryPackage(t, cache, { name: 'b', version: '1.0.0' });
-    files['package.json'] = PKG({}, { a: '1.0.0' });
-    files['package-lock.json'] = LOCK('fixture', {
-      'node_modules/a': { spec: '1.0.0', entry: { ...a, optionalDependencies: { b: spec } } },
-      'node_modules/b': { spec: '1.0.0', entry: { ...b, optional: true } },
-    }, { a: '1.0.0' });
-    files['.npmrc'] = 'audit=false\rgit=./evil.sh\n';
-    files['evil.sh'] = evil;
   } else {
     const spec = gitDependency(t, route === 'npmrc' ? [] : vectors);
     files['package.json'] = PKG({}, { dep: spec });
@@ -343,8 +306,12 @@ function hostileFixture(t, vectors, route = 'postinstall', cache = null) {
       files['evil.sh'] = evil;
     }
   }
+  // (executable in the commit: the judge writes the tree from git, not from the checkout)
+  if (files['evil.sh']) {
+    writeFileSync(path.join(repo.dir, 'evil.sh'), files['evil.sh'], { mode: 0o755 });
+    delete files['evil.sh'];
+  }
   const head = repo.commit('feat: nothing to see', files);
-  if (files['evil.sh']) chmodSync(path.join(repo.dir, 'evil.sh'), 0o755);
   return { repo, head };
 }
 
@@ -374,7 +341,7 @@ function judgeJobs() {
  * checkout is the fixture. Returns the status and output of the last step that ran, and the
  * output of every step.
  */
-function runJob(t, repo, head, job, { before = [], drop = () => false, cache = null } = {}) {
+function runJob(t, repo, head, job, { before = [], drop = () => false } = {}) {
   const tmp = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'oscilla-runner-')));
   t.after(() => {
     spawnSync('chmod', ['-R', 'u+w', tmp]); // the judge copy is read-only
@@ -412,7 +379,7 @@ function runJob(t, repo, head, job, { before = [], drop = () => false, cache = n
   Object.assign(env, {
     GITHUB_BASE_REF: 'main', GITHUB_REPOSITORY: 'fixture/oscilla', RUNNER_TEMP: tmp,
     GITHUB_WORKSPACE: repo.dir, GITHUB_STEP_SUMMARY: path.join(tmp, 'summary.md'),
-    npm_config_cache: cache || path.join(tmp, 'npm-cache'),
+    npm_config_cache: path.join(tmp, 'npm-cache'),
     npm_config_userconfig: path.join(tmp, 'npmrc'),
     npm_config_audit: 'false', npm_config_fund: 'false', npm_config_update_notifier: 'false',
     npm_config_offline: 'true',
@@ -501,8 +468,11 @@ test('R12: a PR\'s postinstall can no longer change what judges it, in any judge
     const names = job.steps.map((st) => st.uses || st.id || 'judge-step');
     assert.deepEqual(names, ['actions/setup-node@v7', 'actions/checkout@v7', 'judge',
       'judge-step'], job.name);
-    assert.ok(job.steps.every((st) => !/\bnpm\b|install-guard/.test(String(st.run || '')
+    assert.ok(job.steps.every((st) => !/\bnpm\b/.test(String(st.run || '')
       .split(CALL)[0])), `${job.name}: nothing is installed before the judge`);
+    // round 8, P3: the judge fetches nothing after the checkout, so no credential is left in
+    // the checkout's .git/config for the pull request's code to read
+    assert.equal(job.steps[1].with?.['persist-credentials'], false, job.name);
   }
   // the control: with a plain `npm ci` and the checkout's own wrapper, each vector alone
   // takes the judge over
@@ -531,47 +501,48 @@ test('R12: a PR\'s postinstall can no longer change what judges it, in any judge
       assert.match(r.out, /installed with `npm ci --ignore-scripts` by the judge/, r.out);
       assert.match(r.out, /nothing\.test\.mjs: passes without the change - not evidence/);
     } else {
-      assert.doesNotMatch(r.log, /npm ci|install-guard/, `${job.name} installs nothing`);
+      assert.doesNotMatch(r.log, /npm ci/, `${job.name} installs nothing`);
     }
   }
 });
 
 // R17, R18, R22 (review of #255, rounds 3 and 4): `npm ci --ignore-scripts` still clones a git
-// dependency and runs its prepare, and still spawns the program a PR .npmrc names for git; the
-// combination of a git spec nested in a registry entry and a `git=` after a lone CR passed
-// round 3's guard, and rewrote the read-only judge copy before the judge ran. Now nothing runs
-// before the judge, whose guard refuses each route before npm starts.
-test('R17, R18, R22: a git dependency, a .npmrc git= and their combination cannot judge',
+// dependency and runs its prepare, and still spawns the program a PR .npmrc names for git;
+// before the judge (round 3's shape) that rewrote the read-only judge copy. Round 8: no guard
+// tells such a lockfile apart any more. The judge has read and written everything it judges
+// from git before the install, which runs in the extracted head tree as a child like the tests,
+// with a cleared environment; so the hostile code runs, and reaches neither the checkout's
+// wrapper, nor the judge copy (no RUNNER_TEMP, GITHUB_ENV or GITHUB_PATH reaches it), nor the
+// verdict.
+test('R17, R18, R22, round 8: install-time code runs as the judge\'s child and decides nothing',
   (t) => {
     const ff = judgeJobs().find((j) => j.name === 'fail-first');
-    const cache = mkdtempSync(path.join(os.tmpdir(), 'oscilla-base-rule-cache-'));
-    t.after(() => rmSync(cache, { recursive: true, force: true }));
     // round 3's shape: an install step between the judge step and the judge's step
     const round3 = { ...ff, steps: [...ff.steps.slice(0, -1), { run: 'npm ci --ignore-scripts' },
       ff.steps.at(-1)] };
-    for (const [route, want] of [['git-dependency', /node_modules\/dep resolves to git\+file:/],
-      ['npmrc', /\.npmrc:1: git names a program npm runs/],
-      ['nested', /node_modules\/a: optionalDependencies\.b = "git\+file:[^"]*" is a git spec/]]) {
+    for (const route of ['git-dependency', 'npmrc']) {
       // the control: under --ignore-scripts npm runs the PR's code, and before the judge it
       // rewrites the read-only extracted copy, so the judge's step prints a forged pass
-      const control = hostileFixture(t, ['wrapper', 'judge'], route, cache);
-      const plain = runJob(t, control.repo, control.head, round3, { cache });
+      const control = hostileFixture(t, ['wrapper', 'judge'], route);
+      const plain = runJob(t, control.repo, control.head, round3);
       assert.match(readFileSync(path.join(control.repo.dir, WRAPPER_REL), 'utf8'), /HOSTILE/,
         `${route}: the attack is real under --ignore-scripts: ${plain.log}`);
       assert.match(plain.out, /HOSTILE judge copy/, `${route}: ${plain.log}`);
       assert.equal(plain.status, 0, `${route}: the forged pass`);
-      // the job as it is: the judge's guard refuses before npm runs; nothing hostile ran, the
-      // copy is the extracted one, and the verdict is the base program's
-      const { repo, head } = hostileFixture(t, ['wrapper', 'path', 'env', 'judge'], route,
-        cache);
-      const r = runJobKeep(t, repo, head, ff, { cache });
+      // the job as it is: the hostile code runs as the judge's child, and the verdict is the
+      // base program's (the PR's one test passes without the change: not evidence)
+      const marks = mkdtempSync(path.join(os.tmpdir(), 'oscilla-base-rule-ran-'));
+      t.after(() => rmSync(marks, { recursive: true, force: true }));
+      const mark = path.join(marks, 'ran');
+      const { repo, head } = hostileFixture(t, ['wrapper', 'path', 'env', 'judge',
+        `ran=${mark}`], route);
+      const r = runJobKeep(t, repo, head, ff);
+      assert.equal(readFileSync(mark, 'utf8'), 'ran\n', `${route}: the code ran: ${r.log}`);
       assert.equal(r.status, 1, `${route}: ${r.log}`);
       assert.match(r.out, judged('fail-first'), route);
-      assert.match(r.out, /install-guard: REFUSED/, route);
-      assert.match(r.out, want, `${route}: ${r.out}`);
-      if (route === 'nested') assert.match(r.out, /\.npmrc: a carriage return/);
-      assert.match(r.out, /fail-first: REFUSED to judge: the install/, route);
-      assert.doesNotMatch(r.log, /HOSTILE|added \d+ package/, `${route}: ${r.log}`);
+      assert.match(r.out, /installed with `npm ci --ignore-scripts` by the judge/, route);
+      assert.match(r.out, /nothing\.test\.mjs: passes without the change - not evidence/, route);
+      assert.doesNotMatch(r.log, /HOSTILE/, `${route}: ${r.log}`);
       assert.equal(readFileSync(path.join(repo.dir, WRAPPER_REL), 'utf8'), real(WRAPPER_REL));
       assert.ok(copyIntact(repo, r.root), `${route}: the judge copy is unchanged`);
     }
@@ -579,7 +550,8 @@ test('R17, R18, R22: a git dependency, a .npmrc git= and their combination canno
 
 // R25 (review of #255, round 4): a committed node_modules symlink made npm ci empty the copy
 // it pointed at, and base-rule.sh then fell back to the checkout's program; now the judge
-// refuses a node_modules before its install, and a copy missing a program its commit has.
+// writes regular files only (round 8: a symbolic link in the head commit is refused before
+// anything runs), and refuses a copy missing a program its commit has.
 test('R25: a committed node_modules is refused, and a judge copy lacking a program too', (t) => {
   const ff = judgeJobs().find((j) => j.name === 'fail-first');
   const { repo, head } = hostileFixture(t, ['wrapper']);
@@ -589,7 +561,7 @@ test('R25: a committed node_modules is refused, and a judge copy lacking a progr
   repo.git('commit', '-q', '-m', 'a node_modules link');
   const r = runJobKeep(t, repo, repo.git('rev-parse', 'HEAD') || head, ff);
   assert.equal(r.status, 1, r.log);
-  assert.match(r.out, /node_modules is a symbolic link: npm ci would empty/);
+  assert.match(r.out, /REFUSED to judge: the head commit [0-9a-f]{12}: node_modules is a symbolic/);
   assert.doesNotMatch(r.log, /HOSTILE/);
   assert.ok(copyIntact(repo, r.root));
   // base-rule.sh run from a judge copy that has a .base-commit and a manifest

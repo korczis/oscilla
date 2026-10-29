@@ -67,3 +67,22 @@ test('quotes and expansions: what bash runs, and what an expansion decides', () 
   assert.deepEqual(programs('command -v npm'), []);
   assert.deepEqual(programs('# npm ci\nls'), ['ls']);
 });
+
+// review of #255, round 7, R45: an arithmetic expansion is no command, but bash runs the
+// command substitutions inside it (and inside a parameter expansion's word) before it
+// evaluates, so they are commands too, in either form, quoted or not, nested
+test('R45: substitutions inside $(( )) and ${ } run their commands', () => {
+  assert.deepEqual(programs('echo $(( $(npm ci) ))'), ['npm', 'echo']);
+  assert.deepEqual(programs('echo $(( `npm ci` + 1 ))'), ['npm', 'echo']);
+  assert.deepEqual(programs('x=$(( 1 + $(npm ci) ))'), ['npm']);
+  assert.deepEqual(programs('echo "$(( $(npm ci) ))"'), ['npm', 'echo']);
+  assert.deepEqual(programs('echo "$(( `npm ci` ))"'), ['npm', 'echo']);
+  assert.deepEqual(programs('echo $(( $(( $(npm ci) )) + 1 ))'), ['npm', 'echo']);
+  assert.deepEqual(programs('echo $(( "$(npm ci)" ))'), ['npm', 'echo']);
+  assert.deepEqual(programs('echo ${x:-$(npm ci)}'), ['npm', 'echo']);
+  assert.deepEqual(programs('echo "${x:-`npm ci`}"'), ['npm', 'echo']);
+  assert.deepEqual(programs('$(( $(npm ci) ))'), ['npm', '$']);
+  // an arithmetic or parameter expansion with no substitution runs nothing
+  assert.deepEqual(programs('echo $(( 1 + 2 )) ${x:-y}'), ['echo']);
+  assert.deepEqual(programs('echo $(( (1 + 2) * 3 ))'), ['echo']);
+});

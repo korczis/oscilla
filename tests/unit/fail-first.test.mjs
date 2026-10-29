@@ -6,8 +6,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync }
-  from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync,
+  rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import os from 'node:os';
@@ -419,7 +419,8 @@ test('a unit test file with a non-ASCII name is seen', (t) => {
 
 // review of #255, round 4: the CI judge (JUDGE_MANIFEST set) checks its own copy against the
 // manifest its `judge` step wrote, before any child and after the last; it installs the
-// packages itself (the guard in-process, then `npm ci --ignore-scripts` as a child); every
+// packages itself (`npm ci --ignore-scripts` as a child, since round 8 in the extracted head
+// tree, never the checkout); every
 // child runs in a group of its own that dies with it; and it refuses to judge where a child
 // could ptrace it (R12, R22).
 const LOCK = `${JSON.stringify({ name: 'fixture', version: '1.0.0', lockfileVersion: 3,
@@ -476,7 +477,6 @@ test('round 4: the judge checks its copy, installs as its own child, then judges
   const r = judgeRun(repo, judge, 'fix(x): the value is 2');
   assert.equal(r.status, 0, r.out);
   assert.match(r.out, /the judge copy matches its manifest \(\d+ files\)/);
-  assert.match(r.out, /install-guard: only registry tarballs/);
   assert.match(r.out, /installed with `npm ci --ignore-scripts` by the judge, as its own child/);
   assert.match(r.out, /value\.test\.mjs: fails without the change \(assertion\), passes with it/);
   // another digest than the one its step recorded: refused before anything runs
@@ -486,30 +486,162 @@ test('round 4: the judge checks its copy, installs as its own child, then judges
   assert.doesNotMatch(wrong.out, /npm ci|value\.test/);
 });
 
-test('round 4: what the install would run, and a committed node_modules, are refused', (t) => {
-  const judge = judgeCopy(t);
-  const repo = packaged();
-  t.after(() => repo.dispose());
-  repo.commit('fix', {
-    'tests/unit/b.test.mjs': VALUE_TEST(1),
-    'package.json': `${JSON.stringify({ name: 'fixture', dependencies: {
-      b: 'git+https://github.com/o/b.git' } })}\n`,
-    '.npmrc': 'audit=false\rgit=./evil.sh\n',
+// review of #255, round 8: the judge reads every commit and file it needs from git and writes
+// both trees before any child runs; the install runs in the extracted head tree, never in the
+// checkout, as a child like the tests. So install-time code (here a git dependency's prepare,
+// which `npm ci --ignore-scripts` runs) that rewrites the checkout's .git (a replace ref for the
+// merge base, a core.fsmonitor, a filter and an alias in .git/config) and plants a symbolic link
+// in the checkout changes neither tree nor the verdict, then or on the next judgement.
+test('round 8: install-time code cannot change what the judge extracted, or its verdict',
+  async (t) => {
+    const judge = judgeCopy(t);
+    const repo = packaged();
+    t.after(() => repo.dispose());
+    const marks = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'oscilla-ff-r8-marks-')));
+    t.after(() => rmSync(marks, { recursive: true, force: true }));
+    const base = repo.git('rev-parse', 'main');
+    // the decoy: a commit with the fix in it; a merge base replaced by it passes the test
+    // without the change, which would turn the evidence into none
+    const fixed = { 'src/value.mjs': 'export const value = () => 2;\n',
+      'tests/unit/value.test.mjs': VALUE_TEST(2) };
+    repo.git('checkout', '-q', '-b', 'decoy', 'main');
+    const decoy = repo.commit('decoy', fixed);
+    repo.git('checkout', '-q', 'pr');
+    const gitDir = path.join(repo.dir, '.git');
+    const hostile = `#!/bin/sh
+# install-time code of the pull request, run by npm ci --ignore-scripts (review of #255, R17)
+echo ran > '${marks}/install-ran'
+mkdir -p '${gitDir}/refs/replace'
+echo ${decoy} > '${gitDir}/refs/replace/${base}'
+printf '[core]\\n\\tfsmonitor = touch ${marks}/fsmonitor-ran\\n' >> '${gitDir}/config'
+printf '[filter "x"]\\n\\tclean = touch ${marks}/filter-ran\\n' >> '${gitDir}/config'
+printf '\\tsmudge = touch ${marks}/filter-ran\\n' >> '${gitDir}/config'
+printf '[alias]\\n\\tls = !touch ${marks}/alias-ran\\n' >> '${gitDir}/config'
+ln -s / '${repo.dir}/escape'
+`;
+    const dep = gitRepo('oscilla-ff-r8-dep-');
+    t.after(() => dep.dispose());
+    const sha = dep.commit('dep', { 'hostile.sh': hostile, 'package.json': `${JSON.stringify({
+      name: 'dep', version: '1.0.0', scripts: { prepare: 'sh hostile.sh' } })}\n` });
+    const spec = `git+file://${dep.dir}#${sha}`;
+    repo.commit('fix', {
+      ...fixed,
+      '.gitattributes': '* filter=x\n',
+      'package.json': `${JSON.stringify({ name: 'fixture', version: '1.0.0', private: true,
+        dependencies: { dep: spec } })}\n`,
+      'package-lock.json': `${JSON.stringify({ name: 'fixture', version: '1.0.0',
+        lockfileVersion: 3, requires: true, packages: {
+          '': { name: 'fixture', version: '1.0.0', dependencies: { dep: spec } },
+          'node_modules/dep': { version: '1.0.0', resolved: spec } } }, null, 2)}\n`,
+    });
+    const probe = () => ({ ok: true, message: 'ptrace: ptrace_scope 1' });
+    const judged = () => failFirst({ repo: repo.dir, title: 'fix(x): the value is 2',
+      baseBranch: 'main', judge, keep: true, probe });
+    const trees = (lines) => {
+      const kept = /trees kept in (.+)$/m.exec(lines.join('\n'))[1];
+      t.after(() => rmSync(kept, { recursive: true, force: true }));
+      const at = (tree, rel) => readFileSync(path.join(kept, tree, rel), 'utf8');
+      return { kept, at };
+    };
+    const first = await judged();
+    const log = first.lines.join('\n');
+    assert.equal(first.status, 'proven', log);
+    assert.match(log, /installed with `npm ci --ignore-scripts` by the judge/);
+    assert.match(log, /value\.test\.mjs: fails without the change \(assertion\), passes with it/);
+    // the attack is real: the install ran it, and it wrote the checkout's .git
+    assert.equal(readFileSync(path.join(marks, 'install-ran'), 'utf8'), 'ran\n', log);
+    assert.equal(readFileSync(path.join(gitDir, 'refs', 'replace', base), 'utf8'),
+      `${decoy}\n`);
+    assert.match(readFileSync(path.join(gitDir, 'config'), 'utf8'), /fsmonitor = touch/);
+    const one = trees(first.lines);
+    assert.equal(one.at('without', 'src/value.mjs'), 'export const value = () => 1;\n');
+    assert.equal(one.at('without', 'tests/unit/value.test.mjs'), VALUE_TEST(2));
+    assert.equal(one.at('with', 'src/value.mjs'), 'export const value = () => 2;\n');
+    for (const tree of ['with', 'without']) {
+      assert.equal(existsSync(path.join(one.kept, tree, 'escape')), false, tree);
+    }
+    // judged again, with the replace ref and the config in the checkout before it starts:
+    // the judge's git honours neither
+    const second = await judged();
+    assert.equal(second.status, 'proven', second.lines.join('\n'));
+    const two = trees(second.lines);
+    assert.equal(two.at('without', 'src/value.mjs'), 'export const value = () => 1;\n');
+    for (const mark of ['fsmonitor-ran', 'filter-ran', 'alias-ran']) {
+      assert.equal(existsSync(path.join(marks, mark)), false, mark);
+    }
   });
-  const r = judgeRun(repo, judge, 'fix(x): b');
-  assert.equal(r.status, 1, r.out);
-  assert.match(r.out, /::error::install-guard: package\.json: dependencies\.b = /);
-  assert.match(r.out, /::error::install-guard: \.npmrc: a carriage return/);
-  assert.match(r.out, /REFUSED to judge: the install/);
-  assert.doesNotMatch(r.out, /installed with|b\.test\.mjs:/);
-  assert.equal(existsSync(path.join(repo.dir, 'node_modules')), false);
-  const clean = packaged();
-  t.after(() => clean.dispose());
-  clean.commit('fix', { 'tests/unit/b.test.mjs': VALUE_TEST(1),
-    'node_modules/x/index.js': 'module.exports = 1;\n' });
-  const committed = judgeRun(clean, judge, 'fix(x): modules');
-  assert.equal(committed.status, 1, committed.out);
-  assert.match(committed.out, /node_modules exists before the install/);
+
+// review of #255, round 8: every git call of the judge runs with GIT_NO_REPLACE_OBJECTS=1,
+// GIT_CONFIG_GLOBAL=/dev/null and GIT_CONFIG_NOSYSTEM=1 (and no other GIT_* variable), so a
+// replace ref in the repository never answers for the merge base it names
+test('round 8: every git call of the judge ignores replace refs and the global config', (t) => {
+  const repo = fixture();
+  t.after(() => repo.dispose());
+  const base = repo.git('rev-parse', 'main');
+  const fixed = { 'src/value.mjs': 'export const value = () => 2;\n',
+    'tests/unit/value.test.mjs': VALUE_TEST(2) };
+  repo.commit('fix', fixed);
+  const decoy = repo.git('commit-tree', repo.git('rev-parse', 'HEAD^{tree}'), '-m', 'decoy');
+  repo.git('replace', base, decoy);
+  const bin = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'oscilla-ff-r8-git-')));
+  t.after(() => rmSync(bin, { recursive: true, force: true }));
+  const real = spawnSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).stdout.trim();
+  const log = path.join(bin, 'log');
+  writeFileSync(path.join(bin, 'git'), '#!/bin/sh\nprintf \'%s|%s|%s|%s|%s\\n\' '
+    + '"${GIT_NO_REPLACE_OBJECTS-}" "${GIT_CONFIG_GLOBAL-}" "${GIT_CONFIG_NOSYSTEM-}" '
+    + `"\${GIT_DIR-}\${GIT_INDEX_FILE-}" "$*" >> '${log}'\nexec '${real}' "$@"\n`);
+  chmodSync(path.join(bin, 'git'), 0o755);
+  const r = spawnSync(process.execPath, [SCRIPT, '--repo', repo.dir, '--title',
+    'fix(x): the value is 2', '--base-branch', 'main'], { encoding: 'utf8',
+    env: { ...ENV, PATH: `${bin}:${ENV.PATH}`, GIT_CONFIG_GLOBAL: path.join(bin, 'none'),
+      GIT_INDEX_FILE: path.join(bin, 'index') } });
+  const out = `${r.stdout}${r.stderr}`;
+  assert.equal(r.status, 0, out);
+  assert.match(out, /value\.test\.mjs: fails without the change \(assertion\), passes with it/);
+  const calls = readFileSync(log, 'utf8').trim().split('\n');
+  for (const sub of ['rev-parse', 'merge-base', 'diff', 'ls-tree', 'cat-file', 'init', 'add']) {
+    assert.ok(calls.some((c) => c.split('|')[4].split(' ').includes(sub)), `${sub}: ${calls}`);
+  }
+  for (const c of calls) assert.ok(c.startsWith('1|/dev/null|1||'), c);
+});
+
+// review of #255, round 8: the trees are written blob by blob (git ls-tree and git cat-file,
+// never tar): a symbolic link, a path with an empty, `.` or `..` component, or one a checkout
+// would refuse as .git (in any case) is refused before anything runs
+test('round 8: the judge writes regular files only, at paths a checkout could hold', (t) => {
+  const repo = fixture();
+  t.after(() => repo.dispose());
+  const base = repo.git('rev-parse', 'main');
+  repo.commit('fix', { 'src/value.mjs': 'export const value = () => 2;\n',
+    'tests/unit/value.test.mjs': VALUE_TEST(2) });
+  const head = repo.git('rev-parse', 'HEAD');
+  const blob = repo.git('rev-parse', 'HEAD:README.md');
+  const sub = (entries) => {
+    const r = spawnSync('git', ['-C', repo.dir, 'mktree'], { encoding: 'utf8',
+      input: entries.map((e) => `${e}\n`).join(''), env: ENV });
+    assert.equal(r.status, 0, r.stderr);
+    return r.stdout.trim();
+  };
+  const top = repo.git('ls-tree', head).split('\n');
+  const linked = spawnSync('git', ['-C', repo.dir, 'hash-object', '-w', '--stdin'],
+    { encoding: 'utf8', input: '/', env: ENV }).stdout.trim();
+  for (const [what, extra, want] of [
+    ['a symbolic link', [`120000 blob ${linked}\tescape`], /escape is a symbolic link/],
+    ['a .. entry', [`100644 blob ${blob}\t..`], /"\.\." is no path a checkout can hold/],
+    ['a .GIT directory', [`040000 tree ${sub([`100644 blob ${blob}\tconfig`])}\t.GIT`],
+      /"\.GIT\/config" is no path a checkout can hold/],
+    ['an NTFS short .git', [`040000 tree ${sub([`100644 blob ${blob}\tconfig`])}\tgit~1`],
+      /"git~1\/config" is no path a checkout can hold/],
+  ]) {
+    const tree = sub([...top, ...extra]);
+    const commit = repo.git('commit-tree', tree, '-p', base, '-m', what);
+    repo.git('update-ref', 'refs/heads/pr', commit);
+    const r = run(repo, 'fix(x): the value is 2');
+    assert.equal(r.status, 1, `${what}: ${r.out}`);
+    assert.match(r.out, want, what);
+    assert.match(r.out, /REFUSED to judge: the head commit/, what);
+    assert.doesNotMatch(r.out, /value\.test\.mjs:/, `${what}: nothing ran`);
+  }
 });
 
 test('round 4: a child that changes the judge copy fails the judgement closed', (t) => {

@@ -675,7 +675,8 @@ test('R12: the judge is the base commit\'s copy, in a job shaped to keep the PR 
     assert.ok(found.some((v) => want.test(v.message)), `${want.source}: ${format(found)}`);
   };
   const node = '      - uses: actions/setup-node@v7\n        with:\n          node-version: 22\n';
-  const checkout = '      - uses: actions/checkout@v7\n        with:\n          fetch-depth: 0\n';
+  const checkout = '      - uses: actions/checkout@v7\n        with:\n          fetch-depth: 0\n'
+    + '          persist-credentials: false\n';
   const ffSteps = '    steps:\n      - uses: actions/setup-node@v7\n';
   const at = (text, from) => text.indexOf(from, text.indexOf('  fail-first:\n'));
   const inFf = (from, to) => {
@@ -690,6 +691,13 @@ test('R12: the judge is the base commit\'s copy, in a job shaped to keep the PR 
   refused(inFf(node, node.replace('node-version: 22', 'node-version-file: .nvmrc')),
     /setup-node reads a file of the checkout/);
   refused(inFf('        id: judge\n', ''), /the third step is not the `judge` step/);
+  // round 8, P3: the checkout keeps no credential in .git/config for the PR's code to read
+  refused(inFf(checkout, checkout.replace('          persist-credentials: false\n', '')),
+    /the checkout persists its credentials/);
+  refused(inFf(checkout, checkout.replace('persist-credentials: false',
+    'persist-credentials: true')), /the checkout persists its credentials/);
+  refused(inFf(checkout, checkout.replace('persist-credentials: false',
+    'persist-credentials: "false"')), /the checkout persists its credentials/);
   refused(inFf(ffSteps, `${ffSteps.replace('      - uses: actions/setup-node@v7\n', '')}`
     + '      - run: echo first\n      - uses: actions/setup-node@v7\n'),
   /the first step is not actions\/setup-node/);
@@ -698,8 +706,13 @@ test('R12: the judge is the base commit\'s copy, in a job shaped to keep the PR 
     + `          key: x\n${FF_JUDGE_STEP}`), /uses actions\/cache@v4 before the judge/);
   refused(inFf(FF_JUDGE_STEP, `      - run: npm ci --ignore-scripts\n${FF_JUDGE_STEP}`),
     /nothing is installed before the judge/);
+  // R45: a command substitution inside an arithmetic expansion runs too
+  refused(inFf(FF_JUDGE_STEP, `      - run: echo $(( $(npm ci) ))\n${FF_JUDGE_STEP}`),
+    /nothing is installed before the judge/);
+  refused(inFf(FF_JUDGE_STEP, `      - run: echo "$(( \`npm ci\` ))"\n${FF_JUDGE_STEP}`),
+    /nothing is installed before the judge/);
   refused(inFf(FF_JUDGE_STEP, '      - run: |\n          "${{ steps.judge.outputs.node }}" '
-    + `"\${{ runner.temp }}/judge/scripts/install-guard.mjs"\n${FF_JUDGE_STEP}`),
+    + `"\${{ runner.temp }}/judge/scripts/fail-first.mjs"\n${FF_JUDGE_STEP}`),
   /runs the judge's node before the judge/);
   // the judge's step: its shell, the extracted copy, env -i, the judge step's PATH and
   // manifest, a HOME
@@ -751,7 +764,7 @@ test('R12: the judge is the base commit\'s copy, in a job shaped to keep the PR 
     assert.match(extract, /echo "manifest=\$\(sha256sum < "\$judge\/\.manifest"/, job);
     assert.match(extract, /^echo "ptrace_scope=\$\(cat \/proc\/sys\/kernel\/yama\/ptrace_scope/m,
       job);
-    assert.doesNotMatch(extract, /\bcp\b|install-guard|\bfind\b|git archive/,
+    assert.doesNotMatch(extract, /\bcp\b|\bfind\b|git archive/,
       `${job}: no checkout copy, no find`);
   }
   // checkRepository passes the actions that name base-rule.sh

@@ -529,8 +529,7 @@ test('usage: no mode, no pull request, an unknown flag, no title exit 2', (t) =>
 
 const SOURCE = read('scripts/pr-metadata.mjs');
 const IMPORTS = ['fail-first.mjs', 'git-ref.mjs', 'release-analyze.mjs', 'shell-words.mjs',
-  'release-metadata.mjs', 'review-verdict.mjs', 'yaml-subset.mjs', 'install-guard.mjs',
-  'judge-isolation.mjs'];
+  'release-metadata.mjs', 'review-verdict.mjs', 'yaml-subset.mjs', 'judge-isolation.mjs'];
 const block = (code) => new RegExp(`^[ \\t]*// rule: ${code}\\n[\\s\\S]*?`
   + `^[ \\t]*// end rule: ${code}\\n`, 'm');
 
@@ -622,7 +621,7 @@ test('mutation: a workflow that writes, misses an event or can no longer refuse'
   const node = '      - uses: actions/setup-node@v7\n        timeout-minutes: 1\n        with:\n'
     + '          node-version: 22\n';
   const checkout = '      - uses: actions/checkout@v7\n        timeout-minutes: 2\n        with:\n'
-    + '          fetch-depth: 0\n';
+    + '          fetch-depth: 0\n          persist-credentials: false\n';
   const runs = '          PR: ${{ github.event.pull_request.number }}\n        run: |\n';
   const guard = '          if [ -z "$PR" ]; then echo'
     + ' "::error::pr-metadata: no pull request to judge"; exit 1; fi\n';
@@ -686,6 +685,13 @@ test('mutation: a workflow that writes, misses an event or can no longer refuse'
     ['setup-node reads the checkout\'s cache', mutate(WORKFLOW, node,
       `${node}          cache: npm\n`), /^setup-node reads a file of the checkout/],
     ['no judge step', mutate(WORKFLOW, '        id: judge\n', ''), /^the first steps are/],
+    // round 8, P3: the judge fetches nothing after the checkout, which keeps no credential
+    ['the checkout keeps its credentials', mutate(WORKFLOW, checkout,
+      checkout.replace('          persist-credentials: false\n', '')),
+    /^the checkout persists its credentials/],
+    ['persist-credentials: true', mutate(WORKFLOW, checkout,
+      checkout.replace('persist-credentials: false', 'persist-credentials: true')),
+    /^the checkout persists its credentials/],
     ['the short base a tag can shadow (#255, R2)', mutate(WORKFLOW, tail,
       tail.replace('refs/remotes/origin/$GITHUB_BASE_REF', 'origin/$GITHUB_BASE_REF')),
     /^the last command is not the call/],
