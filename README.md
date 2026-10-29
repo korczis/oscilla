@@ -628,6 +628,11 @@ The release gate runs the built `dist/index.html` in Chromium, Firefox and WebKi
 behind Safari) through Playwright. Each browser loads the file from `file://` and from a
 GitHub-Pages-like `/oscilla/` sub-path, and the run must produce zero console errors.
 
+Only these three engines are checked. No real device is: Safari on iOS, Chrome on Android and
+Edge have not been tried for sound starting only after a tap, resuming after the page returns
+from the background, or hold-to-play by touch. The owner declined real-device checks for now on
+2026-10-29 (plan issue S071).
+
 ## Testing
 
 | Layer | Where | What it covers |
