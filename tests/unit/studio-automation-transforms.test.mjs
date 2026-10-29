@@ -207,7 +207,7 @@ const ROWS = [
     checks: () => [[0, 0.25], [0.5, 0.625], [1, 1], [1.5, 0.5], [2, 0]] },
   // K013: the Macro value is its ConstantSourceNode offset, 0..1.
   { type: 'macro', key: 'value', unit: '', scale: 'linear', min: 0, max: 1, display: 'linear',
-    param: (h) => h.outputs.control.offset,
+    param: (h) => h.info.source.offset,
     points: [[0, 0, 'step'], [1, 1, 'linear'], [2, 0.25, 'linear']],
     checks: () => [[0, 0], [0.5, 0.5], [1, 1], [1.5, 0.625], [2, 0.25]] },
 

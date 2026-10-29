@@ -21,7 +21,7 @@
 // behind a Master level at or below the engine's ceiling the Drive stays at or below that
 // ceiling, live and offline. DRIVE_HEADROOM (0.8, −1.9 dB) keeps ordinary material (the
 // sawtooth's 0.8 × 1.17 ≈ 0.94) under the clip, so the clip cuts only the larger overshoot.
-// Drive changes glide (τ GLIDE_TAU_S) on the drive gain; the curves themselves never change.
+// Drive and trim changes glide (τ GLIDE_TAU_S); the curves themselves never change.
 
 /** Input span of the curve: x in [−1, 1] is tanh(DRIVE_SPAN · x). */
 export const DRIVE_SPAN = 8;
@@ -39,7 +39,8 @@ export const DRIVE_CLIP = 0.95;
  */
 export const DRIVE_CLIP_CURVE_SIZE = 41;
 
-const GLIDE_TAU_S = 0.015;
+/** Time constant of a drive or trim change's glide (setTargetAtTime), in seconds. */
+export const GLIDE_TAU_S = 0.015;
 const identity = (node) => node;
 const clamp01 = (v) => Math.min(1, Math.max(0, Number.isFinite(v) ? v : 0));
 

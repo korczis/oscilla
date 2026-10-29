@@ -235,7 +235,6 @@ export const drive = {
   create({ ctx, acct, params }) {
     // audio/drive.js: drive gain → tanh WaveShaper (4x) → trim → clip at DRIVE_CLIP (K012).
     const stage = createDriveStage(ctx, params, { track: acct.track });
-    const trimOf = (v) => Math.min(1, Math.max(0, v));
     return {
       inputs: { audio: stage.input },
       outputs: { audio: stage.output },
@@ -243,10 +242,12 @@ export const drive = {
       modTarget: (key, mapping) => (key === 'trim' ? linearOnly(stage.trim.gain)(key, mapping)
         : { reason: `${key} is not modulatable` }),
       applyBase(b, immediate, owned, w) {
-        // The static trim (edge offsets included) is held at 0..1, as createDriveStage holds it.
+        // As on every other node: the static trim (the parameter, held at 0..1 by its
+        // definition) plus the edges' constant part, never clamped as a sum, so each edge maps
+        // its source's full range onto its own span (review of #267, R-2). Whatever the edges
+        // add, the clip after the trim bounds the stage's output at DRIVE_CLIP.
         if (free(owned, 'trim')) {
-          setParam(stage.trim.gain, trimOf(b.trim.value), immediate, ctx.currentTime, w,
-            'trim');
+          setParam(stage.trim.gain, b.trim.value, immediate, ctx.currentTime, w, 'trim');
         }
       },
       update(changed, owned, w) {

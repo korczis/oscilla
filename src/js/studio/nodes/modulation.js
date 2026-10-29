@@ -9,8 +9,10 @@
 // FREQUENCY_MAX_HZ, as a frequency parameter does, and the compiler and the adapter clamp it to
 // 0.95 × Nyquist of the running context (reported in the runtime's limitedParams). A wider
 // range changes no saved studioHash. Random and Step Modulator keep their 100 Hz.
-// K013: the Macro is one control value 0..1 (unipolar), automatable, for driving several
-// parameters from one place; each edge sets its own depth and polarity.
+// K013: the Macro is one control value 0..1 (unipolar), automatable and modulatable, for driving
+// several parameters from one place; each edge sets its own depth and polarity. Its output is
+// clipped to 0..1 (adapters/modulation.js), so a modulated value never leaves the range its
+// edges are sized from.
 
 import { SAFE_NYQUIST_FACTOR_TEXT, WAVEFORMS, WAVEFORM_LABELS } from '../../core/constants.js';
 import { DEFAULT_ADSR, MIN_SEGMENT_S } from '../../audio/envelope.js';
@@ -29,7 +31,9 @@ const rate = (def, modDepth, opts = {}) => numberParam('rate', 'Rate', {
 });
 /**
  * The Inspector slider's range for the LFO rate: the four decades of slow modulation it had
- * before K010, so the slider keeps its resolution there; an audio rate (FM, AM) is typed.
+ * before K010, so the slider keeps its resolution there; an audio rate (FM, AM) is typed. An
+ * automation lane spans the whole range instead (laneRange; automation.js caps it at 0.95 ×
+ * Nyquist of the running context), so an audio rate can be drawn there (review of #267, R-5).
  */
 export const LFO_SLIDER_RANGE = Object.freeze([0.01, 100]);
 const randomPeriodS = (DEFAULT_PATTERN_PARAMS.random.toneMs + DEFAULT_PATTERN_PARAMS.random.gapMs)
@@ -46,7 +50,7 @@ export const lfo = defineNode({
   params: [
     enumParam('shape', 'Shape', WAVEFORMS.map((w) => [w, WAVEFORM_LABELS[w]]), 'sine'),
     rate(DEFAULT_PATTERN_PARAMS.wobble.rate, 1, { max: FREQUENCY_MAX_HZ,
-      softRange: LFO_SLIDER_RANGE }),
+      softRange: LFO_SLIDER_RANGE, laneRange: [0.01, FREQUENCY_MAX_HZ] }),
   ],
   summary(p) {
     return parts(optionLabel(lfo, 'shape', p.shape), `${num(p.rate)} Hz`);
@@ -182,8 +186,9 @@ export const macro = defineNode({
   help: {
     what: 'One control value, 0 to 1, that drives several parameters from one place.',
     inputs: 'Value accepts modulation and an automation lane.',
-    outputs: 'Control, 0 to 1; each connection sets its own depth and polarity (unipolar: 0 to '
-      + 'depth; bipolar: −depth to +depth).',
+    outputs: 'Control, 0 to 1, held there when modulation moves the value beyond it; each '
+      + 'connection sets its own depth and polarity (unipolar: 0 to depth; bipolar: −depth to '
+      + '+depth).',
     constraints: 'Needs ConstantSourceNode. A modulation path may not lead back to its own '
       + 'source.',
   },

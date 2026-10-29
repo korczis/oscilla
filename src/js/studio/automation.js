@@ -363,7 +363,9 @@ function logTicks(lo, hi) {
  * The value scale of a lane (§101): { kind, unit, min, max, toNormalized(v) -> 0..1,
  * fromNormalized(n) -> value, format(v), ticks() -> [{ value, label }] }.
  *   log      frequency (Hz) and other logarithmic parameters (Q, LFO rate): display range is the
- *            definition's softRange (else its range), frequencies capped at 0.95 × Nyquist
+ *            definition's laneRange, else its softRange, else its range; frequencies capped at
+ *            0.95 × Nyquist (the LFO rate's laneRange is its whole range, so an audio rate is
+ *            drawn on the lane while the Inspector slider keeps the slow decades, #267 R-5)
  *   db       linear amplitude (gain, level): shown in dB, DB_SCALE_FLOOR at the bottom, 0 = −∞
  *   linear   dB-valued parameters (filter gain, unit dB) and everything else
  *   bipolar  pan −1..1, centre in the middle
@@ -371,7 +373,7 @@ function logTicks(lo, hi) {
  */
 export function automationScale(paramDef, { sampleRate } = {}) {
   const b = paramBounds(paramDef, sampleRate);
-  const soft = paramDef.softRange;
+  const soft = paramDef.laneRange || paramDef.softRange;
   const unit = paramDef.unit || '';
   if (paramDef.scale === 'log' && b.min > 0) {
     const lo = Math.max(b.min, soft ? soft[0] : b.min);

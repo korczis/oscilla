@@ -240,21 +240,42 @@ export const stepModulator = {
 /** Why a Macro has no output where the browser lacks ConstantSourceNode. */
 export const MACRO_UNAVAILABLE_TEXT = 'The Macro needs ConstantSourceNode, which this browser '
   + 'lacks.';
+/**
+ * Points of the Macro's clip curve: 41 points 0.05 apart on [−1, 1], so 0 and 1 are points and
+ * the browser's linear interpolation between points is the exact identity on [0, 1].
+ */
+export const MACRO_CLIP_CURVE_SIZE = 41;
+
+/** The Macro's clip curve: clamp(x, 0, 1), x evenly spaced on [−1, 1]. */
+export function macroClipCurve(size = MACRO_CLIP_CURVE_SIZE) {
+  const out = new Float32Array(size);
+  const mid = (size - 1) / 2;
+  for (let i = 0; i < size; i++) out[i] = Math.min(1, Math.max(0, (i - mid) / mid));
+  return out;
+}
 
 export const macro = {
   compiler: 'audio/audio-engine.js#AudioEngine',
   structural: [],
   create({ ctx, acct, at, params }) {
-    // One ConstantSourceNode: its offset is the value (0..1); the edges scale it (K013).
+    // One ConstantSourceNode: its offset is the value (0..1); the edges scale it (K013). The
+    // value is modulatable, so what reaches the offset can leave 0..1; a clip (WaveShaper,
+    // oversample 'none', the identity on [0, 1] and 0 or 1 beyond) is the output, so the
+    // output stays in the UNIPOLAR range computeBases sizes every outgoing edge from and a
+    // downstream frequency keeps its 0.95 × Nyquist headroom (review of #267, R-1).
     if (typeof ctx.createConstantSource !== 'function') {
       return inertHandle('degraded', MACRO_UNAVAILABLE_TEXT);
     }
     const cs = acct.source(acct.track(ctx.createConstantSource()));
+    const clip = acct.track(ctx.createWaveShaper());
+    clip.curve = macroClipCurve();
+    clip.oversample = 'none';
     cs.offset.setValueAtTime(params.value, ctx.currentTime);
+    cs.connect(clip);
     cs.start(at);
     return {
       inputs: {},
-      outputs: { control: cs },
+      outputs: { control: clip },
       outputRange: { control: UNIPOLAR },
       modTarget: (key, mapping) => (key === 'value' ? linearOnly(cs.offset)(key, mapping)
         : { reason: `unknown parameter ${key}` }),
@@ -266,7 +287,7 @@ export const macro = {
       update() {},
       stop(t) { try { cs.stop(t); } catch (e) { /* already stopped */ } },
       dispose() {},
-      info: {},
+      info: { source: cs, clip },
       status: 'ready',
       reason: null,
     };
