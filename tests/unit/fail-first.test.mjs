@@ -279,6 +279,57 @@ test('a waiver is a line of the body\'s own prose, its reason not the placeholde
   assert.equal(waiver('See `a\nb` and\nfail-first: n/a `c` d').reason, '`c` d');
 });
 
+// review of #255, round 3: the body is read by CommonMark's block and inline rules, so a
+// backslash-escaped backtick opens no span and a backtick in code pairs with nothing outside
+// it (R5), a fence 4 columns in is a fence only inside a list item (R15), and a heading or an
+// HTML comment is its own block, whose unmatched backtick reaches no line after it (R21).
+test('the waiver is read as CommonMark reads the body (R5, R15, R21)', () => {
+  const hidden = {
+    // R5: the escaped backtick is literal, the next one opens a span across the waiver
+    'after an escaped backtick': 'a \\` b ` c\nfail-first: n/a docs only\n` d\n',
+    // R5: the backtick in the code block pairs with nothing, the span in the prose does
+    'after an indented code block with a backtick': 'Text\n\n    a ` b\nSee `x\n'
+      + 'fail-first: n/a docs only\n` end\n',
+    'after a fenced code block with a backtick': '```\na ` b\n```\nSee `x\n'
+      + 'fail-first: n/a docs only\n` end\n',
+    // R15: outside a list a 4-space ``` is indented code, and the next ``` opens a real fence
+    'in a real fence after a 4-space backtick line': '    ```\ntext\n```\n'
+      + 'fail-first: n/a docs only\n```\n',
+    // R15: inside a list item the same line opens a fence
+    'in a list item\'s fence 4 columns in': '- item\n\n    ```\n    fail-first: n/a docs only\n'
+      + '    ```\n',
+    'in a nested list item\'s fence': '- a\n  - b\n\n      ```\n      fail-first: n/a docs only\n'
+      + '      ```\n',
+  };
+  for (const [what, body] of Object.entries(hidden)) {
+    const w = waiver(body);
+    assert.ok(w === null || w.reason === '', `${what}: ${JSON.stringify(w)}`);
+  }
+  const shown = {
+    // R15: outside a list, a 4-space ``` is code, not a fence that runs on
+    'after a 4-space backtick line outside a list': 'Text\n\n    ```\nfail-first: n/a docs only\n',
+    // R21: a heading's and a comment's backticks reach no other block
+    'right after a heading': '## Why\nfail-first: n/a docs only\n',
+    'after a heading with an unmatched backtick': '## The ` key\nfail-first: n/a docs only\n'
+      + 'see `x`\n',
+    'after an HTML comment with an unmatched backtick': '<!-- a ` tick -->\n'
+      + 'fail-first: n/a docs only\nmore `x`\n',
+    'after an inline comment with a backtick': 'Note <!-- ` --> here.\n\n'
+      + 'fail-first: n/a docs only\n` x\n',
+    // R5: an escaped backtick opens nothing, a code block's backtick pairs with nothing
+    'after an escaped backtick': 'a \\` b\nfail-first: n/a docs only\nc ` d\n',
+    'after a fenced code block with a backtick': '```\na ` b\n```\nfail-first: n/a docs only\n'
+      + 'c ` d\n',
+    'after a setext heading': 'Why\n---\nfail-first: n/a docs only\n',
+    'after a thematic break': '***\nfail-first: n/a docs only\n',
+    // a fence is no paragraph: it has no lazy continuation, and ends with its quote
+    'after a fence in a quote': '> ```\n> x\nfail-first: n/a docs only\n',
+  };
+  for (const [what, body] of Object.entries(shown)) {
+    assert.deepEqual(waiver(body), { reason: 'docs only' }, what);
+  }
+});
+
 test('a test that asks git for the tracked files can be evidence', (t) => {
   const repo = fixture();
   t.after(() => repo.dispose());

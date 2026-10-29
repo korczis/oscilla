@@ -85,15 +85,20 @@ function npmExpansion(text, scripts) {
 }
 
 // A repository file a command line executes: `node [flags] <path>`, `bash <path>`,
-// `sh <path>`, or the path itself in command position (`run: .github/scripts/x.sh`).
+// `sh <path>`, or the path itself in command position (`run: .github/scripts/x.sh`). A judge
+// job runs the base commit's copy of a file, which its `judge` step put in
+// ${{ runner.temp }}/judge/ (review of #255, R12): that runs the file too.
 const REPO_FILE = String.raw`((?:tests|scripts|\.github)\/[\w./@-]+)`;
+const JUDGE_COPY = String.raw`\$\{\{\s*runner\.temp\s*\}\}\/judge\/`;
 const INVOKED = new RegExp(
   String.raw`(?:^|[\s;&|(])(?:node|bash|sh)\s+(?:-[\w-]+(?:=\S+)?\s+)*["']?${REPO_FILE}`
-  + String.raw`|(?:^|\n)\s*(?:-\s+)?(?:run:\s*)?["']?${REPO_FILE}(?=[\s"']|$)`, 'g');
+  + String.raw`|(?:^|\n)\s*(?:-\s+)?(?:run:\s*)?["']?${REPO_FILE}(?=[\s"']|$)`
+  + String.raw`|(?:^|[\s;&|(])(?:\/bin\/bash|"\$\{\{\s*steps\.judge\.outputs\.node\s*\}\}")\s+`
+  + String.raw`["']?${JUDGE_COPY}${REPO_FILE}`, 'g');
 
 /** The repository files the command lines of a text execute directly. */
 export function invokedFiles(code) {
-  return new Set([...code.matchAll(INVOKED)].map((m) => m[1] || m[2]));
+  return new Set([...code.matchAll(INVOKED)].map((m) => m[1] || m[2] || m[3]));
 }
 
 /**

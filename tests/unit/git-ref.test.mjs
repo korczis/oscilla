@@ -82,6 +82,36 @@ test('a name with any character a ref may hold is checked like any other (R13)',
   assert.equal(commitOf(repo.dir, 'refs/remotes/origin/main^0'), base);
 });
 
+// review of #255, round 3 (R13): the suffixes were a list (~ and ^ steps), so `^{/re}` and
+// `@{n}` sent a shadowed name to git's tags-first lookup and skipped the ambiguity check
+test('a shadowed name is refused whatever revision suffix follows it (R13)', (t) => {
+  const { repo, base, head } = fixture(t);
+  repo.git('update-ref', '-m', 'move', 'refs/remotes/origin/main', head);
+  repo.git('update-ref', '-m', 'back', 'refs/remotes/origin/main', base);
+  const suffixes = ['^{/base}', '@{0}', '@{1}', '~0', '^0', '^{commit}', '^{}'];
+  // without a shadow each resolves as git resolves it on the one ref
+  for (const s of suffixes) {
+    for (const name of ['origin/main', 'refs/remotes/origin/main']) {
+      assert.equal(commitOf(repo.dir, `${name}${s}`),
+        repo.git('rev-parse', '--verify', `refs/remotes/origin/main${s}^{commit}`), `${name}${s}`);
+    }
+  }
+  assert.equal(commitOf(repo.dir, 'refs/remotes/origin/main@{1}'), head);
+  assert.equal(commitOf(repo.dir, `${base}~0`), base);
+  // with a tag that shadows it, git takes the tag; here each form is refused
+  repo.git('tag', 'origin/main', head);
+  assert.equal(repo.git('rev-parse', 'origin/main^{/change}'), head);
+  for (const s of [...suffixes, '^{/change}']) {
+    for (const name of ['origin/main', 'refs/remotes/origin/main']) {
+      assert.throws(() => commitOf(repo.dir, `${name}${s}`), /is ambiguous/, `${name}${s}`);
+    }
+  }
+  // a path after the name is no commit
+  repo.git('tag', '-d', 'origin/main');
+  assert.throws(() => commitOf(repo.dir, 'refs/remotes/origin/main:README.md'),
+    /names no commit/);
+});
+
 test('a full ref name must exist as itself, and names a commit (R14)', (t) => {
   const { repo, base, head } = fixture(t);
   // refs/tags/refs/remotes/origin/ghost: git's lookup finds it for refs/remotes/origin/ghost

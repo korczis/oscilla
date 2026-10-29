@@ -45,7 +45,9 @@ export function commandTokens(text) {
   for (const m of text.matchAll(/\bnpm\s+(test\b|run\s+([\w:.-]+))/g)) {
     out.add(m[2] ? `npm run ${m[2]}` : 'npm test');
   }
-  const program = /(?:^|[\s"'(=;&|])((?:\.github\/scripts|scripts)\/[\w.-]+|\.github\/[\w.-]+\.jq)/g;
+  // (also inside the copy a judge job takes from the base commit, $RUNNER_TEMP/judge/...)
+  const program = new RegExp(String.raw`(?:^|[\s"'(=;&|]|judge\/)`
+    + String.raw`((?:\.github\/scripts|scripts)\/[\w.-]+|\.github\/[\w.-]+\.jq)`, 'g');
   for (const m of text.matchAll(program)) if (!SETUP_PROGRAMS.has(m[1])) out.add(m[1]);
   if (/\bmajordomus\s+doctor\b/.test(text)) out.add('majordomus doctor');
   if (text.includes(ALL_SUCCESS)) out.add('aggregate');

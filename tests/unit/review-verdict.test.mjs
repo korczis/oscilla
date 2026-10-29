@@ -157,12 +157,12 @@ test('the guarded paths are the rule\'s list', () => {
     'tests/browser/live-smoke.cjs',
     '.github/*', 'scripts/review-verdict.mjs', 'scripts/fail-first.mjs',
     'scripts/ci-workflow-rules.mjs', 'scripts/yaml-subset.mjs', 'scripts/git-ref.mjs',
-    'scripts/pr-metadata.mjs', '.ai/repo/ci/pr-meta.yaml',
-    'tests/unit/review-verdict.test.mjs', 'tests/unit/fail-first.test.mjs',
-    'tests/unit/ci-workflows.test.mjs', 'tests/unit/ci-knowledge-job.test.mjs',
+    'scripts/pr-metadata.mjs', 'scripts/install-guard.mjs', 'scripts/shell-words.mjs',
+    '.ai/repo/ci/pr-meta.yaml', 'tests/unit/review-verdict.test.mjs',
+    'tests/unit/fail-first.test.mjs', 'tests/unit/ci-workflows.test.mjs', 'tests/unit/ci-knowledge-job.test.mjs',
     'tests/unit/yaml-subset.test.mjs', 'tests/unit/base-rule.test.mjs',
     'tests/unit/pr-metadata.test.mjs', 'tests/unit/git-ref.test.mjs',
-    'tests/unit/fixtures/git-repo.mjs']);
+    'tests/unit/install-guard.test.mjs', 'tests/unit/fixtures/git-repo.mjs']);
   for (const f of ['src/js/audio/voice.js', 'src/js/analysis/peak.js',
     'src/js/experiments/store.js', 'src/js/studio/runtime/x.js', 'src/js/core/storage.js',
     'src/js/core/storage-inventory.js', 'scripts/release-publish.mjs',

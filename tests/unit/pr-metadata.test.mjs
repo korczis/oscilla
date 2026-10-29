@@ -145,7 +145,12 @@ test('the waiver: a reason passes; quoted, placeholder or empty, it is not one',
     '`<!--`\nplan: n/a prose\n', '',
     // review of #255, round 2: R5, R15, R16 hold for the plan waiver as for fail-first's
     'See `x\nplan: n/a in a span` here.\n', '- a\n\n    ```\n    plan: n/a fenced\n    ```\n',
-    'plan: n/a `<reason>`\n', 'plan: n/a the `x` flag only\n']) {
+    'plan: n/a `<reason>`\n', 'plan: n/a the `x` flag only\n',
+    // round 3: R5 (escapes, code blocks), R15 (a 4-space fence by CommonMark), R21
+    'a \\` b ` c\nplan: n/a in a span\n` d\n', '    ```\ntext\n```\nplan: n/a fenced\n```\n',
+    'Text\n\n    ```\nplan: n/a prose\n', '## The ` key\nplan: n/a prose\nsee `x`\n',
+    '<!-- a ` tick -->\nplan: n/a prose\nmore `x`\n',
+    '```\na ` b\n```\nSee `x\nplan: n/a span\n` e\n']) {
     assert.deepEqual(planWaiver(body), waiver(body.replace(/plan:/gi, 'fail-first:')), body);
   }
 });
@@ -523,7 +528,7 @@ test('usage: no mode, no pull request, an unknown flag, no title exit 2', (t) =>
 // ---------------------------------------------------------------- the mutation table
 
 const SOURCE = read('scripts/pr-metadata.mjs');
-const IMPORTS = ['fail-first.mjs', 'git-ref.mjs', 'release-analyze.mjs',
+const IMPORTS = ['fail-first.mjs', 'git-ref.mjs', 'release-analyze.mjs', 'shell-words.mjs',
   'release-metadata.mjs', 'review-verdict.mjs', 'yaml-subset.mjs'];
 const block = (code) => new RegExp(`^[ \\t]*// rule: ${code}\\n[\\s\\S]*?`
   + `^[ \\t]*// end rule: ${code}\\n`, 'm');
@@ -586,7 +591,7 @@ test('metadata.yml is the model\'s judge, and the model is the program\'s', () =
     group: 'metadata-${{ github.event.pull_request.number }}', 'cancel-in-progress': true });
   assert.equal(MODEL.judge.workflow, '.github/workflows/metadata.yml');
   assert.deepEqual(MODEL.judge.permissions, { contents: 'read', 'pull-requests': 'read' });
-  assert.equal(MODEL.judge.bound, 5);
+  assert.equal(MODEL.judge.bound, 6);
   assert.equal(MODEL.judge.required, false);
   assert.ok(MODEL.judge.triggers.pull_request.types.includes('edited'));
   assert.deepEqual(MODEL.ids.directories, RECORD_DIRS);
@@ -608,10 +613,16 @@ test('metadata.yml is the model\'s judge, and the model is the program\'s', () =
 test('mutation: a workflow that writes, misses an event or can no longer refuse', () => {
   const tail = '--base "refs/remotes/origin/$GITHUB_BASE_REF" --check --summary'
     + ' "$GITHUB_STEP_SUMMARY"\n';
-  const wrapper = '          .github/scripts/base-rule.sh'
-    + ' "refs/remotes/origin/$GITHUB_BASE_REF" \\\n            scripts/pr-metadata.mjs';
-  const step = '        timeout-minutes: 2\n        env:\n';
-  const runs = '        run: |\n';
+  const wrapper = '            /bin/bash "${{ runner.temp }}/judge/.github/scripts/'
+    + 'base-rule.sh" \\\n            "refs/remotes/origin/$GITHUB_BASE_REF" scripts/pr-metadata.mjs';
+  const shell = '        shell: /usr/bin/env -u BASH_ENV -u ENV /bin/bash --noprofile --norc'
+    + ' -eo pipefail {0}\n';
+  const step = `        timeout-minutes: 2\n${shell}`;
+  const node = '      - uses: actions/setup-node@v7\n        timeout-minutes: 1\n        with:\n'
+    + '          node-version: 22\n';
+  const checkout = '      - uses: actions/checkout@v7\n        timeout-minutes: 2\n        with:\n'
+    + '          fetch-depth: 0\n';
+  const runs = '          PR: ${{ github.event.pull_request.number }}\n        run: |\n';
   const guard = '          if [ -z "$PR" ]; then echo'
     + ' "::error::pr-metadata: no pull request to judge"; exit 1; fi\n';
   // [name, text, the problem it causes]: `alone` cases cause exactly that one problem, so each
@@ -627,7 +638,7 @@ test('mutation: a workflow that writes, misses an event or can no longer refuse'
       '\non:\n  pull_request_target:\n'), /^triggers are/, false],
     ['workflow_dispatch', mutate(WORKFLOW, '\npermissions:\n',
       '  workflow_dispatch:\n\npermissions:\n'), /^triggers are/],
-    ['another bound', mutate(WORKFLOW, '    timeout-minutes: 5\n',
+    ['another bound', mutate(WORKFLOW, '    timeout-minutes: 6\n',
       '    timeout-minutes: 30\n'), /^timeout-minutes is 30/],
     ['renamed job', mutate(WORKFLOW, '    name: metadata\n', '    name: meta\n'),
       /^the job's name/],
@@ -637,23 +648,43 @@ test('mutation: a workflow that writes, misses an event or can no longer refuse'
     ['job permissions', mutate(WORKFLOW, '    runs-on: ubuntu-latest\n',
       '    runs-on: ubuntu-latest\n    permissions:\n      pull-requests: write\n'),
     /^the job widens or narrows/],
-    ['conditional job', mutate(WORKFLOW, '    timeout-minutes: 5\n',
-      '    timeout-minutes: 5\n    if: github.actor != \'x\'\n'), /^the job is conditional/],
-    ['non-fatal job', mutate(WORKFLOW, '    timeout-minutes: 5\n',
-      '    timeout-minutes: 5\n    continue-on-error: true\n'),
+    ['conditional job', mutate(WORKFLOW, '    timeout-minutes: 6\n',
+      '    timeout-minutes: 6\n    if: github.actor != \'x\'\n'), /^the job is conditional/],
+    ['non-fatal job', mutate(WORKFLOW, '    timeout-minutes: 6\n',
+      '    timeout-minutes: 6\n    continue-on-error: true\n'),
     /^the job is conditional or non-fatal/],
-    ['conditional step', mutate(WORKFLOW, step, '        timeout-minutes: 2\n        if: false\n'
-      + '        env:\n'), /^a step is conditional/],
+    ['conditional step', mutate(WORKFLOW, step, `        timeout-minutes: 2\n        if: false\n`
+      + shell), /^a step is conditional/],
     ['non-fatal step', mutate(WORKFLOW, step, '        timeout-minutes: 2\n'
-      + '        continue-on-error: true\n        env:\n'),
+      + `        continue-on-error: true\n${shell}`),
     /^a step is conditional or non-fatal/],
     ['PR from elsewhere', mutate(WORKFLOW,
       '          PR: ${{ github.event.pull_request.number }}\n',
       '          PR: ${{ inputs.pr }}\n'),
     /^PR is not the event's/],
     ['|| true', mutate(WORKFLOW, tail, `${tail.trimEnd()} || true\n`), /forced/, false],
-    ['own copy', mutate(WORKFLOW, wrapper, '          node scripts/pr-metadata.mjs'),
+    ['own copy', mutate(WORKFLOW, wrapper, '            node scripts/pr-metadata.mjs'),
       /^the last command is not the call/],
+    // how the judge is reached (review of #255, R12): the base commit's copy, under env -i,
+    // by a shell that reads no BASH_ENV, after a setup-node that read no file of the checkout
+    ['the checkout\'s base-rule.sh', mutate(WORKFLOW, wrapper, wrapper.replace(
+      '/bin/bash "${{ runner.temp }}/judge/.github/scripts/base-rule.sh"',
+      '.github/scripts/base-rule.sh')), /^the last command is not the call/],
+    ['no env -i', mutate(WORKFLOW, '          /usr/bin/env -i'
+      + ' PATH="${{ steps.judge.outputs.path }}" \\\n            HOME="${{ runner.temp }}/judge-home" GITHUB_REPOSITORY',
+    '          PATH="${{ steps.judge.outputs.path }}" \\\n'
+      + '            HOME="${{ runner.temp }}/judge-home" GITHUB_REPOSITORY'),
+    /^the last command is not the call/],
+    ['NODE_OPTIONS for the judge', mutate(WORKFLOW, ' GITHUB_REPOSITORY="$GITHUB_REPOSITORY" \\',
+      ' GITHUB_REPOSITORY="$GITHUB_REPOSITORY" NODE_OPTIONS=--x \\'),
+    /^the last command is not the call/],
+    ['the step\'s own bash', mutate(WORKFLOW, shell, ''), /^the judge's shell is/],
+    ['checkout before setup-node', mutate(WORKFLOW, `${node}      # Full history: the base`
+      + ' branch\'s records and program, and the merge base of the diff.\n' + checkout,
+    `${checkout}${node}`), /^the first steps are \["actions\/checkout","actions\/setup-node"/],
+    ['setup-node reads the checkout\'s cache', mutate(WORKFLOW, node,
+      `${node}          cache: npm\n`), /^setup-node reads a file of the checkout/],
+    ['no judge step', mutate(WORKFLOW, '        id: judge\n', ''), /^the first steps are/],
     ['the short base a tag can shadow (#255, R2)', mutate(WORKFLOW, tail,
       tail.replace('refs/remotes/origin/$GITHUB_BASE_REF', 'origin/$GITHUB_BASE_REF')),
     /^the last command is not the call/],
@@ -679,6 +710,12 @@ test('mutation: a workflow that writes, misses an event or can no longer refuse'
       /^an early or forced/],
     ['exec true', mutate(WORKFLOW, guard, `${guard}          [ -n "$SKIP" ] && exec true\n`),
       /^an early or forced/],
+    // review of #255, round 3 (R7): read as bash reads it, quoting inside a word hides nothing,
+    // and eval, source and . can make any word mean anything
+    ...[String.raw`e\xit 0`, "ex''it 0", String.raw`ex\ec true`, 'eval "$SKIP"',
+      'source "$RUNNER_TEMP/x.sh"', '. ./x.sh', "$'\\x65xit' 0", 'ex"i"t 0']
+      .map((line) => [line, mutate(WORKFLOW, guard,
+        `${guard}          [ -n "$SKIP" ] && ${line}\n`), /^an early or forced/]),
     // the concurrency of the model, each part alone (R8: the rework had dropped these)
     ['one concurrency group', mutate(WORKFLOW,
       '  group: metadata-${{ github.event.pull_request.number }}\n', '  group: metadata\n'),
@@ -703,7 +740,8 @@ test('mutation: a workflow that writes, misses an event or can no longer refuse'
   }
   for (const line of ['exit', 'exit 0', 'exit 00', 'exit 256', 'exit 512', 'exit 4294967296',
     'exit "$s"', 'exec true', 'exec "$@"', 'x && exec node y', 'trap \'exit 0\' EXIT',
-    'set +e', 'a || true', 'a || :']) {
+    'set +e', 'a || true', 'a || :', String.raw`e\xit 0`, "ex''it 0", String.raw`ex\ec true`,
+    'eval x', 'source x', '. x', 'bash -c "exit 0"', '"$X" y', '$(echo exit) 0']) {
     assert.equal(FORCED_SUCCESS.test(line), true, line);
   }
   // the order of the permission keys means nothing to GitHub, so it means nothing here
