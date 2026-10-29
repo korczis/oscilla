@@ -147,8 +147,9 @@ gates:
   # branch's copy: .github/scripts/base-rule.sh and scripts/ taken from the base commit into
   # $RUNNER_TEMP/judge before anything of the pull request runs, read-only with a manifest,
   # started under env -i (review of #255, R12, R22). Nothing of the pull request runs before
-  # it: the fail-first judge runs its install-guard.mjs in-process and then `npm ci
-  # --ignore-scripts` and the tests as its own children. Each verdict is the judge's exit
+  # it: the fail-first judge reads from git all it judges and writes both trees first, then
+  # runs `npm ci --ignore-scripts` in the extracted head tree and the tests as its own
+  # children (#255, round 8). Each verdict is the judge's exit
   # status alone; nothing reads its log. <base>, <pr.json>, <head> and <pr> are the pull
   # request's.
   - id: fail-first

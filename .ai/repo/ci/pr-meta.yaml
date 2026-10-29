@@ -43,6 +43,10 @@ judge:
   # whose digest the call passes), and the judge's step run by a shell that reads no
   # BASH_ENV, its call under `env -i` with a fixed PATH and HOME; nothing is installed
   steps: [actions/setup-node, actions/checkout, judge]
+  # the judge fetches nothing after the checkout, so the checkout keeps no token in .git/config
+  # for the pull request's code to read (review of #255, round 8, P3)
+  checkout:
+    persist-credentials: false
   shell: /usr/bin/env -u BASH_ENV -u ENV /bin/bash --noprofile --norc -eo pipefail {0}
   # the last command of the job's last step, exactly
   # (the base by its full ref: a tag named origin/<base> would otherwise answer for it)

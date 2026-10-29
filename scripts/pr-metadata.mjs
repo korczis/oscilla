@@ -524,6 +524,15 @@ export function workflowModelProblems(workflowText, modelText) {
   if (['cache', 'node-version-file', 'package-manager-cache'].some((k) => k in node)) {
     out.push('setup-node reads a file of the checkout (cache, node-version-file)');
   }
+  // the judge fetches nothing after the checkout, which keeps no token in .git/config for the
+  // pull request's code to read (review of #255, round 8, P3)
+  const persist = model.checkout?.['persist-credentials'];
+  const checkout = steps.find((st) => /^actions\/checkout@/.test(String(st.uses))) || {};
+  if (checkout.with?.['persist-credentials'] !== persist) {
+    out.push(`the checkout persists its credentials (persist-credentials:`
+      + ` ${JSON.stringify(checkout.with?.['persist-credentials'] ?? null)}, the model's`
+      + ` ${JSON.stringify(persist ?? null)})`);
+  }
   const last = steps.at(-1) || {};
   if (last.shell !== model.shell) out.push(`the judge's shell is ${JSON.stringify(last.shell)}`);
   if (last.env?.PR !== '${{ github.event.pull_request.number }}') {

@@ -7,8 +7,9 @@
 //
 // For a PR whose title starts with feat or fix (in any case, behind bracketed tags), the unit
 // test files the PR adds or changes (tests/unit/**/*.test.mjs between the merge base and the
-// head) are run twice with `node --test`, in two trees extracted with `git archive` and made
-// git repositories with their files staged (so `git ls-files` answers; there is no history):
+// head) are run twice with `node --test`, in two trees written blob by blob from git (`git
+// ls-tree` and `git cat-file`: regular files only, no tar, no link) and made git repositories
+// with their files staged (so `git ls-files` answers; there is no history):
 //   with     the head commit as it is;
 //   without  the merge base's tree (src/, dist/, scripts/, everything outside tests/) with the
 //            head's tests/ put in its place.
@@ -23,6 +24,12 @@
 // missing-file, error, timeout) with the names of the failing tests, so a test that only fails
 // because a new module does not exist yet is visible as that.
 //
+// Everything the judge reads of the repository it reads before any child runs (review of
+// #255, round 8): the head, the merge base, the changed test files and both trees, written and
+// staged, all through judgeGit() (scripts/git-ref.mjs: no replace refs, no global or system
+// config, no inherited GIT_* variable). A child (install-time code included) may then write the
+// checkout's .git as it likes: nothing reads it again.
+//
 // Every child (each `node --test`, and in CI the install) runs through
 // scripts/judge-isolation.mjs: in a process group of its own that is killed when it ends, with
 // a whole environment of a fixed PATH and a HOME of its own, so it never sees the runner's
@@ -35,21 +42,21 @@
 // carries the sha256 of that copy's .manifest, which its job's `judge` step wrote (review of
 // #255, round 4, R12, R22). Then, before any child, the copy is checked against the manifest
 // (and again after the last child: a copy that changed refuses), and the judge drives the
-// install itself: scripts/install-guard.mjs in-process on the checkout (nothing installed yet,
-// so a node_modules there is refused), then `npm ci --ignore-scripts` as a child, then the
-// tests. No step of the job runs anything of the pull request before this program has loaded.
+// install itself: `npm ci --ignore-scripts` as a child in the extracted head tree, never in the
+// checkout (round 8), whose node_modules the other tree links to; then the tests. No step of
+// the job runs anything of the pull request before this program has loaded. Install-time code
+// (a git dependency's prepare, a program a .npmrc names) is the pull request's code, contained
+// exactly as its tests are; no guard tries to tell it apart.
 //
 // Exit 0: nothing to prove, waived, or proven. Exit 1: not proven, or refused. Exit 2: usage.
 
-import { spawnSync } from 'node:child_process';
-import { appendFileSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync }
-  from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync,
+  symlinkSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { commitOf } from './git-ref.mjs';
-import { guard } from './install-guard.mjs';
-import { copyProblems, isolatedEnv, loadManifest, ptraceProbe, runIsolated }
+import { commitOf, judgeGit } from './git-ref.mjs';
+import { copyProblems, isolatedEnv, loadManifest, ptraceProbe, runIsolated, treeOf, writeTree }
   from './judge-isolation.mjs';
 
 // Any case, any spacing, and behind bracketed tags ("[WIP] Fix (x) : ..."): a title that reads
@@ -494,33 +501,30 @@ export function failureKind(output, timedOut) {
   return 'error';
 }
 
+/** One git call of the judge (judgeGit): its trimmed output, or a throw. */
 function git(repo, args, opts = {}) {
-  const r = spawnSync('git', ['-C', repo, ...args], { encoding: 'utf8', ...opts });
+  const r = judgeGit(repo, args, opts);
   if (r.status !== 0) {
     throw new Error(`git ${args.join(' ')}: ${(r.stderr || '').trim() || `exit ${r.status}`}`);
   }
   return r.stdout.trim();
 }
 
-/** Extract <ref> (or one path of it) of <repo> into <dir>. */
-function extract(repo, ref, dir, sub) {
-  const r = spawnSync('sh', ['-c',
-    'set -e; mkdir -p "$3"; if [ -n "$4" ]; then git -C "$1" archive "$2" -- "$4" | tar -x -C "$3";'
-    + ' else git -C "$1" archive "$2" | tar -x -C "$3"; fi', 'sh', repo, ref, dir, sub || ''],
-  { encoding: 'utf8' });
-  if (r.status !== 0) throw new Error(`git archive ${ref} ${sub || ''}: ${r.stderr.trim()}`);
-}
+const inTests = (rel) => rel === 'tests' || rel.startsWith('tests/');
 
-/** Make an extracted tree a git repository with its files staged (no commit, no hooks). */
+/**
+ * Make a written tree a git repository with its files staged (no commit, no hooks), by
+ * judgeGit: its .git is new, so no configuration of the checkout's applies.
+ */
 function stage(tree) {
-  const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' };
-  for (const k of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE']) delete env[k];
   for (const args of [['init', '-q', '-b', 'main'], ['add', '-A']]) {
-    const r = spawnSync('git', ['-C', tree, ...args], { encoding: 'utf8', env });
+    const r = judgeGit(tree, args);
     if (r.status !== 0) throw new Error(`git ${args.join(' ')} in ${tree}: ${r.stderr.trim()}`);
   }
-  // node_modules is linked in afterwards; a `node_modules/` ignore pattern does not match a
-  // symlink, and it must stay as invisible to `git ls-files --others` as the real directory.
+  // node_modules is linked or installed afterwards; a `node_modules/` ignore pattern does not
+  // match a symlink, and it must stay as invisible to `git ls-files --others` as the real
+  // directory.
+  mkdirSync(path.join(tree, '.git', 'info'), { recursive: true });
   appendFileSync(path.join(tree, '.git', 'info', 'exclude'), '\n/node_modules\n');
 }
 
@@ -540,23 +544,16 @@ const NPM_ENV = { npm_config_ignore_scripts: 'true', npm_config_audit: 'false',
   npm_config_fund: 'false', npm_config_update_notifier: 'false', npm_config_progress: 'false' };
 
 /**
- * The judge's install (review of #255, round 4, R12, R22): the guard in this process, then
- * `npm ci --ignore-scripts` (the npm beside this node) as an isolated child in `repo`.
- * Returns the refusals, [] when the packages are installed.
+ * The judge's install (review of #255, round 4, R12, R22; round 8): `npm ci --ignore-scripts`
+ * (the npm beside this node) as an isolated child in `tree`, the extracted head tree, never the
+ * checkout. Install-time code is the pull request's code, contained as its tests are. Returns
+ * the refusals, [] when the packages are installed.
  */
-async function install(repo, home, say) {
-  const problems = guard(repo, { beforeInstall: true });
-  for (const p of problems) say(`::error::install-guard: ${p}`);
-  if (problems.length) {
-    say(`fail-first: install-guard: REFUSED, ${problems.length} problem(s): npm ci would run or`
-      + ' fetch something of the pull request outside the registry; nothing was installed');
-    return problems;
-  }
-  say('fail-first: install-guard: only registry tarballs checked by sha512, no .npmrc program');
+async function install(tree, home, say) {
   const npm = path.join(path.dirname(process.execPath), 'npm');
   if (!existsSync(npm)) return [`no npm beside the judge's node (${npm})`];
   const r = await runIsolated(npm, ['ci', '--ignore-scripts', '--no-audit', '--no-fund'], {
-    cwd: repo, env: isolatedEnv({ home, extra: NPM_ENV }), timeoutMs: INSTALL_TIMEOUT_MS,
+    cwd: tree, env: isolatedEnv({ home, extra: NPM_ENV }), timeoutMs: INSTALL_TIMEOUT_MS,
   });
   const tail = `${r.stdout}\n${r.stderr}`.trim().split('\n').slice(-6);
   for (const l of tail) say(`  npm: ${l}`);
@@ -564,7 +561,8 @@ async function install(repo, home, say) {
     return [`npm ci --ignore-scripts failed (${r.timedOut ? 'timed out' : r.signal
       || `exit ${r.status}`})`];
   }
-  say('fail-first: installed with `npm ci --ignore-scripts` by the judge, as its own child');
+  say('fail-first: installed with `npm ci --ignore-scripts` by the judge, as its own child, in'
+    + ' the extracted head tree');
   return [];
 }
 
@@ -620,8 +618,9 @@ export async function failFirst({ repo, title, body, head = 'HEAD', base,
     : git(repo, ['merge-base', commitOf(repo, baseBranch), headSha]);
   say(`fail-first: head ${headSha.slice(0, 12)}, merge base ${baseSha.slice(0, 12)}`);
   // -z: a name with non-ASCII characters is itself, not a quoted, escaped form
-  const files = git(repo, ['diff', '--name-only', '-z', '--no-renames', '--diff-filter=AM',
-    baseSha, headSha, '--', 'tests/unit']).split('\0').filter((f) => TEST_FILE.test(f));
+  const files = git(repo, ['diff', '--name-only', '-z', '--no-renames', '--no-ext-diff',
+    '--no-textconv', '--diff-filter=AM', baseSha, headSha, '--', 'tests/unit']).split('\0')
+    .filter((f) => TEST_FILE.test(f));
   if (!files.length) {
     say('fail-first: the PR adds or changes no tests/unit/**/*.test.mjs file, so nothing fails'
       + ' without the change');
@@ -632,29 +631,51 @@ export async function failFirst({ repo, title, body, head = 'HEAD', base,
 
   const tmp = mkdtempSync(path.join(os.tmpdir(), 'fail-first-'));
   const home = mkdtempSync(path.join(os.tmpdir(), 'fail-first-home-'));
+  const installHome = mkdtempSync(path.join(os.tmpdir(), 'fail-first-install-home-'));
   const evidence = [];
   let refused = null;
   try {
-    if (judge) {
-      const problems = await install(repo, home, say);
-      if (problems.length) refused = `the install: ${problems.join('; ')}`;
-    }
     const withTree = path.join(tmp, 'with');
     const withoutTree = path.join(tmp, 'without');
+    // Everything of the repository the judgement uses is read now, before any child runs
+    // (round 8): the trees, from git objects only; nothing reads the checkout again.
+    const headTree = treeOf(repo, headSha);
+    const baseTree = treeOf(repo, baseSha);
+    for (const [what, sha, tree] of [['the head commit', headSha, headTree],
+      ['the merge base', baseSha, baseTree]]) {
+      if (!refused && tree.problems.length) {
+        refused = `${what} ${sha.slice(0, 12)}: ${tree.problems.join('; ')}`;
+      }
+    }
     if (!refused) {
-      extract(repo, headSha, withTree);
-      extract(repo, baseSha, withoutTree);
-      rmSync(path.join(withoutTree, 'tests'), { recursive: true, force: true });
-      extract(repo, headSha, withoutTree, 'tests');
+      writeTree(repo, headTree, withTree);
+      // without: the merge base outside tests/, the head's tests/ in its place
+      writeTree(repo, { files: [...baseTree.files.filter((f) => !inTests(f.path)),
+        ...headTree.files.filter((f) => inTests(f.path))],
+      dirs: [...baseTree.dirs.filter((d) => !inTests(d)), ...headTree.dirs.filter(inTests)] },
+      withoutTree);
       // A test that asks git for the tracked files (`git ls-files`) must find them in both
       // trees: each becomes a repository with everything staged and no history.
       for (const tree of [withTree, withoutTree]) stage(tree);
-      const modules = path.join(repo, 'node_modules');
-      if (existsSync(modules)) {
-        for (const tree of [withTree, withoutTree]) {
-          symlinkSync(modules, path.join(tree, 'node_modules'));
+      if (judge) {
+        // the judge installs into the head tree; the other tree links to what it installs
+        // (linked first: the link is the judge's, made before any child)
+        rmSync(path.join(withoutTree, 'node_modules'), { recursive: true, force: true });
+        symlinkSync(path.join(withTree, 'node_modules'), path.join(withoutTree, 'node_modules'));
+      } else {
+        // a local run installs nothing: both trees link to the checkout's packages
+        const modules = path.join(repo, 'node_modules');
+        if (existsSync(modules)) {
+          for (const tree of [withTree, withoutTree]) {
+            symlinkSync(modules, path.join(tree, 'node_modules'));
+          }
         }
       }
+    }
+    // after this, the judge only starts children and checks its copy
+    if (judge && !refused) {
+      const problems = await install(withTree, installHome, say);
+      if (problems.length) refused = `the install: ${problems.join('; ')}`;
     }
     const env = isolatedEnv({ home });
     for (const file of refused ? [] : files) {
@@ -686,6 +707,7 @@ export async function failFirst({ repo, title, body, head = 'HEAD', base,
     if (keep) say(`fail-first: trees kept in ${tmp}`);
     else rmSync(tmp, { recursive: true, force: true });
     rmSync(home, { recursive: true, force: true });
+    rmSync(installHome, { recursive: true, force: true });
   }
   // after the last child: the copy this process loaded from is still the one extracted
   // (defence in depth: what decides is already in memory)

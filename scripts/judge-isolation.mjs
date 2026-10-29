@@ -2,9 +2,10 @@
 // What keeps a pull-request judge apart from the pull-request code it starts (review of
 // #255, R12, R22): the judge is the base commit's copy, extracted into $RUNNER_TEMP/judge by
 // its job's `judge` step, made read-only there and listed in a manifest of git object names
-// before anything of the pull request runs; the fail-first judge then starts every child (the
-// install, the PR's tests) through runIsolated() with isolatedEnv(), and decides from its own
-// memory, never from a file a child can write.
+// before anything of the pull request runs; the fail-first judge then reads everything it
+// judges from git and writes its trees with treeOf() and writeTree() before any child (round
+// 8), starts every child (the install, the PR's tests) through runIsolated() with
+// isolatedEnv(), and decides from its own memory, never from a file a child can write.
 //
 //   node scripts/judge-isolation.mjs --verify <judge-dir> <manifest-sha256>   # exit 0, or 1
 //
@@ -16,9 +17,10 @@
 //                 note outside CI and refuses under CI. It cannot promise isolation against
 //                 sudo: GitHub's hosted Linux runners give the runner user passwordless sudo,
 //                 so a PR test the fail-first judge runs can become root and reach the judge
-//                 whatever ptrace_scope says; that residual risk is stated in
-//                 project.fail-first (review of #255, R31). Each `judge` step prints the
-//                 runner's ptrace_scope, so the run's log measures it.
+//                 whatever ptrace_scope says; sudo and a kernel escape are out of scope, the
+//                 residual risk stated in project.fail-first (review of #255, R31). PR code,
+//                 test or install, shares the job's network and uid. Each `judge` step prints
+//                 the runner's ptrace_scope, so the run's log measures it.
 //   manifest      the `judge` step lists the base commit's .github/scripts/ and scripts/ with
 //                 `git ls-tree -r` (mode, blob, object name, path), keeps the entries that
 //                 match TREE_ENTRY (regular files, 100644 or 100755, a name of
@@ -37,6 +39,13 @@
 //                 verifier. Defence in depth only: the copy is chmod -R a-w, but a child runs
 //                 as the same user and could chmod it back, and what the judge has loaded is
 //                 already in its memory; the check sees a copy changed, it does not prevent it.
+//   treeOf,       the trees the fail-first judge runs the tests in (round 8): `git ls-tree -r
+//   writeTree     -z` and one `git cat-file --batch`, by judgeGit (scripts/git-ref.mjs: no
+//                 replace refs, no global or system config, no inherited GIT_* variable), each
+//                 file created new with its mode; no tar, no attribute or filter applied. A
+//                 symbolic link, a mode that is no regular file or a path a checkout could not
+//                 hold (pathProblem: an empty, `.` or `..` component, `.git` in any case or
+//                 HFS+/NTFS form) is a problem, and the judge refuses before anything runs.
 //   isolatedEnv   a child's whole environment: a fixed PATH (the judge's node directory, then
 //                 the system's), a HOME of its own, CI when the judge has it, and what the
 //                 judge adds (its npm_config_*). No GITHUB_ENV, GITHUB_PATH, GITHUB_OUTPUT,
@@ -49,11 +58,13 @@
 // Tested by tests/unit/judge-isolation.test.mjs and by the replay of the judge jobs in
 // tests/unit/base-rule.test.mjs.
 
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
+import { chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync,
+  writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { judgeGit } from './git-ref.mjs';
 
 export const PTRACE_SCOPE = '/proc/sys/kernel/yama/ptrace_scope';
 /** The system directories of a child's PATH, after the judge's node directory. */
@@ -114,8 +125,7 @@ function blobOid(data, oid) {
  * skipped }, `skipped` the ls-tree lines it leaves out of the copy (R30).
  */
 export function manifestOf(repo, commit) {
-  const r = spawnSync('git', ['-C', repo, 'ls-tree', '-r', commit, '--', ...JUDGE_PATHS],
-    { encoding: 'utf8' });
+  const r = judgeGit(repo, ['ls-tree', '-r', commit, '--', ...JUDGE_PATHS]);
   if (r.status !== 0) throw new Error(`git ls-tree ${commit}: ${r.stderr}`);
   const lines = r.stdout.split('\n').filter(Boolean);
   const kept = lines.filter((l) => TREE_ENTRY.test(l));
@@ -204,6 +214,87 @@ export function copyProblems(dir, manifest) {
     if (base !== `${commit}\n`) out.push(`.base-commit is not the manifest's commit ${commit}`);
   }
   return out;
+}
+
+// HFS+ ignores these code points in a name, so `.g\u200cit` is `.git` there (git's
+// is_hfs_dotgit); NTFS ignores trailing dots and spaces, reads `name:stream` as `name`, and
+// knows `.git` by its short name git~1 (is_ntfs_dotgit)
+const HFS_IGNORED = /[\u200c-\u200f\u202a-\u202e\u206a-\u206f\ufeff]/g;
+const DOT_GIT = /^(?:\.git|git~1)[. ]*(?::.*)?$/;
+
+/**
+ * Why `p`, a path in a git tree, is none a checkout can hold, or null: an empty, `.` or `..`
+ * component (an absolute path has an empty one), or a component git refuses to check out as
+ * .git on some file system: in any case, with code points HFS+ ignores, with NTFS's trailing
+ * dots, spaces or stream, or as git~1. `git archive` refuses these too; the judge, which writes
+ * its trees from blobs, refuses them itself (review of #255, round 8).
+ */
+export function pathProblem(p) {
+  const bad = String(p).split('/').some((c) => c === '' || c === '.' || c === '..'
+    || DOT_GIT.test(c.replace(HFS_IGNORED, '').toLowerCase()));
+  return bad ? `${JSON.stringify(p)} is no path a checkout can hold` : null;
+}
+
+const TREE_LINE = /^(\d{6}) (blob|tree|commit) ([0-9a-f]{40}(?:[0-9a-f]{24})?)\t([\s\S]+)$/;
+
+/**
+ * The tree of `commit` in `repo`, read with `git ls-tree -r -z` (judgeGit): { files: [{ mode,
+ * oid, path }] (100644 and 100755 blobs), dirs: [path] (submodules, which `git archive` writes
+ * as empty directories too), problems: [why] }. A symbolic link, any other mode and a path
+ * pathProblem() refuses are problems: the trees the judge writes hold regular files only, so
+ * nothing it writes, and nothing a test reads, goes through a link (review of #255, round 8).
+ */
+export function treeOf(repo, commit) {
+  const r = judgeGit(repo, ['ls-tree', '-r', '-z', '--full-tree', commit],
+    { maxBuffer: 256 * 1024 * 1024 });
+  if (r.status !== 0) throw new Error(`git ls-tree ${commit}: ${(r.stderr || '').trim()}`);
+  const out = { files: [], dirs: [], problems: [] };
+  for (const line of r.stdout.split('\0').filter(Boolean)) {
+    const m = TREE_LINE.exec(line);
+    if (!m) throw new Error(`git ls-tree ${commit}: a line that is no entry: ${line}`);
+    const [, mode, type, oid, rel] = m;
+    const why = pathProblem(rel);
+    if (why) out.problems.push(why);
+    else if (mode === '120000') out.problems.push(`${rel} is a symbolic link; the judge writes`
+      + ' regular files only');
+    else if (type === 'commit' && mode === '160000') out.dirs.push(rel);
+    else if (type === 'blob' && (mode === '100644' || mode === '100755')) {
+      out.files.push({ mode, oid, path: rel });
+    } else out.problems.push(`${rel} has mode ${mode} (${type}), no regular file`);
+  }
+  return out;
+}
+
+/**
+ * Write `tree` (treeOf's, or its files and dirs) of `repo` into `dir`: every blob read in one
+ * `git cat-file --batch` (judgeGit), each file created new (O_EXCL: nothing already there is
+ * followed or replaced) with its mode. No tar, no link, no attribute or filter applied.
+ */
+export function writeTree(repo, tree, dir) {
+  mkdirSync(dir, { recursive: true });
+  for (const rel of tree.dirs) mkdirSync(path.join(dir, ...rel.split('/')), { recursive: true });
+  if (!tree.files.length) return;
+  const r = judgeGit(repo, ['cat-file', '--batch'], { encoding: 'buffer',
+    input: Buffer.from(tree.files.map((f) => `${f.oid}\n`).join('')),
+    maxBuffer: 2 ** 31 - 1 });
+  if (r.status !== 0) throw new Error(`git cat-file --batch: ${String(r.stderr).trim()}`);
+  let at = 0;
+  for (const f of tree.files) {
+    const nl = r.stdout.indexOf(0x0a, at);
+    const header = r.stdout.toString('latin1', at, nl < 0 ? at : nl);
+    const m = /^([0-9a-f]+) blob (\d+)$/.exec(header);
+    if (nl < 0 || !m || m[1] !== f.oid) {
+      throw new Error(`git cat-file --batch: ${header || 'nothing'} for ${f.oid} (${f.path})`);
+    }
+    const end = nl + 1 + Number(m[2]);
+    if (end > r.stdout.length) throw new Error(`git cat-file --batch: ${f.oid} is cut short`);
+    const data = r.stdout.subarray(nl + 1, end);
+    at = end + 1;
+    const abs = path.join(dir, ...f.path.split('/'));
+    mkdirSync(path.dirname(abs), { recursive: true });
+    writeFileSync(abs, data, { flag: 'wx', mode: 0o600 });
+    chmodSync(abs, f.mode === '100755' ? 0o755 : 0o644);
+  }
 }
 
 /**

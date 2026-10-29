@@ -5,8 +5,38 @@
 // origin/main would shadow the remote-tracking branch origin/main (review of #255, R2).
 // .github/scripts/base-rule.sh passes refs/remotes/origin/<base>; these programs refuse a name
 // that more than one ref answers, in its short or its full form, rather than guess.
+//
+// Every git call of a judge (these, and those of scripts/fail-first.mjs) goes through
+// judgeGit() (review of #255, round 8): with GIT_NO_REPLACE_OBJECTS=1, so a ref under
+// refs/replace/ never answers for the commit it names; GIT_CONFIG_GLOBAL=/dev/null and
+// GIT_CONFIG_NOSYSTEM=1, so no user or system configuration is read; no other GIT_* variable
+// of the caller (GIT_DIR, GIT_INDEX_FILE, GIT_CONFIG_PARAMETERS, ...); and `-c` overrides of
+// the repository's own configuration for what could start a program on a read
+// (core.fsmonitor, core.hooksPath, core.pager; a diff runs with --no-ext-diff). What the
+// repository's .git holds is read before any child of the judge runs, so nothing of the pull
+// request has written it.
 
 import { spawnSync } from 'node:child_process';
+
+/** The environment settings of every git call of a judge. */
+export const JUDGE_GIT_ENV = Object.freeze({ GIT_NO_REPLACE_OBJECTS: '1',
+  GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' });
+
+/** The `-c` settings of every git call of a judge: the repository's config starts nothing. */
+export const JUDGE_GIT_CONFIG = Object.freeze(['-c', 'core.fsmonitor=false',
+  '-c', 'core.hooksPath=/dev/null', '-c', 'core.pager=cat']);
+
+/** `base` without any GIT_* variable, with JUDGE_GIT_ENV. */
+export function gitEnv(base = process.env) {
+  const env = Object.fromEntries(Object.entries(base).filter(([k]) => !/^GIT_/i.test(k)));
+  return { ...env, ...JUDGE_GIT_ENV };
+}
+
+/** `git -C <repo> <args>` as a judge runs it: spawnSync's result. */
+export function judgeGit(repo, args, opts = {}) {
+  return spawnSync('git', [...JUDGE_GIT_CONFIG, '-C', repo, ...args],
+    { encoding: 'utf8', ...opts, env: gitEnv(opts.env) });
+}
 
 const KINDS = ['tags', 'heads', 'remotes'];
 const FULL_SHA = /^[0-9a-f]{40}$/;
@@ -36,7 +66,7 @@ export function splitRevision(rev) {
 }
 
 function git(repo, args) {
-  const r = spawnSync('git', ['-C', repo, ...args], { encoding: 'utf8' });
+  const r = judgeGit(repo, args);
   return r.status === 0 ? r.stdout.trim() : null;
 }
 

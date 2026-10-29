@@ -78,28 +78,23 @@ starts that copy under `env -i` with a fixed PATH, a HOME of its own and the man
 from a shell that reads no `BASH_ENV`. Nothing of the pull request runs before it: the judge
 drives the install (review of #255, round 4, R12, R17-R22). The program, already loaded,
 first refuses to judge where Yama's `ptrace_scope` is 0 or missing on Linux (off Linux it is
-skipped with a note, outside CI only) and checks its copy against the manifest; then it runs
-its `scripts/install-guard.mjs` in-process, which refuses a lockfile entry that is not a
-sha512-checked tarball of `https://registry.npmjs.org/`, a spec in any lock entry's own
-dependency maps (the root entry's included), in `package.json` or in its `overrides` (keys
-too) that npm-package-arg does not call a registry version, range or tag or an alias of one
-(the npm-package-arg inside the runner's own npm, beside the recorded node, loaded by
-absolute path and never from the pull request's `node_modules` or working directory; none
-there and every spec is refused: R35, so git, `file:`, `link:`, URLs, shorthands, paths,
-tarball names, `D:x`, `.x` and `@scope/name@^1` are all refused by npm's own reading), a
-bundled entry (`inBundle`) that its parent's tarball is not shown to carry: it passes only
-when its folder is in the `bundleDependencies` of the entry whose directory holds it, that
-entry is a sha512-checked registry tarball or itself such a bundled entry (R36: the
-outermost bundler's sha512 checks a nested bundle, as arborist's getBundler names it), and
-it has an exact semver `version` and no `resolved`, `integrity`, `link` or other source of
-its own, since npm installs a bundled package its parent lacks from that entry (R34;
-Tailwind 4's `@tailwindcss/oxide-wasm32-wasi` passes: R29), bundled dependencies in
-`package.json`, workspaces, a `.npmrc` key
-that names a program, another registry or turns a check off, a carriage return in a
-`.npmrc` (npm's ini splits lines on `[\r\n]+`), and a `node_modules` already there (a
-symlink npm ci would empty, or one committed); then `npm ci --ignore-scripts` and the tests,
-each as its own child in a process group of its own, killed with its group when it ends,
-with only a fixed PATH, its own HOME and CI in its environment; the verdict is the program's
+skipped with a note, outside CI only) and checks its copy against the manifest; then, before
+any child runs, it reads everything of the repository it judges (round 8): the head, the merge
+base, the changed test files and both trees, every git call with `GIT_NO_REPLACE_OBJECTS=1`,
+`GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`, no other `GIT_*` variable and `-c`
+overrides of what could start a program (`scripts/git-ref.mjs` `judgeGit`), and it writes the
+trees blob by blob (`git ls-tree -r -z`, one `git cat-file --batch`, each file created new
+with its mode; no tar), refusing a symbolic link, a mode that is no regular file and a path a
+checkout could not hold (an empty, `.` or `..` component, `.git` in any case or HFS+/NTFS
+form); then `npm ci --ignore-scripts` as a child in the extracted head tree, never in the
+checkout (the other tree links to its `node_modules`), and the tests, each as its own child
+in a process group of its own, killed with its group when it ends, with only a fixed PATH,
+its own HOME and CI in its environment. Install-time code (a git dependency's `prepare`, a
+program a `.npmrc` names) is the pull request's code, contained exactly as its tests are: it
+may rewrite the checkout's `.git` (a replace ref, a `core.fsmonitor`, a filter, an alias) or
+plant a link, and nothing reads the checkout again. No guard tries to tell such a lockfile
+apart (rounds 4-7 had one, `install-guard.mjs`, which each round found another way around
+and which refused lockfiles npm writes for common packages). The verdict is the program's
 exit status, decided in its memory, and a copy that departs from the manifest after the last
 child refuses (defence in depth: the same user could chmod the copy back, and what decides is
 already loaded). The shape is linted by `project.ci-bounded`'s `judge-first` (advisory).
@@ -110,10 +105,11 @@ probe keeps a same-uid child without sudo out, it cannot promise isolation again
 probe, the group kill and the manifest raise the bar, they do not make root code safe; the
 `judge` step prints the runner's `ptrace_scope` so each run's log measures it, R31); a
 grandchild that starts a session of its own
-leaves the group; and the guard trusts the registry and the lockfile's integrity hashes
-(esbuild's platform binary is such a package), and the registry alone for a bundled package
-a tarball would lack (an exact name and version; a package deduped into a bundle that no
-`bundleDependencies` names is refused, stricter than npm). The
+leaves the group; and PR code, test or install, shares the job's network and uid: it can
+reach the network, the runner user's files outside the judge's memory (the trees, the
+toolcache, the judge copy, which the manifest check then refuses) and anything the uid can
+signal, so it can forge its own evidence (as a test always could) but not the judge's
+reading of git, which is done before it starts. Sudo and a kernel escape are out of scope. The
 same test fails if the last command of the job's last step is anything but that call with
 its exact arguments (`--title` in place of `--pr-json`, `|| true`, an `if:`), if the step
 passes when there is no pull request, or if `ci.yml` can be started by anything but a pull

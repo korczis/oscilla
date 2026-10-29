@@ -517,7 +517,7 @@ printf '[core]\\n\\tfsmonitor = touch ${marks}/fsmonitor-ran\\n' >> '${gitDir}/c
 printf '[filter "x"]\\n\\tclean = touch ${marks}/filter-ran\\n' >> '${gitDir}/config'
 printf '\\tsmudge = touch ${marks}/filter-ran\\n' >> '${gitDir}/config'
 printf '[alias]\\n\\tls = !touch ${marks}/alias-ran\\n' >> '${gitDir}/config'
-ln -s / '${repo.dir}/escape'
+ln -sfn / '${repo.dir}/escape'
 `;
     const dep = gitRepo('oscilla-ff-r8-dep-');
     t.after(() => dep.dispose());

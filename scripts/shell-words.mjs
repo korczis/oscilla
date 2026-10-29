@@ -8,7 +8,8 @@
 // its assignments, redirections, keywords and wrappers. Commands inside `$( )`, backticks and
 // `<( )` are commands too, listed before the one that holds them; heredoc bodies are data.
 //
-// A subset: no aliases, no `case` patterns, no arithmetic beyond marking it dynamic. What it
+// A subset: no aliases, no `case` patterns, no arithmetic beyond marking it dynamic and
+// reading the command substitutions inside it (and inside a `${ }`) as commands (R45). What it
 // cannot read it marks dynamic, so a rule that refuses a dynamic program refuses that too.
 
 const OPERATORS = ['&&', '||', ';;', '|&', ';', '&', '|', '(', ')', '\n'];
@@ -69,11 +70,33 @@ function tokens(src) {
     w = null;
   };
   const sub = (from, to) => open().inner.push(...commandsOf(src.slice(from, to)));
+  /**
+   * the command substitutions inside an arithmetic or a parameter expansion's text (`from` to
+   * `to`): bash runs them before it evaluates, quoted or not, nested too (review of #255, R45)
+   */
+  const subsIn = (from, to) => {
+    for (let k = from; k < to; k++) {
+      const c = src[k];
+      if (c === '\\') {
+        k++;
+      } else if (c === '`') {
+        const e = src.indexOf('`', k + 1);
+        const stop = e < 0 || e > to ? to : e;
+        sub(k + 1, stop);
+        k = stop;
+      } else if (c === '$' && src[k + 1] === '(' && src[k + 2] !== '(') {
+        const e = closing(src, k + 2);
+        sub(k + 2, e - 1);
+        k = e - 1;
+      }
+    }
+  };
   /** a `$` expansion at `k`: the word is dynamic; returns the index after it */
   const dollar = (k) => {
     const cur = open();
     if (src.startsWith('$((', k)) {
       const e = closing(src, k + 3);
+      subsIn(k + 3, e - 1);
       cur.raw += src.slice(k, e + 1);
       cur.dynamic = true;
       return e + 1;
@@ -87,6 +110,7 @@ function tokens(src) {
     }
     if (src[k + 1] === '{') {
       const e = closing(src, k + 2, '{', '}');
+      subsIn(k + 2, e - 1);
       cur.raw += src.slice(k, e);
       cur.dynamic = true;
       return e;

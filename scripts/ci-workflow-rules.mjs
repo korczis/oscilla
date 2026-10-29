@@ -29,7 +29,8 @@
 //                    is the shape itself, not this reading: nothing of the pull request runs
 //                    before the judge, and the judge drives the install (review of #255, round
 //                    4). The lint checks that shape: setup-node first (no cache, no
-//                    node-version-file), the checkout, then the `judge` step that takes the
+//                    node-version-file), the checkout (persist-credentials: false: the judge
+//                    fetches nothing after it, round 8), then the `judge` step that takes the
 //                    judge from the base commit; up to the call no action runs and no command
 //                    runs code of the pull request (any package manager, an interpreter or
 //                    task runner, `source`/`.`, a program named by a relative or workspace
@@ -457,7 +458,7 @@ function judgeCall(cmd) {
  * Why one command runs code of the pull request's checkout before the judge, or null. Read as
  * bash reads it (scripts/shell-words.mjs): the program after its assignments, keywords and
  * wrappers, quotes removed (#255, R19). Nothing is installed before the judge: the fail-first
- * judge installs itself, after its guard (round 4).
+ * judge installs itself, as its own child in the extracted head tree (rounds 4 and 8).
  */
 export function commandProblem(cmd) {
   const p = cmd.program;
@@ -474,7 +475,7 @@ export function commandProblem(cmd) {
   const word = base(p);
   if (PACKAGE_MANAGER.test(word)) {
     return `runs ${word} (nothing is installed before the judge; the fail-first judge installs`
-      + ' itself, after its guard)';
+      + ' itself, as its own child, after it has read git)';
   }
   if (RUNS_CODE.test(word)) return `runs ${word}`;
   if (/^(?:export|declare|typeset|readonly|local)$/.test(word)) {
@@ -602,6 +603,12 @@ function judgeFirstViolations(job, judgeActions = new Set(), doc = {}) {
   }
   if (!/^actions\/checkout@/.test(String(checkout?.uses))) {
     out.push([label(1), 'the second step is not actions/checkout']);
+  } else if (checkout.with?.['persist-credentials'] !== false) {
+    // round 8, P3: the judge fetches nothing after the checkout; a persisted token would sit
+    // in .git/config, where the pull request's tests and install read it
+    out.push([label(1), 'the checkout persists its credentials in .git/config, where the pull'
+      + ' request\'s code can read the token; the judge fetches nothing after it'
+      + ' (persist-credentials: false)']);
   }
   if (judge?.id !== 'judge' || typeof judge.run !== 'string' || at < 2) {
     out.push([label(Math.min(2, steps.length - 1)), 'the third step is not the `judge` step that'

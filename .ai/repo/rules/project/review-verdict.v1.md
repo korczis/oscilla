@@ -44,14 +44,13 @@ never reviewed.
   workflows, `ci-install.sh`, `base-rule.sh`, composite actions, `doctor-verdict.jq`), the
   programs `scripts/review-verdict.mjs`, `scripts/fail-first.mjs`,
   `scripts/ci-workflow-rules.mjs`, `scripts/pr-metadata.mjs`, `scripts/yaml-subset.mjs`,
-  `scripts/git-ref.mjs` (which names their base), `scripts/install-guard.mjs` (what fail-first's
-  install may fetch), `scripts/judge-isolation.mjs` (how a judge keeps apart from the
-  children it starts) and `scripts/shell-words.mjs` (how the rules read a step's commands), the
+  `scripts/git-ref.mjs` (which names their base and how a judge calls git),
+  `scripts/judge-isolation.mjs` (how a judge keeps apart from the children it starts and
+  writes the trees it judges) and `scripts/shell-words.mjs` (how the rules read a step's commands), the
   model `.ai/repo/ci/pr-meta.yaml` the metadata workflow is held to, their tests
   `tests/unit/review-verdict.test.mjs`, `fail-first.test.mjs`, `ci-workflows.test.mjs`,
   `ci-knowledge-job.test.mjs`, `yaml-subset.test.mjs`, `base-rule.test.mjs`,
-  `pr-metadata.test.mjs`, `git-ref.test.mjs`, `install-guard.test.mjs`,
-  `judge-isolation.test.mjs` and `shell-words.test.mjs`, and
+  `pr-metadata.test.mjs`, `git-ref.test.mjs`, `judge-isolation.test.mjs` and `shell-words.test.mjs`, and
   `tests/unit/fixtures/git-repo.mjs`.
   An added, changed, renamed or deleted file there counts. The list is `GUARDED` in
   `scripts/review-verdict.mjs`. Left out on purpose: `src/index.html`, `src/js/main.js` (the

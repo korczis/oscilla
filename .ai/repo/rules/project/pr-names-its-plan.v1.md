@@ -88,8 +88,9 @@ through `.github/scripts/base-rule.sh`, which admits it beside the fail-first an
 review-verdict programs; the base is named by its full ref, `refs/remotes/origin/<base>`, which
 no tag can shadow (review of #255, R2; see `project.review-verdict`). The wrapper and the
 program are the base commit's copies, which the job's `judge` step takes into
-`$RUNNER_TEMP/judge` after a setup-node that read no file of the checkout, makes read-only and
-lists in a manifest, and the last step calls that copy under `env -i` with the manifest's
+`$RUNNER_TEMP/judge` after a setup-node that read no file of the checkout and a checkout that
+persists no credentials (`persist-credentials: false`, review of #255, round 8), makes
+read-only and lists in a manifest, and the last step calls that copy under `env -i` with the manifest's
 digest from a shell that reads no `BASH_ENV` (R12, R22; `judge-first` of `project.ci-bounded`
 lints the shape, advisory). The job is bounded (6 minutes, every step its own), installs nothing,
 and is not part of `gate`.
@@ -111,7 +112,7 @@ mutation table removes each `// rule:` block in turn from a copy of the program 
 block's fixture then passes, so no rule is held by nothing. It also holds the workflow to its
 model: a copy with `pull-requests: write`, an added permission, `edited` missing, another
 trigger, another bound or job name, a non-fatal or conditional step, the checkout's own copy, a
-command after the call, no guard for a missing pull request, or another or no concurrency
+checkout that persists its credentials, a command after the call, no guard for a missing pull request, or another or no concurrency
 group each fails, and one with its permission keys in another order passes.
 
 `tests/unit/base-rule.test.mjs` runs the wrapper on a fixture pull request that replaces the

@@ -381,11 +381,11 @@ jobs:
     # the next and last: nothing of the pull request runs before it. The judge starts the
     # extracted copy under `env -i` (a fixed PATH, that node first, a temporary HOME, no
     # NODE_OPTIONS, from a shell that reads no BASH_ENV) and drives the install itself: the
-    # base's fail-first.mjs checks its copy against the manifest, runs the base's
-    # install-guard.mjs in-process (a lockfile entry or a spec inside one outside the
-    # registry, a .npmrc that names a program or another registry or holds a carriage
-    # return, a committed node_modules), then `npm ci --ignore-scripts` and the PR's tests as
-    # its own children, each in a process group of its own with a cleared environment, and
+    # base's fail-first.mjs checks its copy against the manifest, reads from git everything it
+    # judges and writes both trees before any child (round 8: no replace refs, no global
+    # config, regular files only), then runs `npm ci --ignore-scripts` in the extracted head
+    # tree (never the checkout) and the PR's tests as its own children, each in a process
+    # group of its own with a cleared environment, and
     # judges by their exit statuses in its own memory; its exit status is the verdict. It
     # refuses to judge where Yama's ptrace_scope is 0. Rule `judge-first` of
     # scripts/ci-workflow-rules.mjs lints this shape (advisory, behind review-verdict). What
@@ -403,6 +403,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          persist-credentials: false
       # The judge, from the base commit, before anything of the pull request runs: the base's
       # .github/scripts/ and scripts/ into $RUNNER_TEMP/judge, blob by blob from `git ls-tree
       # -r` (a symbolic link, a submodule or an odd name is left out, with a warning naming
@@ -411,7 +412,9 @@ jobs:
       # PATH (the node setup-node put there before the checkout, so it read no file of the pull
       # request, then the system's) and the manifest's own sha256, which the judge checks its
       # copy against (defence in depth: the same user could chmod the copy back). Nothing of
-      # the pull request runs in this job before the judge's step (#255, R12, R17-R22).
+      # the pull request runs in this job before the judge's step (#255, R12, R17-R22). The
+      # checkout persists no credentials: the judge fetches nothing after it, and a token in
+      # .git/config would be readable by the pull request's tests and install (round 8).
       - name: The judge, taken from the base commit
         id: judge
         run: |
@@ -491,6 +494,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          persist-credentials: false
       # The judge, from the base commit, before anything of the pull request runs: the base's
       # .github/scripts/ and scripts/ into $RUNNER_TEMP/judge, blob by blob from `git ls-tree
       # -r` (a symbolic link, a submodule or an odd name is left out, with a warning naming
@@ -499,7 +503,9 @@ jobs:
       # PATH (the node setup-node put there before the checkout, so it read no file of the pull
       # request, then the system's) and the manifest's own sha256, which the judge checks its
       # copy against (defence in depth: the same user could chmod the copy back). Nothing of
-      # the pull request runs in this job before the judge's step (#255, R12, R17-R22).
+      # the pull request runs in this job before the judge's step (#255, R12, R17-R22). The
+      # checkout persists no credentials: the judge fetches nothing after it, and a token in
+      # .git/config would be readable by the pull request's tests and install (round 8).
       - name: The judge, taken from the base commit
         id: judge
         run: |

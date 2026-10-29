@@ -102,8 +102,9 @@ that is repaired where it last hurt regresses in the next job somebody adds.
   PATH, HOME, CI, GH_TOKEN, GITHUB_REPOSITORY, LANG, LC_ALL, TZ, JUDGE_MANIFEST. The copy
   checks itself against the manifest (`scripts/judge-isolation.mjs --verify`) and then
   `exec`s the program, so no shell reads a file after the program starts. Nothing is
-  installed before the judge: the fail-first judge (the base's `fail-first.mjs`) runs the
-  base's `install-guard.mjs` in-process, then `npm ci --ignore-scripts` and the pull
+  installed before the judge: the fail-first judge (the base's `fail-first.mjs`) reads
+  from git everything it judges and writes both trees first (round 8), then runs
+  `npm ci --ignore-scripts` in the extracted head tree (never the checkout) and the pull
   request's tests as its own children, each in a process group of its own with a cleared
   environment (no `GITHUB_ENV`, `GITHUB_PATH`, `GITHUB_OUTPUT`, `GITHUB_STEP_SUMMARY`,
   `RUNNER_TEMP`, `NODE_OPTIONS`, `BASH_ENV`), and judges in its own memory; it refuses to
@@ -131,7 +132,11 @@ that is repaired where it last hurt regresses in the next job somebody adds.
   so a `postinstall` could rewrite `base-rule.sh` or reach the judge's step through
   `$GITHUB_PATH` or `$GITHUB_ENV` (R12); `--ignore-scripts` left a git dependency's
   `prepare` and a PR `.npmrc`'s `git=` (R17, R18); round 4 showed both together, from a tree
-  the guard passed, rewriting even the read-only extracted copy before the judge ran (R22).
+  the guard passed, rewriting even the read-only extracted copy before the judge ran (R22);
+  rounds 5-7 found ways around each guard, so round 8 removed it and runs install-time code
+  as a child like the tests, after the judge has read git. The checkout of a judge job sets
+  `persist-credentials: false` (the judge fetches nothing after it; a token in `.git/config`
+  would be readable by the pull request's code), and `judge-first` refuses one that does not.
   What the judge itself runs (fail-first runs the pull request's tests) runs after the
   base's program has loaded; see `project.fail-first` for what that does not cover.
 
@@ -185,11 +190,11 @@ it cannot read fails the test instead of passing unread.
   job's shape, any install, each wrapped, keyworded or variable-named command, and each
   loader `env:` or shell of a step's own before the judge (R23), and
   `tests/unit/base-rule.test.mjs` runs the judge jobs step by step against a postinstall, a
-  git dependency's `prepare`, a `.npmrc` `git=` and the reproduction of R22 (a git spec
-  nested in a registry entry and a `git=` after a lone CR): with an install step before the
-  judge (the control) the PR's code rewrites the read-only copy and the judge's step prints a
-  forged pass; in each job as it is the judge's guard refuses first and the copy is the one
-  extracted (R12, R17, R18, R22).
+  git dependency's `prepare` and a `.npmrc` `git=`: with an install step before the judge
+  (the control) the PR's code rewrites the read-only copy and the judge's step prints a
+  forged pass; in each job as it is the code runs as the judge's child in the extracted head
+  tree, the checkout's wrapper and the copy are the ones extracted, and the verdict is the
+  base program's (R12, R17, R18, R22, round 8).
 
 `tests/unit/ci-knowledge-job.test.mjs` keeps the `knowledge` job's own assertions (the exact
 retry flags, the verdict program).
