@@ -13,3 +13,11 @@ validation:
 evidence_required:
   - "milestone_verified"
 created_at: 2026-10-02
+updated_at: 2026-10-28T13:33:58Z
+evidence:
+  - covers: milestone_verified
+    type: ci
+    command: "npm run test:live -- --expect-version 3.13.0 --expect-commit e272fac0e41693d0a2e3d16545710ecae653dfce; node scripts/release-record.mjs --version 3.0.0 --check; node scripts/release-record.mjs --version 3.1.0 --check"
+    result: "V381-V386 DONE: 3.0.0 tagged at 5d94576 and deployed from the gated workflow (V386, verify-deploy PASS), V3 suites in the release gate (V381), audits closed (V382, V383), docs and product graph (V384, V385); .ai/repo/releases/v3.0.0.yaml --check matches what was published on 2026-10-28. The V3 MEASURE flow passes the public smoke on the live page (18/18 x3)."
+    commit: 9135c8f417edc0f39b3a345c5e2e677149b6ac3c
+    recorded_at: 2026-10-28T13:33:58Z

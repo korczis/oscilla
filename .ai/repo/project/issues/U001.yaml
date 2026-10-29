@@ -1,0 +1,35 @@
+id: U001
+milestone: M054
+serves:
+  - "ui-current#ui-audited"
+title: "Audit every workspace against the product it shows"
+slug: audit-every-workspace-against-the-product-it-shows
+priority: p1
+profile: implementation
+objective: "Record in docs/ui-audit.md, for each of the twelve workspaces (Playground, Measure, Experiments, Analyzer, Filter Lab, Compare, Synthesis, Sequencer, Presets, Learn, Studio, About) at 1536x1024 and 390x844: a screenshot reference, the share of the viewport that is empty, what is stale against the current release, what is isolated (no link to the workspace doing the same in depth), what an empty state offers, and the features and plan issues it relates to. Every finding names the feature record under .ai/repo/features or the plan issue that will change it, and becomes a numbered item that U002 to U007 cite. No code changes."
+why: "The owner's 2026-10-28 statement that the whole interface is outdated needs findings a worker can act on, not a redesign from taste; the audit of the same day (live v3.13.0) is the starting point."
+scope:
+  - "docs/ui-audit.md"
+  - ".ai/repo/project/issues/U001.yaml"
+depends_on: []
+acceptance_criteria:
+  - "docs/ui-audit.md covers all twelve workspaces at both sizes, each finding traced to a feature record or plan issue."
+  - "Each of U002 to U007 cites the audit items it resolves."
+validation:
+  - "test -s docs/ui-audit.md"
+evidence_required:
+  - "verified"
+created_at: 2026-10-28
+updated_at: 2026-10-28T16:46:07Z
+started_at: 2026-10-28T16:45:40Z
+started_event: sha256:d5d8cd1b6854260a29d71cd62e53700d646b2272e789d3c1314cdb5aa050cfef
+verified_at: 2026-10-28T16:46:01Z
+verified_event: sha256:b22f1a8036404a2d50e6eaa0235d98b8cf6fdcf2e463e6a2ffb7fcc64d928f6c
+evidence:
+  - covers: verified
+    type: manual
+    command: "node <scratchpad>/shots/measure.cjs (Playwright, Chromium, live https://korczis.github.io/oscilla/ at 3.13.0 e272fac, 1536x1024 and 390x844); test -s docs/ui-audit.md"
+    result: "docs/ui-audit.md audits all twelve workspaces at both sizes with the grid-sampled empty share, overflow and 17 findings (A01-A17), each traced to U002-U007 or to M045/M047/M048/M049/M050; U002-U007 cite the items they resolve. Desktop empty share: Experiments 64 %, Sequencer 46 %, Filter Lab 35 %, Compare 31 %; no horizontal overflow anywhere."
+    artifact: "docs/ui-audit.md"
+    commit: cf8cb9e8c32a9fc54e3300d37cfdf2d47714a280
+    recorded_at: 2026-10-28T16:46:07Z
