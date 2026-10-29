@@ -96,8 +96,11 @@ changed.
 - **Export:** WAV of the current tone, pattern or sequence, rendered offline through the same
   signal chain as live playback; a PNG of the graphs; the configuration as JSON (export and
   import); a shareable configuration URL.
-- **About:** the last workspace tells how OSCILLA was built and with what discipline, and shows
-  the running build's version, commit, channel and source digest.
+- **About:** the last workspace tells OSCILLA as it stands: the release line up to the current
+  release, every workspace and what it is for, and what comes next (the plan's open milestones
+  with their progress, from `src/data/roadmap.json`, which `scripts/roadmap.mjs` writes and
+  `release:prepare` refreshes); then how it was built and with what discipline. It shows the
+  running build's version, commit, channel and source digest.
 
 ## The V3 measurement workbench
 
@@ -676,8 +679,10 @@ run it alone.
   1. `npm run release:analyze` reads the conventional commits since the last `v*` tag and
      proposes the level, with a reason for each commit.
   2. `npm run release:prepare` starts from a clean tree. It bumps `package.json` once (or
-     confirms an untagged version), rebuilds, and runs `version:check`, the release gate and
-     `majordomus doctor`. If anything fails, it restores the files. It never tags. Land the
+     confirms an untagged version), refreshes `src/data/roadmap.json` from the plan, rebuilds,
+     and runs `version:check`, the release gate (with `OSC_ROADMAP_CHECK=1`, so a roadmap that
+     differs from the plan fails it) and `majordomus doctor`. If anything fails, it restores
+     the files. It never tags. Land the
      result on `main` through a pull request. It refuses to start while the newest release has
      no record (step 4), and it refuses the first stable release of a new major (`X.0.0`, and
      equally `X.0.1` or `X.1.0` typed into `package.json`) that no published `X.0.0-rc.N`

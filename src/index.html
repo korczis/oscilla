@@ -2507,18 +2507,10 @@
         </dl>
       </header>
 
-      <section class="osc-about-night" aria-labelledby="osc-about-night-title">
-        <div class="osc-about-night-head">
-          <h3 class="osc-about-statement" id="osc-about-night-title">Built in one night.
-            <span>Not built as a throwaway.</span></h3>
-          <p class="osc-about-stamp osc-num">
-            <time datetime="2026-10-01T22:58:26+02:00">2026-10-01 22:58</time> →
-            <time datetime="2026-10-02T04:49:03+02:00">2026-10-02 04:49</time> CEST
-            <span class="osc-about-stamp-sep" aria-hidden="true">·</span>
-            first tracked commit → modular V2 on main
-            <span class="osc-about-stamp-sep" aria-hidden="true">·</span>
-            5 h 51 min of wall-clock time, with several AI workers in parallel</p>
-        </div>
+      <section class="osc-about-night" aria-labelledby="osc-about-line-title">
+        <h3 class="osc-about-statement" id="osc-about-line-title">Measure, record, compare,
+          patch. <span>Every release line that brought OSCILLA here, up to the current
+          one.</span></h3>
         <ol class="osc-about-timeline" aria-label="OSCILLA evolution">
           <li data-state="done">
             <span class="osc-about-step osc-num">01 · <time data-osc-commit="1655002"
@@ -2538,7 +2530,8 @@
             <span class="osc-about-step osc-num">03 · <time data-osc-commit="9fe0a15"
               datetime="2026-10-02T04:49:03+02:00">04:49</time></span>
             <strong>V2</strong>
-            <span>Modular acoustic laboratory</span>
+            <span>Modular acoustic laboratory at the end of the first night:
+              5 h 51 min of wall-clock time, with several AI workers in parallel</span>
             <em>Released</em>
           </li>
           <li data-state="done" data-osc-release="3.0">
@@ -2642,9 +2635,58 @@
         </ol>
       </section>
 
-      <div class="osc-about-grid">
+      <div class="osc-about-grid osc-about-grid--foot">
+        <section class="osc-about-block" aria-labelledby="osc-about-ws">
+          <h3 class="osc-about-h" id="osc-about-ws"><span class="osc-num">A</span> Workspaces</h3>
+          <p>Every workspace of the navigation, in its order, and what it is for.</p>
+          <ul role="list" aria-label="Workspaces" data-osc="about.workspaces">
+            <li data-osc="about.workspace.playground"><b>Playground</b> The instrument on one
+              screen: generator, waveform, spectrum, spectrogram, microphone analyzer, pattern
+              sequencer and the labs.</li>
+            <li data-osc="about.workspace.measure"><b>Measure</b> A guided measurement of the
+              speaker, room and microphone chain: frequency response, impulse response and RTA,
+              each run rated for quality.</li>
+            <li data-osc="about.workspace.experiments"><b>Experiments</b> Saved measurements as
+              experiments: their definitions, a comparison against a baseline, and the findings
+              that cite them.</li>
+            <li data-osc="about.workspace.analyzer"><b>Analyzer</b> The microphone's live spectrum
+              and spectrogram: a live view, not a calibrated measurement.</li>
+            <li data-osc="about.workspace.filter"><b>Filter Lab</b> A biquad filter and the
+              response the browser computes for it, set by type, cutoff and Q.</li>
+            <li data-osc="about.workspace.compare"><b>Compare</b> The microphone analyzer beside
+              the bioacoustics hearing ranges and the phase and stereo views.</li>
+            <li data-osc="about.workspace.synthesis"><b>Synthesis</b> Additive harmonics, the ADSR
+              envelope and the dual oscillator, with the compact Studio.</li>
+            <li data-osc="about.workspace.sequencer"><b>Sequencer</b> Block sequences of tones,
+              sweeps, pulses and modulation, beside the compact Studio.</li>
+            <li data-osc="about.workspace.presets"><b>Presets</b> Built-in and saved instrument
+              settings, and the history of what was played.</li>
+            <li data-osc="about.workspace.learn"><b>Learn</b> Concept cards from frequency to
+              speaker limitations, most with a demo to play.</li>
+            <li data-osc="about.workspace.studio"><b>Studio</b> A signal graph you patch, with a
+              timeline, transport and automation, run on Web Audio.</li>
+            <li data-osc="about.workspace.about"><b>About</b> This page: what OSCILLA is, how it
+              got here and what comes next.</li>
+          </ul>
+        </section>
+
+
+        <section class="osc-about-block" aria-labelledby="osc-about-next">
+          <h3 class="osc-about-h" id="osc-about-next"><span class="osc-num">B</span> What comes
+            next</h3>
+          <p>The open milestones of OSCILLA's plan as of this release, and how many of each
+            one's required issues are done.</p>
+          <ul role="list" aria-label="Open milestones" data-osc="about.next">
+            <template x-for="m in ROADMAP.milestones" :key="m.id">
+              <li data-osc="about.next.milestone" :data-milestone="m.id"><b
+                x-text="`${m.done} of ${m.required} done`"></b><span
+                x-text="m.title"></span></li>
+            </template>
+          </ul>
+        </section>
+
         <section class="osc-about-block" aria-labelledby="osc-about-origin">
-          <h3 class="osc-about-h" id="osc-about-origin"><span class="osc-num">A</span> Origin</h3>
+          <h3 class="osc-about-h" id="osc-about-origin"><span class="osc-num">C</span> Origin</h3>
           <p>OSCILLA began with an anti-bark ad promising “ultrasound through any phone's
             speaker” that only dogs would hear. A phone tone around 15–16 kHz is audible to many
             people, and it is not ultrasound. Its author's reply was “this can be knocked together
@@ -2660,7 +2702,7 @@
         </section>
 
         <section class="osc-about-block" aria-labelledby="osc-about-eng">
-          <h3 class="osc-about-h" id="osc-about-eng"><span class="osc-num">B</span> Engineering</h3>
+          <h3 class="osc-about-h" id="osc-about-eng"><span class="osc-num">D</span> Engineering</h3>
           <p>The speed was unusual. The constraints were deliberately not.</p>
           <ul class="osc-about-rules" role="list">
             <li><b>Deterministic</b> The same source builds the same bytes; the committed file
@@ -2676,71 +2718,57 @@
               results, whose impulse response can still carry room sound.</li>
           </ul>
         </section>
-
-        <section class="osc-about-block" aria-labelledby="osc-about-method">
-          <h3 class="osc-about-h" id="osc-about-method"><span class="osc-num">C</span> Method</h3>
-          <p>Much of the implementation was AI-assisted. That is how OSCILLA is built, not why
-            it exists.</p>
-          <ol class="osc-about-chain" role="list">
-            <li><b>Human judgment</b> defined the product and the architecture.</li>
-            <li><b>AI</b> accelerated implementation.</li>
-            <li><b>Majordomus</b> kept the rules, plan and decisions in the repository and
-              checked them.</li>
-            <li><b>The repository</b> remained the source of truth.</li>
-          </ol>
-        </section>
       </div>
 
-      <div class="osc-about-grid osc-about-grid--foot">
-        <section class="osc-about-majordomus" aria-labelledby="osc-about-mj">
-          <p class="osc-about-label">Engineering system</p>
-          <h3 class="osc-about-h" id="osc-about-mj">Majordomus</h3>
-          <p class="osc-about-sub">A repository-native engineering control plane for human and
-            AI contributors.</p>
-          <p>Instead of depending on an AI conversation to remember how OSCILLA should work,
-            the repository carries its own machine-readable engineering context: every
-            contributor, person or model, starts from the same rules and plan. Where it is
-            checked: on each commit and in CI, Majordomus validates that context; before a
-            push, a task's scope; and every pull request runs the test suites and a test that
-            each path the claims, rules and guides name exists and each claim's test runs in CI.
-            Review covers what no check can.</p>
-          <ul class="osc-about-chips" role="list" aria-label="What Majordomus keeps explicit">
-            <li>Architectural rules</li><li>Repository context</li><li>Task scope</li>
-            <li>Plans &amp; milestones</li><li>Decision records</li>
-            <li>Claims &amp; tests</li><li>Workflows</li>
-          </ul>
-          <p class="osc-about-coda">AI accelerated implementation.<br>
-            Majordomus supplied structure, memory and constraints.<br>
-            The repository remained the source of truth.</p>
-          <a class="osc-about-link" href="https://majordomus.dev/" target="_blank"
-            rel="noopener noreferrer" data-osc="about.majordomus">majordomus.dev<span
-            class="osc-sr-only"> (opens in a new tab)</span><svg class="osc-ico"
-            aria-hidden="true"><use href="#i-external"/></svg></a>
-        </section>
+      <section class="osc-about-majordomus" aria-labelledby="osc-about-mj">
+        <p class="osc-about-label">Engineering system</p>
+        <h3 class="osc-about-h" id="osc-about-mj">Majordomus</h3>
+        <p class="osc-about-sub">A repository-native engineering control plane for human and
+          AI contributors.</p>
+        <p>OSCILLA explores sound and frequency. Its development explores a narrower question:
+          can implementation speed rise without architecture, verification and product
+          identity dissolving around it?</p>
+        <p>Much of the implementation was AI-assisted. That is how OSCILLA is built, not why
+          it exists.</p>
+        <ol class="osc-about-chain" role="list">
+          <li><b>Human judgment</b> defined the product and the architecture.</li>
+          <li><b>AI</b> accelerated implementation.</li>
+          <li><b>Majordomus</b> kept the rules, plan and decisions in the repository and
+            checked them.</li>
+          <li><b>The repository</b> remained the source of truth.</li>
+        </ol>
+        <p>Instead of depending on an AI conversation to remember how OSCILLA should work,
+          the repository carries its own machine-readable engineering context: every
+          contributor, person or model, starts from the same rules and plan. Where it is
+          checked: on each commit and in CI, Majordomus validates that context; before a
+          push, a task's scope; and every pull request runs the test suites and a test that
+          each path the claims, rules and guides name exists and each claim's test runs in CI.
+          Review covers what no check can.</p>
+        <ul class="osc-about-chips" role="list" aria-label="What Majordomus keeps explicit">
+          <li>Architectural rules</li><li>Repository context</li><li>Task scope</li>
+          <li>Plans &amp; milestones</li><li>Decision records</li>
+          <li>Claims &amp; tests</li><li>Workflows</li>
+        </ul>
+        <a class="osc-about-link" href="https://majordomus.dev/" target="_blank"
+          rel="noopener noreferrer" data-osc="about.majordomus">majordomus.dev<span
+          class="osc-sr-only"> (opens in a new tab)</span><svg class="osc-ico"
+          aria-hidden="true"><use href="#i-external"/></svg></a>
+      </section>
 
-        <section class="osc-about-block osc-about-credits" aria-labelledby="osc-about-exp">
-          <h3 class="osc-about-h" id="osc-about-exp"><span class="osc-num">D</span> Two experiments</h3>
-          <p>OSCILLA explores sound and frequency. Its development explores a narrower question:
-            can implementation speed rise without architecture, verification and product
-            identity dissolving around it?</p>
-          <p>The measurement tooling has shipped as Measure and Experiments, and composition and
-            signal flow as Studio.</p>
-          <dl class="osc-about-spec osc-about-spec--credits" aria-label="Credits">
-            <div><dt>Created by</dt><dd>Tomas Korcak</dd></div>
-            <div><dt>Contact</dt><dd><a class="osc-about-link" href="mailto:korczis@gmail.com"
-              data-osc="about.email">korczis@gmail.com</a></dd></div>
-            <div><dt>Source</dt><dd><a class="osc-about-link"
-              href="https://github.com/korczis/oscilla" target="_blank" rel="noopener noreferrer"
-              data-osc="about.source">github.com/korczis/oscilla<span class="osc-sr-only"> (opens
-              in a new tab)</span><svg class="osc-ico" aria-hidden="true"><use
-              href="#i-external"/></svg></a></dd></div>
-            <div><dt>Licence</dt><dd>MIT; the full text is in the comment at the top of this
-              file.</dd></div>
-            <div><dt>Built with</dt><dd>Alpine.js and uPlot (MIT), p5.js (LGPL-2.1, embedded
-              unmodified); licence texts are in the comment at the top of this file.</dd></div>
-          </dl>
-        </section>
-      </div>
+      <dl class="osc-about-spec osc-about-spec--credits" aria-label="Credits">
+        <div><dt>Created by</dt><dd>Tomas Korcak</dd></div>
+        <div><dt>Contact</dt><dd><a class="osc-about-link" href="mailto:korczis@gmail.com"
+          data-osc="about.email">korczis@gmail.com</a></dd></div>
+        <div><dt>Source</dt><dd><a class="osc-about-link"
+          href="https://github.com/korczis/oscilla" target="_blank" rel="noopener noreferrer"
+          data-osc="about.source">github.com/korczis/oscilla<span class="osc-sr-only"> (opens
+          in a new tab)</span><svg class="osc-ico" aria-hidden="true"><use
+          href="#i-external"/></svg></a></dd></div>
+        <div><dt>Licence</dt><dd>MIT; the full text is in the comment at the top of this
+          file.</dd></div>
+        <div><dt>Built with</dt><dd>Alpine.js and uPlot (MIT), p5.js (LGPL-2.1, embedded
+          unmodified); licence texts are in the comment at the top of this file.</dd></div>
+      </dl>
     </section>
   </main>
 
