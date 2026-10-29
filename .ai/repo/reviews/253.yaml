@@ -1,0 +1,44 @@
+# Review verdict for pull request #253, plan item F001: Tailwind 3.4.19 and the free MIT
+# flowbite 2.5.2 are compiled into the single-file dist (branch feat/f001-tailwind-build).
+# Reviewed head 64f9e41b; merge base origin/main 9de0108. Built by oscilla-b0's agents.
+#
+# The digest: the base branch's scripts/review-verdict.mjs (git archive origin/main scripts),
+# `--repo . --content --list --base-branch origin/main`, over the guarded paths
+# scripts/build-config.mjs, scripts/build.mjs, scripts/pack-single-file.mjs,
+# scripts/release-metadata.mjs and scripts/verify-dist.mjs.
+#
+# What was checked (three independent lenses; every finding then adversarially re-checked):
+# - Build and pack: `node scripts/build.mjs --check` exits 0 (dist byte-identical, 2885512 B);
+#   Tailwind sorts candidates, no timestamps, exact pins with lock integrity; exactly one
+#   <style>, split 129808 B legacy / 9295 B Tailwind, the boundary appears once; dark: compiles
+#   to [data-theme=dark]; no url() in the compiled Tailwind.
+# - Tests: `node --test tests/unit/ui-flowbite-pro-build.test.mjs` 14/14 and
+#   `tests/unit/verify-dist.test.mjs` 9/9 pass; none passes vacuously; verify-dist passes on
+#   the real dist; CI runs both (ci.yml:62, :68; pages.yml:54).
+# - Licence: only the free npm flowbite@2.5.2 (MIT, registry.npmjs.org), tailwindcss and
+#   postcss are added. The 15 changed files and dist/index.html give 0 matches against the
+#   owner's 892 Pro fingerprints (exact and whitespace-normalised), and 0 hits in a substring
+#   check of 769 Pro text files (whole and 400-character windows) against the normalised dist.
+#   No Pro marker, path or package name appears.
+#
+# Why changes: R-1 (P1). The bundled drawer, tooltip and tabs add classes at runtime from
+# their own source in node_modules/flowbite, which the content globs do not scan, so none of
+# those classes is compiled. The PR delivers these components and their data-* API, and with
+# this build they would render unstyled once markup uses them. Fix: scan exactly the five
+# component index.js files, drop the v1 bg-opacity safelist entries, and test that every
+# Default class string of the five components is defined in the Tailwind part of dist.
+schema: review-verdict/v1
+pr: 253
+verdict: changes
+reviewer: "dev-68 (Claude Opus 5.5 session 4f90795d, orchestrating independent review subagents); did not build, merge or edit this change; wrote only this file. Mesh request r-cedb1b3ca853"
+content: 4530eff7dff24b237d8ba552944d321d24beba2301346aee4c0557c47058406a
+findings:
+  - { id: R-1, severity: P1, status: open, title: "Content globs leave out flowbite's component JS, so the classes the bundled components add at runtime are purged (tailwind.config.cjs:35). Fix: Add exactly the five bundled component files to content, e.g. './node_modules/flowbite/lib/esm/components/{drawer,dropdown,collapse,tooltip,tabs}/index.js'. Keep it that narrow so modal/datepicker classes stay out. package-lock already pins these files, so the source digest stays sound. Drop or correct the v1 `bg-opacity-*` safelist entries. Add a test that reads each component's Default class strings (backdropClasses, activeClasses, inactiveClasses, the placement classes, opacity-0/100, overflow-hidden) and asserts every one is a class in the Tai..." }
+  - { id: R-2, severity: P2, status: open, title: "Nothing stops #253 from landing before #250; main would then contradict accepted ADR 0012 and cite an ADR and a rule that do not exist (src/js/ui/flowbite.js:1). Fix: Hold the PR, as draft or with an explicit 'blocked on #250' in the body, until #250 is on main, then merge main and re-run. Align the body with F001 ('lands only after #250') instead of 'whichever lands second'." }
+  - { id: R-3, severity: P3, status: open, title: "With preflight off, border utilities set only a width and draw nothing (tailwind.config.cjs:39). Fix: Restore the border part of preflight only, scoped so legacy elements keep their native borders. One option: an addBase plugin in tailwind.config.cjs that sets `border-width:0;border-style:solid;border-color:theme('borderColor.DEFAULT')` under the Pro shell's root selector (or on `[class*=\"border\"]`). Back it with a test that the compiled CSS gives `.border` elements a solid style. Alternatively, record this explicitly as an F002 prerequisite next to the forms: false note." }
+  - { id: R-4, severity: P3, status: open, title: "tailwind.config.cjs is executable build code but is not a guarded path (scripts/review-verdict.mjs:72). Fix: In a follow-up PR (the base branch's list applies), add 'tailwind.config.cjs' to GUARDED and to the review-verdict rule's list, since it is build code like scripts/build-config.mjs." }
+  - { id: R-5, severity: P3, status: open, title: "The 'never both' constraint is attributed to a rule that does not state it, and nothing checks it (src/js/ui/flowbite.js:11). Fix: Cite 'issue F001 item (4)' and say that the single-owner check arrives with item (8), or add the clause to the rule in #250." }
+  - { id: R-6, severity: P3, status: open, title: "The PR's scope statement leaves out F001 item (11) (tests/README.md:579). Fix: List item (11) under 'Not in this PR (waits for #250 on main)'." }
+  - { id: R-7, severity: P3, status: open, title: "CSS escapes get past the url(), @import and image-set() checks, so the 'every url() is examined' claim is not quite true (scripts/verify-dist.mjs:105). Fix: Before scanning, decode CSS escapes in the text the scanner looks for: hex `\\[0-9a-f]{1,6}\\s?` and `\\<char>`. One option is to normalize a copy of the CSS and use it only for the url(/image-set(/@import matching. The other is to report any backslash escape inside an ident followed by `(`, or inside an at-keyword, as a problem. Add verify-dist.test cases for `\\75 rl(`, `@\\69mport` and `\\69mage-set(`. Or state the limit in tests/README.md and the comment, saying the gate relies on esbuild's normalization." }
+  - { id: R-8, severity: P3, status: open, title: "The unparsable-url( case uses an assertion that a different failure would also satisfy (tests/unit/verify-dist.test.mjs:93). Fix: Match the specific message, e.g. /CSS url\\( the scan cannot parse/. Also assert that cssReferences(...).unparsed === 1 for that input." }
+  - { id: R-9, severity: P3, status: open, title: "Older gaps outside the CSS scanner, not introduced by this PR: entity-encoded style attributes, SVG presentation url() attributes, and data: stylesheets (scripts/verify-dist.mjs:224). Fix: Decode entities in attribute values before checking them. Run cssProblems on SVG presentation attributes that take url(). For a data:text/css link href, decode the payload and scan it with cssProblems, or reject it. These can go in a separate issue, since the PR does not touch these paths." }
