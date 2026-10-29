@@ -1157,6 +1157,102 @@ function defineChecks() {
     return { ok, before, after, crest: +crest.toFixed(3), zeroAfter: zero };
   });
 
+  // C009 (findings engine-sync-9, dead-controls-8): a release edited from 30 ms to 2 s while a
+  // note is held is the one letting go uses, through the Settings field with the Envelope lab
+  // off and through the lab's Release field with it on. 300 ms after letting go a 2 s linear
+  // fade is still above 30 % of the held level; the 30 ms one it started with is silent. Every
+  // reading is taken by a condition poll on the audio clock, windowed at the context's rate.
+  def('release-edit-while-held', async ({ page }) => {
+    const mode = () => page.evaluate(() => document.querySelector('#osc-app').dataset.mode);
+    if (await mode() !== 'playground') {
+      await H.navTo(page, 'playground');
+      await page.waitForFunction(() => document.querySelector('#osc-app').dataset.mode
+        === 'playground', null, { timeout: 8000 });
+    }
+    await H.continuous(page, true); // an unlimited hold: no hard-limit end to refuse the fade
+    const initial = await page.evaluate(() => ({ release: window.OSCILLA.app.release,
+      labR: window.OSCILLA.labs.envelope.adsr.r, labOn: window.OSCILLA.labs.envelope.enabled }));
+    const setLab = async (on) => {
+      if (await page.evaluate(() => window.OSCILLA.labs.envelope.enabled) !== on) {
+        await page.click('#osc-env-enable');
+      }
+      return until(() => page.evaluate((v) => window.OSCILLA.labs.envelope.enabled === v, on),
+        { ms: 3000, what: `release-edit-while-held: Envelope lab ${on ? 'on' : 'off'}` });
+    };
+    const setSettings = async (ms) => {
+      await page.evaluate(() => window.OSCILLA.app.openDialog('settings'));
+      await page.waitForSelector('#osc-set-release', { state: 'visible', timeout: 8000 });
+      await page.fill('#osc-set-release', String(ms));
+      await page.press('#osc-set-release', 'Tab'); // commits (change event)
+      await page.evaluate(() => window.OSCILLA.app.closeDialog('settings'));
+      return until(() => page.evaluate((v) => window.OSCILLA.app.release === v, ms),
+        { ms: 3000, what: `release-edit-while-held: Settings release ${ms} ms` });
+    };
+    const setLabRelease = async (text, s) => {
+      await page.fill('#osc-env-release-value', text);
+      await page.press('#osc-env-release-value', 'Enter');
+      return until(() => page.evaluate((v) => Math.abs(window.OSCILLA.labs.envelope.adsr.r - v)
+        < 1e-9, s), { ms: 3000, what: `release-edit-while-held: lab release ${text}` });
+    };
+    // RMS of the analyser window once the audio clock has passed `t` plus that window, so the
+    // whole window lies after `t`; null (poll again) before.
+    const rmsAfter = (t, what) => until(() => page.evaluate((at) => {
+      const e = window.OSCILLA.engine;
+      const an = e.analyser;
+      if (!e.ctx || e.ctx.currentTime < at + an.fftSize / e.ctx.sampleRate) return null;
+      const d = new Float32Array(an.fftSize);
+      an.getFloatTimeDomainData(d);
+      let s = 0;
+      for (const x of d) s += x * x;
+      return { rms: Math.sqrt(s / d.length) };
+    }, t), { ms: 10000, what }).then((r) => r.rms);
+    const leg = async (name, edit) => {
+      const t0 = await page.evaluate(() => {
+        const a = window.OSCILLA.app;
+        a.source = 'single';
+        a.setPattern('tone');
+        a.setWaveform('sine');
+        a.setFrequency(440);
+        a.holding = true;
+        a.play('hold');
+        const v = window.OSCILLA.engine.voice;
+        return v ? v.t0 : null;
+      });
+      const held = await rmsAfter(t0 + 0.1, `release-edit-while-held: ${name} held level`);
+      await edit();
+      const voice = await page.evaluate(() => {
+        const v = window.OSCILLA.engine.voice;
+        return v ? { release: v.release, noteOff: v.noteOff ?? null, endTime: v.endTime } : null;
+      });
+      const tRel = await page.evaluate(() => {
+        window.OSCILLA.app.releaseHold(); // what letting go of Hold to Play does
+        return window.OSCILLA.engine.ctx.currentTime;
+      });
+      const after = await rmsAfter(tRel + 0.3, `release-edit-while-held: ${name} 300 ms after`);
+      await page.evaluate(() => window.OSCILLA.app.stopNow());
+      const zero = await until(async () => await H.nodes(page) === 0,
+        { ms: 5000, what: `release-edit-while-held: ${name} nodes freed` }).catch(() => false);
+      const ratio = held > 0 ? after / held : 0;
+      return { ok: held > 0.01 && ratio > 0.3 && zero, held: +held.toFixed(4),
+        after: +after.toFixed(4), ratio: +ratio.toFixed(3), voice, zero };
+    };
+    const res = {};
+    try {
+      await setLab(false);
+      await setSettings(30);
+      res.settings = await leg('Settings', () => setSettings(2000));
+      await setLab(true);
+      await setLabRelease('30 ms', 0.03);
+      res.lab = await leg('Envelope lab', () => setLabRelease('2 s', 2));
+    } finally {
+      await page.evaluate(() => window.OSCILLA.app.stopNow());
+      await setLabRelease(`${Math.round(initial.labR * 1000)} ms`, initial.labR).catch(() => {});
+      await setLab(initial.labOn).catch(() => {});
+      await setSettings(initial.release).catch(() => {});
+    }
+    return { ok: res.settings.ok && res.lab.ok, ...res };
+  });
+
   def('frequency-slider-and-fine-steps', async ({ page }) => {
     await H.continuous(page, true);
     await H.focusBody(page);

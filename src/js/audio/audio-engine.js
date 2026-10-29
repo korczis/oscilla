@@ -41,6 +41,8 @@
 //                    and it is handed to the envelope function (see voice.js v1OpenEnvelope);
 //                    the default envelope uses only a and r. Install the DSP ADSR with
 //                    engine.setEnvelope(makeAdsrEnvelope(envelopeModule)).
+//                    engine.setNoteOffRelease(s) changes the release a held voice uses when
+//                    it is let go (a stored time, no param written; C009).
 //     o.envelope     per-play envelope function (overrides engine.setEnvelope).
 //     o.stepEnvelope (eg, t, dur, a, r, adsr) => void, replaces the V1 step envelope of
 //                    programmed patterns (must schedule through eg).
@@ -638,11 +640,33 @@ export class AudioEngine {
     for (const v of [...this.voices]) this._releaseVoice(v, releaseS, silent);
   }
 
-  /** Graceful stop of the current voice with its own release time (or a fast one). */
+  /**
+   * Graceful stop of the current voice with its note-off release (setNoteOffRelease), else its
+   * own play-time release, or a fast one.
+   */
   release(fast = false) {
     const v = this.voice;
     if (!v) return false;
-    return this._releaseVoice(v, fast ? 0.008 : v.release);
+    return this._releaseVoice(v, fast ? 0.008 : (v.noteOff ?? v.release));
+  }
+
+  /**
+   * C009: the release a held note uses when it is let go, edited while it sounds (the Settings
+   * Release field, or the Envelope lab's R). Applies only to the current voice while it is not
+   * releasing and has not ended (a fade that started keeps its time; returns false otherwise).
+   * It is a stored number: no AudioParam is written while the note is held (V249), and
+   * v.release keeps its play-time value for the step envelopes the scheduler tops up and the
+   * RELEASING notice. v.opts takes it too (a copied adsr), so a _restart keeps it. A fade that
+   * would end after a limited voice's endTime is still refused by _releaseVoice.
+   */
+  setNoteOffRelease(s) {
+    const v = this.voice;
+    if (!v || v.ended || v.releasing || !(Number.isFinite(s) && s > 0)) return false;
+    v.noteOff = Math.max(0.005, s);
+    const o = { ...v.opts, releaseS: s };
+    if (o.adsr) o.adsr = { ...o.adsr, r: s };
+    v.opts = o;
+    return true;
   }
 
   /** Escape: ramp everything down within a few milliseconds, long releases included. */
