@@ -62,6 +62,7 @@ import { createExperimentsUi } from './ui/experiments.js';
 import { createFindingsUi } from './ui/findings.js';
 import { createConnectionsUi } from './ui/connections.js';
 import { createStudioUi } from './ui/studio/workspace.js';
+import { createMidiUi } from './midi/ui.js';
 import { createScopeView, createHarmonicBarsView } from './ui/p5-views.js';
 import { buildConfigExport, parseConfigImport, CONFIG_FILE_VERSION } from './ui/config-file.js';
 import { renderPlanToWav, renderSequenceToWav, screenshotCanvases } from './ui/exporters.js';
@@ -740,8 +741,9 @@ function createOscillaComponent(ui) {
   const connections = createConnectionsUi();
   const studio = createStudioUi({ engine, stopPlayback });
   const navigation = createNavigation();
+  const midi = createMidiUi(); // optional input (ADR 0058): reads support at load, never requests
   const cmp = compose(instrument, ui, workbench, measure, experiments, findings, connections,
-    studio, navigation, provenancePart(), TEMPLATE_HELPERS);
+    studio, navigation, midi, provenancePart(), TEMPLATE_HELPERS);
   cmp.dismissAlert = focusSafeDismiss(cmp.dismissAlert);
   const baseRefreshDebug = cmp.refreshDebug;
   Object.defineProperty(cmp, 'refreshDebug', {
@@ -761,6 +763,7 @@ function createOscillaComponent(ui) {
       this.experimentsInit();
       this.findingsInit();
       this.studioInit(); // before integrationInit: Studio's key listener runs first (§125)
+      this.midiInit();
       integrationInit.call(this);
     },
     enumerable: true,
