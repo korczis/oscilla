@@ -13,6 +13,7 @@ milestones:
   - M009
   - M010
   - M034
+  - M079
 satisfaction:
   - id: single-file-build
     criterion: "The build packs the modular source into one dist/index.html deterministically"
@@ -136,4 +137,4 @@ non_goals:
   - "Absolute sound pressure levels: V2 levels are relative to digital full scale (ADR 0017)"
   - "Release engineering and provenance (one version authority, fatal deployment verification): its own intent over M011"
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-10-29

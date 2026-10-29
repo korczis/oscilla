@@ -15,18 +15,18 @@ scope:
 - tests/browser/generator.cjs
 - tests/README.md
 - dist
-- docs/science/readouts.md
+- docs/v3/readout-truth.yaml
 depends_on:
 - K138
 - K134
 - K030
 - K053
-- K136
+- T026
 acceptance_criteria:
 - "Before: VERIFIED: no IMD figure exists."
 - "After and negative cases: as the objective and the criteria below state; the setpoint (what was requested) and the observation (what the analyser measured on the digital output, or the microphone on the room) are separate readouts with separate labels, and no readout claims the acoustic output."
 - "Rollback: revert the merge commit. Nothing changes the schema, a studioHash, URL key meaning or stored preset, so documents saved while it was live load unchanged after the revert."
-- "Scientific-truth rows (Quantity | Unit | Source | Algorithm | Resolution | Calibration | Limitations | Tests | UI label) are added to docs/science/readouts.md and checked by tests/unit/readout-truth.test.mjs (each UI label's text is in the source, each Tests path exists, and a setpoint row never shares its label with an observed row): Two-tone IMD (observed) | % and dB | output or microphone AnalyserNode and the tone plan | SMPTE/DIN sidebands f2 +- n f1 (n = 1..4) over f2; CCIF difference tone over the tones | bin resolution and the window's floor stated | uncalibrated | a measured residual of the digital loopback or of the microphone input, never a device rating | tests/unit/analysis-imd.test.mjs | IMD (SMPTE) 0.02 % of the generated digital signal"
+- "Scientific-truth rows (Quantity | Unit | Source | Algorithm | Resolution | Calibration | Limitations | Tests | UI label) are added to T026's canonical readout table docs/v3/readout-truth.yaml and checked by T026's tests/unit/readout-provenance.test.mjs, which this issue extends so that each UI label's text is in the source, each Tests path exists, and a setpoint row never shares its label with an observed row: Two-tone IMD (observed) | % and dB | output or microphone AnalyserNode and the tone plan | SMPTE/DIN sidebands f2 +- n f1 (n = 1..4) over f2; CCIF difference tone over the tones | bin resolution and the window's floor stated | uncalibrated | a measured residual of the digital loopback or of the microphone input, never a device rating | tests/unit/analysis-imd.test.mjs | IMD (SMPTE) 0.02 % of the generated digital signal"
 - "tests/unit/analysis-imd.test.mjs, failing on the merge base: synthetic two-tone frames with known products give the known SMPTE and CCIF ratios within 0.1 percentage points at 44.1 and 48 kHz; a clean two-tone reads below the floor the window allows and says so."
 - "The wording never says THD+N, true peak or a standard's compliance (the M062 wording table, tests/unit/charts-readout-wording.test.mjs)."
 - "Definition of done, extends: K134's two-tone patterns and K030's spectrum readout."

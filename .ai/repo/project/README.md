@@ -63,6 +63,7 @@ T0xx        measurement truth in the interface: readout states, labels, values i
             provenance (M073)
 G0xx        the component system: one declaration per UI component, the embedded Studio cockpit
             (M085-M087)
+H0xx        coherence-contract gaps of the G1 audit (M079; H004 under M054, H006 under M046)
 Q0xx        questions and acts only the owner can answer or take (M052; Q001 under M005, Q004 under
             M050, Q007 under M053, Q008-Q017 under M063, Q018-Q024 under M070, Q030-Q033 under
             M084, Q034-Q037 under M088, Q040-Q041 under M073)

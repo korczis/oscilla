@@ -19,18 +19,18 @@ scope:
 - tests/unit/source-size-baseline.json
 - tests/README.md
 - dist
-- docs/science/readouts.md
+- docs/v3/readout-truth.yaml
 depends_on:
 - V620
 - K016
 - K036
-- K136
+- T026
 acceptance_criteria:
 - "Before: VERIFIED (S6, S7): faces draw nothing live."
 - "After: each face draws its declared live view from runtime reads while visible."
 - "Negative cases: stopped or hidden: no analyser is read and the face says 'No signal' or 'Live only'; a level is never shown as dB SPL."
 - "Rollback: revert the merge commit. Nothing changes the schema, a studioHash or a stored record, so documents saved while it was live load unchanged after the revert."
-- "Scientific-truth rows (Quantity | Unit | Source | Algorithm | Resolution | Calibration | Limitations | Tests | UI label) are added to docs/science/readouts.md and checked by tests/unit/readout-truth.test.mjs (each UI label's text is in the source, each Tests path exists, and a setpoint row never shares its label with an observed row): Box output level (observed) | dBFS-like | the same probe tap as V616 | as V616 | as V616 | uncalibrated | as V616 | tests/unit/studio-face-views.test.mjs | -12 dB rel"
+- "Scientific-truth rows (Quantity | Unit | Source | Algorithm | Resolution | Calibration | Limitations | Tests | UI label) are added to T026's canonical readout table docs/v3/readout-truth.yaml and checked by T026's tests/unit/readout-provenance.test.mjs, which this issue extends so that each UI label's text is in the source, each Tests path exists, and a setpoint row never shares its label with an observed row: Box output level (observed) | dBFS-like | the same probe tap as V616 | as V616 | as V616 | uncalibrated | as V616 | tests/unit/studio-face-views.test.mjs | -12 dB rel"
 - "tests/unit/studio-face-views.test.mjs, failing on the merge base: the view of each node type, the Filter curve against the biquad formulas within 0.05 dB, the level bar of a full-scale sine at 0 dBFS-like peak; no view allocates in its draw."
 - tests/browser/chart-cost.cjs lists the face views as one subscriber; with the Studio hidden none reads an analyser.
 - "Definition of done, extends: K016's live analysis views and the face of V620."

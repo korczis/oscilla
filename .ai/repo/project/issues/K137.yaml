@@ -19,7 +19,7 @@ scope:
 - tests/visual
 - tests/README.md
 - dist
-- docs/science/readouts.md
+- docs/v3/readout-truth.yaml
 depends_on:
 - K138
 - K059
@@ -28,7 +28,7 @@ acceptance_criteria:
 - "Before: VERIFIED (G6): no pulse; DERIVED: square, saw and triangle are band-limited by the browser's table oscillator (Web Audio specification), which the page never says."
 - "After and negative cases: as the objective and the criteria below state; the setpoint (what was requested) and the observation (what the analyser measured on the digital output, or the microphone on the room) are separate readouts with separate labels, and no readout claims the acoustic output."
 - "Rollback: revert the merge commit. Nothing changes the schema, a studioHash, URL key meaning or stored preset, so documents saved while it was live load unchanged after the revert."
-- "Scientific-truth rows (Quantity | Unit | Source | Algorithm | Resolution | Calibration | Limitations | Tests | UI label) are added to docs/science/readouts.md and checked by tests/unit/readout-truth.test.mjs (each UI label's text is in the source, each Tests path exists, and a setpoint row never shares its label with an observed row): Pulse partial amplitudes (setpoint) | dB relative | PeriodicWave coefficients | Fourier series of a pulse of width w, truncated below 0.95 x Nyquist | exact | not applicable | coefficients that play, not measured; the browser's table interpolation | tests/unit/generator-pulse.test.mjs | Partials (coefficients that play, not measured)"
+- "Scientific-truth rows (Quantity | Unit | Source | Algorithm | Resolution | Calibration | Limitations | Tests | UI label) are added to T026's canonical readout table docs/v3/readout-truth.yaml and checked by T026's tests/unit/readout-provenance.test.mjs, which this issue extends so that each UI label's text is in the source, each Tests path exists, and a setpoint row never shares its label with an observed row: Pulse partial amplitudes (setpoint) | dB relative | PeriodicWave coefficients | Fourier series of a pulse of width w, truncated below 0.95 x Nyquist | exact | not applicable | coefficients that play, not measured; the browser's table interpolation | tests/unit/generator-pulse.test.mjs | Partials (coefficients that play, not measured)"
 - "tests/unit/generator-pulse.test.mjs, failing on the merge base: the partial amplitudes of 10 %, 25 % and 50 % widths match the pulse's Fourier series within 0.5 dB, no partial lies at or above 0.95 x Nyquist at 44.1 and 48 kHz for 20 Hz-10 kHz fundamentals, a width change is click-free by the engine's step bound, and the node census is 0 after stop."
 - "Definition of done, extends: synth K059's vco pulse and the waveform choice of S012."
 - "Definition of done, cross-links: the pulse setting survives the URL round trip and the Harmonics tab shows its partials from the same table. The link is a row of tests/browser/integration-map.json once that map (synth line K075) is on main."

@@ -16,12 +16,12 @@ scope:
 - tests/browser/generator.cjs
 - tests/README.md
 - dist
-- docs/science/readouts.md
+- docs/v3/readout-truth.yaml
 acceptance_criteria:
 - "Before: VERIFIED (G8, G9): bursts in ms only; the Sweep up form shows 'Duration' 10000 without its unit."
 - "After and negative cases: as the objective and the criteria below state; the setpoint (what was requested) and the observation (what the analyser measured on the digital output, or the microphone on the room) are separate readouts with separate labels, and no readout claims the acoustic output."
 - "Rollback: revert the merge commit. Nothing changes the schema, a studioHash, URL key meaning or stored preset, so documents saved while it was live load unchanged after the revert."
-- "Scientific-truth rows (Quantity | Unit | Source | Algorithm | Resolution | Calibration | Limitations | Tests | UI label) are added to docs/science/readouts.md and checked by tests/unit/readout-truth.test.mjs (each UI label's text is in the source, each Tests path exists, and a setpoint row never shares its label with an observed row): Burst length (setpoint) | cycles, ms | plan | N / f | one sample | not applicable | programmed, not observed | tests/unit/generator-burst.test.mjs | 10 cycles = 10.0 ms (programmed) || Log sweep rate (setpoint) | octaves per second | plan | log2(f_end / f_start) / duration | exact | not applicable | programmed | tests/unit/generator-burst.test.mjs | 0.99 oct/s (programmed)"
+- "Scientific-truth rows (Quantity | Unit | Source | Algorithm | Resolution | Calibration | Limitations | Tests | UI label) are added to T026's canonical readout table docs/v3/readout-truth.yaml and checked by T026's tests/unit/readout-provenance.test.mjs, which this issue extends so that each UI label's text is in the source, each Tests path exists, and a setpoint row never shares its label with an observed row: Burst length (setpoint) | cycles, ms | plan | N / f | one sample | not applicable | programmed, not observed | tests/unit/generator-burst.test.mjs | 10 cycles = 10.0 ms (programmed) || Log sweep rate (setpoint) | octaves per second | plan | log2(f_end / f_start) / duration | exact | not applicable | programmed | tests/unit/generator-burst.test.mjs | 0.99 oct/s (programmed)"
 - "tests/unit/generator-burst.test.mjs, failing on the merge base: a 10-cycle 1 kHz burst renders 10.0 ms on within one sample at 44.1 and 48 kHz, the Hann window's envelope within 1 %, the largest sample step at the rectangular edges within the engine's click bound; every visible sweep label carries its unit; the log-sweep rate equals log2(end/start)/duration."
 - "Definition of done, extends: the Pulse and Burst patterns and the sweep editors of S033."
 - "Definition of done, cross-links: a burst setting survives the URL round trip and opens in the Studio as V605 maps it once V605 lands (K140 adds the mapping). The link is a row of tests/browser/integration-map.json once that map (synth line K075) is on main."
@@ -41,4 +41,4 @@ evidence_required:
 created_at: '2026-10-29'
 updated_at: '2026-10-29'
 depends_on:
-- K136
+- T026

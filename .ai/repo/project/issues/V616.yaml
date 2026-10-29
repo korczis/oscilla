@@ -19,14 +19,14 @@ scope:
 - tests/unit/source-size-baseline.json
 - tests/README.md
 - dist
-- docs/science/readouts.md
+- docs/v3/readout-truth.yaml
 - tests/unit/synth-probe.test.mjs
 acceptance_criteria:
 - "Before: VERIFIED (S8): the edge Inspector shows From, To, Signal, Muted, Depth and Offset, and nothing about the signal; PROPOSED by the synth drafts: K064's engine-owned probe for the Synth panel's cables."
 - "After: the Studio edge Inspector reads the same engine-owned probe tap as synth K064 (one module, src/js/studio/probe.js), showing live peak and RMS and a mini scope for AUDIO and CONTROL cables and trigger times for TRIGGER cables."
 - "Negative cases: stopped: no tap exists and the card says so; an ANALYSIS edge shows its role (reference or observed), not a level; hidden Inspector: the tap is disposed; the tap never changes the path's level (render with and without it is bit-identical offline)."
 - "Rollback: revert the merge commit. Nothing changes the schema, a studioHash or a stored record, so documents saved while it was live load unchanged after the revert."
-- "Scientific-truth rows (Quantity | Unit | Source | Algorithm | Resolution | Calibration | Limitations | Tests | UI label) are added to docs/science/readouts.md and checked by tests/unit/readout-truth.test.mjs (each UI label's text is in the source, each Tests path exists, and a setpoint row never shares its label with an observed row): Cable peak and RMS (observed) | dBFS-like | engine probe AnalyserNode on the edge's source output | max |x| and RMS over one analyser window | 0.1 dB; window = fftSize / fs, stated | uncalibrated | a read every frame sees one window; a peak between reads is not seen (stated) | tests/unit/studio-probe.test.mjs | Peak -6.1, RMS -9.1 dB rel (dBFS-like, 43 ms window)"
+- "Scientific-truth rows (Quantity | Unit | Source | Algorithm | Resolution | Calibration | Limitations | Tests | UI label) are added to T026's canonical readout table docs/v3/readout-truth.yaml and checked by T026's tests/unit/readout-provenance.test.mjs, which this issue extends so that each UI label's text is in the source, each Tests path exists, and a setpoint row never shares its label with an observed row: Cable peak and RMS (observed) | dBFS-like | engine probe AnalyserNode on the edge's source output | max |x| and RMS over one analyser window | 0.1 dB; window = fftSize / fs, stated | uncalibrated | a read every frame sees one window; a peak between reads is not seen (stated) | tests/unit/studio-probe.test.mjs | Peak -6.1, RMS -9.1 dB rel (dBFS-like, 43 ms window)"
 - "tests/unit/studio-probe.test.mjs, failing on the merge base: on the recording mock context a probe is one AnalyserNode counted by the engine, connected from the source's output only, disposed on deselect, hide and stop (engine node count back to its value before), never created while stopped; the level of a full-scale sine frame reads 0 dBFS-like peak and -3.01 dB RMS within 0.05 dB; a TRIGGER edge creates no analyser."
 - "The card's wording says 'relative' and never dB SPL (project.no-fake-science v2, tests/unit/no-fake-science.test.mjs)."
 - "Definition of done, extends: the edge Inspector of V427 (From, To, Signal, Muted, Depth, Offset)."
@@ -48,5 +48,5 @@ created_at: '2026-10-29'
 updated_at: '2026-10-29'
 depends_on:
 - V631
-- K136
+- T026
 - K064

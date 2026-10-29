@@ -17,15 +17,15 @@ scope:
 - tests/browser/generator.cjs
 - tests/README.md
 - dist
-- docs/science/readouts.md
+- docs/v3/readout-truth.yaml
 depends_on:
 - K132
-- K136
+- T026
 acceptance_criteria:
 - "Before: VERIFIED (G7): no two-tone or multi-tone; the spectrum marks one requested frequency."
 - "After and negative cases: as the objective and the criteria below state; the setpoint (what was requested) and the observation (what the analyser measured on the digital output, or the microphone on the room) are separate readouts with separate labels, and no readout claims the acoustic output."
 - "Rollback: revert the merge commit. Nothing changes the schema, a studioHash, URL key meaning or stored preset, so documents saved while it was live load unchanged after the revert."
-- "Scientific-truth rows (Quantity | Unit | Source | Algorithm | Resolution | Calibration | Limitations | Tests | UI label) are added to docs/science/readouts.md and checked by tests/unit/readout-truth.test.mjs (each UI label's text is in the source, each Tests path exists, and a setpoint row never shares its label with an observed row): Tone frequencies (setpoint) | Hz | plan | none | 4 significant figures | not applicable | each below 0.95 x Nyquist or the plan is refused | tests/unit/generator-multitone.test.mjs | Requested 60 Hz + 7 kHz (4:1) || Tone peaks on the spectrum (observed) | Hz, dB relative | output AnalyserNode, fftSize 8192, smoothing 0.55 (audio-engine.js) | FFT magnitude with the analyser's Blackman window, peak bin | fs / 8192 = 5.86 Hz at 48 kHz, 5.38 Hz at 44.1 kHz; scalloping up to about 1 dB | uncalibrated | digital loopback, not acoustic output; smoothing lags changes | tests/unit/generator-multitone.test.mjs | Analyser peak 7.00 kHz +-5.9 Hz (digital output)"
+- "Scientific-truth rows (Quantity | Unit | Source | Algorithm | Resolution | Calibration | Limitations | Tests | UI label) are added to T026's canonical readout table docs/v3/readout-truth.yaml and checked by T026's tests/unit/readout-provenance.test.mjs, which this issue extends so that each UI label's text is in the source, each Tests path exists, and a setpoint row never shares its label with an observed row: Tone frequencies (setpoint) | Hz | plan | none | 4 significant figures | not applicable | each below 0.95 x Nyquist or the plan is refused | tests/unit/generator-multitone.test.mjs | Requested 60 Hz + 7 kHz (4:1) || Tone peaks on the spectrum (observed) | Hz, dB relative | output AnalyserNode, fftSize 8192, smoothing 0.55 (audio-engine.js) | FFT magnitude with the analyser's Blackman window, peak bin | fs / 8192 = 5.86 Hz at 48 kHz, 5.38 Hz at 44.1 kHz; scalloping up to about 1 dB | uncalibrated | digital loopback, not acoustic output; smoothing lags changes | tests/unit/generator-multitone.test.mjs | Analyser peak 7.00 kHz +-5.9 Hz (digital output)"
 - "tests/unit/generator-multitone.test.mjs, failing on the merge base: offline renders of each preset at 44.1 and 48 kHz show each tone's bin within +-1 bin and the stated level ratio within 0.2 dB; the stated peak equals the rendered peak within 0.1 dB; CCIF is refused at a sample rate whose 0.95 x Nyquist is below 20 kHz; the node census is 0 after stop."
 - "Definition of done, extends: the pattern engine of S013 and the requested-frequency marker of the spectrum."
 - "Definition of done, cross-links: the plan's tones are the markers the spectrum draws and the tones the Signal Path tab lists (one plan, round trip through url-state). The link is a row of tests/browser/integration-map.json once that map (synth line K075) is on main."

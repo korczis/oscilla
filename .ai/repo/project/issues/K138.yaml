@@ -26,7 +26,7 @@ scope:
 - tests/browser/qa-regressions.cjs
 - .ai/repo/features
 - README.md
-- docs/science/readouts.md
+- docs/v3/readout-truth.yaml
 - tests/visual
 - tests/README.md
 - dist
@@ -40,7 +40,7 @@ acceptance_criteria:
 - "Before: VERIFIED (G3, G6, G13): the generator is the Playground's Source panel only, with no typed field, no channel or polarity, and its analysis a scroll away at phone width; no Generator route or navigation entry exists."
 - "After and negative cases: as the objective and the criteria below state; the setpoint (what was requested) and the observation (what the analyser measured on the digital output, or the microphone on the room) are separate readouts with separate labels, and no readout claims the acoustic output."
 - "Rollback: revert the merge commit. Nothing changes the schema, a studioHash, URL key meaning or stored preset, so documents saved while it was live load unchanged after the revert."
-- "Scientific-truth rows (Quantity | Unit | Source | Algorithm | Resolution | Calibration | Limitations | Tests | UI label) are added to docs/science/readouts.md and checked by tests/unit/readout-truth.test.mjs (each UI label's text is in the source, each Tests path exists, and a setpoint row never shares its label with an observed row): Requested and observed frequency side by side | Hz | setpoint; output AnalyserNode | observed: peak bin with parabolic interpolation | observed +-1 bin stated | uncalibrated | the observed value is the digital output's, never the acoustic one; a difference beyond one bin is shown, never hidden | tests/unit/generator-workspace.test.mjs | Requested 440 Hz | Analyser 440.1 Hz +-5.9 Hz (digital output)"
+- "Scientific-truth rows (Quantity | Unit | Source | Algorithm | Resolution | Calibration | Limitations | Tests | UI label) are added to T026's canonical readout table docs/v3/readout-truth.yaml and checked by T026's tests/unit/readout-provenance.test.mjs, which this issue extends so that each UI label's text is in the source, each Tests path exists, and a setpoint row never shares its label with an observed row: Requested and observed frequency side by side | Hz | setpoint; output AnalyserNode | observed: peak bin with parabolic interpolation | observed +-1 bin stated | uncalibrated | the observed value is the digital output's, never the acoustic one; a difference beyond one bin is shown, never hidden | tests/unit/generator-workspace.test.mjs | Requested 440 Hz | Analyser 440.1 Hz +-5.9 Hz (digital output)"
 - "The pull request carries a reviewer's verdict (it touches a guarded path; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
 - "Wave 2: its chrome is Flowbite Pro markup adapted from the matching Pro component, lands after F002, adds no osc-* class token or legacy selector, and studio.css, studio-timeline.css, charts.css and tokens.css gain no selector or declaration; the domain drawing stays OSCILLA's own inside Pro cards (project.ui-uses-flowbite-pro, project.visual-identity-lock v2; node --test tests/unit/ui-flowbite-pro.test.mjs)."
 - "scripts/size-report.mjs shows at most 4 KB gzip added, with the base and head figures in the pull request body, within the owner's dist budget of 1 200 000 B gzip (decision of 2026-10-29, about 355 KB of headroom at origin/main b67d1e58); the ceiling of this line is 25 KB gzip in all (Studio boxes 35 KB, signal generator 25 KB), stated in the milestone (project.single-file-deliverable)."

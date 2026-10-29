@@ -10,7 +10,7 @@ invariants:
 - "Wave 1 adds no class token, selector or markup surface; later chrome is Flowbite Pro (project.ui-uses-flowbite-pro)"
 - "Every slice meets the owner's definition of done (intent definition-of-done)"
 - "The Generator workspace and the Playground's Source panel project one instrument state: no copy, no second voice (project.audio-engine-discipline v2)"
-- A setpoint and an observation never share a label; no readout claims the acoustic output (project.no-fake-science v2; docs/science/readouts.md)
+- "A setpoint and an observation never share a label; no readout claims the acoustic output (project.no-fake-science v2; docs/v3/readout-truth.yaml, T026)"
 milestones:
 - M082
 satisfaction:

@@ -17,15 +17,15 @@ scope:
 - tests/browser/generator.cjs
 - tests/README.md
 - dist
-- docs/science/readouts.md
+- docs/v3/readout-truth.yaml
 depends_on:
 - K011
-- K136
+- T026
 acceptance_criteria:
 - "Before: VERIFIED (G5): no noise in the Playground; the Studio Noise node has white and pink."
 - "After and negative cases: as the objective and the criteria below state; the setpoint (what was requested) and the observation (what the analyser measured on the digital output, or the microphone on the room) are separate readouts with separate labels, and no readout claims the acoustic output."
 - "Rollback: revert the merge commit. Nothing changes the schema, a studioHash, URL key meaning or stored preset, so documents saved while it was live load unchanged after the revert."
-- "Scientific-truth rows (Quantity | Unit | Source | Algorithm | Resolution | Calibration | Limitations | Tests | UI label) are added to docs/science/readouts.md and checked by tests/unit/readout-truth.test.mjs (each UI label's text is in the source, each Tests path exists, and a setpoint row never shares its label with an observed row): Noise RMS level (setpoint) | dBFS-like | plan | RMS normalisation of the seeded buffer (audio/noise.js normalizeRms) | 0.1 dB | none; SPL only under a valid LevelCalibration | before the -3 dBFS limiter and the output ceiling; statistical | tests/unit/generator-noise.test.mjs | Noise -20.0 dBFS RMS (requested) || Noise spectral slope (observed) | dB per octave | output AnalyserNode (digital, post-limiter) | average of N analyser frames, least-squares slope over log frequency | +-1 dB after N frames, N stated | uncalibrated | of the generated digital signal; the speaker and room change it | tests/unit/generator-noise.test.mjs | Slope -3.0 dB/oct (digital output, N frames)"
+- "Scientific-truth rows (Quantity | Unit | Source | Algorithm | Resolution | Calibration | Limitations | Tests | UI label) are added to T026's canonical readout table docs/v3/readout-truth.yaml and checked by T026's tests/unit/readout-provenance.test.mjs, which this issue extends so that each UI label's text is in the source, each Tests path exists, and a setpoint row never shares its label with an observed row: Noise RMS level (setpoint) | dBFS-like | plan | RMS normalisation of the seeded buffer (audio/noise.js normalizeRms) | 0.1 dB | none; SPL only under a valid LevelCalibration | before the -3 dBFS limiter and the output ceiling; statistical | tests/unit/generator-noise.test.mjs | Noise -20.0 dBFS RMS (requested) || Noise spectral slope (observed) | dB per octave | output AnalyserNode (digital, post-limiter) | average of N analyser frames, least-squares slope over log frequency | +-1 dB after N frames, N stated | uncalibrated | of the generated digital signal; the speaker and room change it | tests/unit/generator-noise.test.mjs | Slope -3.0 dB/oct (digital output, N frames)"
 - "tests/unit/generator-noise.test.mjs, failing on the merge base: offline renders of each colour at 44.1 and 48 kHz have the stated RMS within 0.2 dB and slopes of 0, -3 and -6 dB per octave within 1 dB over 100 Hz-10 kHz (Welch average); the same seed renders the same samples; the voice's node census is 0 after stop."
 - "Definition of done, extends: the pattern engine of S013 and the Studio Noise node (the same audio/noise.js)."
 - "Definition of done, cross-links: the noise pattern survives a copied URL (round trip through url-state) and is shown as one source in the Signal Path tab. The link is a row of tests/browser/integration-map.json once that map (synth line K075) is on main."
