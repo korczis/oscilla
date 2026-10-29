@@ -1094,12 +1094,18 @@ function defineChecks() {
     const list = [...seen.values()];
     const unlabelled = list.filter((c) => !c.name).map((c) => c.osc + (c.id ? `#${c.id}` : ''));
     const unreachable = list.filter((c) => !c.reachable).map((c) => c.osc);
-    const neverVisible = list.filter((c) => !c.visible).map((c) => c.osc);
+    // V501: Connect MIDI is offered only where this build and origin expose Web MIDI (ADR 0058);
+    // where the page does not offer it (WebKit, Firefox on file://) its hidden row is correct.
+    const midiOffered = await page.evaluate(() => !!(window.OSCILLA.app
+      && window.OSCILLA.app.midiCanConnect));
+    const notOffered = midiOffered ? [] : ['midi.connect'];
+    const neverVisible = list.filter((c) => !c.visible && !notOffered.includes(c.osc))
+      .map((c) => c.osc);
     // Controls the audit must have met (they exist only in a state the audit sets up).
     const unseen = ['cnx.link', 'cnx.toggle'].filter((k) => !seen.has(k));
     return { ok: !unlabelled.length && !unreachable.length && !neverVisible.length
       && !unseen.length, unseen,
-      controls: list.length, unlabelled, unreachable, neverVisible, measureState };
+      controls: list.length, unlabelled, unreachable, neverVisible, notOffered, measureState };
   });
 
   def('hold-plays-release-zero-nodes', async ({ page }) => {
