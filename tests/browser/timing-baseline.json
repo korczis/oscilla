@@ -43,7 +43,7 @@
       "timer-sleep": 1
     },
     "tests/browser/v31-studio-timeline.cjs": {
-      "timer-sleep": 18,
+      "timer-sleep": 16,
       "counted-poll": 1
     }
   }
