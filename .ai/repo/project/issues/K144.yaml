@@ -1,0 +1,39 @@
+id: K144
+milestone: M058
+serves:
+  - "playable-instrument#template-pack"
+title: "Demo song vertical slice: an original song as a Studio template, taken through every part that exists by one browser journey"
+slug: demo-song-vertical-slice
+priority: p2
+profile: implementation
+objective: "Lands as feat(demo). Owner request of 2026-10-29: take a whole song in the style of a slow riff-rock piece, composed through MIDI in the UI, connecting every component, as a vertical slice. The song is original (the style riff is copyrighted and is not quoted, transcribed or closely paraphrased): \"Lantern in the Slag Yard\", A minor, 96 BPM, 4/4, 44 bars, 110 s, intro, verse 1, chorus 1, verse 2, build, chorus 2, outro; a bass riff, a lead line, kick, snare, closed and open hats; automation that opens the bass filter, speeds up the lead LFO and fades the outro. It ships as the Studio template demo-song (src/js/studio/templates/demo-song.js, expanded at load from demo-song-score.js) with a pinned studioHash, opened from the existing Templates dialog and #m=studio&st=demo-song, and changes no earlier template's hash and adds no markup or class name. tests/browser/demo-song.cjs drives the user's journey (MIDI through the seam, the song, tempo, drums, tone, automation, PLAY, the Analyzer views and the playhead, STOP and PLAY, Save, reload and Open, Render WAV) and marks every step that waits for unlanded work as an expected failure naming it."
+why: "The owner asked for one piece of music taken through the whole product, so that what connects and what does not is shown by a test rather than described. Measured on main b67d1e58 (v3.13.0) in Chromium before this issue: the whole song played, saved, restored and rendered once a script outside the app had turned it into a Studio file; MIDI notes were silent."
+current_state: "Created 2026-10-29. The gaps the journey marks as expected failures, each with the work that fills it: G1 MIDI notes sound (V502, pull request #261); G2 a MIDI performance records into the song (V505; a MIDI note playing a Studio voice has no plan yet); G4 velocity (a Studio clip has no level; no plan yet); G9 the Drive node (K012, pull request #267); G10 a filter Q lane (refused by the Inspector and at PLAY; no plan yet); G11 the Studio view nodes draw (K016); a keyboard or note view (K026, V504); G12 the last project after a reload (V604). Not part of the slice and not marked: G3 an in-app MIDI file or note-list import, G5 a note or step editor for Studio tracks (ADR 0058 rules out a piano roll; an owner decision first), G6 several sequencer voices, G7 a drum kit, G8 clips placed by reference, G13 the song as a template beyond this one, G14 MIDI file export, G15 measuring a song (nothing honest measures one; U003 adds a real example experiment), G16 every new control waits on F001. Version 2 of the template adds the Drive node and its lane once K012 lands, and the Q lane once a Q automation exists."
+scope:
+  - "src/js/studio/templates"
+  - "src/js/studio/signal-path-projection.js"
+  - "tests/unit/demo-song.test.mjs"
+  - "tests/unit/v31-studio-templates.test.mjs"
+  - "tests/browser/demo-song.cjs"
+  - "tests/browser/qa-regressions.cjs"
+  - "docs/v31/patches-and-provenance.md"
+  - "docs/v31/studio-report.md"
+  - "tests/README.md"
+  - "README.md"
+  - "package.json"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "The template demo-song validates without a warning under its pinned studioHash, holds 744 tempo-linked clips (one per note of demo-song-score.js) on five tracks, seven section markers and the lanes the Studio plays, plans an offline render of the whole 110 s song with no limitation, and the six earlier templates keep their hashes; tests/unit/demo-song.test.mjs fails on the merge base (project.fail-first)."
+  - "Its Learn text says the song is original, that the drums are a sine sweep and filtered noise, and that velocity is not represented; what the score holds and the Studio cannot play (velocity, the Q lane, drive) is absent from the model and named in DEMO_SONG_OMITTED (project.no-fake-science, project.no-inert-surfaces)."
+  - "tests/browser/demo-song.cjs runs through tests/browser/lib/suite.cjs in test:browser, waits only through tests/browser/lib/wait.cjs with named deadlines, and passes in chromium, firefox and webkit with its expected failures printed XFAIL; an expected failure that passes fails the suite until its mark is removed (project.suite-harness, project.bounded-test-timing)."
+  - "README.md has the section \"Demo song: a vertical slice\" and tests/README.md a row for each new test; the pull request carries a reviewer's verdict (src/js/studio is guarded; project.review-verdict) and adds no markup, osc-* class token or stylesheet selector (project.ui-uses-flowbite-pro)."
+validation:
+  - "node --test tests/unit/demo-song.test.mjs"
+  - "node --test tests/unit/v31-studio-templates.test.mjs"
+  - "node tests/browser/demo-song.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

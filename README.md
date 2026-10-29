@@ -481,6 +481,69 @@ Not yet built:
 - dragging several clips at once
 - pinch zoom on the timeline
 
+## Demo song: a vertical slice
+
+"Lantern in the Slag Yard" is an original song written for OSCILLA (plan issue K144): a slow
+riff-rock piece in A minor at 96 BPM, 44 bars (110 s), in seven sections (intro, verse 1,
+chorus 1, verse 2, build, chorus 2, outro). It has a bass riff, a lead line and drums. Its
+score is `src/js/studio/templates/demo-song-score.js`. It ships as the Studio template
+**Demo song**: open it from Studio, Templates, or with the link
+[`#m=studio&st=demo-song`](https://korczis.github.io/oscilla/#m=studio&st=demo-song).
+
+It is a vertical slice: one piece of music taken through every part of OSCILLA that exists
+today, to show where the parts meet and where they do not yet.
+
+- **Studio graph.** A sawtooth bass voice goes into a low-pass filter. A square lead voice goes
+  into a resonant low-pass filter, with an LFO on its cutoff. The kick is a sine Oscillator
+  swept from 140 to 45 Hz. Snare and hats are white noise through band-pass and high-pass
+  filters, each into an Envelope. Everything meets in a mixer that feeds the Master Output, and
+  Scope, Spectrum, Spectrogram and Meter nodes tap the mix.
+- **Timeline.** Every note is a tempo-linked clip on one of five tracks (Bass, Lead, Kick,
+  Snare, Hats), 744 in all, so a tempo change moves the whole song. Seven markers name the
+  sections.
+- **Automation.** The bass filter opens during the build, the lead LFO speeds up, and the
+  outro fades the mix.
+- **Playback, analysis and export.** PLAY, STOP, Save and Open, the Analyzer's scope, spectrum
+  and spectrogram, and Render WAV all work on it as on any Studio document.
+
+What it does not do yet, each named with the work that would fill it:
+
+- MIDI notes do not sound (V502, pull request #261).
+- A MIDI performance cannot be recorded into the song (V505).
+- Velocity is not represented, so the drums have no accents: a Studio clip has no level.
+- There is no Drive node for a driven tone (K012, pull request #267).
+- A filter's Q cannot be automated, so the build's rising resonance is in the score only.
+- The Studio's view nodes draw nothing (K016).
+- There is no keyboard or note view (K026, V504).
+- After a reload the Studio opens the default template, not the last project (V604).
+- No MEASURE or Experiments step is part of the slice: the Studio's measurement clips measure
+  the speaker or loopback path a sound plays through, not the song.
+
+The score keeps the velocities, the Q lane and a drive lane, so each can join the template
+once the Studio can play it.
+
+`tests/unit/demo-song.test.mjs` checks the song as data: one clip per note of the score, the
+pinned hash, an offline render plan of the whole song with no limitation, and that the six
+earlier templates keep their hashes. It also bounds the song's similarity to the riff whose style
+it follows: the bass and the lead share at most two consecutive intervals with it. That is the
+only melody it is compared with. `tests/browser/demo-song.cjs` takes the song
+through the user's whole journey in Chromium, Firefox and WebKit:
+
+1. Connect MIDI through the test seam, and play the riff in.
+2. Open the song.
+3. Change the tempo.
+4. Add a drum hit.
+5. Change the tone.
+6. Show the build automation.
+7. Play, read the Analyzer views and the playhead.
+8. Stop and play again.
+9. Save, reload and open.
+10. Render the WAV.
+
+Each gap above is an expected failure of that suite, named by its plan issue. It runs every
+time, and it fails the suite once it starts passing, so its mark is removed when the work
+lands.
+
 ## Safety and measurement limits
 
 - **Start quietly, especially on headphones.** Loudness is a poor guide to acoustic output,
@@ -639,7 +702,7 @@ from the background, or hold-to-play by touch. The owner declined real-device ch
 | --- | --- | --- |
 | Unit | `tests/unit/` | Pure modules (DSP, analysis, sequencer, charts), the packer, the artifact rules and the release tooling, all under `node --test` |
 | V1 freeze | `tests/freeze/` | Golden vectors that pin V1 behaviour ([ADR 0014](.ai/repo/adrs/0014-v1-behaviour-frozen-by-golden-vectors.md)) |
-| Browser | `npm run test:browser`, `test:engine`, `test:dsp`, `test:labs`, `test:sequencer` | Playwright suites on the built page: the app gate (`tests/browser/app.cjs`), layout (`tests/browser/layout.cjs`), the V2 final-QA regressions (`tests/browser/qa-regressions.cjs`), navigation history and unsaved work (`tests/browser/navigation.cjs`), the MIDI support state (`tests/browser/midi.cjs`), the V1 engine port (`tests/browser/engine-v1port.cjs`), DSP (`tests/browser/dsp.cjs`), labs (`tests/browser/labs.cjs`) and the sequencer (`tests/browser/sequencer.cjs`) |
+| Browser | `npm run test:browser`, `test:engine`, `test:dsp`, `test:labs`, `test:sequencer` | Playwright suites on the built page: the app gate (`tests/browser/app.cjs`), layout (`tests/browser/layout.cjs`), the V2 final-QA regressions (`tests/browser/qa-regressions.cjs`), navigation history and unsaved work (`tests/browser/navigation.cjs`), the MIDI support state (`tests/browser/midi.cjs`), the demo song journey (`tests/browser/demo-song.cjs`), the V1 engine port (`tests/browser/engine-v1port.cjs`), DSP (`tests/browser/dsp.cjs`), labs (`tests/browser/labs.cjs`) and the sequencer (`tests/browser/sequencer.cjs`) |
 | Visual | `scripts/visual-gate.mjs`, `tests/visual/` | The 1536x1024 reference and named regions, compared region by region with thresholds measured from run-to-run variance ([ADR 0029](.ai/repo/adrs/0029-visual-regression-in-the-release-gate.md)) |
 | V3 unit | `tests/unit/v3-*.test.mjs` | Measurement core, transfer and impulse response on synthetic systems with known answers, RTA and aggregation, calibration, quality, experiments (schema, round trip, corrupt imports, store), goldens per algorithm ID, the engine on a fake io and the view models, all in `npm test` |
 | V3 browser | `npm run test:measure` | `tests/browser/v3-measure.cjs`: the measurement engine on real Web Audio, a recovered digital loopback response, limiter transparency, 0 nodes after finish and abort. `tests/browser/analysis-worker.cjs`: the offline analysis in its Worker against the inline run, identical results, no inline fallback, abort. `tests/browser/v3-ui.cjs`: Measure and Experiments of the built page, guided flow, abort at every stage, calibration, experiment import, compare and export, and no "SPL" without a level calibration. All run in Chromium, Firefox and WebKit, from `file://` and `/oscilla/` |
