@@ -13,23 +13,22 @@
 # another ref also answers is refused as ambiguous, and so is a commit name a ref also has; the
 # callers pass the same full name to the program (--base, --base-branch). Refusals exit 2.
 #
-# In CI this file is itself the base commit's copy: the `judge` step of every judge job
-# extracts the base's .github/scripts/base-rule.sh and scripts/ into <judge>
-# ($RUNNER_TEMP/judge), writes the commit's full name to <judge>/.base-commit and the sha256 of
-# every file to <judge>/.manifest, makes the copy read-only and records the manifest's own
-# sha256, all before anything of the pull request runs; the judge's step, the job's next and
+# In CI this file is itself the base commit's copy: the `judge` step of every judge job extracts
+# the base's .github/scripts/ and scripts/ into <judge> ($RUNNER_TEMP/judge), blob by blob from
+# `git ls-tree -r` (R30), writes the commit's full name to <judge>/.base-commit and the commit and
+# the entries it copied to <judge>/.manifest, makes the copy read-only and records the manifest's
+# own sha256, all before anything of the pull request runs; the judge's step, the job's next and
 # last, starts this copy under `env -i` with a fixed PATH (the runner's node first) and that
 # digest as JUDGE_MANIFEST (review of #255, R12, R17-R22). Run so, <base-ref> must name exactly
-# that commit, the copy must match its manifest (scripts/judge-isolation.mjs --verify: defence
-# in depth, since the same user could chmod the copy back), and the program is
-# <judge>/<program>, which replaces this shell (exec): nothing reads this file once the program
-# runs. The fail-first program then drives the install itself. Run from a checkout (no
-# .base-commit beside it), the program and the rest of that commit's scripts/ (its imports)
-# are extracted outside the checkout as before. Either way the program runs on this checkout
-# (the current directory's repository) with --repo, and which commit judged is printed. Only
-# when the base commit has no such program (the pull request that introduces the rule) does
-# the checkout's own copy run, and that is printed as a warning; a judge copy that lacks a
-# program its commit has is refused (R25).
+# that commit, the copy must match its manifest (scripts/judge-isolation.mjs --verify: defence in
+# depth, since the same user could chmod the copy back), and the program is <judge>/<program>,
+# which replaces this shell (exec): nothing reads this file once the program runs. The fail-first
+# program then drives the install itself. Run from a checkout (no .base-commit beside it), the
+# program and the rest of that commit's scripts/ (its imports) are extracted outside the checkout
+# as before. Either way the program runs on this checkout (the current directory's repository)
+# with --repo, and which commit judged is printed. Only when the base commit has no such program
+# (the pull request that introduces the rule) does the checkout's own copy run, and that is
+# printed as a warning; a judge copy that lacks a program its commit has is refused (R25).
 set -euo pipefail
 
 base="${1:?usage: $0 <base-ref> scripts/<rule>.mjs [arguments...]}"

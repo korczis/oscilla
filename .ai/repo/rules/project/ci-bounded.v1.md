@@ -84,11 +84,17 @@ that is repaired where it last hurt regresses in the next job somebody adds.
   `review-verdict`, `metadata`) is shaped so that nothing of the pull request runs before the
   judge, and the judge drives the install. That shape is the guarantee (review of #255,
   round 4): `actions/setup-node` first, without `cache` or `node-version-file`, so it reads
-  no file of the checkout; the checkout; the step `id: judge`, which takes
-  `.github/scripts/base-rule.sh` and `scripts/` from the base commit into
-  `$RUNNER_TEMP/judge`, writes the commit to `.base-commit` and the sha256 of every file to
-  `.manifest`, makes the copy read-only (`chmod -R a-w`) and records the judge's PATH (setup-
-  node's node directory and the system's) and the manifest's own sha256 as step outputs;
+  no file of the checkout; the checkout; the step `id: judge`, which prints the runner's
+  Yama `ptrace_scope` (informational, R31), lists the base commit's `.github/scripts/` and
+  `scripts/` with `git ls-tree -r`, keeps the regular files (100644, 100755) whose names are
+  of `[A-Za-z0-9._@+/-]` and names every other entry (a symbolic link, a submodule, a name
+  with a backslash, a space or a quote) in a warning, writes each kept blob into
+  `$RUNNER_TEMP/judge` with `git cat-file blob` and its mode, writes the commit to
+  `.base-commit` and `commit <sha>` and the kept entries to `.manifest`, so the copy is the
+  manifest by construction and the verifier (`scripts/judge-isolation.mjs`, by git's object
+  names) reads the same definition (R30), makes the copy read-only (`chmod -R a-w`) and
+  records the judge's PATH (setup-node's node directory and the system's) and the manifest's
+  own sha256 as step outputs;
   then the judge's step, the job's last, which runs in `/usr/bin/env -u BASH_ENV -u ENV
   /bin/bash --noprofile --norc -eo pipefail {0}` and calls `"${{ runner.temp
   }}/judge/.github/scripts/base-rule.sh"` with `/bin/bash` under `/usr/bin/env -i`, with that
@@ -114,7 +120,8 @@ that is repaired where it last hurt regresses in the next job somebody adds.
   (`scripts/shell-words.mjs`), its program the word after assignments, redirections, shell
   keywords and definitions (`if`, `!`, `{`, `while`, `coproc`, `function`) and wrappers
   (`env`, `sudo`, `command`, `exec`, `time`, `nice`, `nohup`, `timeout`, `xargs`, ...); no
-  workflow, job or step `env:` before the call sets `BASH_ENV`, `ENV`, `PATH`,
+  workflow, job, container or step `env:` before the call (setup-node's and the checkout's
+  included, round 5) sets `BASH_ENV`, `ENV`, `PATH`,
   `NODE_OPTIONS`, `LD_*`, `DYLD_*`, `GIT_*`, `npm_config_*` or another loader variable, and
   no step before it runs in a `shell:` of its own or under a default shell other than bash
   (R23); the call is found by its structure, not by the first mention of `base-rule.sh`, and

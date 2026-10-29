@@ -53,8 +53,10 @@ jobs:
         with:
           fetch-depth: 0
       # The judge, from the base commit, before anything of the pull request runs: the base's
-      # base-rule.sh and scripts/ into $RUNNER_TEMP/judge, the commit in .base-commit, the
-      # sha256 of every file in .manifest, the copy made read-only, and as outputs the judge's
+      # .github/scripts/ and scripts/ into $RUNNER_TEMP/judge, blob by blob from `git ls-tree
+      # -r` (a symbolic link, a submodule or an odd name is left out, with a warning naming
+      # it: R30), the commit in .base-commit, the commit and the ls-tree entries copied in
+      # .manifest, the copy made read-only, and as outputs the judge's
       # PATH (the node setup-node put there before the checkout, so it read no file of the pull
       # request, then the system's) and the manifest's own sha256, which the judge checks its
       # copy against (defence in depth: the same user could chmod the copy back). Nothing of
@@ -63,14 +65,25 @@ jobs:
         id: judge
         timeout-minutes: 1
         run: |
+          echo "ptrace_scope=$(cat /proc/sys/kernel/yama/ptrace_scope 2>/dev/null || echo missing)"
           base="refs/remotes/origin/$GITHUB_BASE_REF"
           sha="$(git show-ref --verify --hash "$base")"
           judge="$RUNNER_TEMP/judge"
           mkdir -p "$judge" "$RUNNER_TEMP/judge-home"
-          git archive "$sha" -- .github/scripts/base-rule.sh scripts | tar -x -C "$judge"
+          tree="$RUNNER_TEMP/judge-tree"
+          git ls-tree -r "$sha" -- .github/scripts scripts > "$tree"
+          entry='^(100644|100755) blob [0-9a-f]{40}([0-9a-f]{24})?[[:blank:]][A-Za-z0-9._@+/-]+$'
+          if LC_ALL=C grep -Ev "$entry" "$tree" > "$tree.skipped"; then
+            echo "::warning::the judge: not copied from $base (a symbolic link, a submodule or a"\
+              "name outside [A-Za-z0-9._@+/-]): $(tr '\n' ' ' < "$tree.skipped")"
+          fi
+          { echo "commit $sha"; LC_ALL=C grep -E "$entry" "$tree"; } > "$judge/.manifest"
+          tail -n +2 "$judge/.manifest" | while read -r mode _ oid file; do
+            mkdir -p "$(dirname "$judge/$file")"
+            git cat-file blob "$oid" > "$judge/$file"
+            if [ "$mode" = 100755 ]; then chmod a+x "$judge/$file"; fi
+          done
           echo "$sha" > "$judge/.base-commit"
-          (cd "$judge" && find . -type f ! -path ./.manifest -print0 | LC_ALL=C sort -z \
-            | xargs -0 sha256sum) > "$judge/.manifest"
           chmod -R a-w "$judge"
           node="$(readlink -f "$(command -v node)")"
           echo "path=$(dirname "$node"):/usr/bin:/bin:/usr/sbin:/sbin" >> "$GITHUB_OUTPUT"

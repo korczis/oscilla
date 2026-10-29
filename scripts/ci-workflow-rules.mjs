@@ -35,9 +35,10 @@
 //                    task runner, `source`/`.`, a program named by a relative or workspace
 //                    path, a glob, a variable or a substitution, a PATH or loader variable set
 //                    on the way, `git -c`, awk's system(), whatever wrapper or keyword stands
-//                    before it); no workflow, job or step `env:` before the call sets
-//                    BASH_ENV, NODE_OPTIONS, LD_PRELOAD or another loader variable, and no step
-//                    before it runs in a shell of its own; the judge's step is the job's last,
+//                    before it); no workflow, job, container or step `env:` before the call
+//                    (setup-node's and the checkout's included) sets BASH_ENV, NODE_OPTIONS,
+//                    LD_PRELOAD or another loader variable, and no step before it runs in a
+//                    shell of its own; the judge's step is the job's last,
 //                    runs in JUDGE_SHELL and calls the extracted copy under `/usr/bin/env -i`
 //                    with the `judge` step's PATH and manifest digest and its own HOME; a judge
 //                    reached through a local action is refused (R12, R17-R20, R23, R26). It
@@ -574,10 +575,15 @@ function judgeFirstViolations(job, judgeActions = new Set(), doc = {}) {
     });
   });
   if (!calls.length) {
-    const mention = steps.findIndex((s) => typeof s.run === 'string' && JUDGE.test(s.run));
+    // a mention of the wrapper, or the `judge` step that extracts it (whose `git ls-tree`
+    // names only .github/scripts: R30), marks a job that means to judge
+    const mention = steps.findIndex((s) => typeof s.run === 'string'
+      && (JUDGE.test(s.run) || s.id === 'judge'));
     if (mention >= 0 && !through.length) {
-      out.push([stepLabel(steps[mention], mention), 'names .github/scripts/base-rule.sh but'
-        + ' calls it in no form judge-first can read (a variable, a substitution, an alias)']);
+      out.push([stepLabel(steps[mention], mention), `${steps[mention].id === 'judge'
+        ? 'has the `judge` step' : 'names .github/scripts/base-rule.sh'} but calls`
+        + ' .github/scripts/base-rule.sh in no form judge-first can read (a variable, a'
+        + ' substitution, an alias)']);
     }
     return out;
   }
@@ -608,8 +614,16 @@ function judgeFirstViolations(job, judgeActions = new Set(), doc = {}) {
   const loaders = (env, where) => Object.keys(env && typeof env === 'object' ? env : {})
     .filter((k) => LOADER_ENV.test(k)).map((k) => `${where} sets ${k}, which loads code into`
       + ' what runs before the judge');
+  const container = job.container && typeof job.container === 'object' ? job.container.env
+    : undefined;
   for (const why of [...loaders(doc.env, 'the workflow\'s env:'), ...loaders(job.env,
-    'the job\'s env:')]) out.push([label(at), why]);
+    'the job\'s env:'), ...loaders(container, 'the job\'s container env:')]) {
+    out.push([label(at), why]);
+  }
+  // the setup-node and checkout steps' env: holds for what they run, before the judge (round 5)
+  for (let i = 0; i < Math.min(2, at); i++) {
+    for (const why of loaders(steps[i].env, 'its env:')) out.push([label(i), why]);
+  }
   for (const [where, d] of [['the workflow', doc.defaults], ['the job', job.defaults]]) {
     const sh = d?.run?.shell;
     if (sh !== undefined && sh !== 'bash') {

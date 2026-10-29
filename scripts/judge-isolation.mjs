@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // What keeps a pull-request judge apart from the pull-request code it starts (review of
 // #255, R12, R22): the judge is the base commit's copy, extracted into $RUNNER_TEMP/judge by
-// its job's `judge` step, made read-only there and listed in a sha256 manifest before
-// anything of the pull request runs; the fail-first judge then starts every child (the
+// its job's `judge` step, made read-only there and listed in a manifest of git object names
+// before anything of the pull request runs; the fail-first judge then starts every child (the
 // install, the PR's tests) through runIsolated() with isolatedEnv(), and decides from its own
 // memory, never from a file a child can write.
 //
@@ -13,13 +13,29 @@
 //                 rests on Yama: with /proc/sys/kernel/yama/ptrace_scope 1 or more a process
 //                 may ptrace (and so write /proc/<pid>/mem of) only its own descendants.
 //                 0, or no such file on Linux, refuses; off Linux the probe is skipped with a
-//                 note outside CI and refuses under CI.
-//   manifest      the `judge` step writes <judge>/.manifest (`sha256sum` lines `<hex>  ./<path>`
-//                 of every file of the copy, in byte order) and passes the manifest's own
-//                 sha256 to the judge as JUDGE_MANIFEST; loadManifest() checks that digest and
-//                 copyProblems() the copy against the manifest, before any child and after the
-//                 last. Defence in depth only: the copy is chmod -R a-w, but a child runs as
-//                 the same user and could chmod it back, and what the judge has loaded is
+//                 note outside CI and refuses under CI. It cannot promise isolation against
+//                 sudo: GitHub's hosted Linux runners give the runner user passwordless sudo,
+//                 so a PR test the fail-first judge runs can become root and reach the judge
+//                 whatever ptrace_scope says; that residual risk is stated in
+//                 project.fail-first (review of #255, R31). Each `judge` step prints the
+//                 runner's ptrace_scope, so the run's log measures it.
+//   manifest      the `judge` step lists the base commit's .github/scripts/ and scripts/ with
+//                 `git ls-tree -r` (mode, blob, object name, path), keeps the entries that
+//                 match TREE_ENTRY (regular files, 100644 or 100755, a name of
+//                 [A-Za-z0-9._@+/-] only) and names every other entry (a symbolic link, a
+//                 submodule, a name with a backslash, a space or a quote) in a warning, writes
+//                 each kept blob into the copy with `git cat-file blob` and its mode, and the
+//                 list, after a `commit <sha>` line, to <judge>/.manifest; it passes the
+//                 manifest's own sha256 to the judge as JUDGE_MANIFEST. So the copy is the
+//                 manifest by construction, and an entry the copy cannot hold faithfully is
+//                 left out with a clear message instead of making every judge refuse (review
+//                 of #255, R30). loadManifest() checks that digest, copyProblems() the copy
+//                 against the manifest by git's own object names (a blob's sha1, or sha256 in
+//                 a sha256 repository), the executable bit and .base-commit, before any child
+//                 and after the last; a symbolic link or any file the manifest does not list is
+//                 refused. manifestOf() is the same definition, for the tests and the
+//                 verifier. Defence in depth only: the copy is chmod -R a-w, but a child runs
+//                 as the same user and could chmod it back, and what the judge has loaded is
 //                 already in its memory; the check sees a copy changed, it does not prevent it.
 //   isolatedEnv   a child's whole environment: a fixed PATH (the judge's node directory, then
 //                 the system's), a HOME of its own, CI when the judge has it, and what the
@@ -33,7 +49,7 @@
 // Tested by tests/unit/judge-isolation.test.mjs and by the replay of the judge jobs in
 // tests/unit/base-rule.test.mjs.
 
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
@@ -74,24 +90,37 @@ export function ptraceProbe({ platform = process.platform, ci = Boolean(process.
 
 const sha256 = (data) => createHash('sha256').update(data).digest('hex');
 
-/** Every regular file under `dir` but the manifest, as `./<path>`, in byte order. */
-function filesOf(dir) {
-  const out = [];
-  const walk = (rel) => {
-    for (const e of readdirSync(path.join(dir, rel), { withFileTypes: true })) {
-      const r = rel ? `${rel}/${e.name}` : e.name;
-      if (e.isDirectory()) walk(r);
-      else if (r !== MANIFEST) out.push({ rel: `./${r}`, file: e.isFile() });
-    }
-  };
-  walk('');
-  return out.sort((a, b) => Buffer.compare(Buffer.from(a.rel), Buffer.from(b.rel)));
+/** What the `judge` step copies of the base commit: `git ls-tree -r <sha> -- JUDGE_PATHS`. */
+export const JUDGE_PATHS = ['.github/scripts', 'scripts'];
+/**
+ * An entry of `git ls-tree -r` the judge copies: a regular file (100644, 100755), its object
+ * name (40 hex, or 64 in a sha256 repository), a path of [A-Za-z0-9._@+/-] only. The `judge`
+ * step keeps exactly the lines `grep -E` matches with the same expression (a tab between the
+ * object name and the path, [[:blank:]] there).
+ */
+export const TREE_ENTRY = new RegExp('^(100644|100755) blob ([0-9a-f]{40}(?:[0-9a-f]{24})?)'
+  + '\t([A-Za-z0-9._@+/-]+)$');
+/** The files of the copy that are no tree entry: the commit and the manifest itself. */
+const OWN = new Set([MANIFEST, '.base-commit']);
+
+/** git's object name of a blob's `data`, in the hash its `oid` length says. */
+function blobOid(data, oid) {
+  const hash = createHash(oid.length === 64 ? 'sha256' : 'sha1');
+  return hash.update(`blob ${data.length}\0`).update(data).digest('hex');
 }
 
-/** The manifest of `dir` as the `judge` step's sha256sum writes it. */
-export function manifestOf(dir) {
-  return filesOf(dir).filter((f) => f.file)
-    .map((f) => `${sha256(readFileSync(path.join(dir, f.rel)))}  ${f.rel}\n`).join('');
+/**
+ * The manifest the `judge` step writes for `commit` of the repository `repo`: { text,
+ * skipped }, `skipped` the ls-tree lines it leaves out of the copy (R30).
+ */
+export function manifestOf(repo, commit) {
+  const r = spawnSync('git', ['-C', repo, 'ls-tree', '-r', commit, '--', ...JUDGE_PATHS],
+    { encoding: 'utf8' });
+  if (r.status !== 0) throw new Error(`git ls-tree ${commit}: ${r.stderr}`);
+  const lines = r.stdout.split('\n').filter(Boolean);
+  const kept = lines.filter((l) => TREE_ENTRY.test(l));
+  return { text: `commit ${commit}\n${kept.map((l) => `${l}\n`).join('')}`,
+    skipped: lines.filter((l) => !TREE_ENTRY.test(l)) };
 }
 
 /** The sha256 of a manifest's text. */
@@ -99,7 +128,7 @@ export const digestOf = (text) => sha256(text);
 
 /**
  * The manifest of the judge copy `dir`, checked against `digest`: { entries: Map<path,
- * sha256>, problem: null } or { entries: null, problem }.
+ * { mode, oid }>, commit, problem: null } or { entries: null, problem }.
  */
 export function loadManifest(dir, digest) {
   if (!/^[0-9a-f]{64}$/.test(String(digest || ''))) {
@@ -116,31 +145,64 @@ export function loadManifest(dir, digest) {
     return { entries: null, problem: `${MANIFEST} has sha256 ${sha256(text)}, not the`
       + ` ${digest} the judge step recorded` };
   }
+  const [head, ...lines] = text.toString('utf8').split('\n');
+  const commit = /^commit ([0-9a-f]{40}(?:[0-9a-f]{24})?)$/.exec(head)?.[1];
+  if (!commit) return { entries: null, problem: `${MANIFEST}: no \`commit <sha>\` first line` };
   const entries = new Map();
-  for (const line of text.toString('utf8').split('\n')) {
+  for (const line of lines) {
     if (!line) continue;
-    const m = /^([0-9a-f]{64}) {2}(\.\/[^\n\\]+)$/.exec(line);
+    const m = TREE_ENTRY.exec(line);
     if (!m) return { entries: null, problem: `${MANIFEST}: a line that is no entry: ${line}` };
-    entries.set(m[2], m[1]);
+    entries.set(m[3], { mode: m[1], oid: m[2] });
   }
   if (!entries.size) return { entries: null, problem: `${MANIFEST} lists no file` };
-  return { entries, problem: null };
+  return { entries, commit, problem: null };
 }
 
-/** How the copy `dir` departs from its manifest's `entries`: [] when it is the same. */
-export function copyProblems(dir, entries) {
+/** Every entry under `dir` but its directories, as { rel, stat }, in byte order. */
+function filesOf(dir) {
+  const out = [];
+  const walk = (rel) => {
+    for (const e of readdirSync(path.join(dir, rel), { withFileTypes: true })) {
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) walk(r);
+      else out.push({ rel: r, stat: lstatSync(path.join(dir, r)) });
+    }
+  };
+  walk('');
+  return out.sort((a, b) => Buffer.compare(Buffer.from(a.rel), Buffer.from(b.rel)));
+}
+
+/**
+ * How the copy `dir` departs from its manifest (loadManifest's { entries, commit }, or the
+ * entries alone): [] when it is the same.
+ */
+export function copyProblems(dir, manifest) {
+  const { entries, commit } = manifest instanceof Map ? { entries: manifest } : manifest;
   const out = [];
   const seen = new Set();
-  for (const f of filesOf(dir)) {
-    seen.add(f.rel);
-    if (!entries.has(f.rel)) out.push(`${f.rel} is not in the manifest`);
-    else if (!f.file || lstatSync(path.join(dir, f.rel)).isSymbolicLink()) {
-      out.push(`${f.rel} is no regular file`);
-    } else if (sha256(readFileSync(path.join(dir, f.rel))) !== entries.get(f.rel)) {
-      out.push(`${f.rel} changed`);
+  for (const { rel, stat } of filesOf(dir)) {
+    if (OWN.has(rel)) continue;
+    seen.add(rel);
+    const want = entries.get(rel);
+    if (!want) out.push(`${rel} is not in the manifest`);
+    else if (!stat.isFile()) out.push(`${rel} is no regular file`);
+    else if (blobOid(readFileSync(path.join(dir, rel)), want.oid) !== want.oid) {
+      out.push(`${rel} changed`);
+    } else if (Boolean(stat.mode & 0o100) !== (want.mode === '100755')) {
+      out.push(`${rel} has lost or gained its executable bit (${want.mode})`);
     }
   }
   for (const rel of entries.keys()) if (!seen.has(rel)) out.push(`${rel} is missing`);
+  if (commit !== undefined) {
+    let base = null;
+    try {
+      base = readFileSync(path.join(dir, '.base-commit'), 'utf8');
+    } catch {
+      // reported below
+    }
+    if (base !== `${commit}\n`) out.push(`.base-commit is not the manifest's commit ${commit}`);
+  }
   return out;
 }
 
@@ -223,8 +285,9 @@ if (isMain) {
     console.error('usage: node scripts/judge-isolation.mjs --verify <judge-dir> <manifest-sha256>');
     process.exit(2);
   }
-  const { entries, problem } = loadManifest(dir, digest);
-  const problems = problem ? [problem] : copyProblems(dir, entries);
+  const manifest = loadManifest(dir, digest);
+  const { entries, problem } = manifest;
+  const problems = problem ? [problem] : copyProblems(dir, manifest);
   for (const p of problems) console.error(`judge-isolation: ${p}`);
   if (problems.length) {
     console.error('judge-isolation: REFUSED: the judge copy is not the one its step extracted');

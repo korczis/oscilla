@@ -14,7 +14,11 @@
 //   lockfile   no package-lock.json (or npm-shrinkwrap.json), a lockfileVersion below 2, an
 //              entry whose `resolved` is not a tarball of https://registry.npmjs.org/ (git,
 //              file, http, another host, none), one without a sha512 `integrity`, a link
-//              (`link: true`, a directory of the checkout) or a bundled entry (`inBundle`)
+//              (`link: true`, a directory of the checkout), and a bundled entry (`inBundle`)
+//              whose bundling parent (the nearest enclosing lock entry by node_modules
+//              nesting that is not itself bundled) is not such a tarball: a bundled package
+//              arrives inside its parent's tarball, so the parent's sha512 checks it, and
+//              Tailwind 4's @tailwindcss/oxide-wasm32-wasi bundles six (review of #255, R29)
 //   manifest   a package.json with bundleDependencies / bundledDependencies (a bundled
 //              dependency has no lockfile entry) or workspaces (packages of the checkout), a
 //              dependency or an `overrides` value, nested ones included, that names git,
@@ -29,7 +33,9 @@
 //              as package.json's (npm resolves an edge whose spec its locked package does not
 //              satisfy, and clones a git spec there under --ignore-scripts too: round 4, R17),
 //              and a bundleDependencies or workspaces list in an entry; a bare tarball file
-//              name (`evil.tgz`) is a file of the checkout, not a registry name (R24)
+//              name (`evil.tgz`) is a file of the checkout, not a registry name (R24), and so
+//              is any spec with a slash that is not an owner/repo shorthand or a scoped
+//              `@scope/name@version` (`vendor/sub/evil`, `rel/`: a directory, R32)
 //   npmrc      any carriage return: npm's ini splits lines on [\r\n]+, so a key after a lone
 //              CR is a line of its own to npm (round 4, R18)
 //   modules    with --before-install (the judge's install), any node_modules at the
@@ -79,14 +85,59 @@ export function nonRegistrySpec(spec) {
   if (/^[^@\s/<>=~^|][^\s/]*\/[^\s/]+$/.test(s)) return 'is an owner/repo shorthand (GitHub)';
   // npm reads a name ending in a tarball extension as a file of the checkout (R24)
   if (/\.(?:tgz|tar\.gz|tar)$/i.test(s)) return 'is a tarball file of the checkout';
+  // a version, a range or a tag holds no slash: npm reads any other spec with one
+  // (`vendor/sub/evil`, `rel/`) as a directory of the checkout (R32)
+  if (/[/\\]/.test(s) && !SCOPED_VERSION.test(s)) return 'is a relative path of the checkout';
   return null;
 }
 
-/** The refusals of the dependency maps and lists of one manifest or lock entry `pkg`. */
-function specProblems(pkg, at) {
+/** `@scope/name@version`: the one registry form with a slash, outside `npm:`. */
+const SCOPED_VERSION = /^@[a-z0-9][\w.-]*\/[a-z0-9][\w.-]*@[^\s/\\]*$/i;
+
+/** Why a lock entry is not a registry tarball checked by a sha512 integrity, or null. */
+function tarballProblem(entry) {
+  const resolved = typeof entry.resolved === 'string' ? entry.resolved : '';
+  if (!resolved.startsWith(REGISTRY) || !/\.tgz$/.test(new URL(resolved, REGISTRY).pathname)) {
+    return `resolves to ${resolved || '(nothing)'}, not a tarball of ${REGISTRY}`;
+  }
+  if (new URL(resolved).host !== 'registry.npmjs.org') {
+    return `resolves to ${resolved}, not ${REGISTRY}`;
+  }
+  return null;
+}
+
+/** Why a lock entry's integrity is not a sha512 its download is checked against, or null. */
+function integrityProblem(entry) {
+  const integrity = String(entry.integrity ?? '').trim().split(/\s+/).filter(Boolean);
+  if (integrity.length && integrity.every((h) => INTEGRITY.test(h))) return null;
+  return `has ${integrity.length ? `integrity ${entry.integrity}` : 'no integrity'},`
+    + ' not a sha512 the download is checked against';
+}
+
+/**
+ * The bundling parent of the lock entry `key`: the nearest enclosing entry by node_modules
+ * nesting (`a/node_modules/b` encloses `a/node_modules/b/node_modules/c`) that is not itself
+ * bundled, as [key, entry], or null when only the root encloses it.
+ */
+function bundlingParent(packages, key) {
+  for (let k = key; ;) {
+    const cut = k.lastIndexOf('/node_modules/');
+    if (cut < 0) return null;
+    k = k.slice(0, cut);
+    const entry = packages[k];
+    if (entry && typeof entry === 'object' && !entry.inBundle) return [k, entry];
+  }
+}
+
+/**
+ * The refusals of the dependency maps and lists of one manifest or lock entry `pkg`;
+ * `bundles`: a bundle list is allowed, since `pkg` is a registry tarball checked by sha512
+ * that carries its bundled packages inside (R29).
+ */
+function specProblems(pkg, at, { bundles = false } = {}) {
   const out = [];
   for (const k of ['bundleDependencies', 'bundledDependencies']) {
-    if (k in pkg) out.push(`${at}: ${k} (a bundled dependency has no lockfile entry)`);
+    if (k in pkg && !bundles) out.push(`${at}: ${k} (a bundled dependency has no lockfile entry)`);
   }
   if ('workspaces' in pkg) out.push(`${at}: workspaces (packages installed from the checkout)`);
   for (const field of DEPENDENCY_FIELDS) {
@@ -123,25 +174,33 @@ export function lockfileProblems(text, name = 'package-lock.json') {
       out.push(`${at} is no entry`);
       continue;
     }
+    const checked = key !== '' && !entry.link && !entry.inBundle && !tarballProblem(entry)
+      && !integrityProblem(entry);
     // the specs inside the entry: an edge npm finds unsatisfied it resolves again (R17)
-    out.push(...specProblems(entry, at));
+    out.push(...specProblems(entry, at, { bundles: checked }));
     if (key === '') continue;
     if (entry.link) {
       out.push(`${at} links ${entry.resolved ?? 'a directory'} of the checkout (link: true)`);
       continue;
     }
-    if (entry.inBundle) out.push(`${at} is bundled (inBundle): no tarball of its own is checked`);
-    const resolved = typeof entry.resolved === 'string' ? entry.resolved : '';
-    if (!resolved.startsWith(REGISTRY) || !/\.tgz$/.test(new URL(resolved, REGISTRY).pathname)) {
-      out.push(`${at} resolves to ${resolved || '(nothing)'}, not a tarball of ${REGISTRY}`);
-    } else if (new URL(resolved).host !== 'registry.npmjs.org') {
-      out.push(`${at} resolves to ${resolved}, not ${REGISTRY}`);
+    if (entry.inBundle) {
+      // a bundled package comes inside its parent's tarball, which that sha512 checks (R29)
+      const parent = bundlingParent(lock.packages, key);
+      const unchecked = !parent ? 'only the root (the checkout) encloses it'
+        : parent[1].link ? 'is a link of the checkout'
+          : tarballProblem(parent[1]) || integrityProblem(parent[1]);
+      if (unchecked) {
+        const why = parent ? `its bundling parent ${parent[0]} ${unchecked}` : unchecked;
+        out.push(`${at} is bundled (inBundle), and ${why}: no sha512 checks what it brings`);
+        continue;
+      }
+      // what npm records of it is checked as any entry's, when it records anything
+      if (entry.resolved === undefined && entry.integrity === undefined) continue;
     }
-    const integrity = String(entry.integrity ?? '').trim().split(/\s+/).filter(Boolean);
-    if (!integrity.length || !integrity.every((h) => INTEGRITY.test(h))) {
-      out.push(`${at} has ${integrity.length ? `integrity ${entry.integrity}` : 'no integrity'},`
-        + ' not a sha512 the download is checked against');
-    }
+    const where = tarballProblem(entry);
+    if (where) out.push(`${at} ${where}`);
+    const hash = integrityProblem(entry);
+    if (hash) out.push(`${at} ${hash}`);
   }
   return out;
 }

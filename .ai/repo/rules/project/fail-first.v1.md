@@ -69,8 +69,11 @@ through `.github/scripts/base-rule.sh`, which runs the base branch's copy of the
 the pull request, printing the commit it came from, with the base named by its full ref
 `refs/remotes/origin/<base>`, which no tag can shadow (review of #255, R2; see
 `project.review-verdict`). The wrapper is itself the base commit's: the job's `judge` step
-takes it and `scripts/` from the base commit into `$RUNNER_TEMP/judge`, makes the copy
-read-only and records its sha256 manifest, and the judge's step, the next and the last,
+takes `.github/scripts/` and `scripts/` from the base commit into `$RUNNER_TEMP/judge`, blob
+by blob from `git ls-tree -r` (a symbolic link, a submodule or a name outside
+`[A-Za-z0-9._@+/-]` is left out with a warning, so no such entry makes every judge refuse:
+R30), makes the copy read-only and records the manifest (the commit and those entries) and
+its sha256, and the judge's step, the next and the last,
 starts that copy under `env -i` with a fixed PATH, a HOME of its own and the manifest digest,
 from a shell that reads no `BASH_ENV`. Nothing of the pull request runs before it: the judge
 drives the install (review of #255, round 4, R12, R17-R22). The program, already loaded,
@@ -79,8 +82,12 @@ skipped with a note, outside CI only) and checks its copy against the manifest; 
 its `scripts/install-guard.mjs` in-process, which refuses a lockfile entry that is not a
 sha512-checked tarball of `https://registry.npmjs.org/`, a spec in any lock entry's own
 dependency maps (the root entry's included) or in `package.json` that names git, `file:`,
-`link:`, `http(s):`, `github:`, an owner/repo shorthand, a path or a bare tarball name,
-bundled dependencies, workspaces, an `overrides` value outside the registry, a `.npmrc` key
+`link:`, `http(s):`, `github:`, an owner/repo shorthand, a path (a relative directory such
+as `vendor/sub/x` or `rel/` included, R32) or a bare tarball name, a bundled entry
+(`inBundle`) whose bundling parent (the nearest enclosing entry that is not bundled) is not a
+sha512-checked registry tarball (a bundled package arrives inside that tarball, so Tailwind
+4's `@tailwindcss/oxide-wasm32-wasi` passes: R29), bundled dependencies in `package.json`,
+workspaces, an `overrides` value outside the registry, a `.npmrc` key
 that names a program, another registry or turns a check off, a carriage return in a
 `.npmrc` (npm's ini splits lines on `[\r\n]+`), and a `node_modules` already there (a
 symlink npm ci would empty, or one committed); then `npm ci --ignore-scripts` and the tests,
@@ -89,9 +96,13 @@ with only a fixed PATH, its own HOME and CI in its environment; the verdict is t
 exit status, decided in its memory, and a copy that departs from the manifest after the last
 child refuses (defence in depth: the same user could chmod the copy back, and what decides is
 already loaded). The shape is linted by `project.ci-bounded`'s `judge-first` (advisory).
-What this does not cover: the pull request's tests run as the runner's user, so a test with
-the runner's sudo can tamper with the job (the probe, the group kill and the manifest raise
-the bar, they do not make root code safe); a grandchild that starts a session of its own
+What this does not cover: the pull request's tests run as the runner's user, and GitHub's
+hosted Linux runners give that user passwordless sudo, so a test can become root and reach
+the judge's memory, its copy and the rest of the job whatever `ptrace_scope` says: the ptrace
+probe keeps a same-uid child without sudo out, it cannot promise isolation against sudo (the
+probe, the group kill and the manifest raise the bar, they do not make root code safe; the
+`judge` step prints the runner's `ptrace_scope` so each run's log measures it, R31); a
+grandchild that starts a session of its own
 leaves the group; and the guard trusts the registry and the lockfile's integrity hashes
 (esbuild's platform binary is such a package). The
 same test fails if the last command of the job's last step is anything but that call with

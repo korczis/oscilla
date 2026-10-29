@@ -133,10 +133,90 @@ function inline(text, spans) {
       i = close + open.length;
       continue;
     }
+    // an image shows none of its alt text, and a link its title only as an attribute (round
+    // 5, R5): neither is prose, across lines too. Read loosely, so that it hides more rather
+    // than less: a `](...)` whose `[` is missing is hidden as well, and a waiver hidden so is
+    // no waiver, which only asks the pull request for its evidence.
+    if (c === '!' && text[i + 1] === '[') {
+      const close = bracketEnd(text, i + 1);
+      if (close !== null) {
+        const end = (text[close + 1] === '(' && linkTail(text, close + 1))
+          || (text[close + 1] === '[' && (bracketEnd(text, close + 1) ?? close) + 1) || close + 1;
+        out += MORE.repeat(text.slice(i, end).split('\n').length - 1);
+        i = end;
+        continue;
+      }
+    }
+    if (c === ']' && text[i + 1] === '(') {
+      const end = linkTail(text, i + 1);
+      if (end) {
+        out += `]${MORE.repeat(text.slice(i, end).split('\n').length - 1)}`;
+        i = end;
+        continue;
+      }
+    }
     out += c;
     i += 1;
   }
   return out;
+}
+
+/** The index past a run of spaces and tabs with at most one line ending in it, from `k`. */
+const skipSpace = (text, k) => k + /^[ \t]*\n?[ \t]*/.exec(text.slice(k))[0].length;
+
+/**
+ * The index of the `]` that closes the `[` at `at` (nested brackets, backslash escapes and
+ * code spans skipped), or null.
+ */
+function bracketEnd(text, at) {
+  let depth = 0;
+  for (let k = at; k < text.length; k++) {
+    const c = text[k];
+    if (c === '\\') {
+      k++;
+    } else if (c === '`') {
+      const run = /^`+/.exec(text.slice(k))[0];
+      const shut = text.indexOf(run, k + run.length);
+      k = (shut < 0 ? k : shut) + run.length - 1;
+    } else if (c === '[') {
+      depth++;
+    } else if (c === ']' && --depth === 0) {
+      return k;
+    }
+  }
+  return null;
+}
+
+/**
+ * The index past an inline link's or image's `(destination "title")` that opens at `at`
+ * (CommonMark 0.31, 6.3: the destination in <> or without spaces, its parentheses balanced;
+ * the title in "", '' or (), across lines), or null when there is none.
+ */
+function linkTail(text, at) {
+  let k = skipSpace(text, at + 1);
+  if (text[k] === '<') {
+    const e = text.indexOf('>', k + 1);
+    if (e < 0 || text.slice(k, e).includes('\n')) return null;
+    k = e + 1;
+  } else {
+    let depth = 0;
+    while (k < text.length && !/[\s\x00-\x1f]/.test(text[k])) {
+      if (text[k] === '\\') k++;
+      else if (text[k] === '(') depth++;
+      else if (text[k] === ')' && depth-- === 0) break;
+      k++;
+    }
+  }
+  const dest = k;
+  k = skipSpace(text, k);
+  if (k > dest && /["'(]/.test(text[k] ?? '')) {
+    const shut = text[k] === '(' ? ')' : text[k];
+    let j = k + 1;
+    while (j < text.length && text[j] !== shut) j += text[j] === '\\' ? 2 : 1;
+    if (j >= text.length) return null;
+    k = skipSpace(text, j + 1);
+  }
+  return text[k] === ')' ? k + 1 : null;
 }
 
 const ATTRIBUTE = String.raw`\s+[A-Za-z_:][\w.:-]*(?:\s*=\s*(?:[^\s"'=<>\x60]+|'[^']*'|"[^"]*"))?`;
@@ -507,16 +587,16 @@ export async function failFirst({ repo, title, body, head = 'HEAD', base,
   const ptrace = probe();
   say(`fail-first: ${ptrace.message}`);
   if (!ptrace.ok) return refuse('the judge cannot keep its children out of its memory');
-  let entries = null;
+  let manifest = null;
   if (judge) {
     const m = loadManifest(judge.dir, judge.digest);
     if (m.problem) return refuse(`the judge copy: ${m.problem}`);
-    const changed = copyProblems(judge.dir, m.entries);
+    const changed = copyProblems(judge.dir, m);
     if (changed.length) {
       return refuse(`the judge copy is not the one extracted: ${changed.join('; ')}`);
     }
-    entries = m.entries;
-    say(`fail-first: the judge copy matches its manifest (${entries.size} files)`);
+    manifest = m;
+    say(`fail-first: the judge copy matches its manifest (${m.entries.size} files)`);
   }
   const t = String(title || '').trim();
   say(`fail-first: PR title: ${t || '(none)'}`);
@@ -609,8 +689,8 @@ export async function failFirst({ repo, title, body, head = 'HEAD', base,
   }
   // after the last child: the copy this process loaded from is still the one extracted
   // (defence in depth: what decides is already in memory)
-  if (entries) {
-    const changed = copyProblems(judge.dir, entries);
+  if (manifest) {
+    const changed = copyProblems(judge.dir, manifest);
     if (changed.length) {
       return refuse(`the judge copy changed while the children ran: ${changed.join('; ')}`);
     }
