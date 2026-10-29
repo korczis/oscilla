@@ -17,7 +17,8 @@
 //   editor.addNodeAtClient(type, clientX, clientY) -> bool      library drop (§63)
 //   editor.isOverViewport(clientX, clientY), clientToGraph(x, y), centerPoint()
 //   editor.deleteSelection(), copySelection(), cutSelection(), paste(), duplicateSelection(),
-//   editor.selectAll(), toggleFocusedNode(), nudge(key, large), endNudge()
+//   editor.selectAll(), toggleFocusedNode(), nudge(key, large), endNudge(), deleteBridge(),
+//   editor.tidy(), toggleMute()            Shift+Delete, L, M (plan K009, graph-commands.js)
 //   editor.startTapConnect(from), cancelTransient() -> bool, hasGesture(), inSelectionMode()
 //   editor.setRunning(bool), focusNode(id) -> bool, focusViewport() -> bool, isShown(),
 //   destroy()        focusNode / focusViewport refuse (false) while the graph subview is hidden
@@ -486,7 +487,8 @@ export function createGraphEditor(host, svc) {
   // ---------------------------------------------------------------- gestures and commands
   const base = { viewport, store, registry, svc, view: () => view, setView, clientToGraph,
     isOverViewport };
-  const commands = createGraphCommands({ ...base, centerPoint, focusNode, isShown });
+  const commands = createGraphCommands({ ...base, centerPoint, focusNode, isShown,
+    nodeHeights: () => new Map(nodeRects().map((r) => [r.id, r.h])) });
   const gestures = createGraphGestures({ ...base, host, preview, marquee, nodeEls, edgeEls,
     banner: { el: banner, text: bannerText, cancel: bannerCancel },
     setLocalView: (v) => { view = v; applyView(); }, commitView, nodeRects, anchorOf,
@@ -511,6 +513,9 @@ export function createGraphEditor(host, svc) {
     clientToGraph,
     centerPoint,
     deleteSelection: commands.deleteSelection,
+    deleteBridge: commands.deleteBridge,
+    tidy: commands.tidy,
+    toggleMute: commands.toggleMute,
     copySelection: commands.copySelection,
     cutSelection: commands.cutSelection,
     paste: commands.paste,

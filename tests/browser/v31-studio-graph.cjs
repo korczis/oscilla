@@ -29,6 +29,10 @@
 //                        empty canvas; each is one undo entry (undo restores it); a type
 //                        mismatch and a feedback loop are refused with their sentence and
 //                        leave the model and the history as they were
+//   graph-keys-k009      K009: Shift+Delete on the Envelope deletes it and bridges Oscillator ->
+//                        Filter in one undo entry; M mutes the clicked cable and M again
+//                        unmutes it (is-muted drawn); L tidies the graph in one undo entry and
+//                        a second L changes nothing
 //   select-delete-cable  clicking a cable selects it (Inspector: Connection); Delete removes it
 //   multi-select         Shift-click, Shift-drag rectangle; Ctrl/Cmd C, V (new ids, offset,
 //                        internal edges kept), Ctrl/Cmd D; Delete removes nodes and their edges;
@@ -676,6 +680,48 @@ function defineChecks() {
         && d4 === d3,
       announced: live.some((x) => x.startsWith('Connected Oscillator 1 to Filter 1, replacing')),
     }), replaceBanner, deleteBanner, k0, k1, k2, k3, k4, live: live.slice(-6) };
+  });
+
+  def('graph-keys-k009', async ({ page }) => {
+    await H.fresh(page);
+    const d0 = await H.undoDepth(page);
+    await page.click(H.nodeTitle('env-1'));
+    await page.keyboard.press('Shift+Delete');
+    const m1 = await H.settle(() => H.model(page), (m) => !m.nodes.some((n) => n.id === 'env-1'),
+      'Shift+Delete removed the Envelope');
+    const d1 = await H.undoDepth(page);
+    // M on a clicked cable (edge-3, Filter -> Master), twice.
+    const pt = await page.evaluate(() => {
+      const p = document.querySelector('.osc-sg-edge[data-edge-id="edge-3"] .osc-sg-edge-line');
+      const q = p.getPointAtLength(p.getTotalLength() / 2);
+      const m = p.getScreenCTM();
+      return { x: q.x * m.a + q.y * m.c + m.e, y: q.x * m.b + q.y * m.d + m.f };
+    });
+    await page.mouse.click(pt.x, pt.y);
+    await page.keyboard.press('m');
+    const mutedOf = async () => ({ model: (await H.model(page)).edges.find((e) => e.id === 'edge-3')
+      .props.muted, drawn: await page.evaluate(() => document.querySelector(
+      '.osc-sg-edge[data-edge-id="edge-3"]').getAttribute('class').includes('is-muted')) });
+    const mu1 = await H.settle(mutedOf, (v) => v.model && v.drawn, 'M muted the cable');
+    await page.keyboard.press('m');
+    const mu2 = await H.settle(mutedOf, (v) => !v.model && !v.drawn, 'M unmuted the cable');
+    const d2 = await H.undoDepth(page);
+    // L tidies: positions change once, as one entry.
+    const pos = async () => (await H.model(page)).nodes.map((n) => `${n.id}@${n.x},${n.y}`).join();
+    const p0 = await pos();
+    await page.keyboard.press('l');
+    const p1 = await H.settle(pos, (p) => p !== p0, 'L tidied the graph');
+    const d3 = await H.undoDepth(page);
+    await page.keyboard.press('l');
+    const p2 = await pos();
+    const d4 = await H.undoDepth(page);
+    return { ...H.verdict({
+      bridged: m1.edges.some((e) => e.from.node === 'osc-1' && e.to.node === 'filter-1'
+        && e.to.port === 'audio'),
+      bridgeOneEntry: d1 === d0 + 1,
+      muted: mu1.model && mu1.drawn, unmuted: !mu2.model && !mu2.drawn, muteEntries: d2 === d1 + 2,
+      tidied: p1 !== p0, tidyOneEntry: d3 === d2 + 1, tidyStable: p2 === p1 && d4 === d3,
+    }), mu1, mu2, p0, p1 };
   });
 
   def('select-delete-cable', async ({ page }) => {

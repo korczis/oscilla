@@ -938,6 +938,9 @@ export function createStudioUi(svc = {}) {
     const ed = ctx.editor;
     switch (cmd.id) {
       case 'delete': consume(); ed.deleteSelection(); break;
+      case 'delete-bridge': consume(); ed.deleteBridge(); break;
+      case 'tidy': consume(); ed.tidy(); break;
+      case 'mute': consume(); ed.toggleMute(); break;
       case 'copy': consume(); ed.copySelection(); break;
       case 'cut': consume(); ed.cutSelection(); break;
       case 'paste': consume(); ed.paste(); break;

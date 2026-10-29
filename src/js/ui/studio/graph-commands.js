@@ -4,19 +4,98 @@
 // it did through the announcer. Keyboard focus that lands on a node selects it; focus that a
 // pointer press moves does not (the press selects on release).
 //
-//   createGraphCommands(ctx) -> { addNodeAt, addNodeAtClient, deleteSelection, copySelection,
-//     cutSelection, paste, duplicateSelection, selectAll, toggleFocusedNode, nudge, endNudge,
-//     onPress(), destroy() }
+//   createGraphCommands(ctx) -> { addNodeAt, addNodeAtClient, deleteSelection, deleteBridge,
+//     copySelection, cutSelection, paste, duplicateSelection, selectAll, toggleFocusedNode,
+//     nudge, endNudge, tidy, toggleMute, onPress(), destroy() }
 //     ctx: { viewport, store, registry, svc, view(), setView(v), centerPoint(),
-//            clientToGraph(x, y), isOverViewport(x, y), focusNode(id), isShown() }
+//            clientToGraph(x, y), isOverViewport(x, y), focusNode(id), isShown(),
+//            nodeHeights() -> Map id -> logical height (tidy rows) }
+//
+// Plan K009, pure planners beside their commands:
+//   bridgePlan(model, nodeId, registry) -> { edges: [{ from, to }], reason }   Shift+Delete: each
+//     output cable of the node gets the first input cable's source the validator accepts on the
+//     graph without the node (probeConnection, with the bridges already planned); none -> reason
+//   tidyPositions(model, { registry, heights }) -> Map id -> { x, y }   L: compactLayout's
+//     columns and rows from the graph's top-left corner, NODE_WIDTH + TIDY_COLUMN_GAP apart,
+//     each row below the tallest node of the one above (TIDY_DEFAULT_HEIGHT when unknown) plus
+//     TIDY_ROW_GAP, on the grid. Deterministic: the model and the heights decide
+//   muteTargets(model, edgeIds) -> { muted, edgeIds } | null   M: mute every selected cable,
+//     or unmute them when every one is muted
 
 import { announceAction } from '../../studio/a11y.js';
 import { copySubgraph } from '../../studio/actions.js';
-import { NODE_WIDTH, nudgeDelta, panBy, snapPoint } from './graph-geometry.js';
-import { connectionTargets } from './graph-view.js';
+import { defaultEdgeProps } from '../../studio/ports.js';
+import { NODE_REGISTRY } from '../../studio/registry.js';
+import { withoutNodes } from '../../studio/schema.js';
+import { NODE_WIDTH, nudgeDelta, panBy, snap, snapPoint } from './graph-geometry.js';
+import { compactLayout } from './graph-layout.js';
+import { connectionTargets, probeConnection } from './graph-view.js';
 import { focusSelection, toggleFocusedSelection } from './graph-keys.js';
 
 const NODE_HEAD_OFFSET = 18; // logical units above the pointer where an inserted node's top sits
+export const TIDY_COLUMN_GAP = 72;
+export const TIDY_ROW_GAP = 48;
+export const TIDY_DEFAULT_HEIGHT = 120;
+
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+export function bridgePlan(model, nodeId, registry = NODE_REGISTRY) {
+  const node = model.graph.nodes.find((n) => n.id === nodeId);
+  if (!node) return { edges: [], reason: 'Unknown node.' };
+  const name = node.metadata.name;
+  const ins = model.graph.edges.filter((e) => e.to.node === nodeId);
+  const outs = model.graph.edges.filter((e) => e.from.node === nodeId);
+  if (!ins.length) return { edges: [], reason: `${name} has no input connection to bridge.` };
+  if (!outs.length) return { edges: [], reason: `${name} has no output connection to bridge.` };
+  let trial = withoutNodes(model, [nodeId]);
+  const edges = [];
+  let reason = null;
+  for (const o of outs) {
+    for (const i of ins) {
+      const v = probeConnection(trial, i.from, o.to, registry);
+      if (!v.allowed) {
+        reason = reason || v.reason;
+        continue;
+      }
+      const e = { from: { ...i.from }, to: { ...o.to } };
+      edges.push(e);
+      const b = trial.graph.nodes.find((n) => n.id === o.to.node);
+      const tgt = registry.port(b.type, o.to.port, 'in');
+      const props = defaultEdgeProps(v.signalType, tgt,
+        tgt.param ? registry.param(b.type, tgt.param.key) : null);
+      trial = { ...trial, graph: { ...trial.graph, edges: [...trial.graph.edges,
+        { id: `bridge-${edges.length}`, ...e, props }] } };
+      break;
+    }
+  }
+  return { edges, reason: edges.length ? null : reason };
+}
+
+export function tidyPositions(model, { registry = NODE_REGISTRY, heights = null } = {}) {
+  const layout = compactLayout(model, { registry });
+  const out = new Map();
+  const nodes = model.graph.nodes;
+  if (!nodes.length) return out;
+  const ox = snap(Math.min(...nodes.map((n) => n.position.x)));
+  const oy = snap(Math.min(...nodes.map((n) => n.position.y)));
+  const rowH = new Array(layout.rows).fill(0);
+  for (const n of layout.nodes) {
+    const hgt = heights && heights.get(n.id) > 0 ? heights.get(n.id) : TIDY_DEFAULT_HEIGHT;
+    rowH[n.row] = Math.max(rowH[n.row], hgt);
+  }
+  const rowY = [oy];
+  for (let r = 1; r < layout.rows; r++) rowY[r] = rowY[r - 1] + rowH[r - 1] + TIDY_ROW_GAP;
+  for (const n of layout.nodes) {
+    out.set(n.id, { x: ox + n.col * (NODE_WIDTH + TIDY_COLUMN_GAP), y: snap(rowY[n.row]) });
+  }
+  return out;
+}
+
+export function muteTargets(model, edgeIds) {
+  const edges = model.graph.edges.filter((e) => (edgeIds || []).includes(e.id));
+  if (!edges.length) return null;
+  return { muted: !edges.every((e) => e.props && e.props.muted), edgeIds: edges.map((e) => e.id) };
+}
 
 export function createGraphCommands(ctx) {
   const { viewport, store, registry, svc } = ctx;
@@ -140,7 +219,7 @@ export function createGraphCommands(ctx) {
     return best;
   }
 
-  function deleteSelection() {
+  function deleteSelection({ bridges = [], note = '' } = {}) {
     const sel = selection();
     const m = model();
     const nodes = sel.nodes.filter((id) => m.graph.nodes.some((n) => n.id === id));
@@ -153,17 +232,36 @@ export function createGraphCommands(ctx) {
     }
     const primary = nodes.length ? m.graph.nodes.find((n) => n.id === nodes[nodes.length - 1])
       : null;
-    store.beginGesture();
+    store.beginGesture(bridges.length && primary ? `Delete ${primary.metadata.name} and bridge`
+      : null);
     let last = null;
     if (nodes.length) last = store.dispatch({ type: 'NODE_REMOVE', nodeIds: nodes });
     if (edges.length && (!last || last.ok)) {
       const r = store.dispatch({ type: 'EDGE_REMOVE', edgeIds: edges });
       if (!last) last = r;
     }
+    const bridged = new Map(); // source name -> target names
+    let refused = null;
+    for (const b of last && last.ok ? bridges : []) {
+      const r = store.dispatch({ type: 'EDGE_ADD', from: b.from, to: b.to });
+      if (!r.ok) {
+        refused = refused || announceAction(r);
+        continue;
+      }
+      const name = (id) => m.graph.nodes.find((n) => n.id === id).metadata.name;
+      const from = name(b.from.node);
+      bridged.set(from, [...(bridged.get(from) || []), name(b.to.node)]);
+    }
     const entry = store.endGesture();
     if (last && last.ok) {
-      announce(entry && entry.label && nodes.length && edges.length
-        ? `Deleted ${nodes.length + edges.length} items` : announceAction(last));
+      let text = entry && entry.label && nodes.length && edges.length
+        ? `Deleted ${nodes.length + edges.length} items` : announceAction(last);
+      if (bridged.size) {
+        text += ` and bridged ${[...bridged].map(([a, b]) => `${a} to ${b.join(', ')}`)
+          .join('; ')}`;
+      }
+      const why = refused || note;
+      announce(why ? `${text}. No bridge: ${why}` : text);
     } else if (last) announce(announceAction(last), { assertive: true });
     // Focus the nearest remaining node, else the canvas (§142): never <body>. While the graph
     // subview is hidden (a phone, Delete from the Inspector) focus stays where it is (V431 U7).
@@ -177,6 +275,63 @@ export function createGraphCommands(ctx) {
       } else viewport.focus({ preventScroll: true });
     });
     return true;
+  }
+
+  /** Shift+Delete (K009): delete the one selected node and bridge it (bridgePlan). */
+  function deleteBridge() {
+    const m = model();
+    const nodes = selection().nodes.filter((id) => m.graph.nodes.some((n) => n.id === id));
+    if (nodes.length !== 1) {
+      return deleteSelection({ note: nodes.length ? 'select one node to bridge it.' : '' });
+    }
+    const plan = bridgePlan(m, nodes[0], registry);
+    return deleteSelection({ bridges: plan.edges, note: plan.reason || '' });
+  }
+
+  /** L (K009): every node to its tidyPositions place, one NODE_MOVE gesture. */
+  function tidy() {
+    const m = model();
+    const pos = tidyPositions(m, { registry, heights: ctx.nodeHeights ? ctx.nodeHeights() : null });
+    const moves = m.graph.nodes.filter((n) => {
+      const p = pos.get(n.id);
+      return p && (p.x !== n.position.x || p.y !== n.position.y);
+    });
+    if (!moves.length) {
+      announce(m.graph.nodes.length ? 'The graph is already tidy' : 'The graph is empty.');
+      return false;
+    }
+    store.beginGesture('Tidy the graph');
+    for (const n of moves) {
+      const r = store.dispatch({ type: 'NODE_MOVE', nodeId: n.id, position: pos.get(n.id) });
+      if (!r.ok) {
+        store.cancelGesture();
+        announce(announceAction(r), { assertive: true });
+        return false;
+      }
+    }
+    store.endGesture();
+    announce(`Tidied the graph: ${plural(moves.length, 'node')} moved`);
+    return true;
+  }
+
+  /** M (K009): mute the selected cables, or unmute them when all are muted; one entry. */
+  function toggleMute() {
+    const t = muteTargets(model(), selection().edges);
+    if (!t) {
+      announce('Select connections to mute.');
+      return false;
+    }
+    const n = plural(t.edgeIds.length, 'connection');
+    store.beginGesture(`${t.muted ? 'Mute' : 'Unmute'} ${n}`);
+    let failed = null;
+    for (const edgeId of t.edgeIds) {
+      const r = store.dispatch({ type: 'EDGE_UPDATE', edgeId, props: { muted: t.muted } });
+      if (!r.ok) failed = failed || r;
+    }
+    store.endGesture();
+    if (failed) announce(announceAction(failed), { assertive: true });
+    else announce(`${t.muted ? 'Muted' : 'Unmuted'} ${n}`);
+    return !failed;
   }
 
   function copySelection() {
@@ -256,7 +411,10 @@ export function createGraphCommands(ctx) {
   return {
     addNodeAt,
     addNodeAtClient,
-    deleteSelection,
+    deleteSelection: () => deleteSelection(),
+    deleteBridge,
+    tidy,
+    toggleMute,
     copySelection,
     cutSelection,
     paste,

@@ -11,6 +11,8 @@ export const STUDIO_SHORTCUTS = Object.freeze([
   { id: 'play-toggle', keys: 'Space', text: 'Play / stop the Studio transport' },
   { id: 'escape', keys: 'Esc', text: 'Cancel a drag or connection, close a picker, else stop' },
   { id: 'delete', keys: 'Delete / Backspace', text: 'Delete the selected nodes or connection' },
+  { id: 'delete-bridge', keys: 'Shift Delete / Backspace',
+    text: 'Delete the selected node and connect its input to its outputs where the types allow' },
   { id: 'copy', keys: 'Ctrl/⌘ C', text: 'Copy the selected nodes' },
   { id: 'cut', keys: 'Ctrl/⌘ X', text: 'Cut the selected nodes' },
   { id: 'paste', keys: 'Ctrl/⌘ V', text: 'Paste (new ids, small offset)' },
@@ -25,6 +27,8 @@ export const STUDIO_SHORTCUTS = Object.freeze([
   { id: 'connect', keys: 'C', text: 'Connect the selected node (list of compatible inputs)' },
   { id: 'frame-selection', keys: 'F', text: 'Frame the selection' },
   { id: 'frame-all', keys: 'A', text: 'Frame the whole graph' },
+  { id: 'tidy', keys: 'L', text: 'Tidy the graph: lay the nodes out in signal order' },
+  { id: 'mute', keys: 'M', text: 'Mute or unmute the selected connections' },
   { id: 'zoom-in', keys: '+', text: 'Zoom in' },
   { id: 'zoom-out', keys: '−', text: 'Zoom out' },
   { id: 'nudge', keys: 'Arrows (Shift: ×4)', text: 'Move the selected nodes by the grid' },
@@ -66,7 +70,9 @@ export function resolveStudioKey(e) {
   if (mod || e.altKey) return null;
   if (key === ' ' || e.code === 'Space') return { id: 'play-toggle' };
   if (key === 'Escape') return { id: 'escape' };
-  if (key === 'Delete' || key === 'Backspace') return { id: 'delete' };
+  if (key === 'Delete' || key === 'Backspace') {
+    return { id: e.shiftKey ? 'delete-bridge' : 'delete' };
+  }
   if (key.startsWith('Arrow')) return { id: 'nudge', key, large: !!e.shiftKey };
   // '/' is Shift+7 on several layouts: the character decides, not the Shift state.
   if (key === '/') return { id: 'find' };
@@ -77,6 +83,8 @@ export function resolveStudioKey(e) {
     case 'c': return { id: 'connect' };
     case 'f': return { id: 'frame-selection' };
     case 'a': return { id: 'frame-all' };
+    case 'l': return { id: 'tidy' };
+    case 'm': return { id: 'mute' };
     case '+':
     case '=': return { id: 'zoom-in' };
     case '-':

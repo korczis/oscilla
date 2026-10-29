@@ -82,6 +82,12 @@ and the part in view; press or drag on it to move there.
   list of inputs that can take its output; Enter connects. On a touch screen, tap an output,
   then tap a highlighted input.
 - Drop a cable on empty canvas to add a node that accepts it, already connected.
+- Drop a cable on an input that already has one: the new cable replaces it. Drag a cable off
+  its input to move it to another input, or drop it on empty canvas to delete it. Each is one
+  undo step, and a move the types or a feedback loop forbid is refused with the reason.
+- **Shift+Delete** deletes the selected node and connects what fed it to what it fed, where the
+  types allow (otherwise it deletes the node and says why). **L** lays the graph out in signal
+  order as one undo step; **M** mutes or unmutes the selected connections.
 - With a screen reader, a node reads its name, kind, settings and how many input and output
   connections it has; the Inspector's Connections list and the Connect dialog name each port
   and what it is connected to.
@@ -277,6 +283,7 @@ anywhere else in those workspaces Space is the instrument's.
 | Space | Play / stop the Studio transport |
 | Esc | Cancel a drag or connection, close a picker, else stop |
 | Delete / Backspace | Delete the selected nodes or connection |
+| Shift Delete / Backspace | Delete the selected node and connect its input to its outputs where the types allow |
 | Ctrl/⌘ C | Copy the selected nodes |
 | Ctrl/⌘ X | Cut the selected nodes |
 | Ctrl/⌘ V | Paste (new ids, small offset) |
@@ -290,6 +297,8 @@ anywhere else in those workspaces Space is the instrument's.
 | C | Connect the selected node (list of compatible inputs) |
 | F | Frame the selection |
 | A | Frame the whole graph |
+| L | Tidy the graph: lay the nodes out in signal order |
+| M | Mute or unmute the selected connections |
 | + | Zoom in |
 | − | Zoom out |
 | Arrows (Shift: ×4) | Move the selected nodes by the grid |
