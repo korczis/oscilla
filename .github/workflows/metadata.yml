@@ -1,0 +1,68 @@
+# Pull-request metadata (R022, rule project.pr-names-its-plan): every pull request names an
+# existing plan record in its title or branch, or waives with `plan: n/a <reason>`; its title
+# is conventional; its body carries no closing keyword. The program that judges is the base
+# branch's scripts/pr-metadata.mjs (.github/scripts/base-rule.sh), which also writes the
+# pull request's plan records, milestone, level, verdict and fail-first state to the step
+# summary: the metadata visible before anything projects it onto GitHub.
+#
+# The model is .ai/repo/ci/pr-meta.yaml (`judge:`), and tests/unit/pr-metadata.test.mjs fails
+# when this file departs from it: the triggers, exactly the two read permissions, the job, its
+# bound and the last command. It writes nothing, so its token reads only, and the newest run of
+# a pull request cancels an older one. `edited` re-judges a changed title or body without
+# re-running ci.yml. pull_request only (project.ci-bounded, `triggers`): a run without a pull
+# request would have nothing to judge.
+#
+# Not part of the required `gate`: the owner adds `metadata` to branch protection after it has
+# run green on three or more pull requests (owner decision C2). Nothing is installed: the
+# program uses Node built-ins and git.
+name: metadata
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: metadata-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  metadata:
+    name: metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Full history: the base branch's records and program, and the merge base of the diff.
+      - uses: actions/checkout@v7
+        timeout-minutes: 2
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        timeout-minutes: 1
+        with:
+          node-version: 22
+      # Title, body and branch are read from the pull request as it is now (3 tries, 10 s
+      # apart), not from the event, so a re-run after an edit judges the edit.
+      - name: The pull request names its plan record (the base branch's program judges)
+        timeout-minutes: 2
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          if [ -z "$PR" ]; then echo "::error::pr-metadata: no pull request to judge"; exit 1; fi
+          n=0
+          until gh pr view "$PR" --repo "$GITHUB_REPOSITORY" \
+            --json title,body,headRefName,number > "$RUNNER_TEMP/pr.json"; do
+            n=$((n + 1)); [ "$n" -lt 3 ] || { echo "::error::could not read PR $PR"; exit 1; }
+            sleep 10
+          done
+          .github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF" scripts/pr-metadata.mjs \
+            --pr-json "$RUNNER_TEMP/pr.json" --head HEAD --base "origin/$GITHUB_BASE_REF" \
+            --check --summary "$GITHUB_STEP_SUMMARY"

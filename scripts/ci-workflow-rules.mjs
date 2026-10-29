@@ -18,8 +18,10 @@
 //   non-fatal        continue-on-error on a job or a step; `|| true`, `|| :`, `|| exit 0`,
 //                    a trailing `|| echo` or `; true` on a line that installs, downloads,
 //                    checks a digest or runs a browser suite, or `set +e` in such a step
-//   triggers         ci.yml started by anything but pull_request (a manual run has no pull
-//                    request, so fail-first and review-verdict would have nothing to check)
+//   triggers         a workflow with a `gate` job (ci.yml), or with a step that runs
+//                    .github/scripts/base-rule.sh (metadata.yml), started by anything but
+//                    pull_request (a manual run has no pull request, so fail-first,
+//                    review-verdict and pr-metadata would have nothing to check)
 //
 // Why each exists is in .ai/repo/rules/project/ci-bounded.v1.md. The unit test
 // tests/unit/ci-workflows.test.mjs runs this on the repository and on mutated copies.
@@ -349,14 +351,21 @@ export function checkWorkflow(file, text, suites, actions = new Map()) {
     if (String(gate.if || '').replace(/\s/g, '') !== 'always()') {
       add('gate-needs', 'gate', null, 'gate must run with `if: always()` to report a failed job');
     }
-    // The gate is the required check, and two of its jobs judge the pull request itself. A run
-    // without a pull request (a manual dispatch on the PR's branch) would give them nothing to
-    // judge and still put a green `gate` on the same commit.
+  }
+  // The gate is the required check, and two of its jobs judge the pull request itself; the
+  // metadata job judges it too, and becomes required (owner decision C2). A run without a pull
+  // request (a manual dispatch on the PR's branch) would give them nothing to judge and still
+  // put a green check on the same commit. So a workflow with a gate, or with any step that
+  // runs a pull-request rule through .github/scripts/base-rule.sh, starts on pull_request only.
+  const judges = names.some((n) => (jobs[n]?.steps || [])
+    .some((s) => typeof s.run === 'string' && /\.github\/scripts\/base-rule\.sh\b/.test(s.run)));
+  if ('gate' in jobs || judges) {
     const { on } = doc;
     const triggers = typeof on === 'string' ? [on]
       : Array.isArray(on) ? on.map(String) : Object.keys(on || {});
     if (triggers.length !== 1 || triggers[0] !== 'pull_request') {
-      add('triggers', null, null, 'a workflow with a gate job is started by pull_request only,'
+      add('triggers', null, null, `a workflow with ${'gate' in jobs ? 'a gate job'
+        : 'a pull-request rule (base-rule.sh)'} is started by pull_request only,`
         + ` not by: ${triggers.join(', ') || '(nothing)'}`);
     }
   }

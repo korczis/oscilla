@@ -36,13 +36,16 @@ limit (`OSC_LOAD_MAX`, `OSC_LOAD_WAIT_MS`; see `tests/README.md`).
 
 How a change reaches `main` is ruled too: `project.ci-bounded` (every workflow job and
 network step bounded, pinned, retried), `project.fail-first` (a `feat`/`fix` PR's unit tests
-fail on the merge base, or the body says `fail-first: n/a <reason>`) and
-`project.review-verdict` (a PR touching the audio, analysis, experiments, studio,
-measurement, calibration, storage or safety paths, the MEASURE, Experiments and Findings
-adapters, the build, stamp, deploy-verification and release scripts and the release rules'
-tests, anything under `.github/`, or the programs and tests of these three rules needs a
-reviewer's `.ai/repo/reviews/<pr>.yaml` for the content it changes). The builder of a
-change never writes its own verdict, and the base branch's copy of each program judges.
+fail on the merge base, or the body says `fail-first: n/a <reason>`),
+`project.pr-names-its-plan` (every PR names an existing plan record in its title or branch,
+or its body says `plan: n/a <reason>`; a conventional title, no closing keyword; the
+`metadata` workflow) and `project.review-verdict` (a PR touching the audio, analysis,
+experiments, studio, measurement, calibration, storage or safety paths, the MEASURE,
+Experiments and Findings adapters, the build, stamp, deploy-verification and release scripts
+and the release rules' tests, anything under `.github/`, or the programs and tests of these
+four rules needs a reviewer's `.ai/repo/reviews/<pr>.yaml` for the content it changes). The
+builder of a change never writes its own verdict, and the base branch's copy of each program
+judges. Pull requests land by merge commit only (a repository setting since 2026-10-29).
 
 ## Commands
 

@@ -22,8 +22,10 @@
 #     the jobs it `needs`, so a failing one leaves it blocked rather than queued.
 #
 # Not modelled: .github/workflows/pages.yml (a push to main deploys and verifies Pages, after
-# the change has landed; no gate of a task measures it) and cadence.yml (the release lag of
-# main, rule project.deploy-often). No gate is `at-finish` or `on-demand`.
+# the change has landed; no gate of a task measures it), cadence.yml (the release lag of
+# main, rule project.deploy-often) and metadata.yml (the pull request's title, branch and body,
+# rule project.pr-names-its-plan; its model is .ai/repo/ci/pr-meta.yaml, and no task's files
+# select it). No gate is `at-finish` or `on-demand`.
 #
 # Patterns: `**` crosses directories, `*` does not, a pattern without a wildcard names one
 # path. Paths are repository-relative, as `git diff --name-only` prints them.

@@ -1,0 +1,86 @@
+# The model of OSCILLA's pull-request metadata (R022, rule project.pr-names-its-plan): which
+# plan record a pull request serves, judged from its sources (title, branch, body, records)
+# and never from labels a projection wrote. The name and the comment style follow
+# Majordomus' own .ai/repo/ci/pr-meta.yaml, whose PR projection reads this file once it ships
+# to adopters (Majordomus `forge`); until then nothing writes labels, milestones or issues to
+# GitHub from this repository. .github/workflows/metadata.yml is an adapter over the `judge:`
+# block below, and tests/unit/pr-metadata.test.mjs holds the two to each other and every other
+# block to the constants of scripts/pr-metadata.mjs, the program that judges.
+#
+# Measured on 2026-10-29: 8 of the last 40 non-release pull requests named no plan ID in
+# their title or branch (#252, #250, #246, #244, #238, #230, #217, #214), and Majordomus
+# delivery reads only the title and the branch, so they were attributed to nothing.
+version: 1
+
+# ---------------------------------------------------------------- who judges
+# A read-only job. The program is the base branch's (.github/scripts/base-rule.sh), so a pull
+# request cannot change what judges it; the pull request that introduces it is judged by its
+# own copy, with a warning. Title and body edits start this workflow alone (`edited`); ci.yml
+# does not re-run on them. The newest run of a pull request wins: it writes nothing.
+judge:
+  workflow: .github/workflows/metadata.yml
+  job: metadata
+  # minutes; every step declares a smaller bound of its own
+  bound: 5
+  triggers:
+    pull_request:
+      types: [opened, edited, synchronize, reopened, ready_for_review]
+  concurrency: metadata-<number>, cancel-in-progress
+  permissions:
+    contents: read
+    pull-requests: read
+  # the last command of the job's last step, exactly
+  call: >-
+    .github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF" scripts/pr-metadata.mjs
+    --pr-json "$RUNNER_TEMP/pr.json" --head HEAD --base "origin/$GITHUB_BASE_REF"
+    --check --summary "$GITHUB_STEP_SUMMARY"
+  # Branch protection lists `metadata` beside `gate` only after this job has run green on three
+  # or more pull requests (owner decision C2); until then the job reports and does not block.
+  required: false
+
+# ---------------------------------------------------------------- what an ID is
+# The record directories. The prefixes are the first letters of the file names in them at the
+# base or the head, never a list kept here; an ID counts only when <ID>.yaml exists there.
+ids:
+  directories:
+    - .ai/repo/project/issues
+    - .ai/repo/project/milestones
+  title: a capital letter and 3 or 4 digits, as a word (case-sensitive)
+  branch: a segment split on / - _ . of a letter and 3 or 4 digits (any case)
+
+# ---------------------------------------------------------------- who names none
+# Universal (owner decision C3, 2026-10-29): every other pull request names a record or waives.
+exempt:
+  - role: release
+    when: branch release/vX.Y.Z and title chore(release) vX.Y.Z, the same version
+  - role: release-record
+    when: branch chore/release-record-vX.Y.Z
+  - role: train
+    when: "a train(...) title naming its members as #N"
+
+# A line of the body's own prose (not a code block, an HTML comment or a blockquote), with a
+# reason that is not the placeholder.
+waiver: 'plan: n/a <reason>'
+
+# ---------------------------------------------------------------- what is refused
+codes: [title-grammar, plan-id-missing, plan-id-unknown, waiver-form, closing-keyword]
+
+# ---------------------------------------------------------------- the seam
+# The facts a projection reads (schema pr-facts/v1): the IDs with their path, title,
+# milestone, serves and priority; the milestone; the SemVer level and breaking flag; the
+# guarded paths and the verdict state; the fail-first state; whether plan evidence changed;
+# the landing method; the role.
+facts: node scripts/pr-metadata.mjs --facts --pr-json {file} --head {sha} --base {base}
+
+# ---------------------------------------------------------------- the repository settings
+# Owner decision C1, applied on korczis/oscilla on 2026-10-29: merge commits only
+# (allow_squash_merge=false, allow_rebase_merge=false), merge_commit_title=PR_TITLE,
+# merge_commit_message=PR_BODY. So the first-parent subject on main is the judged title, and
+# no evidence head can be squashed. A repository setting: reported here, compared by nothing
+# in this repository until Majordomus `forge check --repo` (draft B7) does.
+repository:
+  allow_merge_commit: true
+  allow_squash_merge: false
+  allow_rebase_merge: false
+  merge_commit_title: PR_TITLE
+  merge_commit_message: PR_BODY
