@@ -72,6 +72,22 @@
 # full unit suite fails only 5 dist-digest/stamp tests, which a comment-only control edit to
 # registry.js fails the same way; no behavioral test catches it.
 #
+# Visual references re-accepted at 0c810763 (2026-10-29), reviewed under
+# project.visual-identity-lock: tests/visual/studio/{darwin-arm64,linux-x64}-{desktop,
+# desktop-timeline}.png against their parent 5894ca06, pixel by pixel (channel delta > 30) and by
+# eye. Every changed region is accounted for, and none is in the signal graph or the timeline:
+# - node library: Noise "white, pink or brown noise" (K011), LFO "from slow sweeps to audio
+#   rate" (K010), and a Macro entry at the foot where the PROCESSING header stood (K013);
+# - Inspector (timeline views only): the Gain note "peaking and shelving types" (K011) wraps
+#   one more line on linux-x64 and moves everything below it down (Enabled, Position X/Y,
+#   Connections), most of linux-x64 desktop-timeline's 1.256 % (darwin 0.352 %);
+# - the graph zoom toolbar gains its minimap toggle (V602, 925b5fc7, on main since 2026-10-21).
+#   main's references (3dcd1715, 2026-10-18) predate it; the toggle is about 0.07 % of the frame,
+#   under the 0.5 % tolerance, which is why main passes with them. The new references record
+#   main's real toolbar; it is no #267 change.
+# Desktop-only references changed (0.253 % linux, 0.267 % darwin: the library copy and the
+# toggle). The compact and phone references and references.json are unchanged. Accepted.
+#
 # Open: N-1 (P3). No P0, P1 or P2 is open.
 schema: review-verdict/v1
 pr: 267
