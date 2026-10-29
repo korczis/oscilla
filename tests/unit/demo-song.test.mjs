@@ -1,4 +1,4 @@
-// The demo song, "Lantern in the Slag Yard" (plan issue K058): the song as data, the loader
+// The demo song, "Lantern in the Slag Yard" (plan issue K144): the song as data, the loader
 // that opens it and the parts of the vertical-slice journey (tests/browser/demo-song.cjs) that
 // need no browser. It fails on a tree without src/js/studio/templates/demo-song.js
 // (project.fail-first).
@@ -28,7 +28,7 @@ const byTrack = (m) => {
   return out;
 };
 
-test('K058 the demo song is the seventh template and the six before it keep their hashes', () => {
+test('K144 the demo song is the seventh template and the six before it keep their hashes', () => {
   assert.equal(DEMO_SONG_TEMPLATE_ID, 'demo-song');
   assert.equal(STUDIO_TEMPLATES.at(-1).id, 'demo-song');
   assert.equal(getTemplate('demo-song'), STUDIO_TEMPLATES.at(-1));
@@ -49,7 +49,7 @@ test('K058 the demo song is the seventh template and the six before it keep thei
   assert.equal(entry.category, 'synthesis');
 });
 
-test('K058 the song validates without a warning, with its hash pinned', () => {
+test('K144 the song validates without a warning, with its hash pinned', () => {
   const v = validateTemplate(demoSong);
   assert.deepEqual(v.errors, []);
   assert.deepEqual(v.warnings.map((w) => w.code), []);
@@ -62,7 +62,7 @@ test('K058 the song validates without a warning, with its hash pinned', () => {
   assert.equal(serializeStudio(back.model), serializeStudio(m));
 });
 
-test('K058 the whole song: 44 bars at 96 BPM, 744 tempo-linked clips, 7 sections', () => {
+test('K144 the whole song: 44 bars at 96 BPM, 744 tempo-linked clips, 7 sections', () => {
   const m = templateModel('demo-song');
   assert.deepEqual([m.transport.timeMode, m.transport.tempo, m.transport.timeSignature],
     ['musical', 96, [4, 4]]);
@@ -90,7 +90,7 @@ test('K058 the whole song: 44 bars at 96 BPM, 744 tempo-linked clips, 7 sections
     [3, 82.406889]]);
 });
 
-test('K058 the parts are wired: synth voices, filter, LFO, drums, mixer and four views', () => {
+test('K144 the parts are wired: synth voices, filter, LFO, drums, mixer and four views', () => {
   const m = templateModel('demo-song');
   const types = Object.fromEntries(m.graph.nodes.map((n) => [n.id, n.type]));
   for (const [id, type] of [['bass-osc', 'oscillator'], ['bass-filter', 'filter'],
@@ -109,7 +109,7 @@ test('K058 the parts are wired: synth voices, filter, LFO, drums, mixer and four
     'main-mix.level3']);
 });
 
-test('K058 the offline render plays every clip and lane, 110 s, with no limitation', () => {
+test('K144 the offline render plays every clip and lane, 110 s, with no limitation', () => {
   const m = templateModel('demo-song');
   const plan = planOfflineRender(m);
   assert.equal(plan.ok, true, JSON.stringify(plan.errors));
@@ -122,7 +122,7 @@ test('K058 the offline render plays every clip and lane, 110 s, with no limitati
   assert.deepEqual(plan.nodes.filter((n) => n.role === 'refused').map((n) => n.id), []);
 });
 
-test('K058 what the Studio cannot play is left out and said, never shipped inert', () => {
+test('K144 what the Studio cannot play is left out and said, never shipped inert', () => {
   const m = templateModel('demo-song');
   const lanes = m.timeline.automation.map((l) => `${l.target.node}.${l.target.param}`);
   assert.ok(!lanes.includes('bass-filter.Q'), 'the refused Q lane is not shipped');
@@ -138,7 +138,7 @@ test('K058 what the Studio cannot play is left out and said, never shipped inert
   assert.match(learn, /Velocity is not represented/);
 });
 
-test('K058 a tempo change moves every clip, and undo restores the song', () => {
+test('K144 a tempo change moves every clip, and undo restores the song', () => {
   const store = createStudioStore(templateModel('demo-song'), { idGenerator: ids() });
   const before = serializeStudio(store.getModel());
   const r = store.dispatch({ type: 'TRANSPORT_SET', tempo: 120 });
@@ -153,7 +153,7 @@ test('K058 a tempo change moves every clip, and undo restores the song', () => {
   assert.equal(serializeStudio(store.getModel()), before);
 });
 
-test('K058 the link #m=studio&st=demo-song opens it', () => {
+test('K144 the link #m=studio&st=demo-song opens it', () => {
   const hash = encodeStudioLink({ templateId: 'demo-song' });
   assert.equal(hash, 'm=studio&st=demo-song');
   assert.equal(decodeStudioLink(hash).templateId, 'demo-song');
@@ -177,7 +177,7 @@ function longestSharedRun(intervals, reference) {
   return best;
 }
 
-test('K058 the bass and lead share at most two consecutive intervals with the style riff', () => {
+test('K144 the bass and lead share at most two consecutive intervals with the style riff', () => {
   for (const part of ['bass', 'lead']) {
     const notes = S.partNotes(part).map((n) => n[1]);
     const intervals = notes.slice(1).map((n, i) => n - notes[i]);

@@ -483,7 +483,7 @@ Not yet built:
 
 ## Demo song: a vertical slice
 
-"Lantern in the Slag Yard" is an original song written for OSCILLA (plan issue K058): a slow
+"Lantern in the Slag Yard" is an original song written for OSCILLA (plan issue K144): a slow
 riff-rock piece in A minor at 96 BPM, 44 bars (110 s), in seven sections (intro, verse 1,
 chorus 1, verse 2, build, chorus 2, outro). It has a bass riff, a lead line and drums. Its
 score is `src/js/studio/templates/demo-song-score.js`. It ships as the Studio template

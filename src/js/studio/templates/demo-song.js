@@ -1,4 +1,4 @@
-// Template: Demo song, "Lantern in the Slag Yard" (plan issue K058). An original slow riff-rock
+// Template: Demo song, "Lantern in the Slag Yard" (plan issue K144). An original slow riff-rock
 // song (demo-song-score.js) expanded into one Studio document: a bass voice through a low-pass
 // filter, a square lead through a resonant filter with an LFO on its cutoff, drums built from
 // an Oscillator sweep (kick) and Noise through filters and envelopes (snare, hats), a mixer, the

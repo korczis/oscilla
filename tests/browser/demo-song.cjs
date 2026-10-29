@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The demo song as a vertical slice (plan issue K058): one user journey through every part of
+// The demo song as a vertical slice (plan issue K144): one user journey through every part of
 // OSCILLA that exists, on the built dist/index.html from file:// in chromium, firefox and
 // webkit. The song is "Lantern in the Slag Yard", an original piece (src/js/studio/templates/
 // demo-song-score.js), opened as the Studio template "Demo song".
@@ -11,27 +11,33 @@
 //                       midi-stub.cjs; "handles (stubbed API)") resolves the request and the page
 //                       states `connected` with the stub's self-naming input
 //   midi-riff           the first two bars of the bass riff as Note On / Note Off through the
-//                       stub: the page reports no error and the MIDI state stays connected
-//   song-open           Templates, Open "Demo song: Lantern in the Slag Yard": 18 nodes, 744
-//                       tempo-linked clips on five tracks, 7 section markers, 96 BPM, clean
+//                       stub: the stub input delivers all 24 messages in the page, the page
+//                       reports no error and the MIDI state stays connected (nothing on this
+//                       tree consumes them yet: midi-notes-sound is the expected failure)
+//   song-open           Templates, Open "Demo song: Lantern in the Slag Yard": 18 nodes, 18
+//                       edges, 744 tempo-linked clips on five tracks, 7 section markers, 96 BPM,
+//                       clean
 //   tempo               the Inspector's Tempo field (nothing selected) at 120 BPM moves every
 //                       clip (the song ends at 88 s) and the timeline strip shows it; 96 restores
 //   drums               the Kick, Snare and Hats tracks hold the song's drum hits, and the Kick
 //                       track's Add clip control adds one more hit at the playhead (one undo)
 //   tone                Lead voice: waveform sawtooth; Lead filter: Q 6, both typed in the
-//                       Inspector and in the model; undo restores the template's values
+//                       Inspector and in the model (they stay: PLAY, Save and the WAV carry them)
 //   automation          the build automation is on the timeline (bass cutoff, lead LFO rate, the
 //                       outro fade); Automate on the Bass filter's cutoff shows its lane
-//   play                PLAY: the transport plays, the engine counts nodes and sources, the main
-//                       output is not silent, and every lane of the song plays
+//   play                PLAY: the running graph is the edited song (the runtime's applied
+//                       revision is the store's, all 18 nodes live, all 18 edges routed), the
+//                       engine counts nodes and sources, the main output is not silent, and no
+//                       clip or lane of the song is left unplayed
 //   views               while it plays: the Analyzer's scope data is not silent, its spectrum
 //                       holds the bass band well above its idle level, and its spectrogram draws
 //                       the bass rows away from their idle colour
 //   playhead            the timeline playhead the editor draws follows the transport position
 //   stop-restart        STOP leaves 0 engine nodes, sources and runtime nodes; PLAY plays again;
 //                       STOP is quiet again
-//   save-reload         Save, reload, Projects, Open: the opened model serializes equal to the
-//                       saved one
+//   save-reload         Save stores the edited song (the stored model equals the live one but
+//                       for its view state, which the editors commit on a debounce); reload,
+//                       Projects, Open: the opened model serializes equal to the stored one
 //   wav                 Render WAV: the download is a WAV of the song's length (110 s plus the
 //                       render's lead and fade), not silent, peak below 0 dBFS
 //   no-errors           no page error or console error during the journey
@@ -75,10 +81,10 @@ const SONG_TITLE = 'Demo song: Lantern in the Slag Yard';
 const EXPECTED = Object.freeze({
   'midi-notes-sound': 'V502 (pull request #261): MIDI notes sound through the AudioEngine',
   'midi-records': 'V505: a MIDI performance records into an editable track; a MIDI note '
-    + 'playing a Studio voice has no plan yet (K058 gap G2)',
-  'drum-accents': 'K058 gap G4 (no plan yet): a Studio clip has no level, so velocity is lost',
+    + 'playing a Studio voice has no plan yet (K144 gap G2)',
+  'drum-accents': 'K144 gap G4 (no plan yet): a Studio clip has no level, so velocity is lost',
   'drive-knob': 'K012 (pull request #267): the Drive node',
-  'resonance-lane': 'K058 gap G10 (no plan yet): the Studio does not automate a filter Q',
+  'resonance-lane': 'K144 gap G10 (no plan yet): the Studio does not automate a filter Q',
   'node-views-draw': 'K016: the Scope, Spectrum, Spectrogram and Meter node cards paint live',
   'keyboard-view': 'K026 and V504: a keyboard or note view beside the views',
   'restore-last': 'V604: after a reload the Studio offers back the last working draft',
@@ -118,29 +124,10 @@ async function expected(leg, id, name, fn) {
 // ------------------------------------------------------------------------------ page helpers
 const counts = (page) => page.evaluate(() => window.OSCILLA.studio.counts());
 const model = (page) => page.evaluate(() => window.OSCILLA.studio.model);
-const live = (page) => page.evaluate(() => (window.__demoLive || []).slice());
-const frame = (page) => page.evaluate(() => new Promise((r) => {
-  requestAnimationFrame(() => requestAnimationFrame(() => r(true)));
-}));
 
 async function ready(page, what) {
   await until(() => page.evaluate(() => document.documentElement.dataset.ready === 'true'
     && !!(window.OSCILLA && window.OSCILLA.app)), { ms: LOAD_MS, what });
-}
-
-async function recordLive(page) {
-  await page.evaluate(() => {
-    const log = [];
-    window.__demoLive = log;
-    for (const sel of ['[data-osc="studio.live"]', '[data-osc="studio.alert"]']) {
-      const el = document.querySelector(sel);
-      if (!el) continue;
-      new MutationObserver(() => {
-        const t = el.textContent.replace(/​/g, '').trim();
-        if (t) log.push(t);
-      }).observe(el, { childList: true, characterData: true, subtree: true });
-    }
-  });
 }
 
 async function studio(page, leg) {
@@ -294,6 +281,14 @@ async function journey(browser, leg) {
     const bars = [[33, 110], [33, 78], [40, 100], [45, 104], [43, 100], [40, 88],
       [33, 110], [33, 78], [38, 100], [39, 98], [40, 110], [43, 96]];
     const before = await page.evaluate(() => window.OSCILLA.engine.activeNodeCount);
+    // What the stub input delivers in the page, heard by a listener of the test's own: the
+    // page listens to no MIDI message on this tree, so delivery is what the seam proves.
+    await page.evaluate((name) => {
+      const seen = [];
+      window.__demoMidiSeen = seen;
+      window.__oscMidiSeam.port(name).addEventListener('midimessage',
+        (e) => seen.push(Array.from(e.data)));
+    }, midiStub.STUB_NAME);
     await page.evaluate(([n, v, name]) => window.__oscMidiSeam.message(name, [0x90, n, v]),
       [bars[0][0], bars[0][1], midiStub.STUB_NAME]);
     await expected(leg, 'midi-notes-sound', 'a MIDI Note On sounds through the AudioEngine',
@@ -316,17 +311,21 @@ async function journey(browser, leg) {
       await page.evaluate(([nn, name]) => window.__oscMidiSeam.message(name, [0x80, nn, 0]),
         [n, midiStub.STUB_NAME]);
     }
+    const sent = bars.flatMap(([n, v]) => [[0x90, n, v], [0x80, n, 0]]);
     const afterRiff = await page.evaluate(() => ({
       state: document.querySelector('[data-osc="midi.status"]').dataset.midiState,
       lastError: window.OSCILLA.engine.lastError ? window.OSCILLA.engine.lastError.message
-        : null }));
-    check(leg, 'midi-riff', 'handles (stubbed API): 12 riff notes reach the page without an '
-      + 'error', afterRiff.state === 'connected' && !afterRiff.lastError && !errors.length,
-      JSON.stringify(afterRiff));
+        : null,
+      seen: window.__demoMidiSeen.slice() }));
+    check(leg, 'midi-riff', 'handles (stubbed API): the stub input delivers the 12 riff notes '
+      + '(24 messages) in the page, which stays connected without an error',
+    JSON.stringify(afterRiff.seen) === JSON.stringify(sent) && afterRiff.state === 'connected'
+      && !afterRiff.lastError && !errors.length,
+    `${afterRiff.seen.length} of ${sent.length} messages delivered, state ${afterRiff.state}, `
+      + `engine error ${afterRiff.lastError || 'none'}`);
 
     // 3. The song, from the Templates dialog.
     await studio(page, leg);
-    await recordLive(page);
     const clipsBefore = (await model(page)).timeline.clips.length;
     await expected(leg, 'midi-records', 'the MIDI riff is recorded into the Studio', async () => {
       const m = await model(page);
@@ -348,10 +347,11 @@ async function journey(browser, leg) {
     for (const c of song.timeline.clips) tracks[c.trackId] = (tracks[c.trackId] || 0) + 1;
     check(leg, 'song-open', 'Templates, Open "Demo song": the whole song as one Studio document',
       listed.includes(SONG_TITLE) && song.graph.nodes.length === 18
-        && song.timeline.clips.length === 744 && song.timeline.tracks.length === 5
+        && song.graph.edges.length === 18 && song.timeline.clips.length === 744 && song.timeline.tracks.length === 5
         && song.timeline.clips.every((c) => !!c.musical) && song.timeline.markers.length === 7
         && song.transport.tempo === 96 && song.transport.timeMode === 'musical' && !dirty,
-      `${song.graph.nodes.length} nodes, ${song.timeline.clips.length} clips ${
+      `${song.graph.nodes.length} nodes, ${song.graph.edges.length} edges, ${
+        song.timeline.clips.length} clips ${
         JSON.stringify(tracks)}, ${song.timeline.markers.map((x) => x.label).join(' | ')}, ${
         song.transport.tempo} BPM, dirty ${dirty}`);
 
@@ -468,15 +468,27 @@ async function journey(browser, leg) {
       return v.rms > 0.002 && v;
     }, { ms: STEP_MS, what: `${leg}: the main output is not silent` });
     const tr = await page.evaluate(() => {
-      const d = window.OSCILLA.studio.transport.debugInfo();
-      return { unplayed: (d.unplayed || []).map((u) => u.id), position: d.position };
+      const s = window.OSCILLA.studio;
+      const d = s.transport.debugInfo();
+      const rt = s.runtime.debugInfo();
+      const applied = s.runtime.applied();
+      return { unplayed: Array.isArray(d.unplayed) ? d.unplayed.map((u) => u.id) : null,
+        revision: s.store.getRevision(), applied: applied ? applied.revision : null,
+        handles: rt.handleCount, routed: rt.routedEdgeCount,
+        degraded: rt.degraded.map((x) => `${x.id}:${x.status}`),
+        inactive: rt.inactiveEdges.map((x) => x.id) };
     });
-    check(leg, 'play', 'PLAY: the engine counts the graph, the output sounds, the song\'s lanes '
-      + 'play', playing.engineSources > 0 && sounding.rms > 0.002
-      && !tr.unplayed.some((id) => /^lane-(cutoff|lfo-rate|fade-)/.test(id)),
-    `${playing.engineNodes} engine nodes, ${playing.engineSources} sources, ${
-      playing.runtimeNodes} runtime nodes, RMS ${sounding.rms.toFixed(4)}; not played: ${
-      tr.unplayed.join(', ') || 'none'}`);
+    check(leg, 'play', 'PLAY: the running graph is the edited song, the engine counts it, the '
+      + 'output sounds, no clip or lane is left unplayed', playing.engineSources > 0
+      && sounding.rms > 0.002 && tr.applied === tr.revision && tr.handles === 18
+      && tr.routed === 18 && !tr.degraded.length && !tr.inactive.length
+      && Array.isArray(tr.unplayed) && !tr.unplayed.length,
+    `revision ${tr.revision}, applied ${tr.applied}; ${tr.handles} nodes live, ${tr.routed} `
+      + `edges routed${tr.degraded.length ? `, degraded ${tr.degraded.join(', ')}` : ''}${
+        tr.inactive.length ? `, inactive ${tr.inactive.join(', ')}` : ''}; ${
+        playing.engineNodes} engine nodes, ${playing.engineSources} sources, ${
+        playing.runtimeNodes} runtime nodes, RMS ${sounding.rms.toFixed(4)}; not played: ${
+        tr.unplayed ? tr.unplayed.join(', ') || 'none' : 'unknown'}`);
     await expected(leg, 'node-views-draw', 'the Studio\'s Scope, Spectrum and Spectrogram node '
       + 'cards draw what plays', async () => {
       const drawn = await page.evaluate(() => ['scope-1', 'spectrum-1', 'spectrogram-1']
@@ -558,11 +570,20 @@ async function journey(browser, leg) {
 
     // 10. Save, reload, open from Projects.
     await page.locator('[data-osc="studio.save"]').first().click();
-    const saved = await until(() => page.evaluate(() => !window.OSCILLA.studio.dirty
-      && window.OSCILLA.studio.projectId && { id: window.OSCILLA.studio.projectId,
-      text: JSON.stringify(window.OSCILLA.studio.model),
-      persistent: window.OSCILLA.app.studio.persistent }), { ms: STEP_MS,
-      what: `${leg}: Save stores the project` });
+    // What Save wrote, read back from the Studio library, against the live model. Their view
+    // state (scroll, zoom) is left out of that comparison only: the editors commit it on a
+    // debounce, so a follow-scroll during PLAY may still be landing in the model when Save
+    // writes it. The opened project is then compared with the stored one whole.
+    const saved = await until(() => page.evaluate(async () => {
+      const s = window.OSCILLA.studio;
+      if (s.dirty || !s.projectId) return false;
+      const got = await (await s.library()).loadProject(s.projectId);
+      if (!got) return false;
+      const bare = (m) => JSON.stringify({ ...m, view: null });
+      return { id: s.projectId, text: JSON.stringify(got.model),
+        same: bare(got.model) === bare(s.model), title: got.model.metadata.title,
+        persistent: window.OSCILLA.app.studio.persistent };
+    }), { ms: STEP_MS, what: `${leg}: Save stores the project` });
     await page.reload({ waitUntil: 'load' });
     await ready(page, `${leg}: the page is ready after the reload`);
     await studio(page, leg);
@@ -582,8 +603,11 @@ async function journey(browser, leg) {
         return m.metadata.title === SONG_TITLE && m.timeline.clips.length === 744
           && JSON.stringify(m);
       }, { ms: STEP_MS, what: `${leg}: Projects, Open loads the saved song` });
-      check(leg, 'save-reload', 'Save, reload, Projects, Open: the same model',
-        reopened === saved.text, `${saved.id}, ${reopened.length} characters`);
+      check(leg, 'save-reload', 'Save stores the edited song; reload, Projects, Open: the '
+        + 'stored model', saved.same && saved.title === SONG_TITLE && reopened === saved.text,
+      `${saved.id}: stored ${saved.same ? 'equals' : 'differs from'} the live model (view `
+        + `state aside), opened ${reopened === saved.text ? 'equals' : 'differs from'} the `
+        + `stored, ${reopened.length} characters`);
     }
 
     // 11. Render WAV.

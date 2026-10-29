@@ -45,7 +45,7 @@ export const STUDIO_TEMPLATES = Object.freeze([basicTone, subtractiveSynth, swee
 export const REFERENCE_TEMPLATE_ID = 'subtractive-synth';
 /** The id of the §258 measurement template. */
 export const MEASUREMENT_TEMPLATE_ID = 'measurement-sweep';
-/** The id of the demo song, the vertical slice of plan issue K058. */
+/** The id of the demo song, the vertical slice of plan issue K144. */
 export const DEMO_SONG_TEMPLATE_ID = 'demo-song';
 
 /** Library entries (no model). */

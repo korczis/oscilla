@@ -1,4 +1,4 @@
-// The score of the demo song "Lantern in the Slag Yard" (plan issue K058): an original slow
+// The score of the demo song "Lantern in the Slag Yard" (plan issue K144): an original slow
 // riff-rock piece in A minor, 96 BPM, 4/4, 44 bars, written for OSCILLA on 2026-10-29. Every
 // part below was composed for this file; nothing is transcribed or quoted from another song.
 // Pure data and pure functions; no DOM, no Web Audio. demo-song.js expands it into a Studio
