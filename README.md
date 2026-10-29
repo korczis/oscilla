@@ -51,7 +51,11 @@ changed.
   ([ADR 0045](.ai/repo/adrs/0045-workspace-in-history-one-hash-dispatcher-unsaved-guard.md)).
   **Copy config URL** keeps the recipe and Studio keys that are in the address. Each nav item
   links to its workspace's address, so opening it in a new tab opens that workspace. A link
-  that is refused does not stay in the address or in history.
+  that is refused does not stay in the address or in history: an `m` that names no page (or
+  two) says "Page link not applied" once and changes no workspace, an instrument link that
+  cannot be read loses its keys, and one restored only in part is rewritten to the values
+  restored, so a reload never repeats a warning. Each workspace names itself in the document
+  title (`OSCILLA · Measure`, …; the Playground keeps the product title).
 - **The address names a stored record.** In Experiments, the experiment the detail shows is
   named in the address (`#m=experiments&exp=<id>`, no new history entry) on every path: when it
   opens, when the detail closes, and on return to Experiments. A definition is `def=<id>` and a

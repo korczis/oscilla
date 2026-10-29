@@ -87,26 +87,29 @@ const ROUTES = [
 ];
 // [hash, workspace (from the Playground or a fresh load), keys that must not stay in the
 //  address, the address it must end on: a hash without '#', a predicate over its parameters, or
-//  null (not judged)]
+//  null (not judged), the warnings a fresh page at it shows: each once, no other]
+const PAGE = 'Page link not applied';
 const GARBAGE = [
-  ['m=bogus', 'playground', [], 'm=playground'],
-  ['m=', 'playground', [], 'm=playground'],
-  ['m=STUDIO', 'playground', [], 'm=playground'],
-  ['m=about&m=learn', 'playground', [], 'm=playground'],
-  ['m=measure&m=measure', 'measure', [], 'm=measure'],
-  ['m=studio&st=nope', 'playground', ['st'], 'm=playground'],
-  ['m=studio&sv=bogus', 'playground', ['sv'], 'm=playground'],
-  ['st=basic-tone', 'playground', ['st'], 'm=playground'],
-  ['mr=%%%garbage', 'playground', ['mr'], 'm=playground'],
-  [`mr=${b64({ v: 1, f1: 9000, f2: 100 })}`, 'playground', ['mr'], 'm=playground'],
-  ['m=experiments&exp=../../etc', 'experiments', ['exp'], 'm=experiments'],
-  ['v=1&x=notbase64!!', 'playground', ['v', 'x'], 'm=playground'],
+  ['m=bogus', 'playground', [], 'm=playground', [PAGE]],
+  ['m=', 'playground', [], 'm=playground', [PAGE]],
+  ['m=STUDIO', 'playground', [], 'm=playground', [PAGE]],
+  ['m=about&m=learn', 'playground', [], 'm=playground', [PAGE]],
+  ['m=measure&m=measure', 'measure', [], 'm=measure', []],
+  ['m=studio&st=nope', 'playground', ['st'], 'm=playground', ['Studio link not applied']],
+  ['m=studio&sv=bogus', 'playground', ['sv'], 'm=playground', ['Studio link not applied']],
+  ['st=basic-tone', 'playground', ['st'], 'm=playground', ['Studio link not applied']],
+  ['mr=%%%garbage', 'playground', ['mr'], 'm=playground', ['Recipe link not applied']],
+  [`mr=${b64({ v: 1, f1: 9000, f2: 100 })}`, 'playground', ['mr'], 'm=playground',
+    ['Recipe link not applied']],
+  ['m=experiments&exp=../../etc', 'experiments', ['exp'], 'm=experiments',
+    ['Record link not applied']],
+  ['v=1&x=notbase64!!', 'playground', ['v', 'x'], 'm=playground', ['Link could not be read']],
   // Partly invalid: rewritten to the values restored, never kept with the invalid ones.
   ['v=1&f=-5&g=99', 'playground', [], (q) => q.get('v') === '1' && q.get('f') !== '-5'
-    && q.get('g') !== '99'],
+    && q.get('g') !== '99', ['Link partly restored']],
   ['no-such-anchor', 'playground', [], null],
   ['%E0%A4%A', 'playground', [], null],
-  [`m=${'a'.repeat(5000)}`, 'playground', [], 'm=playground'],
+  [`m=${'a'.repeat(5000)}`, 'playground', [], 'm=playground', [PAGE]],
 ];
 // [name, from, selector, expected workspace]
 const ACTIONS = [
@@ -388,10 +391,12 @@ async function runLeg(name, origin) {
     }
 
     if (want('garbage-reload')) {
-      // A fresh page at each judged GARBAGE hash ends on the same address as the link did, and
-      // a reload of it raises no warning: a notice the user has seen is not repeated (B4, B5).
+      // A fresh page at each judged GARBAGE hash says what it refused or repaired, each warning
+      // once (an unknown or conflicting m= gets "Page link not applied", a repeated one none),
+      // ends on the same address as the link did, and a reload of it raises no warning: a
+      // notice the user has seen is not repeated (B4, B5).
       const wrong = [];
-      for (const [hash, w, gone, expect] of GARBAGE.filter((g) => g[3] !== null)) {
+      for (const [hash, w, gone, expect, warns] of GARBAGE.filter((g) => g[3] !== null)) {
         const page = await H.open(context, base, hash);
         const what = `fresh #${hash.slice(0, 40)}`;
         const s = await H.settled(page, w, gone, expect, what);
@@ -399,6 +404,12 @@ async function runLeg(name, origin) {
           const at = await H.state(page);
           wrong.push(`${what} ended on ${at.workspace} ${at.hash.slice(0, 60)}`);
         } else {
+          // The address is rewritten after the refusing domain has notified, so the settled
+          // address is the condition the warnings are read at.
+          const first = (await H.warnings(page)).sort();
+          if (JSON.stringify(first) !== JSON.stringify([...warns].sort())) {
+            wrong.push(`${what}: warned ${JSON.stringify(first)}, not ${JSON.stringify(warns)}`);
+          }
           await page.reload({ waitUntil: 'load', timeout: READY_MS });
           await H.ready(page);
           const again = await H.state(page);
