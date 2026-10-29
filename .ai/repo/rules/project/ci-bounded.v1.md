@@ -75,7 +75,16 @@ that is repaired where it last hurt regresses in the next job somebody adds.
   below as not seen.
 - `gate` runs with `if: always()`, its `needs` list every other job of its workflow, and it
   fails unless every one of them succeeded. A job that `gate` does not need is not required
-  by branch protection, whatever it checks.
+  by branch protection, whatever it checks. The one exception is path gating (E026): the
+  engine, suites, measure, studio, browser and visual jobs of `ci.yml` carry
+  `needs: changes` and `if: needs.changes.outputs.runtime != 'false'`, and `gate` accepts
+  their skip only when the `changes` job succeeded with `runtime=false`, the answer of the
+  base branch's `.github/scripts/ci-changes.mjs` (every changed path a regular file under
+  `.ai/repo/project/`, `.ai/repo/reviews/`, `.ai/repo/releases/`, `docs/` or a top-level
+  `*.md`; a base without the classifier answers `runtime=true`, and the pull request's own
+  copy never decides). A skip of any other job or for any other reason, a cancelled or
+  failed job, and a failed or silent `changes` fail it. No other job of `ci.yml` carries a
+  condition.
 - A workflow with a `gate` job is started by `pull_request` and nothing else. Its
   `fail-first` and `review-verdict` jobs judge a pull request; a manual run on a pull
   request's branch would have none to judge, and its `gate` would land on the same commit as
@@ -131,6 +140,16 @@ it cannot read fails the test instead of passing unread.
 `tests/unit/ci-knowledge-job.test.mjs` keeps the `knowledge` job's own assertions (the exact
 retry flags, the verdict program).
 
+`tests/unit/ci-changes.test.mjs` holds the path-gating exception: it runs the `gate` job's
+own `VERDICT` with `jq` on every combination of results (a skip passes only for the six jobs
+and only on `runtime=false` from a successful `changes`), the classifier's fail-closed table
+(a `.md` under `tests/`, renames into or out of the allowlist, deletions, names with spaces,
+links and submodules, an empty diff, any event but a pull request), and the wiring: exactly
+the six jobs carry that condition, the four judge and unit jobs none, and the `changes` step
+runs only the base branch's blob of the classifier, or answers `runtime=true` when the base
+has none.
+`tests/unit/ci-gates-model.test.mjs` refuses any other job condition in `ci.yml`.
+
 What the test cannot see:
 
 - Whether a limit is long enough or short enough, and whether a pinned tag still points at
@@ -145,6 +164,11 @@ What the test cannot see:
   step, not per file); a sums file that was itself downloaded; `gh release download`,
   `git clone`, `npx <remote package>`, `aria2c` and `docker run`, which are not read as
   downloads (a `gh` command still needs its step limit).
+- Whether the path-gating allowlist is right. A file under it that a browser or visual
+  suite read directly would go untested on a pull request that changes only it; on
+  2026-10-29 none did (`tests/browser/lib/suite.cjs` reads `tests/README.md`, which is not
+  in the allowlist), and a file the build reads changes `dist/index.html` too, which the
+  always-running `npm run build:check` holds to the tree.
 - YAML the strict reader does not implement (anchors, a multi-line flow sequence): the file
   is refused as unreadable, which is a refusal of a legal workflow, not a pass.
 - A pull request that rewrites the workflow. On a pull request GitHub runs the workflow file

@@ -20,6 +20,20 @@
 # apt and the browser download are each bounded and retried once (the apt retry against the next
 # mirror), with the measurements in its header. A failed install fails its step, a stalled suite
 # its own step, and the engine suite names a stalled check itself well before either.
+#
+# E026, path gating: the account runs about 20 jobs at a time and a full run of this workflow
+# is 20 jobs, so every pull request used to cost a whole CI round. The `changes` job asks the
+# BASE branch's .github/scripts/ci-changes.mjs whether the pull request changes anything the
+# browser and visual legs could observe. Only when every changed path is a regular file under
+# .ai/repo/project/, .ai/repo/reviews/, .ai/repo/releases/, docs/ or a top-level *.md (and at
+# least one path changed) is the answer `runtime=false`, and then the engine, suites, measure,
+# studio, browser and visual jobs are skipped; anything else, an empty diff, an error or a
+# missing answer runs them (fail closed). unit, knowledge, fail-first and review-verdict always
+# run: the plan, knowledge and build:check tests guard what a non-runtime change can break.
+# `gate` accepts a skipped job only when it is one of those six and `changes` succeeded with
+# `runtime=false`. ci.yml is started by pull_request only (project.ci-bounded, `triggers`), so
+# nothing on main is path-gated here; the classifier answers runtime for any other event.
+# Tested by tests/unit/ci-changes.test.mjs.
 name: CI
 
 # pull_request only (project.ci-bounded, `triggers`): the fail-first and review-verdict jobs
@@ -78,8 +92,50 @@ jobs:
           node scripts/size-report.mjs --base-branch "origin/$GITHUB_BASE_REF" \
             | tee -a "$GITHUB_STEP_SUMMARY"
 
+  changes:
+    # E026: the program that classifies is the base branch's copy, extracted as one blob before
+    # anything of the pull request runs (setup-node first, so it reads no file of the checkout).
+    # A pull request that edits the allowlist is classified by the allowlist it found, and as
+    # .github/ is runtime-relevant, that classification runs everything. A base without the
+    # classifier (the pull request that introduces it) answers runtime=true with a warning and
+    # runs no copy at all, so no pull request is ever skipped by a program it carries. The base
+    # is named by its full ref, so a tag called origin/<base> cannot stand in for it (#255, R2).
+    # Full history, so the merge base is in the clone.
+    name: changes (does the pull request touch a runtime path)
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    outputs:
+      runtime: ${{ steps.classify.outputs.runtime }}
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Classify the changed paths with the base branch's classifier
+        id: classify
+        timeout-minutes: 2
+        run: |
+          base="refs/remotes/origin/$GITHUB_BASE_REF"
+          prog=.github/scripts/ci-changes.mjs
+          judge="$RUNNER_TEMP/ci-changes.mjs"
+          git show-ref --verify --quiet "$base"
+          if git cat-file -e "$base:$prog" 2> /dev/null; then
+            git cat-file blob "$base:$prog" > "$judge"
+            echo "ci-changes: $prog of $base ($(git rev-parse --short=12 "$base")) classifies"
+            node "$judge" --repo . --event "$GITHUB_EVENT_NAME" --head HEAD \
+              --base-branch "$base" --output "$GITHUB_OUTPUT"
+          else
+            echo "::warning::ci-changes: $base has no $prog; runtime=true, everything runs"
+            echo "runtime=true" >> "$GITHUB_OUTPUT"
+          fi
+
   engine:
     name: V1 engine checks (${{ matrix.browser }})
+    needs: changes
+    if: needs.changes.outputs.runtime != 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
@@ -121,6 +177,8 @@ jobs:
     # Per browser: Firefox needs a PulseAudio null sink to run an AudioContext on the runner,
     # while Chromium's realtime clock stalls behind that sink, so each gets its own job.
     name: DSP, labs, sequencer (${{ matrix.browser }})
+    needs: changes
+    if: needs.changes.outputs.runtime != 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
@@ -171,6 +229,8 @@ jobs:
     # V3: the measurement engine on real Web Audio (v3-measure.cjs) and the MEASURE /
     # EXPERIMENTS workspaces of dist (v3-ui.cjs), one browser per job like the browser gate.
     name: V3 measurement and UI (${{ matrix.browser }})
+    needs: changes
+    if: needs.changes.outputs.runtime != 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 50
     strategy:
@@ -212,6 +272,8 @@ jobs:
     # V3.1: the STUDIO workspace, graph editor, timeline, transport and automation editors of dist
     # (v31-studio-graph.cjs, v31-studio-timeline.cjs), one browser per job like the measure gate.
     name: V3.1 Studio UI (${{ matrix.browser }})
+    needs: changes
+    if: needs.changes.outputs.runtime != 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
@@ -251,6 +313,8 @@ jobs:
 
   browser:
     name: Browser gate (${{ matrix.browser }})
+    needs: changes
+    if: needs.changes.outputs.runtime != 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
@@ -290,6 +354,8 @@ jobs:
 
   visual:
     name: Visual regression gate
+    needs: changes
+    if: needs.changes.outputs.runtime != 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # The accepted linux-x64 values in tests/visual/baseline.json were measured in this image
@@ -441,16 +507,27 @@ jobs:
             --pr "$PR" --head HEAD --base-branch "origin/$GITHUB_BASE_REF"
 
   gate:
+    # Every job it needs succeeded, or (E026) is one of the six path-gated jobs and was skipped
+    # while `changes` succeeded with runtime=false. A skip for any other reason, a cancelled or
+    # failed job, and a failed or silent `changes` fail it.
     name: gate
     if: always()
-    needs: [unit, knowledge, fail-first, review-verdict, engine, suites, measure, studio, browser, visual]
+    needs: [unit, knowledge, fail-first, review-verdict, changes, engine, suites, measure, studio, browser, visual]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Every release-gate job passed
+      - name: Every release-gate job passed, or was skipped for a non-runtime change
         env:
           RESULTS: ${{ toJSON(needs) }}
+          VERDICT: >-
+            (.changes.result == "success" and .changes.outputs.runtime == "false") as $nonruntime
+            | to_entries
+            | all(.value.result == "success"
+                or ($nonruntime and .value.result == "skipped"
+                    and (.key as $k
+                         | ["engine", "suites", "measure", "studio", "browser", "visual"]
+                         | any(. == $k))))
         run: |
           echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
-          echo "$RESULTS" | jq -e 'to_entries | all(.value.result == "success")' > /dev/null \
+          echo "$RESULTS" | jq -e "$VERDICT" > /dev/null \
             || { echo "::error::release gate failed: a required job did not succeed"; exit 1; }

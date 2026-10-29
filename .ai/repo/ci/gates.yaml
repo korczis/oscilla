@@ -13,11 +13,17 @@
 #     and repository programs as the job's steps, a leg narrowed with OSC_BROWSERS as the
 #     job's env narrows it. Setup (npm ci, browser and PulseAudio installs, artifact upload)
 #     is not part of a gate;
-#   - ci.yml starts on every pull request and filters no path, and no job is conditional
-#     except the aggregate's `if: always()`, so every gate is `always: true`: every plan
-#     selects it, and any changed file can make a recorded run of it stale. The one path class
-#     covers the whole tree and names no gate, so a plan reads "affected" with every gate
-#     selected as always, never "a changed path is in no class";
+#   - ci.yml starts on every pull request and filters no path. The aggregate's `if: always()`
+#     and (E026) the path-gated jobs' `needs.changes.outputs.runtime != 'false'` are its only
+#     job conditions: in CI, the base branch's .github/scripts/ci-changes.mjs skips the engine,
+#     suites, measure, studio, browser and visual jobs for a pull request whose every changed
+#     path is under .ai/repo/project/, .ai/repo/reviews/, .ai/repo/releases/, docs/ or a
+#     top-level *.md. A local task keeps them: the model does not encode that allowlist (a
+#     path class cannot say "every path outside these"), so it over-selects rather than skip
+#     a gate the classifier would run. Every gate is `always: true`: every plan selects it,
+#     and any changed file can make a recorded run of it stale. The one path class covers the
+#     whole tree and names no gate, so a plan reads "affected" with every gate selected as
+#     always, never "a changed path is in no class";
 #   - `gate` is the aggregate that branch protection requires; it `requires` every gate of
 #     the jobs it `needs`, so a failing one leaves it blocked rather than queued.
 #
@@ -35,6 +41,13 @@ gates:
     always: true
     runs: npm test && npm run version:check && npm run build:check && npm run verify-dist && node scripts/size-report.mjs --base-branch origin/main
     summary: the unit and freeze suites, one product version everywhere, the committed dist equal to a clean rebuild, the artifact rules (single file, no runtime fetch, licence notices, budget), and the size report of dist against the budget and the merge base (a report, never a failure on a size)
+
+  # E026: the classifier is the base branch's copy, extracted with `git cat-file blob`.
+  - id: changes
+    job: changes
+    always: true
+    runs: node .github/scripts/ci-changes.mjs --repo . --event pull_request --head HEAD --base-branch origin/<base>
+    summary: whether the pull request changes a runtime path (anything outside .ai/repo/project, .ai/repo/reviews, .ai/repo/releases, docs and top-level *.md); runtime=false skips the six browser and visual jobs, anything else runs them
 
   - id: engine-chromium
     job: engine
@@ -164,6 +177,7 @@ gates:
       - knowledge
       - fail-first
       - review-verdict
+      - changes
       - engine-chromium
       - engine-firefox
       - engine-webkit
@@ -180,8 +194,8 @@ gates:
       - browser-firefox
       - browser-webkit
       - visual
-    runs: echo "$RESULTS" | jq -e 'to_entries | all(.value.result == "success")'
-    summary: the required check of branch protection; every job it needs succeeded
+    runs: echo "$RESULTS" | jq -e "$VERDICT"
+    summary: the required check of branch protection; every job it needs succeeded, or is a path-gated job skipped while changes succeeded with runtime=false (E026)
 
 classes:
   # ci.yml filters no path: a change anywhere runs every job, which `always` already says.
