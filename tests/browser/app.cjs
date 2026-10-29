@@ -1566,6 +1566,96 @@ function defineChecks() {
     return { ok, res, timeWindow: tw, fullscreenOn: fs1, fullscreenOff: !fs2 };
   });
 
+  // C014 (finding vis-divergence-2): the Analyzer spectrogram writes nothing for a paused or
+  // hidden interval. A 1 kHz tone sounds through GAP_S seconds of the audio clock while the
+  // frame loop is paused (leg pause: the Pause animation button) or the document reads hidden
+  // (leg hidden: the document.hidden getter the frame loop reads, without the visibilitychange
+  // event that would release the voice). After the resume, the tone may cover only the time
+  // since the resume; before the fix the first frame painted the whole gap with one spectrum.
+  def('spectrogram-no-backfill', async ({ page }) => {
+    const TONE_HZ = 1000;
+    const GAP_S = 3;
+    await H.navTo(page, 'analyzer');
+    await page.waitForFunction(() => document.querySelector('#osc-app').dataset.mode
+      === 'analyzer', null, { timeout: 8000 });
+    await page.evaluate(() => window.OSCILLA.app.ensureAudio());
+    await until(() => page.evaluate(() => {
+      const v = window.OSCILLA.labs.spectrogram.view;
+      return !!(v && v.spectrogram && v.spectrogram.rowMap && v.plotCanvas.width > 1);
+    }), { ms: 10000, what: 'spectrogram-no-backfill: the Analyzer spectrogram has its axis' });
+    const readRow = () => page.evaluate((f) => {
+      const v = window.OSCILLA.labs.spectrogram.view;
+      const spg = v.spectrogram;
+      const c = v.plotCanvas;
+      const y = Math.round(spg.yForFrequency(f));
+      const row = c.getContext('2d').getImageData(0, y, c.width, 1).data;
+      const lut = spg.lut;
+      let bright = 0;
+      for (let x = 0; x < c.width; x++) {
+        const d = Math.abs(row[x * 4] - lut[0]) + Math.abs(row[x * 4 + 1] - lut[1])
+          + Math.abs(row[x * 4 + 2] - lut[2]);
+        if (d > 60) bright++;
+      }
+      return { width: c.width, spanS: spg.options.timeSpanS, bright };
+    }, TONE_HZ);
+    const leg = async (name, enter, leave) => {
+      await page.evaluate((f) => {
+        window.OSCILLA.labs.spectrogram.view.spectrogram.clear();
+        const a = window.OSCILLA.app;
+        a.setContinuous(true);
+        a.setWaveform('sine');
+        a.setFrequency(f);
+        if (!a.playing) a.toggleLatch();
+      }, TONE_HZ);
+      // The renderer is running (its clock is set) when the tone is already on the canvas.
+      await until(async () => (await readRow()).bright > 0,
+        { ms: 10000, what: `spectrogram-no-backfill ${name}: the tone is painted before` });
+      await enter();
+      const before = await readRow();
+      const t0 = await page.evaluate(() => window.OSCILLA.engine.ctx.currentTime);
+      // The gap is GAP_S seconds of the audio clock with the tone at the analyser.
+      await until(() => page.evaluate(({ f, end }) => {
+        const e = window.OSCILLA.engine;
+        if (!e.analyser || e.ctx.currentTime < end) return false;
+        const d = new Float32Array(e.analyser.frequencyBinCount);
+        e.analyser.getFloatFrequencyData(d);
+        let k = 1;
+        for (let i = 2; i < d.length; i++) if (d[i] > d[k]) k = i;
+        const hz = (k * e.ctx.sampleRate) / e.analyser.fftSize;
+        return Math.abs(hz - f) < 20 && d[k] > -80;
+      }, { f: TONE_HZ, end: t0 + GAP_S }), { ms: GAP_S * 1000 + 15000,
+        what: `spectrogram-no-backfill ${name}: ${GAP_S} s of the audio clock with the tone` });
+      const still = await readRow();
+      const tResume = Date.now();
+      await leave();
+      const after = await until(async () => {
+        const r = await readRow();
+        return r.bright > before.bright ? { ...r, tRead: Date.now() } : null;
+      }, { ms: 10000, what: `spectrogram-no-backfill ${name}: the tone is painted after resume` });
+      const perS = after.width / after.spanS;
+      const honestMax = Math.ceil(((after.tRead - tResume) / 1000 + 0.3) * perS);
+      const gapColumns = Math.floor(GAP_S * perS);
+      const added = after.bright - before.bright;
+      return { before: before.bright, duringGap: still.bright - before.bright, added, honestMax,
+        gapColumns, width: after.width,
+        ok: still.bright === before.bright && added <= honestMax && honestMax < gapColumns };
+    };
+    const res = {};
+    res.pause = await leg('pause', () => page.click('#osc-viz-pause'),
+      () => page.click('#osc-viz-pause'));
+    const setHidden = (on) => page.evaluate((h) => {
+      if (h) Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+      else delete document.hidden;
+    }, on);
+    try {
+      res.hidden = await leg('hidden', () => setHidden(true), () => setHidden(false));
+    } finally {
+      await setHidden(false);
+    }
+    const paused = await page.evaluate(() => window.OSCILLA.app.vizPaused);
+    return { ok: res.pause.ok && res.hidden.ok && paused === false, paused, ...res };
+  });
+
   def('labs-basic', async ({ page }) => {
     await H.continuous(page, true);
     const out = {};

@@ -53,6 +53,7 @@ export function createSpectrogramView(host, options = {}) {
   let node = null;
   let reader = null;
   let frozen = false;
+  let paused = false; // "Pause animation", kept apart from the user's Freeze switch
   let rect = { x: 0, y: 0, w: 1, h: 1 };
   let sampleRate = 0;
 
@@ -145,13 +146,16 @@ export function createSpectrogramView(host, options = {}) {
     };
     if (!spg) spg = createSpectrogram(plot, cfg);
     else spg.configure(cfg);
-    spg.freeze(frozen);
+    spg.freeze(frozen || paused);
     drawAxes();
   }
 
-  function frame(nowMs = performance.now()) {
+  // info is the shared frame loop's: on the first frame after skipped frames (Pause animation,
+  // a hidden document) the time axis restarts there, so the skipped interval stays unwritten.
+  function frame(nowMs = performance.now(), info = null) {
     const an = o.getAnalyser ? o.getAnalyser() : null;
     ensureRenderer(an);
+    if (info && info.resumed && spg) spg.freeze(frozen || paused);
     if (reader && host.offsetParent !== null) {
       if (reader.fftSize !== node.fftSize) {
         reader.sync();
@@ -196,7 +200,12 @@ export function createSpectrogramView(host, options = {}) {
     frame,
     setFreeze(on) {
       frozen = !!on;
-      if (spg) spg.freeze(frozen);
+      if (spg) spg.freeze(frozen || paused);
+    },
+    /** "Pause animation": pauses the time axis without touching the Freeze state. */
+    setPaused(on) {
+      paused = !!on;
+      if (spg) spg.freeze(frozen || paused);
     },
     setTimeSpan(s) {
       if (s > 0) reconfigure({ timeSpanS: s });
