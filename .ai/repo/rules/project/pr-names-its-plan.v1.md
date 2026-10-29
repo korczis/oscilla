@@ -86,7 +86,11 @@ branch read from GitHub at run time (three tries, ten seconds apart), and only t
 `contents: read` and `pull-requests: read` permissions. The program is the base branch's,
 through `.github/scripts/base-rule.sh`, which admits it beside the fail-first and
 review-verdict programs; the base is named by its full ref, `refs/remotes/origin/<base>`, which
-no tag can shadow (review of #255, R2; see `project.review-verdict`). The job is bounded (5 minutes, every step its own), installs nothing,
+no tag can shadow (review of #255, R2; see `project.review-verdict`). The wrapper and the
+program are the base commit's copies, which the job's `judge` step takes into
+`$RUNNER_TEMP/judge` after a setup-node that read no file of the checkout, and the last step
+calls that copy under `env -i` from a shell that reads no `BASH_ENV` (R12; `judge-first` of
+`project.ci-bounded`). The job is bounded (6 minutes, every step its own), installs nothing,
 and is not part of `gate`.
 
 `tests/unit/pr-metadata.test.mjs` runs the program on fixture repositories: a clean pull

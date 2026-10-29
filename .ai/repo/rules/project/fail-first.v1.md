@@ -65,10 +65,23 @@ new module does not exist yet is visible as that. It exits 1 when no file is evi
 The `fail-first` job of `.github/workflows/ci.yml` runs it on every pull request with the
 title and body read from the pull request at run time, and `gate` needs the job
 (`tests/unit/ci-workflows.test.mjs` fails if `gate` stops needing it). The job runs it
-through `.github/scripts/base-rule.sh`, which extracts `scripts/` of the base branch outside
-the checkout and runs that copy on the pull request, printing the commit it came from, with
-the base named by its full ref `refs/remotes/origin/<base>`, which no tag can shadow (review
-of #255, R2; see `project.review-verdict`); the
+through `.github/scripts/base-rule.sh`, which runs the base branch's copy of the program on
+the pull request, printing the commit it came from, with the base named by its full ref
+`refs/remotes/origin/<base>`, which no tag can shadow (review of #255, R2; see
+`project.review-verdict`). The wrapper is itself the base commit's: the job's `judge` step
+takes it and `scripts/` from the base commit into `$RUNNER_TEMP/judge` before anything of
+the pull request runs, the base's `scripts/install-guard.mjs` then refuses a lockfile entry
+that is not a sha512-checked tarball of `https://registry.npmjs.org/` (a git dependency,
+whose `prepare` npm runs even under `--ignore-scripts`), a `package.json` with bundled
+dependencies, workspaces or an `overrides` value outside the registry, and any `.npmrc` key
+that names a program, another registry or turns a check off (`git=`, `script-shell`,
+`registry`, `strict-ssl=false`, ...), the install runs no lifecycle script, and the judge's
+step starts the extracted copy under `env -i` with a fixed PATH, a HOME of its own and no
+`NODE_OPTIONS`, from a shell that reads no `BASH_ENV` (review of #255, R12, R17-R19; the
+shape is `project.ci-bounded`'s `judge-first`). What this does not cover: the pull request's
+tests run inside the judge's step, so a test with the runner's sudo can tamper with the job;
+and the guard trusts the registry and the lockfile's integrity hashes (esbuild's platform
+binary is such a package). The
 same test fails if the last command of the job's last step is anything but that call with
 its exact arguments (`--title` in place of `--pr-json`, `|| true`, an `if:`), if the step
 passes when there is no pull request, or if `ci.yml` can be started by anything but a pull

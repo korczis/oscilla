@@ -45,6 +45,7 @@ import { fileURLToPath } from 'node:url';
 import { TITLE as FAIL_FIRST_TITLE, waiver, waiverOf } from './fail-first.mjs';
 import { commitOf } from './git-ref.mjs';
 import { commitLevel, parseCommit } from './release-analyze.mjs';
+import { commandsOf } from './shell-words.mjs';
 import { REVIEWS_DIR, reviewedContent, verdictProblems } from './review-verdict.mjs';
 import { parseYaml } from './yaml-subset.mjs';
 
@@ -406,25 +407,55 @@ export function summary(facts, slug) {
 }
 
 const FORCED = /\bset[ \t]+\+(?:e\b|o[ \t]+errexit\b)|\|\|[ \t]*(?:true|:)(?![\w-])/;
-const EXIT_OR_EXEC = /(?<![\w-])(exit|exec)(?![\w-])(?:[ \t]+([^\s;&|)}]+))?/g;
+const SHELLS = /^(?:ba|z|da|k|a|fi)?sh$/;
+
+/** Whether a command, as shell-words reads it, can end the step green without the call. */
+function forcesSuccess(cmd, line) {
+  if (cmd.wrappers.includes('exec')) return true;
+  const p = cmd.program;
+  if (!p) return false;
+  if (p.dynamic) return true;
+  const name = p.text.slice(p.text.lastIndexOf('/') + 1);
+  const [first] = cmd.args;
+  if (name === 'exit' || name === 'return') {
+    return !first || first.dynamic || !/^\d+$/.test(first.text) || BigInt(first.text) % 256n === 0n;
+  }
+  if (['eval', 'source', '.', 'alias', 'shopt', 'enable', 'trap'].includes(name)) {
+    return name !== 'trap' || cmd.args.some((a) => a.dynamic || FORCED_SUCCESS.test(a.text));
+  }
+  if (name === 'set') {
+    return cmd.args.some((a, i) => a.dynamic || /^\+[A-Za-z]*e/.test(a.text)
+      || (/^\+[A-Za-z]*o$/.test(a.text) && cmd.args[i + 1]?.text === 'errexit'));
+  }
+  if ((name === 'true' || name === ':') && line.includes('||')) return true;
+  if (SHELLS.test(name)) {
+    const c = cmd.args.findIndex((a) => /^-[A-Za-z]*c[A-Za-z]*$/.test(a.text));
+    if (c >= 0) {
+      const script = cmd.args[c + 1];
+      return !script || script.dynamic || FORCED_SUCCESS.test(script.text)
+        || commandsOf(script.text).some((x) => x.program && /^(?:true|:)$/.test(x.program.text));
+    }
+  }
+  return false;
+}
 
 /**
  * A line of the judge's step that can end it green without the call deciding, as a matcher
- * (`FORCED_SUCCESS.test(line)`): an `exit` whose status is not a number that bash leaves
- * nonzero (bash exits with it modulo 256, so `exit 256` succeeds; a bare `exit` passes the
- * last status on, 0 after an `if`; `exit "$s"` is whatever $s holds), any `exec` (it replaces
- * the step's shell, so what it starts ends the step: `exec true`), `set +e` or
- * `set +o errexit`, `|| true`, `|| :` (review of #255, R7).
+ * (`FORCED_SUCCESS.test(line)`), read as bash reads it (scripts/shell-words.mjs), so quoting
+ * inside a word does not hide it (`e\\xit 0`, `ex''it 0`, `ex\\ec true`, review of #255, R7):
+ * an `exit` or `return` whose status is not a number that bash leaves nonzero (bash exits with
+ * it modulo 256, so `exit 256` succeeds; a bare `exit` passes the last status on, 0 after an
+ * `if`; `exit "$s"` is whatever $s holds), any `exec` (it replaces the step's shell, so what it
+ * starts ends the step: `exec true`), `eval`, `source`, `.`, `alias`, `shopt` and `enable`
+ * (each can make any word mean anything), a `trap` that does any of these, `set +e` or
+ * `set +o errexit`, `|| true`, `|| :`, a program named by a variable or a substitution, and a
+ * shell's `-c` text that does any of these.
  */
 export const FORCED_SUCCESS = {
   test(line) {
     const text = String(line);
     if (FORCED.test(text)) return true;
-    for (const [, word, status] of text.matchAll(EXIT_OR_EXEC)) {
-      if (word === 'exec') return true;
-      if (!/^\d+$/.test(status ?? '') || BigInt(status) % 256n === 0n) return true;
-    }
-    return false;
+    return commandsOf(text).some((cmd) => forcesSuccess(cmd, text));
   },
 };
 
@@ -481,7 +512,20 @@ export function workflowModelProblems(workflowText, modelText) {
   if (steps.some((s) => s.if !== undefined || s['continue-on-error'] !== undefined)) {
     out.push('a step is conditional or non-fatal');
   }
+  // how the judge is reached: setup-node before the checkout, then the step that takes the
+  // judge from the base commit (review of #255, R12)
+  const order = [].concat(model.steps || []).map(String);
+  const shape = steps.slice(0, order.length).map((st) => (st.uses
+    ? String(st.uses).replace(/@.*$/, '') : st.id || st.name || '(run)'));
+  if (JSON.stringify(shape) !== JSON.stringify(order)) {
+    out.push(`the first steps are ${JSON.stringify(shape)}, the model's ${JSON.stringify(order)}`);
+  }
+  const node = steps[0]?.with || {};
+  if (['cache', 'node-version-file', 'package-manager-cache'].some((k) => k in node)) {
+    out.push('setup-node reads a file of the checkout (cache, node-version-file)');
+  }
   const last = steps.at(-1) || {};
+  if (last.shell !== model.shell) out.push(`the judge's shell is ${JSON.stringify(last.shell)}`);
   if (last.env?.PR !== '${{ github.event.pull_request.number }}') {
     out.push('PR is not the event\'s');
   }

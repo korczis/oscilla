@@ -23,9 +23,17 @@ export function isRefName(name) {
   return name.split('/').every((c) => c && !c.startsWith('.') && !c.endsWith('.lock'));
 }
 
-// a ref name followed by ancestry or peel steps (`origin/main~1`, `main^0`, `v1^{commit}`):
-// the name is checked like any other, and the steps applied to its commit
-const STEPS = /^([^~^]+)((?:~\d*|\^(?:\d+|\{[a-z]*\})?)+)$/;
+/**
+ * A revision as [name, suffix]: the longest leading part that can be a ref name (up to the
+ * first ~ ^ : or `@{`), and the rest: ancestry and peel steps (`~1`, `^0`, `^{commit}`,
+ * `^{/message}`), a reflog or upstream entry (`@{1}`, `@{u}`) or a path (`:file`). Any suffix
+ * counts, not a list of forms, so a shadowed name is checked whatever follows it (review of
+ * #255, R13).
+ */
+export function splitRevision(rev) {
+  const m = /[~^:]|@\{/.exec(rev);
+  return m ? [rev.slice(0, m.index), rev.slice(m.index)] : [rev, ''];
+}
 
 function git(repo, args) {
   const r = spawnSync('git', ['-C', repo, ...args], { encoding: 'utf8' });
@@ -49,17 +57,27 @@ function shortOf(ref) {
  * The full commit name of `ref` in `repo`. A full 40-hex name is itself; a full ref name
  * (refs/...) must exist as exactly that ref; a short name must be answered by exactly one ref.
  * Either way, when another ref answers the same short name, or a ref is named like the commit,
- * this throws: the name is ambiguous. A ref name with ancestry or peel steps after it
- * (`origin/main~1`) is its name checked so, then the steps. Any other expression (HEAD,
- * HEAD~1, an abbreviated commit, `@{u}`) is left to `git rev-parse`. An annotated tag is
- * peeled to its commit; a name of anything but a commit throws.
+ * this throws: the name is ambiguous. A ref name with anything after it (`origin/main~1`,
+ * `origin/main^{/fix}`, `origin/main@{1}`, splitRevision) is its name checked so, then the
+ * suffix applied to the one ref it names. Any other expression (HEAD, HEAD~1, an abbreviated
+ * commit, `@{u}`) is left to `git rev-parse`. An annotated tag is peeled to its commit; a name
+ * of anything but a commit throws.
  */
 export function commitOf(repo, ref) {
   const name = String(ref ?? '');
-  const steps = STEPS.exec(name);
-  if (steps && isRefName(steps[1]) && steps[1] !== 'HEAD') {
-    return peel(repo, `${commitOf(repo, steps[1])}${steps[2]}`, name);
+  const [prefix, suffix] = splitRevision(name);
+  if (suffix && isRefName(prefix) && prefix !== 'HEAD') {
+    return peel(repo, `${qualified(repo, prefix)}${suffix}`, name);
   }
+  return peel(repo, qualified(repo, name), name);
+}
+
+/**
+ * The one name `name` stands for: itself when it is a full commit name or a full ref name,
+ * the one ref that answers a short name (or the name itself when none does, for git to
+ * resolve), or a throw when more than one ref answers it.
+ */
+function qualified(repo, name) {
   const ambiguous = (what) => new Error(`${name} is ambiguous: ${what}; name the base by its`
     + ' full ref (refs/remotes/origin/<branch>) or its full commit name, and remove the other');
   let target = name;
@@ -76,7 +94,7 @@ export function commitOf(repo, ref) {
     if (found.length > 1) throw ambiguous(`${found.join(', ')} all answer it`);
     if (found.length === 1) target = found[0];
   }
-  return peel(repo, target, name);
+  return target;
 }
 
 /** The commit `rev` names, peeled (`^{commit}`), or a throw that names `name`. */

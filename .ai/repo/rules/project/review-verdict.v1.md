@@ -43,12 +43,14 @@ never reviewed.
   `project.review-verdict`, `project.pr-names-its-plan`): everything under `.github/` (the
   workflows, `ci-install.sh`, `base-rule.sh`, composite actions, `doctor-verdict.jq`), the
   programs `scripts/review-verdict.mjs`, `scripts/fail-first.mjs`,
-  `scripts/ci-workflow-rules.mjs`, `scripts/pr-metadata.mjs`, `scripts/yaml-subset.mjs` and
-  `scripts/git-ref.mjs` (which names their base), the model `.ai/repo/ci/pr-meta.yaml` the
-  metadata workflow is held to, their tests `tests/unit/review-verdict.test.mjs`,
-  `fail-first.test.mjs`, `ci-workflows.test.mjs`, `ci-knowledge-job.test.mjs`,
-  `yaml-subset.test.mjs`, `base-rule.test.mjs`, `pr-metadata.test.mjs` and `git-ref.test.mjs`,
-  and `tests/unit/fixtures/git-repo.mjs`.
+  `scripts/ci-workflow-rules.mjs`, `scripts/pr-metadata.mjs`, `scripts/yaml-subset.mjs`,
+  `scripts/git-ref.mjs` (which names their base), `scripts/install-guard.mjs` (what fail-first's
+  install may fetch) and `scripts/shell-words.mjs` (how the rules read a step's commands), the
+  model `.ai/repo/ci/pr-meta.yaml` the metadata workflow is held to, their tests
+  `tests/unit/review-verdict.test.mjs`, `fail-first.test.mjs`, `ci-workflows.test.mjs`,
+  `ci-knowledge-job.test.mjs`, `yaml-subset.test.mjs`, `base-rule.test.mjs`,
+  `pr-metadata.test.mjs`, `git-ref.test.mjs` and `install-guard.test.mjs`, and
+  `tests/unit/fixtures/git-repo.mjs`.
   An added, changed, renamed or deleted file there counts. The list is `GUARDED` in
   `scripts/review-verdict.mjs`. Left out on purpose: `src/index.html`, `src/js/main.js` (the
   composition root) and `src/styles/`, which nearly every user-facing change touches and
@@ -101,8 +103,11 @@ run. So a base branch that has changed one of the pull request's guarded files s
 review is refused in that run even when the branch has not merged it yet, and the remedy is
 to merge `main` into the branch and have the result reviewed. `gate` needs the job
 (`tests/unit/ci-workflows.test.mjs` fails if `gate` stops needing it). The job runs the
-program through `.github/scripts/base-rule.sh`, which extracts `scripts/` of the base branch
-outside the checkout and runs that copy, printing the commit it came from. The base is named
+program through `.github/scripts/base-rule.sh`, which runs the base branch's copy of the
+program, printing the commit it came from; the wrapper is the base commit's own, taken with
+`scripts/` into `$RUNNER_TEMP/judge` by the job's `judge` step before anything of the pull
+request runs and started under `env -i` (review of #255, R12; `judge-first` of
+`project.ci-bounded`). The base is named
 by its full ref, `refs/remotes/origin/<base>`, and the wrapper refuses anything else but a
 full 40-hex commit name, and a ref whose short name another ref (a tag `origin/main`) also
 answers: git looks a short name up in `refs/tags/` before `refs/remotes/`, and the checkout

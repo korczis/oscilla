@@ -40,102 +40,236 @@ export const WAIVER = /^[ \t]*(?:[*-][ \t]+)?fail-first:[ \t]*n\/a\b[ \t]*(.*)$/
 const TEST_FILE = /^tests\/unit\/.+\.test\.mjs$/;
 const FILE_TIMEOUT_MS = 180_000;
 
-// A line that starts a list item, a heading, a fence or a quote: it ends a paragraph, so it is
-// no lazy continuation of a blockquote before it.
-const INTERRUPTS = new RegExp(String.raw`^ {0,3}(?:[*+-](?:[ \t]|$)|\d{1,9}[.)](?:[ \t]|$)`
-  + String.raw`|#{1,6}(?:[ \t]|$)|${'`'}{3}|~{3}|>)`);
-// a fence and its block, to its closing fence or the end of the body. At any indentation: a
-// list item's content may sit 4 or more columns in, and its fence is a fence there (review of
-// #255, R15); one indented 4 outside a list is an indented code block, code either way.
-const FENCE = new RegExp(String.raw`^[ \t]*(${'`'}{3,}(?=[^${'`'}\n]*$)|~{3,})[^\n]*(?:\n|$)`
-  + String.raw`[\s\S]*?(?:^[ \t]*\1[${'`'}~]*[ \t]*$|(?![\s\S]))`, 'gm');
 // what an inline code span leaves in the prose: a mark (U+0001), its index, U+0002 on its
 // first line and the bare marks on each further one. No letter or digit outside the index,
 // so code is no waiver reason (R16), and a line that continues a span starts with a mark, so
-// a waiver inside the span is no line of its own (R5).
+// a waiver inside the span is no line of its own (R5). An inline HTML comment leaves the bare
+// marks on each line after its first.
 const SPAN_MARK = /\u0001(\d*)\u0002/g;
-const LIST_ITEM = /^ {0,3}(?:[*+-]|\d{1,9}[.)])(?:[ \t]|$)/;
+const MORE = '\n\u0001\u0002';
+const ESCAPABLE = /[!-/:-@[-`{-~]/;
 
-/** The columns of a line's indentation, a tab reaching the next multiple of 4. */
-function indentOf(line) {
-  let n = 0;
-  for (const c of /^[ \t]*/.exec(line)[0]) n = c === '\t' ? n + 4 - (n % 4) : n + 1;
-  return n;
+/** A line with each tab expanded to the next multiple of 4 columns. */
+function expandTabs(line) {
+  let out = '';
+  for (const c of line) out += c === '\t' ? ' '.repeat(4 - (out.length % 4)) : c;
+  return out;
 }
 
+const indentOf = (s) => /^ */.exec(s)[0].length;
+
 /**
- * The text with each inline code span replaced by its marks (SPAN_MARK), its source pushed to
- * `spans`. A span opens at a run of backticks and closes at the next run of the same length
- * within its paragraph (it may cross lines, not a blank one, review of #255 R5); a run that
- * finds none is a literal backtick.
+ * The inline text of a paragraph or a heading (CommonMark 0.31, 6.1-6.6) with each code span
+ * replaced by its marks and its source pushed to `spans`, and each HTML comment by its marks.
+ * A backslash escapes the punctuation after it, so `\`` opens no span; a run of backticks
+ * closes at the next run of the same length in the same block, else it is literal; a comment
+ * that starts before a backtick wins over it (review of #255, R5, R21).
  */
-function withoutSpans(text, spans) {
+function inline(text, spans) {
   let out = '';
   let i = 0;
-  const run = /`+/g;
-  for (let m = run.exec(text); m; m = run.exec(text)) {
-    const open = m[0];
-    const blank = /\n[ \t]*\n/g;
-    blank.lastIndex = m.index;
-    const para = blank.exec(text);
-    const end = para ? para.index : text.length;
-    const close = new RegExp(`(?<!\`)${open}(?!\`)`, 'g');
-    close.lastIndex = m.index + open.length;
-    const c = close.exec(text);
-    if (!c || c.index >= end) {
-      run.lastIndex = m.index + open.length;
+  while (i < text.length) {
+    const c = text[i];
+    if (c === '\\' && ESCAPABLE.test(text[i + 1] ?? '')) {
+      out += text.slice(i, i + 2);
+      i += 2;
       continue;
     }
-    const source = text.slice(m.index, c.index + open.length);
-    const n = spans.push(source.replace(/\s*\n\s*/g, ' ')) - 1;
-    out += `${text.slice(i, m.index)}\u0001${n}\u0002`
-      + '\n\u0001\u0002'.repeat(source.split('\n').length - 1);
-    i = c.index + open.length;
-    run.lastIndex = i;
+    if (text.startsWith('<!--', i)) {
+      const k = text.startsWith('<!-->', i) ? i + 2 : text.startsWith('<!--->', i) ? i + 3
+        : text.indexOf('-->', i + 4);
+      if (k >= 0) {
+        out += MORE.repeat(text.slice(i, k + 3).split('\n').length - 1);
+        i = k + 3;
+        continue;
+      }
+    }
+    if (c === '`') {
+      const open = /^`+/.exec(text.slice(i))[0];
+      const run = /`+/g;
+      run.lastIndex = i + open.length;
+      let close = null;
+      for (let m = run.exec(text); m; m = run.exec(text)) {
+        if (m[0].length === open.length) {
+          close = m.index;
+          break;
+        }
+      }
+      if (close === null) {
+        out += open;
+        i += open.length;
+        continue;
+      }
+      const source = text.slice(i, close + open.length);
+      const n = spans.push(source.replace(/\s*\n\s*/g, ' ')) - 1;
+      out += `\u0001${n}\u0002${MORE.repeat(source.split('\n').length - 1)}`;
+      i = close + open.length;
+      continue;
+    }
+    out += c;
+    i += 1;
   }
-  return out + text.slice(i);
+  return out;
+}
+
+const FENCE_OPEN = /^(`{3,}|~{3,})(.*)$/;
+const THEMATIC = /^(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/;
+const SETEXT = /^(?:=+|-+)[ \t]*$/;
+const HEADING = /^#{1,6}(?:[ \t]|$)/;
+const ITEM = /^([*+-]|(\d{1,9})[.)])( *)(.*)$/;
+
+/** A list item's marker at `text` (indent stripped): { width, blank, start } or null. */
+function itemOf(text, indent) {
+  if (THEMATIC.test(text)) return null;
+  const m = ITEM.exec(text);
+  if (!m || (m[3] === '' && m[4] !== '')) return null;
+  const blank = m[4].trim() === '';
+  const spaces = blank || m[3].length > 4 ? 1 : m[3].length;
+  return { width: indent + m[1].length + spaces, blank, start: m[2] };
+}
+
+/** Whether `text` (after the containers) starts a block that ends a paragraph. */
+function interrupts(text) {
+  const indent = indentOf(text);
+  if (indent >= 4) return false;
+  const t = text.slice(indent);
+  const fence = FENCE_OPEN.exec(t);
+  if (fence && !(fence[1][0] === '`' && fence[2].includes('`'))) return true;
+  if (t.startsWith('>') || HEADING.test(t) || THEMATIC.test(t) || t.startsWith('<!--')) return true;
+  const item = itemOf(t, indent);
+  return Boolean(item && !item.blank && (item.start === undefined || Number(item.start) === 1));
 }
 
 /**
- * The body without what GitHub renders as code or a quote rather than as prose: fenced code
- * (a backtick fence whose info string holds no backtick, at any indentation, R15), inline
- * code spans (across the lines of a paragraph too, replaced by their marks, each span's source
- * pushed to `spans`), HTML comments, blockquotes with their lazy continuation lines, and
- * indented code blocks (4 columns, after a blank line, outside a list). What is left is what a
- * reader sees as the author's own text (review of #255, R5).
+ * The body as a reader of GitHub's rendering sees it: each line is kept when it is a line of
+ * a paragraph or a heading outside any blockquote (code spans and HTML comments in it
+ * replaced by their marks, each span's source pushed to `spans`), and blank otherwise. The
+ * blocks follow CommonMark's container rules (0.31, 5.1-5.2), so fenced code (a fence
+ * indented at most 3 columns past its container's content, a backtick fence whose info holds
+ * no backtick, to its closing fence or the container's end), indented code, HTML comments
+ * and blockquotes with their lazy continuation lines are code or quotes in a list item as at
+ * the top level, and a fence indented 4 columns outside a list is no fence (review of #255,
+ * R5, R15, R21).
  */
 export function proseOf(body, spans = []) {
-  const text = withoutSpans(String(body || '').replace(/\r\n?/g, '\n').replace(FENCE, '\n'),
-    spans).replace(/<!--[\s\S]*?(?:-->|(?![\s\S]))/g, '');
-  const out = [];
-  let quote = false;
-  let code = false;
-  let list = false;
-  let blank = true;
-  for (const line of text.split('\n')) {
-    const empty = /^[ \t]*$/.test(line);
-    const indent = indentOf(line);
-    let drop = false;
-    if (empty) {
-      quote = false;
-    } else if (indent < 4 && /^ {0,3}>/.test(line)) {
-      quote = true;
-      drop = true;
-    } else if (quote && !INTERRUPTS.test(line)) {
-      drop = true;
-    } else if (indent >= 4 && (code || (blank && !list))) {
-      code = true;
-      drop = true;
-    } else {
-      quote = false;
-      code = false;
-      if (LIST_ITEM.test(line)) list = true;
-      else if (blank && indent < 2) list = false;
+  const lines = String(body || '').replace(/\r\n?/g, '\n').split('\n').map(expandTabs);
+  const out = lines.map(() => '');
+  let stack = [];
+  let leaf = null;
+  const close = () => {
+    if (leaf && leaf.type === 'para' && !leaf.quoted) {
+      const text = inline(leaf.lines.map((l) => l.text).join('\n'), spans).split('\n');
+      leaf.lines.forEach((l, j) => {
+        out[l.n] = `${l.prefix}${text[j]}`;
+      });
     }
-    if (!empty && indent < 4) code = false;
-    out.push(drop ? '' : line);
-    blank = empty;
-  }
+    leaf = null;
+  };
+  const para = (n, prefix, text) => {
+    if (!leaf || leaf.type !== 'para') {
+      close();
+      leaf = { type: 'para', quoted: stack.some((c) => c.type === 'quote'), lines: [] };
+    }
+    leaf.lines.push({ n, prefix, text });
+  };
+  lines.forEach((line, n) => {
+    let pos = 0;
+    let matched = 0;
+    for (const c of stack) {
+      const rest = line.slice(pos);
+      const indent = indentOf(rest);
+      if (c.type === 'quote') {
+        if (indent > 3 || rest[indent] !== '>') break;
+        pos += indent + 1 + (rest[indent + 1] === ' ' ? 1 : 0);
+      } else if (rest.trim() !== '') {
+        if (indent < c.width) break;
+        pos += c.width;
+      }
+      matched += 1;
+    }
+    let rest = line.slice(pos);
+    if (matched === stack.length && leaf && leaf.type === 'fence') {
+      const indent = indentOf(rest);
+      const t = rest.slice(indent);
+      if (indent <= 3 && t.startsWith(leaf.fence) && new RegExp(`^\\${leaf.fence[0]}+[ ]*$`)
+        .test(t)) leaf = null;
+      return;
+    }
+    if (matched === stack.length && leaf && leaf.type === 'html') {
+      if (rest.includes('-->')) leaf = null;
+      return;
+    }
+    if (matched < stack.length) {
+      // a lazy continuation line of a paragraph keeps its containers
+      if (leaf && leaf.type === 'para' && rest.trim() !== '' && !interrupts(rest)) {
+        para(n, line.slice(0, pos), rest);
+        return;
+      }
+      close();
+      stack = stack.slice(0, matched);
+    }
+    // new containers
+    for (;;) {
+      rest = line.slice(pos);
+      const indent = indentOf(rest);
+      if (indent >= 4) break;
+      const t = rest.slice(indent);
+      if (t.startsWith('>')) {
+        close();
+        stack.push({ type: 'quote' });
+        pos += indent + 1 + (t[1] === ' ' ? 1 : 0);
+        continue;
+      }
+      const item = itemOf(t, indent);
+      if (!item) break;
+      if (leaf && leaf.type === 'para'
+        && (item.blank || (item.start !== undefined && Number(item.start) !== 1))) break;
+      close();
+      stack.push({ type: 'item', width: item.width });
+      pos += Math.min(item.width, rest.length);
+      if (item.blank) break;
+    }
+    rest = line.slice(pos);
+    const prefix = line.slice(0, pos);
+    if (rest.trim() === '') {
+      if (leaf && leaf.type === 'para') close();
+      return;
+    }
+    const indent = indentOf(rest);
+    if (indent >= 4) {
+      if (leaf && leaf.type === 'para') para(n, prefix, rest);
+      else leaf = { type: 'code' };
+      return;
+    }
+    if (leaf && leaf.type === 'code') leaf = null;
+    const t = rest.slice(indent);
+    const fence = FENCE_OPEN.exec(t);
+    if (fence && !(fence[1][0] === '`' && fence[2].includes('`'))) {
+      close();
+      leaf = { type: 'fence', fence: fence[1] };
+      return;
+    }
+    if (t.startsWith('<!--')) {
+      close();
+      if (!t.slice(4).includes('-->')) leaf = { type: 'html' };
+      return;
+    }
+    if (HEADING.test(t)) {
+      close();
+      if (!stack.some((c) => c.type === 'quote')) out[n] = `${prefix}${inline(rest, spans)}`;
+      return;
+    }
+    if (leaf && leaf.type === 'para' && SETEXT.test(t)) {
+      close();
+      return;
+    }
+    if (THEMATIC.test(t)) {
+      close();
+      return;
+    }
+    para(n, prefix, rest);
+  });
+  close();
   return out.join('\n');
 }
 

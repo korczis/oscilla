@@ -19,15 +19,15 @@ schema: oscilla.pr-meta/v1
 version: 1
 
 # ---------------------------------------------------------------- who judges
-# A read-only job. The program is the base branch's (.github/scripts/base-rule.sh), so a pull
-# request cannot change what judges it; the pull request that introduces it is judged by its
-# own copy, with a warning. Title and body edits start this workflow alone (`edited`); ci.yml
-# does not re-run on them. The newest run of a pull request wins: it writes nothing.
+# A read-only job. The program is the base branch's (.github/scripts/base-rule.sh, itself the
+# base commit's copy), so a pull request cannot change what judges it; the pull request that
+# introduces it is judged by its own copy, with a warning. Title and body edits start this
+# workflow alone (`edited`); ci.yml does not re-run on them. The newest run of a pull request wins: it writes nothing.
 judge:
   workflow: .github/workflows/metadata.yml
   job: metadata
   # minutes; every step declares a smaller bound of its own
-  bound: 5
+  bound: 6
   triggers:
     pull_request:
       types: [opened, edited, synchronize, reopened, ready_for_review]
@@ -37,11 +37,20 @@ judge:
   permissions:
     contents: read
     pull-requests: read
+  # how the judge is reached (review of #255, R12): setup-node before the checkout, the step
+  # `judge` third (it takes base-rule.sh and scripts/ from the base commit into
+  # $RUNNER_TEMP/judge before anything of the pull request runs), and the judge's step run by
+  # a shell that reads no BASH_ENV, its call under `env -i` with a fixed PATH and HOME
+  steps: [actions/setup-node, actions/checkout, judge]
+  shell: /usr/bin/env -u BASH_ENV -u ENV /bin/bash --noprofile --norc -eo pipefail {0}
   # the last command of the job's last step, exactly
   # (the base by its full ref: a tag named origin/<base> would otherwise answer for it)
   call: >-
-    .github/scripts/base-rule.sh "refs/remotes/origin/$GITHUB_BASE_REF"
-    scripts/pr-metadata.mjs --pr-json "$RUNNER_TEMP/pr.json" --head HEAD
+    /usr/bin/env -i PATH="${{ steps.judge.outputs.path }}"
+    HOME="${{ runner.temp }}/judge-home" GITHUB_REPOSITORY="$GITHUB_REPOSITORY"
+    /bin/bash "${{ runner.temp }}/judge/.github/scripts/base-rule.sh"
+    "refs/remotes/origin/$GITHUB_BASE_REF" scripts/pr-metadata.mjs
+    --pr-json "${{ runner.temp }}/pr.json" --head HEAD
     --base "refs/remotes/origin/$GITHUB_BASE_REF" --check --summary "$GITHUB_STEP_SUMMARY"
   # Branch protection lists `metadata` beside `gate` only after this job has run green on three
   # or more pull requests (owner decision C2); until then the job reports and does not block.

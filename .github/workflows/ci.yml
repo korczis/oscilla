@@ -375,12 +375,16 @@ jobs:
     # branch's copy (.github/scripts/base-rule.sh), not the one this pull request carries; the
     # base is named by its full ref, refs/remotes/origin/<base>, since a tag named
     # origin/<base> (the full history fetches tags) would otherwise answer for it (#255, R2).
-    # Nothing of the pull request runs before the judge (rule `judge-first` of
-    # scripts/ci-workflow-rules.mjs, #255 R12): the install runs no lifecycle script, since a
-    # postinstall of the PR's package.json could rewrite base-rule.sh or put a node or a
-    # NODE_OPTIONS of its own on $GITHUB_PATH or $GITHUB_ENV for the judge's step. The tests
-    # the judge runs need the packages, not their scripts (esbuild, the one package with an
-    # install script, works without it).
+    # The judge is isolated by structure (#255, R12, R17-R19; rule `judge-first` of
+    # scripts/ci-workflow-rules.mjs checks the shape): setup-node runs before the checkout,
+    # the `judge` step extracts base-rule.sh and the programs from the base commit before
+    # anything of the pull request runs, the base's install-guard.mjs refuses a lockfile entry
+    # outside the registry and a .npmrc that names a program or another registry before the
+    # install, the install runs no lifecycle script, and the judge's step starts the extracted
+    # copy under `env -i` with a fixed PATH (that node first), a temporary HOME and no
+    # NODE_OPTIONS, from a shell that reads no BASH_ENV. The tests the judge runs need the
+    # packages, not their scripts (esbuild, the one package with an install script, works
+    # without it). What this does not cover: the PR's tests run inside the judge's step.
     name: fail-first (feat/fix tests fail without the change)
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -388,16 +392,42 @@ jobs:
       contents: read
       pull-requests: read
     steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-          cache: npm
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      # The judge, from the base commit, before anything of the pull request runs: the base's
+      # base-rule.sh and scripts/ into $RUNNER_TEMP/judge, the commit in .base-commit, and the
+      # node setup-node put on PATH (before the checkout, so it read no file of the pull
+      # request) as an absolute path. What the job runs later cannot change what this step
+      # recorded (#255, R12, R17-R19).
+      - name: The judge, taken from the base commit
+        id: judge
+        run: |
+          base="refs/remotes/origin/$GITHUB_BASE_REF"
+          sha="$(git show-ref --verify --hash "$base")"
+          judge="$RUNNER_TEMP/judge"
+          mkdir -p "$judge" "$RUNNER_TEMP/judge-home"
+          git archive "$sha" -- .github/scripts/base-rule.sh scripts | tar -x -C "$judge"
+          echo "$sha" > "$judge/.base-commit"
+          if [ ! -f "$judge/scripts/install-guard.mjs" ]; then
+            echo "::warning::the base has no scripts/install-guard.mjs; this checkout's copy guards"
+            cp scripts/install-guard.mjs "$judge/scripts/install-guard.mjs"
+          fi
+          node="$(readlink -f "$(command -v node)")"
+          echo "node=$node" >> "$GITHUB_OUTPUT"
+          echo "path=$(dirname "$node"):/usr/bin:/bin:/usr/sbin:/sbin" >> "$GITHUB_OUTPUT"
+          echo "the judge: $base (${sha:0:12}), node $node"
+      - name: Nothing the install would run or fetch comes from outside the registry
+        run: |
+          "${{ steps.judge.outputs.node }}" "${{ runner.temp }}/judge/scripts/install-guard.mjs" \
+            --repo "$GITHUB_WORKSPACE"
       - run: npm ci --ignore-scripts
       - name: The PR's added or changed unit tests fail on the merge base
         timeout-minutes: 10
+        shell: /usr/bin/env -u BASH_ENV -u ENV /bin/bash --noprofile --norc -eo pipefail {0}
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
@@ -405,12 +435,18 @@ jobs:
         run: |
           if [ -z "$PR" ]; then echo "::error::fail-first: no pull request to judge"; exit 1; fi
           n=0
-          until gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body > "$RUNNER_TEMP/pr.json"; do
+          until /usr/bin/env -i PATH="${{ steps.judge.outputs.path }}" \
+            HOME="${{ runner.temp }}/judge-home" GH_TOKEN="$GH_TOKEN" \
+            gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body \
+            > "${{ runner.temp }}/pr.json"; do
             n=$((n + 1)); [ "$n" -lt 3 ] || { echo "::error::could not read PR $PR"; exit 1; }
             sleep 10
           done
-          .github/scripts/base-rule.sh "refs/remotes/origin/$GITHUB_BASE_REF" \
-            scripts/fail-first.mjs --pr-json "$RUNNER_TEMP/pr.json" --head "$HEAD_SHA" \
+          /usr/bin/env -i PATH="${{ steps.judge.outputs.path }}" \
+            HOME="${{ runner.temp }}/judge-home" CI=true \
+            /bin/bash "${{ runner.temp }}/judge/.github/scripts/base-rule.sh" \
+            "refs/remotes/origin/$GITHUB_BASE_REF" scripts/fail-first.mjs \
+            --pr-json "${{ runner.temp }}/pr.json" --head "$HEAD_SHA" \
             --base-branch "refs/remotes/origin/$GITHUB_BASE_REF"
 
   review-verdict:
@@ -425,28 +461,49 @@ jobs:
     # of them does not. What is judged is HEAD of this checkout: the pull request as GitHub
     # merged it with the base branch for this run, so a base that changed one of the PR's
     # guarded files since the review is seen here. Any other PR passes without a verdict. The
-    # script needs no dependency, so nothing is installed, and nothing of the pull request runs
-    # before the judge (`judge-first`, #255 R12). The program that judges, and so the
-    # guarded list, is the base branch's copy (.github/scripts/base-rule.sh): a pull request
-    # that edits the list is judged by the list it found.
+    # script needs no dependency, so nothing is installed. The program that judges, and so the
+    # guarded list, is the base branch's copy (.github/scripts/base-rule.sh), taken from the
+    # base commit and started like fail-first's (#255, R12): a pull request that edits the
+    # list is judged by the list it found.
     name: review-verdict (guarded paths need a recorded review)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 22
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      # The judge, from the base commit, before anything of the pull request runs: the base's
+      # base-rule.sh and scripts/ into $RUNNER_TEMP/judge, the commit in .base-commit, and the
+      # node setup-node put on PATH (before the checkout, so it read no file of the pull
+      # request) as an absolute path. What the job runs later cannot change what this step
+      # recorded (#255, R12, R17-R19).
+      - name: The judge, taken from the base commit
+        id: judge
+        run: |
+          base="refs/remotes/origin/$GITHUB_BASE_REF"
+          sha="$(git show-ref --verify --hash "$base")"
+          judge="$RUNNER_TEMP/judge"
+          mkdir -p "$judge" "$RUNNER_TEMP/judge-home"
+          git archive "$sha" -- .github/scripts/base-rule.sh scripts | tar -x -C "$judge"
+          echo "$sha" > "$judge/.base-commit"
+          node="$(readlink -f "$(command -v node)")"
+          echo "node=$node" >> "$GITHUB_OUTPUT"
+          echo "path=$(dirname "$node"):/usr/bin:/bin:/usr/sbin:/sbin" >> "$GITHUB_OUTPUT"
+          echo "the judge: $base (${sha:0:12}), node $node"
       - name: A guarded change carries a verdict for the content it changes
+        shell: /usr/bin/env -u BASH_ENV -u ENV /bin/bash --noprofile --norc -eo pipefail {0}
         env:
           PR: ${{ github.event.pull_request.number }}
         run: |
           if [ -z "$PR" ]; then echo "::error::review-verdict: no pull request to judge"; exit 1; fi
-          .github/scripts/base-rule.sh "refs/remotes/origin/$GITHUB_BASE_REF" \
-            scripts/review-verdict.mjs --pr "$PR" --head HEAD \
-            --base-branch "refs/remotes/origin/$GITHUB_BASE_REF"
+          /usr/bin/env -i PATH="${{ steps.judge.outputs.path }}" \
+            HOME="${{ runner.temp }}/judge-home" \
+            /bin/bash "${{ runner.temp }}/judge/.github/scripts/base-rule.sh" \
+            "refs/remotes/origin/$GITHUB_BASE_REF" scripts/review-verdict.mjs --pr "$PR" \
+            --head HEAD --base-branch "refs/remotes/origin/$GITHUB_BASE_REF"
 
   gate:
     name: gate
