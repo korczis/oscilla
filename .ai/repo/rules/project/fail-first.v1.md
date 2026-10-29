@@ -40,10 +40,12 @@ A claim a person types is not evidence; a run against the merge base is.
   because a test that is sensitive to a loaded machine would otherwise hide real evidence.
 - A change no unit test can demonstrate (documentation under a `fix` title, a behaviour only
   a browser suite can observe) says so in the pull request body, on a line of its own:
-  `fail-first: n/a <reason>`. The reason is required, and the placeholder `<reason>` or
-  punctuation is not one. The line counts only in the body's own prose: inside a fenced code
-  block, an HTML comment or a blockquote it is a quotation. The reason is printed in the job
-  log, and whether it is a good reason is for the reviewer.
+  `fail-first: n/a <reason>`. The reason is required, and the placeholder `<reason>`,
+  punctuation or text written only as inline code is not one. The line counts only in the
+  body's own prose: inside a fenced code block (in a list item too), an indented code block,
+  a code span (across the lines of a paragraph too), an HTML comment or a blockquote it is a
+  quotation. The reason is printed in the job log, and whether it is a good reason is for the
+  reviewer.
 - The program that judges a pull request is the base branch's `scripts/fail-first.mjs`, not
   the copy the pull request carries.
 - One proving file satisfies the rule. It does not prove that every test in the pull request

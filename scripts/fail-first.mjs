@@ -44,9 +44,16 @@ const FILE_TIMEOUT_MS = 180_000;
 // no lazy continuation of a blockquote before it.
 const INTERRUPTS = new RegExp(String.raw`^ {0,3}(?:[*+-](?:[ \t]|$)|\d{1,9}[.)](?:[ \t]|$)`
   + String.raw`|#{1,6}(?:[ \t]|$)|${'`'}{3}|~{3}|>)`);
-// a fence and its block, to its closing fence or the end of the body
-const FENCE = new RegExp(String.raw`^ {0,3}(${'`'}{3,}(?=[^${'`'}\n]*$)|~{3,})[^\n]*(?:\n|$)`
-  + String.raw`[\s\S]*?(?:^ {0,3}\1[${'`'}~]*[ \t]*$|(?![\s\S]))`, 'gm');
+// a fence and its block, to its closing fence or the end of the body. At any indentation: a
+// list item's content may sit 4 or more columns in, and its fence is a fence there (review of
+// #255, R15); one indented 4 outside a list is an indented code block, code either way.
+const FENCE = new RegExp(String.raw`^[ \t]*(${'`'}{3,}(?=[^${'`'}\n]*$)|~{3,})[^\n]*(?:\n|$)`
+  + String.raw`[\s\S]*?(?:^[ \t]*\1[${'`'}~]*[ \t]*$|(?![\s\S]))`, 'gm');
+// what an inline code span leaves in the prose: a mark (U+0001), its index, U+0002 on its
+// first line and the bare marks on each further one. No letter or digit outside the index,
+// so code is no waiver reason (R16), and a line that continues a span starts with a mark, so
+// a waiver inside the span is no line of its own (R5).
+const SPAN_MARK = /\u0001(\d*)\u0002/g;
 const LIST_ITEM = /^ {0,3}(?:[*+-]|\d{1,9}[.)])(?:[ \t]|$)/;
 
 /** The columns of a line's indentation, a tab reaching the next multiple of 4. */
@@ -57,17 +64,49 @@ function indentOf(line) {
 }
 
 /**
- * The body without what GitHub renders as code or a quote rather than as prose: fenced code
- * (a backtick fence whose info string holds no backtick, indented at most 3 spaces), inline
- * code spans, HTML comments, blockquotes with their lazy continuation lines, and indented code
- * blocks (4 columns, after a blank line, outside a list). What is left is what a reader sees
- * as the author's own text (review of #255, R5).
+ * The text with each inline code span replaced by its marks (SPAN_MARK), its source pushed to
+ * `spans`. A span opens at a run of backticks and closes at the next run of the same length
+ * within its paragraph (it may cross lines, not a blank one, review of #255 R5); a run that
+ * finds none is a literal backtick.
  */
-export function proseOf(body) {
-  const text = String(body || '').replace(/\r\n?/g, '\n')
-    .replace(FENCE, '\n')
-    .replace(/(`+)(?!`)[^\n]*?[^`\n]\1(?!`)/g, 'code')
-    .replace(/<!--[\s\S]*?(?:-->|(?![\s\S]))/g, '');
+function withoutSpans(text, spans) {
+  let out = '';
+  let i = 0;
+  const run = /`+/g;
+  for (let m = run.exec(text); m; m = run.exec(text)) {
+    const open = m[0];
+    const blank = /\n[ \t]*\n/g;
+    blank.lastIndex = m.index;
+    const para = blank.exec(text);
+    const end = para ? para.index : text.length;
+    const close = new RegExp(`(?<!\`)${open}(?!\`)`, 'g');
+    close.lastIndex = m.index + open.length;
+    const c = close.exec(text);
+    if (!c || c.index >= end) {
+      run.lastIndex = m.index + open.length;
+      continue;
+    }
+    const source = text.slice(m.index, c.index + open.length);
+    const n = spans.push(source.replace(/\s*\n\s*/g, ' ')) - 1;
+    out += `${text.slice(i, m.index)}\u0001${n}\u0002`
+      + '\n\u0001\u0002'.repeat(source.split('\n').length - 1);
+    i = c.index + open.length;
+    run.lastIndex = i;
+  }
+  return out + text.slice(i);
+}
+
+/**
+ * The body without what GitHub renders as code or a quote rather than as prose: fenced code
+ * (a backtick fence whose info string holds no backtick, at any indentation, R15), inline
+ * code spans (across the lines of a paragraph too, replaced by their marks, each span's source
+ * pushed to `spans`), HTML comments, blockquotes with their lazy continuation lines, and
+ * indented code blocks (4 columns, after a blank line, outside a list). What is left is what a
+ * reader sees as the author's own text (review of #255, R5).
+ */
+export function proseOf(body, spans = []) {
+  const text = withoutSpans(String(body || '').replace(/\r\n?/g, '\n').replace(FENCE, '\n'),
+    spans).replace(/<!--[\s\S]*?(?:-->|(?![\s\S]))/g, '');
   const out = [];
   let quote = false;
   let code = false;
@@ -105,10 +144,22 @@ export function proseOf(body) {
  * when none was given, or when it is only a placeholder (`<reason>`) or punctuation.
  */
 export function waiver(body) {
-  const m = WAIVER.exec(proseOf(body));
+  return waiverOf(WAIVER, body);
+}
+
+/**
+ * The waiver `pattern` (its group 1 the reason) finds on a line of the body's own prose, as
+ * waiver() reads it: null, or { reason }. The reason is words of the author's own, outside
+ * code (review of #255, R16) and outside a placeholder, else ''; its code is printed as written.
+ */
+export function waiverOf(pattern, body) {
+  const spans = [];
+  const m = pattern.exec(proseOf(body, spans));
   if (!m) return null;
   const reason = m[1].trim();
-  return { reason: /[\p{L}\p{N}]/u.test(reason.replace(/<[^>]*>/g, '')) ? reason : '' };
+  const words = reason.replace(SPAN_MARK, '').replace(/<[^>]*>/g, '');
+  return { reason: /[\p{L}\p{N}]/u.test(words)
+    ? reason.replace(SPAN_MARK, (_, k) => spans[Number(k)] ?? '').trim() : '' };
 }
 
 /** The kind of a failed `node --test` run, from its output. */

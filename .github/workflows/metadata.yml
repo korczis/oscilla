@@ -14,7 +14,8 @@
 #
 # Not part of the required `gate`: the owner adds `metadata` to branch protection after it has
 # run green on three or more pull requests (owner decision C2). Nothing is installed: the
-# program uses Node built-ins and git.
+# program uses Node built-ins and git, and nothing of the pull request runs before the judge
+# (rule `judge-first` of scripts/ci-workflow-rules.mjs, review of #255, R12).
 name: metadata
 
 on:

@@ -142,7 +142,10 @@ test('the waiver: a reason passes; quoted, placeholder or empty, it is not one',
     'plan: n/a <reason>\n', 'plan: n/a ...\n', '```\nplan: n/a quoted\n```\n',
     '> plan: n/a quoted\n', '<!-- plan: n/a quoted -->\n', 'a plan: n/a mid-sentence\n',
     'PLAN: N/A upper case\n', '    plan: n/a code\n', '> q\nplan: n/a lazy\n',
-    '`<!--`\nplan: n/a prose\n', '']) {
+    '`<!--`\nplan: n/a prose\n', '',
+    // review of #255, round 2: R5, R15, R16 hold for the plan waiver as for fail-first's
+    'See `x\nplan: n/a in a span` here.\n', '- a\n\n    ```\n    plan: n/a fenced\n    ```\n',
+    'plan: n/a `<reason>`\n', 'plan: n/a the `x` flag only\n']) {
     assert.deepEqual(planWaiver(body), waiver(body.replace(/plan:/gi, 'fail-first:')), body);
   }
 });

@@ -80,6 +80,17 @@ that is repaired where it last hurt regresses in the next job somebody adds.
   `fail-first` and `review-verdict` jobs judge a pull request; a manual run on a pull
   request's branch would have none to judge, and its `gate` would land on the same commit as
   the required check.
+- In a job that runs `.github/scripts/base-rule.sh` (a judge job: `fail-first`,
+  `review-verdict`, `metadata`), nothing of the pull request runs before the call, in an
+  earlier step or earlier in the same step (`judge-first`): no local action, no `npm`,
+  `npx`, `yarn`, `pnpm`, `bun` or `corepack` command other than `npm ci` / `npm install`
+  with `--ignore-scripts`, no interpreter or task runner (`node`, `sh`, `python`, `make`,
+  ...), no `source` / `.`, and no program named by a relative path. Review of #255, R12: the
+  `fail-first` job ran `npm ci` before the judge, so the pull request's own `postinstall`
+  ran first and could rewrite `base-rule.sh`, or put a `node` on `$GITHUB_PATH` or a
+  `NODE_OPTIONS` on `$GITHUB_ENV` for the judge's step, and its own program judged. What the
+  judge itself runs (fail-first runs the pull request's tests) runs after the base's program
+  is extracted and started.
 
 By convention, not checked: a job's limit is the sum of its steps', rounded up.
 

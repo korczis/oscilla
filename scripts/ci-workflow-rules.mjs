@@ -22,6 +22,13 @@
 //                    .github/scripts/base-rule.sh (metadata.yml), started by anything but
 //                    pull_request (a manual run has no pull request, so fail-first,
 //                    review-verdict and pr-metadata would have nothing to check)
+//   judge-first      in a job that runs .github/scripts/base-rule.sh, a step before the call
+//                    (or a line of its own step before it) that runs code of the pull
+//                    request: a local action, an npm/npx/yarn/pnpm/bun/corepack command other
+//                    than `npm ci` or `npm install` with --ignore-scripts, an interpreter or a
+//                    task runner, `source`/`.`, or a program named by a relative path. What
+//                    runs first can rewrite the wrapper, or reach the judge through
+//                    $GITHUB_ENV and $GITHUB_PATH (review of #255, R12)
 //
 // Why each exists is in .ai/repo/rules/project/ci-bounded.v1.md. The unit test
 // tests/unit/ci-workflows.test.mjs runs this on the repository and on mutated copies.
@@ -327,6 +334,9 @@ export function checkWorkflow(file, text, suites, actions = new Map()) {
     if (image !== undefined && !tagged) {
       add('pinned', name, null, `container image without a version tag or digest: ${image}`);
     }
+    for (const [step, message] of judgeFirstViolations(job)) {
+      add('judge-first', name, step, message);
+    }
     const jobEnv = JSON.stringify([doc.env || {}, job.env || {}]);
     (job.steps || []).forEach((step, i) => {
       const label = stepLabel(step, i);
@@ -358,7 +368,7 @@ export function checkWorkflow(file, text, suites, actions = new Map()) {
   // put a green check on the same commit. So a workflow with a gate, or with any step that
   // runs a pull-request rule through .github/scripts/base-rule.sh, starts on pull_request only.
   const judges = names.some((n) => (jobs[n]?.steps || [])
-    .some((s) => typeof s.run === 'string' && /\.github\/scripts\/base-rule\.sh\b/.test(s.run)));
+    .some((s) => typeof s.run === 'string' && JUDGE.test(s.run)));
   if ('gate' in jobs || judges) {
     const { on } = doc;
     const triggers = typeof on === 'string' ? [on]
@@ -369,6 +379,71 @@ export function checkWorkflow(file, text, suites, actions = new Map()) {
         + ` not by: ${triggers.join(', ') || '(nothing)'}`);
     }
   }
+  return out;
+}
+
+const JUDGE = /\.github\/scripts\/base-rule\.sh\b/;
+/** Package managers: each runs the checkout's package.json, its scripts or its packages. */
+const PACKAGE_MANAGER = /^(?:npm|npx|pnpm|pnpx|yarn|bun|bunx|corepack)$/;
+/** Interpreters and task runners: each runs a file, or text, of the checkout. */
+const RUNS_CODE = new RegExp('^(?:node|nodejs|deno|(?:ba|z|da|k|a|fi)?sh|python[\\d.]*|perl'
+  + '|ruby|php|pwsh|source|\\.|eval|exec|make|gmake|just|rake|mix|cargo|go|java|gradle'
+  + '|mvn|dotnet)$');
+/** An install that runs no lifecycle script: `npm ci` / `npm install` with --ignore-scripts. */
+const QUIET_INSTALL = /^npm\s+(?:-\S+\s+)*(?:ci|install|i)(?:\s|$)/;
+const IGNORES_SCRIPTS = /(?:^|\s)--ignore-scripts(?:=true)?(?=\s|$)/;
+const ASSIGNMENT = String.raw`[A-Za-z_]\w*=(?:"[^"]*"|'[^']*'|\S*)`;
+/** What may stand before a command's program word: assignments, sudo, env, command. */
+const PREFIX = new RegExp(`^(?:(?:${ASSIGNMENT}|sudo|env|command)\\s+)*`);
+const ONLY_ASSIGNMENTS = new RegExp(`^(?:${ASSIGNMENT}\\s*)+$`);
+
+/**
+ * Why one logical line runs code of the pull request's checkout, or null. Each simple command
+ * of it (split on ; & | && || ( ) ` and $( ) is read by its program word, after any variable
+ * assignments, `sudo`, `env` and `command`.
+ */
+export function runsCheckoutCode(line) {
+  for (const raw of commandText(line).split(/\$\(|<\(|\|\||&&|[;&|()`{}]/)) {
+    const cmd = raw.trim().replace(PREFIX, '').replace(ONLY_ASSIGNMENTS, '');
+    if (!cmd) continue;
+    const word = cmd.split(/\s+/)[0].replace(/^["']|["']$/g, '');
+    if (PACKAGE_MANAGER.test(word)) {
+      if (QUIET_INSTALL.test(cmd) && IGNORES_SCRIPTS.test(cmd)) continue;
+      return `runs ${word} (only npm ci or npm install with --ignore-scripts runs nothing of it)`;
+    }
+    if (RUNS_CODE.test(word)) return `runs ${word}`;
+    if (word.includes('/') && !/^[/$~]/.test(word)) return `runs ${word}, a file of the checkout`;
+  }
+  return null;
+}
+
+/**
+ * The judge-first violations of one job: what runs code of the pull request before the first
+ * call of .github/scripts/base-rule.sh, in an earlier step or earlier in the same step.
+ */
+function judgeFirstViolations(job) {
+  const steps = job.steps || [];
+  const at = steps.findIndex((s) => typeof s.run === 'string' && JUDGE.test(s.run));
+  if (at < 0) return [];
+  const out = [];
+  steps.slice(0, at + 1).forEach((step, i) => {
+    const label = stepLabel(step, i);
+    if (localAction(step.uses)) {
+      out.push([label, `uses a local action, which runs code of the pull request before`
+        + ` .github/scripts/base-rule.sh: ${step.uses}`]);
+    }
+    if (typeof step.run !== 'string') return;
+    const lines = logicalLines(step.run);
+    const end = i === at ? lines.findIndex((l) => JUDGE.test(l)) : lines.length;
+    for (const line of lines.slice(0, end)) {
+      const why = runsCheckoutCode(line);
+      if (why) {
+        out.push([label, `runs code of the pull request before .github/scripts/base-rule.sh`
+          + ` (${why}), so it could rewrite the wrapper or reach the judge through $GITHUB_ENV`
+          + ` or $GITHUB_PATH: ${line}`]);
+      }
+    }
+  });
   return out;
 }
 

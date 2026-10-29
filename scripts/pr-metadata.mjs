@@ -42,7 +42,7 @@ import { spawnSync } from 'node:child_process';
 import { appendFileSync, existsSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { TITLE as FAIL_FIRST_TITLE, proseOf, waiver } from './fail-first.mjs';
+import { TITLE as FAIL_FIRST_TITLE, waiver, waiverOf } from './fail-first.mjs';
 import { commitOf } from './git-ref.mjs';
 import { commitLevel, parseCommit } from './release-analyze.mjs';
 import { REVIEWS_DIR, reviewedContent, verdictProblems } from './review-verdict.mjs';
@@ -78,10 +78,7 @@ const VERSION_CORE = /v\d+\.\d+\.\d+/gi;
  * the same answers), the reason empty when it is missing, `<reason>` or punctuation.
  */
 export function planWaiver(body) {
-  const m = PLAN_WAIVER.exec(proseOf(body));
-  if (!m) return null;
-  const reason = m[1].trim();
-  return { reason: /[\p{L}\p{N}]/u.test(reason.replace(/<[^>]*>/g, '')) ? reason : '' };
+  return waiverOf(PLAN_WAIVER, body);
 }
 
 /** The records among a list of paths: { ids: Map<id, path>, prefixes: Set<letter> }. */
@@ -408,13 +405,28 @@ export function summary(facts, slug) {
   return `${out.join('\n')}\n`;
 }
 
+const FORCED = /\bset[ \t]+\+(?:e\b|o[ \t]+errexit\b)|\|\|[ \t]*(?:true|:)(?![\w-])/;
+const EXIT_OR_EXEC = /(?<![\w-])(exit|exec)(?![\w-])(?:[ \t]+([^\s;&|)}]+))?/g;
+
 /**
- * A line of the judge's step that can end it green without the call deciding: an `exit` that
- * is not `exit <nonzero number>` (a bare `exit` passes the last status on, 0 after an `if`),
- * `set +e` or `set +o errexit`, `|| true`, `|| :`.
+ * A line of the judge's step that can end it green without the call deciding, as a matcher
+ * (`FORCED_SUCCESS.test(line)`): an `exit` whose status is not a number that bash leaves
+ * nonzero (bash exits with it modulo 256, so `exit 256` succeeds; a bare `exit` passes the
+ * last status on, 0 after an `if`; `exit "$s"` is whatever $s holds), any `exec` (it replaces
+ * the step's shell, so what it starts ends the step: `exec true`), `set +e` or
+ * `set +o errexit`, `|| true`, `|| :` (review of #255, R7).
  */
-export const FORCED_SUCCESS = new RegExp(String.raw`(?<![\w-])exit(?![\w-])(?![ \t]+[1-9]\d*\b)`
-  + String.raw`|\bset[ \t]+\+(?:e\b|o[ \t]+errexit\b)|\|\|[ \t]*(?:true|:)(?![\w-])`);
+export const FORCED_SUCCESS = {
+  test(line) {
+    const text = String(line);
+    if (FORCED.test(text)) return true;
+    for (const [, word, status] of text.matchAll(EXIT_OR_EXEC)) {
+      if (word === 'exec') return true;
+      if (!/^\d+$/.test(status ?? '') || BigInt(status) % 256n === 0n) return true;
+    }
+    return false;
+  },
+};
 
 /** The read-only judge job, as .ai/repo/ci/pr-meta.yaml declares it. */
 function judgeModel(modelText) {
