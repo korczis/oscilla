@@ -6,11 +6,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync }
+  from 'node:fs';
+import { createRequire } from 'node:module';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gitRepo } from './fixtures/git-repo.mjs';
-import { waiver } from '../../scripts/fail-first.mjs';
+import { failFirst, waiver } from '../../scripts/fail-first.mjs';
+import { digestOf, manifestOf } from '../../scripts/judge-isolation.mjs';
+
+const { until } = createRequire(import.meta.url)('../browser/lib/wait.cjs');
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SCRIPT = path.join(ROOT, 'scripts', 'fail-first.mjs');
@@ -283,6 +289,8 @@ test('a waiver is a line of the body\'s own prose, its reason not the placeholde
 // backslash-escaped backtick opens no span and a backtick in code pairs with nothing outside
 // it (R5), a fence 4 columns in is a fence only inside a list item (R15), and a heading or an
 // HTML comment is its own block, whose unmatched backtick reaches no line after it (R21).
+// Round 4: link reference definitions, HTML blocks and inline tags (R5), and an inline
+// comment's backtick in the waiver's own paragraph (R21).
 test('the waiver is read as CommonMark reads the body (R5, R15, R21)', () => {
   const hidden = {
     // R5: the escaped backtick is literal, the next one opens a span across the waiver
@@ -300,6 +308,15 @@ test('the waiver is read as CommonMark reads the body (R5, R15, R21)', () => {
       + '    ```\n',
     'in a nested list item\'s fence': '- a\n  - b\n\n      ```\n      fail-first: n/a docs only\n'
       + '      ```\n',
+    // round 4, R5: what GitHub renders nothing of, a link reference definition's title
+    // across lines, an HTML block (a type-6 tag's attribute) and an inline tag's attribute
+    'in a link reference title': '[x]: /url "a\nfail-first: n/a docs only\nb"\n',
+    'in a link reference title in parentheses': '[x]: /url (a\nfail-first: n/a docs only\n)\n',
+    'in a link reference title on its own lines': '[x]:\n/url\n"t\nfail-first: n/a docs only"\n',
+    'in a type-6 block\'s attribute': '<div title="\nfail-first: n/a docs only\n">\n',
+    'in a type-6 block after a paragraph': 'Text\n<div\nfail-first: n/a docs only\n',
+    'in a pre block': '<pre>\n\nfail-first: n/a docs only\n</pre>\n',
+    'in an inline tag\'s attribute': 'See <span title="x\nfail-first: n/a docs only\n">y</span>\n',
   };
   for (const [what, body] of Object.entries(hidden)) {
     const w = waiver(body);
@@ -316,6 +333,14 @@ test('the waiver is read as CommonMark reads the body (R5, R15, R21)', () => {
       + 'fail-first: n/a docs only\nmore `x`\n',
     'after an inline comment with a backtick': 'Note <!-- ` --> here.\n\n'
       + 'fail-first: n/a docs only\n` x\n',
+    // round 4, R21: in the same paragraph, the comment's backtick would otherwise open a span
+    // that the later one closes, hiding the waiver between them
+    'after an inline comment with a backtick, in its paragraph': 'Note <!-- ` --> here.\n'
+      + 'fail-first: n/a docs only\n` x\n',
+    // R5: what follows a definition, an HTML block or a lone inline tag is prose
+    'after a link reference definition': '[x]: /url "t"\nfail-first: n/a docs only\n',
+    'after an HTML block and a blank line': '<div>\nx\n</div>\n\nfail-first: n/a docs only\n',
+    'after a line that is no definition': '[x]: /url "t" more\nfail-first: n/a docs only\n',
     // R5: an escaped backtick opens nothing, a code block's backtick pairs with nothing
     'after an escaped backtick': 'a \\` b\nfail-first: n/a docs only\nc ` d\n',
     'after a fenced code block with a backtick': '```\na ` b\n```\nfail-first: n/a docs only\n'
@@ -369,3 +394,182 @@ test('a unit test file with a non-ASCII name is seen', (t) => {
   assert.equal(r.status, 0, r.out);
   assert.match(r.out, /výstup\.test\.mjs: fails without the change \(assertion\)/);
 });
+
+// review of #255, round 4: the CI judge (JUDGE_MANIFEST set) checks its own copy against the
+// manifest its `judge` step wrote, before any child and after the last; it installs the
+// packages itself (the guard in-process, then `npm ci --ignore-scripts` as a child); every
+// child runs in a group of its own that dies with it; and it refuses to judge where a child
+// could ptrace it (R12, R22).
+const LOCK = `${JSON.stringify({ name: 'fixture', version: '1.0.0', lockfileVersion: 3,
+  requires: true, packages: { '': { name: 'fixture', version: '1.0.0' } } }, null, 2)}\n`;
+const PKG = `${JSON.stringify({ name: 'fixture', version: '1.0.0', private: true })}\n`;
+
+/** A judge copy of this checkout's scripts/, sealed as the `judge` step seals it. */
+function judgeCopy(t) {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'oscilla-fail-first-judge-'));
+  t.after(() => {
+    spawnSync('chmod', ['-R', 'u+w', dir]);
+    rmSync(dir, { recursive: true, force: true });
+  });
+  cpSync(path.join(ROOT, 'scripts'), path.join(dir, 'scripts'), { recursive: true });
+  writeFileSync(path.join(dir, '.base-commit'), `${'0'.repeat(40)}\n`);
+  const text = manifestOf(dir);
+  writeFileSync(path.join(dir, '.manifest'), text);
+  spawnSync('chmod', ['-R', 'a-w', dir]);
+  return { dir, digest: digestOf(text) };
+}
+
+/** A fixture with a package and a lockfile, as the repository has. */
+function packaged() {
+  const repo = gitRepo('oscilla-fail-first-judge-');
+  repo.commit('base', {
+    'src/value.mjs': 'export const value = () => 1;\n',
+    'tests/unit/value.test.mjs': VALUE_TEST(1),
+    'package.json': PKG,
+    'package-lock.json': LOCK,
+  });
+  repo.branch('pr');
+  return repo;
+}
+
+function judgeRun(repo, judge, title, digest = judge.digest) {
+  const r = spawnSync(process.execPath, [path.join(judge.dir, 'scripts', 'fail-first.mjs'),
+    '--repo', repo.dir, '--title', title, '--base-branch', 'main'],
+  { encoding: 'utf8', env: { ...ENV, JUDGE_MANIFEST: digest } });
+  return { status: r.status, out: `${r.stdout}${r.stderr}` };
+}
+
+test('round 4: the judge checks its copy, installs as its own child, then judges', (t) => {
+  const judge = judgeCopy(t);
+  const repo = packaged();
+  t.after(() => repo.dispose());
+  repo.commit('fix', {
+    'src/value.mjs': 'export const value = () => 2;\n',
+    'tests/unit/value.test.mjs': VALUE_TEST(2),
+  });
+  const r = judgeRun(repo, judge, 'fix(x): the value is 2');
+  assert.equal(r.status, 0, r.out);
+  assert.match(r.out, /the judge copy matches its manifest \(\d+ files\)/);
+  assert.match(r.out, /install-guard: only registry tarballs/);
+  assert.match(r.out, /installed with `npm ci --ignore-scripts` by the judge, as its own child/);
+  assert.match(r.out, /value\.test\.mjs: fails without the change \(assertion\), passes with it/);
+  // another digest than the one its step recorded: refused before anything runs
+  const wrong = judgeRun(repo, judge, 'fix(x): the value is 2', digestOf('x'));
+  assert.equal(wrong.status, 1, wrong.out);
+  assert.match(wrong.out, /REFUSED to judge: the judge copy: \.manifest has sha256/);
+  assert.doesNotMatch(wrong.out, /npm ci|value\.test/);
+});
+
+test('round 4: what the install would run, and a committed node_modules, are refused', (t) => {
+  const judge = judgeCopy(t);
+  const repo = packaged();
+  t.after(() => repo.dispose());
+  repo.commit('fix', {
+    'tests/unit/b.test.mjs': VALUE_TEST(1),
+    'package.json': `${JSON.stringify({ name: 'fixture', dependencies: {
+      b: 'git+https://github.com/o/b.git' } })}\n`,
+    '.npmrc': 'audit=false\rgit=./evil.sh\n',
+  });
+  const r = judgeRun(repo, judge, 'fix(x): b');
+  assert.equal(r.status, 1, r.out);
+  assert.match(r.out, /::error::install-guard: package\.json: dependencies\.b = /);
+  assert.match(r.out, /::error::install-guard: \.npmrc: a carriage return/);
+  assert.match(r.out, /REFUSED to judge: the install/);
+  assert.doesNotMatch(r.out, /installed with|b\.test\.mjs:/);
+  assert.equal(existsSync(path.join(repo.dir, 'node_modules')), false);
+  const clean = packaged();
+  t.after(() => clean.dispose());
+  clean.commit('fix', { 'tests/unit/b.test.mjs': VALUE_TEST(1),
+    'node_modules/x/index.js': 'module.exports = 1;\n' });
+  const committed = judgeRun(clean, judge, 'fix(x): modules');
+  assert.equal(committed.status, 1, committed.out);
+  assert.match(committed.out, /node_modules exists before the install/);
+});
+
+test('round 4: a child that changes the judge copy fails the judgement closed', (t) => {
+  const judge = judgeCopy(t);
+  const repo = packaged();
+  t.after(() => repo.dispose());
+  const target = path.join(judge.dir, 'scripts', 'fail-first.mjs');
+  repo.commit('fix', {
+    'src/value.mjs': 'export const value = () => 2;\n',
+    // the same user may undo the read-only bit and rewrite the copy (R22)
+    'tests/unit/value.test.mjs': `${VALUE_TEST(2)}import { chmodSync, appendFileSync }
+  from 'node:fs';
+chmodSync(${JSON.stringify(path.dirname(target))}, 0o755);
+chmodSync(${JSON.stringify(target)}, 0o644);
+appendFileSync(${JSON.stringify(target)}, '\\n// HOSTILE\\n');
+`,
+  });
+  const r = judgeRun(repo, judge, 'fix(x): the value is 2');
+  assert.equal(r.status, 1, r.out);
+  assert.match(r.out, /value\.test\.mjs: fails without the change/, 'the children ran');
+  assert.match(r.out,
+    /REFUSED to judge: the judge copy changed while the children ran: .*fail-first\.mjs changed/);
+  assert.doesNotMatch(r.out, /fail-first: proven/);
+});
+
+test('round 4: a test\'s background grandchild is gone when the judge returns', async (t) => {
+  const repo = fixture();
+  t.after(() => repo.dispose());
+  const pidFile = path.join(mkdtempSync(path.join(os.tmpdir(), 'oscilla-ff-grandchild-')), 'pid');
+  t.after(() => rmSync(path.dirname(pidFile), { recursive: true, force: true }));
+  repo.commit('fix', {
+    'src/value.mjs': 'export const value = () => 2;\n',
+    'tests/unit/value.test.mjs': `${VALUE_TEST(2)}import { spawn } from 'node:child_process';
+import { appendFileSync } from 'node:fs';
+const g = spawn('sleep', ['60'], { stdio: 'ignore' });
+g.unref();
+appendFileSync(${JSON.stringify(pidFile)}, g.pid + '\\n');
+`,
+  });
+  const r = run(repo, 'fix(x): the value is 2');
+  assert.equal(r.status, 0, r.out);
+  const pids = readFileSync(pidFile, 'utf8').trim().split('\n').map(Number);
+  assert.ok(pids.length >= 2, `a grandchild per run: ${pids}`);
+  const alive = (pid) => {
+    try {
+      process.kill(pid, 0);
+      const ps = spawnSync('ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8' });
+      return ps.status === 0 && !/^Z/.test(ps.stdout.trim());
+    } catch {
+      return false;
+    }
+  };
+  await until(() => pids.every((pid) => !alive(pid)), { ms: 5_000,
+    what: 'every grandchild of a test run is gone once the judge has returned' });
+});
+
+test('round 4: no ptrace guarantee, no judgement; a child sees none of the runner\'s files',
+  async (t) => {
+    const repo = fixture();
+    t.after(() => repo.dispose());
+    const out = path.join(mkdtempSync(path.join(os.tmpdir(), 'oscilla-ff-env-')), 'env.json');
+    t.after(() => rmSync(path.dirname(out), { recursive: true, force: true }));
+    repo.commit('fix', {
+      'src/value.mjs': 'export const value = () => 2;\n',
+      'tests/unit/value.test.mjs': `${VALUE_TEST(2)}import { writeFileSync } from 'node:fs';
+writeFileSync(${JSON.stringify(out)}, JSON.stringify(process.env));
+`,
+    });
+    const refused = await failFirst({ repo: repo.dir, title: 'fix(x): 2', baseBranch: 'main',
+      probe: () => ({ ok: false, message: 'ptrace: ptrace_scope is 0' }) });
+    assert.equal(refused.status, 'refused');
+    assert.match(refused.lines.join('\n'), /ptrace_scope is 0[\s\S]*REFUSED to judge/);
+    assert.equal(existsSync(out), false, 'no child ran');
+    const prev = { ...process.env };
+    t.after(() => {
+      for (const k of ['GITHUB_ENV', 'GITHUB_OUTPUT', 'GITHUB_STEP_SUMMARY', 'RUNNER_TEMP']) {
+        if (prev[k] === undefined) delete process.env[k]; else process.env[k] = prev[k];
+      }
+    });
+    Object.assign(process.env, { GITHUB_ENV: '/x/env', GITHUB_OUTPUT: '/x/out',
+      GITHUB_STEP_SUMMARY: '/x/summary', RUNNER_TEMP: '/x' });
+    const ok = await failFirst({ repo: repo.dir, title: 'fix(x): 2', baseBranch: 'main',
+      probe: () => ({ ok: true, message: 'ptrace: ptrace_scope 1' }) });
+    assert.equal(ok.status, 'proven', ok.lines.join('\n'));
+    const env = JSON.parse(readFileSync(out, 'utf8'));
+    for (const k of ['GITHUB_ENV', 'GITHUB_OUTPUT', 'GITHUB_STEP_SUMMARY', 'RUNNER_TEMP',
+      'NODE_OPTIONS', 'BASH_ENV']) assert.equal(k in env, false, k);
+    assert.equal(env.PATH.split(':')[0], path.dirname(process.execPath));
+  });

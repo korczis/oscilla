@@ -529,7 +529,8 @@ test('usage: no mode, no pull request, an unknown flag, no title exit 2', (t) =>
 
 const SOURCE = read('scripts/pr-metadata.mjs');
 const IMPORTS = ['fail-first.mjs', 'git-ref.mjs', 'release-analyze.mjs', 'shell-words.mjs',
-  'release-metadata.mjs', 'review-verdict.mjs', 'yaml-subset.mjs'];
+  'release-metadata.mjs', 'review-verdict.mjs', 'yaml-subset.mjs', 'install-guard.mjs',
+  'judge-isolation.mjs'];
 const block = (code) => new RegExp(`^[ \\t]*// rule: ${code}\\n[\\s\\S]*?`
   + `^[ \\t]*// end rule: ${code}\\n`, 'm');
 
@@ -741,7 +742,9 @@ test('mutation: a workflow that writes, misses an event or can no longer refuse'
   for (const line of ['exit', 'exit 0', 'exit 00', 'exit 256', 'exit 512', 'exit 4294967296',
     'exit "$s"', 'exec true', 'exec "$@"', 'x && exec node y', 'trap \'exit 0\' EXIT',
     'set +e', 'a || true', 'a || :', String.raw`e\xit 0`, "ex''it 0", String.raw`ex\ec true`,
-    'eval x', 'source x', '. x', 'bash -c "exit 0"', '"$X" y', '$(echo exit) 0']) {
+    'eval x', 'source x', '. x', 'bash -c "exit 0"', '"$X" y', '$(echo exit) 0',
+    // round 4, R7: a one-line function (or coproc) body hides nothing
+    'function f { exit 0; }', 'function f() { exit 0; }; f', 'coproc X { exit 0; }']) {
     assert.equal(FORCED_SUCCESS.test(line), true, line);
   }
   // the order of the permission keys means nothing to GitHub, so it means nothing here

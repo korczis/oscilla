@@ -165,3 +165,67 @@ test('the checkout: a .npmrc anywhere, the lockfile and package.json, by exit st
   assert.equal(spawnSync(process.execPath, [PROGRAM, '--nope']).status, 2);
   assert.ok(readFileSync(PROGRAM, 'utf8').includes('R17'));
 });
+
+// review of #255, round 4: npm resolves again an edge whose spec its locked package does not
+// satisfy, so a git spec in a lock entry's own dependency maps (or the root entry's) is cloned
+// and its prepare run under --ignore-scripts (R17); npm's ini splits .npmrc on [\r\n]+, so a
+// key after a lone CR is a line to npm (R18); a bare tarball name is a file of the checkout
+// (R24); a node_modules symlink makes npm ci empty what it points to (R25).
+test('round 4: the specs inside lock entries, a lone CR, a tarball name, node_modules', (t) => {
+  const GIT = 'git+https://github.com/o/r.git#0123abc';
+  const entryWith = (o) => lock({ resolved: TARBALL, integrity: HASH, ...o });
+  for (const field of ['dependencies', 'optionalDependencies', 'peerDependencies',
+    'devDependencies']) {
+    const found = lockfileProblems(entryWith({ [field]: { b: GIT } }));
+    assert.ok(found.some((p) => p.includes(`node_modules/dep: ${field}.b = `)
+      && /names git\+https:/.test(p)), `${field}: ${found.join('; ')}`);
+    for (const spec of ['file:../b', 'link:../b', 'https://x.example/b.tgz', 'github:o/r',
+      'o/r', 'evil.tgz', 'b.tar.gz', '/abs/b', './b']) {
+      assert.ok(lockfileProblems(entryWith({ [field]: { b: spec } })).length, `${field} ${spec}`);
+    }
+  }
+  // the root entry "" is read as well
+  const root = JSON.stringify({ name: 'x', lockfileVersion: 3, packages: {
+    '': { name: 'x', dependencies: { a: '1.0.0' }, optionalDependencies: { b: GIT } },
+    'node_modules/a': { version: '1.0.0', resolved: TARBALL, integrity: HASH } } });
+  assert.match(lockfileProblems(root).join('\n'),
+    /\(the root entry ""\): optionalDependencies\.b = .* names git\+https:/);
+  assert.match(lockfileProblems(JSON.stringify({ lockfileVersion: 3, packages: {
+    '': { workspaces: ['p/*'] } } })).join('\n'), /root entry ""\): workspaces/);
+  assert.match(lockfileProblems(entryWith({ bundleDependencies: ['b'] })).join('\n'),
+    /node_modules\/dep: bundleDependencies/);
+  assert.match(lockfileProblems(entryWith({ dependencies: ['b'] })).join('\n'),
+    /dependencies is not a map/);
+  // registry specs inside entries pass, as the repository's own lockfile shows
+  assert.deepEqual(lockfileProblems(entryWith({ dependencies: { b: '^1.0.0', c: 'npm:d@2' },
+    peerDependencies: { e: '*' }, optionalDependencies: { f: '>=1 <3' } })), []);
+  // R24: a bare tarball file name, in package.json too
+  for (const spec of ['evil.tgz', 'EVIL.TGZ', 'b.tar.gz', 'b.tar']) {
+    assert.match(String(nonRegistrySpec(spec)), /a tarball file of the checkout/, spec);
+  }
+  assert.match(manifestProblems(JSON.stringify({ dependencies: { b: 'evil.tgz' } })).join('\n'),
+    /dependencies\.b = "evil\.tgz" is a tarball file/);
+  // R18: a lone CR, and the key after it as npm reads it
+  for (const text of ['audit=false\rgit=./evil.sh\n', 'fund=false\r\rregistry=https://x/\n']) {
+    const found = npmrcProblems(text);
+    assert.ok(found.some((p) => /a carriage return/.test(p)), found.join('; '));
+    assert.ok(found.some((p) => /:2: (git|registry) names/.test(p)), found.join('; '));
+  }
+  assert.deepEqual(npmrcProblems('audit=false\r\n').map((p) => /carriage/.test(p)), [true]);
+  // R25: a node_modules symlink always, and any node_modules before the install
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'oscilla-install-guard-modules-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'x' }));
+  writeFileSync(path.join(dir, 'package-lock.json'), lock({ resolved: TARBALL, integrity: HASH }));
+  assert.deepEqual(guard(dir, { beforeInstall: true }), []);
+  symlinkSync(os.tmpdir(), path.join(dir, 'node_modules'));
+  assert.match(guard(dir).join('\n'), /node_modules is a symbolic link/);
+  rmSync(path.join(dir, 'node_modules'));
+  mkdirSync(path.join(dir, 'node_modules'));
+  assert.deepEqual(guard(dir), []);
+  assert.match(guard(dir, { beforeInstall: true }).join('\n'),
+    /node_modules exists before the install/);
+  const r = spawnSync(process.execPath, [PROGRAM, '--repo', dir, '--before-install'],
+    { encoding: 'utf8' });
+  assert.equal(r.status, 1, r.stdout);
+});

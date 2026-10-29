@@ -429,19 +429,21 @@ test('E022: the size step reports a pull request over the budget, bounded and ne
   });
 
 // The judge of each rule job is the copy the `judge` step took from the base commit, started
-// under `env -i` with that step's PATH and a HOME of its own (#255, R12).
+// under `env -i` with that step's PATH and manifest digest and a HOME of its own (#255, R12,
+// R22).
 const JUDGE_CALL = '/usr/bin/env -i PATH="${{ steps.judge.outputs.path }}"'
   + ' HOME="${{ runner.temp }}/judge-home"';
+const MANIFEST = 'JUDGE_MANIFEST="${{ steps.judge.outputs.manifest }}"';
 const EXTRACTED = '/bin/bash "${{ runner.temp }}/judge/.github/scripts/base-rule.sh"';
 
 test('the pull-request rules are judged by the base branch\'s programs, and need a PR', () => {
   const jobs = parse(CI).jobs;
   for (const [job, call] of [
     // the base by its full ref, never the short origin/<base> a tag can shadow (#255, R2)
-    ['fail-first', `${JUDGE_CALL} CI=true ${EXTRACTED} ${BASE} scripts/fail-first.mjs`
+    ['fail-first', `${JUDGE_CALL} CI=true ${MANIFEST} ${EXTRACTED} ${BASE} scripts/fail-first.mjs`
       + ' --pr-json "${{ runner.temp }}/pr.json" --head "$HEAD_SHA"'
       + ` --base-branch ${BASE}`],
-    ['review-verdict', `${JUDGE_CALL} ${EXTRACTED} ${BASE} scripts/review-verdict.mjs`
+    ['review-verdict', `${JUDGE_CALL} ${MANIFEST} ${EXTRACTED} ${BASE} scripts/review-verdict.mjs`
       + ` --pr "$PR" --head HEAD --base-branch ${BASE}`],
   ]) {
     assert.deepEqual(problemsOfRuleJob(jobs[job], call), [], job);
@@ -477,6 +479,7 @@ test('mutation: a rule job whose call can no longer refuse', () => {
   const wrapper = `            ${EXTRACTED} \\\n            ${BASE} scripts/review`;
   const head = '          /usr/bin/env -i PATH="${{ steps.judge.outputs.path }}" \\\n'
     + '            HOME="${{ runner.temp }}/judge-home" \\\n'
+    + `            ${MANIFEST} \\\n`
     + `            ${EXTRACTED} \\\n            ${BASE} scripts/review`;
   const shell = `        shell: ${JUDGE_SHELL}\n        env:\n          PR:`;
   for (const [name, job] of [
@@ -510,60 +513,68 @@ test('mutation: a rule job whose call can no longer refuse', () => {
   assert.match(problemsOfRuleJob(ff, 'x').join('\n'), /the last command is not the call/);
 });
 
-// R12 (review of #255, rounds 2 and 3): what runs before the judge in its job can rewrite the
-// judge or reach it through $GITHUB_ENV and $GITHUB_PATH. Round 3 showed that a list of
-// forbidden commands keeps losing (a git dependency's prepare and a .npmrc `git=` run under
-// --ignore-scripts, R17 and R18), so the guarantee is the job's structure (rule
-// `judge-first`): setup-node first, the checkout, the `judge` step that takes the judge from
-// the base commit, the base's install guard before any install, and the judge's step calling
-// that copy under `env -i` from a shell that reads no BASH_ENV. The command check stays as a
-// second line, read as bash reads a command (R19), anchored on the call itself (R20).
+// R12, R22 (review of #255, rounds 2-4): what runs before the judge in its job can rewrite the
+// judge or reach it through $GITHUB_ENV and $GITHUB_PATH, and round 4 showed it rewriting even
+// a read-only extracted copy. The guarantee is the job's structure: nothing of the pull request
+// runs before the judge, and the fail-first judge installs the packages itself. Rule
+// `judge-first` lints that structure (advisory, behind review-verdict): setup-node first, the
+// checkout, the `judge` step, then the judge's step, the last, calling that copy under `env
+// -i` from a shell that reads no BASH_ENV; before the call no command runs code of the pull
+// request (read as bash reads a command, R19, anchored on the call, R20), nothing installs, and
+// no env: key or shell of a step's own loads code (R23).
 const judgeFirst = (violations) => rules(violations).filter((r) => r.startsWith('judge-first'));
-const INSTALL_FF = '      - run: npm ci --ignore-scripts\n';
-const GUARD_FF = '      - name: Nothing the install would run or fetch comes from outside the'
-  + ' registry\n';
+/** Where a step goes in before the judge's step of fail-first. */
+const FF_JUDGE_STEP = '      - name: The PR\'s added or changed unit tests fail on the merge'
+  + ' base\n';
 
 test('R12, R19: before the judge no command runs code of the pull request', () => {
   assert.deepEqual(rules(ci(CI)), []);
-  assert.equal(CI.split(INSTALL_FF).length, 2, 'fail-first installs without lifecycle scripts');
+  assert.ok(!/^\s*(?:- run: )?npm ci/m.test(CI.slice(CI.indexOf('  fail-first:\n'),
+    CI.indexOf('  gate:\n'))), 'no judge job installs');
   // (a block scalar, so that the YAML reads `!`, `{` and quotes as shell text)
-  const ff = (run) => ci(mutate(CI, INSTALL_FF,
-    `      - run: |\n${run.split('\n').map((l) => `          ${l}\n`).join('')}`));
+  const ff = (run) => ci(mutate(CI, FF_JUDGE_STEP,
+    `      - run: |\n${run.split('\n').map((l) => `          ${l}\n`).join('')}${FF_JUDGE_STEP}`));
   for (const run of ['npm ci', 'npm install', 'npm i', 'npm ci --ignore-scripts=false',
     'npm install --ignore-scripts', 'sudo npm ci', 'FOO=1 npm ci', 'env FOO=1 npm ci',
+    // round 4: no install at all before the judge, the judge drives it
+    'npm ci --ignore-scripts', 'npm --ignore-scripts ci', 'npm ci --no-audit --ignore-scripts=true',
     'npm ci --ignore-scripts && npm test', 'npm ci --ignore-scripts; node scripts/x.mjs',
     'npm run build', 'npm test', 'npm exec esbuild', 'npx esbuild --version', 'yarn install',
     'pnpm install --ignore-scripts', 'corepack enable', 'node scripts/size-report.mjs',
     'node -e 1', 'x="$(node -p 1)"', 'bash scripts/x.sh', 'sh -c true', '. ./env.sh',
     'source env.sh', './x.sh', 'scripts/x.sh', 'make', 'just test', 'python3 tools/x.py',
     // R19: a wrapper or a shell keyword before npm, npm named through a variable or a
-    // substitution, a later flag that turns the scripts back on (npm honours the last one)
-    'time npm ci --ignore-scripts', 'nohup npm ci --ignore-scripts',
-    'timeout 60 npm ci --ignore-scripts', 'nice -n 5 npm ci --ignore-scripts',
-    'xargs npm ci --ignore-scripts < /dev/null', 'command npm ci --ignore-scripts',
-    'exec npm ci --ignore-scripts', 'sudo -E npm ci --ignore-scripts',
-    'if npm ci --ignore-scripts; then echo ok; fi', '! npm ci --ignore-scripts',
-    '{ npm ci --ignore-scripts; }', 'while npm ci --ignore-scripts; do break; done',
-    '"$NPM" ci --ignore-scripts', '$NPM ci --ignore-scripts', '${NPM:-npm} ci --ignore-scripts',
+    // substitution
+    'time npm ci --ignore-scripts', 'time -p npm ci', '/usr/bin/time npm ci',
+    'nohup npm ci --ignore-scripts', 'timeout 60 npm ci --ignore-scripts',
+    'nice -n 5 npm ci --ignore-scripts', 'xargs npm ci --ignore-scripts < /dev/null',
+    'command npm ci --ignore-scripts', 'exec npm ci --ignore-scripts',
+    'sudo -E npm ci --ignore-scripts', 'if npm ci --ignore-scripts; then echo ok; fi',
+    '! npm ci --ignore-scripts', '{ npm ci --ignore-scripts; }',
+    'while npm ci --ignore-scripts; do break; done', '"$NPM" ci --ignore-scripts',
+    '$NPM ci --ignore-scripts', '${NPM:-npm} ci --ignore-scripts',
     '$(echo npm) ci --ignore-scripts', '`echo npm` ci --ignore-scripts',
-    'n\\pm ci', "n''pm ci", '"npm" ci', 'npm ci --ignore-scripts --no-ignore-scripts',
-    'npm ci --ignore-scripts --ignore-scripts=false', 'npm ci --ignore-scripts --script-shell=x',
-    'npm ci --ignore-scripts --git=./x.sh', 'npm_config_git=./x.sh npm ci --ignore-scripts',
+    'n\\pm ci', "n''pm ci", '"npm" ci', 'npm_config_git=./x.sh npm ci --ignore-scripts',
     'sh -c "npm ci --ignore-scripts"', 'env -S "npm ci"', '$RUNNER_TEMP/tool --version',
-    'eval "npm ci"', 'npm ci --ignore-scripts "$FLAGS"']) {
+    'eval "npm ci"', 'coproc npm ci', 'function f { npm ci; }',
+    // R26: a workspace path, a glob, a PATH or loader set on the way, git -c, awk system(), pip
+    '/home/runner/work/oscilla/oscilla/x.sh', '/__w/oscilla/oscilla/x.sh', 's*/x.sh',
+    'PATH="$PWD/bin:$PATH" gh --version', 'export PATH="$PWD/bin:$PATH"',
+    'export NODE_OPTIONS=--require=./x.cjs', 'BASH_ENV=./x.sh bash -c true',
+    "git -c alias.x='!./x.sh' x", 'git -c core.fsmonitor=./x.sh status',
+    "awk 'BEGIN { system(\"./x.sh\") }'", 'pip install .', 'pip3 install -e .']) {
     const found = ff(run);
-    assert.deepEqual(judgeFirst(found), ['judge-first@fail-first'], run);
+    assert.deepEqual([...new Set(judgeFirst(found))], ['judge-first@fail-first'], run);
     assert.match(found.find((v) => v.rule === 'judge-first').message,
       /runs code of the pull request before \.github\/scripts\/base-rule\.sh/, run);
   }
-  for (const run of ['npm ci --ignore-scripts', 'npm --ignore-scripts ci',
-    'npm ci --no-audit --ignore-scripts=true', 'echo "npm ci then node x"', 'mkdir -p logs',
-    'git log -1', 'command -v node', '/usr/bin/env', 'cat <<EOF\nnpm test\nEOF']) {
+  for (const run of ['echo "npm ci then node x"', 'mkdir -p logs', 'git log -1',
+    'git show-ref --verify --hash "$base"', 'command -v node', '/usr/bin/env', '[ -f x ]',
+    "awk '{ print $1 }' x", 'cat <<EOF\nnpm test\nEOF']) {
     assert.deepEqual(judgeFirst(ff(run)), [], run);
   }
-  assert.match(runsCheckoutCode('time npm ci --ignore-scripts'),
-    /behind an assignment or a wrapper/);
-  assert.equal(runsCheckoutCode('npm ci --ignore-scripts'), null);
+  assert.match(runsCheckoutCode('time npm ci --ignore-scripts'), /runs npm/);
+  assert.match(runsCheckoutCode('npm ci --ignore-scripts'), /nothing is installed before the/);
   assert.equal(runsCheckoutCode('echo "npm ci"'), null);
   // a line of the judge's own step before the call counts as well
   const loop = '          n=0\n          until /usr/bin/env -i PATH=';
@@ -574,29 +585,71 @@ test('R12, R19: before the judge no command runs code of the pull request', () =
     + '          npm test\n';
   assert.deepEqual(judgeFirst(ci(mutate(CI, loop, `${mention}${loop}`))),
     ['judge-first@fail-first']);
-  // what runs after the judge has no say in the judgement
+  // round 4: the judge's step is the job's last, so nothing runs after it either
   const end = '            --base-branch "refs/remotes/origin/$GITHUB_BASE_REF"\n\n'
     + '  review-verdict:\n';
-  const after = mutate(CI, end, end.replace('\n\n', '\n      - run: npm test\n\n'));
-  assert.deepEqual(judgeFirst(ci(after)), []);
-  // review-verdict installs nothing: an install before its judge has no guard before it
+  const after = ci(mutate(CI, end, end.replace('\n\n', '\n      - run: echo done\n\n')));
+  assert.deepEqual(judgeFirst(after), ['judge-first@fail-first']);
+  assert.match(after.find((v) => v.rule === 'judge-first').message,
+    /a step after the judge's: the judge's step is the job's last/);
+  // review-verdict installs nothing either
   const rv = '      - name: A guarded change carries a verdict for the content it changes\n';
   const rvInstall = ci(mutate(CI, rv, `      - run: npm ci --ignore-scripts\n${rv}`));
   assert.deepEqual(judgeFirst(rvInstall), ['judge-first@review-verdict']);
   assert.match(rvInstall.find((v) => v.rule === 'judge-first').message,
-    /installs before the step that runs install-guard\.mjs/);
+    /nothing is installed before the judge/);
   // a job that judges nothing may run what it likes
   assert.deepEqual(judgeFirst(ci(withStep('npm ci\nnode scripts/x.mjs'))), []);
-  // and metadata.yml, which installs nothing either
+  // and metadata.yml, which installs nothing
   const META = read('.github/workflows/metadata.yml');
   const meta = (text) => checkWorkflow('.github/workflows/metadata.yml', text, SUITES);
   const judge = '      - name: The pull request names its plan record (the base branch\'s'
     + ' program judges)\n';
   assert.deepEqual(rules(meta(META)), []);
-  assert.deepEqual(judgeFirst(meta(mutate(META, judge, `      - run: npm ci\n${judge}`))),
-    ['judge-first@metadata']);
-  assert.deepEqual(judgeFirst(meta(mutate(META, judge,
-    `      - run: node scripts/pr-metadata.mjs --help\n${judge}`))), ['judge-first@metadata']);
+  for (const run of ['npm ci', 'npm ci --ignore-scripts', 'node scripts/pr-metadata.mjs --help']) {
+    assert.deepEqual(judgeFirst(meta(mutate(META, judge, `      - run: ${run}\n${judge}`))),
+      ['judge-first@metadata'], run);
+  }
+});
+
+// R23 (review of #255, round 4): an env: key of the workflow, the job or a step before the
+// judge, or a shell of a step's own, runs code before the step's first command.
+test('R23: no env: loader and no shell of its own before the judge', () => {
+  const refused = (text, want, job = 'fail-first') => {
+    const found = ci(text).filter((v) => v.rule === 'judge-first');
+    assert.deepEqual([...new Set(found.map((v) => `judge-first@${v.job}`))],
+      [`judge-first@${job}`], want.source);
+    assert.ok(found.some((v) => want.test(v.message)), `${want.source}: ${format(found)}`);
+  };
+  const steps = '    steps:\n      - uses: actions/setup-node@v7\n';
+  const ffAt = (text, from, to) => {
+    const i = text.indexOf(from, text.indexOf('  fail-first:\n'));
+    return `${text.slice(0, i)}${to}${text.slice(i + from.length)}`;
+  };
+  for (const k of ['BASH_ENV', 'NODE_OPTIONS', 'LD_PRELOAD', 'ENV', 'PATH', 'GIT_CONFIG_PARAMETERS',
+    'npm_config_git']) {
+    refused(ffAt(CI, steps, `    env:\n      ${k}: ./x\n${steps}`),
+      new RegExp(`the job's env: sets ${k}`));
+    refused(ffAt(CI, '      - name: The judge, taken from the base commit\n',
+      `      - name: The judge, taken from the base commit\n        env:\n          ${k}: ./x\n`),
+    new RegExp(`its env: sets ${k}`));
+    refused(ffAt(CI, '          PR: ${{ github.event.pull_request.number }}\n',
+      `          PR: \${{ github.event.pull_request.number }}\n          ${k}: ./x\n`),
+    new RegExp(`its env: sets ${k}`));
+  }
+  const wfEnv = mutate(CI, '\npermissions:\n  contents: read\n',
+    '\npermissions:\n  contents: read\n\nenv:\n  NODE_OPTIONS: --require=./x.cjs\n');
+  const found = ci(wfEnv).filter((v) => v.rule === 'judge-first');
+  assert.deepEqual([...new Set(found.map((v) => v.job))].sort(), ['fail-first', 'review-verdict']);
+  assert.ok(found.every((v) => /the workflow's env: sets NODE_OPTIONS/.test(v.message)));
+  // a step's own shell before the judge, and a default shell other than bash
+  refused(ffAt(CI, '      - name: The judge, taken from the base commit\n        id: judge\n',
+    '      - name: The judge, taken from the base commit\n        id: judge\n'
+    + '        shell: bash --rcfile ./x {0}\n'), /runs in "bash --rcfile \.\/x \{0\}" before/);
+  refused(ffAt(CI, steps, `    defaults:\n      run:\n        shell: sh\n${steps}`),
+    /the job's defaults run in "sh", not bash/);
+  // OSC_BROWSERS-style job env is fine where nothing judges
+  assert.deepEqual(judgeFirst(ci(CI)), []);
 });
 
 test('R12: the judge is the base commit\'s copy, in a job shaped to keep the PR from it', () => {
@@ -625,16 +678,16 @@ test('R12: the judge is the base commit\'s copy, in a job shaped to keep the PR 
   refused(inFf(ffSteps, `${ffSteps.replace('      - uses: actions/setup-node@v7\n', '')}`
     + '      - run: echo first\n      - uses: actions/setup-node@v7\n'),
   /the first step is not actions\/setup-node/);
-  // no action before the judge, and the install after the base's guard
-  refused(inFf(INSTALL_FF, `      - uses: actions/cache@v4\n        with:\n          path: x\n`
-    + `          key: x\n${INSTALL_FF}`), /uses actions\/cache@v4 before the judge/);
-  const guard = CI.slice(at(CI, GUARD_FF), at(CI, INSTALL_FF));
-  refused(inFf(`${guard}${INSTALL_FF}`, `${INSTALL_FF}${guard}`),
-    /installs before the step that runs install-guard\.mjs/);
-  refused(inFf(guard, ''), /installs before the step that runs install-guard\.mjs/);
-  refused(inFf('"${{ runner.temp }}/judge/scripts/install-guard.mjs"', 'scripts/install-guard.mjs'),
-    /runs the judge's node on anything but the guard/);
-  // the judge's step: its shell, the extracted copy, env -i, the judge step's PATH, a HOME
+  // no action before the judge, and no install
+  refused(inFf(FF_JUDGE_STEP, `      - uses: actions/cache@v4\n        with:\n          path: x\n`
+    + `          key: x\n${FF_JUDGE_STEP}`), /uses actions\/cache@v4 before the judge/);
+  refused(inFf(FF_JUDGE_STEP, `      - run: npm ci --ignore-scripts\n${FF_JUDGE_STEP}`),
+    /nothing is installed before the judge/);
+  refused(inFf(FF_JUDGE_STEP, '      - run: |\n          "${{ steps.judge.outputs.node }}" '
+    + `"\${{ runner.temp }}/judge/scripts/install-guard.mjs"\n${FF_JUDGE_STEP}`),
+  /runs the judge's node before the judge/);
+  // the judge's step: its shell, the extracted copy, env -i, the judge step's PATH and
+  // manifest, a HOME
   refused(inFf(`        shell: ${JUDGE_SHELL}\n`, ''), /the judge's step runs in "bash"/);
   refused(inFf(EXTRACTED, '.github/scripts/base-rule.sh'),
     /calls \.github\/scripts\/base-rule\.sh, not the copy the `judge` step took/);
@@ -648,6 +701,8 @@ test('R12: the judge is the base commit\'s copy, in a job shaped to keep the PR 
   refused(inFf(' CI=true \\\n', ' CI=true BASH_ENV=x \\\n'), /sets BASH_ENV for the judge/);
   refused(inFf('            HOME="${{ runner.temp }}/judge-home" CI=true',
     '            HOME="$HOME" CI=true'), /a HOME outside/);
+  refused(inFf(`            ${MANIFEST} \\\n`, ''), /gives the judge no JUDGE_MANIFEST/);
+  refused(inFf(MANIFEST, 'JUDGE_MANIFEST="$X"'), /gives the judge no JUDGE_MANIFEST/);
   const call = '          /usr/bin/env -i PATH="${{ steps.judge.outputs.path }}" \\\n'
     + '            HOME="${{ runner.temp }}/judge-home" CI=true';
   refused(inFf(call, call.replace('${{ steps.judge.outputs.path }}', '$PATH')),
@@ -664,7 +719,15 @@ test('R12: the judge is the base commit\'s copy, in a job shaped to keep the PR 
     new Set(['.github/actions/judge'])).filter((v) => v.rule === 'judge-first');
   assert.ok(found.some((v) => /through the action \.\/\.github\/actions\/judge/.test(v.message)),
     JSON.stringify(found));
-  assert.ok(rv.steps.length >= 4);
+  assert.equal(rv.steps.length, 4);
+  // the judge step makes the copy read-only and records its manifest
+  for (const job of ['fail-first', 'review-verdict']) {
+    const extract = parse(CI).jobs[job].steps[2].run;
+    assert.match(extract, /chmod -R a-w "\$judge"/, job);
+    assert.match(extract, /xargs -0 sha256sum\) > "\$judge\/\.manifest"/, job);
+    assert.match(extract, /echo "manifest=\$\(sha256sum < "\$judge\/\.manifest"/, job);
+    assert.doesNotMatch(extract, /\bcp\b|install-guard/, `${job}: no checkout copy`);
+  }
   // checkRepository passes the actions that name base-rule.sh
   const dir = mkdtempSync(path.join(os.tmpdir(), 'oscilla-judge-action-'));
   try {
