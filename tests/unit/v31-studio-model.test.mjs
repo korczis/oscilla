@@ -433,12 +433,13 @@ test('modulation edge properties: depth, polarity, mapping, offset (§35)', () =
 
 test('registry holds the §29 library and every definition validates', () => {
   const expected = ['oscillator', 'noise', 'sweep', 'sequence', 'microphone', 'lfo', 'envelope',
-    'random', 'step-modulator', 'gain', 'filter', 'pan', 'stereo-split', 'mixer', 'scope',
+    'random', 'step-modulator', 'macro', 'gain', 'filter', 'pan', 'stereo-split', 'mixer',
+    'drive', 'scope',
     'spectrum', 'spectrogram', 'meter', 'rta', 'master', 'recorder', 'capture', 'calibration',
     'transfer-analyzer', 'measurement-result'];
   assert.deepStrictEqual(R.list().map((d) => d.type), expected);
   assert.deepStrictEqual(R.categories().map((c) => [c.id, c.types.length]), [['SOURCES', 5],
-    ['MODULATION', 4], ['PROCESSING', 5], ['ANALYSIS', 5], ['OUTPUT', 2], ['MEASUREMENT', 4]]);
+    ['MODULATION', 5], ['PROCESSING', 6], ['ANALYSIS', 5], ['OUTPUT', 2], ['MEASUREMENT', 4]]);
   for (const def of NODE_DEFINITIONS) assert.deepStrictEqual(validateNodeDefinition(def), []);
   for (const def of R.list()) {
     for (const p of def.params) {

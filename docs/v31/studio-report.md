@@ -51,8 +51,8 @@ no audio node; the compiler builds each one with the existing engine's builders 
 | Category | Count | Node types |
 | --- | --- | --- |
 | Sources | 5 | Oscillator `oscillator`, Noise `noise`, Sweep `sweep`, Sequence `sequence`, Microphone `microphone` |
-| Modulation | 4 | LFO `lfo`, Envelope `envelope`, Random `random`, Step Modulator `step-modulator` |
-| Processing | 5 | Gain `gain`, Filter `filter`, Pan `pan`, Stereo Split `stereo-split`, Mixer `mixer` |
+| Modulation | 5 | LFO `lfo`, Envelope `envelope`, Random `random`, Step Modulator `step-modulator`, Macro `macro` |
+| Processing | 6 | Gain `gain`, Filter `filter`, Pan `pan`, Stereo Split `stereo-split`, Mixer `mixer`, Drive `drive` |
 | Analysis | 5 | Scope `scope`, Spectrum `spectrum`, Spectrogram `spectrogram`, Meter `meter`, RTA `rta` |
 | Output | 2 | Master Output `master`, Recorder/Export `recorder` |
 | Measurement | 4 | Capture `capture`, Calibration `calibration`, Transfer Analyzer `transfer-analyzer`, Measurement Result `measurement-result` |

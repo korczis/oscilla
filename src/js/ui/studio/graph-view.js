@@ -27,6 +27,7 @@
 // on EDGE_ADD cannot disagree; the store still has the last word (§33, §46).
 
 import { NODE_REGISTRY } from '../../studio/registry.js';
+import { CLIP_TARGET_TEXT, gainIsUsed, qIsUsed } from '../../studio/clip-targets.js';
 import { PORT_VISUALS, canConnect, validateEdgeProps } from '../../studio/ports.js';
 import { validateStudioModel } from '../../studio/validate.js';
 import { describeEdge, describeNode, describePortLabel } from '../../studio/a11y.js';
@@ -137,19 +138,21 @@ export function runtimeStatus(model, runtime, revision = null) {
   return { nodes, edges };
 }
 
-/** The filter adapter's reason for not applying Q modulation (adapters/nodes.js modTarget). */
+/** The filter adapter's reason for not applying Q modulation (adapters/processing.js modTarget). */
 export const FILTER_Q_NOT_APPLIED = 'Low-/high-pass Q is a dB AudioParam in Web Audio; a linear Q '
   + 'modulation would be mis-scaled, so it is not applied.';
 
 /**
  * Why a modulation the compiler routes cannot be heard, or null (§237: a graph must not look
- * live when it is not). Two rules, both from the node's own model:
+ * live when it is not). Three rules, all from the node's own model:
  *   - Filter Q on a low-pass or high-pass filter: the adapter does not apply it (Q is a dB
- *     AudioParam there; adapters/nodes.js filter.modTarget, the same reason text; the parity
+ *     AudioParam there; adapters/processing.js filter.modTarget, the same reason text; the parity
  *     with the runtime's inactive edges is a unit test).
- *   - Filter gain on any type but peaking: Web Audio ignores a biquad's gain for low-pass,
- *     high-pass, band-pass and notch (the registry's own constraint: "gain applies to peaking
- *     only").
+ *   - Filter Q on a low-shelf or high-shelf filter: Web Audio ignores it (clip-targets.js
+ *     qIsUsed, the adapter's reason).
+ *   - Filter gain on any type but peaking and the shelves: Web Audio ignores a biquad's gain
+ *     for low-pass, high-pass, band-pass, notch and all-pass (clip-targets.js gainIsUsed; the
+ *     registry's own constraint).
  */
 export function edgeEffectReason(model, edge, registry = NODE_REGISTRY) {
   const b = nodeById(model, edge.to.node);
@@ -160,10 +163,13 @@ export function edgeEffectReason(model, edge, registry = NODE_REGISTRY) {
   if (edge.to.port === 'Q' && (type === 'lowpass' || type === 'highpass')) {
     return FILTER_Q_NOT_APPLIED;
   }
-  if (edge.to.port === 'gain' && type !== 'peaking') {
+  if (edge.to.port === 'Q' && !qIsUsed(type)) return CLIP_TARGET_TEXT.filterQUnused;
+  if (edge.to.port === 'gain' && !gainIsUsed(type)) {
     const p = registry.param(b.type, 'type');
     const o = p && (p.options || []).find((x) => x[0] === type);
-    return `Filter gain applies to peaking only; a ${o ? o[1] : type} filter ignores it.`;
+    const label = o ? o[1] : String(type);
+    return `Filter gain applies to peaking and the shelves only; ${/^[aeiou]/i.test(label)
+      ? 'an' : 'a'} ${label} filter ignores it.`;
   }
   return null;
 }

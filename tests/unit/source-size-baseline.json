@@ -33,7 +33,6 @@
     "src/js/measurement/engine.js": 79000,
     "src/js/measurement/quality.js": 73000,
     "src/js/studio/actions.js": 50000,
-    "src/js/studio/adapters/nodes.js": 45000,
     "src/js/studio/runtime.js": 58000,
     "src/js/studio/transport.js": 80000,
     "src/js/studio/validate.js": 49000,
