@@ -2,7 +2,6 @@
 // key list is pinned by tests/browser/app.cjs `seam-surface-pinned`.
 
 import { MEASUREMENT_STATES as S, isActiveState } from '../../measurement/state-machine.js';
-import { experimentFromResult } from '../measure-experiment.js';
 import {
   encodeRecipeLink, decodeRecipeLink, recipeLinkFields,
 } from '../../core/url-state-measure.js';

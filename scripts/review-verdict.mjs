@@ -50,9 +50,9 @@ export const SCHEMA = 'review-verdict/v1';
  * an entry without one is that file. The first group is the product code where review found
  * defects the suites passed (#139 measurement, calibration and its UI, whose MEASURE adapter
  * src/js/ui/measure.js is composed of the modules under src/js/ui/measure/ since E002; #140
- * Studio; #149 experiments and findings); the second is what proves a build, a deployment and a release
- * (the build and pack scripts, the deploy stamp and its verifiers, the release scripts and
- * the release rules' tests); the third is what enforces the process rules
+ * Studio; #149 experiments and findings); the second is what proves a build, a deployment and
+ * a release (the build and pack scripts, the deploy stamp and its verifiers, the release
+ * scripts and the release rules' tests); the third is what enforces the process rules
  * (project.ci-bounded, project.fail-first, project.review-verdict): the workflows and
  * everything else under .github/, the three programs with their parser, and their tests.
  */
