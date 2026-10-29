@@ -1,0 +1,39 @@
+# Review verdict for pull request #264, K004 (part): Studio Import opens a V2 sequence or a
+# configuration file (branch feat/k004-sequence-import). Reviewed head 5bd0dc10, merge base
+# origin/main e2720e07. Another builder wrote it (oscilla-b0), whose session ran two reviews and a
+# fix round; that round fixed a P1 (silent repairs on import), which this review re-checked.
+#
+# The digest: the base branch's scripts/review-verdict.mjs, run from `git archive origin/main
+# scripts` with --repo on this worktree: 7aacee4b...0a90 over the 3 guarded paths it names.
+#
+# How it was reviewed: two independent lenses (correctness and safety with hostile files;
+# regressions, tests and UI), read-only, in git-archive copies, with the browser check run in
+# chromium; every finding handed to a separate skeptic (8 agents; none refuted).
+#
+# What holds: a refusal returns before openDocument, so the model is unchanged, and the refusal is
+# announced (aria-live assertive) and shown; imported text reaches the DOM only through x-text and
+# textContent, and no studio code uses innerHTML; prototype names as keys are refused at the front
+# end; project and patch import are unchanged (a sequence needs kind oscilla-config, or no kind and
+# a blocks key); the P1 fix refuses every listed silent repair with its own field path; the only
+# markup change is the label of the existing osc-icon-btn import button; dist/index.html is the
+# build of the sources; the unit suite passes, and the sequence-import browser check passes 2 of 2
+# in chromium (file://); Firefox, WebKit and the /oscilla/ origin were not run.
+#
+# Verdict: merge. No P0 or P1. One P2 is worth fixing before or soon after landing:
+# - F1: the P1 fix refuses any file that is not a fixed point of serializeSequence(parseSequence),
+#   and a tempo-locked block at a slow tempo, or beats typed with more than 6 decimals, is not one:
+#   normalizeBlock computes durationMs from the unrounded beats and stores the rounded ones, so the
+#   V2 Sequencer's own save is refused ("durationMs is 100 in the file but would open as 99.999").
+#   Compare durationMs within the rounding of the beats (or round before deriving), and add the
+#   20 BPM case as a test.
+schema: review-verdict/v1
+pr: 264
+verdict: merge
+reviewer: prismatic-majordomus-f3 (claude-code 1f47a36e)
+content: 7aacee4b81d1d65dcfc659b7b2d72b236979195a2a4dcafdf1c4eb9c335c90a0
+findings:
+  - { id: F1, severity: P2, status: open, title: "sequence-import.js:357 the fixed-point check refuses the V2 Sequencer's own save when a block is tempo-locked at a slow tempo (20-40 BPM) or has beats with more than 6 decimals (normalizeBlock derives durationMs from unrounded beats); compare within the beats' rounding" }
+  - { id: F2, severity: P3, status: open, title: "sequence-import.js:356 a block type naming an Object.prototype member (toString, constructor, valueOf, hasOwnProperty, __proto__) makes parseSequence throw TypeError before the hasOwn guard runs, and importStudioFile has no try/catch, so the import throws instead of refusing; documented as never throws" }
+  - { id: F3, severity: P3, status: open, title: "sequence-import.js:49 a block id valid in V2 but not in Studio's id pattern is renumbered without notice, so 'opens as saved or not at all' and the exact round trip do not hold for such ids" }
+  - { id: F4, severity: P3, status: open, title: "sequence-import.js:318 a bare V2 file records no sample rate and is read at the Studio's rate (44.1 kHz before audio starts), so a 48 kHz export with a 22 kHz tone is refused after a reload and opens once audio runs" }
+  - { id: F5, severity: P3, status: open, title: "docs/GLOSSARY.md:19 the entry was rewrapped to a 128-character line" }
