@@ -7,16 +7,19 @@ slug: midi-input-capability
 priority: p2
 profile: implementation
 objective: "Detect Web MIDI and its permission at runtime, list inputs, and state unsupported / permission needed / denied / no devices / connected; measure which gate browsers and origins (file://, Pages) expose it and record that in a test; nothing else changes without MIDI."
-current_state: "Updated 2026-10-18. Depends on P005 (and through it P003) because they edit src/index.html (scope conflicts in the same wave, simulated 2026-10-18), and on V500, which records the two decisions this issue must not start without: the test seam that stands in for MIDI hardware in the gate, and which ADR 0052 kind it is (critique midi-jam-companion finding no-hardware-test-seam-undecided), and the full support-state table with the cause and copy of each state (finding permission-prompt-and-state-taxonomy). Both findings are blocking and are planned against V500, so majordomus plan ready does not list this issue until V500 is done. The scope names only MIDI paths plus the integration files the criteria need (src/js/main.js to compose the module, src/index.html for the stated support state), so that majordomus intent realization does not infer unrelated earlier work as realising this intent (audit finding main-plan F9, 2026-10-18). tests/browser/midi.cjs is the one browser suite the M045 issues share; package.json wires it into the release gate. dist is in scope because every src change commits the rebuilt dist/index.html, and tests/README.md because tests/browser/midi.cjs skips in WebKit (no Web MIDI) and tests/unit/browser-suite-contract.test.mjs fails a skip tests/README.md does not declare; V502-V505 carry both for the same reasons (V504 also src/styles/main.css, which @imports src/styles/midi.css)."
+current_state: "Updated 2026-10-18. Depends on P005 (and through it P003) because they edit src/index.html (scope conflicts in the same wave, simulated 2026-10-18), and on V500, which records the two decisions this issue must not start without: the test seam that stands in for MIDI hardware in the gate, and which ADR 0052 kind it is (critique midi-jam-companion finding no-hardware-test-seam-undecided), and the full support-state table with the cause and copy of each state (finding permission-prompt-and-state-taxonomy). Both findings are blocking and are planned against V500, so majordomus plan ready does not list this issue until V500 is done. The scope names only MIDI paths plus the integration files the criteria need (src/js/main.js to compose the module, src/index.html for the stated support state), so that majordomus intent realization does not infer unrelated earlier work as realising this intent (audit finding main-plan F9, 2026-10-18). tests/browser/midi.cjs is the one browser suite the M045 issues share; package.json wires it into the release gate. dist is in scope because every src change commits the rebuilt dist/index.html, and tests/README.md because tests/browser/midi.cjs skips in WebKit (no Web MIDI) and tests/unit/browser-suite-contract.test.mjs fails a skip tests/README.md does not declare; V502-V505 carry both for the same reasons (V504 also src/styles/main.css, which @imports src/styles/midi.css). Updated 2026-10-28: tests/browser/lib/midi-stub.cjs added to the scope, because ADR 0058's V500 note puts the seam there (the addInitScript stub of navigator.requestMIDIAccess that V501 adds under tests/browser/lib/), and README.md, because tests/unit/docs-derived.test.mjs requires its Testing table to name every suite test:release runs, which now includes tests/browser/midi.cjs."
 scope:
   - "src/js/midi"
   - "src/js/main.js"
   - "src/index.html"
   - "tests/unit/midi"
   - "tests/browser/midi.cjs"
+  - "tests/browser/app.cjs"
+  - "tests/browser/lib/midi-stub.cjs"
   - "package.json"
   - "docs/midi.md"
   - "tests/README.md"
+  - "README.md"
   - "dist"
 depends_on:
   - "V500"
@@ -30,4 +33,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-10-28T19:54:06Z
+started_at: 2026-10-28T19:32:10Z
+started_event: sha256:0765f729c05298a9e68050364caffdf10c6e8b86abd9018bb0ad28388c10a82d
+verified_at: 2026-10-28T19:53:53Z
+verified_event: sha256:e7cbe7e2530af90220f79eb746bb5c7c6ce7770e55ddd523fc636eaf028a7321
+evidence:
+  - covers: verified
+    type: test
+    command: "OSC_LOAD_MAX=80 OSC_STRICT_SKIPS=1 node tests/browser/midi.cjs && npm test && node scripts/fail-first.mjs --title 'feat(midi): V501 MIDI input capability and support state' --base-branch origin/main"
+    result: "midi.cjs exit 0, ALL PASS (210 checks) on darwin arm64: chromium 153.0.8010.12 file 42/http 42, firefox 155.0 file 33/http 35, webkit 26.6 file 29/http 29; measured: chromium needs-permission then denied, grant no-devices then revoked; firefox file unsupported, http needs-permission then pending then blocked (7.0 s); webkit unsupported; spy: 0 requestMIDIAccess calls at load in every build; declared skips midi-measured-grant (firefox, webkit) and midi-measured-stub-fidelity (webkit). npm test 3184/3184 pass. fail-first proven by tests/unit/midi/support.test.mjs and wiring.test.mjs against origin/main 22498bc"
+    artifact: "tests/browser/midi.cjs"
+    commit: 44eca337ce286810ef500916a2e37b3a431de5be
+    recorded_at: 2026-10-28T19:54:06Z
