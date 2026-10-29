@@ -29,8 +29,9 @@
 // Honesty (spec §24, §98, G19): a transfer magnitude is a RATIO (capture / stimulus, dB re a
 // unity digital transfer). The y axis therefore reads TRANSFER_RATIO_UNIT, never "dB SPL",
 // whatever level calibration exists. RAW is always kept; CALIBRATED appears only where the
-// frequency profile covers (no extrapolation, §158); a smoothed or normalized view says so in
-// every series label it touches (§34-§35). Unreliable stretches (quality mask, §156, §221) are
+// frequency profile covers (no extrapolation, §158), and a profile that covers no measured point
+// is no correction (UNCALIBRATED, RAW primary, a note says so; T017); a smoothed or normalized
+// view says so in every series label it touches (§34-§35). Unreliable stretches (quality mask, §156, §221) are
 // separate dashed, faded series; an INVALID result is drawn as not authoritative.
 //
 // View options never fail a result (M6 of the V3 review): a normalization whose reference lies
@@ -106,6 +107,9 @@ export function masterGainText(g) {
     + 'playback / capture path.';
 }
 
+/** A stated frequency (a profile point, a requested reference): "1 kHz", "12.5 kHz", "80 Hz". */
+const hzText = (v) => (v >= 1000 ? `${+(v / 1000).toPrecision(4)} kHz` : `${+v.toPrecision(4)} Hz`);
+
 /**
  * normalizationAvailability(frequencies, spec) → { ok, reason }
  * Whether a normalization (smoothing.js normalizeResponse spec) has a reference inside the
@@ -118,7 +122,7 @@ export function normalizationAvailability(frequencies, spec) {
   if (!n) return { ok: false, reason: 'there is no response to normalize' };
   const lo = frequencies[0];
   const hi = frequencies[n - 1];
-  const hz = (v) => (v >= 1000 ? `${+(v / 1000).toPrecision(4)} kHz` : `${+v.toPrecision(4)} Hz`);
+  const hz = hzText;
   const span = `the response covers ${hz(lo)}–${hz(hi)}`;
   if (spec.mode === 'at-frequency') {
     return spec.hz >= lo && spec.hz <= hi ? { ok: true, reason: null }
@@ -275,8 +279,12 @@ export function buildResponseView(source, options = {}) {
   const f = s.frequencies;
   const n = f.length;
   const raw = s.rawDb;
-  const corr = s.correction;
-  const covered = corr ? maskOn(corr.covered, n) : null;
+  // A correction that covers no grid point corrects nothing (no extrapolation, ADR 0020): it is
+  // no correction, so RAW is primary and the view reads UNCALIBRATED and says why (T017).
+  const corrMask = s.correction ? maskOn(s.correction.covered, n) : null;
+  const corr = corrMask && corrMask.includes(1) ? s.correction : null;
+  const covered = corr ? corrMask : null;
+  const noCoverageNote = s.correction && !corr ? noCoverageText(f, s) : null;
   const base = corr ? corr.correctedDb : raw;
   const baseKind = corr ? K.CALIBRATED : K.OBSERVED;
   const status = s.quality && s.quality.status ? s.quality.status : null;
@@ -431,6 +439,7 @@ export function buildResponseView(source, options = {}) {
   const notes = [];
   if (corr && calibratedRange) notes.push(markers.calibratedRange.label);
   if (s.correctionNote) notes.push(s.correctionNote);
+  if (noCoverageNote) notes.push(noCoverageNote);
   if (normalizationNote) notes.push(normalizationNote);
   if (dText) notes.push(`Derived view: ${dText}. RAW is kept and exported unchanged.`);
   if (s.masterGain !== null) notes.push(masterGainText(s.masterGain));
@@ -539,6 +548,20 @@ function calibrationCoverageText(f, [lo, hi], s) {
 }
 
 /**
+ * 'Frequency profile "X" (points 12 kHz–16 kHz) covers none of the measured range (100 Hz–
+ * 9.9 kHz): …' — the profile's own point frequencies are stated as the file gives them.
+ */
+function noCoverageText(f, s) {
+  const c = s.correction;
+  const cov = Array.isArray(c.coverage) ? c.coverage : null;
+  const pts = !cov ? '' : cov[0] === cov[1] ? ` (one point, at ${hzText(cov[0])})`
+    : ` (points ${hzText(cov[0])}–${hzText(cov[1])})`;
+  return `Frequency profile "${c.name || UNAVAILABLE.UNKNOWN}"${pts} covers none of the measured `
+    + `range (${gridFrequencyText(f, 0, s.binHz)}–${gridFrequencyText(f, f.length - 1, s.binHz)})`
+    + ': no point is corrected (no extrapolation); RAW is shown, uncalibrated.';
+}
+
+/**
  * Textual summary (spec §150): extremes of the primary curve over its reliable points (all
  * points when nothing is reliable, said so), and the quality status. Never lists points.
  */
@@ -587,7 +610,7 @@ function responseReadout(view, s, index, ctx) {
   let corrected = UNAVAILABLE.UNCALIBRATED;
   let calibrated = false;
   if (s.correction) {
-    calibrated = ctx.covered[i] === 1;
+    calibrated = !!ctx.covered && ctx.covered[i] === 1;
     corrected = calibrated ? ratioDbText(s.correction.correctedDb[i] + ctx.offset)
       : 'not covered by the profile (uncalibrated)';
   } else if (s.correctionNote) corrected = UNAVAILABLE.UNAVAILABLE;
