@@ -25,17 +25,23 @@
 // whose `sequencer` holds one, already read by validate.js readUntrustedInput. The file must be
 // the sequencer's canonical form already: parseSequence is run, and the first field it would
 // not reproduce exactly (a clamped, coerced, rounded, defaulted, renumbered or dropped value, a
-// missing or unknown field) refuses the file with that field's path, so a file opens as saved
-// or not at all. Frequencies are checked at the rate the file was saved at (a configuration
-// file's sampleRateRequested), else at the Studio's (`sampleRate`; 44.1 kHz before audio, as the
-// sequencer itself reads it). A seed other than DEFAULT_SEED is refused: the app never writes
-// one, and the Studio keeps no seed outside its model (tests/unit/v31-studio-sequence-file).
+// missing or unknown field, a block type that is not one of BLOCK_SCHEMA's own, a block id that
+// cannot name a clip) refuses the file with that field's path, so a file opens as saved or not
+// at all. One allowance: the sequencer stores a tempo-locked block's beats rounded to 6 decimals
+// and derives its durationMs from the unrounded beats, so its own save of a slow tempo-locked
+// block (100 ms at 20 BPM is 0.033333 beats, which re-derive 99.999 ms) is not a fixed point.
+// Such a durationMs is accepted when some beats value that rounds to the file's beats derives
+// it, and the block opens as the sequencer opens it, from the beats. Frequencies are checked at
+// the rate the file was saved at (a configuration file's sampleRateRequested), else at the
+// Studio's (`sampleRate`; 44.1 kHz before audio, as the sequencer itself reads it). A seed
+// other than DEFAULT_SEED is refused: the app never writes one, and the Studio keeps no seed
+// outside its model (tests/unit/v31-studio-sequence-file).
 
 import { ID_PATTERN } from '../experiments/schema.js';
 import {
   BLOCK_SCHEMA, DEFAULT_SEED, MAX_BLOCKS, MAX_BLOCK_MS, MIN_BLOCK_MS, PROVISIONAL_SAMPLE_RATE,
-  SEQUENCE_VERSION, formatCompactFrequency, isNum, nextBlockId, normalizeModel, paramSchema,
-  parseSequence, safeMaximum, serializeSequence,
+  SEQUENCE_VERSION, clamp, formatCompactFrequency, formatMs, isNum, nextBlockId, normalizeModel,
+  paramSchema, parseSequence, round, safeMaximum, serializeSequence,
 } from '../sequencer/model.js';
 import { createStudioModel } from './schema.js';
 import { studioDiagnostic, validateStudioModel } from './validate.js';
@@ -44,6 +50,7 @@ import { CONTIGUITY_TOLERANCE_S, clipEnd } from './timeline.js';
 export const IMPORT_IDS = Object.freeze({ node: 'seq-1', master: 'master-1', edge: 'edge-1',
   track: 'track-1' });
 const CLIP_PREFIX = 'clip-';
+const CLIP_ID_MAX = 128; // ID_PATTERN's length
 
 /** Clip id of a block (`clip-<blockId>`), or a positional one when that is not a valid id. */
 export function clipIdForBlock(blockId, index) {
@@ -241,6 +248,39 @@ function shown(v) {
 
 const kHz = (rate) => `${String(Number((rate / 1000).toFixed(3)))} kHz`;
 
+// The sequencer's precision: beats to 6 decimals, milliseconds to 3 (model.js normalizeBlock).
+const BEATS_DIGITS = 6;
+const MS_DIGITS = 3;
+
+/**
+ * True when the sequencer can have saved `ms` for a tempo-locked block of `beats` (already its
+ * canonical value): some unrounded beats value that rounds to `beats` derives `ms` (clamped to
+ * the type's bounds, rounded to 3 decimals) at `tempoBpm`.
+ */
+function derivableMs(ms, beats, tempoBpm, { min, max }) {
+  if (!isNum(ms) || round(ms, MS_DIGITS) !== ms) return false;
+  const half = 0.5 * 10 ** -BEATS_DIGITS;
+  const msPerBeat = 60000 / tempoBpm;
+  const lo = round(clamp((beats - half) * msPerBeat, min, max), MS_DIGITS);
+  const hi = round(clamp((beats + half) * msPerBeat, min, max), MS_DIGITS);
+  return ms >= lo && ms <= hi;
+}
+
+/** Block `i` refused before the sequencer reads it: { path, message } or null. */
+function blockShape(raw, i) {
+  const path = `blocks[${i}]`;
+  const where = `Block ${i + 1}`;
+  if (!isPlain(raw)) return { path, message: `${where} is not an object` };
+  // An own key only: BLOCK_SCHEMA.toString is a function, which normalizeBlock would take for a
+  // schema and throw on.
+  if (!Object.hasOwn(BLOCK_SCHEMA, raw.type)) {
+    return Object.hasOwn(raw, 'type') ? { path: `${path}.type`,
+      message: `${where}: ${shown(raw.type)} is not a V2 block type` }
+      : { path: `${path}.type`, message: `${where}: type is missing` };
+  }
+  return null;
+}
+
 /**
  * The first field of `seq` that its canonical form `canon` (serializeSequence of what
  * parseSequence made of it) does not reproduce: { path, message } or null.
@@ -248,7 +288,9 @@ const kHz = (rate) => `${String(Number((rate / 1000).toFixed(3)))} kHz`;
 function firstDifference(seq, canon, rate) {
   const keys = (o, c, path, where, what) => {
     for (const k of Object.keys(c)) {
-      if (!Object.hasOwn(o, k)) return { path: `${path}${k}`, message: `${where}: ${k} is missing` };
+      if (!Object.hasOwn(o, k)) {
+        return { path: `${path}${k}`, message: `${where}: ${k} is missing` };
+      }
     }
     for (const k of Object.keys(o)) {
       if (!Object.hasOwn(c, k)) {
@@ -273,12 +315,8 @@ function firstDifference(seq, canon, rate) {
     const c = canon.blocks[i];
     const path = `blocks[${i}]`;
     const where = `Block ${i + 1}`;
-    if (!isPlain(raw)) return { path, message: `${where} is not an object` };
-    if (!Object.hasOwn(BLOCK_SCHEMA, raw.type)) {
-      return Object.hasOwn(raw, 'type') ? { path: `${path}.type`,
-        message: `${where}: ${shown(raw.type)} is not a V2 block type` }
-        : { path: `${path}.type`, message: `${where}: type is missing` };
-    }
+    const shape = blockShape(raw, i);
+    if (shape) return shape;
     const own = keys(raw, c, `${path}.`, where, 'a V2 block field');
     if (own) return own;
     if (typeof raw.id === 'string' && ids.has(raw.id)) {
@@ -287,8 +325,17 @@ function firstDifference(seq, canon, rate) {
     }
     if (typeof raw.id === 'string') ids.set(raw.id, i);
     for (const k of ['id', 'type', 'durationMs', 'beats']) {
+      if (k === 'durationMs' && c.beats !== null && Object.is(raw.beats, c.beats)
+        && derivableMs(raw.durationMs, c.beats, canon.tempoBpm, BLOCK_SCHEMA[c.type].durationMs)) {
+        continue;
+      }
       const d = value(`${path}.${k}`, where, k, raw[k], c[k]);
       if (d) return d;
+    }
+    if (!ID_PATTERN.test(`${CLIP_PREFIX}${c.id}`)) {
+      return { path: `${path}.id`, message: `${where}: id ${shown(c.id)} cannot name a Studio `
+        + `clip (letters, digits, “.”, “_” and “-”, at most ${CLIP_ID_MAX - CLIP_PREFIX.length} `
+        + 'characters)' };
     }
     if (!isPlain(raw.params)) {
       return { path: `${path}.params`, message: `${where}: params is ${shown(raw.params)}, not `
@@ -352,12 +399,31 @@ export function importSequenceDocument(doc, { sampleRate } = {}) {
     return refuse(at('blocks'), `The sequence has ${seq.blocks.length} blocks; a V2 sequence `
       + `holds at most ${MAX_BLOCKS}`);
   }
+  for (let i = 0; i < seq.blocks.length; i += 1) {
+    const shape = blockShape(seq.blocks[i], i);
+    if (shape) return refuse(at(shape.path), shape.message);
+  }
   const rate = fileRate(doc, config, sampleRate);
-  const { model: parsed, issues } = parseSequence(seq, { sampleRate: rate });
-  const diff = firstDifference(seq, serializeSequence(parsed), rate);
+  let parsed;
+  let issues;
+  try {
+    ({ model: parsed, issues } = parseSequence(seq, { sampleRate: rate }));
+  } catch (e) { // parseSequence is documented never to throw; a file must not make it
+    return refuse(at('blocks'), `The sequencer could not read the sequence (${
+      String((e && e.message) || e).slice(0, 80)})`);
+  }
+  const canon = serializeSequence(parsed);
+  const diff = firstDifference(seq, canon, rate);
   if (diff) return refuse(at(diff.path), diff.message);
-  // Every repair changes a value, so none is left here; this only guards that invariant.
-  if (issues.length) return refuse(at('blocks'), `The sequencer reports: ${issues[0]}`);
+  // Every repair changes a value, so none is left here; this only guards that invariant. The
+  // one exception: a tempo-locked block whose rounded beats re-derive a duration just past its
+  // type's bound is clamped back to the same value, and since its beats are the file's, they
+  // are the rounding of an in-range value (the V2 Sequencer's own save at a bound).
+  const artefacts = new Set(canon.blocks.filter((c) => c.beats !== null)
+    .map((c) => `Block ${canon.blocks.indexOf(c) + 1}: duration limited to `
+      + `${formatMs(c.durationMs)}.`));
+  const repaired = issues.filter((x) => !artefacts.has(x));
+  if (repaired.length) return refuse(at('blocks'), `The sequencer reports: ${repaired[0]}`);
   if (parsed.seed !== DEFAULT_SEED) {
     return refuse(at('seed'), `The sequence seed is ${parsed.seed}; Studio opens only the V2 `
       + `default seed ${DEFAULT_SEED} (it seeds blocks added in the V2 editor, is never heard, `

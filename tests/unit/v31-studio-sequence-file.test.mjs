@@ -9,8 +9,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  DEFAULT_SEED, addBlock, createSequence, moveBlock, referenceSequence, serializeSequence,
-  setTempo, updateBlock,
+  DEFAULT_SEED, addBlock, createSequence, moveBlock, parseSequence, referenceSequence,
+  serializeSequence, setDurationUnit, setTempo, updateBlock,
 } from '../../src/js/sequencer/model.js';
 import {
   CONFIG_FILE_KIND, CONFIG_FILE_VERSION, buildConfigExport,
@@ -266,6 +266,120 @@ test('what the sequencer would silently repair is refused, naming the first fiel
     assert.equal(c.errors[0].path, `sequencer.${path}`, `${name}: config path`);
     // The pure entry point refuses it too.
     assert.equal(importSequenceDocument(JSON.parse(text)).ok, false, name);
+  }
+});
+
+// A tempo-locked block's durationMs is derived from its beats, and the V2 Sequencer stores the
+// beats rounded to 6 decimals and the milliseconds derived from the unrounded beats, so its own
+// save is not always a fixed point of parseSequence (review of #264, F1).
+function v2Save(tempoBpm, block, beats) {
+  const seq = createSequence({ tempoBpm, blocks: [{ id: 'b1', ...block }] });
+  return serializeSequence(beats === undefined ? setDurationUnit(seq, 'b1', 'beats')
+    : updateBlock(seq, 'b1', { beats }));
+}
+
+test('the V2 Sequencer\'s own save of a tempo-locked block opens, as the Sequencer opens it',
+  () => {
+  const cases = [
+    // 100 ms at 20 BPM switched to beats: 0.033333 beats, which re-derive 99.999 ms.
+    ['20 BPM', v2Save(20, { type: 'tone', durationMs: 100, params: { freq: 440 } }),
+      [100, 0.033333], 99.999],
+    // Beats typed with more than 6 decimals.
+    ['beats typed at 120 BPM', v2Save(120, { type: 'tone', durationMs: 100 }, 1.00000103),
+      [500.001, 1.000001], 500],
+    ['beats typed at 30 BPM', v2Save(30, { type: 'tone', durationMs: 100 }, 0.0123456789),
+      [24.691, 0.012346], 24.692],
+    // At a bound: the rounded beats re-derive past it, and the sequencer clamps them back.
+    ['at the 5 s chirp maximum', v2Save(20, { type: 'chirp', durationMs: 5000 }),
+      [5000, 1.666667], 5000],
+    ['at the 10 ms minimum', v2Save(50, { type: 'tone', durationMs: 10 }), [10, 0.008333], 10],
+  ];
+  for (const [name, x, saved, opens] of cases) {
+    const b = x.blocks[0];
+    assert.deepEqual([b.durationMs, b.beats], saved, `${name}: what the Sequencer saves`);
+    const canon = serializeSequence(parseSequence(x).model);
+    assert.equal(canon.blocks[0].durationMs, opens, `${name}: what the Sequencer opens`);
+    const r = importStudioFile(fileText(x));
+    assert.equal(r.ok, true, `${name}: ${JSON.stringify(r.errors)}`);
+    assertOneTrack(r.model, 1, name);
+    const clip = r.model.timeline.clips[0];
+    assert.equal(clip.duration, opens / 1000, `${name}: opens as the Sequencer opens it`);
+    assert.equal(clip.musical.durationBeats, saved[1], `${name}: the beats are the file's`);
+    assert.ok(importStudioFile(configText(x)).ok, `${name}: inside a configuration file`);
+    // The export is the Sequencer's canonical form, a fixed point that re-imports identically.
+    const f = exportSequenceFile(r.model);
+    assert.deepEqual(JSON.parse(f.text), canon, name);
+    assert.deepEqual(importStudioFile(f.text).model, r.model, `${name}: re-import is identical`);
+  }
+});
+
+test('a tempo-locked durationMs outside the rounding of its beats is still refused', () => {
+  const at = (tempoBpm, durationMs, beats, type = 'tone') => fileText(createSequence({
+    tempoBpm, blocks: [{ id: 'b1', type, durationMs: 100 }] }))
+    .replace(/"durationMs": [^,]+,\s*"beats": null/,
+      `"durationMs": ${durationMs}, "beats": ${beats}`);
+  const cases = [
+    // 1 beat at 120 BPM is 500 ms exactly: no rounding of the beats reaches 500.001.
+    [at(120, 501, 1), 'Block 1: durationMs is 501 in the file but would open as 500'],
+    [at(120, 500.001, 1), 'Block 1: durationMs is 500.001 in the file but would open as 500'],
+    // 1.000001 beats at 120 BPM can be 500 or 500.001 ms, not 500.002.
+    [at(120, 500.002, 1.000001),
+      'Block 1: durationMs is 500.002 in the file but would open as 500'],
+    // 0.033333 beats at 20 BPM span 99.998 to 100.001 ms.
+    [at(20, 100.002, 0.033333),
+      'Block 1: durationMs is 100.002 in the file but would open as 99.999'],
+    [at(20, 99.997, 0.033333),
+      'Block 1: durationMs is 99.997 in the file but would open as 99.999'],
+    [at(20, 100.01, 0.033333),
+      'Block 1: durationMs is 100.01 in the file but would open as 99.999'],
+    // The Sequencer stores milliseconds to 3 decimals.
+    [at(20, 100.0004, 0.033333),
+      'Block 1: durationMs is 100.0004 in the file but would open as 99.999'],
+    // Beats past a bound by more than their rounding are clamped, which changes them.
+    [at(20, 5000, 1.666668, 'chirp'),
+      'Block 1: beats is 1.666668 in the file but would open as 1.666667'],
+  ];
+  for (const [text, message] of cases) {
+    assert.ok(text.includes('"beats": '), 'the fixture is tempo-locked');
+    const r = importStudioFile(text);
+    assert.equal(r.ok, false, message);
+    assert.equal(r.model, undefined, message);
+    assert.equal(r.errors[0].path, message.includes('beats is') ? 'blocks[0].beats'
+      : 'blocks[0].durationMs', message);
+    assert.equal(r.errors[0].message, `${message}; the file is refused.`);
+  }
+});
+
+test('a block type naming an Object.prototype member is refused, not thrown (F2)', () => {
+  const ref = serializeSequence(referenceSequence());
+  for (const type of ['toString', 'constructor', '__proto__', 'valueOf', 'hasOwnProperty']) {
+    const doc = { ...ref, blocks: [ref.blocks[0], { ...ref.blocks[1], type }] };
+    let r;
+    assert.doesNotThrow(() => { r = importStudioFile(JSON.stringify(doc)); }, type);
+    assert.equal(r.ok, false, type);
+    assert.equal(r.model, undefined, type);
+    assert.equal(r.errors[0].path, 'blocks[1].type', type);
+    assert.equal(r.errors[0].message,
+      `Block 2: “${type}” is not a V2 block type; the file is refused.`, type);
+    assert.doesNotThrow(() => importSequenceDocument(JSON.parse(JSON.stringify(doc))), type);
+    const c = importStudioFile(configText(doc));
+    assert.equal(c.ok, false, type);
+    assert.equal(c.errors[0].path, 'sequencer.blocks[1].type', type);
+  }
+});
+
+test('a V2 block id that cannot name a Studio clip is refused, not renumbered (F3)', () => {
+  const ref = serializeSequence(referenceSequence());
+  for (const id of ['kick drum', 'é1', `b${'1'.repeat(130)}`, 'b1/2']) {
+    const doc = { ...ref, blocks: [ref.blocks[0], { ...ref.blocks[1], id }] };
+    assert.equal(serializeSequence(parseSequence(doc).model).blocks[1].id, id,
+      'the V2 Sequencer keeps the id');
+    const r = importStudioFile(JSON.stringify(doc));
+    assert.equal(r.ok, false, id);
+    assert.equal(r.model, undefined, id);
+    assert.equal(r.errors[0].path, 'blocks[1].id', id);
+    assert.match(r.errors[0].message,
+      /^Block 2: id “.+” cannot name a Studio clip \(letters, digits, /, id);
   }
 });
 
