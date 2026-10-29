@@ -1,0 +1,72 @@
+# Review verdict for pull request #239, plan item E010: a ledger of the CI checks that passed
+# only on a re-run (branch feat/e010-flake-ledger). Reviewed head f2c7fb9c02a6 (delta
+# b1aff41b..f2c7fb9c over the first review at cde5b98c, the merge of main 6a0932a3 aside: the
+# fix is f2c7fb9c alone); merge base origin/main 45621450c. Built by oscilla-b0's agents;
+# reviewed by dev-68.
+#
+# The digest: the base branch's scripts/review-verdict.mjs (git archive origin/main scripts),
+# `--repo . --head HEAD --content --list --base-branch origin/main`, over the one guarded path
+# the pull request changes, .github/workflows/ci.yml: 63765c0e...f7fc, which matches the
+# builder's. The branch's own script gives the same.
+#
+# First review (cde5b98c): four lenses (the ledger logic, the gate job's wiring, gates.yaml
+# against ci.yml, the tests with mutations), every finding re-checked against the code and
+# R-2 and R-3 against the live API; verdict changes-requested for R-1 and R-2 (P2).
+#
+# Delta review (f2c7fb9c), five lenses:
+# - R-1: the ledger is its own job, flake-ledger, with `if: ${{ always() &&
+#   fromJSON(github.run_attempt) > 1 }}`, needing exactly the ten judged jobs, contents: read
+#   and actions: read only, timeout 5 min. The gate keeps one step, its verdict, and its jq
+#   leaves the flake-ledger key out. Read against GitHub's semantics: the gate keeps
+#   `if: always()` (ci-workflow-rules' gate-needs rule refuses its removal), so a failed,
+#   cancelled or timed-out ledger cannot skip it, and a skipped ledger (every first attempt)
+#   is a finished need; no step of the gate reads anything, so nothing but the verdict can turn
+#   it red. Branch protection on main requires the context `gate` alone (GitHub API
+#   required_status_checks), so the ledger's own red is never a required check. On a re-run
+#   the gate waits for the ledger, bounded by its 5 min. Fork pull requests: the read-only
+#   pull_request token, no secret.
+# - The new test runs the verdict step's `run` as parsed from ci.yml, with bash -eo pipefail
+#   and jq, over every ledger result (success, failure, cancelled, skipped; a timeout is a
+#   failure) and every judged job failed, cancelled or skipped: it cannot drift from ci.yml.
+#   Mutating the jq to judge the ledger fails it.
+# - ci-gates-model: JOB_CONDITIONS allows `always()` to gate and the exact ledger condition to
+#   flake-ledger only; tests prove the condition borrowed by another job, and the ledger's
+#   loosened, are both refused.
+# - R-2, R-3: each passing job of the current attempt walks back over its own earlier runs
+#   (run_attempt equal to the attempt) and stops at the first that did not fail, so it is
+#   compared with its newest earlier run. Mutations: counting any earlier run (the old :78
+#   mutant, now `if (false) break`) fails 4 tests; comparing with any earlier failure
+#   (`break` made `continue`) fails the R-3 test.
+# - R-4: the artifact is flake-ledger-${{ github.run_attempt }}, pinned by the test. R-5:
+#   gates.yaml's gate runs line is its verdict alone, and the ledger has its own gate.
+#
+# Runs: node --test tests/unit/flake-ledger.test.mjs 15/15; ci-gates-model and ci-workflows
+# 38/38; node scripts/ci-workflow-rules.mjs: project.ci-bounded holds. Each mutation was
+# restored and the tree left clean.
+#
+# Context, not a finding: #255 (R022) restructures ci.yml's judge jobs; whichever of the two
+# lands second merges ci.yml and keeps the ledger's needs equal to the gate's judged jobs
+# (the test above checks exactly that).
+#
+# Re-check at a6cc0ea8 (2026-10-29): the branch merged main 86db2da0, which carries #252, and
+# moved the plan evidence to a follow-up on main. Against the reviewed head f2c7fb9c02a6,
+# scripts/flake-ledger.mjs, tests/unit/flake-ledger.test.mjs, tests/unit/ci-gates-model.test.mjs
+# and .ai/repo/ci/gates.yaml are byte-identical; ci.yml differs only by #252's own lines (the
+# fail-first step's `--json title,body,headRefName` and its comment), and tests/README.md only
+# by #252's disk-preflight row. E010's ci.yml diff against main is line-for-line the reviewed
+# one. The guarded content is now b4c4c731...f83f (main's scripts/review-verdict.mjs, as above),
+# matching the builder's; the verdict stands.
+#
+# Open: R-6 (P3, the model). No P0, P1 or P2 is open.
+schema: review-verdict/v1
+pr: 239
+verdict: merge
+reviewer: "dev-68 (Claude Opus 5.5 session 4f90795d); did not build, merge or edit this change; wrote only this file. Mesh request r-adbd85fafd6b"
+content: b4c4c73124d88a6664b3839dcda0a45f49ae2a162944ffc8b2bc8b46f6d8f83f
+findings:
+  - { id: R-1, severity: P2, status: closed, title: "[fixed in f2c7fb9c: the ledger is its own non-required job; the gate runs its verdict alone and leaves the ledger's result out; a test runs that verdict from ci.yml over every ledger result] The ledger steps could fail the required gate check, against 'it reports and never fails the gate' (.github/workflows/ci.yml:457-477): steps default to if: success(), so a failed checkout, setup-node, ledger or upload step skipped the verdict and turned gate red." }
+  - { id: R-2, severity: P2, status: closed, title: "[fixed in f2c7fb9c: a webkit job passing on both attempts is no entry; the :78 mutant now fails 4 tests] No test held the commonest re-run case, a job that passed on both attempts (tests/unit/flake-ledger.test.mjs:53-104)." }
+  - { id: R-3, severity: P3, status: closed, title: "[fixed in f2c7fb9c: each job is compared with its own newest earlier run; fail/pass/pass, carry-over and pass/fail/pass/4 cases; the any-earlier-failure mutant fails] A job was recorded again on a later re-run although it had already passed (scripts/flake-ledger.mjs:76-79)." }
+  - { id: R-4, severity: P3, status: closed, title: "[fixed in f2c7fb9c: name flake-ledger-${{ github.run_attempt }}, pinned by the test] The artifact name was the same on every attempt (.github/workflows/ci.yml:475)." }
+  - { id: R-5, severity: P3, status: closed, title: "[fixed in f2c7fb9c: the gate's runs is its verdict; flake-ledger has its own gate] The gate's runs chained the ledger with && and no attempt guard (.ai/repo/ci/gates.yaml:184)." }
+  - { id: R-6, severity: P3, status: open, title: "new with this delta: the model holds the ledger as an always gate the aggregate requires (.ai/repo/ci/gates.yaml:187 and :191), while ci.yml skips it on every first attempt and the gate's verdict ignores it. So `majordomus check` lists flake-ledger among a task's required gates that never reported (seen at this head), it can never report on a first-attempt run, and by the file's own header (line 22, 'a failing one leaves it blocked') a failed ledger would mark the aggregate blocked where GitHub shows gate green. Non-blocking: OSCILLA's finish_requires does not include gate completion. Fix (follow-up): let the model say that a gate runs on a re-run only and is not required by the aggregate (Majordomus's gate model may need the field), or record why always: true and requires are kept, beside the entry." }

@@ -14,12 +14,16 @@
 #     job's env narrows it. Setup (npm ci, browser and PulseAudio installs, artifact upload)
 #     is not part of a gate;
 #   - ci.yml starts on every pull request and filters no path, and no job is conditional
-#     except the aggregate's `if: always()`, so every gate is `always: true`: every plan
-#     selects it, and any changed file can make a recorded run of it stale. The one path class
-#     covers the whole tree and names no gate, so a plan reads "affected" with every gate
-#     selected as always, never "a changed path is in no class";
+#     except the aggregate's `if: always()` and the flake ledger's (E010: it runs after every
+#     job the aggregate judges, on a re-run only, and is skipped on a first attempt), so every
+#     gate is `always: true`: every plan selects it, and any changed file can make a recorded
+#     run of it stale. The one path class covers the whole tree and names no gate, so a plan reads
+#     "affected" with every gate selected as always, never "a changed path is in no class";
 #   - `gate` is the aggregate that branch protection requires; it `requires` every gate of
-#     the jobs it `needs`, so a failing one leaves it blocked rather than queued.
+#     the jobs it `needs`, so a failing one leaves it blocked rather than queued. It needs
+#     flake-ledger as it needs every job, and its verdict leaves that job's result out: the
+#     ledger reports and never decides the aggregate. `runs` lists commands, not the
+#     conditions ci.yml runs them under.
 #
 # Not modelled: .github/workflows/pages.yml (a push to main deploys and verifies Pages, after
 # the change has landed; no gate of a task measures it) and cadence.yml (the release lag of
@@ -180,8 +184,15 @@ gates:
       - browser-firefox
       - browser-webkit
       - visual
-    runs: echo "$RESULTS" | jq -e 'to_entries | all(.value.result == "success")'
-    summary: the required check of branch protection; every job it needs succeeded
+      - flake-ledger
+    runs: echo "$RESULTS" | jq -e 'to_entries | map(select(.key != "flake-ledger")) | all(.value.result == "success")'
+    summary: the required check of branch protection; every job it needs succeeded but flake-ledger, whose result it leaves out
+
+  - id: flake-ledger
+    job: flake-ledger
+    always: true
+    runs: node scripts/flake-ledger.mjs --repo <owner/name> --run <run> --attempt <attempt> --out flake-ledger.json
+    summary: on a re-run only (github.run_attempt above 1; skipped on a first attempt), after every job the aggregate judges, records every job whose last earlier run failed and which passed on this attempt (E010); it reports and decides nothing, and the aggregate leaves its result out
 
 classes:
   # ci.yml filters no path: a change anywhere runs every job, which `always` already says.
