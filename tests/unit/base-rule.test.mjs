@@ -1,6 +1,7 @@
-// project.fail-first and project.review-verdict are judged by the BASE branch's copy of their
-// programs: .github/scripts/base-rule.sh on fixture pull requests that rewrite the program
-// that would judge them. Each fixture's `main` carries the real programs of this checkout.
+// project.fail-first, project.review-verdict and project.pr-names-its-plan are judged by the
+// BASE branch's copy of their programs: .github/scripts/base-rule.sh on fixture pull requests
+// that rewrite the program that would judge them. Each fixture's `main` carries the real
+// programs of this checkout.
 //   node --test tests/unit/base-rule.test.mjs
 
 import test from 'node:test';
@@ -15,7 +16,8 @@ import { gitRepo } from './fixtures/git-repo.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const WRAPPER = path.join(ROOT, '.github', 'scripts', 'base-rule.sh');
 const PROGRAMS = ['scripts/review-verdict.mjs', 'scripts/fail-first.mjs',
-  'scripts/yaml-subset.mjs'];
+  'scripts/yaml-subset.mjs', 'scripts/pr-metadata.mjs', 'scripts/release-analyze.mjs',
+  'scripts/release-metadata.mjs'];
 const real = (rel) => readFileSync(path.join(ROOT, rel), 'utf8');
 
 const ENV = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' };
@@ -90,6 +92,24 @@ test('a PR that replaces the program with one that always accepts is refused', (
   assert.match(first.out, /tidy\.test\.mjs: passes without the change - not evidence/);
 });
 
+test('a PR that replaces pr-metadata.mjs with one that always passes is refused (R022)', (t) => {
+  const repo = fixture(t);
+  repo.commit('change', {
+    'scripts/pr-metadata.mjs': "console.log('pr-metadata: no violation');\n",
+  });
+  const pr = path.join(repo.dir, '..', `${path.basename(repo.dir)}.meta.json`);
+  t.after(() => spawnSync('rm', ['-f', pr]));
+  writeFileSync(pr, JSON.stringify({ number: 42, title: 'chore(x): tidy', headRefName: 'pr',
+    body: '' }));
+  const args = ['--pr-json', pr, '--head', 'HEAD', '--base', 'main', '--check'];
+  assert.equal(own(repo, 'scripts/pr-metadata.mjs', ...args).status, 0,
+    'the PR\'s own copy lets it through: this is what must not judge');
+  const r = sh(repo, 'main', 'scripts/pr-metadata.mjs', ...args);
+  assert.equal(r.status, 1, r.out);
+  assert.match(r.out, /base-rule: scripts\/pr-metadata\.mjs of main \([0-9a-f]{12}\) judges/);
+  assert.match(r.out, /plan-id-missing: /);
+});
+
 test('the program\'s exit status and output pass through when it accepts', (t) => {
   const repo = fixture(t);
   repo.commit('docs', { 'README.md': 'fixture, documented\n' });
@@ -121,7 +141,7 @@ test('a program started through a symlinked directory still runs, not exit 0 unr
   const dir = mkdtempSync(path.join(os.tmpdir(), 'oscilla-base-rule-link-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   symlinkSync(path.join(ROOT, 'scripts'), path.join(dir, 'scripts'));
-  for (const program of ['review-verdict.mjs', 'fail-first.mjs']) {
+  for (const program of ['review-verdict.mjs', 'fail-first.mjs', 'pr-metadata.mjs']) {
     const r = spawnSync(process.execPath, [path.join(dir, 'scripts', program)],
       { encoding: 'utf8', env: ENV });
     assert.equal(r.status, 2, `${program}: ${r.stdout}${r.stderr}`);

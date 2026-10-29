@@ -157,10 +157,11 @@ test('the guarded paths are the rule\'s list', () => {
     'tests/browser/live-smoke.cjs',
     '.github/*', 'scripts/review-verdict.mjs', 'scripts/fail-first.mjs',
     'scripts/ci-workflow-rules.mjs', 'scripts/yaml-subset.mjs',
+    'scripts/pr-metadata.mjs', '.ai/repo/ci/pr-meta.yaml',
     'tests/unit/review-verdict.test.mjs', 'tests/unit/fail-first.test.mjs',
     'tests/unit/ci-workflows.test.mjs', 'tests/unit/ci-knowledge-job.test.mjs',
     'tests/unit/yaml-subset.test.mjs', 'tests/unit/base-rule.test.mjs',
-    'tests/unit/fixtures/git-repo.mjs']);
+    'tests/unit/pr-metadata.test.mjs', 'tests/unit/fixtures/git-repo.mjs']);
   for (const f of ['src/js/audio/voice.js', 'src/js/analysis/peak.js',
     'src/js/experiments/store.js', 'src/js/studio/runtime/x.js', 'src/js/core/storage.js',
     'src/js/core/storage-inventory.js', 'scripts/release-publish.mjs',
@@ -171,7 +172,7 @@ test('the guarded paths are the rule\'s list', () => {
   }
   for (const f of ['src/js/main.js', 'src/index.html', 'src/js/ui/shell.js',
     'scripts/review-verdict.mjs.bak', 'tests/unit/v3-engine.test.mjs', 'docs/src/js/audio/x.md',
-    'docs/.github/workflows/ci.yml', '.ai/repo/reviews/1.yaml']) {
+    'docs/.github/workflows/ci.yml', '.ai/repo/reviews/1.yaml', '.ai/repo/ci/gates.yaml']) {
     assert.equal(isGuarded(f), false, f);
   }
   // every guarded file that is not a pattern exists: a renamed program would otherwise leave

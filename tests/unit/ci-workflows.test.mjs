@@ -1,8 +1,9 @@
 // project.ci-bounded: every job of every workflow is bounded, every step that installs,
 // downloads or runs a browser suite is bounded by itself, installs go through
 // .github/scripts/ci-install.sh, downloads retry and are digest-checked, actions are pinned and
-// `gate` needs every other job of ci.yml, nothing is made non-fatal, and ci.yml starts on a
-// pull request only. The checker is scripts/ci-workflow-rules.mjs; this
+// `gate` needs every other job of ci.yml, nothing is made non-fatal, and ci.yml and every other
+// workflow that runs a pull-request rule through .github/scripts/base-rule.sh start on a pull
+// request only. The checker is scripts/ci-workflow-rules.mjs; this
 // file runs it on the repository (no violation) and on mutated copies of the real workflows
 // (each mutation is found, by rule and by job), so the checker cannot pass by checking nothing.
 // It generalises what tests/unit/ci-knowledge-job.test.mjs asserts of the `knowledge` job.
@@ -358,6 +359,25 @@ test('mutation: ci.yml started by anything but a pull request', () => {
   assert.deepEqual(rules(ci(push)), ['triggers@-']);
   // pages.yml has no gate: it deploys main and may be started by hand
   assert.deepEqual(checkWorkflow('pages.yml', PAGES, SUITES), []);
+});
+
+test('mutation: metadata.yml started by a push, or its job unbounded (R022)', () => {
+  const META = read('.github/workflows/metadata.yml');
+  const meta = (text) => checkWorkflow('.github/workflows/metadata.yml', text, SUITES);
+  assert.deepEqual(rules(meta(META)), []);
+  // no gate job, but a step runs a pull-request rule through base-rule.sh
+  assert.equal('gate' in parse(META).jobs, false);
+  const push = mutate(META, '\non:\n  pull_request:\n', '\non:\n  push:\n  pull_request:\n');
+  assert.deepEqual(rules(meta(push)), ['triggers@-']);
+  assert.match(meta(push)[0].message,
+    /a pull-request rule \(base-rule\.sh\) is started by pull_request only, not by: push/);
+  const manual = mutate(META, '\npermissions:\n', '  workflow_dispatch:\n\npermissions:\n');
+  assert.deepEqual(rules(meta(manual)), ['triggers@-']);
+  const unbounded = mutate(META, '    timeout-minutes: 5\n', '');
+  assert.deepEqual(rules(meta(unbounded)), ['job-timeout@metadata']);
+  // its gh step reaches the network and carries its own bound
+  const step = mutate(META, '        timeout-minutes: 2\n        env:\n', '        env:\n');
+  assert.deepEqual(rules(meta(step)), ['step-timeout@metadata']);
 });
 
 /** What keeps the size step of `unit` from reporting a pull request over the budget. */
