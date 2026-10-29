@@ -4,7 +4,7 @@ version: 1
 kind: rule
 title: Every release completes prepare, pull request, publish, live verification and record
 description: A release is finished when its record is on main. release:prepare refuses to start the next one before that, and refuses the first stable release of a new major that no published release candidate preceded; release:publish diagnoses a Pages run of which no job starts instead of waiting on it.
-statement: release:prepare refuses to start when the newest v* tag at or after v3.4.0 has no .ai/repo/releases/<tag>.yaml, or when the proposed version is the first stable release of a new major (its major is above that of every stable v* tag reachable from HEAD, whatever its minor and patch) and no vX.0.0-rc.N tag has a record on the prerelease channel (overridden only by --no-rc-because naming an accepted ADR that is an RC exemption for that major: tagged rc-exemption and major-<N>, related to adr:adr-0047). Every v* tag at or after v3.4.0 that is reachable from HEAD and more than 6 hours old has its record in the checkout that is judged, a file that parses as a record and carries the tag it is named after; the copy on origin/main counts only for a branch whose history never contained that record, so a record deleted, renamed, emptied or overwritten on a branch is missing. No scanned file carries a version-shaped literal above the product version up to the end of the next major. release:publish refuses while a pages.yml run has had no job start for 15 minutes or the run list cannot be read, reports the run id, its commit and the git merge-base --is-ancestor verdict against HEAD, never watches a run of which no job has started, and prints the majordomus finish line that verifies the published commit.
+statement: release:prepare refuses to start when the newest v* tag at or after v3.4.0 has no .ai/repo/releases/<tag>.yaml, or when the proposed version is the first stable release of a new major (its major is above that of every stable v* tag reachable from HEAD, whatever its minor and patch) and no vX.0.0-rc.N tag has a record on the prerelease channel (overridden only by --no-rc-because naming an accepted ADR that is an RC exemption for that major: tagged rc-exemption and major-<N>, related to adr:adr-0047). Every v* tag at or after v3.4.0 that is reachable from HEAD and more than 6 hours old has its record in the checkout that is judged, a file that parses as a record and carries the tag it is named after; the copy on origin/main counts only for a branch whose history never contained that record, so a record deleted, renamed, emptied or overwritten on a branch is missing. No scanned file carries a version-shaped literal above the product version up to the end of the next major. release:publish refuses while a pages.yml run has had no job start for 15 minutes or the run list cannot be read, reports the run id, its commit and the git merge-base --is-ancestor verdict against HEAD, never watches a run of which no job has started, and prints the majordomus finish line that verifies the published commit. A release:publish whose tag is already on origin at HEAD (and, if the tag exists locally, at HEAD there too) resumes after the push, with release notes from the newest other v* tag merged into HEAD; a tag at another commit, a tag at HEAD that is only local, or a GitHub Release that already exists refuses.
 status: active
 class: blocking
 depends_on: [project.release-receipt-binds-gate@1, project.about-names-current-release@1]
@@ -260,9 +260,13 @@ project.release-flow-complete)` line per stuck run, or `BLOCKED could not list t
 runs …`, and tags nothing; after the tag is pushed, a run of which no job starts within
 `--pages-timeout` ends the publish with `STUCK` lines, the undo command for the tag and the
 `verify-deploy` command for later. The tag is then on origin with no GitHub Release. To
-resume without undoing it: once the Pages run of that commit has succeeded, run
-`npm run release:verify-deploy -- --commit <sha>` and create the GitHub Release by hand with
-the flags the dry run printed (`release:publish` itself refuses an existing tag). A missing
+resume without undoing it, re-run `npm run release:publish -- --yes` while main still stands
+at the tagged commit (plan issue R021): it prints `RESUME`, skips the tag and its push,
+redeploys unless the live page already says `tagged` for that commit (adopting a dispatched
+run that is still waiting), then runs `verify-deploy` and creates the GitHub Release, so no
+gate is skipped. It refuses a tag on origin or in the checkout that names another commit, a
+GitHub Release that already exists, and a tag at HEAD that was never pushed (it names
+`git push origin refs/tags/<tag>` and the undo `git tag -d <tag>`). A missing
 record fails `npm test` with one line per tag, saying whether the record is recorded nowhere
 (the fix is `release:record` and its pull request, never a hand-written record) or was
 deleted or renamed on this branch (the fix is to restore it); on main the `records` job of
