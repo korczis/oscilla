@@ -1,0 +1,45 @@
+# Review verdict for pull request #239, plan item E010: a ledger of the CI checks that passed
+# only on a re-run (branch feat/e010-flake-ledger). Reviewed head cde5b98ca620 (f492bcd1 the
+# change, cde5b98c its plan evidence); merge base origin/main e272fac0e. Built by
+# oscilla-b0's agents; reviewed by dev-68.
+#
+# The digest: the base branch's scripts/review-verdict.mjs (git archive origin/main scripts),
+# `--repo . --head HEAD --content --list --base-branch origin/main`, over the one guarded path
+# the pull request changes, .github/workflows/ci.yml: cc55c00c...4ed3e8. The branch's own
+# script gives the same.
+#
+# Lenses: (a) the ledger logic of scripts/flake-ledger.mjs: what counts as passed only on a
+# re-run, run_attempt, matrix names, pagination, the API being unreadable, idempotence;
+# (b) the gate job's wiring in ci.yml: permissions, when each step runs, the token, fork pull
+# requests; (c) .ai/repo/ci/gates.yaml against ci.yml; (d) the tests, with mutations. Every
+# finding was re-checked against the code, and R-2 and R-3 against the live API.
+#
+# Runs:
+# - node --test tests/unit/flake-ledger.test.mjs 12/12; ci-gates-model and ci-workflows 38/38;
+#   node scripts/ci-workflow-rules.mjs: project.ci-bounded holds.
+# - The script on three real re-runs of korczis/oscilla (runs 40829386951, 40802373353,
+#   40723364406, attempt 2, GH_TOKEN from gh): each lists exactly the webkit job(s) that
+#   failed on attempt 1 and passed on 2 (V3 measurement and UI, V3.1 Studio UI), with the
+#   failed step, the browser and both outcomes. (Run after the fact, the gate's own job is
+#   completed and appears too; inside CI it is in_progress and is excluded, as intended.)
+#   Those three re-runs listed every job with run_attempt 2, so the carried-over filter was
+#   not exercised by live data (the tests README says as much).
+# - Mutations: counting every earlier run of a job, failed or not (flake-ledger.mjs:78),
+#   leaves the suite at 12/12 and, on run 40829386951, lists all 21 jobs (R-2); dropping the
+#   carried-over filter (line 71) fails one test.
+# - Fork pull requests: the step runs the PR's own script with the read-only GITHUB_TOKEN of
+#   a pull_request event and contents: read, actions: read only; no secret is exposed.
+#
+# Verdict changes-requested for R-1 and R-2: small fixes, each to a contract the change itself
+# states ("reports and never fails the gate"; the ledger lists only checks that failed).
+schema: review-verdict/v1
+pr: 239
+verdict: changes-requested
+reviewer: "dev-68 (Claude Opus 5.5 session 4f90795d); did not build, merge or edit this change; wrote only this file. Mesh request r-adbd85fafd6b"
+content: cc55c00c188a90e82b3725465bd86071be80b241d1b5dd83f6f0f10bda4ed3e8
+findings:
+  - { id: R-1, severity: P2, status: open, title: "The ledger steps can fail the required gate check, against 'it reports and never fails the gate' (.github/workflows/ci.yml:457-477). Steps default to if: success() whatever the job's if: always(), so when checkout, setup-node, the ledger (shell bash runs -eo pipefail, so a non-Refusal error such as a 200 with an unexpected body, or a failed write, exits 1 through tee) or the upload fails on a re-run, 'Every release-gate job passed' is skipped and gate is red although every job it needs passed. The test's comment 'the verdict always runs' (tests/unit/flake-ledger.test.mjs:236) asserts only that the verdict has no if, which means success(). Fix: continue-on-error: true on the four ledger steps (or if: always() on the verdict step), and a test that asserts it." }
+  - { id: R-2, severity: P2, status: open, title: "No test holds the commonest case of a re-run: a job that passed on both attempts is no entry (tests/unit/flake-ledger.test.mjs:53-104). Every fixture's earlier attempt fails, so mutating flake-ledger.mjs:78 to count any earlier run leaves 12/12 green, while on the real run 40829386951 (a re-run of all 21 jobs) it lists all 21 as flaky. The code is right today; nothing keeps it right. Fix: add a job that succeeds on attempts 1 and 2 (run_attempt 2) to the FAILED_FIRST fixture, or its own test, and assert no entry for it." }
+  - { id: R-3, severity: P3, status: open, title: "A job is recorded again on a later re-run although it already passed (scripts/flake-ledger.mjs:76-79). Attempt 1 fails, attempt 2 (re-run failed jobs) passes and is recorded; a re-run of all jobs as attempt 3 passes again and is recorded again as '1: failure, 3: success', because any earlier failure counts, not the job's previous run. Fix: compare with the last attempt before current in which the job ran (run_attempt equal to that attempt), and record only when that one failed or timed out; a test with attempts fail, pass, pass." }
+  - { id: R-4, severity: P3, status: open, title: "unverified: the artifact name is the same on every attempt (.github/workflows/ci.yml:475). upload-artifact v4 and later keep artifacts immutable per run; if a second re-run's upload of 'flake-ledger' conflicts with the first, the step fails and, through R-1, so does gate. Fix: name: flake-ledger-${{ github.run_attempt }} (each attempt's ledger stays addressable), or overwrite: true; the test pins the name and needs the same change." }
+  - { id: R-5, severity: P3, status: open, title: "The gate's runs in .ai/repo/ci/gates.yaml:184 chains the ledger with && and without the attempt guard, so the model says a ledger failure fails the gate and that it runs on every attempt, against the summary beside it and ci.yml. Fix: write the ledger as conditional and non-failing in runs (for example a leading '[ attempt > 1 ] && node scripts/flake-ledger.mjs ...;' before the jq verdict), or say in the summary that runs lists the commands, not their conditions." }
