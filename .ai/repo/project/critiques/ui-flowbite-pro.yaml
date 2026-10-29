@@ -1,5 +1,5 @@
 intent: ui-flowbite-pro
-reviewed_at: "8029c8c0027b90118e40038eb53162457b76a14a"
+reviewed_at: "3123d2c0306c921c40fee24ab21486f954303895"
 reviewed_by: "claude-opus-5.5 (critic, plan-ui-flowbite-pro session)"
 findings:
   - id: budget-headroom-is-shared
