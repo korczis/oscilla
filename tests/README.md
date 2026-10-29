@@ -30,6 +30,7 @@ for people, never gating · **DELETED** removed, with its replacement.
 | `unit/charts.test.mjs` | GATE | chart axis, log mapping, FFT-to-pixel and drag maths |
 | `unit/analysis-peak.test.mjs` | GATE | FFT, Blackman window, dBFS calibration, peak interpolation |
 | `unit/analysis-spectrogram.test.mjs` | GATE | colour LUT and dB-to-index mapping |
+| `unit/k015-spectrogram-readout.test.mjs` | GATE | K015, on synthetic frames through a spec-model AnalyserNode at 44.1 and 48 kHz: a one-frame transient spans 1 column on the unsmoothed `readTime()` feed and at least 5 on the 0.55-smoothed one, the unsmoothed feed equals the analyser's analysis with smoothing off, the hover readout reads a tone's bin within ±1 (log and linear) and holds the shown column while frozen, and its label is dB relative (dBFS-like), never SPL |
 | `unit/analysis-misc.test.mjs` | GATE | analyser bin maths, reader throttle, frame-rate independent averaging |
 | `unit/audio-envelope.test.mjs` | GATE | ADSR clamps and Web Audio automation semantics |
 | `unit/audio-synthesis.test.mjs` | GATE | Fourier series and PeriodicWave arrays |
