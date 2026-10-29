@@ -36,4 +36,4 @@ findings:
   - { id: R4, severity: P3, status: open, title: "ci.yml:337 alpha.9 doctor ran 132.8 s locally against alpha.1's 36 s knowledge job in CI; under the 15 min timeout, watch the first run" }
   - { id: R5, severity: P3, status: open, title: "ci-knowledge-job.test.mjs:136 the fixture's stderr case judges a line CI never passes to the verdict" }
   - { id: R6, severity: P3, status: open, title: "R027.yaml:20 the migration step names alpha.8 where the pinned predecessor was alpha.1" }
-  - { id: R7, severity: P3, status: resolved, title: "R027.yaml:23 acceptance needs this review verdict; R027's scope also omits its own record paths (R027.yaml, reviews/291.yaml)" }
+  - { id: R7, severity: P3, status: closed, title: "R027.yaml:23 acceptance needs this review verdict; R027's scope also omits its own record paths (R027.yaml, reviews/291.yaml)" }
