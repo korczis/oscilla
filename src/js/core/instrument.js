@@ -939,12 +939,20 @@ export function createInstrument(deps = {}) {
     // V1: oscillaApp.serializeConfig, serializeHash, restoreFromHash -> url-state.js
     serializeConfig() { return urlState.serializeConfig(this); },
     serializeHash() { return urlState.serializeHash(this, this.mode); },
+    /**
+     * The `instrument` domain of the hash dispatcher (ui/navigation.js): null (no configuration
+     * in the hash), false (it could not be read: defaults kept, its keys leave the address),
+     * 'partial' (some values were replaced by defaults: the address is rewritten to the state
+     * restored, unless a value waits for the real sample rate) or true (restored).
+     */
     restoreFromHash() {
       const r = urlState.restoreFromHashOn(this, location.hash, env(this));
-      if (!r.handled) return;
+      if (!r.handled) return null;
       if (r.pendingHashConfig) this.pendingHashConfig = r.pendingHashConfig;
       if (r.mode) this.mode = r.mode;
       for (const n of r.notices) this.notify(n.level, n.title, n.message);
+      if (r.malformed) return false;
+      return r.issues && !r.pendingHashConfig ? 'partial' : true;
     },
     /**
      * The hash Copy config URL writes: V1 wrote the instrument hash alone; V2 (ui/navigation.js)
