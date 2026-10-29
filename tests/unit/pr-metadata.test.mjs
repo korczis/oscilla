@@ -1,7 +1,8 @@
 // project.pr-names-its-plan (R022): scripts/pr-metadata.mjs on fixture pull requests. One
 // fixture per violation code fails with exactly that code and a clean one passes; the golden
-// cases are the titles and branches of real pull requests; removing each `// rule:` block of
-// the program makes its fixture pass, which the fixture detects; and
+// cases are the titles and branches of real pull requests, at heads that carry what theirs
+// carried; the skills' own titles are judged as the skills write them; removing each
+// `// rule:` block of the program makes its fixture pass, which the fixture detects; and
 // .github/workflows/metadata.yml agrees with its model, .ai/repo/ci/pr-meta.yaml.
 //   node --test tests/unit/pr-metadata.test.mjs
 
@@ -14,10 +15,11 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseYaml } from '../../scripts/yaml-subset.mjs';
 import {
-  CODES, PLAN_WAIVER, RECORD_DIRS, ROLES, SCHEMA, TYPES, candidates, inspect, judge, planWaiver,
-  recordsOf, roleOf, summary, workflowModelProblems,
+  CLOSING, CODES, PLAN_WAIVER, RECORD_DIRS, ROLES, SCHEMA, TYPES, VERDICT_STATES, candidates,
+  inspect, judge, planWaiver, recordsOf, roleOf, summary, workflowModelProblems,
 } from '../../scripts/pr-metadata.mjs';
 import { waiver } from '../../scripts/fail-first.mjs';
+import { SCHEMA as VERDICT_SCHEMA } from '../../scripts/review-verdict.mjs';
 import { gitRepo } from './fixtures/git-repo.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -37,13 +39,13 @@ const BASE_RECORDS = {
   [`${MILESTONES}/M048.yaml`]: 'id: M048\ntitle: "Studio completion"\npriority: p1\n',
 };
 
-/** main: the records; branch `pr`: one more commit with `files`. */
-function fixture(t, files = {}) {
+/** main: the records; branch `pr`: one more commit with `files`, its message `message`. */
+function fixture(t, files = {}, message = 'change') {
   const repo = gitRepo('oscilla-pr-metadata-');
   t.after(() => repo.dispose());
   repo.commit('base', { ...BASE_RECORDS, 'README.md': 'fixture\n' });
   repo.branch('pr');
-  repo.commit('change', { 'README.md': 'fixture, changed\n', ...files });
+  repo.commit(message, { 'README.md': 'fixture, changed\n', ...files });
   return repo;
 }
 
@@ -68,7 +70,8 @@ const FAILS = {
   'title-grammar': { ...CLEAN, title: 'Pinch zoom on the timeline (V603)' },
   'plan-id-missing': { title: 'chore(docs): tidy the README', headRefName: 'chore/tidy',
     body: 'Tidy.\n' },
-  'plan-id-unknown': { ...CLEAN, title: 'feat(studio): V699 pinch zoom on the timeline' },
+  'plan-id-unknown': { ...CLEAN, title: 'feat(studio): V699 pinch zoom on the timeline',
+    headRefName: 'feat/timeline-pinch' },
   'waiver-form': { title: 'chore(docs): tidy the README', headRefName: 'chore/tidy',
     body: 'Tidy.\n\nplan: n/a <reason>\n' },
   'closing-keyword': { ...CLEAN, body: 'Pinch zoom.\n\nCloses #12\n' },
@@ -133,13 +136,40 @@ test('the waiver: a reason passes; quoted, placeholder or empty, it is not one',
 test('closing keywords in every spelling GitHub honours; Refs and prose do not', (t) => {
   const repo = fixture(t);
   for (const body of ['Closes #12', 'closed #12', 'Fixes korczis/oscilla#3', 'fix #4',
-    'Resolves: #5', 'resolved #6', 'This fixes #7 for good']) {
+    'Resolves: #5', 'resolved #6', 'This fixes #7 for good',
+    'Closes https://github.com/korczis/oscilla/issues/12',
+    // the body is the merge commit's message (C1), where a code fence is plain text
+    '```\nCloses #12\n```\n']) {
     assert.deepEqual(run(t, repo, { ...CLEAN, body }).codes, ['closing-keyword'], body);
   }
   for (const body of ['Refs #12', 'the fix of #12', 'closes nothing', 'resolve the #12 case',
-    'Fixed in V603']) {
+    'Fixed in V603', 'hotfix #12', 'prefix #12', 'unresolved #12', 'enclosed #12',
+    'Refs https://github.com/korczis/oscilla/issues/12',
+    'Closes https://github.com/korczis/oscilla/pull/12']) {
     assert.deepEqual(run(t, repo, { ...CLEAN, body }).codes, [], body);
   }
+  // the title is the merge commit's subject (C1): a keyword there reaches main too
+  for (const title of ['fix(audio): V603 closes #12',
+    'fix(audio): V603, fixes korczis/oscilla#12']) {
+    const r = run(t, repo, { ...CLEAN, title });
+    assert.deepEqual(r.codes, ['closing-keyword'], title);
+    assert.match(r.out, /the title carries the closing keyword/, title);
+  }
+  assert.ok(!CLOSING.global && CLOSING.ignoreCase);
+});
+
+test('closing keywords in a commit message between the merge base and the head', (t) => {
+  const repo = fixture(t, {}, 'fix(studio): V603 pinch zoom\n\nFixes #9 on the timeline.\n');
+  const r = run(t, repo, CLEAN);
+  assert.equal(r.status, 1, r.out);
+  assert.deepEqual(r.codes, ['closing-keyword']);
+  assert.match(r.out, /the message of commit [0-9a-f]{12} carries the closing keyword "Fixes #9"/);
+  // the base's own history is not the pull request's: only merge base..head is read
+  const clean = fixture(t);
+  clean.git('checkout', '-q', 'main');
+  clean.commit('fix(x): closes #3 on main already', { 'main.txt': 'main\n' });
+  clean.git('checkout', '-q', 'pr');
+  assert.deepEqual(run(t, clean, CLEAN).codes, []);
 });
 
 test('an ID: a record letter and a record file, at the base or the head', (t) => {
@@ -161,6 +191,9 @@ test('an ID: a record letter and a record file, at the base or the head', (t) =>
     ['M048']);
   assert.deepEqual(candidates({ title: 'chore: v603 u001', branch: 'feat/V603_x.u001-y' }),
     [{ id: 'V603', from: 'branch' }, { id: 'U001', from: 'branch' }]);
+  // A version in a branch is no segment, so a major of 100 is never V100.
+  assert.deepEqual(candidates({ branch: 'release/v100.0.0' }), []);
+  assert.deepEqual(candidates({ branch: 'chore/release-v100.2.3-rc.1' }), []);
   // Only the record directories count, and only file names of an ID's shape are IDs.
   const odd = recordsOf([`${ISSUES}/README.yaml`, 'docs/V999.yaml', `${MILESTONES}/M12.yaml`]);
   assert.deepEqual([...odd.ids.keys()], []);
@@ -168,60 +201,169 @@ test('an ID: a record letter and a record file, at the base or the head', (t) =>
   assert.deepEqual(RECORD_DIRS, [ISSUES, MILESTONES]);
 });
 
+test('an unknown candidate: refused only as the title\'s one link, else a warning', () => {
+  const records = recordsOf(Object.keys(BASE_RECORDS));
+  const codes = (pr) => judge(pr, records).violations.map((v) => v.code);
+  // the title's only candidate names nothing: exactly plan-id-unknown, and a waiver keeps it
+  assert.deepEqual(codes({ title: 'chore(docs): V699 tidy', branch: 'chore/tidy' }),
+    ['plan-id-unknown']);
+  assert.deepEqual(codes({ title: 'chore(docs): V699 tidy', branch: 'chore/tidy',
+    body: 'plan: n/a docs only\n' }), ['plan-id-unknown']);
+  // a record is named beside it: R128 (a loudness standard), V272 (a review section) warn
+  for (const title of ['feat(measure): V603 EBU R128 loudness',
+    'fix(studio): V603 V272 A7 detune']) {
+    const j = judge({ title, branch: 'feat/x' }, records);
+    assert.deepEqual(j.violations, [], title);
+    assert.equal(j.warnings.length, title.includes('R128') ? 0 : 1, title);
+  }
+  const r128 = recordsOf([...Object.keys(BASE_RECORDS), `${ISSUES}/R022.yaml`]);
+  const loud = judge({ title: 'feat(measure): V603 EBU R128 loudness', branch: 'x' }, r128);
+  assert.deepEqual(loud.violations, []);
+  assert.match(loud.warnings.join('\n'), /^R128 \(from the title\) has the letter/);
+  // from the branch, which an open pull request cannot rename: a warning, and a waiver or a
+  // record in the title clears the pull request (#197, docs/v272-final-review)
+  const branch = 'docs/v272-final-review';
+  const bare = judge({ title: 'docs(review): the final review', branch }, records);
+  assert.deepEqual(bare.violations.map((v) => v.code), ['plan-id-missing']);
+  assert.match(bare.violations[0].message, /V272: no such record/);
+  assert.deepEqual(codes({ title: 'docs(review): the final review', branch,
+    body: 'plan: n/a a review of spec section 272\n' }), []);
+  const named = judge({ title: 'docs(review): V603 the final review', branch }, records);
+  assert.deepEqual(named.violations, []);
+  assert.deepEqual(named.unknown, ['V272']);
+  assert.match(named.warnings[0], /^V272 \(from the branch\)/);
+});
+
 test('the exemptions: a release, a release record and a train name no record', () => {
   const records = recordsOf(Object.keys(BASE_RECORDS));
   const ok = (pr) => judge(pr, records).violations.map((v) => v.code);
   assert.deepEqual(ok({ title: 'chore(release): v40.1.0', branch: 'release/v40.1.0' }), []);
+  assert.deepEqual(ok({ title: 'chore(release): v40.1.0', branch: 'chore/release-v40.1.0' }), []);
+  assert.deepEqual(ok({ title: 'chore(release): v40.1.0', branch: 'release/v40.1.0',
+    version: '40.1.0' }), []);
   assert.deepEqual(ok({ title: 'chore(release): record v40.1.0',
     branch: 'chore/release-record-v40.1.0' }), []);
-  assert.deepEqual(ok({ title: 'train(2026-10-28): #243, #244 in one CI run', branch: 'x' }), []);
-  // the release's title and branch name the same version; a train names its members
+  assert.deepEqual(ok({ title: 'train(2026-10-28): #243, #244 in one CI run',
+    branch: 'train/2026-10-28' }), []);
+  // the release's title, branch and package.json name the same version
   assert.deepEqual(ok({ title: 'chore(release): v40.1.1', branch: 'release/v40.1.0' }),
     ['plan-id-missing']);
   assert.deepEqual(ok({ title: 'chore(release): v40.1.0', branch: 'chore/v40.1.0' }),
     ['plan-id-missing']);
+  assert.deepEqual(ok({ title: 'chore(release): v40.1.0', branch: 'release/v40.1.0',
+    version: '40.0.9' }), ['plan-id-missing']);
+  // a release record: its branch and its title, the same version
+  for (const [title, branch] of [['feat(audio): rewrite the engine', 'chore/release-record-v9.9.9'],
+    ['chore(release): record v9.9.8', 'chore/release-record-v9.9.9'],
+    ['chore(release): record v9.9.9', 'chore/release-record-x'],
+    ['chore(release): record v9.9', 'chore/release-record-v9.9']]) {
+    assert.deepEqual(ok({ title, branch }), ['plan-id-missing'], `${title} on ${branch}`);
+  }
+  // a train: a train/ branch and a train(...) title naming its members
   assert.deepEqual(ok({ title: 'train(2026-10-28): the members', branch: 'train/x' }),
     ['plan-id-missing']);
-  assert.equal(roleOf({ title: 'chore(release): v40.0.0-rc.1', branch: 'release/v40.0.0-rc.1' }),
-    'release');
+  assert.deepEqual(ok({ title: 'train(x): #1 rewrite the audio engine', branch: 'feat/anything' }),
+    ['plan-id-missing']);
+  assert.deepEqual(ok({ title: 'chore(train): #250, #252', branch: 'train/2026-10-29' }),
+    ['plan-id-missing']);
+  assert.equal(roleOf({ title: 'chore(release): v40.0.0-rc.1', branch: 'release/v40.0.0-rc.1',
+    version: '40.0.0-rc.1' }), 'release');
   assert.deepEqual(ROLES, ['release', 'release-record', 'train']);
 });
 
+/** The `gh pr create --title "..."` of a skill, after `after`, and the branch it is pushed on. */
+function skillPr(rel, after) {
+  const text = read(rel).slice(read(rel).indexOf(after));
+  return { title: /gh pr create --base main --title "([^"]+)"/.exec(text)[1],
+    branch: /git push -u origin (\S+)/.exec(text)[1] };
+}
+
+test('the skills\' own titles and branches pass as the skills write them', () => {
+  const records = recordsOf(Object.keys(BASE_RECORDS));
+  const fill = (s) => s.replace(/<yyyy-mm-dd>/g, '2026-10-29').replace('#<a>, #<b>, ...',
+    '#250, #252').replace(/X\.Y\.Z/g, '40.1.0');
+  for (const [rel, after, role] of [
+    ['.ai/repo/skills/merge-train/SKILL.md', '6. Push and open', 'train'],
+    ['.ai/repo/skills/release/SKILL.md', '5. Land it', 'release'],
+    ['.ai/repo/skills/release/SKILL.md', '7. Record it', 'release-record'],
+  ]) {
+    const pr = skillPr(rel, after);
+    const filled = { title: fill(pr.title), branch: fill(pr.branch), version: '40.1.0' };
+    const j = judge(filled, records);
+    assert.deepEqual(j.violations, [], `${rel}: ${JSON.stringify(filled)}`);
+    assert.equal(j.role, role, `${rel}: ${JSON.stringify(filled)}`);
+  }
+});
+
+test('title-grammar holds GitHub\'s button titles and tags to the merge subject', () => {
+  const records = recordsOf(Object.keys(BASE_RECORDS));
+  // fail-first reads `[WIP] feat:` as a feat to decide whether it applies; here the title is
+  // the subject of the merge commit on main (C1), so a tag or GitHub's Revert title is refused
+  for (const title of ['[WIP] feat(studio): V603 pinch zoom',
+    'Revert "feat(studio): V603 pinch zoom on the timeline"']) {
+    assert.deepEqual(judge({ title, branch: 'x' }, records).violations.map((v) => v.code),
+      ['title-grammar'], title);
+  }
+});
+
 // The titles and branches of real pull requests (read with `gh pr view` on 2026-10-29; #228 for
-// the release #237, whose version is the current one and so may not be written here); none
+// the release #237 and #229 for its record #243, whose version is the current one and so may
+// not be written here), each judged at a head carrying the records its own head carried; none
 // of their bodies carries a closing keyword or a `plan: n/a` line.
+const F_RECORDS = { [`${ISSUES}/F001.yaml`]: issue('F001', 'M055'),
+  [`${ISSUES}/F012.yaml`]: issue('F012', 'M055'),
+  [`${MILESTONES}/M055.yaml`]: 'id: M055\ntitle: "The whole UI on Flowbite Pro"\npriority: p1\n' };
 const GOLDEN = [
   [254, 'chore(plan): V603 and U001 done at their main commits', 'chore/plan-done-v603-u001',
     { ids: ['V603', 'U001'] }],
+  // #251 adds M055, F001 and F012 on its own head
+  [251, 'chore(plan): intent ui-flowbite-pro, M055 and F001-F012 (the whole UI on Flowbite Pro)',
+    'chore/plan-ui-flowbite-pro', { ids: ['M055', 'F001', 'F012'], head: F_RECORDS }],
+  // #253's head carries no F001 (#251 is not its ancestor), and main has no F record yet
   [253, 'feat(build): F001 Tailwind and flowbite compiled into the single file',
-    'feat/f001-tailwind-build', { ids: ['F001'] }],
+    'feat/f001-tailwind-build', { codes: ['plan-id-missing'],
+      message: /F001: no record file begins with that letter/ }],
   [248, 'train(2026-10-28): #243, #244, #240, #241 in one CI run; S080 done', 'train/2026-10-28',
     { role: 'train', ids: ['S080'] }],
+  // the merge-train skill's old title, before it was made conventional
+  [194, 'Merge train 2026-10-18: #187-#191', 'train/2026-10-18',
+    { codes: ['title-grammar', 'plan-id-missing'] }],
   [247, 'feat(studio): V603 pinch zoom on the timeline', 'feat/v603-timeline-pinch',
     { ids: ['V603'], branch: 'V603' }],
   [246, 'test(plan): the two heads of #238 are squash-merged evidence commits',
     'fix/plan-evidence-238-off-history', { codes: ['plan-id-missing'] }],
-  [228, 'chore(release): v3.12.1', 'release/v3.12.1', { role: 'release' }],
+  [228, 'chore(release): v3.12.1', 'release/v3.12.1',
+    { role: 'release', head: { 'package.json': '{ "version": "3.12.1" }\n' } }],
+  [229, 'chore(release): record v3.12.1', 'chore/release-record-v3.12.1',
+    { role: 'release-record' }],
   [252, 'chore(process): trains judged by members, one merge-train procedure, disk preflight,'
     + ' evidence on main, bounded budget re-measure, symbol-anchored decisions'
     + ' (evolve 2026-10-28)', 'chore/evolve-process-20261028', { codes: ['plan-id-missing'] }],
 ];
 
 test('golden: real pull requests are judged as the spec says', (t) => {
-  // #253's record F001 is on its head (#251 adds it), not on the base.
-  const repo = fixture(t, { [`${ISSUES}/F001.yaml`]: issue('F001', 'M055') });
   for (const [n, title, headRefName, want] of GOLDEN) {
+    const repo = fixture(t, want.head || {});
     const facts = inspect({ repo: repo.dir, base: 'main', head: 'HEAD',
       pr: { number: n, title, headRefName, body: '' } });
     const label = `#${n} ${title}`;
     assert.deepEqual(facts.violations.map((v) => v.code), want.codes || [], label);
     assert.deepEqual(facts.ids.map((f) => f.id), want.ids || [], label);
     assert.equal(facts.role, want.role || null, label);
+    if (want.message) assert.match(facts.violations[0].message, want.message, label);
     if (want.branch) {
       assert.ok(candidates({ branch: headRefName }).some((c) => c.id === want.branch), label);
     }
   }
+  // a release whose head's package.json names another version is not exempt
+  const other = fixture(t, { 'package.json': '{ "version": "3.12.0" }\n' });
+  const facts = inspect({ repo: other.dir, base: 'main', head: 'HEAD',
+    pr: { number: 228, title: 'chore(release): v3.12.1', headRefName: 'release/v3.12.1' } });
+  assert.deepEqual(facts.violations.map((v) => v.code), ['plan-id-missing']);
 });
+
+const verdictFile = (pr, content, findings = '[]') => `schema: ${VERDICT_SCHEMA}\npr: ${pr}\n`
+  + `reviewer: "a reviewing session"\nverdict: merge\ncontent: ${content}\nfindings: ${findings}\n`;
 
 test('--facts: the pr-facts/v1 seam, and --summary its table', (t) => {
   const repo = fixture(t, {
@@ -235,7 +377,7 @@ test('--facts: the pr-facts/v1 seam, and --summary its table', (t) => {
   const facts = JSON.parse(r.stdout);
   assert.equal(facts.schema, SCHEMA);
   assert.deepEqual(facts.ids, [{ id: 'V603', path: `${ISSUES}/V603.yaml`, title: 'Record V603',
-    milestone: 'M048', serves: ['studio-completion#v603'], priority: 'p2' }]);
+    milestone: 'M048', serves: ['studio-completion#v603'], priority: 'p2', onBase: true }]);
   assert.equal(facts.milestone, 'M048');
   assert.equal(facts.level, 'major');
   assert.equal(facts.breaking, true);
@@ -245,17 +387,27 @@ test('--facts: the pr-facts/v1 seam, and --summary its table', (t) => {
   assert.equal(facts.evidence, true);
   assert.equal(facts.land, 'merge');
   assert.equal(facts.role, null);
+  assert.deepEqual(facts.warnings, []);
   assert.match(facts.content, /^[0-9a-f]{64}$/);
+  assert.deepEqual(VERDICT_STATES, ['n/a', 'needed', 'refused', 'recorded']);
 
-  // the verdict for that content is recorded; fail-first waived; no evidence changed
-  repo.commit('verdict', {
-    '.ai/repo/reviews/42.yaml': `verdict: merge\ncontent: ${facts.content}\n`,
-  });
-  const after = JSON.parse(run(t, repo, { ...CLEAN, body: 'fail-first: n/a docs\n' }, '--facts')
-    .stdout);
+  // a verdict review-verdict would accept is recorded; fail-first waived
+  repo.commit('verdict', { '.ai/repo/reviews/42.yaml': verdictFile(42, facts.content) });
+  const facts2 = (pr) => JSON.parse(run(t, repo, pr, '--facts').stdout);
+  const after = facts2({ ...CLEAN, body: 'fail-first: n/a docs\n' });
   assert.equal(after.verdict, 'recorded');
   assert.equal(after.failFirst, 'waived docs');
   assert.equal(after.level, 'minor');
+  // one review-verdict refuses is refused: only verdict and content, an open P1, stale content
+  for (const text of [`verdict: merge\ncontent: ${facts.content}\n`,
+    verdictFile(42, facts.content, '\n  - { id: R1, severity: P1, status: open, title: "x" }'),
+    verdictFile(43, facts.content)]) {
+    repo.commit('verdict', { '.ai/repo/reviews/42.yaml': text });
+    assert.equal(facts2(CLEAN).verdict, 'refused', text);
+  }
+  repo.commit('verdict', { '.ai/repo/reviews/42.yaml': verdictFile(42, facts.content) });
+  repo.commit('after the review', { '.github/workflows/x.yml': 'name: x, changed\n' });
+  assert.equal(facts2(CLEAN).verdict, 'refused', 'the change moved after the review');
 
   const md = summary(facts, 'korczis/oscilla');
   assert.ok(md.includes('| Plan records | [V603](https://github.com/korczis/oscilla/blob/main/'
@@ -275,6 +427,31 @@ test('--facts: the pr-facts/v1 seam, and --summary its table', (t) => {
   const written = readFileSync(file, 'utf8');
   assert.match(written, /^# before\n### Pull request metadata/);
   assert.match(written, /- `closing-keyword`: /);
+});
+
+test('--facts: no evidence, a record only the head has, a warning, and the merge base', (t) => {
+  const repo = fixture(t, { [`${ISSUES}/F001.yaml`]: issue('F001', 'M055'),
+    [`${ISSUES}/V603.yaml`]: issue('V603', 'M048', 'notes: "changed, no evidence"\n') });
+  // main moves on after the branch: its guarded change and its evidence are not the PR's
+  repo.git('checkout', '-q', 'main');
+  repo.commit('main moves on', { '.github/workflows/y.yml': 'name: y\n',
+    [`${ISSUES}/U001.yaml`]: issue('U001', 'M054', 'evidence:\n  - covers: verified\n') });
+  repo.git('checkout', '-q', 'pr');
+  const facts = JSON.parse(run(t, repo, { ...CLEAN, title: 'feat(build): F001 V603 V777 x' },
+    '--facts').stdout);
+  assert.equal(facts.evidence, false);
+  assert.deepEqual(facts.guarded, []);
+  assert.equal(facts.verdict, 'n/a');
+  assert.notEqual(facts.mergeBase, facts.base);
+  assert.deepEqual(facts.ids.map((f) => [f.id, f.onBase]), [['F001', false], ['V603', true]]);
+  assert.deepEqual(facts.unknown, ['V777']);
+  assert.equal(facts.warnings.length, 1);
+  const md = summary(facts, 'korczis/oscilla');
+  assert.ok(md.includes(`[F001](https://github.com/korczis/oscilla/blob/${facts.head}/`), md);
+  assert.match(md, /Warning: V777 \(from the title\)/);
+  const check = run(t, repo, { ...CLEAN, title: 'feat(build): F001 V603 V777 x' });
+  assert.equal(check.status, 0, check.out);
+  assert.match(check.out, /^pr-metadata: warning: V777/m);
 });
 
 test('usage: no mode, no pull request, an unknown flag, no title exit 2', (t) => {
@@ -356,6 +533,9 @@ function mutate(text, from, to) {
 test('metadata.yml is the model\'s judge, and the model is the program\'s', () => {
   assert.deepEqual(workflowModelProblems(WORKFLOW, MODEL_TEXT), []);
   assert.equal(MODEL.version, 1);
+  assert.equal(MODEL.schema, 'oscilla.pr-meta/v1', 'not Majordomus\' own pr-meta.yaml shape');
+  assert.deepEqual(MODEL.judge.concurrency, {
+    group: 'metadata-${{ github.event.pull_request.number }}', 'cancel-in-progress': true });
   assert.equal(MODEL.judge.workflow, '.github/workflows/metadata.yml');
   assert.deepEqual(MODEL.judge.permissions, { contents: 'read', 'pull-requests': 'read' });
   assert.equal(MODEL.judge.bound, 5);
@@ -410,9 +590,21 @@ test('mutation: a workflow that writes, misses an event or can no longer refuse'
       '        timeout-minutes: 2\n        if: false\n        env:\n'), /conditional/],
     ['continue-on-error', mutate(WORKFLOW, '    timeout-minutes: 5\n',
       '    timeout-minutes: 5\n    continue-on-error: true\n'), /non-fatal/],
+    ['one concurrency group', mutate(WORKFLOW,
+      '  group: metadata-${{ github.event.pull_request.number }}\n', '  group: metadata\n'),
+    /concurrency is/],
+    ['no cancel-in-progress', mutate(WORKFLOW, '  cancel-in-progress: true\n',
+      '  cancel-in-progress: false\n'), /concurrency is/],
+    ['no concurrency', mutate(WORKFLOW, '\nconcurrency:\n'
+      + '  group: metadata-${{ github.event.pull_request.number }}\n'
+      + '  cancel-in-progress: true\n', '\n'), /concurrency is/],
   ]) {
     const problems = workflowModelProblems(text, MODEL_TEXT);
     assert.notDeepEqual(problems, [], name);
     assert.match(problems.join('\n'), want, name);
   }
+  // the order of the permission keys means nothing to GitHub, so it means nothing here
+  const swapped = mutate(WORKFLOW, '  contents: read\n  pull-requests: read\n',
+    '  pull-requests: read\n  contents: read\n');
+  assert.deepEqual(workflowModelProblems(swapped, MODEL_TEXT), []);
 });

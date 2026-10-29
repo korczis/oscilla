@@ -7,9 +7,15 @@
 # block below, and tests/unit/pr-metadata.test.mjs holds the two to each other and every other
 # block to the constants of scripts/pr-metadata.mjs, the program that judges.
 #
-# Measured on 2026-10-29: 8 of the last 40 non-release pull requests named no plan ID in
-# their title or branch (#252, #250, #246, #244, #238, #230, #217, #214), and Majordomus
+# Measured on 2026-10-29: 7 of the last 40 non-release pull requests named no plan ID in
+# their title or branch (#252, #250, #246, #244, #230, #217, #214), and Majordomus
 # delivery reads only the title and the branch, so they were attributed to nothing.
+#
+# `schema` names this file's own shape: it shares Majordomus' file name, not its top-level
+# keys (Majordomus' pr-meta.yaml v1 has actor/trigger/permissions/checkout/runs/forbidden).
+# When the forge projection (draft B1) reads it, B1 names the combined schema; the
+# `repository:` block below is the one draft B7 compares.
+schema: oscilla.pr-meta/v1
 version: 1
 
 # ---------------------------------------------------------------- who judges
@@ -25,7 +31,9 @@ judge:
   triggers:
     pull_request:
       types: [opened, edited, synchronize, reopened, ready_for_review]
-  concurrency: metadata-<number>, cancel-in-progress
+  concurrency:
+    group: metadata-${{ github.event.pull_request.number }}
+    cancel-in-progress: true
   permissions:
     contents: read
     pull-requests: read
@@ -50,25 +58,32 @@ ids:
 
 # ---------------------------------------------------------------- who names none
 # Universal (owner decision C3, 2026-10-29): every other pull request names a record or waives.
+# Each role is held by its branch and its title together, so neither alone exempts.
 exempt:
   - role: release
-    when: branch release/vX.Y.Z and title chore(release) vX.Y.Z, the same version
+    when: >-
+      branch release/vX.Y.Z or chore/release-vX.Y.Z, title chore(release): vX.Y.Z,
+      the head's package.json at X.Y.Z
   - role: release-record
-    when: branch chore/release-record-vX.Y.Z
+    when: "branch chore/release-record-vX.Y.Z, title chore(release): record vX.Y.Z"
   - role: train
-    when: "a train(...) title naming its members as #N"
+    when: "branch train/... and a train(...) title naming its members as #N"
 
 # A line of the body's own prose (not a code block, an HTML comment or a blockquote), with a
 # reason that is not the placeholder.
 waiver: 'plan: n/a <reason>'
 
 # ---------------------------------------------------------------- what is refused
+# plan-id-unknown refuses a title candidate without a record only when the pull request names
+# no record at all; every other unknown candidate is a warning in the summary. closing-keyword
+# reads the title, the body and every commit message between the merge base and the head.
 codes: [title-grammar, plan-id-missing, plan-id-unknown, waiver-form, closing-keyword]
 
 # ---------------------------------------------------------------- the seam
 # The facts a projection reads (schema pr-facts/v1): the IDs with their path, title,
 # milestone, serves and priority; the milestone; the SemVer level and breaking flag; the
-# guarded paths and the verdict state; the fail-first state; whether plan evidence changed;
+# guarded paths and the verdict state (n/a, needed, refused or recorded, by review-verdict's own
+# verdictProblems()); the fail-first state; whether plan evidence changed;
 # the landing method; the role.
 facts: node scripts/pr-metadata.mjs --facts --pr-json {file} --head {sha} --base {base}
 

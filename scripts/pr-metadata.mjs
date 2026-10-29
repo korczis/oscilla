@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // project.pr-names-its-plan: a pull request names an existing plan record in its title or
-// branch, or waives with a reason; its title is conventional; it carries no closing keyword.
+// branch, or waives with a reason; its title is conventional; nothing it lands on main carries
+// a closing keyword.
 //
 //   node scripts/pr-metadata.mjs --pr-json <file> [--repo <dir>] [--base <ref>] [--head <ref>]
 //        [--slug <owner/name>] (--check | --facts | --summary <file>)...
@@ -13,18 +14,25 @@
 // ($GITHUB_STEP_SUMMARY), with links under --slug (default $GITHUB_REPOSITORY).
 //
 // A plan ID is a capital letter and 3 or 4 digits in the title (case-sensitive), or a branch
-// segment of that shape (split on / - _ ., any case: feat/v603-x names V603). A candidate
-// counts only when its letter begins a record file name under RECORD_DIRS at the base or the
-// head (so H264 and v3.12.1 are never IDs), and it is an ID only when <ID>.yaml exists there,
-// at the base or the head (a record the pull request adds counts). The violation codes:
+// segment of that shape (split on / - _ ., any case: feat/v603-x names V603; a version such as
+// v100.0.0 is no segment). A candidate counts only when its letter begins a record file name
+// under RECORD_DIRS at the base or the head (so H264 and v3.12.1 are never IDs), and it is an
+// ID only when <ID>.yaml exists there, at the base or the head (a record the pull request
+// adds counts). The violation codes:
 //   title-grammar    the title is not `type(scope)!: description` with a declared type
 //   plan-id-missing  no ID in the title or the branch, no exemption, no `plan: n/a` line
-//   plan-id-unknown  a candidate with a record letter has no record (a typo, a rename)
+//   plan-id-unknown  a title candidate with a record letter has no record (a typo, a rename),
+//                    and the pull request names no record at all; with one named, or from
+//                    the branch (which an open pull request cannot rename), it is a warning
 //   waiver-form      a `plan: n/a` line without a reason, or with the placeholder
-//   closing-keyword  the body carries `Closes #N`, `fixes owner/repo#N` and the like
-// Exempt from plan-id-missing: a release (branch release/vX.Y.Z, title chore(release): vX.Y.Z),
-// a release record (branch chore/release-record-vX.Y.Z) and a train (title train(...) naming
-// its members as #N). The waiver is read like fail-first's: in the body's own prose only.
+//   closing-keyword  the title, the body or a commit message between the merge base and the
+//                    head carries `Closes #N`, `fixes owner/repo#N`, `Resolves <issue URL>`
+//                    and the like: under owner decision C1 all three reach main
+// Exempt from plan-id-missing: a release (branch release/vX.Y.Z or chore/release-vX.Y.Z,
+// title chore(release): vX.Y.Z, the head's package.json at X.Y.Z), a release record (branch
+// chore/release-record-vX.Y.Z, title chore(release): record vX.Y.Z) and a train (branch
+// train/..., title train(...) naming its members as #N). The waiver is read like
+// fail-first's: in the body's own prose only.
 // Each rule below sits between `// rule: <code>` and `// end rule: <code>`, and
 // tests/unit/pr-metadata.test.mjs removes each block in turn to prove its fixture fails.
 //
@@ -36,7 +44,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TITLE as FAIL_FIRST_TITLE, proseOf, waiver } from './fail-first.mjs';
 import { commitLevel, parseCommit } from './release-analyze.mjs';
-import { REVIEWS_DIR, reviewedContent } from './review-verdict.mjs';
+import { REVIEWS_DIR, reviewedContent, verdictProblems } from './review-verdict.mjs';
 import { parseYaml } from './yaml-subset.mjs';
 
 export const SCHEMA = 'pr-facts/v1';
@@ -44,9 +52,11 @@ export const RECORD_DIRS = ['.ai/repo/project/issues', '.ai/repo/project/milesto
 export const CODES = ['title-grammar', 'plan-id-missing', 'plan-id-unknown', 'waiver-form',
   'closing-keyword'];
 export const ROLES = ['release', 'release-record', 'train'];
+export const VERDICT_STATES = ['n/a', 'needed', 'refused', 'recorded'];
 export const PLAN_WAIVER = /^[ \t]*(?:[*-][ \t]+)?plan:[ \t]*n\/a\b[ \t]*(.*)$/im;
-export const CLOSING =
-  /\b(close[sd]?|fix(e[sd])?|resolve[sd]?)(?::\s*|\s+)([\w.-]+\/[\w.-]+)?#\d+/i;
+export const CLOSING = new RegExp(String.raw`\b(close[sd]?|fix(e[sd])?|resolve[sd]?)`
+  + String.raw`(?::\s*|\s+)(?:([\w.-]+\/[\w.-]+)?#\d+`
+  + String.raw`|https?:\/\/github\.com\/[\w.-]+\/[\w.-]+\/issues\/\d+)`, 'i');
 
 /**
  * The declared title types: every type release-analyze.mjs gives a level of its own (one it
@@ -59,6 +69,7 @@ export const TYPES = new Set(['train', ...['build', 'chore', 'ci', 'docs', 'feat
 const RECORD_FILE = /^([A-Z])\d+\.yaml$/;
 const RECORD_ID = /^[A-Z]\d{3,4}$/;
 const VERSION = String.raw`v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?`;
+const VERSION_CORE = /v\d+\.\d+\.\d+/gi;
 
 /**
  * null when the body carries no `plan: n/a` line of its own prose, else { reason }: read as
@@ -93,27 +104,36 @@ export function candidates({ title = '', branch = '' }) {
   const out = [];
   const add = (id, from) => { if (!out.some((c) => c.id === id)) out.push({ id, from }); };
   for (const m of String(title).matchAll(/\b[A-Z]\d{3,4}\b/g)) add(m[0], 'title');
-  for (const seg of String(branch).split(/[/._-]+/)) {
+  for (const seg of String(branch).replace(VERSION_CORE, '/').split(/[/._-]+/)) {
     if (/^[a-z]\d{3,4}$/i.test(seg)) add(seg.toUpperCase(), 'branch');
   }
   return out;
 }
 
-/** The role that exempts a pull request from naming a record, or null. */
-export function roleOf({ title = '', branch = '' }) {
+/**
+ * The role that exempts a pull request from naming a record, or null. Each role is held by
+ * its branch and its title together; a release also by `version`, the head's package.json
+ * version, when the caller knows it (inspect() always passes it).
+ */
+export function roleOf({ title = '', branch = '', version }) {
   const t = String(title).trim();
-  const release = new RegExp(`^release/(${VERSION})$`).exec(branch);
-  if (release && t === `chore(release): ${release[1]}`) return 'release';
-  if (new RegExp(`^chore/release-record-${VERSION}$`).test(branch)) return 'release-record';
-  if (/^train\([^)]*\): /.test(t) && /#\d+\b/.test(t)) return 'train';
+  const b = String(branch);
+  const release = new RegExp(`^(?:release/|chore/release-)(${VERSION})$`).exec(b);
+  if (release && t === `chore(release): ${release[1]}`
+    && (version === undefined || `v${version}` === release[1])) return 'release';
+  const record = new RegExp(`^chore/release-record-(${VERSION})$`).exec(b);
+  if (record && t === `chore(release): record ${record[1]}`) return 'release-record';
+  if (/^train\/./.test(b) && /^train\([^)]*\): /.test(t) && /#\d+\b/.test(t)) return 'train';
   return null;
 }
 
 /**
- * The violations of one pull request ({ title, branch, body }) against the records:
- * { ids, unknown, role, waived, violations: [{ code, message }] }.
+ * The violations of one pull request against the records:
+ * { ids, unknown, warnings, role, waived, violations: [{ code, message }] }. The input is
+ * { title, branch, body, commits: [{ sha, message }], version }; commits are those between
+ * the merge base and the head, whose messages land on main with a merge commit.
  */
-export function judge({ title = '', branch = '', body = '' }, records) {
+export function judge({ title = '', branch = '', body = '', commits = [], version }, records) {
   const violations = [];
   const flag = (code, message) => violations.push({ code, message });
   const t = String(title).trim();
@@ -122,7 +142,13 @@ export function judge({ title = '', branch = '', body = '' }, records) {
   const foreign = all.filter((c) => !records.prefixes.has(c.id[0])).map((c) => c.id);
   const ids = known.filter((c) => records.ids.has(c.id));
   const unknown = known.filter((c) => !records.ids.has(c.id));
-  const role = roleOf({ title: t, branch });
+  // A title candidate without a record is refused only when nothing else is named: then it is
+  // the pull request's one link, and it points nowhere. Every other one is a warning.
+  const refusedUnknown = ids.length ? [] : unknown.filter((c) => c.from === 'title');
+  const warnings = unknown.filter((c) => !refusedUnknown.includes(c)).map((c) => `${c.id}`
+    + ` (from the ${c.from}) has the letter of a plan record but no ${c.id}.yaml; it counts`
+    + ' for nothing');
+  const role = roleOf({ title: t, branch, version });
   const w = planWaiver(body);
 
   // rule: title-grammar
@@ -131,25 +157,28 @@ export function judge({ title = '', branch = '', body = '' }, records) {
   if (!parsed.conventional || !TYPES.has(parsed.type) || !written
     || written[0] !== parsed.type) {
     flag('title-grammar', `the title is not \`type(scope): description\` with a type of`
-      + ` ${[...TYPES].join(', ')}: ${JSON.stringify(t)}`);
+      + ` ${[...TYPES].join(', ')}: ${JSON.stringify(t)} (it is the subject of the merge`
+      + ' commit on main)');
   }
   // end rule: title-grammar
 
   // rule: plan-id-missing
-  if (!ids.length && !unknown.length && !role && !w) {
+  if (!ids.length && !refusedUnknown.length && !role && !w) {
     flag('plan-id-missing', 'neither the title nor the branch names a plan record'
       + ` (${[...records.prefixes].sort().join(', ')} and digits, as a file under`
-      + ` ${RECORD_DIRS.join(' or ')}); name one, or put \`plan: n/a <reason>\` on a line`
-      + ' of the body'
+      + ` ${RECORD_DIRS.join(' or ')}); name one in the title, or put \`plan: n/a <reason>\``
+      + ' on a line of the body'
       + `${foreign.length ? ` (${foreign.join(', ')}: no record file begins with that letter)`
-        : ''}`);
+        : ''}`
+      + `${unknown.length ? ` (${unknown.map((c) => c.id).join(', ')}: no such record)` : ''}`);
   }
   // end rule: plan-id-missing
 
   // rule: plan-id-unknown
-  for (const c of unknown) {
-    flag('plan-id-unknown', `${c.id} (from the ${c.from}) has the letter of a plan record`
-      + ` but no ${c.id}.yaml under ${RECORD_DIRS.join(' or ')} at the base or the head`);
+  for (const c of refusedUnknown) {
+    flag('plan-id-unknown', `${c.id} (from the title) has the letter of a plan record but no`
+      + ` ${c.id}.yaml under ${RECORD_DIRS.join(' or ')} at the base or the head, and the pull`
+      + ' request names no other record: correct the title');
   }
   // end rule: plan-id-unknown
 
@@ -161,14 +190,18 @@ export function judge({ title = '', branch = '', body = '' }, records) {
   // end rule: waiver-form
 
   // rule: closing-keyword
-  const closing = CLOSING.exec(String(body || ''));
-  if (closing) {
-    flag('closing-keyword', `the body carries the closing keyword "${closing[0]}": a merge`
-      + ' would close that issue outside its record; write `Refs #N`');
+  const sources = [['title', t], ['body', String(body || '')], ...commits.map((c) => [
+    `message of commit ${String(c.sha || '').slice(0, 12)}`, String(c.message || '')])];
+  const closing = sources.map(([where, text]) => [where, CLOSING.exec(text)])
+    .filter(([, m]) => m);
+  if (closing.length) {
+    flag('closing-keyword', `${closing.map(([where, m]) => `the ${where} carries the closing`
+      + ` keyword "${m[0]}"`).join('; ')}: on main it would close that issue outside its`
+      + ' record; write `Refs #N` (a commit message is changed by rewording the commit)');
   }
   // end rule: closing-keyword
 
-  return { ids: ids.map((c) => c.id), unknown: unknown.map((c) => c.id), role,
+  return { ids: ids.map((c) => c.id), unknown: unknown.map((c) => c.id), warnings, role,
     waived: w && w.reason ? w.reason : null, violations };
 }
 
@@ -192,11 +225,28 @@ function yamlOrNull(text) {
   }
 }
 
-/** The records at the base and the head, the head's file winning where both have one. */
+/** The records at the given revisions, the first revision's file winning where both have one. */
 export function recordsAt(repo, revs) {
   const paths = revs.flatMap((rev) => git(repo, ['ls-tree', '-r', '-z', '--name-only', rev,
     '--', ...RECORD_DIRS]).split('\0').filter(Boolean));
   return recordsOf(paths);
+}
+
+/** The commits between the merge base and the head: [{ sha, message }]. */
+function commitsOf(repo, mergeBase, head) {
+  return git(repo, ['log', '--format=%H%x00%B%x1e', `${mergeBase}..${head}`]).split('\x1e')
+    .map((s) => s.replace(/^\n+/, '')).filter((s) => s.includes('\0'))
+    .map((s) => ({ sha: s.slice(0, s.indexOf('\0')), message: s.slice(s.indexOf('\0') + 1) }));
+}
+
+/** The head's package.json version, or '' when it has none (then no release is exempt). */
+function versionAt(repo, head) {
+  try {
+    const v = JSON.parse(show(repo, head, 'package.json') ?? 'null')?.version;
+    return typeof v === 'string' ? v : '';
+  } catch {
+    return '';
+  }
 }
 
 /** Whether the pull request adds or changes the `evidence:` of a project record. */
@@ -212,11 +262,16 @@ function changesEvidence(repo, base, head) {
   });
 }
 
-/** The verdict state: n/a without a guarded path, recorded when it matches the digest. */
+/**
+ * The verdict state, by review-verdict's own test: n/a without a guarded path, needed without
+ * a verdict file, refused when verdictProblems() finds any (a stale digest, an open P0 or P1,
+ * a missing field), recorded otherwise.
+ */
 function verdictState(repo, head, pr, guarded, content) {
   if (!guarded.length) return 'n/a';
-  const doc = yamlOrNull(show(repo, head, `${REVIEWS_DIR}/${pr}.yaml`));
-  return doc && doc.verdict === 'merge' && doc.content === content ? 'recorded' : 'needed';
+  const text = show(repo, head, `${REVIEWS_DIR}/${pr}.yaml`);
+  if (text === null) return 'needed';
+  return verdictProblems(yamlOrNull(text), { pr, content }).length ? 'refused' : 'recorded';
 }
 
 /**
@@ -228,10 +283,13 @@ export function inspect({ repo, pr, base = 'origin/main', head = 'HEAD' }) {
   const baseSha = git(repo, ['rev-parse', '--verify', `${base}^{commit}`]).trim();
   const mergeBase = git(repo, ['merge-base', baseSha, headSha]).trim();
   const records = recordsAt(repo, [headSha, baseSha]);
+  const onBase = recordsAt(repo, [baseSha]).ids;
   const title = String(pr.title || '').trim();
   const branch = String(pr.headRefName || '');
   const body = String(pr.body || '');
-  const verdict = judge({ title, branch, body }, records);
+  const commits = commitsOf(repo, mergeBase, headSha);
+  const verdict = judge({ title, branch, body, commits, version: versionAt(repo, headSha) },
+    records);
 
   const facts = verdict.ids.map((id) => {
     const rel = records.ids.get(id);
@@ -239,7 +297,8 @@ export function inspect({ repo, pr, base = 'origin/main', head = 'HEAD' }) {
       || {};
     const milestone = rel.includes('/milestones/') ? id : doc.milestone ?? null;
     return { id, path: rel, title: doc.title ?? null, milestone,
-      serves: Array.isArray(doc.serves) ? doc.serves : [], priority: doc.priority ?? null };
+      serves: Array.isArray(doc.serves) ? doc.serves : [], priority: doc.priority ?? null,
+      onBase: onBase.has(id) };
   });
   const commit = parseCommit({ subject: title, body });
   const level = commitLevel(commit).level;
@@ -258,6 +317,7 @@ export function inspect({ repo, pr, base = 'origin/main', head = 'HEAD' }) {
     mergeBase,
     ids: facts,
     unknown: verdict.unknown,
+    warnings: verdict.warnings,
     milestone: facts.find((f) => f.milestone)?.milestone ?? null,
     role: verdict.role,
     waived: verdict.waived,
@@ -282,6 +342,7 @@ export function checkLines(facts) {
   lines.push(`pr-metadata: plan records: ${named || 'none'}`
     + `${facts.role ? `; exempt as ${facts.role}` : ''}`
     + `${facts.waived ? `; waived: plan: n/a ${facts.waived}` : ''}`);
+  for (const w of facts.warnings || []) lines.push(`pr-metadata: warning: ${w}`);
   if (!facts.violations.length) {
     lines.push('pr-metadata: no violation');
     return lines;
@@ -295,8 +356,9 @@ const cell = (s) => String(s).replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
 
 /** The --summary Markdown: one table of the facts, the violations below it. */
 export function summary(facts, slug) {
-  const link = (f) => (slug ? `[${f.id}](https://github.com/${slug}/blob/main/${f.path})`
-    : `\`${f.id}\``);
+  // a record only the head adds is not on main yet: link it at the head
+  const link = (f) => (slug ? `[${f.id}](https://github.com/${slug}/blob/`
+    + `${f.onBase ? 'main' : facts.head}/${f.path})` : `\`${f.id}\``);
   const ids = facts.ids.map((f) => `${link(f)} ${cell(f.title || '')}`).join('<br>');
   const rows = [
     ['Plan records', ids || (facts.role ? `none (exempt as ${facts.role})`
@@ -312,6 +374,7 @@ export function summary(facts, slug) {
   ];
   const out = ['### Pull request metadata (project.pr-names-its-plan)', '',
     '| Fact | Value |', '| --- | --- |', ...rows.map(([k, v]) => `| ${k} | ${v} |`), ''];
+  for (const w of facts.warnings || []) out.push(`Warning: ${cell(w)}`, '');
   if (facts.violations.length) {
     out.push(`**${facts.violations.length} violation(s)**`, '');
     for (const v of facts.violations) out.push(`- \`${v.code}\`: ${cell(v.message)}`);
@@ -347,10 +410,17 @@ export function workflowModelProblems(workflowText, modelText) {
     out.push(`pull_request types are ${JSON.stringify(types)}, the model's`
       + ` ${JSON.stringify(want)}`);
   }
+  // compared as sets of key and value: the order of the keys means nothing to GitHub
+  const sorted = (o) => JSON.stringify(Object.entries(o && typeof o === 'object' ? o : {})
+    .map(([k, v]) => [k, String(v)]).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
   const perms = wf.permissions || {};
-  if (JSON.stringify(perms) !== JSON.stringify(model.permissions || {})) {
+  if (sorted(perms) !== sorted(model.permissions)) {
     out.push(`permissions are ${JSON.stringify(perms)}, the model's`
       + ` ${JSON.stringify(model.permissions)}`);
+  }
+  if (sorted(wf.concurrency) !== sorted(model.concurrency)) {
+    out.push(`concurrency is ${JSON.stringify(wf.concurrency)}, the model's`
+      + ` ${JSON.stringify(model.concurrency)}`);
   }
   const jobs = Object.keys(wf.jobs || {});
   if (jobs.join() !== model.job) out.push(`jobs are ${JSON.stringify(jobs)}, not [${model.job}]`);
