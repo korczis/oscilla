@@ -1,0 +1,32 @@
+id: U004
+milestone: M054
+serves:
+  - "ui-current#no-isolated-workspace"
+title: "Filter Lab filters the sound you hear and leads to the Studio filter"
+slug: filter-lab-filters-the-sound-you-hear-and-leads-to-the-studi
+priority: p2
+profile: implementation
+objective: "Resolves docs/ui-audit.md A06. Filter Lab today draws one response curve over most of an empty workspace. Show the current source's spectrum before and after the filter beside the response, let the person play the source through it, and offer 'Open in Studio' that creates the same filter node in a Studio graph. Reuse the existing analysis and Studio actions; no second filter implementation."
+why: "Audit 2026-10-28: Filter Lab is an isolated panel and leaves most of its viewport empty."
+scope:
+  - "src/js/labs"
+  - "src/js/ui"
+  - "src/index.html"
+  - "src/styles"
+  - "tests/browser/ui-current.cjs"
+  - "tests/unit"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "U001"
+  - "U005"
+acceptance_criteria:
+  - "The before/after spectrum and the response share one frequency axis; playing through the filter leaves no node running after stop."
+  - "'Open in Studio' produces a graph whose filter node has the Filter Lab's type, cutoff and Q."
+validation:
+  - "node tests/browser/ui-current.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-28
+updated_at: 2026-10-28
