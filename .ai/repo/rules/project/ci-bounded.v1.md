@@ -81,8 +81,10 @@ that is repaired where it last hurt regresses in the next job somebody adds.
   their skip only when the `changes` job succeeded with `runtime=false`, the answer of the
   base branch's `.github/scripts/ci-changes.mjs` (every changed path a regular file under
   `.ai/repo/project/`, `.ai/repo/reviews/`, `.ai/repo/releases/`, `docs/` or a top-level
-  `*.md`; a base without the classifier answers `runtime=true`, and the pull request's own
-  copy never decides). A skip of any other job or for any other reason, a cancelled or
+  `*.md`, in a pull request into `main`; a pull request into any other base runs everything,
+  because its `gate` lands on the head commit that main's required check reads too; a base
+  without the classifier answers `runtime=true`, and the pull request's own copy never
+  decides). A skip of any other job or for any other reason, a cancelled or
   failed job, and a failed or silent `changes` fail it. No other job of `ci.yml` carries a
   condition.
 - A workflow with a `gate` job is started by `pull_request` and nothing else. Its
@@ -144,7 +146,8 @@ retry flags, the verdict program).
 own `VERDICT` with `jq` on every combination of results (a skip passes only for the six jobs
 and only on `runtime=false` from a successful `changes`), the classifier's fail-closed table
 (a `.md` under `tests/`, renames into or out of the allowlist, deletions, names with spaces,
-links and submodules, an empty diff, any event but a pull request), and the wiring: exactly
+links and submodules, an empty diff, any event but a pull request, any base but `main`), and
+the wiring: exactly
 the six jobs carry that condition, the four judge and unit jobs none, and the `changes` step
 runs only the base branch's blob of the classifier, or answers `runtime=true` when the base
 has none.

@@ -14,10 +14,11 @@
 // 100644 or 100755, or deleted) under one of NON_RUNTIME. Everything else is runtime: src/,
 // dist/, tests/ (a .md there too: tests/browser/lib/suite.cjs reads tests/README.md), scripts/,
 // package*.json, .github/ (this file included), .ai/repo/rules/, any other path, a symbolic
-// link or submodule anywhere, a name with a control character, an empty diff, and any event
-// that is not a pull request. A path that changes the build changes dist/index.html too, which
-// the always-running `unit` job holds to a clean rebuild (npm run build:check), so the
-// allowlist does not need to know the build's inputs.
+// link or submodule anywhere, a name with a control character, an empty diff, any event
+// that is not a pull request, and a pull request into any base but main (GATED_BASES). A
+// path that changes the build changes dist/index.html too, which the always-running `unit`
+// job holds to a clean rebuild (npm run build:check), so the allowlist does not need to know
+// the build's inputs.
 //
 // Dependency-free on purpose: the job runs it as one extracted file, before `npm ci`.
 // Tested by tests/unit/ci-changes.test.mjs.
@@ -34,6 +35,21 @@ export const NON_RUNTIME = Object.freeze([
   'docs/',
   '*.md',
 ]);
+
+/**
+ * The base branches a pull request may be path-gated into. A pull request into any other
+ * branch (a train or a stacked branch) runs everything: its `gate` check lands on the head
+ * commit, which branch protection on main reads too, so a skip judged against another base
+ * would let a head whose own content never ran in a browser satisfy main's required check
+ * (retargeted to main, or the same head opened against main as well).
+ */
+export const GATED_BASES = Object.freeze(['main']);
+
+/** The branch name of a --base-branch value: `refs/remotes/origin/<name>` or a bare name. */
+export function baseName(ref) {
+  if (typeof ref !== 'string') return '';
+  return ref.startsWith('refs/remotes/origin/') ? ref.slice('refs/remotes/origin/'.length) : ref;
+}
 
 /** The jobs of ci.yml that run only for a runtime change. */
 export const GATED_JOBS = Object.freeze(['engine', 'suites', 'measure', 'studio', 'browser',
@@ -102,11 +118,17 @@ function recordReason(r) {
  * Classify a pull request's changed records.
  * @returns {{ runtime: boolean, reason: string, runtimePaths: string[], paths: string[] }}
  */
-export function classify(records, { event = 'pull_request' } = {}) {
+export function classify(records, { event = 'pull_request', base } = {}) {
   const paths = records.flatMap((r) => r.paths);
   if (event !== 'pull_request') {
     return { runtime: true, reason: `event ${event || '(none)'}: everything runs`, runtimePaths: [],
       paths };
+  }
+  if (!GATED_BASES.includes(base)) {
+    return { runtime: true,
+      reason: `base ${JSON.stringify(base ?? null)} is not ${GATED_BASES.join(', ')}: `
+        + 'everything runs',
+      runtimePaths: [], paths };
   }
   if (!records.length) {
     return { runtime: true, reason: 'no changed path: nothing shows the change is non-runtime',
@@ -167,7 +189,7 @@ export function main(argv, { log = console.log } = {}) {
     const { headSha, baseSha, records } = changedRecords(opts.repo, opts.head, opts.baseBranch);
     log(`ci-changes: head ${headSha.slice(0, 12)}, merge base ${baseSha.slice(0, 12)}, `
       + `${records.length} changed path record(s)`);
-    result = classify(records, { event: opts.event });
+    result = classify(records, { event: opts.event, base: baseName(opts.baseBranch) });
   }
   log(`ci-changes: runtime=${result.runtime} (${result.reason})`);
   for (const p of result.runtimePaths.slice(0, 20)) log(`  runtime: ${JSON.stringify(p)}`);

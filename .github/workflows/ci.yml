@@ -26,9 +26,10 @@
 # BASE branch's .github/scripts/ci-changes.mjs whether the pull request changes anything the
 # browser and visual legs could observe. Only when every changed path is a regular file under
 # .ai/repo/project/, .ai/repo/reviews/, .ai/repo/releases/, docs/ or a top-level *.md (and at
-# least one path changed) is the answer `runtime=false`, and then the engine, suites, measure,
-# studio, browser and visual jobs are skipped; anything else, an empty diff, an error or a
-# missing answer runs them (fail closed). unit, knowledge, fail-first and review-verdict always
+# least one path changed) in a pull request into main is the answer `runtime=false` (a train
+# or stacked base runs everything: the head's `gate` would satisfy main's required check too),
+# and then the engine, suites, measure, studio, browser and visual jobs are skipped;
+# anything else, an empty diff, an error or a missing answer runs them (fail closed). unit, knowledge, fail-first and review-verdict always
 # run: the plan, knowledge and build:check tests guard what a non-runtime change can break.
 # `gate` accepts a skipped job only when it is one of those six and `changes` succeeded with
 # `runtime=false`. ci.yml is started by pull_request only (project.ci-bounded, `triggers`), so

@@ -18,13 +18,16 @@ import { fileURLToPath } from 'node:url';
 import { parseYaml } from '../../scripts/yaml-subset.mjs';
 import { gitRepo } from './fixtures/git-repo.mjs';
 import {
-  GATED_JOBS, NON_RUNTIME, changedRecords, classify, isNonRuntimePath, main, parseRawZ,
+  GATED_BASES, GATED_JOBS, NON_RUNTIME, baseName, changedRecords, classify, isNonRuntimePath,
+  main, parseRawZ,
 } from '../../.github/scripts/ci-changes.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PROGRAM = path.join(ROOT, '.github/scripts/ci-changes.mjs');
 const CI = parseYaml(readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8'));
 const RUNTIME_IF = "needs.changes.outputs.runtime != 'false'";
+/** A pull request into main, the one base that is path-gated. */
+const INTO_MAIN = { event: 'pull_request', base: 'main' };
 
 const Z40 = '0'.repeat(40);
 const B = 'a'.repeat(40);
@@ -151,7 +154,7 @@ test('classify: a table of changes, fail closed', () => {
     ['an upper-case markdown suffix', rec('M', ['README.MD']), true],
   ];
   for (const [what, records, runtime] of rows) {
-    const r = classify(records);
+    const r = classify(records, INTO_MAIN);
     assert.equal(r.runtime, runtime, `${what}: ${r.reason}`);
     if (runtime && records.length) assert.ok(r.runtimePaths.length, `${what} names its paths`);
     if (!runtime) assert.deepEqual(r.runtimePaths, [], what);
@@ -160,13 +163,35 @@ test('classify: a table of changes, fail closed', () => {
 
 test('classify: every event but a pull request runs everything', () => {
   const docs = rec('M', ['docs/a.md']);
-  assert.equal(classify(docs, { event: 'pull_request' }).runtime, false);
+  assert.equal(classify(docs, INTO_MAIN).runtime, false);
   for (const event of ['push', 'workflow_dispatch', 'merge_group', 'pull_request_target', '']) {
-    const r = classify(docs, { event });
+    const r = classify(docs, { event, base: 'main' });
     assert.equal(r.runtime, true, event);
     assert.match(r.reason, /everything runs/);
   }
 });
+
+test('classify: only a pull request into main is path-gated; any other base runs everything',
+  () => {
+    // A train or stacked branch: the head's gate check would satisfy main's required check too
+    // (retargeted, or the same head opened against main), so a skip judged there is refused.
+    assert.deepEqual([...GATED_BASES], ['main']);
+    const docs = rec('M', ['docs/a.md']);
+    assert.equal(classify(docs, { event: 'pull_request', base: 'main' }).runtime, false);
+    for (const base of ['train/2026-10-17', 'feat/x', 'Main', 'main ', 'refs/heads/main',
+      'origin/main', 'refs/remotes/origin/main', '', undefined, null]) {
+      const r = classify(docs, { event: 'pull_request', base });
+      assert.equal(r.runtime, true, JSON.stringify(base));
+      assert.match(r.reason, /is not main: everything runs/);
+    }
+    assert.equal(classify(docs).runtime, true, 'no base named: everything runs');
+    assert.equal(baseName('refs/remotes/origin/main'), 'main');
+    assert.equal(baseName('refs/remotes/origin/train/2026-10-17'), 'train/2026-10-17');
+    assert.equal(baseName('main'), 'main');
+    assert.equal(baseName('refs/heads/main'), 'refs/heads/main');
+    assert.equal(baseName('refs/remotes/upstream/main'), 'refs/remotes/upstream/main');
+    assert.equal(baseName(undefined), '');
+  });
 
 /** A fixture repository: main with a tree, a branch `pr` with `files` and `rm` applied. */
 function fixture(t, { files = {}, rm = [], mv = [] } = {}) {
@@ -186,7 +211,7 @@ function fixture(t, { files = {}, rm = [], mv = [] } = {}) {
   repo.git('checkout', '-q', 'pr');
   return repo;
 }
-const judge = (repo) => classify(changedRecords(repo.dir, 'HEAD', 'main').records);
+const judge = (repo) => classify(changedRecords(repo.dir, 'HEAD', 'main').records, INTO_MAIN);
 
 test('against git: renames, deletions, spaces, tests/*.md and an empty diff', (t) => {
   const rows = [
@@ -234,6 +259,22 @@ test('the program writes runtime=<bool> for the job, and exits 1 without an answ
   const outSrc = path.join(dir, 'src');
   assert.equal(run(src, ['--event', 'pull_request'], outSrc).status, 0);
   assert.equal(readFileSync(outSrc, 'utf8'), 'runtime=true\n');
+
+  // the full remote refs the job passes: main is gated, a train base runs everything
+  const trained = fixture(t, { files: { 'docs/a.md': 'b\n' } });
+  trained.git('update-ref', 'refs/remotes/origin/main', 'main');
+  trained.git('update-ref', 'refs/remotes/origin/train/2026-10-17', 'main');
+  const ref = (base, out) => spawnSync(process.execPath, [PROGRAM, '--repo', trained.dir,
+    '--event', 'pull_request', '--head', 'HEAD', '--base-branch', base, '--output', out],
+  { encoding: 'utf8' });
+  const outMain = path.join(dir, 'main');
+  assert.equal(ref('refs/remotes/origin/main', outMain).status, 0);
+  assert.equal(readFileSync(outMain, 'utf8'), 'runtime=false\n');
+  const outTrain = path.join(dir, 'train');
+  const r4 = ref('refs/remotes/origin/train/2026-10-17', outTrain);
+  assert.equal(r4.status, 0, r4.stderr);
+  assert.equal(readFileSync(outTrain, 'utf8'), 'runtime=true\n');
+  assert.match(r4.stdout, /base "train\/2026-10-17" is not main/);
 
   // no base branch to diff against: no answer at all, so `changes` fails and gate with it
   const outBad = path.join(dir, 'bad');
