@@ -45,8 +45,9 @@
 // earlier publish was interrupted after the push. The run skips the tag, the push and the wait
 // for the merge's deploy; it redeploys unless the live page already says tagged for HEAD,
 // adopting a dispatched run of HEAD that is still waiting instead of dispatching another, then
-// verifies and creates the Release. A tag at another commit, or a Release that already
-// exists, refuses.
+// verifies and creates the Release. The notes run from the newest v* tag merged into HEAD other
+// than the one published. A tag at another commit, or a Release that already exists, refuses;
+// a tag at HEAD that is local only (its push failed) refuses with the push and the undo.
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
@@ -245,7 +246,13 @@ export function preconditionProblems(f) {
       + '(push/merge first: Pages deploys main)');
   }
   if (!f.originMain) problems.push('could not read origin/main');
-  if (f.tagLocal && !resume) {
+  const localAtHead = f.tagLocal && f.tagLocalCommit === f.head;
+  if (localAtHead && !f.tagRemote) {
+    // An earlier publish tagged HEAD and its push failed: nothing reached origin.
+    problems.push(`tag ${f.tag} exists locally at HEAD ${short(f.head)} but was never pushed `
+      + `to origin: push it with git push origin refs/tags/${f.tag} and re-run to resume, or `
+      + `undo it with git tag -d ${f.tag}`);
+  } else if (f.tagLocal && !localAtHead) {
     problems.push(`tag ${f.tag} already exists locally`
       + (f.tagLocalCommit ? ` at ${short(f.tagLocalCommit)}, not HEAD ${short(f.head)}` : ''));
   }
@@ -370,7 +377,9 @@ export async function publish({
   // Only a resumed publish can find its Release already made; asked only then.
   facts.releaseExists = resume && sh('gh', ['release', 'view', tag, '--json', 'tagName'])
     .status === 0;
-  const previousTag = lastReleaseTag(run);
+  // The release being published is never its own previous release: a resumed publish finds its
+  // tag at HEAD, and v<version>..HEAD would give empty notes (review R-1 of #242).
+  const previousTag = lastReleaseTag(run, { exclude: tag });
   const commits = readCommits(previousTag, run);
   const notes = releaseNotes({ version, previousTag, commits, commit: head,
     sourceDigest: now.sourceDigest });
