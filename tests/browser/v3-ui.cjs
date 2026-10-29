@@ -2599,6 +2599,12 @@ function defineChecks(fixtures) {
     res.judgement = await page.evaluate(() => document.querySelector('[data-osc="fnd.row"]')
       .textContent.replace(/\s+/g, ' ').includes('Your judgement: Observation'));
     const del = async () => {
+      // The previous deletion's dialog may still be closing: wait until it is shut, or the
+      // open-and-focused check below would pass on it and Enter would hit a closing dialog.
+      await H.until(() => page.evaluate(() => {
+        const d = document.getElementById('osc-dlg-finding-delete');
+        return !d || !d.open;
+      }), Boolean, 5000);
       await page.focus('[data-osc="fnd.row"] [data-osc="fnd.delete"]');
       await page.keyboard.press('Enter');
       // The dialog focuses its first button on a timer after it opens: wait until that initial

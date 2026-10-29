@@ -303,40 +303,44 @@ Majordomus decisions; the code has since decided each one, and this table states
 and where (corrected 2026-10-04). A `majordomus decision` record lives in one checkout's
 `.ai/local/` state, which is never committed, so the durable record is this table and the ADRs
 that repeat it (ADR 0030, ADR 0031, ADR 0032, ADR 0034); `tests/unit/v31-studio-self-knowledge.test.mjs`
-fails when a value or a cited line stops matching the code.
+fails when a value stops matching the code or a cited file stops declaring the cited name.
+A `Where` cell is `path#SYMBOL`, the declaration that holds the value (the decision's own name,
+or the constant that contains it), never `path:line`: a line number moves with every import
+above it, and then this table broke for a change that decided nothing. A decision no symbol
+carries cites the file alone, which must name it.
 
 <!-- studio-decisions:begin -->
 | Decision | Value | Name | Where |
 | --- | --- | --- | --- |
-| Graph coordinate unit | 1 logical unit = 1 CSS px at zoom 1 | `graph coordinate unit` | `src/js/ui/studio/graph-geometry.js:8` |
-| Graph zoom, minimum | 0.25 | `ZOOM_MIN` | `src/js/ui/studio/graph-geometry.js:16` |
-| Graph zoom, maximum | 2.5 | `ZOOM_MAX` | `src/js/ui/studio/graph-geometry.js:17` |
-| Graph zoom, one step | 1.2 | `ZOOM_STEP` | `src/js/ui/studio/graph-geometry.js:19` |
-| Default grid (snapping on) | 8 units | `GRID` | `src/js/ui/studio/graph-geometry.js:23` |
-| Pointer-drag threshold | 4 px | `DRAG_THRESHOLD_PX` | `src/js/ui/studio/graph-geometry.js:25` |
-| Connection hit width | 12 px fine pointer, 24 px coarse pointer | `CABLE_HIT_PX` | `src/js/ui/studio/graph-geometry.js:26` |
-| Fit zoom floor, coarse pointer | 24/26 (port targets at least 24 px) | `COARSE_FIT_MIN_ZOOM` | `src/js/ui/studio/graph-geometry.js:35` |
-| Initial Studio schema version | 1 | `STUDIO_SCHEMA_VERSION` | `src/js/studio/schema.js:54` |
-| Studio project file extension | .oscilla-studio.json | `STUDIO_FILE_EXTENSION` | `src/js/studio/schema.js:56` |
-| Patch file extension | .oscilla-patch.json | `PATCH_FILE_EXTENSION` | `src/js/studio/patches.js:50` |
-| Default timeline scale | 100 px/s | `pxPerSecond` | `src/js/studio/schema.js:111` |
-| Timeline zoom bounds | 4-4000 px/s | `TIMELINE_ZOOM` | `src/js/ui/studio/timeline-view.js:28` |
-| Timeline snap default | 0.1 s time grid | `EDITOR_DEFAULT_SNAP` | `src/js/ui/studio/timeline-view.js:39` |
-| Maximum node import count | 512 nodes | `STUDIO_IMPORT_LIMITS` | `src/js/studio/validate.js:76` |
-| Undo history limit | 200 entries | `STUDIO_HISTORY_LIMIT` | `src/js/studio/history.js:34` |
-| Paste and duplicate offset | (24, 24) units | `PASTE_OFFSET` | `src/js/studio/actions.js:82` |
+| Graph coordinate unit | 1 logical unit = 1 CSS px at zoom 1 | `graph coordinate unit` | `src/js/ui/studio/graph-geometry.js` |
+| Graph zoom, minimum | 0.25 | `ZOOM_MIN` | `src/js/ui/studio/graph-geometry.js#ZOOM_MIN` |
+| Graph zoom, maximum | 2.5 | `ZOOM_MAX` | `src/js/ui/studio/graph-geometry.js#ZOOM_MAX` |
+| Graph zoom, one step | 1.2 | `ZOOM_STEP` | `src/js/ui/studio/graph-geometry.js#ZOOM_STEP` |
+| Default grid (snapping on) | 8 units | `GRID` | `src/js/ui/studio/graph-geometry.js#GRID` |
+| Pointer-drag threshold | 4 px | `DRAG_THRESHOLD_PX` | `src/js/ui/studio/graph-geometry.js#DRAG_THRESHOLD_PX` |
+| Connection hit width | 12 px fine pointer, 24 px coarse pointer | `CABLE_HIT_PX` | `src/js/ui/studio/graph-geometry.js#CABLE_HIT_PX` |
+| Fit zoom floor, coarse pointer | 24/26 (port targets at least 24 px) | `COARSE_FIT_MIN_ZOOM` | `src/js/ui/studio/graph-geometry.js#COARSE_FIT_MIN_ZOOM` |
+| Initial Studio schema version | 1 | `STUDIO_SCHEMA_VERSION` | `src/js/studio/schema.js#STUDIO_SCHEMA_VERSION` |
+| Studio project file extension | .oscilla-studio.json | `STUDIO_FILE_EXTENSION` | `src/js/studio/schema.js#STUDIO_FILE_EXTENSION` |
+| Patch file extension | .oscilla-patch.json | `PATCH_FILE_EXTENSION` | `src/js/studio/patches.js#PATCH_FILE_EXTENSION` |
+| Default timeline scale | 100 px/s | `pxPerSecond` | `src/js/studio/schema.js#DEFAULT_VIEW` |
+| Timeline zoom bounds | 4-4000 px/s | `TIMELINE_ZOOM` | `src/js/ui/studio/timeline-view.js#TIMELINE_ZOOM` |
+| Timeline snap default | 0.1 s time grid | `EDITOR_DEFAULT_SNAP` | `src/js/ui/studio/timeline-view.js#EDITOR_DEFAULT_SNAP` |
+| Maximum node import count | 512 nodes | `STUDIO_IMPORT_LIMITS` | `src/js/studio/validate.js#STUDIO_IMPORT_LIMITS` |
+| Undo history limit | 200 entries | `STUDIO_HISTORY_LIMIT` | `src/js/studio/history.js#STUDIO_HISTORY_LIMIT` |
+| Paste and duplicate offset | (24, 24) units | `PASTE_OFFSET` | `src/js/studio/actions.js#PASTE_OFFSET` |
 <!-- studio-decisions:end -->
 
 The model stores the graph view's zoom within the import's range, `VIEW_LIMITS` 1e-6 to 1e6
-(`src/js/studio/schema.js:108`, default 1; VIEW_SET is held to it as well, so a view the store
+(`src/js/studio/schema.js#VIEW_LIMITS`, default 1; VIEW_SET is held to it as well, so a view the store
 keeps is one its saved file reopens with, review V272 A1); the editor clamps every view it
 applies to the bounds above
-(`clampZoom`/`normalizeView`, `src/js/ui/studio/graph-geometry.js:40-50`), so an imported file
+(`clampZoom`/`normalizeView`, `src/js/ui/studio/graph-geometry.js`), so an imported file
 with zoom 10 opens at 2.5. On a coarse pointer Frame all and Frame selection stop at
 `COARSE_FIT_MIN_ZOOM`, where a 26-unit port row is 24 px on screen (WCAG 2.5.8, review V431
 U9); a larger graph is centred and the rest is a pan away. The bounds are view state, outside the studioHash. Below 0.25 the
 10 px node titles are not legible on a 1x display; above 2.5 one 168-unit node fills a phone
-screen (`src/js/ui/studio/graph-geometry.js:9-10`).
+screen (the decisions comment at the head of `src/js/ui/studio/graph-geometry.js`).
 
 Also decided and described above: the id scheme (`<prefix>-<n>` from `createIdGenerator`, one
 namespace across nodes, edges, tracks, clips, lanes, points and markers, matching `ID_PATTERN`

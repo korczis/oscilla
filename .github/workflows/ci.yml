@@ -371,7 +371,9 @@ jobs:
     # (scripts/fail-first.mjs, tested by tests/unit/fail-first.test.mjs), unless the PR body
     # carries `fail-first: n/a <reason>`, which the step prints. Title and body are read from
     # the PR as it is now, not from the event, so re-running the job after editing the body is
-    # enough. Any other title passes with nothing to prove. The program that judges is the base
+    # enough. A train (head branch train/..., or a `train`/`Merge train` title) is judged by the
+    # member table of its body, read from the same PR JSON before any child runs; any other
+    # title passes with nothing to prove. The program that judges is the base
     # branch's copy (.github/scripts/base-rule.sh), not the one this pull request carries; the
     # base is named by its full ref, refs/remotes/origin/<base>, since a tag named
     # origin/<base> (the full history fetches tags) would otherwise answer for it (#255, R2).
@@ -455,7 +457,7 @@ jobs:
           n=0
           until /usr/bin/env -i PATH="${{ steps.judge.outputs.path }}" \
             HOME="${{ runner.temp }}/judge-home" GH_TOKEN="$GH_TOKEN" \
-            gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body \
+            gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body,headRefName \
             > "${{ runner.temp }}/pr.json"; do
             n=$((n + 1)); [ "$n" -lt 3 ] || { echo "::error::could not read PR $PR"; exit 1; }
             sleep 10

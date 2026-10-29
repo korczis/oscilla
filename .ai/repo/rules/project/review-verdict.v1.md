@@ -157,22 +157,15 @@ What it cannot see:
   pull request's guarded files alone keeps the verdict although the reviewer never saw the
   two together: whether they still work together is what the suites of the same run are
   for, not this rule.
-- `main` moving after the run. Branch protection on `main` requires the `gate` check and
-  does not require the branch to be up to date (`strict: false`, read from
-  `gh api repos/korczis/oscilla/branches/main/protection` when this rule was written). A
-  green `gate` on an unchanged head stays valid when `main` moves, so a guarded file changed
-  on `main` after a pull request's last run is merged with it unjudged unless the two
-  conflict. Requiring up-to-date branches is the owner's setting.
-- A branch that does not contain this rule. On a pull request GitHub runs the `ci.yml` of
-  the pull request's own merge with `main`, and with `strict: false` a pull request whose
-  last run was green before the rule reached `main` keeps that green `gate` and can merge
-  with neither a verdict nor a fail-first run. Such a pull request is bound only from its
-  next run, which needs a new commit on it, in practice a merge of `main`. Nothing in the
-  repository forces that merge: a pull request that changes `src/` conflicts with `main` in
-  `dist/index.html` as soon as another such one lands and has to merge `main` to become
-  mergeable, and one that does not conflict does not have to. Merging `main` into every
-  pull request that was open when the rule landed, before landing it, is a step of the
-  coordinator's landing procedure and is not machine-checked.
+- A merge that bypasses branch protection. Protection on `main` requires the `gate` check
+  on an up-to-date branch (`strict: true`, `contexts: [gate]`, read from
+  `gh api repos/korczis/oscilla/branches/main/protection` on 2026-10-28). A pull request
+  therefore merges only after a run on a head that contains `main`: a guarded file changed on
+  `main` after its last run is judged together with it, and a branch whose last green run
+  predates this rule must merge `main` and run again, with this rule, before it can merge.
+  An administrator's merge past protection is the owner's and is not checked here; the
+  protection setting itself is the owner's too, and this paragraph is re-read against it
+  when it changes.
 - A stale branch started by hand. The `triggers` check holds on a branch that contains this
   rule; a branch from before it still carries a `ci.yml` with `workflow_dispatch`.
 - A pull request that rewrites the `review-verdict` job itself, or the wrapper, or the test

@@ -452,6 +452,24 @@ test('the pull-request rules are judged by the base branch\'s programs, and need
   }
 });
 
+// scripts/fail-first.mjs knows a train by its head branch (train/...) as well as its title, and
+// reads the branch from the PR JSON this step writes: without headRefName in the --json list
+// the branch rule silently stops in CI and only the title is left.
+/** The fields the fail-first job's `gh pr view --json` asks for, or [] when it asks none. */
+function failFirstPrFields(job) {
+  const run = String(job.steps.at(-1).run || '');
+  const m = run.match(/\bgh pr view\b[^\n]*?--json[ =]([\w,]+)/);
+  return m ? m[1].split(',') : [];
+}
+
+test('the fail-first job reads the PR\'s title, body and head branch', () => {
+  const fields = failFirstPrFields(parse(CI).jobs['fail-first']);
+  for (const f of ['title', 'body', 'headRefName']) assert.ok(fields.includes(f), f);
+  const without = parse(mutate(CI, '--json title,body,headRefName', '--json title,body'))
+    .jobs['fail-first'];
+  assert.ok(!failFirstPrFields(without).includes('headRefName'));
+});
+
 /** What stops a rule job from judging: [] when its last command is exactly `call`. */
 function problemsOfRuleJob(job, call) {
   const out = [];

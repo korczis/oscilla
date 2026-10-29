@@ -1,9 +1,9 @@
 ---
 schema: skill/v1
 id: merge-train
-version: 1
+version: 2
 title: Build and land a merge train
-description: Land several ready pull requests together through one train/<date> integration branch, one dist rebuild and one merge commit (ADR 0055).
+description: Land several ready non-feat/fix pull requests together through one train/<date> integration branch, one dist rebuild and one merge commit (ADR 0055).
 status: draft
 tags: [git, ci, release-engineering]
 related: [review-a-guarded-pr, fail-first-change]
@@ -23,16 +23,37 @@ It is for a batch; a single change still ships alone with `gh pr merge --auto --
 does not replace the review of the included changes: the train's combined diff is reviewed
 once, with `review-a-guarded-pr`.
 
+This skill is the one procedure for a train; `project.fail-first` judges what it lands.
+
 # When to use
 
-Several pull requests are ready at once and each one that changes `src/` would conflict on
-`dist/index.html` after the first lands.
+- Several pull requests are ready at once and each one that changes `src/` would conflict on
+  `dist/index.html` after the first lands; or
+- branch protection on `main` requires `gate` on an up-to-date branch (`strict: true`; read it
+  with `gh api repos/korczis/oscilla/branches/main/protection -q .required_status_checks`), so
+  every merge makes every other open pull request merge `main` and run CI again, and while
+  runners are slow or stalled a queue lands one pull request per CI round (#248, 2026-10-28).
+
+# Who may join
+
+- A pull request whose own `gate` was green on its last head, or that is green except for
+  being out of date.
+- **No `feat` or `fix` member.** Each lands as its own pull request, where `project.fail-first`
+  runs its tests against the merge base. The train's `fail-first: n/a` once let an unproven
+  `feat` through; the `fail-first` job now refuses a train whose member table lists one, and
+  a waiver in the train's body does not excuse a member.
+- A member that changes a guarded path (`GUARDED` in `scripts/review-verdict.mjs`) rides only
+  when the train gets its own reviewer-written verdict (step 8). If that wait is what the
+  train is avoiding, land the member on its own instead.
+- No plan evidence recorded on a member branch: the `V272 D4` test of
+  `tests/unit/plan-evidence-commits.test.mjs` refuses, on the pull request, an evidence commit
+  that is not on `main` (`project.shared-machine-discipline`, item 12).
 
 # Procedure
 
-1. List the candidates and their state; keep only green, mergeable ones, and check no
-   release is in flight (rule `project.release-flow-complete`: nothing else merges between
-   prepare and publish):
+1. List the candidates and their state; keep only green, mergeable, non-feat/fix ones, and
+   check no release is in flight (rule `project.release-flow-complete`: nothing else merges
+   between prepare and publish):
 
    ```bash
    gh pr list --state open --json number,title,headRefName,mergeable,statusCheckRollup
@@ -40,7 +61,8 @@ Several pull requests are ready at once and each one that changes `src/` would c
    ```
 
 2. Create the train in its own worktree and start the task there
-   ([task lifecycle](../../workflows/task-lifecycle.md)):
+   ([task lifecycle](../../workflows/task-lifecycle.md)). The branch must be `train/...`:
+   the `fail-first` job recognises a train by it, as well as by its title.
 
    ```bash
    majordomus worktree create train/<yyyy-mm-dd>
@@ -65,7 +87,8 @@ Several pull requests are ready at once and each one that changes `src/` would c
 
    - `dist/index.html` unmerged: take either side, `git checkout --theirs dist/index.html`,
      then `git add dist/index.html`. It is rebuilt once at the end.
-   - Any other unmerged path: resolve it by hand, then `git add <path>`.
+   - Any other unmerged path: resolve it by hand, then `git add <path>`, or stop: abort with
+     `git merge --abort`, drop that member and land it on its own.
    - Before committing, no path is unmerged and no marker is left (rule
      `project.no-conflict-markers`; the test applies the allowlist of look-alike lines):
 
@@ -89,9 +112,22 @@ Several pull requests are ready at once and each one that changes `src/` would c
    A unit test an included pull request added needs its `tests/README.md` row; the
    inventory check of `tests/unit/knowledge-integrity.test.mjs` names a missing one.
 
-6. Push and open the pull request to main. The body lists the included pull requests, the
-   conflicts and how each was resolved, the verification, and on a line of its own the
-   waiver `fail-first: n/a integration train; each included PR carries its own fail-first`.
+6. Push and open the pull request to main. The body carries, in its own prose (not in a code
+   block or a quotation), a member table with one row per included pull request, its number
+   and its pull request title as `gh pr view <n> --json title` prints it; below it, the
+   conflicts and how each was resolved and the verification:
+
+   ```markdown
+   | member | what |
+   |---|---|
+   | #243 | chore(release): record v1.2.3 |
+   | #244 | docs(pack): usage comments name the checkout |
+   ```
+
+   The `fail-first` job refuses a train without the table, with an empty one, with a row
+   that is not `#<n>` or whose title does not start with a conventional type, and with a
+   `feat` or `fix` row. Every `| member | what |` table in the body is read; a `|` inside a
+   title is written `\|`.
 
    ```bash
    majordomus finish --check
@@ -106,15 +142,18 @@ Several pull requests are ready at once and each one that changes `src/` would c
 
 7. Fold follow-ups in before the review. A late change is opened against the train,
    `gh pr create --base train/<yyyy-mm-dd>`, and merged into it with step 4, then step 5
-   again. Its pull request shows merged once its head is in the pushed train.
+   again, and gets its row in the member table. Its pull request shows merged once its head
+   is in the pushed train.
 
 8. Review. `node scripts/review-verdict.mjs --content --list` lists the guarded paths the
    train changes against main; when it lists any, a session that built none of it writes
    `.ai/repo/reviews/<train-pr>.yaml` (skill `review-a-guarded-pr`). A fold-in after the
-   verdict that touches a guarded path makes the verdict stale.
+   verdict that touches a guarded path makes the verdict stale. The reviewer also checks
+   that each member row's title is its member's and that every merged member is listed,
+   which the `fail-first` job cannot see.
 
-9. Land by a merge commit, so every included head reaches main and its pull request is
-   marked merged:
+9. Land by a merge commit, never squash, so every included head reaches main, its pull
+   request is marked merged and its commits stay in the history:
 
    ```bash
    gh pr merge <train-pr> --auto --merge
@@ -124,8 +163,8 @@ Several pull requests are ready at once and each one that changes `src/` would c
 
 - `train/<yyyy-mm-dd>` on origin: one `--no-ff` merge commit per included pull request,
   each made through the pre-commit hook, one `build(dist)` rebuild after the last merge.
-- One pull request to main with the inclusion table, the conflict resolutions, the
-  `npm run verify` result and the fail-first waiver, armed with `--auto --merge`, and its
-  review verdict when guarded paths changed.
+- One pull request to main with the member table (no `feat` or `fix` member), the conflict
+  resolutions and the `npm run verify` result, armed with `--auto --merge`, and its review
+  verdict when guarded paths changed.
 - The task closed with
   `majordomus finish --outcome completed --verify-command "npm run verify" --note <file>`.
