@@ -11,6 +11,10 @@ why: "Owner direction of 2026-10-29 (session oscilla-b0): OSCILLA becomes a play
 scope:
   - "src/js/sequencer/editor.js"
   - "src/js/labs/sequencer-panel.js"
+  - "src/js/labs/index.js"
+  - "src/js/main.js"
+  - "tests/unit/sequencer-model.test.mjs"
+  - "tests/unit/v31-studio-timeline.test.mjs"
   - "tests/unit/sequencer-editor.test.mjs"
   - "tests/unit/sequencer-fake-audio.mjs"
   - "tests/browser/sequencer.cjs"

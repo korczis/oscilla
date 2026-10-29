@@ -15,7 +15,7 @@ scope:
   - "src/js/labs/sequencer-panel.js"
   - "src/index.html"
   - "src/partials"
-  - "tests/unit/studio-sequence-exchange.test.mjs"
+  - "tests/unit/v31-studio-sequence-file.test.mjs"
   - "tests/browser/v31-studio-links.cjs"
   - "tests/README.md"
   - "dist"
@@ -29,7 +29,7 @@ acceptance_criteria:
   - "The pull request carries a reviewer's verdict (src/js/studio is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
   - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
 validation:
-  - "node --test tests/unit/studio-sequence-exchange.test.mjs"
+  - "node --test tests/unit/v31-studio-sequence-file.test.mjs"
   - "node tests/browser/v31-studio-links.cjs"
   - "npm test"
 evidence_required:

@@ -11,6 +11,7 @@ why: "Owner direction of 2026-10-29 (session oscilla-b0): OSCILLA becomes a play
 scope:
   - "src/js/ui/studio/graph-editor.js"
   - "src/js/ui/studio/graph-gestures.js"
+  - "src/js/ui/studio/graph-commands.js"
   - "tests/unit"
   - "tests/unit/source-size-baseline.json"
   - "tests/browser/v31-studio-graph.cjs"

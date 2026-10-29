@@ -10,6 +10,9 @@ objective: "Lands as refactor(studio). src/js/studio/adapters/nodes.js is 40 583
 why: "Owner direction of 2026-10-29 (session oscilla-b0): OSCILLA becomes a playable, patchable instrument and an audio-band signal lab; the plan checked every fact it relies on against main at 8b5792cd, and the sizes it quotes are unchanged at e2720e07."
 scope:
   - "src/js/studio/adapters"
+  - "src/js/studio/clip-targets.js"
+  - "src/js/ui/studio/graph-view.js"
+  - "docs/v31/compiler.md"
   - "tests/unit"
   - "tests/unit/source-size-baseline.json"
   - "tests/README.md"

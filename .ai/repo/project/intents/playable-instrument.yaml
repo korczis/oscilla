@@ -59,7 +59,7 @@ satisfaction:
   - id: "workspaces-exchange"
     criterion: "Studio Import opens a V2 sequence or config file as pattern clips and a track exports as a sequence with exportSequence(importSequence(x)) deep-equal to x; Open in Studio and Send track to Sequencer carry the studioWhatWouldBeLost guard"
     evidence: "command"
-    ref: "node --test tests/unit/studio-sequence-exchange.test.mjs"
+    ref: "node --test tests/unit/v31-studio-sequence-file.test.mjs"
   - id: "held-notes-safe"
     criterion: "The on-screen and QWERTY keyboard play the V502 note voices, are armed per view, never take Space, keep a held note past 2 s only while held under the output ceiling, and release every note on blur, hide and Escape"
     evidence: "command"
