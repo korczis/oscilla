@@ -14,6 +14,7 @@ evidence_required:
 risks:
   - "\"Waterfall\" is taken by a non-goal of intent measurement-extensions (room-acoustics decay plots): the view is called a scrolling spectrogram (D7)."
   - "Every issue touches src/js/analysis and needs a reviewer's verdict."
+  - "K025 waits on F002 of #251 and on K053 of M062 (the chart cursor bus and census), and through K053 and K028 on the charts owner decisions Q014 and Q016 (M063); K029 and K033 of M062 follow K015 and K025; K015's validation runs the tests named K015 in tests/unit/analysis-spectrogram.test.mjs."
   - "Demodulator, Test Signal and I/Q constellation nodes are Wave 3 and not issued."
 created_at: 2026-10-29
 updated_at: 2026-10-29

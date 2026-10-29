@@ -52,13 +52,13 @@ V4xx        V3.1 Studio (M021-M033)
 V5xx        MIDI jam companion (M045)
 V6xx        Studio completion after 3.11 (M048)
 E0xx        engineering integrity: structure, size and checks of the code base (M046)
-K0xx        playable instrument (M057-M059, M061) and audio-band signal lab (M060)
+K0xx        playable instrument (M057-M059, M061), audio-band signal lab (M060) and charts (M062)
 L0xx        Learn lessons (M049)
 P0xx        product: first run (M050), positioning, product path, public story (M051)
 U0xx        the whole interface shows the current product (M054)
 F0xx        the whole interface on Flowbite Pro (M055)
 Q0xx        questions and acts only the owner can answer or take (M052; Q001 under M005, Q004 under
-            M050, Q007 under M053)
+            M050, Q007 under M053, Q008-Q017 under M063)
 ```
 
 A Q issue is answered by the owner, or by a session the owner delegated the decision to. The
@@ -66,8 +66,8 @@ answer is recorded as evidence (covers `owner_decision`) with its date and sourc
 words, or attributed to the deciding session together with the delegation's date and words, its
 reasoning and the note that the owner may override it, never presented as the owner's own words.
 A worker without such a delegation never answers one. Work that waits on an answer names the Q
-issue in `depends_on`, and M052 (questions) and M053 (owner acts on published releases, Q007)
-sort after every live milestone, so `majordomus plan next` does not nominate them first. That is a convention, not a guarantee: a Q issue is READY to
+issue in `depends_on`, and M052 (questions), M053 (owner acts on published releases, Q007)
+and M063 (the charts line's questions, Q008-Q017) sort after every live milestone, so `majordomus plan next` does not nominate them first. That is a convention, not a guarantee: a Q issue is READY to
 `majordomus plan start` like any other, and its `owner` field only informs. A question recorded
 with `majordomus question add` lives in one checkout's `.ai/local/` and is read by nobody else;
 a question the next worker must see is a Q issue.

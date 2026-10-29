@@ -16,7 +16,7 @@ satisfaction:
   - id: "spectrogram-readout"
     criterion: "Hovering the spectrogram reads frequency and relative dB drawn on the canvas, the readout bin matches a synthetic tone within +-1 bin, the label says relative dB, and on synthetic frames the unsmoothed feed from readTime() smears a transient less than the 0.55-smoothing feed"
     evidence: "command"
-    ref: "node --test tests/unit/k015-spectrogram-readout.test.mjs"
+    ref: "f=$(mktemp) && node --test --test-name-pattern='^K015 ' --test-reporter=tap tests/unit/analysis-spectrogram.test.mjs > $f && grep -q '^# Subtest: K015 ' $f; r=$?; rm -f $f; exit $r"
   - id: "analytic-signal"
     criterion: "analysis/analytic.js returns the analytic signal by FFT Hilbert transform with the inverse by conjugation, and its envelope, instantaneous phase and instantaneous frequency of synthetic AM and FM signals are within stated error bounds at 44.1 kHz and 48 kHz"
     evidence: "command"

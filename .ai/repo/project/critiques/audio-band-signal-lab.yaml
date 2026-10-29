@@ -37,4 +37,4 @@ findings:
     resolution:
       state: planned
       issue: "K015"
-      because: "The criterion and K015 name tests/unit/k015-spectrogram-readout.test.mjs (2026-10-29)."
+      because: "The criterion and K015 run only the tests named 'K015 ...' in tests/unit/analysis-spectrogram.test.mjs, the file #263 puts them in, write their TAP to a temporary file and fail when none ran, so the command fails on main and passes on #263, under sh and under bash -eo pipefail alike; k015-spectrogram-readout.test.mjs, named first, was deleted by #263 (3bc96a11) (2026-10-29, revised by the plan change that added M062)."

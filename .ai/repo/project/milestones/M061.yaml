@@ -12,7 +12,7 @@ validation:
 evidence_required:
   - "milestone_verified"
 risks:
-  - "K016 goes first in Wave 2 because it fixes the largest inert surface; it waits on F001, F002 and F008 of #251 and on E004."
+  - "K016 goes first in Wave 2 because it fixes the largest inert surface; it waits on F002 and F008 of #251, on E004, on K053 and K036 of M062 (the chart interaction kit and the shared frame loop), and through K053 and K028 on the charts owner decisions Q014 and Q016 (M063); its loop is a frame-loop subscriber, and K048 of M062 follows it in the inspector."
   - "K018 serves U006 and audit finding A17 (docs/ui-audit.md) as well; it does not edit U006's record."
   - "K026 amends ADR 0005 through its own ADR (D3) before any code, and it waits on V502 (#261)."
   - "The tagged browser and the Keys node are Wave 3 and not issued."

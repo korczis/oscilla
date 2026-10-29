@@ -7,7 +7,7 @@ title: "Linked spectrum over a scrolling spectrogram, and the Audio-band receive
 slug: linked-spectrum-over-a-scrolling-spectrogram-and-the-audio-b
 priority: p2
 profile: implementation
-objective: "Lands as feat(analysis). A spectrum over a time-down scrolling spectrogram (D7: never \"waterfall\") with a shared frequency axis and a tuning cursor, stating the sample rate and FFT size; and an \"Audio-band receiver\" template that heterodynes by ring modulation (both sidebands; a single-sideband shift needs an AudioWorklet, ADR 0026, and its help text says so). A wording test reads every string of the line (section 5 of the plan; intent audio-band-signal-lab invariants). It waits on F001 and F002 of plan pull request #251 (intent ui-flowbite-pro), which are not on main yet; depends_on names them in the plan change after #251 lands."
+objective: "Lands as feat(analysis). A spectrum over a time-down scrolling spectrogram (D7: never \"waterfall\") with a shared frequency axis and a tuning cursor, stating the sample rate and FFT size; and an \"Audio-band receiver\" template that heterodynes by ring modulation (both sidebands; a single-sideband shift needs an AudioWorklet, ADR 0026, and its help text says so). A wording test reads every string of the line (section 5 of the plan; intent audio-band-signal-lab invariants). It waits on F002 of #251 (intent ui-flowbite-pro; F002 needs F001) and on K053 of M062, whose cursor bus (link.js) carries the shared frequency cursor and whose census and keyboard cursor its two views use, and on K036 of M062, whose frame loop takes its hosts; the plan change that added M062 named these edges. Through K053 and K028 it also waits on the charts owner decisions Q014 (the gzip cap) and Q016 (the home of M062) of M063. The scrolling spectrogram does not follow a spectrum zoom and its history never restarts on one (OD11 of the charts plan, out of scope); K033 of M062 stores the history as levels after this issue and keeps its time-down orientation."
 why: "Owner direction of 2026-10-29 (session oscilla-b0): OSCILLA becomes a playable, patchable instrument and an audio-band signal lab; the plan checked every fact it relies on against main at 8b5792cd, and the sizes it quotes are unchanged at e2720e07."
 scope:
   - "src/js/charts"
@@ -21,11 +21,17 @@ scope:
   - "tests/unit/v31-studio-templates.test.mjs"
   - "tests/README.md"
   - "dist"
+  - "tests/unit/chart-host-census.json"
+  - "tests/browser/charts-interaction.cjs"
+  - "tests/visual/charts"
 depends_on:
   - "K010"
   - "K014"
   - "K015"
   - "K024"
+  - "F002"
+  - "K053"
+  - "K036"
 acceptance_criteria:
   - "The two views share one frequency axis and cursor, span no more than Nyquist, and state the sample rate and FFT size, in a unit test that fails on the merge base."
   - "The Audio-band receiver template validates, has a pinned studioHash and renders both sidebands offline at both sample rates."
@@ -33,10 +39,14 @@ acceptance_criteria:
   - "Any new chrome is Flowbite Pro markup adapted from the matching Pro block and lowers or keeps the ratchet (project.ui-uses-flowbite-pro, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs); controls are Pro range sliders with number inputs, never a custom rotary knob (D5)."
   - "The pull request carries a reviewer's verdict (src/js/analysis and src/js/studio is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
   - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+  - "Its chart hosts (the linked spectrum, kind plot, and the scrolling spectrogram, kind rows, sharing the tuning cursor through link.js) enter tests/unit/chart-host-census.json as done in this change (they do not exist when K053 lands, so they are never pending), each carrying data-osc-chart, and the table-driven pass of tests/browser/charts-interaction.cjs holds for each: the host is role=group holding the aria-describedby summary and the snapshot data table, and its focusable plot surface is role=application with aria-roledescription \"interactive chart\" (never role=img), both asserted in the accessibility tree, with a visible focus ring; ArrowRight moves the cursor one step and the one polite live region announces the readout once after the keys settle; Escape clears the cursor and still reaches the page's stop (a playing tone stops); Space keeps its workspace meaning (SPACE_MEANING of src/js/ui/shortcuts.js) and is never taken (ADR 0050); on a touch pointer a tap pins the cursor and it stays after the finger lifts. It lands before K050 of M062 through K048 or K033, so its hosts are in the census when K050 captures the per-host references; if scripts/visual-charts.mjs already exists, each host it adds gets its light and dark reference, bound and expected colours in the same change, which also opens the M063 question that re-accepts the light references."
+  - "The two views paint as one subscriber of src/js/charts/frame-loop.js registered with both hosts (K036's hosts option), with no rAF of their own; tests/browser/chart-cost.cjs passes with them shown and finds them idle while hidden."
 validation:
   - "node --test tests/unit/audio-band-views.test.mjs"
   - "node --test tests/unit/audio-band-wording.test.mjs"
   - "npm test"
+  - "node tests/browser/charts-interaction.cjs"
+  - "node tests/browser/chart-cost.cjs"
 evidence_required:
   - "verified"
 created_at: 2026-10-29
