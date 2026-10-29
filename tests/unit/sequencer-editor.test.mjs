@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createSequencerEditor } from '../../src/js/sequencer/editor.js';
-import * as seqEditor from '../../src/js/sequencer/editor.js';
 import { AudioEngine } from '../../src/js/audio/audio-engine.js';
 import { STOP_RAMP_S, STOP_PAD_S, STOP_LEAD_S } from '../../src/js/sequencer/compiler.js';
 import { FakeContext, fakeTimers } from './sequencer-fake-audio.mjs';
@@ -279,15 +278,55 @@ function counted() {
   const ctx = new FakeContext({ sampleRate: 48000, currentTime: 5 });
   const timers = fakeTimers();
   const engine = new AudioEngine({ env: { setTimeout, clearTimeout } });
-  const account = seqEditor.engineAccounting;
-  assert.equal(typeof account, 'function', 'sequencer/editor.js exports engineAccounting(engine)');
+  assert.equal(typeof engine.stageAccounting, 'function', 'the engine owns the stage accounting');
+  const accounting = engine.stageAccounting();
   const ed = createSequencerEditor({
-    engine: { getContext: () => ctx, getDestination: () => ctx.destination,
-      accounting: account(engine) },
+    engine: { getContext: () => ctx, getDestination: () => ctx.destination, accounting },
     timers,
   });
-  return { ctx, timers, engine, ed };
+  return { ctx, timers, engine, ed, accounting };
 }
+
+test('K001: AudioEngine.stageAccounting counts a stage in the engine census', () => {
+  const engine = new AudioEngine({ env: { setTimeout, clearTimeout } });
+  const a = engine.stageAccounting();
+  const node = {};
+  const osc = {};
+  assert.equal(a.track(node), node);
+  assert.equal(a.source(osc), osc);
+  assert.equal(engine.activeNodeCount, 2);
+  assert.equal(engine.activeSourceCount, 1);
+  assert.equal(a.held, 2);
+  a.untrack(osc);
+  assert.equal(engine.activeNodeCount, 1);
+  assert.equal(engine.activeSourceCount, 0);
+  a.source({});
+  a.release();
+  assert.equal(engine.activeNodeCount, 0, 'release() untracks whatever the stage still holds');
+  assert.equal(engine.activeSourceCount, 0);
+  assert.equal(a.held, 0);
+});
+
+test('K001: a pass whose build throws part-way leaves nothing counted', () => {
+  const ctx = new FakeContext({ sampleRate: 48000, currentTime: 5 });
+  const engine = new AudioEngine({ env: { setTimeout, clearTimeout } });
+  const inner = engine.stageAccounting();
+  let calls = 0;
+  // The first scheduled source is counted, then the build throws.
+  const failing = { track: inner.track, untrack: inner.untrack, source: (n) => {
+    inner.source(n);
+    calls++;
+    throw new Error('build failed');
+  } };
+  const ed = createSequencerEditor({
+    engine: { getContext: () => ctx, getDestination: () => ctx.destination, accounting: failing },
+    timers: fakeTimers(),
+  });
+  assert.throws(() => ed.play(), /build failed/);
+  assert.ok(calls >= 1, 'the build reached the accounting');
+  assert.equal(engine.activeNodeCount, 0, 'engine nodes after a failed build');
+  assert.equal(engine.activeSourceCount, 0);
+});
 
 test('K001: V2 playback is counted by the engine and leaves 0 nodes after stop()', () => {
   const { ctx, engine, ed } = counted();
@@ -415,6 +454,39 @@ test('K003: Ctrl+Z restores the exact serialized model of every edit; Shift+Ctrl
   assert.equal(ed.historyDepth, depth);
   ed.load(ed.serialize());
   assert.equal(ed.canUndo, false);
+});
+
+test('K003: a field committed with its current value is no undo step', () => {
+  const { ed } = setup();
+  ed.selectBlock('b1');
+  const b = ed.selectedBlock;
+  const [k, v] = Object.entries(b.params)[0];
+  ed.updateParam(k, v);
+  ed.updateSelected({ params: { ...b.params } });
+  assert.equal(ed.canUndo, false, 'an unchanged field records nothing');
+  ed.updateParam(k, typeof v === 'number' ? v + 1 : v);
+  assert.equal(ed.canUndo, typeof v === 'number', 'a changed one does');
+});
+
+test('K003: the waveform mirrored from the instrument is no undo step and survives undo', () => {
+  const { ed } = setup();
+  const w0 = ed.model.waveform;
+  const w1 = w0 === 'square' ? 'triangle' : 'square';
+  ed.setWaveform(w1);
+  assert.equal(ed.model.waveform, w1);
+  assert.equal(ed.canUndo, false, 'the mirror records no step');
+  ed.setWaveform(w0);
+  ed.setTempo(60); // the step before it holds w0
+  ed.setWaveform(w1);
+  assert.equal(ed.historyDepth, 1);
+  ed.undo();
+  assert.equal(ed.model.tempoBpm, 120);
+  assert.equal(ed.model.waveform, w1, 'an undo never brings back an older waveform');
+  ed.setWaveform(w0); // the redo step holds w1
+  assert.equal(ed.canRedo, true, 'the mirror keeps the redo branch');
+  ed.redo();
+  assert.equal(ed.model.tempoBpm, 60);
+  assert.equal(ed.model.waveform, w0, 'nor does a redo');
 });
 
 test('K003: Ctrl+C copies the selected block; Ctrl+V pastes it after the selection', () => {

@@ -17,9 +17,15 @@
 //   onEnded?({ stopped }),         playback fully ended (natural end or after a stop fade)
 //   onRecord?(sequenceJson),       the record-style button: hand the sequence to the WAV export
 //   accounting?: { track(node), source(node), untrack(node) }   the engine's node accounting
-//                                  (engineAccounting below): every node of every pass counts as
-//                                  the engine's while it lives and is removed when the pass ends
+//                                  (AudioEngine.stageAccounting()): every node of every pass
+//                                  counts as the engine's while it lives and is removed when the
+//                                  pass ends, or when building it threw part-way
 // }
+//
+// History (K003): every edit of the sequence is one undo step; an edit that leaves the
+// serialized sequence as it was is none. The waveform is not the sequence's own control: it
+// follows the instrument's (main.js mirrors it in), so setWaveform never records a step and
+// undo/redo keep the current waveform instead of restoring an older one.
 //
 // Looping: each pass is compiled as its own voice that starts exactly at the previous pass's
 // end time on the audio clock. A timer only decides *when* to compile the next pass (LOOKAHEAD_S
@@ -58,34 +64,14 @@ import {
 import { compileSequence, observeClock, START_OFFSET_S } from './compiler.js';
 import { reorderTarget } from './timeline.js';
 
-/**
- * The AudioEngine's own accounting for the V2 sequencer (K001, audio-engine-discipline v2): the
- * nodes a pass creates join engine.nodes (oscillators also engine.sources), so the engine's
- * activeNodeCount and activeSourceCount include V2 playback and return to 0 after stop().
- */
-export function engineAccounting(engine) {
-  return {
-    track: (n) => {
-      engine.nodes.add(n);
-      return n;
-    },
-    source: (n) => {
-      engine.nodes.add(n);
-      engine.sources.add(n);
-      return n;
-    },
-    untrack: (n) => {
-      engine.nodes.delete(n);
-      engine.sources.delete(n);
-    },
-  };
-}
-
 export const LOOKAHEAD_S = 1.0; // compile the next loop pass this far ahead of its start
 const MAX_QUEUED_PASSES = 16; // guard for very short looped sequences
 export const HISTORY_LIMIT = 100; // undo steps kept (K003)
 
 const copyOf = (o) => JSON.parse(JSON.stringify(o));
+/** Two models that serialize alike are the same sequence (a no-op edit is no undo step). */
+const sameSequence = (a, b) =>
+  JSON.stringify(serializeSequence(a)) === JSON.stringify(serializeSequence(b));
 /** Space by character (' ', legacy 'Spacebar') or by physical key. */
 const isSpaceKey = (e) => e.key === ' ' || e.key === 'Spacebar' || e.code === 'Space';
 
@@ -212,9 +198,13 @@ export function createSequencerEditor(options = {}) {
     },
 
     // ---------------------------------------------------------------- editing
-    /** Every edit goes through here: a model change is one undo step (K003). */
-    _apply(model, issues = []) {
-      if (model !== this.model) {
+    /**
+     * Every edit goes through here: a change of the serialized sequence is one undo step (K003);
+     * history: false applies it without one (the waveform mirrored from the instrument).
+     */
+    _apply(model, issues = [], { history = true } = {}) {
+      if (history && model !== this.model && sameSequence(model, this.model)) model = this.model;
+      if (history && model !== this.model) {
         priv.undo.push({ model: copyOf(this.model), selectedId: this.selectedId });
         if (priv.undo.length > HISTORY_LIMIT) priv.undo.shift();
         priv.redo = [];
@@ -305,8 +295,9 @@ export function createSequencerEditor(options = {}) {
       this._apply(setLoop(this.model, on));
       if (this.playing && this.model.loop) this._pump();
     },
+    /** The instrument's waveform, mirrored in (main.js): not an edit, so no undo step. */
     setWaveform(w) {
-      this._apply(setWaveform(this.model, w));
+      this._apply(setWaveform(this.model, w), this.warnings, { history: false });
     },
     clear() {
       this._apply(createSequence({ tempoBpm: this.model.tempoBpm }));
@@ -318,7 +309,8 @@ export function createSequencerEditor(options = {}) {
       if (!from.length) return false;
       to.push({ model: copyOf(this.model), selectedId: this.selectedId });
       const s = from.pop();
-      this.model = copyOf(s.model);
+      // The waveform follows the instrument: an undo never brings back an older one.
+      this.model = setWaveform(copyOf(s.model), this.model.waveform);
       this.warnings = [];
       this.error = '';
       this.selectedId = selectBlock(this.model, s.selectedId);
@@ -442,14 +434,20 @@ export function createSequencerEditor(options = {}) {
             },
           }
         : {};
-      const voice = compileSequence(self.model, ctx, getDest(), t0, {
-        timers,
-        ...hooks,
-        onEnded: (info) => {
-          release();
-          self._voiceEnded(voice, info);
-        },
-      });
+      let voice;
+      try {
+        voice = compileSequence(self.model, ctx, getDest(), t0, {
+          timers,
+          ...hooks,
+          onEnded: (info) => {
+            release();
+            self._voiceEnded(voice, info);
+          },
+        });
+      } catch (e) {
+        release(); // a build that threw part-way leaves nothing counted
+        throw e;
+      }
       if (voice.ended) {
         release();
         return null; // empty sequence

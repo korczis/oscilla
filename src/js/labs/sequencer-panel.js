@@ -334,6 +334,19 @@ export function mount(rootEl, adapter) {
     setAttr(loopBtn, 'aria-pressed', editor.model.loop ? 'true' : 'false');
     if (playBtn) setAttr(playBtn, 'title', editor.error || 'Play sequence');
     setText(msgEl, editor.error || (editor.warnings || []).join(' '));
+    syncTempo();
+  }
+
+  /**
+   * The Tempo select shows the sequence's tempo: an undo or redo can change it (K003). A tempo
+   * no option names selects none, so choosing any option is a change again.
+   */
+  function syncTempo() {
+    if (!tempoSel) return;
+    const v = String(editor.model.tempoBpm);
+    if (tempoSel.value === v) return;
+    const i = Array.from(tempoSel.options).findIndex((o) => o.value === v);
+    tempoSel.selectedIndex = i;
   }
 
   function renderScrollbar() {

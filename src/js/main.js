@@ -50,7 +50,6 @@ import { nearestNote, noteToFrequency } from './core/music.js';
 import { BUILTIN_PRESETS } from './data/presets.js';
 import { LEARN_TOPICS } from './data/learn.js';
 import { serializeSequence } from './sequencer/model.js';
-import { engineAccounting } from './sequencer/editor.js';
 
 import { registerOscillaUi, workspaceTitle } from './ui/app.js';
 import { keyGuard, openModal, closeModal, watchDialogs, focusSafely } from './ui/dialogs.js';
@@ -119,7 +118,7 @@ const adapter = {
   },
   getDestination: () => engine.master,
   // V2 sequencer playback is counted by the engine (K001, audio-engine-discipline).
-  sequencerAccounting: engineAccounting(engine),
+  sequencerAccounting: engine.stageAccounting(),
   getStereoRouter: () => (liveRouter ? liveRouter.router : null),
   // The mic lab's nodes are built and accounted by the engine (audio-engine-discipline).
   attachMicrophone: (stream, opts) => engine.attachMicrophone(stream, opts),
