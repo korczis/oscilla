@@ -204,9 +204,11 @@ A new workspace or panel is a new UI surface, and rule `project.ui-uses-flowbite
 Flowbite Pro on Tailwind. The interface that predates the rule is a recorded debt
 (`tests/unit/ui-flowbite-pro-baseline.json`) that may only shrink, and no part of it may grow:
 not a surface, not a use of an existing `osc-*` class. Until the build compiles Tailwind with the
-Flowbite plugin (ADR 0061), a change that adds a surface or a classed element fails
-`tests/unit/ui-flowbite-pro.test.mjs`. Code that adds no markup (a node type, a template, an
-analysis module, a chart inside an existing host) is not affected.
+Flowbite plugin (plan issue F001, `.ai/repo/project/issues/F001.yaml`), a change that adds a
+surface or a classed element fails `tests/unit/ui-flowbite-pro.test.mjs`. Code that adds no markup
+(a node type, a template, an analysis module, a chart inside an existing host) is not affected.
+This is also why About does not link this guide yet: the link waits for About on Pro components
+(`.ai/repo/project/issues/F009.yaml`).
 
 ## Add a chart or visualization
 

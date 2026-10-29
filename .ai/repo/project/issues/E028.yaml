@@ -20,7 +20,7 @@ acceptance_criteria:
   - "node --test tests/unit/extending-guide.test.mjs passes, and its fixture test shows the checker refusing a missing file, export, npm script, link target, heading anchor, rule, import and node command."
   - "The guide's example node is imported as the guide prints it and compiles to a ready plan node; without its adapter it compiles to no-adapter, with another compiler key to adapter-mismatch."
   - "docs/CLAIMS.yaml holds the guaranteed claims extending-guide-checked and readme-landing-links-route, both tested by tests/unit/extending-guide.test.mjs, and tests/README.md has its row."
-  - "No first-screen or About markup changes in this issue: the first screen is P002's, and an About link waits for the Flowbite Pro build (project.ui-uses-flowbite-pro: no osc-* class use may rise, and tests/browser/app.cjs requires every About link to be at least 24 px tall, which an unclassed link is not)."
+  - "No first-screen or About markup changes in this issue: the first screen is P002's, and an About link to the guide waits for F001 and F009 (About on Pro components), because project.ui-uses-flowbite-pro lets no osc-* class use rise and tests/browser/app.cjs requires every About link to be at least 24 px tall, which an unclassed link is not."
   - "npm test passes."
 validation:
   - "node --test tests/unit/extending-guide.test.mjs"
