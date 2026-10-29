@@ -33,10 +33,12 @@
 // Titles are node names in capitals (presentation state, §163), as the compact widget's chips
 // are; subs are formatted from parameters, edge properties and lanes only.
 //
-// `annotations` ({ [nodeId]: { partials, phaseDeg } }) carry the two Playground facts Studio
-// schema 1 has no field for: the partial count of an additive (PeriodicWave) oscillator and the
-// start phase of a dual oscillator's B side. They only add sub text to the stage of their node;
-// they never add, remove or reorder a stage. A schema that gains those fields retires them.
+// `annotations` ({ [nodeId]: { partials, phaseDeg, nextNote } }) carry the three Playground
+// facts Studio schema 1 has no field for: the partial count of an additive (PeriodicWave)
+// oscillator, the start phase of a dual oscillator's B side, and the envelope the next note gets
+// when it differs from the sounding one (envelope params, drawn "next note: ..." after it). They
+// only add sub text to the stage of their node; they never add, remove or reorder a stage. A
+// schema that gains those fields retires them.
 
 import { LIMITER_THRESHOLD_DB, WAVEFORM_LABELS } from '../core/constants.js';
 import { sig } from '../core/math.js';
@@ -233,7 +235,10 @@ export function projectSignalPath(model, { registry = NODE_REGISTRY, annotations
   // 3. Every further chain node.
   for (const id of rest) {
     const n = byId.get(id);
-    push({ title: upper(n), sub: chainSub(n, registry), mod: false }, { nodes: [id] });
+    const next = n.type === 'envelope' && notes(id).nextNote;
+    const sub = chainSub(n, registry);
+    push({ title: upper(n), sub: next ? `${sub} · next note: ${envelopeSub(next)}` : sub,
+      mod: false }, { nodes: [id] });
   }
   // 4. The Master Output and the safe output chain it compiles to.
   push({ title: 'MASTER GAIN', sub: `logical ${Number(master.params.level).toFixed(3)}`,
@@ -271,14 +276,17 @@ function junctionSub(j, branches, byId, registry) {
   return registry.summarize(j);
 }
 
+/** An envelope's sub text from its params (the stage, and a nextNote annotation). */
+function envelopeSub(p) {
+  // At full sustain the decay changes nothing: the envelope is attack and release only.
+  if (p.sustain === 1) return `A ${secs(p.attack)} · R ${secs(p.release)}`;
+  return `A ${secs(p.attack)} · D ${secs(p.decay)} · S ${sig(p.sustain, 2)} · R ${
+    secs(p.release)}`;
+}
+
 function chainSub(n, registry) {
   const p = n.params;
-  if (n.type === 'envelope') {
-    // At full sustain the decay changes nothing: the envelope is attack and release only.
-    if (p.sustain === 1) return `A ${secs(p.attack)} · R ${secs(p.release)}`;
-    return `A ${secs(p.attack)} · D ${secs(p.decay)} · S ${sig(p.sustain, 2)} · R ${
-      secs(p.release)}`;
-  }
+  if (n.type === 'envelope') return envelopeSub(p);
   if (n.type === 'filter') {
     return `${SIGNAL_PATH_FILTER_NAMES[p.type] || p.type} · ${formatFrequency(p.frequency)} · Q ${
       sig(p.Q, 3)}${p.enabled ? '' : ' · bypassed'}`;

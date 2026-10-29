@@ -40,7 +40,11 @@
 //     o.adsr         { a, d, s, r } (seconds, sustain 0..1): attack/release times come from it
 //                    and it is handed to the envelope function (see voice.js v1OpenEnvelope);
 //                    the default envelope uses only a and r. Install the DSP ADSR with
-//                    engine.setEnvelope(makeAdsrEnvelope(envelopeModule)).
+//                    engine.setEnvelope(makeAdsrEnvelope(envelopeModule)). The voice keeps its
+//                    copy as voice.adsr. Attack, decay and release belong to the note: an edit
+//                    applies from the next note. engine.setEnvelopeSustain(adsr | null) moves a
+//                    held open note to a new sustain, or to 1 for an envelope switched off,
+//                    with a click-free glide (envelope.js retargetSustain).
 //     o.envelope     per-play envelope function (overrides engine.setEnvelope).
 //     o.stepEnvelope (eg, t, dur, a, r, adsr) => void, replaces the V1 step envelope of
 //                    programmed patterns (must schedule through eg).
@@ -64,9 +68,10 @@ import {
 import { clamp, toNumber } from '../core/math.js';
 import { planFreqAt } from './patterns.js';
 import {
-  freezeParam, pruneParam, recordEvent, stepEnv, trackParam, trackedParam, v1OpenEnvelope,
-  valueAt,
+  cancelParamFrom, freezeParam, pruneParam, recordEvent, stepEnv, trackParam, trackedParam,
+  v1OpenEnvelope, valueAt,
 } from './voice.js';
+import { getSchedule, retargetSustain, sustainSteadyFrom } from './envelope.js';
 import {
   ESCAPE_RELEASE_S, FAST_RELEASE_S, SCHEDULE_LEAD_S, WAVE_DIP_S, armTopUp, rampSegments,
   scheduleConst, scheduleCycles, scheduleRamps, scheduleSteps,
@@ -446,6 +451,7 @@ export class AudioEngine {
       attack: Math.max(0.001, adsr ? adsr.a : o.attackS), release: Math.max(0.005, adsr ? adsr.r : o.releaseS),
       limited: !!o.limited, extended: false,
       inserts: [], periodicWave: o.periodicWave || null, adsr, eg: null, stepEnv: null,
+      sustainWant: null, sustainTimer: null,
     };
     const t0 = v.t0;
     const track = (n) => { v.nodes.push(n); this.nodes.add(n); return n; };
@@ -866,6 +872,66 @@ export class AudioEngine {
     if (Math.abs(normalizePhaseDeg(v.opts.dualPhaseDeg) - want) < 1e-9) return 'same';
     v.opts = { ...v.opts, dualPhaseDeg: want };
     return this._restart(v, v.plan);
+  }
+
+  /**
+   * A live Envelope Lab edit for the sounding voice (C008). adsr: the lab's { a, d, s, r }, or
+   * null for the envelope switched off. Only the level reaches a held note: an open voice
+   * started with an ADSR glides its tracked envelope (v.eg, envelope.js retargetSustain) to the
+   * new sustain, or to 1 when switched off, never above 1, and keeps its scheduled release;
+   * voice.adsr and voice.opts.adsr follow (null when off) and 'envelope' is emitted. Attack,
+   * decay and release belong to the note and apply from the next one, as does any edit of a
+   * voice started without the ADSR or of a programmed pattern (its steps are scheduled ahead).
+   * An edit while the envelope ramps (attack, decay, an earlier glide) waits for the ramp's end
+   * (UI bookkeeping timer), so no ramp that is sounding is edited (V249); the latest edit wins.
+   * Returns 'applied' | 'deferred' | 'same' | 'next-note' | false (nothing sounding).
+   */
+  setEnvelopeSustain(adsr) {
+    const v = this.voice;
+    if (!v || v.ended || v.releasing || !v.eg) return false;
+    if (!v.adsr || !getSchedule(v.eg).length) return 'next-note';
+    const s = adsr ? clamp(toNumber(adsr.s, v.adsr.s), 0, 1) : 1;
+    if (adsr && Math.abs(v.adsr.s - s) < 1e-9) {
+      v.sustainWant = null;
+      return 'same';
+    }
+    v.sustainWant = { adsr: adsr ? { ...v.adsr, s } : null };
+    return this._retargetSustain(v);
+  }
+
+  /** setEnvelopeSustain's scheduling: now when the envelope holds steady, else at that time. */
+  _retargetSustain(v) {
+    const want = v.sustainWant;
+    if (!want || v.ended || v.releasing || !v.eg || this.voice !== v) return false;
+    const ctx = v.ctx;
+    const t = this._soon(ctx);
+    const steady = sustainSteadyFrom(getSchedule(v.eg), { releaseEnd: v.deadline });
+    if (Number.isNaN(steady)) {
+      v.sustainWant = null;
+      return 'next-note';
+    }
+    if (t < steady) {
+      if (!v.sustainTimer) {
+        const { setTimeout } = this._timers;
+        const wait = ctx.state === 'running' ? Math.max(1, (steady - ctx.currentTime) * 1000 + 1)
+          : 250;
+        v.sustainTimer = setTimeout(() => {
+          v.sustainTimer = null;
+          this._retargetSustain(v);
+        }, wait);
+        v.timers.push(v.sustainTimer);
+      }
+      return 'deferred';
+    }
+    v.sustainWant = null;
+    const done = retargetSustain(v.eg, t, want.adsr ? want.adsr.s : 1, {
+      releaseEnd: v.deadline, cancel: (time) => cancelParamFrom(v.env, time),
+    });
+    if (!done) return false;
+    v.adsr = want.adsr;
+    v.opts = { ...v.opts, adsr: want.adsr };
+    this._emit('envelope', { id: v.id, adsr: want.adsr ? { ...want.adsr } : null });
+    return 'applied';
   }
 
   /**

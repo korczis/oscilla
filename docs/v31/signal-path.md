@@ -110,12 +110,23 @@ is not part of the voice and never was a stage. The Playground has no noise sour
 
 ## Where schema 1 falls short (recorded, not hidden)
 
-- **Annotations.** Studio schema 1 has no field for two facts: an additive oscillator's partial
-  count and the dual B side's start phase. They travel as `annotations` keyed by node id, beside
-  the model, as runtime handles do (§43). They only add sub text to their node's stage; they
-  never add, remove or reorder a stage. A schema that gains those fields retires them. Adding a
-  parameter to the oscillator now would change the `studioHash` of every template and saved
-  Studio.
+- **Annotations.** Studio schema 1 has no field for three facts: an additive oscillator's
+  partial count, the dual B side's start phase and the envelope the next note gets. They travel
+  as `annotations` keyed by node id, beside the model, as runtime handles do (§43). They only add
+  sub text to their node's stage; they never add, remove or reorder a stage. A schema that gains
+  those fields retires them. Adding a parameter to the oscillator now would change the
+  `studioHash` of every template and saved Studio.
+- **The envelope is the note's (C008).** The Filter, Additive and Phase & Stereo labs act on a
+  sounding voice, so their stages come from the lab state. The envelope is fixed when a note
+  starts, except its level: on a held open note the Envelope Lab's Sustain and its power switch
+  reach the voice (`engine.setEnvelopeSustain` glides the tracked envelope to the new sustain, or
+  to 1 when switched off, with `retargetSustain` in `audio/envelope.js`), while attack, decay and
+  release apply from the next note. So while a voice sounds the envelope stage is drawn from the
+  voice's own `adsr` (or its attack and release without the ADSR), and a lab setting that differs
+  is shown after it as `next note: ...` (main.js `envelopeVizInputs`, `soundingEnvelope` in
+  `playground-voice.js`), with the footer `active path · envelope change applies from the next
+  note`. The path is re-synced when a voice starts or ends and when a deferred sustain glide is
+  applied.
 - **Ranges.** The Studio LFO tops out at 100 Hz; the Playground's AM modulator reaches 500 Hz
   and its FM modulator 2 kHz. The derived model keeps the sounding value, so the Signal Path
   shows what plays. Such a model does not pass `validateStudioModel` (`invalid-param` on

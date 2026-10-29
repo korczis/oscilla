@@ -27,10 +27,20 @@
 // .value is never assigned (it is only read as a last resort when no log exists). When the
 // param lacks cancelScheduledValues the hold cannot remove future events; with a fresh
 // per-voice envelope node (V1's model) none are pending after the decay, so the hold is exact.
+//
+// Live sustain (C008): retargetSustain moves a held note to a new sustain level (1 for an
+// envelope switched off) on the same recorded schedule: in sustain an exponential glide of at
+// least SUSTAIN_GLIDE_S from the value at t, in the decay a decay that ends at the new level, in
+// the attack the attack untouched and then that decay; a release scheduled ahead (a finite note)
+// is kept and starts from the new level. Removing the old future events needs a cancel: the
+// param's own cancelScheduledValues, or the caller's (the engine's tracked envelope wrapper has
+// none, so the engine passes one that also keeps its own log exact). The level never exceeds 1.
 
 export const ENVELOPE_FLOOR = 1e-4;
 export const MIN_SEGMENT_S = 0.001;
 export const DEFAULT_ADSR = Object.freeze({ a: 0.01, d: 0.1, s: 0.7, r: 0.2 });
+/** Shortest glide of a sustain change on a held note (retargetSustain): never a step. */
+export const SUSTAIN_GLIDE_S = 0.02;
 
 const schedules = new WeakMap(); // AudioParam → recorded events
 
@@ -214,6 +224,119 @@ export function releaseAt(param, t, r, options = {}) {
     log.push({ kind: 'exp', time: t + rel, value: floor });
   }
   return { value, endTime: t + rel };
+}
+
+const same = (x, y) => x.kind === y.kind && x.time === y.time && x.value === y.value;
+
+/**
+ * The release scheduled ahead in `events` when the note ends at releaseEnd (finite), as
+ * { at, end }: releaseAt's hold and its ramp to the floor are the last two events. null when
+ * the note is open (releaseEnd not finite); false when the schedule does not end there.
+ */
+function scheduledRelease(events, releaseEnd, floor) {
+  if (!Number.isFinite(releaseEnd)) return null;
+  const n = events.length;
+  const last = events[n - 1];
+  if (n < 2 || last.kind !== 'exp' || last.value > floor
+    || Math.abs(last.time - releaseEnd) > 1e-9) return false;
+  return { at: events[n - 2].time, end: last.time };
+}
+
+/**
+ * sustainSteadyFrom(events, { releaseEnd }) → seconds
+ * When the envelope holds a constant level: the end of its last attack, decay or glide (the
+ * scheduled release excluded). -Infinity for a schedule with no ramp, NaN when releaseEnd is
+ * given and the schedule does not end with a release there.
+ */
+export function sustainSteadyFrom(events, { releaseEnd = Infinity, floor = ENVELOPE_FLOOR } = {}) {
+  const release = scheduledRelease(events, releaseEnd, floor);
+  if (release === false) return NaN;
+  const body = release ? events.slice(0, -2) : events;
+  for (let i = body.length - 1; i >= 0; i--) {
+    if (body[i].kind !== 'set') return body[i].time;
+  }
+  return -Infinity;
+}
+
+/**
+ * retargetEvents(events, t, s, { peak = 1, glideS, releaseEnd, floor }) →
+ *   { events, value, target, keep } | null
+ * The timeline after retargetSustain(param, t, s): `keep` leading events of the input are
+ * unchanged, the rest follow from the new sustain level target = min(1, max(floor, s · peak))
+ * (see the header). null when there is nothing to retarget: no schedule, a release that has
+ * already begun at t, or a releaseEnd the schedule does not end at.
+ */
+export function retargetEvents(events, t, s, options = {}) {
+  const floor = options.floor || ENVELOPE_FLOOR;
+  if (!events || !events.length) return null;
+  const peak = Math.min(1, Math.max(floor, num(options.peak, 1)));
+  const glide = Math.max(MIN_SEGMENT_S, num(options.glideS, SUSTAIN_GLIDE_S));
+  const target = Math.min(1, Math.max(floor, Math.min(1, Math.max(0, num(s, 1))) * peak));
+  const release = scheduledRelease(events, options.releaseEnd, floor);
+  if (release === false || (release && release.at <= t)) return null;
+  const body = release ? events.slice(0, -2) : events;
+  const value = valueAtTime(body, t, floor);
+  let lin = -1;
+  for (let i = body.length - 1; i >= 0; i--) if (body[i].kind === 'linear') { lin = i; break; }
+  const last = body[body.length - 1];
+  let out;
+  if (lin >= 0 && t < body[lin].time) {
+    // In the attack: it runs to its peak unchanged, then a decay ends on the new level when the
+    // old one would have (one MIN_SEGMENT_S at least).
+    const attackEnd = body[lin].time;
+    const decayEnd = lin + 1 < body.length ? body[lin + 1].time : attackEnd + glide;
+    out = body.slice(0, lin + 1).map((e) => ({ ...e }));
+    out.push({ kind: 'exp', time: Math.max(decayEnd, attackEnd + MIN_SEGMENT_S), value: target });
+  } else if (last.kind !== 'set' && t < last.time) {
+    // In the decay (or an earlier glide): re-ended at t on its own curve, then a ramp from there
+    // to the new level that ends when the old one would have, SUSTAIN_GLIDE_S at least.
+    const now = body.find((e) => e.time > t);
+    out = body.filter((e) => e.time < t).map((e) => ({ ...e }));
+    out.push({ kind: now.kind, time: t, value });
+    out.push({ kind: 'exp', time: Math.max(last.time, t + glide), value: target });
+  } else {
+    // In the sustain: anchored at its value at t, then the glide.
+    out = body.filter((e) => e.time <= t).map((e) => ({ ...e }));
+    out.push({ kind: 'set', time: t, value });
+    out.push({ kind: 'exp', time: t + glide, value: target });
+  }
+  if (release) out = releaseEvents(out, release.at, release.end - release.at, { floor }).events;
+  let keep = 0;
+  while (keep < events.length && keep < out.length && same(events[keep], out[keep])) keep++;
+  return { events: out, value, target, keep };
+}
+
+/**
+ * retargetSustain(param, t, s, { cancel, peak, glideS, releaseEnd, floor }) →
+ *   { value, target, end } | null
+ * Moves the held note on `param` (scheduled by applyAdsr, optionally released ahead by
+ * releaseAt at releaseEnd) to the sustain level s from time t without a step, through the
+ * module's recorded schedule (see the header and retargetEvents). The future events it
+ * replaces are removed with options.cancel(time) or else the param's cancelScheduledValues;
+ * with neither, and events to remove, nothing is scheduled and it returns null, as it does
+ * when retargetEvents has nothing to retarget. `end` is when the new level is reached.
+ */
+export function retargetSustain(param, t, s, options = {}) {
+  const log = schedules.get(param);
+  const next = retargetEvents(log, t, s, options);
+  if (!next) return null;
+  const cancel = typeof options.cancel === 'function' ? options.cancel
+    : typeof param.cancelScheduledValues === 'function'
+      ? (time) => param.cancelScheduledValues(time) : null;
+  const cancelAt = next.keep < log.length ? log[next.keep].time : null;
+  if (cancelAt != null && !cancel) return null;
+  const added = next.events.slice(next.keep);
+  // Events before the first removed one go in first, so the segment sounding at t keeps its end
+  // (as freezeParam does); the cancel then drops the old future, and the rest follows.
+  for (const e of added) if (cancelAt == null || e.time < cancelAt) apply(param, e);
+  if (cancelAt != null) {
+    cancel(cancelAt);
+    for (const e of added) if (e.time >= cancelAt) apply(param, e);
+  }
+  schedules.set(param, next.events);
+  const reach = next.events.filter((e) => e.kind === 'exp' && e.value === next.target);
+  return { value: next.value, target: next.target,
+    end: reach.length ? reach[reach.length - 1].time : t };
 }
 
 /**

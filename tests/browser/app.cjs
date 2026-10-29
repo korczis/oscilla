@@ -1647,6 +1647,154 @@ function defineChecks() {
     return { ok, ...out };
   });
 
+  // ---- C008: the Envelope Lab on a held note, and the Signal Path's envelope stage
+  const C8 = {
+    db: (x) => 20 * Math.log10(Math.max(x, 1e-9)),
+    // The Envelope panel lives in Synthesis; the path is the bridge state the canvas draws.
+    open: async (page) => {
+      await H.stopAll(page);
+      await until(async () => (await H.nodes(page)) === 0,
+        { ms: 5000, what: 'C008: no voice before the check' });
+      await H.continuous(page, true);
+      await H.navTo(page, 'synthesis');
+      await until(() => page.evaluate(() => document.querySelector('#osc-app').dataset.mode
+        === 'synthesis'), { ms: 8000, what: 'C008: Synthesis workspace open' });
+      await page.evaluate(() => {
+        const a = window.OSCILLA.app;
+        if (a.source !== 'single') a.setDualSource(false);
+        window.OSCILLA.labs.filter.update({ enabled: false });
+        // The lab defaults (an earlier check may have left other times).
+        window.OSCILLA.labs.envelope.update({ adsr: { a: 0.01, d: 0.1, s: 0.6, r: 0.3 } });
+      });
+    },
+    envelope: async (page, on) => {
+      if (await page.evaluate(() => window.OSCILLA.labs.envelope.enabled) !== on) {
+        await page.click('#osc-env-enable');
+      }
+      await until(() => page.evaluate((v) => window.OSCILLA.labs.envelope.enabled === v, on),
+        { ms: 3000, what: `C008: Envelope switch ${on ? 'on' : 'off'}` });
+    },
+    type: async (page, sel, text) => {
+      await page.fill(sel, text);
+      await page.press(sel, 'Enter');
+    },
+    latch: (page) => page.evaluate(() => window.OSCILLA.app.toggleLatch()),
+    // The held level once two analyser windows in a row agree within 0.2 dB and `want` holds.
+    steady: async (page, what, want = () => true) => {
+      let prev = -Infinity;
+      return until(async () => {
+        const v = await H.peak(page);
+        const ok = v > 1e-4 && Math.abs(C8.db(v) - C8.db(prev)) < 0.2 && want(v);
+        prev = v;
+        return ok ? v : null;
+      }, { ms: 8000, what });
+    },
+    voice: (page) => page.evaluate(() => {
+      const v = window.OSCILLA.engine.voice;
+      return v && !v.ended ? { id: v.id, adsr: v.adsr ? { ...v.adsr } : null } : null;
+    }),
+    stages: (page) => page.evaluate(() => {
+      const nodes = window.OSCILLA.viz.state.pathNodes;
+      const env = nodes.find((n) => /ENVELOPE/.test(n.title));
+      const filter = nodes.find((n) => n.title === 'FILTER');
+      return { env: env ? `${env.title} | ${env.sub}` : null, filter: filter ? filter.sub : null };
+    }),
+    end: async (page) => {
+      await H.stopAll(page);
+      const n = await until(async () => ((await H.nodes(page)) === 0 ? 'zero' : null),
+        { ms: 5000, what: 'C008: engine.activeNodeCount returns to 0 after stop' })
+        .catch(() => 'nonzero');
+      return n === 'zero';
+    },
+  };
+
+  // dead-controls-3, control-census-3: Sustain and the power switch reach a held note.
+  def('env-sustain-held-note', async ({ page }) => {
+    const res = {};
+    await C8.open(page);
+    await page.evaluate(() => window.OSCILLA.app.setFrequency(1000));
+    // The envelope-off level of the same note is the reference.
+    await C8.envelope(page, false);
+    await C8.latch(page);
+    res.offRef = await C8.steady(page, 'C008: held 1 kHz note with the envelope off',
+      (v) => v > 0.01);
+    res.stop1 = await C8.end(page);
+    await C8.envelope(page, true);
+    await C8.type(page, '#osc-env-sustain-value', '0.6');
+    await C8.latch(page);
+    res.s06 = await C8.steady(page, 'C008: held note settles at sustain 0.6',
+      (v) => Math.abs(C8.db(v) - C8.db(res.offRef * 0.6)) < 1);
+    res.voice06 = await C8.voice(page);
+    await C8.type(page, '#osc-env-sustain-value', '0.1');
+    res.s01 = await C8.steady(page, 'C008: sustain 0.1 lowers the held note 14 to 17 dB', (v) => {
+      const drop = C8.db(res.s06) - C8.db(v);
+      return drop >= 14 && drop <= 17;
+    });
+    res.voice01 = await C8.voice(page);
+    await C8.envelope(page, false);
+    res.off = await C8.steady(page, 'C008: envelope off brings the held note to the off level',
+      (v) => Math.abs(C8.db(v) - C8.db(res.offRef)) <= 1);
+    res.voiceOff = await C8.voice(page);
+    res.stop2 = await C8.end(page);
+    await C8.type(page, '#osc-env-sustain-value', '0.6');
+    res.dropDb = +(C8.db(res.s06) - C8.db(res.s01)).toFixed(2);
+    res.offDb = +(C8.db(res.off) - C8.db(res.offRef)).toFixed(2);
+    const sameVoice = res.voice06 && res.voice01 && res.voiceOff
+      && res.voice06.id === res.voice01.id && res.voice01.id === res.voiceOff.id;
+    const ok = !!sameVoice && res.dropDb >= 14 && res.dropDb <= 17 && Math.abs(res.offDb) <= 1
+      && Math.abs(res.voice01.adsr.s - 0.1) < 1e-9 && res.voiceOff.adsr === null
+      && res.stop1 && res.stop2;
+    return { ok, ...res };
+  });
+
+  // vis-divergence-5: the Signal Path draws the envelope that sounds; lab edits for the next
+  // note are annotated; the Filter Lab, which is live, changes the drawn filter at once.
+  def('signal-path-sounding-envelope', async ({ page }) => {
+    const res = {};
+    await C8.open(page);
+    await C8.envelope(page, false);
+    await page.evaluate(() => {
+      window.OSCILLA.app.setFrequency(440);
+      window.OSCILLA.labs.filter.update({ enabled: true, type: 'lowpass', frequency: 5000,
+        Q: 0.7071 });
+    });
+    await C8.latch(page);
+    await until(() => C8.voice(page), { ms: 5000, what: 'C008: latched 440 Hz voice' });
+    res.before = await C8.stages(page);
+    res.voice = await C8.voice(page);
+    await C8.envelope(page, true);
+    await C8.type(page, '#osc-env-attack-value', '50 ms');
+    res.pending = await until(async () => {
+      const s = await C8.stages(page);
+      return /^ENVELOPE \| A 10 ms · R 30 ms · next note: A 50 ms · D /.test(s.env) ? s : null;
+    }, { ms: 5000, what: 'C008: the envelope stage stays the voice\'s, next note annotated' });
+    res.voiceAfter = await C8.voice(page);
+    await page.evaluate(() => window.OSCILLA.labs.filter.update({ frequency: 2000 }));
+    res.filterLive = await until(async () => {
+      const s = await C8.stages(page);
+      return /2\.00 kHz/.test(s.filter || '') ? s.filter : null;
+    }, { ms: 5000, what: 'C008: a cutoff change while sounding changes the filter stage' });
+    res.stop1 = await C8.end(page);
+    await C8.latch(page);
+    res.next = await until(async () => {
+      const v = await C8.voice(page);
+      const s = await C8.stages(page);
+      return v && v.adsr && /^ADSR ENVELOPE \| A 50 ms · D 100 ms · S 0\.6 · R 300 ms$/.test(s.env)
+        ? { voice: v, env: s.env } : null;
+    }, { ms: 5000, what: 'C008: after a new note the ADSR stage is the drawn one' });
+    res.stop2 = await C8.end(page);
+    await page.evaluate(() => {
+      window.OSCILLA.labs.envelope.update({ adsr: { a: 0.01 } });
+      window.OSCILLA.labs.filter.update({ enabled: false });
+    });
+    await C8.envelope(page, false);
+    const ok = /^ENVELOPE \| A 10 ms · R 30 ms$/.test(res.before.env || '')
+      && res.voiceAfter && res.voiceAfter.id === res.voice.id && res.voiceAfter.adsr === null
+      && /2\.00 kHz/.test(res.filterLive) && res.before.filter !== res.filterLive
+      && Math.abs(res.next.voice.adsr.a - 0.05) < 1e-9 && res.stop1 && res.stop2;
+    return { ok, ...res };
+  });
+
   // ---- accessibility residuals of the final V1 probe (WCAG 2.4.11, focus loss, overlap)
   def('a11y-alerts-never-cover-focus', async ({ page, browserName, run }) => {
     const res = {};
