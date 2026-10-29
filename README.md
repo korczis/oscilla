@@ -83,7 +83,8 @@ changed.
   averaging and peak hold.
 - **Sequencer:** a timeline of tone, silence, sweep, pulse, chirp, burst, siren, AM, FM and
   random blocks, with drag-and-drop editing, keyboard control, looping and tempo-locked
-  durations.
+  durations. Escape, hiding the page and the status bar's stop key stop a playing sequence
+  from the moment it starts; that stop key never starts the instrument in the same press.
 - **Filter Lab:** biquad filters with a response chart drawn from the browser's own filter
   response. Cutoff and Q can be dragged on the chart.
 - **ADSR:** an attack/decay/sustain/release envelope with a draggable graph.
