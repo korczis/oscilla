@@ -1,0 +1,53 @@
+id: K044
+milestone: M062
+serves:
+  - "playable-instrument#chart-interaction"
+  - "playable-instrument#chart-states-honest"
+title: "Bioacoustics, additive and harmonics charts: every row shown, bar readouts, Nyquist stated"
+slug: bioacoustics-additive-and-harmonics-charts-every-row-shown-b
+priority: p2
+profile: implementation
+objective: "Lands as feat(charts). bio-chart.js: adaptive row height with a 14 px minimum, so all 7 rows show at the default 127 px (mouse and dolphin are cut today), or a \"+n more\" indicator; the crosshair reads \"8.0 kHz: within the cited hearing range of human, dog, cat, bat; outside elephant's\" from the cited data only; a marker at the generator's requested frequency, updated on change and not per frame; colours from K027. additive-chart.js: a bar tooltip in measured and requested terms only, \"H5 . 1.10 kHz requested . -14.0 dB rel . below the digital Nyquist limit (24.0 kHz)\" or \"H9 . 26.4 kHz requested . above the digital Nyquist limit (24.0 kHz): dropped by the browser\", with Nyquist from the live context; the internal audible flag of audio/additive.js visualCoefficients, which records only frequency < sampleRate / 2, is never shown as a word (\"audible\" would claim hearing and speaker output the page cannot know, project.no-fake-science v2: \"speaker output unknown\"); no easing of bar heights. The harmonic bars (createHarmonicBarsView in src/js/ui/p5-views.js, drawing the tables of visualization/harmonics.js, a view of the shared #osc-chart-waveform host): a bar readout, the dB rel unit on the grid and the Nyquist label in text colour with a labelled dashed line (1.9:1 today); the THEORETICAL badge stays. The kit's keyboard cursor: up and down move the bio row, left and right the bar. The bio host is K053's (done there); this slice keeps it passing."
+why: "Owner order of 2026-10-29: \"make the charts really sexy, modern, interactive\", for all charts; reviewer f3 scoped it to every surface that draws data. Revised after f3's review of the plan (CHANGES-REQUESTED, 2026-10-29): owner decisions are Q issues under M063, Pro chrome waits on F002 and on the card issue of its workspace, every chart that claims chart-interaction delivers the keyboard cursor and the announced readout, chart keys never take Escape or Space; revision 3 answers f3's delta review. Facts checked against origin/main at e2720e07 and the branches of #251, #253, #263 and #265 (charts-plan.md, charts-plan-changes.md)."
+scope:
+  - "src/js/charts/bio-chart.js"
+  - "src/js/charts/additive-chart.js"
+  - "src/js/visualization/harmonics.js"
+  - "src/js/ui/p5-views.js"
+  - "src/js/labs/bioacoustics.js"
+  - "src/js/labs/additive.js"
+  - "src/index.html"
+  - "tests/unit/bio-additive-charts.test.mjs"
+  - "tests/unit/charts-readout-wording.test.mjs"
+  - "tests/browser/labs.cjs"
+  - "tests/unit/chart-host-census.json"
+  - "tests/browser/charts-interaction.cjs"
+  - "tests/visual"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K027"
+  - "K053"
+  - "K032"
+  - "F003"
+  - "F006"
+acceptance_criteria:
+  - "tests/unit/bio-additive-charts.test.mjs, failing on the merge base: the row-fit maths shows 7 rows at 127 px; the containment list comes from the cited table; the additive Nyquist classification holds at 44.1 kHz and 48 kHz; the tooltip text never contains \"audible\"."
+  - "tests/unit/charts-readout-wording.test.mjs covers the bio, additive and harmonics wording tables, so \"audible\" and \"inaudible\" cannot return."
+  - "tests/browser/labs.cjs: 7 bio rows render at the default height; the additive tooltip's Nyquist equals ctx.sampleRate / 2. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline and assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac); tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Its chart hosts (additive bars, waveform#harmonics (the harmonic bars view)) move from pending to done in tests/unit/chart-host-census.json, each carrying data-osc-chart, and the table-driven pass of tests/browser/charts-interaction.cjs holds for each: the host is role=group holding the aria-describedby summary and the snapshot data table, and its focusable plot surface is role=application with aria-roledescription \"interactive chart\" (never role=img), both asserted in the accessibility tree, with a visible focus ring; ArrowRight moves the cursor one step and the one polite live region announces the readout once after the keys settle; Escape clears the cursor and still reaches the page's stop (a playing tone stops); Space keeps its workspace meaning (SPACE_MEANING of src/js/ui/shortcuts.js) and is never taken (ADR 0050); on a touch pointer a tap pins the cursor and it stays after the finger lifts."
+  - "Citations and published criteria are quoted as cited (project.no-fake-science)."
+  - "Chart chrome (legend, toolbar, toggle, badge, tooltip, readout row) is Flowbite Pro markup adapted from the matching Pro component and lands after F002 turned on preflight and the form base styles (the border trap of review #253, R-3) and after F003 and F006 placed the card it sits in; no osc-* class token or legacy selector is added and src/styles/tokens.css, charts.css, measure.css, studio.css and studio-timeline.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+  - "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no review verdict is needed; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+  - "The visual references of the bio, additive and analysis regions of test:visual are re-accepted in darwin-arm64 and linux-x64, in each theme that has references (light ones exist once F011 lands), with the reason \"all bio rows; harmonics Nyquist contrast\" in the pull request body (npm run test:visual)."
+  - "scripts/size-report.mjs shows at most 2 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of M062's figures stays within the cap Q014 records, under the 1 000 000 B gzip budget (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/bio-additive-charts.test.mjs tests/unit/charts-readout-wording.test.mjs"
+  - "node tests/browser/labs.cjs"
+  - "node tests/browser/charts-interaction.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29
