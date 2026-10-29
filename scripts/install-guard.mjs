@@ -15,15 +15,23 @@
 //              entry whose `resolved` is not a tarball of https://registry.npmjs.org/ (git,
 //              file, http, another host, none), one without a sha512 `integrity`, a link
 //              (`link: true`, a directory of the checkout), and a bundled entry (`inBundle`)
-//              whose bundling parent (the nearest enclosing lock entry by node_modules
-//              nesting that is not itself bundled) is not such a tarball: a bundled package
-//              arrives inside its parent's tarball, so the parent's sha512 checks it, and
-//              Tailwind 4's @tailwindcss/oxide-wasm32-wasi bundles six (review of #255, R29)
+//              that its parent's tarball is not shown to carry: a bundled package arrives
+//              inside the tarball of its bundler, so that sha512 checks it (Tailwind 4's
+//              @tailwindcss/oxide-wasm32-wasi bundles six, review of #255, R29), but npm
+//              installs one the tarball lacks from the entry's own `version` (`file:<dir>`
+//              runs that directory's prepare under --ignore-scripts, R34). So a bundled entry
+//              passes only when its name (its folder) is in the `bundleDependencies` of the
+//              lock entry it is nested in, that entry is a registry tarball with a sha512 or
+//              itself such a bundled entry (R36: arborist's getBundler names the outermost
+//              bundler, so the top registry parent's sha512 checks the nested bundle, and the
+//              entry that lists a package is the one whose directory holds it), its `version`
+//              is an exact semver and it records no resolved, integrity, link or other source
+//              field and no other package's name: if the tarball does lack it, all npm can do
+//              is fetch that name at that version from the registry (R34)
 //   manifest   a package.json with bundleDependencies / bundledDependencies (a bundled
 //              dependency has no lockfile entry) or workspaces (packages of the checkout), a
-//              dependency or an `overrides` value, nested ones included, that names git,
-//              file, link, http(s), a github:/gitlab:/bitbucket:/gist: or owner/repo shorthand
-//              or a path
+//              dependency or an `overrides` value or key, nested ones included, whose spec is
+//              not the registry's (below)
 //   npmrc      a .npmrc anywhere in the checkout with a key outside NPMRC_KEYS: helper
 //              programs (git, script-shell, shell, node-options, onload-script, ...), other
 //              registries (registry, @scope:registry, replace-registry-host), strict-ssl=false
@@ -32,10 +40,17 @@
 //              dependencies, optionalDependencies, peerDependencies and devDependencies maps,
 //              as package.json's (npm resolves an edge whose spec its locked package does not
 //              satisfy, and clones a git spec there under --ignore-scripts too: round 4, R17),
-//              and a bundleDependencies or workspaces list in an entry; a bare tarball file
-//              name (`evil.tgz`) is a file of the checkout, not a registry name (R24), and so
-//              is any spec with a slash that is not an owner/repo shorthand or a scoped
-//              `@scope/name@version` (`vendor/sub/evil`, `rel/`: a directory, R32)
+//              and a bundleDependencies or workspaces list in an entry
+//   specs      every spec, package.json's, the overrides' (keys too) and the lock entries', is
+//              classified by npm-package-arg, the one inside the runner's own npm (the npm
+//              beside the node running this program, loaded by absolute path, never from the
+//              pull request's node_modules or the working directory; none there: every spec
+//              is refused). Accepted: the types version, range and tag, and an alias whose
+//              target is a registry name with one of those; an overrides value `$<name>`
+//              refers to a root dependency, itself checked. Anything else (git, directory,
+//              file, remote, an alias of those, a spec it cannot read) is refused: a
+//              hand-written grammar kept drifting from npm's (`D:evil`, `.evil`,
+//              `@scope/name@^1` are directories to npm: R24, R32, R35)
 //   npmrc      any carriage return: npm's ini splits lines on [\r\n]+, so a key after a lone
 //              CR is a line of its own to npm (round 4, R18)
 //   modules    with --before-install (the judge's install), any node_modules at the
@@ -43,21 +58,29 @@
 //              it, and a symbolic link there makes npm ci empty what it points to (R25)
 // So nothing is resolved outside the registry, and what comes from it is checked against the
 // lockfile's sha512: the guard trusts the registry and those hashes (esbuild's platform
-// binary is such a package). Tested by tests/unit/install-guard.test.mjs and the replay of
-// the judge jobs in tests/unit/base-rule.test.mjs.
+// binary is such a package), and the registry alone for a bundled package a tarball would
+// lack (an exact name and version, no install script run). Tested by
+// tests/unit/install-guard.test.mjs and the replay of the judge jobs in
+// tests/unit/base-rule.test.mjs.
 //
 // Exit 0: nothing refused. Exit 1: refused. Exit 2: usage.
 
 import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const REGISTRY = 'https://registry.npmjs.org/';
 const INTEGRITY = /^sha512-[A-Za-z0-9+/]{86}==$/;
-const OTHER_SOURCE = new RegExp('^(?:git\\+|git:|github:|gitlab:|bitbucket:|gist:|file:|link:'
-  + '|https?:|ssh:|workspace:|portal:|patch:)', 'i');
 const DEPENDENCY_FIELDS = ['dependencies', 'devDependencies', 'optionalDependencies',
   'peerDependencies'];
+/** The npm-package-arg types of a registry spec; an alias is one when its target is (R35). */
+const REGISTRY_TYPES = new Set(['version', 'range', 'tag']);
+/** What in a lock entry names a source of its own; a bundled entry carries none (R34). */
+const SOURCE_FIELDS = ['resolved', 'integrity', 'link', 'from', '_resolved', '_integrity',
+  '_from'];
+/** Where npm-package-arg resolves a path spec: no directory, only the type is read. */
+const NOWHERE = path.join(path.sep, 'install-guard', 'nowhere');
 /**
  * The keys a project .npmrc may set: none of them makes npm run a program, fetch from
  * another host or skip a check. Compared after lower-casing and `_` to `-`.
@@ -66,33 +89,74 @@ export const NPMRC_KEYS = new Set(['audit', 'audit-level', 'color', 'engine-stri
   'ignore-scripts', 'legacy-peer-deps', 'loglevel', 'package-lock', 'prefer-offline',
   'progress', 'save', 'save-exact', 'save-prefix', 'strict-peer-deps', 'update-notifier']);
 
+const requireAbsolute = createRequire(import.meta.url);
+const TOOLS = new Map();
+
 /**
- * Why a dependency spec (or an overrides value) is not a registry version, or null. Registry
- * forms: a version, a range, a tag, `npm:<name>@<range>`, an overrides reference `$<name>`.
+ * npm-package-arg and semver from the npm that ships with the node `nodePath` (by default the
+ * node running this program, process.execPath: in CI the node the judge step recorded and
+ * starts the judge with), loaded by absolute path from `<node dir>/../lib/node_modules/npm`,
+ * never resolved from the working directory or a node_modules of the pull request (review of
+ * #255, R35). `{ problem }` when that npm or its npm-package-arg is not there: every spec is
+ * then refused.
  */
-export function nonRegistrySpec(spec) {
-  const s = String(spec).trim();
-  if (/^npm:/i.test(s)) {
-    const rest = s.slice(4).replace(/^@?[^@]+@?/, '');
-    return rest ? nonRegistrySpec(rest) : null;
-  }
-  if (/^\$[\w@/.-]+$/.test(s)) return null;
-  if (OTHER_SOURCE.test(s)) return `names ${s.split(':')[0]}:, not the registry`;
-  if (s.includes('://')) return 'is a URL, not the registry';
-  if (/^(?:\.{1,2}(?:\/|$)|\/|~\/)/.test(s) || /^[A-Za-z]:[\\/]/.test(s)) {
-    return 'is a path of the checkout';
-  }
-  if (/^[^@\s/<>=~^|][^\s/]*\/[^\s/]+$/.test(s)) return 'is an owner/repo shorthand (GitHub)';
-  // npm reads a name ending in a tarball extension as a file of the checkout (R24)
-  if (/\.(?:tgz|tar\.gz|tar)$/i.test(s)) return 'is a tarball file of the checkout';
-  // a version, a range or a tag holds no slash: npm reads any other spec with one
-  // (`vendor/sub/evil`, `rel/`) as a directory of the checkout (R32)
-  if (/[/\\]/.test(s) && !SCOPED_VERSION.test(s)) return 'is a relative path of the checkout';
-  return null;
+export function npmTools(nodePath = process.execPath) {
+  const key = String(nodePath);
+  if (!TOOLS.has(key)) TOOLS.set(key, loadTools(key));
+  return TOOLS.get(key);
 }
 
-/** `@scope/name@version`: the one registry form with a slash, outside `npm:`. */
-const SCOPED_VERSION = /^@[a-z0-9][\w.-]*\/[a-z0-9][\w.-]*@[^\s/\\]*$/i;
+function loadTools(nodePath) {
+  const root = path.resolve(path.dirname(nodePath), '..', 'lib', 'node_modules', 'npm');
+  try {
+    if (!path.isAbsolute(nodePath)) throw new Error(`${nodePath} is not an absolute path`);
+    const own = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
+    if (own.name !== 'npm') throw new Error(`${root}/package.json names ${own.name}, not npm`);
+    const npa = requireAbsolute(path.join(root, 'node_modules', 'npm-package-arg'));
+    const semver = requireAbsolute(path.join(root, 'node_modules', 'semver'));
+    if (typeof npa !== 'function' || typeof npa.resolve !== 'function'
+      || typeof semver.parse !== 'function') {
+      throw new Error('not npm-package-arg and semver');
+    }
+    return { npa, semver, root, npm: own.version };
+  } catch (e) {
+    return { problem: `no npm-package-arg in the npm of ${nodePath} (${root}: ${e.message}),`
+      + ' so no spec can be classified: refused' };
+  }
+}
+
+/**
+ * Why a dependency spec is not one npm resolves from the registry, or null: npm-package-arg
+ * of the runner's npm (npmTools) classifies it as npm does an edge `name`@`spec`, and only
+ * the types version, range and tag pass, and an alias whose target is a registry name with
+ * one of those (R35; R24, R32 were hand-written cases of this).
+ */
+export function nonRegistrySpec(spec, { name, tools = npmTools() } = {}) {
+  if (tools.problem) return tools.problem;
+  if (typeof spec !== 'string') return 'is not a version';
+  let r;
+  try {
+    r = tools.npa.resolve(name || undefined, spec, NOWHERE);
+  } catch (e) {
+    return `is no spec npm reads as the registry's (npm-package-arg: ${e.message})`;
+  }
+  if (REGISTRY_TYPES.has(r.type)) return null;
+  if (r.type === 'alias') {
+    const sub = r.subSpec;
+    if (sub && sub.registry && sub.name && REGISTRY_TYPES.has(sub.type)) return null;
+    return `is an alias of a ${sub?.type} spec, not of a registry name (npm-package-arg)`;
+  }
+  return `is a ${r.type} spec to npm (npm-package-arg), not a registry version, range, tag`
+    + ' or alias of one';
+}
+
+/** Whether `v` is an exact semver as written: no range, no `v`, no `=`, no spaces (R34). */
+function exactVersion(v, tools) {
+  if (typeof v !== 'string') return false;
+  const parsed = tools.semver.parse(v);
+  if (!parsed) return false;
+  return v === parsed.version + (parsed.build.length ? `+${parsed.build.join('.')}` : '');
+}
 
 /** Why a lock entry is not a registry tarball checked by a sha512 integrity, or null. */
 function tarballProblem(entry) {
@@ -114,27 +178,67 @@ function integrityProblem(entry) {
     + ' not a sha512 the download is checked against';
 }
 
+/** The names a lock entry's bundle list holds (npm reads `true` as all its dependencies). */
+function bundleList(entry) {
+  const bd = entry.bundleDependencies ?? entry.bundledDependencies;
+  if (bd === true) return Object.keys(entry.dependencies ?? {});
+  return Array.isArray(bd) ? bd.filter((n) => typeof n === 'string') : [];
+}
+
 /**
- * The bundling parent of the lock entry `key`: the nearest enclosing entry by node_modules
- * nesting (`a/node_modules/b` encloses `a/node_modules/b/node_modules/c`) that is not itself
- * bundled, as [key, entry], or null when only the root encloses it.
+ * Why the bundled (inBundle) lock entry `key` is not shown to arrive inside a registry
+ * tarball that a sha512 checks, or null (review of #255, R29, R34, R36). Its holder is the
+ * entry whose directory holds it (`a/node_modules/b` holds `a/node_modules/b/node_modules/c`;
+ * a scoped folder `@s/n` is one name). Accepted only when:
+ *   the holder is a registry tarball with a sha512, or itself a bundled entry accepted by
+ *   this rule (R36: arborist's getBundler returns the outermost bundler, so the bytes of a
+ *   nested bundle are in the top registry parent's tarball and that sha512 checks them);
+ *   its folder name is in the holder's bundleDependencies (a package npm pack puts in a
+ *   tarball is one the packed package lists; a dependency deduped into a bundle that no list
+ *   names is refused, which is stricter than npm);
+ *   its version is an exact semver, and it records no resolved, integrity, link or other
+ *   source field and no other package's name: npm installs a bundled package the tarball
+ *   lacks from that entry (a `file:<dir>` version runs that directory's prepare under
+ *   --ignore-scripts), so at worst it fetches that name at that version from the registry.
  */
-function bundlingParent(packages, key) {
-  for (let k = key; ;) {
-    const cut = k.lastIndexOf('/node_modules/');
-    if (cut < 0) return null;
-    k = k.slice(0, cut);
-    const entry = packages[k];
-    if (entry && typeof entry === 'object' && !entry.inBundle) return [k, entry];
+function bundleProblem(packages, key, tools) {
+  const entry = packages[key];
+  const cut = key.lastIndexOf('/node_modules/');
+  if (cut < 0) return 'only the root (the checkout) encloses it';
+  const at = key.slice(0, cut);
+  const folder = key.slice(cut + '/node_modules/'.length);
+  const holder = packages[at];
+  if (!holder || typeof holder !== 'object') return `${at}, which would hold it, has no entry`;
+  if (holder.link) return `its bundling parent ${at} is a link of the checkout`;
+  if (holder.inBundle) {
+    const up = bundleProblem(packages, at, tools);
+    if (up) return `the bundled ${at} that holds it is refused (${up})`;
+  } else {
+    const unchecked = tarballProblem(holder) || integrityProblem(holder);
+    if (unchecked) {
+      return `its bundling parent ${at} ${unchecked}: no sha512 checks what it brings`;
+    }
   }
+  if (!bundleList(holder).includes(folder)) {
+    return `${folder} is not in the bundleDependencies of ${at}: nothing shows that its tarball`
+      + ' carries it, and npm installs a bundled package it lacks from the entry\'s version';
+  }
+  if (!exactVersion(entry.version, tools)) {
+    return `its version ${JSON.stringify(entry.version)} is not an exact semver (npm installs a`
+      + ' bundled package its parent lacks from it)';
+  }
+  const source = SOURCE_FIELDS.filter((f) => f in entry);
+  if (source.length) return `it records ${source.join(', ')}: a bundled package has no source`;
+  if ('name' in entry && entry.name !== folder) return `it names another package (${entry.name})`;
+  return null;
 }
 
 /**
  * The refusals of the dependency maps and lists of one manifest or lock entry `pkg`;
- * `bundles`: a bundle list is allowed, since `pkg` is a registry tarball checked by sha512
- * that carries its bundled packages inside (R29).
+ * `bundles`: a bundle list is allowed, since `pkg` is a registry tarball checked by sha512,
+ * or a bundled entry inside one, that carries its bundled packages inside (R29, R36).
  */
-function specProblems(pkg, at, { bundles = false } = {}) {
+function specProblems(pkg, at, { bundles = false, tools }) {
   const out = [];
   for (const k of ['bundleDependencies', 'bundledDependencies']) {
     if (k in pkg && !bundles) out.push(`${at}: ${k} (a bundled dependency has no lockfile entry)`);
@@ -148,15 +252,16 @@ function specProblems(pkg, at, { bundles = false } = {}) {
       continue;
     }
     for (const [dep, spec] of Object.entries(deps)) {
-      const why = typeof spec === 'string' ? nonRegistrySpec(spec) : 'is not a version';
+      const why = nonRegistrySpec(spec, { name: dep, tools });
       if (why) out.push(`${at}: ${field}.${dep} = ${JSON.stringify(spec)} ${why}`);
     }
   }
   return out;
 }
 
-/** The refusals of a lockfile's text (`name` the file's). */
-export function lockfileProblems(text, name = 'package-lock.json') {
+/** The refusals of a lockfile's text (`name` the file's); `tools`: npmTools(). */
+export function lockfileProblems(text, name = 'package-lock.json', { tools = npmTools() } = {}) {
+  if (tools.problem) return [`${name}: ${tools.problem}`];
   let lock;
   try {
     lock = JSON.parse(text);
@@ -174,28 +279,20 @@ export function lockfileProblems(text, name = 'package-lock.json') {
       out.push(`${at} is no entry`);
       continue;
     }
-    const checked = key !== '' && !entry.link && !entry.inBundle && !tarballProblem(entry)
-      && !integrityProblem(entry);
+    const bundled = key !== '' && !entry.link && entry.inBundle
+      ? bundleProblem(lock.packages, key, tools) : null;
+    const checked = key !== '' && !entry.link && (entry.inBundle ? !bundled
+      : !tarballProblem(entry) && !integrityProblem(entry));
     // the specs inside the entry: an edge npm finds unsatisfied it resolves again (R17)
-    out.push(...specProblems(entry, at, { bundles: checked }));
+    out.push(...specProblems(entry, at, { bundles: checked, tools }));
     if (key === '') continue;
     if (entry.link) {
       out.push(`${at} links ${entry.resolved ?? 'a directory'} of the checkout (link: true)`);
       continue;
     }
     if (entry.inBundle) {
-      // a bundled package comes inside its parent's tarball, which that sha512 checks (R29)
-      const parent = bundlingParent(lock.packages, key);
-      const unchecked = !parent ? 'only the root (the checkout) encloses it'
-        : parent[1].link ? 'is a link of the checkout'
-          : tarballProblem(parent[1]) || integrityProblem(parent[1]);
-      if (unchecked) {
-        const why = parent ? `its bundling parent ${parent[0]} ${unchecked}` : unchecked;
-        out.push(`${at} is bundled (inBundle), and ${why}: no sha512 checks what it brings`);
-        continue;
-      }
-      // what npm records of it is checked as any entry's, when it records anything
-      if (entry.resolved === undefined && entry.integrity === undefined) continue;
+      if (bundled) out.push(`${at} is bundled (inBundle), and ${bundled}`);
+      continue;
     }
     const where = tarballProblem(entry);
     if (where) out.push(`${at} ${where}`);
@@ -205,8 +302,9 @@ export function lockfileProblems(text, name = 'package-lock.json') {
   return out;
 }
 
-/** The refusals of a package.json's text (`name` the file's). */
-export function manifestProblems(text, name = 'package.json') {
+/** The refusals of a package.json's text (`name` the file's); `tools`: npmTools(). */
+export function manifestProblems(text, name = 'package.json', { tools = npmTools() } = {}) {
+  if (tools.problem) return [`${name}: ${tools.problem}`];
   let pkg;
   try {
     pkg = JSON.parse(text);
@@ -214,25 +312,45 @@ export function manifestProblems(text, name = 'package.json') {
     return [`${name}: not JSON (${e.message})`];
   }
   if (!pkg || typeof pkg !== 'object') return [`${name}: not a manifest`];
-  const out = specProblems(pkg, name);
-  const walk = (value, at) => {
+  const out = specProblems(pkg, name, { tools });
+  // as arborist's OverrideSet reads them: a key is an argument `name[@spec]`, a value (or a
+  // "." key) the spec for that name, `$<name>` a reference to a root dependency's spec
+  const walk = (value, at, dep) => {
     if (typeof value === 'string') {
-      const why = nonRegistrySpec(value);
+      if (value.startsWith('$')) {
+        if (!/^\$[\w@/.-]+$/.test(value)) {
+          out.push(`${name}: ${at} = ${JSON.stringify(value)} is no root dependency reference`);
+        }
+        return;
+      }
+      const why = nonRegistrySpec(value, { name: dep, tools });
       if (why) out.push(`${name}: ${at} = ${JSON.stringify(value)} ${why}`);
     } else if (value && typeof value === 'object') {
       for (const [k, v] of Object.entries(value)) {
-        // a key may carry a spec too (`"foo@github:x/y": "1"`)
-        const keySpec = /^@?[^@]+@(.+)$/.exec(k);
-        if (keySpec && nonRegistrySpec(keySpec[1])) {
-          out.push(`${name}: ${at} key ${JSON.stringify(k)} ${nonRegistrySpec(keySpec[1])}`);
+        if (k === '.') {
+          walk(v, `${at}.${k}`, dep);
+          continue;
         }
-        walk(v, `${at}.${k}`);
+        let keyName;
+        let why = null;
+        try {
+          const key = tools.npa(k, NOWHERE);
+          keyName = key.name;
+          if (!keyName) why = 'names no package';
+          else if (!REGISTRY_TYPES.has(key.type)) {
+            why = `is a ${key.type} spec to npm (npm-package-arg), not the registry`;
+          }
+        } catch (e) {
+          why = `is no spec npm reads (npm-package-arg: ${e.message})`;
+        }
+        if (why) out.push(`${name}: ${at} key ${JSON.stringify(k)} ${why}`);
+        walk(v, `${at}.${k}`, keyName);
       }
     } else if (value !== undefined && value !== null) {
       out.push(`${name}: ${at} = ${JSON.stringify(value)} is not a version`);
     }
   };
-  if ('overrides' in pkg) walk(pkg.overrides, 'overrides');
+  if ('overrides' in pkg) walk(pkg.overrides, 'overrides', undefined);
   return out;
 }
 
@@ -287,10 +405,13 @@ function npmrcFiles(repo) {
 
 /**
  * Every refusal for the checkout at `repo`; `beforeInstall`: the install has not run, so any
- * node_modules there is the pull request's (R25).
+ * node_modules there is the pull request's (R25); `nodePath`: the node whose npm classifies
+ * the specs (npmTools; the running node by default, which in CI is the recorded one, R35).
  */
-export function guard(repo, { beforeInstall = false } = {}) {
+export function guard(repo, { beforeInstall = false, nodePath = process.execPath } = {}) {
+  const tools = npmTools(nodePath);
   const out = [];
+  if (tools.problem) out.push(tools.problem);
   const modules = path.join(repo, 'node_modules');
   let stat = null;
   try {
@@ -307,9 +428,13 @@ export function guard(repo, { beforeInstall = false } = {}) {
   const locks = ['npm-shrinkwrap.json', 'package-lock.json']
     .filter((f) => existsSync(path.join(repo, f)));
   if (!locks.length) out.push('no package-lock.json: npm ci would have nothing to check');
-  for (const f of locks) out.push(...lockfileProblems(read(f), f));
+  if (!tools.problem) {
+    for (const f of locks) out.push(...lockfileProblems(read(f), f, { tools }));
+  }
   if (existsSync(path.join(repo, 'package.json'))) {
-    out.push(...manifestProblems(read('package.json')));
+    if (!tools.problem) {
+      out.push(...manifestProblems(read('package.json'), 'package.json', { tools }));
+    }
   } else {
     out.push('no package.json');
   }

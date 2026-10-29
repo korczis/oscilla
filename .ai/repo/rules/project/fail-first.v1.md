@@ -81,13 +81,20 @@ first refuses to judge where Yama's `ptrace_scope` is 0 or missing on Linux (off
 skipped with a note, outside CI only) and checks its copy against the manifest; then it runs
 its `scripts/install-guard.mjs` in-process, which refuses a lockfile entry that is not a
 sha512-checked tarball of `https://registry.npmjs.org/`, a spec in any lock entry's own
-dependency maps (the root entry's included) or in `package.json` that names git, `file:`,
-`link:`, `http(s):`, `github:`, an owner/repo shorthand, a path (a relative directory such
-as `vendor/sub/x` or `rel/` included, R32) or a bare tarball name, a bundled entry
-(`inBundle`) whose bundling parent (the nearest enclosing entry that is not bundled) is not a
-sha512-checked registry tarball (a bundled package arrives inside that tarball, so Tailwind
-4's `@tailwindcss/oxide-wasm32-wasi` passes: R29), bundled dependencies in `package.json`,
-workspaces, an `overrides` value outside the registry, a `.npmrc` key
+dependency maps (the root entry's included), in `package.json` or in its `overrides` (keys
+too) that npm-package-arg does not call a registry version, range or tag or an alias of one
+(the npm-package-arg inside the runner's own npm, beside the recorded node, loaded by
+absolute path and never from the pull request's `node_modules` or working directory; none
+there and every spec is refused: R35, so git, `file:`, `link:`, URLs, shorthands, paths,
+tarball names, `D:x`, `.x` and `@scope/name@^1` are all refused by npm's own reading), a
+bundled entry (`inBundle`) that its parent's tarball is not shown to carry: it passes only
+when its folder is in the `bundleDependencies` of the entry whose directory holds it, that
+entry is a sha512-checked registry tarball or itself such a bundled entry (R36: the
+outermost bundler's sha512 checks a nested bundle, as arborist's getBundler names it), and
+it has an exact semver `version` and no `resolved`, `integrity`, `link` or other source of
+its own, since npm installs a bundled package its parent lacks from that entry (R34;
+Tailwind 4's `@tailwindcss/oxide-wasm32-wasi` passes: R29), bundled dependencies in
+`package.json`, workspaces, a `.npmrc` key
 that names a program, another registry or turns a check off, a carriage return in a
 `.npmrc` (npm's ini splits lines on `[\r\n]+`), and a `node_modules` already there (a
 symlink npm ci would empty, or one committed); then `npm ci --ignore-scripts` and the tests,
@@ -104,7 +111,9 @@ probe, the group kill and the manifest raise the bar, they do not make root code
 `judge` step prints the runner's `ptrace_scope` so each run's log measures it, R31); a
 grandchild that starts a session of its own
 leaves the group; and the guard trusts the registry and the lockfile's integrity hashes
-(esbuild's platform binary is such a package). The
+(esbuild's platform binary is such a package), and the registry alone for a bundled package
+a tarball would lack (an exact name and version; a package deduped into a bundle that no
+`bundleDependencies` names is refused, stricter than npm). The
 same test fails if the last command of the job's last step is anything but that call with
 its exact arguments (`--title` in place of `--pr-json`, `|| true`, an `if:`), if the step
 passes when there is no pull request, or if `ci.yml` can be started by anything but a pull

@@ -88,7 +88,8 @@ jobs:
           node="$(readlink -f "$(command -v node)")"
           echo "path=$(dirname "$node"):/usr/bin:/bin:/usr/sbin:/sbin" >> "$GITHUB_OUTPUT"
           echo "manifest=$(sha256sum < "$judge/.manifest" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
-          echo "the judge: $base (${sha:0:12}), node $node, $(wc -l < "$judge/.manifest") files"
+          files=$(($(wc -l < "$judge/.manifest") - 1))  # the commit header is no file (R38)
+          echo "the judge: $base (${sha:0:12}), node $node, $files files"
       # Title, body and branch are read from the pull request as it is now (3 tries, 10 s
       # apart), not from the event, so a re-run after an edit judges the edit. The base is named
       # by its full ref, refs/remotes/origin/<base>: a tag named origin/<base>, which the full

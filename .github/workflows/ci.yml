@@ -438,7 +438,8 @@ jobs:
           node="$(readlink -f "$(command -v node)")"
           echo "path=$(dirname "$node"):/usr/bin:/bin:/usr/sbin:/sbin" >> "$GITHUB_OUTPUT"
           echo "manifest=$(sha256sum < "$judge/.manifest" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
-          echo "the judge: $base (${sha:0:12}), node $node, $(wc -l < "$judge/.manifest") files"
+          files=$(($(wc -l < "$judge/.manifest") - 1))  # the commit header is no file (R38)
+          echo "the judge: $base (${sha:0:12}), node $node, $files files"
       - name: The PR's added or changed unit tests fail on the merge base
         timeout-minutes: 10
         shell: /usr/bin/env -u BASH_ENV -u ENV /bin/bash --noprofile --norc -eo pipefail {0}
@@ -525,7 +526,8 @@ jobs:
           node="$(readlink -f "$(command -v node)")"
           echo "path=$(dirname "$node"):/usr/bin:/bin:/usr/sbin:/sbin" >> "$GITHUB_OUTPUT"
           echo "manifest=$(sha256sum < "$judge/.manifest" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
-          echo "the judge: $base (${sha:0:12}), node $node, $(wc -l < "$judge/.manifest") files"
+          files=$(($(wc -l < "$judge/.manifest") - 1))  # the commit header is no file (R38)
+          echo "the judge: $base (${sha:0:12}), node $node, $files files"
       - name: A guarded change carries a verdict for the content it changes
         shell: /usr/bin/env -u BASH_ENV -u ENV /bin/bash --noprofile --norc -eo pipefail {0}
         env:
