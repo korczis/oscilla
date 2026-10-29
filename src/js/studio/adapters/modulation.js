@@ -1,10 +1,11 @@
-// Studio MODULATION adapters (nodes/modulation.js): LFO, Envelope, Random, Step Modulator.
+// Studio MODULATION adapters (nodes/modulation.js): LFO, Envelope, Random, Step Modulator,
+// Macro.
 // The adapter contract is the header of adapters/nodes.js.
 
 import { mulberry32 } from '../../audio/noise.js';
 import { applyAdsr, forgetParam, holdAt, releaseAt } from '../../audio/envelope.js';
 import { CENTS_PER_OCTAVE } from '../../core/music.js';
-import { BIPOLAR, UNIPOLAR, did, free, inertHandle, setParam } from './common.js';
+import { BIPOLAR, UNIPOLAR, did, free, inertHandle, linearOnly, setParam } from './common.js';
 
 /** Control-signal buffer resolution: samples per step of Random / Step Modulator. */
 export const CONTROL_STEP_SAMPLES = 480;
@@ -29,8 +30,10 @@ export const lfo = {
       },
       applyBase(b, immediate, owned, w) {
         const now = ctx.currentTime;
+        // Audio rate (K010): 0.01 Hz … 0.95 × Nyquist of the running context, the engine's own
+        // clamp (computeBases lowers the base there first and reports it as limited).
         if (free(owned, 'rate')) {
-          setParam(osc.frequency, Math.max(0.01, b.rate.value), immediate, now, w, 'rate');
+          setParam(osc.frequency, hooks.clampFrequency(b.rate.value), immediate, now, w, 'rate');
         }
         setParam(osc.detune, b.rate.cents, immediate, now, w, 'detune'); // log-mapped edges only
       },
@@ -231,5 +234,41 @@ export const stepModulator = {
     const sc = steppedControl({ ...env, values, smooth: false,
       holdLast: env.params.playback === 'once', rate: env.params.rate });
     return controlHandle(sc, { values });
+  },
+};
+
+/** Why a Macro has no output where the browser lacks ConstantSourceNode. */
+export const MACRO_UNAVAILABLE_TEXT = 'The Macro needs ConstantSourceNode, which this browser '
+  + 'lacks.';
+
+export const macro = {
+  compiler: 'audio/audio-engine.js#AudioEngine',
+  structural: [],
+  create({ ctx, acct, at, params }) {
+    // One ConstantSourceNode: its offset is the value (0..1); the edges scale it (K013).
+    if (typeof ctx.createConstantSource !== 'function') {
+      return inertHandle('degraded', MACRO_UNAVAILABLE_TEXT);
+    }
+    const cs = acct.source(acct.track(ctx.createConstantSource()));
+    cs.offset.setValueAtTime(params.value, ctx.currentTime);
+    cs.start(at);
+    return {
+      inputs: {},
+      outputs: { control: cs },
+      outputRange: { control: UNIPOLAR },
+      modTarget: (key, mapping) => (key === 'value' ? linearOnly(cs.offset)(key, mapping)
+        : { reason: `unknown parameter ${key}` }),
+      applyBase(b, immediate, owned, w) {
+        if (free(owned, 'value')) {
+          setParam(cs.offset, b.value.value, immediate, ctx.currentTime, w, 'value');
+        }
+      },
+      update() {},
+      stop(t) { try { cs.stop(t); } catch (e) { /* already stopped */ } },
+      dispose() {},
+      info: {},
+      status: 'ready',
+      reason: null,
+    };
   },
 };

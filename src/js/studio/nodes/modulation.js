@@ -1,25 +1,31 @@
-// Studio MODULATION node types (spec §29): LFO, Envelope, Random, Step Modulator.
+// Studio MODULATION node types (spec §29): LFO, Envelope, Random, Step Modulator, Macro.
 // Defaults: LFO rate 5 Hz sine (DEFAULT_PATTERN_PARAMS.wobble, audio/patterns.js; buildLfo in
 // audio/modulation.js), ADSR a 0.01 / d 0.1 / s 0.7 / r 0.2 s (DEFAULT_ADSR, audio/envelope.js),
 // Random 5 Hz (one value per 150 ms tone + 50 ms gap of DEFAULT_PATTERN_PARAMS.random) with its
 // seed 20261001, Step Modulator 4 Hz (one step per 250 ms tone of
 // DEFAULT_PATTERN_PARAMS.alternating). Control outputs are normalized −1..1 (bipolar); the
 // depth, polarity and mapping onto a parameter belong to the modulation edge (§35).
+// K010: the LFO rate reaches audio rate (FM, AM and ring modulation): the model accepts up to
+// FREQUENCY_MAX_HZ, as a frequency parameter does, and the compiler and the adapter clamp it to
+// 0.95 × Nyquist of the running context (reported in the runtime's limitedParams). A wider
+// range changes no saved studioHash. Random and Step Modulator keep their 100 Hz.
+// K013: the Macro is one control value 0..1 (unipolar), automatable, for driving several
+// parameters from one place; each edge sets its own depth and polarity.
 
-import { WAVEFORMS, WAVEFORM_LABELS } from '../../core/constants.js';
+import { SAFE_NYQUIST_FACTOR_TEXT, WAVEFORMS, WAVEFORM_LABELS } from '../../core/constants.js';
 import { DEFAULT_ADSR, MIN_SEGMENT_S } from '../../audio/envelope.js';
 import { DEFAULT_PATTERN_PARAMS } from '../../audio/patterns.js';
 import { definePort } from '../ports.js';
 import {
-  CATEGORIES, boolParam, defineNode, enumParam, integerParam, listParam, numberParam,
-  optionLabel, parts, secondsParam, secs, num,
+  AUDIBLE_SOFT_RANGE, CATEGORIES, FREQUENCY_MAX_HZ, boolParam, defineNode, enumParam,
+  integerParam, listParam, numberParam, optionLabel, parts, pct, secondsParam, secs, num,
 } from './common.js';
 
 const controlOut = definePort({ id: 'control', direction: 'out', type: 'CONTROL',
   label: 'Control' });
-const rate = (def, modDepth) => numberParam('rate', 'Rate', {
+const rate = (def, modDepth, opts = {}) => numberParam('rate', 'Rate', {
   min: 0.01, max: 100, unit: 'Hz', scale: 'log', default: def, automatable: true,
-  modulatable: true, modDepth,
+  modulatable: true, modDepth, ...opts,
 });
 const randomPeriodS = (DEFAULT_PATTERN_PARAMS.random.toneMs + DEFAULT_PATTERN_PARAMS.random.gapMs)
   / 1000;
@@ -29,11 +35,13 @@ export const lfo = defineNode({
   displayName: 'LFO',
   idPrefix: 'lfo',
   category: CATEGORIES.MODULATION,
-  aliases: ['low frequency oscillator', 'modulator', 'wobble', 'vibrato', 'tremolo'],
+  aliases: ['low frequency oscillator', 'modulator', 'wobble', 'vibrato', 'tremolo', 'fm',
+    'am', 'ring modulator'],
   outputs: [controlOut],
   params: [
     enumParam('shape', 'Shape', WAVEFORMS.map((w) => [w, WAVEFORM_LABELS[w]]), 'sine'),
-    rate(DEFAULT_PATTERN_PARAMS.wobble.rate, 1),
+    rate(DEFAULT_PATTERN_PARAMS.wobble.rate, 1, { max: FREQUENCY_MAX_HZ,
+      softRange: [0.01, AUDIBLE_SOFT_RANGE[1]] }),
   ],
   summary(p) {
     return parts(optionLabel(lfo, 'shape', p.shape), `${num(p.rate)} Hz`);
@@ -41,10 +49,11 @@ export const lfo = defineNode({
   capabilities: { realtime: true, offline: true },
   compiler: 'audio/modulation.js#buildLfo',
   help: {
-    what: 'A low-frequency oscillator that modulates parameters.',
+    what: 'A modulation oscillator, from slow sweeps to audio rate (FM, AM).',
     inputs: 'Rate accepts modulation from another modulator.',
     outputs: 'Control, −1 to 1; the connection sets depth and polarity.',
-    constraints: 'A modulation path may not lead back to its own source.',
+    constraints: 'A modulation path may not lead back to its own source. Rate is limited to '
+      + `${SAFE_NYQUIST_FACTOR_TEXT} × the digital Nyquist limit of the running audio context.`,
   },
 });
 
@@ -147,4 +156,31 @@ export const stepModulator = defineNode({
   },
 });
 
-export default [lfo, envelope, random, stepModulator];
+export const macro = defineNode({
+  type: 'macro',
+  displayName: 'Macro',
+  idPrefix: 'macro',
+  category: CATEGORIES.MODULATION,
+  aliases: ['macro control', 'knob', 'performance control', 'constant', 'offset', 'cv',
+    'control voltage'],
+  outputs: [controlOut],
+  params: [
+    numberParam('value', 'Value', { min: 0, max: 1, step: 0.01, default: 0.5,
+      automatable: true, modulatable: true, modDepth: 0.25 }),
+  ],
+  summary(p) {
+    return pct(p.value);
+  },
+  capabilities: { realtime: true, offline: true },
+  compiler: 'audio/audio-engine.js#AudioEngine',
+  help: {
+    what: 'One control value, 0 to 1, that drives several parameters from one place.',
+    inputs: 'Value accepts modulation and an automation lane.',
+    outputs: 'Control, 0 to 1; each connection sets its own depth and polarity (unipolar: 0 to '
+      + 'depth; bipolar: −depth to +depth).',
+    constraints: 'Needs ConstantSourceNode. A modulation path may not lead back to its own '
+      + 'source.',
+  },
+});
+
+export default [lfo, envelope, random, stepModulator, macro];

@@ -1,9 +1,11 @@
-// Studio PROCESSING adapters (nodes/processing.js): Gain, Filter, Pan, Stereo Split, Mixer.
+// Studio PROCESSING adapters (nodes/processing.js): Gain, Filter, Pan, Stereo Split, Mixer,
+// Drive.
 // The adapter contract is the header of adapters/nodes.js.
 
 import { createFilterStage, nodeQ, normalizeFilter } from '../../audio/filters.js';
 import { createStereoRouter } from '../../audio/stereo.js';
-import { CLIP_TARGET_TEXT, gainIsUsed, qIsDecibels } from '../clip-targets.js';
+import { createDriveStage } from '../../audio/drive.js';
+import { CLIP_TARGET_TEXT, gainIsUsed, qIsDecibels, qIsUsed } from '../clip-targets.js';
 import { CENTS_PER_OCTAVE } from '../../core/music.js';
 import { did, free, linearOnly, setParam } from './common.js';
 
@@ -62,6 +64,7 @@ export const filter = {
         }
         if (key === 'Q') {
           if (qIsDecibels(params.type)) return { reason: CLIP_TARGET_TEXT.filterQ };
+          if (!qIsUsed(params.type)) return { reason: CLIP_TARGET_TEXT.filterQUnused };
           return linearOnly(biquad.Q)(key, mapping);
         }
         if (key === 'gain') {
@@ -220,6 +223,40 @@ export const mixer = {
       },
       update() {}, stop() {}, dispose() {},
       info: {},
+      status: 'ready',
+      reason: null,
+    };
+  },
+};
+
+export const drive = {
+  compiler: 'audio/drive.js#createDriveStage',
+  structural: [],
+  create({ ctx, acct, params }) {
+    // audio/drive.js: drive gain → tanh WaveShaper (4x oversampling) → trim ≤ 1 (K012).
+    const stage = createDriveStage(ctx, params, { track: acct.track });
+    const trimOf = (v) => Math.min(1, Math.max(0, v));
+    return {
+      inputs: { audio: stage.input },
+      outputs: { audio: stage.output },
+      outputRange: {},
+      modTarget: (key, mapping) => (key === 'trim' ? linearOnly(stage.output.gain)(key, mapping)
+        : { reason: `${key} is not modulatable` }),
+      applyBase(b, immediate, owned, w) {
+        // The static trim (edge offsets included) is held at 0..1, as createDriveStage holds it.
+        if (free(owned, 'trim')) {
+          setParam(stage.output.gain, trimOf(b.trim.value), immediate, ctx.currentTime, w,
+            'trim');
+        }
+      },
+      update(changed, owned, w) {
+        if (!('drive' in changed)) return;
+        stage.update({ drive: changed.drive }); // glides the drive gain
+        did(w, changed, ['drive'], 'glide');
+      },
+      stop() {},
+      dispose() { stage.dispose(); },
+      info: { stage },
       status: 'ready',
       reason: null,
     };

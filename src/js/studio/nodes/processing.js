@@ -1,4 +1,4 @@
-// Studio PROCESSING node types (spec §29, §188): Gain, Filter, Pan, Stereo Split, Mixer.
+// Studio PROCESSING node types (spec §29, §188): Gain, Filter, Pan, Stereo Split, Mixer, Drive.
 // Defaults: DEFAULT_FILTER low-pass 1 kHz, Q 0.7071 (linear), 0 dB, enabled (audio/filters.js,
 // whose normalizeFilter range is 10 Hz-0.95 × Nyquist, Q 1e-4-1000, gain ±40 dB);
 // createStereoRouter mode 'split', panA −1, panB 1, levels 1 (audio/stereo.js); Mixer channel
@@ -7,12 +7,12 @@
 // INVARIANT (§188): Mixer is the only node whose audio inputs are meant to be summed; every
 // other audio input accepts one connection, so accidental summing cannot happen.
 
-import { DEFAULT_FILTER, FILTER_TYPES } from '../../audio/filters.js';
+import { DEFAULT_FILTER, FILTER_TYPES, usesGain } from '../../audio/filters.js';
 import { SAFE_NYQUIST_FACTOR_TEXT } from '../../core/constants.js';
 import { definePort } from '../ports.js';
 import {
   CATEGORIES, FREQUENCY_MAX_HZ, boolParam, defineNode, enumParam, frequencyParam, hz,
-  levelParam, num, numberParam, optionLabel, parts,
+  levelParam, num, numberParam, optionLabel, parts, pct,
 } from './common.js';
 
 const audioIn = definePort({ id: 'audio', direction: 'in', type: 'AUDIO', label: 'Audio' });
@@ -21,7 +21,7 @@ const audioOut = definePort({ id: 'audio', direction: 'out', type: 'AUDIO', labe
 /** Filter type labels as the Filter Lab shows them (src/index.html). */
 export const FILTER_TYPE_LABELS = Object.freeze({
   lowpass: 'Low-pass', highpass: 'High-pass', bandpass: 'Band-pass', notch: 'Notch',
-  peaking: 'Peaking',
+  peaking: 'Peaking', lowshelf: 'Low-shelf', highshelf: 'High-shelf', allpass: 'All-pass',
 });
 export const MIXER_CHANNELS = 4;
 
@@ -60,7 +60,8 @@ export const filter = defineNode({
   idPrefix: 'filter',
   category: CATEGORIES.PROCESSING,
   aliases: ['biquad', 'lowpass', 'low-pass', 'highpass', 'high-pass', 'bandpass', 'notch',
-    'peaking', 'eq', 'cutoff', 'resonance', 'vcf'],
+    'peaking', 'eq', 'cutoff', 'resonance', 'vcf', 'shelf', 'low-shelf', 'high-shelf',
+    'all-pass', 'allpass', 'phase'],
   inputs: [audioIn],
   outputs: [audioOut],
   params: [
@@ -81,19 +82,20 @@ export const filter = defineNode({
   ],
   summary(p) {
     return parts(optionLabel(filter, 'type', p.type), hz(p.frequency),
-      p.type === 'peaking' ? signedDb(p.gain) : `Q ${num(p.Q)}`,
+      usesGain(p.type) ? signedDb(p.gain) : `Q ${num(p.Q)}`,
       p.enabled ? null : 'bypassed');
   },
   capabilities: { realtime: true, offline: true },
   compiler: 'audio/filters.js#createFilterStage',
   reuses: ['audio/filters.js#normalizeFilter'],
   help: {
-    what: 'A biquad filter (low-pass, high-pass, band-pass, notch, peaking) with click-free '
-      + 'bypass.',
+    what: 'A biquad filter (low-pass, high-pass, band-pass, notch, peaking, low-shelf, '
+      + 'high-shelf, all-pass) with click-free bypass.',
     inputs: 'Audio; cutoff, Q and gain accept modulation.',
     outputs: 'Audio.',
-    constraints: 'Q is linear for every type; gain applies to peaking only. Cutoff is limited '
-      + `to ${SAFE_NYQUIST_FACTOR_TEXT} × the digital Nyquist limit.`,
+    constraints: 'Q is linear for every type and ignored by the shelves; gain applies to '
+      + 'peaking and the shelves only. Cutoff is limited to '
+      + `${SAFE_NYQUIST_FACTOR_TEXT} × the digital Nyquist limit.`,
   },
 });
 
@@ -196,4 +198,34 @@ export const mixer = defineNode({
   },
 });
 
-export default [gain, filter, pan, stereoSplit, mixer];
+export const drive = defineNode({
+  type: 'drive',
+  displayName: 'Drive',
+  idPrefix: 'drive',
+  category: CATEGORIES.PROCESSING,
+  aliases: ['distortion', 'overdrive', 'saturation', 'saturator', 'waveshaper', 'shaper',
+    'fuzz', 'tanh'],
+  inputs: [audioIn],
+  outputs: [audioOut],
+  params: [
+    numberParam('drive', 'Drive', { min: 0, max: 1, step: 0.01, default: 0.5 }),
+    levelParam('trim', 'Trim', 0.5, { automatable: true, modulatable: true, modDepth: 0.25 }),
+  ],
+  summary(p) {
+    return parts(`Drive ${pct(p.drive)}`,
+      p.trim > 0 ? `trim ${signedDb(20 * Math.log10(p.trim))}` : 'muted');
+  },
+  capabilities: { realtime: true, offline: true },
+  compiler: 'audio/drive.js#createDriveStage',
+  reuses: ['audio/drive.js#driveCurve'],
+  help: {
+    what: 'Soft saturation: a tanh curve on a wave shaper with 4× oversampling, then a trim.',
+    inputs: 'Audio; trim accepts modulation.',
+    outputs: 'Audio.',
+    constraints: 'Drive 0-100 % adds 0-36 dB in front of the curve, which keeps 1.9 dB of '
+      + 'headroom for the oversampling filter; trim is at most 1, a modulation edge on it adds '
+      + 'to that, and the output ceiling still applies at Master.',
+  },
+});
+
+export default [gain, filter, pan, stereoSplit, mixer, drive];

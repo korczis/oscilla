@@ -1,5 +1,5 @@
-// White and pink noise from a looped AudioBuffer (the Filter Lab input), deterministic for a
-// given seed.
+// White, pink and brown noise from a looped AudioBuffer (the Filter Lab input, the Studio Noise
+// node), deterministic for a given seed.
 //
 // PRNG: mulberry32 (32-bit state, period 2^32), adequate for audio noise and reproducible.
 // White: uniform in [−1, 1) (flat expected power spectrum).
@@ -7,12 +7,18 @@
 // ~10 Hz at 44.1 kHz; the deviation at 48 kHz is of the same order). The filter is run over the
 // buffer twice and only the second pass is kept: its state at sample 0 is then the state after
 // the last sample, so the loop point is seamless (no low-frequency step at the seam).
+// Brown (K011): uniform white through a leaky integrator y[n] = a·y[n−1] + w[n] with
+// a = exp(−2π·BROWN_CORNER_HZ / sampleRate), so the spectrum falls 6 dB per octave above the
+// corner (1/f², within 0.3 dB up to 6 kHz at 44.1 and 48 kHz) and the leak keeps it bounded;
+// a needs the context's sample rate, which is never assumed. Two passes, as for pink.
 // Both colours are scaled to the same RMS (−14 dBFS by default, peak kept below 0.99) so
 // switching colour in the lab does not change the level by itself.
 
 import { applyAdsr, releaseAt, MIN_SEGMENT_S } from './envelope.js';
 
 const DEFAULT_RMS = 0.2;
+/** Brown noise: the leaky integrator's corner, below which its spectrum is flat. */
+export const BROWN_CORNER_HZ = 20;
 const FADE_S = 0.02;
 const FLOOR = 1e-4;
 
@@ -62,6 +68,23 @@ export function fillPink(out, rng) {
   return out;
 }
 
+/** Brown noise into out at sampleRate (leaky integrator over uniform white, seamless). */
+export function fillBrown(out, rng, sampleRate) {
+  if (!(sampleRate > 0)) throw new RangeError('Brown noise needs the sample rate of its context');
+  const n = out.length;
+  const white = new Float32Array(n);
+  fillWhite(white, rng);
+  const a = Math.exp((-2 * Math.PI * BROWN_CORNER_HZ) / sampleRate);
+  let y = 0;
+  for (let pass = 0; pass < 2; pass++) {
+    for (let i = 0; i < n; i++) {
+      y = a * y + white[i];
+      if (pass === 1) out[i] = y;
+    }
+  }
+  return out;
+}
+
 /** Scale in place to the target RMS, then down if the peak would exceed maxPeak. */
 export function normalizeRms(data, rms = DEFAULT_RMS, maxPeak = 0.99) {
   let s = 0;
@@ -79,11 +102,17 @@ export function normalizeRms(data, rms = DEFAULT_RMS, maxPeak = 0.99) {
   return { rms: cur * k, peak: peak * k, scale: k };
 }
 
-/** Noise samples (Float32Array) for color 'white' | 'pink'. */
-export function noiseSamples(length, { color = 'white', seed = 1, rms = DEFAULT_RMS } = {}) {
+/**
+ * Noise samples (Float32Array) for color 'white' | 'pink' | 'brown'; brown needs `sampleRate`
+ * (its leak is set in Hz).
+ */
+export function noiseSamples(length, {
+  color = 'white', seed = 1, rms = DEFAULT_RMS, sampleRate = null,
+} = {}) {
   const out = new Float32Array(length);
   const rng = mulberry32(seed);
   if (color === 'pink') fillPink(out, rng);
+  else if (color === 'brown') fillBrown(out, rng, sampleRate);
   else if (color === 'white') fillWhite(out, rng);
   else throw new RangeError(`Unknown noise colour “${color}”`);
   normalizeRms(out, rms);
@@ -100,7 +129,8 @@ export function createNoiseBuffer(ctx, options = {}) {
   const length = Math.round(seconds * ctx.sampleRate);
   const buffer = ctx.createBuffer(channels, length, ctx.sampleRate);
   for (let ch = 0; ch < channels; ch++) {
-    const data = noiseSamples(length, { ...options, seed: (options.seed || 1) + ch });
+    const data = noiseSamples(length, { ...options, seed: (options.seed || 1) + ch,
+      sampleRate: ctx.sampleRate });
     buffer.copyToChannel(data, ch);
   }
   return buffer;

@@ -35,8 +35,8 @@
 // Sequence or an Oscillator, event clips only as gates on an Envelope, measurement clips always
 // (as data), and a lane plays unless its parameter has no linear AudioParam that Web Audio uses:
 // a Stereo Split pan or level is a pan law over several gains (no single AudioParam), a low-/
-// high-pass Q AudioParam is in dB (a linear lane would be mis-scaled), and a filter's gain is
-// ignored by Web Audio for every type but peaking.
+// high-pass Q AudioParam is in dB (a linear lane would be mis-scaled), a shelf ignores its Q,
+// and a filter's gain is ignored by Web Audio for every type but peaking and the shelves.
 // tests/unit/v4-clip-target-policy.test.mjs proves the store, the UI and the transport give this
 // verdict for every node type, clip kind, action and parameter in the registry.
 
@@ -62,11 +62,16 @@ export function qIsDecibels(type) {
 }
 
 /**
- * Whether Web Audio uses a biquad's gain AudioParam for a filter type (only the shelving and
- * peaking types do; of FILTER_TYPES, peaking), so that driving it changes the sound.
+ * Whether Web Audio uses a biquad's gain AudioParam for a filter type (only the peaking and
+ * shelving types do), so that driving it changes the sound.
  */
 export function gainIsUsed(type) {
-  return type === 'peaking';
+  return type === 'peaking' || type === 'lowshelf' || type === 'highshelf';
+}
+
+/** Whether Web Audio uses a biquad's Q AudioParam for a filter type (the shelves ignore it). */
+export function qIsUsed(type) {
+  return type !== 'lowshelf' && type !== 'highshelf';
 }
 
 /** How a pattern clip plays, by target node type (absent: it does not play). */
@@ -81,8 +86,10 @@ export const CLIP_TARGET_TEXT = Object.freeze({
     + 'not.',
   filterQ: 'Low-/high-pass Q is a dB AudioParam in Web Audio; a linear Q modulation would be '
     + 'mis-scaled, so it is not applied.',
-  filterGain: 'Web Audio uses the gain of a filter only for the peaking type; a gain lane or '
+  filterQUnused: 'Web Audio ignores Q for the low-shelf and high-shelf types; a Q lane or '
     + 'modulation on this type would change nothing, so it is not applied.',
+  filterGain: 'Web Audio uses the gain of a filter only for the peaking and shelving types; a '
+    + 'gain lane or modulation on this type would change nothing, so it is not applied.',
   stereoSplit: (name, label) => `${name} ${label} sets a pan law over several gains; no single `
     + 'AudioParam carries it, so a lane cannot drive it.',
 });
@@ -94,6 +101,7 @@ export const CLIP_TARGET_TEXT = Object.freeze({
 const LANE_LIMITS = Object.freeze({
   filter: (node, p) => {
     if (p.key === 'Q' && qIsDecibels(node.params.type)) return CLIP_TARGET_TEXT.filterQ;
+    if (p.key === 'Q' && !qIsUsed(node.params.type)) return CLIP_TARGET_TEXT.filterQUnused;
     if (p.key === 'gain' && !gainIsUsed(node.params.type)) return CLIP_TARGET_TEXT.filterGain;
     return null;
   },
