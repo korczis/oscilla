@@ -225,8 +225,6 @@
 .osc-menu--grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  top: auto;
-  bottom: calc(100% + 6px);
 }
 
 .osc-menu[hidden] {

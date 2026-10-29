@@ -15,7 +15,7 @@
     "selectors": 1189,
     "domainViewSelectors": 438
   },
-  "debt": 3910,
+  "debt": 3908,
   "surfaces": {
     "pending": [
       "card#osc-exp-compare",
@@ -778,7 +778,6 @@
     "osc-top-right": 1,
     "osc-transport": 2,
     "osc-transport-btn": 5,
-    "osc-transport-btn--record": 1,
     "osc-trigger": 1,
     "osc-unit": 8,
     "osc-unit-suffix": 8,
@@ -892,12 +891,12 @@
       "declarations": 63
     },
     "src/styles/components.css": {
-      "selectors": 137,
-      "declarations": 509
+      "selectors": 136,
+      "declarations": 508
     },
     "src/styles/instrument.css": {
       "selectors": 272,
-      "declarations": 743
+      "declarations": 741
     },
     "src/styles/integration.css": {
       "selectors": 199,
