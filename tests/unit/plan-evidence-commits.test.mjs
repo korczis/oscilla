@@ -18,7 +18,13 @@
 // An entry without `commit:` must say in its result that the commit "was not preserved" and
 // what replaced it. Record evidence at a commit of main, as the chore(plan) pull requests do:
 // evidence recorded on a branch that is then squash-merged passes on its own pull request and
-// fails here on main afterwards.
+// fails here on main afterwards (#238, squash-merged as 508bd3d, turned main red until #246).
+// So on a pull request (GITHUB_BASE_REF set, as in CI's unit job) a second check refuses, before
+// the merge, every evidence commit that is neither reachable from origin/<base> nor in
+// OFF_HISTORY, whatever merge method the pull request will use: remove it and record it in a
+// follow-up chore(plan) pull request from a fresh branch of origin/main, before that branch's
+// first commit, since `plan evidence` records HEAD (offBase below; the commands are in
+// .ai/repo/workflows/plan.md, "Evidence names a commit of main").
 //
 // It needs full history. CI's unit job checks out with fetch-depth: 0, so under GitHub Actions
 // a shallow clone fails the check; elsewhere (a shallow clone, an export without .git) it
@@ -112,6 +118,27 @@ export function evidenceProblems(entries, { isCommit, reachable, offHistory }) {
   return problems;
 }
 
+/**
+ * One problem per evidence entry whose commit the base branch does not have (V272 D4, PR side).
+ * `reachableFromBase(sha)` answers for origin/<base>; `offHistory` is OFF_HISTORY. Entries
+ * without a well-formed commit are evidenceProblems' to judge, not this one's.
+ */
+export function offBase(entries, { reachableFromBase, offHistory, base = 'main' }) {
+  const problems = [];
+  for (const e of entries) {
+    if (!SHA.test(e.commit || '') || /^0+$/.test(e.commit)) continue;
+    if (offHistory.has(e.commit) || reachableFromBase(e.commit)) continue;
+    problems.push(`${e.file} evidence ${e.index}: commit ${e.commit} is not on ${base}, and a`
+      + ' branch commit is lost to every clone once the branch is squashed or deleted, whatever'
+      + ' the merge method. Remove the entry from this pull request; after it lands, record it'
+      + ` in a follow-up chore(plan) pull request: \`majordomus worktree create chore/plan-<id>\`,`
+      + ` then in that worktree, before its first commit (HEAD still on origin/${base}),`
+      + ' `majordomus plan evidence <id> ...` and `majordomus plan done <id>`, commit, push and'
+      + ' open the pull request (.ai/repo/workflows/plan.md, "Evidence names a commit of main")');
+  }
+  return problems;
+}
+
 function git(args, input) {
   try {
     return execFileSync('git', args, {
@@ -153,6 +180,43 @@ test('V272 D4: every plan evidence commit is a commit of this history, or an exp
     });
     assert.deepEqual(problems, []);
   });
+
+test('V272 D4: on a pull request, every plan evidence commit is already on the base branch',
+  (t) => {
+    const baseRef = process.env.GITHUB_BASE_REF;
+    if (!baseRef) return t.skip('not a pull request run (GITHUB_BASE_REF unset)');
+    const shallow = git(['rev-parse', '--is-shallow-repository']);
+    if (shallow === null) return withoutHistory(t, 'no git repository');
+    if (shallow.trim() === 'true') return withoutHistory(t, 'shallow clone');
+    const base = git(['rev-list', `origin/${baseRef}`]);
+    assert.ok(base !== null, `git rev-list origin/${baseRef} ran (the unit job fetches it)`);
+    const onBase = new Set(base.split('\n').filter(Boolean));
+    const problems = offBase(evidenceEntries(planFiles()), {
+      reachableFromBase: (s) => onBase.has(s), offHistory: OFF_HISTORY, base: baseRef,
+    });
+    assert.deepEqual(problems, []);
+  });
+
+test('V272 D4 mutation: a branch-only evidence commit is refused before the merge', () => {
+  const onMain = 'a'.repeat(40);
+  const branchOnly = 'c'.repeat(40);
+  const squashed = 'd'.repeat(40);
+  const entries = [onMain, branchOnly, squashed, 'not-a-sha', undefined]
+    .map((commit, index) => ({ file: 'x.yaml', index, commit, result: 'ok' }));
+  const problems = offBase(entries, {
+    reachableFromBase: (s) => s === onMain, offHistory: new Map([[squashed, 'why']]),
+  });
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /x\.yaml evidence 1: commit c{40} is not on main/);
+  assert.match(problems[0], /follow-up chore\(plan\) pull request/);
+  assert.match(problems[0], /whatever the merge method/);
+  assert.match(problems[0], /before its first commit \(HEAD still on origin\/main\)/);
+  assert.match(problems[0], /majordomus worktree create chore\/plan-<id>/);
+  assert.doesNotMatch(problems[0], /a squash merge would/);
+  assert.deepEqual(offBase(entries.slice(0, 1), {
+    reachableFromBase: () => true, offHistory: new Map(),
+  }), []);
+});
 
 test('V272 D4: every OFF_HISTORY entry is still cited and still outside this history', (t) => {
   const shallow = git(['rev-parse', '--is-shallow-repository']);

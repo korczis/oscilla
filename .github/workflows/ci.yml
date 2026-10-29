@@ -371,8 +371,10 @@ jobs:
     # (scripts/fail-first.mjs, tested by tests/unit/fail-first.test.mjs), unless the PR body
     # carries `fail-first: n/a <reason>`, which the step prints. Title and body are read from
     # the PR as it is now, not from the event, so re-running the job after editing the body is
-    # enough. Any other title passes with nothing to prove. The program that judges is the base
-    # branch's copy (.github/scripts/base-rule.sh), not the one this pull request carries.
+    # enough. A train (head branch train/..., or a `train`/`Merge train` title) is judged by the
+    # member table of its body; any other title passes with nothing to prove. The program that
+    # judges is the base branch's copy (.github/scripts/base-rule.sh), not the one this pull
+    # request carries.
     name: fail-first (feat/fix tests fail without the change)
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -397,7 +399,7 @@ jobs:
         run: |
           if [ -z "$PR" ]; then echo "::error::fail-first: no pull request to judge"; exit 1; fi
           n=0
-          until gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body > "$RUNNER_TEMP/pr.json"; do
+          until gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body,headRefName > "$RUNNER_TEMP/pr.json"; do
             n=$((n + 1)); [ "$n" -lt 3 ] || { echo "::error::could not read PR $PR"; exit 1; }
             sleep 10
           done
