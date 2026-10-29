@@ -846,15 +846,7 @@ export function compileSequence(model, ctx, destination, t0, opts = {}) {
   if (!keepGrid) {
     out.gain.setValueAtTime(1, now); // automated from the start; constant until a stop fades it
   } else {
-    // A late voice: held at the floor until joinAt, then the edge onto its grid. The clock is
-    // read again here, after the timeline and the graph were built, which takes time too.
-    const q = RENDER_QUANTUM / tl.sampleRate;
-    const rendered = Math.max(ctx.currentTime, renderedTimeAtLeast(ctx));
-    joinAt = Math.ceil((rendered + q) / q - 1e-9) * q;
-    voice.joinAt = joinAt;
-    out.gain.setValueAtTime(GAIN_FLOOR, initAt);
-    out.gain.setValueAtTime(GAIN_FLOOR, joinAt);
-    out.gain.linearRampToValueAtTime(1, joinAt + EDGE_S);
+    out.gain.setValueAtTime(GAIN_FLOOR, initAt); // a late voice: silent until it joins (below)
   }
   carrier.connect(amp);
   amp.connect(env);
@@ -902,6 +894,17 @@ export function compileSequence(model, ctx, destination, t0, opts = {}) {
         pending.delete(e.key);
       }
     }
+  }
+  if (keepGrid) {
+    // A late voice joins its grid once everything is scheduled and its sources (started in the
+    // past: they run at once) sound into a floor-held out gain. The clock is read here, after
+    // the timeline, the graph and the schedules were built, which takes time too.
+    const q = RENDER_QUANTUM / tl.sampleRate;
+    const rendered = Math.max(ctx.currentTime, renderedTimeAtLeast(ctx));
+    joinAt = Math.ceil((rendered + q) / q - 1e-9) * q;
+    voice.joinAt = joinAt;
+    out.gain.setValueAtTime(GAIN_FLOOR, joinAt);
+    out.gain.linearRampToValueAtTime(1, joinAt + EDGE_S);
   }
   const lookup = createLookupFromTimeline(tl);
   lookupFreq = (t) => lookup(t);
