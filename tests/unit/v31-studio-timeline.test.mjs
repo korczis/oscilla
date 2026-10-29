@@ -15,8 +15,8 @@ import {
   STOP_RAMP_S, automationValueAt,
 } from '../../src/js/sequencer/compiler.js';
 import {
-  addBlock, createSequence, moveBlock, referenceSequence, serializeSequence, setTempo,
-  updateBlock, DEFAULT_SEED,
+  addBlock, createSequence, moveBlock, referenceSequence, serializeSequence, setDurationUnit,
+  setTempo, updateBlock, DEFAULT_SEED,
 } from '../../src/js/sequencer/model.js';
 import { SCHEDULE_LEAD_S, TOP_UP_EVERY_MS } from '../../src/js/audio/scheduler.js';
 import { LOOKAHEAD_S } from '../../src/js/sequencer/editor.js';
@@ -548,17 +548,22 @@ test('the musical field is validated and imported; mismatched beats are rejected
 
 // ---------------------------------------------------------------- V2 sequence import (§85)
 
+/** Every block in milliseconds: the form of every sequence stored before K002. */
+const inMs = (seq) => seq.blocks.reduce((m, b) => setDurationUnit(m, b.id, 'ms'), seq);
+
 function v2Fixtures() {
   let all = createSequence({ tempoBpm: 96, waveform: 'square', seed: 4242 });
   for (const type of ['tone', 'silence', 'sweep', 'pulse', 'chirp', 'burst', 'siren', 'am', 'fm',
     'random']) all = addBlock(all, type);
   let locked = referenceSequence();
   locked = updateBlock(locked, 'b2', { beats: 1.5 });
+  locked = setDurationUnit(locked, 'b3', 'ms'); // absolute clips beside tempo-linked ones
   locked = updateBlock(locked, 'b4', { beats: 0.75 });
   locked = setTempo(locked, 137);
   return {
     reference: referenceSequence(),
-    allTypes: all,
+    msReference: inMs(referenceSequence()),
+    allTypes: inMs(all),
     tempoLocked: locked,
     looped: { ...referenceSequence(), loop: true, waveform: 'triangle' },
     reordered: moveBlock(moveBlock(referenceSequence(), 0, 4), 1, 3),
@@ -582,7 +587,7 @@ test('V2 sequence import → export reproduces every fixture exactly', () => {
 
 test('imported sequence keeps the V2 timing: clip starts equal the sequencer block starts', () => {
   const fx = v2Fixtures();
-  for (const seq of [fx.reference, fx.allTypes, fx.tempoLocked]) {
+  for (const seq of [fx.reference, fx.msReference, fx.allTypes, fx.tempoLocked]) {
     const imp = importSequence(serializeSequence(seq));
     const tl = buildTimeline(seq, { sampleRate: SR });
     const c = compileTimeline(imp.model, { sampleRate: SR, baseTime: 1 });
@@ -595,8 +600,15 @@ test('imported sequence keeps the V2 timing: clip starts equal the sequencer blo
   }
   const locked = importSequence(serializeSequence(fx.tempoLocked)).model;
   const linked = locked.timeline.clips.filter((c) => c.musical);
-  // K002: every reference block is tempo-locked (1, 1, 1/2, 1, 1 beat); b2 and b4 were re-set.
-  assert.deepEqual(linked.map((c) => c.musical.durationBeats), [1, 1.5, 0.5, 0.75, 1]);
+  // K002: the reference blocks are tempo-locked (1, 1, 1/2, 1, 1 beat); b2 and b4 were re-set
+  // and b3 is absolute again, so only it imports as a clip without a musical span.
+  assert.deepEqual(linked.map((c) => c.musical.durationBeats), [1, 1.5, 0.75, 1]);
+  assert.equal(locked.timeline.clips.length, 5);
+  for (const seq of [fx.msReference, fx.allTypes]) {
+    const clips = importSequence(serializeSequence(seq)).model.timeline.clips;
+    assert.ok(clips.length > 0 && clips.every((c) => !c.musical),
+      'millisecond blocks stay absolute');
+  }
   assert.equal(locked.transport.tempo, 137);
   assert.equal(locked.timeline.loop.enabled, false);
   const looped = importSequence(serializeSequence(fx.looped)).model;
