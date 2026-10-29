@@ -595,7 +595,8 @@ test('imported sequence keeps the V2 timing: clip starts equal the sequencer blo
   }
   const locked = importSequence(serializeSequence(fx.tempoLocked)).model;
   const linked = locked.timeline.clips.filter((c) => c.musical);
-  assert.deepEqual(linked.map((c) => c.musical.durationBeats), [1.5, 0.75]);
+  // K002: every reference block is tempo-locked (1, 1, 1/2, 1, 1 beat); b2 and b4 were re-set.
+  assert.deepEqual(linked.map((c) => c.musical.durationBeats), [1, 1.5, 0.5, 0.75, 1]);
   assert.equal(locked.transport.tempo, 137);
   assert.equal(locked.timeline.loop.enabled, false);
   const looped = importSequence(serializeSequence(fx.looped)).model;
