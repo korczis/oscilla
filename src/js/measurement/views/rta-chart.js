@@ -132,7 +132,11 @@ export function buildRtaView(input = {}) {
     ? bandBinCounts(binHz, bands, Infinity, window || 'hann').underResolved : null;
   const corr = correction && correction.correctedDb && correction.correctedDb.length === n
     ? correction : null;
-  if (corr) badges.splice(1, 0, 'CALIBRATED (frequency)');
+  // T017: badged from the coverage mask, as FFT mode is: a profile covering no band is
+  // UNCALIBRATED (never extrapolated, ADR 0020).
+  const anyCovered = corr && corr.covered
+    ? Array.prototype.some.call(corr.covered, (c) => c === 1) : false;
+  if (anyCovered) badges.splice(1, 0, 'CALIBRATED (frequency)');
   else badges.splice(1, 0, `${UNAVAILABLE.UNCALIBRATED} (frequency)`);
 
   const bars = [];
@@ -184,7 +188,10 @@ export function buildRtaView(input = {}) {
       + `${underResolvedBins(window || 'hann')} FFT `
       + 'bins: their level is dominated by the window, not the band shape (drawn hatched).');
   }
-  if (corr && bars.some((b) => !b.covered))
+  if (corr && !anyCovered) {
+    notes.push('The frequency profile covers none of the bands: every band is uncorrected '
+      + '(no extrapolation).');
+  } else if (corr && bars.some((b) => !b.covered))
     notes.push('Bands outside the frequency profile are uncorrected (no extrapolation).');
   notes.push(`Bars are band power integrated over the FFT bins of each band (${
     RTA_MODE_LABELS[mode]}); never an FFT sample at the centre.`);

@@ -275,8 +275,12 @@ export function buildResponseView(source, options = {}) {
   const f = s.frequencies;
   const n = f.length;
   const raw = s.rawDb;
-  const corr = s.correction;
-  const covered = corr ? maskOn(corr.covered, n) : null;
+  // T017: a profile that covers none of the grid points is no correction (ADR 0020, never
+  // extrapolated): RAW is primary and the view reads UNCALIBRATED; the readout still names
+  // each point as not covered, and a note says why.
+  const covered = s.correction ? maskOn(s.correction.covered, n) : null;
+  const corr = covered && covered.includes(1) ? s.correction : null;
+  const noneCoveredNote = s.correction && !corr ? noCoverageText(f, s) : null;
   const base = corr ? corr.correctedDb : raw;
   const baseKind = corr ? K.CALIBRATED : K.OBSERVED;
   const status = s.quality && s.quality.status ? s.quality.status : null;
@@ -310,7 +314,8 @@ export function buildResponseView(source, options = {}) {
   let smoothed = null;
   if (smoothing && smoothing > 0) {
     smoothed = smoothResponse(f, base, smoothing);
-    smoothed.smoothedDb = smoothWithinRegions(f, base, smoothing, covered, rel.mask);
+    smoothed.smoothedDb = smoothWithinRegions(f, base, smoothing, corr ? covered : null,
+      rel.mask);
   }
   const derived = !!(normalized || smoothed);
   const primaryValues = smoothed ? smoothed.smoothedDb : base;
@@ -430,6 +435,7 @@ export function buildResponseView(source, options = {}) {
   if (normalizationNote) badges.push('NORMALIZATION NOT APPLIED');
   const notes = [];
   if (corr && calibratedRange) notes.push(markers.calibratedRange.label);
+  if (noneCoveredNote) notes.push(noneCoveredNote);
   if (s.correctionNote) notes.push(s.correctionNote);
   if (normalizationNote) notes.push(normalizationNote);
   if (dText) notes.push(`Derived view: ${dText}. RAW is kept and exported unchanged.`);
@@ -526,6 +532,23 @@ function calibratedSpan(f, covered, coverage) {
   const hi = Array.isArray(coverage) ? Math.min(coverage[1], f[f.length - 1])
     : f[covered.lastIndexOf(1)];
   return [lo, hi];
+}
+
+/**
+ * T017: 'Frequency profile "X" (12.0 kHz–16.0 kHz) covers none of the measured range
+ * (100 Hz–10.0 kHz): RAW is shown, uncalibrated (no extrapolation).'
+ */
+function noCoverageText(f, s) {
+  const c = s.correction;
+  const at = (hz) => formatFrequencyWithResolution(hz,
+    gridResolutionHz(f, nearestIndex(f, hz), s.binHz));
+  const cov = Array.isArray(c.coverage) && c.coverage[0] > 0 && c.coverage[1] >= c.coverage[0]
+    ? c.coverage : null;
+  let span = '';
+  if (cov) span = cov[0] === cov[1] ? ` (only ${at(cov[0])})` : ` (${at(cov[0])}–${at(cov[1])})`;
+  return `Frequency profile "${c.name || UNAVAILABLE.UNKNOWN}"${span} covers none of the `
+    + `measured range (${at(f[0])}–${at(f[f.length - 1])}): RAW is shown, uncalibrated `
+    + '(no extrapolation).';
 }
 
 /** "calibrated 20 Hz–15 kHz, uncalibrated above 15 kHz" (spec §158). */
