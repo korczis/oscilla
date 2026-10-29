@@ -16,7 +16,16 @@
 //   onStart?({ t0, duration }),    playback started (status bar)
 //   onEnded?({ stopped }),         playback fully ended (natural end or after a stop fade)
 //   onRecord?(sequenceJson),       the record-style button: hand the sequence to the WAV export
+//   accounting?: { track(node), source(node), untrack(node) }   the engine's node accounting
+//                                  (AudioEngine.stageAccounting()): every node of every pass
+//                                  counts as the engine's while it lives and is removed when the
+//                                  pass ends, or when building it threw part-way
 // }
+//
+// History (K003): every edit of the sequence is one undo step; an edit that leaves the
+// serialized sequence as it was is none. The waveform is not the sequence's own control: it
+// follows the instrument's (main.js mirrors it in), so setWaveform never records a step and
+// undo/redo keep the current waveform instead of restoring an older one.
 //
 // Looping: each pass is compiled as its own voice that starts exactly at the previous pass's
 // end time on the audio clock. A timer only decides *when* to compile the next pass (LOOKAHEAD_S
@@ -29,6 +38,7 @@ import {
   MAX_BLOCKS,
   isNum,
   addBlock,
+  insertBlock,
   deleteBlock,
   duplicateBlock,
   moveBlock,
@@ -56,6 +66,14 @@ import { reorderTarget } from './timeline.js';
 
 export const LOOKAHEAD_S = 1.0; // compile the next loop pass this far ahead of its start
 const MAX_QUEUED_PASSES = 16; // guard for very short looped sequences
+export const HISTORY_LIMIT = 100; // undo steps kept (K003)
+
+const copyOf = (o) => JSON.parse(JSON.stringify(o));
+/** Two models that serialize alike are the same sequence (a no-op edit is no undo step). */
+const sameSequence = (a, b) =>
+  JSON.stringify(serializeSequence(a)) === JSON.stringify(serializeSequence(b));
+/** Space by character (' ', legacy 'Spacebar') or by physical key. */
+const isSpaceKey = (e) => e.key === ' ' || e.key === 'Spacebar' || e.code === 'Space';
 
 function isEditableTarget(el) {
   if (!el) return false;
@@ -84,6 +102,9 @@ export function createSequencerEditor(options = {}) {
     lastEnd: null,
     loopTimer: null,
     self: null,
+    undo: [], // [{ model, selectedId }] before each edit, oldest first (K003)
+    redo: [],
+    clipboard: null, // a copied block (plain data)
   };
   const resolve = (key, getter) => {
     if (!engine) return null;
@@ -135,6 +156,15 @@ export function createSequencerEditor(options = {}) {
     get canAdd() {
       return this.model.blocks.length < MAX_BLOCKS;
     },
+    get canUndo() {
+      return priv.undo.length > 0;
+    },
+    get canRedo() {
+      return priv.redo.length > 0;
+    },
+    get historyDepth() {
+      return priv.undo.length;
+    },
     sampleRate() {
       const ctx = getCtx();
       if (ctx && isNum(ctx.sampleRate)) return ctx.sampleRate;
@@ -168,7 +198,17 @@ export function createSequencerEditor(options = {}) {
     },
 
     // ---------------------------------------------------------------- editing
-    _apply(model, issues = []) {
+    /**
+     * Every edit goes through here: a change of the serialized sequence is one undo step (K003);
+     * history: false applies it without one (the waveform mirrored from the instrument).
+     */
+    _apply(model, issues = [], { history = true } = {}) {
+      if (history && model !== this.model && sameSequence(model, this.model)) model = this.model;
+      if (history && model !== this.model) {
+        priv.undo.push({ model: copyOf(this.model), selectedId: this.selectedId });
+        if (priv.undo.length > HISTORY_LIMIT) priv.undo.shift();
+        priv.redo = [];
+      }
       this.model = model;
       this.warnings = issues;
       if (this.selectedId !== null && indexOfBlock(model, this.selectedId) < 0)
@@ -255,12 +295,57 @@ export function createSequencerEditor(options = {}) {
       this._apply(setLoop(this.model, on));
       if (this.playing && this.model.loop) this._pump();
     },
+    /** The instrument's waveform, mirrored in (main.js): not an edit, so no undo step. */
     setWaveform(w) {
-      this._apply(setWaveform(this.model, w));
+      this._apply(setWaveform(this.model, w), this.warnings, { history: false });
     },
     clear() {
       this._apply(createSequence({ tempoBpm: this.model.tempoBpm }));
       this.selectedId = null;
+    },
+
+    // ---------------------------------------------------------------- history and clipboard
+    _restore(from, to) {
+      if (!from.length) return false;
+      to.push({ model: copyOf(this.model), selectedId: this.selectedId });
+      const s = from.pop();
+      // The waveform follows the instrument: an undo never brings back an older one.
+      this.model = setWaveform(copyOf(s.model), this.model.waveform);
+      this.warnings = [];
+      this.error = '';
+      this.selectedId = selectBlock(this.model, s.selectedId);
+      if (this.playing && this.model.loop) this._pump();
+      return true;
+    },
+    /** Restore the model (and selection) before the last edit. False when there is none. */
+    undo() {
+      return this._restore(priv.undo, priv.redo);
+    },
+    redo() {
+      return this._restore(priv.redo, priv.undo);
+    },
+    /** Copy the selected block to the editor's clipboard. False when nothing is selected. */
+    copySelected() {
+      const b = this.selectedBlock;
+      if (!b) return false;
+      priv.clipboard = copyOf(b);
+      return true;
+    },
+    /** Paste the copied block after the selection (or at the end) and select it. */
+    paste() {
+      if (!priv.clipboard) return null;
+      if (!this.canAdd) {
+        this.error = `The sequence is full (${MAX_BLOCKS} blocks).`;
+        return null;
+      }
+      const i = this.selectedIndex;
+      const index = i >= 0 ? i + 1 : this.model.blocks.length;
+      const sampleRate = this.sampleRate();
+      const model = insertBlock(this.model, priv.clipboard, { index, sampleRate });
+      this.error = '';
+      this._apply(model);
+      this.selectedId = model.blocks[index].id;
+      return this.selectedId;
     },
 
     // ---------------------------------------------------------------- drag and drop
@@ -289,14 +374,29 @@ export function createSequencerEditor(options = {}) {
     // ---------------------------------------------------------------- keyboard
     /**
      * Timeline keyboard model: Arrow keys / Home / End select, Alt+Arrow moves the selected
-     * block, Delete or Backspace removes it, Ctrl/Cmd+D duplicates, Escape cancels a drag.
+     * block, Delete or Backspace removes it, Ctrl/Cmd+D duplicates, Escape cancels a drag;
+     * K003: Space plays or stops the sequence (the focused timeline is a listbox, which keeps
+     * Space from the instrument's Hold to Play, ADR 0050; an auto-repeat is claimed and
+     * ignored), Ctrl/Cmd+Z undoes, Shift+Ctrl/Cmd+Z redoes, Ctrl/Cmd+C copies the selected
+     * block and Ctrl/Cmd+V pastes it after the selection.
      * Returns true (and calls preventDefault) when the key was handled.
      */
     onKeydown(e) {
       if (!e || isEditableTarget(e.target)) return false;
       const k = e.key;
+      const lower = typeof k === 'string' ? k.toLowerCase() : '';
+      const mod = e.ctrlKey || e.metaKey;
       let handled = true;
-      if (e.altKey && (k === 'ArrowLeft' || k === 'ArrowUp')) this.moveSelected(-1);
+      if (isSpaceKey(e)) {
+        if (e.altKey || mod || e.shiftKey) handled = false;
+        else if (!e.repeat) this.togglePlay();
+      } else if (mod && !e.altKey && lower === 'z') {
+        handled = e.shiftKey ? this.redo() : this.undo();
+      } else if (mod && !e.altKey && !e.shiftKey && lower === 'c') handled = this.copySelected();
+      else if (mod && !e.altKey && !e.shiftKey && lower === 'v') {
+        handled = !!priv.clipboard;
+        this.paste();
+      } else if (e.altKey && (k === 'ArrowLeft' || k === 'ArrowUp')) this.moveSelected(-1);
       else if (e.altKey && (k === 'ArrowRight' || k === 'ArrowDown')) this.moveSelected(1);
       else if ((e.ctrlKey || e.metaKey) && (k === 'd' || k === 'D')) this.duplicateSelected();
       else if (e.altKey || e.ctrlKey || e.metaKey) handled = false;
@@ -314,11 +414,44 @@ export function createSequencerEditor(options = {}) {
     // ---------------------------------------------------------------- transport
     _schedulePass(ctx, t0) {
       const self = priv.self;
-      const voice = compileSequence(self.model, ctx, getDest(), t0, {
-        timers,
-        onEnded: (info) => self._voiceEnded(voice, info),
-      });
-      if (voice.ended) return null; // empty sequence
+      const acct = engine && engine.accounting;
+      const owned = new Set(); // what this pass registered with the engine
+      const release = () => {
+        if (acct) for (const n of owned) acct.untrack(n);
+        owned.clear();
+      };
+      const hooks = acct
+        ? {
+            track: (n) => {
+              owned.add(n);
+              acct.track(n);
+              return n;
+            },
+            source: (n) => {
+              owned.add(n);
+              acct.source(n);
+              return n;
+            },
+          }
+        : {};
+      let voice;
+      try {
+        voice = compileSequence(self.model, ctx, getDest(), t0, {
+          timers,
+          ...hooks,
+          onEnded: (info) => {
+            release();
+            self._voiceEnded(voice, info);
+          },
+        });
+      } catch (e) {
+        release(); // a build that threw part-way leaves nothing counted
+        throw e;
+      }
+      if (voice.ended) {
+        release();
+        return null; // empty sequence
+      }
       priv.voices.add(voice);
       priv.passes.push({ voice, t0: voice.t0, end: voice.endTime });
       priv.lastEnd = voice.endTime;
@@ -484,6 +617,8 @@ export function createSequencerEditor(options = {}) {
       const { model, issues } = parseSequence(json, { sampleRate: this.sampleRate() });
       this._apply(model, issues);
       this.selectedId = model.blocks.length ? model.blocks[0].id : null;
+      priv.undo = []; // a loaded sequence starts a new history
+      priv.redo = [];
       return issues;
     },
     dispose() {

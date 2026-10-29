@@ -117,6 +117,8 @@ const adapter = {
     return () => adapterListeners.delete(fn);
   },
   getDestination: () => engine.master,
+  // V2 sequencer playback is counted by the engine (K001, audio-engine-discipline).
+  sequencerAccounting: engine.stageAccounting(),
   getStereoRouter: () => (liveRouter ? liveRouter.router : null),
   // The mic lab's nodes are built and accounted by the engine (audio-engine-discipline).
   attachMicrophone: (stream, opts) => engine.attachMicrophone(stream, opts),

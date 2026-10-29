@@ -1647,6 +1647,70 @@ function defineChecks() {
     return { ok, ...out };
   });
 
+  // K001 and K003 on the composed page, through main.js's wiring rather than the editor alone:
+  // the V2 sequencer plays inside the engine's node accounting (engine.activeNodeCount rises
+  // while it plays, with no instrument voice, and is 0 after STOP); the waveform the Sequencer
+  // follows from the instrument is no undo step and survives an undo; undo and redo of a tempo
+  // change move the Tempo select with the sequence.
+  def('sequencer-engine-census-and-history', async ({ page }) => {
+    await H.stopAll(page);
+    const inMode = (w) => until(() => page.evaluate((x) =>
+      document.querySelector('#osc-app').dataset.mode === x, w),
+    { ms: 8000, what: `the ${w} workspace is shown` });
+    const read = () => page.evaluate(() => {
+      const e = window.OSCILLA.engine;
+      const ed = window.OSCILLA.labs.sequencer.editor;
+      return { playing: ed.playing, seqNodes: ed.stats().activeNodeCount,
+        nodes: e.activeNodeCount, sources: e.activeSourceCount, voice: !!e.voice,
+        tempo: ed.model.tempoBpm, select: document.querySelector('#osc-seq-tempo').value,
+        waveform: ed.model.waveform, appWaveform: window.OSCILLA.app.waveform,
+        depth: ed.historyDepth };
+    });
+    const when = (test, what, ms = 10000) => until(async () => {
+      const v = await read();
+      return test(v) ? v : null;
+    }, { ms, what });
+    const out = {};
+    await H.navTo(page, 'sequencer');
+    await inMode('sequencer');
+    out.idle = await when((v) => !v.playing && v.nodes === 0 && v.sources === 0,
+      'the engine is idle before the sequencer census');
+    // Looped, so the sequence is still sounding whenever the poll first reads it.
+    await page.evaluate(() => window.OSCILLA.labs.sequencer.editor.setLoop(true));
+    await page.click('#osc-seq-play');
+    out.playing = await when((v) => v.playing && v.seqNodes > 0 && !v.voice && v.nodes > 0
+      && v.sources > 0, 'the engine counts the nodes of the playing sequence');
+    await page.click('#osc-seq-stop');
+    out.stopped = await when((v) => !v.playing && v.nodes === 0 && v.sources === 0,
+      'the engine count is 0 after the sequencer STOP');
+    await page.evaluate(() => window.OSCILLA.labs.sequencer.editor.setLoop(false));
+    // The instrument's waveform, mirrored into the Sequencer: no undo step.
+    const w0 = out.stopped.appWaveform;
+    const w1 = w0 === 'square' ? 'triangle' : 'square';
+    const depth0 = (await read()).depth;
+    await page.evaluate((w) => window.OSCILLA.app.setWaveform(w), w1);
+    out.mirrored = await when((v) => v.waveform === w1, 'the Sequencer follows the waveform');
+    await page.selectOption('#osc-seq-tempo', '60');
+    out.tempo60 = await when((v) => v.tempo === 60 && v.select === '60', 'tempo 60 applied');
+    await page.focus('#osc-seq-timeline');
+    await page.keyboard.press('Control+z');
+    out.undone = await when((v) => v.tempo !== 60, 'Ctrl+Z undoes the tempo change');
+    await page.keyboard.press('Shift+Control+z');
+    out.redone = await when((v) => v.tempo === 60, 'Shift+Ctrl+Z redoes the tempo change');
+    await page.keyboard.press('Control+z');
+    out.back = await when((v) => v.tempo !== 60, 'Ctrl+Z undoes the tempo change again');
+    await page.evaluate((w) => window.OSCILLA.app.setWaveform(w), w0);
+    await H.navTo(page, 'playground');
+    await inMode('playground');
+    const tempo0 = out.idle.tempo;
+    const ok = out.idle.nodes === 0 && out.playing.nodes > 0 && out.stopped.nodes === 0
+      && out.stopped.sources === 0 && out.mirrored.depth === depth0
+      && out.undone.tempo === tempo0 && out.undone.select === String(tempo0)
+      && out.undone.waveform === w1 && out.undone.appWaveform === w1
+      && out.redone.select === '60' && out.back.select === String(tempo0);
+    return { ok, ...out };
+  });
+
   // ---- accessibility residuals of the final V1 probe (WCAG 2.4.11, focus loss, overlap)
   def('a11y-alerts-never-cover-focus', async ({ page, browserName, run }) => {
     const res = {};
