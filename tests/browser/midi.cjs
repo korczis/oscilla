@@ -720,7 +720,8 @@ async function seamNotes(browser, b, origin, url) {
       + `oscillator, ${one.rate} Hz context, the forced ${NOTES_RATE})`, !one.timedOut
       && one.rate === NOTES_RATE, JSON.stringify(one));
     check(leg, id, 'velocity 127 peaks under the master level / NOTE_POLYPHONY',
-      one.peak <= one.gain / NOTE_POLYPHONY * 1.05 + 1e-4, `${one.peak} vs ${one.gain}`);
+      one.peak <= one.gain / NOTE_POLYPHONY * 1.05 + 1e-4,
+      `peak ${one.peak} vs ${one.gain / NOTE_POLYPHONY} (${one.gain} / ${NOTE_POLYPHONY})`);
 
     // A chord of more than NOTE_POLYPHONY notes.
     const chord = Array.from({ length: NOTE_POLYPHONY + 4 }, (_, i) => 48 + 2 * i);

@@ -13,6 +13,8 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 import { AudioEngine } from '../../src/js/audio/audio-engine.js';
+import { glideStart } from '../../src/js/audio/clock.js';
+import { RENDER_QUANTUM, START_OFFSET_S } from '../../src/js/core/constants.js';
 import {
   coherentTime, freezeParam, makeAdsrEnvelope, recordEvent, trackParam, v1OpenEnvelope, valueAt,
 } from '../../src/js/audio/voice.js';
@@ -667,6 +669,34 @@ test('limiter feed: constant 0 into the limiter for the context lifetime, gone o
     assert.strictEqual(created.length, 2);
     assert.strictEqual(eng.limiterFeed, created[1]);
     assert.deepStrictEqual(created[1].out, [`node:${eng.limiter.id}`]);
+  });
+
+// V502: Gecko starts a setTargetAtTime at time 0 (a gain whose input is still silent) from the
+// param's default 1, not from its value, so the first sound of a page played up to 12.5 x the
+// level for about 100 ms in Firefox. On a context that has rendered nothing the master glide
+// starts at the end of the first render quantum, before any voice can start.
+test('V502: the master glide on a context that has rendered nothing starts after one quantum',
+  { skip }, () => {
+    for (const sampleRate of [22050, 44100, 48000]) {
+      const { eng, advance } = setup({ sampleRate });
+      assert.ok(eng.init());
+      const q = RENDER_QUANTUM / sampleRate;
+      assert.strictEqual(eng.ctx.currentTime, 0);
+      assert.strictEqual(glideStart(eng.ctx), q);
+      eng.setMasterGain(0.2);
+      assert.deepStrictEqual(eng.master.gain.events, [['target', 0.2, q, 0.02]],
+        `${sampleRate} Hz: the glide starts after the first quantum, never at 0`);
+      assert.ok(q < START_OFFSET_S, `${sampleRate} Hz: a quantum ends before any voice starts`);
+      const info = eng.play(plan({ pattern: 'tone', frequency: 440 }), opt());
+      assert.ok(info && info.ok !== false && eng.voice.t0 > q,
+        `${sampleRate} Hz: the voice starts after the glide does`);
+      // Once the context has rendered, a glide starts at currentTime, as in V1.
+      advance(0.25);
+      assert.strictEqual(glideStart(eng.ctx), 0.25);
+      eng.setMasterGain(0.1);
+      assert.deepStrictEqual(eng.master.gain.events.at(-1), ['target', 0.1, 0.25, 0.02]);
+      eng.stopAll();
+    }
   });
 
 test('limiter feed: none where the context has no ConstantSourceNode', { skip }, () => {

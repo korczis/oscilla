@@ -78,7 +78,7 @@ import {
   MIC_UNAVAILABLE_TEXT, buildMicrophoneGraph, closeMicrophone, hasMicrophoneApi,
   requestMicrophoneStream, stopStreamTracks,
 } from './microphone.js';
-import { forgetClock, observeClock, renderedTimeAtLeast } from './clock.js';
+import { forgetClock, glideStart, observeClock, renderedTimeAtLeast } from './clock.js';
 
 export {
   ESCAPE_RELEASE_S, FAST_RELEASE_S, SCHEDULE_AHEAD_S, SCHEDULE_LEAD_S, TOP_UP_EVERY_MS,
@@ -339,7 +339,7 @@ export class AudioEngine {
       this.master.gain.cancelScheduledValues(now);
     }
     this._masterHeldUntil = null;
-    this.master.gain.setTargetAtTime(this.gainLevel, now, 0.02);
+    this.master.gain.setTargetAtTime(this.gainLevel, glideStart(this.ctx), 0.02); // V502
   }
 
   /**
