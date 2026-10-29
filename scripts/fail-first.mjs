@@ -31,6 +31,7 @@ import { appendFileSync, existsSync, mkdtempSync, readFileSync, realpathSync, rm
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { commitOf } from './git-ref.mjs';
 
 // Any case, any spacing, and behind bracketed tags ("[WIP] Fix (x) : ..."): a title that reads
 // as feat or fix is one, whatever a stricter parser downstream makes of it.
@@ -39,12 +40,64 @@ export const WAIVER = /^[ \t]*(?:[*-][ \t]+)?fail-first:[ \t]*n\/a\b[ \t]*(.*)$/
 const TEST_FILE = /^tests\/unit\/.+\.test\.mjs$/;
 const FILE_TIMEOUT_MS = 180_000;
 
-/** The body without what quotes rather than says: fenced code, HTML comments, blockquotes. */
+// A line that starts a list item, a heading, a fence or a quote: it ends a paragraph, so it is
+// no lazy continuation of a blockquote before it.
+const INTERRUPTS = new RegExp(String.raw`^ {0,3}(?:[*+-](?:[ \t]|$)|\d{1,9}[.)](?:[ \t]|$)`
+  + String.raw`|#{1,6}(?:[ \t]|$)|${'`'}{3}|~{3}|>)`);
+// a fence and its block, to its closing fence or the end of the body
+const FENCE = new RegExp(String.raw`^ {0,3}(${'`'}{3,}(?=[^${'`'}\n]*$)|~{3,})[^\n]*(?:\n|$)`
+  + String.raw`[\s\S]*?(?:^ {0,3}\1[${'`'}~]*[ \t]*$|(?![\s\S]))`, 'gm');
+const LIST_ITEM = /^ {0,3}(?:[*+-]|\d{1,9}[.)])(?:[ \t]|$)/;
+
+/** The columns of a line's indentation, a tab reaching the next multiple of 4. */
+function indentOf(line) {
+  let n = 0;
+  for (const c of /^[ \t]*/.exec(line)[0]) n = c === '\t' ? n + 4 - (n % 4) : n + 1;
+  return n;
+}
+
+/**
+ * The body without what GitHub renders as code or a quote rather than as prose: fenced code
+ * (a backtick fence whose info string holds no backtick, indented at most 3 spaces), inline
+ * code spans, HTML comments, blockquotes with their lazy continuation lines, and indented code
+ * blocks (4 columns, after a blank line, outside a list). What is left is what a reader sees
+ * as the author's own text (review of #255, R5).
+ */
 export function proseOf(body) {
-  return String(body || '').replace(/\r\n?/g, '\n')
-    .replace(/^[ \t]*(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:^[ \t]*\1[`~]*[ \t]*$|(?![\s\S]))/gm, '\n')
-    .replace(/<!--[\s\S]*?(?:-->|(?![\s\S]))/g, '')
-    .replace(/^[ \t]*>.*$/gm, '');
+  const text = String(body || '').replace(/\r\n?/g, '\n')
+    .replace(FENCE, '\n')
+    .replace(/(`+)(?!`)[^\n]*?[^`\n]\1(?!`)/g, 'code')
+    .replace(/<!--[\s\S]*?(?:-->|(?![\s\S]))/g, '');
+  const out = [];
+  let quote = false;
+  let code = false;
+  let list = false;
+  let blank = true;
+  for (const line of text.split('\n')) {
+    const empty = /^[ \t]*$/.test(line);
+    const indent = indentOf(line);
+    let drop = false;
+    if (empty) {
+      quote = false;
+    } else if (indent < 4 && /^ {0,3}>/.test(line)) {
+      quote = true;
+      drop = true;
+    } else if (quote && !INTERRUPTS.test(line)) {
+      drop = true;
+    } else if (indent >= 4 && (code || (blank && !list))) {
+      code = true;
+      drop = true;
+    } else {
+      quote = false;
+      code = false;
+      if (LIST_ITEM.test(line)) list = true;
+      else if (blank && indent < 2) list = false;
+    }
+    if (!empty && indent < 4) code = false;
+    out.push(drop ? '' : line);
+    blank = empty;
+  }
+  return out.join('\n');
 }
 
 /**
@@ -138,8 +191,8 @@ export function failFirst({ repo, title, body, head = 'HEAD', base, baseBranch =
   }
 
   const headSha = git(repo, ['rev-parse', '--verify', `${head}^{commit}`]);
-  const baseSha = base ? git(repo, ['rev-parse', '--verify', `${base}^{commit}`])
-    : git(repo, ['merge-base', baseBranch, headSha]);
+  const baseSha = base ? commitOf(repo, base)
+    : git(repo, ['merge-base', commitOf(repo, baseBranch), headSha]);
   say(`fail-first: head ${headSha.slice(0, 12)}, merge base ${baseSha.slice(0, 12)}`);
   // -z: a name with non-ASCII characters is itself, not a quoted, escaped form
   const files = git(repo, ['diff', '--name-only', '-z', '--no-renames', '--diff-filter=AM',

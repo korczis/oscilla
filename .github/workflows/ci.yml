@@ -372,7 +372,9 @@ jobs:
     # carries `fail-first: n/a <reason>`, which the step prints. Title and body are read from
     # the PR as it is now, not from the event, so re-running the job after editing the body is
     # enough. Any other title passes with nothing to prove. The program that judges is the base
-    # branch's copy (.github/scripts/base-rule.sh), not the one this pull request carries.
+    # branch's copy (.github/scripts/base-rule.sh), not the one this pull request carries; the
+    # base is named by its full ref, refs/remotes/origin/<base>, since a tag named
+    # origin/<base> (the full history fetches tags) would otherwise answer for it (#255, R2).
     name: fail-first (feat/fix tests fail without the change)
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -401,9 +403,9 @@ jobs:
             n=$((n + 1)); [ "$n" -lt 3 ] || { echo "::error::could not read PR $PR"; exit 1; }
             sleep 10
           done
-          .github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF" scripts/fail-first.mjs \
-            --pr-json "$RUNNER_TEMP/pr.json" --head "$HEAD_SHA" \
-            --base-branch "origin/$GITHUB_BASE_REF"
+          .github/scripts/base-rule.sh "refs/remotes/origin/$GITHUB_BASE_REF" \
+            scripts/fail-first.mjs --pr-json "$RUNNER_TEMP/pr.json" --head "$HEAD_SHA" \
+            --base-branch "refs/remotes/origin/$GITHUB_BASE_REF"
 
   review-verdict:
     # project.review-verdict: a PR that changes a guarded path (the audio, analysis, experiments
@@ -435,8 +437,9 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
         run: |
           if [ -z "$PR" ]; then echo "::error::review-verdict: no pull request to judge"; exit 1; fi
-          .github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF" scripts/review-verdict.mjs \
-            --pr "$PR" --head HEAD --base-branch "origin/$GITHUB_BASE_REF"
+          .github/scripts/base-rule.sh "refs/remotes/origin/$GITHUB_BASE_REF" \
+            scripts/review-verdict.mjs --pr "$PR" --head HEAD \
+            --base-branch "refs/remotes/origin/$GITHUB_BASE_REF"
 
   gate:
     name: gate

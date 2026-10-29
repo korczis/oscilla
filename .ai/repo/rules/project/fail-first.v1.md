@@ -64,7 +64,9 @@ The `fail-first` job of `.github/workflows/ci.yml` runs it on every pull request
 title and body read from the pull request at run time, and `gate` needs the job
 (`tests/unit/ci-workflows.test.mjs` fails if `gate` stops needing it). The job runs it
 through `.github/scripts/base-rule.sh`, which extracts `scripts/` of the base branch outside
-the checkout and runs that copy on the pull request, printing the commit it came from; the
+the checkout and runs that copy on the pull request, printing the commit it came from, with
+the base named by its full ref `refs/remotes/origin/<base>`, which no tag can shadow (review
+of #255, R2; see `project.review-verdict`); the
 same test fails if the last command of the job's last step is anything but that call with
 its exact arguments (`--title` in place of `--pr-json`, `|| true`, an `if:`), if the step
 passes when there is no pull request, or if `ci.yml` can be started by anything but a pull

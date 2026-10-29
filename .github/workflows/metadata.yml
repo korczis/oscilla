@@ -49,7 +49,9 @@ jobs:
         with:
           node-version: 22
       # Title, body and branch are read from the pull request as it is now (3 tries, 10 s
-      # apart), not from the event, so a re-run after an edit judges the edit.
+      # apart), not from the event, so a re-run after an edit judges the edit. The base is named
+      # by its full ref, refs/remotes/origin/<base>: a tag named origin/<base>, which the full
+      # history fetches, would otherwise answer for it (review of #255, R2).
       - name: The pull request names its plan record (the base branch's program judges)
         timeout-minutes: 2
         env:
@@ -63,6 +65,6 @@ jobs:
             n=$((n + 1)); [ "$n" -lt 3 ] || { echo "::error::could not read PR $PR"; exit 1; }
             sleep 10
           done
-          .github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF" scripts/pr-metadata.mjs \
-            --pr-json "$RUNNER_TEMP/pr.json" --head HEAD --base "origin/$GITHUB_BASE_REF" \
-            --check --summary "$GITHUB_STEP_SUMMARY"
+          .github/scripts/base-rule.sh "refs/remotes/origin/$GITHUB_BASE_REF" \
+            scripts/pr-metadata.mjs --pr-json "$RUNNER_TEMP/pr.json" --head HEAD \
+            --base "refs/remotes/origin/$GITHUB_BASE_REF" --check --summary "$GITHUB_STEP_SUMMARY"

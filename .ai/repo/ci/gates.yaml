@@ -149,13 +149,13 @@ gates:
   - id: fail-first
     job: fail-first
     always: true
-    runs: .github/scripts/base-rule.sh origin/<base> scripts/fail-first.mjs --pr-json <pr.json> --head <head> --base-branch origin/<base>
+    runs: .github/scripts/base-rule.sh refs/remotes/origin/<base> scripts/fail-first.mjs --pr-json <pr.json> --head <head> --base-branch refs/remotes/origin/<base>
     summary: a feat or fix pull request's added or changed unit tests fail on the merge base and pass on the head, or its body says fail-first n/a with a reason (project.fail-first)
 
   - id: review-verdict
     job: review-verdict
     always: true
-    runs: .github/scripts/base-rule.sh origin/<base> scripts/review-verdict.mjs --pr <pr> --head HEAD --base-branch origin/<base>
+    runs: .github/scripts/base-rule.sh refs/remotes/origin/<base> scripts/review-verdict.mjs --pr <pr> --head HEAD --base-branch refs/remotes/origin/<base>
     summary: a pull request that changes a guarded path carries a reviewer's verdict for the content it changes (project.review-verdict)
 
   - id: gate

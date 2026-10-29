@@ -43,6 +43,7 @@ import { appendFileSync, existsSync, readFileSync, realpathSync } from 'node:fs'
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TITLE as FAIL_FIRST_TITLE, proseOf, waiver } from './fail-first.mjs';
+import { commitOf } from './git-ref.mjs';
 import { commitLevel, parseCommit } from './release-analyze.mjs';
 import { REVIEWS_DIR, reviewedContent, verdictProblems } from './review-verdict.mjs';
 import { parseYaml } from './yaml-subset.mjs';
@@ -232,11 +233,34 @@ export function recordsAt(repo, revs) {
   return recordsOf(paths);
 }
 
-/** The commits between the merge base and the head: [{ sha, message }]. */
-function commitsOf(repo, mergeBase, head) {
-  return git(repo, ['log', '--format=%H%x00%B%x1e', `${mergeBase}..${head}`]).split('\x1e')
-    .map((s) => s.replace(/^\n+/, '')).filter((s) => s.includes('\0'))
-    .map((s) => ({ sha: s.slice(0, s.indexOf('\0')), message: s.slice(s.indexOf('\0') + 1) }));
+/**
+ * The commits between the merge base and the head: [{ sha, message }]. Each message is read
+ * whole from its commit object by its byte size (git cat-file --batch), so no byte a message
+ * may carry (a record separator, a NUL) can end it early or hide the rest of it.
+ */
+export function commitsOf(repo, mergeBase, head) {
+  const shas = git(repo, ['rev-list', `${mergeBase}..${head}`]).split('\n').filter(Boolean);
+  if (!shas.length) return [];
+  const r = spawnSync('git', ['-C', repo, 'cat-file', '--batch'],
+    { input: `${shas.join('\n')}\n`, maxBuffer: 1 << 28 });
+  if (r.status !== 0) {
+    throw new Error(`git cat-file --batch: ${String(r.stderr || '').trim() || `exit ${r.status}`}`);
+  }
+  const out = r.stdout;
+  const commits = [];
+  let at = 0;
+  for (const sha of shas) {
+    const eol = out.indexOf(0x0a, at);
+    const header = out.subarray(at, eol).toString('utf8').split(' ');
+    if (header[0] !== sha || header[1] !== 'commit') {
+      throw new Error(`git cat-file --batch: ${header.join(' ')} where commit ${sha} was asked`);
+    }
+    const object = out.subarray(eol + 1, eol + 1 + Number(header[2]));
+    at = eol + 1 + Number(header[2]) + 1;
+    const blank = object.indexOf('\n\n');
+    commits.push({ sha, message: blank < 0 ? '' : object.subarray(blank + 2).toString('utf8') });
+  }
+  return commits;
 }
 
 /** The head's package.json version, or '' when it has none (then no release is exempt). */
@@ -280,7 +304,7 @@ function verdictState(repo, head, pr, guarded, content) {
  */
 export function inspect({ repo, pr, base = 'origin/main', head = 'HEAD' }) {
   const headSha = git(repo, ['rev-parse', '--verify', `${head}^{commit}`]).trim();
-  const baseSha = git(repo, ['rev-parse', '--verify', `${base}^{commit}`]).trim();
+  const baseSha = commitOf(repo, base);
   const mergeBase = git(repo, ['merge-base', baseSha, headSha]).trim();
   const records = recordsAt(repo, [headSha, baseSha]);
   const onBase = recordsAt(repo, [baseSha]).ids;
@@ -384,6 +408,14 @@ export function summary(facts, slug) {
   return `${out.join('\n')}\n`;
 }
 
+/**
+ * A line of the judge's step that can end it green without the call deciding: an `exit` that
+ * is not `exit <nonzero number>` (a bare `exit` passes the last status on, 0 after an `if`),
+ * `set +e` or `set +o errexit`, `|| true`, `|| :`.
+ */
+export const FORCED_SUCCESS = new RegExp(String.raw`(?<![\w-])exit(?![\w-])(?![ \t]+[1-9]\d*\b)`
+  + String.raw`|\bset[ \t]+\+(?:e\b|o[ \t]+errexit\b)|\|\|[ \t]*(?:true|:)(?![\w-])`);
+
 /** The read-only judge job, as .ai/repo/ci/pr-meta.yaml declares it. */
 function judgeModel(modelText) {
   const doc = parseYaml(modelText);
@@ -447,9 +479,7 @@ export function workflowModelProblems(workflowText, modelText) {
   if (!run.some((l) => /^if \[ -z "\$PR" \]; then .*exit 1; fi$/.test(l))) {
     out.push('it does not fail when there is no pull request');
   }
-  if (run.some((l) => /\bexit 0\b|\bset \+e\b|\|\|\s*true\b/.test(l))) {
-    out.push('an early or forced success');
-  }
+  if (run.some((l) => FORCED_SUCCESS.test(l))) out.push('an early or forced success');
   return out;
 }
 

@@ -16,8 +16,8 @@ import { gitRepo } from './fixtures/git-repo.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const WRAPPER = path.join(ROOT, '.github', 'scripts', 'base-rule.sh');
 const PROGRAMS = ['scripts/review-verdict.mjs', 'scripts/fail-first.mjs',
-  'scripts/yaml-subset.mjs', 'scripts/pr-metadata.mjs', 'scripts/release-analyze.mjs',
-  'scripts/release-metadata.mjs'];
+  'scripts/git-ref.mjs', 'scripts/yaml-subset.mjs', 'scripts/pr-metadata.mjs',
+  'scripts/release-analyze.mjs', 'scripts/release-metadata.mjs'];
 const real = (rel) => readFileSync(path.join(ROOT, rel), 'utf8');
 
 const ENV = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' };

@@ -85,7 +85,8 @@ the codes, the facts command and the repository settings of decision C1.
 branch read from GitHub at run time (three tries, ten seconds apart), and only the
 `contents: read` and `pull-requests: read` permissions. The program is the base branch's,
 through `.github/scripts/base-rule.sh`, which admits it beside the fail-first and
-review-verdict programs. The job is bounded (5 minutes, every step its own), installs nothing,
+review-verdict programs; the base is named by its full ref, `refs/remotes/origin/<base>`, which
+no tag can shadow (review of #255, R2; see `project.review-verdict`). The job is bounded (5 minutes, every step its own), installs nothing,
 and is not part of `gate`.
 
 `tests/unit/pr-metadata.test.mjs` runs the program on fixture repositories: a clean pull

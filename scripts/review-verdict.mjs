@@ -39,6 +39,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { commitOf } from './git-ref.mjs';
 import { parseYaml as parse } from './yaml-subset.mjs';
 
 export const REVIEWS_DIR = '.ai/repo/reviews';
@@ -53,8 +54,9 @@ export const SCHEMA = 'review-verdict/v1';
  * (the build and pack scripts, the deploy stamp and its verifiers, the release scripts and
  * the release rules' tests); the third is what enforces the process rules
  * (project.ci-bounded, project.fail-first, project.review-verdict, project.pr-names-its-plan):
- * the workflows and everything else under .github/, the four programs with their parser, their
- * tests and the model the fourth's workflow is held to (.ai/repo/ci/pr-meta.yaml).
+ * the workflows and everything else under .github/, the four programs with their parser and
+ * their base-ref resolver (git-ref.mjs), their tests and the model the fourth's workflow is
+ * held to (.ai/repo/ci/pr-meta.yaml).
  */
 export const GUARDED = [
   'src/js/audio/*',
@@ -84,6 +86,7 @@ export const GUARDED = [
   'scripts/fail-first.mjs',
   'scripts/ci-workflow-rules.mjs',
   'scripts/yaml-subset.mjs',
+  'scripts/git-ref.mjs',
   'scripts/pr-metadata.mjs',
   '.ai/repo/ci/pr-meta.yaml',
   'tests/unit/review-verdict.test.mjs',
@@ -93,6 +96,7 @@ export const GUARDED = [
   'tests/unit/yaml-subset.test.mjs',
   'tests/unit/base-rule.test.mjs',
   'tests/unit/pr-metadata.test.mjs',
+  'tests/unit/git-ref.test.mjs',
   'tests/unit/fixtures/git-repo.mjs',
 ];
 
@@ -194,8 +198,8 @@ export function reviewVerdict({ repo, pr, head = 'HEAD', base, baseBranch = 'ori
   const lines = [];
   const say = (s) => lines.push(s);
   const headSha = git(repo, ['rev-parse', '--verify', `${head}^{commit}`]);
-  const baseSha = base ? git(repo, ['rev-parse', '--verify', `${base}^{commit}`])
-    : git(repo, ['merge-base', baseBranch, headSha]);
+  const baseSha = base ? commitOf(repo, base)
+    : git(repo, ['merge-base', commitOf(repo, baseBranch), headSha]);
   say(`review-verdict: PR ${pr}, head ${headSha.slice(0, 12)}, merge base ${baseSha.slice(0, 12)}`);
   const changed = changedPaths(repo, baseSha, headSha).map((c) => c.path);
   const guarded = changed.filter(isGuarded);
@@ -271,8 +275,9 @@ if (isMain) {
   try {
     if (contentOnly) {
       const head = git(opts.repo, ['rev-parse', '--verify', `${opts.head || 'HEAD'}^{commit}`]);
-      const base = opts.base ? git(opts.repo, ['rev-parse', '--verify', `${opts.base}^{commit}`])
-        : git(opts.repo, ['merge-base', opts.baseBranch || 'origin/main', head]);
+      const base = opts.base ? commitOf(opts.repo, opts.base)
+        : git(opts.repo, ['merge-base', commitOf(opts.repo, opts.baseBranch || 'origin/main'),
+          head]);
       const { content, paths } = reviewedContent(opts.repo, base, head);
       console.log(content);
       if (list) for (const p of paths) console.log(`  ${p}`);

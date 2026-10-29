@@ -225,6 +225,12 @@ test('a waiver is a line of the body\'s own prose, its reason not the placeholde
     'a blockquote': '> fail-first: n/a docs-only\n',
     'an HTML comment': '<!--\nfail-first: n/a docs-only\n-->\n',
     'the middle of a sentence': 'We could say fail-first: n/a docs-only here.\n',
+    // what GitHub renders as code or a quote (review of #255, R5)
+    'an indented code block': 'Output:\n\n    fail-first: n/a docs-only\n',
+    'a tab-indented code block': '\tfail-first: n/a docs-only\n',
+    'a blockquote\'s lazy continuation': '> Quoted\nfail-first: n/a docs-only\n',
+    'a code span': '`fail-first: n/a docs-only`\n',
+    'a fence indented 3 spaces': '   ```\nfail-first: n/a docs-only\n   ```\n',
   };
   for (const [what, body] of Object.entries(refused)) {
     const r = run(repo, title, body);
@@ -236,6 +242,12 @@ test('a waiver is a line of the body\'s own prose, its reason not the placeholde
     '- fail-first: n/a only a browser suite can observe it\n',
     '```\nnpm test\n```\n\nFail-First: N/A docs-only\n',
     '* fail-first: n/a <css only> no unit test reaches the stylesheet\r\n',
+    // what GitHub renders as prose (R5): no comment opens in a code span, no fence on a line
+    // that closes its own backticks, a list item ends a quote, a list item's own paragraph
+    'Write `<!--` to hide.\nfail-first: n/a docs-only\n',
+    '```js x``` is inline.\nfail-first: n/a docs-only\n',
+    '> Quoted\n- fail-first: n/a docs-only\n',
+    '- Tidy.\n\n    fail-first: n/a docs-only\n',
   ];
   for (const body of accepted) {
     const r = run(repo, title, body);

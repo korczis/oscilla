@@ -38,6 +38,7 @@ function mutate(text, from, to) {
 }
 const rules = (violations) => violations.map((v) => `${v.rule}@${v.job ?? '-'}`);
 const ci = (text) => checkWorkflow('.github/workflows/ci.yml', text, SUITES);
+const BASE = '"refs/remotes/origin/$GITHUB_BASE_REF"';
 
 /** ci.yml with one more step at the head of the `unit` job (bounded unless `timeout` is 0). */
 function withStep(run, { timeout = 3, extra = '' } = {}) {
@@ -359,6 +360,14 @@ test('mutation: ci.yml started by anything but a pull request', () => {
   assert.deepEqual(rules(ci(push)), ['triggers@-']);
   // pages.yml has no gate: it deploys main and may be started by hand
   assert.deepEqual(checkWorkflow('pages.yml', PAGES, SUITES), []);
+  // the gate alone holds a workflow to pull_request, without any base-rule.sh step in it
+  // (review of #255, R6: ci.yml runs base-rule.sh too, so it alone could not tell)
+  const noRule = CI.replaceAll('.github/scripts/base-rule.sh', '.github/scripts/other.sh');
+  assert.notEqual(noRule, CI);
+  assert.deepEqual(rules(ci(noRule)), []);
+  const gateOnly = mutate(noRule, '\non:\n  pull_request:\n', '\non:\n  push:\n');
+  assert.deepEqual(rules(ci(gateOnly)), ['triggers@-']);
+  assert.match(ci(gateOnly)[0].message, /a workflow with a gate job is started by pull_request/);
 });
 
 test('mutation: metadata.yml started by a push, or its job unbounded (R022)', () => {
@@ -422,12 +431,11 @@ test('E022: the size step reports a pull request over the budget, bounded and ne
 test('the pull-request rules are judged by the base branch\'s programs, and need a PR', () => {
   const jobs = parse(CI).jobs;
   for (const [job, call] of [
-    ['fail-first', '.github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF" scripts/fail-first.mjs'
-      + ' --pr-json "$RUNNER_TEMP/pr.json" --head "$HEAD_SHA"'
-      + ' --base-branch "origin/$GITHUB_BASE_REF"'],
-    ['review-verdict', '.github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF"'
-      + ' scripts/review-verdict.mjs --pr "$PR" --head HEAD'
-      + ' --base-branch "origin/$GITHUB_BASE_REF"'],
+    // the base by its full ref, never the short origin/<base> a tag can shadow (#255, R2)
+    ['fail-first', `.github/scripts/base-rule.sh ${BASE} scripts/fail-first.mjs`
+      + ` --pr-json "$RUNNER_TEMP/pr.json" --head "$HEAD_SHA" --base-branch ${BASE}`],
+    ['review-verdict', `.github/scripts/base-rule.sh ${BASE} scripts/review-verdict.mjs`
+      + ` --pr "$PR" --head HEAD --base-branch ${BASE}`],
   ]) {
     assert.deepEqual(problemsOfRuleJob(jobs[job], call), [], job);
   }
@@ -458,18 +466,20 @@ test('mutation: a rule job whose call can no longer refuse', () => {
   const call = logicalLines(real.steps.at(-1).run).at(-1).replace(/\s+/g, ' ');
   assert.deepEqual(problemsOfRuleJob(real, call), []);
   const edited = (from, to) => parse(mutate(CI, from, to)).jobs['review-verdict'];
-  const tail = '--pr "$PR" --head HEAD --base-branch "origin/$GITHUB_BASE_REF"\n';
+  const tail = `scripts/review-verdict.mjs --pr "$PR" --head HEAD \\\n`
+    + `            --base-branch ${BASE}\n`;
+  const wrapper = `          .github/scripts/base-rule.sh ${BASE} \\\n            scripts/review`;
   for (const [name, job] of [
     ['|| true', edited(tail, `${tail.trimEnd()} || true\n`)],
-    ['judges the base against itself', edited('--head HEAD --base-branch',
-      '--head "origin/$GITHUB_BASE_REF" --base-branch')],
-    ['another base', edited(tail, tail.replace('--base-branch "origin/$GITHUB_BASE_REF"',
-      '--base HEAD'))],
+    ['judges the base against itself', edited('--pr "$PR" --head HEAD',
+      `--pr "$PR" --head ${BASE}`)],
+    ['another base', edited(tail, tail.replace(`--base-branch ${BASE}`, '--base HEAD'))],
+    ['the short base a tag can shadow', edited(tail, tail.replace(`--base-branch ${BASE}`,
+      '--base-branch "origin/$GITHUB_BASE_REF"'))],
+    ['the wrapper given the short base', edited(wrapper,
+      wrapper.replace(BASE, '"origin/$GITHUB_BASE_REF"'))],
     ['a command after it', edited(tail, `${tail}          echo done\n`)],
-    ['wrapped in if', edited('          .github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF"'
-      + ' scripts/review-verdict.mjs', '          if true; then exit 0; fi\n'
-      + '          .github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF"'
-      + ' scripts/review-verdict.mjs')],
+    ['wrapped in if', edited(wrapper, `          if true; then exit 0; fi\n${wrapper}`)],
     ['conditional job', edited('    name: review-verdict (guarded paths need a recorded review)\n',
       '    name: review-verdict (guarded paths need a recorded review)\n'
       + '    if: github.actor != \'x\'\n')],
@@ -477,8 +487,7 @@ test('mutation: a rule job whose call can no longer refuse', () => {
       '      - name: A guarded change carries a verdict for the content it changes\n',
       '      - name: A guarded change carries a verdict for the content it changes\n'
       + '        if: false\n')],
-    ['own copy', edited('.github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF" scripts/review',
-      'node scripts/review')],
+    ['own copy', edited(wrapper, '          node scripts/review')],
   ]) {
     assert.notDeepEqual(problemsOfRuleJob(job, call), [], name);
   }

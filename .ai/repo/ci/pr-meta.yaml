@@ -38,10 +38,11 @@ judge:
     contents: read
     pull-requests: read
   # the last command of the job's last step, exactly
+  # (the base by its full ref: a tag named origin/<base> would otherwise answer for it)
   call: >-
-    .github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF" scripts/pr-metadata.mjs
-    --pr-json "$RUNNER_TEMP/pr.json" --head HEAD --base "origin/$GITHUB_BASE_REF"
-    --check --summary "$GITHUB_STEP_SUMMARY"
+    .github/scripts/base-rule.sh "refs/remotes/origin/$GITHUB_BASE_REF"
+    scripts/pr-metadata.mjs --pr-json "$RUNNER_TEMP/pr.json" --head HEAD
+    --base "refs/remotes/origin/$GITHUB_BASE_REF" --check --summary "$GITHUB_STEP_SUMMARY"
   # Branch protection lists `metadata` beside `gate` only after this job has run green on three
   # or more pull requests (owner decision C2); until then the job reports and does not block.
   required: false

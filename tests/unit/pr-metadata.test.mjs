@@ -16,7 +16,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseYaml } from '../../scripts/yaml-subset.mjs';
 import {
   CLOSING, CODES, PLAN_WAIVER, RECORD_DIRS, ROLES, SCHEMA, TYPES, VERDICT_STATES, candidates,
-  inspect, judge, planWaiver, recordsOf, roleOf, summary, workflowModelProblems,
+  FORCED_SUCCESS, inspect, judge, planWaiver, recordsOf, roleOf, summary, workflowModelProblems,
 } from '../../scripts/pr-metadata.mjs';
 import { waiver } from '../../scripts/fail-first.mjs';
 import { SCHEMA as VERDICT_SCHEMA } from '../../scripts/review-verdict.mjs';
@@ -96,7 +96,9 @@ test('the clean pull request passes; each fixture fails with exactly its code', 
 
 test('title-grammar: an undeclared type, a capitalised type, a missing description', (t) => {
   const repo = fixture(t);
+  // (fEAT and feaT start with lower case: only the comparison with the parsed type sees them)
   for (const title of ['feature(studio): V603 pinch zoom', 'Feat(studio): V603 pinch zoom',
+    'fEAT(studio): V603 pinch zoom', 'feaT(studio): V603 pinch zoom', 'FIX: V603 pinch zoom',
     'feat(studio):V603', 'Merge train 2026-10-18: #187-#191 V603']) {
     assert.deepEqual(run(t, repo, { ...CLEAN, title }).codes, ['title-grammar'], title);
   }
@@ -117,8 +119,19 @@ test('the waiver: a reason passes; quoted, placeholder or empty, it is not one',
   assert.match(waived.out, /waived: plan: n\/a docs-only tidy/);
   assert.deepEqual(run(t, repo, { ...missing, body: '- plan: n/a a list item\n' }).codes, []);
   for (const body of ['```\nplan: n/a quoted\n```\n', '> plan: n/a quoted\n',
-    '<!-- plan: n/a quoted -->\n', 'This says plan: n/a mid-sentence.\n']) {
+    '<!-- plan: n/a quoted -->\n', 'This says plan: n/a mid-sentence.\n',
+    // what GitHub renders as code or a quote (review of #255, R5): an indented code block,
+    // a tab-indented one, a blockquote's lazy continuation line, an inline code span
+    'Output:\n\n    plan: n/a indented code\n', '\tplan: n/a tab-indented code\n',
+    '> A quote\nplan: n/a its lazy continuation\n', '`plan: n/a in a code span`\n']) {
     assert.deepEqual(run(t, repo, { ...missing, body }).codes, ['plan-id-missing'], body);
+  }
+  // what GitHub renders as prose: after an inline `<!--`, after a one-line ```code```, a
+  // list item after a quote, a list item's indented paragraph
+  for (const body of ['Write `<!--` to hide.\nplan: n/a docs only\n',
+    '```js x``` is inline.\nplan: n/a docs only\n', '> A quote\n- plan: n/a docs only\n',
+    '- Tidy.\n\n    plan: n/a docs only\n']) {
+    assert.deepEqual(run(t, repo, { ...missing, body }).codes, [], body);
   }
   for (const body of ['plan: n/a\n', 'plan: n/a ...\n', 'plan: n/a <why>\n']) {
     assert.deepEqual(run(t, repo, { ...missing, body }).codes, ['waiver-form'], body);
@@ -128,7 +141,8 @@ test('the waiver: a reason passes; quoted, placeholder or empty, it is not one',
   for (const body of ['plan: n/a docs only\n', '* plan: n/a  spaced reason \n', 'plan: n/a\n',
     'plan: n/a <reason>\n', 'plan: n/a ...\n', '```\nplan: n/a quoted\n```\n',
     '> plan: n/a quoted\n', '<!-- plan: n/a quoted -->\n', 'a plan: n/a mid-sentence\n',
-    'PLAN: N/A upper case\n', '']) {
+    'PLAN: N/A upper case\n', '    plan: n/a code\n', '> q\nplan: n/a lazy\n',
+    '`<!--`\nplan: n/a prose\n', '']) {
     assert.deepEqual(planWaiver(body), waiver(body.replace(/plan:/gi, 'fail-first:')), body);
   }
 });
@@ -164,6 +178,24 @@ test('closing keywords in a commit message between the merge base and the head',
   assert.equal(r.status, 1, r.out);
   assert.deepEqual(r.codes, ['closing-keyword']);
   assert.match(r.out, /the message of commit [0-9a-f]{12} carries the closing keyword "Fixes #9"/);
+  // several commits (R9): the keyword in the middle one, and in every one, is found
+  const many = fixture(t, {}, 'feat(studio): V603 first step\n');
+  many.commit('fix(studio): V603 second step\n\nResolves #10.\n', { 'b.txt': 'b\n' });
+  many.commit('test(studio): V603 third step\n', { 'c.txt': 'c\n' });
+  const middle = run(t, many, CLEAN);
+  assert.deepEqual(middle.codes, ['closing-keyword'], middle.out);
+  assert.equal([...middle.out.matchAll(/the message of commit/g)].length, 1, middle.out);
+  assert.match(middle.out, /carries the closing keyword "Resolves #10"/);
+  many.commit('docs(studio): V603 fourth\n\ncloses #11\n', { 'd.txt': 'd\n' });
+  assert.equal([...run(t, many, CLEAN).out.matchAll(/the message of commit/g)].length, 2);
+  // a record separator or a NUL-free control byte in a message hides nothing after it (R4)
+  for (const byte of ['\x1e', '\x1f', '\x1c']) {
+    const rs = fixture(t, {}, `fix(studio): V603 pinch zoom\n\nsee${byte} the log\n\nFixes #9\n`);
+    rs.commit('chore(studio): V603 after\n', { 'e.txt': 'e\n' });
+    const x = run(t, rs, CLEAN);
+    assert.deepEqual(x.codes, ['closing-keyword'], JSON.stringify(byte));
+    assert.match(x.out, /carries the closing keyword "Fixes #9"/);
+  }
   // the base's own history is not the pull request's: only merge base..head is read
   const clean = fixture(t);
   clean.git('checkout', '-q', 'main');
@@ -179,6 +211,19 @@ test('an ID: a record letter and a record file, at the base or the head', (t) =>
     headRefName: 'feat/f001-tailwind-build', body: '' });
   assert.equal(r.status, 0, r.out);
   assert.match(r.out, /plan records: F001/);
+  // S080 exists only at the base (the pull request deletes it), and V700 only on main after
+  // the branch: both count, their facts read at the base (review of #255, R11).
+  const gone = fixture(t);
+  gone.git('rm', '-q', `${ISSUES}/S080.yaml`);
+  gone.git('commit', '-q', '-m', 'chore(plan): S080 retired');
+  gone.git('checkout', '-q', 'main');
+  gone.commit('plan', { [`${ISSUES}/V700.yaml`]: issue('V700', 'M048') });
+  gone.git('checkout', '-q', 'pr');
+  const facts = JSON.parse(run(t, gone, { title: 'chore(plan): S080 and V700 retired',
+    headRefName: 'chore/retire', body: '' }, '--facts').stdout);
+  assert.deepEqual(facts.violations, []);
+  assert.deepEqual(facts.ids.map((f) => [f.id, f.title, f.milestone, f.onBase]),
+    [['S080', 'Record S080', 'M005', true], ['V700', 'Record V700', 'M048', true]]);
   // A letter no record file begins with is no candidate: H264, the v of a version, a word.
   const records = recordsOf(Object.keys(BASE_RECORDS));
   assert.deepEqual([...records.prefixes].sort(), ['M', 'S', 'U', 'V']);
@@ -475,8 +520,8 @@ test('usage: no mode, no pull request, an unknown flag, no title exit 2', (t) =>
 // ---------------------------------------------------------------- the mutation table
 
 const SOURCE = read('scripts/pr-metadata.mjs');
-const IMPORTS = ['fail-first.mjs', 'release-analyze.mjs', 'release-metadata.mjs',
-  'review-verdict.mjs', 'yaml-subset.mjs'];
+const IMPORTS = ['fail-first.mjs', 'git-ref.mjs', 'release-analyze.mjs',
+  'release-metadata.mjs', 'review-verdict.mjs', 'yaml-subset.mjs'];
 const block = (code) => new RegExp(`^[ \\t]*// rule: ${code}\\n[\\s\\S]*?`
   + `^[ \\t]*// end rule: ${code}\\n`, 'm');
 
@@ -558,50 +603,84 @@ test('metadata.yml is the model\'s judge, and the model is the program\'s', () =
 });
 
 test('mutation: a workflow that writes, misses an event or can no longer refuse', () => {
-  const tail = '            --check --summary "$GITHUB_STEP_SUMMARY"\n';
-  for (const [name, text, want] of [
+  const tail = '--base "refs/remotes/origin/$GITHUB_BASE_REF" --check --summary'
+    + ' "$GITHUB_STEP_SUMMARY"\n';
+  const wrapper = '          .github/scripts/base-rule.sh'
+    + ' "refs/remotes/origin/$GITHUB_BASE_REF" \\\n            scripts/pr-metadata.mjs';
+  const step = '        timeout-minutes: 2\n        env:\n';
+  const runs = '        run: |\n';
+  const guard = '          if [ -z "$PR" ]; then echo'
+    + ' "::error::pr-metadata: no pull request to judge"; exit 1; fi\n';
+  // [name, text, the problem it causes]: `alone` cases cause exactly that one problem, so each
+  // check of workflowModelProblems() has a case that fails when the check is deleted (R8)
+  for (const [name, text, want, alone = true] of [
     ['pull-requests: write', mutate(WORKFLOW, '  pull-requests: read\n',
-      '  pull-requests: write\n'), /permissions are/],
+      '  pull-requests: write\n'), /^permissions are/],
     ['issues: write added', mutate(WORKFLOW, '  pull-requests: read\n',
-      '  pull-requests: read\n  issues: write\n'), /permissions are/],
+      '  pull-requests: read\n  issues: write\n'), /^permissions are/],
     ['without edited', mutate(WORKFLOW, '[opened, edited, synchronize,',
-      '[opened, synchronize,'), /pull_request types are/],
+      '[opened, synchronize,'), /^pull_request types are/],
     ['pull_request_target', mutate(WORKFLOW, '\non:\n  pull_request:\n',
-      '\non:\n  pull_request_target:\n'), /triggers are/],
+      '\non:\n  pull_request_target:\n'), /^triggers are/, false],
     ['workflow_dispatch', mutate(WORKFLOW, '\npermissions:\n',
-      '  workflow_dispatch:\n\npermissions:\n'), /triggers are/],
+      '  workflow_dispatch:\n\npermissions:\n'), /^triggers are/],
     ['another bound', mutate(WORKFLOW, '    timeout-minutes: 5\n',
-      '    timeout-minutes: 30\n'), /timeout-minutes is 30/],
+      '    timeout-minutes: 30\n'), /^timeout-minutes is 30/],
     ['renamed job', mutate(WORKFLOW, '    name: metadata\n', '    name: meta\n'),
-      /the job's name/],
+      /^the job's name/],
+    ['a second job', mutate(WORKFLOW, '\njobs:\n', '\njobs:\n  other:\n    name: other\n'
+      + '    runs-on: ubuntu-latest\n    timeout-minutes: 1\n    steps:\n      - run: echo\n'),
+    /^jobs are \["other","metadata"\]/],
     ['job permissions', mutate(WORKFLOW, '    runs-on: ubuntu-latest\n',
       '    runs-on: ubuntu-latest\n    permissions:\n      pull-requests: write\n'),
-    /widens or narrows/],
-    ['|| true', mutate(WORKFLOW, tail, `${tail.trimEnd()} || true\n`), /the call|forced/],
-    ['own copy', mutate(WORKFLOW, '          .github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF"'
-      + ' scripts/pr-metadata.mjs', '          node scripts/pr-metadata.mjs'), /not the call/],
-    ['no --check', mutate(WORKFLOW, tail, '            --summary "$GITHUB_STEP_SUMMARY"\n'),
-      /not the call/],
+    /^the job widens or narrows/],
+    ['conditional job', mutate(WORKFLOW, '    timeout-minutes: 5\n',
+      '    timeout-minutes: 5\n    if: github.actor != \'x\'\n'), /^the job is conditional/],
+    ['non-fatal job', mutate(WORKFLOW, '    timeout-minutes: 5\n',
+      '    timeout-minutes: 5\n    continue-on-error: true\n'),
+    /^the job is conditional or non-fatal/],
+    ['conditional step', mutate(WORKFLOW, step, '        timeout-minutes: 2\n        if: false\n'
+      + '        env:\n'), /^a step is conditional/],
+    ['non-fatal step', mutate(WORKFLOW, step, '        timeout-minutes: 2\n'
+      + '        continue-on-error: true\n        env:\n'),
+    /^a step is conditional or non-fatal/],
+    ['PR from elsewhere', mutate(WORKFLOW,
+      '          PR: ${{ github.event.pull_request.number }}\n',
+      '          PR: ${{ inputs.pr }}\n'),
+    /^PR is not the event's/],
+    ['|| true', mutate(WORKFLOW, tail, `${tail.trimEnd()} || true\n`), /forced/, false],
+    ['own copy', mutate(WORKFLOW, wrapper, '          node scripts/pr-metadata.mjs'),
+      /^the last command is not the call/],
+    ['the short base a tag can shadow (#255, R2)', mutate(WORKFLOW, tail,
+      tail.replace('refs/remotes/origin/$GITHUB_BASE_REF', 'origin/$GITHUB_BASE_REF')),
+    /^the last command is not the call/],
+    ['no --check', mutate(WORKFLOW, tail, tail.replace(' --check', '')),
+      /^the last command is not the call/],
     ['a command after it', mutate(WORKFLOW, tail, `${tail}          echo done\n`),
-      /not the call/],
-    ['no PR guard', mutate(WORKFLOW, '          if [ -z "$PR" ]; then echo '
-      + '"::error::pr-metadata: no pull request to judge"; exit 1; fi\n', ''), /no pull request/],
-    ['conditional step', mutate(WORKFLOW, '        timeout-minutes: 2\n        env:\n',
-      '        timeout-minutes: 2\n        if: false\n        env:\n'), /conditional/],
-    ['continue-on-error', mutate(WORKFLOW, '    timeout-minutes: 5\n',
-      '    timeout-minutes: 5\n    continue-on-error: true\n'), /non-fatal/],
-    ['one concurrency group', mutate(WORKFLOW,
-      '  group: metadata-${{ github.event.pull_request.number }}\n', '  group: metadata\n'),
-    /concurrency is/],
-    ['no cancel-in-progress', mutate(WORKFLOW, '  cancel-in-progress: true\n',
-      '  cancel-in-progress: false\n'), /concurrency is/],
-    ['no concurrency', mutate(WORKFLOW, '\nconcurrency:\n'
-      + '  group: metadata-${{ github.event.pull_request.number }}\n'
-      + '  cancel-in-progress: true\n', '\n'), /concurrency is/],
+      /^the last command is not the call/],
+    ['no PR guard', mutate(WORKFLOW, guard, ''), /^it does not fail when there is no pull/],
+    // an early or forced success on a line before the call (R7): each alone
+    ['set +e', mutate(WORKFLOW, runs, `${runs}          set +e\n`), /^an early or forced/],
+    ['set +o errexit', mutate(WORKFLOW, runs, `${runs}          set +o errexit\n`),
+      /^an early or forced/],
+    ['exit 0', mutate(WORKFLOW, guard, `${guard}          [ -n "$SKIP" ] && exit 0\n`),
+      /^an early or forced/],
+    ['a bare exit', mutate(WORKFLOW, guard, `${guard}          [ -n "$SKIP" ] && exit\n`),
+      /^an early or forced/],
+    ['exit with a status of its own', mutate(WORKFLOW, guard,
+      `${guard}          [ -n "$SKIP" ] && exit "$s"\n`), /^an early or forced/],
+    ['|| :', mutate(WORKFLOW, 'sleep 10\n', 'sleep 10 || :\n'), /^an early or forced/],
   ]) {
     const problems = workflowModelProblems(text, MODEL_TEXT);
     assert.notDeepEqual(problems, [], name);
-    assert.match(problems.join('\n'), want, name);
+    assert.ok(problems.some((p) => want.test(p)), `${name}: ${problems.join('; ')}`);
+    if (alone) assert.equal(problems.length, 1, `${name}: ${problems.join('; ')}`);
+  }
+  assert.deepEqual(workflowModelProblems(WORKFLOW, 'schema: x\n'),
+    ['the model has no judge: block']);
+  // a failing exit and a retry loop are not forced successes
+  for (const line of ['exit 1', '{ echo x; exit 1; }', 'gh api --exit-status x', 'a || echo b']) {
+    assert.equal(FORCED_SUCCESS.test(line), false, line);
   }
   // the order of the permission keys means nothing to GitHub, so it means nothing here
   const swapped = mutate(WORKFLOW, '  contents: read\n  pull-requests: read\n',
