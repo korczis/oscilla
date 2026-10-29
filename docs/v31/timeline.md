@@ -263,6 +263,9 @@ The first audible sample depends on what follows the voice, not on the clip:
   frames, never its boundaries: the Tone's release still
   meets the Sweep's attack on the boundary frame (a clamped voice overlapped the next clip by
   its lateness). The transport records a `joined-late` decision `{ from: startTime, to: joinAt }`.
+  A STOP before `joinAt` cancels the join (the out gain is a constant floor up to it, so the
+  edit is exact) and the voice never rises; a STOP inside the join edge starts where the edge
+  ends, at most `EDGE_S` later, so no ramping segment is edited (review #276 R-1).
 
 ## Edit during playback (§182-§183)
 

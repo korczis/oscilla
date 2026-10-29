@@ -383,17 +383,65 @@ test('compileSequence keepGrid: a voice compiled after its start keeps its grid'
       { t: join, value: GAIN_FLOOR, ramp: 'set' },
       { t: join + EDGE_S, value: 1, ramp: 'linear' },
     ], 'held at the floor until the join, then one edge');
-    // A stop inside the join edge holds the edge's value there, never 1.
-    const at = join + EDGE_S / 2;
+    // A stop after the join edge holds 1 there and fades, as for an on-time voice.
+    const at = join + 0.1;
     ctx.currentTime = join;
     assert.equal(voice.stop(at), true);
-    const [hold, fade] = out.gain.events.slice(3);
-    assert.deepEqual([hold.t, hold.ramp, fade], [at, 'set',
+    assert.deepEqual(out.gain.events.slice(3), [{ t: at, value: 1, ramp: 'set' },
       { t: at + STOP_RAMP_S, value: GAIN_FLOOR, ramp: 'linear' }]);
-    assertNear(hold.value, GAIN_FLOOR + (1 - GAIN_FLOOR) / 2, 1e-12, 'the edge value at the stop');
   } finally {
     Object.defineProperty(globalThis, 'performance', { value: realPerf, configurable: true,
       writable: true });
+  }
+});
+
+/** A late keepGrid voice at the review's clock (#276 R-1): currentTime 1.0238, join 1.045333. */
+function lateVoice() {
+  const realPerf = globalThis.performance;
+  Object.defineProperty(globalThis, 'performance', { value: { now: () => 1000 },
+    configurable: true, writable: true });
+  try {
+    const r = compileRef({ ctx: { currentTime: 1.0238 }, keepGrid: true });
+    return { ...r, out: r.ctx.created.filter((n) => n.kind === 'gain')[2] };
+  } finally {
+    Object.defineProperty(globalThis, 'performance', { value: realPerf, configurable: true,
+      writable: true });
+  }
+}
+
+/** The highest value the out gain is scheduled to reach at or after `from`. */
+const peakFrom = (param, from) => Math.max(...param.events.filter((e) => e.t >= from)
+  .map((e) => e.value));
+
+test('keepGrid: a stop before the join cancels the join, the out gain stays at the floor', () => {
+  // Review #276 R-1: STOP at 1.033333 before the join at 1.045333 left the join's floor and its
+  // edge to 1 scheduled after the fade, so the gain rose to 1 by 1.048333 and the sources were
+  // cut at full gain at 1.055333.
+  const { ctx, voice, out } = lateVoice();
+  const q = 128 / SR;
+  assertNear(voice.joinAt, Math.ceil((1.0238 + STOP_LEAD_S) / q - 1e-9) * q, 1e-12);
+  const at = 1.033333;
+  assert.ok(at < voice.joinAt);
+  assert.equal(voice.stop(at), true);
+  assert.equal(voice.stopTime, at);
+  assert.deepEqual(out.gain.calls.slice(-3), [['cancelScheduledValues', at],
+    ['setValueAtTime', GAIN_FLOOR, at], ['linearRampToValueAtTime', GAIN_FLOOR, at + STOP_RAMP_S]]);
+  assert.ok(peakFrom(out.gain, 0) <= GAIN_FLOOR, `out gain rises to ${peakFrom(out.gain, 0)}`);
+  const stopAt = at + STOP_RAMP_S + STOP_PAD_S;
+  for (const o of ctx.oscillators) assert.ok(o.stopAt <= stopAt + 1e-12, `${o.stopAt}`);
+});
+
+test('keepGrid: a stop inside the join edge starts where the edge ends, never mid-ramp', () => {
+  const { voice, out } = lateVoice();
+  const edgeEnd = voice.joinAt + EDGE_S;
+  for (const at of [voice.joinAt, voice.joinAt + EDGE_S / 2, edgeEnd - 1e-6]) {
+    const { voice: v, out: o } = at === voice.joinAt ? { voice, out } : lateVoice();
+    const calls = o.gain.calls.length;
+    assert.equal(v.stop(at), true);
+    assertNear(v.stopTime, edgeEnd, 1e-12, `stop at ${at}`);
+    assert.deepEqual(o.gain.calls.slice(calls), [['setValueAtTime', 1, v.stopTime],
+      ['linearRampToValueAtTime', GAIN_FLOOR, v.stopTime + STOP_RAMP_S]],
+    'the edge is not edited: held at 1 where it ends, then faded');
   }
 });
 

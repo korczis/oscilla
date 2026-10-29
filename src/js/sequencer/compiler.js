@@ -766,13 +766,19 @@ export function compileSequence(model, ctx, destination, t0, opts = {}) {
         const lead = Math.max(STOP_LEAD_S, 2 * q);
         t = Math.ceil((renderedTimeAtLeast(ctx) + lead) / q - 1e-9) * q;
       }
+      // A late voice (keepGrid) inside its join edge: the stop starts where the edge ends, at
+      // most EDGE_S later, so no ramping segment of the out gain is edited (see the header).
+      if (joinAt !== null && t >= joinAt && t < joinAt + EDGE_S) t = joinAt + EDGE_S;
       if (t >= voice.endTime) return false; // already ending naturally
       stopping = true;
       voice.stopTime = t;
       try {
         // The envelope, frequency and AM schedules are not touched while they sound (see the
-        // header): the exact current value of the out gain is 1 (or, inside a late voice's join
-        // edge, the value of that ramp), held from t and faded.
+        // header): the exact current value of the out gain is 1, held from t and faded. A late
+        // voice stopped before its join is still at the floor there: its join (the floor at
+        // joinAt and the edge to 1) is cancelled, so the out gain never rises after the STOP,
+        // and the edit is safe because the gain is a constant floor up to joinAt.
+        if (joinAt !== null && t < joinAt) out.gain.cancelScheduledValues(t);
         out.gain.setValueAtTime(joinValueAt(t), t);
         out.gain.linearRampToValueAtTime(GAIN_FLOOR, t + STOP_RAMP_S);
         const stopAt = t + STOP_RAMP_S + STOP_PAD_S;
@@ -824,7 +830,8 @@ export function compileSequence(model, ctx, destination, t0, opts = {}) {
 
   let lookupFreq = () => null;
   let out = null;
-  // The out gain's scheduled value at t: 1, or inside a late voice's join edge that ramp.
+  // The out gain's scheduled value at t: 1, or before a late voice's join the floor (inside the
+  // join edge, the ramp's value: stop() moves a stop there to the edge's end).
   const joinValueAt = (t) => {
     if (joinAt === null || t >= joinAt + EDGE_S) return 1;
     if (t <= joinAt) return GAIN_FLOOR;
