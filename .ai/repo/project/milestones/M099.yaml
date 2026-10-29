@@ -1,12 +1,12 @@
 id: M099
-title: "The first screen's parts lead to their workspaces"
+title: "The first screen's parts lead to their workspaces, and a read-only explorer shows how they relate"
 slug: the-first-screens-parts-lead-to-their-workspaces
 order: 99
 priority: p3
 problem: "Q004 places a Guided measurement row and a compact Studio on the first screen, but nothing yet proves that each leads a newcomer to its full workspace, and the owner's prompt pack (2026-10-29) asks for an entry that works from GitHub to the running app."
 outcome: "Each part Q004 placed on the first screen leads to its full workspace through the hash dispatcher, targets read from the one entry-path inventory, proven in three browsers, both themes, by keyboard, from file://, the sub-path and the live site."
 acceptance_criteria:
-  - "P008 is done with its evidence."
+  - "P008 and P010 are done with their evidence."
 validation:
   - "node tests/browser/public-entry.cjs"
 evidence_required:
