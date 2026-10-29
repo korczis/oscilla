@@ -5,11 +5,14 @@ kind: rule
 title: Visual identity lock for every V3.x surface
 description: Every V3.x surface, Studio included, is built from the existing OSCILLA design tokens and primitives and looks like the production V2/V3 interface, never like another product.
 statement: New surfaces extend the existing OSCILLA tokens (src/styles/tokens.css), panel primitives, controls, typography, chart styling and Signal Path visual language before inventing any token, shape, colour family or interaction surface; no surface imports the visual identity of another audio product or of a generic flow editor; and the answer to the question whether the screen would still obviously belong to OSCILLA with the logo hidden must be yes.
-status: active
+status: deprecated
 class: blocking
 depends_on: []
 tags: [design, visual, studio, v3]
 ---
+
+> Deprecated on 2026-10-28: superseded by `visual-identity-lock.v2.md` (ADR 0061, Flowbite
+> Pro is the UI of OSCILLA). This file is kept as history and binds nothing.
 
 # Rationale
 
