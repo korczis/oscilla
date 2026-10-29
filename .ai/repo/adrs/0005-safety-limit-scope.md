@@ -60,3 +60,10 @@ coordinating Claude session) — implemented as described; evidence: `plan.limit
 `MAX_PROGRAMMED_S` and `engine.revokeContinuous()` (`src/js/audio/patterns.js`,
 `src/js/core/constants.js`, `src/js/audio/audio-engine.js`); sections "limit scope and
 continuous scheduling" and "continuous revoked" of `tests/browser/engine-v1port.cjs` (CI).
+
+### 2026-10-29: held notes are exempt while held (ADR 0062)
+
+Amended by ADR 0062 (owner decision D3 of the plan intent `playable-instrument`, issue K026):
+a note held on the computer keyboard, the on-screen keyboard or a MIDI key is exempt from the
+limit while it is held, keeps the output ceiling, and is released on blur, hide and Escape.
+Every signal this decision names keeps its rule; the sections above are unchanged.
