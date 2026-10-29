@@ -92,14 +92,47 @@ function isInert(url, { nav = false } = {}) {
 const CSS_URL = /url\(\s*(?:"([^"]*)"|'([^']*)'|([^\s'"()]*))\s*\)/gi;
 const CSS_STRING = /"([^"]*)"|'([^']*)'/g;
 
+// Characters the reference scan reads as syntax. Escaped, the browser takes them as part of a
+// name or a string (\( never opens a function, \" never ends a string), so the decoded copy
+// writes them percent-encoded and keeps the scan's view of the structure the browser's.
+const CSS_SYNTAX = /["'()\\@\s]/u;
+
+/**
+ * A copy of a stylesheet with its CSS escapes decoded (CSS Syntax 3, "consume an escaped code
+ * point"): `\` and 1-6 hex digits with one optional whitespace after, `\` and any other
+ * character, and `\` before a newline (a line continuation, dropped). A decoded character the
+ * scan treats as syntax is written as %XX instead, so `\75 rl(` reads as `url(`, `@\69mport` as
+ * `@import` and `\69mage-set(` as `image-set(`, as the browser reads them, while an escaped
+ * quote or parenthesis cannot end a string or open a function. Code point 0, surrogates and
+ * values past U+10FFFF become U+FFFD. The copy is only scanned, never emitted.
+ * @param {string} css
+ */
+export function decodeCssEscapes(css) {
+  const pct = (ch) => [...Buffer.from(ch, 'utf8')]
+    .map((b) => `%${b.toString(16).toUpperCase().padStart(2, '0')}`).join('');
+  return css.replace(/\\(?:([0-9a-fA-F]{1,6})(?:\r\n|[ \t\n\r\f])?|(\r\n|[\n\r\f])|([\s\S]))/g,
+    (_, hex, newline, other) => {
+      if (newline !== undefined) return '';
+      let ch = other;
+      if (hex !== undefined) {
+        const cp = parseInt(hex, 16);
+        ch = cp === 0 || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)
+          ? '\ufffd' : String.fromCodePoint(cp);
+      }
+      return CSS_SYNTAX.test(ch) ? pct(ch) : ch;
+    });
+}
+
 /**
  * Every reference a stylesheet makes: the target of each url(), the bare strings inside each
  * image-set() / -webkit-image-set() (which takes them as well as url()), and the number of
- * url( openings the scan could not parse, so nothing is skipped in silence.
- * @param {string} css
+ * url( openings the scan could not parse, so nothing is skipped in silence. It scans the
+ * stylesheet with its escapes decoded (decodeCssEscapes), so an escape does not hide one.
+ * @param {string} source
  * @returns {{urls: string[], imageSet: string[], unparsed: number}}
  */
-export function cssReferences(css) {
+export function cssReferences(source) {
+  const css = decodeCssEscapes(source);
   const urls = [];
   for (const m of css.matchAll(CSS_URL)) urls.push(m[1] ?? m[2] ?? m[3]);
   const unparsed = (css.match(/url\(/gi) || []).length - urls.length;
@@ -131,10 +164,12 @@ export function cssReferences(css) {
 
 // CSS may reference data: URLs (and #fragments) only (isInert). The flowbite plugin emits data:
 // SVGs only (mini-svg-data-uri, forms: true included), so ADR 0061 adds no allowance; every
-// url() and image-set() string is examined, whichever quote it uses.
+// url() and image-set() string is examined, whichever quote it uses and whatever CSS escape
+// spells it (review #253, R-7). Entity-encoded style attributes, SVG presentation attributes
+// that take url() and data:text/css stylesheets are not scanned here (R-9, a follow-up).
 function cssProblems(css, where) {
   const out = [];
-  if (/@import\b/i.test(css)) out.push(`${where}: CSS @import (must be bundled)`);
+  if (/@import\b/i.test(decodeCssEscapes(css))) out.push(`${where}: CSS @import (must be bundled)`);
   const { urls, imageSet, unparsed } = cssReferences(css);
   for (const u of urls) {
     if (!isInert(u)) out.push(`${where}: CSS url(${u.slice(0, 60)}) is not a data: URL`);
