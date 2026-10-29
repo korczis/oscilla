@@ -1,0 +1,44 @@
+# Review verdict for pull request #242, plan issue R021: release:publish resumes a publish
+# interrupted after its tag reached origin (scripts/release-publish.mjs). Branch
+# fix/r021-resumable-publish. Reviewed head f2f08a245e23 (df4befe tests, d3a789c fix, f2f08a2
+# plan evidence); merge base cf8cb9e, origin/main 4562145. Built by oscilla-b0's agents;
+# reviewed by dev-68, which built none of it.
+#
+# The digest: the base branch's scripts/review-verdict.mjs (git archive origin/main scripts),
+# `--repo . --head HEAD --content --list --base-branch origin/main`, over
+# scripts/release-publish.mjs and tests/unit/release-publish.test.mjs: 1c1ac51b...2560b531.
+# The head's own script gives the same digest.
+#
+# What was checked:
+# - Peeling. remoteTagCommit prefers the `^{}` line, then the tag's own line. Against a real
+#   bare remote, `git ls-remote --tags origin refs/tags/<t> 'refs/tags/<t>^{}'` prints the tag
+#   object and the peeled commit for an annotated tag, and one line for a lightweight tag,
+#   under protocol v0 and v2 alike. So both kinds resolve to the commit.
+# - Refusal. A remote tag at another commit refuses and names that commit. An existing GitHub
+#   Release refuses on resume. Neither path runs a mutating call. Nothing pushes with force or
+#   deletes; the undo line is only printed. Every git and gh call is spawnSync with an
+#   argument vector, so there is no shell to inject into.
+# - Resume order. The tag, the push and the wait for the merge's run are skipped. The redeploy
+#   is skipped when the live page already says tagged for HEAD, and an unread page redeploys.
+#   A waiting dispatched run of HEAD is adopted rather than dispatched again. verify-deploy and
+#   the tagged reads then gate the Release, as on the first run.
+# - Runs: node --test tests/unit/release-publish.test.mjs, 31/31. `npm test` was not run
+#   here: this worktree has no node_modules, so suites that import uplot and similar fail on
+#   import, for a reason unrelated to this change. CI runs it.
+# - Mutations of scripts/release-publish.mjs, each run against the test file and then
+#   restored:
+#   - caught: resuming at any remote commit (2 fail), dropping the existing-Release refusal
+#     (1 fail), never adopting a waiting run (1 fail);
+#   - survived: dropping the local-tag clause of resumable() (31/31 pass). See R-2.
+# - Probe of R-1: a copy of the test file whose fake reports the local tag v40.0.0 at HEAD,
+#   which is what the interrupted run leaves in its own checkout. The resumed --yes run exits 0
+#   and logs `previous tag: v40.0.0`. In a real repository, `git tag --merged HEAD --list 'v*'`
+#   with v1.1.0 at HEAD lists v1.1.0, so readCommits(v1.1.0..HEAD) is empty.
+verdict: changes-requested
+reviewer: "dev-68 (Claude Opus 5.5), prismatic-majordomus session; a fork of it reviewed and wrote only this file and did not build, merge or edit the change"
+content: 1c1ac51be4ec388e0516fb8c2556b5d205222f6649cba9e2ccc7093e2560b531
+findings:
+  - { id: R-1, severity: P1, status: open, title: "a resumed publish names its own tag as the previous release. scripts/release-publish.mjs:373 takes previousTag from lastReleaseTag (scripts/release-analyze.mjs:164, `git tag --merged HEAD --list v*`). In the checkout of the interrupted run the local tag v<version> is at HEAD, so that list includes it and previousTag is the release's own tag. readCommits(tag..HEAD) is then empty, and the Release is created with no changes and a compare link from vX to vX. This is the R021 incident's own case: the owner's checkout tagged and pushed. Fix: leave `tag` out when choosing the previous tag, and assert the notes in a resume test with the local tag at HEAD" }
+  - { id: R-2, severity: P2, status: open, title: "no fixture has a local tag: the fake answers every `git rev-parse` with status 1 (tests/unit/release-publish.test.mjs:72) and every tag list with v39.0.0. Dropping `&& (!f.tagLocal || f.tagLocalCommit === f.head)` from resumable() (scripts/release-publish.mjs:233) passes all 31 tests, and the same gap hides R-1. Add a resume case with the local tag at HEAD, one with it at another commit (it must refuse), and one with the tag local only" }
+  - { id: R-3, severity: P3, status: open, title: "a tag created locally at HEAD whose push failed is refused as `already exists locally at f187f66, not HEAD f187f66` (scripts/release-publish.mjs:249), which contradicts itself. Say that the tag was never pushed, and name `git push origin refs/tags/<tag>` (then re-run to resume) or the undo `git tag -d <tag>`" }
+  - { id: R-4, severity: P3, status: open, title: "project.release-flow-complete, under Failure behaviour (.ai/repo/rules/project/release-flow-complete.v1.md:262-265), still says release:publish refuses an existing tag and prescribes a Release made by hand. R021 replaces that path, and R021's own `why` says the by-hand path skips the gates. The rule is outside this PR's scope list, so this is a follow-up" }
