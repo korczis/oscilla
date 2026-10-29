@@ -59,9 +59,13 @@ L0xx        Learn lessons (M049)
 P0xx        product: first run (M050), positioning, product path, public story (M051)
 U0xx        the whole interface shows the current product (M054)
 F0xx        the whole interface on Flowbite Pro (M055)
+T0xx        measurement truth in the interface: readout states, labels, values in effect and
+            provenance (M073)
+G0xx        the component system: one declaration per UI component, the embedded Studio cockpit
+            (M085-M087)
 Q0xx        questions and acts only the owner can answer or take (M052; Q001 under M005, Q004 under
             M050, Q007 under M053, Q008-Q017 under M063, Q018-Q024 under M070, Q030-Q033 under
-            M084)
+            M084, Q034-Q037 under M088, Q040-Q041 under M073)
 ```
 
 A Q issue is answered by the owner, or by a session the owner delegated the decision to. The
@@ -70,10 +74,11 @@ words, or attributed to the deciding session together with the delegation's date
 reasoning and the note that the owner may override it, never presented as the owner's own words.
 A worker without such a delegation never answers one. Work that waits on an answer names the Q
 issue in `depends_on`, and M052 (questions), M053 (owner acts on published releases, Q007),
-M063 (the charts line's questions, Q008-Q017), M070 (the instrument line's, Q018-Q024) and
-M084 (the Studio boxes and generator lines', Q030-Q033) sort after every live milestone, so
-`majordomus plan next` does not nominate them first. That is a convention, not a guarantee: a
-Q issue is READY to `majordomus plan start` like any other, and its `owner` field only informs.
+M063 (the charts line's questions, Q008-Q017), M070 (the instrument line's, Q018-Q024),
+M084 (the Studio boxes and generator lines', Q030-Q033) and M088 (the component system's,
+Q034-Q037) sort after every live milestone, so `majordomus plan next` does not nominate them
+first. That is a convention, not a guarantee: a Q issue is READY to `majordomus plan start` like
+any other, and its `owner` field only informs.
 A question recorded with `majordomus question add` lives in one checkout's `.ai/local/` and is
 read by nobody else; a question the next worker must see is a Q issue.
 

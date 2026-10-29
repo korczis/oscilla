@@ -1,0 +1,51 @@
+id: G011
+milestone: M086
+serves:
+- "component-system#embedded-cockpit"
+title: "The embedded Studio is a compact cockpit card: toolbar, Open in Studio, run state, mini level and scope, the selected node, and a phone layout"
+slug: the-embedded-studio-is-a-compact-cockpit-card-toolbar-open-i
+priority: p2
+profile: implementation
+objective: "Lands as feat(studio-ui). U1, U9, U13 and U15 and the rest of the redesign of the design section 5: a Pro card whose header holds the heading at the level of its siblings (h2 in the Playground family), the document title, the dirty mark and an 'Open in Studio' link (an href to #m=studio, so it opens in a new tab too) with an overflow menu (Templates, Fullscreen); a toolbar row with the transport strip of G006, the time, the tempo and the runtime state chip the Inspector already computes (runtimeView: 'Not applied', 'Running', revision) and, at its end, a mini level bar and a small scope of the engine's post-master analyser (the existing engine.analyser, no new AudioNode), labelled 'Output, relative level (dBFS)' and drawn on a canvas through charts/frame-loop.js, in the toolbar row and not in a column beside the graph, because the half-width card is about 584 px wide inside once F002's sidebar is open and the graph needs 552 px (the design's compact-fit-shell measurement in Node, 2026-10-29); where the Playground's Signal analysis already shows the waveform on the same screen, the cockpit shows the level bar only, so the page does not draw the same signal twice; the graph of G010 across the card's width; the timeline miniature of G006 below; and a one-line readout of the selected node or clip with 'Edit in Studio'. Below 640 px it is one column: header, a toolbar of Play, Stop, time and a level bar, the graph top to bottom, the miniature at 48 px, the selection line; nothing scrolls sideways. P002 places the card on the first screen (Q004 option A: beside the Pattern Sequencer); this slice makes it fit that half-width card (about 616 px outside and 584 px inside at 1536 px with F002's sidebar open, 712 px outside with it collapsed) and the full width of its other hosts. Before: VERIFIED 1516 x 133 px, body 70 px, 860 px of spacer, 0 px visible on the first view (inventory U1, U2). After: no wasted band; every row carries an instrument quantity. Negative cases: no AudioContext yet (the meter says 'Not running', never a flat line passed off as silence), MEASURE owns the output (the meter says so), reduced motion (the scope freezes to its last frame with a label). Rollback: revert; no model or record change."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: \"the embedded Studio is ugly as hell\"; components in general must be generic, linkable, traceable, composable, unified, documented, dynamic, generated and interlinked; \"everything must be interlinked with everything\"; improve the main page and the first experience, deploy often. The owner's evolution prompt pack (MASTER, P02, P04, P06) binds it: the dark technical cockpit is locked, shared primitives only where duplication is proven, no new framework, generated docs only where deterministic, no decorative wires. Findings: the UI component inventory of 2026-10-29 (D1-D14 duplication, U1-U15 on the embedded Studio, measured on origin/main b67d1e58, v3.13.0); design: the component-system design of 2026-10-29 (scratchpad components/design.md)."
+scope:
+- src/js/ui/studio/compact.js
+- src/js/ui/studio/cockpit-meter.js
+- src/js/ui/studio/workspace.js
+- src/index.html
+- src/styles
+- src/js/charts/frame-loop.js
+- tests/unit/studio-cockpit.test.mjs
+- tests/browser/studio-cockpit.cjs
+- tests/browser/live-smoke.cjs
+- tests/browser/layout.cjs
+- tests/browser/ui-flowbite-pro.cjs
+- tests/visual
+- tests/unit/ui-flowbite-pro-baseline.json
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- G010
+acceptance_criteria:
+- "tests/unit/studio-cockpit.test.mjs fails on the merge base: the cockpit's view model states the meter's three honest states (not running, measuring owns the output, relative level), the run state from runtimeView, and the selection line for a node, a clip and nothing."
+- "The engine's node census is unchanged by the meter (it reads the existing analyser; project.audio-engine-discipline v2), asserted after stop in the cockpit suite."
+- Its heading is h2 in the Playground and Sequencer outline (U13).
+- "Definition of done, extends: the transport strip and miniature of G006, the renderer of G010, runtimeView of the Inspector, and the existing analyser and frame loop."
+- "Definition of done, interlinks: Open in Studio, Edit in Studio and the overflow menu's items are declared links (G016 rows); the card has a component address (G007)."
+- "Definition of done, interactivity: level and scope move only while the engine runs; the selection line follows the store."
+- "Definition of done, docs, menus and routes: docs/v31/user-guide.md shows the card; the Help menu and the Keyboard shortcuts dialog list its keys. tests/README.md has a row for each new test; the component's catalogue declaration (G001) names its docs, links and tests; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: tests/browser/studio-cockpit.cjs gains 'cockpit-layout': at 1536x1024 (full width, and half width with the sidebar open and collapsed) and 390x844, in both themes and every gate browser from file:// and the sub-path, no element of the card is clipped, the page does not scroll sideways, Play by pointer, Enter and a hasTouch tap moves the meter within until() (deadline 'meter moves', 3 s) and Stop returns it to 'Not running'. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit, and the release that carried it is recorded when the milestone is verified."
+- "The pull request carries a reviewer's verdict for the guarded paths it touches (project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+- "On Pro (after F002): its chrome is markup adapted from the matching Flowbite Pro block (the template names its flowbite-pro reference.md section), recorded as migrated, never pending; it adds no osc-* class token, no legacy vocabulary use and no selector, removes the legacy ones it replaces, and the domain views' stylesheets gain nothing (compact density is Tailwind utilities on the domain view's own elements); the record's debt falls (project.ui-uses-flowbite-pro, project.visual-identity-lock v2, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "scripts/size-report.mjs shows at most 3 KB gzip added, with the base and head figures in the pull request body, inside the cap Q037 records (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/studio-cockpit.test.mjs
+- node tests/browser/studio-cockpit.cjs
+- node tests/browser/layout.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

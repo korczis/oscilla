@@ -1,0 +1,21 @@
+id: Q037
+milestone: M088
+title: "Owner decision: the gzip cap of the component-system line"
+slug: owner-decision-the-gzip-cap-of-the-component-system-line
+priority: p2
+profile: routine
+owner: repository owner
+objective: "The build is 820 005 B gzip of the 1 000 000 B budget at origin/main b67d1e58 (pull request #279, E027, open on 2026-10-29, raises the budget to 1 200 000 B on the owner's decision of that day; the cap asked here is this line's share either way), and the charts (Q014), synth (Q023) and Studio boxes (Q030) lines also draw on what is left. (a) 14 KB in all (catalogue runtime 6 KB, renderer 3 KB, cockpit 5 KB), measured per pull request by scripts/size-report.mjs, with trace fields and long docs kept out of the bundle; (b) another figure. The plan recommends (a)."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: \"the embedded Studio is ugly as hell\"; components in general must be generic, linkable, traceable, composable, unified, documented, dynamic, generated and interlinked; \"everything must be interlinked with everything\"; improve the main page and the first experience, deploy often. The owner's evolution prompt pack (MASTER, P02, P04, P06) binds it: the dark technical cockpit is locked, shared primitives only where duplication is proven, no new framework, generated docs only where deterministic, no decorative wires. Findings: the UI component inventory of 2026-10-29 (D1-D14 duplication, U1-U15 on the embedded Studio, measured on origin/main b67d1e58, v3.13.0); design: the component-system design of 2026-10-29 (scratchpad components/design.md)."
+current_state: "Open on 2026-10-29. The plan's recommendation is not an answer. G008, G010 and G015 name this issue in depends_on, so majordomus plan next does not hand them out before it is answered."
+scope:
+- .ai/repo/project/issues/Q037.yaml
+acceptance_criteria:
+- "The decision is recorded as evidence on this issue (covers owner_decision), either in the owner's words with date and source, or as a decision of a coordinating session under an owner delegation it quotes with its date, stating its reasoning and that the owner may override it; a worker without such a delegation never answers it."
+- The answer names (a) or a figure of (b).
+validation:
+- manual
+evidence_required:
+- owner_decision
+created_at: '2026-10-29'
+updated_at: '2026-10-29'
