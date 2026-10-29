@@ -13,7 +13,8 @@
 // read from the dist head, which is what Pages serves.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { shellMarkup } from './fixtures/shell-markup.mjs';
 import * as social from '../../scripts/social-assets.mjs';
 
 export const SENTENCE = 'A zero-install, scientifically honest acoustic laboratory in your '
@@ -25,18 +26,6 @@ export const TITLE_MAX = 70;
 
 const root = new URL('../../', import.meta.url);
 const read = (p) => readFileSync(new URL(p, root), 'utf8');
-
-/** The shell markup: src/index.html, then any build-time partials (E005), in name order. */
-function shellMarkup() {
-  const parts = [read('src/index.html')];
-  const dir = new URL('src/partials/', root);
-  if (existsSync(dir)) {
-    for (const f of readdirSync(dir).filter((n) => n.endsWith('.html')).sort()) {
-      parts.push(read(`src/partials/${f}`));
-    }
-  }
-  return parts.join('\n');
-}
 
 /** Visible text: comments and tags dropped, entities decoded, whitespace collapsed. */
 export function text(markup) {
