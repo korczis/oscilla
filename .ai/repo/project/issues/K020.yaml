@@ -1,0 +1,32 @@
+id: K020
+milestone: M058
+serves:
+  - "playable-instrument#front-panel"
+title: "Node presets: factory data and single-node user patches in a Pro dropdown"
+slug: node-presets-factory-data-and-single-node-user-patches-in-a
+priority: p2
+profile: implementation
+objective: "Lands as feat(studio). Each node type offers factory presets and the person's single-node patches in a Pro dropdown; applying one sets parameters only (one undo entry) and keeps every edge. Preset names name sounds, never products (D1). It waits on F001, F002 and F008 of plan pull request #251 (intent ui-flowbite-pro), which are not on main yet; depends_on names them in the plan change after #251 lands. It also waits on E004."
+why: "Owner direction of 2026-10-29 (session oscilla-b0): OSCILLA becomes a playable, patchable instrument and an audio-band signal lab; the plan checked every fact it relies on against main at 8b5792cd, and the sizes it quotes are unchanged at e2720e07."
+scope:
+  - "src/js/studio"
+  - "src/js/ui/studio"
+  - "tests/unit/studio-node-presets.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "E004"
+  - "K014"
+acceptance_criteria:
+  - "Applying a preset changes only the node's parameters, keeps its edges and is one undo entry, in a unit test that fails on the merge base."
+  - "Every factory preset validates against its node type."
+  - "Any new chrome is Flowbite Pro markup adapted from the matching Pro block and lowers or keeps the ratchet (project.ui-uses-flowbite-pro, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs); controls are Pro range sliders with number inputs, never a custom rotary knob (D5)."
+  - "The pull request carries a reviewer's verdict (src/js/studio is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/studio-node-presets.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

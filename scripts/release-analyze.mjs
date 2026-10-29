@@ -157,13 +157,16 @@ export function parseFlags(argv, spec, usage, { positional = 0 } = {}) {
 }
 
 // ------------------------------------------------------------------------------- git
-/** Highest SemVer v* tag reachable from HEAD, or null. */
-export function lastReleaseTag(run = gitRunner()) {
+/**
+ * Highest SemVer v* tag reachable from HEAD, or null. `exclude` names a tag that is never the
+ * answer: release:publish leaves out the tag it publishes, which a resumed publish finds at HEAD.
+ */
+export function lastReleaseTag(run = gitRunner(), { exclude = null } = {}) {
   let tags = [];
   try {
     tags = run(['tag', '--merged', 'HEAD', '--list', 'v*']).split('\n').filter(Boolean);
   } catch { return null; }
-  const valid = tags.filter((t) => parseSemver(t.slice(1)));
+  const valid = tags.filter((t) => t !== exclude && parseSemver(t.slice(1)));
   valid.sort((a, b) => compareSemver(b.slice(1), a.slice(1)));
   return valid[0] || null;
 }

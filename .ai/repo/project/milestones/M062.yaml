@@ -1,0 +1,23 @@
+id: M062
+title: "Charts: modern, interactive, honest"
+slug: charts-modern-interactive-honest
+order: 62
+priority: p2
+problem: "Most charts have no hover readout (the MEASURE readout is written on every pointer move and never rendered; IR and overlay have none) and none has a keyboard cursor; chart hosts are role=img; a frozen spectrogram blanks on a scale, span or theme change and its cursor goes stale on scroll (K015 F1, F2); light has no validated chart colours (orange 1.73:1, faded lines 1.3-2.9:1, a light spectrogram LUT that is not monotonic in lightness) and no visual reference; legends do not match their marks; wrapped phase draws vertical lines that are not data; the filter chart traps the wheel; the bio chart hides two of its seven rows; p5 and the Studio transport each run a rAF chain of their own, and the scope, phase and Lissajous views allocate about 334 KB per frame in vertex calls."
+outcome: "Every chart host the census lists has a crosshair and a readout stating unit, resolution and aggregation, a keyboard cursor announced politely and reachable with a screen reader, a touch path, a summary and a data table, named empty states and zoom where it shows more truth; light and dark both validated and referenced per chart host, the light references accepted by the owner; one frame loop for every continuous draw and no work while hidden; levels stay relative unless calibrated (intent playable-instrument criteria chart-palette, chart-interaction, chart-states-honest, chart-cost, chart-light-designed)."
+acceptance_criteria:
+  - "K027, K028, K029, K030, K031, K032, K033, K034, K035, K036, K037, K038, K039, K040, K041, K042, K043, K044, K045, K046, K047, K048, K050, K052, K053, K054, K055, K056, K057 are done with their evidence, K049 is done or cancelled under Q010 and K051 done or cancelled under Q015; npm run release-gate passes at the last one; scripts/chart-census.mjs --require-complete, tests/browser/chart-cost.cjs --require-complete and node scripts/visual-charts.mjs --check-accepted pass, the last bound to the owner's recorded acceptance (Q017, or the M063 question that re-accepted after it)."
+  - "The line's gzip cost, the sum over its pull requests of the head minus the base size-report figure each records, is within the cap Q014 records (the plan recommends 60 KB; the ceilings of the slices above sum to 52 KB, K051 adds 2.5 KB)."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "Pro chrome waits on F002 (#251), which turns on preflight and the form base styles; chrome placed in a workspace's cards waits on that workspace's issue: F003 for the Playground labs and the sequencer, F004 MEASURE, F005 Experiments and Findings, F006 the analysis, spectrogram, mic and filter panels, F008 the Studio. The plan change is stacked on #251 and #265, so those edges are depends_on now."
+  - "Owner decisions are Q008-Q017 under M063; K027 and K028, the entry slices, wait on the cap (Q014) and the home (Q016), and so does every slice that depends on them, K016 (M061) and K025 (M060) included through the kit K053. K029, K039 and K056 do not wait. A cancelled Q issue or a slice cancelled under one is removed from its dependents' depends_on in the same change (K049 under Q010, K051 under Q015)."
+  - "K029, K030 (findPeaks), K033, K054 and K037-K042 and K055 change guarded paths (src/js/analysis, src/js/measurement and the MEASURE, Experiments and Findings adapters) and each needs a reviewer's verdict; K037 on waits on E002 (#262), which adds src/js/ui/measure/* to GUARDED."
+  - "src/js/main.js is at about 39 894 of 40 000 B once F001, #266 and #261 land: K028 is the only chart slice that edits it and moves the wiring to src/js/charts/wire.js first."
+  - "K016 and K025 (#265) build on the kit K053 and deliver the census duties of the hosts they add; K033 follows K025's time-down view; K047 follows K017 (and K003); K048 follows K016 and K019 in the inspector; K057 follows E003, which splits workspace.js; V395 follows K039 on the phase path. These are depends_on edges of this plan change."
+  - "Most slices re-accept references in two environments and, once F011 lands, in both themes; K056 lands first and bounds how far one acceptance may raise a region's mismatch beyond its measured variance, with a recorded override; K050 adds per-host references after every pixel-changing slice, and any later change to a light one needs the owner's acceptance again (Q017's record)."
+created_at: 2026-10-29
+updated_at: 2026-10-29

@@ -15,11 +15,11 @@ timeline and the compact Studio widget on the Playground.
 **OSCILLA.** The app. Product text does not call it "the project".
 
 **Project.** A saved Studio document: a StudioModel of kind `oscilla-studio`, exported as a
-`.oscilla-studio.json` file ("Export project", "Import project or patch") or kept in the
-Studio library of this browser. A **patch** is the smaller sibling: nodes, parameters, inner
-cables and their automation lanes, of kind `oscilla-patch` (`.oscilla-patch.json`,
-`src/js/studio/patches.js`). The Majordomus "project" (the `project.*` rules,
-`.ai/repo/project/`) is repository vocabulary, not the product's.
+`.oscilla-studio.json` file ("Export project", "Import a project, patch, V2 sequence or
+configuration file") or kept in the Studio library of this browser. A **patch** is the smaller
+sibling: nodes, parameters, inner cables and their automation lanes, of kind `oscilla-patch`
+(`.oscilla-patch.json`, `src/js/studio/patches.js`). The Majordomus "project" (the `project.*`
+rules, `.ai/repo/project/`) is repository vocabulary, not the product's.
 
 **Runtime.** The running Web Audio graph compiled from a StudioModel through the existing
 engine (`src/js/studio/runtime.js`, ADR 0035). Its truth has three stages (ADR 0039):
