@@ -109,6 +109,15 @@ claims:
     status: guaranteed
     responsibility: product
 
+  - id: sequencer-through-filter-stage
+    claim: The pattern sequencer plays through the Filter Lab's stage on an engine-owned stage chain that the AudioEngine counts while it sounds and releases after the last pass, live and in the sequence's WAV export, while the Envelope and Additive labs say they shape the instrument only
+    source: .ai/repo/rules/project/audio-engine-discipline.v2.md
+    implementation: src/js/audio/stage-chain.js
+    test: tests/unit/sequencer-stage-chain.test.mjs
+    status: guaranteed
+    responsibility: product
+    note: C003. The attenuation itself (more than 20 dB on a 4 kHz sequence under a 200 Hz low-pass, live and exported) is measured by the seq-filter-reaches-sequence leg of tests/browser/sequencer.cjs in Chromium, Firefox and WebKit.
+
   - id: lowpass-attenuates
     claim: An enabled 500 Hz low-pass attenuates a 5 kHz tone below a fifth of its level, and bypassing it restores the level
     source: .ai/repo/adrs/0015-native-web-audio-engine-extended-in-place.md

@@ -3,6 +3,7 @@
 //
 //   NODE_PATH=<checkout>/tests/node_modules node tests/browser/sequencer.cjs
 //   node tests/browser/sequencer.cjs --browser firefox     # chromium | firefox | webkit (default: all)
+//   node tests/browser/sequencer.cjs --dist <path/to/index.html>   # the app of check (e)
 //   (stop and teardown checks poll against a deadline; no fixed sleep precedes an assertion)
 //
 // The fixture (tests/browser/fixtures/sequencer-fixture.js) is bundled in memory with esbuild
@@ -15,12 +16,20 @@
 //       start/stop/ended are wrapped), also after a looped run;
 //   (d) restart 20x without growth: once each restart's earlier passes have delivered `ended`
 //       (bounded wait), none of their sources is live and only the current voice remains.
+//   (e) seq-filter-reaches-sequence (C003), in the built dist/index.html (file://, 1536x1024):
+//       a looping 4 kHz Tone block, played with #osc-seq-play, drops by more than 20 dB once
+//       the Filter Lab's switch turns on a 200 Hz low-pass set through #osc-filter-cutoff-value;
+//       a cutoff edit during playback applies to the next reading; the engine counts the
+//       sequencer's nodes while it sounds and holds 0 after Stop and after Escape; the exported
+//       WAV of the sequence (OfflineAudioContext) is attenuated by more than 20 dB as well.
 // Exit code 0 only when every check passes in every browser.
 'use strict';
 
 const path = require('path');
+const { pathToFileURL } = require('url');
 const esbuild = require('esbuild');
 const suite = require('./lib/suite.cjs');
+const { until, WaitTimeout } = require('./lib/wait.cjs');
 
 const args = process.argv.slice(2);
 const only = args.includes('--browser') ? args[args.indexOf('--browser') + 1] : null;
@@ -28,6 +37,8 @@ const RUN = suite.open({ name: 'sequencer', browsers: only === null ? undefined 
 const playwright = RUN.playwright;
 const ENGINES = RUN.browsers;
 const FIXTURE = path.join(__dirname, 'fixtures', 'sequencer-fixture.js');
+const DIST = path.resolve(args.includes('--dist') ? args[args.indexOf('--dist') + 1]
+  : path.join(__dirname, '..', '..', 'dist', 'index.html'));
 // timing-allow: the OfflineAudioContext render rate of the reference renders
 const SR = 48000;
 // The spec's shortest allowed edge ramp (2-5 ms). Bounds use this fixed value, never the
@@ -349,6 +360,170 @@ function checkRealtimeCapture(engine, label, cap) {
   );
 }
 
+// ---------------------------------------------------------------- (e) the app (C003)
+
+const dB = (x) => 20 * Math.log10(Math.max(x, 1e-12));
+const FILTER_DROP_DB = 20; // the acceptance bound: the 200 Hz low-pass takes > 20 dB off 4 kHz
+
+/**
+ * Poll `read` until `judge` holds, against a named wall-clock deadline (lib/wait.cjs). Returns
+ * { ok, value }: the last reading either way, so a failed check reports what it measured.
+ */
+async function settle(read, judge, ms, what) {
+  let value;
+  try {
+    await until(async () => {
+      value = await read();
+      return judge(value);
+    }, { ms, what });
+    return { ok: true, value };
+  } catch (e) {
+    if (e instanceof WaitTimeout) return { ok: false, value };
+    throw e;
+  }
+}
+
+async function runApp(engine, browser) {
+  const C = 'seq-filter-reaches-sequence';
+  const context = await browser.newContext({ viewport: { width: 1536, height: 1024 } });
+  const errors = [];
+  try {
+    await context.addInitScript(() => {
+      try {
+        sessionStorage.setItem('oscilla.safetyNoticeCollapsed', '1');
+      } catch (e) {
+        /* storage blocked: the notice stays, the controls are still reachable */
+      }
+    });
+    const page = await context.newPage();
+    page.on('pageerror', (e) => errors.push(String(e)));
+    await page.goto(pathToFileURL(DIST).href);
+    await until(() => page.evaluate(() => document.documentElement.dataset.ready === 'true'),
+      { ms: 30000, what: `${C}: the app is ready` });
+    // The finding's sequence: one looping 4 kHz sine Tone block.
+    await page.evaluate(() => {
+      const seq = window.OSCILLA.labs.sequencer;
+      seq.editor.load({ tempoBpm: 120, loop: true, waveform: 'sine',
+        blocks: [{ id: 't1', type: 'tone', durationMs: 1000, params: { freq: 4000 } }] });
+      seq.render();
+      window.__c003Rms = () => {
+        const an = window.OSCILLA.engine.analyser;
+        if (!an) return 0;
+        const d = new Float32Array(an.fftSize);
+        an.getFloatTimeDomainData(d);
+        let s = 0;
+        for (let i = 0; i < d.length; i++) s += d[i] * d[i];
+        return Math.sqrt(s / d.length);
+      };
+    });
+    const state = () => page.evaluate(() => {
+      const o = window.OSCILLA;
+      return { rms: window.__c003Rms(), playing: o.labs.sequencer.editor.playing,
+        nodes: o.engine.activeNodeCount, sources: o.engine.activeSourceCount,
+        filter: o.labs.filter.config };
+    });
+    const filterOn = () => page.$eval('#osc-filter-enable',
+      (el) => el.getAttribute('aria-checked') === 'true');
+    const setFilter = async (on) => {
+      if ((await filterOn()) !== on) await page.click('#osc-filter-enable');
+      return settle(state, (s) => s.filter.enabled === on, 3000, `${C}: Filter switch ${on}`);
+    };
+    const setCutoff = async (hz) => {
+      await page.fill('#osc-filter-cutoff-value', String(hz));
+      await page.press('#osc-filter-cutoff-value', 'Enter');
+      return settle(state, (s) => Math.abs(s.filter.frequency - hz) < 0.5, 3000,
+        `${C}: the cutoff field sets ${hz} Hz`);
+    };
+
+    await page.click('#osc-ftype-lowpass');
+    await setFilter(false);
+    const cut = await setCutoff(200);
+    check(engine, `${C}: low-pass at 200 Hz set through #osc-filter-cutoff-value`,
+      cut.ok && cut.value.filter.type === 'lowpass', JSON.stringify(cut.value.filter));
+
+    // Filter off: the reference level of the sounding sequence.
+    // The reading is taken once two successive analyser windows agree within 0.5 dB, so the
+    // reference is the steady tone and not a window that still holds the start.
+    await page.click('#osc-seq-play');
+    let prev = 0;
+    const off = await settle(state, (s) => {
+      const steady = s.playing && s.rms > 0.005 && Math.abs(dB(s.rms) - dB(prev)) < 0.5;
+      prev = s.rms;
+      return steady;
+    }, 6000, `${C}: the sequence sounds steadily after Play`);
+    check(engine, `${C}: the sequence sounds and the engine counts it`,
+      off.ok && off.value.nodes > 0 && off.value.sources > 0,
+      `rms ${off.value && off.value.rms.toExponential(2)}, engine nodes `
+        + `${off.value && off.value.nodes}, sources ${off.value && off.value.sources}`);
+    const ref = off.value ? off.value.rms : 0;
+
+    // Filter on while it plays: more than 20 dB down.
+    await setFilter(true);
+    const on = await settle(state, (s) => dB(s.rms) < dB(ref) - FILTER_DROP_DB, 4000,
+      `${C}: the 200 Hz low-pass attenuates the sequence`);
+    check(engine, `${C}: Filter on attenuates the looping 4 kHz sequence by > ${FILTER_DROP_DB} dB`,
+      on.ok && on.value.playing,
+      `${(dB(on.value.rms) - dB(ref)).toFixed(1)} dB (off ${dB(ref).toFixed(1)} dBFS, `
+        + `on ${dB(on.value.rms).toFixed(1)} dBFS)`);
+
+    // A cutoff edit during playback reaches the sounding stage, both ways.
+    await setCutoff(12000);
+    const open = await settle(state, (s) => dB(s.rms) > dB(ref) - 3, 4000,
+      `${C}: a 12 kHz cutoff lets the 4 kHz sequence through`);
+    await setCutoff(200);
+    const shut = await settle(state, (s) => dB(s.rms) < dB(ref) - FILTER_DROP_DB, 4000,
+      `${C}: back to 200 Hz attenuates again`);
+    check(engine, `${C}: cutoff edits during playback apply to the next reading`,
+      open.ok && shut.ok && shut.value.playing,
+      `12 kHz ${(dB(open.value.rms) - dB(ref)).toFixed(1)} dB, `
+        + `200 Hz ${(dB(shut.value.rms) - dB(ref)).toFixed(1)} dB`);
+
+    // Stop: the census returns to zero.
+    await page.click('#osc-seq-stop');
+    const stopped = await settle(state, (s) => !s.playing && s.nodes === 0 && s.sources === 0,
+      4000, `${C}: engine census 0 after Stop`);
+    check(engine, `${C}: engine node count 0 after Stop`, stopped.ok,
+      `playing ${stopped.value.playing}, nodes ${stopped.value.nodes}, `
+        + `sources ${stopped.value.sources}`);
+
+    // Escape: the same, from the app's key handler (it stops once seqPlaying is mirrored).
+    await page.click('#osc-seq-play');
+    const again = await settle(() => page.evaluate(() => ({
+      seq: window.OSCILLA.app.seqPlaying, nodes: window.OSCILLA.engine.activeNodeCount })),
+    (s) => s.seq && s.nodes > 0, 4000, `${C}: the sequence plays again`);
+    await page.keyboard.press('Escape');
+    const escaped = await settle(state, (s) => !s.playing && s.nodes === 0 && s.sources === 0,
+      4000, `${C}: engine census 0 after Escape`);
+    check(engine, `${C}: engine node count 0 after Escape`, again.ok && escaped.ok,
+      `played ${again.ok}, playing ${escaped.value.playing}, nodes ${escaped.value.nodes}, `
+        + `sources ${escaped.value.sources}`);
+
+    // The exported WAV of the sequence goes through the same Filter stage (offline).
+    const wavRms = async (enabled) => {
+      await setFilter(enabled);
+      return page.evaluate(async () => {
+        const r = await window.OSCILLA.app.exportAudio('sequence');
+        if (!r) return null;
+        const d = r.buffer.getChannelData(0);
+        const from = Math.floor(d.length * 0.25);
+        const to = Math.floor(d.length * 0.75);
+        let s = 0;
+        for (let i = from; i < to; i++) s += d[i] * d[i];
+        return Math.sqrt(s / (to - from));
+      });
+    };
+    const wavOff = await wavRms(false);
+    const wavOn = await wavRms(true);
+    check(engine, `${C}: the exported WAV is attenuated by > ${FILTER_DROP_DB} dB as well`,
+      wavOff > 0.005 && wavOn !== null && dB(wavOn) < dB(wavOff) - FILTER_DROP_DB,
+      `off ${wavOff === null ? 'failed' : dB(wavOff).toFixed(1)} dBFS, `
+        + `on ${wavOn === null ? 'failed' : dB(wavOn).toFixed(1)} dBFS`);
+    check(engine, `${C}: no page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  } finally {
+    await context.close();
+  }
+}
+
 // ---------------------------------------------------------------- run
 
 async function runEngine(engine, bundle) {
@@ -486,6 +661,14 @@ async function runEngine(engine, bundle) {
     const final = await page.evaluate(() => window.seqFixture.realtimeTeardown());
     check(engine, 'no live sources after teardown', final.live === 0, JSON.stringify(final));
     check(engine, 'no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
+    await page.close();
+
+    // (e) C003 in the built app.
+    try {
+      await runApp(engine, browser);
+    } catch (e) {
+      check(engine, 'seq-filter-reaches-sequence: run', false, String(e && e.stack ? e.stack : e));
+    }
   } finally {
     await browser.close();
   }

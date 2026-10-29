@@ -962,7 +962,10 @@
       <section class="osc-panel osc-p-envelope" id="osc-panel-envelope" data-osc-panel="envelope"
         data-osc-modes="synthesis" aria-labelledby="osc-env-title">
         <div class="osc-panel-header">
-          <h2 class="osc-panel-title" id="osc-env-title">Envelope (ADSR)</h2>
+          <h2 class="osc-panel-title" id="osc-env-title">Envelope (ADSR)<span data-osc="envelope.scope" hidden
+            :hidden="workspace !== 'sequencer' && !seqPlaying"
+            title="The pattern sequencer plays through the Filter Lab; each of its blocks
+            keeps its own envelope and the sequence's waveform."> · instrument only</span></h2>
           <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm osc-env-power"
             id="osc-env-enable" data-osc="envelope.enable" aria-pressed="false"
             aria-label="Envelope enabled">
@@ -1019,7 +1022,10 @@
       <section class="osc-panel osc-p-additive" id="osc-panel-additive" data-osc-panel="additive"
         data-osc-modes="synthesis" aria-labelledby="osc-add-title">
         <div class="osc-panel-header">
-          <h2 class="osc-panel-title" id="osc-add-title">Additive Synthesis</h2>
+          <h2 class="osc-panel-title" id="osc-add-title">Additive Synthesis<span data-osc="additive.scope" hidden
+            :hidden="workspace !== 'sequencer' && !seqPlaying"
+            title="The pattern sequencer plays through the Filter Lab; each of its blocks
+            keeps its own envelope and the sequence's waveform."> · instrument only</span></h2>
           <span class="osc-spacer"></span>
           <div class="osc-select osc-add-preset">
             <label class="osc-sr-only" for="osc-add-preset">Harmonic preset</label>
