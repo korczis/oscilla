@@ -20,7 +20,10 @@
 //
 // Looping: each pass is compiled as its own voice that starts exactly at the previous pass's
 // end time on the audio clock. A timer only decides *when* to compile the next pass (LOOKAHEAD_S
-// ahead); it never times audio. Edits made during playback apply from the next pass.
+// ahead); it never times audio. Edits made during playback apply from the next pass: each pass
+// record keeps the model it compiled and that model's block layout (block ids and their bounds
+// on the compiled timeline), so the views can tell the sounding pass from the edited model
+// (currentPassBlock, currentPassState) instead of drawing one pass's clock on the other's layout.
 
 import {
   BLOCK_TYPES,
@@ -80,7 +83,8 @@ export function createSequencerEditor(options = {}) {
   const timers = options.timers === undefined ? defaultTimers() : options.timers;
   const priv = {
     voices: new Set(),
-    passes: [], // [{ voice, t0, end }] in start order
+    passes: [], // [{ voice, t0, end, model, layout }] in start order
+    sameCache: { a: null, b: null, same: false, layout: false },
     lastEnd: null,
     loopTimer: null,
     self: null,
@@ -100,6 +104,25 @@ export function createSequencerEditor(options = {}) {
     let found = null;
     for (const p of priv.passes) if (p.t0 <= now) found = p;
     return found || priv.passes[0] || null;
+  };
+
+  // The block layout a pass was compiled with: [{ id, index, startS, endS }], seconds into the
+  // pass on the compiled (frame-rounded) timeline. Frozen: the pass record never changes.
+  const passLayout = (voice) => Object.freeze(voice.timeline.blocks.map((b) => Object.freeze({
+    id: b.id, index: b.index, startS: b.start, endS: b.end })));
+  // What the sounding pass plays against the edited model. `same`: no edit is waiting for the
+  // next pass (the loop flag only decides whether a next pass comes). `layout`: the same blocks,
+  // in the same order, with the same durations, so the edited timeline places them where they
+  // sound. Cached per pair, because the frame loop asks every frame and models are immutable.
+  const compare = (a, b) => {
+    const c = priv.sameCache;
+    if (c.a === a && c.b === b) return c;
+    const blocksKey = (m) => JSON.stringify(m.blocks.map((x) => [x.id, x.durationMs]));
+    const soundKey = (m) => JSON.stringify([m.tempoBpm, m.waveform, m.seed, m.blocks]);
+    const layout = a === b || blocksKey(a) === blocksKey(b);
+    const same = a === b || (layout && soundKey(a) === soundKey(b));
+    priv.sameCache = { a, b, same, layout };
+    return priv.sameCache;
   };
 
   const initial = options.model
@@ -320,7 +343,8 @@ export function createSequencerEditor(options = {}) {
       });
       if (voice.ended) return null; // empty sequence
       priv.voices.add(voice);
-      priv.passes.push({ voice, t0: voice.t0, end: voice.endTime });
+      priv.passes.push({ voice, t0: voice.t0, end: voice.endTime, model: self.model,
+        layout: passLayout(voice) });
       priv.lastEnd = voice.endTime;
       if (voice.warnings.length) self.warnings = voice.warnings;
       return voice;
@@ -451,6 +475,39 @@ export function createSequencerEditor(options = {}) {
       observeClock(ctx); // a fresh clock reading for stop() (compiler.js renderedTimeAtLeast)
       const p = currentPass(ctx.currentTime);
       return p ? { t0: p.t0, duration: p.end - p.t0 } : null;
+    },
+    /**
+     * The block the pass under the audio clock sounds, from that pass's own layout:
+     * { id, index, startS, endS, t } with startS, endS and t in seconds into the pass, or null
+     * when stopped. After an edit during playback the id names the block in the edited model
+     * (timeline.passPlayheadX maps it by id); the index is its place in the sounding pass.
+     */
+    currentPassBlock() {
+      const ctx = getCtx();
+      if (!ctx || !this.playing || !priv.passes.length) return null;
+      observeClock(ctx);
+      const p = currentPass(ctx.currentTime);
+      if (!p) return null;
+      const t = Math.max(0, Math.min(p.end - p.t0, ctx.currentTime - p.t0));
+      const index = p.voice.blockIndexAt(p.t0 + t);
+      const b = p.layout[index];
+      return b ? { id: b.id, index, startS: b.startS, endS: b.endS, t } : null;
+    },
+    /**
+     * The sounding pass against the edited model, or null when stopped:
+     * { durationS, nextDurationS, current, layoutCurrent }. durationS is the sounding pass's
+     * length and nextDurationS the edited model's (what the next pass or the next Play plays);
+     * current is false while an edit waits for the next pass; layoutCurrent is false while the
+     * edited timeline places the blocks elsewhere than the sounding pass does.
+     */
+    currentPassState() {
+      const ctx = getCtx();
+      if (!ctx || !this.playing || !priv.passes.length) return null;
+      const p = currentPass(ctx.currentTime);
+      if (!p) return null;
+      const c = compare(p.model, this.model);
+      return { durationS: p.end - p.t0, nextDurationS: totalDuration(this.model),
+        current: c.same, layoutCurrent: c.layout };
     },
     activeBlockIndex() {
       const ctx = getCtx();

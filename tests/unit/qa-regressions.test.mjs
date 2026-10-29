@@ -312,3 +312,24 @@ test('status bar duration while the sequencer plays is the sequence length', () 
   cmp.seqPlaying = false;
   assert.equal(cmp.statusDurationText, '≤ 2 s');
 });
+
+test('C006: while a stale pass sounds, the status bar shows the sounding and the next length',
+  () => {
+    let model = referenceSequence();
+    let pass = { soundingS: 2.25, nextS: 2.25, current: true, layoutCurrent: true };
+    const seq = { editor: { get model() { return model; } }, passStatus: () => pass };
+    const wb = createWorkbench({ labs: { sequencer: seq } });
+    const cmp = {};
+    Object.defineProperties(cmp, Object.getOwnPropertyDescriptors(wb));
+    Object.assign(cmp, { seqPlaying: true, playing: false, planSummary: { kind: 'open' },
+      continuousAllowed: false, safetyLimit: 2, source: 'single', pattern: 'tone' });
+    assert.equal(cmp.statusDurationText, '2.25 s');
+    // Block 1 lengthened to 3000 ms while pass 1 sounds: 2.25 s plays, 4.75 s comes next.
+    model = { ...model, blocks: model.blocks.map((b, i) => (i ? b : { ...b, durationMs: 3000 })) };
+    pass = { soundingS: 2.25, nextS: 4.75, current: false, layoutCurrent: false };
+    assert.equal(cmp.statusDurationText, '2.25 s now, next 4.75 s');
+    model = { ...model, loop: true };
+    assert.equal(cmp.statusDurationText, '2.25 s now, next 4.75 s (loop)');
+    pass = null; // stopped between frames: the edited length alone
+    assert.equal(cmp.statusDurationText, '4.75 s (loop)');
+  });

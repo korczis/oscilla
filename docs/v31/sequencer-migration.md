@@ -59,6 +59,7 @@ panel), **MIGRATE** (data converted by `importSequence` / `exportSequence`).
 | `layoutBlocks` | REFACTOR | Clip rectangles per track row (`timeline.js timelineRows`) at absolute times |
 | `BLOCK_ACCENTS` | KEEP | Pattern clip colours |
 | `playheadPosition` | SUPERSEDE | `timeline-compiler.js positionAt(anchor, ctxTime)`: start position, loop region and pass number from the audio clock |
+| `passPlayheadX` (C006) | SUPERSEDE | The V2 panel places the head on the sounding block by id while an edit waits for the next pass; the Studio's `EDIT_POLICY` rebuilds future items, so its playhead and timeline describe the same plan |
 | `hitTestBlock` | KEEP | Clip hit testing |
 | `dropIndexAt`, `reorderTarget`, `insertionMarkerX` | SUPERSEDE | Clips are dragged in time (`moveClipResult`, snap), not reordered |
 | `scaleForModel` | REFACTOR | Scale from view state |
@@ -75,6 +76,7 @@ panel), **MIGRATE** (data converted by `importSequence` / `exportSequence`).
 | `onKeydown` (arrows, Alt+Arrow, Delete, Ctrl+D) | REFACTOR | `nudgeClipResult`, `duplicateClipPlacement`, store actions |
 | `dragStart` / `dragOver` / `drop` | SUPERSEDE | `moveClipResult` inside a store gesture (one undo entry) |
 | `playheadTime`, `currentPassTiming`, `activeBlockIndex`, `currentFrequency` | REFACTOR | `positionAt`, the active item, `voice.freqAt` |
+| `currentPassBlock`, `currentPassState` (C006: each pass record keeps its compiled layout) | SUPERSEDE | V2 panel only: the sounding pass against the edited model; the Studio has no stale pass to describe |
 | `serialize`, `load` | KEEP | V2 files; Studio files go through `importSequence` |
 | `SCHEDULE_LEAD_S` | KEEP | `SAFE_HORIZON_S`: nothing is rescheduled closer to now |
 | `TOP_UP_EVERY_MS` | KEEP | Upper bound of `nextWakeMs` |
