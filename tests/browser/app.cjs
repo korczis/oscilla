@@ -1157,6 +1157,166 @@ function defineChecks() {
     return { ok, before, after, crest: +crest.toFixed(3), zeroAfter: zero };
   });
 
+  // C013 (finding vis-divergence-1): the scope and its canvas label follow the output owner.
+  // Sequencer Play and the Playground's compact Studio Play each sound through the one output
+  // analyser; the scope then draws the live trace named after that owner, the aria label says
+  // the same, and with reduced motion on the loop keeps drawing (several frames, not one redraw).
+  def('scope-follows-owner', async ({ page }) => {
+    const owner = () => page.evaluate(() => window.OSCILLA.viz.state.outputOwner);
+    await page.evaluate(() => window.OSCILLA.app.ensureAudio());
+    await H.navTo(page, 'playground');
+    await until(() => page.evaluate(() => window.OSCILLA.app.workspace === 'playground'),
+      { ms: 8000, what: 'scope-follows-owner: the Playground is open' });
+    await page.click('#osc-atab-waveform');
+    await page.evaluate(() => {
+      const ctx = window.OSCILLA.host.p5.drawingContext;
+      window.__c013Drawn = [];
+      if (!ctx.__c013) {
+        const orig = ctx.fillText.bind(ctx);
+        ctx.fillText = (t, ...rest) => {
+          if (window.__c013Drawn) window.__c013Drawn.push(String(t));
+          return orig(t, ...rest);
+        };
+        ctx.__c013 = true;
+      }
+      const v = window.OSCILLA.viz;
+      v.state.reducedMotion = true; // prefers-reduced-motion as the bridge reads it at start
+      v.updateLoop();
+    });
+    const read = () => page.evaluate(() => {
+      const drawn = window.__c013Drawn.splice(0);
+      return {
+        live: drawn.filter((t) => t.startsWith('output analyser')),
+        idle: drawn.filter((t) => /not playing/.test(t)).length,
+        aria: document.getElementById('osc-chart-waveform').getAttribute('aria-label'),
+        looping: window.OSCILLA.viz.looping,
+      };
+    });
+    // One leg: wait for the owner's label and aria label, then count the frames drawn after it.
+    const leg = async (name, re, ariaRe) => {
+      const first = await until(async () => {
+        const r = await read();
+        return r.live.some((t) => re.test(t)) && ariaRe.test(r.aria) ? r : null;
+      }, { ms: 6000, what: `scope-follows-owner: ${name}: live scope and aria label` });
+      let idle = 0;
+      let drawn = 0;
+      const later = await until(async () => {
+        const r = await read();
+        idle += r.idle;
+        drawn += r.live.filter((t) => re.test(t)).length;
+        return drawn >= 3 ? r : null;
+      }, { ms: 6000, what: `scope-follows-owner: ${name}: the scope keeps drawing` });
+      return { label: first.live[0], aria: first.aria, looping: later.looping, idle };
+    };
+    const out = {};
+    try {
+      out.reducedLoopIdle = (await read()).looping;
+      out.loopWas = await page.evaluate(() => {
+        const ed = window.OSCILLA.labs.sequencer.editor;
+        const was = !!ed.model.loop;
+        if (!was) ed.setLoop(true); // the sequence still sounds when a loaded host is slow
+        return was;
+      });
+      await page.click('#osc-seq-play');
+      out.seq = await leg('sequencer', /^output analyser · sequencer/,
+        /^Live output analyser waveform \(sequencer\)/);
+      out.seqOwner = await owner();
+      await page.evaluate((was) => {
+        const ed = window.OSCILLA.labs.sequencer.editor;
+        ed.stop();
+        if (!was) ed.setLoop(false);
+      }, out.loopWas);
+      out.seqStopped = await until(() => page.evaluate(() => {
+        const ed = window.OSCILLA.labs.sequencer.editor;
+        return !ed.playing && ed.stats().activeNodeCount === 0
+          && window.OSCILLA.viz.state.outputOwner === null;
+      }), { ms: 4000, what: 'scope-follows-owner: the sequencer stops and frees its nodes' });
+      await page.click('[data-osc="studio.compact.play"]');
+      out.studio = await leg('Studio', /^output analyser · Studio/,
+        /^Live output analyser waveform \(Studio\)/);
+      out.studioOwner = await owner();
+    } finally {
+      await page.evaluate((was) => {
+        const ed = window.OSCILLA.labs.sequencer.editor;
+        if (ed.playing) ed.stop();
+        if (was === false) ed.setLoop(false);
+        const s = window.OSCILLA.studio;
+        if (s && s.counts().playing) window.OSCILLA.app.studioStop();
+      }, out.loopWas);
+      out.studioStopped = await until(() => page.evaluate(() => !window.OSCILLA.studio.counts()
+        .playing && !window.OSCILLA.viz.state.outputOwner),
+      { ms: 4000, what: 'scope-follows-owner: the Studio stops' });
+      out.idleAria = (await read()).aria;
+      await page.evaluate(() => {
+        window.__c013Drawn = null;
+        const v = window.OSCILLA.viz;
+        let rm = false;
+        try { rm = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { /* */ }
+        v.state.reducedMotion = rm;
+        v.updateLoop();
+      });
+    }
+    out.zeroAfter = await H.waitNodes0(page, 3000);
+    const ok = out.reducedLoopIdle === false
+      && out.seq.looping && out.seq.idle === 0 && out.seqOwner === 'sequencer' && out.seqStopped
+      && out.studio.looping && out.studio.idle === 0 && out.studioOwner === 'studio'
+      && out.studioStopped && /^Waveform, not playing/.test(out.idleAria) && out.zeroAfter;
+    return { ok, ...out };
+  });
+
+  // C013 (finding vis-divergence-4): the Spectrum's requested marker follows the sequence while
+  // only the sequencer sounds: the instrument at 250 Hz is not played, block 0 (Tone 440 Hz)
+  // marks 440 Hz, and the Silence block (a gap) hides the marker and its level chip.
+  def('spectrum-marker-follows-sequence', async ({ page }) => {
+    await page.evaluate(() => window.OSCILLA.app.ensureAudio());
+    await H.navTo(page, 'playground');
+    await until(() => page.evaluate(() => window.OSCILLA.app.workspace === 'playground'),
+      { ms: 8000, what: 'spectrum-marker-follows-sequence: the Playground is open' });
+    const loopWas = await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.setFrequency(250);
+      const ed = window.OSCILLA.labs.sequencer.editor;
+      const was = !!ed.model.loop;
+      if (!was) ed.setLoop(true); // the gap comes round again on a loaded machine
+      return was;
+    });
+    const read = () => page.evaluate(() => {
+      const ed = window.OSCILLA.labs.sequencer.editor;
+      const chart = window.OSCILLA.labs.analysis.chart;
+      return { block: ed.activeBlockIndex(), cur: ed.currentFrequency(),
+        req: chart.options.requested, inst: window.OSCILLA.app.playing,
+        shown: document.getElementById('osc-chart-spectrum').offsetParent !== null };
+    });
+    const out = {};
+    try {
+      await page.click('#osc-seq-play');
+      out.tone = await until(async () => {
+        const r = await read();
+        return r.block === 0 && r.cur === 440 && r.req === 440 ? r : null;
+      }, { ms: 6000, what: 'spectrum-marker-follows-sequence: block 0 marks 440 Hz' });
+      out.gap = await until(async () => {
+        const r = await read();
+        return r.block === 2 && r.cur === null && r.req === null ? r : null;
+      }, { ms: 8000, what: 'spectrum-marker-follows-sequence: the Silence block hides it' });
+    } finally {
+      await page.evaluate((was) => {
+        const ed = window.OSCILLA.labs.sequencer.editor;
+        ed.stop();
+        if (!was) ed.setLoop(false);
+      }, loopWas);
+    }
+    out.idle = await until(async () => {
+      const r = await read();
+      return r.req === 250 ? r : null;
+    }, { ms: 4000, what: 'spectrum-marker-follows-sequence: stopped, the instrument marker' });
+    out.zeroAfter = await until(() => page.evaluate(() => window.OSCILLA.labs.sequencer.editor
+      .stats().activeNodeCount === 0), { ms: 4000,
+      what: 'spectrum-marker-follows-sequence: the sequencer frees its nodes' });
+    const ok = out.tone.shown && !out.tone.inst && !!out.gap && out.idle.req === 250
+      && out.zeroAfter;
+    return { ok, ...out };
+  });
+
   def('frequency-slider-and-fine-steps', async ({ page }) => {
     await H.continuous(page, true);
     await H.focusBody(page);
