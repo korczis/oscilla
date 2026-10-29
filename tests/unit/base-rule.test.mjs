@@ -551,7 +551,7 @@ test('R17, R18, R22: a git dependency, a .npmrc git= and their combination canno
       ff.steps.at(-1)] };
     for (const [route, want] of [['git-dependency', /node_modules\/dep resolves to git\+file:/],
       ['npmrc', /\.npmrc:1: git names a program npm runs/],
-      ['nested', /node_modules\/a: optionalDependencies\.b = "git\+file:[^"]*" names git\+/]]) {
+      ['nested', /node_modules\/a: optionalDependencies\.b = "git\+file:[^"]*" is a git spec/]]) {
       // the control: under --ignore-scripts npm runs the PR's code, and before the judge it
       // rewrites the read-only extracted copy, so the judge's step prints a forged pass
       const control = hostileFixture(t, ['wrapper', 'judge'], route, cache);
@@ -644,4 +644,13 @@ test('R25: a committed node_modules is refused, and a judge copy lacking a progr
   assert.equal(resealed.status, 2, resealed.out);
   assert.match(resealed.out, /names scripts\/review-verdict\.mjs, which the judge copy lacks/);
   assert.doesNotMatch(resealed.out, /this checkout's copy judges/);
+});
+
+// review of #255, round 6, R37: tests/unit/fixtures/judge-copy.mjs is no guarded path, so what
+// it does here is pinned by its git blob id (as the f001 fixtures are): a change to it is a
+// change to this guarded test
+test('R37: the judge-copy fixture is the reviewed blob', () => {
+  const data = readFileSync(path.join(ROOT, 'tests', 'unit', 'fixtures', 'judge-copy.mjs'));
+  const oid = createHash('sha1').update(`blob ${data.length}\0`).update(data).digest('hex');
+  assert.equal(oid, '08b44ae6656fe04a5515574d9ffd650ba97198b6');
 });

@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync }
   from 'node:fs';
+import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
@@ -598,3 +599,12 @@ writeFileSync(${JSON.stringify(out)}, JSON.stringify(process.env));
       'NODE_OPTIONS', 'BASH_ENV']) assert.equal(k in env, false, k);
     assert.equal(env.PATH.split(':')[0], path.dirname(process.execPath));
   });
+
+// review of #255, round 6, R37: tests/unit/fixtures/judge-copy.mjs is no guarded path, so what
+// it does here is pinned by its git blob id (as the f001 fixtures are): a change to it is a
+// change to this guarded test
+test('R37: the judge-copy fixture is the reviewed blob', () => {
+  const data = readFileSync(path.join(ROOT, 'tests', 'unit', 'fixtures', 'judge-copy.mjs'));
+  const oid = createHash('sha1').update(`blob ${data.length}\0`).update(data).digest('hex');
+  assert.equal(oid, '08b44ae6656fe04a5515574d9ffd650ba97198b6');
+});

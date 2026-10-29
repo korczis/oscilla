@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { chmodSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync,
   writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -129,6 +130,9 @@ test('R30: every judge step writes manifestOf()\'s manifest, and copies exactly 
     const m = loadManifest(s.dir, digestOf(text));
     assert.equal(m.problem, null, s.job);
     assert.equal(m.commit, b.sha);
+    // R38: the count in the log is the files', the manifest's commit header is none
+    assert.equal(text.trim().split('\n').length - 1, m.entries.size, s.job);
+    assert.match(s.log, new RegExp(`, ${m.entries.size} files$`, 'm'), `${s.job}: R38`);
     assert.deepEqual(copyProblems(s.dir, m), [], s.job);
     assert.ok(statSync(path.join(s.dir, '.github', 'scripts', 'base-rule.sh')).mode & 0o100);
     // the verifier refuses what the writer left out, put back into the copy
@@ -241,3 +245,12 @@ test('a child runs in a group of its own, and its background grandchild dies wit
     assert.equal(slow.timedOut, true);
     assert.equal(slow.signal, 'SIGKILL');
   });
+
+// review of #255, round 6, R37: tests/unit/fixtures/judge-copy.mjs is no guarded path, so what
+// it does here is pinned by its git blob id (as the f001 fixtures are): a change to it is a
+// change to this guarded test
+test('R37: the judge-copy fixture is the reviewed blob', () => {
+  const data = readFileSync(path.join(ROOT, 'tests', 'unit', 'fixtures', 'judge-copy.mjs'));
+  const oid = createHash('sha1').update(`blob ${data.length}\0`).update(data).digest('hex');
+  assert.equal(oid, '08b44ae6656fe04a5515574d9ffd650ba97198b6');
+});
