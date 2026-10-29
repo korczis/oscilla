@@ -95,7 +95,9 @@ changed.
   species, every value cited.
 - **Export:** WAV of the current tone, pattern or sequence, rendered offline through the same
   signal chain as live playback; a PNG of the graphs; the configuration as JSON (export and
-  import); a shareable configuration URL.
+  import); a shareable configuration URL. The sequence plays and exports in the instrument's
+  waveform; importing a file whose sequence names another waveform says so instead of
+  reporting it restored.
 - **About:** the last workspace tells how OSCILLA was built and with what discipline, and shows
   the running build's version, commit, channel and source digest.
 
