@@ -581,12 +581,12 @@ function defaultTimers() {
  * t0 is clamped to >= ctx.currentTime and rounded up to a whole frame.
  * keepGrid (realtime only): a t0 the clock has already passed is not clamped. The voice keeps
  * every event at t0 + t, as on time (the audio thread evaluates the past ones at its own
- * position), and joins that grid click-free: the out gain holds GAIN_FLOOR until joinAt, the
- * first render-quantum boundary at least one quantum after the audio rendered so far, and ramps
- * to 1 over EDGE_S. A late voice so loses its first frames but none of its boundaries: its end,
- * and the start of whatever follows it on the same grid, stay where they were authored (a
- * clamped voice moves as a whole and overlaps its successor). voice.joinAt is that time, null
- * for a voice that is on time.
+ * position), and joins that grid click-free: the out gain holds GAIN_FLOOR until joinAt, read
+ * once the voice is scheduled, STOP_LEAD_S (at least two quanta) after the audio rendered so far
+ * on a render-quantum boundary, as a stop is, and ramps to 1 over EDGE_S. A late voice so
+ * loses its first frames but none of its boundaries: its end, and the start of whatever follows
+ * it on the same grid, stay where they were authored (a clamped voice moves as a whole and
+ * overlaps its successor). voice.joinAt is that time, null for a voice that is on time.
  * voice: { t0, endTime, duration, sampleRate, warnings, timeline, events, stopTime, joinAt,
  *          stop(atTime?) -> boolean, dispose(), freqAt(ctxTime), blockIndexAt(ctxTime),
  *          ended, stopping, activeSourceCount, activeNodeCount }
@@ -899,9 +899,11 @@ export function compileSequence(model, ctx, destination, t0, opts = {}) {
     // A late voice joins its grid once everything is scheduled and its sources (started in the
     // past: they run at once) sound into a floor-held out gain. The clock is read here, after
     // the timeline, the graph and the schedules were built, which takes time too.
+    // STOP_LEAD_S ahead, as a stop: the edge starts on frames not rendered yet even when the
+    // main thread is late or the context renders in bursts.
     const q = RENDER_QUANTUM / tl.sampleRate;
     const rendered = Math.max(ctx.currentTime, renderedTimeAtLeast(ctx));
-    joinAt = Math.ceil((rendered + q) / q - 1e-9) * q;
+    joinAt = Math.ceil((rendered + Math.max(STOP_LEAD_S, 2 * q)) / q - 1e-9) * q;
     voice.joinAt = joinAt;
     out.gain.setValueAtTime(GAIN_FLOOR, joinAt);
     out.gain.linearRampToValueAtTime(1, joinAt + EDGE_S);

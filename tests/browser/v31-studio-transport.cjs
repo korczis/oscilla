@@ -86,10 +86,10 @@ const ENTRY = path.join(__dirname, 'fixtures', 'v31-studio-transport-entry.js');
 // A Tone voice compiled after the clock passed its start (the main thread late between the
 // window's lateness check and the compile: webkit on CI and a loaded linux container, 3-50 ms)
 // keeps its grid (compileSequence keepGrid, transport decision 'joined-late'): it joins at the
-// next safe render quantum and the onset prediction follows that join, while the boundary and
-// end checks stay exactly as strict (before keepGrid such a voice moved late as a whole, its
-// release overlapped the Sweep's attack and the quietest window was the Sweep's own waveform at
-// 1.016 s, −6.5 dB).
+// first safe render quantum (STOP_LEAD_S ahead, as a stop) and the onset prediction follows that
+// join, while the boundary and end checks stay exactly as strict (before keepGrid such a voice
+// moved late as a whole, its release overlapped the Sweep's attack and the quietest window was
+// the Sweep's own waveform at 1.016 s, −6.5 dB).
 // The engine's limiter (DynamicsCompressorNode) delays the destination by its look-ahead: 6 ms in
 // Blink, Gecko and WebKit (measured 288 frames at 48 kHz in each), which is why the analyser tap
 // read the onset at 14 ms and the boundary at 1.006 s. Firefox's limiter also lags the first

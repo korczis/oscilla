@@ -343,7 +343,7 @@ test('compileSequence keepGrid: a voice compiled after its start keeps its grid'
   // The Studio transport (webkit CI, #261/#262): the clock passed a clip's start between the
   // scheduler's lateness check and the compile. Clamped, the voice moved late as a whole and its
   // release overlapped the next clip's attack; with keepGrid every event stays at t0 + t and
-  // the out gain joins that grid click-free one render quantum after the rendered audio.
+  // the out gain joins that grid click-free STOP_LEAD_S after the rendered audio, as a stop.
   const late = 1.0101 + 0.0137;
   const q = 128 / SR;
   const clamped = compileRef({ ctx: { currentTime: late } });
@@ -363,7 +363,7 @@ test('compileSequence keepGrid: a voice compiled after its start keeps its grid'
     const { ctx, voice } = compileRef({ ctx: { currentTime: late }, keepGrid: true });
     assertNear(voice.t0 * SR, Math.ceil(1.0101 * SR), 1e-9, 'the grid start, not the clock');
     assertNear(voice.endTime, voice.t0 + 3, 1e-12, 'the end stays on the grid');
-    const join = Math.ceil((late + q) / q - 1e-9) * q;
+    const join = Math.ceil((late + STOP_LEAD_S) / q - 1e-9) * q;
     assertNear(voice.joinAt, join, 1e-12);
     assertNear((voice.joinAt * SR) / 128, Math.round((voice.joinAt * SR) / 128), 1e-6);
     const carrier = ctx.oscillators[0];

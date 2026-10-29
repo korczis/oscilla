@@ -258,8 +258,9 @@ The first audible sample depends on what follows the voice, not on the clip:
   in a loaded linux container, 3 to 50 ms) keeps its grid instead of moving late as a whole:
   `compileSequence(..., { keepGrid: true })` schedules every event at `startTime + t` as on
   time and holds the voice's out gain at the floor until `joinAt`, the first render-quantum
-  boundary at least one quantum after the audio rendered so far, then ramps it to 1 over
-  `EDGE_S`. The voice loses its first frames, never its boundaries: the Tone's release still
+  boundary `STOP_LEAD_S` (at least two quanta) after the audio rendered so far, as a stop, read
+  once the voice is scheduled, then ramps it to 1 over `EDGE_S`. The voice loses its first
+  frames, never its boundaries: the Tone's release still
   meets the Sweep's attack on the boundary frame (a clamped voice overlapped the next clip by
   its lateness). The transport records a `joined-late` decision `{ from: startTime, to: joinAt }`.
 

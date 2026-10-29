@@ -178,7 +178,7 @@ test('a clip voice compiled after the clock passed its start keeps the clip boun
   // the clock before baseTime, then the main thread was late before the Tone's voice was built.
   // compileSequence clamped its start to the clock, so the whole voice moved late, its release
   // overlapped the Sweep's attack at b + 1 s and the boundary had no dip. The voice now keeps
-  // its grid and joins it one render quantum after the clock.
+  // its grid and joins it STOP_LEAD_S after the clock, as a stop.
   const s = setup();
   const late = 0.004; // > one render quantum (2.67 ms), < SAFE_HORIZON_S
   let transport = null;
@@ -206,7 +206,8 @@ test('a clip voice compiled after the clock passed its start keeps the clip boun
   assert.equal(joined.length, 1);
   assert.equal(joined[0].clipId, 'clip-1');
   assert.equal(joined[0].from, at(bF, 0));
-  assert.ok(joined[0].to >= jumped + q - EPS && joined[0].to < jumped + 2 * q + 0.2,
+  assert.ok(joined[0].to >= jumped + STOP_LEAD_S - EPS
+    && joined[0].to < jumped + STOP_LEAD_S + q + 0.2,
     `joined at ${joined[0].to}`);
   near((joined[0].to * SR) / 128, Math.round((joined[0].to * SR) / 128), 1e-6);
   // carrier -> amp -> env -> out (compileSequence); read before the voice ends and disconnects.
