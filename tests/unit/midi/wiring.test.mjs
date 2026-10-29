@@ -3,7 +3,8 @@
 // - The page offers one "Connect MIDI" control (pointer and keyboard: a button) and one status
 //   line that states the support state; nothing in src/js but src/js/midi/support.js calls
 //   requestMIDIAccess, and it calls it once, with { sysex: false }, inside connect().
-// - main.js composes the MIDI part and starts it with the component.
+// - main.js composes the MIDI part and starts it with the component; V502: it hands the part
+//   the engine, and stopPlayback (Measure and Studio PLAY taking the output) stops MIDI notes.
 // - tests/browser/midi.cjs runs in the release gate (test:browser) through the harness, its seam
 //   is tests/browser/lib/midi-stub.cjs (which names itself), and every page member the module
 //   reads on a MIDIAccess or a MIDIPort is one the stub declares and the browser suite compares
@@ -86,6 +87,15 @@ test('main.js composes the MIDI part and starts it with the component', () => {
   assert.match(main, /compose\([^)]*\bmidi\b[^)]*\)/);
   assert.match(main, /this\.midiInit\(\);/);
 });
+
+test('V502: main.js hands the engine to the MIDI part, and taking the output stops MIDI notes',
+  () => {
+    const main = code(read('src/js/main.js'));
+    assert.match(main, /const midi = createMidiUi\(\{ engine \}\);/);
+    const stop = /function stopPlayback\(cmp\) \{([\s\S]*?)\n\}/.exec(main);
+    assert.ok(stop, 'stopPlayback (Measure and Studio PLAY take the output)');
+    assert.match(stop[1], /cmp\.midiAllOff\(\)/);
+  });
 
 test('tests/browser/midi.cjs runs in the release gate', () => {
   const pkg = JSON.parse(read('package.json'));

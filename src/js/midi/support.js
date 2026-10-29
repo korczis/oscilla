@@ -24,7 +24,12 @@
 // The module reads only these members of the platform objects (tests/browser/midi.cjs compares
 // them with the real interfaces, through tests/browser/lib/midi-stub.cjs PAGE_READS):
 // access.inputs / addEventListener / removeEventListener, inputs.forEach, and port.name /
-// state / type.
+// state / type / addEventListener / removeEventListener / open.
+//
+// Messages (V502): each connected input of the open access is listened to for `midimessage`,
+// and `onMessage(data, port)` receives its bytes. `onSilence()` is called when an input that was
+// listened to leaves, and when the access is withdrawn or replaced by a new Connect MIDI, so
+// the note layer can stop what that input was holding (src/js/midi/notes.js).
 
 export const MIDI_STATES = Object.freeze([
   'insecure', 'unsupported', 'pending', 'blocked', 'denied', 'failed', 'revoked', 'connected',
@@ -97,7 +102,8 @@ const REJECTED = { SecurityError: 'blocked', NotAllowedError: 'denied' };
  * `onChange(snapshot)` is called after every change of the state or of the input names.
  */
 export function createMidiSupport({ navigator: nav, isSecureContext, site = 'this page',
-  onChange = () => {}, queryTimeoutMs = MIDI_QUERY_TIMEOUT_MS } = {}) {
+  onChange = () => {}, onMessage = () => {}, onSilence = () => {},
+  queryTimeoutMs = MIDI_QUERY_TIMEOUT_MS } = {}) {
   let state = null;
   let detail = {};
   let status = null;        // the kept PermissionStatus
@@ -126,9 +132,39 @@ export function createMidiSupport({ navigator: nav, isSecureContext, site = 'thi
     set(s || 'unknown');
   };
 
+  // The midimessage listeners of the open access: one per connected input, removed when the
+  // input leaves (then onSilence) or the access is dropped.
+  const listen = () => {
+    const connected = new Set();
+    live.access.inputs.forEach((port) => {
+      if (port.state !== 'connected' || port.type === 'output') return;
+      connected.add(port);
+      if (live.heard.has(port)) return;
+      const fn = (event) => { if (event && event.data) onMessage(event.data, port); };
+      live.heard.set(port, fn);
+      port.addEventListener('midimessage', fn);
+      // Opened explicitly: an added listener is not relied on to open the port implicitly.
+      try {
+        if (typeof port.open === 'function') Promise.resolve(port.open()).catch(() => {});
+      } catch (error) { /* the port stays as it is; its messages, if any, still arrive */ }
+    });
+    let lost = false;
+    for (const [port, fn] of live.heard) {
+      if (connected.has(port)) continue;
+      port.removeEventListener('midimessage', fn);
+      live.heard.delete(port);
+      lost = true;
+    }
+    if (lost) onSilence();
+  };
+
   const drop = () => {
-    if (live) live.access.removeEventListener('statechange', live.listener);
+    if (!live) return;
+    live.access.removeEventListener('statechange', live.listener);
+    for (const [port, fn] of live.heard) port.removeEventListener('midimessage', fn);
+    const heard = live.heard.size;
     live = null;
+    if (heard) onSilence();
   };
 
   // The state an open access gives (rows 8 to 10); `leaving` is the port of the statechange.
@@ -136,6 +172,7 @@ export function createMidiSupport({ navigator: nav, isSecureContext, site = 'thi
     const names = connectedNames(live.access);
     const before = live.count;
     live.count = names.length;
+    listen();
     if (names.length) {
       live.everConnected = true;
       set('connected', { names });
@@ -213,7 +250,8 @@ export function createMidiSupport({ navigator: nav, isSecureContext, site = 'thi
         const listener = (event) => {
           if (live && live.access === access) fromAccess(event && event.port);
         };
-        live = { access, listener, everConnected: false, count: 0, lastName: '' };
+        live = { access, listener, everConnected: false, count: 0, lastName: '',
+          heard: new Map() };
         access.addEventListener('statechange', listener);
         fromAccess();
       }, (error) => {

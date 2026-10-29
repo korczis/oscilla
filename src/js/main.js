@@ -213,12 +213,14 @@ engine.play = (plan, o = {}) => {
 
 /**
  * Measure (and Studio PLAY) take the output: stop the instrument and the sequencer (their
- * voices fade), and a playing Studio (V3.1; it is not playing while it claims the output).
+ * voices fade), a playing Studio (V3.1; it is not playing while it claims the output) and the
+ * MIDI notes.
  */
 function stopPlayback(cmp) {
   if (cmp.seqPlaying && labs.sequencer) labs.sequencer.editor.stop();
   if (cmp.playing) cmp.stopNow();
   if (typeof cmp.studioOwnsOutput === 'function' && cmp.studioOwnsOutput()) cmp.studioStop();
+  if (typeof cmp.midiAllOff === 'function') cmp.midiAllOff(); // MIDI notes too (V502)
 }
 
 /** Revert the sounding voice from a PeriodicWave to its oscillator type (additive off). */
@@ -741,7 +743,8 @@ function createOscillaComponent(ui) {
   const connections = createConnectionsUi();
   const studio = createStudioUi({ engine, stopPlayback });
   const navigation = createNavigation();
-  const midi = createMidiUi(); // optional input (ADR 0058): reads support at load, never requests
+  // Optional input (ADR 0058): reads support at load, never requests; notes sound through engine.
+  const midi = createMidiUi({ engine });
   const cmp = compose(instrument, ui, workbench, measure, experiments, findings, connections,
     studio, navigation, midi, provenancePart(), TEMPLATE_HELPERS);
   cmp.dismissAlert = focusSafeDismiss(cmp.dismissAlert);

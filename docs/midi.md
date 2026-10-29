@@ -2,9 +2,10 @@
 
 MIDI is an optional input layer over the audio engine (ADR 0058,
 `.ai/repo/adrs/0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md`). This page
-describes what the first piece of it (plan issue V501) does: OSCILLA detects Web MIDI and its
-permission at runtime, lists the connected inputs and states one support state. Notes do not
-sound yet; that is V502. When MIDI is missing, nothing outside the MIDI surface changes.
+describes what its first two pieces do. V501: OSCILLA detects Web MIDI and its permission at
+runtime, lists the connected inputs and states one support state. V502: the notes of the
+connected inputs sound through the audio engine (see "Playing notes" below). When MIDI is
+missing, nothing outside the MIDI surface changes.
 
 ## Where it is
 
@@ -80,6 +81,37 @@ is then skipped, because there is no access to withdraw; on darwin the same outc
 `insecure` is reached only over plain http on a non-local address, which no gate origin is, and
 `connected`, `disconnected` and the other states without a real device are proved with the test
 seam below.
+
+## Playing notes
+
+Once Connect MIDI has connected an input, its notes sound through the one audio engine, with the
+Playground's waveform, attack, release and A4 tuning. There is no second synthesizer; the
+decisions are the V502 note of ADR 0058.
+
+- **Polyphony.** Up to 8 notes (`NOTE_POLYPHONY`) sound at once. Each is scaled to one eighth of
+  a full voice, so a full chord never exceeds the level of one Playground tone at the same
+  output level; one note is therefore 18 dB quieter than a Playground tone. A ninth note fades
+  out the oldest note (one already releasing first) and starts when that fade has ended.
+- **Velocity.** Amplitude `(velocity / 127)^2`: velocity 127 is full level, 64 about -12 dB,
+  32 about -24 dB.
+- **Messages.** Every channel is heard. Note On with velocity 0 is a Note Off. Playing a key that
+  is still sounding restarts it. CC 120 (All Sound Off) stops every note at once; CC 123 (All
+  Notes Off) releases them. Sustain (CC 64) and every other message are ignored for now.
+- **Safety.** A note that would sound at or above 95 % of the context's Nyquist frequency is not
+  played. A held note obeys the safety limit like HOLD TO PLAY: without the continuous
+  permission it stops at the limit (2 s by default) even with the key down.
+- **Stopping.** Every note stops within a few milliseconds when its input is unplugged, when the
+  MIDI access is withdrawn or Connect MIDI is chosen again, when the page is hidden, on Escape,
+  and when a measurement or the Studio takes the output. Switching to another window does not
+  stop notes: their Note Off still arrives.
+- **The output.** A note and a Playground tone never sound together: whichever starts fades the
+  other out first. While a measurement or the Studio is playing, notes are refused, and OSCILLA
+  says so once.
+
+`tests/unit/midi/notes.test.mjs` proves this on a fake audio context; `tests/browser/midi.cjs`
+check `midi-seam-notes` plays synthetic MIDI events from the test seam into the built page in
+the three gate builds and counts the oscillators independently. No check plays a real device,
+and latency is not measured.
 
 ## How it is tested without hardware
 

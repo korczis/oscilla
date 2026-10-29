@@ -44,6 +44,16 @@
 //                               failed with the name; a newer request wins over an older one
 //                               (polled until the older settlement has reached the page, and
 //                               nothing listens to its access)
+//   midi-seam-notes             V502, synthetic MIDI events from the stub into the AudioEngine,
+//                               the context forced to NOTES_RATE: a Note On sounds (one live
+//                               oscillator counted by the page's own probe, the analyser's peak
+//                               under the master level / NOTE_POLYPHONY); a chord of more than
+//                               NOTE_POLYPHONY notes keeps at most NOTE_POLYPHONY, the peak under
+//                               one voice's level; Note Off and velocity 0 leave zero oscillators
+//                               and zero engine nodes; no gain set to 0 or ramped exponentially
+//                               to 0; a note at or above 0.95 x Nyquist of the running context is
+//                               refused; held notes stop when their input is unplugged and on
+//                               Escape; a held note ends by itself at the session safety limit
 //
 // A gate build or platform not in the record (the CI runners, ubuntu-latest) is held to the
 // states the ADR allows for it and prints what it measured on a RECORD line. There a Chromium
@@ -95,6 +105,12 @@ const MEASURED = {
 const GRANTED = DARWIN ? ['no-devices'] : ['no-devices', 'failed'];
 const MIDI_ONLY = DARWIN ? ['denied'] : ['denied', 'failed'];
 const SEAM_LOAD = { chromium: 'needs-permission', firefox: 'needs-permission', webkit: 'unknown' };
+// midi-seam-notes forces the context to a rate whose 0.95 x Nyquist (10473.75 Hz) falls between
+// two MIDI notes: 123 (9956 Hz) plays, NYQUIST_NOTE 124 (10548 Hz) is refused. The engine suite
+// forces the same rate in all three gate builds.
+const NOTES_RATE = 22050;
+const NYQUIST_NOTE = 124;
+let NOTE_POLYPHONY;
 
 // ------------------------------------------------------------------------- pure judgements
 /**
@@ -137,9 +153,10 @@ function check(leg, id, name, ok, detail = '') {
 }
 
 // ------------------------------------------------------------------------------ page helpers
-async function openPage(browser, url, { init, permissions } = {}) {
+async function openPage(browser, url, { init, permissions, also } = {}) {
   const context = await browser.newContext(permissions ? { permissions } : {});
   if (init) await context.addInitScript(init.fn, init.arg);
+  if (also) await context.addInitScript(also.fn, also.arg);
   const page = await context.newPage();
   page.setDefaultTimeout(30000);
   const errors = [];
@@ -223,6 +240,107 @@ const stateIs = (page, states, what, ms = STEP_MS) => view(page,
 
 const seam = (page, fn, ...a) => page.evaluate(([f, args]) => window.__oscMidiSeam[f](...args),
   [fn, a]);
+
+// Runs in the page before the application (addInitScript), beside the stub: counts the
+// oscillators the page starts and that have not ended, independently of the engine's own
+// accounting, and the most whose scheduled [start, stop) intervals overlap; records the highest
+// frequency scheduled on an oscillator and, since the last reset(), every gain automation that
+// would click (a set to 0 from nonzero, an exponential ramp to 0 or below); and forces the
+// context's sample rate to `cfg.sr`. It is test instrumentation, not part of the seam's marker.
+function audioProbe(cfg) {
+  const T = { oscs: [], maxFreq: 0, clicks: [] };
+  const overlap = () => {
+    const iv = T.oscs.filter((r) => r.startAt !== null)
+      .map((r) => [r.startAt, r.stopAt === null ? Infinity : r.stopAt]);
+    let most = 0;
+    for (const [a] of iv) most = Math.max(most, iv.filter(([s, e]) => s <= a && a < e).length);
+    return most;
+  };
+  for (const name of ['AudioContext', 'webkitAudioContext']) {
+    const Orig = window[name];
+    if (!Orig || !cfg || !cfg.sr) continue;
+    window[name] = class extends Orig {
+      constructor(o) { super(Object.assign({}, o || {}, { sampleRate: cfg.sr })); }
+    };
+  }
+  const BAC = window.BaseAudioContext || window.AudioContext;
+  const freqs = new WeakSet();
+  const create = BAC.prototype.createOscillator;
+  BAC.prototype.createOscillator = function createOscillator(...a) {
+    const o = create.apply(this, a);
+    const rec = { started: false, ended: false, startAt: null, stopAt: null };
+    T.oscs.push(rec);
+    freqs.add(o.frequency);
+    o.addEventListener('ended', () => { rec.ended = true; });
+    const ctx = this;
+    const start = o.start;
+    o.start = function startProbe(when = 0, ...x) {
+      rec.started = true;
+      rec.startAt = Math.max(when, ctx.currentTime);
+      return start.call(this, when, ...x);
+    };
+    // The last stop() before the node stops wins (Web Audio); one after it changes nothing.
+    const stop = o.stop;
+    o.stop = function stopProbe(when = 0) {
+      const at = Math.max(when, ctx.currentTime);
+      if (rec.stopAt === null || ctx.currentTime < rec.stopAt) rec.stopAt = at;
+      return stop.call(this, when);
+    };
+    return o;
+  };
+  const P = AudioParam.prototype;
+  const set = P.setValueAtTime;
+  P.setValueAtTime = function setProbe(v, t) {
+    if (freqs.has(this)) T.maxFreq = Math.max(T.maxFreq, v);
+    else if (v === 0 && this.value !== 0) T.clicks.push(`setValueAtTime(0, ${t})`);
+    return set.call(this, v, t);
+  };
+  const exp = P.exponentialRampToValueAtTime;
+  P.exponentialRampToValueAtTime = function expProbe(v, t) {
+    if (!(v > 0)) T.clicks.push(`exponentialRampToValueAtTime(${v}, ${t})`);
+    return exp.call(this, v, t);
+  };
+  window.__oscMidiAudio = {
+    live: () => T.oscs.filter((r) => r.started && !r.ended).length,
+    started: () => T.oscs.filter((r) => r.started).length,
+    maxFreq: () => T.maxFreq,
+    clicks: () => T.clicks.slice(),
+    overlap,
+    reset() { T.clicks.length = 0; },
+  };
+}
+
+// What the page sounds: the probe's live oscillators, the engine's own counts and the peak of
+// the analyser's current window (the output after the ceiling).
+const sound = (page) => page.evaluate(() => {
+  const e = window.OSCILLA.engine;
+  const A = window.__oscMidiAudio;
+  let peak = 0;
+  if (e.analyser) {
+    const buf = new Float32Array(e.analyser.fftSize);
+    e.analyser.getFloatTimeDomainData(buf);
+    for (const x of buf) peak = Math.max(peak, Math.abs(x));
+  }
+  return { live: A.live(), started: A.started(), nodes: e.activeNodeCount,
+    sources: e.activeSourceCount, notes: e.noteCount, voices: e.voices.size, peak,
+    gain: e.gainLevel, state: e.state, rate: e.sampleRate, safe: e.safeMaximum,
+    time: e.ctx ? e.ctx.currentTime : 0, maxFreq: A.maxFreq(), clicks: A.clicks(),
+    overlap: A.overlap(),
+    lastError: e.lastError ? e.lastError.message : null };
+});
+
+// The sound once `pred` holds, polled against a named deadline; on expiry as it is.
+async function heard(page, pred, what, ms = STEP_MS) {
+  try {
+    return await until(async () => {
+      const m = await sound(page);
+      return pred(m) ? m : null;
+    }, { ms, what });
+  } catch (error) {
+    if (!(error instanceof WaitTimeout)) throw error;
+    return { ...await sound(page), timedOut: error.message };
+  }
+}
 
 // ----------------------------------------------------------------------------- measured group
 // A request's poll: settled where it ends in `settled`, else what judgeSettled makes of it.
@@ -569,10 +687,114 @@ async function seamChecks(browser, b, origin, url, site) {
   }
 }
 
+// midi-seam-notes (V502): synthetic MIDI events from the stub sound through the AudioEngine.
+async function seamNotes(browser, b, origin, url) {
+  const leg = `${b}/${origin}`;
+  const id = 'midi-seam-notes';
+  const NAME = midiStub.STUB_NAME;
+  const { context, page, errors } = await openPage(browser, url,
+    { init: { fn: midiStub.install, arg: {} }, also: { fn: audioProbe, arg: { sr: NOTES_RATE } } });
+  try {
+    await assertGroup(leg, id, page, 'seam');
+    await openSettings(page);
+    await page.locator('[data-osc="midi.connect"]').click(); // the gesture also starts audio
+    await stateIs(page, ['pending'], `${leg}: Connect MIDI asks`);
+    await seam(page, 'resolve', 0, [NAME]);
+    await stateIs(page, ['connected'], `${leg}: the stub device connects`);
+    const msg = (bytes) => seam(page, 'message', NAME, bytes);
+    const idle = (m) => m.live === 0 && m.nodes === 0 && m.sources === 0 && m.notes === 0;
+
+    // One note (the clicks are counted from here: nothing before it is a MIDI note).
+    await page.evaluate(() => window.__oscMidiAudio.reset());
+    await msg([0x90, 60, 127]);
+    const one = await heard(page, (m) => m.state === 'running' && m.live === 1 && m.notes === 1
+      && m.peak > 0.2 * m.gain / NOTE_POLYPHONY,
+    `${leg}: a Note On sounds through the engine`);
+    check(leg, id, 'handles (stubbed API): a Note On sounds through the AudioEngine (one live '
+      + `oscillator, ${one.rate} Hz context, the forced ${NOTES_RATE})`, !one.timedOut
+      && one.rate === NOTES_RATE, JSON.stringify(one));
+    check(leg, id, 'velocity 127 peaks under the master level / NOTE_POLYPHONY',
+      one.peak <= one.gain / NOTE_POLYPHONY * 1.05 + 1e-4, `${one.peak} vs ${one.gain}`);
+
+    // A chord of more than NOTE_POLYPHONY notes.
+    const chord = Array.from({ length: NOTE_POLYPHONY + 4 }, (_, i) => 48 + 2 * i);
+    for (const n of chord) await msg([0x90, n, 127]);
+    let loudest = 0;
+    const full = await heard(page, (m) => {
+      loudest = Math.max(loudest, m.peak);
+      return m.started === chord.length + 1 && m.live === NOTE_POLYPHONY;
+    }, `${leg}: the chord settles to NOTE_POLYPHONY live oscillators`);
+    check(leg, id, `a chord of ${chord.length} notes: at most ${NOTE_POLYPHONY} oscillators `
+      + 'overlap on the audio clock, and the stolen ones have ended', !full.timedOut
+      && full.overlap === NOTE_POLYPHONY, JSON.stringify(full));
+    check(leg, id, 'the chord peaks under one voice\'s level (the master level)',
+      loudest <= full.gain * 1.05 + 1e-4 && loudest > 0, `${loudest} vs ${full.gain}`);
+
+    // Note Off and velocity 0 release everything.
+    for (const [i, n] of [60, ...chord].entries()) {
+      await msg(i % 2 ? [0x90, n, 0] : [0x80, n, 64]);
+    }
+    const gone = await heard(page, idle, `${leg}: Note Off frees every note`);
+    check(leg, id, 'Note Off and velocity 0 leave zero live oscillators and zero engine nodes',
+      !gone.timedOut, JSON.stringify(gone));
+    check(leg, id, 'no gain was set to 0 or ramped exponentially to 0',
+      gone.clicks.length === 0, gone.clicks.join(' | '));
+
+    // The 0.95 x Nyquist bound of the running context.
+    const before = gone.started;
+    const above = NYQUIST_NOTE;
+    await msg([0x90, above, 100]);
+    await msg([0x90, above - 1, 100]);
+    const ny = await heard(page, (m) => m.started === before + 1 && m.live === 1,
+      `${leg}: only the note below the bound starts`);
+    check(leg, id, `note ${above} (at or above 0.95 x Nyquist at ${NOTES_RATE} Hz) is refused, `
+      + `${above - 1} plays below it`, !ny.timedOut && ny.maxFreq < ny.safe && !ny.lastError,
+    JSON.stringify(ny));
+    await msg([0x80, above - 1, 0]);
+    await heard(page, idle, `${leg}: the note below the bound is released`);
+
+    // Unplugging with keys down, then Escape with keys down.
+    await msg([0x90, 60, 100]);
+    await msg([0x90, 67, 100]);
+    await heard(page, (m) => m.live === 2, `${leg}: two held notes sound`);
+    await seam(page, 'unplug', NAME);
+    const unplugged = await heard(page, idle, `${leg}: unplugging frees the held notes`);
+    check(leg, id, 'held notes stop when their input is unplugged', !unplugged.timedOut,
+      JSON.stringify(unplugged));
+    const SECOND = `${NAME} 2`;
+    await seam(page, 'plug', SECOND);
+    await stateIs(page, ['connected'], `${leg}: a device plugged in connects`);
+    await seam(page, 'message', SECOND, [0x90, 64, 100]);
+    await heard(page, (m) => m.live === 1, `${leg}: the new input's note sounds`);
+    await page.keyboard.press('Escape');
+    const escaped = await heard(page, idle, `${leg}: Escape frees the held note`);
+    check(leg, id, 'a held note stops on Escape', !escaped.timedOut, JSON.stringify(escaped));
+
+    // The session safety limit: a held note ends by itself, its key still down.
+    const limitS = await page.evaluate(() => window.OSCILLA.app.safetyLimit);
+    const sent = (await sound(page)).time; // the audio clock before the Note On: <= its start
+    await seam(page, 'message', SECOND, [0x90, 72, 100]);
+    const held = await heard(page, (m) => m.live === 1, `${leg}: a held note sounds`);
+    const ended = await heard(page, idle, `${leg}: the held note ends at the safety limit`,
+      (limitS + 10) * 1000);
+    check(leg, id, `a held note ends by itself at the session safety limit (${limitS} s)`,
+      !held.timedOut && !ended.timedOut && ended.time - sent >= limitS,
+      JSON.stringify({ sent, held: held.time, ended: ended.time, limitS }));
+    const end = await readMidi(page);
+    check(leg, id, 'the page reports no error and raises no notification for MIDI notes',
+      !end.lastError && end.alerts === 0 && errors.length === 0,
+      JSON.stringify({ lastError: end.lastError, alerts: end.alerts, errors }));
+  } finally {
+    await context.close();
+  }
+}
+
 // ----------------------------------------------------------------------------------- the run
 async function main() {
   ({ midiText } = await import(pathToFileURL(path.join(ROOT, 'src', 'js', 'midi',
     'support.js')).href));
+  ({ NOTE_POLYPHONY } = await import(pathToFileURL(path.join(ROOT, 'src', 'js', 'audio',
+    'audio-engine.js')).href));
   await RUN.ready();
   const server = RUN.origins.includes('http') ? await serveDist(DIST, { prefix: 'oscilla-midi-' })
     : null;
@@ -588,6 +810,7 @@ async function main() {
           try {
             await measured(browser, b, origin, url, site);
             await seamChecks(browser, b, origin, url, site);
+            await seamNotes(browser, b, origin, url);
           } catch (err) {
             check(`${b}/${origin}`, 'midi-run', 'run completed', false, err && err.stack);
           }
@@ -605,4 +828,5 @@ async function main() {
 
 if (require.main === module) main().catch((e) => { console.error(e); process.exit(1); });
 
-module.exports = { judgeSettled, judgeNoPrompt, originLabel, MEASURED, GRANTED, MIDI_ONLY };
+module.exports = { judgeSettled, judgeNoPrompt, originLabel, MEASURED, GRANTED, MIDI_ONLY,
+  NOTES_RATE, NYQUIST_NOTE };
