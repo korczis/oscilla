@@ -583,7 +583,7 @@ test('K013 without ConstantSourceNode the Macro degrades with a reason', () => {
   s.runtime.stop();
 });
 
-// ---------------------------------------------------------------- review of #267 (R-1, R-2, R-4, R-5)
+// -------------------------------------------------------- review of #267 (R-1, R-2, R-4, R-5)
 
 /** The [min, max] a node's control output reaches while its input sweeps [lo, hi]. */
 function controlOutputRange(out, lo, hi) {
