@@ -1,0 +1,35 @@
+id: K001
+milestone: M059
+serves:
+  - "playable-instrument#sequencer-audible"
+title: "V2 sequencer playback is counted by the engine"
+slug: v2-sequencer-playback-is-counted-by-the-engine
+priority: p1
+profile: implementation
+objective: "Lands as fix(sequencer). src/js/sequencer/editor.js:317 calls compileSequence without track or source, so the nodes V2 playback creates are outside the AudioEngine's accounting (project.audio-engine-discipline v2). Pass the engine's track and source so that every node V2 play creates is counted and released by stop()."
+why: "Owner direction of 2026-10-29 (session oscilla-b0): OSCILLA becomes a playable, patchable instrument and an audio-band signal lab; the plan checked every fact it relies on against main at 8b5792cd, and the sizes it quotes are unchanged at e2720e07."
+scope:
+  - "src/js/sequencer/editor.js"
+  - "src/js/labs/sequencer-panel.js"
+  - "src/js/labs/index.js"
+  - "src/js/main.js"
+  - "tests/unit/sequencer-model.test.mjs"
+  - "tests/unit/v31-studio-timeline.test.mjs"
+  - "tests/unit/sequencer-editor.test.mjs"
+  - "tests/unit/sequencer-fake-audio.mjs"
+  - "tests/browser/sequencer.cjs"
+  - "tests/README.md"
+  - "dist"
+acceptance_criteria:
+  - "A unit test, failing on the merge base, shows the engine's active-node count rises during V2 play and is 0 after stop()."
+  - "The node census of tests/browser/sequencer.cjs is green in Chromium, Firefox and WebKit."
+  - "fail-first holds (project.fail-first); a reviewer's verdict is needed only if the change reaches src/js/audio (project.review-verdict). It adds no markup, osc-* class token or stylesheet selector, so the Flowbite Pro ratchet stays flat (node --test tests/unit/ui-flowbite-pro.test.mjs)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/sequencer-editor.test.mjs"
+  - "node tests/browser/sequencer.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

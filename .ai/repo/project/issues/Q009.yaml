@@ -1,0 +1,21 @@
+id: Q009
+milestone: M063
+title: "Owner decision: the dark identity exception and the dark values that move"
+slug: owner-decision-the-dark-identity-exception-and-the-dark-valu
+priority: p2
+profile: routine
+owner: "repository owner"
+objective: "OD2 of the charts plan. The dark neon-on-navy trace set is the identity visual-identity-lock v2 locks through the dark references. Its marks pass the validator's 3:1 floor, and its one weak adjacent pair (bat and elephant, CIEDE2000 7.0 under protan) passes only as a set declared direct-labelled. Two dark values fail a floor today: text-dim #66798d is 4.43:1 on --osc-surface-0 and 4.24:1 on --osc-surface-1 against the 4.5:1 text floor, and the MEASURE faded lines (LINE_STYLES unreliable and context, alpha 0.45, src/js/measurement/views/common.js) are 1.6-2.9:1 against the 3:1 mark floor. (a) Keep every dark value: dark text-dim and the dark faded lines become named exceptions in tests/unit/chart-palette.test.mjs, and no dark reference moves for palette reasons. (b) Keep the dark trace set, and move dark text-dim (candidate #7489a0) and the dark faded-line carriers (K054) so they pass; the dark references those two change are re-accepted with that reason. The plan recommends (b): the trace hues are the identity, and a dim label below the text floor is a defect."
+why: "Asked by the charts plan for M062 (owner order of 2026-10-29, session oscilla-b0); reviewer f3 found that the plan's open owner decisions let blocked slices derive READY (review of the charts plan, 2026-10-29). .ai/repo/project/README.md: work that waits on an answer names the Q issue in depends_on."
+current_state: "Open on 2026-10-29. The plan's recommendation is not an answer. K027 and K054 name this issue in depends_on, so majordomus plan next does not hand them out before it is answered."
+scope:
+  - ".ai/repo/project/issues/Q009.yaml"
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision), either in the owner's words with date and source, or as a decision of a coordinating session under an owner delegation it quotes with its date, stating its reasoning and that the owner may override it; a worker without such a delegation never answers it."
+  - "The answer says which dark values move, if any, and that the dark trace set is kept or changed; K027 and K054 then change and re-accept only the dark values and references the answer names, and list the others as named exceptions."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-10-29
+updated_at: 2026-10-29

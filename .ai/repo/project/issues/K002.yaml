@@ -1,0 +1,36 @@
+id: K002
+milestone: M059
+serves:
+  - "playable-instrument#sequencer-audible"
+title: "Sequencer tempo is audible (gap G1)"
+slug: sequencer-tempo-is-audible-gap-g1
+priority: p1
+profile: implementation
+objective: "Lands as fix(sequencer). The tempo select changes nothing you can hear because blocks are timed in ms. In src/js/sequencer/model.js addBlock defaults to beats and the reference sequence is tempo-locked; stored ms sequences keep their ms timing."
+why: "Owner direction of 2026-10-29 (session oscilla-b0): OSCILLA becomes a playable, patchable instrument and an audio-band signal lab; the plan checked every fact it relies on against main at 8b5792cd, and the sizes it quotes are unchanged at e2720e07."
+scope:
+  - "src/js/sequencer/model.js"
+  - "tests/unit/sequencer-model.test.mjs"
+  - "tests/unit/sequencer-compiler.test.mjs"
+  - "tests/unit/freeze.test.mjs"
+  - "tests/unit/v31-studio-timeline.test.mjs"
+  - "tests/unit/v3-golden.test.mjs"
+  - "tests/browser/sequencer.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K001"
+acceptance_criteria:
+  - "A tempo change changes the offline render length of the default sequence (a unit test that fails on the merge base)."
+  - "Stored ms sequences parse and render unchanged."
+  - "The V1 freeze and golden tests are green, or the change to them is stated in the pull request with its reason."
+  - "No reviewer's verdict is needed (src/js/sequencer is not a guarded path); as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first). It closes an inert surface (project.no-inert-surfaces). It adds no markup, osc-* class token or stylesheet selector, so the Flowbite Pro ratchet stays flat (node --test tests/unit/ui-flowbite-pro.test.mjs)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/sequencer-model.test.mjs"
+  - "node tests/browser/sequencer.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29
