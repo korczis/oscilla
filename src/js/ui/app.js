@@ -29,6 +29,8 @@ const MODES = [
 ];
 const WORKSPACE_TITLES = { about: 'About' };
 const ROVING_ROLES = ['tab', 'radio'];
+/** The phone width of src/styles/responsive.css (single column below 768 px). */
+export const PHONE_QUERY = '(max-width: 767.98px)';
 
 /** localStorage can be missing or throw (private mode, file:// policies, quota). */
 function storageGet(key) {
@@ -327,6 +329,19 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
         && p.offsetParent !== null && !p.matches('.osc-p-source, .osc-p-analysis'))
         .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)[0];
       if (target) target.scrollIntoView({ block: tablet ? 'start' : 'nearest', behavior });
+    },
+    /**
+     * A disclosure of Source & Pattern (the six frequency steps, Mode) folds on a phone and is
+     * open from 768 px, where its summary is not shown (P002, Q004 option A); it follows the
+     * width. Without matchMedia it stays as the markup has it (open).
+     */
+    foldOnPhone(el) {
+      const mq = typeof window !== 'undefined' && window.matchMedia
+        ? window.matchMedia(PHONE_QUERY) : null;
+      if (!mq) return;
+      const sync = () => { el.open = !mq.matches; };
+      sync();
+      if (mq.addEventListener) mq.addEventListener('change', sync);
     },
     /** What the one Keyboard shortcuts dialog lists in the workspace in view (ADR 0050). */
     keyHelp() {

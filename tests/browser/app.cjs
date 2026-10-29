@@ -238,7 +238,10 @@ const SETTLED_OBSCURED = 'new Promise((r) => requestAnimationFrame(() => '
 function focusObscured() {
   const el = document.activeElement;
   if (!el || el === document.body) return { body: true };
-  const key = el.id || el.dataset.osc || el.outerHTML.slice(0, 60);
+  // Repeated controls (the compact Studio's node and clip chips) share a data-osc: their
+  // node or clip id tells them apart, so a walk does not stop at the second chip.
+  const key = el.id || (el.dataset.osc ? [el.dataset.osc, el.dataset.nodeId, el.dataset.clipId]
+    .filter(Boolean).join(':') : el.outerHTML.slice(0, 60));
   const r = el.getBoundingClientRect();
   const ix = Math.min(2, r.width / 4);
   const iy = Math.min(2, r.height / 4);
@@ -856,15 +859,22 @@ function defineChecks() {
     await sleep(80);
     await collect();
     await page.evaluate(() => { window.OSCILLA.app.explore = false; });
+    // From 1280 px the Playground leaves Phase & Stereo and Filter Lab to their workspaces
+    // (P002, Q004 option A): their tabs are pressed there.
+    await H.workspace(page, 'compare');
     await page.click('#osc-ptab-stereo');
     await collect();
     await page.click('#osc-ptab-phase');
     await page.click('#osc-mtab-compare');
     await collect();
     await page.click('#osc-mtab-live');
+    await H.workspace(page, 'filter');
     await page.click('#osc-ftype-peaking');
     await collect();
     await page.click('#osc-ftype-lowpass');
+    await H.workspace(page, 'analyzer'); // the Spectrogram panel's own controls
+    await collect();
+    await H.workspace(page, 'playground');
     for (const id of ['saveModal', 'headphonesModal', 'copyModal', 'settings', 'help',
       'osc-dlg-mic', 'osc-dlg-recipe-link']) {
       await page.evaluate((d) => window.OSCILLA.app.openModal(d), id);
@@ -1286,8 +1296,12 @@ function defineChecks() {
       a.setWaveform('square');
       a.dual.a.freq = 300;
     });
+    // Filter Lab is pressed in its own workspace: from 1280 px the Playground leaves it there
+    // (P002, Q004 option A). The export and the import run from the Playground, as before.
+    await H.workspace(page, 'filter');
     await page.click('#osc-ftype-highpass');
     await page.click('#osc-filter-enable');
+    await H.workspace(page, 'playground');
     await page.click('#osc-export');
     const [dl] = await Promise.all([
       page.waitForEvent('download', { timeout: 10000 }),
@@ -1303,8 +1317,10 @@ function defineChecks() {
       a.setWaveform('sine');
       a.dual.a.freq = 999;
     });
+    await H.workspace(page, 'filter');
     await page.click('#osc-ftype-lowpass');
     await page.click('#osc-filter-enable');
+    await H.workspace(page, 'playground');
     await page.setInputFiles('#osc-import-file', { name: 'cfg.json', mimeType: 'application/json',
       buffer: Buffer.from(text) });
     await sleep(400);
@@ -1318,8 +1334,10 @@ function defineChecks() {
     const missing = keys.filter((k) => !(k in doc));
     // reset
     await page.evaluate(() => { window.OSCILLA.app.setFrequency(440); window.OSCILLA.app.setWaveform('sine'); });
+    await H.workspace(page, 'filter');
     await page.click('#osc-ftype-lowpass');
     if (after.filter.enabled) await page.click('#osc-filter-enable');
+    await H.workspace(page, 'playground');
     const ok = !missing.length && doc.version === 1 && Math.abs(after.f - 3210) < 0.01
       && after.w === 'square' && Math.abs(after.dualA - 300) < 0.01
       && after.filter.type === 'highpass' && after.filter.enabled === true && bad === false;
@@ -1597,7 +1615,9 @@ function defineChecks() {
     await page.keyboard.up(' ');
     await H.waitNodes0(page);
     await page.evaluate(() => window.OSCILLA.labs.envelope.update({ enabled: false }));
-    // additive: enabled -> PeriodicWave on the carrier
+    // additive: enabled -> PeriodicWave on the carrier. Additive Synthesis is pressed in
+    // Synthesis: from 1280 px the Playground leaves it there (P002, Q004 option A).
+    await H.workspace(page, 'synthesis');
     await page.click('#osc-add-enable');
     await H.spaceDown(page);
     await sleep(300);
@@ -1605,6 +1625,7 @@ function defineChecks() {
     await page.keyboard.up(' ');
     await H.waitNodes0(page);
     await page.click('#osc-add-enable');
+    await H.workspace(page, 'playground');
     // sequencer: play / stop
     await page.click('#osc-seq-play');
     await sleep(400);
@@ -1672,7 +1693,9 @@ function defineChecks() {
         const r = await page.evaluate(() => {
           const a = document.activeElement;
           if (!a || a === document.body) return { body: true };
-          const key = a.id || a.dataset.osc || a.outerHTML.slice(0, 60);
+          // The compact Studio's chips share a data-osc; their node or clip id tells them apart.
+          const key = a.id || (a.dataset.osc ? [a.dataset.osc, a.dataset.nodeId,
+            a.dataset.clipId].filter(Boolean).join(':') : a.outerHTML.slice(0, 60));
           const box = a.getBoundingClientRect();
           const region = document.querySelector('[data-osc="alerts"]');
           const inAlert = region.contains(a);
