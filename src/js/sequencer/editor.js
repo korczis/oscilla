@@ -18,6 +18,13 @@
 //   onRecord?(sequenceJson),       the record-style button: hand the sequence to the WAV export
 // }
 //
+// One sequence state (C004): the waveform is not the sequence's own control, it follows the
+// instrument's (main.js mirrors it in with setWaveform). load() and clear() keep the mirrored
+// value, so a file whose sequencer.waveform differs never leaves playback on a stale waveform;
+// the serialized waveform is derived. onChange(fn) is called with the new model after every
+// change of it (edits, load, clear, the mirrored waveform), so a view that reads the model,
+// which is not reactive, can be invalidated by a counter (main.js: app.seqRev).
+//
 // Looping: each pass is compiled as its own voice that starts exactly at the previous pass's
 // end time on the audio clock. A timer only decides *when* to compile the next pass (LOOKAHEAD_S
 // ahead); it never times audio. Edits made during playback apply from the next pass.
@@ -84,6 +91,7 @@ export function createSequencerEditor(options = {}) {
     lastEnd: null,
     loopTimer: null,
     self: null,
+    listeners: new Set(), // onChange subscribers (C004)
   };
   const resolve = (key, getter) => {
     if (!engine) return null;
@@ -173,6 +181,13 @@ export function createSequencerEditor(options = {}) {
       this.warnings = issues;
       if (this.selectedId !== null && indexOfBlock(model, this.selectedId) < 0)
         this.selectedId = null;
+      for (const fn of [...priv.listeners]) fn(model);
+    },
+    /** Call fn(model) after every change of the model. Returns the unsubscribe function. */
+    onChange(fn) {
+      if (typeof fn !== 'function') throw new TypeError('onChange needs a function.');
+      priv.listeners.add(fn);
+      return () => priv.listeners.delete(fn);
     },
     /** Add a block after the selection (or at the end) and select it. Returns the id or null. */
     addBlock(type) {
@@ -259,7 +274,8 @@ export function createSequencerEditor(options = {}) {
       this._apply(setWaveform(this.model, w));
     },
     clear() {
-      this._apply(createSequence({ tempoBpm: this.model.tempoBpm }));
+      // The waveform follows the instrument (C004): an empty sequence keeps it.
+      this._apply(createSequence({ tempoBpm: this.model.tempoBpm, waveform: this.model.waveform }));
       this.selectedId = null;
     },
 
@@ -479,10 +495,13 @@ export function createSequencerEditor(options = {}) {
     serialize() {
       return serializeSequence(this.model);
     },
-    /** Load JSON (object or string). Returns the list of issues found while validating. */
+    /**
+     * Load JSON (object or string). Returns the list of issues found while validating. The
+     * waveform the editor follows (the instrument's, mirrored in) is kept: the file's is derived.
+     */
     load(json) {
       const { model, issues } = parseSequence(json, { sampleRate: this.sampleRate() });
-      this._apply(model, issues);
+      this._apply(setWaveform(model, this.model.waveform), issues);
       this.selectedId = model.blocks.length ? model.blocks[0].id : null;
       return issues;
     },
