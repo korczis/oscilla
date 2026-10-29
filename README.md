@@ -63,11 +63,13 @@ changed.
 - **Unsaved work.** While something would be lost, a reload, a closed tab or leaving the page
   makes the browser ask first: unsaved Studio changes, a completed measurement that is not
   saved, a saved experiment's name or notes not yet stored with "Update name and notes", a
-  rename being typed, a finding being written, or a level calibration (it is kept in page memory
-  only). Where the browser allows no IndexedDB, saved experiments, findings and Studio projects
-  live in page memory too and count as well.
-  Studio shows "unsaved changes" and Measure "unsaved result" or "unsaved name or notes". With
-  nothing to lose the page asks nothing. Sequencer patterns are not guarded yet.
+  rename being typed, a finding being written, a level calibration (it is kept in page memory
+  only), or a sequence edited since the page opened, its last import or its last Export config.
+  Where the browser allows no IndexedDB, saved experiments, findings and Studio projects live in
+  page memory too and count as well. Studio shows "unsaved changes", Measure "unsaved result" or
+  "unsaved name or notes", and the Sequencer "unsaved sequence". Lab and instrument settings are
+  configuration: they are kept by Export config, Copy config URL or a preset, and are not
+  counted. With nothing to lose the page asks nothing.
 
 ## The V2 laboratory
 
