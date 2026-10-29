@@ -1,0 +1,36 @@
+id: K022
+milestone: M058
+serves:
+  - "playable-instrument#hash-epoch"
+title: "One hash epoch: unison and spread, filter slope, sync, Step quantize and bypass"
+slug: one-hash-epoch-unison-and-spread-filter-slope-sync-step-quan
+priority: p2
+profile: deep-work
+objective: "Lands as feat(studio). Every new parameter on an existing node type lands here, once (D2): oscillator unison and spread, filter slope 12/24, sync on LFO, Step and Random, Step quantize, and a generic bypass (edge mute needs no new property: every edge already has muted). STUDIO_HASH_VERSION is bumped with a migration (src/js/studio/migrate.js); a document or experiment saved under the earlier version reloads stating \"saved under hash v1, migrated\" with its original hash kept in provenance. ADR 0030 carries a note and the pull request lists every re-pinned template. It is a model change with no new chrome: the new parameters get their Inspector controls from the existing parameter rendering, so it waits on the template pack it re-pins (K014) and not on the Wave 2 chrome."
+why: "Owner direction of 2026-10-29 (session oscilla-b0): OSCILLA becomes a playable, patchable instrument and an audio-band signal lab; the plan checked every fact it relies on against main at 8b5792cd, and the sizes it quotes are unchanged at e2720e07."
+scope:
+  - "src/js/studio"
+  - "src/js/audio"
+  - "src/js/experiments"
+  - "src/js/ui/studio"
+  - ".ai/repo/adrs/0030-studio-model-canonical-separate-from-runtime.md"
+  - "tests/unit"
+  - "tests/browser"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K014"
+acceptance_criteria:
+  - "STUDIO_HASH_VERSION is bumped exactly once and every new parameter of the list is in that bump, in a unit test that fails on the merge base."
+  - "A document and an experiment saved under hash v1 reload with \"saved under hash v1, migrated\" and their original hash in provenance; their render is unchanged with the new parameters at their defaults."
+  - "The pull request lists every re-pinned template, and ADR 0030 carries the note."
+  - "The pull request carries a reviewer's verdict (src/js/studio and src/js/experiments is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first). It adds no markup, osc-* class token or stylesheet selector, so the Flowbite Pro ratchet stays flat (node --test tests/unit/ui-flowbite-pro.test.mjs). A capped file it grows past its cap is split first or its raise is declared in tests/unit/source-size-baseline.json's raises ledger."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/studio-hash-epoch.test.mjs"
+  - "node --test tests/unit/v31-studio-templates.test.mjs"
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29
