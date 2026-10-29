@@ -488,7 +488,6 @@ export function createStudioUi(svc = {}) {
     compileWarning: '', // the warning a failed status compile set (cleared on recovery)
     trace: null,
     tracePending: false,
-    sequenceSeed: null, // the V2 seed of the sequence file this document was imported from
   };
   // The Inspector's Trace refreshes once an operation has ended (coalesced per task).
   ctx.trace = createTrace({ now: Date.now, onIdle: () => {
@@ -803,6 +802,9 @@ export function createStudioUi(svc = {}) {
   }
 
   // ---------------------------------------------------------------- documents
+  /** The running context's rate, or null before audio (a V2 sequence file is read at it). */
+  const studioSampleRate = () => (svc.engine ? svc.engine.sampleRate : null);
+
   function openDocument(model, { reason, projectId = null, templateId = null } = {}) {
     if (ctx.transport && ctx.transport.playing) stopStudio({ fast: true });
     ctx.handle.replace(model, reason);
@@ -811,7 +813,6 @@ export function createStudioUi(svc = {}) {
     ctx.projectId = projectId;
     ctx.templateId = templateId;
     ctx.templateBaseline = templateId ? createDirtyTracker(ctx.handle.getModel()) : null;
-    ctx.sequenceSeed = null;
     if (ctx.editor) requestAnimationFrame(() => ctx.editor.frameAll());
     refreshState();
   }
@@ -1609,13 +1610,13 @@ export function createStudioUi(svc = {}) {
     },
 
     /**
-     * The V2 sequence file of one event track (default: the first with pattern clips); the
-     * seed of the file the document was imported from is kept, so a round trip is exact.
+     * The V2 sequence file of one event track (default: the first with pattern clips), at the
+     * Studio's rate. No control calls it yet (K004 part: the entry point is the owner's choice).
      */
     studioExportTrackSequence(trackId = null) {
       try {
         const f = exportSequenceFile(ctx.handle.getModel(), { trackId: trackId || undefined,
-          seed: ctx.sequenceSeed ?? undefined });
+          sampleRate: studioSampleRate() });
         downloadFile(f);
         announce(`Exported ${f.name}${f.issues.length ? `: ${f.issues.join(' ')}` : ''}`,
           { assertive: f.issues.length > 0 });
@@ -1631,7 +1632,7 @@ export function createStudioUi(svc = {}) {
      * patch (inserted, undoable). A refused file leaves the document as it was.
      */
     studioImportText(text) {
-      const r = importStudioFile(text);
+      const r = importStudioFile(text, { sampleRate: studioSampleRate() });
       if (!r.ok) {
         const e = r.errors && r.errors[0];
         const msg = `Not imported: ${e ? `${e.path ? `${e.path}: ` : ''}${e.message}`
@@ -1647,7 +1648,6 @@ export function createStudioUi(svc = {}) {
       }
       openDocument(r.model, { reason: 'import' });
       if (r.kind === 'sequence') {
-        ctx.sequenceSeed = r.seed;
         const n = r.model.timeline.clips.length;
         announce(`Imported the ${r.source === 'config' ? 'configuration file\'s ' : ''}V2 `
           + `sequence: ${n} pattern clip${n === 1 ? '' : 's'} on one track`);

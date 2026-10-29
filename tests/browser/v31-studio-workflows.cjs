@@ -843,8 +843,8 @@ function defineChecks(fx) {
       clean: opened.dirty === false,
       announced: live.includes(`Imported the configuration file's V2 sequence: ${n} pattern `
         + `clip${n === 1 ? '' : 's'} on one track`),
-      refused: /^Not imported: sequencer\.blocks: The sequence blocks are not a list\.$/
-        .test(refusal.warning),
+      refused: refusal.warning === 'Not imported: sequencer.blocks: The sequence blocks are not '
+        + 'a list; the file is refused.',
       unchanged: refusal.model === opened.model,
       exported: /\.sequence\.json$/.test(seqDl.suggestedFilename())
         && isDeepStrictEqual(exported, cfg.sequencer),

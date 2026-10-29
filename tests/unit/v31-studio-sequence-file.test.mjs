@@ -2,27 +2,32 @@
 // (plan K004; src/js/studio/library.js importStudioFile and exportSequenceFile,
 // src/js/studio/sequence-import.js importSequenceDocument). A V2 sequence file (the sequencer's
 // serializeSequence shape) or an OSCILLA configuration file holding one opens as a Sequence
-// node with one event track of pattern clips; what the sequencer's parser would repair is
-// refused instead, readably, and the export of that track gives the file back exactly.
+// node with one event track of pattern clips. Strict: a file whose sequence the sequencer's
+// parser would not reproduce exactly (a clamped, coerced, defaulted, renumbered or dropped
+// value, an unknown field) is refused with the first field that differs, so the export of that
+// track gives the file back exactly (review of #264).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DEFAULT_SEED, addBlock, createSequence, moveBlock, referenceSequence, serializeSequence,
   setTempo, updateBlock,
 } from '../../src/js/sequencer/model.js';
-import { CONFIG_FILE_KIND, buildConfigExport } from '../../src/js/ui/config-file.js';
+import {
+  CONFIG_FILE_KIND, CONFIG_FILE_VERSION, buildConfigExport,
+} from '../../src/js/ui/config-file.js';
 import {
   SEQUENCE_FILE_EXTENSION, exportProjectFile, exportSequenceFile, importStudioFile,
 } from '../../src/js/studio/library.js';
 import {
-  CONFIG_KIND, exportSequence, importSequence, isSequenceDocument,
+  CONFIG_KIND, CONFIG_VERSION, exportSequence, importSequence, importSequenceDocument,
+  isSequenceDocument,
 } from '../../src/js/studio/sequence-import.js';
 import { STUDIO_IMPORT_LIMITS, validateStudioCommit } from '../../src/js/studio/validate.js';
 import { createIdGenerator, createStudioStore } from '../../src/js/studio/actions.js';
 import { templateModel } from '../../src/js/studio/templates/index.js';
 
 function fixtures() {
-  let all = createSequence({ tempoBpm: 96, waveform: 'square', seed: 4242 });
+  let all = createSequence({ tempoBpm: 96, waveform: 'square' });
   for (const type of ['tone', 'silence', 'sweep', 'pulse', 'chirp', 'burst', 'siren', 'am', 'fm',
     'random']) all = addBlock(all, type);
   let locked = updateBlock(referenceSequence(), 'b2', { beats: 1.5 });
@@ -38,8 +43,8 @@ function fixtures() {
 
 const fileText = (doc) => `${JSON.stringify(doc, null, 2)}\n`;
 
-function configText(sequencer) {
-  return fileText(buildConfigExport({ oscillaVersion: 'test', sampleRate: 48000,
+function configText(sequencer, sampleRate = 48000) {
+  return fileText(buildConfigExport({ oscillaVersion: 'test', sampleRate,
     mode: 'playground', workspace: 'sequencer', instrument: {}, sequencer,
     now: new Date(Date.UTC(2026, 9, 29)) }));
 }
@@ -57,16 +62,32 @@ function assertOneTrack(model, n, name) {
   assert.ok(validateStudioCommit(model).ok, `${name}: the model validates`);
 }
 
-test('exportSequence(importSequence(x)) deep-equals x for every fixture', () => {
+test('exportSequence(importSequence(x).model) deep-equals x for every fixture', () => {
   for (const [name, seq] of Object.entries(fixtures())) {
     const x = serializeSequence(seq);
     const imp = importSequence(x);
     assert.ok(imp.ok, name);
-    const ex = exportSequence(imp.model, { seed: imp.extras.seed });
+    const ex = exportSequence(imp.model);
     assert.deepEqual(ex.sequence, x, name);
     assert.deepEqual(ex.issues, [], name);
     assert.equal(ex.trackId, imp.ids.track, name);
   }
+});
+
+test('a seed other than the V2 default is refused: Studio keeps no seed outside its model', () => {
+  // The app never writes another seed (it only seeds blocks added in the V2 editor and is
+  // never heard), so a file carrying one is hand-made; it is refused rather than dropped.
+  const x = serializeSequence(createSequence({ ...referenceSequence(), seed: 4242 }));
+  const r = importStudioFile(fileText(x));
+  assert.equal(r.ok, false);
+  assert.equal(r.model, undefined);
+  assert.equal(r.errors[0].path, 'seed');
+  assert.match(r.errors[0].message, new RegExp(`^The sequence seed is 4242; Studio opens only `
+    + `the V2 default seed ${DEFAULT_SEED}.*; the file is refused\\.$`));
+  // The pure functions (V416) still carry it explicitly.
+  const imp = importSequence(x);
+  assert.equal(imp.extras.seed, 4242);
+  assert.deepEqual(exportSequence(imp.model, { seed: imp.extras.seed }).sequence, x);
 });
 
 test('Studio Import opens a V2 sequence file as N pattern clips on one track; export gives '
@@ -77,11 +98,11 @@ test('Studio Import opens a V2 sequence file as N pattern clips on one track; ex
     assert.equal(r.ok, true, `${name}: ${JSON.stringify(r.errors)}`);
     assert.equal(r.kind, 'sequence', name);
     assert.equal(r.source, 'sequence', name);
-    assert.equal(r.seed, x.seed, name);
+    assert.equal(r.seed, undefined, `${name}: no seed beside the model`);
     assert.deepEqual(r.warnings, [], name);
     assertOneTrack(r.model, x.blocks.length, name);
     assert.equal(r.model.transport.tempo, x.tempoBpm, name);
-    const f = exportSequenceFile(r.model, { seed: r.seed });
+    const f = exportSequenceFile(r.model);
     assert.ok(f.name.endsWith(SEQUENCE_FILE_EXTENSION), f.name);
     assert.equal(f.type, 'application/json');
     assert.deepEqual(f.issues, [], name);
@@ -105,7 +126,33 @@ test('Studio Import opens the sequence a configuration file holds', () => {
   assertOneTrack(r.model, seq.blocks.length, 'config');
   assert.deepEqual(r.model.timeline.clips.filter((c) => c.musical)
     .map((c) => c.musical.durationBeats), [1.5, 0.75]);
-  assert.deepEqual(JSON.parse(exportSequenceFile(r.model, { seed: r.seed }).text), seq);
+  assert.deepEqual(JSON.parse(exportSequenceFile(r.model).text), seq);
+});
+
+test('a sequence saved at 48 kHz opens at the rate it was saved at, and exports back', () => {
+  // A 22 kHz tone is valid at 48 kHz (safe maximum 22.8 kHz), not at 44.1 kHz (20.9 kHz).
+  const seq = serializeSequence(createSequence({ blocks: [
+    { id: 'b1', type: 'tone', durationMs: 500, params: { freq: 22000 } },
+    { id: 'b2', type: 'sweep', durationMs: 500, params: { start: 440, end: 22500, curve: 'log' } },
+  ] }, { sampleRate: 48000 }));
+  assert.equal(seq.blocks[0].params.freq, 22000);
+  // A configuration file names its rate (sampleRateRequested): it opens on any machine.
+  const cfg = importStudioFile(configText(seq, 48000));
+  assert.equal(cfg.ok, true, JSON.stringify(cfg.errors));
+  assert.equal(importStudioFile(configText(seq, 48000), { sampleRate: 44100 }).ok, true);
+  assert.deepEqual(JSON.parse(exportSequenceFile(cfg.model, { sampleRate: 48000 }).text), seq);
+  // A bare V2 sequence file is read at the Studio's rate.
+  const at48 = importStudioFile(fileText(seq), { sampleRate: 48000 });
+  assert.equal(at48.ok, true, JSON.stringify(at48.errors));
+  assert.deepEqual(JSON.parse(exportSequenceFile(at48.model, { sampleRate: 48000 }).text), seq);
+  const at44 = importStudioFile(fileText(seq));
+  assert.equal(at44.ok, false);
+  assert.equal(at44.errors[0].path, 'blocks[0].params.freq');
+  assert.equal(at44.errors[0].message, 'Block 1: freq 22 kHz is above the 20.9 kHz limit at '
+    + '44.1 kHz; the file is refused.');
+  // A configuration saved before audio started (no rate) is read at the Studio's rate.
+  assert.equal(importStudioFile(configText(seq, null), { sampleRate: 48000 }).ok, true);
+  assert.equal(importStudioFile(configText(seq, null)).ok, false);
 });
 
 test('a malformed or oversized file is refused with a readable reason and no model', () => {
@@ -120,18 +167,21 @@ test('a malformed or oversized file is refused with a readable reason and no mod
     ['blocks not a list', fileText({ ...ref, blocks: { b1: ref.blocks[0] } }),
       /blocks are not a list/, 'blocks'],
     ['another sequence version', fileText({ ...ref, version: 2 }),
-      /^Sequence version 2 is not 1\.$/, 'version'],
+      /^Sequence version 2 is not 1; the file is refused\.$/, 'version'],
     ['no blocks', withBlocks([]), /no blocks, so there is nothing to open/, 'blocks'],
     ['too many blocks', withBlocks(tooMany), /65 blocks; a V2 sequence holds at most 64/,
       'blocks'],
     ['an unknown block type', withBlocks([ref.blocks[0], { ...ref.blocks[1], type: 'laser' }]),
-      /^Block 2: unknown type .*laser.*refused, not repaired\.$/, 'blocks'],
+      /^Block 2: “laser” is not a V2 block type; the file is refused\.$/, 'blocks[1].type'],
     ['a duration out of range', withBlocks([{ ...ref.blocks[0], durationMs: 1 }]),
-      /^Block 1: duration limited to .*refused, not repaired\.$/, 'blocks'],
+      /^Block 1: durationMs is 1 in the file but would open as 10; the file is refused\.$/,
+      'blocks[0].durationMs'],
     ['a config sequence with damage', configText({ ...ref, blocks: 'none' }),
       /blocks are not a list/, 'sequencer.blocks'],
+    ['another configuration version', fileText({ ...JSON.parse(configText(ref)), version: 99 }),
+      /^Configuration file version 99 is not 1; the file is refused\.$/, 'version'],
     ['a prototype key', fileText(ref).replace('"params": {', '"params": {"__proto__": {},'),
-      /./, null],
+      /^forbidden field name$/, 'blocks[0].params.__proto__'],
     ['oversized', huge, /larger than the 4194304-byte import limit/, ''],
   ];
   for (const [name, text, why, path] of cases) {
@@ -143,6 +193,84 @@ test('a malformed or oversized file is refused with a readable reason and no mod
     assert.match(e.message, why, name);
     if (path !== null) assert.equal(e.path, path, `${name}: path`);
   }
+});
+
+test('what the sequencer would silently repair is refused, naming the first field', () => {
+  // Each of these opened "repaired" before (review of #264, P1): parseSequence's normalizeModel
+  // changes them without reporting an issue.
+  const ref = serializeSequence(referenceSequence());
+  const b = ref.blocks;
+  const top = (patch) => ({ ...ref, ...patch });
+  const block = (i, patch) => ({ ...ref, blocks: b.map((x, k) => (k === i ? { ...x, ...patch }
+    : x)) });
+  const params = (i, patch) => block(i, { params: { ...b[i].params, ...patch } });
+  const without = (i, key) => {
+    const { [key]: _drop, ...rest } = b[i];
+    return { ...ref, blocks: b.map((x, k) => (k === i ? rest : x)) };
+  };
+  const burst = { id: 'b1', type: 'burst', durationMs: 500, beats: null,
+    params: { freq: 1000, burstMs: 30, intervalMs: 20 } };
+  const fm = { id: 'b1', type: 'fm', durationMs: 500, beats: null,
+    params: { freq: 100, modFreq: 5, depthHz: 500 } };
+  const cases = [
+    ['tempo 9999', top({ tempoBpm: 9999 }), 'tempoBpm',
+      'The sequence: tempoBpm is 9999 in the file but would open as 300'],
+    ['tempo "fast"', top({ tempoBpm: 'fast' }), 'tempoBpm',
+      'The sequence: tempoBpm is “fast” in the file but would open as 120'],
+    ['tempo as text', top({ tempoBpm: '120' }), 'tempoBpm',
+      'The sequence: tempoBpm is “120” in the file but would open as 120'],
+    ['waveform "laser"', top({ waveform: 'laser' }), 'waveform',
+      'The sequence: waveform is “laser” in the file but would open as “sine”'],
+    ['loop "yes"', top({ loop: 'yes' }), 'loop',
+      'The sequence: loop is “yes” in the file but would open as false'],
+    ['seed -5', top({ seed: -5 }), 'seed',
+      'The sequence: seed is -5 in the file but would open as 0'],
+    ['tempo missing', (() => { const { tempoBpm: _t, ...r } = ref; return r; })(), 'tempoBpm',
+      'The sequence: tempoBpm is missing'],
+    ['an unknown field', top({ selected: 'b1' }), 'selected',
+      'The sequence: selected is not a V2 sequence field'],
+    ['duplicate block ids', block(2, { id: 'b1' }), 'blocks[2].id',
+      'Block 3: id “b1” is already used by block 1'],
+    ['beats -3', block(0, { beats: -3 }), 'blocks[0].beats',
+      'Block 1: beats is -3 in the file but would open as null'],
+    ['params "x"', block(0, { params: 'x' }), 'blocks[0].params',
+      'Block 1: params is “x”, not an object'],
+    ['params missing', without(0, 'params'), 'blocks[0].params', 'Block 1: params is missing'],
+    ['durationMs missing', without(0, 'durationMs'), 'blocks[0].durationMs',
+      'Block 1: durationMs is missing'],
+    ['a parameter missing', params(1, { curve: undefined }), 'blocks[1].params.curve',
+      'Block 2: params.curve is missing'],
+    ['an unknown parameter', params(0, { gain: 1 }), 'blocks[0].params.gain',
+      'Block 1: params.gain is not a parameter of a tone block'],
+    ['an unknown block field', block(0, { colour: 'red' }), 'blocks[0].colour',
+      'Block 1: colour is not a V2 block field'],
+    ['freq 440.00049', params(0, { freq: 440.00049 }), 'blocks[0].params.freq',
+      'Block 1: params.freq is 440.00049 in the file but would open as 440'],
+    ['a block that is not an object', top({ blocks: [null, ...b.slice(1)] }), 'blocks[0]',
+      'Block 1 is not an object'],
+    ['burst interval below the burst', top({ blocks: [burst] }), 'blocks[0].params.intervalMs',
+      'Block 1: params.intervalMs is 20 in the file but would open as 30'],
+    ['fm depth past the floor', top({ blocks: [fm] }), 'blocks[0].params.depthHz',
+      'Block 1: params.depthHz is 500 in the file but would open as 80'],
+  ];
+  for (const [name, doc, path, message] of cases) {
+    const text = JSON.stringify(doc);
+    const r = importStudioFile(text);
+    assert.equal(r.ok, false, `${name}: refused`);
+    assert.equal(r.model, undefined, `${name}: no model`);
+    assert.equal(r.errors[0].path, path, `${name}: path`);
+    assert.equal(r.errors[0].message, `${message}; the file is refused.`, name);
+    // The same sequence inside a configuration file names its path under `sequencer`.
+    const c = importStudioFile(configText(JSON.parse(text)));
+    assert.equal(c.ok, false, `${name}: refused in a configuration file`);
+    assert.equal(c.errors[0].path, `sequencer.${path}`, `${name}: config path`);
+    // The pure entry point refuses it too.
+    assert.equal(importSequenceDocument(JSON.parse(text)).ok, false, name);
+  }
+});
+
+test('the configuration version Studio reads is the one config-file.js writes', () => {
+  assert.equal(CONFIG_VERSION, CONFIG_FILE_VERSION);
 });
 
 test('track export: a document without a pattern track is refused; what V2 cannot hold is '

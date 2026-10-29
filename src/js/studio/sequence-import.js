@@ -20,16 +20,22 @@
 // chain; they are skipped and reported. import → export reproduces serializeSequence(v2) exactly
 // (tests/unit/v31-studio-timeline.test.mjs).
 //
-// importSequenceDocument(doc) is the strict file path of Studio Import (plan K004): a V2
-// sequence file, or an OSCILLA configuration file (ui/config-file.js) whose `sequencer` holds
-// one, already read by validate.js readUntrustedInput. What parseSequence would repair (an
-// unknown block type, a clamped value, a dropped list) is refused instead, so a file opens as
-// saved or not at all (tests/unit/v31-studio-sequence-file.test.mjs).
+// importSequenceDocument(doc, { sampleRate }) is the strict file path of Studio Import (plan
+// K004): a V2 sequence file, or an OSCILLA configuration file (ui/config-file.js, version 1)
+// whose `sequencer` holds one, already read by validate.js readUntrustedInput. The file must be
+// the sequencer's canonical form already: parseSequence is run, and the first field it would
+// not reproduce exactly (a clamped, coerced, rounded, defaulted, renumbered or dropped value, a
+// missing or unknown field) refuses the file with that field's path, so a file opens as saved
+// or not at all. Frequencies are checked at the rate the file was saved at (a configuration
+// file's sampleRateRequested), else at the Studio's (`sampleRate`; 44.1 kHz before audio, as the
+// sequencer itself reads it). A seed other than DEFAULT_SEED is refused: the app never writes
+// one, and the Studio keeps no seed outside its model (tests/unit/v31-studio-sequence-file).
 
 import { ID_PATTERN } from '../experiments/schema.js';
 import {
-  DEFAULT_SEED, MAX_BLOCKS, MAX_BLOCK_MS, MIN_BLOCK_MS, SEQUENCE_VERSION, nextBlockId,
-  normalizeModel, parseSequence, serializeSequence,
+  BLOCK_SCHEMA, DEFAULT_SEED, MAX_BLOCKS, MAX_BLOCK_MS, MIN_BLOCK_MS, PROVISIONAL_SAMPLE_RATE,
+  SEQUENCE_VERSION, formatCompactFrequency, isNum, nextBlockId, normalizeModel, paramSchema,
+  parseSequence, safeMaximum, serializeSequence,
 } from '../sequencer/model.js';
 import { createStudioModel } from './schema.js';
 import { studioDiagnostic, validateStudioModel } from './validate.js';
@@ -206,6 +212,11 @@ export function exportSequence(model, { trackId, seed = DEFAULT_SEED, sampleRate
 
 /** The kind of an OSCILLA configuration file (ui/config-file.js CONFIG_FILE_KIND). */
 export const CONFIG_KIND = 'oscilla-config';
+/** The configuration file version Studio Import reads (ui/config-file.js CONFIG_FILE_VERSION). */
+export const CONFIG_VERSION = 1;
+// Web Audio's sample-rate range; a configuration file's rate outside it is not used.
+const MIN_FILE_RATE = 3000;
+const MAX_FILE_RATE = 768000;
 
 const isPlain = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 
@@ -216,42 +227,145 @@ export function isSequenceDocument(doc) {
 }
 
 const refuse = (path, message) => ({ ok: false, warnings: [], errors: [{
-  ...studioDiagnostic('validate', 'invalid-sequence', message, null, 'error'), path }] });
+  ...studioDiagnostic('validate', 'invalid-sequence', `${message}; the file is refused.`, null,
+    'error'), path }] });
+
+/** A value as the refusal quotes it. */
+function shown(v) {
+  if (v === undefined) return 'missing';
+  if (Array.isArray(v)) return 'a list';
+  if (v && typeof v === 'object') return 'an object';
+  if (typeof v === 'string') return `“${v.length > 32 ? `${v.slice(0, 32)}…` : v}”`;
+  return String(v);
+}
+
+const kHz = (rate) => `${String(Number((rate / 1000).toFixed(3)))} kHz`;
+
+/**
+ * The first field of `seq` that its canonical form `canon` (serializeSequence of what
+ * parseSequence made of it) does not reproduce: { path, message } or null.
+ */
+function firstDifference(seq, canon, rate) {
+  const keys = (o, c, path, where, what) => {
+    for (const k of Object.keys(c)) {
+      if (!Object.hasOwn(o, k)) return { path: `${path}${k}`, message: `${where}: ${k} is missing` };
+    }
+    for (const k of Object.keys(o)) {
+      if (!Object.hasOwn(c, k)) {
+        return { path: `${path}${k}`, message: `${where}: ${k} is not ${what}` };
+      }
+    }
+    return null;
+  };
+  const value = (path, where, key, a, b) => (Object.is(a, b) || (a === 0 && b === 0) ? null
+    : { path, message: `${where}: ${key} is ${shown(a)} in the file but would open as `
+      + `${shown(b)}` });
+  const top = keys(seq, canon, '', 'The sequence', 'a V2 sequence field');
+  if (top) return top;
+  for (const k of Object.keys(canon)) {
+    if (k === 'blocks') continue;
+    const d = value(k, 'The sequence', k, seq[k], canon[k]);
+    if (d) return d;
+  }
+  const ids = new Map();
+  for (let i = 0; i < canon.blocks.length; i += 1) {
+    const raw = seq.blocks[i];
+    const c = canon.blocks[i];
+    const path = `blocks[${i}]`;
+    const where = `Block ${i + 1}`;
+    if (!isPlain(raw)) return { path, message: `${where} is not an object` };
+    if (!Object.hasOwn(BLOCK_SCHEMA, raw.type)) {
+      return Object.hasOwn(raw, 'type') ? { path: `${path}.type`,
+        message: `${where}: ${shown(raw.type)} is not a V2 block type` }
+        : { path: `${path}.type`, message: `${where}: type is missing` };
+    }
+    const own = keys(raw, c, `${path}.`, where, 'a V2 block field');
+    if (own) return own;
+    if (typeof raw.id === 'string' && ids.has(raw.id)) {
+      return { path: `${path}.id`, message: `${where}: id ${shown(raw.id)} is already used by `
+        + `block ${ids.get(raw.id) + 1}` };
+    }
+    if (typeof raw.id === 'string') ids.set(raw.id, i);
+    for (const k of ['id', 'type', 'durationMs', 'beats']) {
+      const d = value(`${path}.${k}`, where, k, raw[k], c[k]);
+      if (d) return d;
+    }
+    if (!isPlain(raw.params)) {
+      return { path: `${path}.params`, message: `${where}: params is ${shown(raw.params)}, not `
+        + 'an object' };
+    }
+    const p = keys(raw.params, c.params, `${path}.params.`, where,
+      `a parameter of a ${c.type} block`);
+    if (p) return { ...p, message: p.message.replace(`${where}: `, `${where}: params.`) };
+    for (const k of Object.keys(c.params)) {
+      const a = raw.params[k];
+      const b = c.params[k];
+      const desc = paramSchema(c.type, k);
+      if (desc && desc.kind === 'freq' && isNum(a) && a > b && b === Math.round(
+        safeMaximum(rate) * 1000) / 1000) {
+        return { path: `${path}.params.${k}`, message: `${where}: ${k} `
+          + `${formatCompactFrequency(a)} is above the ${formatCompactFrequency(b)} limit at `
+          + `${kHz(rate)}` };
+      }
+      const d = value(`${path}.params.${k}`, where, `params.${k}`, a, b);
+      if (d) return d;
+    }
+  }
+  return null;
+}
+
+/** The rate a file's frequencies are read at: the file's own, else the Studio's, else 44.1 kHz. */
+function fileRate(doc, config, sampleRate) {
+  const saved = config ? doc.sampleRateRequested : null;
+  if (isNum(saved) && saved >= MIN_FILE_RATE && saved <= MAX_FILE_RATE) return saved;
+  return isNum(sampleRate) && sampleRate > 0 ? sampleRate : PROVISIONAL_SAMPLE_RATE;
+}
 
 /**
  * Open a V2 sequence file or a configuration file's sequence as a Studio model. Never throws.
- *   importSequenceDocument(doc, { sampleRate }) -> { ok: true, model, seed, source:
- *     'sequence' | 'config', warnings: [] } | { ok: false, warnings: [], errors }
+ *   importSequenceDocument(doc, { sampleRate }) -> { ok: true, model, source:
+ *     'sequence' | 'config', sampleRate, warnings: [] } | { ok: false, warnings: [], errors }
  */
 export function importSequenceDocument(doc, { sampleRate } = {}) {
   const config = isPlain(doc) && doc.kind === CONFIG_KIND;
+  if (config && doc.version !== CONFIG_VERSION) {
+    return refuse('version', `Configuration file version ${shown(doc.version).slice(0, 34)} is `
+      + `not ${CONFIG_VERSION}`);
+  }
   const seq = config ? doc.sequencer : doc;
   const at = (key) => (config ? `sequencer.${key}` : key);
   if (!isPlain(seq)) {
     return refuse(config ? 'sequencer' : '', config
-      ? 'This configuration file holds no Sequencer sequence to open in Studio.'
-      : 'The file does not contain a sequence object.');
+      ? 'This configuration file holds no Sequencer sequence to open in Studio'
+      : 'The file does not contain a sequence object');
   }
   if (seq.version !== SEQUENCE_VERSION) {
-    return refuse(at('version'), `Sequence version ${String(seq.version).slice(0, 16)} is not `
-      + `${SEQUENCE_VERSION}.`);
+    return refuse(at('version'), seq.version === undefined
+      ? `The sequence names no version (${SEQUENCE_VERSION} expected)`
+      : `Sequence version ${shown(seq.version).slice(0, 34)} is not ${SEQUENCE_VERSION}`);
   }
-  if (!Array.isArray(seq.blocks)) return refuse(at('blocks'), 'The sequence blocks are not a list.');
+  if (!Array.isArray(seq.blocks)) return refuse(at('blocks'), 'The sequence blocks are not a list');
   if (!seq.blocks.length) {
-    return refuse(at('blocks'), 'The sequence has no blocks, so there is nothing to open.');
+    return refuse(at('blocks'), 'The sequence has no blocks, so there is nothing to open');
   }
   if (seq.blocks.length > MAX_BLOCKS) {
     return refuse(at('blocks'), `The sequence has ${seq.blocks.length} blocks; a V2 sequence `
-      + `holds at most ${MAX_BLOCKS}.`);
+      + `holds at most ${MAX_BLOCKS}`);
   }
-  const { issues } = parseSequence(seq, { sampleRate });
-  if (issues.length) {
-    const more = issues.length > 1 ? ` (and ${issues.length - 1} more)` : '';
-    return refuse(at('blocks'), `${issues[0]}${more} The file is refused, not repaired.`);
+  const rate = fileRate(doc, config, sampleRate);
+  const { model: parsed, issues } = parseSequence(seq, { sampleRate: rate });
+  const diff = firstDifference(seq, serializeSequence(parsed), rate);
+  if (diff) return refuse(at(diff.path), diff.message);
+  // Every repair changes a value, so none is left here; this only guards that invariant.
+  if (issues.length) return refuse(at('blocks'), `The sequencer reports: ${issues[0]}`);
+  if (parsed.seed !== DEFAULT_SEED) {
+    return refuse(at('seed'), `The sequence seed is ${parsed.seed}; Studio opens only the V2 `
+      + `default seed ${DEFAULT_SEED} (it seeds blocks added in the V2 editor, is never heard, `
+      + 'and Studio keeps no seed)');
   }
-  const imp = importSequence(seq, { sampleRate, title: config ? 'Configuration sequence'
+  const imp = importSequence(seq, { sampleRate: rate, title: config ? 'Configuration sequence'
     : 'Imported sequence' });
   if (!imp.ok) return { ok: false, warnings: [], errors: imp.errors };
-  return { ok: true, model: imp.model, seed: imp.extras.seed,
-    source: config ? 'config' : 'sequence', warnings: [] };
+  return { ok: true, model: imp.model, source: config ? 'config' : 'sequence', sampleRate: rate,
+    warnings: [] };
 }
