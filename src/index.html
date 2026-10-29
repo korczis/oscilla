@@ -754,6 +754,8 @@
           data-osc-panel="sequencer" data-osc-modes="sequencer" aria-labelledby="osc-seq-title">
           <div class="osc-panel-header osc-seq-head">
             <h2 class="osc-panel-title" id="osc-seq-title">Pattern Sequencer</h2>
+            <span data-osc="seq.unsaved" hidden :hidden="!seqUnsaved"
+              title="Export config keeps the sequence; a reload asks first">unsaved sequence</span>
             <div class="osc-transport" role="group" aria-label="Sequencer transport">
               <button type="button" class="osc-transport-btn" id="osc-seq-play"
                 data-osc="seq.play" aria-label="Play sequence" aria-pressed="false">

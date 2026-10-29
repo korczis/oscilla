@@ -71,6 +71,28 @@ function defaultTimers() {
   };
 }
 
+/** JSON with every object's keys in sorted order: equal content gives equal text. */
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().filter((k) => value[k] !== undefined)
+      .map((k) => `${JSON.stringify(k)}:${canonicalJson(value[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+/**
+ * The content of a sequence as a comparable string (C019): what serializeSequence writes for a
+ * model, in canonical key order, without the waveform. The waveform follows the instrument
+ * (main.js mirrors it in) and is configuration, not sequence work. The unsaved-work guard
+ * compares the digest now with the one at the last load, import or export (ui/workbench.js).
+ */
+export function sequenceDigest(model) {
+  const doc = serializeSequence(model);
+  delete doc.waveform;
+  return canonicalJson(doc);
+}
+
 /**
  * options: { model (default: the reference sequence), engine (adapter, see above),
  *            sampleRate (fallback before a context exists), timers }
@@ -84,6 +106,7 @@ export function createSequencerEditor(options = {}) {
     lastEnd: null,
     loopTimer: null,
     self: null,
+    listeners: new Set(), // onChange subscribers (C004)
   };
   const resolve = (key, getter) => {
     if (!engine) return null;
@@ -173,6 +196,13 @@ export function createSequencerEditor(options = {}) {
       this.warnings = issues;
       if (this.selectedId !== null && indexOfBlock(model, this.selectedId) < 0)
         this.selectedId = null;
+      for (const fn of [...priv.listeners]) fn(model);
+    },
+    /** Call fn(model) after every change of the model. Returns the unsubscribe function. */
+    onChange(fn) {
+      if (typeof fn !== 'function') throw new TypeError('onChange needs a function.');
+      priv.listeners.add(fn);
+      return () => priv.listeners.delete(fn);
     },
     /** Add a block after the selection (or at the end) and select it. Returns the id or null. */
     addBlock(type) {

@@ -5,8 +5,9 @@
 // non-empty: a clean page registers none (browsers penalise an always-on handler, and it must
 // never fire on a clean page). The native prompt shows no custom text; each domain shows its
 // own visible indicator (Studio "unsaved changes", MEASURE "unsaved result" or "unsaved name or
-// notes"). Saved is not kept when the store is the memory fallback (no IndexedDB): the records
-// it holds are reported too (experiments/store.js held(), observeMemoryStore).
+// notes", the Sequencer "unsaved sequence"). Saved is not kept when the store is the memory
+// fallback (no IndexedDB): the records it holds are reported too (experiments/store.js held(),
+// observeMemoryStore).
 //
 // Back and Forward between workspaces are same-document traversals (ui/navigation.js) and never
 // fire beforeunload; only leaving the page does.
