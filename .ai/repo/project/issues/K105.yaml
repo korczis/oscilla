@@ -1,0 +1,40 @@
+id: K105
+milestone: M071
+serves:
+  - "connected-instrument#parameter-contract"
+title: "Component contract: every parameter declared, automatable, modulatable and linkable"
+slug: component-contract-every-parameter-declared-automatable-modu
+priority: p1
+profile: implementation
+objective: "Lands as test(studio). A contract over every registry parameter and every instrument control: each declares key, label, unit, range, default, mapping, automatable, modulatable and its deep-link address (#m=studio&node=<id>&param=<key>); every continuous control on a Synth, mixer or engine card is bound to exactly one declared parameter or edge property; a parameter that is neither automatable nor modulatable states why in its definition. A new control without a declared parameter, or a declared parameter with no control on its box face (every parameter is shown, owner decision of 2026-10-29), fails. Before: parameters are declared per node type without a contract over every control. After: every parameter is declared, shown, automatable or modulatable or says why, and linkable. User-value tier 2 of 4 (synth-design.md section 17). Rollback: revert the pull request; no saved state depends on it."
+why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
+scope:
+  - "src/js/studio/registry.js"
+  - "src/js/studio/nodes"
+  - "src/js/ui/synth"
+  - "src/js/ui/controls"
+  - "docs/v31/studio-model.md"
+  - "tests/unit/parameter-contract.test.mjs"
+  - "tests/browser/synth-panel.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K062"
+acceptance_criteria:
+  - "tests/unit/parameter-contract.test.mjs, failing on the merge base: every registry parameter declares the fields above; a fixture control bound to no parameter fails; a fixture parameter with no control on its card fails; a fixture parameter marked neither automatable nor modulatable without a reason fails."
+  - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: a control bound to no parameter; a parameter with no control; a parameter neither automatable nor modulatable without a reason."
+  - "A browser check in tests/browser/synth-panel.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: a parameter's deep link opens the Studio with that node selected and that parameter focused in the Inspector, and Back returns to the card. Real-time: after the deep link, a knob turn on the card changes the focused Inspector value, each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: every control of one card per node type is reached by Tab and operated by keyboard, pointer and touch, its role asserted. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Every edit is one undoable dispatch through the one Studio store (a continuous gesture is one history entry, undo and redo restore the exact serialized model) and the model holds plain data only (project.studio-model-is-canonical); every connection goes through canConnect and full-model validation, and a refusal shows the validator's sentence and leaves model, history and runtime unchanged (project.typed-ports, project.no-silent-feedback)."
+  - "Every link it adds (open in, send to, a modulation route, a probe or a jump between views) is a row of tests/browser/integration-map.json, and tests/browser/integration-map.cjs walks it: the control works by pointer and by keyboard, the target shows the same Studio revision, focus lands on the target heading, and Back, Forward and reload keep the state."
+  - "Every string it adds passes tests/unit/instrument-wording.test.mjs (added by K059): no product, brand or model name, no analog-modelling or vintage claim, and every approximation it makes labelled where it is shown (project.no-fake-science)."
+  - "The pull request carries a reviewer's verdict (src/js/studio is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "scripts/size-report.mjs shows at most 1 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of the line's figures stays within the cap Q023 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/parameter-contract.test.mjs"
+  - "node tests/browser/synth-panel.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

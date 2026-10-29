@@ -1,0 +1,49 @@
+id: K065
+milestone: M065
+serves:
+  - "connected-instrument#piano-keyboard"
+  - "connected-instrument#one-transport"
+title: "Piano keyboard on the Keys node: glissando, multi-touch, two-row keys, MIDI, lights from every source"
+slug: piano-keyboard-on-the-keys-node-glissando-multi-touch-two-ro
+priority: p1
+profile: implementation
+objective: "Lands as feat(synth). Extends K026's shared piano component (src/js/ui/piano, built there for the Playground's V502 voices) and binds it in the Synth workspace's bottom dock and in the Studio to the Keys node through the note router (K060): pointer glissando (one note per pointer, moving with it), multi-touch (one note per pointerId), the two-row computer layout (A W S E D F T G Y H U J K from C), Z and X octave, C and V velocity in 0.1 steps shown, MIDI in through V501 and V502 routed to the same Keys node while the Synth workspace is armed, sustain by MIDI CC64 and a Sustain toggle (never Space, which is the transport), an octave scroll (buttons and a role=slider), scale highlight from the focused pattern's scale and root, and keys lit for every source that holds them (pointer, keys, MIDI, the sequencer at its scheduled times) with the source in the key's accessible description. One arming rule: the computer keys play only while focus is inside the piano dock or its Arm keys toggle is on, never while a text field, a dialog, the Studio graph or the step grid has focus, so they never collide with the graph's bare keys (A, F, T, C in graph-keys.js) or K069's grid keys (A, S, 1-4); the key table is recorded in ADR 0050's Synth row. Before: no keyboard plays the Studio. After: one piano plays the Keys node by pointer, touch, computer keys and MIDI, lit from every source. User-value tier 1 of 4 (synth-design.md section 17). Rollback: revert the pull request; no saved state depends on it."
+why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
+scope:
+  - "src/js/ui/piano"
+  - "src/js/ui/synth"
+  - "src/js/synth"
+  - "src/js/midi"
+  - "src/js/ui/studio/workspace.js"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/browser/integration-map.json"
+  - "tests/browser/lib/midi-stub.cjs"
+  - "tests/unit/piano-keyboard.test.mjs"
+  - "tests/browser/piano.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K026"
+  - "K060"
+  - "K062"
+  - "K104"
+acceptance_criteria:
+  - "tests/unit/piano-keyboard.test.mjs, failing on the merge base: the key map, octave and velocity keys, glissando note changes per pointer, one note per touch point, CC64 sustain holding and releasing, scale-highlight sets for each mode, and the lit-source set of each key; Space is never handled by the piano; with the Studio graph or the step grid focused, A, F, T, C and S reach their owners and play no note, and with Arm keys on they play notes only from the dock."
+  - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: Space (never the piano's); keys while a field has focus; MIDI absent (everything else works); a held note at blur."
+  - "A browser check in tests/browser/piano.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: the same component in the Playground plays the V502 voices and in the Synth workspace the Keys node; a note held in the Synth workspace is shown held in the Studio's Keys node view at the same revision. Real-time: a key press reaches the Keys node's runtime pitch and gate; a MIDI Note On from the stub (tests/browser/lib/midi-stub.cjs, seam group) lights its key and reaches the voice; a sequencer step playing lights its key at its scheduled time, each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: pointer glissando, two synthesized touch points, the two-row keys with Z, X, C and V, and Tab to a key then Enter each play; every key is a button named with its note and aria-pressed while held, and the component has a visible label. Held notes are released on blur, hide and Escape (D3). Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Every node it plays is built by an engine adapter with track()/source() accounting, all timing is on the audio clock (no timer or rAF times audio), envelopes are click-free, frequencies stay below 0.95 x Nyquist of the running context, the peak stays at or below the output ceiling and the engine node census is 0 after stop (project.audio-engine-discipline v2)."
+  - "Every link it adds (open in, send to, a modulation route, a probe or a jump between views) is a row of tests/browser/integration-map.json, and tests/browser/integration-map.cjs walks it: the control works by pointer and by keyboard, the target shows the same Studio revision, focus lands on the target heading, and Back, Forward and reload keep the state."
+  - "Every string it adds passes tests/unit/instrument-wording.test.mjs (added by K059): no product, brand or model name, no analog-modelling or vintage claim, and every approximation it makes labelled where it is shown (project.no-fake-science)."
+  - "Its chrome uses the Flowbite Pro component where Pro has one (card, button, button group, input, dropdown, tabs, tooltip, popover), adapted from that block, lands after F002, is recorded as migrated (never pending) and lowers or keeps the ratchet; the instrument visuals Pro has no component for (the knob arc, the cable layer, the piano keys, the pad surface) are inline SVG and Tailwind utilities inside Pro cards, as the ADR 0061 resolution note of K058 records; it adds no osc-* class token, no legacy selector, no inline style and no stylesheet (project.ui-uses-flowbite-pro, project.visual-identity-lock v2, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs); every continuous instrument parameter it shows is the knob of K058 (D11)."
+  - "The pull request carries a reviewer's verdict (src/js/synth is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "scripts/size-report.mjs shows at most 4 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; it does not wait on Q023, and its figure joins the line's sum once Q023 records the cap, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/piano-keyboard.test.mjs"
+  - "node tests/browser/piano.cjs"
+  - "node tests/browser/midi.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

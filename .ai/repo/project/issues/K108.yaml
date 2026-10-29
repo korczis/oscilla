@@ -1,0 +1,41 @@
+id: K108
+milestone: M071
+serves:
+  - "connected-instrument#daw-mixer"
+title: "Mixer view: channel strips, sends, inserts and the master with its meter"
+slug: mixer-view-channel-strips-sends-inserts-and-the-master-with
+priority: p2
+profile: implementation
+objective: "Lands as feat(synth). The Mix sub-view (place per Q019): a Pro card per channel strip with its knobs (D11), a vertical level fader built on the knob's value model, mute and solo toggles, send knobs, an insert list reordered by drag or keyboard (one BATCH), the strip's level meter from the shared meter model, and the master strip with the safety chain's ceiling stated. Every strip deep-links to its track, its instrument and its Studio node. Before: levels are set per node in the Inspector. After: a mixer view of strips with meters. User-value tier 3 of 4 (synth-design.md section 17). Rollback: revert the pull request; no saved state depends on it."
+why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
+scope:
+  - "src/js/ui/synth"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/browser/integration-map.json"
+  - "tests/unit/mixer-view.test.mjs"
+  - "tests/browser/mixer.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K107"
+  - "K062"
+  - "Q019"
+acceptance_criteria:
+  - "tests/unit/mixer-view.test.mjs, failing on the merge base: each control maps to one dispatch, an insert reorder is one BATCH, and the meter reads the shared model."
+  - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: an insert reorder that would close a cycle (refused)."
+  - "A browser check in tests/browser/mixer.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: a strip's Open in Studio selects its channel node, and a strip's track link opens the arrangement with that track selected. Real-time: a fader drag changes the runtime gain and the strip's meter, each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: strips work by pointer, keyboard and touch; mute and solo are role=switch. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Every edit is one undoable dispatch through the one Studio store (a continuous gesture is one history entry, undo and redo restore the exact serialized model) and the model holds plain data only (project.studio-model-is-canonical); every connection goes through canConnect and full-model validation, and a refusal shows the validator's sentence and leaves model, history and runtime unchanged (project.typed-ports, project.no-silent-feedback)."
+  - "Every link it adds (open in, send to, a modulation route, a probe or a jump between views) is a row of tests/browser/integration-map.json, and tests/browser/integration-map.cjs walks it: the control works by pointer and by keyboard, the target shows the same Studio revision, focus lands on the target heading, and Back, Forward and reload keep the state."
+  - "Every string it adds passes tests/unit/instrument-wording.test.mjs (added by K059): no product, brand or model name, no analog-modelling or vintage claim, and every approximation it makes labelled where it is shown (project.no-fake-science)."
+  - "Its chrome uses the Flowbite Pro component where Pro has one (card, button, button group, input, dropdown, tabs, tooltip, popover), adapted from that block, lands after F002, is recorded as migrated (never pending) and lowers or keeps the ratchet; the instrument visuals Pro has no component for (the knob arc, the cable layer, the piano keys, the pad surface) are inline SVG and Tailwind utilities inside Pro cards, as the ADR 0061 resolution note of K058 records; it adds no osc-* class token, no legacy selector, no inline style and no stylesheet (project.ui-uses-flowbite-pro, project.visual-identity-lock v2, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs); every continuous instrument parameter it shows is the knob of K058 (D11)."
+  - "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no review verdict is needed; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+  - "scripts/size-report.mjs shows at most 4 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of the line's figures stays within the cap Q023 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/mixer-view.test.mjs"
+  - "node tests/browser/mixer.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

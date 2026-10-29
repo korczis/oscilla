@@ -1,0 +1,46 @@
+id: K134
+milestone: M082
+serves:
+- "signal-generator-lab#noise-and-tones"
+title: Two-tone and multi-tone test signals with a requested-frequency marker per tone
+slug: two-tone-and-multi-tone-test-signals-with-a-requested-freque
+priority: p2
+profile: implementation
+objective: "Lands as feat(audio). Patterns in a new 'Test signals' group: SMPTE/DIN two-tone (60 Hz + 7 kHz, 4:1), CCIF/ITU two-tone (19 kHz + 20 kHz, 1:1; refused with the reason where 20 kHz is at or above 0.95 x Nyquist of the running context) and Multi-tone (a list of up to 16 frequencies, Hz or note names through K132, with relative levels). The plan states its peak and RMS (crest factor) so the level a user sets is the plan's peak in dBFS-like units. The spectrum chart draws a requested-frequency marker for each tone (today one marker), a domain view on the canvas."
+why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings G1-G14 measured on origin/main b67d1e58)."
+scope:
+- src/js/audio/patterns.js
+- src/js/audio/audio-engine.js
+- src/js/charts/spectrum-chart.js
+- src/js/core/url-state.js
+- tests/unit/generator-multitone.test.mjs
+- tests/browser/generator.cjs
+- tests/README.md
+- dist
+- docs/science/readouts.md
+depends_on:
+- K132
+- K136
+acceptance_criteria:
+- "Before: VERIFIED (G7): no two-tone or multi-tone; the spectrum marks one requested frequency."
+- "After and negative cases: as the objective and the criteria below state; the setpoint (what was requested) and the observation (what the analyser measured on the digital output, or the microphone on the room) are separate readouts with separate labels, and no readout claims the acoustic output."
+- "Rollback: revert the merge commit. Nothing changes the schema, a studioHash, URL key meaning or stored preset, so documents saved while it was live load unchanged after the revert."
+- "Scientific-truth rows (Quantity | Unit | Source | Algorithm | Resolution | Calibration | Limitations | Tests | UI label) are added to docs/science/readouts.md and checked by tests/unit/readout-truth.test.mjs (each UI label's text is in the source, each Tests path exists, and a setpoint row never shares its label with an observed row): Tone frequencies (setpoint) | Hz | plan | none | 4 significant figures | not applicable | each below 0.95 x Nyquist or the plan is refused | tests/unit/generator-multitone.test.mjs | Requested 60 Hz + 7 kHz (4:1) || Tone peaks on the spectrum (observed) | Hz, dB relative | output AnalyserNode, fftSize 8192, smoothing 0.55 (audio-engine.js) | FFT magnitude with the analyser's Blackman window, peak bin | fs / 8192 = 5.86 Hz at 48 kHz, 5.38 Hz at 44.1 kHz; scalloping up to about 1 dB | uncalibrated | digital loopback, not acoustic output; smoothing lags changes | tests/unit/generator-multitone.test.mjs | Analyser peak 7.00 kHz +-5.9 Hz (digital output)"
+- "tests/unit/generator-multitone.test.mjs, failing on the merge base: offline renders of each preset at 44.1 and 48 kHz show each tone's bin within +-1 bin and the stated level ratio within 0.2 dB; the stated peak equals the rendered peak within 0.1 dB; CCIF is refused at a sample rate whose 0.95 x Nyquist is below 20 kHz; the node census is 0 after stop."
+- "Definition of done, extends: the pattern engine of S013 and the requested-frequency marker of the spectrum."
+- "Definition of done, cross-links: the plan's tones are the markers the spectrum draws and the tones the Signal Path tab lists (one plan, round trip through url-state). The link is a row of tests/browser/integration-map.json once that map (synth line K075) is on main."
+- "Definition of done, dynamics: a marker per tone on the live spectrum."
+- "Definition of done, docs and routes: README.md's Playground feature list and docs/GLOSSARY.md where a term is new; .ai/repo/features/playground.md (or the feature record of the Playground) says what changed; tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: A check 'two-tone' in tests/browser/generator.cjs selects SMPTE two-tone by keyboard, presses Hold to Play by pointer and waits with until() (deadline 'two peaks at 60 Hz and 7 kHz', 6 s) for analyser peaks within +-1 bin of each and the 4:1 ratio within 1 dB, and for two markers in the chart's state; edits the multi-tone list by touch in a hasTouch context and waits for the markers to follow; on the merge base the patterns do not exist. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit and the completed evidence the release that carried it; E030's judge passes on the pull request once E030 is on main."
+- "The pull request carries a reviewer's verdict (it touches a guarded path; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+- "Wave 1: it adds no class token, selector, markup surface or inline style, so the Flowbite Pro record does not change: node scripts/ui-flowbite-pro-record.mjs --check passes with no rewrite and node --test tests/unit/ui-flowbite-pro.test.mjs passes (project.ui-uses-flowbite-pro); live drawing is on a canvas, a domain view."
+- "scripts/size-report.mjs shows at most 1.5 KB gzip added, with the base and head figures in the pull request body, within the owner's dist budget of 1 200 000 B gzip (decision of 2026-10-29, about 355 KB of headroom at origin/main b67d1e58); the ceiling of this line is 25 KB gzip in all (Studio boxes 35 KB, signal generator 25 KB), stated in the milestone (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/generator-multitone.test.mjs
+- node tests/browser/generator.cjs --only two-tone
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

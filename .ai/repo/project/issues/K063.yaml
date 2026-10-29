@@ -1,0 +1,43 @@
+id: K063
+milestone: M064
+serves:
+  - "connected-instrument#patch-cables"
+title: "Patch bay: drag cables from typed jacks, with highlight, refusal, fan-out and normalling"
+slug: patch-bay-drag-cables-from-typed-jacks-with-highlight-refusa
+priority: p1
+profile: implementation
+objective: "Lands as feat(synth). The jack strips of the panel cards and one SVG cable layer over the panel: drag from any jack after the 4 px threshold with a live sagging cable (min(80, 0.25 x distance) px), compatible jacks highlighted and incompatible ones crossed with the validator's sentence in a Pro tooltip, judged once per drag by canConnect and full-model validation of the whole batch the drop would dispatch (the cable plus the normals it breaks, from normals.js), because connectionTargets' probe adds the trial edge without removing the normal and would show a single-input normalled jack as refused (no compatibility table of its own); drop to connect as one batch that breaks the jack's normal (K061); fan-out from outputs; single-input jacks replace (K008); click or tap selects a cable, Delete or a drag-off removes it and restores the normal; colour derived from the source module, pattern from the type; Enter on a focused jack opens the connection list of createConnectDialog (compatible targets, then refused ones with reasons, then Remove cable); tap-connect mode on touch; feedback refused with the cycle path highlighted. Before: cables exist only in the Studio graph. After: cables are dragged in the panel with highlight, refusal, fan-out and normalling. User-value tier 1 of 4 (synth-design.md section 17). Rollback: revert the pull request; no saved state depends on it."
+why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
+scope:
+  - "src/js/ui/synth"
+  - "src/js/ui/studio/graph-view.js"
+  - "src/js/ui/studio/graph-picker.js"
+  - "src/js/ui/studio/graph-geometry.js"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/browser/integration-map.json"
+  - "tests/unit/synth-patch-bay.test.mjs"
+  - "tests/browser/synth-patch-bay.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K062"
+  - "K008"
+acceptance_criteria:
+  - "tests/unit/synth-patch-bay.test.mjs, failing on the merge base: the cable sag geometry is bounded and continuous; the jack verdicts equal canConnect plus validation for every jack pair of the panel, judged on the batch, so High-pass, Low-pass and Output audio inputs show as replaceable while normalled; the derived colour of two modules differs and is one of the validated set; a drop, a drag-off and a Delete each produce one batch with the normal change."
+  - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: an incompatible drop; a feedback cable; a drop on empty panel; a second cable into a single input (replaces)."
+  - "A browser check in tests/browser/synth-patch-bay.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: a cable patched in the Synth panel is the edge the Studio graph shows at the same revision, and undo in the Studio removes it from the panel. Real-time: a dropped cable appears in the runtime's edge list and the destination's input level (a meter tap) rises; an audio cable dropped on a trigger jack adds no edge and announces 'Audio output cannot connect to a trigger input.', each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: connect and remove by pointer drag, by keyboard (Enter on a jack, choose from the list) and by touch tap-connect each run; jacks are buttons with accessible names and the cable list is a listbox in the accessibility tree. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Every edit is one undoable dispatch through the one Studio store (a continuous gesture is one history entry, undo and redo restore the exact serialized model) and the model holds plain data only (project.studio-model-is-canonical); every connection goes through canConnect and full-model validation, and a refusal shows the validator's sentence and leaves model, history and runtime unchanged (project.typed-ports, project.no-silent-feedback)."
+  - "Every link it adds (open in, send to, a modulation route, a probe or a jump between views) is a row of tests/browser/integration-map.json, and tests/browser/integration-map.cjs walks it: the control works by pointer and by keyboard, the target shows the same Studio revision, focus lands on the target heading, and Back, Forward and reload keep the state."
+  - "Every string it adds passes tests/unit/instrument-wording.test.mjs (added by K059): no product, brand or model name, no analog-modelling or vintage claim, and every approximation it makes labelled where it is shown (project.no-fake-science)."
+  - "Its chrome uses the Flowbite Pro component where Pro has one (card, button, button group, input, dropdown, tabs, tooltip, popover), adapted from that block, lands after F002, is recorded as migrated (never pending) and lowers or keeps the ratchet; the instrument visuals Pro has no component for (the knob arc, the cable layer, the piano keys, the pad surface) are inline SVG and Tailwind utilities inside Pro cards, as the ADR 0061 resolution note of K058 records; it adds no osc-* class token, no legacy selector, no inline style and no stylesheet (project.ui-uses-flowbite-pro, project.visual-identity-lock v2, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs); every continuous instrument parameter it shows is the knob of K058 (D11)."
+  - "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no review verdict is needed; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+  - "scripts/size-report.mjs shows at most 5 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; it does not wait on Q023, and its figure joins the line's sum once Q023 records the cap, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/synth-patch-bay.test.mjs"
+  - "node tests/browser/synth-patch-bay.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

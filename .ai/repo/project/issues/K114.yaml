@@ -1,0 +1,38 @@
+id: K114
+milestone: M072
+serves:
+  - "connected-instrument#session-and-midi"
+title: "Piano roll: CC lanes and step input"
+slug: piano-roll-cc-lanes-and-step-input
+priority: p3
+profile: implementation
+objective: "Lands as feat(synth). The piano roll of K099 gains CC lanes per notes clip (values written to a midi-cc or any declared parameter at their times) and step input from the piano (each note writes at the cursor and advances by the grid). Before: the piano roll has notes only. After: CC lanes and step input. User-value tier 4 of 4 (synth-design.md section 17). Rollback: revert the pull request; no saved state depends on it."
+why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
+scope:
+  - "src/js/ui/synth"
+  - "src/js/studio/schema.js"
+  - "src/js/studio/timeline-compiler.js"
+  - "tests/unit/piano-roll-cc.test.mjs"
+  - "tests/browser/session.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K099"
+  - "K077"
+acceptance_criteria:
+  - "tests/unit/piano-roll-cc.test.mjs, failing on the merge base: a CC lane value lands at its time offline; step input writes and advances by the grid."
+  - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: a CC outside 0-127 (refused)."
+  - "A browser check in tests/browser/session.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: a CC lane drawn in the roll is the lane the Studio shows. Real-time: a lane value moves its target parameter while playing, each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: lanes and step input work by pointer, keyboard and touch. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Every edit is one undoable dispatch through the one Studio store (a continuous gesture is one history entry, undo and redo restore the exact serialized model) and the model holds plain data only (project.studio-model-is-canonical); every connection goes through canConnect and full-model validation, and a refusal shows the validator's sentence and leaves model, history and runtime unchanged (project.typed-ports, project.no-silent-feedback)."
+  - "Every string it adds passes tests/unit/instrument-wording.test.mjs (added by K059): no product, brand or model name, no analog-modelling or vintage claim, and every approximation it makes labelled where it is shown (project.no-fake-science)."
+  - "The pull request carries a reviewer's verdict (src/js/studio is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "scripts/size-report.mjs shows at most 2 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of the line's figures stays within the cap Q023 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/piano-roll-cc.test.mjs"
+  - "node tests/browser/session.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

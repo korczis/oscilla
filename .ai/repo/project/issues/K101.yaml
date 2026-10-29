@@ -1,0 +1,45 @@
+id: K101
+milestone: M069
+serves:
+  - "connected-instrument#session-and-midi"
+  - "connected-instrument#one-transport"
+title: "Session grid: tracks by scenes, clip launch quantised to the bar"
+slug: session-grid-tracks-by-scenes-clip-launch-quantised-to-the-b
+priority: p2
+profile: implementation
+objective: "Lands as feat(studio). Size: big; it is split further into landable pull requests when started, each with its own fail-first test. timeline.session = { scenes, slots } under the schema version V601 introduces (a stated migration from it), clip launch and scene launch quantised to the next bar on the audio clock, a launched clip looping on the one transport, and the arrangement timeline as the other view; follow actions later. Before: clips play only on the timeline. After: a session grid launched on the bar. User-value tier 3 of 4 (synth-design.md section 17). Rollback: revert the pull request together with its migration; documents saved under its schema are refused by older builds with the schema sentence."
+why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
+scope:
+  - "src/js/studio/schema.js"
+  - "src/js/studio/migrate.js"
+  - "src/js/studio/timeline.js"
+  - "src/js/studio/transport.js"
+  - "src/js/ui/synth"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/unit/studio-session.test.mjs"
+  - "tests/browser/session.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K099"
+  - "V601"
+  - "Q019"
+acceptance_criteria:
+  - "tests/unit/studio-session.test.mjs, failing on the merge base: a launch requested mid-bar starts at the next bar's frame; a scene launch starts every slot of the scene on the same frame; a document of the previous schema migrates with its timeline unchanged and states the migration."
+  - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: a launch requested in the last frame of a bar (next bar)."
+  - "A browser check in tests/browser/session.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: a clip launched in the grid is the clip the arrangement timeline marks as playing. Real-time: a launched clip sounds from the next bar (runtime onset), each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: slots and scenes launch by pointer, keyboard (arrows, Enter) and touch; the grid is role=grid with named cells. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Every edit is one undoable dispatch through the one Studio store (a continuous gesture is one history entry, undo and redo restore the exact serialized model) and the model holds plain data only (project.studio-model-is-canonical); every connection goes through canConnect and full-model validation, and a refusal shows the validator's sentence and leaves model, history and runtime unchanged (project.typed-ports, project.no-silent-feedback)."
+  - "Every node it plays is built by an engine adapter with track()/source() accounting, all timing is on the audio clock (no timer or rAF times audio), envelopes are click-free, frequencies stay below 0.95 x Nyquist of the running context, the peak stays at or below the output ceiling and the engine node census is 0 after stop (project.audio-engine-discipline v2)."
+  - "Every string it adds passes tests/unit/instrument-wording.test.mjs (added by K059): no product, brand or model name, no analog-modelling or vintage claim, and every approximation it makes labelled where it is shown (project.no-fake-science)."
+  - "Its chrome uses the Flowbite Pro component where Pro has one (card, button, button group, input, dropdown, tabs, tooltip, popover), adapted from that block, lands after F002, is recorded as migrated (never pending) and lowers or keeps the ratchet; the instrument visuals Pro has no component for (the knob arc, the cable layer, the piano keys, the pad surface) are inline SVG and Tailwind utilities inside Pro cards, as the ADR 0061 resolution note of K058 records; it adds no osc-* class token, no legacy selector, no inline style and no stylesheet (project.ui-uses-flowbite-pro, project.visual-identity-lock v2, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs); every continuous instrument parameter it shows is the knob of K058 (D11)."
+  - "The pull request carries a reviewer's verdict (src/js/studio is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "scripts/size-report.mjs shows at most 6 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of the line's figures stays within the cap Q023 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/studio-session.test.mjs"
+  - "node tests/browser/session.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

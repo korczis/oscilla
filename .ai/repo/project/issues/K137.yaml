@@ -1,0 +1,49 @@
+id: K137
+milestone: M082
+serves:
+- "signal-generator-lab#noise-and-tones"
+title: "Pulse waveform with width, band-limited and proven so"
+slug: pulse-waveform-with-width-band-limited-and-proven-so
+priority: p2
+profile: implementation
+objective: "Lands as feat(audio). The band-limited pulse is synth K059's PeriodicWave builder (its vco's pulse, partials stopping below 0.95 x Nyquist of the running context, rebuilt when frequency or width changes), shared as src/js/audio/pulse.js: if K059 kept it inside the vco adapter, this slice moves it there so both use one module. The Generator workspace (K138) gains a Pulse waveform and a Width control. The help says 'band-limited: no partial above the digital Nyquist limit', and states that sine, triangle, saw and square are band-limited by the browser's table oscillator. The Studio Oscillator node gains no width parameter (D2); the Studio's pulse is the vco."
+why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings G1-G14 measured on origin/main b67d1e58)."
+scope:
+- src/js/audio/pulse.js
+- src/js/audio/audio-engine.js
+- src/js/core/constants.js
+- src/js/core/url-state.js
+- src/index.html
+- tests/unit/generator-pulse.test.mjs
+- tests/browser/generator.cjs
+- tests/visual
+- tests/README.md
+- dist
+- docs/science/readouts.md
+depends_on:
+- K138
+- K059
+- K136
+acceptance_criteria:
+- "Before: VERIFIED (G6): no pulse; DERIVED: square, saw and triangle are band-limited by the browser's table oscillator (Web Audio specification), which the page never says."
+- "After and negative cases: as the objective and the criteria below state; the setpoint (what was requested) and the observation (what the analyser measured on the digital output, or the microphone on the room) are separate readouts with separate labels, and no readout claims the acoustic output."
+- "Rollback: revert the merge commit. Nothing changes the schema, a studioHash, URL key meaning or stored preset, so documents saved while it was live load unchanged after the revert."
+- "Scientific-truth rows (Quantity | Unit | Source | Algorithm | Resolution | Calibration | Limitations | Tests | UI label) are added to docs/science/readouts.md and checked by tests/unit/readout-truth.test.mjs (each UI label's text is in the source, each Tests path exists, and a setpoint row never shares its label with an observed row): Pulse partial amplitudes (setpoint) | dB relative | PeriodicWave coefficients | Fourier series of a pulse of width w, truncated below 0.95 x Nyquist | exact | not applicable | coefficients that play, not measured; the browser's table interpolation | tests/unit/generator-pulse.test.mjs | Partials (coefficients that play, not measured)"
+- "tests/unit/generator-pulse.test.mjs, failing on the merge base: the partial amplitudes of 10 %, 25 % and 50 % widths match the pulse's Fourier series within 0.5 dB, no partial lies at or above 0.95 x Nyquist at 44.1 and 48 kHz for 20 Hz-10 kHz fundamentals, a width change is click-free by the engine's step bound, and the node census is 0 after stop."
+- "Definition of done, extends: synth K059's vco pulse and the waveform choice of S012."
+- "Definition of done, cross-links: the pulse setting survives the URL round trip and the Harmonics tab shows its partials from the same table. The link is a row of tests/browser/integration-map.json once that map (synth line K075) is on main."
+- "Definition of done, dynamics: the scope and spectrum show the width change live."
+- "Definition of done, docs and routes: README.md's Playground feature list and docs/GLOSSARY.md where a term is new; .ai/repo/features/playground.md (or the feature record of the Playground) says what changed; tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: A check 'pulse' in tests/browser/generator.cjs picks Pulse by keyboard (arrow keys in the tile group), sets width 25 % by pointer on the slider and by touch, plays it and waits with until() (deadline 'pulse spectrum nulls at 4 x f', 6 s) for the analyser's 4th harmonic at least 30 dB under the 3rd; on the merge base the tile does not exist. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit and the completed evidence the release that carried it; E030's judge passes on the pull request once E030 is on main."
+- "The pull request carries a reviewer's verdict (it touches a guarded path; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+- "Wave 2: its chrome is Flowbite Pro markup adapted from the matching Pro component, lands after F002, adds no osc-* class token or legacy selector, and studio.css, studio-timeline.css, charts.css and tokens.css gain no selector or declaration; the domain drawing stays OSCILLA's own inside Pro cards (project.ui-uses-flowbite-pro, project.visual-identity-lock v2; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "scripts/size-report.mjs shows at most 1.5 KB gzip added, with the base and head figures in the pull request body, within the owner's dist budget of 1 200 000 B gzip (decision of 2026-10-29, about 355 KB of headroom at origin/main b67d1e58); the ceiling of this line is 25 KB gzip in all (Studio boxes 35 KB, signal generator 25 KB), stated in the milestone (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/generator-pulse.test.mjs
+- node tests/browser/generator.cjs --only pulse
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

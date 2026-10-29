@@ -1,0 +1,52 @@
+id: V621
+milestone: M081
+serves:
+- "studio-box-system#box-faces"
+title: "Live mini views on box faces: level, waveform, response curve, spectrum"
+slug: live-mini-views-on-box-faces-level-waveform-response-curve-s
+priority: p2
+profile: implementation
+objective: "P04 slice E (compile and playback). Lands as feat(studio-ui). Each face draws its declared view (V619 face.view) on one canvas: an output level bar for every sounding box, a waveform for sources, the response curve for Filter (the biquad response math K043 and K048 use, captioned as Q011 decides while stopped), and K016's live views for the analysis boxes. One frame-loop subscriber (K036) draws only boxes in the viewport (V618's culling), reads through the visualization bridge and engine.snapshot(), allocates nothing per frame, and says 'No signal' or 'Live only' where that is the truth. Levels are relative (dBFS-like)."
+why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings S1-S14 measured on origin/main b67d1e58)."
+scope:
+- src/js/ui/studio/graph-face.js
+- src/js/ui/studio/face-views.js
+- src/js/studio/probe.js
+- tests/unit/studio-face-views.test.mjs
+- tests/browser/studio-boxes.cjs
+- tests/browser/chart-cost.cjs
+- tests/visual
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+- docs/science/readouts.md
+depends_on:
+- V620
+- K016
+- K036
+- K136
+acceptance_criteria:
+- "Before: VERIFIED (S6, S7): faces draw nothing live."
+- "After: each face draws its declared live view from runtime reads while visible."
+- "Negative cases: stopped or hidden: no analyser is read and the face says 'No signal' or 'Live only'; a level is never shown as dB SPL."
+- "Rollback: revert the merge commit. Nothing changes the schema, a studioHash or a stored record, so documents saved while it was live load unchanged after the revert."
+- "Scientific-truth rows (Quantity | Unit | Source | Algorithm | Resolution | Calibration | Limitations | Tests | UI label) are added to docs/science/readouts.md and checked by tests/unit/readout-truth.test.mjs (each UI label's text is in the source, each Tests path exists, and a setpoint row never shares its label with an observed row): Box output level (observed) | dBFS-like | the same probe tap as V616 | as V616 | as V616 | uncalibrated | as V616 | tests/unit/studio-face-views.test.mjs | -12 dB rel"
+- "tests/unit/studio-face-views.test.mjs, failing on the merge base: the view of each node type, the Filter curve against the biquad formulas within 0.05 dB, the level bar of a full-scale sine at 0 dBFS-like peak; no view allocates in its draw."
+- tests/browser/chart-cost.cjs lists the face views as one subscriber; with the Studio hidden none reads an analyser.
+- "Definition of done, extends: K016's live analysis views and the face of V620."
+- "Definition of done, cross-links: a face view and the cable probe of V616 read the same tap for the same output. The link is a row of tests/browser/integration-map.json once that map (synth line K075) is on main."
+- "Definition of done, dynamics: every sounding box shows its level and its signal while playing."
+- "Definition of done, docs and routes: docs/v31/user-guide.md and .ai/repo/features/studio-signal-graph.md say what changed; tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: A check 'face-views' in tests/browser/studio-boxes.cjs plays the Basic Tone template by pointer (Play) and by keyboard (Space) and waits with until() (deadline 'oscillator face level above -60 dB', 5 s) for the level bar read from the canvas; changes the waveform by touch in a hasTouch context and waits until the face waveform's zero-crossing count changes; pans the box out of view and waits until its draw count stops rising; on the merge base the face has no canvas. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit and the completed evidence the release that carried it; E030's judge passes on the pull request once E030 is on main."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "Wave 2: its chrome is Flowbite Pro markup adapted from the matching Pro component, lands after F002, adds no osc-* class token or legacy selector, and studio.css, studio-timeline.css, charts.css and tokens.css gain no selector or declaration; the domain drawing stays OSCILLA's own inside Pro cards (project.ui-uses-flowbite-pro, project.visual-identity-lock v2; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "scripts/size-report.mjs shows at most 4 KB gzip added, with the base and head figures in the pull request body, within the owner's dist budget of 1 200 000 B gzip (decision of 2026-10-29, about 355 KB of headroom at origin/main b67d1e58); the ceiling of this line is 35 KB gzip in all (Studio boxes 35 KB, signal generator 25 KB), stated in the milestone (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/studio-face-views.test.mjs
+- node tests/browser/studio-boxes.cjs --only face-views
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'
