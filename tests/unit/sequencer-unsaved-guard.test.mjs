@@ -5,12 +5,21 @@
 // 'Unsaved sequence' while the digest differs from the one at the last load, import or export.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createSequencerEditor, sequenceDigest } from '../../src/js/sequencer/editor.js';
+// A namespace import: on a tree without the digest the tests fail by assertion, not at load.
+import * as editorModule from '../../src/js/sequencer/editor.js';
 import { createWorkbench } from '../../src/js/ui/workbench.js';
 import { collectUnsaved } from '../../src/js/ui/unsaved.js';
 
+const { createSequencerEditor } = editorModule;
+const sequenceDigest = (model) => {
+  assert.equal(typeof editorModule.sequenceDigest, 'function',
+    'sequencer/editor.js exports sequenceDigest');
+  return editorModule.sequenceDigest(model);
+};
+
 function editorWithLog() {
   const ed = createSequencerEditor({ timers: null, sampleRate: 48000 });
+  assert.equal(typeof ed.onChange, 'function', 'the editor names its changes (onChange)');
   const seen = [];
   ed.onChange((model) => seen.push(sequenceDigest(model)));
   return { ed, seen };
@@ -67,6 +76,7 @@ test('sequenceDigest does not change on a no-op, a selection or the mirrored wav
 
 test('onChange returns its unsubscribe and refuses a non-function', () => {
   const ed = createSequencerEditor({ timers: null, sampleRate: 48000 });
+  assert.equal(typeof ed.onChange, 'function', 'the editor names its changes (onChange)');
   let calls = 0;
   const off = ed.onChange(() => { calls += 1; });
   ed.setTempo(90);
@@ -79,6 +89,8 @@ test('onChange returns its unsubscribe and refuses a non-function', () => {
 test('the workbench reports Unsaved sequence until the sequence is marked saved', () => {
   const ed = createSequencerEditor({ timers: null, sampleRate: 48000 });
   const wb = createWorkbench({ labs: { sequencer: { editor: ed } } });
+  assert.equal(typeof wb.sequencerWhatWouldBeLost, 'function',
+    'the workbench is a source of the unsaved-work guard');
   // No sequencer mounted yet, or nothing changed: nothing to lose.
   assert.deepEqual(wb.sequencerWhatWouldBeLost(), []);
   wb.markSequenceSaved();
