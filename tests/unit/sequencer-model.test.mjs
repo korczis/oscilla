@@ -381,7 +381,7 @@ class FakeOffline extends FakeContext {
 const renderedLength = async (m) => (await renderSequenceOffline(m, FakeOffline,
   { sampleRate: SR })).buffer.length;
 
-test('K002: the default sequence is tempo-locked, so a tempo change changes its render', async () => {
+test('K002: the default sequence is tempo-locked; a tempo change changes its render', async () => {
   const m = referenceSequence({ sampleRate: SR });
   assert.deepEqual(m.blocks.map((b) => b.beats), [1, 1, 0.5, 1, 1], 'beats at 120 BPM');
   assert.deepEqual(m.blocks.map((b) => b.durationMs), [500, 500, 250, 500, 500],

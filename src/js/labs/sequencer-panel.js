@@ -5,7 +5,9 @@
 //
 // Interaction: click selects; drag reorders (insertion marker); the focused timeline takes the
 // editor's keyboard model (arrows select, Alt+arrows move, Delete removes, Ctrl/Cmd+D
-// duplicates, Escape cancels a drag); the move/delete buttons and the "Add block" menu edit;
+// duplicates, Escape cancels a drag, Space plays or stops, Ctrl/Cmd+Z and Shift+Ctrl/Cmd+Z undo
+// and redo, Ctrl/Cmd+C and Ctrl/Cmd+V copy and paste a block); the move/delete buttons and
+// the "Add block" menu edit;
 // play/stop/loop and "play from the start" use the adapter's context and destination. The
 // audio clock (ctx.currentTime) drives the playhead; no timer ever times audio.
 //

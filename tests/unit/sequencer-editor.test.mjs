@@ -334,9 +334,123 @@ test('K001: natural end, looped passes, restarts and dispose all return the engi
   assert.equal(engine.activeSourceCount, 0);
 });
 
-test('K001: without accounting hooks the editor still plays (lab fixtures, offline adapters)', () => {
+test('K001: without accounting hooks the editor still plays (lab fixtures)', () => {
   const { ed } = setup();
   assert.equal(ed.play(), true);
   ed.dispose();
   assert.deepEqual(ed.stats(), { voices: 0, activeSourceCount: 0, activeNodeCount: 0 });
+});
+
+// ---------------------------------------------------------------- K003: Space, undo, copy
+
+const ctrl = (k, mods = {}) => key(k, { ctrlKey: true, ...mods });
+const snap = (ed) => JSON.stringify(ed.serialize());
+
+test('K003: Space on the timeline plays and stops; repeats and modifiers do not', () => {
+  const { ctx, ed } = setup();
+  let e = key(' ', { code: 'Space' });
+  assert.equal(ed.onKeydown(e), true);
+  assert.equal(e.prevented, true, 'the timeline claims Space');
+  assert.equal(ed.playing, true);
+  e = key(' ', { code: 'Space', repeat: true });
+  assert.equal(ed.onKeydown(e), true, 'an auto-repeat is claimed');
+  assert.equal(ed.playing, true, 'and does not toggle');
+  assert.equal(ed.onKeydown(key('Spacebar')), true, 'the legacy key name');
+  assert.equal(ed.playing, false);
+  ctx.advance(ctx.currentTime + 0.1);
+  assert.deepEqual(ed.stats(), { voices: 0, activeSourceCount: 0, activeNodeCount: 0 });
+  assert.equal(ed.onKeydown(key(' ', { code: 'Space', shiftKey: true })), false, 'Shift+Space');
+  assert.equal(ed.onKeydown(ctrl(' ')), false, 'Ctrl+Space');
+  assert.equal(ed.onKeydown(key(' ', { target: { tagName: 'INPUT' } })), false, 'a field keeps it');
+  assert.equal(ed.playing, false);
+});
+
+test('K003: Ctrl+Z restores the exact serialized model of every edit; Shift+Ctrl+Z redoes', () => {
+  const { ed } = setup();
+  const states = [snap(ed)];
+  const edits = [
+    () => ed.addBlock('fm'),
+    () => ed.updateParam('freq', 523.25),
+    () => ed.onKeydown(key('ArrowLeft', { altKey: true })),
+    () => ed.onKeydown(ctrl('d')),
+    () => ed.setTempo(90),
+    () => ed.setLoop(true),
+    () => {
+      ed.dragStart(0);
+      ed.drop(4);
+    },
+    () => ed.onKeydown(key('Delete')),
+    () => ed.setDurationUnit('ms'),
+    () => ed.clear(),
+  ];
+  for (const edit of edits) {
+    edit();
+    states.push(snap(ed));
+    assert.notEqual(states.at(-1), states.at(-2), `edit ${states.length - 1} changed the model`);
+  }
+  assert.equal(ed.canUndo, true);
+  for (let i = states.length - 2; i >= 0; i--) {
+    const e = ctrl('z');
+    assert.equal(ed.onKeydown(e), true);
+    assert.equal(e.prevented, true);
+    assert.equal(snap(ed), states[i], `undo to state ${i}`);
+  }
+  assert.equal(ed.canUndo, false);
+  assert.equal(ed.onKeydown(ctrl('z')), false, 'nothing to undo: the key is not claimed');
+  assert.equal(ed.selectedId, 'b1', 'the selection comes back with the model');
+  for (let i = 1; i < states.length; i++) {
+    assert.equal(ed.onKeydown(ctrl('Z', { shiftKey: true })), true);
+    assert.equal(snap(ed), states[i], `redo to state ${i}`);
+  }
+  assert.equal(ed.onKeydown(ctrl('z', { shiftKey: true })), false, 'nothing to redo');
+  // Cmd on macOS; a new edit drops the redo branch.
+  ed.onKeydown(key('z', { metaKey: true }));
+  assert.equal(snap(ed), states.at(-2));
+  ed.addBlock('tone');
+  assert.equal(ed.canRedo, false);
+  // An edit that changes nothing is no step; loading a sequence starts a new history.
+  const depth = ed.historyDepth;
+  ed.setTempo(ed.model.tempoBpm);
+  ed.moveBlockTo(0, 0);
+  assert.equal(ed.historyDepth, depth);
+  ed.load(ed.serialize());
+  assert.equal(ed.canUndo, false);
+});
+
+test('K003: Ctrl+C copies the selected block; Ctrl+V pastes it after the selection', () => {
+  const { ed } = setup();
+  ed.selectBlock('b2');
+  const before = snap(ed);
+  assert.equal(ed.onKeydown(ctrl('c')), true);
+  assert.equal(snap(ed), before, 'copy does not change the model');
+  assert.equal(ed.canUndo, false, 'copy is not an edit');
+  ed.selectBlock('b4');
+  const e = ctrl('v');
+  assert.equal(ed.onKeydown(e), true);
+  assert.equal(e.prevented, true);
+  assert.deepEqual(ids(ed), ['b1', 'b2', 'b3', 'b4', 'b6', 'b5']);
+  assert.equal(ed.selectedId, 'b6', 'the pasted block is selected');
+  const src = ed.model.blocks[1];
+  const pasted = ed.selectedBlock;
+  assert.deepEqual({ ...pasted, id: src.id }, src, 'an exact copy but its id');
+  ed.onKeydown(ctrl('v', { metaKey: true, ctrlKey: false }));
+  assert.equal(ed.model.blocks.length, 7, 'pastes again');
+  ed.onKeydown(ctrl('z'));
+  ed.onKeydown(ctrl('z'));
+  assert.equal(snap(ed), before, 'each paste is one undo step');
+  // A tempo-locked block pasted after a tempo change takes the current tempo.
+  ed.setTempo(60);
+  ed.onKeydown(ctrl('v'));
+  assert.equal(ed.selectedBlock.beats, 1);
+  assert.equal(ed.selectedBlock.durationMs, 1000);
+  // Nothing selected: copy is not claimed; a full sequence refuses the paste with a reason.
+  ed.selectBlock(null);
+  assert.equal(ed.onKeydown(ctrl('c')), false);
+  const empty = setup().ed;
+  assert.equal(empty.onKeydown(ctrl('v')), false, 'empty clipboard: not claimed');
+  for (let i = ed.model.blocks.length; i < 64; i++) ed.addBlock('tone');
+  const full = snap(ed);
+  assert.equal(ed.onKeydown(ctrl('v')), true);
+  assert.equal(snap(ed), full);
+  assert.match(ed.error, /full/);
 });

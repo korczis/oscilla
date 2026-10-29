@@ -656,6 +656,23 @@ export function addBlock(model, type, opts = {}) {
   return withBlocks(model, blocks);
 }
 
+/**
+ * Insert a copy of `block` (a pasted block) at `index` (default end) with a fresh id,
+ * validated against this model's tempo: a tempo-locked block takes the current tempo.
+ * opts: { index, sampleRate }. Returns the same model when it is full.
+ */
+export function insertBlock(model, block, opts = {}) {
+  if (!block || model.blocks.length >= MAX_BLOCKS) return model;
+  const { block: b } = normalizeBlock(
+    { ...deepCopy(block), id: nextBlockId(model.blocks) },
+    { sampleRate: opts.sampleRate, tempoBpm: model.tempoBpm, index: model.blocks.length },
+  );
+  const index = toInt(opts.index, model.blocks.length, 0, model.blocks.length);
+  const blocks = model.blocks.slice();
+  blocks.splice(index, 0, b);
+  return withBlocks(model, blocks);
+}
+
 export function deleteBlock(model, id) {
   const i = indexOfBlock(model, id);
   if (i < 0) return model;

@@ -37,10 +37,10 @@ for people, never gating · **DELETED** removed, with its replacement.
 | `unit/bioacoustics.test.mjs` | GATE | species data is sourced and carries the disclaimer (no fake science) |
 | `unit/integration-ui.test.mjs` | GATE | config file schema, typing guard, WAV render length |
 | `unit/ui-shell.test.mjs` | GATE | theme resolution, slider fill, tab restore, LUT ends (moved from `visual/ui.test.mjs`) |
-| `unit/sequencer-model.test.mjs` | GATE | block schemas, Nyquist-safe frequency clamps |
+| `unit/sequencer-model.test.mjs` | GATE | block schemas, Nyquist-safe frequency clamps; K002 (gap G1): the reference sequence and an added block are tempo-locked, so a tempo change changes the offline render length, and stored millisecond sequences parse, re-serialize and render unchanged |
 | `unit/sequencer-compiler.test.mjs` | GATE | planned automation: sorted, never gain 0, frequencies in range |
 | `unit/sequencer-timeline.test.mjs` | GATE | time scale, ticks, block rectangles |
-| `unit/sequencer-editor.test.mjs` | GATE | editor state, no Web Audio in state, stop timing constants |
+| `unit/sequencer-editor.test.mjs` | GATE | editor state, no Web Audio in state, stop timing constants; K001: V2 playback counted by a real `AudioEngine` (`engineAccounting`), 0 engine nodes and sources after stop, natural end, a looped run, 20 restarts and dispose; K003: Space on the timeline toggles play (auto-repeat ignored, modifiers and fields not claimed), Ctrl/⌘ Z restores the exact serialized model of every edit and Shift + Ctrl/⌘ Z redoes, Ctrl/⌘ C and Ctrl/⌘ V copy and paste a block as one undo step |
 | `unit/pack-single-file.test.mjs` | GATE | the packer inlines in order (vendors, the analysis library, the app) and escapes `</script`; the comment allow-list, the indentation rule (pre, textarea, script, style and attribute values verbatim), compact Lucide icons and their `:where(.lucide)` paint rule |
 | `unit/verify-dist.test.mjs` | GATE | verify-dist rejects modules, external scripts, altered vendors |
 | `unit/social-meta.test.mjs` | GATE | favicon, touch icon and Open Graph tags are complete and absolute; the inline touch icon is an indexed PNG that re-encodes losslessly |
