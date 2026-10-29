@@ -4,7 +4,45 @@
 
 A zero-install, scientifically honest acoustic laboratory in your browser: generate, measure and reproduce sound experiments, and know how far each result can be trusted.
 
-What you can do with it today, from one static file and with no account:
+**Try it:** <https://korczis.github.io/oscilla/>. It is one HTML file that loads nothing at
+runtime: no install, no account, nothing sent anywhere, and the same file runs when you open
+[`dist/index.html`](dist/index.html) from disk (claims `dist-self-contained`,
+`opens-from-file-and-subpath`).
+
+### Three things to try first
+
+Each link opens its workspace and starts nothing until you press a button.
+
+1. **[Hear and see a tone](https://korczis.github.io/oscilla/#m=playground).** Hold
+   **Hold to Play** (or Space) for the default 440 Hz sine, and watch its waveform, spectrum and
+   spectrogram; letting go stops it (claims `tone-plays-and-releases`, `space-one-owner`).
+2. **[Measure your speaker, room and microphone chain](https://korczis.github.io/oscilla/#m=measure&mr=eyJ2IjoxLCJkIjozLCJuIjoyfQ).**
+   The link fills the Measure setup with two 3-second log sweeps. Check the setup, start quietly
+   and without headphones, and read the response with its valid range and the quality reasons
+   for its rating. Nothing is called dB SPL until you calibrate the level (claims
+   `measurement-workbench`, `transfer-function`, `measurement-quality`,
+   `spl-only-with-level-calibration`).
+3. **[Patch a synth in the Studio](https://korczis.github.io/oscilla/#m=studio&st=subtractive-synth&sv=graph).**
+   The Subtractive Synth template opens on its graph: an oscillator through an envelope and a
+   filter whose cutoff an LFO and an automation lane move. Press Play; the graph on screen is the
+   graph that sounds (claims `studio-compiled-topology`, `studio-click-free-live-edit`).
+
+`tests/unit/extending-guide.test.mjs` checks that each of these addresses routes to the workspace,
+recipe and template it names (claim `readme-landing-links-route`). Each claim id is an entry of
+[`docs/CLAIMS.yaml`](docs/CLAIMS.yaml) with the test that proves it.
+
+### Extend it
+
+OSCILLA is MIT-licensed, modular source that you can read, change and build into the same single
+file. [**Hack and extend OSCILLA**](docs/EXTENDING.md) shows where each kind of extension plugs
+in: a Studio node (with a complete example), a template, a lab or workspace, a chart, a browser
+check, and the rules a change has to satisfy. Every file, export and npm script the guide names
+is checked by a unit test, and its example node compiles through the real Studio registry
+(claim `extending-guide-checked`).
+
+### What it does today
+
+From one static file and with no account:
 
 - measure the response of your speaker, room and microphone chain with a log sweep, and see the
   quality reasons that say how far that response can be trusted;
@@ -15,8 +53,6 @@ What you can do with it today, from one static file and with no account:
 - patch a signal graph in the Studio and run it.
 
 ![OSCILLA playing a 440 Hz sine: source, waveform, relative spectrum, spectrogram, microphone analyzer, sequencer and device limits](site/og-image.png)
-
-**Live demo:** https://korczis.github.io/oscilla/
 
 ## What it does
 
@@ -587,7 +623,8 @@ Or use the public URL: https://korczis.github.io/oscilla/
 ## Development
 
 Requires Node.js 22 or later. The fast check also runs `majordomus doctor`, so it needs the
-`majordomus` CLI.
+`majordomus` CLI. To add a Studio node, a template, a lab, a chart or a browser check, start
+with [Hack and extend OSCILLA](docs/EXTENDING.md).
 
 ```bash
 npm ci

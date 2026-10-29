@@ -108,6 +108,10 @@ satisfaction:
     criterion: "The Studio performance budgets are judged on the operations' own CPU time, so the load of a shared machine does not fail them, and the build's budget also fails a build twice as slow on any machine"
     evidence: "command"
     ref: "node --test tests/unit/v31-studio-performance.test.mjs"
+  - id: "extending-guide-names-real-code"
+    criterion: "docs/EXTENDING.md shows a contributor how to add a Studio node, a template, a lab or workspace, a chart and a browser check, every file, export, rule, link and npm script it names exists, its example node compiles through the real registry and compiler, and README's landing deep links route where they say and point to the guide"
+    evidence: claim
+    ref: "extending-guide-checked"
 governance:
   - "rule:project.single-file-deliverable"
   - "rule:project.rules-name-their-enforcement"
