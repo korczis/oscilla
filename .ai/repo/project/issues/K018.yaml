@@ -6,7 +6,7 @@ title: "Open in Studio and Send track to Sequencer, guarded against lost work"
 slug: open-in-studio-and-send-track-to-sequencer-guarded-against-l
 priority: p2
 profile: implementation
-objective: "Lands as feat(studio). \"Open in Studio\" in the Sequencer and \"Send track to Sequencer\" in the Studio carry the material across through K004's import and export, behind the studioWhatWouldBeLost guard. It serves U006 and audit finding A17 (docs/ui-audit.md) too, without editing U006's record. It waits on F001 and F002 of plan pull request #251 (intent ui-flowbite-pro), which are not on main yet; depends_on names them in the plan change after #251 lands."
+objective: "Lands as feat(studio). \"Open in Studio\" in the Sequencer and \"Send track to Sequencer\" in the Studio carry the material across through K004's import and export, behind the studioWhatWouldBeLost guard. It serves U006 and audit finding A17 (docs/ui-audit.md) too, without editing U006's record. It also adds the \"Export track as sequence\" control over K004's export, behind the same guard. Its chrome is in two workspaces: the Sequencer's button waits on F001, F002 and F003 and the Studio's buttons on F001, F002 and F008 of plan pull request #251 (intent ui-flowbite-pro), which are not on main yet; depends_on names them in the plan change after #251 lands. The Studio side goes into the file I/O module E003 splits out of workspace.js, so it also waits on E003."
 why: "Owner direction of 2026-10-29 (session oscilla-b0): OSCILLA becomes a playable, patchable instrument and an audio-band signal lab; the plan checked every fact it relies on against main at 8b5792cd, and the sizes it quotes are unchanged at e2720e07."
 scope:
   - "src/js/ui/studio"
@@ -15,21 +15,22 @@ scope:
   - "src/js/labs/sequencer-panel.js"
   - "src/index.html"
   - "src/partials"
-  - "tests/unit/v31-studio-sequence-file.test.mjs"
+  - "tests/unit/studio-sequencer-bridge.test.mjs"
   - "tests/browser/v31-studio-links.cjs"
   - "tests/README.md"
   - "dist"
 depends_on:
+  - "E003"
   - "K004"
   - "K017"
 acceptance_criteria:
-  - "A round trip Sequencer to Studio to Sequencer leaves the sequence deep-equal, in a unit test that fails on the merge base."
+  - "A round trip Sequencer to Studio to Sequencer leaves the sequence deep-equal (or loses only the fields K004's test lists), in tests/unit/studio-sequencer-bridge.test.mjs, which fails on the merge base."
   - "With unsaved work either way the guard names what would be lost and nothing moves until the person confirms."
   - "Any new chrome is Flowbite Pro markup adapted from the matching Pro block and lowers or keeps the ratchet (project.ui-uses-flowbite-pro, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs); controls are Pro range sliders with number inputs, never a custom rotary knob (D5)."
   - "The pull request carries a reviewer's verdict (src/js/studio is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
   - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
 validation:
-  - "node --test tests/unit/v31-studio-sequence-file.test.mjs"
+  - "node --test tests/unit/studio-sequencer-bridge.test.mjs"
   - "node tests/browser/v31-studio-links.cjs"
   - "npm test"
 evidence_required:

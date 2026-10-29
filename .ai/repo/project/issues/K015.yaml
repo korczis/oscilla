@@ -6,12 +6,12 @@ title: "Spectrogram hover readout of frequency and relative dB, and an unsmoothe
 slug: spectrogram-hover-readout-of-frequency-and-relative-db-and-a
 priority: p2
 profile: implementation
-objective: "Lands as feat(analysis). src/js/charts/spectrogram-view.js gets a hover readout (frequency and relative dB) drawn on the canvas, using rowFrequency of src/js/analysis/spectrogram.js (unused today), and an unsmoothed feed from readTime() beside the 0.55-smoothing feed. A domain visual on the canvas, so it has no ratchet effect."
+objective: "Lands as feat(analysis). src/js/charts/spectrogram-view.js gets a hover readout (frequency and relative dB) drawn on the canvas, using rowFrequency of src/js/analysis/spectrogram.js (unused today), and an unsmoothed feed from readTime() beside the 0.55-smoothing feed. A domain visual on the canvas, so it has no ratchet effect. The spectrogram view is shared by the whole app, so it carries none of the banned terms of intent audio-band-signal-lab and needs not carry its required phrases, which belong to the views K025 adds."
 why: "Owner direction of 2026-10-29 (session oscilla-b0): OSCILLA becomes a playable, patchable instrument and an audio-band signal lab; the plan checked every fact it relies on against main at 8b5792cd, and the sizes it quotes are unchanged at e2720e07."
 scope:
   - "src/js/charts/spectrogram-view.js"
   - "src/js/analysis/spectrogram.js"
-  - "tests/unit/analysis-spectrogram.test.mjs"
+  - "tests/unit/k015-spectrogram-readout.test.mjs"
   - "tests/README.md"
   - "dist"
 acceptance_criteria:
@@ -21,7 +21,7 @@ acceptance_criteria:
   - "The pull request carries a reviewer's verdict (src/js/analysis is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first). It adds no markup, osc-* class token or stylesheet selector, so the Flowbite Pro ratchet stays flat (node --test tests/unit/ui-flowbite-pro.test.mjs)."
   - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
 validation:
-  - "node --test tests/unit/analysis-spectrogram.test.mjs"
+  - "node --test tests/unit/k015-spectrogram-readout.test.mjs"
   - "npm test"
 evidence_required:
   - "verified"

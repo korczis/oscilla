@@ -12,18 +12,19 @@ scope:
   - "src/js/ui/studio/graph-editor.js"
   - "src/js/ui/studio/graph-gestures.js"
   - "src/js/ui/studio/graph-commands.js"
-  - "tests/unit"
   - "tests/unit/source-size-baseline.json"
+  - "tests/unit/studio-graph-editor-headroom.test.mjs"
   - "tests/browser/v31-studio-graph.cjs"
   - "tests/README.md"
   - "dist"
 acceptance_criteria:
   - "tests/browser/v31-studio-graph.cjs is green with no assertion changed."
-  - "graph-editor.js has at least 12 000 B of room under its cap, and tests/unit/source-size-budget.test.mjs passes."
+  - "graph-editor.js has at least 12 000 B of room under its cap and each file split from it at least 10 000 B: tests/unit/studio-graph-editor-headroom.test.mjs reads each file and its cap and fails on the merge base, and tests/unit/source-size-budget.test.mjs passes."
   - "No reviewer's verdict is needed (src/js/ui/studio is not guarded) and fail-first does not apply to a refactor. It adds no markup, osc-* class token or stylesheet selector, so the Flowbite Pro ratchet stays flat (node --test tests/unit/ui-flowbite-pro.test.mjs)."
 validation:
   - "node tests/browser/v31-studio-graph.cjs"
   - "node --test tests/unit/source-size-budget.test.mjs"
+  - "node --test tests/unit/studio-graph-editor-headroom.test.mjs"
   - "npm test"
 evidence_required:
   - "verified"

@@ -29,7 +29,7 @@ depends_on:
 acceptance_criteria:
   - "The two views share one frequency axis and cursor, span no more than Nyquist, and state the sample rate and FFT size, in a unit test that fails on the merge base."
   - "The Audio-band receiver template validates, has a pinned studioHash and renders both sidebands offline at both sample rates."
-  - "tests/unit/audio-band-wording.test.mjs finds the required phrases (\"audio-band\", \"a digital signal generated in this page or captured from the microphone\", \"no radio is received\") and none of the banned terms (radio reception, RF, SDR hardware, waterfall, dBm)."
+  - "tests/unit/audio-band-wording.test.mjs finds the required phrases (\"audio-band\", \"a digital signal generated in this page or captured from the microphone\", \"no radio is received\") in every string the line adds and none of the banned terms (radio reception, SDR hardware, waterfall, dBm, and RF matched as a whole word and case-sensitively, so that perform and interface do not match); alias arrays are excluded, so the Spectrogram node's search alias \"waterfall\" (src/js/studio/nodes/analysis.js) stays as a search term, never a displayed name."
   - "Any new chrome is Flowbite Pro markup adapted from the matching Pro block and lowers or keeps the ratchet (project.ui-uses-flowbite-pro, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs); controls are Pro range sliders with number inputs, never a custom rotary knob (D5)."
   - "The pull request carries a reviewer's verdict (src/js/analysis and src/js/studio is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
   - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."

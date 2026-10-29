@@ -14,7 +14,7 @@ evidence_required:
 risks:
   - "src/js/ui/studio is not a guarded path, so K006 to K009 need fail-first but no review verdict; K005 changes src/js/studio and needs one (scripts/review-verdict.mjs GUARDED)."
   - "K007 and K008 rebase after K006 (both work in graph-gestures.js); K010 to K013 of M058 rebase after K005."
-  - "Edge mute (K009) may need a new edge property, which changes the canonical form and every saved studioHash like a new parameter does; if so the property joins the K022 hash epoch (D2) and the M key lands after it."
+  - "Edge mute (K009) uses the muted property every edge already has (src/js/studio/ports.js EDGE_PROPERTY_FIELDS), so it adds no edge property and changes no pinned template studioHash."
   - "K004 and K009 both edit src/js/ui/studio/workspace.js, which E003 splits: whichever runs after E003 edits the module E003 names instead."
 created_at: 2026-10-29
 updated_at: 2026-10-29

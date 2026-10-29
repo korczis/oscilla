@@ -6,16 +6,20 @@ title: "Shift+Del deletes and bridges, L tidies, M mutes the selected edges"
 slug: shift-del-deletes-and-bridges-l-tidies-m-mutes-the-selected
 priority: p2
 profile: implementation
-objective: "Lands as feat(studio-ui). In src/js/ui/studio/graph-keys.js and the key dispatch of workspace.js: Shift+Del deletes the selected node and bridges its input to its output where canConnect allows; L tidies the graph against compactLayout as one NODE_MOVE gesture; M mutes the selected edges. If an edge mute needs a new edge property, that changes the canonical form and every saved studioHash, so the property joins the K022 hash epoch (D2) and the M key lands after K022, in this issue or in a follow-up it names."
+objective: "Lands as feat(studio-ui). In src/js/ui/studio/graph-keys.js and the key dispatch of workspace.js: Shift+Del deletes the selected node and bridges its input to its output where canConnect allows; L tidies the graph against compactLayout as one NODE_MOVE gesture; M mutes the selected edges through the muted property every edge already has (EDGE_PROPERTY_FIELDS in src/js/studio/ports.js, applied by the compiler), so it adds no edge property and does not wait for K022."
 why: "Owner direction of 2026-10-29 (session oscilla-b0): OSCILLA becomes a playable, patchable instrument and an audio-band signal lab; the plan checked every fact it relies on against main at 8b5792cd, and the sizes it quotes are unchanged at e2720e07."
 scope:
   - "src/js/ui/studio/graph-keys.js"
+  - "src/js/ui/studio/graph-commands.js"
+  - "src/js/ui/studio/graph-editor.js"
   - "src/js/ui/studio/workspace.js"
   - "src/js/ui/studio/workspace"
   - "src/js/ui/shortcuts.js"
   - "tests/unit/studio-graph-keys.test.mjs"
+  - "tests/unit/studio-graph-commands.test.mjs"
   - "tests/unit/v4-shortcuts.test.mjs"
   - "tests/browser/v31-studio-graph.cjs"
+  - "docs/v31/user-guide.md"
   - "tests/README.md"
   - "dist"
 depends_on:
@@ -24,7 +28,7 @@ acceptance_criteria:
   - "A bridge is made only where canConnect allows it; otherwise the node is deleted plainly and the reason announced."
   - "L is one NODE_MOVE gesture, deterministic against compactLayout fixtures."
   - "The shortcut list is generated from STUDIO_SHORTCUTS, and graph keys do not take Space."
-  - "No studioHash changes, or the edge-mute property waits for K022 as the objective says."
+  - "No pinned template studioHash changes; muting an edge changes that document's studioHash by design, since muted is part of the canonical edge."
   - "No reviewer's verdict is needed (src/js/ui/studio is not a guarded path); as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first). It adds no markup, osc-* class token or stylesheet selector, so the Flowbite Pro ratchet stays flat (node --test tests/unit/ui-flowbite-pro.test.mjs)."
   - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
 validation:

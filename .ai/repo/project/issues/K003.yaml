@@ -10,8 +10,11 @@ objective: "Lands as feat(sequencer). Extend onKeydown in src/js/sequencer/edito
 why: "Owner direction of 2026-10-29 (session oscilla-b0): OSCILLA becomes a playable, patchable instrument and an audio-band signal lab; the plan checked every fact it relies on against main at 8b5792cd, and the sizes it quotes are unchanged at e2720e07."
 scope:
   - "src/js/sequencer/editor.js"
+  - "src/js/sequencer/model.js"
+  - "src/js/labs/sequencer-panel.js"
   - "src/js/ui/shortcuts.js"
   - "tests/unit/sequencer-editor.test.mjs"
+  - "tests/unit/sequencer-model.test.mjs"
   - "tests/unit/v4-shortcuts.test.mjs"
   - "tests/README.md"
   - "dist"

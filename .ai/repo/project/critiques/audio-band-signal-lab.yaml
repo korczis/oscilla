@@ -1,0 +1,40 @@
+intent: audio-band-signal-lab
+reviewed_at: "b8e160ef3932f0211508b7f4833d6e1425d52b0e"
+reviewed_by: "claude-opus-5.5 (two independent reviewers of pull request #265, reviews 0 and 1, oscilla-b0 workflow); the findings are theirs, transcribed by the plan builder, who wrote the resolutions"
+findings:
+  - id: wording-test-misfires
+    class: delivery_verification
+    subject: "audio-band-signal-lab#honest-wording"
+    finding: "A substring ban on \"RF\" matches perform and interface, so the wording test would fail on honest text unless the ban is a whole word and case-sensitive."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "K025"
+      because: "The criterion and K025 match RF as a whole word, case-sensitively, over the strings the line adds (2026-10-29)."
+  - id: waterfall-alias-on-main
+    class: missed_requirement
+    subject: "K025"
+    finding: "The Spectrogram node already has the search alias \"waterfall\" (src/js/studio/nodes/analysis.js), outside K025's scope, while K025's wording test bans the word; the records did not say whether the alias goes or is exempt (D7)."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "K025"
+      because: "An invariant and K025 state that search aliases are search terms, never a displayed name; the alias stays and the wording test excludes alias arrays; the owner may override (2026-10-29)."
+  - id: shared-spectrogram-phrases
+    class: unproven_assumption
+    subject: "K015"
+    finding: "The invariant required every view of the line to say \"no radio is received\", which would put the line's phrases on the shared spectrogram view K015 extends, a general analysis view used across the app."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "K015"
+      because: "The phrases are required on the views and templates the line adds (K025, Wave 3); the shared view carries none of the banned terms (2026-10-29)."
+  - id: spectrogram-readout-ref-passes-on-base
+    class: delivery_verification
+    subject: "audio-band-signal-lab#spectrogram-readout"
+    finding: "The criterion's command ran tests/unit/analysis-spectrogram.test.mjs, which passes on main, while K015's branch adds tests/unit/k015-spectrogram-readout.test.mjs."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "K015"
+      because: "The criterion and K015 name tests/unit/k015-spectrogram-readout.test.mjs (2026-10-29)."

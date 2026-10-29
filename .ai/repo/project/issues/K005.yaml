@@ -13,19 +13,20 @@ scope:
   - "src/js/studio/clip-targets.js"
   - "src/js/ui/studio/graph-view.js"
   - "docs/v31/compiler.md"
-  - "tests/unit"
   - "tests/unit/source-size-baseline.json"
+  - "tests/unit/studio-adapters-headroom.test.mjs"
   - "tests/README.md"
   - "dist"
 acceptance_criteria:
   - "Every template's studioHash is unchanged."
   - "tests/unit/v31-studio-compiler.test.mjs and tests/unit/v31-studio-runtime-truth.test.mjs are green with no expected value changed."
-  - "Each adapter file has at least 10 000 B of room under its cap in tests/unit/source-size-baseline.json, and tests/unit/source-size-budget.test.mjs passes."
+  - "Each adapter file has at least 10 000 B of room under its cap in tests/unit/source-size-baseline.json: tests/unit/studio-adapters-headroom.test.mjs reads each file and its cap and fails on the merge base, and tests/unit/source-size-budget.test.mjs passes."
   - "The pull request carries a reviewer's verdict (src/js/studio is guarded; project.review-verdict); fail-first does not apply to a refactor. It adds no markup, osc-* class token or stylesheet selector, so the Flowbite Pro ratchet stays flat (node --test tests/unit/ui-flowbite-pro.test.mjs)."
 validation:
   - "node --test tests/unit/v31-studio-compiler.test.mjs"
   - "node --test tests/unit/v31-studio-runtime-truth.test.mjs"
   - "node --test tests/unit/source-size-budget.test.mjs"
+  - "node --test tests/unit/studio-adapters-headroom.test.mjs"
   - "npm test"
 evidence_required:
   - "verified"

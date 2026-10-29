@@ -6,7 +6,7 @@ title: "On-screen and QWERTY keyboard on the V502 note voices, with held notes r
 slug: on-screen-and-qwerty-keyboard-on-the-v502-note-voices-with-h
 priority: p2
 profile: implementation
-objective: "Lands as feat(midi). First an ADR amending ADR 0005 (D3): a held key or MIDI note is a user-held gesture exempt from the 2 s playback limit while it is held, the output ceiling is kept, and release is forced on blur, hide and Escape. Then an on-screen and a QWERTY keyboard play the V502 note voices (8 notes at 1/8 gain, D4), armed per view, never taking Space (ADR 0050). It waits on F001 and F002 of plan pull request #251 (intent ui-flowbite-pro), which are not on main yet; depends_on names them in the plan change after #251 lands."
+objective: "Lands as feat(midi). First an ADR amending ADR 0005 (D3): a held key or MIDI note is a user-held gesture exempt from the configured playback limit (ADR 0005: 0.5-5 s, default 2 s) while it is held, the output ceiling is kept, and release is forced on blur, hide and Escape. Then an on-screen and a QWERTY keyboard play the V502 note voices (8 notes at 1/8 gain, D4), armed per view, never taking Space (ADR 0050). The on-screen keyboard is a Pro card in the Playground, where the V502 voices play, so it waits on F001, F002 and F003 of plan pull request #251 (intent ui-flowbite-pro), which are not on main yet; depends_on names them in the plan change after #251 lands. The QWERTY keyboard needs no chrome. The Studio gets no keyboard here: its note source is the Wave 3 Keys node."
 why: "Owner direction of 2026-10-29 (session oscilla-b0): OSCILLA becomes a playable, patchable instrument and an audio-band signal lab; the plan checked every fact it relies on against main at 8b5792cd, and the sizes it quotes are unchanged at e2720e07."
 scope:
   - "src/js/midi"
@@ -25,7 +25,7 @@ depends_on:
   - "V502"
 acceptance_criteria:
   - "The ADR amending ADR 0005 is recorded before any code of this issue lands."
-  - "A held note sounds past 2 s only while held, at or below the output ceiling, and every note is released on blur, visibilitychange to hidden and Escape, in a unit test that fails on the merge base."
+  - "A held note sounds past the configured playback limit only while held, at or below the output ceiling, and every note is released on blur, visibilitychange to hidden and Escape, in a unit test that fails on the merge base."
   - "The keyboard is armed per view and never takes Space; the node census is 0 after release. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline and assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac) (project.suite-harness, project.bounded-test-timing)."
   - "Any new chrome is Flowbite Pro markup adapted from the matching Pro block and lowers or keeps the ratchet (project.ui-uses-flowbite-pro, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs); controls are Pro range sliders with number inputs, never a custom rotary knob (D5)."
   - "The pull request carries a reviewer's verdict (src/js/audio and src/js/core/safety is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."

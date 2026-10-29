@@ -13,7 +13,14 @@ scope:
   - "src/js/studio/adapters"
   - "src/js/studio/registry.js"
   - "src/js/audio"
-  - "tests/unit/studio-drive-node.test.mjs"
+  - "tests/unit/k010-k013-studio-voice-nodes.test.mjs"
+  - "tests/unit/v31-studio-model.test.mjs"
+  - "tests/unit/studio-automation-transforms.test.mjs"
+  - "tests/browser/v31-studio-offline.cjs"
+  - "tests/browser/fixtures/v31-studio-offline-entry.js"
+  - "docs/v31/compiler.md"
+  - "docs/v31/studio-model.md"
+  - "docs/v31/studio-report.md"
   - "tests/README.md"
   - "dist"
 depends_on:
@@ -27,7 +34,8 @@ acceptance_criteria:
   - "The pull request carries a reviewer's verdict (src/js/audio and src/js/studio is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first). It adds no markup, osc-* class token or stylesheet selector, so the Flowbite Pro ratchet stays flat (node --test tests/unit/ui-flowbite-pro.test.mjs). A capped file it grows past its cap is split first or its raise is declared in tests/unit/source-size-baseline.json's raises ledger."
   - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
 validation:
-  - "node --test tests/unit/studio-drive-node.test.mjs"
+  - "node --test tests/unit/k010-k013-studio-voice-nodes.test.mjs"
+  - "node tests/browser/v31-studio-offline.cjs"
   - "npm test"
 evidence_required:
   - "verified"

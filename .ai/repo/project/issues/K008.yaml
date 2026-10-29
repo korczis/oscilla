@@ -11,8 +11,10 @@ why: "Owner direction of 2026-10-29 (session oscilla-b0): OSCILLA becomes a play
 scope:
   - "src/js/ui/studio/graph-gestures.js"
   - "src/js/ui/studio/graph-view.js"
-  - "tests/unit/studio-graph-gestures.test.mjs"
+  - "tests/unit/studio-graph-rewire.test.mjs"
   - "tests/browser/v31-studio-graph.cjs"
+  - "tests/browser/timing-baseline.json"
+  - "docs/v31/user-guide.md"
   - "tests/README.md"
   - "dist"
 depends_on:
@@ -23,7 +25,7 @@ acceptance_criteria:
   - "No reviewer's verdict is needed (src/js/ui/studio is not a guarded path); as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first). It adds no markup, osc-* class token or stylesheet selector, so the Flowbite Pro ratchet stays flat (node --test tests/unit/ui-flowbite-pro.test.mjs)."
   - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
 validation:
-  - "node --test tests/unit/studio-graph-gestures.test.mjs"
+  - "node --test tests/unit/studio-graph-rewire.test.mjs"
   - "node tests/browser/v31-studio-graph.cjs"
   - "npm test"
 evidence_required:
