@@ -3,11 +3,13 @@
 // into the ONE OSCILLA component by main.js (Object.defineProperties, never spread), like
 // measure.js; its state lives in the closure `nav`, never in reactive state.
 //
-// The hash is shared by four codecs, each reading only its own keys: the instrument
+// The hash is shared by five codecs, each reading only its own keys: the instrument
 // (core/url-state.js: v s p w f g d a r rm x, and V1 mode ids in `m`), the MEASURE recipe
 // (core/url-state-measure.js: mr), the Studio link (core/url-state-studio.js: m=studio, st,
 // sv) and a stored record (core/url-state-records.js: m=experiments with exp, def or finding,
-// ADR 0048; the record keys leave the address with Experiments, like the Studio keys). `m`
+// ADR 0048; the record keys leave the address with Experiments, like the Studio keys) and the
+// keyboard (src/js/midi/keyboard-ui.js: kbd=1 arms the keyboard of the Playground or the
+// Studio the link opens, K026; it leaves the address with the first workspace change). `m`
 // names the workspace: any workspace id (`m=measure`, `m=analyzer`, …) or, as V1 links wrote
 // it, a V1 mode id (`sweep` → Playground, `dual` → Synthesis).
 //
@@ -56,11 +58,13 @@ import {
   RECORD_LINK_KEYS, RECORD_LINK_MODE, decodeRecordLink, encodeRecordLink, withoutRecordParams,
 } from '../core/url-state-records.js';
 import { WORKSPACES } from './app.js';
+import { KEYBOARD_LINK_KEY } from '../midi/keyboard.js';
 
 export const ROUTE_KEY = 'm';
 export const DEFAULT_WORKSPACE = 'playground';
 /** The domains that read the hash, in the order the dispatcher applies them. */
-export const HASH_DOMAINS = Object.freeze(['instrument', 'measure', 'studio', 'records']);
+export const HASH_DOMAINS = Object.freeze(['instrument', 'measure', 'studio', 'keyboard',
+  'records']);
 /**
  * The domains re-applied on Back / Forward (ADR 0048): opening a stored record replaces nothing
  * the user made, so a traversal between two records opens the record its entry names.
@@ -130,9 +134,14 @@ export function navigationStateOf(hash, source) {
   return r ? { ...r, mode: v1ModeFor(r.workspace, source) } : null;
 }
 
-/** The hash (without '#') naming `workspace`; the Studio keys leave with STUDIO. */
+/**
+ * The hash (without '#') naming `workspace`; the Studio keys leave with STUDIO, and the
+ * keyboard's arming key with any change of workspace (it armed the view the link opened).
+ */
 export function hashForWorkspace(hash, workspace) {
   const q = isAnchorHash(hash) ? new URLSearchParams() : paramsOf(hash);
+  const from = routeOfHash(hash);
+  if (!from || from.workspace !== workspace) q.delete(KEYBOARD_LINK_KEY);
   if (workspace !== STUDIO_LINK_MODE) {
     q.delete(STUDIO_LINK_KEYS.template);
     q.delete(STUDIO_LINK_KEYS.subview);

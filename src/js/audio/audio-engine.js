@@ -874,8 +874,8 @@ export class AudioEngine {
 
   /**
    * Start note `key` (the MIDI layer's input, channel and note). o: freq (Hz), level (0..1),
-   * wave, attackS, releaseS, limitS and continuous (as play()). Refused at or above
-   * safeMaximum. The same key fades out (FAST_RELEASE_S) under the new note; past
+   * wave, attackS, releaseS, limitS, continuous (as play()), held (ADR 0062). Refused at
+   * or above safeMaximum. The same key fades out (FAST_RELEASE_S) under the new note; past
    * NOTE_POLYPHONY the oldest note fades out first and the new one starts after that fade, as
    * after fading out the play() voice. Returns { ok, reason? | id, start, end, limited, stolen }.
    */
@@ -916,10 +916,11 @@ export class AudioEngine {
       v.sources.push(osc);
       this.sources.add(osc);
       osc.connect(env);
-      // Without the continuous permission a held note ends at the safety limit, as HOLD does.
-      const len = o.continuous ? Infinity : Math.max(0.05, toNumber(o.limitS, 2));
-      v.extended = !!o.continuous;
-      v.limited = !o.continuous;
+      // Held: no end until released (ADR 0062); else HOLD's limit unless continuous.
+      v.held = !!o.held;
+      const len = v.held || o.continuous ? Infinity : Math.max(0.05, toNumber(o.limitS, 2));
+      v.extended = !v.held && !!o.continuous;
+      v.limited = Number.isFinite(len);
       const atk = Math.min(v.attack, len * 0.4);
       this._ev(v.env, 'setValueAtTime', GAIN_FLOOR, ctx.currentTime);
       this._ev(v.env, 'setValueAtTime', GAIN_FLOOR, t0);

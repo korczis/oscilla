@@ -1325,6 +1325,31 @@
     <section class="osc-panel osc-p-studio" id="osc-panel-studio" data-osc="studio.compact"
       data-osc-panel="studio" data-osc-modes="playground sequencer"></section>
 
+    <!-- ---------- Keyboard (K026; ADR 0058, ADR 0062): the computer keyboard and the
+         on-screen keys play the note voices of the AudioEngine (src/js/midi/keyboard-ui.js), in
+         the Playground and the Studio, each armed on its own. The keys are a canvas domain view;
+         the controls are native buttons and carry no class until the keyboard moves into its
+         Pro card (plan F001 to F003). -->
+    <div id="osc-keyboard" data-osc="keyboard" role="group" aria-labelledby="osc-kbd-title"
+      x-show="kbdView" x-cloak>
+      <h2 id="osc-kbd-title">Keyboard</h2>
+      <div role="group" aria-label="Keyboard controls" aria-describedby="osc-kbd-readout">
+        <button type="button" data-osc="keyboard.arm" :aria-pressed="String(kbdArmedHere)"
+          @click="kbdToggle()" x-text="kbdArmedHere ? 'Disarm keys' : 'Arm keys'">Arm keys</button>
+        <button type="button" data-osc="keyboard.octave-down" aria-keyshortcuts="Z"
+          @click="kbdControl('octave-down')">Octave −</button>
+        <button type="button" data-osc="keyboard.octave-up" aria-keyshortcuts="X"
+          @click="kbdControl('octave-up')">Octave +</button>
+        <button type="button" data-osc="keyboard.velocity-down" aria-keyshortcuts="C"
+          @click="kbdControl('velocity-down')">Velocity −</button>
+        <button type="button" data-osc="keyboard.velocity-up" aria-keyshortcuts="V"
+          @click="kbdControl('velocity-up')">Velocity +</button>
+      </div>
+      <p id="osc-kbd-readout" data-osc="keyboard.readout" role="status" x-text="kbdReadout"></p>
+      <p data-osc="keyboard.held" x-text="'Holding: ' + (kbdHeld || 'nothing')"></p>
+      <canvas data-osc="keyboard.keys" role="img" :aria-label="kbdLabel" height="132"></canvas>
+    </div>
+
     <!-- Studio announcements (outside the views: the compact widget announces too). A modal
          dialog makes them inert, so while one is open workspace.js also says the sentence in
          that dialog's own regions (data-osc studio.dlg.live / studio.dlg.alert, V272 C4). -->
@@ -2920,7 +2945,8 @@
         transport. Elsewhere it starts nothing. A focused text field, button, link, slider or
         open dialog keeps Space. Start at a low level: OSCILLA caps the logical gain at 0.25
         and, unless continuous playback is allowed in Device &amp; Limits, stops every tone after
-        the hard limit.</p>
+        the hard limit. A note held on the keyboard or a MIDI key sounds while it is held, under
+        the same gain cap, and stops on release, Esc, or when the page loses the focus.</p>
       <div class="osc-dialog-actions">
         <button type="button" class="osc-btn osc-btn-primary" @click="closeDialog('help')">Close</button>
       </div>
@@ -2974,7 +3000,9 @@
         <p class="osc-muted osc-dialog-note osc-settings-wide">Hard limit (Device &amp; Limits):
           scheduled on the audio clock, so it holds even if the page stalls. It also caps the
           Finite tone. Other programmed patterns stop at their own end (max 30 s); a continuous
-          sweep repeat needs “Allow continuous playback”.</p>
+          sweep repeat needs “Allow continuous playback”. A note held on the keyboard or a MIDI
+          key is exempt while it is held and stops on release, Esc, or when the page loses the
+          focus.</p>
         <label class="osc-label" for="osc-set-duration">Trigger duration (ms)</label>
         <input class="osc-number" id="osc-set-duration" type="text" :value="duration"
           data-osc="settings.duration" @change="setEnv('duration', $event.target.value)">

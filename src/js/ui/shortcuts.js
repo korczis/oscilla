@@ -20,6 +20,7 @@
 
 import { STUDIO_SHORTCUTS } from './studio/graph-keys.js';
 import { KEY_HELP } from './studio/transport-view.js';
+import { KEYBOARD_VIEWS } from '../midi/keyboard.js';
 
 /** Who owns Space in each workspace (the keys are exactly app.js WORKSPACES). */
 export const SPACE_OWNER = Object.freeze({
@@ -87,6 +88,16 @@ const SEQUENCER_ROWS = Object.freeze([
   row('sequencer-timeline', 'Arrows, Alt + arrows, Del, Ctrl/⌘ D',
     'Select, move, delete, duplicate blocks', 'on the Sequencer timeline'),
 ]);
+// The keyboard (K026, src/js/midi/keyboard.js) in the views it is armed in, by physical key
+// (the same places on QWERTZ and AZERTY). It never takes Space, nor a key with Ctrl, Meta or
+// Alt. Armed in Studio, these letters play instead of Studio's A, C, F and T.
+const KEYBOARD_WHERE = 'with the keyboard armed (Arm keys, or a link with kbd=1)';
+const KEYBOARD_ROWS = Object.freeze([
+  row('keyboard-notes', 'A W S E D F T G Y H U J K O L P ; \'',
+    'Play notes, C to the next F: a note sounds while its key is held', KEYBOARD_WHERE),
+  row('keyboard-octave', 'Z / X', 'Octave down / up', KEYBOARD_WHERE),
+  row('keyboard-velocity', 'C / V', 'Velocity down / up (steps of 20)', KEYBOARD_WHERE),
+]);
 // Measure's Esc is the global one and more: it replaces that row instead of repeating the key.
 const MEASURE_ROWS = Object.freeze([
   row('measure-abort', 'Esc',
@@ -135,7 +146,8 @@ export function shortcutHelp(workspace) {
     if (workspace === 'sequencer') rows.push(...SEQUENCER_ROWS);
   } else if (owner === 'studio') {
     rows = [...STUDIO_ROWS];
-  } else if (workspace === 'measure') {
+  }
+  if (KEYBOARD_VIEWS.includes(workspace)) rows.push(...KEYBOARD_ROWS); else if (workspace === 'measure') {
     rows = [...MEASURE_ROWS];
   }
   const own = new Set(rows.map(shown));
