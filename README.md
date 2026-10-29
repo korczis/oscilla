@@ -80,7 +80,8 @@ changed.
 - **Spectrogram:** a scrolling time-frequency view, with level shown as colour.
 - **Microphone analyzer and compare:** your microphone's spectrum and spectrogram, the detected
   frequency with its uncertainty, and a generator-versus-microphone comparison with freeze,
-  averaging and peak hold.
+  averaging and peak hold. If the browser closes the audio context, the microphone stops and
+  the panel says so; it never keeps showing readings from the closed graph.
 - **Sequencer:** a timeline of tone, silence, sweep, pulse, chirp, burst, siren, AM, FM and
   random blocks, with drag-and-drop editing, keyboard control, looping and tempo-locked
   durations.
