@@ -844,12 +844,12 @@ const failed = (path, message, code = 'invalid-structure') => ({ ok: false, warn
   errors: [asError({ text: message, path }, code)] });
 
 /**
- * The import front end, one implementation for validateStudioImport and migrate.js
- * importStudio: the size cap (before JSON.parse) → JSON.parse → the structural scan (plain data
- * only, no prototype keys, finite numbers) → nesting depth → a Studio object (`kind`). No
- * version is looked at. Returns { ok: true, doc } or a failed import result.
+ * The untrusted-JSON front end of every Studio file import: the size cap (before JSON.parse) →
+ * JSON.parse → the structural scan (plain data only, no prototype keys, finite numbers) →
+ * nesting depth. Nothing about the document's kind is looked at (library.js reads V2 sequence
+ * and configuration files through it too). Returns { ok: true, doc } or a failed import result.
  */
-export function readStudioInput(input, lim) {
+export function readUntrustedInput(input, lim) {
   let doc = input;
   if (typeof input === 'string') {
     if (utf8Length(input, lim.maxBytes) > lim.maxBytes) {
@@ -868,6 +868,18 @@ export function readStudioInput(input, lim) {
   if (depthOf(doc, lim.depth) > lim.depth) {
     return failed('', `The data is nested deeper than ${lim.depth} levels.`, 'limit-exceeded');
   }
+  return { ok: true, doc };
+}
+
+/**
+ * The import front end, one implementation for validateStudioImport and migrate.js
+ * importStudio: readUntrustedInput → a Studio object (`kind`). No version is looked at.
+ * Returns { ok: true, doc } or a failed import result.
+ */
+export function readStudioInput(input, lim) {
+  const read = readUntrustedInput(input, lim);
+  if (!read.ok) return read;
+  const doc = read.doc;
   if (!doc || typeof doc !== 'object' || Array.isArray(doc)) {
     return failed('', 'The file does not contain a Studio object.');
   }
