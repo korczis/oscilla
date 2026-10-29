@@ -78,7 +78,7 @@ import {
   MIC_UNAVAILABLE_TEXT, buildMicrophoneGraph, closeMicrophone, hasMicrophoneApi,
   requestMicrophoneStream, stopStreamTracks,
 } from './microphone.js';
-import { forgetClock, observeClock, renderedTimeAtLeast } from './clock.js';
+import { forgetClock, glideStart, observeClock, renderedTimeAtLeast } from './clock.js';
 
 export {
   ESCAPE_RELEASE_S, FAST_RELEASE_S, SCHEDULE_AHEAD_S, SCHEDULE_LEAD_S, TOP_UP_EVERY_MS,
@@ -129,6 +129,12 @@ export function ceilingCurve(cap) {
   return curve;
 }
 
+/**
+ * The most note voices (noteOn) that sound at once. Each is scaled by 1 / NOTE_POLYPHONY, so
+ * their sum never exceeds one full voice: the master level stays the cap (ADR 0058, V502 note).
+ */
+export const NOTE_POLYPHONY = 8;
+
 export class AudioEngine {
   /**
    * options.env: the window-like object that provides AudioContext/webkitAudioContext,
@@ -158,6 +164,7 @@ export class AudioEngine {
     this.voices = new Set();
     this.nodes = new Set();      // every node owned by a voice
     this.sources = new Set();    // every scheduled source owned by a voice
+    this.notes = new Map();      // note key -> its latest note voice (noteOn, V502)
     this.lastError = null;
     this.mic = null;
     this.micAttachment = null;   // a caller-opened stream's analysis graph (attachMicrophone)
@@ -332,7 +339,7 @@ export class AudioEngine {
       this.master.gain.cancelScheduledValues(now);
     }
     this._masterHeldUntil = null;
-    this.master.gain.setTargetAtTime(this.gainLevel, now, 0.02);
+    this.master.gain.setTargetAtTime(this.gainLevel, glideStart(this.ctx), 0.02); // V502
   }
 
   /**
@@ -692,6 +699,7 @@ export class AudioEngine {
     v.eg = null;
     v.lanes = null;
     this.voices.delete(v);
+    if (v.note !== undefined && this.notes.get(v.note) === v) this.notes.delete(v.note);
     if (this.voice === v) {
       this.voice = null;
       this._emit('ended', { id: v.id });
@@ -850,6 +858,105 @@ export class AudioEngine {
     this.mic = null;
     closeMicrophone(m);
     this._emit('mic', { active: false, reason });
+  }
+
+  // ---------------------------------------------------------------- V502: note voices
+  // ADR 0058 (V502 note): MIDI notes are voices of this engine in `voices` (never `voice`), so
+  // stopAll, revokeContinuous, play() and a closed context free them like any other. A note and
+  // the play() voice never sound together (each start fades the other out first, ADR 0002), and
+  // each note peaks at level / NOTE_POLYPHONY, so the notes sum to at most one voice's level.
+
+  /** Note voices sounding or scheduled to sound. */
+  get noteCount() {
+    const now = this.ctx ? this.ctx.currentTime : Infinity;
+    return [...this.voices].filter((v) => v.note !== undefined && now < v.endTime - 0.01).length;
+  }
+
+  /**
+   * Start note `key` (the MIDI layer's input, channel and note). o: freq (Hz), level (0..1),
+   * wave, attackS, releaseS, limitS and continuous (as play()). Refused at or above
+   * safeMaximum. The same key fades out (FAST_RELEASE_S) under the new note; past
+   * NOTE_POLYPHONY the oldest note fades out first and the new one starts after that fade, as
+   * after fading out the play() voice. Returns { ok, reason? | id, start, end, limited, stolen }.
+   */
+  noteOn(key, o = {}) {
+    if (!this.init()) return { ok: false, reason: 'no-audio' };
+    const ctx = this.ctx;
+    const freq = toNumber(o.freq, 0);
+    if (!(freq > 0 && freq < this.safeMaximum)) return { ok: false, reason: 'frequency' };
+    this._observeClock(ctx);
+    let t0 = ctx.currentTime + START_OFFSET_S;
+    const fadeOut = (v) => {
+      this._releaseVoice(v, FAST_RELEASE_S, v.note !== undefined);
+      if (!v.ended) t0 = Math.max(t0, v.endTime);
+    };
+    for (const v of [...this.voices]) if (v.note === undefined) fadeOut(v);
+    if (this.notes.has(key)) this._releaseVoice(this.notes.get(key), FAST_RELEASE_S, true);
+    const held = () => [...this.voices].filter((v) => v.note !== undefined && v.endTime > t0);
+    let stolen = 0;
+    for (let h = held(); h.length >= NOTE_POLYPHONY; h = held(), stolen++) {
+      fadeOut(h.find((v) => v.releasing) || h[0]); // the oldest fading one, else the oldest
+    }
+    const peak = Math.max(GAIN_FLOOR, clamp(toNumber(o.level, 1), 0, 1) / NOTE_POLYPHONY);
+    const v = {
+      id: ++this._seq, ctx, plan: null, opts: o, note: key, t0, nodes: [], sources: [],
+      freqParams: [], live: {}, inserts: [], timers: [], endTime: Infinity, deadline: Infinity,
+      attack: Math.max(0.005, toNumber(o.attackS, 0)), release: Math.max(0.005,
+        toNumber(o.releaseS, 0)), releasing: false, ended: false, limited: false, extended: false,
+    };
+    const track = (n) => { v.nodes.push(n); this.nodes.add(n); return n; };
+    try {
+      // osc -> env (attack, a limit's release) -> fade -> cut (the releases, V249) -> master
+      const [env, fade, cut] = [0, 1, 2].map(() => track(ctx.createGain()));
+      [v.env, v.fade, v.cut] = [env, fade, cut].map((n) => this._track(n.gain, 1));
+      env.connect(fade);
+      fade.connect(cut);
+      cut.connect(this.master);
+      const osc = track(this._osc(o.wave || 'sine', freq, t0));
+      v.sources.push(osc);
+      this.sources.add(osc);
+      osc.connect(env);
+      // Without the continuous permission a held note ends at the safety limit, as HOLD does.
+      const len = o.continuous ? Infinity : Math.max(0.05, toNumber(o.limitS, 2));
+      v.extended = !!o.continuous;
+      v.limited = !o.continuous;
+      const atk = Math.min(v.attack, len * 0.4);
+      this._ev(v.env, 'setValueAtTime', GAIN_FLOOR, ctx.currentTime);
+      this._ev(v.env, 'setValueAtTime', GAIN_FLOOR, t0);
+      this._ev(v.env, 'linearRampToValueAtTime', peak, t0 + atk);
+      if (Number.isFinite(len)) {
+        const rel = Math.min(v.release, len * 0.5);
+        this._ev(v.env, 'setValueAtTime', peak, t0 + len - rel);
+        this._ev(v.env, 'linearRampToValueAtTime', GAIN_FLOOR, t0 + len);
+        v.deadline = t0 + len;
+        v.endTime = v.deadline + 0.01;
+        osc.stop(v.endTime);
+      }
+      osc.onended = () => this._cleanup(v);
+      this.voices.add(v);
+      this.notes.set(key, v);
+      if (Number.isFinite(v.endTime)) this._armFallback(v);
+      return { ok: true, id: v.id, start: t0, end: v.endTime, limited: v.limited, stolen };
+    } catch (e) {
+      this._cleanup(v);
+      this._fail(e, 'note');
+      return { ok: false, reason: 'error' };
+    }
+  }
+
+  /** Release note `key` with its own release time; false when it is not sounding. */
+  noteOff(key) {
+    const v = this.notes.get(key);
+    this.notes.delete(key);
+    return !!v && this._releaseVoice(v, v.release, true);
+  }
+
+  /** Release every note, within ESCAPE_RELEASE_S when `fast`; returns how many were held. */
+  notesOff(fast = true) {
+    const all = [...this.voices].filter((v) => v.note !== undefined);
+    for (const v of all) this._releaseVoice(v, fast ? ESCAPE_RELEASE_S : v.release, true);
+    this.notes.clear();
+    return all.length;
   }
 
   // ---------------------------------------------------------------- V2 additions

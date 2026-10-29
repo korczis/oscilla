@@ -774,12 +774,13 @@ claims:
     note: 'Issue V501. Which gate browsers and origins expose Web MIDI is to be measured, not assumed.'
 
   - id: midi-notes-sound
-    claim: 'Note On and Note Off from a MIDI input will sound through the AudioEngine, with velocity under the safety level cap, bounded polyphony and click-free starts and stops.'
+    claim: 'Note On and Note Off from a MIDI input sound through the AudioEngine, with velocity under the safety level cap, bounded polyphony and click-free starts and stops.'
     source: .ai/repo/adrs/0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md
-    implementation: '-'
-    test: '-'
-    status: planned
-    note: 'Issue V502.'
+    implementation: src/js/midi/notes.js
+    test: tests/unit/midi/notes.test.mjs
+    status: guaranteed
+    responsibility: product
+    note: 'Issue V502; the decisions are the ADR''s V502 note (NOTE_POLYPHONY 8, each note at level / NOTE_POLYPHONY, velocity amplitude (v / 127)^2, the session safety limit, refusal at or above 0.95 x Nyquist). The note voices are src/js/audio/audio-engine.js noteOn / noteOff / notesOff, proven on the fake audio context. tests/browser/midi.cjs (midi-seam-notes) plays synthetic MIDI events from the stub in Chromium, Firefox and WebKit, from file:// and the /oscilla/ sub-path, with an independent oscillator count. No check plays a real MIDI device; latency is not measured.'
 
   - id: midi-response-deterministic
     claim: 'A MIDI response mode will produce the same output events for the same input events, scheduled on the audio clock, with no network call or model inference in the path.'

@@ -92,6 +92,23 @@ const DEVIATIONS = {
     delete q.demo.cfg.pp;
     return q;
   }),
+  // V502: on a context that has rendered nothing (currentTime 0) setMasterGain's glide starts at
+  // the end of the first render quantum (clock.js glideStart), where V1 starts it at 0, which
+  // Gecko starts from gain 1 (tests/unit/engine.test.mjs); the mock context runs at 48 kHz
+  'engine.stop/setMasterGain-clamped': (out) => {
+    const q = constants.RENDER_QUANTUM / 48000;
+    const v1 = (events) => events.map((e) => {
+      assert.ok(e[0] === 'target' && Math.abs(e[2] - q) < 1e-9 && e[3] === 0.02,
+        `V502 fix: the glide starts after the first render quantum: ${JSON.stringify(e)}`);
+      return ['target', e[1], 0, 0.02];
+    });
+    const v = structuredClone(out);
+    v.master = v1(v.master);
+    const limiter = v.graph.find((n) => n.kind === 'compressor');
+    const master = v.graph.find((n) => n.kind === 'gain' && n.out.includes(`node:${limiter.id}`));
+    master.params.gain.events = v1(master.params.gain.events);
+    return v;
+  },
 };
 
 // ------------------------------------------------- V249: releases on the output stage

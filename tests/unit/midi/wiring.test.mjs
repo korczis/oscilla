@@ -3,12 +3,15 @@
 // - The page offers one "Connect MIDI" control (pointer and keyboard: a button) and one status
 //   line that states the support state; nothing in src/js but src/js/midi/support.js calls
 //   requestMIDIAccess, and it calls it once, with { sysex: false }, inside connect().
-// - main.js composes the MIDI part and starts it with the component.
+// - main.js composes the MIDI part and starts it with the component; V502: it hands the part
+//   the engine and the sequencer's live playing state, stopPlayback (Measure and Studio PLAY
+//   taking the output) stops MIDI notes, and so does starting the sequencer.
 // - tests/browser/midi.cjs runs in the release gate (test:browser) through the harness, its seam
 //   is tests/browser/lib/midi-stub.cjs (which names itself), and every page member the module
 //   reads on a MIDIAccess or a MIDIPort is one the stub declares and the browser suite compares
 //   with the real interface.
-// - docs/midi.md carries the copy of every state as the ADR states it.
+// - docs/midi.md carries the copy of every state as the ADR states it, and every sentence
+//   that refuses a MIDI note (MIDI_REFUSED).
 //
 //   node --test 'tests/unit/midi/*.test.mjs'
 import test from 'node:test';
@@ -85,6 +88,42 @@ test('main.js composes the MIDI part and starts it with the component', () => {
   assert.match(main, /const midi = createMidiUi\(/);
   assert.match(main, /compose\([^)]*\bmidi\b[^)]*\)/);
   assert.match(main, /this\.midiInit\(\);/);
+});
+
+test('V502: main.js hands the engine to the MIDI part, and taking the output stops MIDI notes',
+  () => {
+    const main = code(read('src/js/main.js'));
+    assert.match(main, /const midi = createMidiUi\(\{ engine, sequencerPlaying \}\);/);
+    const stop = /function stopPlayback\(cmp\) \{([\s\S]*?)\n\}/.exec(main);
+    assert.ok(stop, 'stopPlayback (Measure and Studio PLAY take the output)');
+    assert.match(stop[1], /cmp\.midiAllOff\(\)/);
+  });
+
+test('V502: the sequencer and MIDI notes never sound together (review of #261, P2-1)', () => {
+  const main = code(read('src/js/main.js'));
+  // The live state of the editor, not the 150 ms seqPlaying copy.
+  assert.match(main,
+    /const sequencerPlaying = \(\) => !!\(labs\.sequencer && labs\.sequencer\.editor\.playing\);/);
+  // Starting a sequence stops every note before the editor schedules it.
+  const wrap = /editor\.play = function playAfterMidi\(\.\.\.args\) \{([\s\S]*?)\n {4}\};/
+    .exec(main);
+  assert.ok(wrap, 'main.js wraps the sequencer editor\'s play');
+  const body = wrap[1];
+  assert.ok(body.indexOf('app.midiAllOff()') >= 0
+    && body.indexOf('app.midiAllOff()') < body.indexOf('playSequence.apply(this, args)'),
+  'the notes stop before the sequence is scheduled');
+  const ui = code(read('src/js/midi/ui.js'));
+  assert.match(ui, /return sequencerPlaying\(\) \? 'sequencer' : null;/);
+});
+
+test('docs/midi.md quotes every sentence that refuses a MIDI note', async () => {
+  const { MIDI_REFUSED } = await import(new URL('src/js/midi/ui.js', root).href);
+  const doc = read('docs/midi.md');
+  assert.deepEqual(Object.keys(MIDI_REFUSED).sort(),
+    ['measurement', 'reference', 'sequencer', 'studio']);
+  for (const [by, sentence] of Object.entries(MIDI_REFUSED)) {
+    assert.ok(doc.includes(`"${sentence}"`), `docs/midi.md quotes the ${by} refusal`);
+  }
 });
 
 test('tests/browser/midi.cjs runs in the release gate', () => {
