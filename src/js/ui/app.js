@@ -27,7 +27,14 @@ const MODES = [
   'playground', 'measure', 'experiments', ...NAV_GROUPS.analyze, ...NAV_GROUPS.synthesis,
   'learn', 'studio', 'about',
 ];
-const WORKSPACE_TITLES = { about: 'About' };
+// The document title of each workspace but the Playground, which keeps the product title (the
+// page's own <title>): every history entry, tab and screen-reader page title names its page.
+// The names are the nav items' labels.
+const WORKSPACE_TITLES = Object.freeze({
+  measure: 'Measure', experiments: 'Experiments', analyzer: 'Analyzer', filter: 'Filter Lab',
+  compare: 'Compare', synthesis: 'Synthesis', sequencer: 'Sequencer', presets: 'Presets',
+  learn: 'Learn', studio: 'Studio', about: 'About',
+});
 const ROVING_ROLES = ['tab', 'radio'];
 
 /** localStorage can be missing or throw (private mode, file:// policies, quota). */
@@ -144,7 +151,10 @@ export function placeNavPanel(button, panel, win = window) {
 /**
  * The heading of a workspace: the heading its own view is labelled by (MEASURE, STUDIO, …), the
  * title of the visually first of its panels on the Playground grid (Analyzer, Filter Lab, …),
- * or the page heading for the Playground. null when none is shown.
+ * or the page heading for the Playground. A panel a workspace lists first in data-osc-modes is
+ * its own and is preferred over one it shares with the workspace listed before it (Compare's
+ * Phase panel before the Analyzer's microphone panel, which Compare also shows). null when none
+ * is shown.
  */
 export function workspaceHeading(root, mode) {
   const shown = (el) => !!el && el.getClientRects().length > 0;
@@ -158,11 +168,12 @@ export function workspaceHeading(root, mode) {
     .filter((p) => p.dataset.oscModes.split(/\s+/).includes(mode));
   const view = own.find((p) => p.classList.contains('osc-view') && shown(p));
   if (view) return labelOf(view);
-  const panel = own.filter((p) => p.classList.contains('osc-panel') && shown(p)
+  const panels = own.filter((p) => p.classList.contains('osc-panel') && shown(p)
     && !p.matches('.osc-p-source, .osc-p-analysis'))
     .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top
-      || a.getBoundingClientRect().left - b.getBoundingClientRect().left)[0];
-  return labelOf(panel);
+      || a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+  const home = panels.find((p) => p.dataset.oscModes.split(/\s+/)[0] === mode);
+  return labelOf(home || panels[0]);
 }
 
 /**
@@ -179,7 +190,7 @@ export function focusWorkspaceHeading(root, mode) {
   return document.activeElement === h;
 }
 
-/** Document title for a workspace: the product title, or `OSCILLA · <page>` for a page-like one. */
+/** Document title for a workspace: `OSCILLA · <page>`, or the product title for the Playground. */
 export function workspaceTitle(mode, base) {
   return WORKSPACE_TITLES[mode] ? `OSCILLA · ${WORKSPACE_TITLES[mode]}` : base;
 }
