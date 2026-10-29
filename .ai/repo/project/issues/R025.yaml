@@ -1,0 +1,22 @@
+id: R025
+milestone: M056
+serves:
+  - "engineering-integrity#pr-names-its-plan"
+title: "Backfill GitHub from the records: labels, milestones, open and merged pull requests"
+slug: backfill-github-from-the-records
+priority: p3
+profile: implementation
+objective: "Through the forge projection (R024), in workflow_dispatch runs with the workflow token only (a person's token would start runs on `labeled`), plans first and resumable: (a) the label definitions; (b) the 54 milestones, then close the done ones; (c) the open pull requests with their full metadata; (d) merged pull requests since v3.0.0, the semver label and milestone only, at 300 writes or fewer per run an hour apart (owner default C6); (e) the plan issues in ascending ID order only once the owner decides the phase-2 issue mirror (C5). Body-inferred IDs go into a report and are never applied. The 10 unused default labels are reported, not deleted (C10)."
+why: "Milestones first (owner decision C5, 2026-10-29); a backfill that is paced and resumable converges without tripping GitHub's secondary rate limit."
+scope:
+  - ".ai/repo/ci/pr-meta.yaml"
+depends_on:
+  - "R024"
+acceptance_criteria:
+  - "Each phase's plan is printed before it applies; a second apply makes no write; the run logs and evidence name the counts per phase."
+validation:
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

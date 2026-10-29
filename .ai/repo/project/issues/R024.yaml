@@ -1,0 +1,26 @@
+id: R024
+milestone: M056
+serves:
+  - "engineering-integrity#pr-names-its-plan"
+title: "Adopt Majordomus forge: the rendered projection workflows and the actor of pr-meta.yaml"
+slug: adopt-majordomus-forge-projection
+priority: p2
+profile: implementation
+objective: "Once Majordomus ships `majordomus forge` (draft B1) and the generated adopter workflows (draft B4), commit the rendered pr-meta and trunk-projection workflows, add the `actor:` block and the label families to .ai/repo/ci/pr-meta.yaml, feed it the pr-facts/v1 seam of scripts/pr-metadata.mjs --facts, and bump the pinned Majordomus version under project.majordomus-layer-current. OSCILLA keeps no label writer of its own (owner default C4)."
+why: "One writer, in Majordomus, and no second implementation: the projection writes labels and milestones from the records, and the required check keeps judging sources only."
+scope:
+  - ".github/workflows"
+  - ".ai/repo/ci/pr-meta.yaml"
+  - ".ai/repo/providers"
+depends_on:
+  - "R022"
+acceptance_criteria:
+  - "The rendered workflows pass scripts/ci-workflow-rules.mjs (bounded, pinned, retried, no continue-on-error); the derive job reads only and the project job alone holds a write token; a template change shows as drift in majordomus doctor."
+  - "The pull request carries a review verdict (.github is guarded)."
+validation:
+  - "node --test tests/unit/ci-workflows.test.mjs tests/unit/pr-metadata.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

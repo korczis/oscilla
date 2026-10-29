@@ -1,0 +1,38 @@
+id: R022
+milestone: M056
+serves:
+  - "engineering-integrity#pr-names-its-plan"
+title: "Every pull request names its plan record, judged by the base branch"
+slug: every-pull-request-names-its-plan-record
+priority: p1
+profile: implementation
+objective: "Add scripts/pr-metadata.mjs, a read-only judge of a pull request's title, branch and body: an ID is a capital letter and 3 or 4 digits in the title, or a branch segment of that shape in any case, whose letter begins a record file under .ai/repo/project/issues or milestones and whose <ID>.yaml exists at the base or the head. It refuses title-grammar, plan-id-missing, plan-id-unknown, waiver-form and closing-keyword, exempts releases, release records and trains, accepts `plan: n/a <reason>` in the body's own prose, and prints the facts as pr-facts/v1 JSON (--facts) and a step-summary table (--summary). .github/workflows/metadata.yml runs the base branch's copy through .github/scripts/base-rule.sh with contents: read and pull-requests: read only; .ai/repo/ci/pr-meta.yaml is its model; rule project.pr-names-its-plan states it."
+why: "Majordomus delivery attributes a pull request from its title and branch alone; 8 of the last 40 non-release pull requests named no ID there (2026-10-29), and a typo or a closing keyword is a link that points nowhere or closes an issue outside its record."
+scope:
+  - "scripts/pr-metadata.mjs"
+  - "scripts/fail-first.mjs"
+  - "scripts/review-verdict.mjs"
+  - "scripts/ci-workflow-rules.mjs"
+  - "tests/unit/pr-metadata.test.mjs"
+  - "tests/unit/base-rule.test.mjs"
+  - "tests/unit/ci-workflows.test.mjs"
+  - ".github/workflows/metadata.yml"
+  - ".github/scripts/base-rule.sh"
+  - ".ai/repo/ci"
+  - ".ai/repo/rules/project"
+  - "CLAUDE.md"
+  - "README.md"
+  - "tests/README.md"
+depends_on: []
+acceptance_criteria:
+  - "tests/unit/pr-metadata.test.mjs: one fixture per code fails with exactly that code and a clean one passes; the golden cases #254, #253, #248, #247, #246, #237 and #252 hold; removing each `// rule:` block of the program lets its fixture through; metadata.yml matches pr-meta.yaml and a copy with pull-requests: write or without `edited` fails; the file fails on the merge base (fail-first)."
+  - "tests/unit/base-rule.test.mjs: a pull request replacing pr-metadata.mjs with one that always passes is refused by the base's copy. tests/unit/ci-workflows.test.mjs: metadata.yml with a push trigger, or without its job bound, is refused."
+  - "The pull request carries a review verdict (.github and the rule programs are guarded)."
+  - "The owner adds `metadata` to branch protection after three green pull requests (C2); until then the job reports and does not block."
+validation:
+  - "node --test tests/unit/pr-metadata.test.mjs tests/unit/base-rule.test.mjs tests/unit/ci-workflows.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

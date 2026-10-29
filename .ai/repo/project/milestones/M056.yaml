@@ -1,0 +1,21 @@
+id: M056
+title: "GitHub is a projection of the repository: every pull request names its plan record"
+slug: github-is-a-projection-of-the-repository
+order: 56
+priority: p1
+problem: "On 2026-10-29 GitHub carried 0 milestones and no derived label for OSCILLA's 54 milestones and 309 plan issues, 8 of the last 40 non-release pull requests named no plan ID in their title or branch (#252, #250, #246, #244, #238, #230, #217, #214), which is all Majordomus delivery reads, and the merge settings allowed squash and rebase, so an evidence-carrying head could be squashed (#238, #246) and first-parent subjects were 'Merge pull request' lines. The owner ordered GitHub metadata to be made systemic (2026-10-29) and decided: merge commits only (C1, applied that day), the rule binds every pull request (C3), milestones before issues (C5)."
+outcome: "Every pull request names an existing plan record in its title or branch, or waives with a reason, judged by the base branch's program in a read-only job whose step summary shows the derived metadata; release notes come from first-parent history; Majordomus' forge projection writes the labels, milestones and (later) issues from the records; a scheduled drift check reports GitHub departing from the records."
+acceptance_criteria:
+  - "R022 to R026 are done with their evidence."
+  - "The owner has added `metadata` as a required check after three green pull requests (C2)."
+validation:
+  - "node --test tests/unit/pr-metadata.test.mjs"
+  - "npm test"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "Most of the visible value (labels, milestones on GitHub) waits on Majordomus drafts B1 and B4 (the forge projection and generated adopter workflows); R024 to R026 depend on them shipping, and R022 and R023 do not."
+  - "A required check that depends on a forge write would block every merge when GitHub stalls: the required check judges sources only (R022), and drift is a scheduled, non-required check (R026)."
+  - "Mirroring 309 issues raises GitHub issue numbers by about 309 and costs about 560 paced writes: milestones come first (C5), issues are a later phase through Majordomus."
+created_at: 2026-10-29
+updated_at: 2026-10-29
