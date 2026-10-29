@@ -52,6 +52,7 @@ V4xx        V3.1 Studio (M021-M033)
 V5xx        MIDI jam companion (M045)
 V6xx        Studio completion after 3.11 (M048)
 E0xx        engineering integrity: structure, size and checks of the code base (M046)
+K0xx        playable instrument (M057-M059, M061) and audio-band signal lab (M060)
 L0xx        Learn lessons (M049)
 P0xx        product: first run (M050), positioning, product path, public story (M051)
 Q0xx        questions and acts only the owner can answer or take (M052; Q001 under M005, Q004 under

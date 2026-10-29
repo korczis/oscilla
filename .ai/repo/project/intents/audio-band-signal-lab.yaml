@@ -1,0 +1,47 @@
+id: audio-band-signal-lab
+title: "OSCILLA shows audio-band digital signals the way a software receiver shows a band: a readable spectrogram, a linked spectrum over a scrolling spectrogram, analytic-signal demodulation and a heterodyne template, each stated as audio-band and checked against known test signals"
+statement: "The owner asked on 2026-10-29 (session oscilla-b0) for an SDR-like line in OSCILLA. It is audio-band only: every signal is a digital signal generated in this page or captured from the microphone, and no radio is received. The spectrogram gets a hover readout (frequency and relative dB) and an unsmoothed feed; a linked spectrum sits over a time-down scrolling spectrogram with a shared frequency axis and a tuning cursor; analysis/analytic.js derives the analytic signal by a Hilbert transform (envelope, instantaneous phase and frequency) with error bounds at both sample rates; an \"Audio-band receiver\" template heterodynes by ring modulation, which produces both sidebands. Owner decisions of 2026-10-29, answered by the owner through AskUserQuestion in session oscilla-b0: D6, this line is its own intent, so its non-goals stand alone beside intent playable-instrument; D7, the view is named \"scrolling spectrogram\" (time down), never \"waterfall\", and the non-goal \"Waterfall plots\" of intent measurement-extensions stays as it is, meaning room-acoustics decay plots. Wave 3 adds Demodulator, Test Signal (AM, FM, PSK) and I/Q constellation nodes, whose demodulated figures are checked against the known test-signal plan; they are not yet issued, and their criterion is added to this intent with the issues that serve it."
+invariants:
+  - "Every view, template and help text the line adds (the linked views and the Audio-band receiver template of K025, and the Wave 3 nodes) says \"audio-band\", \"a digital signal generated in this page or captured from the microphone\" and \"no radio is received\"; the shared spectrogram view that K015 extends is a general analysis view and carries none of the banned terms without the phrases; RF, antenna and reception are never claimed (project.no-fake-science v2)"
+  - "Search aliases of existing node types are search terms, never a displayed name: the Spectrogram node's alias \"waterfall\" (src/js/studio/nodes/analysis.js) stays so that a person who types the common word finds the scrolling spectrogram, and the wording test excludes alias arrays (D7 as read by session oscilla-b0; the owner may override it)"
+  - "Levels are relative (dBFS-like), never dBm or field strength"
+  - "\"I/Q\" is the analytic signal of the audio buffer computed by a Hilbert transform, never device I/Q"
+  - "The frequency span is bounded by the context's Nyquist frequency, and each view states the actual sample rate and FFT size and implies no wider bandwidth"
+  - "Demodulated figures are checked against the known test-signal plan (plan.modFreq and depth) and shown as a measured residual, passing only within stated bounds at 44.1 kHz and 48 kHz, for example within 1 % on the modulation frequency"
+  - "Analysis code is a guarded path: every pull request of the line carries a reviewer's verdict and, as a feat change, fail-first (project.review-verdict, project.fail-first)"
+  - "The AudioEngine stays the only audio lifecycle owner and the UI is Flowbite Pro with the ratchet only falling (project.audio-engine-discipline, project.ui-uses-flowbite-pro)"
+milestones:
+  - "M060"
+satisfaction:
+  - id: "spectrogram-readout"
+    criterion: "Hovering the spectrogram reads frequency and relative dB drawn on the canvas, the readout bin matches a synthetic tone within +-1 bin, the label says relative dB, and on synthetic frames the unsmoothed feed from readTime() smears a transient less than the 0.55-smoothing feed"
+    evidence: "command"
+    ref: "node --test tests/unit/k015-spectrogram-readout.test.mjs"
+  - id: "analytic-signal"
+    criterion: "analysis/analytic.js returns the analytic signal by FFT Hilbert transform with the inverse by conjugation, and its envelope, instantaneous phase and instantaneous frequency of synthetic AM and FM signals are within stated error bounds at 44.1 kHz and 48 kHz"
+    evidence: "command"
+    ref: "node --test tests/unit/analysis-analytic.test.mjs"
+  - id: "linked-views"
+    criterion: "A linked spectrum over a scrolling spectrogram shares one frequency axis and tuning cursor, states the sample rate and FFT size, spans no more than Nyquist, and the \"Audio-band receiver\" template validates, renders both ring-modulation sidebands offline and says that a single-sideband shift is out of scope"
+    evidence: "command"
+    ref: "node --test tests/unit/audio-band-views.test.mjs"
+  - id: "honest-wording"
+    criterion: "A wording test reads every string the line adds: the required phrases are present and the banned terms (radio reception, SDR hardware, waterfall, dBm, and RF matched as a whole word and case-sensitively, so that perform and interface do not match) are absent; search aliases are excluded"
+    evidence: "command"
+    ref: "node --test tests/unit/audio-band-wording.test.mjs"
+governance:
+  - "rule:project.no-fake-science"
+  - "rule:project.audio-engine-discipline"
+  - "rule:project.ui-uses-flowbite-pro"
+  - "rule:project.single-file-deliverable"
+  - "rule:project.review-verdict"
+  - "rule:project.fail-first"
+  - "adr:adr-0026"
+  - "adr:adr-0061"
+non_goals:
+  - "RF reception, antennas, SDR hardware, device I/Q or any claim that a radio is received (D6)"
+  - "The name \"waterfall\": the view is a scrolling spectrogram, and the \"Waterfall plots\" non-goal of intent measurement-extensions (room-acoustics decay) stands (D7)"
+  - "A single-sideband frequency shift: it needs an AudioWorklet (ADR 0026) and is out of scope; the heterodyne template is ring modulation with both sidebands"
+  - "Absolute levels in dBm or field strength, and any bandwidth beyond the context's Nyquist frequency"
+created_at: 2026-10-29
+updated_at: 2026-10-29
