@@ -53,6 +53,11 @@ function fmSignal(sampleRate) {
   return render(sampleRate, (t) => Math.cos(TAU * FM.fc * t + FM.beta * Math.sin(TAU * FM.fm * t)));
 }
 
+/** The raised-cosine taper weight of sample i of a taper of `taper` samples. */
+function raisedCosine(i, taper) {
+  return 0.5 - 0.5 * Math.cos((Math.PI * i) / taper);
+}
+
 /** The wrapped difference a − b in (−π, π]. */
 function angleDiff(a, b) {
   let d = (a - b) % TAU;
@@ -101,14 +106,44 @@ test('K024 trustedBand: taperPeriods periods of its low edge fit in a taper, and
     for (const seconds of [0.1, 0.2, 0.5]) {
       const length = Math.round(seconds * sampleRate);
       const { low, high } = trustedBand(length, sampleRate);
+      // The taper analyticSignal() applies, in whole samples (review R-2 of #275).
       const taperSeconds = taperLength(length) / sampleRate;
-      assert.ok(Math.abs(low * taperSeconds - ANALYTIC_BOUNDS.taperPeriods) < 0.2,
+      assert.ok(Math.abs(low * taperSeconds - ANALYTIC_BOUNDS.taperPeriods) < 1e-9,
         `${seconds} s at ${sampleRate} Hz: ${low * taperSeconds} periods in a taper`);
       assert.ok(Math.abs(sampleRate / 2 - high - low) < 1e-9, 'symmetric about the band');
       assert.ok(high < sampleRate / 2, 'below Nyquist');
     }
   }
   assert.throws(() => trustedBand(1000, 0), RangeError);
+});
+
+test('K024 trustedBand is null when the buffer has no band: an empty taper or low >= high, '
+  + 'and analyse() hands the null on', () => {
+  // Review R-2 of #275: trustedBand(19, 48000) was { low: 252632, high: -228632 }.
+  for (const sampleRate of RATES) {
+    for (const length of [0, 1, 19]) {
+      assert.equal(taperLength(length), 0, `${length} samples: no taper`);
+      assert.equal(trustedBand(length, sampleRate), null, `${length} samples: empty taper`);
+    }
+    // 20 to 419 samples: a taper of 1 to 20 samples, whose margin 5 fs / taper is at least
+    // fs / 4, so low >= high.
+    for (const length of [20, 200, 419]) {
+      assert.ok(taperLength(length) >= 1);
+      assert.equal(trustedBand(length, sampleRate), null, `${length} samples: empty band`);
+    }
+    const first = trustedBand(420, sampleRate);
+    assert.ok(first && first.low < first.high, `420 samples at ${sampleRate} Hz: a band`);
+    assert.equal(trustedBand(-5, sampleRate), null, 'a negative length has no band');
+    assert.equal(trustedBand(Number.NaN, sampleRate), null, 'NaN samples have no band');
+  }
+  assert.throws(() => trustedBand(19, 0), RangeError, 'a bad rate is still refused');
+  // analyse() still computes the analytic signal of a short buffer, but states no band for it.
+  const short = analyse(new Float32Array([0, 1, 0, -1, 0, 1, 0, -1]), 48000);
+  assert.equal(short.band, null);
+  assert.equal(short.envelope.length, 8);
+  assert.equal(short.frequency.length, 7);
+  const long = analyse(new Float32Array(4800), 48000);
+  assert.deepEqual(long.band, trustedBand(4800, 48000));
 });
 
 test('K024 the real part of the analytic signal is the audio buffer itself', () => {
@@ -125,6 +160,16 @@ test('K024 the real part of the analytic signal is the audio buffer itself', () 
         `${sampleRate} Hz: real part differs by ${between}, bound ${ANALYTIC_BOUNDS.realPart}`);
       // Inside each taper the real part is the buffer under the raised cosine, and nowhere else.
       assert.ok(Math.abs(z.re[0]) <= ANALYTIC_BOUNDS.realPart, 'the taper starts at zero');
+      // The taper is the raised cosine w(i) = (1 - cos(pi i / taper)) / 2 at both ends (review
+      // R-1 of #275: a linear ramp passed every other test while breaking the frequency bound).
+      const last = x.length - 1;
+      const head = maxOver(0, z.taper, (i) => z.re[i] - x[i] * raisedCosine(i, z.taper));
+      const tail = maxOver(0, z.taper,
+        (i) => z.re[last - i] - x[last - i] * raisedCosine(i, z.taper));
+      assert.ok(head <= ANALYTIC_BOUNDS.realPart,
+        `${sampleRate} Hz: head taper differs by ${head}`);
+      assert.ok(tail <= ANALYTIC_BOUNDS.realPart,
+        `${sampleRate} Hz: tail taper differs by ${tail}`);
       // With no taper the inverse by conjugation returns the buffer everywhere.
       const plain = analyticSignal(x, { taperFraction: 0 });
       assert.equal(plain.taper, 0);
@@ -167,6 +212,44 @@ test('K024 the bounds hold at both ends of trustedBand for a 0.1 s buffer', () =
       const phaseErr = maxOver(start, end, (i) => angleDiff(phase[i], TAU * fc * (i / sampleRate)));
       assert.ok(phaseErr <= ANALYTIC_BOUNDS.phaseRad, `${label}: phase ${phaseErr}`);
       const freqErr = maxOver(start, end - 1, (i) => frequency[i] - fc);
+      assert.ok(freqErr <= ANALYTIC_BOUNDS.frequencyHz, `${label}: frequency ${freqErr}`);
+    }
+  }
+});
+
+test('K024 the bounds hold at both ends of trustedBand with modulation at a tenth of its low '
+  + 'edge (0.1 s, AM and FM)', () => {
+  // Review R-1 of #275: with fm = low / 10 (about 100 Hz) the frequency error at the band edges
+  // depends on the taper's shape. The raised cosine measures 0.003-0.021 Hz here; a linear ramp
+  // measures 0.35-0.43 Hz, over the 0.25 Hz bound, so the bound itself pins the shape.
+  for (const sampleRate of RATES) {
+    const length = Math.round(0.1 * sampleRate);
+    const { low, high } = trustedBand(length, sampleRate);
+    const fm = low / 10;
+    const beta = 0.2; // FM deviation beta * fm = 20 Hz; sidebands past the third are below 1e-5.
+    const cases = [
+      // AM content lies at fc and fc +- fm: these carriers put it on the band's edges.
+      { kind: 'AM', fc: low + fm }, { kind: 'AM', fc: high - fm },
+      // FM keeps three sidebands of margin inside the band.
+      { kind: 'FM', fc: low + 3 * fm }, { kind: 'FM', fc: high - 3 * fm },
+    ];
+    for (const { kind, fc } of cases) {
+      const am = kind === 'AM';
+      const trueEnv = (i) => (am ? 1 + AM.m * Math.cos(TAU * fm * (i / sampleRate)) : 1);
+      const truePhase = (i) => {
+        const t = i / sampleRate;
+        return TAU * fc * t + (am ? 0 : beta * Math.sin(TAU * fm * t));
+      };
+      const x = new Float32Array(length);
+      for (let i = 0; i < length; i++) x[i] = trueEnv(i) * Math.cos(truePhase(i));
+      const { envelope: env, phase, frequency, interior: [start, end] } = analyse(x, sampleRate);
+      const label = `${kind} at ${sampleRate} Hz, carrier ${fc.toFixed(1)} Hz, fm ${fm.toFixed(1)}`;
+      const envErr = maxOver(start, end, (i) => (env[i] - trueEnv(i)) / trueEnv(i));
+      assert.ok(envErr <= ANALYTIC_BOUNDS.envelopeRelative, `${label}: envelope ${envErr}`);
+      const phaseErr = maxOver(start, end, (i) => angleDiff(phase[i], truePhase(i)));
+      assert.ok(phaseErr <= ANALYTIC_BOUNDS.phaseRad, `${label}: phase ${phaseErr}`);
+      const freqErr = maxOver(start, end - 1,
+        (i) => frequency[i] - ((truePhase(i + 1) - truePhase(i)) * sampleRate) / TAU);
       assert.ok(freqErr <= ANALYTIC_BOUNDS.frequencyHz, `${label}: frequency ${freqErr}`);
     }
   }

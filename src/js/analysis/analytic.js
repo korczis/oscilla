@@ -55,15 +55,22 @@ export const ANALYTIC_BOUNDS = Object.freeze({
 
 /**
  * The band { low, high } in hertz inside which ANALYTIC_BOUNDS holds for a buffer of `length`
- * samples at `sampleRate`: taperPeriods periods of `low` fit in one taper, and `high` is the
- * same distance below the Nyquist frequency.
+ * samples at `sampleRate`: taperPeriods periods of `low` fit in the taper analyticSignal()
+ * actually applies (taperLength(length) samples), and `high` is the same distance below the
+ * Nyquist frequency. It is null when there is no such band: the taper is empty (fewer than
+ * 1 / taperFraction samples, so no taper is applied) or the margin at each end meets or crosses
+ * the other (low >= high, fewer than 420 samples at the default fractions). Null means the
+ * module states no bound for that buffer, and analyse() hands it on as band: null.
  */
 export function trustedBand(length, sampleRate) {
   if (!(Number.isFinite(sampleRate) && sampleRate > 0))
     throw new RangeError(`sampleRate must be a positive number of hertz, got ${sampleRate}`);
-  const taperSeconds = (length * ANALYTIC_BOUNDS.taperFraction) / sampleRate;
-  const margin = ANALYTIC_BOUNDS.taperPeriods / taperSeconds;
-  return { low: margin, high: sampleRate / 2 - margin };
+  const taper = taperLength(length);
+  if (!(taper >= 1)) return null;
+  const margin = (ANALYTIC_BOUNDS.taperPeriods * sampleRate) / taper;
+  const low = margin;
+  const high = sampleRate / 2 - margin;
+  return low < high ? { low, high } : null;
 }
 
 /** The smallest power of two of at least n (and at least 2). */
@@ -196,7 +203,8 @@ export function instantaneousFrequency(z, sampleRate) {
 /**
  * The analytic signal of the audio buffer and what it gives: { analytic, envelope, phase,
  * frequency, interior, band }: interior is the [start, end) range and band the trustedBand()
- * in hertz that ANALYTIC_BOUNDS holds on.
+ * in hertz that ANALYTIC_BOUNDS holds on, or null when the buffer is too short to have one (no
+ * bound is stated for it then; its envelope, phase and frequency are still computed).
  */
 export function analyse(samples, sampleRate) {
   const analytic = analyticSignal(samples);
