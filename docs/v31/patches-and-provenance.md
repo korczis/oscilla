@@ -45,6 +45,7 @@ A template is a frozen record:
 | `stereo-beat` | 200 Hz and 204 Hz → Stereo Split (A left, B right) → Master; Meter tap | — | stereo routing; what is physical and what arises in hearing (no-fake-science wording) |
 | `filter-automation` | white Noise → Filter (band-pass, Q 4) → Master; Spectrum tap | centre frequency 200 Hz → 4 kHz → 200 Hz | automation lanes |
 | `measurement-sweep` | Sweep (log 20 Hz-20 kHz, 5 s) → Master; Sweep reference → Transfer Analyzer; Microphone → Calibration → Transfer Analyzer → Measurement Result | noise check, pre-roll, stimulus, tail, analysis; capture window on a second track | transfer measurement routing; the §258 fixture |
+| `demo-song` | Bass voice (saw) → Filter (LP); Lead voice (square) → Filter (LP, Q 4) with an LFO on its cutoff; Kick (sine Oscillator), Noise → band-pass and high-pass Filters → Envelopes (snare, hats) → Drum mix; Main mix → Master; Scope, Spectrum, Spectrogram and Meter tap the mix | an original song (K058), 44 bars at 96 BPM in musical time: 744 tempo-linked pattern and gate clips on five tracks, seven section markers, lanes for the bass cutoff, the lead LFO rate and the outro fade; velocity, the bass Q lane and drive are in the score (`demo-song-score.js`) and not played | a whole song through every Studio part that exists; the vertical slice of README "Demo song: a vertical slice" |
 
 Provenance (§196): `validateTemplate` normalizes the model, runs `validateStudioModel`, checks the
 Learn bounds and compares `studioHash(model)` with the pinned value. Anything that changes the

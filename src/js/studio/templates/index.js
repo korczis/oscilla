@@ -31,6 +31,7 @@ import sweepSequence from './sweep-sequence.js';
 import stereoBeat from './stereo-beat.js';
 import filterAutomation from './filter-automation.js';
 import measurementSweep from './measurement-sweep.js';
+import demoSong from './demo-song.js';
 
 export const TEMPLATE_ID_PATTERN = /^[a-z][a-z0-9-]{0,47}$/;
 export const TEMPLATE_CATEGORIES = Object.freeze(['synthesis', 'measurement']);
@@ -38,12 +39,14 @@ export const TEMPLATE_CATEGORIES = Object.freeze(['synthesis', 'measurement']);
 export const LEARN_LIMITS = Object.freeze({ summaryChars: 200, points: 4, pointChars: 200 });
 
 export const STUDIO_TEMPLATES = Object.freeze([basicTone, subtractiveSynth, sweepSequence,
-  stereoBeat, filterAutomation, measurementSweep].map((t) => deepFreeze(t)));
+  stereoBeat, filterAutomation, measurementSweep, demoSong].map((t) => deepFreeze(t)));
 
 /** The id of the §257 reference fixture (the Basic Synth of the specification). */
 export const REFERENCE_TEMPLATE_ID = 'subtractive-synth';
 /** The id of the §258 measurement template. */
 export const MEASUREMENT_TEMPLATE_ID = 'measurement-sweep';
+/** The id of the demo song, the vertical slice of plan issue K058. */
+export const DEMO_SONG_TEMPLATE_ID = 'demo-song';
 
 /** Library entries (no model). */
 export function listTemplates() {
