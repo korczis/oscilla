@@ -223,6 +223,9 @@ function stopPlayback(cmp) {
   if (typeof cmp.midiAllOff === 'function') cmp.midiAllOff(); // MIDI notes too (V502)
 }
 
+/** The sequencer is playing now (its editor, not the 150 ms `seqPlaying` copy; V502). */
+const sequencerPlaying = () => !!(labs.sequencer && labs.sequencer.editor.playing);
+
 /** Revert the sounding voice from a PeriodicWave to its oscillator type (additive off). */
 function clearPeriodicWave() {
   if (typeof engine.clearPeriodicWave === 'function') engine.clearPeriodicWave(); // click-free dip
@@ -462,6 +465,15 @@ function mountLabs(root) {
   }
   if (labs.sequencer) syncSequencerIcon(root);
   if (labs.sequencer) {
+    // MIDI notes and a sequence never sound together (V502): the sequence plays into the
+    // master outside the engine's voices, so its start stops every note first (they fade within
+    // ESCAPE_RELEASE_S) and the MIDI part refuses notes while it plays (sequencerPlaying).
+    const editor = labs.sequencer.editor;
+    const playSequence = editor.play;
+    editor.play = function playAfterMidi(...args) {
+      if (app && typeof app.midiAllOff === 'function') app.midiAllOff();
+      return playSequence.apply(this, args);
+    };
     // UI bookkeeping only (the sequencer schedules on the audio clock itself).
     setInterval(() => {
       const on = !!labs.sequencer.editor.playing;
@@ -744,7 +756,7 @@ function createOscillaComponent(ui) {
   const studio = createStudioUi({ engine, stopPlayback });
   const navigation = createNavigation();
   // Optional input (ADR 0058): reads support at load, never requests; notes sound through engine.
-  const midi = createMidiUi({ engine });
+  const midi = createMidiUi({ engine, sequencerPlaying });
   const cmp = compose(instrument, ui, workbench, measure, experiments, findings, connections,
     studio, navigation, midi, provenancePart(), TEMPLATE_HELPERS);
   cmp.dismissAlert = focusSafeDismiss(cmp.dismissAlert);

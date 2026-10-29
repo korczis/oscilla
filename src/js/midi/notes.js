@@ -15,15 +15,22 @@
 //   anything else (CC 64 sustain     ignored: not part of the first version (ADR 0058, V502 note)
 //     included), or a message
 //     without a status byte
-// Everything stops (within ESCAPE_RELEASE_S) when an input is lost, the access is withdrawn or
-// replaced, the page is hidden, Escape is pressed, or Measure or Studio PLAY takes the output.
-// A note is refused while a measurement or the Studio transport owns the output.
+// Everything stops (within ESCAPE_RELEASE_S) when any listened-to input is lost (every note,
+// not only that input's), the access is withdrawn or replaced, the page is hidden, Escape is
+// pressed, Measure or Studio PLAY takes the output, or the sequencer starts. A note is refused
+// while a measurement, a level reference capture, the Studio transport or the sequencer owns
+// the output (ownedBy, src/js/midi/ui.js MIDI_REFUSED).
+// The Labs stages that play() adds (filter, ADSR, additive) do not apply to notes.
 
 import { clamp } from '../core/math.js';
 import { midiToFrequency } from '../core/music.js';
 import { WAVEFORMS } from '../core/constants.js';
 
-/** The velocity law: amplitude (velocity / 127)^2, that is 40 log10(velocity / 127) dB. */
+/**
+ * The velocity law: amplitude (velocity / 127)^2, that is 40 log10(velocity / 127) dB. The
+ * engine raises a note's peak (this / NOTE_POLYPHONY) to GAIN_FLOOR (-80 dB), so velocities 1
+ * to 3 all sound at that floor, above the law; from velocity 4 the law holds exactly.
+ */
 export function velocityLevel(velocity) {
   const v = clamp(Math.round(Number(velocity) || 0), 0, 127) / 127;
   return v * v;
@@ -52,7 +59,8 @@ export function parseMidiMessage(data) {
 /**
  * The note layer of one page. `engine` is the AudioEngine; `settings()` returns the
  * Playground's { a4, waveform, attackS, releaseS, limitS, continuous } at the time of a note;
- * `ownedBy()` names who owns the output ('measurement', 'studio') or returns null; `refused(by)`
+ * `ownedBy()` names who owns the output ('measurement', 'reference', 'studio',
+ * 'sequencer') or returns null; `refused(by)`
  * is told once per run of refused notes (the caller says so to the user).
  */
 export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () => null,

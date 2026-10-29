@@ -28,8 +28,9 @@
 //
 // Messages (V502): each connected input of the open access is listened to for `midimessage`,
 // and `onMessage(data, port)` receives its bytes. `onSilence()` is called when an input that was
-// listened to leaves, and when the access is withdrawn or replaced by a new Connect MIDI, so
-// the note layer can stop what that input was holding (src/js/midi/notes.js).
+// listened to leaves, and when the access is withdrawn or replaced by a new Connect MIDI; it
+// names no port, and the note layer stops every note, not only the leaving input's
+// (src/js/midi/notes.js).
 
 export const MIDI_STATES = Object.freeze([
   'insecure', 'unsupported', 'pending', 'blocked', 'denied', 'failed', 'revoked', 'connected',

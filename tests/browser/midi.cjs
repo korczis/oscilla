@@ -51,9 +51,13 @@
 //                               NOTE_POLYPHONY notes keeps at most NOTE_POLYPHONY, the peak under
 //                               one voice's level; Note Off and velocity 0 leave zero oscillators
 //                               and zero engine nodes; no gain set to 0 or ramped exponentially
-//                               to 0; a note at or above 0.95 x Nyquist of the running context is
-//                               refused; held notes stop when their input is unplugged and on
-//                               Escape; a held note ends by itself at the session safety limit
+//                               to 0 (automation only: a rendered one-sample step is measured by
+//                               the engine suites, not here); a note at or above 0.95 x Nyquist of
+//                               the running context is refused; held notes stop when their input
+//                               is unplugged and on Escape; a held note ends by itself at the
+//                               session safety limit, within LIMIT_MARGIN_S past its release;
+//                               starting the sequencer stops held notes, a Note On while it plays
+//                               is refused and said once, and after it stops a note sounds again
 //
 // A gate build or platform not in the record (the CI runners, ubuntu-latest) is held to the
 // states the ADR allows for it and prints what it measured on a RECORD line. There a Chromium
@@ -110,7 +114,9 @@ const SEAM_LOAD = { chromium: 'needs-permission', firefox: 'needs-permission', w
 // forces the same rate in all three gate builds.
 const NOTES_RATE = 22050;
 const NYQUIST_NOTE = 124;
+const LIMIT_MARGIN_S = 2;    // a note at the safety limit is freed within its release + this
 let NOTE_POLYPHONY;
+let MIDI_REFUSED;
 
 // ------------------------------------------------------------------------- pure judgements
 /**
@@ -770,20 +776,78 @@ async function seamNotes(browser, b, origin, url) {
     const escaped = await heard(page, idle, `${leg}: Escape frees the held note`);
     check(leg, id, 'a held note stops on Escape', !escaped.timedOut, JSON.stringify(escaped));
 
-    // The session safety limit: a held note ends by itself, its key still down.
-    const limitS = await page.evaluate(() => window.OSCILLA.app.safetyLimit);
+    // The session safety limit: a held note ends by itself, its key still down, and not long
+    // after it (LIMIT_MARGIN_S past its release covers the cleanup and the polls).
+    const { limitS, releaseS } = await page.evaluate(() => ({
+      limitS: window.OSCILLA.app.safetyLimit, releaseS: window.OSCILLA.app.release / 1000 }));
     const sent = (await sound(page)).time; // the audio clock before the Note On: <= its start
     await seam(page, 'message', SECOND, [0x90, 72, 100]);
     const held = await heard(page, (m) => m.live === 1, `${leg}: a held note sounds`);
     const ended = await heard(page, idle, `${leg}: the held note ends at the safety limit`,
       (limitS + 10) * 1000);
-    check(leg, id, `a held note ends by itself at the session safety limit (${limitS} s)`,
-      !held.timedOut && !ended.timedOut && ended.time - sent >= limitS,
-      JSON.stringify({ sent, held: held.time, ended: ended.time, limitS }));
+    check(leg, id, `a held note ends by itself at the session safety limit (${limitS} s), `
+      + `within ${LIMIT_MARGIN_S} s past its release`, !held.timedOut && !ended.timedOut
+      && ended.time - sent >= limitS && ended.time - sent <= limitS + releaseS + LIMIT_MARGIN_S,
+    JSON.stringify({ sent, held: held.time, ended: ended.time, limitS, releaseS }));
     const end = await readMidi(page);
     check(leg, id, 'the page reports no error and raises no notification for MIDI notes',
       !end.lastError && end.alerts === 0 && errors.length === 0,
       JSON.stringify({ lastError: end.lastError, alerts: end.alerts, errors }));
+
+    // The sequencer plays into the master outside the engine's voices (review of #261, P2-1):
+    // starting a sequence stops every note first, and while it plays a Note On is refused and
+    // said once. It loops, so it is still playing however long the checks take.
+    // The longest safety limit, so the held notes cannot end by themselves meanwhile; whether
+    // the start released them is read in the same task as the start, not after a wait.
+    await page.evaluate(() => window.OSCILLA.app.setSafetyLimit(5));
+    await seam(page, 'message', SECOND, [0x90, 60, 100]);
+    await seam(page, 'message', SECOND, [0x90, 64, 100]);
+    await heard(page, (m) => m.notes === 2, `${leg}: two held notes before the sequence`);
+    const start = await page.evaluate(() => {
+      const e = window.OSCILLA.engine;
+      const ed = window.OSCILLA.labs.sequencer.editor;
+      const held = [...e.voices].filter((v) => v.note !== undefined && !v.releasing);
+      ed.setLoop(true);
+      const started = ed.play();
+      const soon = e.ctx.currentTime + 0.5;
+      return { started, held: held.length,
+        released: held.filter((v) => v.releasing && v.endTime < soon).length };
+    });
+    const hushed = await heard(page, (m) => m.notes === 0 && m.voices === 0,
+      `${leg}: starting the sequence frees the notes`);
+    check(leg, id, 'starting the sequencer stops every held MIDI note (released as it starts)',
+      start.started === true && start.held === 2 && start.released === 2 && !hushed.timedOut,
+      JSON.stringify({ ...start, notes: hushed.notes, voices: hushed.voices }));
+    await page.evaluate((s) => window.OSCILLA.app.setSafetyLimit(s), limitS);
+    await seam(page, 'message', SECOND, [0x90, 67, 100]);
+    await seam(page, 'message', SECOND, [0x90, 69, 100]);
+    const during = await sound(page); // read at once: a note let through would still sound
+    let said = null;
+    try {
+      said = await until(() => page.evaluate(() => {
+        const t = [...document.querySelectorAll('[data-osc="alerts"] .osc-toast')]
+          .map((el) => el.textContent.replace(/\s+/g, ' ').trim());
+        return t.length ? t : null;
+      }), { ms: STEP_MS, what: `${leg}: the refused note is said` });
+    } catch (error) {
+      if (!(error instanceof WaitTimeout)) throw error;
+    }
+    const playing = await page.evaluate(() => window.OSCILLA.labs.sequencer.editor.playing);
+    check(leg, id, 'while the sequencer plays a Note On is refused, and said once',
+      playing === true && during.notes === 0 && during.voices === 0 && !!said
+      && said.length === 1 && said[0].includes(MIDI_REFUSED.sequencer),
+    JSON.stringify({ playing, notes: during.notes, voices: during.voices, said }));
+    await page.evaluate(() => window.OSCILLA.labs.sequencer.editor.stop());
+    await seam(page, 'message', SECOND, [0x90, 72, 100]);
+    const again = await heard(page, (m) => m.notes === 1,
+      `${leg}: a note sounds once the sequence has stopped`);
+    check(leg, id, 'once the sequencer stops, a Note On sounds again', !again.timedOut,
+      JSON.stringify({ notes: again.notes }));
+    await seam(page, 'message', SECOND, [0x80, 72, 0]);
+    const quiet = await heard(page, idle, `${leg}: the sequence and the notes are freed`);
+    check(leg, id, 'the sequence and the notes leave zero oscillators and zero engine nodes, '
+      + 'with no error', !quiet.timedOut && !quiet.lastError && errors.length === 0,
+    JSON.stringify({ ...quiet, errors }));
   } finally {
     await context.close();
   }
@@ -795,6 +859,8 @@ async function main() {
     'support.js')).href));
   ({ NOTE_POLYPHONY } = await import(pathToFileURL(path.join(ROOT, 'src', 'js', 'audio',
     'audio-engine.js')).href));
+  ({ MIDI_REFUSED } = await import(pathToFileURL(path.join(ROOT, 'src', 'js', 'midi',
+    'ui.js')).href));
   await RUN.ready();
   const server = RUN.origins.includes('http') ? await serveDist(DIST, { prefix: 'oscilla-midi-' })
     : null;

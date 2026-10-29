@@ -3,7 +3,8 @@
 // clock for the context and the engine's timers; no real time passes).
 //
 // - A Note On is a note voice of the one engine: osc -> env -> fade -> cut -> master, at
-//   midiToFrequency(note, A4), peaking at velocityLevel(velocity) / NOTE_POLYPHONY.
+//   midiToFrequency(note, A4), peaking at velocityLevel(velocity) / NOTE_POLYPHONY (raised to
+//   GAIN_FLOOR for velocities 1 to 3).
 // - The level cap: at no time do more than NOTE_POLYPHONY notes sound, and their peaks sum to at
 //   most one voice; a note and the play() voice never sound together.
 // - Click-free: the attack ramps linearly from GAIN_FLOOR, a release holds the output-stage
@@ -13,6 +14,8 @@
 // - Note Off, velocity 0, retrigger, All Sound Off, All Notes Off, omni channels, the safety
 //   limit, and every way the notes stop leave zero engine nodes and zero live sources.
 // - support.js listens to each connected input and says when one goes away.
+// - A note is refused, said once per owner, while a measurement, a level reference capture,
+//   the Studio or the sequencer owns the output.
 //
 //   node --test 'tests/unit/midi/*.test.mjs'
 import test from 'node:test';
@@ -135,6 +138,21 @@ test('a Note On is a note voice of the engine at the note\'s frequency, under th
   assert.ok(Math.abs(w.osc.frequency.events[0].value - midiToFrequency(60, 432)) < 1e-9);
   assert.equal(w.osc.type, 'square', 'the Playground waveform');
   assert.ok(Math.abs(w.peak - velocityLevel(64) / NOTE_POLYPHONY) < 1e-12);
+});
+
+test('velocities 1 to 3 sound at the engine\'s gain floor, from 4 the law holds exactly', () => {
+  for (let vel = 1; vel <= 8; vel += 1) {
+    const r = rig();
+    r.notes.handle(on(60, vel));
+    const [v] = voices(r.ctx, r.engine);
+    const law = velocityLevel(vel) / NOTE_POLYPHONY;
+    if (vel <= 3) {
+      assert.ok(law < GAIN_FLOOR, `velocity ${vel}: the law is under the floor`);
+      assert.equal(v.peak, GAIN_FLOOR, `velocity ${vel} peaks at GAIN_FLOOR (-80 dB)`);
+    } else {
+      assert.ok(Math.abs(v.peak - law) < 1e-15, `velocity ${vel} follows (v / 127)^2 / 8`);
+    }
+  }
 });
 
 test('the attack and the release are click-free, and the stop comes after the floor', () => {
@@ -454,10 +472,14 @@ test('the component part: Playground settings per note, a refusal said, every st
   const fire = (key, e = {}) => { for (const fn of on2[key] || []) fn(e); };
   const notices = [];
   let measuring = false;
-  const cmp = Object.assign(createMidiUi({ win, engine: r.engine }), {
+  let sequencing = false;
+  let studio = false;
+  const cmp = Object.assign(createMidiUi({ win, engine: r.engine,
+    sequencerPlaying: () => sequencing }), {
     a4: 440, waveform: 'triangle', attack: 20, release: 120, safetyLimit: 2,
     continuousAllowed: false, notify: (...a) => notices.push(a),
-    measureOwnsOutput: () => measuring, studioOwnsOutput: () => false,
+    measureOwnsOutput: () => measuring, studioOwnsOutput: () => studio,
+    meas: { levelForm: { capturing: false } },
   });
   await cmp.midiInit();
   cmp.midiConnect();
@@ -486,6 +508,29 @@ test('the component part: Playground settings per note, a refusal said, every st
   port.send([0x90, 62, 100]);
   assert.equal(r.engine.noteCount, 0);
   assert.deepEqual(notices, [['info', 'MIDI', MIDI_REFUSED.measurement]], 'said once');
+
+  // Each other owner of the output refuses notes too, each said once (review of #261).
+  measuring = false;
+  const refusedBy = (set, unset, by) => {
+    notices.length = 0;
+    set();
+    port.send([0x90, 60, 100]);
+    port.send([0x90, 62, 100]);
+    assert.equal(r.engine.noteCount, 0, `no note while ${by} owns the output`);
+    assert.deepEqual(notices, [['info', 'MIDI', MIDI_REFUSED[by]]], `${by}: said once`);
+    unset();
+  };
+  refusedBy(() => { cmp.meas.levelForm.capturing = true; },
+    () => { cmp.meas.levelForm.capturing = false; }, 'reference');
+  refusedBy(() => { studio = true; }, () => { studio = false; }, 'studio');
+  refusedBy(() => { sequencing = true; }, () => { sequencing = false; }, 'sequencer');
+  notices.length = 0;
+  port.send([0x90, 60, 100]);
+  assert.equal(r.engine.noteCount, 1, 'with nobody owning the output a note sounds again');
+  assert.deepEqual(notices, []);
+  cmp.midiAllOff();
+  r.fake.advance(1);
+  assert.ok(allGone(r));
 });
 
 const AUDIO_API = new RegExp([

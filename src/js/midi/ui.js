@@ -13,10 +13,19 @@ import { createMidiNotes } from './notes.js';
 export const MIDI_REFUSED = Object.freeze({
   measurement: 'MIDI notes do not play while the measurement owns the output: stop it (Esc) '
     + 'first.',
+  reference: 'MIDI notes do not play while the level reference is being captured.',
   studio: 'MIDI notes do not play while the Studio is playing: stop it first.',
+  sequencer: 'MIDI notes do not play while the sequencer is playing: stop it (Esc) first.',
 });
 
-export function createMidiUi({ win = window, engine = null } = {}) {
+/**
+ * `engine`: the AudioEngine the notes sound through. `sequencerPlaying()`: whether the
+ * sequencer is playing now (main.js reads the editor itself, not the 150 ms `seqPlaying` copy);
+ * the sequencer plays into the engine's master outside its voices, so notes and a sequence are
+ * kept apart here: a note is refused while it plays, and main.js stops the notes when it starts.
+ */
+export function createMidiUi({ win = window, engine = null, sequencerPlaying = () => false }
+  = {}) {
   let support = null;
   let notes = null;
   return {
@@ -36,7 +45,10 @@ export function createMidiUi({ win = window, engine = null } = {}) {
           continuous: cmp.continuousAllowed }),
         ownedBy: () => {
           if (owns('measureOwnsOutput')) return 'measurement';
-          return owns('studioOwnsOutput') ? 'studio' : null;
+          const form = cmp.meas && cmp.meas.levelForm;
+          if (form && form.capturing) return 'reference';
+          if (owns('studioOwnsOutput')) return 'studio';
+          return sequencerPlaying() ? 'sequencer' : null;
         },
         refused: (by) => {
           if (typeof cmp.notify === 'function') cmp.notify('info', 'MIDI', MIDI_REFUSED[by]);
@@ -76,7 +88,10 @@ export function createMidiUi({ win = window, engine = null } = {}) {
       if (support) support.connect();
     },
 
-    /** Every MIDI note off (Measure or Studio PLAY takes the output, main.js stopPlayback). */
+    /**
+     * Every MIDI note off: Measure or Studio PLAY takes the output (main.js stopPlayback), or
+     * the sequencer starts (main.js, around the editor's play).
+     */
     midiAllOff() {
       return notes ? notes.silence() : 0;
     },
