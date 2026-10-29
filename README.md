@@ -606,7 +606,7 @@ The browser suites need Playwright's browsers (`npx playwright install chromium 
 webkit`). Work lands through small pull requests. CI runs the gate on every pull request,
 branch protection requires the `gate` check, and a merge to `main` redeploys Pages.
 
-Two of the gate's jobs check the pull request rather than the product. `fail-first`: when the
+Three jobs check the pull request rather than the product. `fail-first`: when the
 title starts with `feat` or `fix`, a unit test the pull request adds or changes must fail on
 the merge base and pass on the head, or the body carries `fail-first: n/a <reason>`
 (`node scripts/fail-first.mjs --title "<title>"`). `review-verdict`: a change under `src/js/audio`,
@@ -616,10 +616,17 @@ and Findings adapters, `scripts/release-*`, the build, stamp and deploy-verifica
 the release rules' tests or `.github/`, or to the programs and tests of these rules, needs a
 reviewer's verdict in `.ai/repo/reviews/<pr>.yaml` for the guarded content the pull request
 changes (`node scripts/review-verdict.mjs --pr <number>`; `--content` prints the digest to
-record, which a merge of `main` that leaves those files alone does not change). CI judges a
-pull request with the base branch's copy of both programs, and `ci.yml` runs on pull requests
-only. A pull request is bound from the first run of a head that contains these jobs. The rules are
-`project.fail-first`, `project.review-verdict` and `project.ci-bounded` under
+record, which a merge of `main` that leaves those files alone does not change). Those two are
+part of the gate. `metadata` (`.github/workflows/metadata.yml`, not part of the gate): the
+title or the branch names an existing plan record under `.ai/repo/project/` (`feat/v603-x`
+names V603), or the body carries `plan: n/a <reason>`; the title is conventional; no closing
+keyword (`Closes #N`) is in the title, the body or a commit message
+(`node scripts/pr-metadata.mjs --pr-json <file> --check`); its step summary shows the records,
+milestone, level, verdict and fail-first state. CI judges a pull request with the base
+branch's copy of all three programs, and `ci.yml` and `metadata.yml` run on pull requests
+only. A pull request is bound from the first run of a head that contains these jobs. Pull
+requests land by merge commit only. The rules are `project.fail-first`,
+`project.review-verdict`, `project.pr-names-its-plan` and `project.ci-bounded` under
 [`.ai/repo/rules/project/`](.ai/repo/rules/project/).
 
 ## Browser support

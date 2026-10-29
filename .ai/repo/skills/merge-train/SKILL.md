@@ -19,7 +19,7 @@ outputs:
 
 Turns N ready pull requests into one CI round and one `dist/index.html` rebuild instead of N
 ([ADR 0055](../../adrs/0055-merge-train-lands-by-one-merge-commit-after-one-rebuild.md)).
-It is for a batch; a single change still ships alone with `gh pr merge --auto --squash`. It
+It is for a batch; a single change still ships alone with `gh pr merge --auto --merge`. It
 does not replace the review of the included changes: the train's combined diff is reviewed
 once, with `review-a-guarded-pr`.
 
@@ -96,8 +96,13 @@ Several pull requests are ready at once and each one that changes `src/` would c
    ```bash
    majordomus finish --check
    git push -u origin train/<yyyy-mm-dd>
-   gh pr create --base main --title "Merge train <yyyy-mm-dd>: #<a>, #<b>, ..." --body-file <file>
+   gh pr create --base main --title "train(<yyyy-mm-dd>): #<a>, #<b>, ..." --body-file <file>
    ```
+
+   The title is conventional because it becomes the subject of the merge commit on main
+   (merge commits only, owner decision C1); rule `project.pr-names-its-plan` exempts a train
+   from naming a plan record only on a `train/...` branch under a `train(...)` title that
+   names its members as `#N`.
 
 7. Fold follow-ups in before the review. A late change is opened against the train,
    `gh pr create --base train/<yyyy-mm-dd>`, and merged into it with step 4, then step 5

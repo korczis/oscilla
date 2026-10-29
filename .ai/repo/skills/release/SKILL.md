@@ -80,7 +80,7 @@ record is on main.
    majordomus finish --check
    git push -u origin chore/release-vX.Y.Z
    gh pr create --base main --title "chore(release): vX.Y.Z" --body-file <file>
-   gh pr merge <n> --auto --squash
+   gh pr merge <n> --auto --merge
    gh pr list --state open --json number,title,autoMergeRequest \
      --jq '.[] | select(.autoMergeRequest != null)'     # only this pull request
    ```
@@ -113,7 +113,7 @@ record is on main.
      --verify-command "npm run release:record -- --version X.Y.Z --check" --note <file>
    git push -u origin chore/release-record-vX.Y.Z
    gh pr create --base main --title "chore(release): record vX.Y.Z" --body-file <file>
-   gh pr merge <n> --auto --squash
+   gh pr merge <n> --auto --merge
    ```
 
 8. Close the release task with the line `release:publish` printed:

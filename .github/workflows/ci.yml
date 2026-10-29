@@ -408,7 +408,7 @@ jobs:
   review-verdict:
     # project.review-verdict: a PR that changes a guarded path (the audio, analysis, experiments
     # and studio modules, core/storage*, scripts/release-*, all of .github/, and the programs
-    # and tests of the three process rules: GUARDED in scripts/review-verdict.mjs) needs
+    # and tests of the four process rules: GUARDED in scripts/review-verdict.mjs) needs
     # .ai/repo/reviews/<pr>.yaml: `verdict: merge`, the reviewer session, the content it
     # reviewed and no open P0 or P1 finding (scripts/review-verdict.mjs, tested by
     # tests/unit/review-verdict.test.mjs). `content` is a SHA-256 over the guarded paths the PR

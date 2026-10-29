@@ -64,7 +64,7 @@ npm run release:prepare -- --help  # also publish/analyze/record/stamp/verify-de
 majordomus plan status             # milestone progress
 ```
 
-Ship through small PRs with `gh pr merge --auto --squash`; the required `gate` check
+Ship through small PRs with `gh pr merge --auto --merge`; the required `gate` check
 aggregates the CI jobs, whose `npm test` includes `tests/unit/knowledge-integrity.test.mjs`
 (the paths the claims, rules and bootstraps name exist; claim and rule tests run in CI).
 `majordomus doctor` runs in the pre-commit hook, `npm run verify` and CI; `majordomus finish

@@ -75,8 +75,8 @@ Majordomus
 
 Shipping
 
-12. Ship through small pull requests with `gh pr merge --auto --squash`, gated on `gate`;
-    open long work as an early draft. Read release and deploy state from GitHub
+12. Ship through small pull requests with `gh pr merge --auto --merge` (merge commits only
+    since 2026-10-29), gated on `gate`; open long work as an early draft. Read release and deploy state from GitHub
     (`gh release list`, `npm run release:verify-deploy`), never from memory.
 13. Land dist-changing pull requests one at a time, each merged up to date with main and
     rebuilt. Do not arm auto-merge on a pull request that changes build inputs between
