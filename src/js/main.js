@@ -587,7 +587,12 @@ function integrationInit() {
     void cmp.metricFrequency; void cmp.playing; void cmp.sampleRate; void cmp.dualFa;
     notifyAdapter();
   });
-  cmp.$watch('gainLevel', (g) => engine.setMasterGain(g));
+  cmp.$watch('gainLevel', (g) => {
+    engine.setMasterGain(g);
+    // The Playground gain now holds the master stage: the status bar stops showing the Studio's
+    // Master Output level (C012; the Studio keeps this newer level at STOP, PR #119 D2).
+    if (cmp.studio && cmp.studio.masterLevel !== null) cmp.studio.masterLevel = null;
+  });
   cmp.$watch('theme', () => {
     bridge.readPalette();
     requestAnimationFrame(() => {

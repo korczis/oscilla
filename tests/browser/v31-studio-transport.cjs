@@ -35,6 +35,19 @@
 //   STOP: 0 engine nodes/sources, 0 runtime nodes, 0 live sources, 0 live connections; three
 //        PLAY → STOP cycles have the same peak counts (no growth);
 //   no console error or page error.
+// Then the built dist/index.html (the whole app: Alpine component, unlock listener, status bar)
+// at 1536 x 1024 in the same browser (C012):
+//   studio-level-survives-gesture  the Subtractive Synth looping with its Master Output at
+//        0.02 (the Playground gain differs): a pointerdown on the Master node and a keydown leave
+//        engine.gainLevel and master.gain at the Studio's level, the transport still plays, and
+//        STOP gives the Playground level back (engine-sync-2);
+//   status-bar-studio  the Subtractive Synth looping at Master 0.05: the visible status bar says PLAYING
+//        with the playing dot, "Master -26.0 dB" (the level in effect) and pattern "Studio"; the
+//        status Play button stays the instrument's (aria-pressed false, ADR 0050); a Playground
+//        gain set while the Studio plays is shown as "Gain <dB>" and is the engine's level; after
+//        STOP the state is not PLAYING and the readout is the Playground gain (dup-stale-4);
+//   app: no console error or page error.
+// --app-only (diagnostic) runs only the dist checks.
 // Runs in `npm run test:studio` (release-gate and the CI studio job).
 'use strict';
 
@@ -44,6 +57,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const esbuild = require('esbuild');
 const suite = require('./lib/suite.cjs');
+const { until } = require('./lib/wait.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -56,6 +70,8 @@ const BROWSERS = RUN.browsers;
 const JSON_OUT = arg('json', '');
 const STALL_MS = Number(arg('stall-ms', '0'));
 const ENTRY = path.join(__dirname, 'fixtures', 'v31-studio-transport-entry.js');
+const DIST = path.resolve(__dirname, '..', '..', 'dist', 'index.html');
+const APP_ONLY = argv.includes('--app-only');
 
 // Timing semantics (§212, docs/v31/timeline.md "Clip start"): a clip starts at the frame where
 // its voice envelope leaves GAIN_FLOOR — baseTime + position, as the V2 sequencer's block start
@@ -238,8 +254,170 @@ async function runOne(browserName, url) {
   }
 }
 
+// ------------------------------------------------------------------ the app (C012)
+
+const near = (a, b, tol) => Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= tol;
+const dbText = (g) => `${(20 * Math.log10(g)).toFixed(1)} dB`;
+
+/** A Studio template in the Studio workspace, stopped, its timeline looping, Master at `level`. */
+async function loadStudio(page, template, level) {
+  await page.evaluate(async (id) => {
+    const a = window.OSCILLA.app;
+    const s = window.OSCILLA.studio;
+    if (s.transport && s.transport.playing) await a.studioStop();
+    a.alerts = [];
+    if (a.workspace !== 'studio') a.setWorkspace('studio');
+    a.studioLoadTemplate(id);
+  }, template);
+  await until(() => page.evaluate(() => document.querySelector('#osc-app').dataset.mode
+    === 'studio'), { ms: 15000, what: `${template}: the Studio workspace is shown` });
+  return page.evaluate((v) => {
+    const store = window.OSCILLA.studio.store;
+    const m = store.getModel();
+    // The timeline loops: at its end the transport stops and gives the level back mid-check.
+    const end = Math.max(0, ...m.timeline.clips.map((c) => c.start + c.duration));
+    const actions = [{ type: 'NODE_PARAM_SET', nodeId: 'master-1', key: 'level', value: v }];
+    if (end > 0) actions.push({ type: 'LOOP_SET', enabled: true, start: 0, end });
+    for (const action of actions) {
+      const r = store.dispatch(action);
+      if (!r.ok) throw new Error(`${action.type}: ${r.reason}`);
+    }
+    return { playground: window.OSCILLA.app.gainLevel, end };
+  }, level);
+}
+
+/** PLAY from the Studio's own button, until the engine plays at the Studio's level. */
+async function playStudio(page, level, what) {
+  await page.click('[data-osc="studio.play"]');
+  await until(() => page.evaluate((v) => {
+    const e = window.OSCILLA.engine;
+    return window.OSCILLA.studio.transport.playing && Math.abs(e.gainLevel - v) < 1e-9
+      && Math.abs(e.master.gain.value - v) < 1e-3;
+  }, level), { ms: 15000, what });
+}
+
+const engineLevel = (page) => page.evaluate(() => {
+  const e = window.OSCILLA.engine;
+  return { gainLevel: e.gainLevel, master: e.master.gain.value, writes: e.masterWrites,
+    playing: window.OSCILLA.studio.transport.playing, time: e.ctx.currentTime };
+});
+
+const statusBar = (page) => page.evaluate(() => {
+  const q = (k) => document.querySelector(`[data-osc="status.${k}"]`);
+  const shown = (el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility
+    !== 'hidden';
+  return { label: q('label').textContent.trim(), labelShown: shown(q('label')),
+    dot: q('state').classList.contains('is-playing'), gain: q('gain').textContent.trim(),
+    gainShown: shown(q('gain')), pattern: q('pattern').textContent.trim(),
+    playPressed: q('play').getAttribute('aria-pressed'),
+    engine: window.OSCILLA.engine.gainLevel, app: window.OSCILLA.app.gainLevel,
+    playing: window.OSCILLA.studio.transport.playing };
+});
+
+async function studioLevelSurvivesGesture(key, page) {
+  const STUDIO = 0.02;
+  const { playground } = await loadStudio(page, 'subtractive-synth', STUDIO);
+  check(key, 'studio-level-survives-gesture: the levels differ before PLAY',
+    !near(playground, STUDIO, 1e-3), `Playground ${playground}, Studio ${STUDIO}`);
+  await playStudio(page, STUDIO, 'studio-level-survives-gesture: PLAY at the Master level');
+  const before = await engineLevel(page);
+  // A plain pointerdown on the Master node's title and a keydown: the capture-phase unlock
+  // listener runs ensureAudio for both (main.js).
+  await page.click('.osc-sg-node[data-node-id="master-1"] .osc-sg-title');
+  await page.keyboard.press('Shift');
+  // A level write would glide master.gain (tau 20 ms); 150 ms of audio clock shows it.
+  const after = await until(() => engineLevel(page).then((v) => (v.time > before.time + 0.15
+    ? v : null)), { ms: 10000, what: 'studio-level-survives-gesture: 150 ms after the gesture' });
+  check(key, 'studio-level-survives-gesture: the Studio still plays after the gesture',
+    after.playing, JSON.stringify(after));
+  check(key, 'studio-level-survives-gesture: engine.gainLevel keeps the Master Output level',
+    near(after.gainLevel, STUDIO, 1e-9), `${after.gainLevel} (was ${before.gainLevel}; `
+      + `${after.writes - before.writes} write(s) during the gesture)`);
+  check(key, 'studio-level-survives-gesture: master.gain stays at the Master Output level',
+    near(after.master, STUDIO, 2e-3), `${f(after.master, 4)}, Playground ${playground}`);
+  await page.evaluate(() => window.OSCILLA.app.studioStop());
+  const stopped = await until(() => engineLevel(page).then((v) => (!v.playing
+    && near(v.gainLevel, playground, 1e-9) ? v : null)).catch(() => null),
+  { ms: 10000, what: 'studio-level-survives-gesture: STOP gives the Playground level back' })
+    .catch(() => null);
+  check(key, 'studio-level-survives-gesture: STOP gives the Playground level back',
+    !!stopped, stopped ? `${stopped.gainLevel}` : JSON.stringify(await engineLevel(page)));
+}
+
+async function statusBarStudio(key, page) {
+  const STUDIO = 0.05;
+  const { playground } = await loadStudio(page, 'subtractive-synth', STUDIO);
+  await playStudio(page, STUDIO, 'status-bar-studio: PLAY at the Master level');
+  const want = `Master ${dbText(STUDIO)}`;
+  const on = await until(() => statusBar(page).then((v) => (v.label === 'PLAYING'
+    && v.gain === want ? v : null)), { ms: 5000, what: 'status-bar-studio: PLAYING and Master' })
+    .catch(() => null);
+  const bar = on || await statusBar(page);
+  check(key, 'status-bar-studio: the visible state says PLAYING with the playing dot',
+    bar.labelShown && bar.label === 'PLAYING' && bar.dot, JSON.stringify(bar));
+  check(key, `status-bar-studio: the visible readout is the level in effect (${want})`,
+    bar.gainShown && bar.gain === want && near(bar.engine, STUDIO, 1e-9), JSON.stringify(bar));
+  check(key, 'status-bar-studio: the pattern readout names the Studio', bar.pattern === 'Studio',
+    bar.pattern);
+  check(key, 'status-bar-studio: the status Play button stays the instrument\'s (ADR 0050)',
+    bar.playPressed === 'false', `aria-pressed=${bar.playPressed}`);
+  // The Playground gain set while the Studio plays is the newer level: shown as such.
+  const PLAYGROUND = 0.03;
+  await page.evaluate((g) => { window.OSCILLA.app.gainLevel = g; }, PLAYGROUND);
+  const wantGain = `Gain ${dbText(PLAYGROUND)}`;
+  const set = await until(() => statusBar(page).then((v) => (v.gain === wantGain ? v : null)),
+    { ms: 5000, what: 'status-bar-studio: a Playground gain while playing' }).catch(() => null);
+  const sb = set || await statusBar(page);
+  check(key, `status-bar-studio: a Playground gain set while playing reads ${wantGain}`,
+    sb.gain === wantGain && near(sb.engine, PLAYGROUND, 1e-9) && sb.playing, JSON.stringify(sb));
+  await page.evaluate(() => window.OSCILLA.app.studioStop());
+  const off = await until(() => statusBar(page).then((v) => (!v.playing && v.label !== 'PLAYING'
+    && !v.dot && v.gain === wantGain ? v : null)), { ms: 10000,
+    what: 'status-bar-studio: the state after STOP' }).catch(() => null);
+  const ob = off || await statusBar(page);
+  check(key, 'status-bar-studio: after STOP the state is not PLAYING and reads the Playground gain',
+    !!off, JSON.stringify(ob));
+  await page.evaluate((g) => { window.OSCILLA.app.gainLevel = g; }, playground);
+}
+
+async function runApp(browserName) {
+  const key = browserName;
+  const browser = await playwright[browserName].launch(LAUNCH[browserName]);
+  const context = await browser.newContext({ viewport: { width: 1536, height: 1024 } });
+  const page = await context.newPage();
+  page.setDefaultTimeout(15000);
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(`console: ${m.text()}`); });
+  console.log(`\n${key} app (dist/index.html)`);
+  try {
+    await page.goto(pathToFileURL(DIST).href, { waitUntil: 'load' });
+    await page.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
+    await page.mouse.click(5, 300); // a user gesture so the audio context may start
+    await page.evaluate(() => { const a = window.OSCILLA.app; a.alerts = [];
+      if (!a.safetyCollapsed) a.collapseSafety(); });
+    for (const fn of [studioLevelSurvivesGesture, statusBarStudio]) {
+      try {
+        await fn(key, page);
+      } catch (err) {
+        check(key, `${fn.name} completed`, false, err && err.message);
+      }
+    }
+    check(key, 'app: no console errors', errors.length === 0, errors.join(' | '));
+  } finally {
+    try {
+      await page.evaluate(() => window.OSCILLA.app.studioStop());
+    } catch { /* page gone */ }
+    await browser.close();
+  }
+}
+
 (async () => {
   await RUN.ready();
+  if (!fs.existsSync(DIST)) {
+    console.error(`missing ${DIST}: run npm run build`);
+    process.exit(2);
+  }
   const r = await esbuild.build({ entryPoints: [ENTRY], bundle: true, format: 'iife',
     write: false, target: 'es2020', logLevel: 'silent' });
   const html = HTML(r.outputFiles[0].text);
@@ -248,7 +426,10 @@ async function runOne(browserName, url) {
   fs.writeFileSync(file, html);
   console.log(`fixture: ${pathToFileURL(file).href} (${(html.length / 1024).toFixed(1)} kB)`);
   try {
-    for (const b of BROWSERS) await runOne(b, pathToFileURL(file).href);
+    for (const b of BROWSERS) {
+      if (!APP_ONLY) await runOne(b, pathToFileURL(file).href);
+      await runApp(b);
+    }
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

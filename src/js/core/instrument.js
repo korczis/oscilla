@@ -379,7 +379,11 @@ export function createInstrument(deps = {}) {
       if (!AudioEngine.isSupported()) { this.status = 'ERROR'; return false; }
       // A context closed from outside is rebuilt by init(); treat that like a first start.
       const first = !engine.ctx || engine.state === 'closed';
-      engine.setMasterGain(this.gainLevel); // a new context starts at the requested level
+      // A new context starts at the requested level: init() builds master.gain from it. Only
+      // then: main.js calls ensureAudio on every pointerdown and keydown, and a write on a
+      // running context would replace the level the Studio's Master Output set while it plays
+      // (C012, engine-sync-2). The gainLevel $watch in main.js keeps a running engine in step.
+      if (first) engine.setMasterGain(this.gainLevel);
       if (!engine.init()) { this.status = 'ERROR'; return false; }
       this.sampleRate = engine.sampleRate;
       this.audioState = engine.state;
