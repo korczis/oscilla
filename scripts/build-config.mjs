@@ -73,9 +73,10 @@ export const BUILD_TIME_ASSETS = ['flowbite', 'lucide-static', 'tailwindcss'];
 // flowbite components (drawer, dropdown, collapse, tooltip, tabs, with @popperjs/core) into the
 // app script, within the budget. Both sides are measured as verify-dist and size-report measure
 // (bytes, and node:zlib gzipSync at level 9): before (main 9de0108)
-// 2 825 605 B raw / 818 005 B gzip, after 2 885 512 B raw / about 831 850 B gzip
-// (+59 907 B raw, about +13 845 B gzip): about 9 KB of compiled CSS, 47 KB of components
-// and 3 KB of licence text in the notice. The gzip figure is "about" because this file is an
+// 2 825 605 B raw / 818 005 B gzip, after 2 888 466 B raw / about 832 250 B gzip
+// (+62 861 B raw, about +14 245 B gzip): about 12 KB of compiled CSS (the classes the five
+// components add at run time included), 47 KB of components and 3 KB of licence text in the
+// notice. The gzip figure is "about" because this file is an
 // input of the source digest that dist carries: writing a figure here changes the digest and so
 // moves gzip by a few bytes (raw does not move: the digest has a fixed length).
 export const BUDGET = {
