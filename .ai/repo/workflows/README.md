@@ -23,3 +23,6 @@ and the workflows show when to apply them.
 | [`task-lifecycle.md`](task-lifecycle.md) | every session: start, orient, checkpoint, check, hand over or finish |
 | [`plan.md`](plan.md) | the repository has a plan under `../project/` and work is taken from it |
 | [`continuity.md`](continuity.md) | resuming after a session ended, or leaving work for one that has not begun |
+
+Landing several ready pull requests in one CI run and one merge commit (a merge train) is a
+skill, not a workflow: [`merge-train`](../skills/merge-train/SKILL.md) (ADR 0055).
