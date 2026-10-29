@@ -17,8 +17,17 @@ Oscillator → Filter → Gain → Pan, five Mixers into a sixth, the Master Out
 One copy, `PERF_BUDGETS` and `BROWSER_BUDGETS` in the fixture module, used by the tests and
 checked against this table by `tests/unit/v31-studio-docs.test.mjs`. A budget is what an
 interaction may cost: one 60 Hz frame (16.7 ms) for what a single gesture commits, a few frames
-for whole-document work. The times below (the fastest of the repeats) are 10-100 times under them, so a budget fails on a
-real regression (an accidental O(n²) per action), not on a slower CI runner.
+for whole-document work. The times below (the fastest of the repeats) are about 8 times
+(build) to several hundred times under them on a quiet machine, so a budget fails on a real
+regression (an accidental O(n²) per action), not on a slower CI runner. The headroom shrinks
+under load: build measured 281 ms of its 1000 at a load of 60 on the shared Mac (2026-10-28).
+
+An operation whose fastest repeat is over its budget is re-measured in further batches,
+keeping the running minimum, until it is within budget or `REMEASURE_DEADLINE_MS` (20 s, wall
+clock) passes; all operations together share `TOTAL_DEADLINE_MS` (60 s), so the file stays
+well inside fail-first's 180 s per-file timeout. A failure names the minimum, the batch count
+and the load. This narrows the load flake and does not remove it: when the load starves the CPU
+(build missed its budget by 28 ms at a load of 90.7), more batches do not help.
 
 <!-- budgets:begin -->
 | Operation (fastest repeat) | Budget (ms) |
