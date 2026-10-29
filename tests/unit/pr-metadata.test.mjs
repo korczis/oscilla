@@ -670,6 +670,21 @@ test('mutation: a workflow that writes, misses an event or can no longer refuse'
     ['exit with a status of its own', mutate(WORKFLOW, guard,
       `${guard}          [ -n "$SKIP" ] && exit "$s"\n`), /^an early or forced/],
     ['|| :', mutate(WORKFLOW, 'sleep 10\n', 'sleep 10 || :\n'), /^an early or forced/],
+    // review of #255, round 2 (R7): bash exits with the status modulo 256, and exec replaces
+    // the step's shell, so whatever it starts ends the step
+    ['exit 256', mutate(WORKFLOW, guard, `${guard}          [ -n "$SKIP" ] && exit 256\n`),
+      /^an early or forced/],
+    ['exec true', mutate(WORKFLOW, guard, `${guard}          [ -n "$SKIP" ] && exec true\n`),
+      /^an early or forced/],
+    // the concurrency of the model, each part alone (R8: the rework had dropped these)
+    ['one concurrency group', mutate(WORKFLOW,
+      '  group: metadata-${{ github.event.pull_request.number }}\n', '  group: metadata\n'),
+    /^concurrency is/],
+    ['no cancel-in-progress', mutate(WORKFLOW, '  cancel-in-progress: true\n',
+      '  cancel-in-progress: false\n'), /^concurrency is/],
+    ['no concurrency', mutate(WORKFLOW, '\nconcurrency:\n'
+      + '  group: metadata-${{ github.event.pull_request.number }}\n'
+      + '  cancel-in-progress: true\n', '\n'), /^concurrency is/],
   ]) {
     const problems = workflowModelProblems(text, MODEL_TEXT);
     assert.notDeepEqual(problems, [], name);
@@ -679,8 +694,14 @@ test('mutation: a workflow that writes, misses an event or can no longer refuse'
   assert.deepEqual(workflowModelProblems(WORKFLOW, 'schema: x\n'),
     ['the model has no judge: block']);
   // a failing exit and a retry loop are not forced successes
-  for (const line of ['exit 1', '{ echo x; exit 1; }', 'gh api --exit-status x', 'a || echo b']) {
+  for (const line of ['exit 1', '{ echo x; exit 1; }', 'gh api --exit-status x', 'a || echo b',
+    'exit 255', 'exit 257', '[ "$n" -lt 3 ] || { echo x; exit 1; }', 'gh --exec-path x']) {
     assert.equal(FORCED_SUCCESS.test(line), false, line);
+  }
+  for (const line of ['exit', 'exit 0', 'exit 00', 'exit 256', 'exit 512', 'exit 4294967296',
+    'exit "$s"', 'exec true', 'exec "$@"', 'x && exec node y', 'trap \'exit 0\' EXIT',
+    'set +e', 'a || true', 'a || :']) {
+    assert.equal(FORCED_SUCCESS.test(line), true, line);
   }
   // the order of the permission keys means nothing to GitHub, so it means nothing here
   const swapped = mutate(WORKFLOW, '  contents: read\n  pull-requests: read\n',

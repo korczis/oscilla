@@ -62,6 +62,48 @@ test('a tag named origin/main shadows nothing: it is refused as ambiguous', (t) 
   assert.throws(() => commitOf(repo.dir, base), /refs\/heads\/[0-9a-f]{40} has the same name/);
 });
 
+// review of #255, round 2. R13: a ref name may hold characters outside [\w./-] ('+', '@',
+// non-ASCII), and such a name was handed to git's own lookup, tags first. R14: the existence
+// check of a full ref name and the peel to a commit each had no test that failed without them.
+test('a name with any character a ref may hold is checked like any other (R13)', (t) => {
+  const { repo, base, head } = fixture(t);
+  for (const short of ['origin/a+b', 'origin/r@1', 'origin/výstup', 'origin/a,b', 'origin/a=b']) {
+    repo.git('update-ref', `refs/remotes/${short}`, base);
+    assert.equal(commitOf(repo.dir, short), base, short);
+    assert.equal(commitOf(repo.dir, `refs/remotes/${short}`), base, short);
+    repo.git('tag', short, head);
+    assert.equal(repo.git('rev-parse', `${short}^{commit}`), head, `git takes the tag: ${short}`);
+    for (const ref of [short, `refs/remotes/${short}`, `${short}~0`, `${short}^0`]) {
+      assert.throws(() => commitOf(repo.dir, ref), /is ambiguous: refs\/tags\//, ref);
+    }
+  }
+  // an expression on a name that one ref answers is that ref's commit, moved as it says
+  assert.equal(commitOf(repo.dir, 'pr~1'), base);
+  assert.equal(commitOf(repo.dir, 'refs/remotes/origin/main^0'), base);
+});
+
+test('a full ref name must exist as itself, and names a commit (R14)', (t) => {
+  const { repo, base, head } = fixture(t);
+  // refs/tags/refs/remotes/origin/ghost: git's lookup finds it for refs/remotes/origin/ghost
+  repo.git('tag', 'refs/remotes/origin/ghost', head);
+  assert.equal(repo.git('rev-parse', 'refs/remotes/origin/ghost^{commit}'), head);
+  assert.throws(() => commitOf(repo.dir, 'refs/remotes/origin/ghost'),
+    /refs\/remotes\/origin\/ghost does not exist \(git show-ref --verify\)/);
+  assert.throws(() => commitOf(repo.dir, 'refs/remotes/origin/nope'), /does not exist/);
+  // an annotated tag is peeled to its commit, by its ref or by its object's full name
+  repo.git('tag', '-a', '-m', 'release', 'rel', base);
+  const tag = repo.git('rev-parse', 'refs/tags/rel');
+  assert.notEqual(tag, base);
+  repo.git('update-ref', 'refs/remotes/origin/rel', tag);
+  assert.equal(commitOf(repo.dir, 'refs/remotes/origin/rel'), base);
+  assert.equal(commitOf(repo.dir, tag), base);
+  // a ref to a tree names no commit
+  const tree = repo.git('rev-parse', `${base}^{tree}`);
+  repo.git('update-ref', 'refs/remotes/origin/tree', tree);
+  assert.throws(() => commitOf(repo.dir, 'refs/remotes/origin/tree'), /names no commit/);
+  assert.throws(() => commitOf(repo.dir, tree), /names no commit/);
+});
+
 test('the three programs refuse a shadowed base of their own accord', (t) => {
   const { repo, head } = fixture(t);
   repo.git('tag', 'origin/main', head);

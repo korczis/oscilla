@@ -496,6 +496,64 @@ test('mutation: a rule job whose call can no longer refuse', () => {
   assert.match(problemsOfRuleJob(ff, 'x').join('\n'), /the last command is not the call/);
 });
 
+// R12 (review of #255): the fail-first job ran `npm ci` on the pull request's checkout before
+// base-rule.sh, so the PR's postinstall ran first and could replace the program that judges
+// it, or reach the judge through $GITHUB_ENV and $GITHUB_PATH. In a job that runs base-rule.sh,
+// nothing before the call may run the pull request's code (rule `judge-first`).
+const judgeFirst = (violations) => rules(violations).filter((r) => r.startsWith('judge-first'));
+const INSTALL_FF = '      - run: npm ci --ignore-scripts\n';
+
+test('R12: a judge job runs no code of the pull request before the judge', () => {
+  assert.deepEqual(rules(ci(CI)), []);
+  assert.equal(CI.split(INSTALL_FF).length, 2, 'fail-first installs without lifecycle scripts');
+  const ff = (run) => ci(mutate(CI, INSTALL_FF, `      - run: ${run}\n`));
+  for (const run of ['npm ci', 'npm install', 'npm i', 'npm ci --ignore-scripts=false',
+    'sudo npm ci', 'FOO=1 npm ci', 'env FOO=1 npm ci', 'npm ci --ignore-scripts && npm test',
+    'npm ci --ignore-scripts; node scripts/x.mjs', 'npm run build', 'npm test',
+    'npm exec esbuild', 'npx esbuild --version', 'yarn install', 'pnpm install --ignore-scripts',
+    'corepack enable', 'node scripts/size-report.mjs', 'node -e 1', 'x="$(node -p 1)"',
+    'bash scripts/x.sh', 'sh -c true', '. ./env.sh', 'source env.sh', './x.sh',
+    'scripts/x.sh', 'make', 'just test', 'python3 tools/x.py']) {
+    const found = ff(run);
+    assert.deepEqual(judgeFirst(found), ['judge-first@fail-first'], run);
+    assert.match(found.find((v) => v.rule === 'judge-first').message,
+      /runs code of the pull request before \.github\/scripts\/base-rule\.sh/, run);
+  }
+  for (const run of ['npm ci --ignore-scripts', 'npm --ignore-scripts ci',
+    'npm ci --no-audit --ignore-scripts=true', 'echo "npm ci then node x"', 'mkdir -p logs',
+    'git log -1', 'command -v node', '/usr/bin/env', '$RUNNER_TEMP/tool --version']) {
+    assert.deepEqual(judgeFirst(ff(run)), [], run);
+  }
+  // a line of the judge's own step before the call counts as well
+  const loop = '          n=0\n          until gh pr view "$PR" --repo "$GITHUB_REPOSITORY"'
+    + ' --json title,body';
+  assert.deepEqual(judgeFirst(ci(mutate(CI, loop, `          npm test\n${loop}`))),
+    ['judge-first@fail-first']);
+  // what runs after the judge has no say in the judgement
+  const end = '            --base-branch "refs/remotes/origin/$GITHUB_BASE_REF"\n\n'
+    + '  review-verdict:\n';
+  const after = mutate(CI, end, end.replace('\n\n', '\n      - run: npm test\n\n'));
+  assert.deepEqual(judgeFirst(ci(after)), []);
+  // review-verdict installs nothing; an install or a local action before its judge is refused
+  const rv = '      - name: A guarded change carries a verdict for the content it changes\n';
+  assert.deepEqual(judgeFirst(ci(mutate(CI, rv, `      - run: npm ci\n${rv}`))),
+    ['judge-first@review-verdict']);
+  assert.deepEqual(judgeFirst(ci(mutate(CI, rv, `      - uses: ./.github/actions/setup\n${rv}`))),
+    ['judge-first@review-verdict']);
+  // a job that judges nothing may run what it likes
+  assert.deepEqual(judgeFirst(ci(withStep('npm ci\nnode scripts/x.mjs'))), []);
+  // and metadata.yml, which installs nothing either
+  const META = read('.github/workflows/metadata.yml');
+  const meta = (text) => checkWorkflow('.github/workflows/metadata.yml', text, SUITES);
+  const judge = '      - name: The pull request names its plan record (the base branch\'s'
+    + ' program judges)\n';
+  assert.deepEqual(rules(meta(META)), []);
+  assert.deepEqual(judgeFirst(meta(mutate(META, judge, `      - run: npm ci\n${judge}`))),
+    ['judge-first@metadata']);
+  assert.deepEqual(judgeFirst(meta(mutate(META, judge,
+    `      - run: node scripts/pr-metadata.mjs --help\n${judge}`))), ['judge-first@metadata']);
+});
+
 test('mutation: an install behind an npm script', (t) => {
   for (const [name, cmd] of [['browsers', 'playwright install --with-deps chromium'],
     ['postinstall', 'npx playwright install --with-deps'],

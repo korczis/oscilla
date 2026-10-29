@@ -7,10 +7,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync }
+  from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseYaml } from '../../scripts/yaml-subset.mjs';
 import { gitRepo } from './fixtures/git-repo.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -200,4 +202,171 @@ test('a program started through a symlinked directory still runs, not exit 0 unr
   const rules = spawnSync(process.execPath, [path.join(dir, 'scripts', 'ci-workflow-rules.mjs')],
     { encoding: 'utf8', env: ENV });
   assert.match(rules.stdout + rules.stderr, /project\.ci-bounded:/);
+});
+
+// R12 (review of #255): the fail-first job ran `npm ci` on the pull request's checkout before
+// the step that calls base-rule.sh, so the pull request's own postinstall ran first: it could
+// rewrite base-rule.sh, put a node of its own on $GITHUB_PATH or a NODE_OPTIONS on $GITHUB_ENV,
+// and its own program judged. Here every job of ci.yml and metadata.yml that runs base-rule.sh
+// is run as the runner runs it, its `run` steps in order up to the judge's, each through
+// `bash -eo pipefail`, with what a step writes to $GITHUB_ENV and $GITHUB_PATH applied to the
+// steps after it, on a fixture whose pull request carries such a postinstall.
+const WRAPPER_REL = '.github/scripts/base-rule.sh';
+const HOSTILE_SH = String.raw`#!/bin/sh
+# what a pull request's postinstall can do to the job that judges it (review of #255, R12)
+for vector in "$@"; do
+  case "$vector" in
+    wrapper)
+      printf '#!/bin/sh\necho "HOSTILE wrapper"\nexit 0\n' > .github/scripts/base-rule.sh ;;
+    path)
+      mkdir -p "$PWD/.hostile"
+      printf '#!/bin/sh\necho "HOSTILE node"\nexit 0\n' > "$PWD/.hostile/node"
+      chmod +x "$PWD/.hostile/node"
+      echo "$PWD/.hostile" >> "$GITHUB_PATH" ;;
+    env) echo "NODE_OPTIONS=--require $PWD/hostile.cjs" >> "$GITHUB_ENV" ;;
+  esac
+done
+`;
+const LOCK = (name) => `${JSON.stringify({ name, version: '1.0.0', lockfileVersion: 3,
+  requires: true, packages: { '': { name, version: '1.0.0' } } }, null, 2)}\n`;
+const PKG = (scripts) => `${JSON.stringify({ name: 'fixture', version: '1.0.0', private: true,
+  scripts }, null, 2)}\n`;
+
+/** main: the real programs and wrapper, a package; the PR: a hostile postinstall, no more. */
+function hostileFixture(t, vectors) {
+  const repo = gitRepo('oscilla-base-rule-r12-');
+  t.after(() => repo.dispose());
+  repo.commit('base', {
+    ...Object.fromEntries(PROGRAMS.map((p) => [p, real(p)])),
+    [WRAPPER_REL]: real(WRAPPER_REL),
+    'package.json': PKG({}),
+    'package-lock.json': LOCK('fixture'),
+    'README.md': 'fixture\n',
+  });
+  chmodSync(path.join(repo.dir, WRAPPER_REL), 0o755);
+  repo.commit('the wrapper is executable', {});
+  repo.git('update-ref', BASE, 'main');
+  repo.branch('pr');
+  const head = repo.commit('feat: nothing to see', {
+    'package.json': PKG({ postinstall: `sh hostile.sh ${vectors.join(' ')}` }),
+    'hostile.sh': HOSTILE_SH,
+    'hostile.cjs': "console.log('HOSTILE hook');\nprocess.exit(0);\n",
+  });
+  return { repo, head };
+}
+
+/** Every job that runs base-rule.sh, with its steps up to and including the judge's. */
+function judgeJobs() {
+  const out = [];
+  for (const wf of ['.github/workflows/ci.yml', '.github/workflows/metadata.yml']) {
+    const doc = parseYaml(real(wf));
+    for (const [name, job] of Object.entries(doc.jobs)) {
+      const steps = job.steps || [];
+      const i = steps.findIndex((s) => typeof s.run === 'string' && s.run.includes(WRAPPER_REL));
+      if (i < 0) continue;
+      const program = /scripts\/[\w-]+\.mjs/.exec(steps[i].run.split(WRAPPER_REL)[1])[0];
+      out.push({ wf, name, program, env: { ...doc.env, ...job.env },
+        steps: steps.slice(0, i + 1) });
+    }
+  }
+  return out;
+}
+
+/**
+ * Run a job's steps on the fixture as the runner would, `before` (shell texts) ahead of them.
+ * The actions (checkout, setup-node) are what the fixture already is. Returns the status and
+ * output of the last step that ran.
+ */
+function runJob(t, repo, head, job, { before = [] } = {}) {
+  const tmp = mkdtempSync(path.join(os.tmpdir(), 'oscilla-runner-'));
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const bin = path.join(tmp, 'bin');
+  mkdirSync(bin);
+  const prJson = path.join(tmp, 'event-pr.json');
+  writeFileSync(prJson, JSON.stringify({ number: 42, title: 'feat(x): nothing to see',
+    body: '', headRefName: 'pr' }));
+  writeFileSync(path.join(bin, 'gh'), `#!/bin/sh\ncat "${prJson}"\n`);
+  chmodSync(path.join(bin, 'gh'), 0o755);
+  writeFileSync(path.join(tmp, 'npmrc'), '');
+  const context = {
+    'github.token': 'fixture-token',
+    'github.event.pull_request.number': '42',
+    'github.event.pull_request.head.sha': head,
+  };
+  const expand = (v) => String(v).replace(/\$\{\{\s*([^}]*?)\s*\}\}/g, (_, e) => {
+    assert.ok(e in context, `${job.name}: the simulation knows the expression ${e}`);
+    return context[e];
+  });
+  const expandAll = (o) => Object.fromEntries(Object.entries(o || {})
+    .map(([k, v]) => [k, expand(v)]));
+  // the job's environment, without anything of this test run's own npm (npm test sets
+  // npm_config_local_prefix and friends, which would point npm ci at this checkout)
+  const env = Object.fromEntries(Object.entries(ENV).filter(([k]) => !/^npm_|^INIT_CWD$/i.test(k)
+    && k !== 'NODE_OPTIONS'));
+  Object.assign(env, {
+    GITHUB_BASE_REF: 'main', GITHUB_REPOSITORY: 'fixture/oscilla', RUNNER_TEMP: tmp,
+    GITHUB_STEP_SUMMARY: path.join(tmp, 'summary.md'),
+    npm_config_cache: path.join(tmp, 'npm-cache'), npm_config_userconfig: path.join(tmp, 'npmrc'),
+    npm_config_audit: 'false', npm_config_fund: 'false', npm_config_update_notifier: 'false',
+    npm_config_offline: 'true',
+  });
+  const steps = [...before.map((run) => ({ run })), ...job.steps];
+  let added = {};
+  let paths = [bin];
+  let last = null;
+  steps.forEach((step, k) => {
+    if (last && last.status !== 0) return; // a failed step ends the job
+    if (typeof step.run !== 'string') {
+      assert.ok(!String(step.uses).startsWith('./'), `${job.name}: no local action to simulate`);
+      return;
+    }
+    const files = { GITHUB_ENV: path.join(tmp, `env-${k}`),
+      GITHUB_PATH: path.join(tmp, `path-${k}`) };
+    for (const f of Object.values(files)) writeFileSync(f, '');
+    const script = path.join(tmp, `step-${k}.sh`);
+    writeFileSync(script, expand(step.run));
+    const r = spawnSync('bash', ['--noprofile', '--norc', '-eo', 'pipefail', script], {
+      cwd: repo.dir, encoding: 'utf8',
+      env: { ...env, ...expandAll(job.env), ...expandAll(step.env), ...added, ...files,
+        PATH: [...paths, ENV.PATH].join(path.delimiter) },
+    });
+    last = { status: r.status, out: `${r.stdout}${r.stderr}` };
+    // what the runner does between steps: $GITHUB_ENV sets, $GITHUB_PATH prepends
+    for (const line of readFileSync(files.GITHUB_ENV, 'utf8').split('\n')) {
+      const m = /^([A-Za-z_]\w*)=(.*)$/.exec(line);
+      if (m) added = { ...added, [m[1]]: m[2] };
+    }
+    paths = [...readFileSync(files.GITHUB_PATH, 'utf8').split('\n').filter(Boolean).reverse(),
+      ...paths];
+  });
+  return last;
+}
+
+const STATUS = { 'scripts/fail-first.mjs': 1, 'scripts/pr-metadata.mjs': 1,
+  'scripts/review-verdict.mjs': 0 };
+
+test('R12: a PR\'s postinstall can no longer change what judges it, in any judge job', (t) => {
+  const jobs = judgeJobs();
+  assert.deepEqual(jobs.map((j) => `${j.wf}:${j.name}`).sort(), [
+    '.github/workflows/ci.yml:fail-first', '.github/workflows/ci.yml:review-verdict',
+    '.github/workflows/metadata.yml:metadata']);
+  // the control: with a plain `npm ci` before the judge, each vector alone takes it over
+  const ff = jobs.find((j) => j.name === 'fail-first');
+  for (const vector of ['wrapper', 'path', 'env']) {
+    const { repo, head } = hostileFixture(t, [vector]);
+    const plain = { ...ff, steps: ff.steps.filter((s) => !/^\s*npm ci\b/.test(s.run || '')) };
+    const r = runJob(t, repo, head, plain, { before: ['npm ci'] });
+    assert.equal(r.status, 0, `${vector}: ${r.out}`);
+    assert.match(r.out, /HOSTILE/, `${vector}: the attack is real`);
+  }
+  // every judge job as it is: the postinstall does not run, the base's program judges
+  for (const job of jobs) {
+    const { repo, head } = hostileFixture(t, ['wrapper', 'path', 'env']);
+    const r = runJob(t, repo, head, job);
+    assert.doesNotMatch(r.out, /HOSTILE/, `${job.name}: ${r.out}`);
+    assert.match(r.out, judged(job.program.slice(8, -4)), `${job.name}: ${r.out}`);
+    assert.equal(r.status, STATUS[job.program], `${job.name}: ${r.out}`);
+    assert.equal(readFileSync(path.join(repo.dir, WRAPPER_REL), 'utf8'), real(WRAPPER_REL),
+      `${job.name}: the wrapper is the committed one`);
+  }
 });

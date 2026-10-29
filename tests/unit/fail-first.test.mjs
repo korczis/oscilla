@@ -231,6 +231,15 @@ test('a waiver is a line of the body\'s own prose, its reason not the placeholde
     'a blockquote\'s lazy continuation': '> Quoted\nfail-first: n/a docs-only\n',
     'a code span': '`fail-first: n/a docs-only`\n',
     'a fence indented 3 spaces': '   ```\nfail-first: n/a docs-only\n   ```\n',
+    // review of #255, round 2: a code span across the lines of a paragraph (R5), a fence in a
+    // list item, indented 4 (R15), and a reason written only in code (R16)
+    'a code span across lines': 'See `x\nfail-first: n/a docs-only` here.\n',
+    'a code span across lines, in a list': '- See ``a\n  fail-first: n/a docs-only`` here.\n',
+    'a fence in a list item': '- Output:\n\n    ```\n    fail-first: n/a docs-only\n    ```\n',
+    'a tab-indented fence in a list item': '1. Output:\n\n\t~~~\n\tfail-first: n/a docs\n\t~~~\n',
+    'a placeholder in code': 'fail-first: n/a `<reason>`\n',
+    'punctuation in code': 'fail-first: n/a `...`\n',
+    'a reason only in code': 'fail-first: n/a `docs-only`\n',
   };
   for (const [what, body] of Object.entries(refused)) {
     const r = run(repo, title, body);
@@ -248,6 +257,9 @@ test('a waiver is a line of the body\'s own prose, its reason not the placeholde
     '```js x``` is inline.\nfail-first: n/a docs-only\n',
     '> Quoted\n- fail-first: n/a docs-only\n',
     '- Tidy.\n\n    fail-first: n/a docs-only\n',
+    // a code span that closes before the waiver's line, and code beside a reason of words
+    'See `x\ny` here.\nfail-first: n/a docs-only\n',
+    'fail-first: n/a the `--keep` flag only prints a path\n',
   ];
   for (const body of accepted) {
     const r = run(repo, title, body);
@@ -257,6 +269,14 @@ test('a waiver is a line of the body\'s own prose, its reason not the placeholde
   assert.equal(waiver('fail-first: n/a <reason>').reason, '');
   assert.equal(waiver('fail-first: n/a x').reason, 'x');
   assert.equal(waiver('```\nfail-first: n/a x\n```'), null);
+  // inline code is no reason (R16), and is printed as it was written
+  for (const body of ['fail-first: n/a `<reason>`', 'fail-first: n/a `x` `y`',
+    'fail-first: n/a ``a ` b``']) {
+    assert.equal(waiver(body).reason, '', body);
+  }
+  assert.equal(waiver('fail-first: n/a the `--keep` flag only').reason,
+    'the `--keep` flag only');
+  assert.equal(waiver('See `a\nb` and\nfail-first: n/a `c` d').reason, '`c` d');
 });
 
 test('a test that asks git for the tracked files can be evidence', (t) => {
