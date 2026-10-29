@@ -1,0 +1,38 @@
+id: F012
+milestone: M055
+serves:
+  - "ui-flowbite-pro#no-legacy-chrome"
+  - "ui-flowbite-pro#pro-shell"
+title: "Hold the Pro interface in the gate and register its claims"
+slug: hold-the-pro-interface-in-the-gate-and-register-its-claims
+priority: p2
+profile: implementation
+objective: "Make tests/browser/ui-flowbite-pro.cjs part of the release gate (package.json test:release) in every gate browser and origin; confirm the ratchet debt of tests/unit/ui-flowbite-pro-baseline.json has fallen to the domain views' own residual (no surface pending; no legacy stylesheet but src/styles/studio.css, studio-timeline.css, charts.css and the custom properties of tokens.css they read keeps a selector; every osc-* class still recorded is one a selector of those stylesheets names, under a domain-view prefix and no shell primitive, and every other recorded class one those selectors name) and delete what is left of the legacy chrome (the base reset preflight replaced, the custom properties of src/styles/tokens.css that only chrome read). The domain views' selectors and classes are not debt 0's: ADR 0061 decision 3 keeps their own rendering inside Pro cards, and #250's rule leaves to an owner decision whether they leave the record; they keep their ratchet and never grow. Chrome selectors left in those stylesheets are not residual: F008 removes the Studio's from studio.css and studio-timeline.css, F006 the chart cards' from charts.css, and this issue the chrome-only tokens and the class tokens kept only as hooks that no stylesheet names (osc-stl-hrow--track and the other classes tests/browser/live-smoke.cjs read before F011 moved it to data-osc hooks), from src/index.html and src/js/ui, with a reviewer's verdict if that touches a guarded file (project.review-verdict); register the claims of ui-flowbite-pro in docs/CLAIMS.yaml (pro-build, pro-shell, no-legacy-chrome, pro-accessible, visual-references-pro, licence-clean) with the sources and tests that prove them; point the intent's criteria at those claims; add the browser suite to the rule's Verification section (the plan's pull request, #251, has already put the rule and ADR 0061 in the intent's governance). The evidence that OSCILLA is on Pro is this repository's own: the ratchet (tests/unit/ui-flowbite-pro.test.mjs) holding only the domain views' residual and the browser structure check (tests/browser/ui-flowbite-pro.cjs) asserting the Pro structure of the shell, of each of the twelve workspaces and of each of the 22 dialogs in the rendered page. The owner's verifier (~/.claude/skills/flowbite-pro/verify.mjs) is never evidence here: it lives outside the repository, changes without this repository's review, and on pull request #250's tree (2026-10-28) its S0 did not recognise src/index.html as a UI and reported 'PASS (no UI: S0 false, vacuous pass)'; a later copy (file dated 2026-10-28 23:01) recognises it and reports FAIL with 8 findings on the pre-Pro tree. That file belongs to the dev-68 session, so this plan records the gap and does not edit it. Its output may be quoted on the issue for information, next to the repository's evidence, never in its place."
+why: "The intent is held only when a check fails on regression; the claims make the guarantee visible to the knowledge integrity test."
+scope:
+  - "package.json"
+  - "src/styles"
+  - "src/index.html"
+  - "src/js/ui"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/unit/ui-flowbite-pro.test.mjs"
+  - "docs/CLAIMS.yaml"
+  - ".ai/repo/project/intents/ui-flowbite-pro.yaml"
+  - ".ai/repo/rules/project/ui-uses-flowbite-pro.v1.md"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "F011"
+acceptance_criteria:
+  - "npm run release-gate runs ui-flowbite-pro.cjs in every gate browser and origin and passes."
+  - "The ratchet debt is the domain views' residual and nothing else (the intent's no-legacy-chrome command, whose residual check names studio.css, studio-timeline.css, charts.css and tokens.css, exits 0), and tests/browser/ui-flowbite-pro.cjs asserts the Pro structure of the shell, of each of the twelve workspaces and of each of the 22 dialogs in every gate browser and origin (the intent's no-legacy-chrome command, which runs both, exits 0)."
+  - "docs/CLAIMS.yaml names the six claims with their tests and every ui-flowbite-pro criterion points at its claim; knowledge-integrity passes; majordomus intent validate shows 0 failures."
+  - "The issue's evidence is the ratchet and the browser structure check above; no criterion rests on ~/.claude/skills/flowbite-pro/verify.mjs, whose S0 once passed OSCILLA vacuously (no UI detected)."
+validation:
+  - "npm run release-gate"
+  - "majordomus intent validate"
+  - "node tests/browser/ui-flowbite-pro.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-28
+updated_at: 2026-10-29
