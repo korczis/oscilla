@@ -1,54 +1,54 @@
 # Review verdict for pull request #255, R022: every pull request names its plan record, judged by
-# the base branch (branch feat/r022-pr-metadata-judge). Reviewed head
-# da28149d9e91ccad2db9d557c563a25a93c8f877, merge base origin/main 94192a19 (main's tip). Another
-# builder wrote all of it (oscilla-b0), not me.
+# the base branch (branch feat/r022-pr-metadata-judge). Second round (re-review).
+# Reviewed head dfb5641b6e08, merge base origin/main 94192a19 (main's tip: main has not moved).
+# Round 1 reviewed da28149d and requested changes (d267cb2a). This round reviews what changed
+# since: the R2 test (6abba178) and the fix (dfb5641b). Another builder wrote them (oscilla-b0),
+# not me.
 #
 # The digest: the base branch's scripts/review-verdict.mjs judges this pull request. I ran it from
 # `git archive origin/main scripts` with --repo on this worktree, `--content --list --base-branch
-# origin/main`: 0cab9798...e3b7 over the 8 guarded paths the base list names (base-rule.sh,
-# ci.yml, metadata.yml, ci-workflow-rules.mjs, review-verdict.mjs and three tests). The head's
-# own list adds scripts/pr-metadata.mjs, .ai/repo/ci/pr-meta.yaml and their test (R1).
+# origin/main`: e50e8d9d...85b2 over the 10 guarded paths the base list names.
 #
-# How it was reviewed: five independent lenses, each read-only against this head, and every
-# finding handed to a separate skeptic told to refute it unless it reproduced (20 agents):
-# - review-verdict.mjs against origin/main, line by line, with fixture repositories;
-# - base-vs-head confusion in .github/scripts/base-rule.sh and its three callers;
-# - workflow security of ci.yml and metadata.yml (injection, pull_request_target, token scope,
-#   masked failures);
-# - scripts/pr-metadata.mjs against rule pr-names-its-plan.v1 and pr-meta.yaml;
-# - mutation survival in the guarded tests and in pr-metadata.test.mjs.
+# How it was reviewed: five independent lenses, read-only against this head, and every finding
+# handed to a separate skeptic told to refute it unless it reproduced (13 agents):
+# - attempts to defeat the R2 fix in fixture repositories (a tag origin/main, a tag
+#   refs/remotes/origin/main, a same-named branch, pushed remote refs, sha forms, a hostile
+#   GITHUB_BASE_REF): none defeated it, so R2 is closed;
+# - scripts/git-ref.mjs commitOf and its three callers;
+# - every workflow caller and the size-report exception;
+# - R4-R11 checked by mutation: reintroduce each defect, see whether a test goes red;
+# - regressions for a normal PR, a train, the PR that introduces a program, a non-main base, a fork.
 #
-# Verdict: changes-requested, for one open P1 (R2). base-rule.sh resolves the unqualified name
-# "origin/$GITHUB_BASE_REF", and every caller checks out with fetch-depth 0, which fetches tags.
-# Git looks a short name up in refs/tags/ before refs/remotes/, so a tag named origin/main
-# shadows the base branch: the PR's own program then judges, which disables fail-first,
-# review-verdict and pr-metadata together, for every later PR. Reproduced in a fixture repo
-# ("scripts/review-verdict.mjs of origin/main (<the PR's commit>) judges ... accepted", exit 0).
-# No such tag exists on korczis/oscilla today (git ls-remote --tags: 0 shaped like a branch). The
-# unqualified rev-parse is already on main, so the defect predates this PR, but this PR adds a
-# third caller through it (metadata.yml:66) and touches base-rule.sh, so it is fixed here:
-# resolve refs/remotes/origin/$GITHUB_BASE_REF (or github.event.pull_request.base.sha), pass the
-# same qualified ref as --base/--base-branch, and refuse a ref that is ambiguous or resolves
-# outside refs/remotes/.
-#
-# Four claims were refuted: that base-rule.sh itself runs from the head (it does, but a change to
-# it is a guarded change this verdict binds); that the fallback opens for any base lacking the
-# program; that a plan: n/a waiver is refused for a title holding a term like "EBU R128"; and
-# that the model check accepts a line that repoints origin/<base>.
+# Verdict: changes-requested, for one new open P1 (R12). In the fail-first job (ci.yml:392) `npm ci`
+# runs on the PR's checkout before the step that calls .github/scripts/base-rule.sh, so the PR's
+# own package.json postinstall runs first. A PR that touches no guarded path (package.json,
+# package-lock.json and helpers are not guarded) can overwrite base-rule.sh, or write
+# NODE_OPTIONS to $GITHUB_ENV or a fake node or git to $GITHUB_PATH, so that the PR's own program
+# judges. Reproduced in a fixture: review-verdict says no verdict is needed; base-rule.sh with
+# fail-first refuses before npm ci, and after it prints the PR's "fail-first: proven", exit 0.
+# The review-verdict job installs nothing and is not affected. Like R2 this predates the pull
+# request, but this pull request reworks that job's callers and claims the base branch judges,
+# so it is fixed here: `npm ci --ignore-scripts`, or extract the judge from the base commit before
+# any PR code runs, and keep PR-written $GITHUB_ENV and $GITHUB_PATH away from the judge step.
 schema: review-verdict/v1
 pr: 255
 verdict: changes-requested
 reviewer: prismatic-majordomus-f3 (claude-code 1f47a36e)
-content: 0cab9798050f81267707beb433f317a242d6b530637e407d27c3c9ea2120e3b7
+content: e50e8d9dbe42d7a26857217e07dc2bf3b098814e64546202a465003945b785b2
 findings:
-  - { id: R1, severity: P2, status: open, title: "review-verdict.mjs:87 the new judge (scripts/pr-metadata.mjs), its model (.ai/repo/ci/pr-meta.yaml) and its test are guarded only by the head's list, so the base list that judges this PR leaves them out of the digest: re-check them unchanged since da28149d before merge, or pin the reviewed head" }
-  - { id: R2, severity: P1, status: open, title: "base-rule.sh:23 resolves the unqualified origin/$GITHUB_BASE_REF, so a pushed tag named origin/<base> shadows the base branch and the PR's own program judges (fail-first, review-verdict, pr-metadata); resolve refs/remotes/origin/<base> or the event's base.sha and refuse an ambiguous ref" }
-  - { id: R3, severity: P2, status: open, title: "ci.yml:29 (pre-existing) does not re-run when a PR's base branch changes, so the base-branch rules can be judged by another branch's programs and the green gate carried to main" }
-  - { id: R4, severity: P2, status: open, title: "pr-metadata.mjs:237 the closing-keyword scan skips the rest of any commit message containing an ASCII RS (0x1E)" }
-  - { id: R5, severity: P2, status: open, title: "fail-first.mjs:43 the plan waiver is accepted from text GitHub renders as code or a quote, and refused from visible prose" }
-  - { id: R6, severity: P2, status: open, title: "ci-workflow-rules.mjs:362 the new triggers check can stop checking workflows that have a gate job, and no test notices" }
-  - { id: R7, severity: P2, status: open, title: "pr-metadata.mjs:450 the forced-success check in workflowModelProblems is untested and lets a bare `exit` through" }
-  - { id: R8, severity: P2, status: open, title: "pr-metadata.mjs:433 three workflowModelProblems checks can be deleted without any test failing" }
-  - { id: R9, severity: P2, status: open, title: "pr-metadata.mjs:237 the closing-keyword scan of commits is tested only with single-commit PRs" }
-  - { id: R10, severity: P2, status: open, title: "pr-metadata.mjs:158 the lower-case check on the title's type can be removed without a test failing" }
-  - { id: R11, severity: P2, status: open, title: "pr-metadata.mjs:285 no test covers a record that exists only at the base" }
+  - { id: R1, severity: P2, status: open, title: "the base list leaves scripts/pr-metadata.mjs, .ai/repo/ci/pr-meta.yaml and their test out of the digest; the PR body lists their blob shas at dfb5641b for a re-check before merge" }
+  - { id: R2, severity: P1, status: closed, title: "base-rule.sh resolved the unqualified origin/<base>, so a tag of that name shadowed the base branch; fixed in dfb5641b (exact refs/remotes ref or full sha, ambiguity refused, every caller qualified, git-ref.mjs for the three programs) and not defeated in round 2" }
+  - { id: R3, severity: P2, status: open, title: "ci.yml (pre-existing) does not re-run when a PR's base branch changes; deferred by the builder to a follow-up" }
+  - { id: R4, severity: P2, status: closed, title: "pr-metadata.mjs closing-keyword scan skipped the rest of a commit message containing an ASCII RS; fixed" }
+  - { id: R5, severity: P2, status: open, title: "fail-first.mjs:69 proseOf removes inline code spans only within one line, but a GitHub code span can cross lines in a paragraph, so a waiver hidden in a multi-line span is still accepted (partly fixed)" }
+  - { id: R6, severity: P2, status: closed, title: "ci-workflow-rules.mjs triggers check could stop checking workflows with a gate job; fixed" }
+  - { id: R7, severity: P2, status: open, title: "pr-metadata.mjs:416 FORCED_SUCCESS treats `exit 256` as a failing exit and does not match `exec true`, so both end the judge step green before the call runs (partly fixed)" }
+  - { id: R8, severity: P2, status: open, title: "pr-metadata.mjs:453 the rework dropped the three concurrency mutation cases, so the concurrency check in workflowModelProblems can be deleted with every test still green (regressed)" }
+  - { id: R9, severity: P2, status: closed, title: "closing-keyword scan was tested only with single-commit PRs; tested" }
+  - { id: R10, severity: P2, status: closed, title: "the lower-case check on the title's type could be removed without a test failing; tested" }
+  - { id: R11, severity: P2, status: closed, title: "no test covered a record that exists only at the base; tested" }
+  - { id: R12, severity: P1, status: open, title: "ci.yml:392 the fail-first job runs `npm ci` (the PR's postinstall) before base-rule.sh, so a PR touching no guarded path can replace the program that judges it, or reach the judge step through $GITHUB_ENV/$GITHUB_PATH; use --ignore-scripts or extract the judge from the base first (pre-existing on main)" }
+  - { id: R13, severity: P2, status: open, title: "git-ref.mjs:14 commitOf skips its existence and ambiguity checks for a name outside [\\w./-] (e.g. '+', '@', non-ASCII), so git's tags-first lookup decides; not reachable from CI today because base-rule.sh checks first" }
+  - { id: R14, severity: P2, status: open, title: "git-ref.mjs:50 git-ref.test.mjs does not pin the full-ref existence check or the ^{commit} peel; both mutants survive" }
+  - { id: R15, severity: P2, status: open, title: "fail-first.mjs:48 proseOf matches a fence only when indented 0-3 spaces, so a fenced block nested in a list item (indented 4) counts as prose again and a waiver inside it is accepted; the old regex refused it" }
+  - { id: R16, severity: P2, status: open, title: "fail-first.mjs:69 an inline code span is replaced with the literal word 'code', so a placeholder or punctuation-only reason written in backticks now counts as a real reason" }
