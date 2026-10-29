@@ -33,11 +33,13 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
-updated_at: 2026-10-28T19:54:06Z
+updated_at: 2026-10-29T04:23:33Z
 started_at: 2026-10-28T19:32:10Z
 started_event: sha256:0765f729c05298a9e68050364caffdf10c6e8b86abd9018bb0ad28388c10a82d
 verified_at: 2026-10-28T19:53:53Z
 verified_event: sha256:e7cbe7e2530af90220f79eb746bb5c7c6ce7770e55ddd523fc636eaf028a7321
+completed_at: 2026-10-29T04:23:33Z
+completed_event: sha256:3959456550279df47bf93e1dd1b67facbbe5651ae4c8240add634e0c26070473
 evidence:
   - covers: verified
     type: test
@@ -46,3 +48,10 @@ evidence:
     artifact: "tests/browser/midi.cjs"
     commit: 44eca337ce286810ef500916a2e37b3a431de5be
     recorded_at: 2026-10-28T19:54:06Z
+  - covers: verified
+    type: ci
+    command: "node scripts/review-verdict.mjs --pr 249 --head 893cc420 --base-branch 893cc420^1"
+    result: "PR #249 landed by merge commit 893cc420; none of its 16 changed paths is guarded, the base program printed 'no verdict needed' (project.review-verdict); fail-first passed in CI; the two failed v3-ui jobs were unrelated flakes (firefox file evidence checks, webkit findings-delete-focus), each passing locally and on re-run."
+    artifact: "https://github.com/korczis/oscilla/pull/249"
+    commit: 893cc420c1d2c5597166ea6c3487333161a89609
+    recorded_at: 2026-10-29T04:23:31Z
