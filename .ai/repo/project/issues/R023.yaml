@@ -1,0 +1,26 @@
+id: R023
+milestone: M056
+serves:
+  - "engineering-integrity#release-notes-first-parent"
+title: "Release analysis and notes read first-parent history, with pull request and plan links"
+slug: release-analysis-reads-first-parent-history
+priority: p2
+profile: implementation
+objective: "scripts/release-analyze.mjs gains --first-parent and computes a train's level from its members (the highest of them, from the member table, owner default C9); scripts/release-publish.mjs writes notes from first-parent history with `(#N)` links and the plan IDs each pull request names, and no 'Merge pull request' line. A fixture range in the shape of v3.12.0..v3.13.0 produces no merge line."
+why: "With merge commits only (C1, 2026-10-29) the first-parent subjects on main are the judged pull request titles (R022); release notes built from every commit repeat merge subjects and miss the plan records."
+scope:
+  - "scripts/release-analyze.mjs"
+  - "scripts/release-publish.mjs"
+  - "tests/unit/release-analyze.test.mjs"
+  - "tests/unit/release-publish.test.mjs"
+depends_on: []
+acceptance_criteria:
+  - "Unit tests over a fixture history: first-parent analysis yields the level of the pull request titles, a train takes its highest member's level, and the notes carry `(#N)` and plan IDs and no merge subject; the tests fail on the merge base (fail-first)."
+  - "The pull request carries a review verdict (scripts/release-* is guarded); project.release-flow-complete holds."
+validation:
+  - "node --test tests/unit/release-analyze.test.mjs tests/unit/release-publish.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

@@ -11,6 +11,7 @@ invariants:
   - "Every tracked YAML file of the project model stays strict YAML named by its identity (tests/unit/plan-yaml-strict.test.mjs, landed 2026-10-18)"
 milestones:
   - "M046"
+  - "M056"
 satisfaction:
   - id: "source-size-budget"
     criterion: "No file under src/js, nor src/index.html, exceeds its recorded byte cap; a file over 40 000 bytes without a cap fails; a cap above its file's headroom ceiling (the size plus 10 %, rounded up to the next 1 000 bytes) fails until it is lowered; a cap entry for a file of 40 000 bytes or less fails; and a cap above its value in the most recent earlier commit of the baseline (an uncapped file counting as capped at 40 000 bytes) fails unless the baseline's raises ledger declares it"
@@ -96,6 +97,26 @@ satisfaction:
     criterion: "After release:publish tags a release, Pages is redeployed so the release commit's live page names its tag"
     evidence: "command"
     ref: "node --test tests/unit/release-publish.test.mjs"
+  - id: "pr-names-its-plan"
+    criterion: "Every pull request names an existing plan record in its title or branch, or waives with a reason, has a conventional title and no closing keyword in its title, body or commits, judged by the base branch's program in a read-only job (owner decisions C1 and C3, 2026-10-29)"
+    evidence: "command"
+    ref: "node --test tests/unit/pr-metadata.test.mjs"
+  - id: "release-notes-first-parent"
+    criterion: "Release analysis and notes read first-parent history: the level comes from the pull request titles, a train takes its highest member's level, and the notes link (#N) and plan IDs and carry no merge subject"
+    evidence: "command"
+    ref: "node --test tests/unit/release-analyze.test.mjs tests/unit/release-publish.test.mjs"
+  - id: "forge-projection-adopted"
+    criterion: "GitHub's labels and milestones are written from the records by Majordomus' forge projection alone, through rendered workflows whose derive job reads only and whose project job alone holds a write token"
+    evidence: "command"
+    ref: "node --test tests/unit/ci-workflows.test.mjs"
+  - id: "github-backfilled"
+    criterion: "GitHub carries the milestones of the records and the metadata of the open and the merged pull requests since v3.0.0, each phase printed before it applies, and a second apply makes no write"
+    evidence: "command"
+    ref: "npm test"
+  - id: "github-drift-reported"
+    criterion: "GitHub departing from the records is reported by a scheduled, bounded check outside the gate that names each drifted object, and cadence issues carry release-overdue"
+    evidence: "command"
+    ref: "node --test tests/unit/ci-workflows.test.mjs"
 governance:
   - "rule:project.single-file-deliverable"
   - "rule:project.rules-name-their-enforcement"
@@ -114,4 +135,4 @@ non_goals:
   - "Splitting src/js/studio/transport.js (72 327 bytes on main at d4bd97f), src/js/measurement/engine.js (70 955) or src/js/measurement/quality.js (66 213) in this milestone: they stay under their falling cap with its headroom, and a split of any of them is a candidate criterion for the owner, not planned work"
   - "Bounding the total size of src/js: the per-file budget measures distribution; the total is bounded by the dist budget"
 created_at: 2026-10-18
-updated_at: 2026-10-19
+updated_at: 2026-10-29

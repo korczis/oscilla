@@ -46,7 +46,7 @@ prefix is added here in the same change that adds its first issue.
 S000-S095   V1 specification sections (M001-M005); S000 received the text of 64-95
 D001-D003   V1 delivery (M006)
 V2xx        V2 laboratory (M007-M010, M034)
-R0xx        release engineering (M011, M035)
+R0xx        release engineering (M011, M035); GitHub as a projection of the plan (M056)
 V3xx        V3 MEASURE (M012-M020); V39x its measurement extensions after 3.11 (M047)
 V4xx        V3.1 Studio (M021-M033)
 V5xx        MIDI jam companion (M045)

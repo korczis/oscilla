@@ -109,7 +109,9 @@ It never flips the machine-wide launcher at `~/.local/bin/majordomus`: that is t
 
    The pin touches `.github/`, so the pull request needs a reviewer's verdict (skill
    `review-a-guarded-pr`). Its body carries the waiver line
-   `fail-first: n/a tooling and CI pin migration, no behaviour change in src/`.
+   `fail-first: n/a tooling and CI pin migration, no behaviour change in src/`, and, unless
+   its title or branch names the plan record it serves, the line
+   `plan: n/a Majordomus layer migration, no plan record` (rule `project.pr-names-its-plan`).
 
 8. List the launcher flip for the owner and stop there.
 

@@ -40,10 +40,12 @@ A claim a person types is not evidence; a run against the merge base is.
   because a test that is sensitive to a loaded machine would otherwise hide real evidence.
 - A change no unit test can demonstrate (documentation under a `fix` title, a behaviour only
   a browser suite can observe) says so in the pull request body, on a line of its own:
-  `fail-first: n/a <reason>`. The reason is required, and the placeholder `<reason>` or
-  punctuation is not one. The line counts only in the body's own prose: inside a fenced code
-  block, an HTML comment or a blockquote it is a quotation. The reason is printed in the job
-  log, and whether it is a good reason is for the reviewer.
+  `fail-first: n/a <reason>`. The reason is required, and the placeholder `<reason>`,
+  punctuation or text written only as inline code is not one. The line counts only in the
+  body's own prose: inside a fenced code block (in a list item too), an indented code block,
+  a code span (across the lines of a paragraph too), an HTML comment or a blockquote it is a
+  quotation. The reason is printed in the job log, and whether it is a good reason is for the
+  reviewer.
 - The program that judges a pull request is the base branch's `scripts/fail-first.mjs`, not
   the copy the pull request carries.
 - A train (skill `merge-train`, `.ai/repo/skills/merge-train/SKILL.md`; ADR 0055 as amended
@@ -78,8 +80,51 @@ The `fail-first` job of `.github/workflows/ci.yml` runs it on every pull request
 title, body and head branch (`headRefName`) read from the pull request at run time, and
 `gate` needs the job (`tests/unit/ci-workflows.test.mjs` fails if `gate` stops needing it, or
 if the step's `gh pr view --json` stops asking for `headRefName`). The job runs it
-through `.github/scripts/base-rule.sh`, which extracts `scripts/` of the base branch outside
-the checkout and runs that copy on the pull request, printing the commit it came from; the
+through `.github/scripts/base-rule.sh`, which runs the base branch's copy of the program on
+the pull request, printing the commit it came from, with the base named by its full ref
+`refs/remotes/origin/<base>`, which no tag can shadow (review of #255, R2; see
+`project.review-verdict`). The wrapper is itself the base commit's: the job's `judge` step
+takes `.github/scripts/` and `scripts/` from the base commit into `$RUNNER_TEMP/judge`, blob
+by blob from `git ls-tree -r` (a symbolic link, a submodule or a name outside
+`[A-Za-z0-9._@+/-]` is left out with a warning, so no such entry makes every judge refuse:
+R30), makes the copy read-only and records the manifest (the commit and those entries) and
+its sha256, and the judge's step, the next and the last,
+starts that copy under `env -i` with a fixed PATH, a HOME of its own and the manifest digest,
+from a shell that reads no `BASH_ENV`. Nothing of the pull request runs before it: the judge
+drives the install (review of #255, round 4, R12, R17-R22). The program, already loaded,
+first refuses to judge where Yama's `ptrace_scope` is 0 or missing on Linux (off Linux it is
+skipped with a note, outside CI only) and checks its copy against the manifest; then, before
+any child runs, it reads everything of the repository it judges (round 8): the head, the merge
+base, the changed test files and both trees, every git call with `GIT_NO_REPLACE_OBJECTS=1`,
+`GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`, no other `GIT_*` variable and `-c`
+overrides of what could start a program (`scripts/git-ref.mjs` `judgeGit`), and it writes the
+trees blob by blob (`git ls-tree -r -z`, one `git cat-file --batch`, each file created new
+with its mode; no tar), refusing a symbolic link, a mode that is no regular file and a path a
+checkout could not hold (an empty, `.` or `..` component, `.git` in any case or HFS+/NTFS
+form); then `npm ci --ignore-scripts` as a child in the extracted head tree, never in the
+checkout (the other tree links to its `node_modules`), and the tests, each as its own child
+in a process group of its own, killed with its group when it ends, with only a fixed PATH,
+its own HOME and CI in its environment. Install-time code (a git dependency's `prepare`, a
+program a `.npmrc` names) is the pull request's code, contained exactly as its tests are: it
+may rewrite the checkout's `.git` (a replace ref, a `core.fsmonitor`, a filter, an alias) or
+plant a link, and nothing reads the checkout again. No guard tries to tell such a lockfile
+apart (rounds 4-7 had one, `install-guard.mjs`, which each round found another way around
+and which refused lockfiles npm writes for common packages). The verdict is the program's
+exit status, decided in its memory, and a copy that departs from the manifest after the last
+child refuses (defence in depth: the same user could chmod the copy back, and what decides is
+already loaded). The shape is linted by `project.ci-bounded`'s `judge-first` (advisory).
+What this does not cover: the pull request's tests run as the runner's user, and GitHub's
+hosted Linux runners give that user passwordless sudo, so a test can become root and reach
+the judge's memory, its copy and the rest of the job whatever `ptrace_scope` says: the ptrace
+probe keeps a same-uid child without sudo out, it cannot promise isolation against sudo (the
+probe, the group kill and the manifest raise the bar, they do not make root code safe; the
+`judge` step prints the runner's `ptrace_scope` so each run's log measures it, R31); a
+grandchild that starts a session of its own
+leaves the group; and PR code, test or install, shares the job's network and uid: it can
+reach the network, the runner user's files outside the judge's memory (the trees, the
+toolcache, the judge copy, which the manifest check then refuses) and anything the uid can
+signal, so it can forge its own evidence (as a test always could) but not the judge's
+reading of git, which is done before it starts. Sudo and a kernel escape are out of scope. The
 same test fails if the last command of the job's last step is anything but that call with
 its exact arguments (`--title` in place of `--pr-json`, `|| true`, an `if:`), if the step
 passes when there is no pull request, or if `ci.yml` can be started by anything but a pull

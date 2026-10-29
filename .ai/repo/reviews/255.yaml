@@ -1,0 +1,121 @@
+# Review verdict for pull request #255, R022: every pull request names its plan record, judged by
+# the base branch (branch feat/r022-pr-metadata-judge). Ninth round (re-review of a merge).
+# Reviewed head ef368d75, merge base origin/main 94192a19 (main's tip is 45621450). Round 7
+# reviewed 152cacea and requested changes (3efeddbd); between rounds the reviewer and the author
+# agreed that install-time code is PR code like a test, so the lockfile guard is not the boundary:
+# install-guard is removed, and the one capability install-time code had over a test (npm ci in the
+# checkout before the judge's own git archive | tar) is closed by order. This round reviews
+# ef368d75: every judge git call of fail-first before any child, through judgeGit (replace objects
+# and system/global config off, inherited GIT_* dropped, fsmonitor, hooks and pager off, no external
+# diff or textconv); the trees from ls-tree -z and cat-file --batch with links, odd modes and .git
+# forms refused; npm ci --ignore-scripts in the extracted head tree with its own HOME; R45;
+# persist-credentials: false on the three judge checkouts. Another builder wrote it (oscilla-b0).
+#
+# The digest: the base branch's scripts/review-verdict.mjs, run from `git archive origin/main
+# scripts` with --repo on this worktree: b15190bf...2778 over the 10 guarded paths it names.
+#
+# How it was reviewed: three independent lenses (order and capability parity, the tree builder and
+# judgeGit, regressions and completeness), read-only, with real git 2.55 and npm 10.9.3 fixtures;
+# every finding handed to a separate skeptic (19 agents; one finding refuted).
+#
+# What holds: after the first child the judge only spawns children, removes its tmp dirs and checks
+# its copy against the in-memory manifest digest, so no state a child can write is read back except
+# as a refusal; the verdict is exit statuses only, and printed TAP names cannot start a workflow
+# command; install-time and test-time code have the same env, HOME, uid, network and the same
+# reachable state before the judge's next action; writeTree creates with O_EXCL and refuses
+# duplicates and malformed entries; the step shell is -eo pipefail with the judge last, and no step
+# follows it. Unit tests pass offline; install-guard is gone from code, rules, docs and tests.
+#
+# Verdict: merge. No P0 or P1 is open. Open and worth doing next, in this PR or a follow-up:
+# - R47 (P2): the with and without runs share one HOME, /tmp and node_modules, and run with first,
+#   so an ordinary non-idempotent test (a scratch file opened wx) yields "proven" for a PR that
+#   changes no source (reproduced). Give each child its own HOME and TMPDIR, and run without first.
+# - R48 (P2): a symbolic link anywhere in the head or merge-base tree refuses every feat/fix PR; main
+#   has none today. Write links outside tests/ as inert data, or refuse only links that matter, or
+#   lint main against them.
+# - R49 (P2): a workspace or file: dependency resolves to the head's code in the without tree, so
+#   such a PR reads "not proven" where it used to get a clear refusal. Install per tree or refuse
+#   link entries with a reason.
+# Round 9 (re-review of a merge): head b740b201 merges origin/main, which now carries #252's train
+# detection, into the head round 8 accepted (bd2f2a74); the merge base is e2720e07. Main's program
+# gives b15190bf...2778 -> 7db72a32...6c49 over the same 10 guarded paths. Reviewed from git (the
+# diff bd2f2a74..b740b201 and --remerge-diff), in two lenses with a skeptic each (5 agents; one
+# documentation finding refuted).
+#
+# What holds: git-ref.mjs, judge-isolation.mjs, ci-workflow-rules.mjs, shell-words.mjs and
+# base-rule.sh are byte-identical to bd2f2a74; ci.yml keeps #255's form of the pr.json fetch (under
+# env -i, before base-rule.sh; GH_TOKEN where R50 found it, no wider); persist-credentials: false is
+# on all three judge checkouts and #252 adds no judge job. In fail-first.mjs the train check comes
+# after the ptrace probe and the manifest check and returns before the first git call and before
+# any child; judgeTrain and trainMembers are pure functions of the PR JSON's body. A feat or fix
+# title is tested before the train patterns, so no branch name or title moves a feat or fix PR onto
+# the train path; on any other title the train path can only keep "not applicable" or make it
+# stricter. Members are body text, as #252 states and as before this merge. Every test of both sides
+# is kept; fail-first.test.mjs 31/31 and the whole unit suite pass.
+#
+# Verdict: merge. One P3 is new (R58).
+#
+schema: review-verdict/v1
+pr: 255
+verdict: merge
+reviewer: prismatic-majordomus-f3 (claude-code 1f47a36e)
+content: 7db72a32882654136c74c635d225337b7a958be8f269cd0ecc1c4f5e525e6c49
+findings:
+  - { id: R1, severity: P2, status: open, title: "the base list leaves scripts/pr-metadata.mjs, .ai/repo/ci/pr-meta.yaml and their test out of the digest, and the persist-credentials assertion now lives there too; deferred, blob shas in the PR comment for a pre-merge re-check" }
+  - { id: R2, severity: P1, status: closed, title: "base-rule.sh resolved the unqualified origin/<base>; fixed in dfb5641b" }
+  - { id: R3, severity: P2, status: open, title: "ci.yml (pre-existing) does not re-run when a PR's base branch changes; deferred" }
+  - { id: R4, severity: P2, status: closed, title: "closing-keyword scan and the ASCII RS; fixed" }
+  - { id: R5, severity: P2, status: closed, title: "hidden waivers in link titles, alt text and HTML; tested" }
+  - { id: R6, severity: P2, status: closed, title: "triggers check and gate jobs; fixed" }
+  - { id: R7, severity: P2, status: closed, title: "FORCED_SUCCESS lexical forms; fixed" }
+  - { id: R8, severity: P2, status: closed, title: "concurrency mutation cases; restored" }
+  - { id: R9, severity: P2, status: closed, title: "multi-commit closing-keyword scan; tested" }
+  - { id: R10, severity: P2, status: closed, title: "lower-case type check; tested" }
+  - { id: R11, severity: P2, status: closed, title: "a record only at the base; tested" }
+  - { id: R12, severity: P1, status: closed, title: "a PR's code ran before the fail-first judge; closed by the judge-driven install" }
+  - { id: R13, severity: P2, status: closed, title: "git-ref suffixes; fixed" }
+  - { id: R14, severity: P2, status: closed, title: "git-ref tests; tested" }
+  - { id: R15, severity: P2, status: closed, title: "indented fences; fixed" }
+  - { id: R16, severity: P2, status: closed, title: "inline code counted as a reason; fixed" }
+  - { id: R17, severity: P1, status: closed, title: "nested dependency maps in lock entries; every map of every entry is read" }
+  - { id: R18, severity: P1, status: closed, title: ".npmrc split; split on /[\\r\\n]+/ and any CR refused" }
+  - { id: R19, severity: P1, status: closed, title: "judge-first evadable; advisory in the rule text" }
+  - { id: R20, severity: P2, status: closed, title: "judge-first anchoring; superseded" }
+  - { id: R21, severity: P2, status: closed, title: "R21's inline-comment case; pinned" }
+  - { id: R22, severity: P1, status: closed, title: "the extracted judge writable by what ran before it; closed" }
+  - { id: R23, severity: P2, status: open, title: "ci-workflow-rules.mjs:575 judge-first recognises a judge job only by a step with id 'judge' or a literal base-rule.sh, not by its judge step under any name (advisory lint)" }
+  - { id: R24, severity: P2, status: closed, title: "bare tarball spec; refused" }
+  - { id: R25, severity: P2, status: closed, title: "committed node_modules; refused" }
+  - { id: R26, severity: P2, status: closed, title: "program denylist; extended" }
+  - { id: R27, severity: P2, status: closed, title: "shell-words redirect and backtick mutants; tested" }
+  - { id: R28, severity: P2, status: closed, title: "the .base-commit refusal; tested" }
+  - { id: R29, severity: P1, status: closed, title: "every bundled lock entry was refused, so Tailwind 4 would fail every feat/fix PR; fixed (the Tailwind 4 closure, #253's F001 lockfile and main's pass, for the right reason), but see R34" }
+  - { id: R30, severity: P2, status: closed, title: "manifest writer/verifier drift; the copy and manifest come from git ls-tree, odd names skipped by warning, skipped judge files fail closed" }
+  - { id: R31, severity: P2, status: closed, title: "sudo on hosted runners; stated as residual risk, ptrace_scope printed in every judge step (measure it in this PR's log before merge)" }
+  - { id: R32, severity: P2, status: closed, title: "multi-segment relative specs; refused (remaining forms are R35)" }
+  - { id: R33, severity: P2, status: closed, title: "the PR body on this PR's own metadata run; corrected" }
+  - { id: R34, severity: P1, status: closed, title: "an inBundle entry accepted without its version; closed by structure (install-time code is contained as a test is, rounds 7-8)" }
+  - { id: R35, severity: P1, status: closed, title: "hand-written spec grammar; every spec classified by the runner npm's own npm-package-arg, loaded by absolute path, fail-closed; no accepted non-registry spec found" }
+  - { id: R36, severity: P2, status: closed, title: "nested bundles refused; checked against the immediate holder (the Amplify fixture passes); npm-written nested locks remain R44" }
+  - { id: R37, severity: P2, status: closed, title: "the unguarded fixtures; tailwind4-cli.json.gz and judge-copy.mjs pinned by blob id (verified)" }
+  - { id: R38, severity: P2, status: closed, title: "the judge log count; header excluded, asserted per judge job" }
+  - { id: R39, severity: P1, status: closed, title: "a non-canonical bundled lock key; closed by structure (install-guard removed; install in a fresh tree after every judge git call)" }
+  - { id: R40, severity: P1, status: closed, title: "hasShrinkwrap; closed by structure" }
+  - { id: R41, severity: P2, status: closed, title: "build metadata in exactVersion; moot (install-guard removed, npa used nowhere else)" }
+  - { id: R42, severity: P2, status: closed, title: "lock root overrides; moot" }
+  - { id: R43, severity: P1, status: closed, title: "workspaces on a registry entry refused; closed by structure (no lockfile guard)" }
+  - { id: R44, severity: P1, status: closed, title: "strict holder list; closed by structure" }
+  - { id: R45, severity: P3, status: open, title: "shell-words.mjs:96 judge-first reads $(( )) and ${ } now, but still misses $((cmd) ) (a subshell substitution bash runs) and <( ) inside ${x:-...} (advisory lint)" }
+  - { id: R46, severity: P3, status: closed, title: "untested fail-closed checks of install-guard; moot (removed with the code)" }
+  - { id: R47, severity: P2, status: open, title: "fail-first.mjs:680 one HOME, the shared /tmp and one node_modules for the with and without runs, with first: a non-idempotent test (wx scratch file) gives a false proven for a PR that changes no source; per-child HOME and TMPDIR, without first" }
+  - { id: R48, severity: P2, status: open, title: "judge-isolation.mjs:259 a symbolic link anywhere in the head or merge-base tree refuses every feat/fix PR (none on main today); write links outside tests/ as data, refuse only what matters, or lint main" }
+  - { id: R49, severity: P2, status: open, title: "fail-first.mjs:664 a workspace or file: dependency resolves to the head's code in the without tree, so the PR reads not-proven instead of a clear refusal; install per tree or refuse link entries with a reason" }
+  - { id: R50, severity: P3, status: open, title: "ci.yml:449 GH_TOKEN (read-only) is in the judge step's environment, readable by a same-uid child through /proc/<pid>/environ of its ancestor bash; fetch pr.json in the earlier judge step and drop GH_TOKEN; state the post-step survivor residual" }
+  - { id: R51, severity: P3, status: open, title: "git-ref.mjs:9 says every judge git call goes through judgeGit, but base-rule.sh, review-verdict.mjs:116,221 and pr-metadata.mjs:208,242 call git directly (all before any PR code today); route them or narrow the claim" }
+  - { id: R52, severity: P3, status: open, title: "fail-first.mjs:690 a without run that never started (spawn error: status and signal null) counts as evidence; refuse or retry it" }
+  - { id: R53, severity: P3, status: open, title: "fail-first.mjs:533 a test file name is passed to node --test as a glob, so [ ] * ? { } in a name never runs as itself; refuse or escape them" }
+  - { id: R54, severity: P3, status: open, title: "fail-first.mjs:520 stage() uses git add -A, so the tree's .gitignore drops tracked files from ls-files and working-tree-encoding refuses the PR; build the index from the ls-tree entries" }
+  - { id: R55, severity: P3, status: open, title: "judge-isolation.mjs:248 ls-tree and diff -z output decoded as UTF-8, so non-UTF-8 names become U+FFFD and can collide; read Buffers or refuse such names" }
+  - { id: R56, severity: P3, status: open, title: "fail-first.mjs:670 local mode throws EEXIST when a tree tracks node_modules/ (judge mode removes it first)" }
+  - { id: R57, severity: P3, status: open, title: "fail-first.test.mjs:569 the round-8 replay stays green with the -c overrides and --no-ext-diff/--no-textconv removed, and is red on 3efeddbd only by the old guard; assert the arguments" }
+  - { id: R58, severity: P3, status: open, title: "fail-first.test.mjs:886 the order of the train path is not held by a test: moving it before the ptrace probe or the manifest check, or adding a non-throwing judgeGit call or a child before it, leaves every test green; add train-title cases with a failing probe and a wrong digest (refused), and assert no judgeGit call and no child before the train verdict" }

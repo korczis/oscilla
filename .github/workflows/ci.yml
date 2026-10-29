@@ -372,9 +372,26 @@ jobs:
     # carries `fail-first: n/a <reason>`, which the step prints. Title and body are read from
     # the PR as it is now, not from the event, so re-running the job after editing the body is
     # enough. A train (head branch train/..., or a `train`/`Merge train` title) is judged by the
-    # member table of its body; any other title passes with nothing to prove. The program that
-    # judges is the base branch's copy (.github/scripts/base-rule.sh), not the one this pull
-    # request carries.
+    # member table of its body, read from the same PR JSON before any child runs; any other
+    # title passes with nothing to prove. The program that judges is the base
+    # branch's copy (.github/scripts/base-rule.sh), not the one this pull request carries; the
+    # base is named by its full ref, refs/remotes/origin/<base>, since a tag named
+    # origin/<base> (the full history fetches tags) would otherwise answer for it (#255, R2).
+    # The judge is isolated by structure (#255, rounds 2-4, R12, R17-R22): setup-node runs
+    # before the checkout, the `judge` step extracts base-rule.sh and the programs from the
+    # base commit, makes them read-only and records their manifest, and the judge's step is
+    # the next and last: nothing of the pull request runs before it. The judge starts the
+    # extracted copy under `env -i` (a fixed PATH, that node first, a temporary HOME, no
+    # NODE_OPTIONS, from a shell that reads no BASH_ENV) and drives the install itself: the
+    # base's fail-first.mjs checks its copy against the manifest, reads from git everything it
+    # judges and writes both trees before any child (round 8: no replace refs, no global
+    # config, regular files only), then runs `npm ci --ignore-scripts` in the extracted head
+    # tree (never the checkout) and the PR's tests as its own children, each in a process
+    # group of its own with a cleared environment, and
+    # judges by their exit statuses in its own memory; its exit status is the verdict. It
+    # refuses to judge where Yama's ptrace_scope is 0. Rule `judge-first` of
+    # scripts/ci-workflow-rules.mjs lints this shape (advisory, behind review-verdict). What
+    # this does not cover is in the PR body of #255 and in project.fail-first.
     name: fail-first (feat/fix tests fail without the change)
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -382,16 +399,55 @@ jobs:
       contents: read
       pull-requests: read
     steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # The judge, from the base commit, before anything of the pull request runs: the base's
+      # .github/scripts/ and scripts/ into $RUNNER_TEMP/judge, blob by blob from `git ls-tree
+      # -r` (a symbolic link, a submodule or an odd name is left out, with a warning naming
+      # it: R30), the commit in .base-commit, the commit and the ls-tree entries copied in
+      # .manifest, the copy made read-only, and as outputs the judge's
+      # PATH (the node setup-node put there before the checkout, so it read no file of the pull
+      # request, then the system's) and the manifest's own sha256, which the judge checks its
+      # copy against (defence in depth: the same user could chmod the copy back). Nothing of
+      # the pull request runs in this job before the judge's step (#255, R12, R17-R22). The
+      # checkout persists no credentials: the judge fetches nothing after it, and a token in
+      # .git/config would be readable by the pull request's tests and install (round 8).
+      - name: The judge, taken from the base commit
+        id: judge
+        run: |
+          echo "ptrace_scope=$(cat /proc/sys/kernel/yama/ptrace_scope 2>/dev/null || echo missing)"
+          base="refs/remotes/origin/$GITHUB_BASE_REF"
+          sha="$(git show-ref --verify --hash "$base")"
+          judge="$RUNNER_TEMP/judge"
+          mkdir -p "$judge" "$RUNNER_TEMP/judge-home"
+          tree="$RUNNER_TEMP/judge-tree"
+          git ls-tree -r "$sha" -- .github/scripts scripts > "$tree"
+          entry='^(100644|100755) blob [0-9a-f]{40}([0-9a-f]{24})?[[:blank:]][A-Za-z0-9._@+/-]+$'
+          if LC_ALL=C grep -Ev "$entry" "$tree" > "$tree.skipped"; then
+            echo "::warning::the judge: not copied from $base (a symbolic link, a submodule or a"\
+              "name outside [A-Za-z0-9._@+/-]): $(tr '\n' ' ' < "$tree.skipped")"
+          fi
+          { echo "commit $sha"; LC_ALL=C grep -E "$entry" "$tree"; } > "$judge/.manifest"
+          tail -n +2 "$judge/.manifest" | while read -r mode _ oid file; do
+            mkdir -p "$(dirname "$judge/$file")"
+            git cat-file blob "$oid" > "$judge/$file"
+            if [ "$mode" = 100755 ]; then chmod a+x "$judge/$file"; fi
+          done
+          echo "$sha" > "$judge/.base-commit"
+          chmod -R a-w "$judge"
+          node="$(readlink -f "$(command -v node)")"
+          echo "path=$(dirname "$node"):/usr/bin:/bin:/usr/sbin:/sbin" >> "$GITHUB_OUTPUT"
+          echo "manifest=$(sha256sum < "$judge/.manifest" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          files=$(($(wc -l < "$judge/.manifest") - 1))  # the commit header is no file (R38)
+          echo "the judge: $base (${sha:0:12}), node $node, $files files"
       - name: The PR's added or changed unit tests fail on the merge base
         timeout-minutes: 10
+        shell: /usr/bin/env -u BASH_ENV -u ENV /bin/bash --noprofile --norc -eo pipefail {0}
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
@@ -399,18 +455,25 @@ jobs:
         run: |
           if [ -z "$PR" ]; then echo "::error::fail-first: no pull request to judge"; exit 1; fi
           n=0
-          until gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body,headRefName > "$RUNNER_TEMP/pr.json"; do
+          until /usr/bin/env -i PATH="${{ steps.judge.outputs.path }}" \
+            HOME="${{ runner.temp }}/judge-home" GH_TOKEN="$GH_TOKEN" \
+            gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body,headRefName \
+            > "${{ runner.temp }}/pr.json"; do
             n=$((n + 1)); [ "$n" -lt 3 ] || { echo "::error::could not read PR $PR"; exit 1; }
             sleep 10
           done
-          .github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF" scripts/fail-first.mjs \
-            --pr-json "$RUNNER_TEMP/pr.json" --head "$HEAD_SHA" \
-            --base-branch "origin/$GITHUB_BASE_REF"
+          /usr/bin/env -i PATH="${{ steps.judge.outputs.path }}" \
+            HOME="${{ runner.temp }}/judge-home" CI=true \
+            JUDGE_MANIFEST="${{ steps.judge.outputs.manifest }}" \
+            /bin/bash "${{ runner.temp }}/judge/.github/scripts/base-rule.sh" \
+            "refs/remotes/origin/$GITHUB_BASE_REF" scripts/fail-first.mjs \
+            --pr-json "${{ runner.temp }}/pr.json" --head "$HEAD_SHA" \
+            --base-branch "refs/remotes/origin/$GITHUB_BASE_REF"
 
   review-verdict:
     # project.review-verdict: a PR that changes a guarded path (the audio, analysis, experiments
     # and studio modules, core/storage*, scripts/release-*, all of .github/, and the programs
-    # and tests of the three process rules: GUARDED in scripts/review-verdict.mjs) needs
+    # and tests of the four process rules: GUARDED in scripts/review-verdict.mjs) needs
     # .ai/repo/reviews/<pr>.yaml: `verdict: merge`, the reviewer session, the content it
     # reviewed and no open P0 or P1 finding (scripts/review-verdict.mjs, tested by
     # tests/unit/review-verdict.test.mjs). `content` is a SHA-256 over the guarded paths the PR
@@ -420,25 +483,71 @@ jobs:
     # merged it with the base branch for this run, so a base that changed one of the PR's
     # guarded files since the review is seen here. Any other PR passes without a verdict. The
     # script needs no dependency, so nothing is installed. The program that judges, and so the
-    # guarded list, is the base branch's copy (.github/scripts/base-rule.sh): a pull request
-    # that edits the list is judged by the list it found.
+    # guarded list, is the base branch's copy (.github/scripts/base-rule.sh), taken from the
+    # base commit and started like fail-first's (#255, R12): a pull request that edits the
+    # list is judged by the list it found.
     name: review-verdict (guarded paths need a recorded review)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 22
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # The judge, from the base commit, before anything of the pull request runs: the base's
+      # .github/scripts/ and scripts/ into $RUNNER_TEMP/judge, blob by blob from `git ls-tree
+      # -r` (a symbolic link, a submodule or an odd name is left out, with a warning naming
+      # it: R30), the commit in .base-commit, the commit and the ls-tree entries copied in
+      # .manifest, the copy made read-only, and as outputs the judge's
+      # PATH (the node setup-node put there before the checkout, so it read no file of the pull
+      # request, then the system's) and the manifest's own sha256, which the judge checks its
+      # copy against (defence in depth: the same user could chmod the copy back). Nothing of
+      # the pull request runs in this job before the judge's step (#255, R12, R17-R22). The
+      # checkout persists no credentials: the judge fetches nothing after it, and a token in
+      # .git/config would be readable by the pull request's tests and install (round 8).
+      - name: The judge, taken from the base commit
+        id: judge
+        run: |
+          echo "ptrace_scope=$(cat /proc/sys/kernel/yama/ptrace_scope 2>/dev/null || echo missing)"
+          base="refs/remotes/origin/$GITHUB_BASE_REF"
+          sha="$(git show-ref --verify --hash "$base")"
+          judge="$RUNNER_TEMP/judge"
+          mkdir -p "$judge" "$RUNNER_TEMP/judge-home"
+          tree="$RUNNER_TEMP/judge-tree"
+          git ls-tree -r "$sha" -- .github/scripts scripts > "$tree"
+          entry='^(100644|100755) blob [0-9a-f]{40}([0-9a-f]{24})?[[:blank:]][A-Za-z0-9._@+/-]+$'
+          if LC_ALL=C grep -Ev "$entry" "$tree" > "$tree.skipped"; then
+            echo "::warning::the judge: not copied from $base (a symbolic link, a submodule or a"\
+              "name outside [A-Za-z0-9._@+/-]): $(tr '\n' ' ' < "$tree.skipped")"
+          fi
+          { echo "commit $sha"; LC_ALL=C grep -E "$entry" "$tree"; } > "$judge/.manifest"
+          tail -n +2 "$judge/.manifest" | while read -r mode _ oid file; do
+            mkdir -p "$(dirname "$judge/$file")"
+            git cat-file blob "$oid" > "$judge/$file"
+            if [ "$mode" = 100755 ]; then chmod a+x "$judge/$file"; fi
+          done
+          echo "$sha" > "$judge/.base-commit"
+          chmod -R a-w "$judge"
+          node="$(readlink -f "$(command -v node)")"
+          echo "path=$(dirname "$node"):/usr/bin:/bin:/usr/sbin:/sbin" >> "$GITHUB_OUTPUT"
+          echo "manifest=$(sha256sum < "$judge/.manifest" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          files=$(($(wc -l < "$judge/.manifest") - 1))  # the commit header is no file (R38)
+          echo "the judge: $base (${sha:0:12}), node $node, $files files"
       - name: A guarded change carries a verdict for the content it changes
+        shell: /usr/bin/env -u BASH_ENV -u ENV /bin/bash --noprofile --norc -eo pipefail {0}
         env:
           PR: ${{ github.event.pull_request.number }}
         run: |
           if [ -z "$PR" ]; then echo "::error::review-verdict: no pull request to judge"; exit 1; fi
-          .github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF" scripts/review-verdict.mjs \
-            --pr "$PR" --head HEAD --base-branch "origin/$GITHUB_BASE_REF"
+          /usr/bin/env -i PATH="${{ steps.judge.outputs.path }}" \
+            HOME="${{ runner.temp }}/judge-home" \
+            JUDGE_MANIFEST="${{ steps.judge.outputs.manifest }}" \
+            /bin/bash "${{ runner.temp }}/judge/.github/scripts/base-rule.sh" \
+            "refs/remotes/origin/$GITHUB_BASE_REF" scripts/review-verdict.mjs --pr "$PR" \
+            --head HEAD --base-branch "refs/remotes/origin/$GITHUB_BASE_REF"
 
   gate:
     name: gate

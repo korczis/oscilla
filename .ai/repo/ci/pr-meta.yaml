@@ -1,0 +1,117 @@
+# The model of OSCILLA's pull-request metadata (R022, rule project.pr-names-its-plan): which
+# plan record a pull request serves, judged from its sources (title, branch, body, records)
+# and never from labels a projection wrote. The name and the comment style follow
+# Majordomus' own .ai/repo/ci/pr-meta.yaml, whose PR projection reads this file once it ships
+# to adopters (Majordomus `forge`); until then nothing writes labels, milestones or issues to
+# GitHub from this repository. .github/workflows/metadata.yml is an adapter over the `judge:`
+# block below, and tests/unit/pr-metadata.test.mjs holds the two to each other and every other
+# block to the constants of scripts/pr-metadata.mjs, the program that judges.
+#
+# Measured on 2026-10-29: 7 of the last 40 non-release pull requests named no plan ID in
+# their title or branch (#252, #250, #246, #244, #230, #217, #214), and Majordomus
+# delivery reads only the title and the branch, so they were attributed to nothing.
+#
+# `schema` names this file's own shape: it shares Majordomus' file name, not its top-level
+# keys (Majordomus' pr-meta.yaml v1 has actor/trigger/permissions/checkout/runs/forbidden).
+# When the forge projection (draft B1) reads it, B1 names the combined schema; the
+# `repository:` block below is the one draft B7 compares.
+schema: oscilla.pr-meta/v1
+version: 1
+
+# ---------------------------------------------------------------- who judges
+# A read-only job. The program is the base branch's (.github/scripts/base-rule.sh, itself the
+# base commit's copy), so a pull request cannot change what judges it; the pull request that
+# introduces it is judged by its own copy, with a warning. Title and body edits start this
+# workflow alone (`edited`); ci.yml does not re-run on them. The newest run of a pull request wins: it writes nothing.
+judge:
+  workflow: .github/workflows/metadata.yml
+  job: metadata
+  # minutes; every step declares a smaller bound of its own
+  bound: 6
+  triggers:
+    pull_request:
+      types: [opened, edited, synchronize, reopened, ready_for_review]
+  concurrency:
+    group: metadata-${{ github.event.pull_request.number }}
+    cancel-in-progress: true
+  permissions:
+    contents: read
+    pull-requests: read
+  # how the judge is reached (review of #255, R12): setup-node before the checkout, the step
+  # `judge` third (it takes base-rule.sh and scripts/ from the base commit into
+  # $RUNNER_TEMP/judge before anything of the pull request runs, read-only, with a manifest
+  # whose digest the call passes), and the judge's step run by a shell that reads no
+  # BASH_ENV, its call under `env -i` with a fixed PATH and HOME; nothing is installed
+  steps: [actions/setup-node, actions/checkout, judge]
+  # the judge fetches nothing after the checkout, so the checkout keeps no token in .git/config
+  # for the pull request's code to read (review of #255, round 8, P3)
+  checkout:
+    persist-credentials: false
+  shell: /usr/bin/env -u BASH_ENV -u ENV /bin/bash --noprofile --norc -eo pipefail {0}
+  # the last command of the job's last step, exactly
+  # (the base by its full ref: a tag named origin/<base> would otherwise answer for it)
+  call: >-
+    /usr/bin/env -i PATH="${{ steps.judge.outputs.path }}"
+    HOME="${{ runner.temp }}/judge-home" GITHUB_REPOSITORY="$GITHUB_REPOSITORY"
+    JUDGE_MANIFEST="${{ steps.judge.outputs.manifest }}"
+    /bin/bash "${{ runner.temp }}/judge/.github/scripts/base-rule.sh"
+    "refs/remotes/origin/$GITHUB_BASE_REF" scripts/pr-metadata.mjs
+    --pr-json "${{ runner.temp }}/pr.json" --head HEAD
+    --base "refs/remotes/origin/$GITHUB_BASE_REF" --check --summary "$GITHUB_STEP_SUMMARY"
+  # Branch protection lists `metadata` beside `gate` only after this job has run green on three
+  # or more pull requests (owner decision C2); until then the job reports and does not block.
+  required: false
+
+# ---------------------------------------------------------------- what an ID is
+# The record directories. The prefixes are the first letters of the file names in them at the
+# base or the head, never a list kept here; an ID counts only when <ID>.yaml exists there.
+ids:
+  directories:
+    - .ai/repo/project/issues
+    - .ai/repo/project/milestones
+  title: a capital letter and 3 or 4 digits, as a word (case-sensitive)
+  branch: a segment split on / - _ . of a letter and 3 or 4 digits (any case)
+
+# ---------------------------------------------------------------- who names none
+# Universal (owner decision C3, 2026-10-29): every other pull request names a record or waives.
+# Each role is held by its branch and its title together, so neither alone exempts.
+exempt:
+  - role: release
+    when: >-
+      branch release/vX.Y.Z or chore/release-vX.Y.Z, title chore(release): vX.Y.Z,
+      the head's package.json at X.Y.Z
+  - role: release-record
+    when: "branch chore/release-record-vX.Y.Z, title chore(release): record vX.Y.Z"
+  - role: train
+    when: "branch train/... and a train(...) title naming its members as #N"
+
+# A line of the body's own prose (not a code block, an HTML comment or a blockquote), with a
+# reason that is not the placeholder.
+waiver: 'plan: n/a <reason>'
+
+# ---------------------------------------------------------------- what is refused
+# plan-id-unknown refuses a title candidate without a record only when the pull request names
+# no record at all; every other unknown candidate is a warning in the summary. closing-keyword
+# reads the title, the body and every commit message between the merge base and the head.
+codes: [title-grammar, plan-id-missing, plan-id-unknown, waiver-form, closing-keyword]
+
+# ---------------------------------------------------------------- the seam
+# The facts a projection reads (schema pr-facts/v1): the IDs with their path, title,
+# milestone, serves and priority; the milestone; the SemVer level and breaking flag; the
+# guarded paths and the verdict state (n/a, needed, refused or recorded, by review-verdict's own
+# verdictProblems()); the fail-first state; whether plan evidence changed;
+# the landing method; the role.
+facts: node scripts/pr-metadata.mjs --facts --pr-json {file} --head {sha} --base {base}
+
+# ---------------------------------------------------------------- the repository settings
+# Owner decision C1, applied on korczis/oscilla on 2026-10-29: merge commits only
+# (allow_squash_merge=false, allow_rebase_merge=false), merge_commit_title=PR_TITLE,
+# merge_commit_message=PR_BODY. So the first-parent subject on main is the judged title, and
+# no evidence head can be squashed. A repository setting: reported here, compared by nothing
+# in this repository until Majordomus `forge check --repo` (draft B7) does.
+repository:
+  allow_merge_commit: true
+  allow_squash_merge: false
+  allow_rebase_merge: false
+  merge_commit_title: PR_TITLE
+  merge_commit_message: PR_BODY

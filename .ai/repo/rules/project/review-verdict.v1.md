@@ -4,7 +4,7 @@ version: 1
 kind: rule
 title: Risky changes merge only with a recorded review verdict for the reviewed content
 description: A pull request that changes a guarded path merges only with a committed verdict file that says merge, names the reviewer, records the digest of the guarded content the pull request changes and lists no open P0 or P1 finding.
-statement: A pull request touching src/js/audio, src/js/analysis, src/js/experiments, src/js/studio, src/js/measurement, src/js/calibration, src/js/core/storage*, src/js/core/safety*, src/js/ui/measure.js, src/js/ui/experiments.js, src/js/ui/findings.js, scripts/release-*, the build, pack, stamp and deploy-verification scripts (scripts/build*, scripts/pack-single-file.mjs, scripts/stamp-build.mjs, scripts/verify-deploy.mjs, scripts/verify-dist.mjs), the release rules' tests (tests/unit/release-*, tests/unit/version-authority.test.mjs, tests/browser/live-smoke.cjs), anything under .github/, or the programs and tests that enforce the process rules (scripts/review-verdict.mjs, scripts/fail-first.mjs, scripts/ci-workflow-rules.mjs, scripts/yaml-subset.mjs, their tests under tests/unit/ and tests/unit/fixtures/git-repo.mjs) merges only with .ai/repo/reviews/<pr>.yaml carrying `verdict: merge`, the reviewer session, a `content` equal to the SHA-256 of the guarded paths the pull request changes against its merge base (mode, blob and name of each, as merged with the base branch for the run), and no finding of severity P0 or P1 with status open; the guarded list that applies is the base branch's, the verdict is written by a reviewer who did not build the change, and a pull request is bound from the first CI run of a head that contains this rule's job.
+statement: A pull request touching src/js/audio, src/js/analysis, src/js/experiments, src/js/studio, src/js/measurement, src/js/calibration, src/js/core/storage*, src/js/core/safety*, src/js/ui/measure.js, src/js/ui/experiments.js, src/js/ui/findings.js, scripts/release-*, the build, pack, stamp and deploy-verification scripts (scripts/build*, scripts/pack-single-file.mjs, scripts/stamp-build.mjs, scripts/verify-deploy.mjs, scripts/verify-dist.mjs), the release rules' tests (tests/unit/release-*, tests/unit/version-authority.test.mjs, tests/browser/live-smoke.cjs), anything under .github/, or the programs and tests that enforce the process rules (scripts/review-verdict.mjs, scripts/fail-first.mjs, scripts/ci-workflow-rules.mjs, scripts/pr-metadata.mjs with its model .ai/repo/ci/pr-meta.yaml, scripts/yaml-subset.mjs, their tests under tests/unit/ and tests/unit/fixtures/git-repo.mjs) merges only with .ai/repo/reviews/<pr>.yaml carrying `verdict: merge`, the reviewer session, a `content` equal to the SHA-256 of the guarded paths the pull request changes against its merge base (mode, blob and name of each, as merged with the base branch for the run), and no finding of severity P0 or P1 with status open; the guarded list that applies is the base branch's, the verdict is written by a reviewer who did not build the change, and a pull request is bound from the first CI run of a head that contains this rule's job.
 status: active
 class: blocking
 depends_on: []
@@ -39,12 +39,19 @@ never reviewed.
   verifiers (`scripts/stamp-build.mjs`, `scripts/verify-deploy.mjs`,
   `scripts/verify-dist.mjs`) and the release rules' tests (`tests/unit/release-*`,
   `tests/unit/version-authority.test.mjs`, `tests/browser/live-smoke.cjs`); and what
-  enforces the process rules: everything under `.github/` (the workflows, `ci-install.sh`,
-  `base-rule.sh`, composite actions, `doctor-verdict.jq`), the programs
-  `scripts/review-verdict.mjs`, `scripts/fail-first.mjs`, `scripts/ci-workflow-rules.mjs` and
-  `scripts/yaml-subset.mjs`, their tests `tests/unit/review-verdict.test.mjs`,
-  `fail-first.test.mjs`, `ci-workflows.test.mjs`, `ci-knowledge-job.test.mjs`,
-  `yaml-subset.test.mjs` and `base-rule.test.mjs`, and `tests/unit/fixtures/git-repo.mjs`.
+  enforces the four process rules (`project.ci-bounded`, `project.fail-first`,
+  `project.review-verdict`, `project.pr-names-its-plan`): everything under `.github/` (the
+  workflows, `ci-install.sh`, `base-rule.sh`, composite actions, `doctor-verdict.jq`), the
+  programs `scripts/review-verdict.mjs`, `scripts/fail-first.mjs`,
+  `scripts/ci-workflow-rules.mjs`, `scripts/pr-metadata.mjs`, `scripts/yaml-subset.mjs`,
+  `scripts/git-ref.mjs` (which names their base and how a judge calls git),
+  `scripts/judge-isolation.mjs` (how a judge keeps apart from the children it starts and
+  writes the trees it judges) and `scripts/shell-words.mjs` (how the rules read a step's commands), the
+  model `.ai/repo/ci/pr-meta.yaml` the metadata workflow is held to, their tests
+  `tests/unit/review-verdict.test.mjs`, `fail-first.test.mjs`, `ci-workflows.test.mjs`,
+  `ci-knowledge-job.test.mjs`, `yaml-subset.test.mjs`, `base-rule.test.mjs`,
+  `pr-metadata.test.mjs`, `git-ref.test.mjs`, `judge-isolation.test.mjs` and `shell-words.test.mjs`, and
+  `tests/unit/fixtures/git-repo.mjs`.
   An added, changed, renamed or deleted file there counts. The list is `GUARDED` in
   `scripts/review-verdict.mjs`. Left out on purpose: `src/index.html`, `src/js/main.js` (the
   composition root) and `src/styles/`, which nearly every user-facing change touches and
@@ -97,8 +104,17 @@ run. So a base branch that has changed one of the pull request's guarded files s
 review is refused in that run even when the branch has not merged it yet, and the remedy is
 to merge `main` into the branch and have the result reviewed. `gate` needs the job
 (`tests/unit/ci-workflows.test.mjs` fails if `gate` stops needing it). The job runs the
-program through `.github/scripts/base-rule.sh`, which extracts `scripts/` of the base branch
-outside the checkout and runs that copy, printing the commit it came from. The same test
+program through `.github/scripts/base-rule.sh`, which runs the base branch's copy of the
+program, printing the commit it came from; the wrapper is the base commit's own, taken with
+`scripts/` into `$RUNNER_TEMP/judge` by the job's `judge` step before anything of the pull
+request runs, made read-only with a manifest it checks, and started under `env -i` as the
+job's last step; the job installs nothing (review of #255, R12, R22; `judge-first` of
+`project.ci-bounded` lints the shape, advisory, behind this rule). The base is named
+by its full ref, `refs/remotes/origin/<base>`, and the wrapper refuses anything else but a
+full 40-hex commit name, and a ref whose short name another ref (a tag `origin/main`) also
+answers: git looks a short name up in `refs/tags/` before `refs/remotes/`, and the checkout
+fetches tags, so a pushed tag `origin/main` once let a pull request's own program judge it
+(review of #255, R2; `scripts/git-ref.mjs` refuses the same inside the programs). The same test
 holds the caller: the last command of the job's last step is exactly that call with exactly
 those arguments (`|| true`, a command after it, another `--head` or base, the checkout's own
 copy, an `if:` on the job or the step and an early `exit 0` each fail it), the step fails

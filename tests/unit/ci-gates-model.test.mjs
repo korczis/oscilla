@@ -45,7 +45,9 @@ export function commandTokens(text) {
   for (const m of text.matchAll(/\bnpm\s+(test\b|run\s+([\w:.-]+))/g)) {
     out.add(m[2] ? `npm run ${m[2]}` : 'npm test');
   }
-  const program = /(?:^|[\s"'(=;&|])((?:\.github\/scripts|scripts)\/[\w.-]+|\.github\/[\w.-]+\.jq)/g;
+  // (also inside the copy a judge job takes from the base commit, $RUNNER_TEMP/judge/...)
+  const program = new RegExp(String.raw`(?:^|[\s"'(=;&|]|judge\/)`
+    + String.raw`((?:\.github\/scripts|scripts)\/[\w.-]+|\.github\/[\w.-]+\.jq)`, 'g');
   for (const m of text.matchAll(program)) if (!SETUP_PROGRAMS.has(m[1])) out.add(m[1]);
   if (/\bmajordomus\s+doctor\b/.test(text)) out.add('majordomus doctor');
   if (text.includes(ALL_SUCCESS)) out.add('aggregate');
@@ -209,8 +211,8 @@ test('the token reader sees suites, programs and the verdict, and skips setup', 
   assert.deepEqual(commandTokens('npm ci\n.github/scripts/ci-install.sh browser webkit'), []);
   assert.deepEqual(commandTokens('mkdir -p logs && npm run test:engine 2>&1 | tee logs/e.log'),
     ['npm run test:engine']);
-  assert.deepEqual(commandTokens('.github/scripts/base-rule.sh origin/main scripts/fail-first.mjs'),
-    ['.github/scripts/base-rule.sh', 'scripts/fail-first.mjs']);
+  assert.deepEqual(commandTokens('.github/scripts/base-rule.sh refs/remotes/origin/main'
+    + ' scripts/fail-first.mjs'), ['.github/scripts/base-rule.sh', 'scripts/fail-first.mjs']);
   assert.deepEqual(commandTokens('majordomus doctor --json > d.jsonl\njq -s -f .github/v.jq d.jsonl'),
     ['.github/v.jq', 'majordomus doctor']);
   assert.deepEqual(commandTokens(`jq -e 'to_entries | ${ALL_SUCCESS}'`), ['aggregate']);
@@ -258,7 +260,8 @@ test('a command that differs on either side is a disagreement', () => {
   const studio = parseYaml(MODEL).gates.find((g) => g.id === 'studio-webkit').runs;
   assert.ok(has(compare(CI, mutate(MODEL, studio, studio.replace('=webkit', '=chromium'))),
     'gate studio-webkit runs an npm script without OSC_BROWSERS=webkit'));
-  assert.ok(has(compare(mutate(CI, 'scripts/review-verdict.mjs \\', 'scripts/other.mjs \\'), MODEL),
+  assert.ok(has(compare(mutate(CI, 'scripts/review-verdict.mjs --pr', 'scripts/other.mjs --pr'),
+    MODEL),
     'gate review-verdict runs'));
 });
 

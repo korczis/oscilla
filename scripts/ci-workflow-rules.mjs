@@ -18,8 +18,33 @@
 //   non-fatal        continue-on-error on a job or a step; `|| true`, `|| :`, `|| exit 0`,
 //                    a trailing `|| echo` or `; true` on a line that installs, downloads,
 //                    checks a digest or runs a browser suite, or `set +e` in such a step
-//   triggers         ci.yml started by anything but pull_request (a manual run has no pull
-//                    request, so fail-first and review-verdict would have nothing to check)
+//   triggers         a workflow with a `gate` job (ci.yml), or with a step that runs
+//                    .github/scripts/base-rule.sh (metadata.yml), started by anything but
+//                    pull_request (a manual run has no pull request, so fail-first,
+//                    review-verdict and pr-metadata would have nothing to check)
+//   judge-first      ADVISORY, a lint behind project.review-verdict (every .github/ change is
+//                    reviewed): a job that calls .github/scripts/base-rule.sh (read as bash
+//                    reads its commands, scripts/shell-words.mjs, not by the first mention) has
+//                    the shape that keeps the pull request from the judge. What guarantees that
+//                    is the shape itself, not this reading: nothing of the pull request runs
+//                    before the judge, and the judge drives the install (review of #255, round
+//                    4). The lint checks that shape: setup-node first (no cache, no
+//                    node-version-file), the checkout (persist-credentials: false: the judge
+//                    fetches nothing after it, round 8), then the `judge` step that takes the
+//                    judge from the base commit; up to the call no action runs and no command
+//                    runs code of the pull request (any package manager, an interpreter or
+//                    task runner, `source`/`.`, a program named by a relative or workspace
+//                    path, a glob, a variable or a substitution, a PATH or loader variable set
+//                    on the way, `git -c`, awk's system(), whatever wrapper or keyword stands
+//                    before it); no workflow, job, container or step `env:` before the call
+//                    (setup-node's and the checkout's included) sets BASH_ENV, NODE_OPTIONS,
+//                    LD_PRELOAD or another loader variable, and no step before it runs in a
+//                    shell of its own; the judge's step is the job's last,
+//                    runs in JUDGE_SHELL and calls the extracted copy under `/usr/bin/env -i`
+//                    with the `judge` step's PATH and manifest digest and its own HOME; a judge
+//                    reached through a local action is refused (R12, R17-R20, R23, R26). It
+//                    reads a subset of bash, so a form it cannot read can pass it; the review
+//                    of the .github change is what catches that.
 //
 // Why each exists is in .ai/repo/rules/project/ci-bounded.v1.md. The unit test
 // tests/unit/ci-workflows.test.mjs runs this on the repository and on mutated copies.
@@ -27,6 +52,7 @@
 import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { commandsOf } from './shell-words.mjs';
 import { parseYaml as parse } from './yaml-subset.mjs';
 
 const INSTALL_WRAPPER = '.github/scripts/ci-install.sh';
@@ -291,8 +317,9 @@ function localAction(uses) {
  * @param {Set<string>} suites npm scripts that run a browser
  * @param {Map<string, string>} [actions] local action directory -> why a step using it must
  *   carry timeout-minutes (from actionNeedsTimeout)
+ * @param {Set<string>} [judgeActions] local action directories whose steps name base-rule.sh
  */
-export function checkWorkflow(file, text, suites, actions = new Map()) {
+export function checkWorkflow(file, text, suites, actions = new Map(), judgeActions = new Set()) {
   const out = [];
   const add = (rule, job, step, message) => out.push({ file, job, step, rule, message });
   let doc;
@@ -325,6 +352,9 @@ export function checkWorkflow(file, text, suites, actions = new Map()) {
     if (image !== undefined && !tagged) {
       add('pinned', name, null, `container image without a version tag or digest: ${image}`);
     }
+    for (const [step, message] of judgeFirstViolations(job, judgeActions, doc)) {
+      add('judge-first', name, step, message);
+    }
     const jobEnv = JSON.stringify([doc.env || {}, job.env || {}]);
     (job.steps || []).forEach((step, i) => {
       const label = stepLabel(step, i);
@@ -349,17 +379,293 @@ export function checkWorkflow(file, text, suites, actions = new Map()) {
     if (String(gate.if || '').replace(/\s/g, '') !== 'always()') {
       add('gate-needs', 'gate', null, 'gate must run with `if: always()` to report a failed job');
     }
-    // The gate is the required check, and two of its jobs judge the pull request itself. A run
-    // without a pull request (a manual dispatch on the PR's branch) would give them nothing to
-    // judge and still put a green `gate` on the same commit.
+  }
+  // The gate is the required check, and two of its jobs judge the pull request itself; the
+  // metadata job judges it too, and becomes required (owner decision C2). A run without a pull
+  // request (a manual dispatch on the PR's branch) would give them nothing to judge and still
+  // put a green check on the same commit. So a workflow with a gate, or with any step that
+  // runs a pull-request rule through .github/scripts/base-rule.sh, starts on pull_request only.
+  const judges = names.some((n) => (jobs[n]?.steps || [])
+    .some((s) => typeof s.run === 'string' && JUDGE.test(s.run)));
+  if ('gate' in jobs || judges) {
     const { on } = doc;
     const triggers = typeof on === 'string' ? [on]
       : Array.isArray(on) ? on.map(String) : Object.keys(on || {});
     if (triggers.length !== 1 || triggers[0] !== 'pull_request') {
-      add('triggers', null, null, 'a workflow with a gate job is started by pull_request only,'
+      add('triggers', null, null, `a workflow with ${'gate' in jobs ? 'a gate job'
+        : 'a pull-request rule (base-rule.sh)'} is started by pull_request only,`
         + ` not by: ${triggers.join(', ') || '(nothing)'}`);
     }
   }
+  return out;
+}
+
+const JUDGE = /\.github\/scripts\/base-rule\.sh\b/;
+/** Package managers: each runs the checkout's package.json, its scripts or its packages. */
+const PACKAGE_MANAGER = /^(?:npm|npx|pnpm|pnpx|yarn|bun|bunx|corepack|pip\d*|pipx|uv|poetry)$/;
+/** Interpreters and task runners: each runs a file, or text, of the checkout. */
+const RUNS_CODE = new RegExp('^(?:node|nodejs|deno|(?:ba|z|da|k|a|fi)?sh|python[\\d.]*|perl'
+  + '|ruby|php|pwsh|source|\\.|eval|make|gmake|just|rake|mix|cargo|go|java|gradle'
+  + '|mvn|dotnet)$');
+/** Variables that load code into what runs after them (R23, R26). */
+export const LOADER_ENV = new RegExp('^(?:BASH_ENV|ENV|PATH|NODE_OPTIONS|NODE_PATH|LD_\\w+'
+  + '|DYLD_\\w+|GIT_\\w+|NPM_CONFIG_\\w+|PERL5OPT|PERL5LIB|PYTHONSTARTUP|PYTHONPATH|RUBYOPT'
+  + '|SHELLOPTS|BASHOPTS|PROMPT_COMMAND|PS4)$', 'i');
+/** Where actions/checkout puts the pull request: a program named under it is the PR's. */
+const WORKSPACE = /^(?:\/home\/runner\/work\/|\/github\/workspace\/|\/__w\/)/;
+/**
+ * The shell of a judge's step: bash started without the environment's BASH_ENV and ENV,
+ * which a $GITHUB_ENV line could otherwise point at a file it runs first.
+ */
+export const JUDGE_SHELL = '/usr/bin/env -u BASH_ENV -u ENV /bin/bash --noprofile --norc'
+  + ' -eo pipefail {0}';
+/** The names the judge's `env -i` may set: none of them loads code. */
+const JUDGE_ENV = new Set(['PATH', 'HOME', 'CI', 'GH_TOKEN', 'GITHUB_REPOSITORY', 'LANG',
+  'LC_ALL', 'TZ', 'JUDGE_MANIFEST']);
+// what the runner writes into a step before the shell reads it, and was fixed before anything
+// of the pull request ran: the judge step's outputs and the runner's temporary directory
+const EXPRESSION = /\$\{\{\s*([^}]*?)\s*\}\}/g;
+const JUDGE_NODE = '__judge_node__';
+const JUDGE_MANIFEST = '__judge_manifest__';
+const RUNNER_TEMP = '/__runner_temp__';
+
+/** A step's shell text with the expressions the rule knows replaced by fixed words. */
+function withExpressions(text) {
+  return String(text).replace(EXPRESSION, (all, e) => {
+    if (e === 'steps.judge.outputs.node') return JUDGE_NODE;
+    if (e === 'steps.judge.outputs.path') return '__judge_path__';
+    if (e === 'steps.judge.outputs.manifest') return JUDGE_MANIFEST;
+    if (e === 'runner.temp') return RUNNER_TEMP;
+    return '$__expression__';
+  });
+}
+
+const base = (w) => w.text.slice(w.text.lastIndexOf('/') + 1);
+
+/** The judge's script a command runs (`base-rule.sh`, or a shell given it), or null. */
+function judgeCall(cmd) {
+  const p = cmd.program;
+  if (!p || p.dynamic) return null;
+  if (base(p) === 'base-rule.sh') return p;
+  if (/^(?:ba)?sh$/.test(base(p))) {
+    const script = cmd.args.find((a) => !/^-/.test(a.text));
+    if (script && !script.dynamic && base(script) === 'base-rule.sh') return script;
+  }
+  return null;
+}
+
+/**
+ * Why one command runs code of the pull request's checkout before the judge, or null. Read as
+ * bash reads it (scripts/shell-words.mjs): the program after its assignments, keywords and
+ * wrappers, quotes removed (#255, R19). Nothing is installed before the judge: the fail-first
+ * judge installs itself, as its own child in the extracted head tree (rounds 4 and 8).
+ */
+export function commandProblem(cmd) {
+  const p = cmd.program;
+  const words = cmd.words.filter((w) => !w.redirect);
+  // (the judge's own PATH, which an `env -i` gives gh and the judge, is the `judge` step's)
+  const loader = words.slice(0, Math.max(0, words.indexOf(p))).find((w) => {
+    const m = /^([A-Za-z_]\w*)\+?=/.exec(w.raw);
+    return m && LOADER_ENV.test(m[1]) && w.text !== 'PATH=__judge_path__';
+  });
+  if (loader) return `sets ${loader.raw.split('=')[0]}, which loads code into what runs next`;
+  if (!p) return null;
+  if (p.dynamic) return `runs a program named by a variable or a substitution (${p.raw})`;
+  if (p.text === JUDGE_NODE) return 'runs the judge\'s node before the judge: nothing runs first';
+  const word = base(p);
+  if (PACKAGE_MANAGER.test(word)) {
+    return `runs ${word} (nothing is installed before the judge; the fail-first judge installs`
+      + ' itself, as its own child, after it has read git)';
+  }
+  if (RUNS_CODE.test(word)) return `runs ${word}`;
+  if (/^(?:export|declare|typeset|readonly|local)$/.test(word)) {
+    const set = cmd.args.find((a) => {
+      const m = /^([A-Za-z_]\w*)\+?=?/.exec(a.text);
+      return m && LOADER_ENV.test(m[1]);
+    });
+    if (set) return `${word}s ${set.text.split('=')[0]}, which loads code into what runs next`;
+  }
+  if (word === 'git' && cmd.args.some((a) => /^(?:-c|--config-env)(?:=|$)|^-c\S/.test(a.text))) {
+    return 'runs git with -c (an alias or a config value can run a program)';
+  }
+  if (/^[gnm]?awk$/.test(word) && cmd.args.some((a) => a.dynamic || /system\s*\(|\||getline/
+    .test(a.text))) {
+    return `runs ${word} with system(), a pipe or getline`;
+  }
+  if (!/^\[\[?$/.test(p.text) && /[*?]|\[[^\]]*\]/.test(p.raw.replace(/'[^']*'|"[^"]*"/g, ''))) {
+    return `runs a program named by a glob (${p.raw})`;
+  }
+  if (WORKSPACE.test(p.text)) return `runs ${p.text}, a file of the checkout`;
+  if (p.text.includes('/') && !p.text.startsWith('/')) {
+    return `runs ${p.text}, a file of the checkout`;
+  }
+  return null;
+}
+
+/** For tests and messages: why one shell line runs code of the checkout, or null. */
+export function runsCheckoutCode(line) {
+  for (const cmd of commandsOf(withExpressions(line))) {
+    const why = commandProblem(cmd);
+    if (why) return why;
+  }
+  return null;
+}
+
+/** How the judge must be started (#255, R12): what is wrong with one judge call, or null. */
+function callProblem(cmd, script) {
+  const words = cmd.words.filter((w) => !w.redirect);
+  if (script.text !== `${RUNNER_TEMP}/judge/.github/scripts/base-rule.sh`) {
+    return `calls ${script.raw}, not the copy the \`judge\` step took from the base commit`
+      + ' ("${{ runner.temp }}/judge/.github/scripts/base-rule.sh")';
+  }
+  if (words[0]?.text !== '/usr/bin/env' || words[1]?.text !== '-i') {
+    return 'calls the judge outside `/usr/bin/env -i`, so what $GITHUB_ENV set reaches it';
+  }
+  const env = [];
+  let k = 2;
+  for (; words[k] && /^[A-Za-z_]\w*=/.test(words[k].raw); k++) env.push(words[k]);
+  const names = env.map((w) => w.raw.slice(0, w.raw.indexOf('=')));
+  const bad = names.filter((n) => !JUDGE_ENV.has(n));
+  if (bad.length) {
+    return `sets ${bad.join(', ')} for the judge (allowed: ${[...JUDGE_ENV].join(', ')})`;
+  }
+  const value = (n) => env[names.indexOf(n)]?.text.slice(n.length + 1);
+  if (value('PATH') !== '__judge_path__') {
+    return 'gives the judge a PATH other than the `judge` step\'s'
+      + ' (${{ steps.judge.outputs.path }})';
+  }
+  if (!String(value('HOME') ?? '').startsWith(`${RUNNER_TEMP}/`)) {
+    return 'gives the judge a HOME outside ${{ runner.temp }}';
+  }
+  if (value('JUDGE_MANIFEST') !== JUDGE_MANIFEST) {
+    return 'gives the judge no JUDGE_MANIFEST of the `judge` step'
+      + ' (${{ steps.judge.outputs.manifest }}), so it cannot check its own copy';
+  }
+  if (words[k]?.text !== '/bin/bash' || words[k + 1] !== script) {
+    return 'starts the judge with something but /bin/bash';
+  }
+  return null;
+}
+
+/**
+ * The judge-first violations of one job (#255, R12, R17-R20, R23), anchored on the structure
+ * of the job, not on the first mention of base-rule.sh: a job whose commands call
+ * .github/scripts/base-rule.sh (or that reaches it through a local action) must start with
+ * setup-node (reading no file of the checkout), then the checkout, then the `judge` step that
+ * takes the judge from the base commit; up to the judge's call no action runs, no command runs
+ * code of the pull request or installs, no `env:` (the workflow's, the job's or a step's) sets
+ * a loader variable, no step runs in a shell of its own; the judge's step is the last, uses
+ * JUDGE_SHELL and calls the extracted copy under `/usr/bin/env -i` with the `judge` step's
+ * PATH and manifest digest and a HOME of its own. Advisory: see the header.
+ */
+function judgeFirstViolations(job, judgeActions = new Set(), doc = {}) {
+  const steps = job.steps || [];
+  const out = [];
+  const through = steps.map((s, i) => [s, i])
+    .filter(([s]) => judgeActions.has(localAction(s.uses)));
+  for (const [s, i] of through) {
+    out.push([stepLabel(s, i), `reaches .github/scripts/base-rule.sh through the action`
+      + ` ${s.uses}, where nothing can see what runs before it`]);
+  }
+  const calls = [];
+  steps.forEach((s, i) => {
+    if (typeof s.run !== 'string') return;
+    commandsOf(withExpressions(s.run)).forEach((cmd, c) => {
+      const script = judgeCall(cmd);
+      if (script) calls.push({ i, c, cmd, script });
+    });
+  });
+  if (!calls.length) {
+    // a mention of the wrapper, or the `judge` step that extracts it (whose `git ls-tree`
+    // names only .github/scripts: R30), marks a job that means to judge
+    const mention = steps.findIndex((s) => typeof s.run === 'string'
+      && (JUDGE.test(s.run) || s.id === 'judge'));
+    if (mention >= 0 && !through.length) {
+      out.push([stepLabel(steps[mention], mention), `${steps[mention].id === 'judge'
+        ? 'has the `judge` step' : 'names .github/scripts/base-rule.sh'} but calls`
+        + ' .github/scripts/base-rule.sh in no form judge-first can read (a variable, a'
+        + ' substitution, an alias)']);
+    }
+    return out;
+  }
+  if (calls.length > 1) {
+    out.push([stepLabel(steps[calls[1].i], calls[1].i), 'calls the judge a second time']);
+  }
+  const [{ i: at, c: atCommand, cmd, script }] = calls;
+  const label = (i) => stepLabel(steps[i], i);
+  const [node, checkout, judge] = steps;
+  if (!/^actions\/setup-node@/.test(String(node?.uses))) {
+    out.push([label(0), 'the first step is not actions/setup-node, which must run before'
+      + ' the checkout so that it reads no file of the pull request']);
+  } else if (['cache', 'cache-dependency-path', 'node-version-file', 'package-manager-cache']
+    .some((k) => k in (node.with || {}))) {
+    out.push([label(0), 'setup-node reads a file of the checkout (cache, node-version-file)']);
+  }
+  if (!/^actions\/checkout@/.test(String(checkout?.uses))) {
+    out.push([label(1), 'the second step is not actions/checkout']);
+  } else if (checkout.with?.['persist-credentials'] !== false) {
+    // round 8, P3: the judge fetches nothing after the checkout; a persisted token would sit
+    // in .git/config, where the pull request's tests and install read it
+    out.push([label(1), 'the checkout persists its credentials in .git/config, where the pull'
+      + ' request\'s code can read the token; the judge fetches nothing after it'
+      + ' (persist-credentials: false)']);
+  }
+  if (judge?.id !== 'judge' || typeof judge.run !== 'string' || at < 2) {
+    out.push([label(Math.min(2, steps.length - 1)), 'the third step is not the `judge` step that'
+      + ' takes base-rule.sh and scripts/ from the base commit before anything else runs']);
+  }
+  if (at !== steps.length - 1) {
+    out.push([label(at + 1), 'a step after the judge\'s: the judge\'s step is the job\'s last']);
+  }
+  // R23: an env: key or a shell of a step's own runs before the step's first command
+  const loaders = (env, where) => Object.keys(env && typeof env === 'object' ? env : {})
+    .filter((k) => LOADER_ENV.test(k)).map((k) => `${where} sets ${k}, which loads code into`
+      + ' what runs before the judge');
+  const container = job.container && typeof job.container === 'object' ? job.container.env
+    : undefined;
+  for (const why of [...loaders(doc.env, 'the workflow\'s env:'), ...loaders(job.env,
+    'the job\'s env:'), ...loaders(container, 'the job\'s container env:')]) {
+    out.push([label(at), why]);
+  }
+  // the setup-node and checkout steps' env: holds for what they run, before the judge (round 5)
+  for (let i = 0; i < Math.min(2, at); i++) {
+    for (const why of loaders(steps[i].env, 'its env:')) out.push([label(i), why]);
+  }
+  for (const [where, d] of [['the workflow', doc.defaults], ['the job', job.defaults]]) {
+    const sh = d?.run?.shell;
+    if (sh !== undefined && sh !== 'bash') {
+      out.push([label(at), `${where}'s defaults run in ${JSON.stringify(sh)}, not bash`]);
+    }
+  }
+  for (let i = 2; i <= at && i < steps.length; i++) {
+    const step = steps[i];
+    for (const why of loaders(step.env, 'its env:')) out.push([label(i), why]);
+    if (step.uses !== undefined) {
+      out.push([label(i), `uses ${step.uses} before the judge: an action runs what no rule here`
+        + ' reads']);
+      continue;
+    }
+    if (typeof step.run !== 'string') continue;
+    if (i < at && step.shell !== undefined && step.shell !== 'bash') {
+      out.push([label(i), `runs in ${JSON.stringify(step.shell)} before the judge, not bash`]);
+    }
+    const cmds = commandsOf(withExpressions(step.run));
+    const before = i === at ? cmds.slice(0, atCommand) : cmds;
+    for (const c of before) {
+      const why = commandProblem(c);
+      if (why) {
+        out.push([label(i), `runs code of the pull request before .github/scripts/base-rule.sh`
+          + ` (${why}), so it could rewrite the judge or reach it through $GITHUB_ENV or`
+          + ` $GITHUB_PATH: ${c.line}`]);
+      }
+    }
+  }
+  if (steps[at].shell !== JUDGE_SHELL) {
+    out.push([label(at), `the judge's step runs in ${JSON.stringify(steps[at].shell ?? 'bash')},`
+      + ` not ${JUDGE_SHELL}`]);
+  }
+  const why = callProblem(cmd, script);
+  if (why) out.push([label(at), why]);
   return out;
 }
 
@@ -446,9 +752,11 @@ export function checkRepository(root) {
   const read = (rel) => readFileSync(path.join(root, rel), 'utf8');
   const out = [];
   const actions = new Map();
+  const judgeActions = new Set();
   for (const rel of filesUnder(root, '.github', /(^|\/)action\.ya?ml$/)) {
     const text = read(rel);
     out.push(...checkAction(rel, text, suites));
+    if (JUDGE.test(text)) judgeActions.add(path.posix.dirname(rel));
     const why = actionNeedsTimeout(text, suites);
     if (why) actions.set(path.posix.dirname(rel), why);
   }
@@ -457,7 +765,9 @@ export function checkRepository(root) {
     out.push({ file: '.github/workflows', job: null, step: null, rule: 'parse',
       message: 'no workflow files' });
   }
-  for (const rel of workflows) out.push(...checkWorkflow(rel, read(rel), suites, actions));
+  for (const rel of workflows) {
+    out.push(...checkWorkflow(rel, read(rel), suites, actions, judgeActions));
+  }
   const scripts = [...filesUnder(root, '.github', /\.sh$/),
     ...filesUnder(root, 'scripts', /\.sh$/)];
   for (const rel of scripts) out.push(...checkScript(rel, read(rel)));

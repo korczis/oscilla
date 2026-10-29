@@ -80,6 +80,65 @@ that is repaired where it last hurt regresses in the next job somebody adds.
   `fail-first` and `review-verdict` jobs judge a pull request; a manual run on a pull
   request's branch would have none to judge, and its `gate` would land on the same commit as
   the required check.
+- A job that calls `.github/scripts/base-rule.sh` (a judge job: `fail-first`,
+  `review-verdict`, `metadata`) is shaped so that nothing of the pull request runs before the
+  judge, and the judge drives the install. That shape is the guarantee (review of #255,
+  round 4): `actions/setup-node` first, without `cache` or `node-version-file`, so it reads
+  no file of the checkout; the checkout; the step `id: judge`, which prints the runner's
+  Yama `ptrace_scope` (informational, R31), lists the base commit's `.github/scripts/` and
+  `scripts/` with `git ls-tree -r`, keeps the regular files (100644, 100755) whose names are
+  of `[A-Za-z0-9._@+/-]` and names every other entry (a symbolic link, a submodule, a name
+  with a backslash, a space or a quote) in a warning, writes each kept blob into
+  `$RUNNER_TEMP/judge` with `git cat-file blob` and its mode, writes the commit to
+  `.base-commit` and `commit <sha>` and the kept entries to `.manifest`, so the copy is the
+  manifest by construction and the verifier (`scripts/judge-isolation.mjs`, by git's object
+  names) reads the same definition (R30), makes the copy read-only (`chmod -R a-w`) and
+  records the judge's PATH (setup-node's node directory and the system's) and the manifest's
+  own sha256 as step outputs;
+  then the judge's step, the job's last, which runs in `/usr/bin/env -u BASH_ENV -u ENV
+  /bin/bash --noprofile --norc -eo pipefail {0}` and calls `"${{ runner.temp
+  }}/judge/.github/scripts/base-rule.sh"` with `/bin/bash` under `/usr/bin/env -i`, with that
+  PATH, `JUDGE_MANIFEST` set to that digest, a HOME under `runner.temp`, and no name outside
+  PATH, HOME, CI, GH_TOKEN, GITHUB_REPOSITORY, LANG, LC_ALL, TZ, JUDGE_MANIFEST. The copy
+  checks itself against the manifest (`scripts/judge-isolation.mjs --verify`) and then
+  `exec`s the program, so no shell reads a file after the program starts. Nothing is
+  installed before the judge: the fail-first judge (the base's `fail-first.mjs`) reads
+  from git everything it judges and writes both trees first (round 8), then runs
+  `npm ci --ignore-scripts` in the extracted head tree (never the checkout) and the pull
+  request's tests as its own children, each in a process group of its own with a cleared
+  environment (no `GITHUB_ENV`, `GITHUB_PATH`, `GITHUB_OUTPUT`, `GITHUB_STEP_SUMMARY`,
+  `RUNNER_TEMP`, `NODE_OPTIONS`, `BASH_ENV`), and judges in its own memory; it refuses to
+  judge where Yama's `ptrace_scope` is 0 or missing, and when its copy departs from the
+  manifest before the first child or after the last (defence in depth: the same user could
+  chmod the copy back). The `review-verdict` and `metadata` judges install nothing. The
+  verdict of each is the judge's exit status alone; nothing reads its log.
+- `judge-first` is advisory: a lint backing `project.review-verdict` (every change under
+  `.github/` is reviewed), not the guarantee. It reads the shape above: up to the call no
+  action runs, no command installs or runs code of the pull request (any package manager,
+  an interpreter or task runner, `eval`, `source` / `.`, a program named by a relative or
+  workspace path, a glob, a variable or a substitution, `git -c`, awk's `system()`, a PATH
+  or loader variable assigned or exported on the way), each command read as bash reads it
+  (`scripts/shell-words.mjs`), its program the word after assignments, redirections, shell
+  keywords and definitions (`if`, `!`, `{`, `while`, `coproc`, `function`) and wrappers
+  (`env`, `sudo`, `command`, `exec`, `time`, `nice`, `nohup`, `timeout`, `xargs`, ...); no
+  workflow, job, container or step `env:` before the call (setup-node's and the checkout's
+  included, round 5) sets `BASH_ENV`, `ENV`, `PATH`,
+  `NODE_OPTIONS`, `LD_*`, `DYLD_*`, `GIT_*`, `npm_config_*` or another loader variable, and
+  no step before it runs in a `shell:` of its own or under a default shell other than bash
+  (R23); the call is found by its structure, not by the first mention of `base-rule.sh`, and
+  a judge named through a variable or reached through a local action is refused. It reads a
+  subset of bash, so a form it cannot read can pass it (R19); the review of the `.github`
+  change is what catches that. History: the `fail-first` job ran `npm ci` before the judge,
+  so a `postinstall` could rewrite `base-rule.sh` or reach the judge's step through
+  `$GITHUB_PATH` or `$GITHUB_ENV` (R12); `--ignore-scripts` left a git dependency's
+  `prepare` and a PR `.npmrc`'s `git=` (R17, R18); round 4 showed both together, from a tree
+  the guard passed, rewriting even the read-only extracted copy before the judge ran (R22);
+  rounds 5-7 found ways around each guard, so round 8 removed it and runs install-time code
+  as a child like the tests, after the judge has read git. The checkout of a judge job sets
+  `persist-credentials: false` (the judge fetches nothing after it; a token in `.git/config`
+  would be readable by the pull request's code), and `judge-first` refuses one that does not.
+  What the judge itself runs (fail-first runs the pull request's tests) runs after the
+  base's program has loaded; see `project.fail-first` for what that does not cover.
 
 By convention, not checked: a job's limit is the sum of its steps', rounded up.
 
@@ -123,10 +182,19 @@ it cannot read fails the test instead of passing unread.
   job that calls a reusable workflow, an `echo` that mentions apt or curl, `command -v curl`,
   `--retry "$VAR"`, a pre-release version tag, `|| { ...; exit 1; }`.
 - "the pull-request rules are judged by the base branch's programs" fails unless the last
-  command of the `fail-first` and of the `review-verdict` job is exactly its call of
-  `.github/scripts/base-rule.sh` with its exact arguments, unconditional, and the step fails
-  when there is no pull request; "a rule job whose call can no longer refuse" applies eight
-  such edits and requires each to be reported.
+  command of the `fail-first` and of the `review-verdict` job is exactly its call of the
+  base commit's copy of `.github/scripts/base-rule.sh` under `env -i` with its exact
+  arguments, in the judge's shell, unconditional, and the step fails when there is no pull
+  request; "a rule job whose call can no longer refuse" applies thirteen such edits and
+  requires each to be reported. The `judge-first` tests refuse each departure from the
+  job's shape, any install, each wrapped, keyworded or variable-named command, and each
+  loader `env:` or shell of a step's own before the judge (R23), and
+  `tests/unit/base-rule.test.mjs` runs the judge jobs step by step against a postinstall, a
+  git dependency's `prepare` and a `.npmrc` `git=`: with an install step before the judge
+  (the control) the PR's code rewrites the read-only copy and the judge's step prints a
+  forged pass; in each job as it is the code runs as the judge's child in the extracted head
+  tree, the checkout's wrapper and the copy are the ones extracted, and the verdict is the
+  base program's (R12, R17, R18, R22, round 8).
 
 `tests/unit/ci-knowledge-job.test.mjs` keeps the `knowledge` job's own assertions (the exact
 retry flags, the verdict program).

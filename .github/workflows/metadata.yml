@@ -1,0 +1,123 @@
+# Pull-request metadata (R022, rule project.pr-names-its-plan): every pull request names an
+# existing plan record in its title or branch, or waives with `plan: n/a <reason>`; its title
+# is conventional; its body carries no closing keyword. The program that judges is the base
+# branch's scripts/pr-metadata.mjs (.github/scripts/base-rule.sh), which also writes the
+# pull request's plan records, milestone, level, verdict and fail-first state to the step
+# summary: the metadata visible before anything projects it onto GitHub.
+#
+# The model is .ai/repo/ci/pr-meta.yaml (`judge:`), and tests/unit/pr-metadata.test.mjs fails
+# when this file departs from it: the triggers, exactly the two read permissions, the job, its
+# bound and the last command. It writes nothing, so its token reads only, and the newest run of
+# a pull request cancels an older one. `edited` re-judges a changed title or body without
+# re-running ci.yml. pull_request only (project.ci-bounded, `triggers`): a run without a pull
+# request would have nothing to judge.
+#
+# Not part of the required `gate`: the owner adds `metadata` to branch protection after it has
+# run green on three or more pull requests (owner decision C2). Nothing is installed: the
+# program uses Node built-ins and git. Nothing of the pull request runs before the judge, and
+# the judge is the base commit's copy, extracted before the checkout's files are read, made
+# read-only with a manifest the judge checks, and started under `env -i` (review of #255,
+# R12, R17-R22; rule `judge-first` of scripts/ci-workflow-rules.mjs lints the shape).
+name: metadata
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: metadata-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  metadata:
+    name: metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      # The runner's node, before the checkout: setup-node reads no file of the pull request.
+      - uses: actions/setup-node@v7
+        timeout-minutes: 1
+        with:
+          node-version: 22
+      # Full history: the base branch's records and program, and the merge base of the diff.
+      - uses: actions/checkout@v7
+        timeout-minutes: 2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # The judge, from the base commit, before anything of the pull request runs: the base's
+      # .github/scripts/ and scripts/ into $RUNNER_TEMP/judge, blob by blob from `git ls-tree
+      # -r` (a symbolic link, a submodule or an odd name is left out, with a warning naming
+      # it: R30), the commit in .base-commit, the commit and the ls-tree entries copied in
+      # .manifest, the copy made read-only, and as outputs the judge's
+      # PATH (the node setup-node put there before the checkout, so it read no file of the pull
+      # request, then the system's) and the manifest's own sha256, which the judge checks its
+      # copy against (defence in depth: the same user could chmod the copy back). Nothing of
+      # the pull request runs in this job before the judge's step (#255, R12, R17-R22). The
+      # checkout persists no credentials: the judge fetches nothing after it, and a token in
+      # .git/config would be readable by the pull request's code (round 8).
+      - name: The judge, taken from the base commit
+        id: judge
+        timeout-minutes: 1
+        run: |
+          echo "ptrace_scope=$(cat /proc/sys/kernel/yama/ptrace_scope 2>/dev/null || echo missing)"
+          base="refs/remotes/origin/$GITHUB_BASE_REF"
+          sha="$(git show-ref --verify --hash "$base")"
+          judge="$RUNNER_TEMP/judge"
+          mkdir -p "$judge" "$RUNNER_TEMP/judge-home"
+          tree="$RUNNER_TEMP/judge-tree"
+          git ls-tree -r "$sha" -- .github/scripts scripts > "$tree"
+          entry='^(100644|100755) blob [0-9a-f]{40}([0-9a-f]{24})?[[:blank:]][A-Za-z0-9._@+/-]+$'
+          if LC_ALL=C grep -Ev "$entry" "$tree" > "$tree.skipped"; then
+            echo "::warning::the judge: not copied from $base (a symbolic link, a submodule or a"\
+              "name outside [A-Za-z0-9._@+/-]): $(tr '\n' ' ' < "$tree.skipped")"
+          fi
+          { echo "commit $sha"; LC_ALL=C grep -E "$entry" "$tree"; } > "$judge/.manifest"
+          tail -n +2 "$judge/.manifest" | while read -r mode _ oid file; do
+            mkdir -p "$(dirname "$judge/$file")"
+            git cat-file blob "$oid" > "$judge/$file"
+            if [ "$mode" = 100755 ]; then chmod a+x "$judge/$file"; fi
+          done
+          echo "$sha" > "$judge/.base-commit"
+          chmod -R a-w "$judge"
+          node="$(readlink -f "$(command -v node)")"
+          echo "path=$(dirname "$node"):/usr/bin:/bin:/usr/sbin:/sbin" >> "$GITHUB_OUTPUT"
+          echo "manifest=$(sha256sum < "$judge/.manifest" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          files=$(($(wc -l < "$judge/.manifest") - 1))  # the commit header is no file (R38)
+          echo "the judge: $base (${sha:0:12}), node $node, $files files"
+      # Title, body and branch are read from the pull request as it is now (3 tries, 10 s
+      # apart), not from the event, so a re-run after an edit judges the edit. The base is named
+      # by its full ref, refs/remotes/origin/<base>: a tag named origin/<base>, which the full
+      # history fetches, would otherwise answer for it (review of #255, R2). The judge is the
+      # extracted copy, started under `env -i` with a fixed PATH and HOME (R12).
+      - name: The pull request names its plan record (the base branch's program judges)
+        timeout-minutes: 2
+        shell: /usr/bin/env -u BASH_ENV -u ENV /bin/bash --noprofile --norc -eo pipefail {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          if [ -z "$PR" ]; then echo "::error::pr-metadata: no pull request to judge"; exit 1; fi
+          n=0
+          until /usr/bin/env -i PATH="${{ steps.judge.outputs.path }}" \
+            HOME="${{ runner.temp }}/judge-home" GH_TOKEN="$GH_TOKEN" \
+            gh pr view "$PR" --repo "$GITHUB_REPOSITORY" \
+            --json title,body,headRefName,number > "${{ runner.temp }}/pr.json"; do
+            n=$((n + 1)); [ "$n" -lt 3 ] || { echo "::error::could not read PR $PR"; exit 1; }
+            sleep 10
+          done
+          /usr/bin/env -i PATH="${{ steps.judge.outputs.path }}" \
+            HOME="${{ runner.temp }}/judge-home" GITHUB_REPOSITORY="$GITHUB_REPOSITORY" \
+            JUDGE_MANIFEST="${{ steps.judge.outputs.manifest }}" \
+            /bin/bash "${{ runner.temp }}/judge/.github/scripts/base-rule.sh" \
+            "refs/remotes/origin/$GITHUB_BASE_REF" scripts/pr-metadata.mjs \
+            --pr-json "${{ runner.temp }}/pr.json" --head HEAD \
+            --base "refs/remotes/origin/$GITHUB_BASE_REF" --check --summary "$GITHUB_STEP_SUMMARY"

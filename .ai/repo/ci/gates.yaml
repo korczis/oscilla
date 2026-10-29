@@ -22,8 +22,10 @@
 #     the jobs it `needs`, so a failing one leaves it blocked rather than queued.
 #
 # Not modelled: .github/workflows/pages.yml (a push to main deploys and verifies Pages, after
-# the change has landed; no gate of a task measures it) and cadence.yml (the release lag of
-# main, rule project.deploy-often). No gate is `at-finish` or `on-demand`.
+# the change has landed; no gate of a task measures it), cadence.yml (the release lag of
+# main, rule project.deploy-often) and metadata.yml (the pull request's title, branch and body,
+# rule project.pr-names-its-plan; its model is .ai/repo/ci/pr-meta.yaml, and no task's files
+# select it). No gate is `at-finish` or `on-demand`.
 #
 # Patterns: `**` crosses directories, `*` does not, a pattern without a wildcard names one
 # path. Paths are repository-relative, as `git diff --name-only` prints them.
@@ -142,18 +144,24 @@ gates:
     summary: the .ai layer by majordomus doctor at the pinned release; every FAIL fails but the git-hook wiring of policy enforcement, and an output without an OK layout line fails
 
   # The two process rules judge a pull request, and the program that judges is the base
-  # branch's copy (.github/scripts/base-rule.sh); <base>, <pr.json>, <head> and <pr> are the
-  # pull request's.
+  # branch's copy: .github/scripts/base-rule.sh and scripts/ taken from the base commit into
+  # $RUNNER_TEMP/judge before anything of the pull request runs, read-only with a manifest,
+  # started under env -i (review of #255, R12, R22). Nothing of the pull request runs before
+  # it: the fail-first judge reads from git all it judges and writes both trees first, then
+  # runs `npm ci --ignore-scripts` in the extracted head tree and the tests as its own
+  # children (#255, round 8). Each verdict is the judge's exit
+  # status alone; nothing reads its log. <base>, <pr.json>, <head> and <pr> are the pull
+  # request's.
   - id: fail-first
     job: fail-first
     always: true
-    runs: .github/scripts/base-rule.sh origin/<base> scripts/fail-first.mjs --pr-json <pr.json> --head <head> --base-branch origin/<base>
+    runs: $RUNNER_TEMP/judge/.github/scripts/base-rule.sh refs/remotes/origin/<base> scripts/fail-first.mjs --pr-json <pr.json> --head <head> --base-branch refs/remotes/origin/<base>
     summary: a feat or fix pull request's added or changed unit tests fail on the merge base and pass on the head, or its body says fail-first n/a with a reason (project.fail-first)
 
   - id: review-verdict
     job: review-verdict
     always: true
-    runs: .github/scripts/base-rule.sh origin/<base> scripts/review-verdict.mjs --pr <pr> --head HEAD --base-branch origin/<base>
+    runs: $RUNNER_TEMP/judge/.github/scripts/base-rule.sh refs/remotes/origin/<base> scripts/review-verdict.mjs --pr <pr> --head HEAD --base-branch refs/remotes/origin/<base>
     summary: a pull request that changes a guarded path carries a reviewer's verdict for the content it changes (project.review-verdict)
 
   - id: gate

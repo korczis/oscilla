@@ -1,0 +1,25 @@
+id: R026
+milestone: M056
+serves:
+  - "engineering-integrity#github-drift-reported"
+title: "GitHub drift is reported on a schedule; cadence issues carry release-overdue"
+slug: github-drift-reported-on-a-schedule
+priority: p3
+profile: implementation
+objective: "A scheduled, non-required workflow runs `majordomus forge check` (window 1800 s) and fails while GitHub's labels, milestones or pull-request regions depart from the records; .github/workflows/cadence.yml adds a release-overdue label, written only by the projection (owner default C8), to its own issues (#175, #227, #231), which the projection never adopts."
+why: "Drift must be visible without ever blocking a merge: a required check that depends on a forge write would stall every merge when GitHub does."
+scope:
+  - ".github/workflows"
+  - "tests/unit/ci-workflows.test.mjs"
+depends_on:
+  - "R024"
+acceptance_criteria:
+  - "The drift workflow is bounded, pinned and retried (project.ci-bounded), not part of gate, and its failure names each drifted object; cadence.yml's issue carries the label and the projection leaves it alone."
+  - "The pull request carries a review verdict (.github is guarded)."
+validation:
+  - "node --test tests/unit/ci-workflows.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29
