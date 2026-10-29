@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import {
   connectionTargets, probeConnection, probeRewire,
 } from '../../src/js/ui/studio/graph-view.js';
-import { rewireCable } from '../../src/js/ui/studio/graph-gestures.js';
+import { bodyTarget, rewireCable } from '../../src/js/ui/studio/graph-gestures.js';
 import { REFERENCE_TEMPLATE_ID, templateModel } from '../../src/js/studio/templates/index.js';
 import { createIdGenerator, createStudioStore } from '../../src/js/studio/actions.js';
 import { AUDIO_FEEDBACK_MESSAGE } from '../../src/js/studio/validate.js';
@@ -69,9 +69,11 @@ test('K008 a picked-up cable is judged without itself; dropped back it is unchan
 
 test('K008 a type mismatch or a feedback loop is refused with the validator sentence', () => {
   const m = synth();
-  const type = probeRewire(m, at('lfo-1', 'control'), at('master-1', 'audio'), { detach: 'edge-4' });
+  const type = probeRewire(m, at('lfo-1', 'control'), at('master-1', 'audio'),
+    { detach: 'edge-4' });
   assert.equal(type.allowed, false);
-  assert.match(type.reason, /^Connection rejected: Control output cannot connect to an audio input/);
+  assert.match(type.reason,
+    /^Connection rejected: Control output cannot connect to an audio input/);
   assert.deepEqual(type.remove, []);
   // Filter -> Envelope (occupied by the Oscillator): replacing edge-1 would close
   // env -> filter -> env, an instantaneous audio loop.
@@ -100,7 +102,8 @@ test('K008 replace is one history entry: EDGE_REMOVE then EDGE_ADD; undo restore
   const r = rewireCable(store, { from: at('osc-1', 'audio'), to: at('filter-1', 'audio') });
   assert.equal(r.ok, true);
   assert.equal(r.changed, true);
-  assert.match(r.text, /^Connected Oscillator 1 to Filter 1, replacing the connection from Envelope 1$/);
+  assert.match(r.text,
+    /^Connected Oscillator 1 to Filter 1, replacing the connection from Envelope 1$/);
   const m = store.getModel();
   assert.ok(!m.graph.edges.some((e) => e.id === 'edge-2'));
   assert.ok(keys(m).includes('osc-1.audio>filter-1.audio'));
@@ -189,5 +192,76 @@ test('K008 a store refusal after the probe rolls the whole gesture back', () => 
   assert.match(r.text, /running graph refused it/);
   assert.deepEqual(keys(store.getModel()), keys(m));
   assert.equal(store.debugInfo().undoDepth, depth);
+  assert.equal(store.debugInfo().inGesture, false);
+});
+
+test('K008 a muted cable stays muted wherever it is moved; settings only to the same parameter',
+  () => {
+    // edge-3 (Filter -> Master) muted, moved to the Spectrum input (edge-5 removed first).
+    const { store } = storeWithGate();
+    store.dispatch({ type: 'EDGE_UPDATE', edgeId: 'edge-3', props: { muted: true } });
+    store.dispatch({ type: 'EDGE_REMOVE', edgeIds: ['edge-5'] });
+    const r = rewireCable(store, { from: at('filter-1', 'audio'), to: at('spectrum-1', 'audio'),
+      detach: 'edge-3' });
+    assert.equal(r.ok, true, r.text);
+    const moved = store.getModel().graph.edges.find((e) => e.to.node === 'spectrum-1');
+    assert.equal(moved.props.muted, true, 'the move did not make the signal audible');
+    // The muted LFO -> cutoff cable moved to Q: still muted, Q's own default depth.
+    const s2 = storeWithGate().store;
+    const set = s2.dispatch({ type: 'EDGE_UPDATE', edgeId: 'edge-4',
+      props: { muted: true, depth: 3 } }).ok;
+    assert.equal(set, true);
+    const plain = probeRewire(s2.getModel(), at('lfo-1', 'control'), at('filter-1', 'Q'));
+    assert.equal(plain.allowed, true);
+    assert.equal(rewireCable(s2, { from: at('lfo-1', 'control'), to: at('filter-1', 'Q'),
+      detach: 'edge-4' }).ok, true);
+    const q = s2.getModel().graph.edges.find((e) => e.to.port === 'Q');
+    assert.equal(q.props.muted, true);
+    assert.notEqual(q.props.depth, 3, 'depth is the cutoff\'s, not carried to Q');
+    // An unmuted cable moved elsewhere is unmuted.
+    const s3 = storeWithGate().store;
+    rewireCable(s3, { from: at('lfo-1', 'control'), to: at('filter-1', 'Q'), detach: 'edge-4' });
+    assert.equal(s3.getModel().graph.edges.find((e) => e.to.port === 'Q').props.muted, false);
+  });
+
+test('K008 a cable dropped on a node body takes a free input before replacing one', () => {
+  const m0 = synth();
+  const { store } = storeWithGate(m0);
+  const add = (nodeType, y) => store.dispatch({ type: 'NODE_ADD', nodeType,
+    position: { x: 0, y } }).created.nodes[0];
+  const mixer = add('mixer', 600);
+  const osc2 = add('oscillator', 800);
+  const filter2 = add('filter', 1000);
+  store.dispatch({ type: 'EDGE_ADD', from: at('osc-1', 'audio'), to: at(mixer, 'in1') });
+  const m = store.getModel();
+  const t = bodyTarget(connectionTargets(m, at(osc2, 'audio'), undefined, { rewire: true }),
+    mixer);
+  assert.equal(t.port, 'in2', 'the free input, not Oscillator 1\'s');
+  assert.deepEqual(t.replaces, []);
+  // A node whose only signal input is taken: the drop replaces it, as a drop on the port does.
+  store.dispatch({ type: 'EDGE_ADD', from: at('osc-1', 'audio'), to: at(filter2, 'audio') });
+  const f = bodyTarget(connectionTargets(store.getModel(), at(osc2, 'audio'), undefined,
+    { rewire: true }), filter2);
+  assert.equal(f.port, 'audio');
+  assert.equal(f.replaces.length, 1);
+  // No compatible input: the first refusal, for its reason.
+  const no = bodyTarget(connectionTargets(store.getModel(), at('lfo-1', 'control'), undefined,
+    { rewire: true }), 'master-1');
+  assert.equal(no.allowed, false);
+  assert.equal(bodyTarget([], 'master-1'), null);
+});
+
+test('K008 a removal the store cannot roll back is reported, not called a refusal', () => {
+  const m = synth();
+  const store = createStudioStore(m, { idGenerator: createIdGenerator(m),
+    gate: (next, info) => (info.reason === 'cancel' || (info.action
+      && info.action.type === 'EDGE_ADD')
+      ? { ok: false, reason: 'The running graph refused it.', phase: 'prepare' } : null) });
+  const depth = store.debugInfo().undoDepth;
+  const r = rewireCable(store, { from: at('osc-1', 'audio'), to: at('filter-1', 'audio') });
+  assert.equal(r.ok, false);
+  assert.equal(r.changed, true);
+  assert.match(r.text, /running graph refused it\. The cable was removed and not put back: /);
+  assert.equal(store.debugInfo().undoDepth, depth + 1, 'the removal is one undo entry');
   assert.equal(store.debugInfo().inGesture, false);
 });

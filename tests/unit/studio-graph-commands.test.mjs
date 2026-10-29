@@ -24,9 +24,13 @@ const synth = () => templateModel(REFERENCE_TEMPLATE_ID);
 const at = (node, port) => ({ node, port });
 
 /** createGraphCommands on a real store, with the DOM it touches stubbed. */
-function harness(m = synth()) {
+function harness(m = synth(), { gate = null, hold = false } = {}) {
   globalThis.requestAnimationFrame = () => 0;
-  const store = createStudioStore(m, { idGenerator: createIdGenerator(m) });
+  const raw = createStudioStore(m, { idGenerator: createIdGenerator(m), gate });
+  // hold: a store with workspace.js's hold(fn), counting the commands that run in one.
+  const holds = [];
+  const store = hold ? { ...raw, hold: (fn) => { holds.push(raw.getRevision()); return fn(); } }
+    : raw;
   const said = [];
   const viewport = { addEventListener() {}, contains: () => false, focus() {} };
   const cmd = createGraphCommands({ viewport, store, registry: NODE_REGISTRY,
@@ -35,20 +39,20 @@ function harness(m = synth()) {
     clientToGraph: () => ({ x: 0, y: 0 }), isOverViewport: () => true, focusNode: () => true,
     isShown: () => false, nodeHeights: () => new Map() });
   const select = (sel) => store.dispatch({ type: 'SELECTION_CHANGE', selection: sel });
-  return { store, cmd, said, select, depth: () => store.debugInfo().undoDepth };
+  return { store, cmd, said, select, holds, depth: () => store.debugInfo().undoDepth };
 }
 
 test('K009 bridgePlan joins a node\'s input to its outputs where the validator allows it', () => {
   const m = synth();
   assert.deepEqual(bridgePlan(m, 'env-1'), { edges: [{ from: at('osc-1', 'audio'),
-    to: at('filter-1', 'audio') }], reason: null });
+    to: at('filter-1', 'audio') }], reason: null, dropped: [] });
   // Filter: the Envelope feeds both outputs; the LFO's control cable cannot reach an audio input.
   assert.deepEqual(bridgePlan(m, 'filter-1').edges, [
     { from: at('env-1', 'audio'), to: at('master-1', 'audio') },
     { from: at('env-1', 'audio'), to: at('spectrum-1', 'audio') }]);
   const lfo = bridgePlan(m, 'lfo-1');
   assert.deepEqual(lfo.edges, []);
-  assert.equal(lfo.reason, 'LFO 1 has no input connection to bridge.');
+  assert.equal(lfo.reason, 'LFO 1 has no signal input connection to bridge.');
   const master = bridgePlan(m, 'master-1');
   assert.deepEqual(master.edges, []);
   assert.equal(master.reason, 'Master has no output connection to bridge.');
@@ -56,11 +60,19 @@ test('K009 bridgePlan joins a node\'s input to its outputs where the validator a
 
 test('K009 a bridge the types refuse is not made, and the plan says why', () => {
   const s = createStudioStore(synth(), { idGenerator: createIdGenerator(synth()) });
-  // LFO 1 -> Oscillator 1 frequency: the oscillator's only input is a control cable.
-  s.dispatch({ type: 'EDGE_ADD', from: at('lfo-1', 'control'), to: at('osc-1', 'frequency') });
-  const p = bridgePlan(s.getModel(), 'osc-1');
+  // Envelope 1 fed by Oscillator 1 (audio) feeds only Filter 1's Q (its control output): an
+  // audio cable cannot reach a parameter input.
+  s.dispatch({ type: 'EDGE_REMOVE', edgeIds: ['edge-2'] });
+  assert.equal(s.dispatch({ type: 'EDGE_ADD', from: at('env-1', 'control'),
+    to: at('filter-1', 'Q') }).ok, true);
+  const p = bridgePlan(s.getModel(), 'env-1');
   assert.deepEqual(p.edges, []);
-  assert.match(p.reason, /^Connection rejected: Control output cannot connect to an audio input/);
+  assert.match(p.reason, /^Connection rejected: Audio output cannot connect to /);
+  // A node whose only input is a parameter (LFO 1 -> Oscillator 1 frequency) has no signal to
+  // bridge.
+  s.dispatch({ type: 'EDGE_ADD', from: at('lfo-1', 'control'), to: at('osc-1', 'frequency') });
+  assert.equal(bridgePlan(s.getModel(), 'osc-1').reason,
+    'Oscillator 1 has no signal input connection to bridge.');
 });
 
 test('K009 Shift+Delete is one history entry; undo restores the node and its cables', () => {
@@ -86,8 +98,8 @@ test('K009 Shift+Delete without a possible bridge deletes plainly and announces 
   h.cmd.deleteBridge();
   assert.ok(!h.store.getModel().graph.nodes.some((n) => n.id === 'lfo-1'));
   assert.equal(h.depth(), d0 + 1);
-  assert.equal(h.said.at(-1).text, 'Deleted LFO 1. No bridge: LFO 1 has no input connection to '
-    + 'bridge.');
+  assert.equal(h.said.at(-1).text, 'Deleted LFO 1. No bridge: LFO 1 has no signal input '
+    + 'connection to bridge.');
   // Two nodes: no bridge is guessed.
   const h2 = harness();
   h2.select({ nodes: ['env-1', 'lfo-1'] });
@@ -96,7 +108,7 @@ test('K009 Shift+Delete without a possible bridge deletes plainly and announces 
   assert.match(h2.said.at(-1).text, /No bridge: select one node to bridge it\.$/);
 });
 
-test('K009 tidyPositions places compactLayout columns and rows on the grid, deterministically', () => {
+test('K009 tidyPositions puts compactLayout columns and rows on the grid, deterministic', () => {
   const m = synth();
   const layout = compactLayout(m);
   const pos = tidyPositions(m);
@@ -165,4 +177,82 @@ test('K009 M mutes the selected connections, then unmutes them, one entry each',
   h.cmd.toggleMute();
   assert.equal(h.depth(), d1);
   assert.equal(h.said.at(-1).text, 'Select connections to mute.');
+});
+
+test('K009 a bridge never takes a modulator of the deleted node\'s own parameter', () => {
+  const s = createStudioStore(synth(), { idGenerator: createIdGenerator(synth()) });
+  const lfo2 = s.dispatch({ type: 'NODE_ADD', nodeType: 'lfo', position: { x: 0, y: 600 } })
+    .created.nodes[0];
+  // LFO 2 -> LFO 1 rate, LFO 1 -> Filter cutoff (edge-4).
+  assert.equal(s.dispatch({ type: 'EDGE_ADD', from: at(lfo2, 'control'),
+    to: at('lfo-1', 'rate') }).ok, true);
+  const p = bridgePlan(s.getModel(), 'lfo-1');
+  assert.deepEqual(p.edges, [], 'LFO 2 does not become the cutoff modulator');
+  assert.equal(p.reason, 'LFO 1 has no signal input connection to bridge.');
+});
+
+test('K009 a bridge is muted when a cable it replaces was, and says so', () => {
+  for (const edgeId of ['edge-1', 'edge-2']) {
+    const h = harness();
+    h.store.dispatch({ type: 'EDGE_UPDATE', edgeId, props: { muted: true } });
+    const plan = bridgePlan(h.store.getModel(), 'env-1');
+    assert.deepEqual(plan.edges, [{ from: at('osc-1', 'audio'), to: at('filter-1', 'audio'),
+      props: { muted: true } }], edgeId);
+    h.select({ nodes: ['env-1'] });
+    h.cmd.deleteBridge();
+    const bridge = h.store.getModel().graph.edges.find((e) => e.from.node === 'osc-1'
+      && e.to.node === 'filter-1');
+    assert.equal(bridge.props.muted, true, `${edgeId} muted: the bridge stays silent`);
+    assert.equal(h.said.at(-1).text, 'Deleted Envelope 1 and bridged Oscillator 1 to Filter 1, '
+      + 'muted as before');
+  }
+});
+
+test('K009 a bridge names the sources it does not reconnect', () => {
+  const h = harness();
+  const add = (nodeType, y) => h.store.dispatch({ type: 'NODE_ADD', nodeType,
+    position: { x: 0, y } }).created.nodes[0];
+  const mixer = add('mixer', 600);
+  const osc2 = add('oscillator', 800);
+  const filter2 = add('filter', 1000);
+  for (const [from, to] of [[at('osc-1', 'audio'), at(mixer, 'in1')],
+    [at(osc2, 'audio'), at(mixer, 'in2')], [at(mixer, 'audio'), at(filter2, 'audio')]]) {
+    assert.equal(h.store.dispatch({ type: 'EDGE_ADD', from, to }).ok, true);
+  }
+  const plan = bridgePlan(h.store.getModel(), mixer);
+  assert.equal(plan.edges.length, 1);
+  assert.deepEqual(plan.dropped, ['Oscillator 2']);
+  h.select({ nodes: [mixer] });
+  h.cmd.deleteBridge();
+  assert.match(h.said.at(-1).text,
+    /and bridged Oscillator 1 to Filter 2\. Not reconnected: Oscillator 2$/);
+});
+
+test('K009 when every bridge is refused the delete is plain, its undo entry named for it', () => {
+  const h = harness(synth(), { gate: (next, info) => (info.action
+    && info.action.type === 'EDGE_ADD'
+    ? { ok: false, reason: 'The running graph refused it.', phase: 'prepare' } : null) });
+  h.select({ nodes: ['env-1'] });
+  const d0 = h.depth();
+  h.cmd.deleteBridge();
+  assert.ok(!h.store.getModel().graph.nodes.some((n) => n.id === 'env-1'));
+  assert.equal(h.depth(), d0 + 1);
+  assert.equal(h.store.undoLabel(), 'Delete Envelope 1');
+  assert.match(h.said.at(-1).text, /^Deleted Envelope 1\. No bridge: .*running graph refused it/);
+});
+
+test('K009 L and M each run in one store hold: the projections update once', () => {
+  const h = harness(synth(), { hold: true });
+  h.cmd.tidy();
+  assert.equal(h.holds.length, 1);
+  h.select({ edges: ['edge-1', 'edge-2', 'edge-4'] });
+  h.cmd.toggleMute();
+  assert.equal(h.holds.length, 2);
+  assert.equal(h.said.at(-1).text, 'Muted 3 connections');
+});
+
+test('K009 L with unmeasured cards (a hidden graph) uses the default row height', () => {
+  const m = synth();
+  const zero = new Map(m.graph.nodes.map((n) => [n.id, 0]));
+  assert.deepEqual(tidyPositions(m, { heights: zero }), tidyPositions(m));
 });

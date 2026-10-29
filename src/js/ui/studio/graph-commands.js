@@ -9,12 +9,17 @@
 //     nudge, endNudge, tidy, toggleMute, onPress(), destroy() }
 //     ctx: { viewport, store, registry, svc, view(), setView(v), centerPoint(),
 //            clientToGraph(x, y), isOverViewport(x, y), focusNode(id), isShown(),
-//            nodeHeights() -> Map id -> logical height (tidy rows) }
+//            nodeHeights() -> Map id -> logical height (tidy rows; 0 when unmeasured) }
+//     store.hold(fn), when the store has it (workspace.js createStoreHandle), runs a command of
+//     many actions with one projection update at its end (docs/v31/performance.md editMs).
 //
 // Plan K009, pure planners beside their commands:
-//   bridgePlan(model, nodeId, registry) -> { edges: [{ from, to }], reason }   Shift+Delete: each
-//     output cable of the node gets the first input cable's source the validator accepts on the
-//     graph without the node (probeConnection, with the bridges already planned); none -> reason
+//   bridgePlan(model, nodeId, registry) -> { edges: [{ from, to, props? }], reason, dropped }
+//     Shift+Delete: each output cable of the node gets the first source of a cable into one of
+//     its signal inputs (never a PARAMETER input: a modulator of the node's own parameter is not
+//     its signal) that the validator accepts on the graph without the node (probeConnection,
+//     with the bridges already planned); none -> reason. A bridge is muted ({ muted: true })
+//     when either cable it replaces was. `dropped`: the names of the sources no bridge carries
 //   tidyPositions(model, { registry, heights }) -> Map id -> { x, y }   L: compactLayout's
 //     columns and rows from the graph's top-left corner, NODE_WIDTH + TIDY_COLUMN_GAP apart,
 //     each row below the tallest node of the one above (TIDY_DEFAULT_HEIGHT when unknown) plus
@@ -43,13 +48,20 @@ export function bridgePlan(model, nodeId, registry = NODE_REGISTRY) {
   const node = model.graph.nodes.find((n) => n.id === nodeId);
   if (!node) return { edges: [], reason: 'Unknown node.' };
   const name = node.metadata.name;
-  const ins = model.graph.edges.filter((e) => e.to.node === nodeId);
+  const signalIn = (e) => {
+    const p = registry.port(node.type, e.to.port, 'in');
+    return !!p && p.role !== 'PARAMETER';
+  };
+  const ins = model.graph.edges.filter((e) => e.to.node === nodeId && signalIn(e));
   const outs = model.graph.edges.filter((e) => e.from.node === nodeId);
-  if (!ins.length) return { edges: [], reason: `${name} has no input connection to bridge.` };
-  if (!outs.length) return { edges: [], reason: `${name} has no output connection to bridge.` };
+  const none = (reason) => ({ edges: [], reason, dropped: [] });
+  if (!ins.length) return none(`${name} has no signal input connection to bridge.`);
+  if (!outs.length) return none(`${name} has no output connection to bridge.`);
   let trial = withoutNodes(model, [nodeId]);
   const edges = [];
+  const used = new Set();
   let reason = null;
+  const muted = (e) => !!(e.props && e.props.muted);
   for (const o of outs) {
     for (const i of ins) {
       const v = probeConnection(trial, i.from, o.to, registry);
@@ -57,18 +69,23 @@ export function bridgePlan(model, nodeId, registry = NODE_REGISTRY) {
         reason = reason || v.reason;
         continue;
       }
-      const e = { from: { ...i.from }, to: { ...o.to } };
+      const e = { from: { ...i.from }, to: { ...o.to },
+        ...(muted(i) || muted(o) ? { props: { muted: true } } : {}) };
       edges.push(e);
+      used.add(i);
       const b = trial.graph.nodes.find((n) => n.id === o.to.node);
       const tgt = registry.port(b.type, o.to.port, 'in');
-      const props = defaultEdgeProps(v.signalType, tgt,
-        tgt.param ? registry.param(b.type, tgt.param.key) : null);
+      const props = { ...defaultEdgeProps(v.signalType, tgt,
+        tgt.param ? registry.param(b.type, tgt.param.key) : null), ...e.props };
       trial = { ...trial, graph: { ...trial.graph, edges: [...trial.graph.edges,
-        { id: `bridge-${edges.length}`, ...e, props }] } };
+        { id: `bridge-${edges.length}`, from: e.from, to: e.to, props }] } };
       break;
     }
   }
-  return { edges, reason: edges.length ? null : reason };
+  const nameOf = (id) => model.graph.nodes.find((n) => n.id === id).metadata.name;
+  const dropped = edges.length ? [...new Set(ins.filter((i) => !used.has(i))
+    .map((i) => nameOf(i.from.node)))] : [];
+  return { edges, reason: edges.length ? null : reason, dropped };
 }
 
 export function tidyPositions(model, { registry = NODE_REGISTRY, heights = null } = {}) {
@@ -115,6 +132,7 @@ export function createGraphCommands(ctx) {
   const selection = () => store.getSelection();
   const announce = (text, opts) => { if (text) svc.announce(text, opts); };
   const select = (sel) => store.dispatch({ type: 'SELECTION_CHANGE', selection: sel });
+  const hold = (fn) => (typeof store.hold === 'function' ? store.hold(fn) : fn());
 
   /** A pointer press: the focus it moves in this event-loop turn does not select. */
   function onPress() {
@@ -219,7 +237,7 @@ export function createGraphCommands(ctx) {
     return best;
   }
 
-  function deleteSelection({ bridges = [], note = '' } = {}) {
+  function deleteSelection({ bridges = [], note = '', dropped = [] } = {}) {
     const sel = selection();
     const m = model();
     const nodes = sel.nodes.filter((id) => m.graph.nodes.some((n) => n.id === id));
@@ -242,15 +260,26 @@ export function createGraphCommands(ctx) {
     }
     const bridged = new Map(); // source name -> target names
     let refused = null;
+    let anyMuted = false;
+    const name = (id) => m.graph.nodes.find((n) => n.id === id).metadata.name;
     for (const b of last && last.ok ? bridges : []) {
-      const r = store.dispatch({ type: 'EDGE_ADD', from: b.from, to: b.to });
+      const r = store.dispatch({ type: 'EDGE_ADD', from: b.from, to: b.to,
+        ...(b.props ? { props: b.props } : {}) });
       if (!r.ok) {
         refused = refused || announceAction(r);
         continue;
       }
-      const name = (id) => m.graph.nodes.find((n) => n.id === id).metadata.name;
+      if (b.props && b.props.muted) anyMuted = true;
       const from = name(b.from.node);
       bridged.set(from, [...(bridged.get(from) || []), name(b.to.node)]);
+    }
+    if (bridges.length && last && last.ok && !bridged.size) {
+      // Every bridge refused (the running graph): undo the whole gesture and delete plainly,
+      // so the undo entry is not named for a bridge that is not there.
+      if (store.cancelGesture()) {
+        select({ nodes, edges }); // the removal pruned the selection; the cancel restored them
+        return deleteSelection({ note: refused || note });
+      }
     }
     const entry = store.endGesture();
     if (last && last.ok) {
@@ -258,10 +287,12 @@ export function createGraphCommands(ctx) {
         ? `Deleted ${nodes.length + edges.length} items` : announceAction(last);
       if (bridged.size) {
         text += ` and bridged ${[...bridged].map(([a, b]) => `${a} to ${b.join(', ')}`)
-          .join('; ')}`;
+          .join('; ')}${anyMuted ? ', muted as before' : ''}`;
       }
       const why = refused || note;
-      announce(why ? `${text}. No bridge: ${why}` : text);
+      if (why) text += `. No bridge: ${why}`;
+      if (bridged.size && dropped.length) text += `. Not reconnected: ${dropped.join(', ')}`;
+      announce(text);
     } else if (last) announce(announceAction(last), { assertive: true });
     // Focus the nearest remaining node, else the canvas (§142): never <body>. While the graph
     // subview is hidden (a phone, Delete from the Inspector) focus stays where it is (V431 U7).
@@ -285,13 +316,15 @@ export function createGraphCommands(ctx) {
       return deleteSelection({ note: nodes.length ? 'select one node to bridge it.' : '' });
     }
     const plan = bridgePlan(m, nodes[0], registry);
-    return deleteSelection({ bridges: plan.edges, note: plan.reason || '' });
+    return deleteSelection({ bridges: plan.edges, note: plan.reason || '',
+      dropped: plan.dropped });
   }
 
   /** L (K009): every node to its tidyPositions place, one NODE_MOVE gesture. */
   function tidy() {
     const m = model();
-    const pos = tidyPositions(m, { registry, heights: ctx.nodeHeights ? ctx.nodeHeights() : null });
+    const heights = ctx.nodeHeights ? ctx.nodeHeights() : null;
+    const pos = tidyPositions(m, { registry, heights });
     const moves = m.graph.nodes.filter((n) => {
       const p = pos.get(n.id);
       return p && (p.x !== n.position.x || p.y !== n.position.y);
@@ -300,16 +333,22 @@ export function createGraphCommands(ctx) {
       announce(m.graph.nodes.length ? 'The graph is already tidy' : 'The graph is empty.');
       return false;
     }
-    store.beginGesture('Tidy the graph');
-    for (const n of moves) {
-      const r = store.dispatch({ type: 'NODE_MOVE', nodeId: n.id, position: pos.get(n.id) });
-      if (!r.ok) {
-        store.cancelGesture();
-        announce(announceAction(r), { assertive: true });
-        return false;
+    const failed = hold(() => {
+      store.beginGesture('Tidy the graph');
+      for (const n of moves) {
+        const r = store.dispatch({ type: 'NODE_MOVE', nodeId: n.id, position: pos.get(n.id) });
+        if (!r.ok) {
+          store.cancelGesture();
+          return r;
+        }
       }
+      store.endGesture();
+      return null;
+    });
+    if (failed) {
+      announce(announceAction(failed), { assertive: true });
+      return false;
     }
-    store.endGesture();
     announce(`Tidied the graph: ${plural(moves.length, 'node')} moved`);
     return true;
   }
@@ -322,13 +361,15 @@ export function createGraphCommands(ctx) {
       return false;
     }
     const n = plural(t.edgeIds.length, 'connection');
-    store.beginGesture(`${t.muted ? 'Mute' : 'Unmute'} ${n}`);
     let failed = null;
-    for (const edgeId of t.edgeIds) {
-      const r = store.dispatch({ type: 'EDGE_UPDATE', edgeId, props: { muted: t.muted } });
-      if (!r.ok) failed = failed || r;
-    }
-    store.endGesture();
+    hold(() => {
+      store.beginGesture(`${t.muted ? 'Mute' : 'Unmute'} ${n}`);
+      for (const edgeId of t.edgeIds) {
+        const r = store.dispatch({ type: 'EDGE_UPDATE', edgeId, props: { muted: t.muted } });
+        if (!r.ok) failed = failed || r;
+      }
+      store.endGesture();
+    });
     if (failed) announce(announceAction(failed), { assertive: true });
     else announce(`${t.muted ? 'Muted' : 'Unmuted'} ${n}`);
     return !failed;

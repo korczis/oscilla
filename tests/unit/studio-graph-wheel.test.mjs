@@ -1,13 +1,14 @@
 // Studio graph wheel (plan K007; spec §56-§57): a wheel or two-finger trackpad scroll pans the
-// view by its deltaX and deltaY, Ctrl/Cmd + wheel and a trackpad pinch (which browsers report as
-// a wheel with ctrlKey) zoom at the pointer. src/js/ui/studio/graph-gestures.js wheelAction.
+// view by its deltaX and deltaY, Ctrl/Cmd + wheel and a trackpad pinch (a wheel with ctrlKey in
+// Chromium and Firefox, gesturechange events in Safari) zoom at the pointer.
+// src/js/ui/studio/graph-gestures.js wheelAction, gestureZoomFactor.
 //   node --test tests/unit/studio-graph-wheel.test.mjs
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  WHEEL_LINE_PX, WHEEL_ZOOM_MAX_DELTA, wheelAction,
+  WHEEL_LINE_PX, WHEEL_ZOOM_MAX_DELTA, gestureZoomFactor, wheelAction,
 } from '../../src/js/ui/studio/graph-gestures.js';
 import { ZOOM_STEP, zoomAt } from '../../src/js/ui/studio/graph-geometry.js';
 
@@ -70,4 +71,14 @@ test('K007 a wheel with no delta does nothing', () => {
   assert.equal(wheelAction(wheel({ ctrlKey: true })), null);
   assert.equal(wheelAction(wheel({ deltaY: Number.NaN })), null);
   assert.equal(wheelAction(null), null);
+});
+
+test('K007 a Safari pinch zooms by the change of its cumulative scale', () => {
+  // gesturestart at scale 1, then 1.1, then 1.21: two equal zoom steps.
+  assert.equal(gestureZoomFactor(1, 1.1), 1.1);
+  assert.ok(Math.abs(gestureZoomFactor(1.1, 1.21) - 1.1) < 1e-12);
+  assert.equal(gestureZoomFactor(2, 1), 0.5, 'pinching in zooms out');
+  for (const [a, b] of [[1, 1], [0, 1.1], [1, 0], [1, NaN], [1, Infinity], [NaN, 1]]) {
+    assert.equal(gestureZoomFactor(a, b), null, `${a} -> ${b}`);
+  }
 });

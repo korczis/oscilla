@@ -6,26 +6,34 @@
 //
 //   wheelAction(wheelEvent, { pageHeight }) -> { kind: 'pan', dx, dy } | { kind: 'zoom', factor }
 //     | null        pure: what a wheel event does to the view (px of the viewport)
+//   bodyTarget(verdicts, nodeId) -> verdict | null   pure: the input a cable dropped on a node's
+//     body takes (a free one before one it would replace)
+//   gestureZoomFactor(lastScale, scale) -> factor | null   pure: the zoom step of one Safari
+//     gesturechange (its `scale` is cumulative from gesturestart)
 //   rewireCable(store, { from, to, detach, registry }) -> { ok, changed, text, label? }   the
 //     end of a cable drag (K008) as one history entry: EDGE_REMOVE of the picked-up cable and of
 //     the cable an occupied single input had, then EDGE_ADD; `to` null deletes the picked-up
 //     cable. probeRewire judges first: a refusal dispatches nothing (model, history, revision
 //     and the runtime gate untouched) and a store refusal after it cancels the whole gesture.
-//   createGraphGestures(ctx) -> { dragging(id), kind(), inTap(), refresh(), startTapConnect(from),
-//     cancelTransient(), cancel(), destroy() }
+//     A moved cable stays muted when it was; depth, polarity, mapping and offset carry over
+//     only to the same parameter of the same node type.
+//   createGraphGestures(ctx) -> { dragging(id), detaching(), kind(), inTap(), refresh(),
+//     startTapConnect(from), cancelTransient(), cancel(), destroy() }
 //     ctx: { host, viewport, preview, marquee, banner: { el, text, cancel }, nodeEls, edgeEls,
 //            store, registry, svc, view(), setLocalView(v), commitView(now), nodeRects(),
 //            anchorOf(nodeId, key), routeEdge(entry), routeAll(), render(), clientToGraph(x, y),
-//            isOverViewport(x, y), onPress() }
+//            isOverViewport(x, y), isChrome(el), onPress() }
 //
 // Pointer model (decision, docs in tests/browser/v31-studio-graph.cjs): mouse/pen — drag a node
 // to move it (snap to the 8-unit grid; Alt disables snapping), drag from an output port to draw
 // a cable, drag on blank canvas to pan, Shift/Ctrl/Cmd + drag on blank canvas for rectangle
 // selection, middle-button drag pans, double-click blank canvas opens the quick-add picker. Wheel
 // (K007, wheelAction): a wheel or two-finger trackpad scroll pans by its deltaX and deltaY (Shift
-// turns a vertical-only wheel horizontal); Ctrl/Cmd + wheel, and a trackpad pinch, which browsers
-// report as a wheel with ctrlKey, zoom at the pointer. Touch — one finger on blank canvas pans, two fingers pinch-zoom, a tap on
-// an output port starts tap-connect mode (no precision cable drag needed on phones, §137-§138).
+// turns a vertical-only wheel horizontal); Ctrl/Cmd + wheel zooms at the pointer. A trackpad
+// pinch zooms at the pointer too: Chromium and Firefox report it as a wheel with ctrlKey, Safari
+// as gesturestart / gesturechange events (gestureZoomFactor; the page zoom is prevented).
+// Touch — one finger on blank canvas pans, two fingers pinch-zoom, a tap on an output port
+// starts tap-connect mode (no precision cable drag needed on phones, §137-§138).
 // A press without movement past DRAG_THRESHOLD_PX is a click/tap. Every gesture uses pointer
 // capture; pointercancel, lostpointercapture and window blur cancel it cleanly (§246-§247).
 // Performance (§61-§62, §146-§147): a node drag moves only the dragged node elements and the
@@ -72,6 +80,30 @@ export function wheelAction(e, { pageHeight = WHEEL_PAGE_PX } = {}) {
   return { kind: 'pan', dx: -dx || 0, dy: -dy || 0 };
 }
 
+/** The zoom step of a Safari gesturechange: scale over the last one, null when it is no step. */
+export function gestureZoomFactor(lastScale, scale) {
+  if (!(lastScale > 0) || !(scale > 0) || !Number.isFinite(scale)) return null;
+  const f = scale / lastScale;
+  return Number.isFinite(f) && f !== 1 ? f : null;
+}
+
+/**
+ * The input of node `nodeId` a cable dropped on its body takes, from connectionTargets verdicts:
+ * the first free compatible one; one that replaces a cable (K008) only when the node has no
+ * free one; else the first refusal (its reason is said); null when the node has no input.
+ */
+export function bodyTarget(verdicts, nodeId) {
+  let firstReason = null;
+  let firstReplace = null;
+  for (const t of verdicts) {
+    if (t.node !== nodeId) continue;
+    if (t.allowed && !(t.replaces && t.replaces.length)) return t;
+    if (t.allowed && !firstReplace) firstReplace = t;
+    if (!t.allowed && !firstReason) firstReason = t;
+  }
+  return firstReplace || firstReason;
+}
+
 const nameOf = (m, id) => {
   const n = m.graph.nodes.find((x) => x.id === id);
   return n ? n.metadata.name : id;
@@ -91,11 +123,12 @@ export function rewireCable(store, { from, to = null, detach = null, registry } 
   const replaced = v.replaces.map((id) => m.graph.edges.find((e) => e.id === id));
   const label = old ? `Reconnect ${nameOf(m, from.node)} to ${nameOf(m, to.node)}`
     : `Replace the connection into ${nameOf(m, to.node)}`;
-  // A cable moved to the same parameter keeps its settings (depth, polarity, mapping, offset).
+  // A cable moved to the same parameter keeps its settings (depth, polarity, mapping, offset);
+  // a muted one stays muted wherever it goes (a move never makes a silenced signal audible).
   const typeOf = (id) => (m.graph.nodes.find((n) => n.id === id) || {}).type;
   const keep = !!old && old.to.port === to.port && typeOf(old.to.node) === typeOf(to.node);
-  const addEdge = () => store.dispatch({ type: 'EDGE_ADD', from, to,
-    ...(keep ? { props: old.props } : {}) });
+  const props = keep ? old.props : old && old.props && old.props.muted ? { muted: true } : null;
+  const addEdge = () => store.dispatch({ type: 'EDGE_ADD', from, to, ...(props ? { props } : {}) });
   if (!v.remove.length) {
     const r = addEdge(); // a new cable to a free input: the plain EDGE_ADD of before K008
     return { ok: r.ok, changed: !!r.changed, text: announceAction(r), label: r.label,
@@ -105,8 +138,10 @@ export function rewireCable(store, { from, to = null, detach = null, registry } 
   const rm = store.dispatch({ type: 'EDGE_REMOVE', edgeIds: v.remove });
   const add = rm.ok ? addEdge() : rm;
   if (!add.ok) {
-    store.cancelGesture();
-    return { ok: false, changed: false, text: announceAction(add) };
+    // A refused return to the start keeps what was dispatched as one undo entry (actions.js).
+    if (store.cancelGesture()) return { ok: false, changed: false, text: announceAction(add) };
+    return { ok: false, changed: true, text: `${announceAction(add).replace(/\.$/, '')}. The `
+      + 'cable was removed and not put back: Undo restores it' };
   }
   store.endGesture();
   const text = `${announceAction(add)}${replaced.length ? `, replacing the connection from ${
@@ -179,16 +214,9 @@ export function createGraphGestures(ctx) {
     return r;
   }
 
-  /** The first compatible input of a node for a cable dropped on its body. */
+  /** bodyTarget over the judged inputs of this cable gesture. */
   function bestTargetOn(nodeId) {
-    if (!targets) return null;
-    let firstReason = null;
-    for (const t of targets.values()) {
-      if (t.node !== nodeId) continue;
-      if (t.allowed) return t;
-      if (!firstReason) firstReason = t;
-    }
-    return firstReason;
+    return targets ? bodyTarget(targets.values(), nodeId) : null;
   }
 
   function startTapConnect(from) {
@@ -220,6 +248,10 @@ export function createGraphGestures(ctx) {
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   }
 
+  /** Over the view controls, the minimap or the banner (a captured pointer's target is the
+   * viewport, so the point decides). */
+  const overChrome = (e) => ctx.isChrome(document.elementFromPoint(e.clientX, e.clientY));
+
   function capture(e) {
     try { viewport.setPointerCapture(e.pointerId); } catch (err) { /* not capturable */ }
   }
@@ -232,7 +264,7 @@ export function createGraphGestures(ctx) {
   }
 
   function onPointerDown(e) {
-    if (e.target.closest('.osc-sg-controls, .osc-sg-banner')) return;
+    if (ctx.isChrome(e.target)) return;
     ctx.onPress();
     if (e.pointerType === 'touch') {
       pointers.set(e.pointerId, local(e));
@@ -301,8 +333,11 @@ export function createGraphGestures(ctx) {
     if (pe && ne && pe.dataset.dir === 'in') {
       e.preventDefault();
       const nodeId = ne.dataset.nodeId;
-      const edge = model().graph.edges.find((x) => x.to.node === nodeId
+      // An input that takes several cables: the selected one of them (click its cable first),
+      // else the first.
+      const into = model().graph.edges.filter((x) => x.to.node === nodeId
         && x.to.port === pe.dataset.port);
+      const edge = into.find((x) => selection().edges.includes(x.id)) || into[0];
       select(edge ? { edges: [edge.id] } : { nodes: [nodeId] });
       // K008: dragging the cable off its input picks it up for a re-route or a delete.
       if (edge) {
@@ -409,11 +444,11 @@ export function createGraphGestures(ctx) {
           for (const x of entry.ports.values()) x.classList.toggle('is-hover', x === pe);
         }
         let text = connectingText(model(), gesture.from, registry);
-        let t = null;
-        if (pe && ne && pe.dataset.dir === 'in') t = targets.get(tkey(ne.dataset.nodeId, pe.dataset.port));
-        else if (ne && ne.dataset.nodeId !== gesture.from.node) t = bestTargetOn(ne.dataset.nodeId);
+        const t = dropTarget(gesture, pe, ne);
         if (t) text = cableText(t);
-        else if (gesture.detach && !ne) text = 'Release to delete this connection';
+        else if (gesture.detach && !ne && !overChrome(e)) {
+          text = 'Release to delete this connection';
+        }
         showBanner(text, false);
         break;
       }
@@ -486,6 +521,13 @@ export function createGraphGestures(ctx) {
     }
   }
 
+  /** The target verdict under a dragged cable: an input port, else a node body, else null. */
+  function dropTarget(g, pe, ne) {
+    if (pe && ne && pe.dataset.dir === 'in') return targets.get(tkey(ne.dataset.nodeId,
+      pe.dataset.port));
+    return ne && ne.dataset.nodeId !== g.from.node ? bestTargetOn(ne.dataset.nodeId) : null;
+  }
+
   function onPointerUp(e) {
     if (e.pointerType === 'touch') pointers.delete(e.pointerId);
     if (!gesture) return;
@@ -513,14 +555,14 @@ export function createGraphGestures(ctx) {
       case 'cable': {
         preview.setAttribute('d', '');
         const { pe, ne } = portUnder(e.clientX, e.clientY);
-        let t = null;
-        if (pe && ne && pe.dataset.dir === 'in') t = targets.get(tkey(ne.dataset.nodeId, pe.dataset.port));
-        else if (ne && ne.dataset.nodeId !== g.from.node) t = bestTargetOn(ne.dataset.nodeId);
+        const t = dropTarget(g, pe, ne);
         clearTargets();
         showBanner('', false);
         if (t && t.allowed) finishCable(g, { node: t.node, port: t.port });
         else if (t) announce(t.reason, { assertive: true });
-        else if (!ne && ctx.isOverViewport(e.clientX, e.clientY)) {
+        else if (!ne && ctx.isOverViewport(e.clientX, e.clientY)
+          && !overChrome(e)) {
+          // The view controls, minimap and banner are not canvas: a drop there cancels.
           // A picked-up cable dropped on empty canvas is deleted (K008); a new one opens
           // create-node-from-cable (§66): a picker of the types that accept this cable.
           if (g.detach) finishCable(g, null);
@@ -614,7 +656,7 @@ export function createGraphGestures(ctx) {
     if (gesture) return;
     e.preventDefault();
     const a = wheelAction(e, { pageHeight: viewport.clientHeight || WHEEL_PAGE_PX });
-    if (!a) return;
+    if (!a || (a.kind === 'zoom' && pinchScale)) return; // a Safari pinch zooms by its gesture
     if (a.kind === 'pan') {
       ctx.setView(panBy(ctx.view(), a.dx, a.dy));
       return;
@@ -623,8 +665,30 @@ export function createGraphGestures(ctx) {
     ctx.setView(zoomAt(ctx.view(), a.factor, p.x, p.y));
   }
 
+  // Safari's trackpad pinch (no ctrlKey wheel there): zoom at the pointer, never the page. A
+  // touch pinch runs through the pointer events above (iOS sends both), so it is left to them.
+  let pinchScale = 0;
+  function onGesture(e) {
+    e.preventDefault();
+    if (e.type === 'gestureend') {
+      if (pinchScale) ctx.commitView(true);
+      pinchScale = 0;
+      return;
+    }
+    if (gesture || pointers.size) return;
+    if (e.type === 'gesturestart') {
+      pinchScale = e.scale > 0 ? e.scale : 1;
+      return;
+    }
+    const f = gestureZoomFactor(pinchScale || 1, e.scale);
+    if (!f) return;
+    pinchScale = e.scale;
+    const p = local(e);
+    ctx.setView(zoomAt(ctx.view(), f, p.x, p.y), false);
+  }
+
   function onDblClick(e) {
-    if (e.target.closest('.osc-sg-node, .osc-sg-edge, .osc-sg-controls, .osc-sg-banner')) return;
+    if (e.target.closest('.osc-sg-node, .osc-sg-edge') || ctx.isChrome(e.target)) return;
     svc.onQuickAdd({ at: ctx.clientToGraph(e.clientX, e.clientY), from: null });
   }
 
@@ -637,12 +701,17 @@ export function createGraphGestures(ctx) {
   });
   viewport.addEventListener('wheel', onWheel, { passive: false });
   viewport.addEventListener('dblclick', onDblClick);
+  for (const type of ['gesturestart', 'gesturechange', 'gestureend']) {
+    viewport.addEventListener(type, onGesture, { passive: false });
+  }
   const onBlur = () => onCancel(null);
   window.addEventListener('blur', onBlur);
 
   return {
     /** True while a node drag moves `id` (the render keeps its preview position). */
     dragging: (id) => !!(gesture && gesture.kind === 'node-drag' && gesture.starts.has(id)),
+    /** The edge id a cable drag picked up (the render keeps it blank), else null. */
+    detaching: () => (gesture && gesture.kind === 'cable' && gesture.detach) || null,
     kind: () => (gesture ? gesture.kind : null),
     inTap: () => !!tap,
     /** Re-judge the tap-connect targets after a render. */

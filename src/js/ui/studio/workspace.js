@@ -379,6 +379,9 @@ export function microphoneOutcome(mics, { playing = false } = {}) {
  * A stable handle over the current store (§9): the same object for every projection, the
  * document behind it replaceable (open project / template / import). Revisions are monotonic
  * across documents. subscribe(fn) -> off: fn(event) after every store change and replacement.
+ * hold(fn) -> fn's result: the events of the changes fn makes reach the listeners once, when it
+ * returns: the last model change (else the last event), so a command of many actions (L, M:
+ * graph-commands.js) syncs, compiles and renders once (docs/v31/performance.md editMs).
  * `gate(next, info)`: the store's commit gate (actions.js), with info.revision in the handle's
  * monotonic numbering (the workspace passes transport.admit). `trace`: the operation trace port
  * (core/trace.js), its store steps carrying the handle's revision.
@@ -389,7 +392,13 @@ export function createStoreHandle(initialModel, {
   const listeners = new Set();
   let offset = 0;
   let store = null;
+  let held = 0;
+  let pending = null;
   const emit = (ev) => {
+    if (held) {
+      if (!pending || ev.type === 'model' || pending.type !== 'model') pending = ev;
+      return;
+    }
     for (const fn of [...listeners]) {
       try { fn(ev); } catch (e) { console.error('OSCILLA Studio listener failed:', e); }
     }
@@ -429,6 +438,18 @@ export function createStoreHandle(initialModel, {
     subscribe(fn) {
       listeners.add(fn);
       return () => listeners.delete(fn);
+    },
+    hold(fn) {
+      held++;
+      try {
+        return fn();
+      } finally {
+        if (--held === 0 && pending) {
+          const ev = pending;
+          pending = null;
+          emit(ev);
+        }
+      }
     },
     /** Open another document (validated by createStudioStore); a new history. */
     replace(model, reason = 'replace') {

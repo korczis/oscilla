@@ -98,6 +98,7 @@ export function createGraphEditor(host, svc) {
   const nodeEls = new Map(); // id -> { el, sig, node, ports: Map key -> el, anchors: Map }
   const edgeEls = new Map(); // id -> { g, hit, line, sig }
   let viewTimer = null;
+  let gestures = null; // graph-gestures.js, created once the editor's functions exist
   let running = false;
 
   const model = () => store.getModel();
@@ -392,7 +393,8 @@ export function createGraphEditor(host, svc) {
     const e = entry.edge;
     const a = anchorOf(e.from.node, `out:${e.from.port}`);
     const b = anchorOf(e.to.node, `in:${e.to.port}`);
-    if (!a || !b) {
+    // A cable picked up by a drag stays blank until it is dropped (K008), whatever renders.
+    if (!a || !b || (gestures && gestures.detaching() === e.id)) {
       entry.line.setAttribute('d', '');
       entry.hit.setAttribute('d', '');
       entry.mark.setAttribute('d', '');
@@ -487,12 +489,14 @@ export function createGraphEditor(host, svc) {
   // ---------------------------------------------------------------- gestures and commands
   const base = { viewport, store, registry, svc, view: () => view, setView, clientToGraph,
     isOverViewport };
+  // Unmeasured cards (a hidden graph) count 0: tidyPositions then uses TIDY_DEFAULT_HEIGHT.
   const commands = createGraphCommands({ ...base, centerPoint, focusNode, isShown,
-    nodeHeights: () => new Map(nodeRects().map((r) => [r.id, r.h])) });
-  const gestures = createGraphGestures({ ...base, host, preview, marquee, nodeEls, edgeEls,
+    nodeHeights: () => new Map([...nodeEls].map(([id, en]) => [id, en.el.offsetHeight || 0])) });
+  const isChrome = (el) => !!el && [controls, banner, minimap.el].some((c) => c.contains(el));
+  gestures = createGraphGestures({ ...base, host, preview, marquee, nodeEls, edgeEls,
     banner: { el: banner, text: bannerText, cancel: bannerCancel },
     setLocalView: (v) => { view = v; applyView(); }, commitView, nodeRects, anchorOf,
-    routeEdge, routeAll, render, onPress: commands.onPress });
+    routeEdge, routeAll, render, isChrome, onPress: commands.onPress });
 
   applyView();
   render();
