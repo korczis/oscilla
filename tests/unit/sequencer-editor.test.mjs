@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { createSequencerEditor } from '../../src/js/sequencer/editor.js';
 import { STOP_RAMP_S, STOP_PAD_S, STOP_LEAD_S } from '../../src/js/sequencer/compiler.js';
 import { FakeContext, fakeTimers } from './sequencer-fake-audio.mjs';
+import * as timeline from '../../src/js/sequencer/timeline.js';
 
+const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) <= eps, `${a} != ${b}`);
 const ids = (ed) => ed.model.blocks.map((b) => b.id);
 const types = (ed) => ed.model.blocks.map((b) => b.type);
 
@@ -268,4 +270,93 @@ test('dispose releases everything', () => {
   assert.equal(ed.playing, false);
   assert.deepEqual(ed.stats(), { voices: 0, activeSourceCount: 0, activeNodeCount: 0 });
   assert.ok(ctx.created.every((n) => n.kind === 'destination' || n.disconnected));
+});
+
+// C006 (finding vis-divergence-3): edits during playback apply from the next pass, so the
+// playhead must follow the sounding pass's own layout, not the edited model's timeline.
+const laneOf = (ed) => {
+  const scale = timeline.createTimeScale({ durationS: ed.totalDurationS, widthPx: 600,
+    minSpanS: 3.75, headroomRatio: 0.1 });
+  return timeline.layoutBlocks(ed.model, scale, { gapPx: 4 });
+};
+const rectUnder = (rects, x) => rects.find((r) => x >= r.x && x < r.x + r.w) || null;
+
+test('C006: after lengthening block 0 during pass 1, the playhead marks the Pulse that sounds',
+  () => {
+    const { ctx, ed } = setup();
+    ed.selectBlock('b1');
+    assert.equal(ed.play(), true);
+    const pass = ed.currentPassTiming();
+    ctx.currentTime = pass.t0 + 0.1; // inside the Tone of pass 1
+    assert.deepEqual(ed.currentPassState(), { durationS: 2.25, nextDurationS: 2.25,
+      current: true, layoutCurrent: true });
+    ed.updateParam('durationMs', 3000); // the edit lands while pass 1 sounds
+    assert.equal(ed.model.blocks[0].durationMs, 3000);
+    ctx.currentTime = pass.t0 + 1.3; // pass 1: Pulse 1.2 kHz, 1.25-1.75 s, first pulse
+    assert.equal(ed.currentFrequency(), 1200, 'the Pulse sounds');
+    assert.equal(ed.currentPassTiming().t0, pass.t0, 'the pass was not restarted');
+    const pb = ed.currentPassBlock();
+    assert.equal(pb.id, 'b4', 'the sounding block is the Pulse');
+    assert.equal(pb.index, ed.activeBlockIndex());
+    near(pb.startS, 1.25);
+    near(pb.endS, 1.75);
+    near(pb.t, 1.3);
+    assert.deepEqual(ed.currentPassState(), { durationS: 2.25, nextDurationS: 4.75,
+      current: false, layoutCurrent: false });
+    const rects = laneOf(ed);
+    const x = timeline.passPlayheadX(rects, pb);
+    assert.equal(rectUnder(rects, x).id, 'b4', 'the playhead sits on the Pulse rect');
+    // The linear mapping of the pass clock onto the edited lane lands in the 3 s Tone: the
+    // defect this replaces.
+    const scale = timeline.createTimeScale({ durationS: ed.totalDurationS, widthPx: 600,
+      minSpanS: 3.75, headroomRatio: 0.1 });
+    assert.equal(rectUnder(rects, scale.secToPx(pb.t)).id, 'b1');
+    ed.stop();
+  });
+
+test('C006: moves and deletes during playback map by block id; a deleted block gives null',
+  () => {
+    const { ctx, ed } = setup();
+    ed.play();
+    const { t0 } = ed.currentPassTiming();
+    ed.selectBlock('b4');
+    ed.moveSelected(-1); // Pulse before Silence in the edited model
+    ed.moveSelected(-1); // and before the Sweep
+    ctx.currentTime = t0 + 1.4;
+    const pb = ed.currentPassBlock();
+    assert.equal(pb.id, 'b4');
+    assert.equal(pb.index, 3, 'its place in the sounding pass');
+    const state = ed.currentPassState();
+    assert.equal(state.layoutCurrent, false);
+    assert.equal(state.nextDurationS, 2.25);
+    const rects = laneOf(ed);
+    assert.equal(rects[1].id, 'b4', 'moved in the edited lane');
+    assert.equal(rectUnder(rects, timeline.passPlayheadX(rects, pb)).id, 'b4');
+    ed.deleteSelected();
+    assert.equal(timeline.passPlayheadX(laneOf(ed), ed.currentPassBlock()), null);
+    ed.stop();
+    assert.equal(ed.currentPassBlock(), null, 'stopped: no sounding block');
+    assert.equal(ed.currentPassState(), null);
+  });
+
+test('C006: a parameter-only edit keeps the layout but waits for the next pass; a loop pass '
+  + 'compiled after the edit is current', () => {
+  const { ctx, ed, timers } = setup();
+  ed.setLoop(true);
+  ed.play();
+  const first = ed.currentPassTiming();
+  ed.selectBlock('b1');
+  ed.updateParam('freq', 660);
+  ctx.currentTime = first.t0 + 0.2;
+  assert.deepEqual(ed.currentPassState(), { durationS: 2.25, nextDurationS: 2.25,
+    current: false, layoutCurrent: true });
+  ed.setTempo(ed.model.tempoBpm); // no change: still the same wait, not a new one
+  assert.equal(ed.currentPassState().current, false);
+  ctx.currentTime = first.t0 + 1.5;
+  timers.runUntil(1500); // the next pass is compiled from the edited model
+  ctx.advance(first.t0 + first.duration + 0.1);
+  assert.deepEqual(ed.currentPassState(), { durationS: 2.25, nextDurationS: 2.25,
+    current: true, layoutCurrent: true });
+  assert.equal(ed.currentPassBlock().id, 'b1');
+  ed.stop();
 });

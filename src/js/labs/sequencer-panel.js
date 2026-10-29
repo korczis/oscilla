@@ -9,6 +9,13 @@
 // play/stop/loop and "play from the start" use the adapter's context and destination. The
 // audio clock (ctx.currentTime) drives the playhead; no timer ever times audio.
 //
+// Edits during playback apply from the next pass (sequencer/editor.js). The lane always shows
+// the edited model; while the sounding pass was compiled from another layout, the playhead is
+// placed on the block that sounds by its id (timeline.passPlayheadX), that block is marked
+// (aria-current, dashed outline), the message line says the changes apply from the next pass
+// and the status bar shows the sounding and the next length. A block deleted while it sounds
+// has no place in the lane: the playhead is ghosted. The pass is never restarted by an edit.
+//
 // Scrolling: the lane shows at least minSpanS (the reference's ~4 s axis) and never packs a
 // long sequence tighter than minPxPerS; beyond that the timeline scrolls horizontally. The bar
 // under the lane ([data-osc="seq.scroll"]) shows and drives the visible window (thumb drag,
@@ -23,6 +30,7 @@ import {
   generateTicks,
   layoutBlocks,
   playheadPosition,
+  passPlayheadX,
   dropIndexAt,
   insertionMarkerX,
 } from '../sequencer/timeline.js';
@@ -47,6 +55,9 @@ export function timelineWindow({ durationS, laneW, minSpanS = TIMELINE_OPTIONS.m
   return { spanS, contentPx, maxScrollPx: Math.max(0, contentPx - w) };
 }
 const DRAG_THRESHOLD_PX = 4;
+/** Message line while an edit waits for the next pass (sequencer/editor.js next-pass rule). */
+export const NEXT_PASS_NOTE = 'Changes apply from the next pass.';
+const SOUNDING_OUTLINE = '2px dashed var(--osc-text)';
 
 /** Ids kept from the shell markup for the Sweep fields (status/visual-idmap.tsv). */
 const FIELD_IDS = {
@@ -190,6 +201,11 @@ export function mount(rootEl, adapter) {
   let fieldsFor = '';
   let rulerKey = '';
   let drag = null;
+  // The sounding pass as last drawn: its block id, whether the lane's layout differs from it
+  // (stale) and whether an edit waits for the next pass (pending).
+  let sounding = { id: null, stale: false, pending: false };
+  let passKey = '';
+  const passListeners = new Set();
 
   function safeMax() {
     return editor.sampleRate() * 0.475;
@@ -234,6 +250,7 @@ export function mount(rootEl, adapter) {
       setText(b.children[0], r.label);
       setText(b.children[1], r.detail);
       setAttr(b, 'aria-selected', r.id === editor.selectedId ? 'true' : 'false');
+      paintSounding(b, r.id);
       setAttr(b, 'aria-label', `${r.label} ${r.detail}, ${(r.endS - r.startS).toFixed(2)} s`);
       // A narrow block truncates its text with an ellipsis; the tooltip keeps all of it.
       setAttr(b, 'title', `${r.label} ${r.detail} · ${(r.endS - r.startS).toFixed(2)} s`);
@@ -252,6 +269,42 @@ export function mount(rootEl, adapter) {
       setAttr(timeline, 'aria-activedescendant', `osc-seq-block-${editor.selectedId}`);
     }
     else timeline.removeAttribute('aria-activedescendant');
+  }
+
+  /** aria-current on the block that sounds; a dashed outline while the lane is not its pass. */
+  function paintSounding(b, id) {
+    const want = id !== sounding.id ? '' : sounding.stale ? 'stale' : 'current';
+    if ((b.dataset.sounding || '') === want) return;
+    if (want) {
+      b.dataset.sounding = want;
+      b.setAttribute('aria-current', 'true');
+    } else {
+      delete b.dataset.sounding;
+      b.removeAttribute('aria-current');
+    }
+    b.style.outline = want === 'stale' ? SOUNDING_OUTLINE : '';
+    b.style.outlineOffset = want === 'stale' ? '-4px' : '';
+  }
+
+  /** { soundingS, nextS, current, layoutCurrent } while a pass sounds, else null. */
+  function passStatus() {
+    const ps = editor.playing ? editor.currentPassState() : null;
+    return ps ? { soundingS: ps.durationS, nextS: ps.nextDurationS, current: ps.current,
+      layoutCurrent: ps.layoutCurrent } : null;
+  }
+
+  function notifyPass() {
+    const st = passStatus();
+    const key = st ? `${st.soundingS}:${st.nextS}:${st.current}:${st.layoutCurrent}` : '';
+    if (key === passKey) return;
+    passKey = key;
+    for (const fn of passListeners) {
+      try {
+        fn(st);
+      } catch (e) {
+        /* theirs */
+      }
+    }
   }
 
   function renderRuler() {
@@ -329,7 +382,8 @@ export function mount(rootEl, adapter) {
     setAttr(playBtn, 'aria-pressed', editor.playing ? 'true' : 'false');
     setAttr(loopBtn, 'aria-pressed', editor.model.loop ? 'true' : 'false');
     if (playBtn) setAttr(playBtn, 'title', editor.error || 'Play sequence');
-    setText(msgEl, editor.error || (editor.warnings || []).join(' '));
+    const said = editor.error || (editor.warnings || []).join(' ');
+    setText(msgEl, [said, sounding.pending ? NEXT_PASS_NOTE : ''].filter(Boolean).join(' '));
   }
 
   function renderScrollbar() {
@@ -348,6 +402,7 @@ export function mount(rootEl, adapter) {
     renderScrollbar();
     renderEditor();
     renderTransport();
+    notifyPass();
   }
 
   /** Scroll the lane to px (clamped); true when the position changed. */
@@ -526,30 +581,65 @@ export function mount(rootEl, adapter) {
   const firstSweep = editor.model.blocks.find((b) => b.type === 'sweep');
   if (firstSweep) editor.selectBlock(firstSweep.id);
 
+  /**
+   * Playhead from the audio clock: { visible, x, t, ghost }. While the lane shows the sounding
+   * pass's layout, the pass time maps linearly onto it; otherwise the head goes onto the block
+   * that sounds, found by id, and is a ghost when that block was deleted.
+   */
+  function playheadNow(timing, pb, ps) {
+    const ctx = getCtx();
+    if (!timing || !ctx || !scale) return { visible: false };
+    if (!pb || !ps || ps.layoutCurrent) {
+      return playheadPosition({ ctxTime: ctx.currentTime, t0: timing.t0,
+        durationS: timing.duration, loop: editor.model.loop, scale });
+    }
+    if (ctx.currentTime - timing.t0 > timing.duration) return { visible: false };
+    const x = passPlayheadX(rects, pb);
+    if (x === null) {
+      return { visible: true, ghost: true, t: pb.t,
+        x: scale.secToPx(Math.min(pb.t, totalDuration(editor.model))) };
+    }
+    return { visible: true, ghost: false, t: pb.t, x };
+  }
+
   let wasPlaying = false;
   offs.push(onFrame(() => {
-    const ctx = getCtx();
     const timing = editor.playing ? editor.currentPassTiming() : null;
-    const ph = timing && ctx && scale
-      ? playheadPosition({ ctxTime: ctx.currentTime, t0: timing.t0, durationS: timing.duration,
-        loop: editor.model.loop, scale })
-      : { visible: false };
+    const pb = timing ? editor.currentPassBlock() : null;
+    const ps = pb ? editor.currentPassState() : null;
+    const next = { id: pb ? pb.id : null, stale: !!(ps && !ps.layoutCurrent),
+      pending: !!(ps && !ps.current) };
+    if (next.id !== sounding.id || next.stale !== sounding.stale
+      || next.pending !== sounding.pending) {
+      const notePending = next.pending !== sounding.pending;
+      sounding = next;
+      for (const [id, b] of blockEls) paintSounding(b, id);
+      if (notePending) renderTransport();
+      notifyPass();
+    }
+    let ph = playheadNow(timing, pb, ps);
     if (ph.visible && win.maxScrollPx > 0 && !scrollDrag && timeline) {
       // Page the window so the playhead stays visible while the sequence plays.
       const w = timeline.clientWidth || 400;
       if (ph.x < 0 || ph.x > w - 4) {
         scrollTo(scrollPx + ph.x - 16);
-        ph.x = scale.secToPx(ph.t);
+        ph = playheadNow(timing, pb, ps);
       }
     }
     if (playhead.hidden !== !ph.visible) playhead.hidden = !ph.visible;
     if (ph.visible) {
       const tf = `translateX(${Math.round(ph.x)}px)`;
       if (playhead.style.transform !== tf) playhead.style.transform = tf;
+      const ghost = ph.ghost ? 'true' : 'false';
+      if (playhead.dataset.ghost !== ghost) {
+        playhead.dataset.ghost = ghost;
+        playhead.style.opacity = ph.ghost ? '0.35' : '';
+      }
     }
     if (editor.playing !== wasPlaying) {
       wasPlaying = editor.playing;
       renderTransport();
+      notifyPass();
     }
   }));
   offs.push(observeSize(timeline || rootEl, () => {
@@ -569,6 +659,13 @@ export function mount(rootEl, adapter) {
       return { scrollPx, ...win };
     },
     scrollTo,
+    /** The sounding pass against the edited model (status bar), or null when stopped. */
+    passStatus,
+    /** fn(passStatus()) whenever the sounding pass, its length or the edited length changes. */
+    onPassChange(fn) {
+      passListeners.add(fn);
+      return () => passListeners.delete(fn);
+    },
     update(state = {}) {
       if (state.sequence) editor.load(state.sequence);
       if (state.tempoBpm) editor.setTempo(state.tempoBpm);
@@ -576,6 +673,7 @@ export function mount(rootEl, adapter) {
     },
     dispose() {
       offs.forEach((f) => f());
+      passListeners.clear();
       editor.dispose();
       for (const b of blockEls.values()) b.remove();
       blockEls.clear();
