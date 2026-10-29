@@ -4,7 +4,9 @@
 // hosts live in `svc` (a closure), never in reactive state.
 //
 // svc: { engine, bridge, labs, exportConfigDoc(cmp), applyImport(cmp, parsed),
-//        renderWav(cmp, kind), screenshot(cmp), relayout() }
+//        renderWav(cmp, kind), screenshot(cmp), relayout(),
+//        labSnapshot() -> sections | null, applyLabSnapshot(cmp, record) -> { applied, issues },
+//        labsMounted() -> boolean }
 
 import { STORAGE_KEYS, WAVEFORM_LABELS } from '../core/constants.js';
 import { clamp, round } from '../core/math.js';
@@ -21,7 +23,9 @@ import { scopeWindow } from './p5-views.js';
 import { OSCILLA_VERSION } from './version.js';
 import { formatHz } from '../charts/axes.js';
 import { rovingKeydown } from './app.js';
-import { parseConfigImport, exportFileName } from './config-file.js';
+import { parseConfigImport, parseLabSections, exportFileName } from './config-file.js';
+import { LABS_INCLUDED_TEXT, SEQUENCE_NOT_INCLUDED_TEXT, labSectionsText } from './lab-state.js';
+import { LAB_HASH_KEY, decodeLabParam, encodeLabParam } from '../core/url-state-labs.js';
 import { downloadBlob, readFileText } from './exporters.js';
 import { focusSafely, isFocusable } from './dialogs.js';
 import { sessionStore } from '../core/storage.js';
@@ -44,6 +48,8 @@ export { v1ModeFor, workspaceForV1Mode } from './navigation.js';
 export const SWEEP_FORM = SWEEP_PARAMS;
 
 export function createWorkbench(svc) {
+  // A `lab=` link the page opened at, validated, waiting for the labs to mount (C018).
+  let pendingLabLink = null;
   return {
     OSCILLA_VERSION,
     SWEEP_FORM,
@@ -391,6 +397,75 @@ export function createWorkbench(svc) {
         ? `${warn} value(s) were invalid and kept at their previous setting.`
         : 'All settings were restored.');
       return true;
+    },
+    // ------------------------------------------------------------------ lab settings (C018)
+    // The V1 instrument (core/instrument.js) stores and applies no lab state; these replace its
+    // hooks, so a custom preset, a History entry and the config link carry the Filter,
+    // Envelope, Additive and Phase & Stereo settings beside the V1 cfg (ui/lab-state.js).
+    labSnapshot() { return svc.labSnapshot ? svc.labSnapshot() : null; },
+    applyLabSnapshot(record) {
+      const r = svc.applyLabSnapshot ? svc.applyLabSnapshot(this, record) : null;
+      return r ? { applied: r.applied, issues: r.issues } : { applied: [], issues: 0 };
+    },
+    labsRestoredNote(applied) {
+      const text = labSectionsText(applied);
+      return text ? `${text} settings restored too.` : '';
+    },
+    labsSavedNote() {
+      return `It holds ${LABS_INCLUDED_TEXT}; ${SEQUENCE_NOT_INCLUDED_TEXT}.`;
+    },
+    configLinkNote() {
+      if (!this.labSnapshot()) return 'The link restores these settings; it never starts playback.';
+      return `The link restores ${LABS_INCLUDED_TEXT}; ${SEQUENCE_NOT_INCLUDED_TEXT}. `
+        + 'It never starts playback.';
+    },
+    /** The `lab=` value of the config link (ui/navigation.js configLinkHash), or null. */
+    labLinkParam() {
+      const s = this.labSnapshot();
+      return s ? encodeLabParam(s) : null;
+    },
+    /**
+     * The labs hash domain (ADR 0045 dispatcher): null without a `lab=` key, false when the
+     * value is refused (named in a warning; the dispatcher then drops it from the address),
+     * true when applied or, at load before the labs mount, kept for labsApplyPending().
+     */
+    labsApplyLinkHash(hash) {
+      const d = decodeLabParam(hash);
+      if (!d) return null;
+      const refuse = (why) => {
+        this.notify('warning', 'Lab settings in the link not restored', `The \`${LAB_HASH_KEY}\` `
+          + `value was refused (${why}); the lab settings stay as they were.`);
+        return false;
+      };
+      if (!d.ok) return refuse(d.error);
+      const warnings = [];
+      const parsed = parseLabSections(d.sections, warnings);
+      if (!Object.values(parsed).some(Boolean)) {
+        return refuse(warnings.length ? warnings.join(' ') : 'it names no lab section');
+      }
+      if (svc.labsMounted && !svc.labsMounted()) {
+        pendingLabLink = d.sections;
+        return true;
+      }
+      this.labsApplyLink(d.sections);
+      return true;
+    },
+    /** Apply a `lab=` link kept at load, once the labs exist (main.js after mountLabs). */
+    labsApplyPending() {
+      const s = pendingLabLink;
+      pendingLabLink = null;
+      if (s) this.labsApplyLink(s);
+    },
+    labsApplyLink(sections) {
+      const r = this.applyLabSnapshot(sections);
+      const text = labSectionsText(r.applied);
+      if (r.issues) {
+        this.notify('warning', 'Lab settings partly restored', `${text || 'No'} settings restored; `
+          + `${r.issues} lab section(s) in the link were invalid and kept at their setting.`);
+      } else if (text) {
+        this.notify('info', 'Lab settings restored from link', `${text} settings as the link `
+          + 'holds them; the sequence is not part of a link.');
+      }
     },
     async exportAudio(kind) {
       if (this.exportBusy) return false;
