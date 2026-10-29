@@ -11,6 +11,7 @@
 // The 'mode' event kind keeps its name (detail.value is the workspace id).
 
 import { shortcutHelp } from './shortcuts.js';
+import { counterpartOf, showsCounterparts } from './counterparts.js';
 
 const THEME_KEY = 'oscilla.v2.theme';
 const ANALYSIS_TAB_KEY = 'oscilla.v2.analysisTab';
@@ -347,6 +348,27 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
           if (group && this.navOpen === group) this.closeNavGroup(true);
         },
       };
+    },
+
+    /**
+     * A counterpart link (ui/counterparts.js): its href, written in src/index.html, is the
+     * workspace's address (counterpartHref); a plain click opens the workspace, selects its
+     * MEASURE result tab and moves focus to the workspace heading.
+     */
+    counterpartLink(id) {
+      const c = counterpartOf(id);
+      return {
+        '@click'(e) {
+          if (!c || e.button > 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+          e.preventDefault();
+          this.setWorkspace(c.workspace, { focusHeading: true });
+          if (c.measureTab) this.measureSetTab(c.measureTab);
+        },
+      };
+    },
+    /** True when the workspace in view shows the counterpart links. */
+    counterpartsShown() {
+      return showsCounterparts(this.workspace);
     },
 
     // ---- navigation groups (disclosure: a button with aria-expanded and a list of links) ----
