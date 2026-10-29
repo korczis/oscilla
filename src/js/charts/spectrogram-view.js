@@ -2,10 +2,12 @@
 // overlay canvas for the axes (log or linear frequency on y, elapsed time on x). The colour LUT
 // comes from the design tokens (theme.js lutStops). Data: an AnalyserNode reader; without an
 // analyser nothing is drawn (the canvas stays at the floor colour) — no noise is ever invented.
-// Feed: 'unsmoothed' (default; from readTime, analysis/spectrogram.js createSpectrogramFeed) or
-// 'analyser' (getFloatFrequencyData with the node's smoothing). Hover: a cursor line and the
-// readout of the newest column at that row (bin, frequency, dB relative), drawn on the axes
-// canvas; the level is never calibrated here, so it is always RELATIVE_UNIT.
+// Feed: 'analyser' (default; getFloatFrequencyData with the node's smoothing) or 'unsmoothed'
+// (from readTime, analysis/spectrogram.js createSpectrogramFeed), which sits beside it until a
+// UI choice between them exists (K015). Hover: a cursor line and the readout of the newest
+// column at that row (bin, frequency, dB relative), drawn on the axes canvas; the level is never
+// calibrated here, so it is always RELATIVE_UNIT. The axes canvas is sized in layout() only:
+// the frame and pointer paths redraw it from the cached size and never touch the DOM.
 
 import { createSpectrogram, createSpectrogramFeed } from '../analysis/spectrogram.js';
 import { createAnalyserReader } from '../analysis/analyser.js';
@@ -31,7 +33,7 @@ const DEFAULTS = {
   timeLabelGap: 10,
   tickFont: 10.5,
   autoFrame: true,
-  feed: 'unsmoothed',
+  feed: 'analyser',
 };
 
 /**
@@ -75,6 +77,7 @@ export function createSpectrogramView(host, options = {}) {
   let cursorY = null; // CSS px from the plot top while the pointer is over the plot
   let frozen = false;
   let rect = { x: 0, y: 0, w: 1, h: 1 };
+  let box = { w: 1, h: 1, dpr: 1 }; // the axes canvas size (CSS px), set by layout() only
   let sampleRate = 0;
 
   function effectiveMaxHz() {
@@ -103,12 +106,14 @@ export function createSpectrogramView(host, options = {}) {
     plot.width = Math.round(rect.w * dpr);
     plot.height = Math.round(rect.h * dpr);
     if (spg) spg.resize();
+    box = fitCanvas(axes, w, h);
     drawAxes();
   }
 
   function drawAxes() {
-    const { w, h } = fitCanvas(axes, host.clientWidth, host.clientHeight);
+    const { w, h, dpr } = box;
     const ctx = axes.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
     ctx.font = canvasFont(theme, o.tickFont);
     ctx.fillStyle = theme.textMuted;
@@ -225,7 +230,10 @@ export function createSpectrogramView(host, options = {}) {
         reader.sync();
         spg.configure({ fftSize: node.fftSize });
       }
-      if (spg.push(feed.read(nowMs), nowMs) > 0) {
+      // Frozen: push writes nothing, so the unsmoothed feed skips its JS FFT; the analyser feed
+      // keeps reading (native, cheap) so the node's smoothing is current after an unfreeze.
+      const skip = frozen && feed.mode === 'unsmoothed';
+      if (spg.push(skip ? null : feed.read(nowMs), nowMs) > 0) {
         spg.draw();
         if (cursorY != null) drawAxes();
       }
