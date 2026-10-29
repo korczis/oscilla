@@ -65,6 +65,10 @@ accepted` lists them. The rest stay `proposed`, each for a stated reason:
 - 0060: new on 2026-10-18 (issue P004); a decision taken under the owner's delegation
   (Q003), which the owner may override, so its acceptance is the owner's.
 
+On 2026-10-28 the owner ordered Flowbite Pro for the UI of every project; ADR 0061 records
+that order as an accepted decision (its acceptance note quotes it) and supersedes the bullet of
+0012 that dropped Tailwind and Flowbite, which 0012's own resolution note of that date says.
+
 A worker still never promotes a status without the owner: this was the owner's act, and a
 later acceptance, supersession or rejection is too.
 
@@ -121,6 +125,7 @@ listed one is not accepted, or when a link, title, date or mark differs from the
 | [0046](0046-findings-interpretation-linked-to-evidence.md) | A finding is an interpretation linked to the evidence it rests on, never measurement truth | 2026-10-18 | yes |
 | [0048](0048-connected-records-over-stored-fields.md) | Connected records come from stored fields only, and read present only when the identity verifies | 2026-10-18 | yes |
 | [0049](0049-raw-capture-retention.md) | The raw capture lives only for its analysis; a run stores derived results | 2026-10-18 | yes |
+| [0061](0061-the-ui-is-built-on-flowbite-pro.md) | The UI is built on Flowbite Pro: Tailwind and Flowbite return at build time, inlined | 2026-10-28 | no |
 
 ## An exemption from the release candidate
 

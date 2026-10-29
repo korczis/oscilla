@@ -82,3 +82,14 @@ and `measure-from-file-and-subpath`; the capture worklet and the analysis Worker
 `data:` URLs (`src/js/measurement/capture.js`, `src/js/measurement/analysis-runner.js`,
 packaging per ADR 0026's 2026-10-04 note); the budget as its 2026-10-05 note records
 (`scripts/build-config.mjs` `BUDGET`).
+
+### 2026-10-28: the Tailwind and Flowbite bullet is superseded by ADR 0061
+
+On the owner's order of 2026-10-28 (ADR 0061, accepted), the UI is built on Flowbite Pro on
+Tailwind. The bullet "Tailwind and Flowbite are dropped for plain, token-based CSS" no longer
+holds: Tailwind compiles at build time into the one inlined `<style>`, and the public MIT
+`flowbite` package is pinned and bundled like Alpine.js and uPlot. Every other part of this
+decision stands unchanged: dependencies pinned and inlined, classic scripts only, no runtime
+fetch, CDN, runtime compiler, remote font or root-relative asset, worklets and workers from
+embedded source, `scripts/verify-dist.mjs` and the size budget. The status stays `accepted`
+for those parts.
