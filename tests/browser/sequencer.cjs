@@ -15,12 +15,20 @@
 //       start/stop/ended are wrapped), also after a looped run;
 //   (d) restart 20x without growth: once each restart's earlier passes have delivered `ended`
 //       (bounded wait), none of their sources is live and only the current voice remains.
+//   (e) the Pattern Sequencer panel of the built page (dist/index.html, file://), driven
+//       through its controls: Play from the start, Loop (pointer and keyboard), the Selected
+//       block fields (start, end, duration, curve), Move later and Tempo, each judged at the
+//       model, at a view (transport aria state, status bar, the block's timeline label) and at
+//       what sounds (the engine output while playing, or the sequence WAV of the Export menu).
 // Exit code 0 only when every check passes in every browser.
 'use strict';
 
+const fs = require('fs');
 const path = require('path');
+const { pathToFileURL } = require('url');
 const esbuild = require('esbuild');
 const suite = require('./lib/suite.cjs');
+const { until } = require('./lib/wait.cjs');
 
 const args = process.argv.slice(2);
 const only = args.includes('--browser') ? args[args.indexOf('--browser') + 1] : null;
@@ -349,6 +357,240 @@ function checkRealtimeCapture(engine, label, cap) {
   );
 }
 
+// ---------------------------------------------------------------- (e) the panel in the page
+// C020: the Pattern Sequencer panel of the built page (dist/index.html from file://), its
+// controls operated through the UI: Play from the start, Loop, the Selected block fields
+// (start, end, duration, curve), Move later and Tempo. Each is judged at the model, at a view
+// that shows it (the transport's aria state, the status bar, the block's label on the
+// timeline) and at what sounds: the engine output while the sequence plays, or the sequence
+// WAV that the Export menu renders. Every wait is a condition poll with a named deadline.
+
+const DIST = path.join(__dirname, '..', '..', 'dist', 'index.html');
+const PANEL_MS = 15000;
+
+/** In-page: the sequencer as the model, the panel and the engine output show it. */
+function panelState() {
+  const O = window.OSCILLA;
+  const lab = O.labs.sequencer;
+  const ed = lab.editor;
+  const q = (s) => document.querySelector(s);
+  const txt = (s) => (q(s) ? q(s).textContent.replace(/\s+/g, ' ').trim() : null);
+  const e = O.engine;
+  let peak = 0;
+  if (e.analyser) {
+    const d = new Float32Array(e.analyser.fftSize);
+    e.analyser.getFloatTimeDomainData(d);
+    for (let i = 0; i < d.length; i++) peak = Math.max(peak, Math.abs(d[i]));
+  }
+  const timing = ed.currentPassTiming();
+  return {
+    playing: ed.playing, appPlaying: O.app.seqPlaying, loop: ed.model.loop,
+    tempo: ed.model.tempoBpm, selected: ed.selectedId, now: e.ctx ? e.ctx.currentTime : 0,
+    pass: timing, peak,
+    blocks: ed.model.blocks.map((b) => {
+      const el = q(`#osc-seq-block-${b.id}`);
+      const r = el ? el.getBoundingClientRect() : null;
+      return { id: b.id, type: b.type, ms: b.durationMs, beats: b.beats, p: { ...b.params },
+        label: el ? el.getAttribute('aria-label') : null, x: r ? r.left : null };
+    }),
+    aria: { play: q('#osc-seq-play').getAttribute('aria-pressed'),
+      loop: q('#osc-seq-record').getAttribute('aria-pressed') },
+    tempoSelect: q('#osc-seq-tempo').value,
+    status: { label: txt('[data-osc="status.label"]'),
+      duration: txt('[data-osc="status.duration"]') },
+  };
+}
+
+/** Channel 0 of a 16-bit PCM WAV as floats, with its rate. */
+function wavSamples(buf) {
+  let off = 12;
+  let fmt = null;
+  while (off + 8 <= buf.length) {
+    const id = buf.toString('ascii', off, off + 4);
+    const size = buf.readUInt32LE(off + 4);
+    if (id === 'fmt ') {
+      fmt = { channels: buf.readUInt16LE(off + 10), sampleRate: buf.readUInt32LE(off + 12),
+        bits: buf.readUInt16LE(off + 22) };
+    } else if (id === 'data' && fmt && fmt.bits === 16) {
+      const n = Math.floor(size / (2 * fmt.channels));
+      const out = new Float32Array(n);
+      for (let i = 0; i < n; i++) out[i] = buf.readInt16LE(off + 8 + i * 2 * fmt.channels) / 32768;
+      return { samples: out, sampleRate: fmt.sampleRate };
+    }
+    off += 8 + size + (size % 2);
+  }
+  return null;
+}
+
+/** Dominant frequency around t seconds of a render: a ~40 ms slice, at the render's rate. */
+function freqAt(wav, t) {
+  const n = 2 ** Math.floor(Math.log2(wav.sampleRate * 0.04));
+  return dominant(wav.samples, Math.round(t * wav.sampleRate) - n / 2, n, wav.sampleRate).freq;
+}
+
+async function panelChecks(engine, browser) {
+  const context = await browser.newContext({ viewport: { width: 1536, height: 1024 },
+    acceptDownloads: true });
+  const page = await context.newPage();
+  page.setDefaultTimeout(PANEL_MS);
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  const state = () => page.evaluate(panelState);
+  const poll = (pred, what) => {
+    let last = null;
+    return until(async () => {
+      last = await state();
+      return pred(last) ? last : null;
+    }, { ms: PANEL_MS, what: `sequencer panel: ${what}` }).catch((e) => ({ timeout: String(
+      e.message).split('\n')[0], last }));
+  };
+  const exportWav = async () => {
+    await page.click('#osc-export');
+    const [dl] = await Promise.all([page.waitForEvent('download', { timeout: PANEL_MS }),
+      page.click('[data-osc="export.seqWav"]')]);
+    return wavSamples(fs.readFileSync(await dl.path()));
+  };
+  const near = (x, y, tol) => typeof x === 'number' && Math.abs(x - y) <= tol;
+  try {
+    await page.goto(pathToFileURL(DIST).href, { waitUntil: 'load', timeout: 60000 });
+    await page.waitForSelector('html[data-ready="true"]', { timeout: 60000 });
+    await page.mouse.click(5, 5); // the first gesture lets the AudioContext start
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.ensureAudio();
+      if (!a.safetyCollapsed && a.collapseSafety) a.collapseSafety();
+      a.alerts = [];
+    });
+    await until(() => page.evaluate(() => window.OSCILLA.engine.state === 'running'),
+      { ms: 60000, what: 'sequencer panel: the AudioContext runs after the first gesture' });
+    const nav = await page.evaluate(() => {
+      const el = document.querySelector('[data-osc="nav.sequencer"]');
+      const g = el && el.closest('[data-osc-nav-group]');
+      return g && el.offsetParent === null ? g.dataset.oscNavGroup : null;
+    });
+    if (nav) await page.click(`[data-osc="nav-group.${nav}"]`);
+    await page.click('[data-osc="nav.sequencer"]');
+    await until(() => page.evaluate(() => window.OSCILLA.app.workspace === 'sequencer'),
+      { ms: PANEL_MS, what: 'sequencer panel: the Sequencer workspace is shown' });
+    const reference = await page.evaluate(() => JSON.parse(JSON.stringify(
+      window.OSCILLA.labs.sequencer.editor.model)));
+    const total = (s) => s.blocks.reduce((t, b) => t + b.ms, 0) / 1000;
+
+    // Play from the start: the sequence sounds and the transport and status bar say so.
+    await page.click('#osc-seq-start');
+    let s = await poll((x) => x.playing && x.appPlaying && x.peak > 0.005, 'playing from Start');
+    check(engine, '(e) Play from the start (#osc-seq-start) plays: model, transport, output',
+      !s.timeout && s.aria.play === 'true' && s.status.label === 'PLAYING',
+      JSON.stringify(s.timeout ? s : { peak: s.peak, aria: s.aria, status: s.status }));
+    await page.click('#osc-seq-stop');
+    await poll((x) => !x.playing, 'stopped');
+
+    // Loop on: the sequence plays past the end of its first pass, and says it loops; Loop off
+    // by keyboard: it ends after the pass that sounds.
+    await page.click('#osc-seq-record');
+    s = await poll((x) => x.loop && x.aria.loop === 'true', 'Loop pressed');
+    check(engine, '(e) Loop (#osc-seq-record) by pointer sets the model and its pressed state',
+      !s.timeout, JSON.stringify(s.timeout ? s : { loop: s.loop, aria: s.aria.loop }));
+    await page.click('#osc-seq-start');
+    const first = await poll((x) => x.playing && x.pass, 'the first looped pass');
+    // A second pass has started on the audio clock and sounds. (The status bar's "(loop)" is
+    // not judged here: it follows the model only on some engines, plan issue C004.)
+    const looped = first.timeout ? first : await poll((x) => x.playing && x.pass
+      && x.pass.t0 >= first.pass.t0 + total(x) - 0.01 && x.now > x.pass.t0 + 0.05
+      && x.peak > 0.005, 'a second pass sounds');
+    check(engine, '(e) a looped sequence starts a second pass and sounds past the first',
+      !looped.timeout, JSON.stringify(looped.timeout ? looped : { peak: looped.peak,
+        second: +(looped.pass.t0 - first.pass.t0).toFixed(3) }));
+    await page.focus('#osc-seq-record');
+    await page.keyboard.press('Enter');
+    s = await poll((x) => !x.loop && x.aria.loop === 'false' && !x.playing && !x.appPlaying,
+      'the sequence ends after Loop off');
+    check(engine, '(e) Loop off by keyboard: the playing sequence ends after its pass',
+      !s.timeout, JSON.stringify(s.timeout ? s : { loop: s.loop, playing: s.playing }));
+
+    // The Selected block fields, on the first Sweep (selected at start): each edit reaches the
+    // model, the block's label on the timeline and the rendered WAV.
+    await page.click('#osc-seq-block-b2');
+    const fields = [
+      ['#osc-seq-start-hz', 'start', '500', 500, async () => {
+        await page.fill('#osc-seq-start-hz', '500'); await page.press('#osc-seq-start-hz', 'Tab'); }],
+      ['#osc-seq-end-hz', 'end', '1000', 1000, async () => {
+        await page.focus('#osc-seq-end-hz'); await page.keyboard.press('ControlOrMeta+a');
+        await page.keyboard.type('1000'); await page.keyboard.press('Tab'); }],
+      ['#osc-seq-duration', 'durationMs', '750', 750, async () => {
+        await page.fill('#osc-seq-duration', '750'); await page.press('#osc-seq-duration', 'Tab'); }],
+      ['#osc-seq-curve', 'curve', 'linear', 'linear', () => page.selectOption('#osc-seq-curve', 'linear')],
+    ];
+    for (const [sel, key, , want, act] of fields) {
+      const before = (await state()).blocks.find((b) => b.id === 'b2').label;
+      await act();
+      s = await poll((x) => {
+        const b = x.blocks.find((y) => y.id === 'b2');
+        const v = key === 'durationMs' ? b.ms : b.p[key];
+        return v === want && (key === 'curve' || b.label !== before);
+      }, `${sel} reaches block b2`);
+      check(engine, `(e) ${sel} reaches the block and its timeline label`, !s.timeout,
+        JSON.stringify(s.timeout ? s : s.blocks.find((b) => b.id === 'b2')));
+    }
+    let wav = await exportWav();
+    s = await state();
+    const b2At = s.blocks[0].ms / 1000; // b1 (tone, 500 ms) then b2
+    const sweepAt = (u) => freqAt(wav, b2At + 0.03 + u * (0.75 - 0.06));
+    const f0 = sweepAt(0);
+    const fMid = freqAt(wav, b2At + 0.375);
+    const f1 = sweepAt(1);
+    // A linear 500 -> 1000 Hz sweep is at 750 Hz half way (a log one would be at 707 Hz).
+    // The render is the sequence plus its release tail, which no edit changes.
+    const tail = (w, x) => w.samples.length / w.sampleRate - total(x);
+    check(engine, '(e) the WAV renders the edited block: 500 -> 1000 Hz, linear, 750 ms',
+      wav && tail(wav, s) >= 0 && tail(wav, s) < 0.25
+        && near(f0, 500 + 500 * (0.03 / 0.75), 25) && near(fMid, 750, 20)
+        && near(f1, 1000 - 500 * (0.03 / 0.75), 25),
+      `length ${(wav.samples.length / wav.sampleRate).toFixed(3)} s (model ${total(s)} s), `
+        + `${f0.toFixed(0)} / ${fMid.toFixed(0)} / ${f1.toFixed(0)} Hz`);
+
+    // Move later: the Tone b1, selected on the timeline, moves after b2; the timeline and the
+    // render follow.
+    await page.click('#osc-seq-block-b1');
+    await page.click('#osc-seq-move-later');
+    s = await poll((x) => x.blocks[0].id === 'b2' && x.blocks[1].id === 'b1'
+      && x.blocks[1].x > x.blocks[0].x, 'b1 moved after b2');
+    wav = s.timeout ? null : await exportWav();
+    const toneF = wav ? freqAt(wav, 0.75 + 0.25) : null;
+    const leadF = wav ? freqAt(wav, 0.03) : null;
+    check(engine, '(e) Move later (#osc-seq-move-later): model order, timeline, the WAV',
+      !s.timeout && near(toneF, 440, 15) && near(leadF, 500 + 500 * (0.03 / 0.75), 25),
+      JSON.stringify(s.timeout ? s : { order: s.blocks.map((b) => b.id), toneF, leadF }));
+
+    // Tempo: a tempo-locked sequence (the config import's path) follows the BPM chosen.
+    const version = reference.version;
+    await page.evaluate((v) => window.OSCILLA.labs.sequencer.update({ sequence: { version: v,
+      tempoBpm: 120, loop: false, waveform: 'sine', blocks: [
+        { id: 't1', type: 'tone', beats: 2, durationMs: 1000, params: { freq: 440 } },
+        { id: 't2', type: 'tone', beats: 1, durationMs: 500, params: { freq: 880 } }] } }),
+    version);
+    await page.selectOption('#osc-seq-tempo', '120');
+    const at120 = await exportWav();
+    await page.selectOption('#osc-seq-tempo', '60');
+    s = await poll((x) => x.tempo === 60 && x.blocks[0].ms === 2000 && x.blocks[1].ms === 1000
+      && /2\.00 s/.test(x.blocks[0].label || ''), 'Tempo 60 rescales the tempo-locked blocks');
+    wav = s.timeout ? null : await exportWav();
+    // 120 -> 60 BPM doubles the 1.5 s of tempo-locked blocks: the render is 1.5 s longer.
+    const longer = wav ? (wav.samples.length - at120.samples.length) / wav.sampleRate : null;
+    check(engine, '(e) Tempo (#osc-seq-tempo) 60 BPM: model, timeline label, the render',
+      !s.timeout && s.tempoSelect === '60' && near(longer, 1.5, 0.02)
+        && near(freqAt(wav, 2.5), 880, 20) && near(freqAt(at120, 1.25), 880, 20),
+      JSON.stringify(s.timeout ? s : { tempo: s.tempo, ms: s.blocks.map((b) => b.ms),
+        longer }));
+    await page.selectOption('#osc-seq-tempo', '120');
+    await page.evaluate((m) => window.OSCILLA.labs.sequencer.update({ sequence: m }), reference);
+    check(engine, '(e) no page errors in the sequencer panel', errors.length === 0,
+      errors.slice(0, 3).join(' | '));
+  } finally {
+    await context.close();
+  }
+}
+
 // ---------------------------------------------------------------- run
 
 async function runEngine(engine, bundle) {
@@ -486,6 +728,7 @@ async function runEngine(engine, bundle) {
     const final = await page.evaluate(() => window.seqFixture.realtimeTeardown());
     check(engine, 'no live sources after teardown', final.live === 0, JSON.stringify(final));
     check(engine, 'no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
+    await panelChecks(engine, browser);
   } finally {
     await browser.close();
   }

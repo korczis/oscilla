@@ -116,7 +116,7 @@ claims:
     test: tests/browser/app.cjs
     status: guaranteed
     responsibility: product
-    note: Check labs-basic; the filter response curve is also compared with getFrequencyResponse in tests/browser/labs.cjs (npm run test:labs, in test:release and CI's suites job).
+    note: Check labs-basic, through the Filter Lab's own type radio, cutoff and Q fields and power switch (the cutoff, Q and gain controls are also judged at the output by controls-filter); the filter response curve is also compared with getFrequencyResponse in tests/browser/labs.cjs (npm run test:labs, in test:release and CI's suites job).
 
   - id: adsr-envelope-semantics
     claim: The ADSR envelope schedules attack, decay, sustain and release with Web Audio set, linear and exponential semantics, and a release mid-segment continues from the current value
