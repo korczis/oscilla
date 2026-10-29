@@ -1,0 +1,35 @@
+id: K029
+milestone: M062
+serves:
+  - "playable-instrument#chart-states-honest"
+  - "playable-instrument#chart-cost"
+title: "K015 review follow-ups: named spectrogram states, scroll-safe readout, due-only FFT"
+slug: k015-review-follow-ups-named-spectrogram-states-scroll-safe
+priority: p1
+profile: implementation
+objective: "Lands as fix(analysis). The follow-ups review 263 asked for, \"F1 and F2 first\", on K015 alone: they are canvas-level fixes that need no Pro markup and no kit. F1: a frozen spectrogram whose scale, span or theme changes blanks, and its readout says \"No analyser data\" though the analyser is live; the readout now tells apart no analyser, history not yet filled and \"History cleared by a scale change: unfreeze to refill\". F2: the readout is re-hit-tested from the last client point on scroll of the nearest scrolling ancestor, observeSize and layout(), so it never names a stale bin. F3: push is split into a due count and a write, so the unsmoothed feed runs its FFT only when a column is due. F4: the readout bin skips NaN as the row maximum does. F6: the unit-test stub host gets a non-zero offset. F5 (keyboard cursor and status region) is K033, on the kit. K015's tests live in tests/unit/analysis-spectrogram.test.mjs on #263 (commit 3bc96a11 deleted k015-spectrogram-readout.test.mjs), each named \"K015 ...\", so this plan change points K015's scope and validation and the ref of audio-band-signal-lab#spectrogram-readout at the tests of that file named \"K015 ...\", with a check that some ran: the ref fails on main and passes on #263, so K015 is reachable as DONE and the critique spectrogram-readout-ref-passes-on-base stays true. It does not wait on Q016: its work is the same wherever M062 lives."
+why: "Owner order of 2026-10-29: \"make the charts really sexy, modern, interactive\", for all charts; reviewer f3 scoped it to every surface that draws data. Revised after f3's review of the plan (CHANGES-REQUESTED, 2026-10-29): owner decisions are Q issues under M063, Pro chrome waits on F002 and on the card issue of its workspace, every chart that claims chart-interaction delivers the keyboard cursor and the announced readout, chart keys never take Escape or Space; revision 3 answers f3's delta review. Facts checked against origin/main at e2720e07 and the branches of #251, #253, #263 and #265 (charts-plan.md, charts-plan-changes.md)."
+scope:
+  - "src/js/charts/spectrogram-view.js"
+  - "src/js/analysis/spectrogram.js"
+  - "tests/unit/analysis-spectrogram.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K015"
+  - "K056"
+acceptance_criteria:
+  - "Unit tests in tests/unit/analysis-spectrogram.test.mjs that fail on the merge base: frozen plus a scale change gives the history-cleared state with its sentence; the F2 hit test with a non-zero host offset after a simulated scroll names the bin under the pointer; the feed is not read when no column is due (F3); a NaN bin is skipped (F4)."
+  - "Levels say dB relative (dBFS-like) unless a valid LevelCalibration applies, every estimate is labelled as one, and no data value is tweened or eased (project.no-fake-science)."
+  - "The pull request carries a reviewer's verdict (src/js/analysis is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "It adds no markup, osc-* class token or selector, so the Flowbite Pro ratchet stays flat (node --test tests/unit/ui-flowbite-pro.test.mjs)."
+  - "No visual reference moves: the references are not frozen."
+  - "scripts/size-report.mjs shows at most 0.5 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; it does not wait on Q014, and its figure joins M062's sum once Q014 records the cap, under the 1 000 000 B gzip budget (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/analysis-spectrogram.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29
