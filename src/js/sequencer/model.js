@@ -21,6 +21,14 @@
 // 44.1 kHz one.
 
 import { PROVISIONAL_SAMPLE_RATE, SAFE_NYQUIST_FACTOR, WAVEFORMS } from '../core/constants.js';
+import {
+  clamp, deepCopy, isNum, mulberry32, pick, round, sig, toInt, toNumber,
+} from '../core/math.js';
+import {
+  formatMs,
+  frequencyToNormalized,
+  normalizedToFrequency as coreNormalizedToFrequency,
+} from '../core/frequency.js';
 
 // ============================================================ constants
 
@@ -56,58 +64,14 @@ export const BLOCK_TYPES = [
 
 // ============================================================ helpers
 
-// from V1 clamp (index.html@95dfa81:1172)
-export const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-// from V1 isNum (index.html@95dfa81:1173)
-export const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
+// V1 clamp, isNum, toNumber, toInt, pick, round, sig and mulberry32 (index.html@95dfa81:1172-1240)
+// and frequencyToNormalized (:1366): one owner, core/math.js and core/frequency.js (E041);
+// re-exported for the sequencer's importers. round is core's, with the S079 tie fix.
+export { clamp, isNum, toNumber, toInt, pick, round, sig, mulberry32, frequencyToNormalized };
 
-// from V1 toNumber (index.html@95dfa81:1177)
-/** Coerce to a finite number inside [lo, hi]; anything else becomes the fallback. */
-export function toNumber(v, fallback, lo = -Infinity, hi = Infinity) {
-  const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : v;
-  return isNum(n) ? clamp(n, lo, hi) : fallback;
-}
-// from V1 toInt (index.html@95dfa81:1181)
-export function toInt(v, fallback, lo, hi) {
-  return Math.round(toNumber(v, fallback, lo, hi));
-}
-// from V1 pick (index.html@95dfa81:1184)
-export function pick(v, allowed, fallback) {
-  return allowed.includes(v) ? v : fallback;
-}
-// from V1 round (index.html@95dfa81:1187)
-export function round(v, digits) {
-  const m = 10 ** digits;
-  return Math.round((v + Number.EPSILON) * m) / m;
-}
-// from V1 sig (index.html@95dfa81:1192)
-/** Significant-digit formatting without trailing zeros: 2.2727 -> "2.27", 50.0 -> "50". */
-export function sig(v, digits = 3) {
-  return String(Number(v.toPrecision(digits)));
-}
-
-// from V1 mulberry32 (index.html@95dfa81:1240)
-/** Deterministic PRNG so a random block's preview equals what plays and what is exported. */
-export function mulberry32(seed) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-// from V1 frequencyToNormalized (index.html@95dfa81:1366)
-export function frequencyToNormalized(freq, min, max) {
-  if (!(freq > 0 && min > 0 && max > min)) return 0;
-  return clamp(Math.log(freq / min) / Math.log(max / min), 0, 1);
-}
-// from V1 normalizedToFrequency (index.html@95dfa81:1370), floor changed to SEQ_MIN_FREQUENCY
+/** core/frequency.js normalizedToFrequency, with the sequencer floor for an invalid range. */
 export function normalizedToFrequency(value, min, max) {
-  if (!(min > 0 && max > min) || !isNum(value)) return min > 0 ? min : SEQ_MIN_FREQUENCY;
-  return min * Math.pow(max / min, clamp(value, 0, 1));
+  return min > 0 ? coreNormalizedToFrequency(value, min, max) : SEQ_MIN_FREQUENCY;
 }
 
 /** The running context's safe maximum: 0.95 x Nyquist. Invalid rates fall back to 44.1 kHz. */
@@ -130,13 +94,9 @@ export function formatFrequencyRange(a, b, sep = ' → ') {
   return `${formatCompactFrequency(a)}${sep}${formatCompactFrequency(b)}`;
 }
 
-// from V1 formatMs (index.html@95dfa81:1437)
-export function formatMs(ms) {
-  if (!isNum(ms)) return '—';
-  return ms >= 1000 ? `${sig(ms / 1000, 3)} s` : `${sig(ms, 3)} ms`;
-}
+// V1 formatMs (index.html@95dfa81:1437): one owner, core/frequency.js (E041).
+export { formatMs };
 
-const deepCopy = (o) => JSON.parse(JSON.stringify(o)); // from V1 deepCopy (index.html@95dfa81:1174)
 
 // ============================================================ block schema
 

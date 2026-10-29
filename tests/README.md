@@ -39,6 +39,7 @@ for people, never gating · **DELETED** removed, with its replacement.
 | `unit/ui-shell.test.mjs` | GATE | theme resolution, slider fill, tab restore, LUT ends (moved from `visual/ui.test.mjs`) |
 | `unit/sequencer-model.test.mjs` | GATE | block schemas, Nyquist-safe frequency clamps |
 | `unit/sequencer-compiler.test.mjs` | GATE | planned automation: sorted, never gain 0, frequencies in range |
+| `unit/sequencer-core-helpers.test.mjs` | GATE | E041: the sequencer's numeric helpers, log mapping, `formatMs` and `lfoShape` are `core/math.js`, `core/frequency.js` and `audio/patterns.js` (identity), with the 20 Hz floor kept; a decimal tie in a block or tempo rounds up as core rounds it (S079 carry-over) |
 | `unit/sequencer-timeline.test.mjs` | GATE | time scale, ticks, block rectangles |
 | `unit/sequencer-editor.test.mjs` | GATE | editor state, no Web Audio in state, stop timing constants |
 | `unit/pack-single-file.test.mjs` | GATE | the packer inlines in order (vendors, the analysis library, the app) and escapes `</script`; the comment allow-list, the indentation rule (pre, textarea, script, style and attribute values verbatim), compact Lucide icons and their `:where(.lucide)` paint rule |
