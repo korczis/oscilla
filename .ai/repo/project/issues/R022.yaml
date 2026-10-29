@@ -25,7 +25,7 @@ scope:
   - "tests/README.md"
 depends_on: []
 acceptance_criteria:
-  - "tests/unit/pr-metadata.test.mjs: one fixture per code fails with exactly that code and a clean one passes; the golden cases #254, #253, #248, #247, #246, #237 and #252 hold; removing each `// rule:` block of the program lets its fixture through; metadata.yml matches pr-meta.yaml and a copy with pull-requests: write or without `edited` fails; the file fails on the merge base (fail-first)."
+  - "tests/unit/pr-metadata.test.mjs: one fixture per code fails with exactly that code and a clean one passes; the golden cases #254, #253, #248, #247, #246, #228 (a release of the shape of #237, whose version is the current one) and #252 hold; removing each `// rule:` block of the program lets its fixture through; metadata.yml matches pr-meta.yaml and a copy with pull-requests: write or without `edited` fails; the file fails on the merge base (fail-first)."
   - "tests/unit/base-rule.test.mjs: a pull request replacing pr-metadata.mjs with one that always passes is refused by the base's copy. tests/unit/ci-workflows.test.mjs: metadata.yml with a push trigger, or without its job bound, is refused."
   - "The pull request carries a review verdict (.github and the rule programs are guarded)."
   - "The owner adds `metadata` to branch protection after three green pull requests (C2); until then the job reports and does not block."
