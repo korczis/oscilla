@@ -14,7 +14,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gitRepo } from './fixtures/git-repo.mjs';
 import { failFirst, waiver } from '../../scripts/fail-first.mjs';
-import { digestOf, manifestOf } from '../../scripts/judge-isolation.mjs';
+import { digestOf } from '../../scripts/judge-isolation.mjs';
+import { extractJudge } from './fixtures/judge-copy.mjs';
 
 const { until } = createRequire(import.meta.url)('../browser/lib/wait.cjs');
 
@@ -317,6 +318,17 @@ test('the waiver is read as CommonMark reads the body (R5, R15, R21)', () => {
     'in a type-6 block after a paragraph': 'Text\n<div\nfail-first: n/a docs only\n',
     'in a pre block': '<pre>\n\nfail-first: n/a docs only\n</pre>\n',
     'in an inline tag\'s attribute': 'See <span title="x\nfail-first: n/a docs only\n">y</span>\n',
+    // round 5, R5: an inline link's title and an image's alt text are attributes only
+    'in an inline link title': 'See [x](/url "a\nfail-first: n/a docs only\nb") here\n',
+    'in an inline link title in parentheses': 'See [x](</u rl> (\nfail-first: n/a docs only\n))\n',
+    'in an image\'s alt text': '![a\nfail-first: n/a docs only\nb](img.png "t")\n',
+    'in an image\'s alt text holding a code span': '![a `]`\nfail-first: n/a docs only\n](i.png)\n',
+    'in a reference image\'s alt text': '![a\nfail-first: n/a docs only\n][r]\n\n[r]: /i.png\n',
+    // round 5, R5: the interrupts() fix: an HTML block ends a lazy continuation line's
+    // paragraph, so what follows it is the block's, not prose
+    'in a type-6 block after a list item\'s paragraph': '- item\n<div\nfail-first: n/a docs only\n',
+    'in a script block after a quote\'s paragraph': '> quoted\n<script>\n'
+      + 'fail-first: n/a docs only\n</script>\n',
   };
   for (const [what, body] of Object.entries(hidden)) {
     const w = waiver(body);
@@ -349,10 +361,19 @@ test('the waiver is read as CommonMark reads the body (R5, R15, R21)', () => {
     'after a thematic break': '***\nfail-first: n/a docs only\n',
     // a fence is no paragraph: it has no lazy continuation, and ends with its quote
     'after a fence in a quote': '> ```\n> x\nfail-first: n/a docs only\n',
+    // round 5, R5: a link's text is prose, and so is what follows a link or an image
+    'in a link\'s text across lines': '[a\nfail-first: n/a docs only\nb](/url)\n',
+    'after a link with a title': 'See [x](/url "t").\nfail-first: n/a docs only\n',
+    'after an image': '![alt](x.png)\nfail-first: n/a docs only\n',
+    'after a list item and a blank line, past an HTML block': '- item\n\n<div>\n\n'
+      + 'fail-first: n/a docs only\n',
   };
   for (const [what, body] of Object.entries(shown)) {
     assert.deepEqual(waiver(body), { reason: 'docs only' }, what);
   }
+  // an image is no reason: its alt text is not shown
+  assert.equal(waiver('fail-first: n/a ![docs only](x.png)').reason, '');
+  assert.equal(waiver('fail-first: n/a [docs only](/why)').reason, '[docs only]');
 });
 
 test('a test that asks git for the tracked files can be evidence', (t) => {
@@ -404,19 +425,23 @@ const LOCK = `${JSON.stringify({ name: 'fixture', version: '1.0.0', lockfileVers
   requires: true, packages: { '': { name: 'fixture', version: '1.0.0' } } }, null, 2)}\n`;
 const PKG = `${JSON.stringify({ name: 'fixture', version: '1.0.0', private: true })}\n`;
 
-/** A judge copy of this checkout's scripts/, sealed as the `judge` step seals it. */
+/**
+ * A judge copy of this checkout's scripts/, committed to a base of their own and extracted as
+ * the `judge` step extracts it (R30), read-only.
+ */
 function judgeCopy(t) {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'oscilla-fail-first-judge-'));
+  const src = gitRepo('oscilla-fail-first-judge-src-');
   t.after(() => {
     spawnSync('chmod', ['-R', 'u+w', dir]);
     rmSync(dir, { recursive: true, force: true });
+    src.dispose();
   });
-  cpSync(path.join(ROOT, 'scripts'), path.join(dir, 'scripts'), { recursive: true });
-  writeFileSync(path.join(dir, '.base-commit'), `${'0'.repeat(40)}\n`);
-  const text = manifestOf(dir);
-  writeFileSync(path.join(dir, '.manifest'), text);
+  cpSync(path.join(ROOT, 'scripts'), path.join(src.dir, 'scripts'), { recursive: true });
+  const sha = src.commit('the judge', {});
+  const digest = extractJudge(src.dir, sha, dir);
   spawnSync('chmod', ['-R', 'a-w', dir]);
-  return { dir, digest: digestOf(text) };
+  return { dir, digest };
 }
 
 /** A fixture with a package and a lockfile, as the repository has. */

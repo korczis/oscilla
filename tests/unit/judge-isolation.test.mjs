@@ -7,18 +7,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync }
-  from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync,
+  writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { copyProblems, digestOf, isolatedEnv, loadManifest, manifestOf, ptraceProbe,
   runIsolated, SYSTEM_PATH } from '../../scripts/judge-isolation.mjs';
+import { parseYaml } from '../../scripts/yaml-subset.mjs';
 import { createRequire } from 'node:module';
+import { extractJudge } from './fixtures/judge-copy.mjs';
+import { gitRepo } from './fixtures/git-repo.mjs';
 
 const { until } = createRequire(import.meta.url)('../browser/lib/wait.cjs');
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PROGRAM = path.join(ROOT, 'scripts', 'judge-isolation.mjs');
+const GIT_ENV = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' };
+for (const k of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE']) delete GIT_ENV[k];
 
 test('ptrace: 0 or no Yama file on Linux refuses; 1 and more pass; off Linux only outside CI',
   () => {
@@ -40,67 +45,157 @@ test('ptrace: 0 or no Yama file on Linux refuses; 1 and more pass; off Linux onl
     assert.equal(ptraceProbe({ platform: 'darwin', ci: true }).ok, false);
   });
 
-/** A judge copy: files under a directory, its manifest written as the judge step writes it. */
-function copy(t) {
+/**
+ * A base commit with the programs and the wrapper, and `extra` files ({ path: text }) beside
+ * them; `link`: a symbolic link under scripts/ too. { repo, sha }.
+ */
+function base(t, extra = {}, { link = false } = {}) {
+  const repo = gitRepo('oscilla-judge-base-');
+  t.after(() => repo.dispose());
+  repo.commit('base', { 'scripts/fail-first.mjs': 'export {};\n',
+    'scripts/b-c.mjs': 'export const b = 1;\n', 'scripts/B.mjs': 'export const B = 1;\n',
+    '.github/scripts/base-rule.sh': '#!/bin/sh\n', 'README.md': 'not copied\n', ...extra });
+  chmodSync(path.join(repo.dir, '.github', 'scripts', 'base-rule.sh'), 0o755);
+  if (link) symlinkSync('fail-first.mjs', path.join(repo.dir, 'scripts', 'link.mjs'));
+  repo.git('add', '-A');
+  repo.git('commit', '-q', '--allow-empty', '-m', 'modes and links');
+  const sha = repo.git('rev-parse', 'HEAD');
+  repo.git('update-ref', 'refs/remotes/origin/main', sha);
+  return { repo, sha };
+}
+
+/** A judge copy of `sha` as the `judge` step makes it: { dir, digest }. */
+function copy(t, b = base(t)) {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'oscilla-judge-copy-'));
   t.after(() => {
     spawnSync('chmod', ['-R', 'u+w', dir]);
     rmSync(dir, { recursive: true, force: true });
   });
-  mkdirSync(path.join(dir, 'scripts'));
-  mkdirSync(path.join(dir, '.github', 'scripts'), { recursive: true });
-  writeFileSync(path.join(dir, 'scripts', 'fail-first.mjs'), 'export {};\n');
-  writeFileSync(path.join(dir, 'scripts', 'b-c.mjs'), 'export const b = 1;\n');
-  writeFileSync(path.join(dir, 'scripts', 'B.mjs'), 'export const B = 1;\n');
-  writeFileSync(path.join(dir, '.github', 'scripts', 'base-rule.sh'), '#!/bin/sh\n');
-  writeFileSync(path.join(dir, '.base-commit'), `${'a'.repeat(40)}\n`);
-  return dir;
+  return { dir, digest: extractJudge(b.repo.dir, b.sha, dir), ...b };
 }
 
-test('the manifest is what the judge step\'s find | sort | sha256sum writes', (t) => {
-  const dir = copy(t);
-  const step = spawnSync('bash', ['-c', 'cd "$1" && find . -type f ! -path ./.manifest -print0'
-    + ' | LC_ALL=C sort -z | xargs -0 sha256sum', 'bash', dir], { encoding: 'utf8' });
-  assert.equal(step.status, 0, step.stderr);
-  assert.equal(manifestOf(dir), step.stdout);
-  assert.match(manifestOf(dir), /^[0-9a-f]{64} {2}\.\/\.base-commit\n/);
+/** The `judge` step of each judge job, run on `repo` as the runner would: its output. */
+function judgeSteps(t, repo) {
+  const out = [];
+  for (const wf of ['.github/workflows/ci.yml', '.github/workflows/metadata.yml']) {
+    for (const [name, job] of Object.entries(parseYaml(readFileSync(path.join(ROOT, wf),
+      'utf8')).jobs)) {
+      const step = (job.steps || []).find((s) => s.id === 'judge');
+      if (!step) continue;
+      const tmp = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'oscilla-judge-step-')));
+      t.after(() => {
+        spawnSync('chmod', ['-R', 'u+w', tmp]);
+        rmSync(tmp, { recursive: true, force: true });
+      });
+      writeFileSync(path.join(tmp, 'output'), '');
+      const r = spawnSync('bash', ['--noprofile', '--norc', '-eo', 'pipefail', '-c', step.run],
+        { cwd: repo.dir, encoding: 'utf8', env: { ...GIT_ENV, RUNNER_TEMP: tmp,
+          GITHUB_BASE_REF: 'main', GITHUB_OUTPUT: path.join(tmp, 'output') } });
+      out.push({ job: `${wf}:${name}`, status: r.status, log: `${r.stdout}${r.stderr}`,
+        dir: path.join(tmp, 'judge'), output: readFileSync(path.join(tmp, 'output'), 'utf8') });
+    }
+  }
+  return out;
+}
+
+// review of #255, round 5, R30: the manifest is `git ls-tree -r` of the base commit, not
+// `find | sha256sum` of the extracted files, so writer and verifier read one definition: a
+// symbolic link or a name with a backslash under the base's scripts/ is left out of the copy
+// with a warning naming it, instead of making every judge refuse every pull request.
+test('R30: every judge step writes manifestOf()\'s manifest, and copies exactly it', (t) => {
+  const b = base(t, { 'scripts/a\\b.mjs': 'export {};\n', 'scripts/sp ace.mjs': '' },
+    { link: true });
+  const want = manifestOf(b.repo.dir, b.sha);
+  assert.equal(want.skipped.length, 3, want.skipped.join('\n'));
+  assert.ok(want.skipped.some((l) => /^120000 blob /.test(l)), 'the symbolic link');
+  assert.ok(want.skipped.some((l) => /"scripts\/a\\\\b\.mjs"$/.test(l)), 'the backslash name');
+  assert.match(want.text, new RegExp(`^commit ${b.sha}\\n100755 blob [0-9a-f]{40}\\t`
+    + '\\.github/scripts/base-rule\\.sh\\n'));
+  assert.doesNotMatch(want.text, /README|link\.mjs|a\\b|sp ace/);
+  const steps = judgeSteps(t, b.repo);
+  assert.deepEqual(steps.map((s) => s.job), ['.github/workflows/ci.yml:fail-first',
+    '.github/workflows/ci.yml:review-verdict', '.github/workflows/metadata.yml:metadata']);
+  for (const s of steps) {
+    assert.equal(s.status, 0, `${s.job}: ${s.log}`);
+    assert.match(s.log, /^ptrace_scope=(?:\d+|missing)$/m, `${s.job}: R31, measured`);
+    assert.match(s.log, /::warning::the judge: not copied from refs\/remotes\/origin\/main/,
+      s.job);
+    assert.match(s.log, /::warning::the judge: not copied .*120000 blob .*scripts\/link\.mjs/,
+      s.job);
+    assert.match(s.log, /::warning::the judge: not copied .*"scripts\/a\\\\b\.mjs"/, s.job);
+    const text = readFileSync(path.join(s.dir, '.manifest'), 'utf8');
+    assert.equal(text, want.text, s.job);
+    assert.match(s.output, new RegExp(`^manifest=${digestOf(text)}$`, 'm'), s.job);
+    const m = loadManifest(s.dir, digestOf(text));
+    assert.equal(m.problem, null, s.job);
+    assert.equal(m.commit, b.sha);
+    assert.deepEqual(copyProblems(s.dir, m), [], s.job);
+    assert.ok(statSync(path.join(s.dir, '.github', 'scripts', 'base-rule.sh')).mode & 0o100);
+    // the verifier refuses what the writer left out, put back into the copy
+    spawnSync('chmod', ['-R', 'u+w', s.dir]);
+    symlinkSync('fail-first.mjs', path.join(s.dir, 'scripts', 'link.mjs'));
+    writeFileSync(path.join(s.dir, 'scripts', 'a\\b.mjs'), 'export {};\n');
+    assert.deepEqual(copyProblems(s.dir, m).sort(), ['scripts/a\\b.mjs is not in the manifest',
+      'scripts/link.mjs is not in the manifest']);
+  }
 });
 
 test('a copy that departs from its manifest, or a manifest not the recorded one, is refused',
   (t) => {
-    const dir = copy(t);
-    const text = manifestOf(dir);
-    writeFileSync(path.join(dir, '.manifest'), text);
-    const digest = digestOf(text);
-    const { entries, problem } = loadManifest(dir, digest);
-    assert.equal(problem, null);
-    assert.equal(entries.size, 5);
-    assert.deepEqual(copyProblems(dir, entries), []);
-    // the digest of another manifest, no digest, no manifest
+    const { dir, digest, sha } = copy(t);
+    const text = readFileSync(path.join(dir, '.manifest'), 'utf8');
+    const m = loadManifest(dir, digest);
+    assert.equal(m.problem, null);
+    assert.equal(m.entries.size, 4);
+    assert.equal(m.commit, sha);
+    assert.deepEqual(copyProblems(dir, m), []);
+    // the digest of another manifest, no digest, no manifest, no commit line, an odd line
     assert.match(loadManifest(dir, digestOf(`${text}x`)).problem, /not the [0-9a-f]{64} the judge/);
     assert.match(loadManifest(dir, '').problem, /is no sha256/);
     assert.match(loadManifest(path.join(dir, 'scripts'), digest).problem, /ENOENT/);
-    // a changed, a missing, an added file and a symlink in place of one
+    const odd = (body) => {
+      const other = mkdtempSync(path.join(os.tmpdir(), 'oscilla-judge-odd-'));
+      t.after(() => rmSync(other, { recursive: true, force: true }));
+      writeFileSync(path.join(other, '.manifest'), body);
+      return loadManifest(other, digestOf(body)).problem;
+    };
+    assert.match(odd(text.split('\n').slice(1).join('\n')), /no `commit <sha>` first line/);
+    assert.match(odd(`${text}120000 blob ${'a'.repeat(40)}\tscripts/l\n`), /a line that is no/);
+    assert.match(odd(`${text}100644 blob ${'a'.repeat(40)}\tscripts/a\\b\n`), /a line that is/);
+    assert.match(odd(`commit ${sha}\n`), /lists no file/);
+    // a changed, a missing, an added file, a symlink in place of one, a lost executable bit,
+    // another .base-commit
     writeFileSync(path.join(dir, '.github', 'scripts', 'base-rule.sh'), '#!/bin/sh\nexit 0\n');
-    assert.deepEqual(copyProblems(dir, entries), ['./.github/scripts/base-rule.sh changed']);
+    assert.deepEqual(copyProblems(dir, m), ['.github/scripts/base-rule.sh changed']);
+    writeFileSync(path.join(dir, '.github', 'scripts', 'base-rule.sh'), '#!/bin/sh\n');
+    chmodSync(path.join(dir, '.github', 'scripts', 'base-rule.sh'), 0o644);
+    assert.deepEqual(copyProblems(dir, m), ['.github/scripts/base-rule.sh has lost or gained its'
+      + ' executable bit (100755)']);
+    chmodSync(path.join(dir, 'scripts', 'B.mjs'), 0o755);
+    assert.ok(copyProblems(dir, m).includes('scripts/B.mjs has lost or gained its executable'
+      + ' bit (100644)'));
+    chmodSync(path.join(dir, 'scripts', 'B.mjs'), 0o644);
+    chmodSync(path.join(dir, '.github', 'scripts', 'base-rule.sh'), 0o755);
     rmSync(path.join(dir, 'scripts', 'b-c.mjs'));
     writeFileSync(path.join(dir, 'scripts', 'extra.mjs'), '');
-    assert.deepEqual(copyProblems(dir, entries).sort(), ['./.github/scripts/base-rule.sh changed',
-      './scripts/b-c.mjs is missing', './scripts/extra.mjs is not in the manifest']);
+    assert.deepEqual(copyProblems(dir, m).sort(), ['scripts/b-c.mjs is missing',
+      'scripts/extra.mjs is not in the manifest']);
     rmSync(path.join(dir, 'scripts', 'B.mjs'));
     symlinkSync(path.join(dir, 'scripts', 'fail-first.mjs'), path.join(dir, 'scripts', 'B.mjs'));
-    assert.ok(copyProblems(dir, entries).includes('./scripts/B.mjs is no regular file'));
+    assert.ok(copyProblems(dir, m).includes('scripts/B.mjs is no regular file'));
+    writeFileSync(path.join(dir, '.base-commit'), `${'b'.repeat(40)}\n`);
+    assert.ok(copyProblems(dir, m).includes(`.base-commit is not the manifest's commit ${sha}`));
     // the program: exit 1 and the refusal; exit 0 on the copy as written
     const r = spawnSync(process.execPath, [PROGRAM, '--verify', dir, digest], { encoding: 'utf8' });
     assert.equal(r.status, 1, r.stdout + r.stderr);
     assert.match(r.stderr, /judge-isolation: REFUSED/);
     const fresh = copy(t);
-    writeFileSync(path.join(fresh, '.manifest'), manifestOf(fresh));
-    chmodSync(fresh, 0o555);
-    const ok = spawnSync(process.execPath, [PROGRAM, '--verify', fresh,
-      digestOf(readFileSync(path.join(fresh, '.manifest')))], { encoding: 'utf8' });
+    spawnSync('chmod', ['-R', 'a-w', fresh.dir]);
+    const ok = spawnSync(process.execPath, [PROGRAM, '--verify', fresh.dir, fresh.digest],
+      { encoding: 'utf8' });
     assert.equal(ok.status, 0, ok.stdout + ok.stderr);
-    assert.equal(spawnSync(process.execPath, [PROGRAM, '--verify', fresh]).status, 2);
+    assert.match(ok.stdout, /matches its manifest \(4 files\)/);
+    assert.equal(spawnSync(process.execPath, [PROGRAM, '--verify', fresh.dir]).status, 2);
   });
 
 test('a child\'s environment is the fixed PATH, its HOME, CI and what the judge sets', () => {

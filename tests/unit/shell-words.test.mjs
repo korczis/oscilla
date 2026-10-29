@@ -16,6 +16,9 @@ test('substitutions: top-level backticks, $( ), process substitution, inside quo
   assert.deepEqual(programs('`npm ci`'), ['npm', '$']);
   assert.deepEqual(programs('echo `npm ci`'), ['npm', 'echo']);
   assert.deepEqual(programs('echo "$(npm ci)"'), ['npm', 'echo']);
+  // round 5, R27: a backtick substitution inside double quotes runs its command too
+  assert.deepEqual(programs('echo "x `npm ci` y"'), ['npm', 'echo']);
+  assert.equal(commandsOf('echo "`npm ci`"').at(-1).args[0].dynamic, true);
   assert.deepEqual(programs('x=$(npm ci)'), ['npm']);
   assert.deepEqual(programs('cat <(npm ci)'), ['npm', 'cat']);
   assert.deepEqual(programs('tee >(npm ci) < /dev/null'), ['npm', 'tee']);
@@ -42,6 +45,10 @@ test('redirections: a target is no program, and the program after one is', () =>
   assert.deepEqual(programs('2>/dev/null npm ci'), ['npm']);
   assert.deepEqual(programs('npm ci 2>&1 | tee log'), ['npm', 'tee']);
   assert.deepEqual(programs('npm ci >log 2>&1'), ['npm']);
+  // round 5, R27: `2>&1` is one redirection with its target, so a `1>` right after it is a
+  // redirection of its own and the word after that its target, not the program
+  assert.deepEqual(programs('2>&1>/dev/null npm ci'), ['npm']);
+  assert.deepEqual(programs('>&2>/dev/null npm ci'), ['npm']);
   const [cmd] = commandsOf('npm ci > log');
   assert.deepEqual(cmd.args.map((a) => a.text), ['ci']);
   // heredoc bodies are data

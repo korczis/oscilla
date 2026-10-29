@@ -13,7 +13,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { digestOf, manifestOf } from '../../scripts/judge-isolation.mjs';
+import { copyProblems, digestOf, loadManifest, manifestOf }
+  from '../../scripts/judge-isolation.mjs';
+import { extractJudge } from './fixtures/judge-copy.mjs';
 import { parseYaml } from '../../scripts/yaml-subset.mjs';
 import { gitRepo } from './fixtures/git-repo.mjs';
 
@@ -471,10 +473,12 @@ function runJob(t, repo, head, job, { before = [], drop = () => false, cache = n
 const STATUS = { 'scripts/fail-first.mjs': 1, 'scripts/pr-metadata.mjs': 1,
   'scripts/review-verdict.mjs': 0 };
 /** The judge copy a job's `judge` step extracted, and whether it still matches its manifest. */
-function copyIntact(log, jobRoot) {
+function copyIntact(repo, jobRoot) {
   const dir = path.join(jobRoot, 'judge');
   const manifest = readFileSync(path.join(dir, '.manifest'), 'utf8');
-  return manifest === manifestOf(dir) && /\.\/\.github\/scripts\/base-rule\.sh\n/.test(manifest)
+  const m = loadManifest(dir, digestOf(manifest));
+  return manifest === manifestOf(repo.dir, repo.git('rev-parse', BASE)).text && !m.problem
+    && copyProblems(dir, m).length === 0 && /\t\.github\/scripts\/base-rule\.sh\n/.test(manifest)
     && readFileSync(path.join(dir, WRAPPER_REL), 'utf8') === real(WRAPPER_REL);
 }
 /** runJob, keeping the runner's temporary directory to look at afterwards. */
@@ -521,7 +525,7 @@ test('R12: a PR\'s postinstall can no longer change what judges it, in any judge
     assert.equal(r.status, STATUS[job.program], `${job.name}: ${r.out}`);
     assert.equal(readFileSync(path.join(repo.dir, WRAPPER_REL), 'utf8'), real(WRAPPER_REL),
       `${job.name}: the wrapper is the committed one`);
-    assert.ok(copyIntact(r.log, r.root), `${job.name}: the judge copy is unchanged`);
+    assert.ok(copyIntact(repo, r.root), `${job.name}: the judge copy is unchanged`);
     if (job.name === 'fail-first') {
       assert.match(r.out, /the judge copy matches its manifest/);
       assert.match(r.out, /installed with `npm ci --ignore-scripts` by the judge/, r.out);
@@ -569,7 +573,7 @@ test('R17, R18, R22: a git dependency, a .npmrc git= and their combination canno
       assert.match(r.out, /fail-first: REFUSED to judge: the install/, route);
       assert.doesNotMatch(r.log, /HOSTILE|added \d+ package/, `${route}: ${r.log}`);
       assert.equal(readFileSync(path.join(repo.dir, WRAPPER_REL), 'utf8'), real(WRAPPER_REL));
-      assert.ok(copyIntact(r.log, r.root), `${route}: the judge copy is unchanged`);
+      assert.ok(copyIntact(repo, r.root), `${route}: the judge copy is unchanged`);
     }
   });
 
@@ -587,9 +591,14 @@ test('R25: a committed node_modules is refused, and a judge copy lacking a progr
   assert.equal(r.status, 1, r.log);
   assert.match(r.out, /node_modules is a symbolic link: npm ci would empty/);
   assert.doesNotMatch(r.log, /HOSTILE/);
-  assert.ok(copyIntact(r.log, r.root));
+  assert.ok(copyIntact(repo, r.root));
   // base-rule.sh run from a judge copy that has a .base-commit and a manifest
   const fx = fixture(t);
+  // the base carries the wrapper, as main does
+  fx.git('checkout', '-q', 'main');
+  fx.commit('the wrapper', { [WRAPPER_REL]: real(WRAPPER_REL) });
+  fx.git('update-ref', BASE, 'main');
+  fx.git('checkout', '-q', 'pr');
   fx.commit('docs', { 'README.md': 'fixture, documented\n' });
   const judge = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'oscilla-base-rule-judge-')));
   t.after(() => {
@@ -597,14 +606,11 @@ test('R25: a committed node_modules is refused, and a judge copy lacking a progr
     rmSync(judge, { recursive: true, force: true });
   });
   const sha = fx.git('rev-parse', 'main');
-  const extract = spawnSync('sh', ['-c', `git -C "${fx.dir}" archive main -- scripts | tar -x -C`
-    + ` "${judge}"`]);
-  assert.equal(extract.status, 0);
-  mkdirSync(path.join(judge, '.github', 'scripts'), { recursive: true });
-  writeFileSync(path.join(judge, WRAPPER_REL), real(WRAPPER_REL));
-  writeFileSync(path.join(judge, '.base-commit'), `${sha}\n`);
-  const seal = () => {
-    const text = manifestOf(judge);
+  const digest = extractJudge(fx.dir, sha, judge);
+  /** The manifest without the lines `drop` matches, sealed: its digest. */
+  const seal = (drop) => {
+    const text = manifestOf(fx.dir, sha).text.split('\n').filter((l) => !drop.test(l))
+      .join('\n');
     writeFileSync(path.join(judge, '.manifest'), text);
     return digestOf(text);
   };
@@ -613,7 +619,6 @@ test('R25: a committed node_modules is refused, and a judge copy lacking a progr
       { cwd: fx.dir, encoding: 'utf8', env: { ...ENV, ...env } });
     return { status: x.status, out: `${x.stdout}${x.stderr}` };
   };
-  const digest = seal();
   const ok = viaCopy({ JUDGE_MANIFEST: digest }, BASE, 'scripts/review-verdict.mjs', ...VERDICT);
   assert.equal(ok.status, 0, ok.out);
   assert.match(ok.out, judged('review-verdict'));
@@ -634,8 +639,8 @@ test('R25: a committed node_modules is refused, and a judge copy lacking a progr
   assert.match(lacking.out, /scripts\/review-verdict\.mjs is missing/);
   assert.match(lacking.out, /not the copy its step extracted/);
   // and resealed without it, the copy still may not fall back to the checkout's program
-  const resealed = viaCopy({ JUDGE_MANIFEST: seal() }, BASE, 'scripts/review-verdict.mjs',
-    ...VERDICT);
+  const resealed = viaCopy({ JUDGE_MANIFEST: seal(/\tscripts\/review-verdict\.mjs$/) }, BASE,
+    'scripts/review-verdict.mjs', ...VERDICT);
   assert.equal(resealed.status, 2, resealed.out);
   assert.match(resealed.out, /names scripts\/review-verdict\.mjs, which the judge copy lacks/);
   assert.doesNotMatch(resealed.out, /this checkout's copy judges/);

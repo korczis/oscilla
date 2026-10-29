@@ -362,7 +362,9 @@ test('mutation: ci.yml started by anything but a pull request', () => {
   assert.deepEqual(checkWorkflow('pages.yml', PAGES, SUITES), []);
   // the gate alone holds a workflow to pull_request, without any base-rule.sh step in it
   // (review of #255, R6: ci.yml runs base-rule.sh too, so it alone could not tell)
-  const noRule = CI.replaceAll('.github/scripts/base-rule.sh', '.github/scripts/other.sh');
+  // (and no `judge` step, which marks a job that means to judge: R30)
+  const noRule = CI.replaceAll('.github/scripts/base-rule.sh', '.github/scripts/other.sh')
+    .replaceAll('        id: judge\n', '        id: other\n');
   assert.notEqual(noRule, CI);
   assert.deepEqual(rules(ci(noRule)), []);
   const gateOnly = mutate(noRule, '\non:\n  pull_request:\n', '\non:\n  push:\n');
@@ -637,6 +639,19 @@ test('R23: no env: loader and no shell of its own before the judge', () => {
       `          PR: \${{ github.event.pull_request.number }}\n          ${k}: ./x\n`),
     new RegExp(`its env: sets ${k}`));
   }
+  // round 5, R23: setup-node's and the checkout's env:, and the job's container env:
+  for (const k of ['NODE_OPTIONS', 'LD_PRELOAD', 'BASH_ENV']) {
+    const node = '      - uses: actions/setup-node@v7\n';
+    refused(ffAt(CI, node, `${node}        env:\n          ${k}: ./x\n`),
+      new RegExp(`its env: sets ${k}`));
+    refused(ffAt(CI, '      - uses: actions/checkout@v7\n', '      - uses: actions/checkout@v7\n'
+      + `        env:\n          ${k}: ./x\n`), new RegExp(`its env: sets ${k}`));
+    refused(ffAt(CI, steps, `    container:\n      image: node:22.11.0\n      env:\n`
+      + `        ${k}: ./x\n${steps}`), new RegExp(`the job's container env: sets ${k}`));
+  }
+  // a container's harmless env:, and a step's after the judge's call, are not refused
+  assert.deepEqual(judgeFirst(ci(ffAt(CI, steps, '    container:\n      image: node:22.11.0\n'
+    + `      env:\n        TZ: UTC\n${steps}`))), []);
   const wfEnv = mutate(CI, '\npermissions:\n  contents: read\n',
     '\npermissions:\n  contents: read\n\nenv:\n  NODE_OPTIONS: --require=./x.cjs\n');
   const found = ci(wfEnv).filter((v) => v.rule === 'judge-first');
@@ -710,7 +725,10 @@ test('R12: the judge is the base commit\'s copy, in a job shaped to keep the PR 
   refused(inFf(EXTRACTED, `/usr/bin/env ${EXTRACTED}`), /starts the judge with something but/);
   // R20: a judge named through a variable, or reached through a local action, is refused
   refused(inFf(EXTRACTED, '/bin/bash "$JUDGE"'),
-    /names \.github\/scripts\/base-rule\.sh but calls it in no form/);
+    /has the `judge` step but calls \.github\/scripts\/base-rule\.sh in no form/);
+  // and without a `judge` step, a mention of the wrapper alone marks the job
+  refused(inFf(EXTRACTED, '/bin/bash "$JUDGE" # .github/scripts/base-rule.sh').replace(
+    '        id: judge\n', ''), /names \.github\/scripts\/base-rule\.sh but calls/);
   const rv = parse(CI).jobs['review-verdict'];
   const viaAction = mutate(CI, '      - name: A guarded change carries a verdict for the content'
     + ' it changes\n', '      - uses: ./.github/actions/judge\n      - name: A guarded change'
@@ -720,13 +738,21 @@ test('R12: the judge is the base commit\'s copy, in a job shaped to keep the PR 
   assert.ok(found.some((v) => /through the action \.\/\.github\/actions\/judge/.test(v.message)),
     JSON.stringify(found));
   assert.equal(rv.steps.length, 4);
-  // the judge step makes the copy read-only and records its manifest
-  for (const job of ['fail-first', 'review-verdict']) {
-    const extract = parse(CI).jobs[job].steps[2].run;
+  // the judge step makes the copy read-only and records its manifest, which is the base
+  // commit's `git ls-tree -r` (R30), and prints the runner's ptrace_scope (R31)
+  for (const [wf, job] of [[CI, 'fail-first'], [CI, 'review-verdict'],
+    [read('.github/workflows/metadata.yml'), 'metadata']]) {
+    const extract = parse(wf).jobs[job].steps[2].run;
     assert.match(extract, /chmod -R a-w "\$judge"/, job);
-    assert.match(extract, /xargs -0 sha256sum\) > "\$judge\/\.manifest"/, job);
+    assert.match(extract, /git ls-tree -r "\$sha" -- \.github\/scripts scripts > "\$tree"/, job);
+    assert.ok(extract.includes('{ echo "commit $sha"; LC_ALL=C grep -E "$entry" "$tree"; }'
+      + ' > "$judge/.manifest"'), job);
+    assert.match(extract, /git cat-file blob "\$oid" > "\$judge\/\$file"/, job);
     assert.match(extract, /echo "manifest=\$\(sha256sum < "\$judge\/\.manifest"/, job);
-    assert.doesNotMatch(extract, /\bcp\b|install-guard/, `${job}: no checkout copy`);
+    assert.match(extract, /^echo "ptrace_scope=\$\(cat \/proc\/sys\/kernel\/yama\/ptrace_scope/m,
+      job);
+    assert.doesNotMatch(extract, /\bcp\b|install-guard|\bfind\b|git archive/,
+      `${job}: no checkout copy, no find`);
   }
   // checkRepository passes the actions that name base-rule.sh
   const dir = mkdtempSync(path.join(os.tmpdir(), 'oscilla-judge-action-'));
