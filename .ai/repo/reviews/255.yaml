@@ -1,44 +1,49 @@
 # Review verdict for pull request #255, R022: every pull request names its plan record, judged by
-# the base branch (branch feat/r022-pr-metadata-judge). Sixth round (re-review).
-# Reviewed head 2c85a146, merge base origin/main 94192a19 (main's tip is 45621450). Round 5
-# reviewed 1bc7fa8e and requested changes for R29 (1a1a959f). This round reviews 2c85a146:
-# bundled entries accepted under a sha512 registry parent (R29), the copy and manifest from git
-# ls-tree with odd names skipped by warning (R30), sudo stated (R31), specs (R32), the body (R33),
-# step and container env: read (R23), and the R5/R27 tests. Another builder wrote it (oscilla-b0).
+# the base branch (branch feat/r022-pr-metadata-judge). Seventh round (re-review).
+# Reviewed head 152cacea, merge base origin/main 94192a19 (main's tip is 45621450). Round 6
+# reviewed 2c85a146 and requested changes for R34 and R35 (2de6ca5b). This round reviews 152cacea:
+# a bundled entry needs its holder's list, a sha512 holder chain and an exact version with no
+# source field (R34, R36); every spec is classified by the runner npm's own npm-package-arg (R35);
+# the two fixtures pinned (R37); the judge log count (R38). Another builder wrote it (oscilla-b0).
 #
 # The digest: the base branch's scripts/review-verdict.mjs, run from `git archive origin/main
-# scripts` with --repo on this worktree: 338c3e79...42a1 over the 10 guarded paths it names.
+# scripts` with --repo on this worktree: 06b44ed1...54f6 over the 10 guarded paths it names.
 #
-# How it was reviewed: four independent lenses (bundled acceptance, the manifest and the skip, the
-# spec grammar against npm-package-arg, regressions and the unguarded fixtures), read-only, with
-# real offline npm 10.9.3 fixtures; every finding handed to a separate skeptic (10 agents; none
-# refuted).
+# How it was reviewed: four independent lenses (bundled acceptance, npm-package-arg and how npm is
+# found, regressions against real lockfiles, the strict-or-edge decision), read-only, with real
+# offline npm 10.9.3 fixtures; every finding handed to a separate skeptic (13 agents; none refuted).
 #
-# The R30 deviation (an odd name or symlink in the base is skipped with a warning rather than
-# failing the step) is accepted: it was checked that a judge program or import that is skipped
-# fails closed (ERR_MODULE_NOT_FOUND inside the copy, or base-rule.sh exit 2), never falls back to
-# the checkout, and that the warning cannot inject a workflow command.
+# R35 holds: no spec npm reads as non-registry was found accepted, and the PR cannot choose the
+# node or the npm (recorded by readlink -f before checkout, run under env -i). Unit tests 3235/3235.
 #
-# Verdict: changes-requested, for two open P1s in the guard:
-# - R34: an inBundle entry with no resolved and no integrity is accepted without its `version`
-#   being read (install-guard.mjs:198). When the sha512-checked parent tarball does not in fact
-#   bundle it, npm installs it from the entry's own version: a `file:<dir>` version runs that
-#   directory's prepare under --ignore-scripts (reproduced, exit 0, marker written), a `file:x.tgz`
-#   installs an unhashed tarball, and a plain version is fetched by name with no integrity. The
-#   parent's sha512 does not cover what the parent does not contain. Accept a bundled entry only
-#   when its name is in the bundling parent's lockfile `bundleDependencies`, and its version is an
-#   exact semver with no other source-bearing field.
-# - R35: three spec forms npm-package-arg 12.0.2 reads as checkout directories pass the guard
-#   (install-guard.mjs:82,95): `@scope/name@<range>` outside npm:, a bare drive letter (`D:evil`),
-#   and a dot-led name (`.evil`, `..x`); npm ci then links a PR directory into node_modules.
-#   Hand-written grammar keeps drifting from npm's: classify each spec with the npm-package-arg
-#   that ships inside the runner's own npm, loaded by absolute path from the recorded node, and
-#   refuse any type other than version, range, tag and alias-of-those.
+# The decision asked of the reviewer (strict list or npm's edge rule): the edge rule. The holder's
+# bundleDependencies is lock text the PR writes, so membership is not a boundary (a forged list is
+# accepted either way); what bounds an accepted bundled entry is (b) and (c): npm then either uses
+# the holder tarball's bytes, installs nothing, or fetches name@exact-version from the registry
+# (reify.js:759-764). Follow arborist's getBundler exactly: transitive edges from an accepted bundled
+# entry (dependencies, optionalDependencies, peerDependencies, resolved by walking up node_modules
+# inside the holder's subtree) and its pBundler clause (a child of an accepted bundled entry is
+# bundled). State the name@exact-version registry fallback as the residual.
+#
+# Verdict: changes-requested, for two open P1 bypasses and two P1 over-refusals:
+# - R39: a bundled entry at a non-canonical key (`.../node_modules/evil/.`, `evil/`, `./evil`) with a
+#   matching name passes; arborist path.resolves the key to `evil`, finds it unlisted, installs it
+#   from `evil/.@1.0.0`, which npm-package-arg reads as a checkout directory, and its prepare runs
+#   under --ignore-scripts (reproduced twice). Refuse any lock key that is not path.posix.normalize'd,
+#   ends in `/`, or has a segment after node_modules/ that validate-npm-package-name (the runner
+#   npm's) rejects; require entry.name, when present, to be a valid name too.
+# - R40: hasShrinkwrap / _hasShrinkwrap on a lock entry is not refused; npm ci then reads the
+#   tarball's own npm-shrinkwrap.json and installs its file:/git: entries outside the guard; a git
+#   dependency's prepare runs under --ignore-scripts (reproduced twice). Anyone can publish such a
+#   tarball to the registry, so sha512 does not help. Refuse both fields on every entry.
+# - R43, R44: the guard refuses lockfiles npm writes for common packages (a registry entry carrying
+#   `workspaces`: jest 30, recharts 3, vitefu, eslint 10; unlisted transitive bundled deps:
+#   aws-cdk-lib, semantic-release's npm).
 schema: review-verdict/v1
 pr: 255
 verdict: changes-requested
 reviewer: prismatic-majordomus-f3 (claude-code 1f47a36e)
-content: 338c3e79b72a9d738f9b823ab01f0df4ccfe745598b3207a4873877f9bc342a1
+content: 06b44ed14159fed2572a222415c922dd7ec409640b88516905ff9907d78754f6
 findings:
   - { id: R1, severity: P2, status: open, title: "the base list leaves scripts/pr-metadata.mjs, .ai/repo/ci/pr-meta.yaml and their test out of the digest; deferred, blob shas in the PR comment for a pre-merge re-check" }
   - { id: R2, severity: P1, status: closed, title: "base-rule.sh resolved the unqualified origin/<base>; fixed in dfb5641b" }
@@ -73,8 +78,16 @@ findings:
   - { id: R31, severity: P2, status: closed, title: "sudo on hosted runners; stated as residual risk, ptrace_scope printed in every judge step (measure it in this PR's log before merge)" }
   - { id: R32, severity: P2, status: closed, title: "multi-segment relative specs; refused (remaining forms are R35)" }
   - { id: R33, severity: P2, status: closed, title: "the PR body on this PR's own metadata run; corrected" }
-  - { id: R34, severity: P1, status: open, title: "install-guard.mjs:198 an inBundle entry with no resolved/integrity is accepted without its version being read; when the parent tarball does not bundle it, npm installs it from that version (file:<dir> runs prepare under --ignore-scripts; file:x.tgz unhashed; a plain version by name with no integrity); accept it only when named in the parent's lock bundleDependencies and versioned by an exact semver with no source-bearing field" }
-  - { id: R35, severity: P1, status: open, title: "install-guard.mjs:82,95 three spec forms npm-package-arg reads as checkout directories pass: @scope/name@<range> outside npm:, a bare drive letter (D:evil), a dot-led name (.evil, ..x); npm ci links a PR directory into node_modules; classify specs with the runner npm's own npm-package-arg instead of a hand-written grammar" }
-  - { id: R36, severity: P2, status: open, title: "install-guard.mjs:177 a bundled entry that has its own bundleDependencies is still refused under a sha512 registry parent (found in a real Amplify lockfile: @aws-cdk/cloud-assembly-schema)" }
-  - { id: R37, severity: P2, status: open, title: "review-verdict.mjs:106 tests/unit/fixtures/install-guard/tailwind4-cli.json.gz and judge-copy.mjs are outside GUARDED and not pinned (the f001 .gz files are pinned by blob id), so a PR needing no verdict can hollow what a guarded test proves; pin them or add them to GUARDED" }
-  - { id: R38, severity: P2, status: open, title: "ci.yml:441, :528, metadata.yml:91 the judge step's log counts the manifest's commit header as a file (33 for 32)" }
+  - { id: R34, severity: P1, status: closed, title: "an inBundle entry accepted without its version; closed by (b) and (c), variants through the key (R39) and build metadata (R41) remain" }
+  - { id: R35, severity: P1, status: closed, title: "hand-written spec grammar; every spec classified by the runner npm's own npm-package-arg, loaded by absolute path, fail-closed; no accepted non-registry spec found" }
+  - { id: R36, severity: P2, status: closed, title: "nested bundles refused; checked against the immediate holder (the Amplify fixture passes); npm-written nested locks remain R44" }
+  - { id: R37, severity: P2, status: closed, title: "the unguarded fixtures; tailwind4-cli.json.gz and judge-copy.mjs pinned by blob id (verified)" }
+  - { id: R38, severity: P2, status: closed, title: "the judge log count; header excluded, asserted per judge job" }
+  - { id: R39, severity: P1, status: open, title: "install-guard.mjs:209 a bundled entry at a non-canonical lock key (node_modules/holder/node_modules/evil/., evil/, ./evil) passes; arborist normalises it to an unlisted node and installs evil/.@1.0.0, a checkout directory whose prepare runs under --ignore-scripts; refuse non-normalised keys and segments or names validate-npm-package-name rejects" }
+  - { id: R40, severity: P1, status: open, title: "install-guard.mjs:297 hasShrinkwrap/_hasShrinkwrap is not refused; npm ci installs the tarball's own npm-shrinkwrap.json (file:, git:), and a git dependency's prepare runs under --ignore-scripts; a registry-published tarball suffices; refuse both fields" }
+  - { id: R41, severity: P2, status: open, title: "install-guard.mjs:158 exactVersion accepts build metadata ending .tgz/.tar (1.0.0+x.tgz), which npm-package-arg reads as a local file when npm falls back to name@version; require npa(`${name}@${version}`).type === 'version'" }
+  - { id: R42, severity: P2, status: open, title: "install-guard.mjs:287 the lock root entry's overrides are never classified, and arborist uses them when read-package-json-fast cannot read package.json (\"bin\": [1]); a git override then spawns git ls-remote/clone; classify or refuse overrides in the lock root (and refuse a package.json npm's normaliser rejects)" }
+  - { id: R43, severity: P1, status: open, title: "install-guard.mjs:246 a sha512 registry entry carrying `workspaces` is refused, though npm copies the published field into the lock and arborist acts only on the root's (jest 30 via babel-plugin-istanbul, recharts 3, es-toolkit, vitefu, eslint 10); refuse workspaces only in package.json, the root entry and unchecked entries" }
+  - { id: R44, severity: P1, status: open, title: "install-guard.mjs:222 strict holder-list membership refuses every npm-written lock whose bundled deps have deps (aws-cdk-lib: 23 refusals; semantic-release's npm) and gives no safety (the PR writes the list); adopt arborist getBundler: transitive edges from accepted bundled entries plus the pBundler clause, (b) and (c) unchanged" }
+  - { id: R45, severity: P3, status: open, title: "shell-words.mjs:75 the advisory judge-first lint does not see a command substitution inside $(( )) or its backtick form" }
+  - { id: R46, severity: P3, status: open, title: "install-guard.mjs:112,114,182 four fail-closed checks survive mutation: a relative node path, a package.json not named npm, the bundledDependencies spelling, an alias of any target" }
