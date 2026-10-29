@@ -25,7 +25,14 @@
 //   - no class the legacy CSS styles is also a class the compiled Tailwind defines, because the
 //     Tailwind part follows it in the cascade and would win silently;
 //   - verify-dist examines every url() the plugin emits (forms: true included) and finds data:
-//     URLs only.
+//     URLs only;
+//   - every class the five bundled components add at run time (their Default class options,
+//     their classList literals and the drawer's placement classes, read from their own source
+//     under node_modules/flowbite) is defined in the compiled Tailwind, because the content
+//     globs scan exactly those five files (review #253, R-1).
+//
+// Order: this PR lands only after #250 (ADR 0061, rule project.ui-uses-flowbite-pro and the
+// ratchet tests/unit/ui-flowbite-pro.test.mjs), which this file and src/js/ui/flowbite.js cite.
 //   node --test tests/unit/ui-flowbite-pro-build.test.mjs
 
 import test from 'node:test';
@@ -46,6 +53,7 @@ const DIST = 'dist/index.html';
 const CONFIG = 'tailwind.config.cjs';
 const ENTRY = 'src/styles/tailwind.css';
 const COMPONENTS = ['collapse', 'drawer', 'dropdown', 'tabs', 'tooltip'];
+const COMPONENT_DIR = 'node_modules/flowbite/lib/esm/components';
 const INITIALISERS = ['initCollapses', 'initDrawers', 'initDropdowns', 'initTabs', 'initTooltips'];
 // The initialisers of every other flowbite component: none of them may reach the bundle.
 const OTHER_INITIALISERS = ['initAccordions', 'initCarousels', 'initCopyClipboards',
@@ -110,7 +118,36 @@ async function compileTailwind(config, { from = path.join(ROOT, ENTRY), dark = f
   return result.css;
 }
 
-/** A .dark class selector (not the escaped dark: variant class, e.g. .dark\:bg-opacity-80). */
+/**
+ * Every class a bundled flowbite component adds at run time, read from its own source: the
+ * class options of its Default (backdropClasses, activeClasses, inactiveClasses, edgeOffset),
+ * the literal arguments of its classList.add / classList.remove calls, and the drawer's
+ * placement classes (base, active, inactive).
+ * @returns {Map<string, string[]>} component -> its classes
+ */
+function componentClasses() {
+  const out = new Map();
+  for (const name of COMPONENTS) {
+    const src = read(`${COMPONENT_DIR}/${name}/index.js`);
+    const strings = [];
+    const literals = (list) => [...list.matchAll(/'([^']*)'/g)].map((m) => m[1]);
+    const defaults = src.match(/^var Default = \{([\s\S]*?)^\};$/m);
+    assert.ok(defaults, `${name}: its Default options are found`);
+    for (const m of defaults[1].matchAll(/^\s*(\w+):\s*'([^']*)',?$/gm)) {
+      if (/Classes$/.test(m[1]) || m[1] === 'edgeOffset') strings.push(m[2]);
+    }
+    for (const m of src.matchAll(/\.classList\.(?:add|remove)\(([^)]*)\)/g)) {
+      strings.push(...literals(m[1]));
+    }
+    for (const m of src.matchAll(/^\s*(?:base|active|inactive):\s*\[([^\]]*)\]/gm)) {
+      strings.push(...literals(m[1]));
+    }
+    out.set(name, [...new Set(strings.flatMap((s) => s.split(/\s+/)).filter(Boolean))].sort());
+  }
+  return out;
+}
+
+/** A .dark class selector (not the escaped dark: variant class, e.g. .dark\:bg-gray-900\/80). */
 const DARK_CLASS = /\.dark(?![\w\\-])/;
 
 /** The flowbite plugin with its form base styles on, compiled with the shipped config. */
@@ -146,6 +183,11 @@ test('tailwind.config.cjs carries the Pro theme, the data-theme dark mode and no
     for (const cls of ['lg:w-16', 'lg:ml-16', 'lg:hidden', 'lg:absolute', 'w-64', 'pl-11']) {
       assert.ok(config.safelist.includes(cls), `safelist: ${cls}`);
     }
+    assert.deepEqual(config.safelist.filter((c) => /opacity/.test(c)), [],
+      'no flowbite 1 bg-opacity-* classes: flowbite 2.5 writes bg-gray-900/50');
+    assert.deepEqual(files.filter((f) => f.includes('node_modules')),
+      [`./${COMPONENT_DIR}/{${['drawer', 'dropdown', 'collapse', 'tooltip', 'tabs']}}/index.js`],
+      'content: exactly the five bundled components, nothing else of node_modules');
     assert.equal(config.plugins.length, 1, 'one plugin: flowbite');
     assert.deepEqual(config.plugins[0].__options, { forms: false },
       'the flowbite plugin runs with forms: false');
@@ -199,8 +241,8 @@ test('dist carries the compiled Tailwind after the legacy CSS, with the theme an
     for (const cls of ['lg\\:ml-16', 'lg\\:hidden', 'lg\\:absolute', 'w-64', 'pl-11']) {
       assert.ok(tailwind.includes(`.${cls}{`), `safelisted .${cls}`);
     }
-    assert.ok(/\.dark\\:bg-opacity-80:where\(\[data-theme=["']?dark["']?\]/.test(tailwind),
-      'the dark variant matches [data-theme="dark"]');
+    assert.ok(/\.dark\\:bg-gray-900\\\/80:where\(\[data-theme=["']?dark["']?\]/.test(tailwind),
+      'the dark variant (the drawer backdrop\'s) matches [data-theme="dark"]');
     assert.ok(!/prefers-color-scheme/.test(tailwind), 'dark mode is never the media query');
     assert.ok(/\.tooltip-arrow/.test(tailwind), 'the flowbite plugin base (tooltip arrows) is in');
     // Preflight would reset html, body, headings, buttons and form controls.
@@ -252,7 +294,7 @@ test('the plugin\'s .dark ancestor is rewritten to the data-theme selector OSCIL
     const fixed = await compileForms({ dark: true });
     assert.ok(!DARK_CLASS.test(fixed), 'darkThemeSelector rewrites every one of them');
     assert.match(fixed, /\[data-theme="dark"\] \[type=['"]?checkbox/, 'the form rules too');
-    assert.ok(/\.dark\\:bg-opacity-80/.test(tailwind), 'the dark: variant class is untouched');
+    assert.ok(/\.dark\\:bg-gray-900\\\/80/.test(tailwind), 'the dark: variant class is untouched');
   });
 
 test('no class the legacy CSS styles is a class the compiled Tailwind defines', () => {
@@ -275,6 +317,28 @@ test('verify-dist examines every url() the plugin emits and finds data: URLs onl
   assert.ok(refs.urls.some((u) => u.includes("'")), 'with the other quote inside');
   const { tailwind } = distStyle();
   assert.deepEqual(cssReferences(tailwind).urls.filter((u) => !/^data:/.test(u)), []);
+});
+
+test('every class the bundled components add at run time is in the compiled Tailwind', () => {
+  const { tailwind } = distStyle();
+  const defined = classesOf(tailwind);
+  const classes = componentClasses();
+  for (const name of COMPONENTS) {
+    assert.ok(classes.get(name).length > 0, `${name}: its run-time classes are read`);
+  }
+  const all = new Set([...classes.values()].flat());
+  // The ones the review names (R-1): the scan reads them, so the check is not vacuous.
+  for (const cls of ['bg-gray-900/50', 'dark:bg-gray-900/80', 'fixed', 'inset-0', 'z-30',
+    'transition-transform', '-translate-x-full', 'transform-none', 'overflow-hidden',
+    'bottom-[60px]', 'opacity-0', 'opacity-100', 'invisible', 'visible', 'hidden', 'block',
+    'text-blue-600', 'hover:text-blue-600', 'dark:border-transparent',
+    'hover:border-gray-300', 'dark:hover:text-gray-300']) {
+    assert.ok(all.has(cls), `the scan reads ${cls}`);
+  }
+  for (const name of COMPONENTS) {
+    const missing = classes.get(name).filter((c) => !defined.has(c));
+    assert.deepEqual(missing, [], `${name}: every run-time class is compiled`);
+  }
 });
 
 test('the app script carries the five flowbite components, started after Alpine', () => {
