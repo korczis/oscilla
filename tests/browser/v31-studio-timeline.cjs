@@ -31,8 +31,9 @@
 //                       entry "2 kHz"; curve choice; Delete removes; lane scale is logarithmic
 //   loop-markers        M adds a marker at the playhead, ←/→ move it, L toggles the loop, loop
 //                       handle by keyboard, ruler click locates the transport
-//   playback            Space plays, the playhead element follows transport.playhead(), the
-//                       workspace header shows Playing, an edit during playback goes through the
+//   playback            Space plays, the playhead element follows transport.playhead() (both
+//                       read in the frame the editor draws), the workspace header shows
+//                       Playing, an edit during playback goes through the
 //                       transport's edit path (decisions recorded), Space stops: 0 engine nodes
 //                       and sources
 //   escape-priority     while playing: Escape first cancels a drag (audio continues), then closes
@@ -60,7 +61,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
-const { until } = require('./lib/wait.cjs');
+const { bounded, until } = require('./lib/wait.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -184,6 +185,23 @@ const H = {
     const m = /translateX\(([-\d.]+)px\)/.exec(el.style.transform || '');
     return { p: window.OSCILLA.studio.transport.playhead().position, x: m ? Number(m[1]) : null };
   }, TL),
+  /**
+   * The playhead read when the editor draws it: x the transform the editor writes on its frame,
+   * p the transport's position in that same frame. H.playhead reads p later than the frame that
+   * drew x, ahead of it by the age of that frame (0.12 s on CI WebKit, whose frames come that far
+   * apart), so only this reading can judge that x follows p. Settles on the next draw;
+   * while the playhead does not move nothing is drawn, and the wait expires under its name.
+   */
+  drawn: (page, what) => bounded(page.evaluate((tl) => new Promise((resolve) => {
+    const el = document.querySelector(`${tl} [data-osc="studio.tl.playhead"]`);
+    const seen = new MutationObserver(() => {
+      seen.disconnect();
+      const m = /translateX\(([-\d.]+)px\)/.exec(el.style.transform || '');
+      resolve({ p: window.OSCILLA.studio.transport.playhead().position,
+        x: m ? Number(m[1]) : null });
+    });
+    seen.observe(el, { attributes: true, attributeFilter: ['style'] });
+  }), TL), { ms: 3000, what }),
   until: async (fn, test, ms = 4000, step = 40) => {
     const t0 = Date.now();
     let v = await fn();
@@ -483,11 +501,18 @@ function defineChecks() {
       await H.focus(page, '.osc-stl [data-clip="clip-1"]');
       await H.key(page, ' ');
       const playing = await H.until(() => H.counts(page), (c) => c.playing, 2000);
-      await sleep(500);
-      const s1 = await H.playhead(page);
-      await sleep(300);
+      // Each reading is taken as the editor draws (H.drawn): the playhead past 0.5 s, then 0.3 s
+      // further on, still before the sweep the edit below moves.
+      const s1 = await until(async () => {
+        const d = await H.drawn(page, 'the editor draws the playhead while playing');
+        return d.p >= 0.5 && d;
+      }, { ms: 5000, what: 'the drawn playhead reaches 0.5 s' });
+      const s2r = await until(async () => {
+        const d = await H.drawn(page, 'the editor draws the playhead while playing');
+        return d.p >= s1.p + 0.3 && d;
+      }, { ms: 5000, what: 'the drawn playhead advances 0.3 s further' });
       // The header is the one transport on screen: its PLAY key reads Playing.
-      const s2 = { ...await H.playhead(page), state: await page.evaluate(() => document
+      const s2 = { ...s2r, state: await page.evaluate(() => document
         .querySelector('[data-osc="studio.play"]').getAttribute('aria-pressed')) };
       // Edit during playback: move the sweep one step later.
       await H.focus(page, '.osc-stl [data-clip="clip-2"]');
@@ -505,7 +530,8 @@ function defineChecks() {
       return result({
         playing: playing.playing && s2.state === 'true',
         advances: s2.p > s1.p && s1.p > 0.2,
-        follows: near(s2.x / 100, s2.p, 0.12),
+        // Read in one frame, x and p differ by the clock's step within it: ms, not frames.
+        follows: near(s1.x / 100, s1.p, 0.05) && near(s2.x / 100, s2.p, 0.05),
         editPath: dbg.decisions > 0,
         sounding: nodesWhile > 0,
         stopped: !after.playing && after.nodes === 0 && after.sources === 0,
