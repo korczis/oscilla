@@ -1,0 +1,31 @@
+id: E028
+milestone: M046
+serves:
+  - "engineering-integrity#extending-guide-names-real-code"
+title: "A hack-and-extend guide that names only real code, and a README landing that routes where it says"
+slug: a-hack-and-extend-guide-that-names-only-real-code
+priority: p2
+profile: implementation
+objective: "Owner order of 2026-10-29: the landing must be easy to use, easy to extend, open to hack and extend-friendly. Write docs/EXTENDING.md from the code on main: adding a Studio node (defineNode, definePort, the parameter helpers, the compiler key, the adapter contract of adapters/nodes.js, NODE_DEFINITIONS and NODE_ADAPTERS, templates), a lab or workspace (mountLabs, WORKSPACES, routeOfHash), a chart (the shared onFrame loop and the chart hosts), a browser check (suite.cjs, until), what the single-file build forbids, and the rules a change satisfies, fail-first and the review verdict included. tests/unit/extending-guide.test.mjs fails when a path, export, rule, link or npm script the guide names does not exist, and compiles the guide's Polarity example node through createNodeRegistry and compileStudio. README opens with a landing (the Q002 sentence, the live page, three deep links that each cite their guaranteed claims, Extend it) whose links the same test decodes with the shipped routers."
+why: "The guide is only useful while it is true; a guide checked by a test is the extend-friendly part of the owner's order that can be held. The landing's claims follow project.no-fake-science: each cites a guaranteed claim of docs/CLAIMS.yaml."
+scope:
+  - "docs/EXTENDING.md"
+  - "tests/unit/extending-guide.test.mjs"
+  - "README.md"
+  - "tests/README.md"
+  - "docs/CLAIMS.yaml"
+  - ".ai/repo/project/intents/engineering-integrity.yaml"
+  - ".ai/repo/project/issues/E028.yaml"
+acceptance_criteria:
+  - "node --test tests/unit/extending-guide.test.mjs passes, and its fixture test shows the checker refusing a missing file, export, npm script, link target, heading anchor, rule, import and node command."
+  - "The guide's example node is imported as the guide prints it and compiles to a ready plan node; without its adapter it compiles to no-adapter, with another compiler key to adapter-mismatch."
+  - "docs/CLAIMS.yaml holds the guaranteed claims extending-guide-checked and readme-landing-links-route, both tested by tests/unit/extending-guide.test.mjs, and tests/README.md has its row."
+  - "No first-screen or About markup changes in this issue: the first screen is P002's, and an About link waits for the Flowbite Pro build (project.ui-uses-flowbite-pro: no osc-* class use may rise, and tests/browser/app.cjs requires every About link to be at least 24 px tall, which an unclassed link is not)."
+  - "npm test passes."
+validation:
+  - "node --test tests/unit/extending-guide.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29
