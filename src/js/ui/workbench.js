@@ -6,7 +6,7 @@
 // svc: { engine, bridge, labs, exportConfigDoc(cmp), applyImport(cmp, parsed),
 //        renderWav(cmp, kind), screenshot(cmp), relayout() }
 
-import { STORAGE_KEYS, WAVEFORM_LABELS } from '../core/constants.js';
+import { MAX_OUTPUT_GAIN, STORAGE_KEYS, WAVEFORM_LABELS } from '../core/constants.js';
 import { clamp, round } from '../core/math.js';
 import {
   formatFrequency, formatMs, frequencyToNormalized, normalizedToFrequency,
@@ -43,6 +43,10 @@ export { v1ModeFor, workspaceForV1Mode } from './navigation.js';
 
 export const SWEEP_FORM = SWEEP_PARAMS;
 
+/** T001: the state shown while the output ceiling flattens the signal (ADR 0002). */
+export const CEILING_TEXT = 'OUTPUT AT CEILING (clipped)';
+const CEILING_DB_TEXT = `${gainLevelDb(MAX_OUTPUT_GAIN).toFixed(1)} dBFS`;
+
 export function createWorkbench(svc) {
   return {
     OSCILLA_VERSION,
@@ -56,6 +60,10 @@ export function createWorkbench(svc) {
     lastPattern: null,
     fullscreen: '',
     learnOpen: 'frequency',
+    // T001: set by main.js when the bridge reports that the output ceiling starts or stops
+    // flattening the signal (the engine's pre-ceiling tap); never per frame.
+    outputAtCeiling: false,
+    ceilingText: CEILING_TEXT,
     // Bumped by main.js when a lab changes (getters below that read lab state depend on it).
     labRev: 0,
 
@@ -84,6 +92,15 @@ export function createWorkbench(svc) {
     },
     get gainFill() { return `${this.gainPct}%`; },
     get isSounding() { return this.playing || this.seqPlaying; },
+    /** The ceiling acts on what sounds now (idle shows nothing, whatever the tap read last). */
+    get ceilingActing() { return this.outputAtCeiling && this.isSounding; },
+    /** The gain readout is the master setpoint, not the level the output carries. */
+    get gainTitle() {
+      return `Gain setpoint ${this.gainDbText} (logical gain ${this.gainLevel.toFixed(3)} re `
+        + `digital full scale), set before the filter, envelope, limiter and the `
+        + `${CEILING_DB_TEXT} output ceiling; relative, not SPL.`
+        + (this.ceilingActing ? ` Now: ${CEILING_TEXT}, the ceiling flattens the output.` : '');
+    },
     get holdLabel() {
       if (this.status === 'SUSPENDED') return 'Waiting for audio';
       if (this.playing && this.releasing) return 'Releasing';

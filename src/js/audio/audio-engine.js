@@ -21,8 +21,9 @@
 // INVARIANTS (inventory K4/K5, risks 4/5):
 //   - every node of a voice goes through track() (sources through source()), so
 //     activeNodeCount/activeSourceCount stay exact and stop/cleanup leaves zero nodes;
-//   - the output chain (master, limiter and its zero feed, trim, ceiling, analyser) belongs to
-//     the context, not to a voice, and is outside that accounting (see feedLimiter);
+//   - the output chain (master, limiter and its zero feed, trim, ceiling, analyser, and the
+//     read-only pre-ceiling tap) belongs to the context, not to a voice, and is outside that
+//     accounting (see feedLimiter);
 //   - every automation of the envelope, dip and fade gains goes through the recorded params
 //     (v.env / v.rel / v.fade / v.cut, envelope functions through the `eg` wrapper), so their
 //     scheduled value is known at any time in every browser (_freeze holds rel for a dip);
@@ -79,6 +80,7 @@ import {
   requestMicrophoneStream, stopStreamTracks,
 } from './microphone.js';
 import { forgetClock, observeClock, renderedTimeAtLeast } from './clock.js';
+import { ceilingTapSize } from './output-ceiling.js';
 
 export {
   ESCAPE_RELEASE_S, FAST_RELEASE_S, SCHEDULE_AHEAD_S, SCHEDULE_LEAD_S, TOP_UP_EVERY_MS,
@@ -145,6 +147,9 @@ export class AudioEngine {
     this.analyser = null;
     this.timeData = null;
     this.freqData = null;
+    this.preCeiling = null;      // read-only tap before the ceiling (T001, enableCeilingTap)
+    this.preCeilingData = null;
+    this._ceilingTapWanted = false;
     this.gainLevel = DEFAULT_GAIN; // requested master level, applied when a context is built
     // Every write of the master level counts (setMasterGain, holdMasterGain): a client that
     // borrowed the level (the Studio) gives it back only if nobody wrote it since (PR #119 D2).
@@ -244,8 +249,11 @@ export class AudioEngine {
       this.master = ctx.createGain();
       this.master.gain.value = this.gainLevel; // the requested level from the first sample
       // Conservative limiter. DynamicsCompressorNode applies automatic makeup gain
-      // ((1 / fullRangeGain) ^ 0.6 per the Web Audio spec); `trim` removes it so the
-      // logical gain shown in the UI is the level that reaches the output.
+      // ((1 / fullRangeGain) ^ 0.6 per the Web Audio spec); `trim` removes it, so a single
+      // unprocessed voice leaves at the logical gain. The UI gain is a setpoint, not the
+      // emitted level: a filter boost, the envelope, additive normalisation, the limiter and
+      // the ceiling all act after it, and an insert can push one voice past the cap.
+      // enableCeilingTap() reports when the ceiling then flattens it (T001, ADR 0002 note).
       this.limiter = ctx.createDynamicsCompressor();
       this.limiter.threshold.value = LIMITER_THRESHOLD_DB;
       this.limiter.knee.value = 0;
@@ -274,6 +282,7 @@ export class AudioEngine {
       this.analyser.connect(ctx.destination);
       this.timeData = new Float32Array(this.analyser.fftSize);
       this.freqData = new Float32Array(this.analyser.frequencyBinCount);
+      if (this._ceilingTapWanted) this._buildCeilingTap(ctx);
       this.ctx = ctx;
       ctx.onstatechange = () => {
         forgetClock(ctx); // readings taken before a suspension or a start would run ahead
@@ -289,6 +298,26 @@ export class AudioEngine {
     }
   }
 
+  /**
+   * T001: keep a read-only tap of the signal before the ceiling (an AnalyserNode on `trim`;
+   * nothing is connected from it and it changes no sample), on this context and on every one
+   * built later. snapshot() exposes it as preCeiling / preCeilingData / ceilingCap and the
+   * visualization bridge judges it (output-ceiling.js) to say when the ceiling acts. Opt-in
+   * (main.js), so the V1 output chain of the freeze vectors stays as recorded.
+   */
+  enableCeilingTap() {
+    this._ceilingTapWanted = true;
+    if (this.ctx && this.trim && !this.preCeiling) this._buildCeilingTap(this.ctx);
+  }
+
+  _buildCeilingTap(ctx) {
+    const tap = ctx.createAnalyser();
+    tap.fftSize = ceilingTapSize(ctx.sampleRate);
+    this.trim.connect(tap);
+    this.preCeiling = tap;
+    this.preCeilingData = new Float32Array(tap.fftSize);
+  }
+
   // V1: AudioEngine._discardContext (index.html@a7b7a23)
   /** Drop a context (closed from outside, or failed): free every voice and the microphone. */
   _discardContext() {
@@ -302,7 +331,9 @@ export class AudioEngine {
       try { this.limiterFeed.disconnect(); } catch (e) { /* gone */ }
     }
     this.limiterFeed = null;
+    if (this.preCeiling) { try { this.preCeiling.disconnect(); } catch (e) { /* gone */ } }
     this.master = this.limiter = this.trim = this.ceiling = this.analyser = null;
+    this.preCeiling = this.preCeilingData = null;
     if (ctx) {
       ctx.onstatechange = null;
       if (ctx.state !== 'closed') { try { ctx.close(); } catch (e) { /* ignore */ } }
@@ -940,8 +971,10 @@ export class AudioEngine {
    * frame); without, returns a new frozen object. The analyser and buffers are references:
    * read them, never reconnect or resize them.
    *   { hasCtx, state, running, time, sampleRate, voice, voiceId, t0, plan, kind, playing,
-   *     releasing, endTime, limited, extended, analyser, timeData, freqData, mic, micAnalyser,
-   *     micFreqData, activeNodes, activeSources, voices, audibleVoices }
+   *     releasing, endTime, limited, extended, analyser, timeData, freqData, preCeiling,
+   *     preCeilingData, ceilingCap, mic, micAnalyser, micFreqData, activeNodes, activeSources,
+   *     voices, audibleVoices }
+   * preCeiling is the read-only tap before the output ceiling (ceilingCap, linear full scale).
    * voices counts every voice not freed yet (silent released ones included); audibleVoices
    * only those sounding or scheduled to sound — show that one in the UI.
    */
@@ -969,6 +1002,9 @@ export class AudioEngine {
     o.analyser = this.analyser;
     o.timeData = this.timeData;
     o.freqData = this.freqData;
+    o.preCeiling = this.preCeiling;
+    o.preCeilingData = this.preCeilingData;
+    o.ceilingCap = MAX_OUTPUT_GAIN;
     o.mic = !!this.mic;
     o.micAnalyser = this.mic ? this.mic.analyser : null;
     o.micFreqData = this.mic ? this.mic.freqData : null;
