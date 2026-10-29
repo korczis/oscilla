@@ -34,7 +34,7 @@
       "fixed-frame-window": 1
     },
     "tests/browser/v31-studio-graph.cjs": {
-      "timer-sleep": 24
+      "timer-sleep": 23
     },
     "tests/browser/v31-studio-links.cjs": {
       "timer-sleep": 1

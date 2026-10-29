@@ -4,6 +4,13 @@
 // running gesture, the tap-connect source and the live connection feedback, and changes the model
 // only by store actions at gesture end (§61).
 //
+//   wheelAction(wheelEvent, { pageHeight }) -> { kind: 'pan', dx, dy } | { kind: 'zoom', factor }
+//     | null        pure: what a wheel event does to the view (px of the viewport)
+//   rewireCable(store, { from, to, detach, registry }) -> { ok, changed, text, label? }   the
+//     end of a cable drag (K008) as one history entry: EDGE_REMOVE of the picked-up cable and of
+//     the cable an occupied single input had, then EDGE_ADD; `to` null deletes the picked-up
+//     cable. probeRewire judges first: a refusal dispatches nothing (model, history, revision
+//     and the runtime gate untouched) and a store refusal after it cancels the whole gesture.
 //   createGraphGestures(ctx) -> { dragging(id), kind(), inTap(), refresh(), startTapConnect(from),
 //     cancelTransient(), cancel(), destroy() }
 //     ctx: { host, viewport, preview, marquee, banner: { el, text, cancel }, nodeEls, edgeEls,
@@ -14,8 +21,10 @@
 // Pointer model (decision, docs in tests/browser/v31-studio-graph.cjs): mouse/pen — drag a node
 // to move it (snap to the 8-unit grid; Alt disables snapping), drag from an output port to draw
 // a cable, drag on blank canvas to pan, Shift/Ctrl/Cmd + drag on blank canvas for rectangle
-// selection, middle-button drag pans, wheel zooms at the pointer, double-click blank canvas opens
-// the quick-add picker. Touch — one finger on blank canvas pans, two fingers pinch-zoom, a tap on
+// selection, middle-button drag pans, double-click blank canvas opens the quick-add picker. Wheel
+// (K007, wheelAction): a wheel or two-finger trackpad scroll pans by its deltaX and deltaY (Shift
+// turns a vertical-only wheel horizontal); Ctrl/Cmd + wheel, and a trackpad pinch, which browsers
+// report as a wheel with ctrlKey, zoom at the pointer. Touch — one finger on blank canvas pans, two fingers pinch-zoom, a tap on
 // an output port starts tap-connect mode (no precision cable drag needed on phones, §137-§138).
 // A press without movement past DRAG_THRESHOLD_PX is a click/tap. Every gesture uses pointer
 // capture; pointercancel, lostpointercapture and window blur cancel it cleanly (§246-§247).
@@ -28,8 +37,82 @@ import {
   GRID, cablePath, dragPosition, idsInRect, mergeSelection, normalizeRect, panBy, pastThreshold,
   pinchView, screenToGraph, toggleInSelection, zoomAt,
 } from './graph-geometry.js';
-import { connectingText, connectionTargets } from './graph-view.js';
+import { connectingText, connectionTargets, probeRewire } from './graph-view.js';
 import { setText } from './graph-dom.js';
+
+/** px of one wheel line (deltaMode 1). */
+export const WHEEL_LINE_PX = 16;
+/** px of one wheel page (deltaMode 2) when the viewport height is unknown. */
+export const WHEEL_PAGE_PX = 400;
+/** The largest |delta| px one zoom event counts: a mouse notch is about one zoom step. */
+export const WHEEL_ZOOM_MAX_DELTA = 20;
+const WHEEL_ZOOM_RATE = 0.01;
+
+/**
+ * What a wheel event { deltaX, deltaY, deltaMode, ctrlKey, metaKey, shiftKey } does: Ctrl or
+ * Cmd zooms by exp(-0.01 * deltaY) with deltaY bounded to WHEEL_ZOOM_MAX_DELTA px (a pinch step
+ * keeps its rate, a mouse notch is about one zoom step); otherwise the view pans by minus the
+ * deltas, Shift turning a vertical-only wheel horizontal. null when it moves nothing.
+ */
+export function wheelAction(e, { pageHeight = WHEEL_PAGE_PX } = {}) {
+  if (!e) return null;
+  const unit = e.deltaMode === 1 ? WHEEL_LINE_PX : e.deltaMode === 2 ? pageHeight : 1;
+  let dx = Number.isFinite(e.deltaX) ? e.deltaX * unit : 0;
+  let dy = Number.isFinite(e.deltaY) ? e.deltaY * unit : 0;
+  if (e.ctrlKey || e.metaKey) {
+    if (!dy) return null;
+    const d = Math.max(-WHEEL_ZOOM_MAX_DELTA, Math.min(WHEEL_ZOOM_MAX_DELTA, dy));
+    return { kind: 'zoom', factor: Math.exp(-d * WHEEL_ZOOM_RATE) };
+  }
+  if (e.shiftKey && !dx) {
+    dx = dy;
+    dy = 0;
+  }
+  if (!dx && !dy) return null;
+  return { kind: 'pan', dx: -dx || 0, dy: -dy || 0 };
+}
+
+const nameOf = (m, id) => {
+  const n = m.graph.nodes.find((x) => x.id === id);
+  return n ? n.metadata.name : id;
+};
+
+export function rewireCable(store, { from, to = null, detach = null, registry } = {}) {
+  const m = store.getModel();
+  const old = detach ? m.graph.edges.find((e) => e.id === detach) : null;
+  if (!to) {
+    if (!old) return { ok: false, changed: false, text: 'Nothing to delete.' };
+    const r = store.dispatch({ type: 'EDGE_REMOVE', edgeIds: [old.id] });
+    return { ok: r.ok, changed: !!r.changed, text: announceAction(r), label: r.label };
+  }
+  const v = probeRewire(m, from, to, { detach, registry });
+  if (!v.allowed) return { ok: false, changed: false, text: v.reason };
+  if (v.same) return { ok: true, changed: false, text: 'Connection unchanged' };
+  const replaced = v.replaces.map((id) => m.graph.edges.find((e) => e.id === id));
+  const label = old ? `Reconnect ${nameOf(m, from.node)} to ${nameOf(m, to.node)}`
+    : `Replace the connection into ${nameOf(m, to.node)}`;
+  // A cable moved to the same parameter keeps its settings (depth, polarity, mapping, offset).
+  const typeOf = (id) => (m.graph.nodes.find((n) => n.id === id) || {}).type;
+  const keep = !!old && old.to.port === to.port && typeOf(old.to.node) === typeOf(to.node);
+  const addEdge = () => store.dispatch({ type: 'EDGE_ADD', from, to,
+    ...(keep ? { props: old.props } : {}) });
+  if (!v.remove.length) {
+    const r = addEdge(); // a new cable to a free input: the plain EDGE_ADD of before K008
+    return { ok: r.ok, changed: !!r.changed, text: announceAction(r), label: r.label,
+      created: r.created };
+  }
+  store.beginGesture(label);
+  const rm = store.dispatch({ type: 'EDGE_REMOVE', edgeIds: v.remove });
+  const add = rm.ok ? addEdge() : rm;
+  if (!add.ok) {
+    store.cancelGesture();
+    return { ok: false, changed: false, text: announceAction(add) };
+  }
+  store.endGesture();
+  const text = `${announceAction(add)}${replaced.length ? `, replacing the connection from ${
+    replaced.map((e) => nameOf(m, e.from.node)).join(', ')}` : ''}`;
+  return { ok: true, changed: true, text, label, created: add.created };
+}
 
 export function createGraphGestures(ctx) {
   const { host, viewport, preview, marquee, nodeEls, edgeEls, store, registry, svc } = ctx;
@@ -49,9 +132,10 @@ export function createGraphGestures(ctx) {
   // ---------------------------------------------------------------- connection feedback
   const tkey = (node, port) => `${node}\u0000${port}`;
 
-  function refreshTargets(from) {
-    targets = new Map(connectionTargets(model(), from, registry).map((t) => [tkey(t.node, t.port),
-      t]));
+  /** Judge every input for a cable from `from`; `opts` { rewire, detach } for a drag (K008). */
+  function refreshTargets(from, opts = {}) {
+    targets = new Map(connectionTargets(model(), from, registry, opts).map((t) => [
+      tkey(t.node, t.port), t]));
     for (const [id, entry] of nodeEls) {
       for (const [key, pe] of entry.ports) {
         if (!key.startsWith('in:')) {
@@ -220,6 +304,11 @@ export function createGraphGestures(ctx) {
       const edge = model().graph.edges.find((x) => x.to.node === nodeId
         && x.to.port === pe.dataset.port);
       select(edge ? { edges: [edge.id] } : { nodes: [nodeId] });
+      // K008: dragging the cable off its input picks it up for a re-route or a delete.
+      if (edge) {
+        capture(e);
+        gesture = { ...base, kind: 'in-press', edge: edge.id, from: { ...edge.from } };
+      }
       return;
     }
     if (ne) {
@@ -246,6 +335,32 @@ export function createGraphGestures(ctx) {
     } else {
       gesture = { ...base, kind: 'pan', start: { ...ctx.view() } };
     }
+  }
+
+  /** A press on an output or on a connected input became a cable drag (K008). */
+  function startCable(g) {
+    g.detach = g.kind === 'in-press' ? g.edge : null;
+    g.kind = 'cable';
+    const picked = g.detach ? edgeEls.get(g.detach) : null;
+    if (picked) for (const p of [picked.line, picked.hit, picked.mark]) p.setAttribute('d', '');
+    refreshTargets(g.from, { rewire: true, detach: g.detach });
+    showBanner(connectingText(model(), g.from, registry), false);
+  }
+
+  /** The banner over a target while a cable is dragged. */
+  function cableText(t) {
+    if (!t.allowed) return t.reason;
+    if (t.same) return 'Release to keep this connection';
+    return `Release to connect to ${t.label}${t.replaces.length ? ', replacing its connection'
+      : ''}`;
+  }
+
+  /** Drop a dragged cable on `to` (null: delete the picked-up cable), one history entry. */
+  function finishCable(g, to) {
+    const r = rewireCable(store, { from: g.from, to, detach: g.detach, registry });
+    announce(r.text, { assertive: !r.ok });
+    if (r.ok && r.created && r.created.edges) select({ edges: r.created.edges });
+    return r;
   }
 
   function scheduleDrag(fn) {
@@ -281,10 +396,9 @@ export function createGraphGestures(ctx) {
       case 'pan':
         ctx.setLocalView(panBy(gesture.start, dx, dy));
         break;
+      case 'in-press':
       case 'port-press':
-        gesture.kind = 'cable';
-        refreshTargets(gesture.from);
-        showBanner(connectingText(model(), gesture.from, registry), false);
+        startCable(gesture);
         // fallthrough
       case 'cable': {
         const a = ctx.anchorOf(gesture.from.node, `out:${gesture.from.port}`);
@@ -298,7 +412,8 @@ export function createGraphGestures(ctx) {
         let t = null;
         if (pe && ne && pe.dataset.dir === 'in') t = targets.get(tkey(ne.dataset.nodeId, pe.dataset.port));
         else if (ne && ne.dataset.nodeId !== gesture.from.node) t = bestTargetOn(ne.dataset.nodeId);
-        if (t) text = t.allowed ? `Release to connect to ${t.label}` : t.reason;
+        if (t) text = cableText(t);
+        else if (gesture.detach && !ne) text = 'Release to delete this connection';
         showBanner(text, false);
         break;
       }
@@ -403,11 +518,13 @@ export function createGraphGestures(ctx) {
         else if (ne && ne.dataset.nodeId !== g.from.node) t = bestTargetOn(ne.dataset.nodeId);
         clearTargets();
         showBanner('', false);
-        if (t && t.allowed) connect(g.from, { node: t.node, port: t.port });
+        if (t && t.allowed) finishCable(g, { node: t.node, port: t.port });
         else if (t) announce(t.reason, { assertive: true });
         else if (!ne && ctx.isOverViewport(e.clientX, e.clientY)) {
-          // Create-node-from-cable (§66): a picker of the types that accept this cable.
-          svc.onQuickAdd({ at: ctx.clientToGraph(e.clientX, e.clientY), from: g.from });
+          // A picked-up cable dropped on empty canvas is deleted (K008); a new one opens
+          // create-node-from-cable (§66): a picker of the types that accept this cable.
+          if (g.detach) finishCable(g, null);
+          else svc.onQuickAdd({ at: ctx.clientToGraph(e.clientX, e.clientY), from: g.from });
         } else announce('Connection cancelled');
         ctx.render();
         break;
@@ -496,10 +613,14 @@ export function createGraphGestures(ctx) {
   function onWheel(e) {
     if (gesture) return;
     e.preventDefault();
-    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
-    const dy = e.deltaY * unit;
+    const a = wheelAction(e, { pageHeight: viewport.clientHeight || WHEEL_PAGE_PX });
+    if (!a) return;
+    if (a.kind === 'pan') {
+      ctx.setView(panBy(ctx.view(), a.dx, a.dy));
+      return;
+    }
     const p = local(e);
-    ctx.setView(zoomAt(ctx.view(), Math.exp(-dy * (e.ctrlKey ? 0.01 : 0.0015)), p.x, p.y));
+    ctx.setView(zoomAt(ctx.view(), a.factor, p.x, p.y));
   }
 
   function onDblClick(e) {

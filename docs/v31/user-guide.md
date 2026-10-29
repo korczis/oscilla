@@ -28,6 +28,11 @@ Below 768 px the workspace shows one of **Graph**, **Timeline** and **Inspector*
 out so far that a port is smaller than 24 px: a large graph is centred, and you pan to the
 rest.
 
+On the graph, drag empty canvas, turn the wheel or scroll with two fingers to pan (Shift turns
+a vertical wheel sideways). Ctrl/⌘ + wheel, a trackpad pinch and a two-finger touch pinch zoom
+at the pointer, as do **+** and **−**. **Minimap** in the graph controls shows the whole graph
+and the part in view; press or drag on it to move there.
+
 ## Links and fullscreen
 
 - **Copy link** (the chain-link button after Frame all in the toolbar) puts a link to the current view in the
@@ -293,7 +298,6 @@ anywhere else in those workspaces Space is the instrument's.
 
 ## Limits
 
-- Not built yet: a minimap, node groups, dragging several clips at once, pinch zoom on the
-  timeline. A link opens a shipped template only; a saved project is shared as a file.
+- Not built yet: node groups, dragging several clips at once. A link opens a shipped template only; a saved project is shared as a file.
 - Studio is responsive at about 100 nodes and 200 connections ([performance](performance.md));
   it is not designed for much larger graphs.

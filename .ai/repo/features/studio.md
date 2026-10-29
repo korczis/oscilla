@@ -32,7 +32,9 @@ one is what the others show. The editor is OSCILLA's own HTML nodes over SVG cab
 locked visual identity (ADR 0034), shipped inside the single `dist/index.html` and running
 from `file://` and the Pages sub-path.
 
-Every editor has a keyboard path: a Connect… list instead of dragging a cable, a details
+The graph pans by dragging empty canvas, by the wheel or a two-finger scroll, and zooms at the
+pointer with Ctrl/⌘ + wheel, a trackpad or touch pinch, the buttons and the keys; the minimap
+shows the whole graph and moves the view. Every editor has a keyboard path: a Connect… list instead of dragging a cable, a details
 panel instead of dragging a clip, arrow-key nudges, screen-reader announcements, and tap to
 connect on touch, with a split Graph / Timeline / Inspector view below 768 px. Studio output
 and Playground output are exclusive, and a measurement stops the Studio. It stays responsive
@@ -53,8 +55,7 @@ bounds, grid, hit widths, schema version, import limits) are tabled in
 
 ## What it does not do
 
-Not built: a minimap, node groups, dragging several clips at once, pinch zoom on the
-timeline, autosave and crash recovery. A deep link opens Studio, a view and a shipped template
+Not built: node groups, dragging several clips at once, autosave and crash recovery. A deep link opens Studio, a view and a shipped template
 only; a saved project or an edited graph is shared as an exported file, never in a URL. The
 Playground's Signal Path view draws the Playground voice as a derived Studio graph
 (`docs/v31/signal-path.md`), read-only; it cannot yet open that voice in the Studio.
