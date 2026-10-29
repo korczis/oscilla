@@ -120,7 +120,10 @@ is in the [algorithm notes](docs/v3/algorithms.md).
 - **Setup check.** Before anything plays, OSCILLA checks the microphone permission, the input
   device, the sample rate, the input level and the background noise. It requests echo
   cancellation, noise suppression and automatic gain control off, and reads back what the
-  browser actually applied. A blocker stops the flow and a warning never does.
+  browser actually applied. A blocker stops the flow and a warning never does. The check
+  stops nothing: while the instrument, the sequencer or the Studio transport is playing it
+  warns that other sounds are playing, says that a high input level or clipping then includes
+  the app's own output (not the background), and Measure stops them before the run.
 - **Input device.** The default input stays the default. Once the browser has granted the
   microphone, the Live input panel lists the inputs and you can choose one; the experiment
   records it as a hashed identifier. An input that disappears stays selected and is reported as

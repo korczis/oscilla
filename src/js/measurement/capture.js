@@ -779,17 +779,22 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
       return true;
     },
 
-    async preflight() {
+    /**
+     * opts.otherAudio: the caller's fact that an output owner the engine does not count (the
+     * sequencer, the Studio transport) sounds; reported as output.otherAudio with the voices.
+     */
+    async preflight(opts) {
       dropLive('measurement');
       const since = epoch;
+      const voices = engine.audibleVoiceCount || 0;
       const facts = {
         audioContext: { available: true, state: null },
         sampleRate: null,
         permission: kind === 'loopback' ? 'not-required' : 'unknown',
         input: null,
         inputLevel: null,
-        output: { gain: engine.gainLevel, maxGain: MAX_OUTPUT_GAIN,
-          audibleVoices: engine.audibleVoiceCount || 0 },
+        output: { gain: engine.gainLevel, maxGain: MAX_OUTPUT_GAIN, audibleVoices: voices,
+          otherAudio: !!(opts && opts.otherAudio) || voices > 0 },
         worklet: null,
         testContext,
       };

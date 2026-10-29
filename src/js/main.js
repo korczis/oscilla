@@ -212,13 +212,29 @@ engine.play = (plan, o = {}) => {
 };
 
 /**
- * Measure (and Studio PLAY) take the output: stop the instrument and the sequencer (their
- * voices fade), and a playing Studio (V3.1; it is not playing while it claims the output).
+ * The sources that sound into the master output, one list (C016): stopPlayback stops each one
+ * that sounds and outputBusy says whether any does, so MEASURE's setup check (OTHER_AUDIO) and
+ * Measure / Studio PLAY (which take the output) name the same owners. The sequencer is read
+ * live (editor.playing), not through the 150 ms seqPlaying copy; its voices and the Studio's
+ * never enter engine.audibleVoiceCount. tests/unit/output-owners.test.mjs keeps the two in sync.
  */
+const OUTPUT_OWNERS = Object.freeze([
+  { id: 'sequencer', busy: () => !!(labs.sequencer && labs.sequencer.editor.playing),
+    stop: () => labs.sequencer.editor.stop() },
+  { id: 'instrument', busy: (cmp) => !!cmp.playing, stop: (cmp) => cmp.stopNow() },
+  // V3.1: the Studio is not playing while it claims the output for a measurement.
+  { id: 'studio', busy: (cmp) => typeof cmp.studioOwnsOutput === 'function'
+    && cmp.studioOwnsOutput(), stop: (cmp) => cmp.studioStop() },
+]);
+
+/** Measure (and Studio PLAY) take the output: stop every owner that sounds (voices fade). */
 function stopPlayback(cmp) {
-  if (cmp.seqPlaying && labs.sequencer) labs.sequencer.editor.stop();
-  if (cmp.playing) cmp.stopNow();
-  if (typeof cmp.studioOwnsOutput === 'function' && cmp.studioOwnsOutput()) cmp.studioStop();
+  for (const owner of OUTPUT_OWNERS) if (owner.busy(cmp)) owner.stop(cmp);
+}
+
+/** True while any output owner sounds (MEASURE's setup check; it stops nothing). */
+function outputBusy(cmp) {
+  return OUTPUT_OWNERS.some((owner) => owner.busy(cmp));
 }
 
 /** Revert the sounding voice from a PeriodicWave to its oscillator type (additive off). */
@@ -733,7 +749,7 @@ function createOscillaComponent(ui) {
     relayout: () => { if (host) host.resize(); repairCharts(); },
   });
   const measure = createMeasureUi({
-    engine, build: BUILD, stopPlayback,
+    engine, build: BUILD, stopPlayback, outputBusy,
     loopback: new URLSearchParams(window.location.search).get('measure') === 'loopback',
   });
   const experiments = createExperimentsUi();

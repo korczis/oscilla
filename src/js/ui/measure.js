@@ -285,6 +285,7 @@ function calText(cal) {
 /**
  * createMeasureUi(svc) → the MEASURE part of the component.
  * svc: { engine (AudioEngine), stopPlayback(cmp) (instrument, sequencer, voices),
+ *        outputBusy(cmp) (optional: any owner stopPlayback stops is sounding),
  *        loopback: boolean (TEST CONTEXT at load, from the URL) }
  */
 export function createMeasureUi(svc) {
@@ -1403,6 +1404,14 @@ export function createMeasureUi(svc) {
   }
 
   // ---------------------------------------------------------------- actions
+  /**
+   * The app's own output sounds (the sequencer, the instrument, the Studio transport: the
+   * owners stopPlayback stops). The setup check reports it (OTHER_AUDIO) and leaves it playing.
+   */
+  function otherAudioNow(cmp) {
+    return typeof svc.outputBusy === 'function' && !!svc.outputBusy(cmp);
+  }
+
   async function runPreflight(cmp) {
     stopLive(); // exclusive input: the live RTA never runs beside a capture
     const me = ensureEngine();
@@ -1414,7 +1423,8 @@ export function createMeasureUi(svc) {
     cmp.meas.savedId = null;
     rebuildAll();
     try {
-      ctx.pending = me.preflight(recipeNow(), { calibration: calibrationInput() });
+      ctx.pending = me.preflight(recipeNow(), { calibration: calibrationInput(),
+        otherAudio: otherAudioNow(cmp) });
       await ctx.pending;
     } catch (e) {
       if (!(e && e.code === 'ABORTED')) {
