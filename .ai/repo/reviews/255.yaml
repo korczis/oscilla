@@ -1,5 +1,5 @@
 # Review verdict for pull request #255, R022: every pull request names its plan record, judged by
-# the base branch (branch feat/r022-pr-metadata-judge). Eighth round (re-review).
+# the base branch (branch feat/r022-pr-metadata-judge). Ninth round (re-review of a merge).
 # Reviewed head ef368d75, merge base origin/main 94192a19 (main's tip is 45621450). Round 7
 # reviewed 152cacea and requested changes (3efeddbd); between rounds the reviewer and the author
 # agreed that install-time code is PR code like a test, so the lockfile guard is not the boundary:
@@ -36,11 +36,30 @@
 # - R49 (P2): a workspace or file: dependency resolves to the head's code in the without tree, so
 #   such a PR reads "not proven" where it used to get a clear refusal. Install per tree or refuse
 #   link entries with a reason.
+# Round 9 (re-review of a merge): head b740b201 merges origin/main, which now carries #252's train
+# detection, into the head round 8 accepted (bd2f2a74); the merge base is e2720e07. Main's program
+# gives b15190bf...2778 -> 7db72a32...6c49 over the same 10 guarded paths. Reviewed from git (the
+# diff bd2f2a74..b740b201 and --remerge-diff), in two lenses with a skeptic each (5 agents; one
+# documentation finding refuted).
+#
+# What holds: git-ref.mjs, judge-isolation.mjs, ci-workflow-rules.mjs, shell-words.mjs and
+# base-rule.sh are byte-identical to bd2f2a74; ci.yml keeps #255's form of the pr.json fetch (under
+# env -i, before base-rule.sh; GH_TOKEN where R50 found it, no wider); persist-credentials: false is
+# on all three judge checkouts and #252 adds no judge job. In fail-first.mjs the train check comes
+# after the ptrace probe and the manifest check and returns before the first git call and before
+# any child; judgeTrain and trainMembers are pure functions of the PR JSON's body. A feat or fix
+# title is tested before the train patterns, so no branch name or title moves a feat or fix PR onto
+# the train path; on any other title the train path can only keep "not applicable" or make it
+# stricter. Members are body text, as #252 states and as before this merge. Every test of both sides
+# is kept; fail-first.test.mjs 31/31 and the whole unit suite pass.
+#
+# Verdict: merge. One P3 is new (R58).
+#
 schema: review-verdict/v1
 pr: 255
 verdict: merge
 reviewer: prismatic-majordomus-f3 (claude-code 1f47a36e)
-content: b15190bf7960a7be2711666baf3c1a383afa9c956ff6894c4e6bca278c3c2778
+content: 7db72a32882654136c74c635d225337b7a958be8f269cd0ecc1c4f5e525e6c49
 findings:
   - { id: R1, severity: P2, status: open, title: "the base list leaves scripts/pr-metadata.mjs, .ai/repo/ci/pr-meta.yaml and their test out of the digest, and the persist-credentials assertion now lives there too; deferred, blob shas in the PR comment for a pre-merge re-check" }
   - { id: R2, severity: P1, status: closed, title: "base-rule.sh resolved the unqualified origin/<base>; fixed in dfb5641b" }
@@ -99,3 +118,4 @@ findings:
   - { id: R55, severity: P3, status: open, title: "judge-isolation.mjs:248 ls-tree and diff -z output decoded as UTF-8, so non-UTF-8 names become U+FFFD and can collide; read Buffers or refuse such names" }
   - { id: R56, severity: P3, status: open, title: "fail-first.mjs:670 local mode throws EEXIST when a tree tracks node_modules/ (judge mode removes it first)" }
   - { id: R57, severity: P3, status: open, title: "fail-first.test.mjs:569 the round-8 replay stays green with the -c overrides and --no-ext-diff/--no-textconv removed, and is red on 3efeddbd only by the old guard; assert the arguments" }
+  - { id: R58, severity: P3, status: open, title: "fail-first.test.mjs:886 the order of the train path is not held by a test: moving it before the ptrace probe or the manifest check, or adding a non-throwing judgeGit call or a child before it, leaves every test green; add train-title cases with a failing probe and a wrong digest (refused), and assert no judgeGit call and no child before the train verdict" }
