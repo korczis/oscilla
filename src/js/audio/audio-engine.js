@@ -444,7 +444,7 @@ export class AudioEngine {
       fade: null, cut: null, lanes: null, laneNext: 0,
       endTime: Infinity, deadline: Infinity, releasing: false, ended: false, timers: [], dipping: false,
       attack: Math.max(0.001, adsr ? adsr.a : o.attackS), release: Math.max(0.005, adsr ? adsr.r : o.releaseS),
-      limited: !!o.limited, extended: false,
+      limited: !!o.limited, extended: false, limitable: false, limitAt: null,
       inserts: [], periodicWave: o.periodicWave || null, adsr, eg: null, stepEnv: null,
     };
     const t0 = v.t0;
@@ -505,6 +505,9 @@ export class AudioEngine {
       }
 
       let end = Infinity;
+      // C011: the voices the hard limit governs (tightenLimit): the open patterns and the
+      // finite tone; other programmed patterns keep their own end (ADR 0005).
+      v.limitable = programmedEnd == null || !!plan.limitable;
       if (programmedEnd != null) {
         end = programmedEnd;
       } else {
@@ -611,6 +614,7 @@ export class AudioEngine {
     const rel = Math.max(0.005, releaseS);
     const stopAt = Math.max(t + rel + 0.01, v.t0 + 0.005);
     if (t >= v.endTime - 0.002 || stopAt >= v.endTime) return false; // ends sooner on its own
+    this._dropPendingLimit(v, t);
     const stage = !v.fade.ev.length ? v.fade : !v.cut.ev.length ? v.cut : null;
     if (!stage) return false; // already in its second, fast fade
     v.releasing = true;
@@ -657,6 +661,75 @@ export class AudioEngine {
       if (v.extended && this._releaseVoice(v, FAST_RELEASE_S)) n++;
     }
     return n;
+  }
+
+  /**
+   * C011: the hard safety limit was lowered while voices sound (mirrors revokeContinuous).
+   * Every live voice the limit governs (the open patterns in hold, trigger or latch, and the
+   * finite tone; not the other programmed patterns, which keep their own end, and not a voice
+   * the continuous permission lengthened) ends at t0 + limitS when that is earlier than its own
+   * end. The release (the voice's own release time) is scheduled on the audio clock on the
+   * output-stage gain that is still exactly 1 (`fade`, or `cut` after an earlier tightening
+   * whose fade has begun), and the sources stop after it; the envelope (env/eg) is never edited
+   * (V249). A voice whose new end is already past or inside the schedule lead fades now
+   * (FAST_RELEASE_S). It only ever shortens: a higher limit changes nothing that sounds.
+   * v.opts.limitS and v.deadline are lowered too, so a restart (_restart) inherits the cap.
+   * Returns the number of voices shortened.
+   */
+  tightenLimit(limitS) {
+    const lim = Number(limitS);
+    if (!(lim > 0)) return 0;
+    let n = 0;
+    for (const v of [...this.voices]) {
+      if (v.ended || v.releasing || v.extended || !v.limitable || v.ctx.state === 'closed') continue;
+      const rel = v.release;
+      const at = v.t0 + lim;
+      const stopAt = at + rel + 0.01;
+      if (!(stopAt < v.endTime - 0.002)) continue; // ends sooner on its own: never extended
+      v.opts = { ...v.opts, limitS: Math.min(lim, toNumber(v.opts.limitS, lim)) };
+      v.deadline = Math.min(v.deadline, at + rel);
+      v.limited = true;
+      const t = this._soon(v.ctx);
+      if (at <= t) {
+        if (this._releaseVoice(v, FAST_RELEASE_S)) n++;
+        continue;
+      }
+      this._dropPendingLimit(v, t);
+      const stage = !v.fade.ev.length ? v.fade : !v.cut.ev.length ? v.cut : null;
+      if (!stage) continue;
+      try {
+        this._ev(stage, 'setValueAtTime', 1, at);
+        this._ev(stage, 'linearRampToValueAtTime', GAIN_FLOOR, at + rel);
+        for (const s of v.sources) {
+          try { s.stop(stopAt); } catch (e) { /* already stopped */ }
+        }
+        v.endTime = stopAt;
+        v.limitAt = stage === v.fade ? at : null;
+      } catch (e) {
+        this._fail(e, 'limit');
+        this._cleanup(v);
+        continue;
+      }
+      for (const id of v.timers) this._timers.clearTimeout(id);
+      v.timers.length = 0;
+      this._armTimers(v);
+      n++;
+    }
+    return n;
+  }
+
+  /**
+   * C011: a limit release that tightenLimit scheduled on `fade` and that has not begun by t
+   * leaves `fade` exactly 1 until then, so it is withdrawn (nothing sounding is edited) and the
+   * release asked for now takes `fade` as on any voice.
+   */
+  _dropPendingLimit(v, t) {
+    if (v.limitAt == null) return;
+    if (v.limitAt > t && v.fade.ev.length) {
+      v.fade.param.cancelScheduledValues(v.limitAt);
+      v.fade.ev.length = 0;
+    }
+    v.limitAt = null;
   }
 
   // V1: AudioEngine: _cleanup (index.html@a7b7a23), plus disposal of the V2 insert stages

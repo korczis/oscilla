@@ -25,6 +25,7 @@ const os = require('os');
 
 const args = process.argv.slice(2);
 const suite = require('./lib/suite.cjs');
+const { until } = require('./lib/wait.cjs');
 // This file is also loaded as a module (instrument, LAUNCH); only the entry script opens a run.
 const RUN = require.main === module
   ? suite.open({ name: 'engine-v1port',
@@ -1357,6 +1358,79 @@ async function runBrowser() {
   }
 
   // ------------------------------------------------------------------ V2 extension points
+  // ------------------------------------------------------------------ C011 limit-tightens-live
+  // Not part of V1's suite. Finding dead-controls-4: the Device & Limits hard limit lowered
+  // while a trigger sounds reaches that voice (instrument.setSafetyLimit -> engine.tightenLimit).
+  // A 5000 ms trigger under the 5 s limit; about 100 ms in (polled on the audio clock against a
+  // wall deadline) the limit drops to 0.5 s and is raised to 2 s again in the same task. The
+  // voice must stop within release + 50 ms of t0 + 0.5 s on the audio clock (the scheduled stop
+  // of its oscillators), not be extended by the raise, be silent on the output tap after its
+  // release, release without a click and leave nothing behind.
+  section('limit-tightens-live: a lower hard limit shortens the sounding trigger (C011)');
+  {
+    const { page, problems, context } = await openPage(browser);
+    await startAudio(page);
+    const s0 = await app(page, (a, e, O, T) => {
+      a.setPattern('tone'); a.setWaveform('sine'); a.setFrequency(220);
+      a.release = 30;
+      a.duration = 5000;
+      a.setSafetyLimit('5');
+      const n0 = T.oscs.length;
+      a.trigger();
+      const v = e.voice;
+      return { n0, t0: v.t0, release: v.release, endTime: v.endTime, limit: a.safetyLimit,
+        gain: a.gainLevel, sr: e.ctx.sampleRate };
+    });
+    await until(() => app(page, (a, e, O, T, t) => e.ctx.currentTime >= t, s0.t0 + 0.1),
+      { ms: 15000, what: 'limit-tightens-live: 100 ms of the 5 s trigger rendered' });
+    const ch = await app(page, (a, e) => {
+      const v = e.voice;
+      const tReq = e.ctx.currentTime;
+      a.setSafetyLimit('0.5');
+      const lowered = v.endTime;
+      a.setSafetyLimit('2');
+      return { tReq, lowered, raised: v.endTime, limit: a.safetyLimit, ended: v.ended };
+    });
+    const done = await until(() => app(page, (a, e, O, T) => (T.liveOscs() === 0
+      && e.voices.size === 0 && e.activeNodeCount === 0 ? { now: e.ctx.currentTime } : null)),
+    { ms: 15000, what: 'limit-tightens-live: the shortened trigger torn down' })
+      .catch((err) => ({ error: err.message }));
+    const r = await app(page, async (a, e, O, T, arg) => {
+      const recs = T.oscs.slice(arg.n0).filter((x) => x.started);
+      const stops = recs.map((x) => (x.stopEff == null ? Infinity : x.stopEff - arg.t0));
+      const relEnd = arg.t0 + 0.5 + arg.release;
+      await T.waitRec(relEnd + 0.25);
+      const slope = (2 * Math.PI * 220 * arg.gain) / arg.sr;
+      return {
+        oscs: recs.length, stopAt: stops.length ? Math.max(...stops) : null,
+        before: T.stats(arg.t0 + 0.2, arg.t0 + 0.45).peak,
+        after: T.stats(relEnd + 0.03, relEnd + 0.25).peak,
+        clickRatio: +(T.stats(arg.t0 + 0.4, relEnd + 0.03).maxStep / slope).toFixed(2),
+        nodes: e.activeNodeCount, voices: e.voices.size, live: T.liveOscs(),
+        playing: a.playing, status: a.status,
+      };
+    }, s0);
+    const bound = 0.5 + s0.release + 0.05;
+    check('limit-tightens-live: the 5 s trigger started under the 5 s limit',
+      s0.limit === 5 && s0.endTime - s0.t0 > 4.9, JSON.stringify(s0));
+    check('limit-tightens-live: lowering to 0.5 s moves the end to t0 + 0.5 s + release',
+      !ch.ended && ch.limit === 2 && Math.abs(ch.lowered - (s0.t0 + 0.5 + s0.release + 0.01)) < 1e-6,
+      JSON.stringify(ch));
+    check('limit-tightens-live: raising the limit again does not extend the voice',
+      ch.raised === ch.lowered, JSON.stringify(ch));
+    check('limit-tightens-live: oscillators stop within release + 50 ms of t0 + 0.5 s (audio clock)',
+      r.oscs >= 1 && r.stopAt > 0.49 && r.stopAt <= bound, JSON.stringify({ ...r, bound }));
+    check('limit-tightens-live: it sounded until the limit and is silent after its release',
+      r.before > 0.01 && r.after < 1e-4, JSON.stringify(r));
+    check('limit-tightens-live: the release is click-free (step ratio < 3)', r.clickRatio < 3,
+      JSON.stringify(r));
+    check('limit-tightens-live: 0 oscillators, nodes and voices afterwards, STOPPED',
+      !done.error && r.live === 0 && r.nodes === 0 && r.voices === 0 && !r.playing,
+      JSON.stringify({ done, r }));
+    check('no console problems (limit-tightens-live)', problems.length === 0, problems.join(' | '));
+    await context.close();
+  }
+
   // Not part of V1's suite: the V2 hooks on the ported engine, measured the same way (click
   // ratio from the output tap, oscillator accounting).
   section('V2 extension points on the ported engine');

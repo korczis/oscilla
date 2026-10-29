@@ -16,11 +16,20 @@
 //   onStart?({ t0, duration }),    playback started (status bar)
 //   onEnded?({ stopped }),         playback fully ended (natural end or after a stop fade)
 //   onRecord?(sequenceJson),       the record-style button: hand the sequence to the WAV export
+//   continuousAllowed?(),          read-only: the session's "Allow continuous playback" (absent:
+//                                  not allowed)
 // }
 //
 // Looping: each pass is compiled as its own voice that starts exactly at the previous pass's
 // end time on the audio clock. A timer only decides *when* to compile the next pass (LOOKAHEAD_S
 // ahead); it never times audio. Edits made during playback apply from the next pass.
+//
+// C011, the loop cap (ADR 0005: a sequence keeps its programmed end, at most MAX_PROGRAMMED_S):
+// without the continuous permission no pass is scheduled that would end more than LOOP_CAP_S
+// after play() started the first one. The loop then ends with its last pass that fits (its own
+// click-free end) and `loopNotice` states why. Withdrawing the permission (followPermission)
+// stops a loop that already runs past the cap. The model's loop flag is never rewritten, so an
+// imported loop:true sequence is capped the same way and round-trips unchanged.
 
 import {
   BLOCK_TYPES,
@@ -53,8 +62,14 @@ import {
 } from './model.js';
 import { compileSequence, observeClock, START_OFFSET_S } from './compiler.js';
 import { reorderTarget } from './timeline.js';
+import { MAX_PROGRAMMED_S } from '../core/constants.js';
 
 export const LOOKAHEAD_S = 1.0; // compile the next loop pass this far ahead of its start
+/** C011: how long a loop may play without the continuous permission (ADR 0005). */
+export const LOOP_CAP_S = MAX_PROGRAMMED_S;
+export const LOOP_CAP_REASON = `Loop stopped at ${LOOP_CAP_S} s: allow continuous playback to `
+  + 'loop until stopped.';
+const CAP_EPS_S = 1e-6;
 const MAX_QUEUED_PASSES = 16; // guard for very short looped sequences
 
 function isEditableTarget(el) {
@@ -84,6 +99,7 @@ export function createSequencerEditor(options = {}) {
     lastEnd: null,
     loopTimer: null,
     self: null,
+    playT0: null, // audio-clock start of the first pass since play(): the loop cap counts from it
   };
   const resolve = (key, getter) => {
     if (!engine) return null;
@@ -91,6 +107,17 @@ export function createSequencerEditor(options = {}) {
     return engine[key] || null;
   };
   const getCtx = () => resolve('ctx', 'getContext');
+  const continuousAllowed = () => {
+    if (!engine || typeof engine.continuousAllowed !== 'function') return false;
+    try {
+      return !!engine.continuousAllowed();
+    } catch (e) {
+      return false;
+    }
+  };
+  /** Whether a pass ending at `end` may still be scheduled (the cap, C011). */
+  const passFits = (end) =>
+    continuousAllowed() || priv.playT0 === null || end - priv.playT0 <= LOOP_CAP_S + CAP_EPS_S;
   const getDest = () => resolve('destination', 'getDestination');
   const clearLoopTimer = () => {
     if (priv.loopTimer !== null && timers) timers.clearTimeout(priv.loopTimer);
@@ -113,6 +140,7 @@ export function createSequencerEditor(options = {}) {
     playing: false,
     error: '',
     warnings: [],
+    loopNotice: '', // C011: why a loop ended at the cap ('' while it may go on)
     dragFromIndex: -1,
     dragInsertIndex: -1,
     recordAvailable: !!(engine && typeof engine.onRecord === 'function'),
@@ -352,7 +380,12 @@ export function createSequencerEditor(options = {}) {
         priv.lastEnd - ctx.currentTime < LOOKAHEAD_S &&
         queued < MAX_QUEUED_PASSES
       ) {
-        const v = self._schedulePass(ctx, Math.max(priv.lastEnd, ctx.currentTime + START_OFFSET_S));
+        const start = Math.max(priv.lastEnd, ctx.currentTime + START_OFFSET_S);
+        if (!passFits(start + totalDuration(self.model))) {
+          self._endLoopAtCap();
+          return;
+        }
+        const v = self._schedulePass(ctx, start);
         if (!v) {
           self.stop();
           return;
@@ -364,6 +397,72 @@ export function createSequencerEditor(options = {}) {
         priv.loopTimer = null;
         self._pump();
       }, wait);
+    },
+    /**
+     * C011: the next pass would end past the cap. Schedule nothing more; the passes already
+     * scheduled play to their own end, and the reason is stated.
+     */
+    _endLoopAtCap() {
+      const self = priv.self || this;
+      clearLoopTimer();
+      self.loopNotice = LOOP_CAP_REASON;
+      if (priv.voices.size === 0 && self.playing) {
+        self.playing = false;
+        if (engine && typeof engine.onEnded === 'function') {
+          try {
+            engine.onEnded({ stopped: false });
+          } catch (e) {
+            /* theirs */
+          }
+        }
+      }
+    },
+    /**
+     * C011: follow the continuous permission after it changed. Withdrawn: a pass already
+     * scheduled to end past the cap is dropped before it starts; when the sounding pass runs
+     * past it, the loop stops now (click-free) with the reason. Returns true when it stopped
+     * or dropped something.
+     */
+    followPermission() {
+      const self = priv.self || this;
+      const ctx = getCtx();
+      if (!ctx || !self.playing || continuousAllowed() || priv.playT0 === null) return false;
+      const capEnd = priv.playT0 + LOOP_CAP_S + CAP_EPS_S;
+      const over = priv.passes.filter((p) => p.end > capEnd && !p.voice.stopping);
+      if (!over.length) return false;
+      if (over.some((p) => p.t0 <= ctx.currentTime + START_OFFSET_S)) {
+        self.stop();
+        self.loopNotice = LOOP_CAP_REASON;
+        return true;
+      }
+      for (const p of over) p.voice.stop();
+      const kept = priv.passes.filter((p) => !over.includes(p));
+      priv.lastEnd = kept.length ? Math.max(...kept.map((p) => p.end)) : null;
+      self._pump();
+      return true;
+    },
+    /**
+     * C011, read-only: the loop's schedule against the cap. { capped (the cap applies now),
+     * capS, t0 (start of the first pass), lastScheduledEnd (end of the last pass compiled),
+     * endsAt (when the loop's last pass that fits ends, from what is scheduled and the current
+     * sequence length; null while it may go on, or when stopped) }.
+     */
+    loopSchedule() {
+      const self = priv.self || this;
+      const capped = !continuousAllowed();
+      const t0 = priv.playT0;
+      const lastScheduledEnd = priv.lastEnd;
+      let endsAt = null;
+      if (self.playing && t0 !== null && lastScheduledEnd !== null) {
+        if (!self.model.loop || self.loopNotice) endsAt = lastScheduledEnd;
+        else if (capped) {
+          const passS = totalDuration(self.model);
+          const room = t0 + LOOP_CAP_S + CAP_EPS_S - lastScheduledEnd;
+          const more = passS > 0 ? Math.max(0, Math.floor(room / passS)) : 0;
+          endsAt = lastScheduledEnd + more * passS;
+        }
+      }
+      return { capped, capS: LOOP_CAP_S, t0, lastScheduledEnd, endsAt };
     },
     /** Start (or restart) playback from the first block. Returns true when audio was scheduled. */
     play() {
@@ -387,12 +486,15 @@ export function createSequencerEditor(options = {}) {
         }
       }
       this.error = '';
+      this.loopNotice = '';
       this.playing = true;
+      priv.playT0 = null;
       const voice = this._schedulePass(ctx, ctx.currentTime + START_OFFSET_S);
       if (!voice) {
         this.playing = false;
         return false;
       }
+      priv.playT0 = voice.t0;
       if (typeof engine.onStart === 'function') {
         try {
           engine.onStart({ t0: voice.t0, duration: voice.duration });

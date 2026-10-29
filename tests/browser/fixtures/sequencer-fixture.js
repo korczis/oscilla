@@ -12,6 +12,7 @@ import {
   EDGE_S,
 } from '../../../src/js/sequencer/compiler.js';
 import { createSequencerEditor } from '../../../src/js/sequencer/editor.js';
+import { mount as mountSequencerPanel } from '../../../src/js/labs/sequencer-panel.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /** Deadline poll: wait until cond() holds or ms pass; returns the wall time waited (ms). */
@@ -373,6 +374,84 @@ async function realtimeStopCapture(runs, { forceFallback = false } = {}) {
   return { sampleRate: ctx.sampleRate, runs: out };
 }
 
+// ---------------------------------------------------------------- C011 seq-loop-cap
+// The real sequencer panel on a minimal shell (its transport controls and message line), with
+// the adapter's read-only continuousAllowed(). Without the permission a loop may play passes
+// up to LOOP_CAP_S (30 s) since play(); the editor's schedule says where it stops, so the check
+// reads it instead of waiting 30 s (the unit test runs the whole loop on a fake clock).
+
+let capLab = null;
+
+function loopCapStart(passMs) {
+  const { ctx, master } = rt;
+  resetProbe();
+  const root = document.createElement('div');
+  root.innerHTML = '<button type="button" id="osc-seq-play" aria-pressed="false">Play</button>'
+    + '<button type="button" id="osc-seq-record" aria-label="Loop sequence" '
+    + 'aria-pressed="false"></button><p data-osc="seq.message" role="status"></p>';
+  document.body.appendChild(root);
+  const perm = { allowed: false };
+  const lab = mountSequencerPanel(root, {
+    getContext: () => ctx,
+    getDestination: () => master,
+    getSampleRate: () => ctx.sampleRate,
+    continuousAllowed: () => perm.allowed,
+  });
+  capLab = { lab, root, perm };
+  const ed = lab.editor;
+  ed.load(createSequence({
+    loop: true,
+    blocks: [{ type: 'tone', durationMs: passMs, params: { freq: 440 } }],
+  }, { sampleRate: ctx.sampleRate }));
+  const loopBtn = root.querySelector('#osc-seq-record');
+  loopBtn.click(); // the Loop control: off, then on again (the flag is the model's)
+  const offAfterClick = ed.model.loop;
+  loopBtn.click();
+  const played = ed.play();
+  lab.render();
+  return {
+    played,
+    offAfterClick,
+    loop: ed.model.loop,
+    passS: ed.totalDurationS,
+    schedule: ed.loopSchedule(),
+    title: loopBtn.getAttribute('title'),
+    pressed: loopBtn.getAttribute('aria-pressed'),
+    live: probe.live.size,
+    stats: ed.stats(),
+  };
+}
+
+/** Withdraw-then-allow round: the title follows the permission; then stop. */
+function loopCapStop() {
+  const { lab, root, perm } = capLab;
+  const ed = lab.editor;
+  const loopBtn = root.querySelector('#osc-seq-record');
+  perm.allowed = true;
+  lab.render();
+  const allowed = { schedule: ed.loopSchedule(), title: loopBtn.getAttribute('title') };
+  perm.allowed = false;
+  ed.followPermission();
+  lab.render();
+  const withdrawn = { playing: ed.playing, schedule: ed.loopSchedule(),
+    title: loopBtn.getAttribute('title') };
+  ed.stop();
+  return { allowed, withdrawn };
+}
+
+function loopCapTorn() {
+  return capLab ? { torn: torn(capLab.lab.editor), live: probe.live.size,
+    stats: capLab.lab.editor.stats() } : null;
+}
+
+function loopCapDispose() {
+  if (!capLab) return null;
+  capLab.lab.dispose();
+  capLab.root.remove();
+  capLab = null;
+  return probeSnapshot();
+}
+
 async function realtimeTeardown() {
   if (!rt) return null;
   rt.editor.dispose();
@@ -397,6 +476,10 @@ window.seqFixture = {
   loopThenStop,
   realtimeStopCapture,
   realtimeTeardown,
+  loopCapStart,
+  loopCapStop,
+  loopCapTorn,
+  loopCapDispose,
   probeSnapshot,
   hasCancelAndHold: () => typeof AudioParam.prototype.cancelAndHoldAtTime === 'function',
 };

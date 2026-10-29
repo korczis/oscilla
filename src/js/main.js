@@ -111,6 +111,8 @@ const adapter = {
     return app.source === 'dual' ? app.dualFa : app.metricFrequency;
   },
   isPlaying: () => !!(app && (app.playing || app.seqPlaying)),
+  // C011: read-only; the sequencer's loop keeps to its cap without the permission.
+  continuousAllowed: () => !!(app && app.continuousAllowed),
   getA4: () => (app && app.a4) || 440,
   onChange(fn) {
     adapterListeners.add(fn);
