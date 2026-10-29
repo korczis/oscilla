@@ -41,13 +41,33 @@
 # Runs: node --test tests/unit/analysis-analytic.test.mjs 14/14 at f46e0aa0. The measurement
 # scripts are kept in the reviewer's scratchpad (r275/measure.mjs, r275/edges.mjs).
 #
-# Open: R-1 (P2), R-2 and R-3 (P3).
+# Delta review at a22dc644 (2026-10-29), range b783a702..a22dc644: analytic.js (trustedBand)
+# and its unit test only; dist rebuilt (build.mjs --check up to date). Lenses and runs:
+# - Mutants in a git-archive scratch copy, the PR worktree untouched: the linear-ramp taper
+#   fails 2 tests (the new taper-shape assert and the AM edge case through the 0.25 Hz bound),
+#   1/N scaling halved fails 7, positive bins not doubled fails 7, trustedBand without its null
+#   on an empty band fails 1. The K024 suite passes 16/16.
+# - Bounds over the whole new trusted band, measured on the interior at 44.1 and 48 kHz on
+#   0.1, 0.2 and 0.5 s: tones at low, 1.5 low, fs/8, fs/4, high - 1 and high; AM at low + fm
+#   and high - fm; FM (beta 0.2) at low + 3 fm and high - 3 fm, fm = low / 10. 60 of 60 within
+#   the stated bounds; worst at 44.1 kHz, 0.1 s, a tone at the new low edge 1002.3 Hz: envelope
+#   7.5e-5 relative, phase 7.3e-5 rad, frequency 0.074 Hz (bounds 1e-3, 1e-3 rad, 0.25 Hz).
+# - trustedBand: the margin comes from taperLength(); null for an empty taper and for an empty
+#   band; 419 samples gives null and 420 the first band at any rate; a bad rate still throws
+#   RangeError; analyse() of 100 samples gives band null and still computes envelope (100) and
+#   frequency (99). No module in src/ imports analytic.js yet, so null reaches no caller that
+#   could do arithmetic on band.low; the taper lies inside the excluded edge, so no bound is
+#   claimed where the taper acts.
+# - Digest: main's scripts/review-verdict.mjs, --content --base-branch origin/main:
+#   4ba70810...9a41 over src/js/analysis/analytic.js, the builder's value.
+#
+# Open: R-3 (P3). No P0, P1 or P2 is open.
 schema: review-verdict/v1
 pr: 275
-verdict: changes
+verdict: merge
 reviewer: "dev-68 (Claude Opus 5.5 session 4f90795d); did not build, merge or edit this change; wrote only this file"
-content: b943ba229d25060a2be62d888aef24a88bc1702b84fe4734f2c5e250edc6f442
+content: 4ba70810976b5e489a75f78c4cef632ee16e00d9e507432751363bbce88a9a41
 findings:
-  - { id: R-1, severity: P2, status: open, title: "The taper's shape carries the stated frequency bound, and no test holds it (src/js/analysis/analytic.js:120; tests/unit/analysis-analytic.test.mjs:153). With the raised cosine made a linear ramp (w = i / taper) all 14 tests pass, yet the interior frequency error of in-band AM at both edges of trustedBand() on 0.1 s buffers rises to 0.40-0.43 Hz (bound 0.25 Hz; FM 0.31-0.33 Hz), measured at 44.1 and 48 kHz with fm = 100 Hz (carrier low+fm / high-fm). The edge test uses fm = 20 Hz and does not reach it. At the reviewed head the same signals measure 0.0085-0.020 Hz. Fix: add an in-band case with faster modulation at the band edges (fm = low/10, still 1/11 of the carrier), which kills the ramp mutant through the bound itself; asserting re[i] == x[i]·w(i) inside the taper pins the shape too." }
-  - { id: R-2, severity: P3, status: open, title: "trustedBand(length, rate) for length < 20 returns low > high: taperSeconds is length·0.05/rate while the taper actually applied is floor(length·0.05) = 0 samples, e.g. trustedBand(19, 48000) = {low: 252632, high: -228632} (src/js/analysis/analytic.js:61-67). Outside the stated 0.1 s condition, but analyse() hands this band to K025's consumers unflagged. Fix: compute the margin from taperLength() and throw a RangeError (or return null) when the taper is empty, so no caller can show an inverted band." }
+  - { id: R-1, severity: P2, status: closed, title: "[fixed in a22dc644: a taper-shape assert |re[i] - x[i]w(i)| <= 1e-9 at both ends and AM/FM edge cases at fm = low/10; the linear-ramp mutant fails 2] The taper's shape carries the stated frequency bound, and no test holds it (src/js/analysis/analytic.js:120; tests/unit/analysis-analytic.test.mjs:153). With the raised cosine made a linear ramp (w = i / taper) all 14 tests pass, yet the interior frequency error of in-band AM at both edges of trustedBand() on 0.1 s buffers rises to 0.40-0.43 Hz (bound 0.25 Hz; FM 0.31-0.33 Hz), measured at 44.1 and 48 kHz with fm = 100 Hz (carrier low+fm / high-fm). The edge test uses fm = 20 Hz and does not reach it. At the reviewed head the same signals measure 0.0085-0.020 Hz. Fix: add an in-band case with faster modulation at the band edges (fm = low/10, still 1/11 of the carrier), which kills the ramp mutant through the bound itself; asserting re[i] == x[i]·w(i) inside the taper pins the shape too." }
+  - { id: R-2, severity: P3, status: closed, title: "[fixed in a22dc644: the margin from taperLength(); null for an empty taper or band, 420 samples the first band; RangeError kept for a bad rate] trustedBand(length, rate) for length < 20 returns low > high: taperSeconds is length·0.05/rate while the taper actually applied is floor(length·0.05) = 0 samples, e.g. trustedBand(19, 48000) = {low: 252632, high: -228632} (src/js/analysis/analytic.js:61-67). Outside the stated 0.1 s condition, but analyse() hands this band to K025's consumers unflagged. Fix: compute the margin from taperLength() and throw a RangeError (or return null) when the taper is empty, so no caller can show an inverted band." }
   - { id: R-3, severity: P3, status: open, title: "Doubling the Nyquist bin (src/js/analysis/analytic.js:129) is an equivalent mutant for in-band signals: their energy at N/2 is nil, so no test can tell the two apart. Correct as written; noted so the next reader does not take the survivor for a gap." }
