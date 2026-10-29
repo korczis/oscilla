@@ -79,7 +79,8 @@ import {
 } from '../../studio/templates/index.js';
 import { decodeStudioLink, encodeStudioLink } from '../../core/url-state-studio.js';
 import {
-  createDirtyTracker, createStudioLibrary, exportProjectFile, fileSlug, importStudioFile,
+  createDirtyTracker, createStudioLibrary, exportProjectFile, exportSequenceFile, fileSlug,
+  importStudioFile,
 } from '../../studio/library.js';
 import { announceRedo, announceUndo, announceAction } from '../../studio/a11y.js';
 import { observeMemoryStore, openExperimentStoreOrMemory } from '../../experiments/store.js';
@@ -487,6 +488,7 @@ export function createStudioUi(svc = {}) {
     compileWarning: '', // the warning a failed status compile set (cleared on recovery)
     trace: null,
     tracePending: false,
+    sequenceSeed: null, // the V2 seed of the sequence file this document was imported from
   };
   // The Inspector's Trace refreshes once an operation has ended (coalesced per task).
   ctx.trace = createTrace({ now: Date.now, onIdle: () => {
@@ -809,6 +811,7 @@ export function createStudioUi(svc = {}) {
     ctx.projectId = projectId;
     ctx.templateId = templateId;
     ctx.templateBaseline = templateId ? createDirtyTracker(ctx.handle.getModel()) : null;
+    ctx.sequenceSeed = null;
     if (ctx.editor) requestAnimationFrame(() => ctx.editor.frameAll());
     refreshState();
   }
@@ -1605,7 +1608,28 @@ export function createStudioUi(svc = {}) {
       }
     },
 
-    /** Import a project (replaces the document) or a patch (inserted, undoable). */
+    /**
+     * The V2 sequence file of one event track (default: the first with pattern clips); the
+     * seed of the file the document was imported from is kept, so a round trip is exact.
+     */
+    studioExportTrackSequence(trackId = null) {
+      try {
+        const f = exportSequenceFile(ctx.handle.getModel(), { trackId: trackId || undefined,
+          seed: ctx.sequenceSeed ?? undefined });
+        downloadFile(f);
+        announce(`Exported ${f.name}${f.issues.length ? `: ${f.issues.join(' ')}` : ''}`,
+          { assertive: f.issues.length > 0 });
+        return f;
+      } catch (e) {
+        announce(`Not exported: ${(e && e.message) || e}`, { assertive: true });
+        return null;
+      }
+    },
+
+    /**
+     * Import a project or a V2 sequence or configuration file (replaces the document), or a
+     * patch (inserted, undoable). A refused file leaves the document as it was.
+     */
     studioImportText(text) {
       const r = importStudioFile(text);
       if (!r.ok) {
@@ -1622,6 +1646,13 @@ export function createStudioUi(svc = {}) {
         return res;
       }
       openDocument(r.model, { reason: 'import' });
+      if (r.kind === 'sequence') {
+        ctx.sequenceSeed = r.seed;
+        const n = r.model.timeline.clips.length;
+        announce(`Imported the ${r.source === 'config' ? 'configuration file\'s ' : ''}V2 `
+          + `sequence: ${n} pattern clip${n === 1 ? '' : 's'} on one track`);
+        return { ok: true, kind: 'sequence', clips: n };
+      }
       announce(`Imported ${r.model.metadata.title}`);
       return { ok: true, kind: 'project' };
     },

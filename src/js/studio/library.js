@@ -18,8 +18,12 @@
 //     never loaded. Records of the other kind are refused ('invalid' on save, 'corrupt' on load).
 //   Files (§158): exportProjectFile(model) / exportPatchFile(patch) -> { name, type, text }
 //     (`.oscilla-studio.json`, `.oscilla-patch.json`, pretty canonical JSON);
-//     importStudioFile(text) -> { ok, kind: 'project' | 'patch', model | patch, warnings }
-//     | { ok: false, errors } — recognises either file by its `kind`.
+//     importStudioFile(text) -> { ok, kind: 'project' | 'patch' | 'sequence', model | patch,
+//     warnings } | { ok: false, errors } — recognises each file by its `kind`; a V2 sequence
+//     file (no `kind`, a `blocks` key) or a configuration file (`oscilla-config`) opens as a
+//     model through sequence-import.js importSequenceDocument (`seed`, `source` beside it).
+//     exportSequenceFile(model, { trackId, seed }) -> { name, type, text, issues, trackId }:
+//     one event track as a V2 sequence file (`.sequence.json`), plan K004.
 //   Dirty state (§156, §254): createDirtyTracker(baseline) -> { markSaved(model, info),
 //     markUnsaved(), isDirty(model), status(model) }. Dirty = execution or presentation state
 //     differs from the last explicit save (schema.js semanticState); pan, zoom, timeline scale
@@ -35,13 +39,15 @@ import { toIsoTimestamp } from '../experiments/schema.js';
 import {
   STUDIO_FILE_EXTENSION, STUDIO_KIND, semanticState, serializeStudio, studioHash,
 } from './schema.js';
-import { STUDIO_IMPORT_LIMITS, validateStudioCommit } from './validate.js';
+import { STUDIO_IMPORT_LIMITS, readUntrustedInput, validateStudioCommit } from './validate.js';
 import { importStudio } from './migrate.js';
+import { exportSequence, importSequenceDocument, isSequenceDocument } from './sequence-import.js';
 import {
   PATCH_FILE_EXTENSION, PATCH_KIND, importPatch, patchHash, serializePatch,
 } from './patches.js';
 
 export const STUDIO_FILE_TYPE = 'application/json';
+export const SEQUENCE_FILE_EXTENSION = '.sequence.json';
 
 const invalid = (what, why) => new ExperimentStoreError('invalid', `${what} not saved: ${why}`);
 const corrupt = (id, why) => new ExperimentStoreError('corrupt', `stored Studio record ${id} `
@@ -154,22 +160,51 @@ export function exportPatchFile(patch) {
 }
 
 /**
- * Import an untrusted Studio project or patch file (JSON text). The kind is read from the
- * parsed document only to choose the pipeline; each pipeline re-checks everything.
+ * The V2 sequence file of one event track (default: the first with pattern clips). Throws a
+ * TypeError when there is no such track or it holds no pattern clip; `issues` lists what a V2
+ * sequence cannot hold (overlaps, gaps under 10 ms, a partial loop region).
+ */
+export function exportSequenceFile(model, { trackId, seed } = {}) {
+  const r = exportSequence(model, { trackId, seed });
+  const track = r.trackId ? model.timeline.tracks.find((t) => t.id === r.trackId) : null;
+  if (!track) throw new TypeError(r.issues[0] || 'There is no event track with pattern clips.');
+  if (!r.sequence.blocks.length) {
+    throw new TypeError(`Track ${track.name || track.id} holds no pattern clip to export as a `
+      + 'V2 sequence.');
+  }
+  const name = `${fileSlug(model.metadata.title)}-${fileSlug(track.name, 'track')}`
+    + SEQUENCE_FILE_EXTENSION;
+  return { name, type: STUDIO_FILE_TYPE, text: `${JSON.stringify(r.sequence, null, 2)}\n`,
+    issues: r.issues, trackId: track.id };
+}
+
+/**
+ * Import an untrusted Studio project, patch, V2 sequence or configuration file (JSON text).
+ * The kind is read from the parsed document only to choose the pipeline; each pipeline
+ * re-checks everything.
  */
 export function importStudioFile(text) {
   let kind = null;
+  let doc = null;
   if (typeof text === 'string') {
     if (text.length <= STUDIO_IMPORT_LIMITS.maxBytes) {
       try {
-        const doc = JSON.parse(text);
+        doc = JSON.parse(text);
         kind = doc && typeof doc === 'object' ? doc.kind : null;
       } catch (e) {
         kind = null; // importStudio reports the parse error
       }
     }
   } else if (text && typeof text === 'object') {
+    doc = text;
     kind = text.kind;
+  }
+  if (isSequenceDocument(doc)) {
+    const read = readUntrustedInput(text, STUDIO_IMPORT_LIMITS);
+    if (!read.ok) return read;
+    const r = importSequenceDocument(read.doc);
+    return r.ok ? { ok: true, kind: 'sequence', model: r.model, warnings: r.warnings,
+      migratedFrom: null, seed: r.seed, source: r.source } : r;
   }
   if (kind === PATCH_KIND) {
     const r = importPatch(text);

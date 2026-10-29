@@ -19,14 +19,20 @@
 // the active loop region spans exactly the exported sequence. Overlapping clips cannot be a V2
 // chain; they are skipped and reported. import → export reproduces serializeSequence(v2) exactly
 // (tests/unit/v31-studio-timeline.test.mjs).
+//
+// importSequenceDocument(doc) is the strict file path of Studio Import (plan K004): a V2
+// sequence file, or an OSCILLA configuration file (ui/config-file.js) whose `sequencer` holds
+// one, already read by validate.js readUntrustedInput. What parseSequence would repair (an
+// unknown block type, a clamped value, a dropped list) is refused instead, so a file opens as
+// saved or not at all (tests/unit/v31-studio-sequence-file.test.mjs).
 
 import { ID_PATTERN } from '../experiments/schema.js';
 import {
-  DEFAULT_SEED, MAX_BLOCKS, MAX_BLOCK_MS, MIN_BLOCK_MS, nextBlockId, normalizeModel, parseSequence,
-  serializeSequence,
+  DEFAULT_SEED, MAX_BLOCKS, MAX_BLOCK_MS, MIN_BLOCK_MS, SEQUENCE_VERSION, nextBlockId,
+  normalizeModel, parseSequence, serializeSequence,
 } from '../sequencer/model.js';
 import { createStudioModel } from './schema.js';
-import { validateStudioModel } from './validate.js';
+import { studioDiagnostic, validateStudioModel } from './validate.js';
 import { CONTIGUITY_TOLERANCE_S, clipEnd } from './timeline.js';
 
 export const IMPORT_IDS = Object.freeze({ node: 'seq-1', master: 'master-1', edge: 'edge-1',
@@ -190,8 +196,62 @@ export function exportSequence(model, { trackId, seed = DEFAULT_SEED, sampleRate
   if (tl.loop.enabled && !loop) {
     issues.push('The loop region is not the whole sequence; the V2 sequence does not loop.');
   }
-  const { model: seq, issues: more } = normalizeModel({ version: 1,
+  const { model: seq, issues: more } = normalizeModel({ version: SEQUENCE_VERSION,
     tempoBpm: model.transport.tempo, loop, waveform: node && node.params.waveform, seed,
     blocks: blocks.slice(0, MAX_BLOCKS) }, { sampleRate });
-  return { sequence: serializeSequence(seq), issues: issues.concat(more) };
+  return { sequence: serializeSequence(seq), issues: issues.concat(more), trackId: track.id };
+}
+
+// ---------------------------------------------------------------- files (plan K004)
+
+/** The kind of an OSCILLA configuration file (ui/config-file.js CONFIG_FILE_KIND). */
+export const CONFIG_KIND = 'oscilla-config';
+
+const isPlain = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+
+/** True when a parsed document is read as a V2 sequence file or a configuration file. */
+export function isSequenceDocument(doc) {
+  return isPlain(doc) && (doc.kind === CONFIG_KIND
+    || (doc.kind === undefined && Object.hasOwn(doc, 'blocks')));
+}
+
+const refuse = (path, message) => ({ ok: false, warnings: [], errors: [{
+  ...studioDiagnostic('validate', 'invalid-sequence', message, null, 'error'), path }] });
+
+/**
+ * Open a V2 sequence file or a configuration file's sequence as a Studio model. Never throws.
+ *   importSequenceDocument(doc, { sampleRate }) -> { ok: true, model, seed, source:
+ *     'sequence' | 'config', warnings: [] } | { ok: false, warnings: [], errors }
+ */
+export function importSequenceDocument(doc, { sampleRate } = {}) {
+  const config = isPlain(doc) && doc.kind === CONFIG_KIND;
+  const seq = config ? doc.sequencer : doc;
+  const at = (key) => (config ? `sequencer.${key}` : key);
+  if (!isPlain(seq)) {
+    return refuse(config ? 'sequencer' : '', config
+      ? 'This configuration file holds no Sequencer sequence to open in Studio.'
+      : 'The file does not contain a sequence object.');
+  }
+  if (seq.version !== SEQUENCE_VERSION) {
+    return refuse(at('version'), `Sequence version ${String(seq.version).slice(0, 16)} is not `
+      + `${SEQUENCE_VERSION}.`);
+  }
+  if (!Array.isArray(seq.blocks)) return refuse(at('blocks'), 'The sequence blocks are not a list.');
+  if (!seq.blocks.length) {
+    return refuse(at('blocks'), 'The sequence has no blocks, so there is nothing to open.');
+  }
+  if (seq.blocks.length > MAX_BLOCKS) {
+    return refuse(at('blocks'), `The sequence has ${seq.blocks.length} blocks; a V2 sequence `
+      + `holds at most ${MAX_BLOCKS}.`);
+  }
+  const { issues } = parseSequence(seq, { sampleRate });
+  if (issues.length) {
+    const more = issues.length > 1 ? ` (and ${issues.length - 1} more)` : '';
+    return refuse(at('blocks'), `${issues[0]}${more} The file is refused, not repaired.`);
+  }
+  const imp = importSequence(seq, { sampleRate, title: config ? 'Configuration sequence'
+    : 'Imported sequence' });
+  if (!imp.ok) return { ok: false, warnings: [], errors: imp.errors };
+  return { ok: true, model: imp.model, seed: imp.extras.seed,
+    source: config ? 'config' : 'sequence', warnings: [] };
 }

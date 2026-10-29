@@ -40,6 +40,11 @@
 //                        BROWSER_BUDGETS.editMs (median of 9; tests/unit/fixtures/
 //                        v31-large-studio.mjs, docs/v31/performance.md); the numbers are printed
 //                        (V431)
+//   sequence-import      a configuration saved with Export config opens through the Studio
+//                        Import button as one event track of N pattern clips (one per block of
+//                        its sequence) playing a Sequence node, clean, and announced; a damaged
+//                        sequence is refused with its reason and leaves the document unchanged;
+//                        the track exported as a V2 sequence equals the configuration's (K004)
 //   deleted-project-detaches  Save, Open that project, Delete + Confirm delete: the document is
 //                        detached (no project id), counts as unsaved (the indicator shows), the
 //                        announcement says so; Templates then shows its unsaved-changes note and
@@ -67,6 +72,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
+const { isDeepStrictEqual } = require('node:util');
 const suite = require('./lib/suite.cjs');
 const { until } = require('./lib/wait.cjs');
 
@@ -783,6 +789,67 @@ function defineChecks(fx) {
       editBudget: t.editMs <= fx.budgets.editMs && t.moveMs <= fx.budgets.editMs
         && t.frameMs <= fx.budgets.editMs,
     }), t };
+  });
+
+  def('sequence-import', async ({ page }) => {
+    // A configuration saved the way a user saves one (Export config), with the Sequencer's
+    // sequence in it, then opened through the Studio Import button (plan K004).
+    await page.evaluate(() => window.OSCILLA.app.setWorkspace('sequencer'));
+    await until(() => page.evaluate(() => !!window.OSCILLA.labs.sequencer),
+      { ms: 15000, what: 'sequence-import: the Sequencer lab is mounted' });
+    await H.fresh(page);
+    await H.recordLive(page);
+    const [cfgDl] = await Promise.all([page.waitForEvent('download', { timeout: 20000 }),
+      page.evaluate(() => { window.OSCILLA.app.exportConfig(); })]);
+    const cfgText = fs.readFileSync(await cfgDl.path(), 'utf8');
+    const cfg = JSON.parse(cfgText);
+    const n = cfg.sequencer && Array.isArray(cfg.sequencer.blocks) ? cfg.sequencer.blocks.length
+      : -1;
+    const [chooser] = await Promise.all([page.waitForEvent('filechooser', { timeout: 15000 }),
+      page.click('[data-osc="studio.import"]')]);
+    await chooser.setFiles({ name: cfgDl.suggestedFilename(), mimeType: 'application/json',
+      buffer: Buffer.from(cfgText) });
+    const opened = await until(() => page.evaluate(() => {
+      const m = window.OSCILLA.studio.model;
+      if (m.metadata.title !== 'Configuration sequence') return null;
+      const track = m.timeline.tracks[0];
+      const target = track && m.graph.nodes.find((x) => x.id === track.target);
+      return { tracks: m.timeline.tracks.length, kind: track && track.kind,
+        target: target && target.type, clips: m.timeline.clips.length,
+        pattern: m.timeline.clips.filter((c) => c.kind === 'pattern'
+          && c.trackId === track.id).length,
+        tempo: m.transport.tempo, dirty: window.OSCILLA.studio.dirty,
+        model: JSON.stringify(m) };
+    }), { ms: 15000, what: 'sequence-import: the saved config opens in Studio' });
+    // A damaged sequence is refused: the document stays as it is and the reason is shown.
+    const bad = { ...cfg, sequencer: { ...cfg.sequencer, blocks: 'none' } };
+    await page.setInputFiles('#osc-studio-import-file', { name: 'damaged.json',
+      mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(bad)) });
+    const refusal = await until(() => page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      return a.studio.warning.startsWith('Not imported') ? { warning: a.studio.warning,
+        model: JSON.stringify(window.OSCILLA.studio.model) } : null;
+    }), { ms: 15000, what: 'sequence-import: the damaged file is refused' });
+    // The track goes back out as the V2 sequence the configuration held.
+    const [seqDl] = await Promise.all([page.waitForEvent('download', { timeout: 20000 }),
+      page.evaluate(() => { window.OSCILLA.app.studioExportTrackSequence(); })]);
+    const exported = JSON.parse(fs.readFileSync(await seqDl.path(), 'utf8'));
+    const live = await H.live(page);
+    return { ...H.verdict({
+      savedConfig: cfg.kind === 'oscilla-config' && n > 0,
+      oneTrack: opened.tracks === 1 && opened.kind === 'event' && opened.target === 'sequence',
+      nPatternClips: opened.clips === n && opened.pattern === n,
+      tempo: opened.tempo === cfg.sequencer.tempoBpm,
+      clean: opened.dirty === false,
+      announced: live.includes(`Imported the configuration file's V2 sequence: ${n} pattern `
+        + `clip${n === 1 ? '' : 's'} on one track`),
+      refused: /^Not imported: sequencer\.blocks: The sequence blocks are not a list\.$/
+        .test(refusal.warning),
+      unchanged: refusal.model === opened.model,
+      exported: /\.sequence\.json$/.test(seqDl.suggestedFilename())
+        && isDeepStrictEqual(exported, cfg.sequencer),
+    }), n, opened: { ...opened, model: undefined }, warning: refusal.warning,
+    live: live.slice(-4) };
   });
 
   def('deleted-project-detaches', async ({ page }) => {
