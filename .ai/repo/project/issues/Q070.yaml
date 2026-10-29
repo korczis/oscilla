@@ -1,0 +1,23 @@
+id: Q070
+milestone: M098
+serves:
+  - "public-discoverability#libraries-decided"
+title: "Owner decision: which named visualization libraries, if any, enter dist"
+slug: owner-decision-which-named-visualization-libraries-if-any-enter-dist
+priority: p3
+profile: routine
+owner: "repository owner"
+objective: "From P009's measurements and recommendation, decide for Mermaid (as a runtime), Chart.js, Cytoscape.js and Apache ECharts whether each enters dist, and for which consumer; a library adopted gets an ADR before its integration issue is planned."
+why: "The owner named the libraries in the prompt pack (2026-10-29); the budget, ADR 0012 and ADR 0013 and the deferral of a p5 replacement make adoption the owner's decision."
+scope:
+  - ".ai/repo/project/issues/Q070.yaml"
+depends_on:
+  - "P009"
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision), in the owner's words with date and source; a worker never answers it."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-10-30
+updated_at: 2026-10-30

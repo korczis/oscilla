@@ -1,0 +1,157 @@
+intent: public-discoverability
+reviewed_at: "cdda563c1982a0736ee7441f905ee2dfe2050b81"
+reviewed_by: "claude-opus-5.5 (independent critic subagent, oscilla-af session)"
+findings:
+  - id: p008-intro-band-changes-q004-layout
+    class: unproven_assumption
+    subject: "P008"
+    finding: "P008 assumes a 'bounded introduction' fits inside the first screen Q004 chose without changing its layout. Q004's owner_decision (8b5792cd) and option A of docs/first-screen-options.md fix that layout part by part: header, safety notice, the h1 sentence, then Source & Pattern beside Signal analysis, Microphone Analyzer and Device & Limits, then the full-width Guided measurement row, then the compact Studio beside the Pattern Sequencer, with the same order on a phone. P008 adds a band that repeats the sentence, adds three entries and adds 'a small real preview (waveform or spectrum)'. The sentence is already the h1. A live waveform and spectrum preview is already Signal analysis. The Measure entry is already the Guided measurement row with Check setup. The Studio entry is already the compact Studio. On top of that, the owner answered 'No, not now' to a waveform-and-spectrum guided path on the first screen. A new band above or between those rows pushes the chosen panels down at 1536x1024 and 390x844, so it changes the layout. The intent's own non-goal forbids that without a new owner decision superseding Q004. As written, P008 either breaks Q004 or duplicates parts Q004 already places. Two compatible paths exist. (a) Make Q004's existing parts carry the entries: a labelled action on the h1 row or in the Pro page header's actions slot, 'Open Measure' on the Guided measurement row, 'Open in Studio' on the compact Studio, with no new preview panel. (b) Raise an owner Q issue for an intro band, stating its viewport cost, and make P008 depend on it. P002's own acceptance (the first screen shows what Q004 chose) would also fail against a band Q004 does not list."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "P008"
+      because: "P008 adds no band, preview or copy: it makes the Guided measurement row and the compact Studio Q004 already places each lead to its full workspace, and states the owner's 'No, not now' on a guided path (2026-10-30)."
+  - id: in-app-entry-ref-cannot-fail-on-p008
+    class: delivery_verification
+    subject: "public-discoverability#in-app-entry"
+    finding: "The criterion's ref is 'node tests/browser/first-screen.cjs'. That is the same command as first-run-experience#first-screen-built, and the suite is P002's: it lands with P002's inventory (open PR #278) and does not exist on main yet. Once P002 lands, the ref passes whether or not P008 has added a single entry. It cannot turn false before P008's work and true after it. The criterion needs a check of its own: named rows for the three entries (or a separate suite) that fail on P002's head and pass on P008's."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "P008"
+      because: "The criterion's ref is P008's own suite, tests/browser/public-entry.cjs, which fails until the two parts lead to their workspaces (2026-10-30)."
+  - id: github-shell-ref-only-prints
+    class: delivery_verification
+    subject: "public-discoverability#github-shell-consistent"
+    finding: "'gh repo view korczis/oscilla --json description,homepageUrl,usesCustomOpenGraphImage,repositoryTopics' prints and exits 0 whatever the values are, so it proves none of the four clauses. It exits 0 today, with usesCustomOpenGraphImage false. 'Topics name only what the code does' is a judgement, and no command can decide it as written. An assertion would make the ref falsifiable. For example, pipe to 'jq -e' and require the description to equal the DESCRIPTION exported by scripts/social-assets.mjs, the homepage to equal https://korczis.github.io/oscilla/, usesCustomOpenGraphImage to be true, and every topic to belong to a list committed with the reason for each. The issue also marks all of P007 'owner: repository owner'. Only the social-preview upload needs the owner's hands: P003's evidence shows a committer setting the description with gh repo edit. The gh-able part therefore never reaches a worker through plan next."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "P007"
+      because: "The ref now selects on usesCustomOpenGraphImage and the homepage and greps the Q002 sentence, so it exits non-zero today; topics are listed with their code in the evidence rather than judged by the command; P007 is no longer owner-only, only the upload is the owner's (2026-10-30)."
+  - id: libraries-ref-is-test-s
+    class: delivery_verification
+    subject: "public-discoverability#libraries-decided"
+    finding: "'test -s docs/library-decisions.md' (and P009's identical validation) passes on any non-empty file, including one that names one library or carries no numbers. The criterion asks for a row per library (Mermaid runtime, Chart.js, Cytoscape.js, ECharts), each with raw and gzip deltas, the command that produced each number, a consumer and a decision. A small unit check of the table's rows and fields would make the criterion falsifiable. Otherwise the evidence is a reader's judgement and should say so."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "Q070"
+      because: "The criterion's ref is Q070 being DONE, an owner decision recorded with its evidence, not a file's existence (2026-10-30)."
+  - id: p009-adoption-is-an-owner-decision
+    class: missed_requirement
+    subject: "P009"
+    finding: "P009 has a worker record 'adopt or not-adopt' for four runtime engines measured 'against uPlot and p5'. The plan already places those choices with the owner. ADR 0012 fixes the self-contained runtime and its stack. ADR 0013 governs how a vendor library ships (p5 as a separately identifiable block with its licence). engineering-integrity's non-goals record replacing p5 and changing the size budget as decisions the owner deferred ('this intent measures, it does not decide'). Q014 is the open owner question on M062's gzip cap, and the pack itself says to 'raise the explicit Q decision with the measured tradeoff'. The intent's fifth invariant lets a library into dist with only a measured delta, an adapter, a host and a consumer, with no owner decision. A worker's 'adopt' for an M062 consumer would also re-plan K027-K057, which are written for uPlot and Canvas hosts (K053's census). P009 should recommend, not decide: any adopt goes to an owner Q issue that depends on P009, and the decision is recorded as an ADR (status proposed until the owner answers). A free-standing docs/library-decisions.md would compete with .ai/repo/adrs as a decision record, which the pack forbids ('no parallel tracking document')."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "Q070"
+      because: "P009 measures and recommends into Q070's record; the owner decides in Q070; an adoption gets an ADR beside ADR 0012 and 0013; docs/library-decisions.md is dropped (2026-10-30)."
+  - id: p009-budget-figure-and-method
+    class: unproven_assumption
+    subject: "P009"
+    finding: "P009's why says 'the budget is 1.2 MB gzip'. On main, scripts/build-config.mjs:46 is gzipBytes 1_000_000. The raise to 1 200 000 B is E027, in open PR #279 (state OPEN, merge state BEHIND). Every 'inside the budget' judgement in P009 and P008 would be made against the wrong number. The method also contradicts the scope. The repository's size tooling measures dist/index.html, so measuring a tree-shaken import 'with the repository's size tooling' means adding an import under src/ and dependencies to package.json and the lock. Those are build inputs, and 'No file under src/ or dist/ changes' forbids them. P009 should say the measurement runs in a throwaway worktree or scratch build with pinned versions, and that only the record lands. The commands it cites must then be reproducible from that record."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "P009"
+      because: "P009 cites scripts/build-config.mjs BUDGET.gzipBytes (1 000 000 B on main, E027 proposing 1 200 000) and measures in a scratch build outside the tree, so nothing under src/, dist/ or package.json changes (2026-10-30)."
+  - id: p006-e028-dependency-unrecorded
+    class: delivery_verification
+    subject: "P006"
+    finding: "P006 builds on E028, and the readme-front-page ref runs tests/unit/extending-guide.test.mjs. Both exist only in PR #286, carried by train #316, and neither is on main. P006 has no depends_on, so plan next derives it READY and can hand it to a second worker, even though its implementation (#318) is already open and stacked on the unmerged train. #318 does not carry P006.yaml, and its body says 'plan: n/a'. If #318 lands before this planning PR, nothing links it to P006, and the evidence-at-a-main-commit convention cannot name it. Order the work so that this plan lands, then #316, then #318, with #318 naming P006. Add 'depends_on: E028' once E028.yaml is on main, or start P006 right away so it does not show as READY."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "P006"
+      because: "E028's record is not on main yet, so depends_on cannot name it without failing plan validate; P006's acceptance requires E028 on main before it lands and adds the edge once it is; #318 will carry P006.yaml and name P006 instead of plan: n/a (2026-10-30)."
+  - id: palette-invariant-unenforced
+    class: regression_risk
+    subject: "public-discoverability"
+    finding: "The artwork invariant requires the art to be 'drawn in OSCILLA's own palette'. P006's acceptance and tests/unit/readme-landing-art.test.mjs check structure only: title, desc, no script, handler, foreignObject, font or external reference, and the 'not a measurement' label. Nothing checks colour. The illustration in #318 (ccc7e079, docs/assets/oscilla-signal-path.svg) already uses #ffb020 three times: the evidence card stroke, the UNCALIBRATED ring and its text. That value appears in no file under src/; the nearest token is --osc-orange #fcad38. The pack's P02 asks for a test that detects colours outside the identity. A check that every fill and stroke value of a docs/assets SVG is a value of src/styles/tokens.css would enforce the invariant, and the stray amber would fail it."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "P006"
+      because: "The invariant now names src/styles/tokens.css, P006's acceptance adds the colour check to readme-landing-art.test.mjs, and #318 replaces #ffb020 with --osc-orange #fcad38 (2026-10-30)."
+  - id: readme-render-proof-is-unrecorded
+    class: delivery_verification
+    subject: "P006"
+    finding: "The only proof that GitHub renders the diagram is 'seen before merge'. That observation leaves no evidence. mermaidFailures in #318 checks only that each edge's endpoints are declared with '['. It does not validate the syntax: an unbalanced quote or a bad label renders on GitHub as 'Unable to render rich display' and passes the test. It also checks only the first hop of a chained edge (a --> b --> c). The pack asks for the README to be readable in dark and light and on a phone. P006 asks for neither, and its SVG has a fixed navy background. The tagline check (indexOf(TAGLINE) > indexOf(SENTENCE)) passes even if the tagline sits 800 lines below the sentence. The evidence should record the rendered blob URL at the merged commit, with screenshots in both GitHub themes and at phone width. Alternatively, the issue can name these as manual checks with their limits."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "P006"
+      because: "The render check is recorded as a pull-request comment (#318, 2026-10-30: SVG and flowchart rendered, mermaid 10.9.1 and 11.4.1 parse it) and P006's acceptance names that record and the themes; the edge check covers the unchained edges the diagram uses."
+  - id: screenshot-and-social-preview-go-stale
+    class: regression_risk
+    subject: "P007"
+    finding: "README's site/og-image.png alt text lists 'spectrogram ... microphone analyzer, sequencer and device limits', and #318 adds 'the screenshot below is the real built app'. Q004 removes the separate Spectrogram panel from the first screen. P002 (its scope has no site/), F003 and P008 will all change the screen that npm run social captures, and 'npm run social -- --check' verifies only the head block in src/index.html, not the PNG. After those land, the caption and alt text will describe an older app. The social preview P007 asks the owner to upload by hand is a copy of the PNG, and it will drift the same way. The pack says to avoid divergent hand-maintained OG assets. Make P007 depend on P002 (and P008, if it stays in the first screen), or have its evidence compare the uploaded image with the committed site/og-image.png. Whichever issue next changes the captured screen should regenerate the PNG and README's alt text."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "P007"
+      because: "P007 depends on P002 and uploads the card npm run social regenerates after it; P008 regenerates site/og-image.png when it changes the first screen's pixels (2026-10-30)."
+  - id: p008-verification-gaps
+    class: missed_requirement
+    subject: "P008"
+    finding: "P008 changes src and dist on the first screen, but its acceptance omits checks that the rules and the pack require. (1) Accessibility: keyboard reach, visible focus, reduced motion, dark and light themes, touch at 390x844. The pack's P01 asks for a criterion, and P05 for the checks. (2) The Flowbite Pro ratchet (tests/unit/ui-flowbite-pro.test.mjs, project.ui-uses-flowbite-pro). (3) tests/browser/live-smoke.cjs, which reads the first screen after every Pages deploy, and which review-verdict guards. It is not in P008's scope. P002's critique (live-smoke-and-visual-gate-assume-the-playground) found exactly this. (4) A reviewer's verdict if the Measure entry touches the guarded src/js/ui/measure.js. (5) A claim in docs/CLAIMS.yaml or a use case under .ai/repo/use-cases for the new visitor flow; none exists for 'first visit to a workspace'. (6) The fail-first clause points at the wrong property. 'No AudioContext starts and no getUserMedia call is made until pressed' already holds on the merge base, so a unit test of it passes there and cannot fail first. The fail-first test has to be about the new entries routing."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "P008"
+      because: "P008's acceptance adds keyboard and visible focus in dark and light, the Flowbite Pro ratchet, live-smoke in scope, review verdicts for guarded paths, a claim naming the new suite, and a fail-first test on the property it adds (each part names an inventory route that opens its workspace) (2026-10-30)."
+  - id: instrument-entry-undefined
+    class: unproven_assumption
+    subject: "public-discoverability#in-app-entry"
+    finding: "The criterion and P008 ask for 'one entry each to Measure, the instrument and the Studio' from inside the Playground. 'The instrument' names no route. The Playground is itself the V1 instrument (src/js/core/instrument.js; P002's 'the instrument's direct path'), so an entry to it from inside it is circular. docs/GLOSSARY.md has no entry for the term. The owner's instrument direction of 2026-10-29 (playable-instrument) points at the Studio and the synthesizer, and the Studio already has its own entry. A browser row cannot check an undefined target. Name the hash each entry opens (for example #m=measure, #m=studio, and a stated third target), drawn from the route inventory."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "P008"
+      because: "The 'instrument' entry is dropped: the Playground is the instrument and the first screen; P008's ways lead to Measure and the Studio (2026-10-30)."
+  - id: route-lists-multiply
+    class: unnecessary_work
+    subject: "P008"
+    finding: "The same workspace edges are about to be listed by hand in four or five places. E028 (#286) puts the README landing links in a test. U006 adds the Related table in src/js. U010 (#294) adds cross-links. U063 (#317) builds the navigable-surface census. P002 and F002 carry the entry-path inventory. P008 would add its own three entries. The pack's Phase G asks for one relationships definition that the README links, the in-app actions and the tests all consume. The Playground to Measure edge in particular is one P08 of the pack assigns to U006 and the cross-links work. P008 should read its targets from the U006 table or the shared inventory, rather than adding another list that can drift."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "P008"
+      because: "P008 reads its targets from the entry-path inventory P002 commits and adds no hand-written route list (2026-10-30)."
+  - id: p008-shares-budget-headroom-unbounded
+    class: regression_risk
+    subject: "P008"
+    finding: "'The gzip delta is measured and within the budget' gives no ceiling. The headroom is shared. Q014 (open) gives M062 a cap of 55 to 60 KB and leaves about 95 KB of the 1 000 000 B budget for F002 to F012 and the K-line. P008 adds a Pro intro, three CTAs and a live preview into that same headroom, outside Q014's arithmetic. The first issue to overrun it will be refused, possibly a chart slice the owner prioritised. P008 should state a byte ceiling, as the M062 slices do, and count it against Q014's remainder."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "P008"
+      because: "P008 carries a ceiling of 10 000 B gzip, counted against the headroom Q014 divides (2026-10-30)."
+  - id: intent-misses-pack-criteria-and-non-goals
+    class: missed_requirement
+    subject: "public-discoverability"
+    finding: "The pack's P01 asks for satisfaction criteria covering live deployed verification, accessibility, visual acceptances, and licence and social metadata. The intent has none for the deployed site: no check that README's deep links or P008's entries work on https://korczis.github.io/oscilla/, though live-smoke and verify-deploy exist for that. It has none for accessibility. It has none for licence and contribution links, which P04 lists. Its non-goals leave out 'a new backend' and 'a generic dashboard', which P01 names. The first invariant cites tests/unit/positioning-consistency.test.mjs for the tagline, but that test checks only the README's opening paragraph; the tagline's position is checked by readme-landing-art.test.mjs. The same invariant says the paragraph is the sentence 'verbatim', while the test checks that it contains the sentence and stays within 200 characters."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "P008"
+      because: "The intent adds live-and-accessible (deployed deep links, keyboard and themes, proven by public-entry.cjs --live), non-goals for a backend and a generic dashboard, and invariant 1 now says 'contains' and cites readme-landing-art.test.mjs for the tagline; licence and contribution links already stand in README's Licences and Development sections (2026-10-30)."
+  - id: governance-omits-runtime-adrs
+    class: surface_missing
+    subject: "public-discoverability"
+    finding: "P009 measures runtime engines and P008 adds a preview that must not start audio. Yet the governance omits ADR 0012 (self-contained runtime and its stack), ADR 0013 (how a vendor library ships, and its licence), project.audio-engine-discipline (the preview must use the one engine and start only on a gesture), and project.fail-first and project.review-verdict. P008 needs those last two, and its acceptance invokes fail-first by name."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "P008"
+      because: "The governance adds ADR 0012, ADR 0013, project.audio-engine-discipline, project.fail-first and project.review-verdict (2026-10-30)."
+  - id: m098-couples-fast-and-slow-slices
+    class: delivery_verification
+    subject: "M098"
+    finding: "M098's acceptance is 'P006, P007, P008 and P009 are done'. P006 and P007 can finish within days. P008 sits behind P002, which depends on Q004, Q002, P003 and F003. F003 depends on F002, F002 on F001, and F001 is still an open PR (#253). The milestone will show low progress long after the public-face work that can ship is done, which is the same coupling the first-run-experience critique found in M052. Either accept that and say so in the milestone, or place P008 under M050 beside P002, which it extends."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "P008"
+      because: "P008 moves to its own milestone M099 under this intent; M098 completes with P006, P007, P009 and Q070 (2026-10-30)."
