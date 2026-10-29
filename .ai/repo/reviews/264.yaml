@@ -26,14 +26,37 @@
 #   V2 Sequencer's own save is refused ("durationMs is 100 in the file but would open as 99.999").
 #   Compare durationMs within the rounding of the beats (or round before deriving), and add the
 #   20 BPM case as a test.
+#
+# Re-review of the fix delta (head a73a12a4, one commit on 3a3c7220; digest 8a19e8d8...7b0c, the
+# same 3 guarded paths): two lenses and a skeptic per finding (6 agents, none refuted). F1, F2, F3
+# and F5 are fixed: 143,010 Sequencer saves across every typed duration, tempo 20-300 BPM, switches
+# to beats and tempo changes all open, at the canonical durationMs and from their beats; every
+# Object.prototype name and non-string type is refused at blocks[i].type with no throw and no
+# model; ids failing ID_PATTERN are refused; the browser check passes in chromium, firefox and
+# webkit; dist is the build of the sources.
+#
+# Verdict: merge. No P0 or P1. Two P2s remain at the endpoints of the new tolerance, worth fixing
+# before landing: derivableMs takes the beats preimage as the closed interval beats +/- 0.5e-6,
+# while model.js rounds half-up with a +EPSILON bias, so the true preimage is about
+# [beats - half - EPSILON, beats + half - EPSILON). At tempos where a beats boundary lands on a
+# millisecond boundary (20 and 60 BPM), the low end refuses a typed-beats save (F6), and the high
+# end accepts a hand-edited durationMs no save can produce, which opens 0.002 ms different (F7).
+# Search the doubles u with round(u, 6) === beats and compare against round(clamp(u * msPerBeat), 3)
+# at those exact endpoints, lower inclusive and upper exclusive; the test at
+# v31-studio-sequence-file.test.mjs:331 asserts the F6 refusal and its comment at :328 is wrong on
+# both ends.
 schema: review-verdict/v1
 pr: 264
 verdict: merge
 reviewer: prismatic-majordomus-f3 (claude-code 1f47a36e)
-content: 7aacee4b81d1d65dcfc659b7b2d72b236979195a2a4dcafdf1c4eb9c335c90a0
+content: 8a19e8d8b377820834bc52a242900591abff16ff55a5f314fe6f68579c7f0b0c
 findings:
-  - { id: F1, severity: P2, status: open, title: "sequence-import.js:357 the fixed-point check refuses the V2 Sequencer's own save when a block is tempo-locked at a slow tempo (20-40 BPM) or has beats with more than 6 decimals (normalizeBlock derives durationMs from unrounded beats); compare within the beats' rounding" }
-  - { id: F2, severity: P3, status: open, title: "sequence-import.js:356 a block type naming an Object.prototype member (toString, constructor, valueOf, hasOwnProperty, __proto__) makes parseSequence throw TypeError before the hasOwn guard runs, and importStudioFile has no try/catch, so the import throws instead of refusing; documented as never throws" }
-  - { id: F3, severity: P3, status: open, title: "sequence-import.js:49 a block id valid in V2 but not in Studio's id pattern is renumbered without notice, so 'opens as saved or not at all' and the exact round trip do not hold for such ids" }
+  - { id: F1, severity: P2, status: closed, title: "the fixed-point check refused the Sequencer's own tempo-locked save; fixed in a73a12a4 (derivableMs), endpoints in F6 and F7" }
+  - { id: F2, severity: P3, status: closed, title: "an Object.prototype block type threw out of the import; fixed, refused at blocks[i].type with no model" }
+  - { id: F3, severity: P3, status: closed, title: "ids failing ID_PATTERN were renumbered; fixed, refused at blocks[i].id" }
   - { id: F4, severity: P3, status: open, title: "sequence-import.js:318 a bare V2 file records no sample rate and is read at the Studio's rate (44.1 kHz before audio starts), so a 48 kHz export with a 22 kHz tone is refused after a reload and opens once audio runs" }
-  - { id: F5, severity: P3, status: open, title: "docs/GLOSSARY.md:19 the entry was rewrapped to a 128-character line" }
+  - { id: F5, severity: P3, status: closed, title: "GLOSSARY wrap; fixed" }
+  - { id: F6, severity: P2, status: open, title: "sequence-import.js:264 derivableMs ignores model.js round's +EPSILON bias, so at 20 and 60 BPM a save from a typed beats value (e.g. 0.03333249999999999 at 20 BPM, saved 99.997 ms / 0.033333) is refused; the test at :331 asserts that refusal" }
+  - { id: F7, severity: P2, status: open, title: "sequence-import.js:265 the upper end beats+0.5e-6 is taken as part of the preimage, so a hand-edited durationMs one 0.001 step past any save (100.001 ms with 0.033333 beats at 20 BPM) is accepted and opens as 99.999 ms" }
+  - { id: F8, severity: P3, status: open, title: "sequence-import.js:276 a one-element list type ([\"tone\"]) passes the own-key check (String coercion) and is refused with a self-contradictory message" }
+  - { id: F9, severity: P3, status: open, title: "sequence-import.js:53 CLIP_ID_MAX hand-copies ID_PATTERN's length, and the F3 refusal message depends on it; derive it from the pattern or export it beside it" }
