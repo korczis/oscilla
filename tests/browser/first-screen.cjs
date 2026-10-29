@@ -41,6 +41,32 @@
 //                   engine, source and runtime nodes
 //   no-console-errors
 //
+// The first screen Q004 chose (option A: the Playground, lighter, with the measurement in view,
+// no guided path; docs/first-screen-options.md section 5; claim first-screen-layout), on a
+// first visit (fresh storage, the listening safety notice shown):
+//   layout desktop  at 1536x1024 the h1 is the Q002 sentence, shown above every panel; the
+//                   Playground shows exactly Source & Pattern, Signal analysis, Microphone
+//                   Analyzer and Device & Limits side by side in that order, under them the
+//                   Guided measurement row across the full width (seven steps, Check setup
+//                   enabled, Frequency and Level UNCALIBRATED) entirely in the viewport, and
+//                   under it the Pattern Sequencer with the compact Studio beside it, the
+//                   compact Studio starting in the viewport; the Spectrogram panel, Filter Lab,
+//                   Envelope, Additive Synthesis, Phase & Stereo, Bioacoustics and the other
+//                   MEASURE panels are not shown, nor anything else (no guided path)
+//   layout phone    at 390x844 (a phone: isMobile, hasTouch) the same order top to bottom: the
+//                   sentence, Source & Pattern, Signal analysis, Guided measurement, the compact
+//                   Studio; the six frequency steps and Mode folded behind Source & Pattern's
+//                   own disclosures (open at 1536x1024, their summaries unseen), the steps shown
+//                   once their summary is pressed; the measurement steps folded to the current
+//                   one
+//   layout primary  Check setup pressed on the Playground (?measure=loopback, TEST CONTEXT, so
+//                   no microphone is asked for) opens MEASURE (#m=measure) with focus still on
+//                   the button (WebKit: on the MEASURE view holding it), and the setup check
+//                   runs there to READY
+//   layout others   the rest of the product is where it was: MEASURE shows its seven panels
+//                   with the sentence visually hidden, the Analyzer shows the Spectrogram panel,
+//                   Synthesis the Envelope and Filter Lab the filter
+//
 // Waits are condition polls through lib/wait.cjs with a named wall-clock deadline (rule
 // project.bounded-test-timing); the run goes through lib/suite.cjs (project.suite-harness).
 'use strict';
@@ -575,10 +601,250 @@ async function firstPlay(ctx) {
   }
 }
 
+// ------------------------------------------------------------------------------ Q004 layout
+// The positioning sentence Q002 recorded (scripts/social-assets.mjs DESCRIPTION; the unit test
+// tests/unit/positioning-consistency.test.mjs holds the two equal).
+const SENTENCE = 'A zero-install, scientifically honest acoustic laboratory in your browser: '
+  + 'generate, measure and reproduce sound experiments, and know how far each result can be '
+  + 'trusted.';
+// What the first screen shows (in its rows) and what leaves it, by element id.
+const SHOWN = ['osc-panel-source', 'osc-panel-analysis', 'osc-panel-mic', 'osc-panel-device',
+  'osc-measure-flow', 'osc-panel-sequencer', 'osc-panel-studio'];
+const LEFT = ['osc-panel-spectrogram', 'osc-panel-filter', 'osc-panel-envelope',
+  'osc-panel-additive', 'osc-panel-phase', 'osc-panel-bio', 'osc-panel-dual',
+  'osc-measure-stimulus', 'osc-measure-input', 'osc-measure-quality', 'osc-measure-result',
+  'osc-measure-setup', 'osc-measure-experiment'];
+const PX = 2; // rows align within 2 px (sub-pixel layout differs between engines)
+
+/** In-page: the boxes of the first screen's parts, the sentence and the measurement row. */
+function layoutFacts() {
+  const shown = (el) => !!el && el.getClientRects().length > 0
+    && getComputedStyle(el).visibility !== 'hidden'
+    && el.getBoundingClientRect().width > 1 && el.getBoundingClientRect().height > 1;
+  const box = (el) => {
+    const r = el.getBoundingClientRect();
+    return { top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+  };
+  const main = document.getElementById('osc-main');
+  const h1 = main.querySelector('h1');
+  // Every shown panel of the main region (a section card that is not inside another panel).
+  const panels = [...main.querySelectorAll('section.osc-panel[id]')]
+    .filter((p) => shown(p) && !p.parentElement.closest('section.osc-panel'))
+    .map((p) => p.id);
+  const boxes = {};
+  for (const p of main.querySelectorAll('section[id]')) if (shown(p)) boxes[p.id] = box(p);
+  const steps = [...document.querySelectorAll('[data-osc="measure.step"]')].filter(shown);
+  const primary = document.querySelector('[data-osc="measure.primary"]');
+  const ind = (k) => {
+    const el = document.querySelector(`[data-osc="measure.${k}"]`);
+    return shown(el) ? el.textContent.replace(/\s+/g, ' ').trim() : null;
+  };
+  return {
+    vw: window.innerWidth, vh: window.innerHeight, workspace: window.OSCILLA.app.workspace,
+    safety: shown(document.getElementById('osc-safety')),
+    h1: shown(h1) ? { text: h1.textContent.replace(/\s+/g, ' ').trim(), ...box(h1) } : null,
+    panels, boxes,
+    steps: steps.map((s) => ({ id: s.dataset.step, current: s.getAttribute('aria-current') })),
+    stepsInDom: document.querySelectorAll('[data-osc="measure.step"]').length,
+    primary: shown(primary) ? { text: primary.textContent.trim(), enabled: !primary.disabled }
+      : null,
+    freq: ind('freqIndicator'), level: ind('levelIndicator'),
+    // Source & Pattern's own disclosures: the six frequency steps and Mode.
+    folds: ['osc-fine-fold', 'osc-mode-fold'].map((id) => {
+      const d = document.getElementById(id);
+      return { id, open: !!d && d.open, summary: !!d && shown(d.querySelector('summary')) };
+    }),
+  };
+}
+
+async function layoutDesktop(ctx) {
+  const page = await H.open(ctx.context, ctx.base);
+  try {
+    const f = await page.evaluate(layoutFacts);
+    const b = f.boxes;
+    const wrong = [];
+    if (!f.safety) wrong.push('not a first visit: the safety notice is not shown');
+    if (!f.h1) wrong.push('the h1 is not shown');
+    else if (f.h1.text !== SENTENCE) wrong.push(`h1 "${f.h1.text}"`);
+    const extra = f.panels.filter((p) => !SHOWN.includes(p));
+    const missing = SHOWN.filter((p) => !f.panels.includes(p));
+    if (extra.length) wrong.push(`shown but not chosen: ${extra.join(', ')}`);
+    if (missing.length) wrong.push(`chosen but not shown: ${missing.join(', ')}`);
+    const left = LEFT.filter((p) => b[p]);
+    if (left.length) wrong.push(`still on the first screen: ${left.join(', ')}`);
+    if (!wrong.length) {
+      const [src, ana, mic, dev] = ['osc-panel-source', 'osc-panel-analysis', 'osc-panel-mic',
+        'osc-panel-device'].map((id) => b[id]);
+      const flow = b['osc-measure-flow'];
+      const seq = b['osc-panel-sequencer'];
+      const st = b['osc-panel-studio'];
+      const top = Math.min(src.top, ana.top, mic.top, dev.top);
+      if (f.h1.bottom > top) wrong.push(`the h1 (bottom ${f.h1.bottom}) is not above the panels`);
+      if ([ana, mic, dev].some((x) => Math.abs(x.top - src.top) > PX)
+        || !(src.right <= ana.left && ana.right <= mic.left && mic.right <= dev.left)) {
+        wrong.push('row 1 is not Source, Analysis, Microphone, Device side by side');
+      }
+      const row1 = Math.max(src.bottom, ana.bottom, mic.bottom, dev.bottom);
+      if (flow.top < row1) wrong.push(`the measurement row (top ${flow.top}) overlaps row 1`);
+      if (Math.abs(flow.left - src.left) > PX || Math.abs(flow.right - dev.right) > PX) {
+        wrong.push(`the measurement row is not full width (${flow.left}-${flow.right}, row 1 `
+          + `${src.left}-${dev.right})`);
+      }
+      if (flow.bottom > f.vh) {
+        wrong.push(`the measurement row ends below the viewport (${flow.bottom} > ${f.vh})`);
+      }
+      if (Math.abs(seq.top - st.top) > PX || !(seq.right <= st.left)) {
+        wrong.push('the Pattern Sequencer and the compact Studio are not side by side');
+      }
+      if (Math.min(seq.top, st.top) < flow.bottom) wrong.push('row 3 overlaps the measurement row');
+      if (st.top >= f.vh) wrong.push(`the compact Studio starts below the viewport (${st.top})`);
+    }
+    if (f.steps.length !== 7) wrong.push(`${f.steps.length} measurement steps shown`);
+    if (!f.primary || f.primary.text !== 'Check setup' || !f.primary.enabled) {
+      wrong.push(`primary ${JSON.stringify(f.primary)}`);
+    }
+    if (!/UNCALIBRATED/.test(f.freq || '') || !/UNCALIBRATED/.test(f.level || '')) {
+      wrong.push(`indicators ${f.freq} / ${f.level}`);
+    }
+    if (f.folds.some((d) => !d.open || d.summary)) {
+      wrong.push(`the steps and Mode are not open as before: ${JSON.stringify(f.folds)}`);
+    }
+    check(ctx.leg, 'layout desktop: the sentence, then Source/Analysis/Microphone/Device, the '
+      + 'measurement row in view, then Sequencer and compact Studio', !wrong.length,
+    `${wrong.join('; ')} :: ${JSON.stringify({ h1: f.h1, panels: f.panels })}`);
+  } finally {
+    await page.close().catch(() => {});
+  }
+}
+
+async function layoutPhone(ctx) {
+  // Firefox has no mobile emulation (Playwright refuses isMobile there): a 390 px touch viewport.
+  const phone = await ctx.browser.newContext({ viewport: PHONE, hasTouch: true,
+    ...(ctx.engine === 'firefox' ? {} : { isMobile: true }) });
+  await phone.addInitScript(recordNotices);
+  ctx.watch(phone);
+  try {
+    const page = await H.open(phone, ctx.base);
+    const f = await page.evaluate(layoutFacts);
+    const b = f.boxes;
+    const order = ['osc-panel-source', 'osc-panel-analysis', 'osc-measure-flow',
+      'osc-panel-studio'];
+    const wrong = [];
+    if (!f.h1) wrong.push('the h1 is not shown');
+    else if (f.h1.text !== SENTENCE) wrong.push(`h1 "${f.h1.text}"`);
+    const missing = order.filter((p) => !b[p]);
+    if (missing.length) wrong.push(`not shown: ${missing.join(', ')}`);
+    const extra = f.panels.filter((p) => !order.includes(p));
+    if (extra.length) wrong.push(`shown at 390 px but not chosen: ${extra.join(', ')}`);
+    if (!wrong.length) {
+      const tops = [f.h1.top, ...order.map((p) => b[p].top)];
+      if (tops.some((t, i) => i > 0 && t < tops[i - 1])) {
+        wrong.push(`not top to bottom: sentence, ${order.join(', ')} (${tops.join(', ')})`);
+      }
+    }
+    if (f.steps.length !== 1 || f.steps[0].current !== 'step' || f.stepsInDom !== 7) {
+      wrong.push(`steps not folded to the current one: ${JSON.stringify(f.steps)} of `
+        + `${f.stepsInDom}`);
+    }
+    if (!f.primary || f.primary.text !== 'Check setup') {
+      wrong.push(`primary ${JSON.stringify(f.primary)}`);
+    }
+    if (f.folds.some((d) => d.open || !d.summary)) {
+      wrong.push(`the steps and Mode are not folded: ${JSON.stringify(f.folds)}`);
+    }
+    // Folded, they open from their own summary.
+    await page.click('#osc-fine-fold > summary', { timeout: NAV_MS })
+      .catch((e) => wrong.push(`the steps' summary: ${String(e.message).split('\n')[0]}`));
+    const steps = await page.evaluate(() => [...document.querySelectorAll('[data-osc="source.step"]')]
+      .filter((b) => b.getBoundingClientRect().height > 0).length);
+    if (steps !== 6) wrong.push(`${steps} frequency steps shown after opening the disclosure`);
+    check(ctx.leg, 'layout phone: the sentence, Source, Analysis, the measurement (current '
+      + 'step), compact Studio, top to bottom', !wrong.length,
+    `${wrong.join('; ')} :: ${JSON.stringify({ h1: f.h1, panels: f.panels, steps: f.steps })}`);
+  } finally {
+    await phone.close().catch(() => {});
+  }
+}
+
+async function layoutPrimary(ctx) {
+  const page = await H.open(ctx.context, H.urlOf(ctx.base, '?measure=loopback', ''));
+  try {
+    const before = await H.state(page);
+    const wrong = [];
+    await page.click('[data-osc="measure.primary"]', { timeout: NAV_MS })
+      .catch((e) => wrong.push(`Check setup not pressable: ${String(e.message).split('\n')[0]}`));
+    const now = async () => ({ ...(await H.state(page)),
+      ready: await page.evaluate(() => window.OSCILLA.measure.state) });
+    const s = await until(async () => {
+      const st = await now();
+      return st.workspace === 'measure' && st.ready === 'READY' ? st : null;
+    }, { ms: READY_MS, what: 'Check setup from the Playground reaches READY in MEASURE' })
+      .catch(() => now());
+    if (before.workspace !== 'playground') wrong.push(`started in ${before.workspace}`);
+    if (s.workspace !== 'measure' || s.hash !== '#m=measure') {
+      wrong.push(`landed in ${s.workspace} ${s.hash}`);
+    }
+    if (s.ready !== 'READY') wrong.push(`measurement state ${s.ready}`);
+    // Focus stays where the press was: on the button, or (WebKit, whose click does not focus a
+    // button) on the MEASURE view that holds it, never dropped to <body>.
+    if (!['BUTTON#osc-measure-primary[measure.primary]', 'SECTION#osc-view-measure[measure-view]']
+      .includes(s.focus)) wrong.push(`focus ${s.focus}`);
+    if (!s.testContext) wrong.push('the TEST CONTEXT banner is not shown');
+    check(ctx.leg, 'layout primary: Check setup on the Playground opens MEASURE and runs there',
+      !wrong.length, `${wrong.join('; ')} :: ${H.brief(s)}`);
+  } finally {
+    await page.close().catch(() => {});
+  }
+}
+
+async function layoutOthers(ctx) {
+  const rows = [
+    { hash: 'm=measure', shown: ['osc-measure-flow', 'osc-measure-stimulus', 'osc-measure-input',
+      'osc-measure-quality', 'osc-measure-result', 'osc-measure-setup',
+      'osc-measure-experiment'] },
+    { hash: 'm=analyzer', shown: ['osc-panel-spectrogram', 'osc-panel-analysis'],
+      hidden: ['osc-measure-flow'] },
+    { hash: 'm=synthesis', shown: ['osc-panel-envelope', 'osc-panel-additive'],
+      hidden: ['osc-measure-flow'] },
+    { hash: 'm=filter', shown: ['osc-panel-filter'], hidden: ['osc-measure-flow'] },
+  ];
+  for (const row of rows) {
+    const page = await H.open(ctx.context, H.urlOf(ctx.base, '', row.hash));
+    try {
+      const f = await until(async () => {
+        const v = await page.evaluate(layoutFacts);
+        return v.workspace === row.hash.slice(2) ? v : null;
+      }, { ms: NAV_MS, what: `#${row.hash} opens` }).catch(() => page.evaluate(layoutFacts));
+      const wrong = [];
+      const missing = row.shown.filter((p) => !f.boxes[p]);
+      if (missing.length) wrong.push(`not shown: ${missing.join(', ')}`);
+      const extra = (row.hidden || []).filter((p) => f.boxes[p]);
+      if (extra.length) wrong.push(`shown: ${extra.join(', ')}`);
+      if (f.h1) wrong.push('the sentence is shown (the workspace heading leads here)');
+      check(ctx.leg, `layout others: #${row.hash} shows what it showed before`, !wrong.length,
+        `${wrong.join('; ')} :: ${JSON.stringify(f.panels)}`);
+    } finally {
+      await page.close().catch(() => {});
+    }
+  }
+}
+
+async function layout(ctx) {
+  for (const [name, fn] of [['desktop', layoutDesktop], ['phone', layoutPhone],
+    ['primary', layoutPrimary], ['others', layoutOthers]]) {
+    try {
+      await fn(ctx);
+    } catch (err) {
+      check(ctx.leg, `layout ${name} ran to completion`, false,
+        String(err && err.message).split('\n')[0]);
+    }
+  }
+}
+
 const CHECKS = [
   ['load', entryLoad], ['link', entryLink], ['direct-path', directPath],
   ['studio-widget', studioWidget], ['compact-studio', compactStudio], ['skip-link', skipLink],
-  ['first-play', firstPlay],
+  ['first-play', firstPlay], ['layout', layout],
 ];
 
 // ------------------------------------------------------------------------------ one leg

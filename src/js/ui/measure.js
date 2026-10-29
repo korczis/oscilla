@@ -1677,6 +1677,10 @@ export function createMeasureUi(svc) {
     async measureRunPrimary() {
       const a = this.meas.flow.primaryAction;
       if (!a || !a.enabled) return;
+      // The Playground shows this flow as its measurement row (P002, Q004 option A), but the
+      // measurement runs in MEASURE: the action opens it first, in the same gesture, so the
+      // quality reasons, the result and Stop are in view (and leaving MEASURE aborts, main.js).
+      if (this.workspace !== 'measure') this.setWorkspace('measure');
       switch (a.id) {
         case 'preflight': await runPreflight(this); break;
         case 'measure': await runMeasure(this); break;
