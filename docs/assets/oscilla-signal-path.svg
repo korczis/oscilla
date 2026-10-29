@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 440" width="1200" height="440" role="img" aria-labelledby="t d" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">
+<title id="t">OSCILLA signal path: generate, observe, measure, trust</title>
+<desc id="d">An illustration, not a measurement. A generated signal on the left passes through a chain of three Signal Path nodes (oscillator, envelope, filter), then splits into a waveform view and a spectrum view, and ends in an evidence card that names what a real OSCILLA result carries: its valid range, its quality reasons and whether its level is calibrated.</desc>
+<rect width="1200" height="440" fill="#020b15"/>
+<line x1="0" y1="0" x2="0" y2="440" stroke="#14222f" stroke-width="1.5" opacity="0.6"/>
+<line x1="40" y1="0" x2="40" y2="440" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="80" y1="0" x2="80" y2="440" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="120" y1="0" x2="120" y2="440" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="160" y1="0" x2="160" y2="440" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="200" y1="0" x2="200" y2="440" stroke="#14222f" stroke-width="1.5" opacity="0.6"/>
+<line x1="240" y1="0" x2="240" y2="440" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="280" y1="0" x2="280" y2="440" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="320" y1="0" x2="320" y2="440" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="360" y1="0" x2="360" y2="440" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="400" y1="0" x2="400" y2="440" stroke="#14222f" stroke-width="1.5" opacity="0.6"/>
+<line x1="440" y1="0" x2="440" y2="440" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="480" y1="0" x2="480" y2="440" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="520" y1="0" x2="520" y2="440" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="560" y1="0" x2="560" y2="440" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="600" y1="0" x2="600" y2="440" stroke="#14222f" stroke-width="1.5" opacity="0.6"/>
+<line x1="640" y1="0" x2="640" y2="440" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="680" y1="0" x2="680" y2="440" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="720" y1="0" x2="720" y2="440" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="760" y1="0" x2="760" y2="440" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="800" y1="0" x2="800" y2="440" stroke="#14222f" stroke-width="1.5" opacity="0.6"/>
+<line x1="840" y1="0" x2="840" y2="440" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="880" y1="0" x2="880" y2="440" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="920" y1="0" x2="920" y2="440" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="960" y1="0" x2="960" y2="440" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="1000" y1="0" x2="1000" y2="440" stroke="#14222f" stroke-width="1.5" opacity="0.6"/>
+<line x1="1040" y1="0" x2="1040" y2="440" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="1080" y1="0" x2="1080" y2="440" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="1120" y1="0" x2="1120" y2="440" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="1160" y1="0" x2="1160" y2="440" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="1200" y1="0" x2="1200" y2="440" stroke="#14222f" stroke-width="1.5" opacity="0.6"/>
+<line x1="0" y1="0" x2="1200" y2="0" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="0" y1="40" x2="1200" y2="40" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="0" y1="80" x2="1200" y2="80" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="0" y1="120" x2="1200" y2="120" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="0" y1="160" x2="1200" y2="160" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="0" y1="200" x2="1200" y2="200" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="0" y1="240" x2="1200" y2="240" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="0" y1="280" x2="1200" y2="280" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="0" y1="320" x2="1200" y2="320" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="0" y1="360" x2="1200" y2="360" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="0" y1="400" x2="1200" y2="400" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<line x1="0" y1="440" x2="1200" y2="440" stroke="#14222f" stroke-width="1" opacity="0.35"/>
+<text x="40" y="52" fill="#f3f6f9" font-size="26" font-weight="700" letter-spacing="4">OSCILLA</text>
+<text x="196" y="52" fill="#94a9bd" font-size="15">See sound. Shape frequency.</text>
+<text x="1160" y="52" fill="#66798d" font-size="11" text-anchor="end" letter-spacing="2">ILLUSTRATION · NOT A MEASUREMENT</text>
+<rect x="40" y="150" width="170" height="140" rx="6" fill="#020a16" stroke="#1b2a3b"/>
+<text x="52" y="172" fill="#c4d2df" font-size="12" letter-spacing="1">GENERATE</text>
+<line x1="52" y1="235" x2="198" y2="235" stroke="#1b2a3b"/>
+<path d="M52 235 L52.9 231 L53.8 227.1 L54.7 223.2 L55.6 219.6 L56.6 216.1 L57.5 212.9 L58.4 210 L59.3 207.5 L60.2 205.3 L61.1 203.6 L62 202.3 L63 201.4 L63.9 201 L64.8 201.1 L65.7 201.7 L66.6 202.7 L67.5 204.1 L68.4 206 L69.3 208.3 L70.2 211 L71.2 214 L72.1 217.2 L73 220.8 L73.9 224.5 L74.8 228.4 L75.7 232.3 L76.6 236.3 L77.5 240.3 L78.5 244.2 L79.4 248 L80.3 251.6 L81.2 255 L82.1 258.1 L83 260.9 L83.9 263.3 L84.8 265.3 L85.8 266.9 L86.7 268.1 L87.6 268.8 L88.5 269 L89.4 268.8 L90.3 268.1 L91.2 266.9 L92.2 265.3 L93.1 263.3 L94 260.9 L94.9 258.1 L95.8 255 L96.7 251.6 L97.6 248 L98.5 244.2 L99.5 240.3 L100.4 236.3 L101.3 232.3 L102.2 228.4 L103.1 224.5 L104 220.8 L104.9 217.2 L105.8 214 L106.8 211 L107.7 208.3 L108.6 206 L109.5 204.1 L110.4 202.7 L111.3 201.7 L112.2 201.1 L113.1 201 L114 201.4 L115 202.3 L115.9 203.6 L116.8 205.3 L117.7 207.5 L118.6 210 L119.5 212.9 L120.4 216.1 L121.3 219.6 L122.3 223.2 L123.2 227.1 L124.1 231 L125 235 L125.9 239 L126.8 242.9 L127.7 246.8 L128.7 250.4 L129.6 253.9 L130.5 257.1 L131.4 260 L132.3 262.5 L133.2 264.7 L134.1 266.4 L135 267.7 L135.9 268.6 L136.9 269 L137.8 268.9 L138.7 268.3 L139.6 267.3 L140.5 265.9 L141.4 264 L142.3 261.7 L143.2 259 L144.2 256 L145.1 252.8 L146 249.2 L146.9 245.5 L147.8 241.6 L148.7 237.7 L149.6 233.7 L150.6 229.7 L151.5 225.8 L152.4 222 L153.3 218.4 L154.2 215 L155.1 211.9 L156 209.1 L156.9 206.7 L157.8 204.7 L158.8 203.1 L159.7 201.9 L160.6 201.2 L161.5 201 L162.4 201.2 L163.3 201.9 L164.2 203.1 L165.2 204.7 L166.1 206.7 L167 209.1 L167.9 211.9 L168.8 215 L169.7 218.4 L170.6 222 L171.5 225.8 L172.4 229.7 L173.4 233.7 L174.3 237.7 L175.2 241.6 L176.1 245.5 L177 249.2 L177.9 252.8 L178.8 256 L179.8 259 L180.7 261.7 L181.6 264 L182.5 265.9 L183.4 267.3 L184.3 268.3 L185.2 268.9 L186.1 269 L187.1 268.6 L188 267.7 L188.9 266.4 L189.8 264.7 L190.7 262.5 L191.6 260 L192.5 257.1 L193.4 253.9 L194.3 250.4 L195.3 246.8 L196.2 242.9 L197.1 239 L198 235" fill="none" stroke="#34db7b" stroke-width="2"/>
+<path d="M210 220 C235 220 235 220 260 220" fill="none" stroke="#34db7b" stroke-width="2" stroke-linecap="round"/>
+<g><rect x="260" y="191" width="118" height="58" rx="6" fill="#06111d" stroke="#12a0f5" stroke-width="1.5"/><circle cx="260" cy="220" r="4" fill="#020b15" stroke="#12a0f5" stroke-width="1.5"/><circle cx="378" cy="220" r="4" fill="#020b15" stroke="#12a0f5" stroke-width="1.5"/><text x="274" y="216" fill="#f3f6f9" font-size="14" font-weight="600">OSC</text><text x="274" y="235" fill="#94a9bd" font-size="11">oscillator</text></g>
+<path d="M378 220 C394 220 394 220 410 220" fill="none" stroke="#12a0f5" stroke-width="2" stroke-linecap="round"/>
+<g><rect x="410" y="191" width="118" height="58" rx="6" fill="#06111d" stroke="#19b8f0" stroke-width="1.5"/><circle cx="410" cy="220" r="4" fill="#020b15" stroke="#19b8f0" stroke-width="1.5"/><circle cx="528" cy="220" r="4" fill="#020b15" stroke="#19b8f0" stroke-width="1.5"/><text x="424" y="216" fill="#f3f6f9" font-size="14" font-weight="600">ENV</text><text x="424" y="235" fill="#94a9bd" font-size="11">envelope</text></g>
+<path d="M528 220 C544 220 544 220 560 220" fill="none" stroke="#19b8f0" stroke-width="2" stroke-linecap="round"/>
+<g><rect x="560" y="191" width="118" height="58" rx="6" fill="#06111d" stroke="#a164fa" stroke-width="1.5"/><circle cx="560" cy="220" r="4" fill="#020b15" stroke="#a164fa" stroke-width="1.5"/><circle cx="678" cy="220" r="4" fill="#020b15" stroke="#a164fa" stroke-width="1.5"/><text x="574" y="216" fill="#f3f6f9" font-size="14" font-weight="600">FILTER</text><text x="574" y="235" fill="#94a9bd" font-size="11">low-pass</text></g>
+<text x="260" y="175" fill="#c4d2df" font-size="12" letter-spacing="1">SIGNAL PATH · the graph on screen is the graph that sounds</text>
+<path d="M678 220 C719 220 719 152 760 152" fill="none" stroke="#a164fa" stroke-width="2" stroke-linecap="round"/>
+<path d="M678 220 C719 220 719 288 760 288" fill="none" stroke="#a164fa" stroke-width="2" stroke-linecap="round"/>
+<rect x="760" y="96" width="200" height="112" rx="6" fill="#020a16" stroke="#1b2a3b"/>
+<text x="772" y="116" fill="#c4d2df" font-size="12" letter-spacing="1">WAVEFORM</text>
+<line x1="772" y1="162" x2="948" y2="162" stroke="#1b2a3b"/>
+<path d="M772 162 L773.1 161.6 L774.2 160.6 L775.3 159.1 L776.4 157.2 L777.5 155.5 L778.6 154 L779.7 153.2 L780.8 153.4 L781.9 154.6 L783 156.9 L784.1 160.3 L785.2 164.5 L786.3 169.3 L787.4 174.1 L788.5 178.6 L789.6 182.3 L790.7 184.6 L791.8 185.3 L792.9 184.1 L794 180.9 L795.1 175.7 L796.2 168.8 L797.3 160.8 L798.4 152.1 L799.5 144.3 L800.6 137.9 L801.7 133.3 L802.8 130.9 L803.9 130.9 L805 133.2 L806.1 137.6 L807.2 143.8 L808.3 151.3 L809.4 159.6 L810.5 168 L811.6 175.8 L812.7 182.6 L813.8 187.7 L814.9 190.9 L816 191.9 L817.1 190.7 L818.2 187.3 L819.3 182.1 L820.4 175.4 L821.5 167.7 L822.6 159.7 L823.7 152 L824.8 145 L825.9 139.4 L827 135.5 L828.1 133.7 L829.2 134 L830.3 136.3 L831.4 140.6 L832.5 146.5 L833.6 153.4 L834.7 160.9 L835.8 168.4 L836.9 175.4 L838 181.3 L839.1 185.7 L840.2 188.3 L841.3 188.9 L842.4 187.5 L843.5 184.2 L844.6 179.3 L845.7 173.1 L846.8 166.1 L847.9 158.9 L849 152 L850.1 146 L851.2 141.1 L852.3 137.9 L853.4 136.5 L854.5 137.1 L855.6 139.5 L856.7 143.5 L857.8 148.9 L858.9 155.2 L860 162 L861.1 168.7 L862.2 174.8 L863.3 179.9 L864.4 183.6 L865.5 185.6 L866.6 185.9 L867.7 184.4 L868.8 181.2 L869.9 176.6 L871 171 L872.1 164.7 L873.2 158.4 L874.3 152.3 L875.4 147.1 L876.5 143 L877.6 140.4 L878.7 139.5 L879.8 140.2 L880.9 142.5 L882 146.3 L883.1 151.2 L884.2 156.9 L885.3 162.9 L886.4 168.7 L887.5 174 L888.6 178.3 L889.7 181.3 L890.8 182.9 L891.9 182.9 L893 181.3 L894.1 178.3 L895.2 174.1 L896.3 169.1 L897.4 163.6 L898.5 158.1 L899.6 152.9 L900.7 148.4 L901.8 145.1 L902.9 143 L904 142.4 L905.1 143.3 L906.2 145.5 L907.3 149 L908.4 153.3 L909.5 158.3 L910.6 163.5 L911.7 168.5 L912.8 172.9 L913.9 176.5 L915 178.9 L916.1 180 L917.2 179.8 L918.3 178.3 L919.4 175.5 L920.5 171.8 L921.6 167.4 L922.7 162.7 L923.8 158 L924.9 153.6 L926 150 L927.1 147.3 L928.2 145.7 L929.3 145.4 L930.4 146.3 L931.5 148.4 L932.6 151.5 L933.7 155.3 L934.8 159.5 L935.9 163.9 L937 168 L938.1 171.6 L939.2 174.5 L940.3 176.4 L941.4 177.1 L942.5 176.8 L943.6 175.3 L944.7 172.9 L945.8 169.7 L946.9 165.9 L948 162" fill="none" stroke="#12a0f5" stroke-width="2"/>
+<rect x="760" y="232" width="200" height="112" rx="6" fill="#020a16" stroke="#1b2a3b"/>
+<text x="772" y="252" fill="#c4d2df" font-size="12" letter-spacing="1">SPECTRUM</text>
+<line x1="772" y1="330" x2="948" y2="330" stroke="#1b2a3b"/>
+<line x1="792" y1="330" x2="792" y2="264" stroke="#a164fa" stroke-width="3" stroke-linecap="round"/>
+<line x1="812" y1="330" x2="812" y2="294.6" stroke="#19b8f0" stroke-width="3" stroke-linecap="round"/>
+<line x1="832" y1="330" x2="832" y2="305.4" stroke="#19b8f0" stroke-width="3" stroke-linecap="round"/>
+<line x1="852" y1="330" x2="852" y2="311" stroke="#19b8f0" stroke-width="3" stroke-linecap="round"/>
+<line x1="872" y1="330" x2="872" y2="314.5" stroke="#19b8f0" stroke-width="3" stroke-linecap="round"/>
+<line x1="892" y1="330" x2="892" y2="316.8" stroke="#19b8f0" stroke-width="3" stroke-linecap="round"/>
+<line x1="912" y1="330" x2="912" y2="318.5" stroke="#19b8f0" stroke-width="3" stroke-linecap="round"/>
+<line x1="932" y1="330" x2="932" y2="319.8" stroke="#19b8f0" stroke-width="3" stroke-linecap="round"/>
+<path d="M960 152 C980 152 980 190 1000 190" fill="none" stroke="#12a0f5" stroke-width="2" stroke-linecap="round"/>
+<path d="M960 288 C980 288 980 250 1000 250" fill="none" stroke="#19b8f0" stroke-width="2" stroke-linecap="round"/>
+<rect x="1000" y="120" width="164" height="200" rx="6" fill="#06111d" stroke="#ffb020" stroke-width="1.5"/>
+<text x="1014" y="146" fill="#f3f6f9" font-size="13" font-weight="600" letter-spacing="1">EVIDENCE</text>
+<circle cx="1020" cy="178" r="5" fill="none" stroke="#34db7b" stroke-width="2"/>
+<text x="1034" y="182" fill="#c4d2df" font-size="12">valid range</text>
+<circle cx="1020" cy="212" r="5" fill="none" stroke="#34db7b" stroke-width="2"/>
+<text x="1034" y="216" fill="#c4d2df" font-size="12">quality reasons</text>
+<circle cx="1020" cy="246" r="5" fill="none" stroke="#34db7b" stroke-width="2"/>
+<text x="1034" y="250" fill="#c4d2df" font-size="12">method named</text>
+<circle cx="1020" cy="280" r="5" fill="none" stroke="#ffb020" stroke-width="2"/>
+<text x="1034" y="284" fill="#ffb020" font-size="12">UNCALIBRATED</text>
+<text x="40" y="388" fill="#94a9bd" font-size="13" letter-spacing="1">generate</text>
+<text x="124.4" y="388" fill="#66798d" font-size="13">→</text>
+<text x="154.4" y="388" fill="#94a9bd" font-size="13" letter-spacing="1">observe</text>
+<text x="230" y="388" fill="#66798d" font-size="13">→</text>
+<text x="260" y="388" fill="#94a9bd" font-size="13" letter-spacing="1">measure</text>
+<text x="335.6" y="388" fill="#66798d" font-size="13">→</text>
+<text x="365.6" y="388" fill="#94a9bd" font-size="13" letter-spacing="1">interpret</text>
+<text x="458.8" y="388" fill="#66798d" font-size="13">→</text>
+<text x="488.8" y="388" fill="#94a9bd" font-size="13" letter-spacing="1">save and repeat</text>
+</svg>

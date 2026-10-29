@@ -4,6 +4,10 @@
 
 A zero-install, scientifically honest acoustic laboratory in your browser: generate, measure and reproduce sound experiments, and know how far each result can be trusted.
 
+**See sound. Shape frequency.**
+
+![Illustration of OSCILLA's signal path: a generated sine passes through oscillator, envelope and filter nodes, splits into a waveform view and a spectrum view, and ends in an evidence card naming the valid range, the quality reasons, the method and the UNCALIBRATED state. It is an illustration, not a measurement.](docs/assets/oscilla-signal-path.svg)
+
 **Try it:** <https://korczis.github.io/oscilla/>. It is one HTML file that loads nothing at
 runtime: no install, no account, nothing sent anywhere, and the same file runs when you open
 [`dist/index.html`](dist/index.html) from disk (claims `dist-self-contained`,
@@ -51,6 +55,21 @@ From one static file and with no account:
 - save an experiment and repeat it later from its recipe;
 - generate tones, sweeps and sequences and see them as waveform, spectrum and spectrogram;
 - patch a signal graph in the Studio and run it.
+
+### From a tone to a result you can trust
+
+```mermaid
+flowchart LR
+  gen["Generate<br/>tone, sweep or sequence"] -->|"listen and watch"| obs["Observe<br/>waveform, spectrum, spectrogram"]
+  obs -->|"play a log sweep through<br/>speaker, room and microphone"| mea["Measure<br/>transfer function, impulse response, RTA"]
+  mea -->|"valid range and<br/>quality reasons"| int["Interpret<br/>relative dB until the level is calibrated"]
+  int -->|"save the run"| exp["Save and repeat<br/>an experiment reruns from its recipe"]
+  exp -->|"two setups or positions"| cmp["Compare<br/>every difference between records named"]
+  gen -.->|"the same engine, as a patch"| stu["Studio<br/>the graph on screen is the graph that sounds"]
+```
+
+The illustration above is drawn, not measured. The screenshot below is the real built app,
+captured by `npm run social` from `dist/index.html`:
 
 ![OSCILLA playing a 440 Hz sine: source, waveform, relative spectrum, spectrogram, microphone analyzer, sequencer and device limits](site/og-image.png)
 
