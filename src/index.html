@@ -1125,7 +1125,8 @@
               <label class="osc-label" for="osc-stereo-pan">Pan</label>
               <input class="osc-slider osc-slider--sm" id="osc-stereo-pan" type="range" min="-1"
                 max="1" step="0.01" value="0" style="--osc-fill: 50%" data-osc="stereo.pan"
-                aria-valuetext="Centre">
+                aria-valuetext="Centre" :disabled="source !== 'dual' || dual.stereo"
+                aria-describedby="osc-stereo-pan-why">
               <span class="osc-label" id="osc-stereo-route-label">Output</span>
               <div class="osc-seg osc-stereo-route" role="radiogroup"
                 aria-labelledby="osc-stereo-route-label">
@@ -1138,6 +1139,12 @@
               </div>
             </div>
           </div>
+          <p id="osc-stereo-pan-why" hidden
+            :hidden="!(tabs.phase === 'stereo' && (source !== 'dual' || dual.stereo))"
+            x-text="source !== 'dual'
+              ? 'Pan applies to the A/B dual voice: switch on Play A + B (Dual Oscillator).'
+              : 'Pan applies in Mono output; Stereo output sends A left and B right.'">Pan applies
+            to the A/B dual voice in Mono output; Stereo output sends A left and B right.</p>
           <div class="osc-phase-corr">
             <span class="osc-label" id="osc-corr-label">Correlation</span>
             <div class="osc-meter osc-corr-meter" id="osc-corr-meter" data-osc="phase.correlationMeter"
