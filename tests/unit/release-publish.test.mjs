@@ -4,7 +4,9 @@
 // the diagnosis of a Pages run that never starts (rule project.release-flow-complete).
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { appendFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync,
+} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -46,10 +48,15 @@ const page = (record) => `<!doctype html>${REGION_OPEN}${JSON.stringify(record)}
 const TAGGED_PAGE = page({ commit: HEAD, release: 'tagged', distance: 0 });
 const REDEPLOYED = [{ databaseId: 8001, status: 'completed', conclusion: 'success',
   headSha: HEAD, createdAt: ago(0) }];
+// `localTag` is the commit the local tag v40.0.0 names (null: no local tag); `tags` is what
+// `git tag --merged HEAD --list v*` prints, by default v39.0.0 plus v40.0.0 when the local tag
+// is at HEAD, as in the checkout of an interrupted publish. `git log <tag>..HEAD` of a tag at
+// HEAD is empty, as in git.
 function fakes({ branch = 'main', dirty = '', originMain = HEAD, tagRemote = '', ok = true,
   runs = [], jobs = {}, ancestor = 0,
   redeploy = (dispatched) => (dispatched ? REDEPLOYED : []), live = TAGGED_PAGE,
-  releaseExists = false } = {}) {
+  releaseExists = false, localTag = null,
+  tags = localTag === HEAD ? 'v39.0.0\nv40.0.0' : 'v39.0.0' } = {}) {
   const calls = [];
   let dispatched = false;
   const run = (args) => {
@@ -57,8 +64,10 @@ function fakes({ branch = 'main', dirty = '', originMain = HEAD, tagRemote = '',
     if (args[0] === 'rev-parse' && args[1] === 'HEAD') return HEAD;
     if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return branch;
     if (args[0] === 'status') return dirty;
-    if (args[0] === 'tag') return 'v39.0.0';
-    if (args[0] === 'log') return COMMITS;
+    if (args[0] === 'tag') return tags;
+    if (args[0] === 'log') {
+      return localTag === HEAD && args.at(-1) === 'v40.0.0..HEAD' ? '' : COMMITS;
+    }
     throw new Error(`unexpected git ${args.join(' ')}`);
   };
   const sh = (cmd, args) => {
@@ -69,7 +78,9 @@ function fakes({ branch = 'main', dirty = '', originMain = HEAD, tagRemote = '',
     if (cmd === 'git' && args[0] === 'ls-remote') {
       return { status: 0, stdout: `${originMain}\trefs/heads/main` };
     }
-    if (cmd === 'git' && args[0] === 'rev-parse') return { status: 1, stdout: '' }; // no local tag
+    if (cmd === 'git' && args[0] === 'rev-parse') {
+      return localTag ? { status: 0, stdout: localTag } : { status: 1, stdout: '' };
+    }
     if (cmd === 'git' && args[0] === 'merge-base') return { status: ancestor, stdout: '' };
     if (cmd === 'gh' && args[0] === 'workflow' && args[1] === 'run') {
       dispatched = true;
@@ -799,3 +810,61 @@ test('R021: resuming when the GitHub Release already exists refuses', async () =
   assert.match(f.out.join('\n'), /BLOCKED the GitHub Release v40\.0\.0 already exists/);
   assert.deepEqual(f.calls.filter(MUTATING), []);
 });
+
+// Review R-1 and R-2 of #242. The interrupted run left its own local tag at HEAD: that tag is
+// never the previous release, and the local tag decides whether the publish may resume.
+const notesOf = (f) => {
+  const create = f.calls.find((c) => c[0] === 'gh' && c[1] === 'release' && c[2] === 'create');
+  return readFileSync(create[create.indexOf('--notes-file') + 1], 'utf8');
+};
+
+test('R021 resume with the local tag at HEAD: the notes run from the previous release',
+  async () => {
+    const dry = fakes({ tagRemote: TAG_AT(HEAD), localTag: HEAD });
+    assert.equal(await publish({ argv: [], run: dry.run, sh: dry.sh, log: dry.log,
+      receipt: RECEIPT, fingerprint: FP }), 0, dry.out.join('\n'));
+    const text = dry.out.join('\n');
+    assert.match(text, /RESUME v40\.0\.0/);
+    assert.match(text, /previous tag: v39\.0\.0; 3 commit\(s\) in the notes/);
+    assert.match(text, /compare\/v39\.0\.0\.\.\.v40\.0\.0/);
+    assert.ok(dry.calls.some((c) => c.join(' ') === 'git log --format=%H%x1f%s%x1f%b%x1e '
+      + 'v39.0.0..HEAD'));
+    const f = fakes({ tagRemote: TAG_AT(HEAD), localTag: HEAD, live: TAGGED_PAGE });
+    assert.equal(await yesRun(f), 0, f.out.join('\n'));
+    const notes = notesOf(f);
+    assert.match(notes, /### Features\n\n- \*\*labs:\*\* new lab/);
+    assert.match(notes, /compare\/v39\.0\.0\.\.\.v40\.0\.0/);
+    assert.doesNotMatch(notes, /v40\.0\.0\.\.\.v40\.0\.0/);
+  });
+
+test('R021: a local tag at another commit refuses although origin has it at HEAD', async () => {
+  const f = fakes({ tagRemote: TAG_AT(HEAD), localTag: OLDER });
+  const code = await publish({ argv: ['--yes'], run: f.run, sh: f.sh, log: f.log,
+    receipt: RECEIPT, fingerprint: FP });
+  assert.equal(code, 1);
+  const text = f.out.join('\n');
+  assert.match(text, /BLOCKED tag v40\.0\.0 already exists locally at 0a1b2c3, not HEAD f187f66/);
+  assert.doesNotMatch(text, /RESUME/);
+  assert.deepEqual(f.calls.filter(MUTATING), []);
+});
+
+test('R021: a tag made locally at HEAD whose push failed refuses and says it was never pushed',
+  async () => {
+    const f = fakes({ localTag: HEAD });
+    const code = await publish({ argv: ['--yes'], run: f.run, sh: f.sh, log: f.log,
+      receipt: RECEIPT, fingerprint: FP });
+    assert.equal(code, 1);
+    const blocked = f.out.filter((l) => l.includes('BLOCKED')).join('\n');
+    assert.match(blocked, /tag v40\.0\.0 exists locally at HEAD f187f66 but was never pushed/);
+    assert.match(blocked, /git push origin refs\/tags\/v40\.0\.0/);
+    assert.match(blocked, /git tag -d v40\.0\.0/);
+    assert.doesNotMatch(blocked, /not HEAD/);
+    assert.deepEqual(f.calls.filter(MUTATING), []);
+    // A local tag only, at another commit, keeps the plain refusal.
+    const g = fakes({ localTag: OLDER });
+    assert.equal(await publish({ argv: ['--yes'], run: g.run, sh: g.sh, log: g.log,
+      receipt: RECEIPT, fingerprint: FP }), 1);
+    assert.match(g.out.join('\n'),
+      /BLOCKED tag v40\.0\.0 already exists locally at 0a1b2c3, not HEAD/);
+    assert.deepEqual(g.calls.filter(MUTATING), []);
+  });
