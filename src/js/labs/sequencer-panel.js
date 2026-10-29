@@ -158,6 +158,8 @@ export function mount(rootEl, adapter) {
         if (ctx && ctx.state === 'suspended') return ctx.resume();
         return null;
       },
+      // K001: the engine counts every node of V2 playback (adapter.sequencerAccounting).
+      accounting: adapter.sequencerAccounting || null,
     },
   });
 

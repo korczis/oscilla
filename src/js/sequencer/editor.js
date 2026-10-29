@@ -16,6 +16,9 @@
 //   onStart?({ t0, duration }),    playback started (status bar)
 //   onEnded?({ stopped }),         playback fully ended (natural end or after a stop fade)
 //   onRecord?(sequenceJson),       the record-style button: hand the sequence to the WAV export
+//   accounting?: { track(node), source(node), untrack(node) }   the engine's node accounting
+//                                  (engineAccounting below): every node of every pass counts as
+//                                  the engine's while it lives and is removed when the pass ends
 // }
 //
 // Looping: each pass is compiled as its own voice that starts exactly at the previous pass's
@@ -53,6 +56,29 @@ import {
 } from './model.js';
 import { compileSequence, observeClock, START_OFFSET_S } from './compiler.js';
 import { reorderTarget } from './timeline.js';
+
+/**
+ * The AudioEngine's own accounting for the V2 sequencer (K001, audio-engine-discipline v2): the
+ * nodes a pass creates join engine.nodes (oscillators also engine.sources), so the engine's
+ * activeNodeCount and activeSourceCount include V2 playback and return to 0 after stop().
+ */
+export function engineAccounting(engine) {
+  return {
+    track: (n) => {
+      engine.nodes.add(n);
+      return n;
+    },
+    source: (n) => {
+      engine.nodes.add(n);
+      engine.sources.add(n);
+      return n;
+    },
+    untrack: (n) => {
+      engine.nodes.delete(n);
+      engine.sources.delete(n);
+    },
+  };
+}
 
 export const LOOKAHEAD_S = 1.0; // compile the next loop pass this far ahead of its start
 const MAX_QUEUED_PASSES = 16; // guard for very short looped sequences
@@ -314,11 +340,38 @@ export function createSequencerEditor(options = {}) {
     // ---------------------------------------------------------------- transport
     _schedulePass(ctx, t0) {
       const self = priv.self;
+      const acct = engine && engine.accounting;
+      const owned = new Set(); // what this pass registered with the engine
+      const release = () => {
+        if (acct) for (const n of owned) acct.untrack(n);
+        owned.clear();
+      };
+      const hooks = acct
+        ? {
+            track: (n) => {
+              owned.add(n);
+              acct.track(n);
+              return n;
+            },
+            source: (n) => {
+              owned.add(n);
+              acct.source(n);
+              return n;
+            },
+          }
+        : {};
       const voice = compileSequence(self.model, ctx, getDest(), t0, {
         timers,
-        onEnded: (info) => self._voiceEnded(voice, info),
+        ...hooks,
+        onEnded: (info) => {
+          release();
+          self._voiceEnded(voice, info);
+        },
       });
-      if (voice.ended) return null; // empty sequence
+      if (voice.ended) {
+        release();
+        return null; // empty sequence
+      }
       priv.voices.add(voice);
       priv.passes.push({ voice, t0: voice.t0, end: voice.endTime });
       priv.lastEnd = voice.endTime;

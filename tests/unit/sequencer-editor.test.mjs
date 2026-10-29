@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createSequencerEditor } from '../../src/js/sequencer/editor.js';
+import * as seqEditor from '../../src/js/sequencer/editor.js';
+import { AudioEngine } from '../../src/js/audio/audio-engine.js';
 import { STOP_RAMP_S, STOP_PAD_S, STOP_LEAD_S } from '../../src/js/sequencer/compiler.js';
 import { FakeContext, fakeTimers } from './sequencer-fake-audio.mjs';
 
@@ -268,4 +270,73 @@ test('dispose releases everything', () => {
   assert.equal(ed.playing, false);
   assert.deepEqual(ed.stats(), { voices: 0, activeSourceCount: 0, activeNodeCount: 0 });
   assert.ok(ctx.created.every((n) => n.kind === 'destination' || n.disconnected));
+});
+
+// ---------------------------------------------------------------- K001: engine accounting
+
+/** An editor whose engine adapter counts into a real AudioEngine (as main.js wires it). */
+function counted() {
+  const ctx = new FakeContext({ sampleRate: 48000, currentTime: 5 });
+  const timers = fakeTimers();
+  const engine = new AudioEngine({ env: { setTimeout, clearTimeout } });
+  const account = seqEditor.engineAccounting;
+  assert.equal(typeof account, 'function', 'sequencer/editor.js exports engineAccounting(engine)');
+  const ed = createSequencerEditor({
+    engine: { getContext: () => ctx, getDestination: () => ctx.destination,
+      accounting: account(engine) },
+    timers,
+  });
+  return { ctx, timers, engine, ed };
+}
+
+test('K001: V2 playback is counted by the engine and leaves 0 nodes after stop()', () => {
+  const { ctx, engine, ed } = counted();
+  assert.equal(engine.activeNodeCount, 0);
+  assert.equal(ed.play(), true);
+  assert.ok(engine.activeNodeCount > 0, `engine nodes during play: ${engine.activeNodeCount}`);
+  assert.equal(engine.activeNodeCount, ed.stats().activeNodeCount, 'every voice node is counted');
+  assert.equal(engine.activeSourceCount, ed.stats().activeSourceCount);
+  ctx.currentTime += 0.6;
+  assert.equal(ed.stop(), true);
+  assert.ok(engine.activeNodeCount > 0, 'the fading voice is still counted');
+  const fade = STOP_LEAD_S + 128 / 48000 + STOP_RAMP_S + STOP_PAD_S;
+  ctx.advance(ctx.currentTime + fade + 1e-6);
+  assert.equal(engine.activeNodeCount, 0, 'engine nodes after stop');
+  assert.equal(engine.activeSourceCount, 0, 'engine sources after stop');
+});
+
+test('K001: natural end, looped passes, restarts and dispose all return the engine to 0', () => {
+  let { ctx, engine, ed } = counted();
+  ed.play();
+  const { t0, duration } = ed.currentPassTiming();
+  ctx.advance(t0 + duration + STOP_PAD_S);
+  assert.equal(ed.playing, false);
+  assert.equal(engine.activeNodeCount, 0, 'natural end');
+  const loop = counted();
+  loop.ed.setLoop(true);
+  loop.ed.play();
+  const first = loop.ed.currentPassTiming();
+  loop.ctx.currentTime = first.t0 + 1.5;
+  loop.timers.runUntil(1500);
+  assert.equal(loop.ed.stats().voices, 2);
+  assert.equal(loop.engine.activeNodeCount, loop.ed.stats().activeNodeCount, 'queued pass counted');
+  loop.ed.stop();
+  loop.ctx.advance(loop.ctx.currentTime + 0.1);
+  assert.equal(loop.engine.activeNodeCount, 0, 'looped run stopped');
+  ({ ctx, engine, ed } = counted());
+  for (let i = 0; i < 20; i++) {
+    ed.restart();
+    ctx.advance(ctx.currentTime + 0.1);
+  }
+  assert.equal(engine.activeNodeCount, ed.stats().activeNodeCount, 'no growth over restarts');
+  ed.dispose();
+  assert.equal(engine.activeNodeCount, 0, 'dispose');
+  assert.equal(engine.activeSourceCount, 0);
+});
+
+test('K001: without accounting hooks the editor still plays (lab fixtures, offline adapters)', () => {
+  const { ed } = setup();
+  assert.equal(ed.play(), true);
+  ed.dispose();
+  assert.deepEqual(ed.stats(), { voices: 0, activeSourceCount: 0, activeNodeCount: 0 });
 });
