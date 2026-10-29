@@ -23,6 +23,17 @@ pressure.
    reader the button is always "Play the Studio", a toggle that reads as pressed while the
    Studio plays.
 
+4. From a lab: Filter Lab, Synthesis (Subtractive Synth, Stereo Beat), the Sequencer and
+   Measure each link to the shipped template that does their job ("Open Filter Automation in
+   Studio"). The template is a separate document; the lab's own settings stay in the lab.
+5. **Open this pattern in Studio** in the Sequencer opens a copy of the Sequencer's current
+   pattern as a new document (one Sequence node, one clip per block), the same pipeline as
+   importing a sequence file. With unsaved Studio changes nothing is replaced and the notice
+   says so.
+6. The toolbar's **Back** button returns to the workspace Studio was opened from and names it
+   ("Back to the Sequencer"); when Studio is the first workspace the page opens, it is the
+   Playground.
+
 Below 768 px the workspace shows one of **Graph**, **Timeline** and **Inspector** at a time
 (tabs and their panels). On a touch screen, **Frame all** and **Frame selection** do not zoom
 out so far that a port is smaller than 24 px: a large graph is centred, and you pan to the

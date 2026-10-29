@@ -991,24 +991,29 @@ export function createInstrument(deps = {}) {
       if (m === 'dual') { this.source = 'dual'; if (this.vizMode !== 'spectrum') this.vizMode = 'interference'; }
     },
     // V1: oscillaApp: runDemo (index.html@a7b7a23)
-    runDemo(topic) {
+    /** opts.action: a link the demo's notice carries ({ href, text }, e.g. back to the lesson). */
+    runDemo(topic, { action = null } = {}) {
       const d = topic.demo;
       // A demo that needs another mode's source sets it fully, so earlier settings cannot skew it.
       if (d.cfg && d.cfg.source === 'dual') this.source = 'dual';
       this.applyConfig(d.cfg, 'learn');
       if (d.viz) this.vizMode = d.viz;
       this.loadedLabel = d.label;
-      this.notify('success', `Demo ready: ${d.label}`, this.isProgrammed ? 'Press TRIGGER (or Space) to hear it.' : 'Press and hold HOLD TO PLAY.');
+      this.notify('success', `Demo ready: ${d.label}`, this.isProgrammed ? 'Press TRIGGER (or Space) to hear it.' : 'Press and hold HOLD TO PLAY.', { action });
     },
 
 
     // ============================== alerts, dialogs, microphone
     // V1: oscillaApp: notify, dismissAlert (index.html@a7b7a23)
-    notify(level, title, message) {
+    // V2: opts.action { href, text } adds a link to the notice (a way back, U010); a notice with
+    // a link stays until it is followed or dismissed, so it never vanishes under the pointer.
+    notify(level, title, message, { action = null } = {}) {
       if (this.alerts.some((a) => a.title === title && a.message === message)) return;
       const id = ++alertSeq;
-      this.alerts = [...this.alerts, { id, level, title, message }].slice(-4);
-      if (level === 'success' || level === 'info') setTimeout(() => this.dismissAlert(id), 6000);
+      this.alerts = [...this.alerts, { id, level, title, message, action }].slice(-4);
+      if (!action && (level === 'success' || level === 'info')) {
+        setTimeout(() => this.dismissAlert(id), 6000);
+      }
       if (level === 'error') engine.lastError = { message: `${title}: ${message}`, context: 'ui' };
     },
     dismissAlert(id) { this.alerts = this.alerts.filter((a) => a.id !== id); },
