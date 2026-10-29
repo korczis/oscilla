@@ -1,0 +1,39 @@
+# Review verdict for pull request #252, the process changes of the 2026-10-28 evolve pass
+# (trains judged by their members, one merge-train procedure, disk preflight, evidence on main,
+# bounded budget re-measure, symbol-anchored decisions), branch chore/evolve-process-20261028.
+# Reviewed head 6f434f030e74d413d8484581a924aa0439d9e2dc. Merge base origin/main 9de0108dfc3:
+# main has not moved. Another builder wrote all of it (oscilla-b0), not me.
+#
+# The digest: the base branch's scripts/review-verdict.mjs judges this pull request. I ran it
+# from `git archive origin/main scripts` with --repo on this worktree,
+# `--content --list --base-branch origin/main`: 106c70d9...e7ee over .github/workflows/ci.yml,
+# scripts/fail-first.mjs, tests/unit/ci-workflows.test.mjs and tests/unit/fail-first.test.mjs,
+# the only guarded paths.
+#
+# How it was reviewed: four independent lenses, each read-only against this head, each finding
+# then given to a separate skeptic told to refute it unless it reproduced (13 agents):
+# - fail-first.mjs behaviour, with hand-built fixture repositories in mktemp dirs;
+# - the ci.yml changes (events, fetch depth, conditions, hidden failures, injection);
+# - whether each assertion of the two guarded tests can fail, by mutating the code under test;
+# - every claim the rules, ADR 0055 and the merge-train skill make about what is enforced,
+#   against the guarded code.
+#
+# Result: no P0 and no P1. Seven P2 findings reproduced and stay open as follow-ups; two claims
+# were refuted (a feat/fix title behind an emoji or "WIP:" prefix; and a P1 claim that a train
+# titled feat or fix keeps the train-wide waiver, which the code does not grant). None of the
+# open findings lets broken code merge: R1 lets one malformed member row go unjudged, R2 can
+# count one flaky base failure as evidence, R3 refuses a valid fix (a false refusal), and R4-R7
+# are mutations the suite does not catch.
+schema: review-verdict/v1
+pr: 252
+verdict: merge
+reviewer: prismatic-majordomus-f3 (claude-code 1f47a36e)
+content: 106c70d9fe18f26c34e351b58add9c1482dace274a01ea3d64fcef958847e7ee
+findings:
+  - { id: R1, severity: P2, status: open, title: "fail-first.mjs:103 trainMembers ends the member table at a line without a leading pipe, so a GFM continuation row (e.g. '#2 | feat(y): ...') renders in the table but is never judged" }
+  - { id: R2, severity: P2, status: open, title: "fail-first.mjs:280 the base-tree run is not retried, so one load-induced failure there counts as 'fails without the change'" }
+  - { id: R3, severity: P2, status: open, title: "fail-first.mjs:191 a test path is passed to node --test as a glob, so a file named with [ ] * ? is not run and a valid fix is refused" }
+  - { id: R4, severity: P2, status: open, title: "fail-first.test.mjs:372 the train/ branch anchor is never tested: an unanchored TRAIN_BRANCH survives the suite" }
+  - { id: R5, severity: P2, status: open, title: "fail-first.mjs:344 the --head-branch flag has no test: removing its parsing survives the suite" }
+  - { id: R6, severity: P2, status: open, title: "fail-first.test.mjs:347 the #<n> member check is tested only with 'one': an unanchored pattern survives" }
+  - { id: R7, severity: P2, status: open, title: "fail-first.test.mjs:414 no test puts a member title behind bracketed tags: dropping tag support in TYPED survives" }
