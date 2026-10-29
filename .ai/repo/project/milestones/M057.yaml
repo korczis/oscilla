@@ -1,0 +1,20 @@
+id: M057
+title: "Box-system ergonomics: one-gesture patching with headroom in the editor modules"
+slug: box-system-ergonomics-one-gesture-patching-with-headroom-in
+order: 57
+priority: p1
+problem: "The wheel only zooms; a drop on an occupied input is refused; a cable cannot be dragged off to re-route it; there is no splice, bridge or tidy; and the two editor modules are near their caps (src/js/ui/studio/graph-editor.js 49 525 of 54 000 B, src/js/studio/adapters/nodes.js 40 583 of 45 000 B on main at e2720e07)."
+outcome: "Each patching gesture is one undo step through canConnect and refusals give the validator's sentence; the shortcut list is generated and current; graph-editor.js and adapters/nodes.js have at least 10 KB of cap room each."
+acceptance_criteria:
+  - "K005 to K009 are done with their evidence; npm run release-gate passes at the last one."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "src/js/ui/studio is not a guarded path, so K006 to K009 need fail-first but no review verdict; K005 changes src/js/studio and needs one (scripts/review-verdict.mjs GUARDED)."
+  - "K007 and K008 rebase after K006 (both work in graph-gestures.js); K010 to K013 of M058 rebase after K005."
+  - "Edge mute (K009) may need a new edge property, which changes the canonical form and every saved studioHash like a new parameter does; if so the property joins the K022 hash epoch (D2) and the M key lands after it."
+  - "K004 and K009 both edit src/js/ui/studio/workspace.js, which E003 splits: whichever runs after E003 edits the module E003 names instead."
+created_at: 2026-10-29
+updated_at: 2026-10-29

@@ -1,0 +1,30 @@
+id: K006
+milestone: M057
+serves:
+  - "playable-instrument#editor-headroom"
+title: "Move the graph editor pointer gestures into graph-gestures.js"
+slug: move-the-graph-editor-pointer-gestures-into-graph-gestures-j
+priority: p1
+profile: implementation
+objective: "Lands as refactor(studio-ui). src/js/ui/studio/graph-editor.js is 49 525 of 54 000 B (main at e2720e07). Move its pointer gestures (drag, cable, wheel and pinch handling) into a new src/js/ui/studio/graph-gestures.js with no behaviour change. K007 and K008 rebase after it."
+why: "Owner direction of 2026-10-29 (session oscilla-b0): OSCILLA becomes a playable, patchable instrument and an audio-band signal lab; the plan checked every fact it relies on against main at 8b5792cd, and the sizes it quotes are unchanged at e2720e07."
+scope:
+  - "src/js/ui/studio/graph-editor.js"
+  - "src/js/ui/studio/graph-gestures.js"
+  - "tests/unit"
+  - "tests/unit/source-size-baseline.json"
+  - "tests/browser/v31-studio-graph.cjs"
+  - "tests/README.md"
+  - "dist"
+acceptance_criteria:
+  - "tests/browser/v31-studio-graph.cjs is green with no assertion changed."
+  - "graph-editor.js has at least 12 000 B of room under its cap, and tests/unit/source-size-budget.test.mjs passes."
+  - "No reviewer's verdict is needed (src/js/ui/studio is not guarded) and fail-first does not apply to a refactor. It adds no markup, osc-* class token or stylesheet selector, so the Flowbite Pro ratchet stays flat (node --test tests/unit/ui-flowbite-pro.test.mjs)."
+validation:
+  - "node tests/browser/v31-studio-graph.cjs"
+  - "node --test tests/unit/source-size-budget.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

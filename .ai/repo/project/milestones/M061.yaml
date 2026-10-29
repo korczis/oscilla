@@ -1,0 +1,20 @@
+id: M061
+title: "Interconnection: live analysis views, sequence exchange, workspace bridges and one keyboard"
+slug: interconnection-live-analysis-views-sequence-exchange-worksp
+order: 61
+priority: p2
+problem: "The Studio analysis nodes show nothing (inert in substance); Studio Import ignores V2 sequence files although src/js/studio/sequence-import.js is tested and has no caller; there are no Sequencer and Studio bridges, three separate preset and template lists, and no single note source."
+outcome: "Live node views; sequence import and export; the two bridge buttons with a dirty guard; and the on-screen keyboard and QWERTY on the V502 voices, with one tagged browser and one Keys node fed by keyboard, QWERTY and MIDI in Wave 3."
+acceptance_criteria:
+  - "K004, K016, K018 and K026 are done with their evidence; npm run release-gate passes at the last one."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "K016 goes first in Wave 2 because it fixes the largest inert surface; it waits on F001, F002 and F008 of #251 and on E004."
+  - "K018 serves U006 and audit finding A17 (docs/ui-audit.md) as well; it does not edit U006's record."
+  - "K026 amends ADR 0005 through its own ADR (D3) before any code, and it waits on V502 (#261)."
+  - "The tagged browser and the Keys node are Wave 3 and not issued."
+created_at: 2026-10-29
+updated_at: 2026-10-29

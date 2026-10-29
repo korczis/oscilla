@@ -1,0 +1,29 @@
+id: K019
+milestone: M059
+serves:
+  - "playable-instrument#sequencer-editing"
+title: "Step-bar editor for the Step node values"
+slug: step-bar-editor-for-the-step-node-values
+priority: p2
+profile: implementation
+objective: "Lands as feat(studio-ui). The Step node's values are edited as bars, a domain visual inside an Inspector Pro card: keyboard-operable (arrows select and change a step) and a drag across bars is one NODE_PARAM_SET gesture. It waits on F001 and F002 of plan pull request #251 (intent ui-flowbite-pro), which are not on main yet; depends_on names them in the plan change after #251 lands. It also waits on E004."
+why: "Owner direction of 2026-10-29 (session oscilla-b0): OSCILLA becomes a playable, patchable instrument and an audio-band signal lab; the plan checked every fact it relies on against main at 8b5792cd, and the sizes it quotes are unchanged at e2720e07."
+scope:
+  - "src/js/ui/studio"
+  - "tests/unit/studio-step-bars.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "E004"
+acceptance_criteria:
+  - "A drag across several bars is one history entry and the keyboard reaches every step, in a unit test that fails on the merge base."
+  - "Any new chrome is Flowbite Pro markup adapted from the matching Pro block and lowers or keeps the ratchet (project.ui-uses-flowbite-pro, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs); controls are Pro range sliders with number inputs, never a custom rotary knob (D5)."
+  - "No reviewer's verdict is needed (src/js/ui/studio is not a guarded path); as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/studio-step-bars.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

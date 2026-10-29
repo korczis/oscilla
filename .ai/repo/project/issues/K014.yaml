@@ -1,0 +1,32 @@
+id: K014
+milestone: M058
+serves:
+  - "playable-instrument#template-pack"
+title: "Template pack: filter-envelope synth, FM bell, ring-mod, drive lead, macro pad, step-modulator bass"
+slug: template-pack-filter-envelope-synth-fm-bell-ring-mod-drive-l
+priority: p2
+profile: implementation
+objective: "Lands as feat(studio). Six templates under src/js/studio/templates: a filter-envelope synth on the existing Envelope CONTROL output, an FM bell (K010), a ring-mod (a Gain with a bipolar audio-rate LFO edge, K010), a drive lead (K012), a macro pad (K013) and a step-modulator bass (the existing Step on a log edge). No template names a commercial product or claims analog modelling (D1). The set is fixed by what has landed: a template that needs K010, K012 or K013 follows it."
+why: "Owner direction of 2026-10-29 (session oscilla-b0): OSCILLA becomes a playable, patchable instrument and an audio-band signal lab; the plan checked every fact it relies on against main at 8b5792cd, and the sizes it quotes are unchanged at e2720e07."
+scope:
+  - "src/js/studio/templates"
+  - "tests/unit/v31-studio-templates.test.mjs"
+  - "tests/browser/v31-studio-workflows.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K010"
+  - "K012"
+  - "K013"
+acceptance_criteria:
+  - "Each template validates, has a pinned studioHash, renders non-silent offline with peak at or below the cap, and opens through the Templates dialog and #m=studio&st=<id>; the template test fails on the merge base. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline and assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac) (project.suite-harness, project.bounded-test-timing)."
+  - "The pull request carries a reviewer's verdict (src/js/studio is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first). It adds no markup, osc-* class token or stylesheet selector, so the Flowbite Pro ratchet stays flat (node --test tests/unit/ui-flowbite-pro.test.mjs)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/v31-studio-templates.test.mjs"
+  - "node tests/browser/v31-studio-workflows.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29
