@@ -1,72 +1,71 @@
 # Review verdict for pull request #255, R022: every pull request names its plan record, judged by
-# the base branch (branch feat/r022-pr-metadata-judge). Fourth round (re-review).
-# Reviewed head e9be0c40, merge base origin/main 94192a19 (main's tip is 893cc420). Round 3
-# reviewed a8d72253 and requested changes (678ada52). This round reviews e9be0c40: the judge
-# extracted from the base into $RUNNER_TEMP/judge, setup-node before checkout, the env -i judge
-# step, install-guard.mjs, shell-words.mjs behind judge-first, and the R5/R7/R13/R15/R21 fixes.
-# Another builder wrote them (oscilla-b0), not me.
+# the base branch (branch feat/r022-pr-metadata-judge). Fifth round (re-review).
+# Reviewed head 1bc7fa8e, merge base origin/main 94192a19 (main's tip is 20583503). Round 4
+# reviewed e9be0c40 and requested changes (f8fa5fb0). This round reviews 1bc7fa8e: no PR code
+# before the judge; a `judge` step that extracts the base's copy, writes a manifest and makes it
+# read-only; fail-first driving the guard, `npm ci --ignore-scripts` and the PR's tests as
+# isolated children with a cleared environment; the verdict as the exit code alone. Another
+# builder wrote it (oscilla-b0), not me.
 #
 # The digest: the base branch's scripts/review-verdict.mjs, run from `git archive origin/main
-# scripts` with --repo on this worktree: 2ba62ded...be38 over the 10 guarded paths it names.
+# scripts` with --repo on this worktree: 3b1ed742...d5a9 over the 10 guarded paths it names.
 #
-# How it was reviewed: five independent lenses, read-only against this head, with real offline
-# npm 10.9.3 / node 22.20.0 fixtures and real bash 5.3; every finding handed to a separate
-# skeptic told to refute it unless it reproduced (25 agents; none refuted). The builder's stated
-# non-coverage counted only where shown reachable with the guard in place.
+# How it was reviewed: five independent lenses (escape from the isolated children, the guard,
+# the manifest, the resolutions by mutation, runnability), read-only, with real offline npm and
+# bash fixtures; every finding handed to a separate skeptic (17 agents). Two claims were refuted,
+# among them a P1 that sibling with/without test trees could forge a proven verdict.
 #
-# Verdict: changes-requested. The structure is the right direction, but PR code still runs before
-# the judge on a guard-clean tree, and it can rewrite the extracted judge:
-# - R17 (P1, still open): install-guard checks each lock entry's resolved/integrity but not the
-#   dependency maps inside it (dependencies, optionalDependencies, peerDependencies, and the root
-#   entry), so a registry entry whose nested `dependencies` names a git spec makes npm ci clone it
-#   and run its prepare under --ignore-scripts (exit 0, "added 2 packages").
-# - R18 (P1, still open): install-guard splits .npmrc on \r?\n, npm's ini on [\r\n]+, so a key after
-#   a lone CR (git=, registry=, node-options=, ...) passes the allowlist and npm uses it.
-# - R22 (P1): combined (a lone-CR git=./evil.sh and an optional nested git spec), npm ci spawns the
-#   PR's evil.sh with RUNNER_TEMP and GITHUB_ENV in its environment; it overwrote
-#   $RUNNER_TEMP/judge/.github/scripts/base-rule.sh and the judge step printed a forged pass,
-#   exit 0. The extracted copy is writable by anything that runs before the judge.
-# - R19 (P1, still open) and R23 (P1): judge-first is still evadable (keyword-led compounds,
-#   substitutions inside $(( )) and ${...}, wrapper options, comment preprocessing, eval-like forms)
-#   and never reads workflow/job/step env: or a pre-judge step's shell: (BASH_ENV, NODE_OPTIONS).
-#   Those routes edit .github/, which is guarded, so review-verdict is their backstop; the finding is
-#   that the rule claims more than the lint can decide.
-# What closes the class: no step before the judge runs anything of the PR. Let the judge drive the
-# install. The base program, extracted and already loaded, runs `npm ci --ignore-scripts` itself as
-# a child with a cleared environment, after the guard (fixed for R17/R18), and only then the PR's
-# tests; a child's writes to files, $GITHUB_ENV or $GITHUB_PATH reach only later steps, never the
-# already-running judge. Make judge-first advisory in the rule's text rather than a guarantee.
+# Verdict: changes-requested, for one open P1 that is about availability, not a bypass (R29).
+# No route for a PR's own program to judge was found this round: R12, R17, R18, R22 are closed by
+# the judge-driven install and the fixed guard, and R19 is closed by making judge-first advisory.
+# R29: install-guard refuses every lock entry with bundled dependencies. Tailwind 4, which the
+# accepted ADR 0061 brings back for the Flowbite Pro migration, carries them
+# (@tailwindcss/oxide-wasm32-wasi bundles six packages with no resolved/integrity), so the first
+# PR that adds it, and every feat/fix PR after it, would fail the required fail-first gate.
+# Reproduced with the real lockfile plus @tailwindcss/cli 4.1.14's closure: 19 refusals, exit 1.
+# The safe rule: accept an inBundle entry whose bundling parent is a registry.npmjs.org tarball
+# with sha512 integrity (its files arrive inside the checked tarball), and refuse it otherwise.
+#
+# Threat model, for the record: GitHub's hosted Linux runners give the runner user passwordless
+# sudo, so neither the ptrace probe nor any isolation keeps a PR's own tests (which fail-first
+# runs) from reaching the judge (R31). That is the residual risk the builder states; this
+# verdict accepts it as stated, and the pull request body should say sudo, not only ptrace_scope.
 schema: review-verdict/v1
 pr: 255
 verdict: changes-requested
 reviewer: prismatic-majordomus-f3 (claude-code 1f47a36e)
-content: 2ba62dede92771b946a8079878d33c2bf81677e2b91b2b5095d52d15f5d3be38
+content: 3b1ed742cf62fa4f603a8dbcfc101d7df6d3d93392f67959ecc3293bfb68d5a9
 findings:
-  - { id: R1, severity: P2, status: open, title: "the base list leaves scripts/pr-metadata.mjs, .ai/repo/ci/pr-meta.yaml and their test out of the digest; deferred, 8 blob shas listed in the PR comment for a pre-merge re-check" }
-  - { id: R2, severity: P1, status: closed, title: "base-rule.sh resolved the unqualified origin/<base>; fixed in dfb5641b, not defeated since" }
+  - { id: R1, severity: P2, status: open, title: "the base list leaves scripts/pr-metadata.mjs, .ai/repo/ci/pr-meta.yaml and their test out of the digest; deferred, 11 blob shas in the PR comment for a pre-merge re-check" }
+  - { id: R2, severity: P1, status: closed, title: "base-rule.sh resolved the unqualified origin/<base>; fixed in dfb5641b" }
   - { id: R3, severity: P2, status: open, title: "ci.yml (pre-existing) does not re-run when a PR's base branch changes; deferred" }
   - { id: R4, severity: P2, status: closed, title: "closing-keyword scan and the ASCII RS; fixed" }
-  - { id: R5, severity: P2, status: open, title: "fail-first.mjs:154 a waiver hidden in a multi-line link reference title or a type-6 HTML block attribute is accepted, though GitHub renders none of it" }
-  - { id: R6, severity: P2, status: closed, title: "the triggers check and gate jobs; fixed" }
-  - { id: R7, severity: P2, status: open, title: "shell-words.mjs:296 a single-line `function` definition hides `exit 0` from FORCED_SUCCESS (and an install or checkout program from judge-first)" }
-  - { id: R8, severity: P2, status: closed, title: "the concurrency mutation cases; restored" }
+  - { id: R5, severity: P2, status: open, title: "fail-first.mjs:88 a waiver inside an inline link title or an image's alt text spanning lines is accepted, though GitHub shows it only as an attribute; and the interrupts() fix at :238 has no test (reverting it keeps fail-first.test.mjs green)" }
+  - { id: R6, severity: P2, status: closed, title: "triggers check and gate jobs; fixed" }
+  - { id: R7, severity: P2, status: closed, title: "FORCED_SUCCESS lexical forms; fixed and pinned" }
+  - { id: R8, severity: P2, status: closed, title: "concurrency mutation cases; restored" }
   - { id: R9, severity: P2, status: closed, title: "multi-commit closing-keyword scan; tested" }
   - { id: R10, severity: P2, status: closed, title: "lower-case type check; tested" }
-  - { id: R11, severity: P2, status: closed, title: "a record that exists only at the base; tested" }
-  - { id: R12, severity: P1, status: open, title: "a PR's code runs before the fail-first judge; the routes still open are R17, R18 and R22" }
-  - { id: R13, severity: P2, status: closed, title: "git-ref STEPS and ^{/regex}, @{n}; fixed" }
-  - { id: R14, severity: P2, status: closed, title: "git-ref tests and ^{commit}; tested" }
-  - { id: R15, severity: P2, status: closed, title: "an indented ``` line opening a fence; fixed for both CommonMark cases" }
-  - { id: R16, severity: P2, status: closed, title: "inline code replaced by the word 'code'; fixed" }
-  - { id: R17, severity: P1, status: open, title: "install-guard.mjs:85/97 lock entries are checked for resolved and integrity only; a git spec in an entry's nested dependencies/optionalDependencies/peerDependencies (or the root entry) makes npm ci clone it and run its prepare under --ignore-scripts" }
-  - { id: R18, severity: P1, status: open, title: "install-guard.mjs:156 .npmrc is split on \\r?\\n while npm's ini splits on [\\r\\n]+, so any key after a lone CR (git=, registry=, node-options=, replace-registry-host=, strict-ssl=) passes the allowlist" }
-  - { id: R19, severity: P1, status: open, title: "shell-words.mjs (:75, :235, :253, :268, :296) judge-first is evadable: keyword-led compounds (function, coproc, time -p), substitutions inside $(( )) and ${...}, comment preprocessing that joins or blanks real lines, eval-like forms (trap DEBUG, aliases, ${v@P}, mapfile -C), and mis-skipped wrapper options (timeout --kill-after, sudo --user, env --default-signal, taskset, flock, /usr/bin/time)" }
-  - { id: R20, severity: P2, status: closed, title: "judge-first anchored on the first textual mention; superseded by R23 and the shell-words parse" }
-  - { id: R21, severity: P2, status: open, title: "fail-first.mjs:78 R21's inline-comment case is vacuous: the 'a comment before a backtick wins' branch can be deleted with all tests green" }
-  - { id: R22, severity: P1, status: open, title: "ci.yml:427 on a guard-clean tree (R17 + R18) npm ci spawns PR code with RUNNER_TEMP and GITHUB_ENV in its environment; it rewrote $RUNNER_TEMP/judge/.github/scripts/base-rule.sh and the judge printed a forged pass, exit 0: the extracted judge is writable by what runs before it" }
-  - { id: R23, severity: P1, status: open, title: "ci-workflow-rules.mjs:577 judge-first never reads workflow/job/step env: or a pre-judge step's shell:, so BASH_ENV or NODE_OPTIONS run PR code before the judge and the job passes (guarded .github edits; review-verdict is the backstop)" }
-  - { id: R24, severity: P2, status: open, title: "install-guard.mjs:65 a bare tarball filename spec (\"b\": \"evil.tgz\") passes nonRegistrySpec and npm ci installs the checkout's tarball instead of the sha512-checked registry entry" }
-  - { id: R25, severity: P2, status: open, title: "base-rule.sh:67 a committed node_modules symlink makes npm ci empty the directory it points to, and base-rule.sh's -f test on the extracted file then falls back to the checkout's copy" }
-  - { id: R26, severity: P2, status: open, title: "ci-workflow-rules.mjs:474 the program denylist misses an absolute or globbed path into the workspace, a PATH prepend, git -c alias '!', awk system(), pip install ." }
-  - { id: R27, severity: P2, status: open, title: "shell-words tests do not pin top-level backticks, process substitution, coproc or redirect targets: removing their handling keeps all 51 tests green" }
-  - { id: R28, severity: P2, status: open, title: "base-rule.sh:66 the refusal of a base ref that does not name .base-commit has no test" }
+  - { id: R11, severity: P2, status: closed, title: "a record only at the base; tested" }
+  - { id: R12, severity: P1, status: closed, title: "a PR's code ran before the fail-first judge; closed: nothing of the PR runs before the judge, which drives the guard, the install and the tests itself" }
+  - { id: R13, severity: P2, status: closed, title: "git-ref suffixes; fixed" }
+  - { id: R14, severity: P2, status: closed, title: "git-ref tests; tested" }
+  - { id: R15, severity: P2, status: closed, title: "indented fences; fixed" }
+  - { id: R16, severity: P2, status: closed, title: "inline code counted as a reason; fixed" }
+  - { id: R17, severity: P1, status: closed, title: "nested dependency maps in lock entries; the guard reads every map of every entry, the root included" }
+  - { id: R18, severity: P1, status: closed, title: ".npmrc split differently from npm's ini; split on /[\\r\\n]+/ and any CR refused" }
+  - { id: R19, severity: P1, status: closed, title: "judge-first evadable; it is advisory in the rule text and no longer the guarantee" }
+  - { id: R20, severity: P2, status: closed, title: "judge-first anchoring; superseded" }
+  - { id: R21, severity: P2, status: closed, title: "R21's inline-comment case; pinned" }
+  - { id: R22, severity: P1, status: closed, title: "the extracted judge writable by what ran before it; closed: nothing runs before it, and a manifest is checked before the first child and after the last" }
+  - { id: R23, severity: P2, status: open, title: "ci-workflow-rules.mjs:619 judge-first does not read the env: of the setup-node and checkout steps or the job's container env:, though the rule text names step env: before the call (advisory now, so P2)" }
+  - { id: R24, severity: P2, status: closed, title: "bare tarball spec; refused" }
+  - { id: R25, severity: P2, status: closed, title: "committed node_modules; refused before the install" }
+  - { id: R26, severity: P2, status: closed, title: "the program denylist; extended" }
+  - { id: R27, severity: P2, status: open, title: "shell-words.mjs:150 removing the 2>&N redirect-target handling or the backtick substitution inside double quotes keeps every test green (advisory lint)" }
+  - { id: R28, severity: P2, status: closed, title: "the .base-commit refusal; tested" }
+  - { id: R29, severity: P1, status: open, title: "install-guard.mjs:133 refuses every lock entry with bundled dependencies; Tailwind 4 (ADR 0061, the Flowbite Pro migration) brings them, so the first PR that adds it and every feat/fix PR after it fail the required fail-first gate; accept an inBundle entry whose bundling parent is a sha512-checked registry.npmjs.org tarball" }
+  - { id: R30, severity: P2, status: open, title: "ci.yml:422 / judge-isolation.mjs:84,122 the manifest writer (find -type f, sha256sum) and the verifier disagree on symlinks and escaped names, so one unguarded symlink or backslash-named file under the base's scripts/ makes every judge refuse every PR, a repair PR included; build the manifest from git ls-tree, or refuse such entries with a clear message" }
+  - { id: R31, severity: P2, status: open, title: "judge-isolation.mjs:72 the ptrace probe's guarantee does not hold on hosted runners, where the runner user has passwordless sudo; the residual risk (the PR's own tests run inside fail-first) should say sudo, not only ptrace_scope; ptrace_scope on ubuntu-latest is still to be measured before merge" }
+  - { id: R32, severity: P2, status: open, title: "install-guard.mjs:79 nonRegistrySpec misses bare multi-segment and trailing-slash relative paths (vendor/sub/evil, rel/) that npm resolves as directory deps; fails closed today (link entry refused, or npm ci aborts)" }
+  - { id: R33, severity: P2, status: open, title: "metadata.yml this PR's own metadata job exits 2 (main's base-rule.sh does not admit pr-metadata.mjs: run 40833861239), contrary to the PR body's 'first run judges itself' section; not required, but the check is red and the stated behaviour is false" }
