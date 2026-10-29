@@ -22,6 +22,9 @@
 //     and 48 kHz, behind a Master Output at its highest level (MAX_OUTPUT_GAIN, the live
 //     engine's ceiling) peaks at or below that ceiling with no clipped sample; a Macro at
 //     1 opens a 300 Hz low-pass so that the 2.2 kHz harmonic is > 10 dB above the Macro at 0;
+//     a Macro at 0.5 that an LFO pushes to −0.5 … 1.5, driving a 100 Hz oscillator's frequency
+//     by 50 kHz (unipolar), keeps that frequency (its computed value, mirrored on a second
+//     channel) at or below 0.95 x Nyquist and reaches it, at 44.1 and 48 kHz (review of #267);
 //     the filter stage's response probe gives a low-shelf's and a high-shelf's gain (±6 dB)
 //     within 0.5 dB on the shelf and 0 dB off it, the same shelves rendered through the Studio
 //     graph move a 40 Hz or 16 kHz tone by their gain within 0.5 dB, and an all-pass is flat
@@ -149,6 +152,20 @@ async function runOne(name, url) {
     check(name, 'K013 a Macro at 1 opens the cutoff: 2.2 kHz > 10 dB over the Macro at 0',
       m0.ok && m1.ok && re(m1.amp[2200], m0.amp[2200]) > 10,
       `${re(m1.amp[2200], m0.amp[2200]).toFixed(1)} dB`);
+    // R-1 (review of #267): the Macro's clip keeps its output in 0..1, so the frequency it
+    // drives stays at or below 0.95 x Nyquist (float32 resolution) while an LFO pushes the
+    // Macro value to 1.5, at each rate this check requests and asserts back.
+    // timing-allow: OfflineAudioContext render rates this check requests and asserts back
+    for (const sr of [44100, 48000]) {
+      const fp = await page.evaluate((o) => window.T.frequencyPeak('macroFm', o),
+        { sampleRate: sr });
+      check(name, `R-1 a modulated Macro driving a frequency by 50 kHz at ${sr} Hz stays at or `
+        + 'below 0.95 x Nyquist and reaches it',
+        fp.ok && fp.sampleRate === sr && fp.driven === 1 && fp.peak <= fp.cap * (1 + 1e-6)
+          && fp.peak > fp.cap * 0.99 && fp.low >= 100 * (1 - 1e-6)
+          && fp.limitedEdges.includes('e2'),
+        JSON.stringify(fp));
+    }
     const shelf = await page.evaluate(() => window.T.response({ type: 'lowshelf',
       frequency: 500, gain: 6 }, [30, 15000]));
     check(name, 'K011 low-shelf +6 dB: 6 dB below the corner, 0 dB above it (±0.5 dB)',

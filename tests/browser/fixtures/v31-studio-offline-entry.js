@@ -84,12 +84,7 @@ window.T = {
    */
   async voice(name, opts = {}) {
     const v = VOICES[name](opts);
-    const model = normalizeStudio({ kind: STUDIO_KIND, schemaVersion: 1,
-      graph: { nodes: v.nodes.map(([id, type, params]) => ({ id, type,
-        position: { x: 0, y: 0 }, params })),
-      edges: v.edges.map(([id, from, fp, to, tp, props]) => ({ id, from: { node: from, port: fp },
-        to: { node: to, port: tp }, ...(props ? { props } : {}) })) } });
-    const r = await renderStudioOffline(model, { duration: 1, channels: 1,
+    const r = await renderStudioOffline(modelOf(v), { duration: 1, channels: 1,
       ...(opts.sampleRate ? { sampleRate: opts.sampleRate } : {}) });
     if (!r.ok) return { ok: false, errors: r.errors, limitations: r.limitations };
     const b = r.buffer;
@@ -98,6 +93,96 @@ window.T = {
     const amp = {};
     for (const f of v.probe || []) amp[f] = amplitudeAt(win, f, sr);
     return { ok: true, sampleRate: sr, stats: r.stats, amp, ceiling: MAX_OUTPUT_GAIN };
+  },
+  /**
+   * The computed value of every oscillator frequency AudioParam that a modulation edge drives,
+   * over the render of VOICES[name] at opts.sampleRate (review of #267, R-1): a frequency
+   * AudioParam's value cannot be read from a render, so each oscillator's frequency gets a
+   * mirror, a ConstantSourceNode whose offset receives the same automation calls (through the
+   * param's own methods) and the same connections (AudioNode.prototype.connect, wrapped while
+   * the graph is built). The offset is not clamped to ±Nyquist as the frequency is, so the
+   * mirror shows the value the Studio asks for. Rendered on channel 1, the audio on channel 0.
+   */
+  async frequencyPeak(name, opts = {}) {
+    const v = VOICES[name](opts);
+    const mirrors = new Map(); // AudioParam -> { cs, driven }
+    const realConnect = AudioNode.prototype.connect;
+    const realDisconnect = AudioNode.prototype.disconnect;
+    AudioNode.prototype.connect = function connect(dest, ...rest) {
+      const out = realConnect.call(this, dest, ...rest);
+      const m = mirrors.get(dest);
+      if (m) {
+        realConnect.call(this, m.cs.offset, ...rest);
+        m.driven = true;
+      }
+      return out;
+    };
+    AudioNode.prototype.disconnect = function disconnect(...a) {
+      const m = a.length ? mirrors.get(a[0]) : null;
+      if (m) {
+        try { realDisconnect.call(this, m.cs.offset, ...a.slice(1)); } catch (e) { /* none */ }
+      }
+      return realDisconnect.apply(this, a);
+    };
+    const destGet = findGetter(OfflineAudioContext.prototype, 'destination');
+    class MirrorContext extends OfflineAudioContext {
+      get destination() {
+        if (!this.merger) {
+          this.merger = this.createChannelMerger(2);
+          this.merger.connect(destGet.call(this));
+        }
+        return this.merger;
+      }
+
+      createOscillator() {
+        const o = super.createOscillator();
+        const p = o.frequency;
+        const cs = this.createConstantSource();
+        cs.offset.value = p.value;
+        cs.start(0);
+        for (const k of ['setValueAtTime', 'linearRampToValueAtTime',
+          'exponentialRampToValueAtTime', 'setTargetAtTime', 'setValueCurveAtTime',
+          'cancelScheduledValues', 'cancelAndHoldAtTime']) {
+          const real = p[k];
+          if (typeof real !== 'function') continue;
+          p[k] = (...a) => {
+            cs.offset[k](...a);
+            return real.apply(p, a);
+          };
+        }
+        const valueOf = findGetter(AudioParam.prototype, 'value');
+        const valueSet = Object.getOwnPropertyDescriptor(AudioParam.prototype, 'value').set;
+        Object.defineProperty(p, 'value', { get: () => valueOf.call(p),
+          set: (x) => { cs.offset.value = x; valueSet.call(p, x); } });
+        mirrors.set(p, { cs, driven: false });
+        return o;
+      }
+
+      startRendering() {
+        for (const m of mirrors.values()) if (m.driven) m.cs.connect(this.destination, 0, 1);
+        return super.startRendering();
+      }
+    }
+    let r;
+    try {
+      r = await renderStudioOffline(modelOf(v), { duration: 1, channels: 2,
+        sampleRate: opts.sampleRate, OfflineAudioContext: MirrorContext });
+    } finally {
+      AudioNode.prototype.connect = realConnect;
+      AudioNode.prototype.disconnect = realDisconnect;
+    }
+    if (!r.ok) return { ok: false, errors: r.errors, limitations: r.limitations };
+    const b = r.buffer;
+    const f = b.getChannelData(1).subarray(Math.ceil(r.startTime * b.sampleRate));
+    let peak = -Infinity;
+    let low = Infinity;
+    for (let i = 0; i < f.length; i++) {
+      peak = Math.max(peak, f[i]);
+      low = Math.min(low, f[i]);
+    }
+    return { ok: true, sampleRate: b.sampleRate, driven: [...mirrors.values()]
+      .filter((m) => m.driven).length, peak, low, cap: (b.sampleRate / 2) * 0.95,
+    limitedEdges: r.debug.runtime.limitedEdges };
   },
   /** A filter stage's response (dB) at freqs, on an OfflineAudioContext at its default rate. */
   response(cfg, freqs) {
@@ -108,6 +193,22 @@ window.T = {
     return Array.from(magDb);
   },
 };
+
+/** The getter of `name` on proto or the nearest prototype above it that defines it. */
+function findGetter(proto, name) {
+  for (let o = proto; o; o = Object.getPrototypeOf(o)) {
+    const d = Object.getOwnPropertyDescriptor(o, name);
+    if (d && d.get) return d.get;
+  }
+  throw new Error(`no getter ${name}`);
+}
+
+/** A Studio model of a voice graph (VOICES below). */
+const modelOf = (v) => normalizeStudio({ kind: STUDIO_KIND, schemaVersion: 1,
+  graph: { nodes: v.nodes.map(([id, type, params]) => ({ id, type,
+    position: { x: 0, y: 0 }, params })),
+  edges: v.edges.map(([id, from, fp, to, tp, props]) => ({ id, from: { node: from, port: fp },
+    to: { node: to, port: tp }, ...(props ? { props } : {}) })) } });
 
 // The voice graphs (ids, types, params; edges [id, from, port, to, port, props]).
 const VOICES = {
@@ -142,5 +243,14 @@ const VOICES = {
     edges: [['e1', 'osc', 'audio', 'f', 'audio'], ['e2', 'f', 'audio', 'out', 'audio'],
       ['e3', 'm', 'control', 'f', 'frequency', { depth: 4000, polarity: 'unipolar' }]],
     probe: [2200],
+  }),
+  // R-1 (review of #267): a Macro at 0.5 whose value a 5 Hz LFO moves by ±1 (−0.5 … 1.5 before
+  // the Macro's clip) drives a 100 Hz oscillator's frequency by up to 50 kHz (unipolar).
+  macroFm: () => ({
+    nodes: [['osc', 'oscillator', { frequency: 100 }], ['m', 'macro', { value: 0.5 }],
+      ['lfo', 'lfo', { rate: 5 }], ['out', 'master', {}]],
+    edges: [['e1', 'osc', 'audio', 'out', 'audio'],
+      ['e2', 'm', 'control', 'osc', 'frequency', { depth: 50000, polarity: 'unipolar' }],
+      ['e3', 'lfo', 'control', 'm', 'value', { depth: 1 }]],
   }),
 };

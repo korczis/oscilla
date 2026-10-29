@@ -26,6 +26,9 @@ import {
 } from '../../src/js/audio/drive.js';
 import { createIdGenerator, createStudioStore } from '../../src/js/studio/actions.js';
 import {
+  automationScale, editPointAction, nudgePointAction, pointAtLaneCoordinates,
+} from '../../src/js/studio/automation.js';
+import {
   CLIP_TARGET_TEXT, clipTarget, gainIsUsed, qIsUsed,
 } from '../../src/js/studio/clip-targets.js';
 import { FREQUENCY_MAX_HZ } from '../../src/js/studio/nodes/common.js';
@@ -526,8 +529,9 @@ test('K013 one Macro drives cutoff and LFO rate through each edge\'s depth and p
     const s = setup(sr);
     assert.equal(s.runtime.apply(store.getModel()).ok, true);
     assert.equal(s.runtime.start().ok, true);
-    const cs = s.runtime.nodes.get(macro).outputs.control;
+    const cs = s.runtime.nodes.get(macro).info.source;
     assert.equal(cs.kind, 'constant-source');
+    assert.equal(s.runtime.nodes.get(macro).outputs.control.kind, 'waveshaper', 'the clip');
     assert.equal(lastValue(cs.offset), 0.5);
     const biquad = s.runtime.nodes.get(f).info.stage.node;
     const eC = s.runtime.edges.get(toCutoff);
@@ -578,3 +582,280 @@ test('K013 without ConstantSourceNode the Macro degrades with a reason', () => {
   assert.match(h.reason, /ConstantSourceNode/);
   s.runtime.stop();
 });
+
+// ---------------------------------------------------------------- review of #267 (R-1, R-2, R-4, R-5)
+
+/** The [min, max] a node's control output reaches while its input sweeps [lo, hi]. */
+function controlOutputRange(out, lo, hi) {
+  if (out.kind !== 'waveshaper') return [lo, hi]; // a ConstantSourceNode passes what drives it
+  let min = Infinity;
+  let max = -Infinity;
+  for (let i = 0; i <= 4000; i++) {
+    const y = shape(out.curve, lo + ((hi - lo) * i) / 4000);
+    min = Math.min(min, y);
+    max = Math.max(max, y);
+  }
+  return [min, max];
+}
+
+test('R-1 a modulated Macro stays in its declared 0..1 range: a downstream frequency keeps '
+  + '0.95 x Nyquist', () => {
+  for (const sr of [...RATES, 96000]) {
+    const store = newStore();
+    const b = builder(store);
+    const osc = b.add('oscillator', { frequency: 100 });
+    const master = b.add('master');
+    const macro = b.add('macro', { value: 0.5 });
+    const lfo = b.add('lfo', { rate: 3 });
+    b.connect(osc, 'audio', master, 'audio');
+    const e = b.connect(macro, 'control', osc, 'frequency', { depth: 50000,
+      polarity: 'unipolar' });
+    const m = b.connect(lfo, 'control', macro, 'value', { depth: 1 });
+    const s = setup(sr);
+    assert.equal(s.runtime.apply(store.getModel()).ok, true);
+    assert.equal(s.runtime.start().ok, true);
+    const h = s.runtime.nodes.get(macro);
+    const cs = h.info.source || h.outputs.control;
+    // What drives the Macro: its offset (0.5) plus the LFO edge, ±1: −0.5 … 1.5.
+    const g = Math.abs(s.runtime.edges.get(m).ramp.target);
+    const lo = lastValue(cs.offset) - g;
+    const hi = lastValue(cs.offset) + g;
+    assert.ok(lo < 0 && hi > 1, `the probe drives the value outside 0..1: ${lo} … ${hi}`);
+    const [outLo, outHi] = controlOutputRange(h.outputs.control, lo, hi);
+    assert.ok(outLo >= 0 && outHi <= 1, `${sr}: the Macro output reaches ${outLo} … ${outHi}`);
+    assert.deepEqual(h.outputRange.control, [0, 1], 'the range computeBases sizes edges from');
+    const carrier = s.runtime.nodes.get(osc).info.oscillator;
+    const peak = lastValue(carrier.frequency) + s.runtime.edges.get(e).ramp.target * outHi;
+    assert.ok(peak <= safeMax(sr) * (1 + 1e-12), `${sr}: peak ${peak} > ${safeMax(sr)}`);
+    assert.ok(peak > 0.99 * safeMax(sr), `${sr}: the edge reaches the cap (${peak})`);
+    assert.ok(s.runtime.debugInfo().limitedEdges.includes(e), 'the scaled edge is reported');
+    s.runtime.stop();
+  }
+});
+
+test('R-1 the Macro clip: identity on 0..1, held at 0 and 1 beyond, no resampling, census 0',
+  async () => {
+    const { MACRO_CLIP_CURVE_SIZE, macroClipCurve } = await import(
+      '../../src/js/studio/adapters/modulation.js');
+    assert.equal(typeof macroClipCurve, 'function', 'adapters/modulation.js#macroClipCurve');
+    const c = macroClipCurve();
+    assert.equal(c.length, MACRO_CLIP_CURVE_SIZE);
+    assert.match(R.get('macro').help.outputs, /^Control, 0 to 1, held there when modulation/);
+    for (let i = -4000; i <= 4000; i++) {
+      const x = i / 1000;
+      const y = shape(c, x);
+      const want = Math.min(1, Math.max(0, x));
+      assert.ok(Math.abs(y - want) < 1e-6, `${x}: ${y}`);
+    }
+    for (const sr of RATES) {
+      const store = newStore();
+      const b = builder(store);
+      const osc = b.add('oscillator');
+      const f = b.add('filter');
+      const master = b.add('master');
+      const macro = b.add('macro', { value: 0.25 });
+      const lfo = b.add('lfo');
+      b.connect(osc, 'audio', f, 'audio');
+      b.connect(f, 'audio', master, 'audio');
+      b.connect(macro, 'control', f, 'frequency', { depth: 1000, polarity: 'unipolar' });
+      b.connect(lfo, 'control', macro, 'value', { depth: 1 });
+      const s = setup(sr);
+      assert.equal(s.runtime.apply(store.getModel()).ok, true);
+      assert.equal(s.runtime.start().ok, true);
+      const h = s.runtime.nodes.get(macro);
+      const out = h.outputs.control;
+      assert.equal(out.kind, 'waveshaper');
+      assert.equal(out.oversample, 'none', 'nothing after the clip resamples');
+      assert.deepEqual(Array.from(out.curve), Array.from(c));
+      assert.equal(h.info.source.kind, 'constant-source');
+      assert.ok(h.info.source.outputs.includes(out), 'the ConstantSourceNode feeds the clip');
+      assert.equal(lastValue(h.info.source.offset), 0.25, 'a static value passes unchanged');
+      s.runtime.stop();
+      const { after } = await censusAfterStop(setup(sr), store.getModel());
+      assert.deepEqual(after, { nodes: 0, sources: 0, engineNodes: 0, engineSources: 0 }, `${sr}`);
+    }
+  });
+
+/**
+ * The Drive trim a control source of range [lo, hi] gives through one edge: the trim gain's
+ * base plus the edge gain times the source, at the source's lo, middle and hi.
+ */
+function driveTrimSpan({ source, trim, props }, sr = 48000) {
+  const store = newStore();
+  const b = builder(store);
+  const osc = b.add('oscillator');
+  const drive = b.add('drive', { drive: 0.5, trim });
+  const master = b.add('master');
+  const src = b.add(source, source === 'macro' ? { value: 0.5 } : {});
+  b.connect(osc, 'audio', drive, 'audio');
+  b.connect(drive, 'audio', master, 'audio');
+  const e = b.connect(src, 'control', drive, 'trim', props);
+  const s = setup(sr);
+  assert.equal(s.runtime.apply(store.getModel()).ok, true);
+  assert.equal(s.runtime.start().ok, true);
+  const edge = s.runtime.edges.get(e);
+  const base = lastValue(s.runtime.nodes.get(drive).info.stage.trim.gain);
+  const [lo, hi] = source === 'macro' ? [0, 1] : [-1, 1];
+  const out = { edge, base, at: [lo, (lo + hi) / 2, hi].map((m) => base + edge.ramp.target * m) };
+  s.runtime.stop();
+  return out;
+}
+
+test('R-2 the Drive trim maps each edge over its full span: the static trim, then the edges',
+  () => {
+    const near3 = (a, b) => a.every((x, i) => Math.abs(x - b[i]) < 1e-9);
+    // [source, trim, edge props, trim at the source's lo / middle / hi]
+    const cases = [
+      // A unipolar source (Macro) on the default bipolar edge: trim ± depth, not 0 … 2 depth.
+      ['macro', 0.1, { depth: 0.25 }, [-0.15, 0.1, 0.35]],
+      ['macro', 0.1, { depth: 0.25, polarity: 'unipolar' }, [0.1, 0.225, 0.35]],
+      ['macro', 1, { depth: 0.25 }, [0.75, 1, 1.25]],
+      // A bipolar source (LFO) on a unipolar edge: trim … trim + depth, not held at 1.
+      ['lfo', 1, { depth: 0.25, polarity: 'unipolar' }, [1, 1.125, 1.25]],
+      ['lfo', 0.5, { depth: 0.25 }, [0.25, 0.5, 0.75]],
+      ['lfo', 0, { depth: 0.25, offset: -0.1 }, [-0.35, -0.1, 0.15]],
+    ];
+    for (const [source, trim, props, want] of cases) {
+      for (const sr of RATES) {
+        const r = driveTrimSpan({ source, trim, props }, sr);
+        assert.equal(r.edge.status, 'active');
+        assert.ok(near3(r.at, want), `${source} ${JSON.stringify(props)} trim ${trim} at ${sr}: `
+          + `${r.at.join(', ')} vs ${want.join(', ')}`);
+      }
+    }
+    // The trim is linear: a log-mapped edge onto it is refused where it is drawn.
+    const store = newStore();
+    const b = builder(store);
+    const drive = b.add('drive');
+    const lfo = b.add('lfo');
+    const r = store.dispatch({ type: 'EDGE_ADD', from: { node: lfo, port: 'control' },
+      to: { node: drive, port: 'trim' }, props: { depth: 0.25, mapping: 'log' } });
+    assert.equal(r.ok, false);
+    assert.match(r.reason, /log mapping needs a logarithmic parameter/);
+  });
+
+test('R-4 Drive changes glide (tau GLIDE_TAU_S) on the drive gain and the trim', async () => {
+  const { GLIDE_TAU_S } = await import('../../src/js/audio/drive.js');
+  assert.equal(GLIDE_TAU_S, 0.015, 'audio/drive.js#GLIDE_TAU_S');
+  const ctx = new StudioFakeContext({ sampleRate: 48000 });
+  const st = createDriveStage(ctx, { drive: 0.5, trim: 0.5 });
+  const n0 = st.input.gain.events.length;
+  const t0 = st.trim.gain.events.length;
+  st.update({ drive: 1, trim: 0.25 });
+  const d = st.input.gain.events.slice(n0);
+  const t = st.trim.gain.events.slice(t0);
+  assert.deepEqual(d.map((x) => [x.ramp, x.tau]), [['target', GLIDE_TAU_S]], 'drive: one glide');
+  assert.ok(Math.abs(d[0].value - driveGain(1) / DRIVE_SPAN) < 1e-9);
+  assert.deepEqual(t.map((x) => [x.ramp, x.tau, x.value]), [['target', GLIDE_TAU_S, 0.25]],
+    'trim: one glide');
+  st.update({ drive: 1, trim: 0.25 });
+  assert.equal(st.input.gain.events.length, n0 + 1, 'an unchanged value writes nothing');
+  assert.equal(st.trim.gain.events.length, t0 + 1);
+  // Through the Studio runtime: a drive or trim edit on a playing graph glides, never steps.
+  const store = newStore();
+  const b = builder(store);
+  const osc = b.add('oscillator');
+  const drive = b.add('drive', { drive: 0.5, trim: 0.5 });
+  const master = b.add('master');
+  b.connect(osc, 'audio', drive, 'audio');
+  b.connect(drive, 'audio', master, 'audio');
+  const s = setup();
+  assert.equal(s.runtime.apply(store.getModel()).ok, true);
+  assert.equal(s.runtime.start().ok, true);
+  s.advance(0.1);
+  const stage = s.runtime.nodes.get(drive).info.stage;
+  for (const [key, value, param] of [['drive', 0.9, stage.input.gain],
+    ['trim', 0.3, stage.trim.gain]]) {
+    b.ok(store.dispatch({ type: 'NODE_PARAM_SET', nodeId: drive, key, value }));
+    assert.equal(s.runtime.apply(store.getModel()).ok, true);
+    const last = param.events[param.events.length - 1];
+    assert.equal(last.ramp, 'target', `${key}: a glide`);
+    assert.ok(last.tau > 0 && last.tau <= GLIDE_TAU_S, `${key}: tau ${last.tau}`);
+  }
+  s.runtime.stop();
+});
+
+test('R-4 the LFO adapter clamps its rate to 0.95 x Nyquist itself, past computeBases', () => {
+  for (const sr of [...RATES, 96000]) {
+    const store = newStore();
+    const b = builder(store);
+    const osc = b.add('oscillator');
+    const master = b.add('master');
+    const lfo = b.add('lfo', { rate: 440 });
+    b.connect(osc, 'audio', master, 'audio');
+    b.connect(lfo, 'control', osc, 'level', { depth: 0.5 });
+    const s = setup(sr);
+    assert.equal(s.runtime.apply(store.getModel()).ok, true);
+    assert.equal(s.runtime.start().ok, true);
+    const h = s.runtime.nodes.get(lfo);
+    const mod = h.info.oscillator;
+    // A base above the cap (as a lane's initial value that overrides the computed base can be)
+    // and one below the floor: the adapter's own clamp is the last bound.
+    for (const [v, want] of [[100000, safeMax(sr)], [1e-6, 0.01]]) {
+      const w = {};
+      h.applyBase({ rate: { value: v, cents: 0 } }, true, new Set(), w);
+      assert.ok(Math.abs(lastValue(mod.frequency) - want) < 1e-9,
+        `${sr}: ${v} -> ${lastValue(mod.frequency)} vs ${want}`);
+      assert.ok(Math.abs(w.rate - want) < 1e-9);
+    }
+    s.runtime.stop();
+  }
+});
+
+test('R-5 an LFO rate lane spans 0.01 Hz to 0.95 x Nyquist on a log scale (audio rates drawn)',
+  () => {
+    const p = R.param('lfo', 'rate');
+    for (const sr of [...RATES, 96000]) {
+      const scale = automationScale(p, { sampleRate: sr });
+      assert.equal(scale.kind, 'log');
+      assert.equal(scale.min, 0.01);
+      assert.ok(Math.abs(scale.max - safeMax(sr)) < 1e-9, `${sr}: ${scale.max}`);
+      assert.ok(Math.abs(scale.fromNormalized(1) - safeMax(sr)) < 1e-6, 'the lane top');
+      const n = scale.toNormalized(2000);
+      assert.ok(n > 0.5 && n < 1, `2000 Hz sits inside the lane (${n})`);
+      assert.ok(Math.abs(scale.fromNormalized(n) - 2000) < 1e-6);
+      // A point drawn at the top of the lane is the cap; one at 2/3 of the height an audio rate.
+      const top = pointAtLaneCoordinates({ x: 0, y: 0, height: 120, pxPerSecond: 100 }, scale);
+      assert.ok(Math.abs(top.value - safeMax(sr)) < 1e-6);
+      const up = pointAtLaneCoordinates({ x: 0, y: 40, height: 120, pxPerSecond: 100 }, scale);
+      assert.ok(up.value > 100, `audio rate drawn: ${up.value}`);
+      assert.ok(scale.ticks().some((t) => t.value === 10000), 'ticks reach the kHz decade');
+    }
+    // The Inspector slider keeps its four decades; the lane is a separate range.
+    assert.deepEqual(sliderRange(p), { lo: 0.01, hi: 100, log: true });
+    // Random and Step Modulator lanes stay at their 0.01-100 Hz range; a cutoff lane is unchanged.
+    for (const type of ['random', 'step-modulator']) {
+      const sc = automationScale(R.param(type, 'rate'), { sampleRate: 48000 });
+      assert.deepEqual([sc.min, sc.max], [0.01, 100], type);
+    }
+    const cut = automationScale(R.param('filter', 'frequency'), { sampleRate: 48000 });
+    assert.deepEqual([cut.min, cut.max], [20, 20000]);
+  });
+
+test('R-5 a typed 2000 Hz LFO rate point keeps its value; a nudge moves it by one lane step',
+  () => {
+    for (const sr of RATES) {
+      const store = newStore();
+      const b = builder(store);
+      const lfo = b.add('lfo');
+      b.ok(store.dispatch({ type: 'AUTOMATION_POINT_ADD', target: { node: lfo, param: 'rate' },
+        time: 0, value: 2000 }));
+      const model = store.getModel();
+      const lane = model.timeline.automation[0];
+      const pt = lane.points[0];
+      const typed = editPointAction(model, lane.id, pt.id, { value: 2000 }, { sampleRate: sr });
+      assert.equal(typed.ok, true);
+      assert.equal(typed.action, null, 'a typed 2000 Hz is not rewritten');
+      const above = editPointAction(model, lane.id, pt.id, { value: 1e6 }, { sampleRate: sr });
+      assert.ok(Math.abs(above.action.value - safeMax(sr)) < 1e-6, 'held at 0.95 x Nyquist');
+      const scale = automationScale(R.param('lfo', 'rate'), { sampleRate: sr });
+      for (const dir of [1, -1]) {
+        const r = nudgePointAction(model, lane.id, pt.id, { dValue: dir, sampleRate: sr });
+        assert.equal(r.ok, true);
+        const want = scale.fromNormalized(scale.toNormalized(2000) + dir * 0.01);
+        assert.ok(Math.abs(r.action.value - want) < 1e-6, `${sr} ${dir}: ${r.action.value}`);
+        assert.ok(dir > 0 ? r.action.value > 2000 : r.action.value < 2000);
+        assert.ok(r.action.value > 1000 && r.action.value < 4000, 'one step, not to 100 Hz');
+      }
+    }
+  });
