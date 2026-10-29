@@ -15,12 +15,19 @@
 //       start/stop/ended are wrapped), also after a looped run;
 //   (d) restart 20x without growth: once each restart's earlier passes have delivered `ended`
 //       (bounded wait), none of their sources is live and only the current voice remains.
+//   seq-add-menu-pointer (C005, finding control-census-6): in the built app (dist/index.html
+//       from file://), at 1536x1024, 1920x1080 and 1280x800 and with the safety notice shown
+//       and dismissed, the point under the centre of every Add block menu item is that item and
+//       a real mouse click there adds a block of that type (the upward grid menu was clipped
+//       by the scrolling .osc-main, so Tone and Silence could not be clicked).
 // Exit code 0 only when every check passes in every browser.
 'use strict';
 
 const path = require('path');
+const { pathToFileURL } = require('url');
 const esbuild = require('esbuild');
 const suite = require('./lib/suite.cjs');
+const { until } = require('./lib/wait.cjs');
 
 const args = process.argv.slice(2);
 const only = args.includes('--browser') ? args[args.indexOf('--browser') + 1] : null;
@@ -28,6 +35,9 @@ const RUN = suite.open({ name: 'sequencer', browsers: only === null ? undefined 
 const playwright = RUN.playwright;
 const ENGINES = RUN.browsers;
 const FIXTURE = path.join(__dirname, 'fixtures', 'sequencer-fixture.js');
+const DIST = path.resolve(__dirname, '..', '..', 'dist', 'index.html');
+// The visual reference size and two common desktop sizes (C005).
+const ADD_MENU_VIEWPORTS = [[1536, 1024], [1920, 1080], [1280, 800]];
 // timing-allow: the OfflineAudioContext render rate of the reference renders
 const SR = 48000;
 // The spec's shortest allowed edge ramp (2-5 ms). Bounds use this fixed value, never the
@@ -349,6 +359,98 @@ function checkRealtimeCapture(engine, label, cap) {
   );
 }
 
+// ---------------------------------------------------------------- Add block menu (C005)
+
+/** Open the Add block menu, hit-test one item's centre and click it with the mouse. */
+async function clickAddItem(page, type) {
+  const item = `[data-osc="seq.addType"][data-value="${type}"]`;
+  await page.click('#osc-seq-add');
+  await until(() => page.evaluate((s) => {
+    const e = document.querySelector(s);
+    return !!e && e.offsetParent !== null && e.getBoundingClientRect().height > 0;
+  }, item), { ms: 5000, what: `seq-add-menu-pointer: the ${type} item is shown` });
+  const at = await page.evaluate((s) => {
+    const e = document.querySelector(s);
+    const b = e.getBoundingClientRect();
+    const x = b.x + b.width / 2;
+    const y = b.y + b.height / 2;
+    const hit = document.elementFromPoint(x, y);
+    const ed = window.OSCILLA.labs.sequencer.editor;
+    const name = (h) => `${h.tagName.toLowerCase()}${h.id ? `#${h.id}` : ''}.${h.className}`;
+    const under = hit === e ? 'the item' : hit ? name(hit) : 'nothing';
+    return { x, y, under, n: ed.model.blocks.length };
+  }, item);
+  await page.mouse.click(at.x, at.y);
+  const read = () => page.evaluate(() => {
+    const ed = window.OSCILLA.labs.sequencer.editor;
+    const b = ed.model.blocks.find((x) => x.id === ed.selectedId);
+    const menu = document.querySelector('#osc-seq-add-menu');
+    return { n: ed.model.blocks.length, type: b ? b.type : null, open: !menu.hidden };
+  });
+  let after = await read();
+  if (at.under === 'the item') {
+    after = await until(async () => {
+      const r = await read();
+      return r.n === at.n + 1 && !r.open ? r : null;
+    }, { ms: 5000, what: `seq-add-menu-pointer: a click on ${type} adds a block` })
+      .catch(() => read());
+  }
+  // A click that missed the item leaves the menu open (or opens nothing); close it either way.
+  if (after.open) await page.keyboard.press('Escape');
+  return {
+    under: at.under,
+    added: at.under === 'the item' && after.n === at.n + 1 && after.type === type,
+    y: Math.round(at.y),
+  };
+}
+
+async function checkAddMenuPointer(engine, browser) {
+  for (const [width, height] of ADD_MENU_VIEWPORTS) {
+    const context = await browser.newContext({ viewport: { width, height } });
+    const page = await context.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(String(e)));
+    try {
+      await page.goto(`${pathToFileURL(DIST).href}#m=sequencer`, { waitUntil: 'load' });
+      await page.waitForSelector('html[data-ready="true"]', { timeout: 30000 });
+      await until(() => page.evaluate(() => {
+        const app = document.querySelector('#osc-app');
+        return !!(app && app.dataset.mode === 'sequencer' && window.OSCILLA
+          && window.OSCILLA.labs && window.OSCILLA.labs.sequencer);
+      }), { ms: 10000, what: 'seq-add-menu-pointer: the Sequencer workspace is shown' });
+      const types = await page.evaluate(() => [...document
+        .querySelectorAll('[data-osc="seq.addType"]')].map((b) => b.dataset.value));
+      const missed = [];
+      // The safety notice is shown on a first run; every item is tried with it shown.
+      const miss = (type, r, notice) =>
+        `${type} (notice ${notice}; under the pointer: ${r.under}, y ${r.y})`;
+      for (const type of types) {
+        const r = await clickAddItem(page, type);
+        if (!r.added) missed.push(miss(type, r, 'shown'));
+      }
+      // Dismissed, the header moves up; the first row (Tone, Silence) is tried again.
+      const dismiss = await page.$('#osc-safety-dismiss');
+      if (dismiss && (await dismiss.isVisible())) {
+        await dismiss.click();
+        for (const type of types.slice(0, 2)) {
+          const r = await clickAddItem(page, type);
+          if (!r.added) missed.push(miss(type, r, 'dismissed'));
+        }
+      }
+      check(
+        engine,
+        `seq-add-menu-pointer ${width}x${height}: a mouse click on every Add block item adds it`,
+        types.length === 10 && missed.length === 0 && errors.length === 0,
+        missed.length || errors.length
+          ? [...missed, ...errors.slice(0, 2).map((e) => `page error: ${e}`)].join('; ')
+          : `${types.join(', ')} each added by a pointer click`,
+      );
+    } finally {
+      await context.close();
+    }
+  }
+}
+
 // ---------------------------------------------------------------- run
 
 async function runEngine(engine, bundle) {
@@ -486,6 +588,7 @@ async function runEngine(engine, bundle) {
     const final = await page.evaluate(() => window.seqFixture.realtimeTeardown());
     check(engine, 'no live sources after teardown', final.live === 0, JSON.stringify(final));
     check(engine, 'no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
+    await checkAddMenuPointer(engine, browser);
   } finally {
     await browser.close();
   }
