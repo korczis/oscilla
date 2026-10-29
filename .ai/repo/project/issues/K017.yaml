@@ -1,0 +1,36 @@
+id: K017
+milestone: M059
+serves:
+  - "playable-instrument#sequencer-editing"
+title: "Sequencer chrome: numeric BPM, ms and beats toggle, note-name entry, loop icon"
+slug: sequencer-chrome-numeric-bpm-ms-and-beats-toggle-note-name-e
+priority: p2
+profile: implementation
+objective: "Lands as feat(sequencer). A numeric 20-300 BPM input, an ms/beats toggle, note-name entry (A4, C#3 or MIDI numbers) through src/js/core/music.js, and a loop icon. Note names are block parameters, not a piano roll (ADR 0058). It waits on F001, F002 and F003 of plan pull request #251 (intent ui-flowbite-pro), which are not on main yet; depends_on names them in the plan change after #251 lands."
+why: "Owner direction of 2026-10-29 (session oscilla-b0): OSCILLA becomes a playable, patchable instrument and an audio-band signal lab; the plan checked every fact it relies on against main at 8b5792cd, and the sizes it quotes are unchanged at e2720e07."
+scope:
+  - "src/js/sequencer"
+  - "src/js/labs/sequencer-panel.js"
+  - "src/js/core/music.js"
+  - "src/index.html"
+  - "src/partials"
+  - "tests/unit/sequencer-chrome.test.mjs"
+  - "tests/browser/sequencer.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K003"
+acceptance_criteria:
+  - "Note-name entry parses A4, C#3 and MIDI numbers to the frequency core/music.js gives and refuses anything else with a readable sentence, in a unit test that fails on the merge base."
+  - "A BPM outside 20-300 is refused, not clamped silently."
+  - "Any new chrome is Flowbite Pro markup adapted from the matching Pro block and lowers or keeps the ratchet (project.ui-uses-flowbite-pro, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs); controls are Pro range sliders with number inputs, never a custom rotary knob (D5)."
+  - "No reviewer's verdict is needed (src/js/sequencer is not a guarded path); as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/sequencer-chrome.test.mjs"
+  - "node tests/browser/sequencer.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29
