@@ -78,7 +78,7 @@
 <line x1="932" y1="330" x2="932" y2="319.8" stroke="#19b8f0" stroke-width="3" stroke-linecap="round"/>
 <path d="M960 152 C980 152 980 190 1000 190" fill="none" stroke="#12a0f5" stroke-width="2" stroke-linecap="round"/>
 <path d="M960 288 C980 288 980 250 1000 250" fill="none" stroke="#19b8f0" stroke-width="2" stroke-linecap="round"/>
-<rect x="1000" y="120" width="164" height="200" rx="6" fill="#06111d" stroke="#ffb020" stroke-width="1.5"/>
+<rect x="1000" y="120" width="164" height="200" rx="6" fill="#06111d" stroke="#fcad38" stroke-width="1.5"/>
 <text x="1014" y="146" fill="#f3f6f9" font-size="13" font-weight="600" letter-spacing="1">EVIDENCE</text>
 <circle cx="1020" cy="178" r="5" fill="none" stroke="#34db7b" stroke-width="2"/>
 <text x="1034" y="182" fill="#c4d2df" font-size="12">valid range</text>
@@ -86,8 +86,8 @@
 <text x="1034" y="216" fill="#c4d2df" font-size="12">quality reasons</text>
 <circle cx="1020" cy="246" r="5" fill="none" stroke="#34db7b" stroke-width="2"/>
 <text x="1034" y="250" fill="#c4d2df" font-size="12">method named</text>
-<circle cx="1020" cy="280" r="5" fill="none" stroke="#ffb020" stroke-width="2"/>
-<text x="1034" y="284" fill="#ffb020" font-size="12">UNCALIBRATED</text>
+<circle cx="1020" cy="280" r="5" fill="none" stroke="#fcad38" stroke-width="2"/>
+<text x="1034" y="284" fill="#fcad38" font-size="12">UNCALIBRATED</text>
 <text x="40" y="388" fill="#94a9bd" font-size="13" letter-spacing="1">generate</text>
 <text x="124.4" y="388" fill="#66798d" font-size="13">→</text>
 <text x="154.4" y="388" fill="#94a9bd" font-size="13" letter-spacing="1">observe</text>

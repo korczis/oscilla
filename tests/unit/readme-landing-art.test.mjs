@@ -8,6 +8,7 @@
 //     with a <title> and a <desc>, no script, no event handler, no foreign object, no external
 //     reference (only the SVG namespace URI) and no font file;
 //   - an illustration says on its face that it is not a measurement, and README says so too;
+//   - every colour an illustration uses is a colour of src/styles/tokens.css (OSCILLA's palette);
 //   - README carries at least one native GitHub `mermaid` block with a flowchart, and every
 //     edge of it ends on a node that block declares.
 // The checks run on broken fixtures too, so they cannot pass by finding nothing.
@@ -23,6 +24,12 @@ const README = readFileSync(join(ROOT, 'README.md'), 'utf8');
 const SENTENCE = 'A zero-install, scientifically honest acoustic laboratory in your browser';
 const TAGLINE = 'See sound. Shape frequency.';
 const SVG_NS = 'http://www.w3.org/2000/svg';
+const TOKENS = readFileSync(join(ROOT, 'src', 'styles', 'tokens.css'), 'utf8').toLowerCase();
+
+export function offPaletteColours(svg, tokens = TOKENS) {
+  const colours = new Set((svg.match(/#[0-9a-fA-F]{6}\b/g) || []).map((c) => c.toLowerCase()));
+  return [...colours].filter((c) => !tokens.includes(c)).sort();
+}
 
 function readmeImages(markdown) {
   return [...markdown.matchAll(/!\[([^\]]*)\]\((docs\/assets\/[^)\s]+)\)/g)]
@@ -81,7 +88,9 @@ test('every docs/assets image README shows exists, has alt text and is a clean S
     assert.ok(alt.trim().length >= 40, `${path} has descriptive alt text`);
     assert.ok(existsSync(join(ROOT, path)), `${path} exists`);
     assert.ok(path.endsWith('.svg'), `${path} is an SVG`);
-    assert.deepEqual(svgFailures(readFileSync(join(ROOT, path), 'utf8')), [], path);
+    const svg = readFileSync(join(ROOT, path), 'utf8');
+    assert.deepEqual(svgFailures(svg), [], path);
+    assert.deepEqual(offPaletteColours(svg), [], `${path} uses only colours of src/styles/tokens.css`);
   }
   assert.match(README, /illustration[^.]*not (?:a )?measure/i, 'README says the art is not measured');
 });
@@ -98,6 +107,8 @@ test('the checkers refuse broken fixtures', () => {
   assert.ok(svgFailures(good.replace('<text>', '<text onclick="x()">')).length > 0);
   assert.ok(svgFailures(good.replace('</svg>', '<image href="https://example.com/a.png"/></svg>')).length > 0);
   assert.ok(svgFailures(good.replace('not a measurement', 'a measurement')).length > 0);
+  assert.deepEqual(offPaletteColours('<rect fill="#020B15"/>', '--osc-bg: #020b15;'), []);
+  assert.deepEqual(offPaletteColours('<rect fill="#ffb020"/>', '--osc-bg: #020b15;'), ['#ffb020']);
   assert.deepEqual(mermaidFailures('no diagram'), ['no mermaid block']);
   assert.ok(mermaidFailures('```mermaid\nflowchart LR\n  a["A"] --> b\n```').length > 0);
   assert.deepEqual(mermaidFailures('```mermaid\nflowchart LR\n  a["A"] -->|"x"| b["B"]\n```'), []);
