@@ -74,6 +74,32 @@ test('exportSequence(importSequence(x).model) deep-equals x for every fixture', 
   }
 });
 
+// The V2 sequence fields the StudioModel does not carry, with the value the export writes: the
+// seed (it only seeds blocks added later in the V2 editor and is never heard; a file with another
+// seed is refused, below). One more is carried only in its canonical form: a tempo-locked block's
+// durationMs, derived from its beats. A Sequencer save off that form (beats typed at an end of
+// their rounding) opens and exports at the duration the beats derive, also after a save and
+// reload (the tempo-locked test below). Every other field is carried by the model.
+const NOT_CARRIED = Object.freeze({ seed: DEFAULT_SEED });
+
+test('a saved and reloaded imported track exports the imported file (K004)', () => {
+  for (const [name, seq] of Object.entries(fixtures())) {
+    const x = serializeSequence(seq);
+    const opened = importStudioFile(fileText(x));
+    assert.equal(opened.ok, true, `${name}: ${JSON.stringify(opened.errors)}`);
+    // Save (the project file) and reload: only the StudioModel survives, nothing beside it.
+    const saved = exportProjectFile(opened.model).text;
+    const reloaded = importStudioFile(saved);
+    assert.equal(reloaded.ok, true, `${name}: ${JSON.stringify(reloaded.errors)}`);
+    assert.equal(reloaded.kind, 'project', name);
+    const out = JSON.parse(exportSequenceFile(reloaded.model).text);
+    for (const [field, written] of Object.entries(NOT_CARRIED)) {
+      assert.equal(out[field], written, `${name}: ${field} is written as its default`);
+    }
+    assert.deepEqual(out, x, `${name}: export(import(file)) after a save and reload is the file`);
+  }
+});
+
 test('a seed other than the V2 default is refused: Studio keeps no seed outside its model', () => {
   // The app never writes another seed (it only seeds blocks added in the V2 editor and is
   // never heard), so a file carrying one is hand-made; it is refused rather than dropped.
@@ -289,6 +315,14 @@ test('the V2 Sequencer\'s own save of a tempo-locked block opens, as the Sequenc
       [500.001, 1.000001], 500],
     ['beats typed at 30 BPM', v2Save(30, { type: 'tone', durationMs: 100 }, 0.0123456789),
       [24.691, 0.012346], 24.692],
+    // The lowest beats that round to 0.033333 (round adds Number.EPSILON before rounding), typed
+    // at 20 BPM: they derive 99.997 ms (review of #264, F6).
+    ['the low end of the beats rounding at 20 BPM',
+      v2Save(20, { type: 'tone', durationMs: 100 }, 0.03333249999999999), [99.997, 0.033333],
+      99.999],
+    ['the low end of the beats rounding at 60 BPM',
+      v2Save(60, { type: 'tone', durationMs: 100 }, 0.0999995 - Number.EPSILON),
+      [99.999, 0.1], 100],
     // At a bound: the rounded beats re-derive past it, and the sequencer clamps them back.
     ['at the 5 s chirp maximum', v2Save(20, { type: 'chirp', durationMs: 5000 }),
       [5000, 1.666667], 5000],
@@ -310,6 +344,11 @@ test('the V2 Sequencer\'s own save of a tempo-locked block opens, as the Sequenc
     const f = exportSequenceFile(r.model);
     assert.deepEqual(JSON.parse(f.text), canon, name);
     assert.deepEqual(importStudioFile(f.text).model, r.model, `${name}: re-import is identical`);
+    // The durationMs the model does not carry stays canonical after a save and reload.
+    const reloaded = importStudioFile(exportProjectFile(r.model).text);
+    assert.equal(reloaded.ok, true, `${name}: ${JSON.stringify(reloaded.errors)}`);
+    assert.deepEqual(JSON.parse(exportSequenceFile(reloaded.model).text), canon,
+      `${name}: after a save and reload`);
   }
 });
 
@@ -325,16 +364,35 @@ test('a tempo-locked durationMs outside the rounding of its beats is still refus
     // 1.000001 beats at 120 BPM can be 500 or 500.001 ms, not 500.002.
     [at(120, 500.002, 1.000001),
       'Block 1: durationMs is 500.002 in the file but would open as 500'],
-    // 0.033333 beats at 20 BPM span 99.998 to 100.001 ms.
+    // The beats that round to 0.033333 lie in [0.0333325, 0.0333335) less the rounding's
+    // Number.EPSILON, so at 20 BPM they derive 99.997 to 100 ms (review of #264, F6 and F7).
     [at(20, 100.002, 0.033333),
       'Block 1: durationMs is 100.002 in the file but would open as 99.999'],
-    [at(20, 99.997, 0.033333),
-      'Block 1: durationMs is 99.997 in the file but would open as 99.999'],
+    [at(20, 100.001, 0.033333),
+      'Block 1: durationMs is 100.001 in the file but would open as 99.999'],
+    [at(20, 99.996, 0.033333),
+      'Block 1: durationMs is 99.996 in the file but would open as 99.999'],
+    // 0.1 beats at 60 BPM derive 99.999 to 100 ms, never 100.001 (the upper end is open).
+    [at(60, 100.001, 0.1), 'Block 1: durationMs is 100.001 in the file but would open as 100'],
     [at(20, 100.01, 0.033333),
       'Block 1: durationMs is 100.01 in the file but would open as 99.999'],
     // The Sequencer stores milliseconds to 3 decimals.
     [at(20, 100.0004, 0.033333),
       'Block 1: durationMs is 100.0004 in the file but would open as 99.999'],
+    // Each end of a rounding range is one double: 1.000501 beats at 60 BPM open 1000.501 ms
+    // and refuse the next millisecond step either way (review of #355, V1).
+    [at(60, 1000.502, 1.000501),
+      'Block 1: durationMs is 1000.502 in the file but would open as 1000.501'],
+    [at(60, 1001.4, 1.001401),
+      'Block 1: durationMs is 1001.4 in the file but would open as 1001.401'],
+    // A derived duration past a bound is clamped to it, so a millisecond past the clamp is
+    // refused: a chirp's 5000 ms ceiling and a block's 10 ms floor (review of #355, V2).
+    [at(20, 5000.001, 1.666667, 'chirp'),
+      'Block 1: durationMs is 5000.001 in the file but would open as 5000'],
+    [at(20, 5000.002, 1.666667, 'chirp'),
+      'Block 1: durationMs is 5000.002 in the file but would open as 5000'],
+    [at(20, 9.999, 0.003333),
+      'Block 1: durationMs is 9.999 in the file but would open as 10'],
     // Beats past a bound by more than their rounding are clamped, which changes them.
     [at(20, 5000, 1.666668, 'chirp'),
       'Block 1: beats is 1.666668 in the file but would open as 1.666667'],
@@ -368,6 +426,19 @@ test('a block type naming an Object.prototype member is refused, not thrown (F2)
   }
 });
 
+test('a block type that is not a string is refused as such, not coerced to a key (F8)', () => {
+  const ref = serializeSequence(referenceSequence());
+  for (const [type, said] of [[['tone'], 'a list'], [{ tone: 1 }, 'an object'], [7, '7']]) {
+    const doc = { ...ref, blocks: [ref.blocks[0], { ...ref.blocks[1], type }] };
+    const r = importStudioFile(JSON.stringify(doc));
+    assert.equal(r.ok, false, said);
+    assert.equal(r.model, undefined, said);
+    assert.equal(r.errors[0].path, 'blocks[1].type', said);
+    assert.equal(r.errors[0].message,
+      `Block 2: ${said} is not a V2 block type; the file is refused.`, said);
+  }
+});
+
 test('a V2 block id that cannot name a Studio clip is refused, not renumbered (F3)', () => {
   const ref = serializeSequence(referenceSequence());
   for (const id of ['kick drum', 'é1', `b${'1'.repeat(130)}`, 'b1/2']) {
@@ -381,6 +452,16 @@ test('a V2 block id that cannot name a Studio clip is refused, not renumbered (F
     assert.match(r.errors[0].message,
       /^Block 2: id “.+” cannot name a Studio clip \(letters, digits, /, id);
   }
+  // The longest id is the clip id pattern's (ID_PATTERN) less the `clip-` prefix (F9).
+  const longest = `b${'1'.repeat(122)}`;
+  const opens = importStudioFile(JSON.stringify({ ...ref, blocks: [ref.blocks[0],
+    { ...ref.blocks[1], id: longest }] }));
+  assert.equal(opens.ok, true, JSON.stringify(opens.errors));
+  assert.equal(opens.model.timeline.clips[1].id, `clip-${longest}`);
+  const over = importStudioFile(JSON.stringify({ ...ref, blocks: [ref.blocks[0],
+    { ...ref.blocks[1], id: `${longest}1` }] }));
+  assert.equal(over.ok, false);
+  assert.match(over.errors[0].message, /at most 123 characters\); the file is refused\.$/);
 });
 
 test('the configuration version Studio reads is the one config-file.js writes', () => {
