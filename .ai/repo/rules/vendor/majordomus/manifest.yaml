@@ -5,7 +5,7 @@ vendor: majordomus
 package: majordomus-standard-rules
 version: 1
 format: ai-rules/v1
-source_revision: 1.0.0-alpha.1
+source_revision: 1.0.0-alpha.9
 rules:
   - id: majordomus.adr-integrity
     version: 1
@@ -68,9 +68,9 @@ rules:
     file: rules/decision-threshold.v1.md
     sha256: 072a8155ad66e81fed3b935a20e9ac255a2ed657fce9f338d61afeeb2a210bb7
   - id: majordomus.deployment-contract
-    version: 1
-    file: rules/deployment-contract.v1.md
-    sha256: 5180a026347d696531604b717226250afaf3980e8e49086bb91d0d47eedd9dae
+    version: 2
+    file: rules/deployment-contract.v2.md
+    sha256: 78db0793022488c37698b69ea5a72f1e43c4404bd24430f2a7d7bc07fc22e3e7
   - id: majordomus.doctrine-wiring-integrity
     version: 1
     file: rules/doctrine-wiring-integrity.v1.md
