@@ -1,0 +1,38 @@
+id: T002
+milestone: M073
+serves:
+  - "v3-measure#readout-states"
+  - "v3-measure#readout-labels"
+title: "The waveform scope never draws a flat top that is not in the data, and says when it shows a mono sum"
+slug: the-waveform-scope-never-draws-a-flat-top-that-is-not-in-the
+priority: p1
+profile: implementation
+objective: "Truth-table rows GEN-02, STP-15 (scratchpad p05/truth-table.md). A pure scopeScale({ peak, gain }) returns { yMax, overRange, ratio }; the y axis rescales to the next nice step at or above the window peak and labels its ticks as multiples of the set gain, and the ceiling state comes from T001. It lands on the drawing K032 (M062) rewrites, so it follows K032. The label says \"mono sum (L+R)/2\" in every uiPickFit width, and while the dual stereo route plays it adds that opposite-phase channels cancel here and points to Phase & Stereo."
+why: "P05 audit of origin/main b67d1e58 (v3.13.0): The scope clamps samples to 1.15 x the set gain with no mark: a clean sine boosted +6 dB (crest 3.01 dB, 0 % at the ceiling) is drawn with flat tops, and a 3.1x over-range is drawn as a plateau at about +1.1. With Stereo split, A = B = 440 Hz and Δφ 180 both channels play at full level (router RMS 0.282) while the scope labelled \"output analyser\" is flat (RMS 2.08e-8), because the analyser sees the mono down-mix. Narrow panels drop \"relative to set gain\", so +1 reads as full scale."
+scope:
+  - "src/js/ui/p5-views.js"
+  - "src/js/ui/scope-scale.js"
+  - "src/js/ui/workbench.js"
+  - "tests/unit/readout-states-scope.test.mjs"
+  - "tests/browser/app.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "T001"
+  - "K032"
+acceptance_criteria:
+  - "Fail-first fixture: tests/unit/readout-states-scope.test.mjs: scopeScale({ peak: 0.16, gain: 0.08 }) → overRange, ratio 2, yMax ≥ 2; scopeScale({ peak: 0.25, gain: 0.08 }) → ratio 3.125; the label builder at its narrowest fallback still contains \"set gain\" and \"mono\". Fails on the merge base (no helper; narrow label drops the qualifier). Browser check in tests/browser/app.cjs: the +6 dB peaking path shows the rescaled axis; the split-180 path shows the mono-sum text."
+  - "Negative cases, each asserted: A sine at the set gain keeps yMax 1 and no over-range text; the idle computed trace is unchanged; the min/max band below sr/f < 4 is unchanged; window maths (qa-regressions.test.mjs:224-236) unchanged."
+  - "Revertible on its own: Revert: display-only module and label strings."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named deadline (project.suite-harness, project.bounded-test-timing)."
+  - "Any new visible element follows the Flowbite Pro components and the locked tokens (project.ui-uses-flowbite-pro, project.visual-identity-lock); npm run visual passes or the baseline change is declared."
+  - "tests/README.md has a row for each new test; this issue does not edit docs/CLAIMS.yaml or the intent (T027 does)."
+validation:
+  - "npm test"
+  - "npm run verify"
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29
