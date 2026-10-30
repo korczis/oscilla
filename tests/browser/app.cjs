@@ -1265,6 +1265,13 @@ function defineChecks() {
       await seen(w, h, 'the parse error clears', (v) => !v.shown);
       res[`${w}x${h}`] = { over, fine, parse };
     }
+    // A sweep value a preset or link applies replaces the typed one: its error goes with it.
+    await type(END, '30000');
+    await seen(390, 844, 'the End error is shown before the preset', (v) => v.shown);
+    await page.evaluate(() => window.OSCILLA.app.applyConfig({ v: 1, source: 'sweep',
+      sweep: { end: 10000 } }, 'preset'));
+    const preset = await seen(390, 844, 'a preset clears the End error', (v) => !v.shown
+      && v.value === '10.00 kHz');
     await page.setViewportSize({ width: 1536, height: 1024 });
     await page.evaluate(() => { window.OSCILLA.app.source = 'single'; });
     await page.selectOption('#osc-pattern-select', 'tone');
@@ -1279,7 +1286,8 @@ function defineChecks() {
       && fine.value === '10.00 kHz' && fine.describedBy === null
       && parse.invalid === 'true' && parse.inside;
     const bad = Object.entries(res).filter(([, r]) => !good(r));
-    return { ok: !bad.length, res };
+    const cleared = preset.invalid === 'false' && preset.describedBy === null;
+    return { ok: !bad.length && cleared, res, preset };
   });
 
   def('presets-save-load', async ({ page }) => {

@@ -124,3 +124,15 @@ test('pattern fields keep their ids and errors through the shared template', () 
   assert.equal(app.ppError(d), app.paramErrors[app.paramId(d)]);
   assert.notEqual(app.ppError(d), '');
 });
+
+test('a sweep value a preset or link sets clears the error typed there', () => {
+  const app = sweepApp(null);
+  app.setSweepField(field('end'), '30000');
+  app.setSweepField(field('durationMs'), '99');
+  app.setSweepField(field('start'), 'abc');
+  app.applyConfig({ v: 1, source: 'sweep', sweep: { end: 5000, durationMs: 3000 } }, 'preset');
+  assert.equal(app.sweep.end, 5000);
+  assert.equal(app.ppError(field('end')), '', 'the limit message no longer describes 5 kHz');
+  assert.equal(app.ppError(field('durationMs')), '');
+  assert.match(app.ppError(field('start')), /is not a frequency/, 'an untouched field keeps its error');
+});
