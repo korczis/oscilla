@@ -1,0 +1,50 @@
+# Review verdict for pull request #342, T023: the Studio says when it plays a lower frequency
+# than the one stored (branch fix/t023-studio-frequency-limited). Reviewed head 8849157a, merge
+# base origin/main e872c444. Builder oscilla-b0; this reviewer (oscilla-26-review) did not build
+# it, and neither did the session that started this review.
+#
+# The digest: the base branch's scripts/review-verdict.mjs, run from `git archive origin/main
+# scripts .github/scripts` with --repo on a detached worktree of the head: 85536c4b...eef over
+# the 2 guarded paths it names (src/js/studio/compiler.js, src/js/studio/runtime.js).
+#
+# What was verified, on the head, with the real AudioEngine over the fake AudioContext:
+# - Fail-first: tests/unit/readout-in-effect-studio-limits.test.mjs fails 6/6 on the merge base's
+#   tree with the head's tests/ in place, and passes 6/6 on the head.
+# - The diagnostic fires exactly when the base an AudioParam holds is below the stored value plus
+#   its cables' constant part: 30 kHz at 22.05, 44.1 and 48 kHz each give one, with played =
+#   safeMaximum = sr / 2 x 0.95 of the running context; 45.6 kHz at 96 kHz, a value exactly at
+#   the safe maximum (44.1 and 48 kHz) and 1 kHz give none.
+# - It cannot outlive the graph: bases (and their diagnostics) are cleared on stop and dispose,
+#   deleted with a removed or replaced node, and a lane-owned base is filtered at read time.
+#   The Inspector shows a field's note only while details.stored equals the model's value.
+# - It changes no audio: computeBases' base and gains are unchanged (scaled is a new, read-only
+#   output), v31-studio-compiler.test.mjs passes; no node is created; the work is per apply and
+#   per debugInfo, nothing per audio frame. studioHash, planHash, the applied record and saved
+#   records are untouched: the diagnostics live only in the runtime's bases map, and the
+#   transport does not keep apply's warnings.
+# - npm test (node --test "tests/unit/**/*.test.mjs"): 3318 tests, 3317 pass, 0 fail, 1 skipped.
+#   build:check: dist/index.html is the build of the sources. Browser: v31-studio-runtime in
+#   chromium (file://), 16/16, OSC_LOAD_MAX=40 at load 18; firefox, webkit and http not run.
+#
+# Verdict: changes-requested, for R1 (P1): the new user-facing text gives a false reason. The
+# clamp's cap is min(p.max, safeMaximum) (compiler.js:536), but frequencyLimits always says
+# "0.95 x Nyquist" and the safe maximum (compiler.js:622), the edge text names the node's
+# Frequency even when the target is another parameter (compiler.js:625), and the Runtime section
+# says the values were lowered "to keep frequencies at or below 0.95 x Nyquist"
+# (inspector.js:333). Reproduced at 48 kHz: an LFO Rate (max 100 Hz) at 80 Hz with a +50 Hz cable
+# offset reads "LFO 1 Rate is 80 Hz, 130 Hz with its cables' constant offset, but plays 100 Hz:
+# the Studio keeps a frequency at or below 22.80 kHz, 0.95 x Nyquist at 48 kHz", and an LFO into
+# that Rate with depth 80 on 50 Hz "plays 63% of its depth (50 Hz of 80 Hz): the Studio keeps LFO
+# 1 Frequency at or below 22.80 kHz". Fix: pass the cap that applied and say which bound it is
+# (the parameter's range maximum or 0.95 x Nyquist), name the edge's target parameter, and add the
+# LFO-Rate case to the test. The played values themselves are right in every case tried.
+schema: review-verdict/v1
+pr: 342
+verdict: changes-requested
+reviewer: oscilla-26-review
+content: 85536c4b204695d12fcf2ee8419c0291216d0291098c05342528704e5bb74eef
+findings:
+  - { id: R1, severity: P1, status: open, title: "compiler.js:536/622/625, inspector.js:333 a value capped by its parameter range (LFO Rate, max 100 Hz) is reported as lowered to 0.95 x Nyquist (22.80 kHz) and an edge into Rate names 'LFO 1 Frequency'; the reason, the bound and the parameter named are false" }
+  - { id: R2, severity: P2, status: open, title: "compiler.js:631 'plays' is the frequency AudioParam base: a linear cable's constant part is included but a log cable's constant cents (on the detune AudioParam) are not, so 30 kHz with a -1 octave log offset reads 'plays 22.80 kHz' while it sounds 11.4 kHz; and '20.00 kHz, plays 22.80 kHz' reads as a raise; define played as the pitch or label it the frequency base" }
+  - { id: R3, severity: P3, status: open, title: "runtime.js:793 the message text is frozen at the last base recompute: renaming the node (or the cable's source) while playing applies but recomputes no bases, so the Runtime section keeps 'Oscillator 1 Frequency is 30.00 kHz' after the rename" }
+  - { id: R4, severity: P3, status: open, title: "inspector.js:196 a negative cable offset reads 'its cables' constant -5000 Hz included' (not -5.00 kHz); and compiler.js:658 a log edge whose constant offset alone was lowered says 'plays a lower offset' with details.played equal to details.stored, recording no amount" }
