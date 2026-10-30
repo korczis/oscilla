@@ -269,11 +269,14 @@ export function measureFlow(ctx = {}) {
   {
     const b = reasonsFor(blockers, 'stimulus');
     const w = reasonsFor(warnings, 'stimulus');
+    // A blocked step says why, as the input and calibration steps do (C021): the description
+    // of the sweep the check refused is not the reason it refused it.
+    let detail = st ? `${describeStimulus({ ...st, kind: st.kind || 'log-sweep' })}, `
+      + `${levelName(st.level)} output, ${repeats} run${repeats === 1 ? '' : 's'}`
+      : 'No stimulus chosen';
+    if (b.length) detail = b[0].text;
     set('stimulus', { complete: (!!preflight && !b.length) || measured, blocked: b.length > 0,
-      warn: w.length > 0, reasons: [...b, ...w],
-      detail: st ? `${describeStimulus({ ...st, kind: st.kind || 'log-sweep' })}, `
-        + `${levelName(st.level)} output, ${repeats} run${repeats === 1 ? '' : 's'}`
-        : 'No stimulus chosen' });
+      warn: w.length > 0, reasons: [...b, ...w], detail });
   }
   // 5 measure
   {
