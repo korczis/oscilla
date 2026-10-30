@@ -231,7 +231,9 @@ test('T023 review: a cable offset is included in what plays, and the count is of
   assert.match(node.message,
     /is 20\.00 kHz, 25\.00 kHz with its cables' constant offset, but plays 22\.80 kHz/);
   const f = fieldOf(s, 'frequency');
-  assert.equal(f.readout, '20.00 kHz, plays 22.80 kHz');
+  // Review R2 of the second round: the asked sum stands beside the stored value, so that a cap
+  // below it does not read as a raise of 20 kHz.
+  assert.equal(f.readout, '20.00 kHz (25.00 kHz with cables), plays 22.80 kHz');
   assert.ok(f.limitNote.startsWith('Plays 22.80 kHz, its cables\' constant 5.00 kHz included:'),
     f.limitNote);
   const rv = inspector.runtimeView(s.store.getModel(), truthOf(s));
@@ -262,4 +264,153 @@ test('T023 review: a lane-owned base and a not-yet-applied edit claim no lowered
   const g = fieldOf(b, 'frequency');
   assert.equal(g.readout, '1.00 kHz');
   assert.equal(g.limitNote, null);
+});
+
+// ---------------------------------------------------------------- review of #342, round 2
+
+/** Oscillator -> Master, LFO 1 into its frequency, LFO 2 into LFO 1's Rate (`props`). */
+function rateRig(sampleRate, rate, props) {
+  const fx = createFakeAudioEnv({ sampleRate });
+  const engine = new AudioEngine({ env: fx.env });
+  assert.ok(engine.init(), 'engine.init');
+  if (engine.limiterFeed) engine.limiterFeed.infrastructure = true;
+  const runtime = runtimeMod.createStudioRuntime({ engine });
+  const store = createStudioStore(null, { idGenerator: createIdGenerator(null) });
+  const add = (nodeType, extra = {}) => ok(store.dispatch({ type: 'NODE_ADD', nodeType,
+    position: { x: 0, y: 0 }, ...extra })).created.nodes[0];
+  const connect = (from, fromPort, to, toPort, p) => ok(store.dispatch({ type: 'EDGE_ADD',
+    from: { node: from, port: fromPort }, to: { node: to, port: toPort }, props: p }))
+    .created.edges[0];
+  const osc = add('oscillator', { params: { frequency: 440 } });
+  const master = add('master');
+  connect(osc, 'audio', master, 'audio');
+  const lfo1 = add('lfo', { params: { rate } });
+  connect(lfo1, 'control', osc, 'frequency', { depth: 10 });
+  const lfo2 = add('lfo', { params: { rate: 1 } });
+  const edge = connect(lfo2, 'control', lfo1, 'rate', props);
+  const s = { fx, engine, runtime, store, osc: lfo1, lfo1, lfo2, edge };
+  ok(runtime.apply(store.getModel(), { revision: store.getRevision() }));
+  s.started = ok(runtime.start());
+  return s;
+}
+
+// R1 (P1): an LFO's Rate is capped by its own range (100 Hz), not by 0.95 x Nyquist; the
+// reason, the bound and the parameter named must say so.
+test('T023 review R1: a Rate capped by its range names the range, not 0.95 x Nyquist', () => {
+  const s = rateRig(48000, 80, { depth: 1, offset: 50 });
+  const got = limits(s.runtime.debugInfo().diagnostics).filter((d) => d.entity.kind === 'node');
+  assert.equal(got.length, 1, JSON.stringify(s.runtime.debugInfo().diagnostics));
+  const d = got[0];
+  assert.deepEqual(d.entity, { kind: 'node', id: s.lfo1 });
+  assert.equal(d.message, 'LFO 1 Rate is 80 Hz, 130 Hz with its cables\' constant offset, but '
+    + 'plays 100 Hz: the Studio keeps LFO 1 Rate at or below 100 Hz, the top of its range.');
+  assert.equal(d.details.param, 'rate');
+  assert.equal(d.details.target, 'rate');
+  assert.equal(d.details.bound, 'range');
+  assert.equal(d.details.cap, 100);
+  assert.ok(close(d.details.played, 100), `played ${d.details.played}`);
+  const f = inspector.inspectorView(s.store.getModel(), { nodes: [s.lfo1] },
+    { truth: truthOf(s) }).fields.find((x) => x.key === 'rate');
+  assert.equal(f.readout, '80 Hz (130 Hz with cables), plays 100 Hz');
+  assert.equal(f.limitNote, 'Plays 100 Hz, its cables\' constant 50 Hz included: the Studio '
+    + 'keeps this rate at or below 100 Hz, the top of its range.');
+  const rv = inspector.runtimeView(s.store.getModel(), truthOf(s));
+  assert.ok(!/Nyquist/.test(rv.text), rv.text);
+  assert.match(rv.text, /lowered to keep them within their parameters' ranges; see/);
+});
+
+test('T023 review R1: a cable into a Rate names the Rate and its range', () => {
+  const s = rateRig(48000, 50, { depth: 80 });
+  const got = limits(s.started.warnings);
+  assert.equal(got.length, 1, JSON.stringify(s.started.warnings));
+  const d = got[0];
+  assert.deepEqual(d.entity, { kind: 'edge', id: s.edge });
+  assert.equal(d.message, 'The cable LFO 2 → LFO 1 Rate plays 63% of its depth (50 Hz of '
+    + '80 Hz): the Studio keeps LFO 1 Rate at or below 100 Hz, the top of its range.');
+  assert.equal(d.details.param, 'rate');
+  assert.equal(d.details.target, 'rate');
+  assert.equal(d.details.bound, 'range');
+  assert.ok(close(d.details.scale, 50 / 80), `scale ${d.details.scale}`);
+  // the frequency case keeps its Nyquist reason, and names the frequency
+  const o = rig(48000, { frequency: 12000 }, { port: 'frequency', props: { depth: 20000 } });
+  const e = limits(o.started.warnings)[0];
+  assert.equal(e.details.bound, 'nyquist');
+  assert.ok(e.message.endsWith(': the Studio keeps Oscillator 1 Frequency at or below '
+    + '22.80 kHz, 0.95 × Nyquist at 48 kHz.'), e.message);
+  const both = inspector.runtimeView(o.store.getModel(), truthOf(o));
+  assert.match(both.text, /lowered to keep frequencies at or below 0\.95 × Nyquist; see/);
+});
+
+// R2 (P2): "plays" is what sounds, the AudioParam base shifted by the log cables' constant
+// cents: 30 kHz with a -1 octave log offset sounds at 11.4 kHz (22.8 kHz, then down an octave).
+test('T023 review R2: what plays includes a log offset, below and above the stored value', () => {
+  const s = rig(48000, { frequency: 30000 },
+    { port: 'frequency', props: { depth: 0.1, mapping: 'log', offset: -1 } });
+  const o = s.runtime.nodes.get(s.osc).info.oscillator;
+  const sounding = target(o.frequency) * 2 ** (target(o.detune) / 1200);
+  assert.ok(close(sounding, 11400), `sounding ${sounding}`);
+  const d = limits(s.runtime.debugInfo().diagnostics).find((x) => x.entity.kind === 'node');
+  assert.ok(d, 'the clamped base is a diagnostic');
+  assert.ok(close(d.details.played, sounding), `played ${d.details.played}`);
+  assert.ok(close(d.details.asked, 15000), `asked ${d.details.asked}`);
+  assert.ok(close(d.details.base, 22800), `base ${d.details.base}`);
+  assert.ok(close(d.details.cents, -1200), `cents ${d.details.cents}`);
+  assert.equal(d.message, 'Oscillator 1 Frequency is 30.00 kHz, 15.00 kHz with its cables\' '
+    + 'constant offset, but plays 11.40 kHz: the Studio keeps Oscillator 1 Frequency at or '
+    + 'below 22.80 kHz, 0.95 × Nyquist at 48 kHz. Its log cables\' constant -1 octave applies '
+    + 'after that.');
+  const f = fieldOf(s, 'frequency');
+  assert.equal(f.readout, '30.00 kHz (15.00 kHz with cables), plays 11.40 kHz');
+  assert.match(f.limitNote, /^Plays 11\.40 kHz, its cables' constant -1 octave included: /);
+  assert.match(f.limitNote, /The log cables' offset applies after that\.$/);
+
+  // above: 20 kHz and a +1 octave log offset ask 40 kHz and sound at the cap, 22.8 kHz
+  const u = rig(48000, { frequency: 20000 },
+    { port: 'frequency', props: { depth: 0, mapping: 'log', offset: 1 } });
+  const ou = u.runtime.nodes.get(u.osc).info.oscillator;
+  const up = target(ou.frequency) * 2 ** (target(ou.detune) / 1200);
+  assert.ok(close(up, 22800), `sounding ${up}`);
+  const n = limits(u.runtime.debugInfo().diagnostics).find((x) => x.entity.kind === 'node');
+  assert.ok(n, 'a base its log offset lowers is a diagnostic');
+  assert.ok(close(n.details.played, 22800), `played ${n.details.played}`);
+  assert.ok(close(n.details.asked, 40000), `asked ${n.details.asked}`);
+  assert.ok(n.message.startsWith('Oscillator 1 Frequency is 20.00 kHz, 40.00 kHz with its '
+    + 'cables\' constant offset, but plays 22.80 kHz: '), n.message);
+  assert.equal(fieldOf(u, 'frequency').readout,
+    '20.00 kHz (40.00 kHz with cables), plays 22.80 kHz');
+});
+
+// R3 (P3): the text names the node and the cable's source as they are now.
+test('T023 review R3: a rename while playing renames the diagnostics', () => {
+  const s = rig(48000, { frequency: 12000 }, { port: 'frequency', props: { depth: 20000 } });
+  ok(s.store.dispatch({ type: 'NODE_RENAME', nodeId: s.osc, name: 'Lead' }));
+  s.apply();
+  const lfo = s.store.getModel().graph.edges.find((e) => e.id === s.edge).from.node;
+  ok(s.store.dispatch({ type: 'NODE_RENAME', nodeId: lfo, name: 'Wobble' }));
+  s.apply();
+  const d = limits(s.runtime.debugInfo().diagnostics)[0];
+  assert.match(d.message, /^The cable Wobble → Lead Frequency plays /);
+  assert.match(d.message, /keeps Lead Frequency at or below/);
+});
+
+// R4 (P3): a negative offset reads in kHz, and a log offset lowered alone records its amount.
+test('T023 review R4: a negative offset in kHz, a lowered log offset with its amount', () => {
+  const s = rig(48000, { frequency: 30000 },
+    { port: 'frequency', props: { depth: 100, offset: -5000 } });
+  const f = fieldOf(s, 'frequency');
+  assert.ok(f.limitNote.startsWith('Plays 22.80 kHz, its cables\' constant -5.00 kHz included:'),
+    f.limitNote);
+  assert.equal(f.readout, '30.00 kHz (25.00 kHz with cables), plays 22.80 kHz');
+
+  const u = rig(48000, { frequency: 20000 },
+    { port: 'frequency', props: { depth: 0, mapping: 'log', offset: 1 } });
+  const e = limits(u.runtime.debugInfo().diagnostics).find((x) => x.entity.kind === 'edge');
+  assert.ok(e, 'the edge whose constant offset was lowered is a diagnostic');
+  assert.equal(e.details.mapping, 'log');
+  assert.ok(close(e.details.offsetStored, 1), `offsetStored ${e.details.offsetStored}`);
+  const room = Math.log2(22800 / 20000);
+  assert.ok(close(e.details.offsetPlayed, room), `offsetPlayed ${e.details.offsetPlayed}`);
+  assert.equal(e.message, 'The cable LFO 1 → Oscillator 1 Frequency plays a lower constant '
+    + 'offset (the log cables into Frequency add 0.189 octaves of 1 octave): the Studio keeps '
+    + 'Oscillator 1 Frequency at or below 22.80 kHz, 0.95 × Nyquist at 48 kHz.');
 });

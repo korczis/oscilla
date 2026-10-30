@@ -58,7 +58,9 @@ import { PORT_VISUALS } from '../../studio/ports.js';
 import { describeEdge, summarizeGraph, announceAction } from '../../studio/a11y.js';
 import { formatFrequency, parseFrequency } from '../../core/frequency.js';
 import { SAFE_NYQUIST_FACTOR_TEXT } from '../../core/constants.js';
+import { limitBoundText, limitValueText } from '../../studio/compiler.js';
 import { sig } from '../../core/math.js';
+import { CENTS_PER_OCTAVE } from '../../core/music.js';
 import { CATEGORY_LABELS, STATUS_LABELS, edgeRoute, nodeConnections } from './graph-view.js';
 import { formatSecondsText } from './timeline-view.js';
 import { h, replaceChildren, setAttr, setText } from './graph-dom.js';
@@ -176,9 +178,18 @@ function fieldOf(model, node, p, registry, edgeStatus, truth = null) {
   const control = p.type === 'enum' ? 'select' : p.type === 'boolean' ? 'toggle'
     : p.type === 'id' ? 'readonly' : p.type === 'list' ? 'list' : 'number';
   const text = formatParamValue(p, value);
-  // A value the runtime lowers to stay at or below 0.95 × Nyquist reads what plays (T023).
+  // A value the runtime holds below what it and its cables ask reads what plays (T023), the
+  // asked value beside the stored one when cables add to it, so that a cap below the sum does
+  // not read as a raise of the stored value (review R2).
   const limit = lane ? null : limitOf(truth, node, p.key);
-  const played = limit ? `${text}, plays ${formatParamValue(p, limit.details.played)}` : text;
+  const ld = limit ? limit.details : null;
+  const cabled = ld ? [ld.offset ? limitValueText(ld.offset, p.unit) : null,
+    ld.cents ? limitValueText(ld.cents / CENTS_PER_OCTAVE, 'octaves') : null]
+    .filter(Boolean) : [];
+  const playedText = ld ? formatParamValue(p, ld.played) : '';
+  const played = !ld ? text : cabled.length
+    ? `${text} (${formatParamValue(p, ld.asked)} with cables), plays ${playedText}`
+    : `${text}, plays ${playedText}`;
   return {
     key: p.key,
     label: p.label,
@@ -193,12 +204,12 @@ function fieldOf(model, node, p, registry, edgeStatus, truth = null) {
     valueText: lane ? `${text}, base, overridden by the lane` : played,
     laneNote: lane ? `Automated: the lane sets ${p.label}. ${text} is the base value, used only `
       + 'without the lane; a change here is not heard while the lane exists.' : null,
-    limitNote: limit ? `Plays ${formatParamValue(p, limit.details.played)}${limit.details.offset
-      ? `, its cables' constant ${formatParamValue(p, limit.details.offset)} included` : ''}: `
-      + `the Studio keeps `
-      + `${p.unit === 'Hz' ? 'a frequency' : 'the pitch'} at or below `
-      + `${formatFrequency(limit.details.safeMaximum)}, ${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist at `
-      + `${Number((limit.details.sampleRate / 1000).toFixed(3))} kHz.` : null,
+    // Which cap applied, the parameter's range or 0.95 × Nyquist, and whose (review R1).
+    limitNote: ld ? `Plays ${playedText}${cabled.length
+      ? `, its cables' constant ${cabled.join(' and ')} included` : ''}: the Studio keeps `
+      + `${ld.target === p.key ? `this ${p.label.toLowerCase()}` : 'the detuned frequency'} `
+      + `at or below ${limitBoundText(ld)}.${ld.cents < 0
+        ? ' The log cables\' offset applies after that.' : ''}` : null,
     input: p.type === 'list' ? (value || []).join(', ')
       : finite(value) ? String(Number(value.toPrecision(6))) : '',
     unit: p.unit || '',
@@ -327,11 +338,17 @@ export function runtimeView(model, truth, opts = {}) {
   const d = v ? v.desired : { revision: null, studioHash: null };
   const why = v && v.reason ? v.reason.message : '';
   // A value the runtime plays below the stored one is not "as edited" (T023).
-  const lowered = runtimeDiagnostics(truth).filter((x) => x.code === 'frequency-limited').length;
-  // Each one is a value (a parameter, a cable's depth), not a frequency of its own.
+  const limits = runtimeDiagnostics(truth).filter((x) => x.code === 'frequency-limited');
+  const lowered = limits.length;
+  // Each one is a value (a parameter, a cable's depth), not a frequency of its own, and the
+  // reason is the cap that applied: a parameter's range, 0.95 × Nyquist, or both (review R1).
+  const bounds = new Set(limits.map((x) => (x.details && x.details.bound) || 'nyquist'));
+  const held = [bounds.has('range') ? 'within their parameters\' ranges' : null,
+    bounds.has('nyquist') ? `at or below ${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist` : null]
+    .filter(Boolean).join(' and ');
   const text = state === 'in-sync' ? (lowered ? `Revision ${a.revision} plays with ${lowered} `
-    + `value${lowered === 1 ? '' : 's'} lowered to keep frequencies at or below `
-    + `${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist; see the diagnostics below.`
+    + `value${lowered === 1 ? '' : 's'} lowered to keep ${bounds.has('range') ? 'them'
+      : 'frequencies'} ${held}; see the diagnostics below.`
     : `Revision ${a.revision} plays as edited.`)
     : state === 'degraded' ? `Revision ${a.revision} plays, short of its plan: ${why}`
     : state === 'behind' ? `Revision ${a.revision} plays; revision ${d.revision} is not `
