@@ -24,6 +24,9 @@
 #   deadline; browser-timing, browser-suite-contract, ui-flowbite-pro (debt 3909, not above 3910),
 #   docs-derived, knowledge-integrity, v3-ui, positioning-consistency and first-screen-layout
 #   pass; npm run build:check says dist is the build of the sources.
+# - Not run by this review: the browser suites. One attempt at first-screen.cjs (chromium and
+#   webkit, file://, OSC_LOAD_MAX=30) was refused by the harness's load gate (load 32-50 for
+#   480 s, nothing ran); the browser evidence is the builder's and the earlier adversarial pass's.
 # - The new Playground reference.png (accepting it is the review, project.visual-identity-lock
 #   v2) shows the chosen layout; the domain views keep their own language.
 #
