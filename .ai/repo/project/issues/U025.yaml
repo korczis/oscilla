@@ -1,0 +1,51 @@
+id: U025
+milestone: M054
+serves:
+  - "ui-current#ui-audited"
+title: "At tablet size the Studio shows the whole graph after Frame all, its clips without a nested scroller and readable track headers"
+slug: at-tablet-size-the-studio-shows-the-whole-graph-after-frame-all
+priority: p3
+profile: implementation
+objective: "Lands as fix(ui). Before, at 768x1024 on a coarse pointer the 768-1279 px Studio rules (src/styles/studio.css:1389-1408: a minmax(0, 36%) timeline row beside a fixed 272 px Inspector column) leave the page unscrollable (.osc-main scrollHeight = clientHeight = 739) and give [data-osc=\"studio.graph.viewport\"] in #osc-st-graph 443x199 px with the 44 px zoom/frame bar over it; Frame all stops at COARSE_FIT_MIN_ZOOM (src/js/ui/studio/graph-geometry.js:29-35, about 92%), so all six nodes of the default patch are cut by the viewport edges; #osc-studio-timeline-host holding [data-osc=\"studio.tl.scroll\"] is a nested 206 px scroller (scrollHeight 373), so the Tone and Sweep clips sit under the status bar until it is scrolled; and the track header's span.osc-stl-htarget (src/js/ui/studio/timeline-editor.js:398) and span.osc-stl-hrange (src/js/ui/studio/automation-editor.js:42) render 1 and 0 px wide inside the 156 px --osc-stl-head-w column (src/styles/studio-timeline.css:10, 251-258). After, at that size the graph gets the workspace's width with the zoom bar outside its viewport, Frame all fits the default patch at the coarse minimum zoom (the minimum itself is kept: it holds the 24 px port targets), the timeline's clips are seen at once or by the page's own scroll, and a header shows its target and range or leaves them out with their full text kept in the header's accessible name. Built on Flowbite Pro: the layout uses Pro cards, a Pro drawer or tabs and Tailwind responsive variants in the markup F008 builds, adds no osc-* class, legacy rule or inline style, and removes the legacy rules it replaces (project.ui-uses-flowbite-pro); every control it shows works (project.no-inert-surfaces); the range text stays the lane's real range (project.no-fake-science). Negative cases: at 1280 px and wider the three-column Studio and the visual reference are unchanged; below 768 px the one-subview layout (docs/v31/user-guide.md) is unchanged; a fine pointer keeps Frame all without the coarse minimum. Rollback: revert the commit; layout and markup only, no stored state or URL key changes. Not this: W014 (track header kind, 390 px headers), U007 (phone width 390x844), F008 (moves the Studio chrome to Pro, keeps the graph and timeline geometry), S084 (adds widths to layout.cjs, no panel-height check), V429 (mobile Studio, horizontal overflow only), V409 (graph pan, zoom and frame all)."
+why: "Found by the S074 quality-bar review of 2026-10-30 at origin/main d9db6bdf, section 74 symptom 'At tablet width the Studio is cramped: the graph viewport is 199 px tall, no node is fully visible when it opens, and the timeline's track headers are clipped to 0-1 px.', reproduced by an independent verifier; evidence scratchpad s074/out/st-768x1024-touch-studio-timeline.png (the measured rects above). Severity P3: it stays usable through pan and inner scrolling. card#osc-st-graph and card#osc-st-timeline are recorded Flowbite debt, the fixed-height tablet geometry is not; no plan issue or open PR covers it (#268 and #330 touch the Studio and the shell, not this layout)."
+scope:
+  - "src/index.html"
+  - "src/styles/studio.css"
+  - "src/styles/studio-timeline.css"
+  - "src/js/ui/studio/workspace.js"
+  - "src/js/ui/studio/graph-editor.js"
+  - "src/js/ui/studio/graph-geometry.js"
+  - "src/js/ui/studio/timeline-editor.js"
+  - "src/js/ui/studio/automation-editor.js"
+  - "tests/unit/studio-tablet-layout.test.mjs"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/browser/layout.cjs"
+  - "docs/v31/user-guide.md"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "F008"
+acceptance_criteria:
+  - "Fail-first: tests/unit/studio-tablet-layout.test.mjs reads src/index.html, src/styles/studio.css, src/styles/studio-timeline.css, src/js/ui/studio/timeline-editor.js and src/js/ui/studio/automation-editor.js and fails on the merge base: on a coarse pointer between 768 and 1279 px the graph is not placed beside a fixed Inspector column with the timeline in a fractional row, and a track header emits its target and range only with a minimum width that holds them, their full text otherwise in the header's accessible name."
+  - "A Studio tablet check in tests/browser/layout.cjs at 768x1024 with a coarse pointer, in every gate browser: the graph viewport ([data-osc=\"studio.graph.viewport\"]) is at least 360 px tall below the zoom bar and the bar's rect intersects no node; after Frame all every node rect of the default patch lies inside the viewport rect."
+  - "The same check: the default patch's Tone and Sweep clips lie inside the visible area with every element's scrollTop at 0, or are reached by scrolling the page itself; no element shorter than 240 px is the only way to reach them; none lies under the status bar."
+  - "The same check: every rendered track-header target and range text has clientWidth at least min(scrollWidth, 32 px), and a header that leaves one out carries its full text in its accessible name."
+  - "Negative cases decided by browser checks: the existing layout.cjs squash, overlap, overflow and 44 px target checks pass at all WIDTHS and TOUCH_WIDTHS; tests/browser/v31-studio-timeline.cjs keeps the below-768 px one-subview layout; npm run visual passes at 1536x1024; on a fine pointer Frame all is not held at COARSE_FIT_MIN_ZOOM (tests/unit/v31-studio-ui-graph-geometry.test.mjs passes)."
+  - "It adds no class token, selector, markup surface or inline style and only removes legacy ones, so tests/unit/ui-flowbite-pro-baseline.json stays equal or falls (node scripts/ui-flowbite-pro-record.mjs --check passes, rewritten only where a count fell) and node --test tests/unit/ui-flowbite-pro.test.mjs passes (project.ui-uses-flowbite-pro, project.visual-identity-lock v2)."
+  - "As a fix change it carries a unit test that fails on the merge base and passes on the head (project.fail-first); it touches the studio paths, so it carries a reviewer's verdict (project.review-verdict)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named deadline (project.suite-harness, project.bounded-test-timing)."
+  - "Definition of done, extends: the Studio's responsive layout gains a tablet arrangement between the one-subview phone layout and the three-column desktop."
+  - "Definition of done, interlinks: the objective names W014, U007, F008, S084, V429 and V409; the plan record and the pull request cite this issue and the S074 finding."
+  - "Definition of done, interactivity: Frame all, the subview or drawer control and the timeline scroll work at tablet size (the browser check above); no inert control is added (project.no-inert-surfaces)."
+  - "Definition of done, docs, menus and routes: docs/v31/user-guide.md describes the Studio layout from 768 to 1279 px; no route or menu changes."
+  - "Definition of done, tested: the unit test and the browser check above; tests/README.md has a row for the new unit test and the extended layout.cjs row; dist is rebuilt and npm run build:check passes."
+  - "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+  - "node --test tests/unit/studio-tablet-layout.test.mjs"
+  - "node tests/browser/layout.cjs"
+  - "node tests/browser/v31-studio-timeline.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-10-30'
+updated_at: '2026-10-30'

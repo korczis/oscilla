@@ -1,0 +1,38 @@
+id: U013
+milestone: M054
+serves:
+  - "ui-current#ui-audited"
+title: "The Additive Synthesis chart shows when the additive switch is off"
+slug: the-additive-synthesis-chart-shows-when-the-additive-switch-is
+priority: p3
+profile: implementation
+objective: "Lands as fix(ui). Defect: the Additive Synthesis chart (#osc-chart-additive, src/index.html:1039-1040, drawn by createAdditiveChart in src/js/charts/additive-chart.js) has no off state. With [data-osc=\"additive.enable\"] (#osc-add-enable, src/index.html:1034-1035) off, periodicWave() returns null (src/js/labs/additive.js:232-234) and the instrument plays its plain oscillator, yet render() (src/js/labs/additive.js:131-133) hands the chart only the bars, so the canvas is pixel-identical in both states and the host keeps the static aria-label 'Harmonic amplitudes 1 to 10': harmonics 2 to 8 read as sounding when they do not. Before: same pixels, same name, on and off. After: the chart gains setEnabled(on) and an isEnabled() for tests, which the lab calls from render() with enable.value (changed() already re-renders on the switch, src/js/labs/additive.js:145-147,179); off, it draws the same bars (what enabling would play, never different values: getBars() is unchanged) at reduced opacity and labels the plot BYPASSED, the pattern of the Filter chart (src/js/charts/filter-chart.js:77,88-92) and the dimmed Envelope graph (src/js/charts/envelope-graph.js:75-77); the host's aria-label comes from one exported function of the chart module and names the state (on: 'Harmonic amplitudes 1 to 10'; off: it adds that additive synthesis is bypassed and the oscillator plays its plain waveform). Negative cases: the switch on draws exactly what it draws today (no regression of the bar states of T022 or the coefficient equality of V219); a state restored through a preset, History or the config file (state.enabled, src/js/labs/additive.js:248-251) shows the matching chart state on load; the selection and keyboard adjustment keep working while bypassed. Fix within project.ui-uses-flowbite-pro: the canvas is a domain visual (ADR 0061 note); no new osc-* class, selector, markup surface or inline style, and the label is set as an attribute, not a style. project.no-fake-science: the chart never shows partials as playing when they are not. Rollback: revert the commit; the chart returns to its stateless drawing. Not this: T022 (per-harmonic bar states), K044 (bar tooltips, dB rel unit, Nyquist label), V219 (bars equal the coefficients), K027 with K043/T021 and K045 (the filter and envelope inactive states), C007 and C008 (the additive state reaching the voice and the Signal Path), C003 (the 'instrument only' panel note), K091 (audio/additive.js engines)."
+why: "Found by the S074 quality-bar review of 2026-10-30 at origin/main d9db6bdf, section 74 symptom \"The Additive Synthesis chart is pixel-identical with the additive switch on and off, and its aria-label is 'Harmonic amplitudes 1 to 10' in both states\", reproduced by an independent verifier (probe: 'add state false -> true, chart same? true', 'add aria off Harmonic amplitudes 1 to 10'; the Envelope comparison 'env enable changes chart true'); screenshots s074/add-on.png and s074/add-off.png of the review scratchpad. The graph does not show whether its partials reach the output, so in the off state it shows a spectrum that is not playing (project.no-fake-science, project.no-inert-surfaces)."
+scope:
+  - "src/js/charts/additive-chart.js"
+  - "src/js/labs/additive.js"
+  - "tests/unit/charts.test.mjs"
+  - "tests/browser/labs.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/charts.test.mjs imports the chart module's exported label function and fails on the merge base: on, it returns 'Harmonic amplitudes 1 to 10'; off, a different string that says additive synthesis is bypassed (project.fail-first)."
+  - "A check in tests/browser/labs.cjs toggles #osc-add-enable off and on and asserts, polled against a named deadline: the canvas pixels of #osc-chart-additive differ between the states; the host's aria-label differs and the off one names the bypass; the chart's isEnabled() equals the lab's enabled; getBars() is identical in both states and still equals the PeriodicWave coefficients (the existing 'additive bars equal the PeriodicWave coefficients' check passes)."
+  - "The same check restores a state with enabled false through labs.additive.update and asserts the chart and its label show the off state without a toggle."
+  - "It adds no class token, selector, markup surface or inline style, so tests/unit/ui-flowbite-pro-baseline.json stays equal or falls (node scripts/ui-flowbite-pro-record.mjs --check passes) and node --test tests/unit/ui-flowbite-pro.test.mjs passes (project.ui-uses-flowbite-pro, project.visual-identity-lock)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named deadline (project.suite-harness, project.bounded-test-timing)."
+  - "Definition of done, extends: the Additive chart joins the inactive chart set of the Filter (BYPASSED) and the Envelope (dimmed)."
+  - "Definition of done, interlinks: the chart's state follows the switch, presets, History and the config file through the one lab state; the pull request names U013 and the related ids T022, K044 and K027."
+  - "Definition of done, interactivity: the switch changes the chart at once; selection and arrow-key adjustment of a bar still work while bypassed."
+  - "Definition of done, docs, menus and routes: tests/README.md rows for the unit and browser checks name the off state; no menu or route changes (stated)."
+  - "Definition of done, tested: node --test tests/unit/charts.test.mjs, node tests/browser/labs.cjs and npm test pass; dist is rebuilt and npm run build:check passes."
+  - "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+  - "node --test tests/unit/charts.test.mjs"
+  - "node tests/browser/labs.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-10-30'
+updated_at: '2026-10-30'
