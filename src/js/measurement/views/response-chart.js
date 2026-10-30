@@ -535,8 +535,9 @@ function calibratedSpan(f, covered, coverage) {
 }
 
 /**
- * T017: 'Frequency profile "X" (12.0 kHz–16.0 kHz) covers none of the measured range
- * (100 Hz–10.0 kHz): RAW is shown, uncalibrated (no extrapolation).'
+ * T017: 'Frequency profile "X" (12.0 kHz–16.0 kHz) covers none of the 319 measured points
+ * (100 Hz–9.9 kHz): RAW is shown, uncalibrated (no extrapolation).' A one-point profile reads
+ * '(a single point at 1.00 kHz)': it lies inside the range yet covers no grid point.
  */
 function noCoverageText(f, s) {
   const c = s.correction;
@@ -545,10 +546,13 @@ function noCoverageText(f, s) {
   const cov = Array.isArray(c.coverage) && c.coverage[0] > 0 && c.coverage[1] >= c.coverage[0]
     ? c.coverage : null;
   let span = '';
-  if (cov) span = cov[0] === cov[1] ? ` (only ${at(cov[0])})` : ` (${at(cov[0])}–${at(cov[1])})`;
+  if (cov) {
+    span = cov[0] === cov[1] ? ` (a single point at ${at(cov[0])})`
+      : ` (${at(cov[0])}–${at(cov[1])})`;
+  }
   return `Frequency profile "${c.name || UNAVAILABLE.UNKNOWN}"${span} covers none of the `
-    + `measured range (${at(f[0])}–${at(f[f.length - 1])}): RAW is shown, uncalibrated `
-    + '(no extrapolation).';
+    + `${f.length} measured points (${at(f[0])}–${at(f[f.length - 1])}): RAW is shown, `
+    + 'uncalibrated (no extrapolation).';
 }
 
 /** "calibrated 20 Hz–15 kHz, uncalibrated above 15 kHz" (spec §158). */

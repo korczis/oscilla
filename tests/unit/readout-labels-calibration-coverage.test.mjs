@@ -2,7 +2,7 @@
 // is no correction. The response view and the RTA band view badge CALIBRATED (frequency) only
 // when at least one grid point or band is inside the profile's coverage (ADR 0020: never
 // extrapolated); otherwise RAW is primary, the badge reads UNCALIBRATED, the summary gives the
-// RAW extremes and a note says the profile covers none of the measured range.
+// RAW extremes and a note says the profile covers none of the measured points.
 //
 // Real pieces only: a rendered 100 Hz-10 kHz log sweep through a delayed, scaled path with
 // seeded noise -> align -> computeTransfer (48 points per octave: 319 grid points) ->
@@ -95,8 +95,8 @@ test('fixture: the 100 Hz-10 kHz sweep has 319 grid points; the profiles cover n
   }
 });
 
-for (const [what, profile] of [['a 12-16 kHz profile', OUT_OF_RANGE],
-  ['a one-point 1 kHz profile', ONE_POINT]]) {
+for (const [what, profile, span] of [['a 12-16 kHz profile', OUT_OF_RANGE, '12.0 kHz–16.0 kHz'],
+  ['a one-point 1 kHz profile', ONE_POINT, 'a single point at 1.00 kHz']]) {
   test(`response view: ${what} covering no measured point is UNCALIBRATED`, () => {
     const r = resultWith(profile);
     const v = buildResponseView(r);
@@ -116,10 +116,11 @@ for (const [what, profile] of [['a 12-16 kHz profile', OUT_OF_RANGE],
       + `${common.ratioDbText(r.transfer.magnitudeDb[lo])} at `
       + `${common.gridFrequencyText(f, lo, binHz)}`), v.summary);
     assert.doesNotMatch(v.summary, /no measured points/);
-    // The note says why: the profile covers none of the measured range (no extrapolation).
-    const note = v.notes.find((t) => /covers none of the measured range/.test(t));
+    // The note says why: the profile covers none of the measured points (no extrapolation).
+    // It never says the profile lies outside the range: the 1 kHz point is inside it.
+    const note = v.notes.find((t) => /covers none of the 319 measured points \(100 Hz–/.test(t));
     assert.ok(note, v.notes.join('\n'));
-    assert.ok(note.includes(`"${profile.name}"`), note);
+    assert.ok(note.includes(`"${profile.name}" (${span}) covers`), note);
     assert.match(note, /no extrapolation/);
     // The cursor never reads a CALIBRATED value.
     const at = v.readoutAt(1000);
@@ -138,7 +139,7 @@ test('response view: a partly covering profile keeps CALIBRATED and the uncovere
   assert.equal(v.primary, 'corrected');
   assert.match(v.markers.calibratedRange.label, /^calibrated 200 Hz–4\.0+ kHz, uncalibrated below/);
   assert.ok(v.notes.includes(v.markers.calibratedRange.label));
-  assert.ok(!v.notes.some((t) => /covers none of the measured range/.test(t)));
+  assert.ok(!v.notes.some((t) => /covers none of the \d+ measured points/.test(t)));
   assert.match(v.summary, /^Frequency response \(calibrated\): maximum /);
 });
 
