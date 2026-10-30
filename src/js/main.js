@@ -35,6 +35,7 @@ import { buildPeriodicWave } from './audio/additive.js';
 import { encodeWav, parseWav } from './audio/wav.js';
 import { buildPlan, planFreqAt, PATTERNS } from './audio/patterns.js';
 import { createVisualizationBridge } from './visualization/visualization-bridge.js';
+import { soundingEnvelope } from './studio/playground-voice.js';
 import { startVisualizer, createDefaultViews } from './visualization/p5-host.js';
 import { harmonicTable } from './visualization/harmonics.js';
 import { createInstrument } from './core/instrument.js';
@@ -179,19 +180,29 @@ function v2PlayOptions(plan, ctx, live) {
   return o;
 }
 
+/** The envelope the sounding voice has and the next note gets, as plain values (C008). */
+function envelopeVizInputs() {
+  const env = labs.envelope;
+  const v = engine.voice;
+  return soundingEnvelope({
+    voice: v && !v.ended ? { adsr: v.adsr, attack: v.attack, release: v.release } : null,
+    labAdsr: env && env.enabled ? env.adsr : null,
+    attackS: app ? app.attack / 1000 : 0.01, releaseS: app ? app.release / 1000 : 0.03,
+  });
+}
+
 /**
  * What the visualization bridge shows of the labs (Harmonics tab, signal path): read on every
- * bridge sync, never per frame. Plain values only.
+ * bridge sync, never per frame. Plain values only. The envelope is the sounding note's.
  */
 function labVizInputs(plan) {
   const add = labs.additive;
   const additive = add && add.enabled && plan && plan.type !== 'dual' ? add.coefficients() : null;
-  const env = labs.envelope;
   const filter = labs.filter ? labs.filter.config : null;
   const dual = plan && plan.type === 'dual';
   return {
     additive,
-    adsr: env && env.enabled ? { ...env.adsr } : null,
+    ...envelopeVizInputs(),
     filter: filter && filter.enabled ? { ...filter } : null,
     router: dual && needsRouter(plan) ? routerConfigFor(plan) : null,
     phaseDeg: dual && labs.phase ? labs.phase.config.phaseDeg : 0,
@@ -439,7 +450,15 @@ function mountLabs(root) {
     });
   }
   const labChanged = () => { syncLabFlags(); vizLabsChanged(); };
-  if (labs.envelope) labs.envelope.onChange(labChanged);
+  if (labs.envelope) {
+    labs.envelope.onChange(() => {
+      // C008: sustain and the power switch reach a held note; a and d apply from the next.
+      if (engine.voice && !engine.voice.ended) {
+        engine.setEnvelopeSustain(labs.envelope.enabled ? labs.envelope.adsr : null);
+      }
+      labChanged();
+    });
+  }
   if (labs.filter) labs.filter.onChange(labChanged);
   if (labs.phase) {
     let lastPhaseDeg = labs.phase.config.phaseDeg;
@@ -521,6 +540,14 @@ function integrationInit() {
   engine.on((type, d) => {
     cmp.onEngine(type, d);
     notifyAdapter();
+    // C008: the path draws the sounding envelope: re-sync when it changed.
+    if (type === 'play' || type === 'ended' || type === 'envelope') {
+      queueMicrotask(() => {
+        const drawn = bridge.state.lab;
+        const pick = (l) => JSON.stringify(l ? [l.adsr, l.envelope, l.nextNote] : null);
+        if (pick(drawn) !== pick(envelopeVizInputs())) vizLabsChanged();
+      });
+    }
   });
   if (!engine.isSupported()) {
     cmp.status = 'ERROR';

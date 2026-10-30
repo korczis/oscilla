@@ -40,7 +40,11 @@
 //     o.adsr         { a, d, s, r } (seconds, sustain 0..1): attack/release times come from it
 //                    and it is handed to the envelope function (see voice.js v1OpenEnvelope);
 //                    the default envelope uses only a and r. Install the DSP ADSR with
-//                    engine.setEnvelope(makeAdsrEnvelope(envelopeModule)).
+//                    engine.setEnvelope(makeAdsrEnvelope(envelopeModule)). The voice keeps its
+//                    copy as voice.adsr. Attack and decay belong to the note: an edit applies
+//                    from the next note. engine.setEnvelopeSustain(adsr | null) moves a held
+//                    note to a new sustain, or to 1 for an envelope switched off, with a
+//                    click-free glide (envelope.js retargetSustain).
 //     o.envelope     per-play envelope function (overrides engine.setEnvelope).
 //     o.stepEnvelope (eg, t, dur, a, r, adsr) => void, replaces the V1 step envelope of
 //                    programmed patterns (must schedule through eg).
@@ -64,9 +68,10 @@ import {
 import { clamp, toNumber } from '../core/math.js';
 import { planFreqAt } from './patterns.js';
 import {
-  freezeParam, pruneParam, recordEvent, stepEnv, trackParam, trackedParam, v1OpenEnvelope,
-  valueAt,
+  cancelParamFrom, freezeParam, pruneParam, recordEvent, stepEnv, trackParam, trackedParam,
+  v1OpenEnvelope, valueAt,
 } from './voice.js';
+import { getSchedule, retargetSustain, sustainSteadyFrom } from './envelope.js';
 import {
   ESCAPE_RELEASE_S, FAST_RELEASE_S, SCHEDULE_LEAD_S, WAVE_DIP_S, armTopUp, rampSegments,
   scheduleConst, scheduleCycles, scheduleRamps, scheduleSteps,
@@ -446,6 +451,7 @@ export class AudioEngine {
       attack: Math.max(0.001, adsr ? adsr.a : o.attackS), release: Math.max(0.005, adsr ? adsr.r : o.releaseS),
       limited: !!o.limited, extended: false,
       inserts: [], periodicWave: o.periodicWave || null, adsr, eg: null, stepEnv: null,
+      sustainWant: null, sustainTimer: null,
     };
     const t0 = v.t0;
     const track = (n) => { v.nodes.push(n); this.nodes.add(n); return n; };
@@ -866,6 +872,83 @@ export class AudioEngine {
     if (Math.abs(normalizePhaseDeg(v.opts.dualPhaseDeg) - want) < 1e-9) return 'same';
     v.opts = { ...v.opts, dualPhaseDeg: want };
     return this._restart(v, v.plan);
+  }
+
+  /**
+   * A live Envelope Lab edit for the sounding voice (C008). adsr: the lab's { a, d, s, r }, or
+   * null for the envelope switched off. Only the level reaches a held note: an open-pattern
+   * voice started with an ADSR glides its tracked envelope (v.eg, envelope.js retargetSustain)
+   * to the new sustain, or to 1 when switched off, never above 1, and a finite one (the safety
+   * limit, TRIGGER) keeps its scheduled release, which starts from the new level; voice.adsr and
+   * voice.opts.adsr.s follow (voice.opts.adsr null when off) and 'envelope' is emitted. Attack
+   * and decay belong to the note and apply from the next one, as does any edit of a voice
+   * started without the ADSR or of a programmed pattern (its steps are scheduled ahead). The
+   * release a held note uses when let go is not this method's (#301 C009). An edit while the
+   * envelope ramps (attack, decay, an earlier glide) waits until the audio thread has rendered
+   * the ramp's end (UI bookkeeping timer), so no ramp that is sounding is edited (V249); the
+   * latest edit wins.
+   * Returns 'applied' | 'deferred' | 'same' | 'next-note' | false (nothing sounding).
+   */
+  setEnvelopeSustain(adsr) {
+    const v = this.voice;
+    if (!v || v.ended || v.releasing || !v.eg) return false;
+    if (!v.adsr || !getSchedule(v.eg).length) return 'next-note';
+    const s = adsr ? clamp(toNumber(adsr.s, v.adsr.s), 0, 1) : 1;
+    if (adsr && Math.abs(v.adsr.s - s) < 1e-9) {
+      v.sustainWant = null;
+      return 'same';
+    }
+    v.sustainWant = { adsr: adsr ? { ...v.adsr, s } : null };
+    return this._retargetSustain(v);
+  }
+
+  /**
+   * setEnvelopeSustain's scheduling: now when the envelope holds steady, else once it does.
+   * Steady means rendered (V249): the render quantum holding the end of the last attack, decay
+   * or glide lies at or before ctx.currentTime. currentTime is a lower bound of what has
+   * rendered in every browser: Chromium's is the rendered position and moves in device-callback
+   * bursts, a stale Firefox value only delays the edit to a later timer task. clock.js
+   * renderedTimeAtLeast is not: it extrapolates readings by real time, so between bursts it
+   * runs ahead of rendering and would edit the last quanta of a ramp (review #310 R-9). Nor is
+   * the scheduling time _soon, later still by SCHEDULE_LEAD_S.
+   */
+  _retargetSustain(v) {
+    const want = v.sustainWant;
+    if (!want || v.ended || v.releasing || !v.eg || this.voice !== v) return false;
+    const ctx = v.ctx;
+    const steady = sustainSteadyFrom(getSchedule(v.eg), { releaseEnd: v.deadline });
+    if (Number.isNaN(steady)) {
+      v.sustainWant = null;
+      return 'next-note';
+    }
+    const q = RENDER_QUANTUM / ctx.sampleRate;
+    const ready = Math.ceil(steady / q - 1e-6) * q;
+    const rendered = ctx.currentTime;
+    if (rendered < ready) {
+      if (!v.sustainTimer) {
+        const { setTimeout } = this._timers;
+        const wait = ctx.state === 'running' ? Math.max(1, (ready - rendered) * 1000 + 1)
+          : 250;
+        v.sustainTimer = setTimeout(() => {
+          v.sustainTimer = null;
+          this._retargetSustain(v);
+        }, wait);
+        v.timers.push(v.sustainTimer);
+      }
+      return 'deferred';
+    }
+    v.sustainWant = null;
+    const t = this._soon(ctx);
+    const done = retargetSustain(v.eg, t, want.adsr ? want.adsr.s : 1, {
+      releaseEnd: v.deadline, cancel: (time) => cancelParamFrom(v.env, time),
+    });
+    if (!done) return false;
+    v.adsr = want.adsr;
+    // Only the sustain: the options' other fields, the release among them, are not this edit's.
+    v.opts = { ...v.opts,
+      adsr: want.adsr ? { ...(v.opts.adsr || want.adsr), s: want.adsr.s } : null };
+    this._emit('envelope', { id: v.id, adsr: want.adsr ? { ...want.adsr } : null });
+    return 'applied';
   }
 
   /**

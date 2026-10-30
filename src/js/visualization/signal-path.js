@@ -7,9 +7,16 @@
 // (studio/playground-voice.js) projected by studio/signal-path-projection.js. This file derives
 // no topology of its own: V1's stage-list derivation and its V2 lab extension were removed
 // (docs/v31/signal-path.md).
+//
+// C008: while a voice sounds, the envelope stage is the sounding note's; an Envelope Lab setting
+// the next note will get is in its sub ("next note: ..."), and the footer says so too, because a
+// narrow box truncates the sub.
 
 export const PATH_GAP_X = 14;
 export const PATH_GAP_Y = 20;
+/** Footer while the envelope stage shows a setting the next note gets (C008). */
+export const NEXT_NOTE_FOOTER = 'active path · envelope change applies from the next note';
+const NEXT_NOTE = / · next note: /;
 
 /**
  * createSignalPathView() -> { id: 'path', draw(h, st, now) } for createP5Host.
@@ -26,6 +33,7 @@ export function createSignalPathView() {
   let pTop = 0;
   const pPos = new Float64Array(2);
   let pathSubs = [];
+  let pathNextNote = false;
   let pathSubsNodes = null;
   let pathSubsBw = -1;
   let pathTitles = [];
@@ -54,6 +62,7 @@ export function createSignalPathView() {
     };
     pathTitles = nodes.map((n) => fit(n.title, titleSize));
     pathSubs = nodes.map((n) => fit(n.sub, 8));
+    pathNextNote = nodes.some((n) => NEXT_NOTE.test(n.sub));
     pathSubsNodes = nodes;
     pathSubsBw = pBw;
     pathSubsSize = titleSize;
@@ -135,7 +144,10 @@ export function createSignalPathView() {
       label(pathTitles[i], x + 7, pBh >= 26 ? y + 16 : y + pBh / 2 + 3, on ? pal.fg : pal.muted, titleSize);
       if (pBh > 34) label(pathSubs[i], x + 7, y + 31, pal.muted, 8);
     }
-    if (pathFooter) label(playing ? 'active path' : 'idle — subdued nodes are not processing', 12, H - 6, pal.muted, 9);
+    if (pathFooter) {
+      label(playing ? (pathNextNote ? NEXT_NOTE_FOOTER : 'active path')
+        : 'idle — subdued nodes are not processing', 12, H - 6, pal.muted, 9);
+    }
   }
 
   return {
