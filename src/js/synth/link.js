@@ -38,7 +38,7 @@ export function linkOf(model, panel, presetId) {
 
 export function linkAction(model, panel, link, { registry = NODE_REGISTRY } = {}) {
   const p = presetOf(link.preset || 'init') || presetOf('init');
-  const steps = [...presetAction(model, panel, p.id).action.steps];
+  const steps = [...presetAction(model, panel, p.id, { all: true }).action.steps];
   const given = new Map(link.values);
   const nodes = panel.resolve(model);
   for (const [k, v] of link.values) {

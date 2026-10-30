@@ -410,7 +410,9 @@ function defineChecks() {
       }),
     }));
     return { ...H.verdict({
-      studioBeforeAbout: nav.at(-2) === 'nav.studio' && nav.at(-1) === 'nav.about',
+      // Studio, then Synth (K058, Q019: the instrument workspace right after Studio), then About.
+      studioBeforeAbout: nav.at(-3) === 'nav.studio' && nav.at(-2) === 'nav.synth'
+        && nav.at(-1) === 'nav.about',
       nodes: v.nodes === 6, edges: v.edges === 5 && v.paths === 5, controlDashed: v.control,
       glyphShapes: v.shapes >= 3, title: v.title === 'Subtractive Synth',
       summary: v.summary.startsWith('6 nodes, 5 connections. Signal path: Oscillator 1 to '

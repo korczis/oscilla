@@ -22,6 +22,10 @@ const SH_CLOCKED = Object.freeze({
 /** Why a control on this face does nothing now, or null (project.no-inert-surfaces (b)). */
 export function controlReason(module, node, control, model, panel) {
   if (control.kind === 'amount') return amountReason(model, panel, control.amount);
+  // The node type's own rule (nodes/engines.js `inactive`): data, beside its parameters.
+  const own = typeof module.def.inactive === 'function'
+    ? module.def.inactive(node.params, control.key) : null;
+  if (own) return own;
   if (module.node === 'vco' && control.key === 'width' && node.params.waveform !== 'pulse') {
     return 'Pulse width applies to the pulse wave; choose Pulse to use it.';
   }
@@ -91,6 +95,17 @@ function toggleHtml(cid, c, value, reason) {
     + `${value ? 'On' : 'Off'}</button>${why(cid, reason)}</div>`;
 }
 
+/**
+ * A readout derived from the parameters (the node type's `facts`, nodes/engines.js): computed,
+ * never observed, and labelled so (project.no-fake-science).
+ */
+function factsHtml(m, node) {
+  if (typeof m.def.facts !== 'function') return '';
+  return '<p class="relative px-3 pb-3 text-[11px] leading-snug text-gray-600 '
+    + `dark:text-gray-300" data-facts="${m.id}"><span class="font-semibold">Computed from the `
+    + `settings:</span> ${esc(m.def.facts(node.params))}</p>`;
+}
+
 /** The plate of one module: header, face controls, locked values and the module's note. */
 export function plateHtml({ panel, module: m, node, model, tokens }) {
   const hid = `synth-m-${m.id}`;
@@ -138,5 +153,6 @@ export function plateHtml({ panel, module: m, node, model, tokens }) {
     + (fixed || m.note ? `<div class="relative flex flex-wrap items-center gap-1 px-3 pb-3">`
       + `${fixed}${m.note ? `<span class="text-[11px] text-gray-500 dark:text-gray-400">`
       + `${esc(m.note)}</span>` : ''}</div>` : '')
+    + factsHtml(m, node)
     + '</section>';
 }

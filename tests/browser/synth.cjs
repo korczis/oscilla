@@ -341,7 +341,8 @@ function defineChecks() {
     const after = await page.evaluate(() => ({ rev: window.OSCILLA.studio.store.getRevision(),
       sel: [...window.OSCILLA.studio.selection.nodes].sort() }));
     return { ok: after.rev === before.rev && JSON.stringify(after.sel)
-      === JSON.stringify(before.nodes) && after.sel.length === 14, before, after };
+      === JSON.stringify(before.nodes) && after.sel.length === before.nodes.length
+      && after.sel.length >= 14, before, after };
   });
 
   def('s-escape', async ({ page }) => {

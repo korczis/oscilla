@@ -441,8 +441,11 @@ test('registry holds the §29 library and every definition validates', () => {
   for (const [type, after] of [['vco', 'microphone'], ['keys', 'macro'], ['ring', 'drive']]) {
     expected.splice(expected.indexOf(after) + 1, 0, type);
   }
+  // The Synth engines (K090-K092, K121, K123) follow the VCO among the sources (nodes/engines.js).
+  expected.splice(expected.indexOf('vco') + 1, 0, 'additive-voice', 'fm-voice', 'am-voice',
+    'wavetable-voice', 'perc-voice');
   assert.deepStrictEqual(R.list().map((d) => d.type), expected);
-  assert.deepStrictEqual(R.categories().map((c) => [c.id, c.types.length]), [['SOURCES', 6],
+  assert.deepStrictEqual(R.categories().map((c) => [c.id, c.types.length]), [['SOURCES', 11],
     ['MODULATION', 6], ['PROCESSING', 7], ['ANALYSIS', 5], ['OUTPUT', 2], ['MEASUREMENT', 4]]);
   for (const def of NODE_DEFINITIONS) assert.deepStrictEqual(validateNodeDefinition(def), []);
   for (const def of R.list()) {

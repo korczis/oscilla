@@ -28,11 +28,13 @@ import analysis from './nodes/analysis.js';
 import output from './nodes/output.js';
 import measurement from './nodes/measurement.js';
 import instrument from './nodes/instrument.js';
+import engines from './nodes/engines.js';
 
 export { CATEGORIES, CATEGORY_ORDER, CLIP_KINDS };
 
 export const NODE_DEFINITIONS = Object.freeze([
   ...sources, ...modulation, ...processing, ...analysis, ...output, ...measurement, ...instrument,
+  ...engines,
 ]);
 
 export const PARAM_TYPES = Object.freeze(['number', 'integer', 'enum', 'boolean', 'list', 'id']);

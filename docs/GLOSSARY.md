@@ -22,6 +22,14 @@ in it (`src/js/synth/normals.js`). A cable into it replaces the normal; removing
 restores it. **Patch bay**: the panel's view of every jack, grouped by module, where cables are
 drawn.
 
+**Engine.** A polyphonic note source of the Synth's Engines tab (`docs/synth.md`): additive,
+FM, AM / ring, wavetable, hard sync or percussion, up to 16 **voices**; a 17th note takes the
+voice released first, else the oldest (**voice stealing**). **FM index**: how far a modulator
+moves its target's frequency, Δf = I x f_mod Hz. **Morph**: the wavetable position, an
+equal-power crossfade of two neighbouring tables. **Hard sync**: a wave reset at every period of
+the note, here at set ratios. **Chain**: an engine's input that passes audio to its output
+unchanged, so every instrument reaches the one Master Output.
+
 **CV and gate.** A control signal that sets a parameter (the Keys pitch, in octaves) and a
 trigger that opens and closes envelopes (the Keys gate). **Ring modulation**: the product of two
 audio signals, giving their sum and difference frequencies.

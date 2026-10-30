@@ -10,6 +10,10 @@
 // nodes only, no timeline), then transport.live drives the Keys node. Leaving the workspace,
 // Escape, page hide and STOP disarm; a measurement owning the output refuses the arm.
 //
+// Tabs (Q019; PR B): Panel holds the semi-modular voice, Engines the polyphonic engines
+// (panels/engines.js); the keys play the Keys node on Panel and the chosen engine on Engines,
+// through the same sink. Switching tab releases every held note first.
+//
 //   createSynthUi({ get, setupAudio, announce }) -> the component part
 //     get() -> { handle, transport }   the workspace's store handle and transport (late-bound)
 
@@ -27,6 +31,8 @@ import { panelTokens } from './view/tokens.js';
 import { NODE_REGISTRY } from '../studio/registry.js';
 import { canConnect } from '../studio/ports.js';
 import { decodeSynthLink, encodeSynthLink } from '../core/url-state-synth.js';
+import { ENGINE_BLOCKED } from './panels/engines.js';
+import { SAFE_NYQUIST_FACTOR_TEXT } from '../core/constants.js';
 
 export const SYNTH_PANEL = SEMI_MONO;
 export const SYNTH_TEXT = Object.freeze({
@@ -50,6 +56,12 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   let selected = null; // a selected cable id
   let layout = null;
 
+  const ENGINE_IDS = panel.modulesOf('engines').map((m) => m.id);
+  const tab = () => (cmp ? cmp.synth.tab : 'panel');
+  const engineId = () => (cmp && ENGINE_IDS.includes(cmp.synth.engine) ? cmp.synth.engine
+    : ENGINE_IDS[0]);
+  /** The module the keys play now: Keys on the Panel tab, the chosen engine on Engines. */
+  const playedModule = () => (tab() === 'engines' ? engineId() : 'keys');
   const handle = () => get().handle;
   const transport = () => {
     setupAudio();
@@ -196,6 +208,28 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   }
 
   const PLATE_GRID = 'grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-4';
+  const CHIP = 'snap-start shrink-0 rounded-full border border-solid px-3 h-11 text-xs '
+    + 'font-semibold tracking-wide';
+
+  /** The engine picker: one radio per engine module, then the blocked engines, disabled. */
+  function enginePicker() {
+    const on = engineId();
+    const res = nodes();
+    return '<div role="radiogroup" aria-label="Engine the keys play" class="flex shrink-0 '
+      + 'gap-2 lg:flex-wrap">' + ENGINE_IDS.map((id) => {
+      const x = panel.module(id);
+      const sel = id === on;
+      return `<button type="button" role="radio" aria-checked="${sel}" data-engine="${id}" `
+        + `class="${CHIP} ${sel ? 'border-primary-600 bg-primary-600 text-white '
+          + 'dark:bg-primary-500' : 'border-gray-300 bg-white text-gray-800 '
+          + 'dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200'}">${esc(x.label)}`
+        + `${res.get(id) ? '' : ' (removed)'}</button>`;
+    }).join('') + '</div>' + ENGINE_BLOCKED.map((b) => `<button type="button" aria-disabled="true" `
+      + `aria-describedby="synth-blocked-${b.id}" data-blocked="${b.id}" class="${CHIP} `
+      + 'cursor-not-allowed border-dashed border-gray-300 bg-gray-100 text-gray-500 '
+      + `dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400">${esc(b.label)}<span `
+      + `class="sr-only" id="synth-blocked-${b.id}">${esc(b.reason)}</span></button>`).join('');
+  }
   function renderAll() {
     const el = host();
     if (!el || !cmp) return;
@@ -214,19 +248,23 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     const m = model();
     const res = nodes();
     const tokens = panelTokens(el);
-    const chips = panel.modules.map((x) => `<button type="button" data-goto="${x.id}" class="`
-      + 'snap-start shrink-0 rounded-full border border-solid border-gray-300 bg-white px-3 h-11 '
-      + 'text-xs font-semibold tracking-wide text-gray-800 dark:border-gray-600 dark:bg-gray-800 '
-      + `dark:text-gray-200">${esc(x.label)}</button>`).join('');
-    const plates = panel.modules.map((x) => plateHtml({ panel, module: x, node: res.get(x.id),
+    const engines = tab() === 'engines';
+    const shown = engines ? [panel.module(engineId())] : panel.modulesOf('panel');
+    const chips = engines ? enginePicker() : shown.map((x) => `<button type="button" `
+      + `data-goto="${x.id}" class="${CHIP} border-gray-300 bg-white text-gray-800 `
+      + `dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200">${esc(x.label)}</button>`)
+      .join('');
+    const plates = shown.map((x) => plateHtml({ panel, module: x, node: res.get(x.id),
       model: m, tokens })).join('');
-    el.innerHTML = '<nav aria-label="Synth sections" class="sticky top-0 z-20 -mx-4 mb-3 flex '
-      + 'snap-x snap-mandatory gap-2 overflow-x-auto bg-gray-50 px-4 py-2 dark:bg-gray-900 '
-      + `xl:hidden">${chips}<button type="button" data-goto="bay" class="snap-start shrink-0 `
-      + 'rounded-full border border-solid border-primary-600 px-3 h-11 text-xs font-semibold '
-      + 'text-primary-700 dark:text-primary-400">PATCH BAY</button></nav>'
+    el.innerHTML = `<nav aria-label="${engines ? 'Synth engines' : 'Synth sections'}" `
+      + 'class="sticky top-0 z-20 -mx-4 mb-3 flex snap-x snap-mandatory gap-2 overflow-x-auto '
+      + `bg-gray-50 px-4 py-2 dark:bg-gray-900 ${engines ? 'lg:flex-wrap' : 'xl:hidden'}" `
+      + `>${chips}<button type="button" data-goto="bay" `
+      + `class="${CHIP} border-primary-600 text-primary-700 dark:text-primary-400">PATCH BAY`
+      + '</button></nav>'
       + '<div class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">'
-      + `<div class="${PLATE_GRID}" data-osc="synth.modules">${plates}</div>`
+      + `<div class="${engines ? 'grid grid-cols-1 gap-3' : PLATE_GRID}" `
+      + `data-osc="synth.modules">${plates}</div>`
       + '<section class="bg-white rounded-lg shadow dark:bg-gray-800 self-start p-3 '
       + 'xl:sticky xl:top-4" aria-labelledby="synth-bay-title" data-osc="synth.bay" '
       + 'data-module="bay"><h3 id="synth-bay-title" class="text-sm font-bold tracking-widest '
@@ -238,6 +276,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       + '</ul></section></div>';
     shape = shapeOf();
     renderBay();
+    const chosen = engines && el.querySelector('[data-engine][aria-checked="true"]');
+    if (chosen) chosen.parentElement.parentElement.scrollLeft = chosen.offsetLeft - 16;
     if (keep) {
       const sel = keep[0] === 'data-option' ? `[data-option="${keep[1]}"][data-v="${keep[2]}"]`
         : `[${keep[0]}="${keep[1]}"]`;
@@ -347,10 +387,17 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
   function onClick(e) {
     const t = e.target.closest('[data-option],[data-toggle],[data-goto],[data-cable],'
-      + '[data-remove-cable],[data-restore-normal],[data-restore-module],[data-insert-panel]');
+      + '[data-remove-cable],[data-restore-normal],[data-restore-module],[data-insert-panel],'
+      + '[data-engine],[data-blocked]');
     if (!t) return;
     const d = t.dataset;
-    if (d.option) {
+    if (d.engine) {
+      showTab('engines', d.engine);
+      say(`${panel.module(d.engine).label}: the keys play this engine.`);
+    } else if (d.blocked) {
+      const b = ENGINE_BLOCKED.find((x) => x.id === d.blocked);
+      if (b) say(b.reason);
+    } else if (d.option) {
       const x = controlOf(d.option);
       const o = x && x.c.param.options.find((v) => String(v[0]) === d.v);
       if (o) setControl(d.option, o[0]);
@@ -523,20 +570,37 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       say(SYNTH_TEXT.armed);
       if (cmp) cmp.synth.armed = !!t.armed;
     }
-    return t.live(nodes().get('keys').id, { kind: 'on', note, velocity });
+    const target = nodes().get(playedModule());
+    if (!target) {
+      say(`${panel.module(playedModule()).label} was removed in Studio: Restore module first.`,
+        true);
+      return { ok: false, reason: 'removed' };
+    }
+    const r = t.live(target.id, { kind: 'on', note, velocity });
+    if (r && r.dropped) {
+      const limit = `${SAFE_NYQUIST_FACTOR_TEXT} × the digital Nyquist limit`;
+      say(target.type === 'fm-voice' ? `${r.dropped} operator(s) above ${limit} left out of `
+        + 'this note.' : `${r.dropped} harmonic(s) above ${limit} dropped from this note.`);
+    }
+    return r;
   }
 
   function noteOff(note) {
     const t = get().transport;
-    const k = present() ? nodes().get('keys') : null;
+    const k = present() ? nodes().get(playedModule()) : null;
     return t && k ? t.live(k.id, { kind: 'off', note }).ok : false;
   }
 
+  /** Every note of every note source of the panel off (Escape, a tab change, MIDI all-off). */
   function allOff() {
     const t = get().transport;
-    const k = present() ? nodes().get('keys') : null;
-    if (!t || !k || !t.playing) return 0;
-    return t.live(k.id, { kind: 'all-off' }).released || 0;
+    if (!t || !present() || !t.playing) return 0;
+    let n = 0;
+    for (const id of ['keys', ...ENGINE_IDS]) {
+      const node = nodes().get(id);
+      if (node) n += t.live(node.id, { kind: 'all-off' }).released || 0;
+    }
+    return n;
   }
 
   function disarm(reason) {
@@ -551,14 +615,32 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   // ------------------------------------------------------------------ links
 
   function linkNow() {
-    return encodeSynthLink(linkOf(model(), panel, cmp.synth.preset));
+    return encodeSynthLink({ ...linkOf(model(), panel, cmp.synth.preset), tab: tab(),
+      engine: tab() === 'engines' ? engineId() : null });
   }
 
   function applyLink(link) {
     if (!ensurePanel()) return false;
+    showTab(link.tab || 'panel', link.engine);
+    if (!link.preset && !link.values.length && !link.cables.length) return true;
     const r = dispatch(linkAction(model(), panel, link, { registry }));
     if (r.ok && link.preset) cmp.synth.preset = link.preset;
     return r.ok;
+  }
+
+  /** Show tab `id` (and engine `eng` on Engines); held notes are released first. */
+  function showTab(id, eng = null) {
+    if (!cmp) return;
+    const next = panel.tabs.some((x) => x.id === id) ? id : 'panel';
+    if (next !== cmp.synth.tab || (eng && eng !== cmp.synth.engine)) allOff();
+    cmp.synth.tab = next;
+    const p = presetOf(cmp.synth.preset);
+    if (!p || p.tab !== next) cmp.synth.preset = ''; // the menu lists this tab's presets
+    if (eng && ENGINE_IDS.includes(eng)) cmp.synth.engine = eng;
+    const info = panel.tabs.find((x) => x.id === next);
+    cmp.synth.title = info.title;
+    cmp.synth.description = info.description;
+    requestAnimationFrame(renderAll);
   }
 
   // ------------------------------------------------------------------ the part
@@ -567,7 +649,10 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     synth: {
       title: panel.title,
       description: panel.description,
-      presets: PRESETS.map((p) => ({ id: p.id, title: p.title })),
+      tabs: panel.tabs.map((x) => ({ id: x.id, label: x.id === 'panel' ? 'Panel' : 'Engines' })),
+      tab: 'panel',
+      engine: ENGINE_IDS[0],
+      presets: PRESETS.map((p) => ({ id: p.id, title: p.title, tab: p.tab })),
       preset: 'init',
       armed: false,
       status: '',
@@ -636,10 +721,18 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       if (r.reason) { say(r.reason, true); return false; }
       const done = dispatch(r.action);
       if (done.ok) {
+        const p = presetOf(id);
         this.synth.preset = id;
-        say(`Preset ${presetOf(id).title}.`);
+        if (p.engine) showTab('engines', p.engine);
+        say(`Preset ${p.title}.`);
       }
       return done.ok;
+    },
+
+    /** The tab strip (Panel | Engines). */
+    synthTab(id) {
+      showTab(id);
+      return this.synth.tab;
     },
 
     synthOpenStudio() {
@@ -669,15 +762,16 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
         say(r.reason, true);
         return false;
       }
-      const l = r.link;
-      if (!l.preset && !l.values.length && !l.cables.length) return true;
-      return applyLink(l);
+      return applyLink(r.link);
     },
 
     /** Test and debug reads (window.OSCILLA.app.synthDebug(); not a contract). */
     synthDebug() {
       const t = get().transport;
+      const played = present() ? nodes().get(playedModule()) : null;
       return { present: present(), armed: !!(t && t.armed), held: t ? t.heldNotes() : [],
+        tab: tab(), engine: engineId(), played: played ? played.id : null,
+        voices: t && played && typeof t.liveVoices === 'function' ? t.liveVoices(played.id) : 0,
         nodes: Object.fromEntries([...nodes()].map(([k, n]) => [k, n ? n.id : null])),
         cables: userCables(), link: present() ? linkNow() : '' };
     },
