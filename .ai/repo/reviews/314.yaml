@@ -1,0 +1,61 @@
+# Review verdict for pull request #314, plan item C018 (OSCILLA PACK 03, finding persist-3):
+# presets, History and the config link restore the lab settings they claim (branch
+# feat/c018-lab-state-round-trip). Reviewed head e2c3782e784b (== origin at fetch; the PR body's
+# merge base cdda563c, origin/main now fde49bd1). Built by the builder's session; reviewed by
+# dev-68, which re-checked a first review pass (F1-F8) against the code and kept or re-graded
+# each finding (R-n below keeps the first pass's number).
+#
+# The digest: `node scripts/review-verdict.mjs --content --list --base origin/main` in the PR
+# worktree, over the one guarded path the pull request changes, src/js/core/storage.js:
+# 665ddbe0...5c55, which matches the PR body. The branch's scripts/review-verdict.mjs is
+# byte-identical to origin/main's (git archive origin/main scripts; cmp equal), so this is main's
+# digest too. Validated with main's copy (--pr 314 --repo .).
+#
+# Lenses: (a) does a restored control reach the sound and the control itself (the owner's PACK03
+# group: controls that do not reach the sound); (b) one apply path and one validation path; (c)
+# V1 cfg, hash, preset schema and freeze vectors unchanged; (d) PR body vs code; (e) tests.
+#
+# Runs (first pass, re-read here): unit lab-state-round-trip, navigation, v4-connections, freeze
+# and freeze-guard 1192/1192; fail-first 3 files (lab-state-round-trip by module-not-found only);
+# 13 scratch mutations, 12 killed by the unit test, the pending `lab=` link (workbench.js
+# labsApplyPending) killed only by the browser check; navigation.cjs --only lab-state-round-trip
+# passes on the head dist (chromium file/http) and fails on the merge base's dist with exactly
+# the list in the PR body; reviewer probes (chromium) for the held-voice cases. This pass read
+# the code for every finding: no PR code was modified, nothing was installed, nothing was run
+# beyond git and the digest.
+#
+# Re-grading. R-3 stays P2: phase-stereo.js setCfg writes cfg and aria-valuetext only, and no
+# code writes #osc-stereo-pan .value or the [data-osc=phase.offset] field, so every restore path
+# this PR adds (preset, History, `lab=` link) leaves the Pan slider and the offset field showing
+# the old value while the labs (and the next note) use the restored one; the next touch of the
+# slider throws the restored pan away. That is the owner's group on the paths this PR claims.
+# R-1 and R-2 are lowered from P2 to P3: both are pre-existing defects of the live controls
+# themselves (the Pan slider and the Additive switch/harmonics hit the same code on main), the
+# restored lab state is correct and the next note plays it; they are follow-ups, not C018
+# regressions. R-9 is new (lens a).
+#
+# Checked and found correct: one snapshot shape (buildLabSections) and one validation path
+# (parseLabSections) for the config file, presets, History and the link; storage's optional
+# `labs` sibling (presetRecord, migratePreset, historyEntry, pushHistory dedupe) leaves V1
+# records exactly V1; serializeConfig, serializeHash, restoreFromHash and the freeze vectors are
+# unchanged; the labs hash domain runs after instrument, a refused `lab=` value is warned and
+# removed by hashAfterRefusal, and a link at load waits for mountLabs; the filter (live insert
+# stage) and the additive wave reach a held voice; phaseDeg restarts a held dual voice through
+# engine.setDualPhase.
+#
+# Open: R-3 (P2) blocks the merge. R-1, R-2, R-4 to R-9 are P3.
+schema: review-verdict/v1
+pr: 314
+verdict: changes-requested
+reviewer: "dev-68 (Claude Opus 5.5 session 4f90795d); did not build, merge or edit this change; wrote only this file"
+content: 665ddbe00956b838fbee70bf80d48962dbc395b645501cfc94dd143accb15c55
+findings:
+  - { id: R-3, severity: P2, status: open, title: "After a preset load, a History recall or a lab= link the Pan slider and the phase-offset field show stale values: labs.phase.update -> setCfg (src/js/labs/phase-stereo.js:165) writes cfg and aria-valuetext only, and nothing writes #osc-stereo-pan .value (or its --osc-fill) or the [data-osc=phase.offset] field (probe: config.pan 0.5, slider '0'; phaseDeg 90, field '45'). The next slider input reverts the restored pan. Pre-existing on the config import, now reached by the three paths this PR adds; its browser check reads labs.phase.config, not the control. Fix: write el.pan.value, its fill and el.offset.value in setCfg (or in update), and assert the control values in lab-state-round-trip." }
+  - { id: R-1, severity: P3, status: open, title: "A restored pan never reaches a dual voice that is already sounding and started centred: needsRouter() (src/js/main.js:140) is evaluated only at play time, so with pan 0 there is no live router and the phase onChange's liveRouter.wrapper.refresh() (main.js:461) does nothing; the next note pans (probe: L=R=0.00498 held, L 0.0067 / R 0.0425 next note). Pre-existing for the Pan slider itself on main (R/L 1.00 held, 6.31 next note); the toasts say 'Phase & Stereo settings restored too' while the held voice stays centred. Follow-up in the owner's group: build the router for every dual voice, or say the pan applies from the next note." }
+  - { id: R-2, severity: P3, status: open, title: "A restore (or any Additive edit) that swaps the PeriodicWave of a sounding voice steps the signal: engine.setPeriodicWave (src/js/audio/audio-engine.js:917) calls carrier.setPeriodicWave with no dip, while clearPeriodicWave goes through _switchWaves (probe: 0.0821 one-sample step vs 0.0063 steady; identical on main through labs.additive.update). Pre-existing, not introduced here; the PR adds no param step of its own. Fix: route the swap through the _switchWaves dip." }
+  - { id: R-4, severity: P3, status: open, title: "The unit fail-first for lab-state-round-trip is module-not-found only, and the test composes its own labSnapshot/applyLabSnapshot instead of workbench.js's: mutation M10 (labsApplyPending never applies) survives it and is caught only by the browser check. labsApplyLinkHash's refusal, labLinkParam, configLinkNote and main.js applyLabSnapshot have no unit test." }
+  - { id: R-5, severity: P3, status: open, title: "No check plays a voice: the unit test and tests/browser/navigation.cjs lab-state-round-trip assert lab state (window.OSCILLA.labs.*.config), not sound or controls, so R-1 to R-3 pass them. A held-voice assertion (live filter stage, carrier type, L/R balance) and a control-value assertion are missing for this group." }
+  - { id: R-6, severity: P3, status: open, title: "Copy config URL can produce a lab= link the page refuses: parseLabSections accepts up to 256 partials and additive.setPartials does not cap at HARMONIC_COUNT 10, so a config-file import can leave more partials in the lab; about 50 partials encode past LAB_PARAM_MAX 4096 (src/js/core/url-state-labs.js) and are refused, while the copy note says the link restores the Additive settings. Cap in the encoder or say so in the note." }
+  - { id: R-7, severity: P3, status: open, title: "An empty phaseStereo section counts as applied and as a valid link: parseLabSections returns phaseStereo {} when no key is numeric ({} is truthy), so applyLabSections (src/js/ui/lab-state.js:60) reports 'Phase & Stereo settings restored', and labsApplyLinkHash's Object.values(parsed).some(Boolean) (workbench.js:443) accepts a lab= value naming only such a section. Read, not run." }
+  - { id: R-8, severity: P3, status: open, title: "Paths the restored labs do not reach, pre-existing and not claimed: the held note's envelope (o.adsr is captured at play time, main.js:167), the Sequencer (sequencer-panel.js reads no lab state) and Studio (own graph); History is written only by instrument.play. The stop/start path is correct." }
+  - { id: R-9, severity: P3, status: open, title: "Lens (a), missed by the first pass: the 30 built-in presets (src/js/data/presets.js), the Learn demos (runDemo, src/js/core/instrument.js applyConfig 'learn') and custom presets/History entries without labs restore the instrument only and leave the current labs in place, so after a custom preset with the filter at 300 Hz a built-in preset or 'Show 440 Hz' demo plays through that filter while its toast names only the preset. Pre-existing; the one coherent state of PACK03 needs a stated rule (reset the labs to defaults for a record without labs, or say they are kept)." }
