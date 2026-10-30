@@ -1,65 +1,145 @@
 # Review verdict for pull request #290, plan item C012: the Studio master level has one writer;
 # the status bar shows what the Studio plays (branch fix/c012-studio-master-level-one-writer).
-# Reviewed head 41d2034fe666 (== origin at fetch; merge base cdda563c, origin/main fde49bd1,
-# which adds only #284 docs; git merge-tree with it is clean).
-# Built by the builder's session; reviewed by dev-68. This is a second, independent pass over a
-# first review; every finding below was re-derived from the code and kept only where it held.
+# Delta re-review of the fixes for the changes verdict 76e93875 (reviewed head 41d2034fe666).
+# Reviewed head 6624639c3756 (== origin at fetch). Delta 76e93875..6624639c is one commit, the
+# fix; no merge of main in it. Merge base cdda563c; origin/main 88b936cb changes no file the PR
+# changes except README.md, docs/v31/user-guide.md and tests/README.md (none guarded);
+# git merge-tree with it is clean (tree 57b0c2a6), but see F7.
+# Built by the builder's session; reviewed by dev-68 (Claude Opus 5.5 session 4f90795d), who
+# did not build, merge or edit this change and wrote only this file.
 #
 # The digest: the branch's scripts/review-verdict.mjs, identical to origin/main's (diff empty),
-# `--content --list --base origin/main` in the PR worktree, over the one guarded path the pull
-# request changes, src/js/studio/runtime.js: 37a33a98...42df2, which matches the PR body.
+# `--content --list --base origin/main` in a fresh detached worktree of 6624639c: one guarded
+# path, src/js/studio/runtime.js, 37a33a98...42df2: unchanged, as the builder claims (the delta
+# does not touch runtime.js, and main has not changed it since cdda563c).
 #
-# Lenses: (a) a control that does not reach the sound (PACK03, owner-flagged): every writer of
-# engine.setMasterGain / holdMasterGain (main.js gainLevel $watch, instrument.js ensureAudio and
-# resetDefaults, engine-hooks via the runtime gate) and every way the output is claimed from a
-# playing Studio (the playing / seqPlaying $watch, stopPlayback for MEASURE, the Studio
-# measurement run, Escape, visibilitychange / pagehide, a closed context via dropAll);
-# (b) audio-engine discipline: no new automation, master.gain still built at gainLevel, level
-# changes stay setTargetAtTime glides (tau 20 ms); (c) fail-first; (d) PR body and docs vs code;
-# (e) tests and mutation coverage.
+# Lenses: (a) a control that does not reach the sound: every master-level writer after the fix
+# (main.js gainLevel $watch, instrument.js ensureAudio on a new context, claimMasterLevel from
+# play() and from the sequencer's onStart via adapter.claimOutput, resetDefaults on an unchanged
+# gain, the Studio runtime via engine-hooks); every Playground voice start goes through play()
+# (src/js grep: engine.play only at instrument.js:441); the Studio PLAY stops the instrument and
+# sequencer, so a claim cannot land without the playing / seqPlaying $watch following it;
+# (b) audio-engine discipline: no new node, no new automation; the claim is setMasterGain, a
+# setTargetAtTime glide (tau 20 ms) from the current value, no step, no ramp to 0, no edit of a
+# rendering ramp (a pending holdMasterGain glide is cancelled from now only, PR #119 code);
+# (c) fail-first; (d) PR body, tests/README.md and comments vs code; (e) tests and mutants.
 #
-# Runs:
-# - The PR worktree held no Claude session at review time (only `majordomus serve`, PID 89667,
-#   which logs to .ai/local); it was used for read-only git commands, the digest and this file.
-#   Code was read in a fresh detached worktree of origin/fix/c012-studio-master-level-one-writer.
-# - Fail-first: git archive cdda563c (src, the fake-audio helper) plus the PR's
-#   tests/unit/c012-studio-master-level.test.mjs: tests 1, 2 and 4 fail by assertion, test 3 by
-#   TypeError, test 5 passes (F3). At HEAD 5/5 pass.
-# - CI run 40960482032: everything passes except V3 measurement and UI (chromium), one check
-#   findings-delete-focus that this diff does not touch (F5), and review-verdict / gate, which
-#   wait for this file.
-# - Not re-run here (disk at the floor, nothing installed): the first pass's chromium probes on
-#   the built dist (F1 master.gain trace, F2 status bar after resetDefaults) and its 8 mutants.
-#   F1 and F2 were confirmed by reading the code paths they name; the numbers are the first
-#   pass's.
+# Runs (all at 6624639c, node_modules symlinked read-only from the primary checkout):
+# - node scripts/build.mjs --check: dist/index.html is up to date.
+# - node --test tests/unit/c012-studio-master-level.test.mjs: 9/9 pass.
+# - node --test "tests/unit/**/*.test.mjs": 3287 tests, 3284 pass, 1 skipped, 2 fail; the two
+#   (version-authority.test.mjs) fail with EISDIR on the node_modules symlink, 12/12 without it.
+# - Fail-first, the head's C012 test file on git archive copies: at cdda563c 8 fail, test 5
+#   passes (the README now names it the regression guard), test 3 fails by assertion ('PLAY
+#   reported the Studio level: undefined'); at 41d2034f tests 1-5 pass, 6-9 (F1, F2) fail.
+# - node tests/browser/v31-studio-transport.cjs --app-only: ALL PASS, 51 checks in chromium,
+#   firefox and webkit (playground-over-studio, sequencer-over-studio, reset-over-studio among
+#   them); --browsers chromium --viewport 390x844: ALL PASS, 17 (readout hidden, as expected).
+# - Full transport run --browsers webkit, twice: ALL PASS 44/44, Tone -> Sweep dip at 1.0000 s.
+# - Probe, chromium on dist, Studio Master 0.02, Playground 0.08, master.gain sampled every 4 ms
+#   of audio time from the click (scratch d290-probe/f1trace.cjs):
+#     status-bar Play  41d2034f: 0.02 to 42.7 ms, 0.0543 at 58.7, 0.08 at 184; held 0.71
+#                      6624639c: 0.034 at 5.3 ms, 0.0448 at 10.7, 0.0679 at 32, 0.08 at 144;
+#                      held null, masterLevel null, readout 'Gain -21.9 dB'
+#     sequencer PLAY   41d2034f: 0.02 to 53.3 ms, 0.08 at 192; held 0.567
+#                      6624639c: same glide as status-bar Play from 0 ms; held null
+#     Reset instrument 41d2034f: engine 0.08, Studio playing, readout 'Master -34.0 dB' (F2)
+#                      6624639c: engine 0.08, Studio playing, readout 'Gain -21.9 dB'
+# - Mutants (git archive of 6624639c, one textual change each, the C012 unit file):
+#     M8  workbench.js drop `void this.gainLevel`           SURVIVED (also chromium app 17/17)
+#     N1  play(): drop this.claimMasterLevel()               killed (F1 Playground test)
+#     N2  claimMasterLevel: drop the masterLevel clear       killed (F2 at-default test)
+#     N3  resetDefaults: claim unconditionally               killed (F2 changed-gain test)
+#     N4  resetDefaults: never claim                         killed (F2 at-default test)
+#     N5  sequencerEngine: onStart claims nothing            killed (F1 sequencer test)
+#     N6  main.js adapter: no claimOutput                    unit SURVIVED; dist rebuilt in the
+#         copy, chromium --app-only: 2 FAIL (sequencer-over-studio, engine 0.02, held 1.47)
+#     N7  play(): claim before the plan check (a refused     SURVIVED
+#         configuration claims the level)
+#     N8  sequencer: claim also in resume()                  killed (claim count 2)
+#     N8b sequencer: claim in resume() instead of onStart    SURVIVED
+#     N9  ensureAudio: write on every call (revert)          killed (engine-sync-2)
+#     N10 claimMasterLevel: no engine write                  killed (F1, F2 tests)
+# - CI run 41003287882 on 6624639c (merge ref 06396c6 with main 253cd5c2): red on unit, build,
+#   artifact rules (F7), V3.1 Studio UI (webkit) (F5), review-verdict and gate (this file).
 #
-# Checked and found correct: ensureAudio writes only when it builds or rebuilds a context, before
-# init() builds master.gain from it; restoreMaster emits 'master' null on every way out (stop,
-# refused start, dropAll, setOptions 'ignore', dispose via stop), so no exit leaves the status
-# bar on Master; the Master Output adapter writes only on engage and a changed level; MEASURE
-# and the Studio measurement go through stopStudio; nothing else writes the master level
-# (src/js grep: main.js:591, instrument.js:386 and :912, engine-hooks only); engine objects stay
-# out of Alpine state (the mirror is two numbers).
-# Lens (a), what the first pass did not name: no further writer bypasses the fix. The F1 gap is
-# wider than the Playground trigger: it is every claim that relies on the async playing /
-# seqPlaying $watch (the status-bar Play button, Space / Enter triggers, the Pattern Sequencer's
-# PLAY), since none of them writes cmp.gainLevel any more and the Studio's held restore is the
-# only thing that brings the level back.
-# F2 is kept at P2 for its readout half: Reset instrument re-setting the Playground gain while
-# the Studio plays is defensible under the documented rule (a Playground gain set while the
-# Studio plays takes over), but when gainLevel is already the default no reactive dependency
-# changes, so the status bar keeps showing `Master <Studio dB>` for a level no longer in effect:
-# the dup-stale-4 defect this PR closes, on a path its own workbench.js comment names.
-#
-# Open: F1 and F2 (P2), F3 to F5 (P3). Verdict: changes.
+# F1 closed: the claim now precedes engine.play and the sequencer's onStart, so the glide to the
+# Playground gain starts at the click (probe) and the Studio's STOP keeps that level with no held
+# restore; the unlock listener still writes nothing (studio-level-survives-gesture passes).
+# F2 closed: resetDefaults writes only when the gain is unchanged and then clears the reactive
+# masterLevel; a changed gain is left to the $watch (N3, N4 killed; probe readout correct).
+# F3 closed: tests/README.md now matches the fail-first runs, and test 3 asserts the event.
+# Open: F7 (P2), F4 to F6 (P3). Verdict: changes-requested.
 schema: review-verdict/v1
 pr: 290
-verdict: changes
-reviewer: "dev-68 (Claude Opus 5.5 session 4f90795d); did not build, merge or edit this change; wrote only this file"
+verdict: changes-requested
+reviewer: dev-68
 content: 37a33a9885d03fa0176f56e49e9d6adbe61d20197a1cbb246566312563442df2
 findings:
-  - { id: F1, severity: P2, status: open, title: "A Playground, status-bar Play or Pattern Sequencer voice started over a playing Studio sounds its first ~70 ms at the Studio's Master level, then glides to the Playground gain (src/js/core/instrument.js:386). `if (first)` also removed the write on the play() path (instrument.js:432 -> ensureAudio), so the newcomer's level now arrives only via the playing / seqPlaying $watch (src/js/ui/studio/workspace.js:1158-1159) -> runtime.stop -> restoreMaster(t + S) (src/js/studio/runtime.js:981) -> engine.holdMasterGain(saved, t + S). First pass, chromium on dist, Studio Master 0.02, Playground 0.08: master.gain 0.02 to 64 ms, 0.0543 at 96 ms, 0.08 at 229 ms (base: 0.0448 at 10.7 ms). The onset is 12 dB low (or high, if the Studio Master is above the Playground gain): the Playground gain does not reach the start of the sound it governs. Click-free (setTargetAtTime). Untested: the unit test counts ensureAudio writes and no browser check starts the Playground over the Studio. Fix: write cmp.gainLevel when the instrument or sequencer claims the output (the play path, not the unlock listener), or make that hand-off restore at once, and add the browser check." }
-  - { id: F2, severity: P2, status: open, title: "resetDefaults (src/js/core/instrument.js:912) is still an unconditional second writer: with gainLevel already at the default, the main.js gainLevel $watch (src/js/main.js:590-595) does not fire, cmp.studio.masterLevel is not cleared, and the workbench getter's only reactive hook on engine writes is `void this.gainLevel` (src/js/ui/workbench.js:102), which did not change, so statusGainText is never re-evaluated. First pass, chromium, Studio Master 0.02, Playground 0.08, Reset instrument (src/index.html:3006, also presets.reset at :2258): engine and master.gain 0.08, Studio still PLAYING, status bar 'Master -34.0 dB': the readout shows a level not in effect (dup-stale-4). The unit test's 'resetDefaults supersedes it' (tests/unit/c012-studio-master-level.test.mjs:148-150) bumps masterWrites on a plain object and never exercises Alpine reactivity. Fix: write in resetDefaults only when gainLevel did not change and then clear cmp.studio.masterLevel (or mirror engine.masterWrites into a reactive counter), with a browser check." }
-  - { id: F3, severity: P3, status: open, title: "tests/README.md:140 says every C012 test fails before its fix; against merge base cdda563c test 5 ('the status bar never writes the Studio level into the Playground gain') passes and test 3 fails by TypeError (events.at(-1) undefined), not by assertion. The PR body's fail-first block (4 failures) is accurate. Fix: say which four fail first, and make test 3 assert the event exists." }
-  - { id: F4, severity: P3, status: open, title: "The workspace 'master' mirror (src/js/ui/studio/workspace.js:761-768) and the main.js clear (src/js/main.js:594) have no unit coverage, and dropping `void this.gainLevel` (src/js/ui/workbench.js:102) survives the unit test (first pass, mutant M8; 7 of 8 mutants killed). The main.js clear and the getter's masterWrites check cover each other, so either can go without any check failing; F2 shows that this reactive path is the weak one." }
-  - { id: F5, severity: P3, status: open, title: "CI run 40960482032 is red on V3 measurement and UI (chromium), one check v3-ui findings-delete-focus (dialog keyboard race) in code this diff does not touch; the first pass reran it locally on the HEAD dist, PASS 2/2. Rerun CI before merge." }
+  - id: F1
+    severity: P2
+    status: closed
+    title: >-
+      A Playground, status-bar Play or Pattern Sequencer voice started over a playing Studio
+      sounded its first ~70 ms at the Studio's Master level. Fixed in 6624639c:
+      claimMasterLevel (src/js/core/instrument.js:459) is called in play() after the plan check
+      (:440) and from the sequencer's onStart (src/js/labs/sequencer-panel.js:150 via
+      main.js:121 claimOutput). Probe: master.gain starts its tau-20-ms glide at the click
+      (0.0448 at 10.7 ms) instead of holding 0.02 to 43-53 ms; _masterHeldUntil null after the
+      Studio stops. N1, N5, N10 killed by unit tests, N6 by sequencer-over-studio.
+  - id: F2
+    severity: P2
+    status: closed
+    title: >-
+      resetDefaults was an unconditional second writer and left the status bar on
+      'Master <Studio dB>' when the gain was already at its default. Fixed in 6624639c
+      (src/js/core/instrument.js:932): it claims only when gainLevel did not change, clearing
+      cmp.studio.masterLevel; a changed gain is written by the main.js $watch alone. Probe and
+      reset-over-studio: readout 'Gain -21.9 dB' with the Studio still playing; N2, N3, N4
+      killed.
+  - id: F3
+    severity: P3
+    status: closed
+    title: >-
+      tests/README.md said every C012 test fails before its fix. Fixed: it now excepts the
+      status-bar no-write guard (test 5, which passes at cdda563c), and test 3 asserts the PLAY
+      event exists, so it fails at cdda563c by assertion, not TypeError.
+  - id: F4
+    severity: P3
+    status: open
+    title: >-
+      Not addressed by 6624639c, unchanged in substance: the workspace 'master' mirror
+      (src/js/ui/studio/workspace.js:761-768) and the main.js clear (src/js/main.js:596) have no
+      unit coverage, and dropping `void this.gainLevel` (src/js/ui/workbench.js:102, M8)
+      survives the unit file and the chromium app checks. Now that every writer clears
+      masterLevel itself the line is a redundant safety net; either test it or drop it with a
+      comment.
+  - id: F5
+    severity: P3
+    status: open
+    title: >-
+      CI run 41003287882 is red on V3.1 Studio UI (webkit): the transport check 'the Tone ->
+      Sweep boundary is at baseTime + 1 s' (dip at 1.0160 s) and the quietest-window check, on
+      the fixture engine path, which this diff does not touch. Local webkit full transport run
+      at 6624639c: 44/44 twice, dip at 1.0000 s. The earlier V3 measurement and UI (chromium)
+      red is green now. Rerun CI before merge.
+  - id: F6
+    severity: P3
+    status: open
+    title: >-
+      The 'a refused start claims nothing' guarantees are tested only on the earliest refusal:
+      N7 (play() claims before the plan check, so a refused configuration would take the level
+      from a playing Studio) and N8b (the sequencer claims in resume(), before _schedulePass
+      can refuse at src/js/sequencer/editor.js:391) survive. The code is correct; add a refused
+      currentPlan case and a scheduled-pass refusal case.
+  - id: F7
+    severity: P2
+    status: open
+    title: >-
+      The PR as merged with main fails the unit job: main's C020 control-drive ratchet (469e958b,
+      tests/unit/control-drive-baseline.test.mjs) lists settings.reset as undriven
+      (tests/unit/control-drive-baseline.json:99), and this PR's reset-over-studio check now
+      drives it. CI run 41003287882, merge ref 06396c6: 'the tree holds exactly the undriven
+      controls the baseline lists ... remove from tests/unit/control-drive-baseline.json:
+      settings.reset'; reproduced locally on merge-tree 57b0c2a6 (1 fail of 16). Fix: merge
+      main and drop settings.reset from the baseline; the digest does not move.
