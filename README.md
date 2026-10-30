@@ -473,7 +473,10 @@ release and deployment are evidenced is the [final report](docs/v31/studio-repor
   exists; where it does not (Safari on iPhone), the button says so.
 
 Studio output and Playground output are exclusive: starting one stops the other, and a
-measurement stops the Studio.
+measurement stops the Studio. While the Studio plays, its Master Output level is the engine's
+output level and a click or key press elsewhere leaves it alone; the status bar says PLAYING and
+shows `Master <dB>`, or `Gain <dB>` once the Playground gain is set again. The status bar's Play
+button stays the Playground's.
 
 Not yet built:
 - a minimap

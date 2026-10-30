@@ -117,6 +117,8 @@ const adapter = {
     return () => adapterListeners.delete(fn);
   },
   getDestination: () => engine.master,
+  // The Pattern Sequencer started: the Playground gain is the level in effect (C012 F1).
+  claimOutput: () => { if (app) app.claimMasterLevel(); },
   getStereoRouter: () => (liveRouter ? liveRouter.router : null),
   // The mic lab's nodes are built and accounted by the engine (audio-engine-discipline).
   attachMicrophone: (stream, opts) => engine.attachMicrophone(stream, opts),
@@ -587,7 +589,12 @@ function integrationInit() {
     void cmp.metricFrequency; void cmp.playing; void cmp.sampleRate; void cmp.dualFa;
     notifyAdapter();
   });
-  cmp.$watch('gainLevel', (g) => engine.setMasterGain(g));
+  cmp.$watch('gainLevel', (g) => {
+    engine.setMasterGain(g);
+    // The Playground gain now holds the master stage: the status bar stops showing the Studio's
+    // Master Output level (C012; the Studio keeps this newer level at STOP, PR #119 D2).
+    if (cmp.studio && cmp.studio.masterLevel !== null) cmp.studio.masterLevel = null;
+  });
   cmp.$watch('theme', () => {
     bridge.readPalette();
     requestAnimationFrame(() => {

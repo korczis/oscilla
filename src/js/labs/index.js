@@ -10,6 +10,7 @@
 //   onChange(cb)          → called when any of the above changes; may return an unsubscribe
 // Optional extras the controllers use when present:
 //   getDestination()      → AudioNode the sequencer plays into (default ctx.destination)
+//   claimOutput()         the sequencer started playing: the Playground gain is the output level
 //   getStereoRouter()     → audio/stereo.js router while stereo plays (Phase & Stereo live data)
 //   ensureContext()       → Promise<AudioContext> created in the current user gesture (mic)
 //   attachMicrophone(stream) → AnalyserNode, detachMicrophone()   engine-owned mic graph
