@@ -124,6 +124,9 @@ test('T016: a run whose peak reached the rail without a clip region is AT RAIL, 
   assert.match(c.detail, /brief clipping is not excluded/);
   assert.match(c.detail, /0\.995/);
   assert.match(c.detail, new RegExp(`≥ ${CLIP_THRESHOLD}`));
+  // The analog blind spot is stated: the rail is digital full scale only (review R6).
+  assert.match(c.detail,
+    /clipping before the converter, in a preamp or by automatic gain, cannot be seen/);
   // Exactly at the threshold counts as at the rail (capture-checks: |x| ≥ CLIP_THRESHOLD).
   assert.equal(clippingOf(reduceAll([runEvent(0, { peak: CLIP_THRESHOLD })])).value, 'AT RAIL');
 });
@@ -139,6 +142,25 @@ test('T016: AT RAIL is kept across later clean runs; a clip region still overrid
   { peak: 0.5 })]);
   assert.equal(clippingOf(clipped).text, 'CLIPPING DETECTED');
   assert.equal(clippingOf(clipped).status, 'fail');
+});
+
+test('T016: a rail first reached in a later run moves NONE and NOT CHECKED up to AT RAIL', () => {
+  // NONE after a clean run 1, then run 2 reaches the rail: the bar says AT RAIL for run 2.
+  const fromNone = clippingOf(reduceAll([runEvent(0, { peak: 0.5 }),
+    runEvent(1, { peak: 0.995 })]));
+  assert.equal(fromNone.text, 'CLIPPING AT RAIL');
+  assert.equal(fromNone.status, 'warn');
+  assert.match(fromNone.detail, /^Run 2: peak 0\.995/);
+  // NOT CHECKED after an unreported run 1, then run 2 reaches the rail: AT RAIL outranks it.
+  const fromUnchecked = clippingOf(reduceAll([runEvent(0), runEvent(1, { peak: 0.995 })]));
+  assert.equal(fromUnchecked.text, 'CLIPPING AT RAIL');
+  assert.equal(fromUnchecked.status, 'warn');
+  assert.match(fromUnchecked.detail, /^Run 2: peak 0\.995/);
+  // And it stays there after a third, clean run.
+  const kept = clippingOf(reduceAll([runEvent(0), runEvent(1, { peak: 0.995 }),
+    runEvent(2, { peak: 0.5 })]));
+  assert.equal(kept.text, 'CLIPPING AT RAIL');
+  assert.match(kept.detail, /^Run 2:/);
 });
 
 test('T016: an unknown peak is NOT CHECKED; NONE names its threshold', () => {
