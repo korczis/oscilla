@@ -1,0 +1,42 @@
+# Review verdict for pull request #332, the synth engines (K090 and the K-line engines; branch
+# feat/synth-engines, stacked on feat/synth-panel = #329). Reviewed head 5afc08a4 against base
+# origin/feat/synth-panel. Another session built it (oscilla-b0); this reviewer built none of the
+# synth code. prismatic-majordomus-f3 reviewed the DSP lens earlier (its three P1s verified fixed by
+# measurement, and the FM-bass DC-block P2 that 5afc08a4 fixes); this review is the voices-and-tests
+# lens oscilla-b0 asked for, plus the #329 slow-arming leak.
+#
+# The digest is scripts/review-verdict.mjs (git archive origin/main scripts) run --content over
+# the 9 guarded paths it names against origin/feat/synth-panel: src/js/audio/additive.js and
+# src/js/studio/{adapters/engines,adapters/nodes,adapters/voices,live-notes,nodes/engines,offline,
+# registry,transport}.js.
+#
+# How it was reviewed, three lenses in detached worktrees at the head, a skeptic per P1-P2:
+# - Mutations, one revert per claimed fix (14 mutants, synth-engines.cjs --only rows one browser
+#   at a time with OSC_LOAD_MAX=40, and the round-2/round-3 unit files): 12 killed. Clap gate-off,
+#   plain linear FM through the stack (375.6 cents), round-2's 0.1x high-pass (123.5 cents, caught
+#   by o-pitch's drive part only), swapped phase tables, Level/4, steal before the fade, morph
+#   headroom and level factor, silent-note steal, ring without modulator, legato off and legato from
+#   the floor are all killed. Survivors: V1 and V2 below.
+# - Voice repros live in chromium at 48 kHz on the committed dist: none of f3's three reproduces.
+#   A sourceless note steals nothing (16 voices before and after, noteOn stolen:false); a retrigger
+#   on the formant pad dips 0.06 dB (was 28-33 dB); percussion allOff silences the open hat.
+#   synth-engines.cjs desktop and synth.cjs pass.
+# - The slow-arming leak: reproduced in 1 of 5 natural runs per engine (chromium, webkit) at -42 dB
+#   RMS for 107 ms, and 6 of 6 when the Arm transaction is stalled past t0 + attack, at -31 dB RMS
+#   (a held C4 sustains at -31.5 dB) for 117-128 ms. The cause is #329's transport (V4).
+#
+# Verdict: merge. No P0 or P1. V4 is #329's code and is open there as well; it should be fixed in
+# #329 before the synth chain is released, but it does not block this pull request's merge.
+schema: review-verdict/v1
+pr: 332
+verdict: merge
+reviewer: oscilla-af (claude-code 901211e2)
+content: 459ec243ac38712068045634a5c850bb83d474a89a6cdfb6a2411a8b998c081a
+findings:
+  - { id: V1, severity: P2, status: open, title: "adapters/engines.js:221 the index of an edge into a phase operator is untested: indexGain(m, 0.5 / to.phi) passes every unit test (35/35) and o-pitch/o-headroom, against the face's claim that a stack edge keeps the peak deviation and |J_k(I)|; assert each phase-operator input gain (index_m / phi) or add an offline line-level check of one stack" }
+  - { id: V2, severity: P3, status: open, title: "adapters/engines.js:184 removing the sine-table matching of operators that feed a phase operator passes firefox o-pitch at 4.671 of 5 cents (1.637 fixed); assert the table in the round-3 unit test or tighten the firefox drive bound" }
+  - { id: V3, severity: P3, status: open, title: "synth-engines.cjs:695 with suite.cjs: --only without a phone check always exits 1 (the phone leg runs 0 checks and the harness throws), so a narrowed run cannot be judged by its exit code" }
+  - { id: V4, severity: P2, status: open, title: "transport.js:615 (#329) first Arm with no key held can sound a full-level note of about 120 ms: the Keys-gated envelopes open at t0 = hooks.soon() when the graph is built and ownEnvelope(fresh) releases them at ctxNow(), which a stalled transaction reaches after t0 + attack; create the envelope closed (or release at t0, before the attack) when no key is held" }
+  - { id: V5, severity: P3, status: open, title: "live-notes.js:117-121 a note that sounds nothing still enters the held list, so the held readout and the voice count disagree" }
+  - { id: V6, severity: P3, status: open, title: "nodes/engines.js:170-186 amDcText: in AM mode at Depth 0 the face claims a DC offset that measures 0" }
+  - { id: V7, severity: P3, status: open, title: "nodes/engines.js:176 the reason given for keeping the DC (a high-pass would raise the voice's peak above its stated bound) is false at most of the settings that show it; state the reason that holds" }
