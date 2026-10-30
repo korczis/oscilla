@@ -2975,8 +2975,10 @@
           (Device &amp; Limits): scheduled on the audio clock, so it holds even if the page
           stalls. It also caps the Finite tone. Other programmed patterns stop at their own end
           (max 30 s); a continuous sweep repeat needs “Allow continuous playback”. Attack applies
-          from the next note; release also applies to a held note (with the Envelope lab on, its
-          Release is the one used).</p>
+          from the next note. Release, edited while a note is held, is the fade when you let go
+          of it (with the Envelope lab on, its Release is the one used), shortened to end by the
+          hard limit or a pattern’s own end; a note that reaches either, or a Trigger note’s
+          end, fades over the release it started with.</p>
         <label class="osc-label" for="osc-set-duration">Trigger duration (ms)</label>
         <input class="osc-number" id="osc-set-duration" type="text" :value="duration"
           data-osc="settings.duration" @change="setEnv('duration', $event.target.value)">

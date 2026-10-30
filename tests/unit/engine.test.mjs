@@ -973,18 +973,75 @@ test('C009: the edited release survives a restart; step envelopes keep the play-
     assert.strictEqual(eng.activeNodeCount, 0);
   });
 
-test('C009: a limited voice never ends later than its hard-limit endTime after the edit',
+// C009 review F1 (P1): in the app's default (continuous off, 2 s hard limit) a release edited
+// upward while the note is held must not turn letting go into nothing. The fade that does not
+// fit before the limited voice's own end is shortened to end before it: the let-go always starts
+// a fade (and a 'release' event), and the voice never ends later than the hard limit.
+test('C009: a release edited past a limited voice\'s end still fades it out when let go',
   { skip }, () => {
     const { eng, advance } = setup();
-    const info = eng.play(plan({ pattern: 'tone' }), opt({ continuous: false, limitS: 1 }));
+    const events = [];
+    eng.on((type, d) => events.push([type, d]));
+    const info = eng.play(plan({ pattern: 'tone' }), opt({ continuous: false, limitS: 2 }));
     assert.strictEqual(info.limited, true);
     const v = eng.voice;
     const end = v.endTime;
-    advance(0.3);
+    advance(0.5);
+    assert.strictEqual(eng.setNoteOffRelease(1), true);
+    advance(1.2);
+    assert.strictEqual(eng.release(), true, 'letting go starts a fade');
+    assert.deepStrictEqual(events.filter(([type]) => type === 'release').map(([, d]) => d.natural),
+      [false], 'the let-go is announced (RELEASING)');
+    const q = 128 / SR;
+    const t = Math.ceil((1.2 + 0.02) / q) * q;
+    const fade = v.nodes[2].gain.events;
+    assert.strictEqual(fade.length, 2);
+    assert.deepStrictEqual(fade[0], ['set', 1, t], 'the fade starts at the let-go');
+    assert.strictEqual(fade[1][0], 'linear');
+    assert.ok(fade[1][2] - t > 0.5, 'over the time the limit leaves, not a click');
+    assert.ok(fade[1][2] - t < 1, 'shorter than the 1 s edit, which does not fit');
+    assert.ok(v.endTime < end, 'it never ends later than the hard limit');
+    assert.ok(fade[1][2] < v.endTime);
+    advance(3);
+    assert.strictEqual(eng.activeNodeCount, 0);
+
+    // An edit that fits is used as it is.
+    const { eng: e2, advance: adv2 } = setup();
+    e2.play(plan({ pattern: 'tone' }), opt({ continuous: false, limitS: 2 }));
+    const v2 = e2.voice;
+    adv2(0.5);
+    assert.strictEqual(e2.setNoteOffRelease(0.4), true);
+    adv2(0.6);
+    assert.strictEqual(e2.release(), true);
+    const f2 = v2.nodes[2].gain.events;
+    assert.ok(Math.abs(f2[1][2] - f2[0][2] - 0.4) < 1e-9, 'it fades over the edited 0.4 s');
+  });
+
+// C009 review F7 (P2): the same holds for any voice with a finite end of its own, continuous on
+// included: a held programmed pattern (a sweep played once) let go after a release edit longer
+// than what is left of it fades from the let-go, not at full level to its own end.
+test('C009: a held programmed pattern let go after a long release edit fades from the let-go',
+  { skip }, () => {
+    const { eng, advance } = setup();
+    const p = buildPlan({
+      ...defaultInstrumentState(), source: 'sweep',
+      sweep: {
+        start: 200, end: 2000, durationMs: 3000, curve: 'log', direction: 'up', repeat: 'once',
+      },
+    }, ENV_S).plan;
+    eng.play(p, opt({ continuous: true }));
+    const v = eng.voice;
+    const end = v.endTime;
+    assert.ok(Number.isFinite(end) && end > 2.9, 'a programmed end of its own');
+    advance(0.2);
     assert.strictEqual(eng.setNoteOffRelease(2), true);
-    assert.strictEqual(eng.release(), false, 'a fade past the limit is refused');
-    assert.strictEqual(v.endTime, end, 'the hard-limit end is kept');
-    assert.ok(v.nodes.slice(2, 4).every((n) => n.gain.events.length === 0));
-    advance(2);
+    advance(1.5);
+    assert.strictEqual(eng.release(), true, 'letting go starts a fade');
+    const fade = v.nodes[2].gain.events;
+    assert.strictEqual(fade.length, 2);
+    const q = 128 / SR;
+    assert.deepStrictEqual(fade[0], ['set', 1, Math.ceil((1.5 + 0.02) / q) * q]);
+    assert.ok(fade[1][2] < v.endTime && v.endTime < end, 'it ends before the pattern would');
+    advance(4);
     assert.strictEqual(eng.activeNodeCount, 0);
   });

@@ -604,13 +604,19 @@ export class AudioEngine {
    * is always one of the fast fades (stop now, Escape, a retrigger, the continuous permission
    * withdrawn: FAST_RELEASE_S or less), so a voice whose `cut` is fading already ends within
    * FAST_RELEASE_S plus the stop margin; a third request is declined (returns false).
+   *
+   * `fit` (C009, a let-go with a note-off release edited while held): a fade that would end
+   * after the voice's own end (the hard limit, a programmed pattern's end) is shortened to end
+   * before it rather than refused, so letting go always starts a fade and the voice never ends
+   * later than it would have. Without `fit` such a fade is refused (V1).
    */
-  _releaseVoice(v, releaseS, silent = false) {
+  _releaseVoice(v, releaseS, silent = false, fit = false) {
     if (!v || v.ended) return false;
     const ctx = v.ctx;
     if (ctx.state === 'closed') { this._cleanup(v); return true; }
     const t = this._soon(ctx);
-    const rel = Math.max(0.005, releaseS);
+    let rel = Math.max(0.005, releaseS);
+    if (fit && t + rel + 0.01 >= v.endTime) rel = Math.max(0.005, v.endTime - t - 0.012);
     const stopAt = Math.max(t + rel + 0.01, v.t0 + 0.005);
     if (t >= v.endTime - 0.002 || stopAt >= v.endTime) return false; // ends sooner on its own
     const stage = !v.fade.ev.length ? v.fade : !v.cut.ev.length ? v.cut : null;
@@ -642,12 +648,15 @@ export class AudioEngine {
 
   /**
    * Graceful stop of the current voice with its note-off release (setNoteOffRelease), else its
-   * own play-time release, or a fast one.
+   * own play-time release, or a fast one. A note-off release longer than the time the voice has
+   * left before its own end is shortened to end before it (C009 review F1, F7).
    */
   release(fast = false) {
     const v = this.voice;
     if (!v) return false;
-    return this._releaseVoice(v, fast ? 0.008 : (v.noteOff ?? v.release));
+    if (fast) return this._releaseVoice(v, 0.008);
+    if (v.noteOff == null) return this._releaseVoice(v, v.release);
+    return this._releaseVoice(v, v.noteOff, false, true);
   }
 
   /**
@@ -656,8 +665,9 @@ export class AudioEngine {
    * releasing and has not ended (a fade that started keeps its time; returns false otherwise).
    * It is a stored number: no AudioParam is written while the note is held (V249), and
    * v.release keeps its play-time value for the step envelopes the scheduler tops up and the
-   * RELEASING notice. v.opts takes it too (a copied adsr), so a _restart keeps it. A fade that
-   * would end after a limited voice's endTime is still refused by _releaseVoice.
+   * RELEASING notice. v.opts takes it too (a copied adsr), so a _restart keeps it. When it
+   * does not fit before a voice's own end (the hard limit, a programmed pattern's end),
+   * release() shortens the fade to end before it: letting go always fades, never past that end.
    */
   setNoteOffRelease(s) {
     const v = this.voice;

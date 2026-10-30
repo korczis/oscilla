@@ -88,7 +88,9 @@ changed.
   response. Cutoff and Q can be dragged on the chart.
 - **ADSR:** an attack/decay/sustain/release envelope with a draggable graph. Attack applies
   from the next note; a release edited while a note is held (here, or Settings Release with
-  the envelope off) is the one letting go of that note uses.
+  the envelope off) is the one letting go of that note uses, shortened to end by the hard
+  limit or a pattern's own end. A note that reaches either, or a Trigger note's end, fades
+  over the release it started with.
 - **Additive synthesis:** a harmonic editor. The bars you see are the same coefficients that
   build the waveform you hear.
 - **Phase, Lissajous and stereo:** A/B phase views, a Lissajous figure, a correlation meter and
