@@ -122,6 +122,27 @@ test('the primary action pressed on the Playground opens MEASURE before it runs'
   assert.equal(cmp.workspace, 'measure');
 });
 
+test('Repeat pressed on the Playground opens MEASURE before it measures; Cancel stays put',
+  async () => {
+    // A COMPLETE result outlives leaving MEASURE (only an active run is aborted), so the
+    // Playground's measurement row can offer "Repeat (new experiment)" as a secondary action.
+    const { cmp, calls } = makeMeasure('playground');
+    let measuredIn = null;
+    cmp.measureRepeat = async function measureRepeat() { measuredIn = this.workspace; };
+    await cmp.measureRunSecondary('repeat');
+    assert.deepEqual(calls, ['measure'], 'MEASURE opened once');
+    assert.equal(measuredIn, 'measure', 'the repeat runs in MEASURE, not unseen on the Playground');
+
+    const inMeasure = makeMeasure('measure');
+    inMeasure.cmp.measureRepeat = async () => {};
+    await inMeasure.cmp.measureRunSecondary('repeat');
+    assert.deepEqual(inMeasure.calls, [], 'no workspace switch from MEASURE itself');
+
+    const cancel = makeMeasure('playground');
+    await cancel.cmp.measureRunSecondary('stop');
+    assert.deepEqual(cancel.calls, [], 'Cancel needs no workspace: it stops in place');
+  });
+
 test('in MEASURE the primary action runs in place, and a disabled one moves nobody', async () => {
   const inMeasure = makeMeasure('measure');
   inMeasure.cmp.meas.flow = { ...inMeasure.cmp.meas.flow,

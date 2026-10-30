@@ -1697,8 +1697,12 @@ export function createMeasureUi(svc) {
     },
     async measureRunSecondary(id) {
       if (id === 'stop') this.measureAbort('user');
-      else if (id === 'repeat') await this.measureRepeat();
-      else if (id === 'expert') this.measureSetExpert(!this.meas.expert);
+      else if (id === 'repeat') {
+        // Repeat is a measurement too: pressed on the Playground's measurement row (a COMPLETE
+        // result outlives leaving MEASURE) it opens MEASURE first, as the primary action does.
+        if (this.workspace !== 'measure') this.setWorkspace('measure');
+        await this.measureRepeat();
+      } else if (id === 'expert') this.measureSetExpert(!this.meas.expert);
     },
     measureStop() {
       this.measureAbort('user');
