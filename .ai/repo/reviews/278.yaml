@@ -1,0 +1,43 @@
+# Review verdict for pull request #278, P002: the first-screen entry-path inventory and the Q004
+# first screen (branch test/p002-first-screen-inventory). Reviewed head 1468baf2, merge base
+# origin/main b67d1e58. Reviewer oscilla-26-review, a session that built none of it.
+#
+# The digest: scripts/review-verdict.mjs --content --list at the head, and the base branch's copy
+# (git archive origin/main scripts, --repo on this worktree) gives the same e0edd5a9...93ce over
+# the 2 guarded paths: src/js/ui/measure.js and tests/browser/live-smoke.cjs. origin/main has not
+# touched either since the merge base, so a merge of main leaves the digest as it is.
+#
+# What holds:
+# - measure.js: measureRunPrimary and the secondary Repeat switch to MEASURE before they run,
+#   only when the action is enabled; Stop and Expert stay in place. Entering MEASURE never
+#   triggers the main.js workspace watcher's abort (it fires only for ws !== 'measure'), READY is
+#   an active state, so a Playground row can never offer 'measure' or 'stop' as primary. The two
+#   unit tests that judge this fail on the merge base's measure.js and pass at the head.
+# - live-smoke.cjs: PANELS is the first screen's panels plus #osc-measure-flow at its 1536x1024
+#   viewport; the moved panels are covered pre-deploy (first-screen.cjs layout others, app.cjs
+#   compare: bio, qa-regressions compare: phase).
+# - src/index.html: a sorted-lines diff against the merge base confirms the PR body: only a
+#   reorder, the h1, the MEASURE view's :hidden binding, the two <details> and comments.
+# - The h1 is DESCRIPTION verbatim (Q002); the Playground row shows MEASURE's own state with
+#   Frequency and Level UNCALIBRATED and no result (project.no-fake-science holds).
+# - first-screen.cjs runs through lib/suite.cjs, every wait is until()/bounded() with a named
+#   deadline; browser-timing, browser-suite-contract, ui-flowbite-pro (debt 3909, not above 3910),
+#   docs-derived, knowledge-integrity, v3-ui, positioning-consistency and first-screen-layout
+#   pass; npm run build:check says dist is the build of the sources.
+# - The new Playground reference.png (accepting it is the review, project.visual-identity-lock
+#   v2) shows the chosen layout; the domain views keep their own language.
+#
+# Verdict: merge. No P0 or P1. R1 must be done before landing anyway (the branch cannot merge as
+# it is); R2 is worth a small follow-up.
+schema: review-verdict/v1
+pr: 278
+verdict: merge
+reviewer: oscilla-26-review
+content: e0edd5a901f959d40d4325c9421ff99554ce52bdc6ad32d3ff3420e1117a93ce
+findings:
+  - { id: R1, severity: P2, status: open, title: "the branch is 113 commits behind origin/main and merge-tree conflicts in tests/browser/app.cjs, tests/README.md, tests/unit/ui-flowbite-pro-baseline.json and dist/index.html (none guarded); the merged app.cjs and a re-measured Flowbite record need their suites rerun before landing" }
+  - { id: R2, severity: P3, status: open, title: "instrument.css hides every .osc-m-step that is not .is-current on the phone Playground, so a blocked step (preflight refused, its fail icon) or a saved result (all steps done, measure-flow.js:309) leaves the measurement row with no step shown; keep .is-blocked or fall back to flow.current" }
+  - { id: R3, severity: P3, status: open, title: "knowledge/curated/visual-reference-is-an-ai-render.md (status verified, derived_from file:tests/visual/reference.png) and the v2-laboratory critique and gap (15.91 % against the reference) now describe a file this PR replaced with a container capture" }
+  - { id: R4, severity: P3, status: open, title: "CLAIMS first-screen-layout note and the PR body put the measurement row after Device & Limits at 768-1279 px; it shares order 5 with the Spectrogram panel, which precedes it in the DOM, so it follows the Spectrogram" }
+  - { id: R5, severity: P3, status: open, title: "first-screen.cjs layout primary accepts focus on SECTION#osc-view-measure in every engine though the comment allows it only for WebKit" }
+  - { id: R6, severity: P3, status: open, title: "on the Playground MEASURE's sr-only Measure h2 and its two aria-live regions join the accessibility tree around the measurement row" }
