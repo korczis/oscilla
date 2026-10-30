@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Y001 WebGL probe (spike, never merged)</title>
+</head>
+<body>
+<p>Y001 WebGL capability probe. Run by spike/gl/probe.cjs; the page exposes window.__probe().</p>
+<script>
+'use strict';
+// Y001 spike (branch spike/gl-views, never merged). Everything here is throwaway measurement
+// code; nothing in src/ uses it.
+
+const VS1 = 'attribute vec2 p; varying vec2 uv; void main(){ uv = p * 0.5 + 0.5; '
+  + 'gl_Position = vec4(p, 0.0, 1.0); }';
+const FS1 = 'precision mediump float; varying vec2 uv; uniform sampler2D t; '
+  + 'void main(){ gl_FragColor = vec4(texture2D(t, uv).rrr, 1.0); }';
+const VS2 = '#version 300 es\nin vec2 p; out vec2 uv; void main(){ uv = p * 0.5 + 0.5; '
+  + 'gl_Position = vec4(p, 0.0, 1.0); }';
+const FS2 = '#version 300 es\nprecision mediump float; in vec2 uv; uniform sampler2D t; '
+  + 'out vec4 o; void main(){ o = vec4(texture(t, uv).rrr, 1.0); }';
+
+function ctxOf(kind, attrs) {
+  const c = document.createElement('canvas');
+  c.width = 4;
+  c.height = 4;
+  let gl = null;
+  let error = null;
+  try {
+    gl = c.getContext(kind, attrs);
+  } catch (e) {
+    error = String(e && e.message || e);
+  }
+  return { canvas: c, gl, error };
+}
+
+function program(gl, vs, fs) {
+  const sh = (type, src) => {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+    return s;
+  };
+  const p = gl.createProgram();
+  gl.attachShader(p, sh(gl.VERTEX_SHADER, vs));
+  gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  return p;
+}
+
+/**
+ * Upload a 4 x 4 single-channel texture filled with 200 in the given format and sample it in a
+ * full-canvas draw; read back the red channel. ok: upload raised no GL error and the sample is
+ * 200 +- 2.
+ */
+function textureRoundTrip(gl, isGl2, format) {
+  const out = { format, uploadError: null, sampled: null, ok: false, error: null };
+  try {
+    const p = program(gl, isGl2 ? VS2 : VS1, isGl2 ? FS2 : FS1);
+    gl.useProgram(p);
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(p, 'p');
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const data = new Uint8Array(16).fill(200);
+    while (gl.getError()) { /* clear */ }
+    if (format === 'R8') {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, 4, 4, 0, gl.RED, gl.UNSIGNED_BYTE, data);
+    } else {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, 4, 4, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE,
+        data);
+    }
+    const e = gl.getError();
+    out.uploadError = e || 0;
+    // Column update the level ring needs: texSubImage2D of one 1 x 4 column.
+    const col = new Uint8Array(4).fill(200);
+    if (format === 'R8') gl.texSubImage2D(gl.TEXTURE_2D, 0, 1, 0, 1, 4, gl.RED, gl.UNSIGNED_BYTE, col);
+    else gl.texSubImage2D(gl.TEXTURE_2D, 0, 1, 0, 1, 4, gl.LUMINANCE, gl.UNSIGNED_BYTE, col);
+    out.subImageError = gl.getError() || 0;
+    gl.viewport(0, 0, 4, 4);
+    gl.uniform1i(gl.getUniformLocation(p, 't'), 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    const px = new Uint8Array(4);
+    gl.readPixels(1, 1, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    out.sampled = px[0];
+    out.ok = out.uploadError === 0 && out.subImageError === 0 && Math.abs(px[0] - 200) <= 2;
+  } catch (err) {
+    out.error = String(err && err.message || err);
+  }
+  return out;
+}
+
+function describe(kind) {
+  const r = { kind };
+  for (const caveat of [false, true]) {
+    const { gl, error } = ctxOf(kind, { failIfMajorPerformanceCaveat: caveat });
+    r[caveat ? 'withCaveatFail' : 'plain'] = { ok: !!gl, error };
+  }
+  const { gl } = ctxOf(kind, {});
+  if (!gl) return r;
+  const isGl2 = kind === 'webgl2';
+  const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+  r.vendor = gl.getParameter(gl.VENDOR);
+  r.renderer = gl.getParameter(gl.RENDERER);
+  r.version = gl.getParameter(gl.VERSION);
+  r.shadingLanguage = gl.getParameter(gl.SHADING_LANGUAGE_VERSION);
+  r.debugRendererInfo = !!dbg;
+  r.unmaskedVendor = dbg ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) : null;
+  r.unmaskedRenderer = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : null;
+  r.MAX_TEXTURE_SIZE = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+  r.MAX_VERTEX_TEXTURE_IMAGE_UNITS = gl.getParameter(gl.MAX_VERTEX_TEXTURE_IMAGE_UNITS);
+  r.ALIASED_LINE_WIDTH_RANGE = Array.from(gl.getParameter(gl.ALIASED_LINE_WIDTH_RANGE));
+  const sup = gl.getSupportedExtensions() || [];
+  r.supportedExtensions = sup;
+  const ext = (name) => sup.includes(name);
+  r.EXT_color_buffer_float = ext('EXT_color_buffer_float');
+  r.EXT_color_buffer_half_float = ext('EXT_color_buffer_half_float');
+  r.OES_element_index_uint = isGl2 ? 'core' : ext('OES_element_index_uint');
+  r.textures = {};
+  if (isGl2) r.textures.R8 = textureRoundTrip(ctxOf(kind, {}).gl, true, 'R8');
+  r.textures.LUMINANCE = textureRoundTrip(ctxOf(kind, {}).gl, isGl2, 'LUMINANCE');
+  return r;
+}
+
+const frame = () => new Promise((res) => requestAnimationFrame(() => res()));
+
+/**
+ * Create up to `max` contexts of `kind`, each kept alive (referenced, attached to the DOM),
+ * and record which ones are lost. firstLossAt: the 1-based creation count at which some earlier
+ * context first reported isContextLost() synchronously (null when none did); lostEvents: the
+ * indices that fired webglcontextlost by the end (events are asynchronous, so the runner gives
+ * them `settleFrames` animation frames to arrive).
+ */
+async function contextBudget(kind, max = 64, settleFrames = 30) {
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  const list = [];
+  const lostEvents = [];
+  let restored = 0;
+  let firstLossAt = null;
+  let firstLostIndex = null;
+  let createFailedAt = null;
+  for (let i = 0; i < max; i++) {
+    const c = document.createElement('canvas');
+    c.width = 2;
+    c.height = 2;
+    // No preventDefault: the page does not ask for restoration (Firefox restores otherwise).
+    c.addEventListener('webglcontextlost', () => { lostEvents.push(i); });
+    c.addEventListener('webglcontextrestored', () => { restored += 1; });
+    host.appendChild(c);
+    let gl = null;
+    try { gl = c.getContext(kind); } catch (e) { gl = null; }
+    if (!gl) { createFailedAt = i + 1; break; }
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT); // a used context, not an idle one
+    list.push(gl);
+    if (firstLossAt === null) {
+      const lost = list.findIndex((g) => g.isContextLost());
+      if (lost >= 0) { firstLossAt = i + 1; firstLostIndex = lost; }
+    }
+  }
+  for (let f = 0; f < settleFrames; f++) await frame();
+  const lostAtEnd = list.map((g, i) => (g.isContextLost() ? i : -1)).filter((i) => i >= 0);
+  const r = { kind, requested: max, created: list.length, createFailedAt, firstLossAt,
+    firstLostIndex, lostAtEnd: lostAtEnd.length, alive: list.length - lostAtEnd.length,
+    lostEventIndices: lostEvents.slice(0, 64), lostEvents: lostEvents.length, restored,
+    // With asynchronous loss (Firefox) the limit is created - lostEvents once all have arrived.
+    aliveByEvents: list.length - lostEvents.length };
+  host.remove();
+  return r;
+}
+
+window.__probe = async function probe() {
+  const out = { userAgent: navigator.userAgent, devicePixelRatio: devicePixelRatio,
+    contexts: {} };
+  for (const kind of ['webgl2', 'webgl']) out.contexts[kind] = describe(kind);
+  return out;
+};
+window.__contextBudget = contextBudget;
+window.__ready = true;
+</script>
+</body>
+</html>

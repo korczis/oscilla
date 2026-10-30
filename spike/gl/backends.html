@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Y001 backend bench (spike, never merged)</title>
+<style>
+  html, body { margin: 0; background: #000; color: #ccc; font: 12px monospace; }
+  #host canvas { display: block; }
+</style>
+</head>
+<body>
+<div id="host"></div>
+<pre id="status">loading</pre>
+<!-- Served by spike/gl/bench.cjs: /p5.min.js is node_modules/p5/lib/p5.min.js (p5@1.11.3). -->
+<script src="/p5.min.js"></script>
+<script>
+'use strict';
+// Y001 spike (branch spike/gl-views, never merged). Query: ?backend=raw-gl|p5gl|canvas2d
+// &scene=ring|xy&count=0|1. With count=1 every 2D/WebGL context the page creates is wrapped
+// so its draw and upload calls are counted per frame (a separate page load from the timed
+// run, so the wrapping costs nothing in the timings).
+(function countCalls() {
+  const q = new URLSearchParams(location.search);
+  window.__calls = Object.create(null);
+  if (q.get('count') !== '1') return;
+  const GL = ['drawArrays', 'drawElements', 'drawArraysInstanced', 'drawElementsInstanced',
+    'drawRangeElements', 'clear', 'texImage2D', 'texSubImage2D', 'bufferData', 'bufferSubData'];
+  const C2D = ['fill', 'stroke', 'fillRect', 'strokeRect', 'clearRect', 'putImageData',
+    'drawImage', 'fillText', 'strokeText'];
+  const seen = new WeakSet();
+  const orig = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function getContext(kind, attrs) {
+    const ctx = orig.call(this, kind, attrs);
+    if (!ctx || seen.has(ctx)) return ctx;
+    seen.add(ctx);
+    const names = kind === '2d' ? C2D : GL;
+    const tag = kind === '2d' ? '2d' : 'gl';
+    for (const n of names) {
+      const f = ctx[n];
+      if (typeof f !== 'function') continue;
+      const key = `${tag}.${n}`;
+      window.__calls[key] = 0;
+      ctx[n] = function counted(...a) {
+        window.__calls[key] += 1;
+        return f.apply(this, a);
+      };
+    }
+    return ctx;
+  };
+}());
+</script>
+<script type="module">
+const q = new URLSearchParams(location.search);
+const BACKEND = q.get('backend') || 'raw-gl';
+const SCENE = q.get('scene') || 'ring';
+const COLS = 1024;
+const ROWS = 512;
+const N = 2048;
+const XY_SIZE = 512;
+const status = document.getElementById('status');
+const host = document.getElementById('host');
+
+// ------------------------------------------------------------- data (allocation-free per frame)
+const column = new Uint8Array(ROWS);
+const xy = new Float32Array(N * 2);
+let seed = 12345;
+let frameNo = 0;
+function nextColumn() {
+  // A drifting peak over a noise floor; an LCG keeps it deterministic and allocation-free.
+  const peak = (Math.sin(frameNo * 0.02) * 0.4 + 0.5) * ROWS;
+  for (let r = 0; r < ROWS; r++) {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    const d = (r - peak) / 6;
+    const v = 40 + (seed >>> 26) + 200 * Math.exp(-d * d);
+    column[r] = v > 255 ? 255 : v;
+  }
+}
+function nextXY() {
+  const ph = frameNo * 0.01;
+  for (let i = 0; i < N; i++) {
+    const t = (i / N) * Math.PI * 2;
+    xy[2 * i] = Math.sin(3 * t + ph);
+    xy[2 * i + 1] = Math.sin(2 * t);
+  }
+}
+
+// ------------------------------------------------------------- backend
+const mod = await import(`./backends/${BACKEND}.js`);
+let view;
+try {
+  if (BACKEND === 'p5gl') {
+    view = SCENE === 'ring' ? await mod.createRing(host, COLS, ROWS)
+      : await mod.createXY(host, N, XY_SIZE);
+  } else {
+    const canvas = document.createElement('canvas');
+    host.appendChild(canvas);
+    view = SCENE === 'ring' ? mod.createRing(canvas, COLS, ROWS)
+      : mod.createXY(canvas, N, XY_SIZE);
+  }
+} catch (e) {
+  window.__error = String(e && e.message || e);
+}
+
+function step(sync) {
+  frameNo += 1;
+  if (SCENE === 'ring') nextColumn(); else nextXY();
+  const t0 = performance.now();
+  if (SCENE === 'ring') { view.push(column); view.draw(); } else view.draw(xy);
+  if (sync) view.sync(); // wait for the pixels: GPU / raster work included
+  return performance.now() - t0;
+}
+
+/**
+ * Run `frames` animation frames, one draw each; resolve with the per-frame main-thread times
+ * (performance.now around push + draw, and with `sync` a 1-pixel readback that waits for the
+ * GPU / rasteriser), the rAF intervals, and the counted calls per frame.
+ */
+function run(frames, sync = false) {
+  const times = new Float64Array(frames);
+  const intervals = new Float64Array(frames);
+  const before = { ...window.__calls };
+  let i = 0;
+  let last = 0;
+  return new Promise((resolve) => {
+    const tick = (now) => {
+      times[i] = step(sync);
+      intervals[i] = last ? now - last : NaN;
+      last = now;
+      i += 1;
+      if (i < frames) requestAnimationFrame(tick);
+      else {
+        const calls = {};
+        for (const k of Object.keys(window.__calls)) {
+          const d = window.__calls[k] - (before[k] || 0);
+          if (d) calls[k] = d / frames;
+        }
+        resolve({ times: Array.from(times), intervals: Array.from(intervals).filter((x) => x > 0),
+          calls });
+      }
+    };
+    requestAnimationFrame(tick);
+  });
+}
+
+// Timer resolution this page gets (coarsened unless crossOriginIsolated; bench.cjs serves
+// COOP/COEP so it is): the smallest step performance.now() takes, over 50 steps.
+function timerGranularity() {
+  let min = Infinity;
+  for (let k = 0; k < 50; k++) {
+    const a = performance.now();
+    let b = a;
+    while (b === a) b = performance.now();
+    if (b - a < min) min = b - a;
+  }
+  return min;
+}
+window.__timer = { crossOriginIsolated: self.crossOriginIsolated === true,
+  granularityMs: timerGranularity() };
+window.__info = view ? view.info : null;
+window.__run = run;
+window.__ready = true;
+status.textContent = `${BACKEND} ${SCENE} ${view ? JSON.stringify(view.info) : window.__error}`;
+</script>
+</body>
+</html>
