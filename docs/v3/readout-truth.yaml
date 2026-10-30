@@ -1,0 +1,622 @@
+# The readout truth table (T026): one row per readout of the interface. A readout key is the
+# data-osc value of a markup readout of src/index.html (an element that binds x-text or
+# :aria-valuetext, or carries role="meter", role="img" or aria-live, and is not a control
+# without a value of its own), or `chart:<id>` for a declared data-osc-chart.
+#
+# Rows are seeded from the P05 audit of origin/main b67d1e58 (v3.13.0); `audit` names its row
+# ids. Every figure is quoted from that audit's fixtures, probes or the code; nothing here was
+# estimated for the table. `label` is how the value is known (VERIFIED, DERIVED, INFERRED,
+# PROPOSED, UNKNOWN, BLOCKED); a row merged from several audit rows carries the weakest. Each
+# open defect names the plan issue that fixes it.
+#
+# Keys without a row are listed in tests/unit/readout-provenance-baseline.json, which only
+# shrinks. docs/v3/readout-truth.md is generated from this file by scripts/readout-truth.mjs;
+# tests/unit/readout-provenance.test.mjs holds both to the markup.
+schema: readout-truth/v1
+readouts:
+  - key: source.freqValue
+    audit: [GEN-06]
+    readout: "Main frequency readout #osc-freq-value"
+    quantity: Requested digital frequency (setpoint)
+    unit: Hz
+    source: [src/js/ui/workbench.js]
+    algorithm: app.frequency formatted by groupedHz
+    resolution: 0.01 / 0.1 / 1 Hz by band
+    calibration: none; DAC clock and speaker unknown
+    limitations: The same box shows the setpoint at two resolutions next to the alt readout
+    tests: [tests/unit/integration-ui.test.mjs]
+    label: VERIFIED
+  - key: source.freqAlt
+    audit: [GEN-07, GEN-08]
+    readout: "Alt readout #osc-freq-alt: the frequency in Frequency mode, the note in Note mode"
+    quantity: >-
+      Requested frequency (setpoint); in Note mode the nearest 12-TET note and cents of the
+      setpoint (not a detected pitch)
+    unit: Hz/kHz; note + cents
+    source: [src/js/core/frequency.js, src/js/core/music.js]
+    algorithm: formatFrequency; in Note mode midi = 69 + 12·log2(f/a4)
+    resolution: integer or 0.01 Hz below 1 kHz, 10 Hz from 1 kHz; 1 cent
+    calibration: none; equal temperament only
+    limitations: >-
+      Coarser than the main readout from 1 kHz; a tie at ±50 cents; extended outside the MIDI
+      range
+    tests: [tests/unit/audio-test-matrix.test.mjs, tests/unit/core.test.mjs]
+    label: VERIFIED
+  - key: source.freqSlider
+    audit: [GEN-07]
+    readout: Frequency slider aria-valuetext
+    quantity: Requested frequency (setpoint)
+    unit: Hz/kHz
+    source: [src/js/core/frequency.js]
+    algorithm: formatFrequency
+    resolution: integer or 0.01 Hz below 1 kHz, 10 Hz from 1 kHz
+    calibration: none
+    limitations: Coarser than the main readout from 1 kHz
+    tests: [tests/unit/audio-test-matrix.test.mjs, tests/unit/core.test.mjs]
+    label: VERIFIED
+  - key: source.rangeMin
+    audit: [GEN-09]
+    readout: Frequency slider lower range label
+    quantity: Lower bound of the frequency control
+    unit: Hz/kHz
+    source: [src/js/core/frequency.js, src/js/ui/workbench.js]
+    algorithm: rangeBounds(range, safeMax)
+    resolution: 3 significant digits
+    calibration: none
+    limitations: Before audio starts the bounds assume 44.1 kHz
+    tests: [tests/unit/audio-test-matrix.test.mjs]
+    label: VERIFIED
+  - key: source.rangeMax
+    audit: [GEN-09]
+    readout: Frequency slider upper range label
+    quantity: Upper bound of the frequency control
+    unit: Hz/kHz
+    source: [src/js/core/frequency.js, src/js/ui/workbench.js]
+    algorithm: rangeBounds(range, safeMax)
+    resolution: 3 significant digits
+    calibration: none
+    limitations: Before audio starts the bounds assume 44.1 kHz
+    tests: [tests/unit/audio-test-matrix.test.mjs]
+    label: VERIFIED
+  - key: source.gainValue
+    audit: [GEN-01, GEN-10]
+    readout: "Gain readout #osc-gain-value"
+    quantity: Logical master-gain setpoint, shown in place of the emitted level
+    unit: dB re digital full scale (relative, not SPL)
+    source: [src/js/core/config.js, src/js/ui/workbench.js, src/js/audio/audio-engine.js]
+    algorithm: >-
+      gainLevel = 0.25·(pct/100)², shown as 20·log10(gainLevel); the emitted path is master →
+      limiter → trim → ceiling (WaveShaper at MAX_OUTPUT_GAIN 0.25 = -12.04 dBFS) → analyser
+    resolution: 0.1 dB
+    calibration: none, relative digital (ADR 0017)
+    limitations: >-
+      Peak-matched for a sine only (square -12.45, saw -12.70 dBFS at the -12.0 dB setting);
+      not RMS; the setpoint omits filter, envelope, additive normalisation, dual ×0.5, limiter
+      and ceiling; the reference is only in the tooltip
+    tests: [tests/unit/core.test.mjs, tests/browser/engine-v1port.cjs]
+    label: VERIFIED
+    defects:
+      - issue: T001
+        summary: >-
+          Under a Filter Lab boost the output sits at the ceiling (peaking 1 kHz Q1 +24 dB at
+          gain 0.08: peak -12.04 dBFS, 79.2 % of samples at the ceiling) while the readout
+          still says -21.9 dB, with no clip indicator
+  - key: source.gain
+    audit: [GEN-10]
+    readout: Gain slider aria-valuetext
+    quantity: Logical master-gain setpoint
+    unit: dB re digital full scale (relative, not SPL); linear logical gain
+    source: [src/js/core/config.js, src/js/ui/workbench.js]
+    algorithm: gainLevel = 0.25·(pct/100)², 20·log10(gainLevel)
+    resolution: 0.1 dB; logical gain 3 decimals
+    calibration: none, relative digital (ADR 0017)
+    limitations: Peak-matched for a sine only; not RMS; not the emitted level
+    tests: [tests/unit/core.test.mjs]
+    label: VERIFIED
+    defects:
+      - issue: T001
+        summary: The setpoint is announced while the safety ceiling acts on the output
+  - key: status.gain
+    audit: [GEN-01]
+    readout: Status-bar gain
+    quantity: Logical master-gain setpoint, shown in place of the emitted level
+    unit: dB re digital full scale (relative, not SPL)
+    source: [src/js/core/config.js, src/js/ui/workbench.js]
+    algorithm: 20·log10(gainLevel)
+    resolution: 0.1 dB
+    calibration: none, digital only
+    limitations: >-
+      The setpoint omits filter, envelope, additive normalisation, dual ×0.5, limiter and
+      ceiling
+    tests: [tests/browser/engine-v1port.cjs]
+    label: VERIFIED
+    defects:
+      - issue: T001
+        summary: The status bar keeps the setpoint while the output sits at the ceiling
+  - key: status.frequency
+    audit: [GEN-03]
+    readout: Status-bar frequency while a pattern or sweep plays
+    quantity: Requested instantaneous frequency (planned)
+    unit: Hz
+    source: [src/js/core/instrument.js, src/js/audio/audio-engine.js, src/js/ui/workbench.js]
+    algorithm: >-
+      engine.instantaneousFrequency() = planFreqAt(plan, t), polled every 100 ms, formatted by
+      groupedHz
+    resolution: 0.01 / 0.1 / 1 Hz by band; 100 ms poll
+    calibration: none
+    limitations: >-
+      Up to one poll stale, bounded by the sweep rate (about 7 % at the default sweep); not
+      labelled 'requested' in place
+    tests: []
+    untested: no test of statusFreqText (P05 GEN-03)
+    label: VERIFIED
+  - key: status.waveform
+    audit: [GEN-11]
+    readout: Status-bar waveform
+    quantity: Configured waveform
+    unit: text
+    source: [src/js/ui/workbench.js]
+    algorithm: WAVEFORM_LABELS
+    resolution: n/a
+    calibration: n/a
+    limitations: The configured shape, not the emitted one (see source.gainValue)
+    tests: []
+    untested: no test of the status-bar waveform text (P05 GEN-11)
+    label: VERIFIED
+  - key: status.duration
+    audit: [GEN-11]
+    readout: Status-bar duration
+    quantity: Programmed or limited duration
+    unit: s/ms
+    source: [src/js/ui/workbench.js]
+    algorithm: planSummary, formatMs
+    resolution: formatMs
+    calibration: n/a
+    limitations: The programmed duration, not a measured one
+    tests: []
+    untested: no test of the status-bar duration text (P05 GEN-11)
+    label: VERIFIED
+  - key: chart:waveform
+    audit: [GEN-02, GEN-13, STP-15]
+    readout: Waveform tab scope trace and its +1/0/-1 axis
+    quantity: >-
+      Output analyser samples divided by the set gain (live); the analytic configured waveform
+      before audio (idle, marked computed)
+    unit: ratio to set gain
+    source: [src/js/ui/p5-views.js, src/js/audio/audio-engine.js]
+    algorithm: >-
+      Analyser after the ceiling; y = clamp(d/gain, ±1.15), rising-zero trigger, min/max band
+      when sr/f < 4; a stereo route arrives as the Web Audio mono down-mix (L+R)/2
+    resolution: 1/fs; window up to 8192 samples
+    calibration: none, relative digital
+    limitations: >-
+      The clamp flattens samples above 1.15× gain with no mark; the 'relative to set gain'
+      header is dropped in narrow panels; the label never says mono sum
+    tests: [tests/unit/qa-regressions.test.mjs]
+    label: VERIFIED
+    defects:
+      - issue: T002
+        summary: >-
+          The scope draws flat tops on a clean +6 dB peaking sine and a plateau for a 3.1×
+          peak; a split 440/440 Δφ 180 stereo route draws a flat line
+  - key: dual.beat
+    audit: [GEN-05]
+    readout: "Dual Oscillator difference #osc-dual-beat"
+    quantity: "|fA − fB| stated as an amplitude-beat rate and period"
+    unit: Hz, ms
+    source: [src/js/core/instrument.js]
+    algorithm: beatText(dualDelta)
+    resolution: 3 significant digits
+    calibration: none
+    limitations: >-
+      Beating exists only in the mono sum or acoustically; claim dual-oscillator-beats scopes
+      it to mono
+    tests: [tests/unit/freeze.test.mjs]
+    label: VERIFIED
+    defects:
+      - issue: T004
+        summary: >-
+          The same beat text shows with Stereo split and in binaural mode, where each channel
+          carries one steady tone
+  - key: chart:spectrum
+    audit: [SPC-01, SPC-02, SPC-03, SPC-04]
+    readout: Spectrum trace, requested-frequency marker chip, hover chip and frequency axis
+    quantity: >-
+      Per-bin 20·log10|X[k]| of the Blackman, 1/N-scaled DFT of the output analyser, one point
+      per CSS column; the marker level is the largest bin within ±2 bins of the setpoint
+    unit: dB on the analyser scale (a full-scale sine is about -13.56 dB) against Hz
+    source:
+      - src/js/analysis/analyser.js
+      - src/js/charts/spectrum-data.js
+      - src/js/charts/spectrum-chart.js
+      - src/js/charts/axes.js
+      - src/js/labs/analysis.js
+    algorithm: >-
+      engine.analyser (fftSize 8192, smoothing 0.55) to per-column data; levelNear for the
+      marker; chipLevelText; logTicks/linearTicks and maxFrequencyFor for the axis
+    resolution: 5.86 Hz bins at 48 kHz; chips 3 significant digits and 1 dB
+    calibration: none, digital before the DAC; caption RELATIVE LEVEL (dBFS-like, uncalibrated)
+    limitations: >-
+      The -13.56 dB scale offset and the smoothing are not stated; up to about 1 dB
+      scalloping; the marker takes the bin maximum without interpolation and its ±2-bin window
+      can catch a neighbour; sub-bin hover columns are interpolated unmarked; the log axis
+      starts at 20 Hz
+    tests: [tests/unit/charts.test.mjs, tests/unit/analysis-peak.test.mjs]
+    label: DERIVED
+    defects:
+      - issue: T005
+        summary: About says bare 'dBFS'; the -13.56 dB offset is stated only in ADR 0017
+      - issue: T006
+        summary: >-
+          Choosing Max Nyquist before audio leaves the axis at 20 kHz after a 48 kHz context
+          starts
+  - key: chart:spectrogram
+    audit: [SPC-10, SPC-11, SPC-13]
+    readout: Spectrogram panel colour image, colour bar, time axis and frequency axis
+    quantity: Analyser bin level over time, mapped to a 256-entry colour table
+    unit: dB on the analyser scale, -100..0; s; Hz
+    source: [src/js/analysis/spectrogram.js, src/js/charts/spectrogram-view.js]
+    algorithm: >-
+      buildRowMap/fillColumn; columns placed by performance.now(), newest at the right; row
+      centre frequency from frequencyAtPosition
+    resolution: about 0.39 dB per colour step; a column about 10 ms; 5.86 Hz bins
+    calibration: none
+    limitations: >-
+      The '0 dB' top is unreachable (at most -7.54 dB; a full-scale sine reads -13.5); '0s'
+      is the oldest edge; Freeze and hidden pauses join seamlessly; rows above the last bin
+      are clamped
+    tests: [tests/unit/analysis-spectrogram.test.mjs]
+    label: INFERRED
+    defects:
+      - issue: K033
+        summary: The colour key is static, not generated from the scale (M062)
+      - issue: T008
+        summary: >-
+          The colour key does not name the analyser scale, and the time axis is not anchored
+          at now (an event at '8s' happened about 2 s ago), with no pause marker
+  - key: chart:analysis-spectrogram
+    audit: [SPC-12]
+    readout: Analysis-tab spectrogram
+    quantity: Analyser bin level over time as colour, without a key
+    unit: dB on the analyser scale, -100..0 (not shown)
+    source: [src/js/charts/spectrogram-view.js, src/js/analysis/spectrogram.js]
+    algorithm: createSpectrogramView with its default range -100..0
+    resolution: as chart:spectrogram
+    calibration: none
+    limitations: >-
+      No colour bar or range is shown; in Playground, Synthesis and Compare no key is on
+      screen at all
+    tests: [tests/unit/analysis-spectrogram.test.mjs]
+    label: VERIFIED
+    defects:
+      - issue: K033
+        summary: No generated colour key (M062)
+      - issue: T008
+        summary: The key, once shown, has to name the analyser scale
+  - key: chart:mic
+    audit: [MIC-05, MIC-06, MIC-07, MIC-08, MIC-09, SPC-09]
+    readout: >-
+      Microphone chart: live, generator-target and peak-hold traces, the peak marker and its
+      chip
+    quantity: >-
+      Microphone input magnitude spectrum, the generator target, the running maximum and the
+      detected peak
+    unit: dB relative analyser level, no reference, against Hz
+    source:
+      - src/js/labs/mic-analyzer.js
+      - src/js/charts/spectrum-chart.js
+      - src/js/analysis/analyser.js
+    algorithm: >-
+      Microphone AnalyserNode (Blackman, 8192, smoothing 0.5) to a per-column maximum; Average
+      is a power EMA with τ 1 s; Peak hold has no decay; chart.setPeak every 100 ms
+    resolution: 5.86 Hz; 20 dB grid; chip 3 significant digits and 1 dB
+    calibration: uncalibrated microphone; digital output
+    limitations: >-
+      The Y axis 0 dB … -80 has no caption (only the note under the readout says not
+      calibrated); smoothing 0.5 against 0.55 and τ 1 s appear nowhere; chip and readout use
+      different digit rules; estimate and trace come from different frames; -80 dB floor
+    tests: [tests/unit/charts.test.mjs, tests/unit/analysis-misc.test.mjs, tests/browser/labs.cjs]
+    label: INFERRED
+    defects:
+      - issue: K030
+        summary: The microphone chart drops the ADR 0017 caption
+      - issue: T009
+        summary: >-
+          A frozen view mixes moments (dot, chip and readout -30.4 dB against a trace maximum
+          of -20.8 dB), and the traces do not state their averaging
+  - key: chart:filter
+    audit: [LAB-01, LAB-02, LAB-03]
+    readout: Filter Lab magnitude response curve, handle and model note
+    quantity: Configured biquad magnitude response (not measured)
+    unit: dB re unity against Hz
+    source: [src/js/audio/filters.js, src/js/charts/filter-chart.js]
+    algorithm: >-
+      getFrequencyResponse at 256 log points, Q in dB for LP/HP; the note is BYPASSED when the
+      filter is off, else the model note
+    resolution: 256 points; y -30..+17 dB
+    calibration: digital transfer function
+    limitations: >-
+      Digital filter only; before PLAY an assumed 48 kHz; Q up to 30 and gain up to +24 dB
+      exceed the plot
+    tests: [tests/browser/labs.cjs, tests/browser/app.cjs]
+    label: VERIFIED
+    defects:
+      - issue: T021
+        summary: >-
+          Off-scale responses are drawn at +17 dB with the handle pinned (LP Q 30 is +29.54 dB
+          at the cutoff), and the default state shows BYPASSED without the model-rate note
+  - key: filter.cutoff
+    audit: [LAB-04]
+    readout: Filter Lab Cutoff slider aria-valuetext
+    quantity: Biquad frequency (cutoff for LP/HP, centre for band-pass, notch and peaking)
+    unit: Hz/kHz
+    source: [src/js/labs/filter-lab.js]
+    algorithm: the frequency setpoint of the filter lab, formatted to 3 significant digits
+    resolution: 3 significant digits
+    calibration: digital setpoint
+    limitations: The -3 dB point moves with Q; labelled Cutoff for every type
+    tests: [tests/browser/labs.cjs]
+    label: DERIVED
+    defects:
+      - issue: T021
+        summary: The frequency is named Cutoff for every type, also where it is the centre
+  - key: filter.q
+    audit: [LAB-12]
+    readout: Filter Lab Q slider aria-valuetext
+    quantity: Linear Q (converted to dB for LP/HP inside)
+    unit: dimensionless
+    source: [src/js/labs/filter-lab.js]
+    algorithm: formatQ; clamped to 0.1..30
+    resolution: 3, 2 or 1 decimals
+    calibration: n/a
+    limitations: The unit is not stated
+    tests: [tests/browser/labs.cjs]
+    label: VERIFIED
+  - key: chart:envelope
+    audit: [LAB-05]
+    readout: Envelope (ADSR) graph
+    quantity: Idealised scheduled gain envelope (closed form)
+    unit: linear gain against s
+    source: [src/js/audio/envelope.js]
+    algorithm: envelopePoints, valueAtTime
+    resolution: display only
+    calibration: n/a
+    limitations: The sustain length is illustrative (hold = max(a+d, r)/2); no S label
+    tests: [tests/unit/audio-envelope.test.mjs]
+    label: VERIFIED
+  - key: envelope.attack
+    audit: [LAB-06]
+    readout: Envelope Attack slider aria-valuetext
+    quantity: Attack time of the scheduled envelope
+    unit: s/ms
+    source: [src/js/charts/drag-math.js, src/js/labs/envelope.js]
+    algorithm: clampAdsr
+    resolution: formatDuration
+    calibration: n/a
+    limitations: A scheduled time, not a measured one (P05 LAB-06 records no other limit)
+    tests: [tests/unit/audio-envelope.test.mjs]
+    label: VERIFIED
+  - key: envelope.decay
+    audit: [LAB-06]
+    readout: Envelope Decay slider aria-valuetext
+    quantity: Decay time of the scheduled envelope
+    unit: s/ms
+    source: [src/js/charts/drag-math.js, src/js/labs/envelope.js]
+    algorithm: clampAdsr
+    resolution: formatDuration
+    calibration: n/a
+    limitations: A scheduled time, not a measured one (P05 LAB-06 records no other limit)
+    tests: [tests/unit/audio-envelope.test.mjs]
+    label: VERIFIED
+  - key: envelope.release
+    audit: [LAB-06]
+    readout: Envelope Release slider aria-valuetext
+    quantity: Release time of the scheduled envelope
+    unit: s/ms
+    source: [src/js/charts/drag-math.js, src/js/labs/envelope.js]
+    algorithm: clampAdsr
+    resolution: formatDuration
+    calibration: n/a
+    limitations: A scheduled time, not a measured one (P05 LAB-06 records no other limit)
+    tests: [tests/unit/audio-envelope.test.mjs]
+    label: VERIFIED
+  - key: chart:additive
+    audit: [LAB-07]
+    readout: Additive harmonic bars
+    quantity: Played partial amplitude after peak normalisation
+    unit: dB re the normalised oscillator peak
+    source: [src/js/labs/additive.js, src/js/audio/additive.js, src/js/charts/additive-chart.js]
+    algorithm: 20·log10(gain·scale)
+    resolution: 20 dB grid
+    calibration: n/a
+    limitations: >-
+      Volume and envelope apply after it; no 'dB' on the axis; the Nyquist hatching needs a
+      context
+    tests: [tests/unit/audio-synthesis.test.mjs, tests/browser/labs.cjs]
+    label: VERIFIED
+    defects:
+      - issue: T022
+        summary: >-
+          Partials at -81.1 and -85.0 dB play but draw nothing, as if off (contradicts claim
+          additive-coefficients-play)
+  - key: additive.gain
+    audit: [LAB-08]
+    readout: Additive Gain slider aria-valuetext
+    quantity: Played level of the selected partial
+    unit: dB re the normalised peak; 'off' at or below -96 dB
+    source: [src/js/labs/additive.js]
+    algorithm: gainForPlayedLevel bisection
+    resolution: 0.1 dB text, 0.5 dB slider
+    calibration: n/a
+    limitations: >-
+      The field shows -85.0 dB while the slider sits at its -60 dB minimum; the reference is
+      not stated
+    tests: [tests/unit/audio-synthesis.test.mjs]
+    label: VERIFIED
+    defects:
+      - issue: T022
+        summary: The slider and the field disagree below the -60 dB slider minimum
+  - key: phase.correlationMeter
+    audit: [STP-01, STP-02, STP-03, STP-04, STP-05, STP-06]
+    readout: Correlation meter, its value text and its aria-valuetext
+    quantity: >-
+      Pearson r of the routed L/R per 2048-sample window, EMA-smoothed; '1.00 mono' without a
+      router; '—' Unavailable with a reason
+    unit: '-1..+1 (bar as % width)'
+    source: [src/js/analysis/correlation.js, src/js/audio/stereo.js, src/js/labs/phase-stereo.js]
+    algorithm: >-
+      Pearson r over taps after the router output, EMA with τ 0.3 s; meterPct = (v+1)/2·100,
+      unavailable → 0 %; no coefficient below RMS 1e-4 per channel
+    resolution: 2 decimals; 42.7 ms window; τ 0.3 s
+    calibration: scale-free, digital, before the master gain
+    limitations: >-
+      The analysers are read one after the other ('est.'); τ is not shown; green for every
+      value with no -1/0/+1 marks; not exercised while Studio or a non-dual source plays
+      (UNKNOWN in P05 STP-06)
+    tests:
+      - tests/unit/analysis-misc.test.mjs
+      - tests/unit/qa-regressions.test.mjs
+      - tests/browser/labs.cjs
+      - tests/browser/qa-regressions.cjs
+    label: DERIVED
+    defects:
+      - issue: T012
+        summary: >-
+          'Unavailable' draws the same empty bar as r = -1; '1.00 mono' is asserted without a
+          signal check (a mono 440/440 Δφ 180 dual near -171 dBFS reads 1.00 mono, meter
+          100 %); a one-sided signal is reported as no signal
+  - key: stereo.pan
+    audit: [STP-13]
+    readout: Pan slider aria-valuetext
+    quantity: Equal-power pan of the A+B mix in Mono
+    unit: '-1..+1'
+    source: [src/js/audio/stereo.js, src/js/main.js]
+    algorithm: panGains cos/sin; the router is built only at PLAY
+    resolution: '0.01'
+    calibration: configured digital
+    limitations: Ignored in Stereo split, which is not stated
+    tests: [tests/unit/audio-synthesis.test.mjs]
+    label: VERIFIED
+    defects:
+      - issue: T015
+        summary: >-
+          Moving Pan while a mono dual plays leaves the panners at 0 while the UI says '100%
+          left'; a configuration import leaves the slider out of step
+  - key: chart:phase
+    audit: [STP-07, STP-08, STP-09, STP-10, STP-11]
+    readout: Phase tab rows A and B, the Lissajous figure and the corner data-source label
+    quantity: >-
+      Live L and R buffers triggered on L and scaled by 1/commonPeak, and their XY figure; in
+      model mode analytic unit sines
+    unit: relative amplitude (level discarded)
+    source:
+      - src/js/labs/phase-stereo.js
+      - src/js/charts/phase-view.js
+      - src/js/charts/phase-model.js
+      - src/js/charts/lissajous.js
+    algorithm: >-
+      Live: a polyline through 2048 L/R pairs; model: modelWaves (240 points) and
+      modelLissajous (480 points)
+    resolution: one vertex per sample or pair; model 240 and 480 points
+    calibration: level discarded; the model is illustrative
+    limitations: >-
+      No level or clip indication; a zigzag above sr/4; no axis labels; the model ignores
+      waveform and levels; 'live' means the router tap before the master gain
+    tests: [tests/unit/charts.test.mjs]
+    label: VERIFIED
+    defects:
+      - issue: T013
+        summary: >-
+          With a mono pan both rows carry the A+B mix and are labelled A and B; the model
+          draws equal sines whatever the waveform and level
+      - issue: T014
+        summary: >-
+          An 18 kHz quadrature at 48 kHz draws an octagram {8/3}; there is no undersampled
+          state
+  - key: measure.stimulusText
+    audit: [MSR-01]
+    readout: MEASURE stimulus summary
+    quantity: Requested sweep range and duration
+    unit: Hz, s
+    source: [src/js/experiments/schema.js, src/js/ui/measure.js]
+    algorithm: describeStimulus; normalizeStimulus clamps to 0.95·Nyquist
+    resolution: as typed; a clamp is reported
+    calibration: digital
+    limitations: The speaker may not reproduce it
+    tests: [tests/unit/v3-measurement-core.test.mjs]
+    label: VERIFIED
+  - key: measure.responseSummary
+    audit: [MSR-16]
+    readout: MEASURE response summary maximum and minimum
+    quantity: Extremes of the frequency response over the reliable points
+    unit: dB, Hz
+    source: [src/js/measurement/views/response-chart.js]
+    algorithm: maximum and minimum over the reliable points of the response
+    resolution: 0.1 dB
+    calibration: says uncalibrated
+    limitations: Falls back to all points, and says so
+    tests: [tests/unit/v3-views.test.mjs]
+    label: VERIFIED
+  - key: measure.irSummary
+    audit: [MSR-24, MSR-25, MSR-26]
+    readout: MEASURE impulse-response summary
+    quantity: Time of the direct peak (largest |h|), its amplitude h[peak] and the noise tail
+    unit: ms; relative amplitude; dB re peak
+    source: [src/js/measurement/impulse-response.js, src/js/measurement/views/ir-chart.js]
+    algorithm: >-
+      Direct peak = argmax |h|; noise tail = 10·log10(mean h² / h_peak²) over the last 10 % of
+      the full-overlap lags
+    resolution: 0.01 ms at 48 kHz; 3 significant digits; 1 dB
+    calibration: digital, original scale including the master gain
+    limitations: >-
+      'Direct' is the largest |h| (a stronger reflection would be named direct, unstated); the
+      noise tail is an upper bound when the decay outlasts the post-roll, which the UI does
+      not say
+    tests:
+      - tests/unit/v3-transfer-ir.test.mjs
+      - tests/unit/v3-views.test.mjs
+      - tests/unit/v3-review-calibration.test.mjs
+    label: VERIFIED
+    defects:
+      - issue: T019
+        summary: >-
+          A noise-free T60 2 s decay with a 0.5 s post-roll reads noise tail −52 dB re peak
+          with no caveat
+  - key: measure.rtaSummary
+    audit: [MSR-29]
+    readout: MEASURE RTA summary
+    quantity: Per-frame band or bin power of the live tap or the capture
+    unit: dB relative; dB SPL only under a bound level calibration
+    source:
+      - src/js/measurement/live-rta.js
+      - src/js/measurement/views/rta-chart.js
+      - src/js/measurement/rta.js
+    algorithm: band or FFT-bin power per frame; the level offset through levelInUse
+    resolution: fs/fftSize per bin; 1/3-octave bands
+    calibration: relative unless a level calibration is bound
+    limitations: No clip or overload state
+    tests: [tests/unit/v3-live-rta.test.mjs]
+    label: VERIFIED
+    defects:
+      - issue: T020
+        summary: >-
+          A clipped frame reads as a valid level (clamp(4·sin) reads 'highest band 1 kHz at
+          −1.0 dB relative'; with the LEVEL fixture 123.5 dB SPL against about 133.6
+          unclipped), with no warning
+  - key: measure.levelState
+    audit: [MSR-32]
+    readout: Level calibration state
+    quantity: >-
+      Level calibration state; offset Y = reference dB SPL − observed band level X, a level
+      R shown as R + Y
+    unit: dB; dB SPL
+    source: [src/js/calibration/level.js, src/js/ui/measure.js]
+    algorithm: the level.js offset, worded by measureLevelStateText
+    resolution: 0.1 dB
+    calibration: valid only while the bound input matches (ADR 0017, ADR 0020)
+    limitations: A single broadband scalar; unweighted
+    tests:
+      - tests/unit/v3-calibration.test.mjs
+      - tests/unit/v3-review-calibration.test.mjs
+      - tests/browser/v3-ui.cjs
+    label: DERIVED
