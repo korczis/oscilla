@@ -1,0 +1,77 @@
+# Review verdict for pull request #293, plan item C010: the Phase & Stereo pan reaches the
+# sounding dual voice, its controls show the configuration, and it says where it does not apply
+# (branch fix/c010-phase-stereo-pan-live). Reviewed head 5471d2351e96 (== origin after git
+# fetch; merge base cdda563c1982). origin/main has since moved to fde49bd1 (#284, docs facts);
+# scripts/ is identical between it and the head (git diff origin/main HEAD -- scripts: 0 lines).
+# Built by the builder's session; first review and this independent re-check by dev-68.
+#
+# Worktree: /Users/korczis/dev/oscilla-wt/fix/c010-phase-stereo-pan-live was not used: lsof
+# shows a majordomus serve daemon (PID 80092) with its cwd there. This re-check ran in a fresh
+# detached worktree of origin/fix/c010-phase-stereo-pan-live in the scratchpad, node_modules
+# symlinked read-only from the builder worktree, nothing installed. The PR code was not modified.
+#
+# The digest: the branch's scripts/review-verdict.mjs (byte-identical to origin/main's)
+# `--content --list --base origin/main` gives 918794d7...2b08 over the one guarded path the PR
+# changes, src/js/audio/audio-engine.js. It matches the first review and the PR body.
+#
+# Lenses: (a) does every control path reach the sound (PACK03: controls that do not reach the
+# sound); (b) audio-engine discipline (click-free restart, no setTargetAtTime from a default,
+# node accounting); (c) tests, fail-first and mutation; (d) docs and PR body vs measured code.
+#
+# Re-check of the first review, each finding read against the code:
+# - F1 holds by reading alone: the check's `centred` level is read from a fresh voice, started
+#   at ctx.currentTime + START_OFFSET_S (audio-engine.js:441), and `back` from the voice
+#   setDualRouter restarted, started at _soon(ctx) + FAST_RELEASE_S (render-aware). With the
+#   default Δφ 45° and A = B, their RMS differs by 0.69 dB (20 log10 cos 22.5°) whenever one of
+#   them loses its B start delay, more than the check's 0.5 dB tolerance. The first review's
+#   failing reads (-29.90 dB centred vs -30.63 back) are that case. Kept at P2: CI runs
+#   tests/browser/app.cjs in Firefox (package.json test:browser), so a flaky GATE check, and the
+#   PR body's Firefox PASS is not reliable. Reproduced independently: 1 of the 3 Firefox
+#   file:// runs that reached the check failed at exactly that step (see Runs).
+# - F2 holds as P3, pre-existing: a fresh voice's t0 is not render-aware. It is not introduced
+#   here, though every pan-engaging restart replays it.
+# - F3 holds as P3: the unit fail-first shows only that the method is missing (TypeError), and
+#   the unit lab() copies main.js's want() rather than testing it. The first review's main.js
+#   mutations show the browser check covers it.
+# - F4 holds as P3: liveRouter (main.js:95) is global, and dispose clears it only for its own
+#   router (main.js:150). After a centred retrigger it describes the releasing voice until that
+#   voice ends. That window affects labVizInputs, getStereoRouter and the correlation meter only.
+# - F5 holds as P3: dom.js setSlider writes input.value whenever it differs, with no focus check
+#   (only setField checks document.activeElement), against the comment at phase-stereo.js:184.
+#   offsetText(359.999) is '360'.
+# - F6 holds as P3: the disable rule (index.html:1128) does not look at the sequencer, which
+#   builds its own oscillators with no router.
+#
+# Lens (a), paths checked for a bypass of the fix: none found beyond F6. The paths: slider input
+# and keyboard (labs input -> setCfg -> onChange -> setDualRouter). Config import (applyImport ->
+# labs.phase.update -> setCfg). Route switches in both directions with pan off centre:
+# app.setStereo's syncViz runs after setDualRouter has read the old plan, and updateLive then
+# routes the router with the current pan. A restart from updateLive or setDualPhase:
+# engine._restart -> the main.js play wrapper; v2PlayOptions keeps or re-adds dualRouter, and
+# v.opts carries the factory. Retrigger during a release (setDualRouter skips the releasing
+# voice and acts on engine.voice). WAV export (renderPlanToWav extraOptions -> v2PlayOptions
+# with pan and phaseDeg). It is the only pan control in src/index.html.
+#
+# Runs:
+# - node scripts/build.mjs --check: dist up to date (source 0d4fb99d9d6f).
+# - node --test tests/unit/dual-router-live.test.mjs: 2/2 pass.
+# - OSC_LOAD_MAX=300 node tests/browser/app.cjs --browsers firefox --origins file --only
+#   pan-live-dual, 6 runs at load 97-116 on 18 cores. Runs 1, 3 and 5 stopped at page.goto
+#   timeout 8000 ms before the check (environmental, not counted). Runs 2 and 4 passed. Run 6
+#   failed with "pan-live-dual: back at centre, balanced, at the centred level: not reached
+#   within 15000 ms", the F1 step. The first review's 27 runs at load 30-70 (7 failures) remain
+#   the rate measurement.
+#
+# Open: F1 (P2), F2-F6 (P3). No P0 or P1. One P2 is open, so the verdict is changes.
+schema: review-verdict/v1
+pr: 293
+verdict: changes
+reviewer: "dev-68 (Claude Opus 5.5 session 4f90795d); did not build, merge or edit this change; wrote only this file"
+content: 918794d7ae9f05623e89e8c046a03f0455d2ad0890100ae2d7479d52a1b12b08
+findings:
+  - { id: F1, severity: P2, status: open, title: "GATE check pan-live-dual (tests/browser/app.cjs:1726-1731) compares the RMS of two different voices with A = B and the default Δφ 45°. 'centred' is a fresh voice started at currentTime + START_OFFSET_S (audio-engine.js:441); 'back' is the setDualRouter restart started at _soon + FAST_RELEASE_S. When one of them loses B's start delay, the levels differ by 0.69 dB, which is over the 0.5 dB tolerance. The first review measured 7 of 27 Firefox file:// runs failing at load 30-70 (centred -29.90 / -31.03 / -33.96 / -46.44 dB vs back -30.63), with 0 failures with phaseDeg forced to 0. CI runs app.cjs in Firefox, and the PR body's Firefox PASS does not hold. Fix: set phaseDeg 0 for the check and restore it, or compare against a level that does not depend on phase." }
+  - { id: F2, severity: P3, status: open, title: "Pre-existing: a fresh voice starts at ctx.currentTime + START_OFFSET_S (audio-engine.js:441), not the render-aware _soon() a replacement uses. In Firefox under load, t0 can pass before the audio thread sees the graph, and A and B start together, so the Δφ B the lab shows does not reach the sound. Every pan-engaging or setDualPhase restart rolls it again. This is the PACK03 class; worth its own issue." }
+  - { id: F3, severity: P3, status: open, title: "The unit fail-first (tests/unit/dual-router-live.test.mjs on main) fails only with TypeError 'eng.setDualRouter is not a function', and its lab()/want() copies main.js rather than testing it. No unit test holds the main.js wiring (main.js:454-464). The browser check pan-live-dual does: reverting onChange to main's refresh, or dropping '|| liveRouter' (main.js:197), fails it." }
+  - { id: F4, severity: P3, status: open, title: "liveRouter (main.js:95) is global, and dispose clears it only for its own router (main.js:150). After a centred retrigger while a routed voice releases, labVizInputs (main.js:197), adapter.getStereoRouter and the correlation meter describe the fading voice until it ends. Pre-existing and related: a router-less centred mono voice switched to Stereo glides its StereoPanners with no router, while the signal path shows one. Both are view mismatches, not wrong sound." }
+  - { id: F5, severity: P3, status: open, title: "The comment at phase-stereo.js:184-186 says setSlider leaves a control the user is dragging alone, but dom.js setSlider (38-44) writes input.value whenever it differs, with no focus check (only setField checks document.activeElement). Nit: offsetText rounds to two decimals, so an imported -0.001° (stored 359.999) shows '360', outside the stated [0, 360)." }
+  - { id: F6, severity: P3, status: open, title: "The Pan disable rule (src/index.html:1128, source !== 'dual' || dual.stereo) ignores the sequencer. With the source set to dual and only the sequencer sounding (sequencer/compiler.js builds its own oscillators, with no router or dual path), the slider is enabled with no reason shown but moves nothing audible." }
