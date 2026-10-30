@@ -88,8 +88,8 @@ changed.
   response. Cutoff and Q can be dragged on the chart.
 - **ADSR:** an attack/decay/sustain/release envelope with a draggable graph. On a held tone
   a Sustain change, or switching the envelope off, takes effect with a short glide. Switching it
-  on, attack, decay and release, and edits during a programmed pattern apply from the next note;
-  the Signal Path marks such a change as `next note`.
+  on, attack and decay, and edits during a programmed pattern apply from the next note; the
+  Signal Path marks such a change as `next note`.
 - **Additive synthesis:** a harmonic editor. The bars you see are the same coefficients that
   build the waveform you hear.
 - **Phase, Lissajous and stereo:** A/B phase views, a Lissajous figure, a correlation meter and

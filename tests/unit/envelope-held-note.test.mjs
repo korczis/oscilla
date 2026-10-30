@@ -209,7 +209,7 @@ function plan(cfg) {
 const opt = (o = {}) => ({
   mode: 'hold', continuous: true, limitS: 2, durationS: 0.5, attackS: 0.01, releaseS: 0.03, ...o,
 });
-function setup() {
+function setup({ perf = null } = {}) {
   const audio = makeMockAudio({ cancelAndHold: false });
   const timers = new Map();
   let seq = 0;
@@ -218,6 +218,8 @@ function setup() {
     setTimeout: (fn, ms) => { timers.set(++seq, { fn, ms }); return seq; },
     clearTimeout: (id) => { timers.delete(id); },
   };
+  // A performance clock (ms) the test moves, for the engine's rendered-time estimate.
+  if (perf) env.performance = { now: () => perf.ms };
   const eng = new AudioEngine({ env });
   eng.setEnvelope(makeAdsrEnvelope(envelopeJs));
   const events = [];
@@ -238,7 +240,7 @@ test('engine.setEnvelopeSustain: a held ADSR note glides to the new sustain, the
   assert.equal(eng.setEnvelopeSustain({ ...ADSR, s: 0.1, a: 0.5 }), 'applied');
   close(v.adsr.s, 0.1);
   assert.equal(v.adsr.a, ADSR.a, 'attack stays the note\'s');
-  assert.equal(v.opts.adsr, v.adsr, 'restarts and top-ups take the new sustain');
+  assert.deepEqual(v.opts.adsr, v.adsr, 'restarts and top-ups take the new sustain');
   assert.ok(events.some(([type, d]) => type === 'envelope' && d.id === v.id));
   const t = v.env.ev[v.env.ev.length - 2].time;
   assert.ok(t >= 0.5, 'scheduled ahead of the clock');
@@ -378,10 +380,193 @@ test('soundingEnvelope: the sounding voice\'s envelope, the lab\'s for the next 
   const out = soundingEnvelope({ voice, labAdsr: { ...ADSR, a: 0.05 } });
   assert.deepEqual(out.adsr, ADSR);
   assert.deepEqual(out.nextNote, { adsr: { ...ADSR, a: 0.05 } });
-  // A switched-off voice (adsr null, its release kept) against the lab off.
+  // A switched-off voice (adsr null, its release kept) against the lab off: only the release
+  // differs, and the release is #301 C009's (review #310 F3); a different attack is pending.
+  assert.equal(soundingEnvelope({ voice: { adsr: null, attack: 0.01, release: 0.3 },
+    labAdsr: null, attackS: 0.01, releaseS: 0.03 }).nextNote, null);
   assert.deepEqual(soundingEnvelope({ voice: { adsr: null, attack: 0.01, release: 0.3 },
-    labAdsr: null, attackS: 0.01, releaseS: 0.03 }).nextNote,
-  { adsr: null, attack: 0.01, release: 0.03 });
+    labAdsr: null, attackS: 0.05, releaseS: 0.03 }).nextNote,
+  { adsr: null, attack: 0.05, release: 0.03 });
   // Plain copies: the voice's object never enters the bridge state.
   assert.notEqual(out.adsr, voice.adsr);
+});
+
+// ---------------------------------------------------------------- review #310 R-1, R-2, R-8, F3
+
+/** The envelope's recorded log in the mock's kind names, as the real param holds it. */
+const logged = (v) => v.env.ev.map((e) => ({ kind: KIND[e.kind], value: e.value, time: e.time }));
+const decayEnd = (v) => v.env.ev.filter((e) => e.kind === 'exponentialRampToValueAtTime')[0].time;
+
+test('R-1: an edit in the last 20 ms of the decay waits until the decay has rendered (V249)',
+  { skip }, () => {
+  for (const before of [0.019, 0.01, 0.003, 0.0001]) {
+    const { eng, advance, flush } = setup();
+    eng.play(plan({ pattern: 'tone' }), opt({ adsr: { ...ADSR } }));
+    const v = eng.voice;
+    const end = decayEnd(v);
+    advance(end - before);
+    const n = JSON.stringify(v.env.ev);
+    assert.equal(eng.setEnvelopeSustain({ ...ADSR, s: 0.2 }), 'deferred',
+      `an edit ${before * 1000} ms before the decay end`);
+    assert.equal(JSON.stringify(v.env.ev), n, 'the sounding decay is not edited');
+    assert.equal(realEnv(v).length, logged(v).length, 'nothing reached the param');
+    close(v.adsr.s, ADSR.s);
+    advance(end + 0.01);
+    flush();
+    close(v.adsr.s, 0.2);
+    const anchor = v.env.ev[v.env.ev.length - 2];
+    assert.ok(anchor.time > end, 'the glide starts after the decay end');
+    close(valueAt(v.env, anchor.time), ADSR.s, 1e-9);
+    close(valueAt(v.env, 5), 0.2, 1e-9);
+    eng.stopAll();
+    advance(3);
+    assert.equal(eng.activeNodeCount, 0);
+  }
+});
+
+test('R-1: a Sustain drag (an edit every 16 ms) never edits a glide that still renders',
+  { skip }, () => {
+  const { eng, advance, flush } = setup();
+  eng.play(plan({ pattern: 'tone' }), opt({ adsr: { ...ADSR } }));
+  const v = eng.voice;
+  advance(0.5);
+  assert.equal(eng.setEnvelopeSustain({ ...ADSR, s: 0.4 }), 'applied');
+  const glideEnd = v.env.ev[v.env.ev.length - 1].time;
+  const n = JSON.stringify(v.env.ev);
+  for (const [at, s] of [[0.516, 0.35], [0.532, 0.3]]) {
+    advance(at);
+    assert.ok(glideEnd > at, `the first glide still renders at ${at}`);
+    assert.equal(eng.setEnvelopeSustain({ ...ADSR, s }), 'deferred', `the edit at ${at}`);
+    assert.equal(JSON.stringify(v.env.ev), n, `the sounding glide is not edited at ${at}`);
+  }
+  advance(glideEnd + 0.003);
+  flush();
+  close(v.adsr.s, 0.3);
+  assert.ok(v.env.ev[v.env.ev.length - 2].time > glideEnd, 'the next glide follows the first');
+  close(valueAt(v.env, 5), 0.3, 1e-9);
+  eng.stopAll();
+  advance(3);
+  assert.equal(eng.activeNodeCount, 0);
+});
+
+test('R-1: the guard reads the rendered clock, not a stale currentTime', { skip }, () => {
+  const perf = { ms: 0 };
+  const { eng, advance } = setup({ perf });
+  eng.play(plan({ pattern: 'tone' }), opt({ adsr: { ...ADSR } })); // a clock reading: ct 0, 0 ms
+  const v = eng.voice;
+  const end = decayEnd(v);
+  // currentTime still reads 10 ms before the decay end (Firefox within a task), while the real
+  // time since the reading says the audio thread rendered 10 ms past it.
+  advance(end - 0.01);
+  perf.ms = (end + 0.01) * 1000;
+  assert.equal(eng.setEnvelopeSustain({ ...ADSR, s: 0.2 }), 'applied');
+  close(valueAt(v.env, 5), 0.2, 1e-9);
+  eng.stopAll();
+  advance(3);
+});
+
+test('R-2: a finite note at sustain 0 (the default HOLD path) takes a raised Sustain',
+  { skip }, () => {
+  const { eng, advance } = setup();
+  const zero = { ...ADSR, s: 0 };
+  eng.play(plan({ pattern: 'tone' }), opt({ continuous: false, limitS: 2, adsr: zero }));
+  const v = eng.voice;
+  const end = v.deadline;
+  assert.ok(Number.isFinite(end));
+  advance(0.5);
+  assert.equal(eng.setEnvelopeSustain({ ...zero, s: 0.5 }), 'applied');
+  close(v.adsr.s, 0.5);
+  const real = realEnv(v);
+  assert.ok(maxStep(real, 0.45, 0.6) < 0.05, 'the glide starts from the floor, no step');
+  close(valueAtTime(real, 1, 1), 0.5, 1e-9);
+  close(valueAtTime(real, end - ADSR.r, 1), 0.5, 1e-9);
+  close(valueAtTime(real, end, 1), ENVELOPE_FLOOR, 1e-12);
+  assert.ok(valueAtTime(real, end - ADSR.r / 2, 1) < 0.5, 'released from the new level');
+  assert.equal(v.deadline, end, 'the note ends when it did');
+  assert.ok(maxStep(real, end - ADSR.r - 0.01, end - ADSR.r + 0.01) < 0.01, 'no step at release');
+  assert.deepEqual(logged(v), real, 'the engine log is the real schedule (R-5)');
+  advance(3);
+  assert.equal(eng.activeNodeCount, 0);
+});
+
+test('R-8: a finite note dragged to Sustain 0 and back up follows both edits', { skip }, () => {
+  const { eng, advance, flush } = setup();
+  eng.play(plan({ pattern: 'tone' }), opt({ continuous: false, limitS: 2, adsr: { ...ADSR } }));
+  const v = eng.voice;
+  const end = v.deadline;
+  advance(0.5);
+  assert.equal(eng.setEnvelopeSustain({ ...ADSR, s: 0 }), 'applied');
+  advance(0.6);
+  flush();
+  close(valueAtTime(realEnv(v), 0.6, 1), ENVELOPE_FLOOR, 1e-12);
+  assert.equal(eng.setEnvelopeSustain({ ...ADSR, s: 0.5 }), 'applied');
+  close(v.adsr.s, 0.5);
+  const real = realEnv(v);
+  close(valueAtTime(real, 1, 1), 0.5, 1e-9);
+  close(valueAtTime(real, end, 1), ENVELOPE_FLOOR, 1e-12);
+  assert.ok(valueAtTime(real, end - ADSR.r / 2, 1) < 0.5, 'released from the new level');
+  assert.deepEqual(logged(v), real, 'the engine log is the real schedule (R-5)');
+  advance(3);
+  assert.equal(eng.activeNodeCount, 0);
+});
+
+test('R-2, R-8: retargetSustain re-releases a release held at the floor', () => {
+  const p = mockParam();
+  applyAdsr(p, 0, { ...ADSR, s: 0 }, 1);
+  const { endTime } = releaseAt(p, 1.7, 0.3); // held at the floor: no ramp is scheduled
+  const r = retargetSustain(p, 0.5, 0.4, { releaseEnd: endTime });
+  assert.ok(r, 'retargeted');
+  close(r.value, ENVELOPE_FLOOR, 1e-12);
+  const ev = getSchedule(p);
+  assert.ok(maxStep(ev, 0.45, 0.6) < 0.05, 'the glide starts from the floor, no step');
+  close(valueAtTime(ev, 1), 0.4);
+  close(valueAtTime(ev, 1.7), 0.4);
+  close(valueAtTime(ev, endTime), ENVELOPE_FLOOR);
+  assert.equal(ev[ev.length - 1].time, endTime);
+  assert.deepEqual(replay(p.calls), ev);
+  // Back down to 0, then up: each edit reaches the level.
+  assert.ok(retargetSustain(p, 0.8, 0, { releaseEnd: endTime }));
+  close(valueAtTime(getSchedule(p), 1.2), ENVELOPE_FLOOR);
+  assert.ok(retargetSustain(p, 1.3, 0.7, { releaseEnd: endTime }));
+  const ev2 = getSchedule(p);
+  close(valueAtTime(ev2, 1.6), 0.7);
+  close(valueAtTime(ev2, endTime), ENVELOPE_FLOOR);
+  assert.deepEqual(replay(p.calls), ev2);
+  // A release at the floor that has begun is left alone.
+  assert.equal(retargetSustain(getFloorNote(), 1.8, 0.5, { releaseEnd: endTime }), null);
+});
+
+function getFloorNote() {
+  const p = mockParam();
+  applyAdsr(p, 0, { ...ADSR, s: 0 }, 1);
+  releaseAt(p, 1.7, 0.3);
+  return p;
+}
+
+test('F3: a sustain edit keeps the release the voice\'s options carry (C009 owns it)',
+  { skip }, () => {
+  const { eng, advance } = setup();
+  eng.play(plan({ pattern: 'tone' }), opt({ adsr: { ...ADSR } }));
+  const v = eng.voice;
+  advance(0.5);
+  // What #301 setNoteOffRelease writes: the note-off release in the voice's options.
+  v.opts = { ...v.opts, releaseS: 0.9, adsr: { ...v.opts.adsr, r: 0.9 } };
+  assert.equal(eng.setEnvelopeSustain({ ...ADSR, s: 0.1 }), 'applied');
+  close(v.opts.adsr.s, 0.1);
+  assert.equal(v.opts.adsr.r, 0.9, 'the release in the options is not overwritten');
+  assert.equal(v.opts.releaseS, 0.9);
+  eng.stopAll();
+  advance(3);
+});
+
+test('F3: the Signal Path leaves the release out of "next note" (C009 owns it)', () => {
+  const { soundingEnvelope } = playgroundVoice;
+  const voice = { adsr: { ...ADSR }, attack: 0.01, release: ADSR.r };
+  assert.equal(soundingEnvelope({ voice, labAdsr: { ...ADSR, r: 0.9 } }).nextNote, null,
+    'a Release edit alone is no next-note change');
+  const plain = { adsr: null, attack: 0.01, release: 0.03 };
+  assert.equal(soundingEnvelope({ voice: plain, labAdsr: null, attackS: 0.01, releaseS: 0.5 })
+    .nextNote, null);
+  assert.ok(soundingEnvelope({ voice, labAdsr: { ...ADSR, r: 0.9, a: 0.05 } }).nextNote,
+    'an attack edit still is');
 });

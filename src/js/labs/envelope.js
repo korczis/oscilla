@@ -3,7 +3,7 @@
 // (charts/envelope-graph.js). main.js passes lab.adsr (when enabled) to the engine as a note's
 // play option (audio/envelope.js applyAdsr schedules it), and on lab.onChange hands a sounding
 // voice the new sustain or the power switch (engine.setEnvelopeSustain glides a held note to
-// it); attack, decay and release belong to the note and apply from the next one (C008).
+// it); attack and decay belong to the note and apply from the next one (C008).
 
 import { createEnvelopeGraph } from '../charts/envelope-graph.js';
 import { ADSR_LIMITS, clampAdsr } from '../charts/drag-math.js';

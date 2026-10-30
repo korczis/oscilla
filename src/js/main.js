@@ -452,7 +452,7 @@ function mountLabs(root) {
   const labChanged = () => { syncLabFlags(); vizLabsChanged(); };
   if (labs.envelope) {
     labs.envelope.onChange(() => {
-      // C008: sustain and the power switch reach a held note; a, d, r apply from the next.
+      // C008: sustain and the power switch reach a held note; a and d apply from the next.
       if (engine.voice && !engine.voice.ended) {
         engine.setEnvelopeSustain(labs.envelope.enabled ? labs.envelope.adsr : null);
       }

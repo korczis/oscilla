@@ -57,18 +57,21 @@ const envelopeParams = (adsr) => ({ attack: adsr.a, decay: adsr.d, sustain: adsr
   release: adsr.r });
 
 const sameTime = (x, y) => Math.abs(Number(x) - Number(y)) < 1e-9;
+// The release is left out: the release a held note uses when let go is #301 C009's, not this.
 const sameAdsr = (x, y) => (!x || !y ? x === y
-  : ['a', 'd', 's', 'r'].every((k) => sameTime(x[k], y[k])));
+  : ['a', 'd', 's'].every((k) => sameTime(x[k], y[k])));
 
 /**
  * soundingEnvelope(input) -> { adsr, envelope, nextNote } for labVizInputs (C008), plain values.
  *   input: { voice: the sounding voice's { adsr | null, attack, release } (seconds) or null,
  *            labAdsr: the Envelope Lab's ADSR when it is on, else null,
  *            attackS, releaseS: the Playground's attack and release (the V1 envelope) }
- * The envelope belongs to the note: a held note keeps its attack, decay and release, and only
- * its sustain level and the power switch reach it (engine.setEnvelopeSustain). While a voice
+ * The envelope belongs to the note: a held note keeps its attack and decay, and only its
+ * sustain level and the power switch reach it (engine.setEnvelopeSustain). While a voice
  * sounds, `adsr` / `envelope` are the voice's, and `nextNote` is what the next note gets
- * ({ adsr } or { adsr: null, attack, release }, the engine's floors applied) when it differs.
+ * ({ adsr } or { adsr: null, attack, release }, the engine's floors applied) when its attack,
+ * decay, sustain or envelope kind differs. A release edit alone is no next-note change: the
+ * release a held note uses when let go is #301 C009's (review #310 F3).
  * Idle, `adsr` is the lab's and nothing is pending.
  */
 export function soundingEnvelope({ voice = null, labAdsr = null, attackS = 0.01,
@@ -79,7 +82,7 @@ export function soundingEnvelope({ voice = null, labAdsr = null, attackS = 0.01,
   if (!voice) return { adsr: next.adsr, envelope: null, nextNote: null };
   const adsr = voice.adsr ? { ...voice.adsr } : null;
   const differs = adsr ? !sameAdsr(adsr, next.adsr) : !!next.adsr
-    || !sameTime(voice.attack, next.attack) || !sameTime(voice.release, next.release);
+    || !sameTime(voice.attack, next.attack);
   return { adsr, envelope: adsr ? null : { attack: voice.attack, release: voice.release },
     nextNote: differs ? next : null };
 }

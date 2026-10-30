@@ -32,9 +32,10 @@
 // envelope switched off) on the same recorded schedule: in sustain an exponential glide of at
 // least SUSTAIN_GLIDE_S from the value at t, in the decay a decay that ends at the new level, in
 // the attack the attack untouched and then that decay; a release scheduled ahead (a finite note)
-// is kept and starts from the new level. Removing the old future events needs a cancel: the
-// param's own cancelScheduledValues, or the caller's (the engine's tracked envelope wrapper has
-// none, so the engine passes one that also keeps its own log exact). The level never exceeds 1.
+// is kept and starts from the new level, also one held at the floor (sustain 0, no ramp).
+// Removing the old future events needs a cancel: the param's own cancelScheduledValues, or the
+// caller's (the engine's tracked envelope wrapper has none, so the engine passes one that also
+// keeps its own log exact). The level never exceeds 1.
 
 export const ENVELOPE_FLOOR = 1e-4;
 export const MIN_SEGMENT_S = 0.001;
@@ -230,16 +231,21 @@ const same = (x, y) => x.kind === y.kind && x.time === y.time && x.value === y.v
 
 /**
  * The release scheduled ahead in `events` when the note ends at releaseEnd (finite), as
- * { at, end }: releaseAt's hold and its ramp to the floor are the last two events. null when
- * the note is open (releaseEnd not finite); false when the schedule does not end there.
+ * { at, end, tail }: releaseAt's hold and its ramp to the floor are the last two events (tail
+ * 2), or, when the held value was the floor (a sustain of 0, where releaseAt adds no ramp),
+ * the hold alone, a 'set' at the floor before releaseEnd (tail 1). null when the note is open
+ * (releaseEnd not finite); false when the schedule does not end with a release there.
  */
 function scheduledRelease(events, releaseEnd, floor) {
   if (!Number.isFinite(releaseEnd)) return null;
   const n = events.length;
   const last = events[n - 1];
+  if (n >= 2 && last.kind === 'set' && last.value <= floor && last.time < releaseEnd) {
+    return { at: last.time, end: releaseEnd, tail: 1 };
+  }
   if (n < 2 || last.kind !== 'exp' || last.value > floor
     || Math.abs(last.time - releaseEnd) > 1e-9) return false;
-  return { at: events[n - 2].time, end: last.time };
+  return { at: events[n - 2].time, end: last.time, tail: 2 };
 }
 
 /**
@@ -251,7 +257,7 @@ function scheduledRelease(events, releaseEnd, floor) {
 export function sustainSteadyFrom(events, { releaseEnd = Infinity, floor = ENVELOPE_FLOOR } = {}) {
   const release = scheduledRelease(events, releaseEnd, floor);
   if (release === false) return NaN;
-  const body = release ? events.slice(0, -2) : events;
+  const body = release ? events.slice(0, -release.tail) : events;
   for (let i = body.length - 1; i >= 0; i--) {
     if (body[i].kind !== 'set') return body[i].time;
   }
@@ -274,7 +280,7 @@ export function retargetEvents(events, t, s, options = {}) {
   const target = Math.min(1, Math.max(floor, Math.min(1, Math.max(0, num(s, 1))) * peak));
   const release = scheduledRelease(events, options.releaseEnd, floor);
   if (release === false || (release && release.at <= t)) return null;
-  const body = release ? events.slice(0, -2) : events;
+  const body = release ? events.slice(0, -release.tail) : events;
   const value = valueAtTime(body, t, floor);
   let lin = -1;
   for (let i = body.length - 1; i >= 0; i--) if (body[i].kind === 'linear') { lin = i; break; }

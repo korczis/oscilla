@@ -41,10 +41,10 @@
 //                    and it is handed to the envelope function (see voice.js v1OpenEnvelope);
 //                    the default envelope uses only a and r. Install the DSP ADSR with
 //                    engine.setEnvelope(makeAdsrEnvelope(envelopeModule)). The voice keeps its
-//                    copy as voice.adsr. Attack, decay and release belong to the note: an edit
-//                    applies from the next note. engine.setEnvelopeSustain(adsr | null) moves a
-//                    held open note to a new sustain, or to 1 for an envelope switched off,
-//                    with a click-free glide (envelope.js retargetSustain).
+//                    copy as voice.adsr. Attack and decay belong to the note: an edit applies
+//                    from the next note. engine.setEnvelopeSustain(adsr | null) moves a held
+//                    note to a new sustain, or to 1 for an envelope switched off, with a
+//                    click-free glide (envelope.js retargetSustain).
 //     o.envelope     per-play envelope function (overrides engine.setEnvelope).
 //     o.stepEnvelope (eg, t, dur, a, r, adsr) => void, replaces the V1 step envelope of
 //                    programmed patterns (must schedule through eg).
@@ -876,14 +876,17 @@ export class AudioEngine {
 
   /**
    * A live Envelope Lab edit for the sounding voice (C008). adsr: the lab's { a, d, s, r }, or
-   * null for the envelope switched off. Only the level reaches a held note: an open voice
-   * started with an ADSR glides its tracked envelope (v.eg, envelope.js retargetSustain) to the
-   * new sustain, or to 1 when switched off, never above 1, and keeps its scheduled release;
-   * voice.adsr and voice.opts.adsr follow (null when off) and 'envelope' is emitted. Attack,
-   * decay and release belong to the note and apply from the next one, as does any edit of a
-   * voice started without the ADSR or of a programmed pattern (its steps are scheduled ahead).
-   * An edit while the envelope ramps (attack, decay, an earlier glide) waits for the ramp's end
-   * (UI bookkeeping timer), so no ramp that is sounding is edited (V249); the latest edit wins.
+   * null for the envelope switched off. Only the level reaches a held note: an open-pattern
+   * voice started with an ADSR glides its tracked envelope (v.eg, envelope.js retargetSustain)
+   * to the new sustain, or to 1 when switched off, never above 1, and a finite one (the safety
+   * limit, TRIGGER) keeps its scheduled release, which starts from the new level; voice.adsr and
+   * voice.opts.adsr.s follow (voice.opts.adsr null when off) and 'envelope' is emitted. Attack
+   * and decay belong to the note and apply from the next one, as does any edit of a voice
+   * started without the ADSR or of a programmed pattern (its steps are scheduled ahead). The
+   * release a held note uses when let go is not this method's (#301 C009). An edit while the
+   * envelope ramps (attack, decay, an earlier glide) waits until the audio thread has rendered
+   * the ramp's end (UI bookkeeping timer), so no ramp that is sounding is edited (V249); the
+   * latest edit wins.
    * Returns 'applied' | 'deferred' | 'same' | 'next-note' | false (nothing sounding).
    */
   setEnvelopeSustain(adsr) {
@@ -899,21 +902,31 @@ export class AudioEngine {
     return this._retargetSustain(v);
   }
 
-  /** setEnvelopeSustain's scheduling: now when the envelope holds steady, else at that time. */
+  /**
+   * setEnvelopeSustain's scheduling: now when the envelope holds steady, else once it does.
+   * Steady means rendered (V249): the render quantum holding the end of the last attack, decay
+   * or glide lies before the time the audio thread has rendered at least up to (clock.js
+   * renderedTimeAtLeast, the estimate _soon starts from). The scheduling time _soon is later
+   * than that by SCHEDULE_LEAD_S, so comparing the ramp end with it would edit a ramp that
+   * still sounds (an edit in the last SCHEDULE_LEAD_S of a decay, a drag's next edit during
+   * the previous glide).
+   */
   _retargetSustain(v) {
     const want = v.sustainWant;
     if (!want || v.ended || v.releasing || !v.eg || this.voice !== v) return false;
     const ctx = v.ctx;
-    const t = this._soon(ctx);
     const steady = sustainSteadyFrom(getSchedule(v.eg), { releaseEnd: v.deadline });
     if (Number.isNaN(steady)) {
       v.sustainWant = null;
       return 'next-note';
     }
-    if (t < steady) {
+    const q = RENDER_QUANTUM / ctx.sampleRate;
+    const ready = Math.ceil(steady / q - 1e-6) * q;
+    const rendered = renderedTimeAtLeast(ctx, this._perfNow(), { outputTimestamp: false });
+    if (rendered < ready) {
       if (!v.sustainTimer) {
         const { setTimeout } = this._timers;
-        const wait = ctx.state === 'running' ? Math.max(1, (steady - ctx.currentTime) * 1000 + 1)
+        const wait = ctx.state === 'running' ? Math.max(1, (ready - rendered) * 1000 + 1)
           : 250;
         v.sustainTimer = setTimeout(() => {
           v.sustainTimer = null;
@@ -924,12 +937,15 @@ export class AudioEngine {
       return 'deferred';
     }
     v.sustainWant = null;
+    const t = this._soon(ctx);
     const done = retargetSustain(v.eg, t, want.adsr ? want.adsr.s : 1, {
       releaseEnd: v.deadline, cancel: (time) => cancelParamFrom(v.env, time),
     });
     if (!done) return false;
     v.adsr = want.adsr;
-    v.opts = { ...v.opts, adsr: want.adsr };
+    // Only the sustain: the options' other fields, the release among them, are not this edit's.
+    v.opts = { ...v.opts,
+      adsr: want.adsr ? { ...(v.opts.adsr || want.adsr), s: want.adsr.s } : null };
     this._emit('envelope', { id: v.id, adsr: want.adsr ? { ...want.adsr } : null });
     return 'applied';
   }
