@@ -1726,21 +1726,36 @@ function defineChecks() {
       }, { ms: 5000, what: 'pan-live-dual: the pan is enabled for the dual voice in Mono, A = B' });
       res.pan0 = await setPan(0);
       await H.spaceDown(page);
+      // The reference level is the steady one: three reads in a row of the same voice within
+      // 0.1 dB. Under load the analyser's window can still hold the attack (or silence before
+      // it) after currentTime passed t0 + 0.25 s, and an early read was up to 16 dB low.
+      const steady = [];
       res.centred = await until(async () => {
         const r = await read();
-        return r.sounding && r.levelDb > -60 ? r : null;
-      }, { ms: 15000, what: 'pan-live-dual: the centred mono dual voice sounds' });
+        if (!(r.sounding && r.levelDb > -60)) return null;
+        steady.push(r);
+        const s = steady.slice(-3);
+        return s.length === 3 && s.every((x) => x.id === r.id
+          && Math.abs(x.levelDb - r.levelDb) < 0.1) ? r : null;
+      }, { ms: 15000, what: 'pan-live-dual: the centred mono dual voice sounds at a steady level' });
       res.panLeft = await setPan(-1);
       res.left = await until(async () => {
         const r = await read();
         return r.router && r.sounding && r.balanceDb > 6 ? r : null;
       }, { ms: 15000, what: 'pan-live-dual: the live pan to the left reaches the L/R balance' });
       res.panBack = await setPan(0);
+      let lastBack = null;
       res.back = await until(async () => {
         const r = await read();
+        lastBack = r;
         return r.router && r.sounding && Math.abs(r.balanceDb) < 0.5
           && Math.abs(r.levelDb - res.centred.levelDb) < 0.5 ? r : null;
-      }, { ms: 15000, what: 'pan-live-dual: back at centre, balanced, at the centred level' });
+      }, { ms: 15000, what: 'pan-live-dual: back at centre, balanced, at the centred level' })
+        .catch((e) => {
+          e.message = `${String(e.message).split('\n')[0]} (centred ${JSON.stringify(res.centred)}`
+            + `, last ${JSON.stringify(lastBack)})`;
+          throw e;
+        });
       await page.keyboard.up(' ');
       res.quiet = await until(() => inPage(() => window.OSCILLA.engine.activeNodeCount === 0),
         { ms: 10000, what: 'pan-live-dual: 0 engine nodes after the release' });
