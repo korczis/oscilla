@@ -28,4 +28,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-10-30T16:07:27Z
+started_at: 2026-10-30T16:07:04Z
+started_event: sha256:f5e76381ccaf8850f8b9d487c3339926ef5caa53b7acc01c171033f257006bc4
+completed_at: 2026-10-30T16:07:27Z
+completed_event: sha256:ec8460d4efe4ba1f5d9eea0ed175d61569fb3c938a5ae02c116855ef49757ee5
+evidence:
+  - covers: verified
+    type: ci
+    command: "CI run 41070402575 on #291 head fc89ebc1; node scripts/review-verdict.mjs --pr 291"
+    result: "All checks green incl. the knowledge job on majordomus 1.0.0-alpha.9 and the browser gates; review verdict .ai/repo/reviews/291.yaml (merge, f3) accepted; landed as e872c444; machine launcher runs 1.0.0-alpha.9"
+    artifact: ".ai/repo/reviews/291.yaml"
+    commit: e872c44489bd66ecfd8a6b58a0dd868270da3cf0
+    recorded_at: 2026-10-30T16:07:19Z
