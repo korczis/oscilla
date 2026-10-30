@@ -78,6 +78,16 @@ const FULLSCREEN_PROBE = () => {
   Object.defineProperty(window, '__oscFullscreenAsked', { value: () => asked.slice() });
 };
 
+// A browser without a usable clipboard (as file:// often is): the copy actions fall back to
+// their dialog, which shows the link to copy by hand. Rows that judge the dialog run with it.
+const NO_CLIPBOARD = () => {
+  Object.defineProperty(navigator, 'clipboard', { configurable: true,
+    value: { writeText: () => Promise.reject(new Error('clipboard refused')) } });
+};
+/** A copy action either copied (and says so) or opened its fallback dialog with the link. */
+const copiedOrShown = (dialog, title) => (s) => s.dialogs.includes(dialog)
+  || s.app.alerts.some((a) => title.test(a));
+
 // ------------------------------------------------------------------------------ drivers
 const D = {
   click: (sel) => async (page) => { await page.locator(sel).first().click(); },
@@ -1066,9 +1076,9 @@ row({ id: 'export.import.pointer', ws: 'playground', control: '[data-osc="export
   expect: (s, b, x, page) => !!page.__got });
 row({ id: 'export.url.pointer', ws: 'playground', control: '[data-osc="export.url"]',
   how: 'pointer', setup: S.openMenu('#osc-export'), act: D.click('[data-osc="export.url"]'),
-  expect: (s) => s.dialogs.includes('osc-dlg-copy') });
+  expect: copiedOrShown('osc-dlg-copy', /link copied/i) });
 row({ id: 'copy.url.pointer', ws: 'playground', control: '[data-osc="copy.url"]', how: 'pointer',
-  setup: seq(S.openMenu('#osc-export'), D.click('[data-osc="export.url"]')),
+  noClipboard: true, setup: seq(S.openMenu('#osc-export'), D.click('[data-osc="export.url"]')),
   act: D.click('[data-osc="copy.url"]'),
   expect: (s, b, x) => /#v=1/.test(x.v), read: () => ({ v: window.OSCILLA.app.copyUrl || '' }) });
 row({ id: 'actions.toggle.pointer', ws: 'playground', control: '#osc-sb-actions-toggle',
@@ -1079,7 +1089,7 @@ row({ id: 'status.play.pointer', ws: 'playground', control: '#osc-sb-play', how:
   viewport: { width: 390, height: 844 }, act: D.click('#osc-sb-play'),
   expect: (s) => !!s.engine.voice && s.app.playing });
 row({ id: 'action.url.pointer', ws: 'playground', control: '#osc-act-url', how: 'pointer',
-  act: D.click('#osc-act-url'), expect: (s) => s.dialogs.includes('osc-dlg-copy') });
+  act: D.click('#osc-act-url'), expect: copiedOrShown('osc-dlg-copy', /link copied/i) });
 row({ id: 'action.screenshot.pointer', ws: 'playground', control: '#osc-act-screenshot',
   how: 'pointer', act: async (page) => { page.__got = await download(page, () => page.click(
     '#osc-act-screenshot')); },
@@ -1119,7 +1129,12 @@ row({ id: 'presets.delete.pointer', ws: 'presets', control: '[data-osc="presets.
   how: 'pointer', setup: seq(D.click('[data-osc="presets.save"]'),
     (page) => page.fill('#osc-save-name', 'Gone'), D.click('[data-osc="save.confirm"]'),
     D.click('#osc-ptab-cat-custom')),
-  act: async (page) => { await page.locator('[data-osc="presets.delete"]').first().click(); },
+  // two steps: Delete turns the button into Confirm, which deletes
+  act: async (page) => {
+    const del = page.locator('[data-osc="presets.delete"][aria-label="Delete Gone"]');
+    await del.click();
+    await page.locator('[data-osc="presets.delete"][aria-label="Confirm delete Gone"]').click();
+  },
   expect: (s, b, x) => !x.v, read: () => ({ v: (window.OSCILLA.app.customPresets || [])
     .some((p) => p.name === 'Gone') }) });
 row({ id: 'presets.clearHistory.pointer', ws: 'presets',
@@ -1147,7 +1162,7 @@ row({ id: 'headphones.confirm.pointer', ws: 'synthesis', control: '[data-osc="he
   act: D.click('[data-osc="headphones.confirm"]'),
   expect: (s) => !s.dialogs.includes('osc-dlg-headphones') && s.aria.binaural === 'true' });
 row({ id: 'studio.copyLink.dialog.pointer', ws: 'studio', control: '[data-osc="studio.linkUrl"]',
-  how: 'pointer', covers: ['[data-osc="studio.linkDone"]'],
+  how: 'pointer', covers: ['[data-osc="studio.linkDone"]'], noClipboard: true,
   act: async (page) => {
     await page.click('[data-osc="studio.copyLink"]');
     await until(() => page.evaluate(() => /#/.test(document.querySelector(
@@ -1415,6 +1430,7 @@ family({ id: 'links.internal', control: 'a[href="#osc-main"], a[href^="mailto:"]
     return { members: links.length + mail.length, bad };
   } });
 family({ id: 'dialogs.dismiss', control: 'dialog .osc-dialog-actions button:not([data-osc])',
+  init: NO_CLIPBOARD,
   why: 'each dialog closes by its own Cancel, Done or Close button and by Escape',
   run: async (page) => {
     const bad = [];
@@ -1592,7 +1608,8 @@ async function census(browser) {
 
 async function runRow(browser, r) {
   const { context, page, errors } = await op.openApp(browser, { dist: DIST, viewport: r.viewport,
-    init: FULLSCREEN_PROBE, keepSafety: !!r.keepSafety });
+    init: r.noClipboard ? [FULLSCREEN_PROBE, NO_CLIPBOARD] : FULLSCREEN_PROBE,
+    keepSafety: !!r.keepSafety });
   try {
     if (r.ws !== 'playground') await op.navTo(page, r.ws);
     const read = () => (r.read ? page.evaluate(r.read, r.readArg) : Promise.resolve({}));

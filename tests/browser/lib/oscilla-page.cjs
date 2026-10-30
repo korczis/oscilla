@@ -44,7 +44,7 @@ async function openApp(browser, { dist, query = '', hash = '', audio = true, ini
   keepAlerts = false, keepSafety = false,
   viewport = { width: 1536, height: 1024 }, timeout = 10000 } = {}) {
   const context = await browser.newContext({ viewport, acceptDownloads: true });
-  if (init) await context.addInitScript(init);
+  for (const fn of [].concat(init || [])) await context.addInitScript(fn);
   const page = await context.newPage();
   page.setDefaultTimeout(timeout);
   const errors = [];
