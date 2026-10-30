@@ -4,6 +4,7 @@
 //       phase input of operator k starts at I_m / Φ_k and falls to I_m · sustain / Φ_k, so the
 //       shapers cos(Φ_k x), sin(Φ_k x) see the phase deviation I_m · sin θ_m (changing the
 //       edge's scale to 0.5 / Φ passed every earlier test)
+//   V5  a note-on that takes no voice (it sounds nothing) does not enter the held list
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { FM_ALGORITHMS } from '../../src/js/synth/fm-algorithms.js';
@@ -71,4 +72,32 @@ test('V1 every edge into a phase operator carries I_m / Φ_k, falling to I_m · 
     }
   }
   assert.equal(edges, 3, 'one edge into a phase operator in 3-stack, two in 4-stack');
+});
+
+// ------------------------------------------------------------------ V5 the held list
+
+test('V5 a note that sounds nothing does not enter the held list', async () => {
+  const { createLiveNotes } = await import('../../src/js/studio/live-notes.js');
+  const calls = [];
+  const engine = { // a polyphonic engine handle: notes at or above 100 take no voice
+    noteOn(at, note) {
+      calls.push(['on', note]);
+      return note >= 100 ? { slot: null, stolen: false, retrigger: false, dropped: 2 }
+        : { slot: 0, stolen: false, retrigger: false, dropped: 0 };
+    },
+    noteOff: (at, note) => calls.push(['off', note]),
+    allOff: () => 0,
+  };
+  const live = createLiveNotes({ getModel: () => ({ graph: { nodes: [], edges: [] } }),
+    handleOf: (id) => (id === 'fm-1' ? engine : null) });
+  const loud = live.event('fm-1', { kind: 'on', note: 60, at: 0 });
+  assert.equal(loud.silent, false);
+  const quiet = live.event('fm-1', { kind: 'on', note: 120, at: 0 });
+  assert.equal(quiet.silent, true, 'the result says it sounds nothing');
+  assert.equal(quiet.dropped, 2, 'and how many operators the limit left out');
+  assert.deepEqual(live.held(), [60], 'only the sounding note is held');
+  assert.equal(quiet.held, 1);
+  assert.equal(live.event('fm-1', { kind: 'off', note: 120, at: 1 }).held, 1);
+  assert.equal(live.allOff(2), 1, 'all-off counts the held notes that sound');
+  assert.deepEqual(calls, [['on', 60], ['on', 120], ['off', 120]], 'every event reached it');
 });

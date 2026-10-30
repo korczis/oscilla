@@ -18,6 +18,7 @@
 //   A polyphonic engine (nodes/engines.js, capabilities.notes, a handle with noteOn) takes the
 //   same events on its own id: on -> noteOn(at, note, velocity), off -> noteOff(at, note),
 //   all-off -> allOff(at, fast); its voice pool allocates (adapters/voices.js), no note stack.
+//   A note-on that takes no voice (it sounds nothing) is not held: { silent: true }.
 
 import { createNoteStack } from '../synth/note-stack.js';
 import { NODE_REGISTRY } from './registry.js';
@@ -116,9 +117,13 @@ export function createLiveNotes({ getModel, handleOf }) {
     }
     if (kind === 'on') {
       const r = h.noteOn(at, note, velocity);
-      held.add(note);
-      return { ok: true, held: held.size, top: note, stolen: !!(r && r.stolen),
-        dropped: r ? r.dropped : 0 };
+      // A note that sounds nothing takes no voice (adapters/voices.js: slot null, every
+      // operator above the limit, a ring with no modulator): it is not held either (review of
+      // #332, V5), so the held list names only notes that sound.
+      const silent = !!r && r.slot == null;
+      if (!silent) held.add(note);
+      return { ok: true, held: held.size, top: silent ? null : note, silent,
+        stolen: !!(r && r.stolen), dropped: r ? r.dropped : 0 };
     }
     held.delete(note);
     h.noteOff(at, note);
