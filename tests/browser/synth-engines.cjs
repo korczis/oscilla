@@ -686,14 +686,16 @@ function defineChecks() {
 }
 
 // ------------------------------------------------------------------------------ runner
+/** Does check `name` run at `sizeName` under the --only selection? */
+const runsAt = (name, sizeName) => (!ONLY || ONLY.has(name))
+  && (sizeName === 'phone' ? PHONE_CHECKS.has(name) : name !== 'e-mobile');
+
 async function runLeg(browserName, sizeName, base) {
   const browser = await playwright[browserName].launch(LAUNCH[browserName]);
   const results = {};
   try {
     for (const { name, hash, fn } of defineChecks()) {
-      if (ONLY && !ONLY.has(name)) continue;
-      if (sizeName === 'phone' && !PHONE_CHECKS.has(name)) continue;
-      if (sizeName === 'desktop' && name === 'e-mobile') continue;
+      if (!runsAt(name, sizeName)) continue;
       const context = await browser.newContext({ viewport: SIZES[sizeName],
         hasTouch: sizeName === 'phone' });
       const errors = [];
@@ -718,6 +720,15 @@ async function runLeg(browserName, sizeName, base) {
 }
 
 (async () => {
+  // --only names checks of this suite; a size none of them runs at is not a leg (review of
+  // #332, V3: an o-* check selected alone ran a phone leg of 0 checks, which the harness fails).
+  const known = defineChecks().map((c) => c.name);
+  const unknown = ONLY ? [...ONLY].filter((n) => !known.includes(n)) : [];
+  if (unknown.length) {
+    console.error(`unknown --only check(s) ${unknown.join(', ')}; known: ${known.join(', ')}`);
+    process.exit(2);
+  }
+  const sizes = Object.keys(SIZES).filter((sz) => known.some((n) => runsAt(n, sz)));
   await RUN.ready();
   if (!fs.existsSync(DIST)) {
     console.error(`missing ${DIST}: run npm run build`);
@@ -729,7 +740,7 @@ async function runLeg(browserName, sizeName, base) {
   try {
     for (const b of RUN.browsers) {
       for (const o of RUN.origins) {
-        for (const size of Object.keys(SIZES)) {
+        for (const size of sizes) {
           const base = o === 'file' ? pathToFileURL(DIST).href : server.url;
           const key = `${b}/${o}/${size}`;
           const t0 = Date.now();
