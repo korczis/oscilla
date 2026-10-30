@@ -1,0 +1,59 @@
+# Review verdict for pull request #297, plan record C016 (PACK 03, finding coupling-5): MEASURE's
+# setup check counts every output owner as other audio (branch fix/c016-preflight-other-audio).
+# Reviewed head c11cea228bdd (== origin after git fetch; merge base cdda563c1982; origin/main
+# fde49bd1 is docs-only drift over none of the touched files and merges cleanly).
+# Built by the builder's session; reviewed by dev-68, which re-checked a first review pass
+# finding by finding against the code and kept only what held.
+#
+# The digest: scripts/ on the branch is identical to origin/main's (git diff origin/main --
+# scripts is empty), so the branch's copy was used in the worktree:
+# `node scripts/review-verdict.mjs --content --list --base origin/main` gives 5801e324...0143
+# over src/js/measurement/capture.js, src/js/measurement/engine.js, src/js/ui/measure.js.
+#
+# Lenses: (a) every control path that sounds into engine.master is owned, reported and stopped;
+# (b) click-free stops, no param writes; (c) fail-first and test strength; (d) the PR body.
+#
+# Runs (first pass, re-read here; nothing was rerun that the code reading did not need):
+# - Fail-first in a git-archive copy of the merge base with the head's tests/: output-owners
+#   5/5 fail, v3-engine tests 22 and 23 fail (ERR_ASSERTION); on the head 33/33 pass.
+# - 10 mutations in git-archive copies of the head against output-owners + v3-engine: 8 killed;
+#   M1 (capture overwrites otherAudio with voices > 0) and M4 (otherAudioNow returns false)
+#   survive the unit tests (R-3). Both are killed by the sequencer and Studio cases of the
+#   browser app leg in tests/browser/v3-measure.cjs, which ci.yml runs (it always calls runApp).
+# - 12 relevant unit files on the head: 1310 tests, 1309 pass, 1 skip. build.mjs --check: dist
+#   up to date. The browser leg was not run (load 86-161, OSC_LOAD_MAX left at its default).
+# - This pass: the worktree was used read-only (only the majordomus serve daemon, PID 79695, had
+#   its cwd there); reading quality-bar.js, audio-engine.js (_soon, _releaseVoice,
+#   audibleVoiceCount), capture.js preflight, engine.js measure(), measure.js runMeasure,
+#   main.js, workbench.js, sequencer-panel.js and studio/workspace.js.
+#
+# Checked and found correct: OUTPUT_OWNERS covers the writers into engine.master outside the
+# measurement stimulus (engine voices via the engine.play wrapper, the sequencer via the adapter's
+# getDestination, the Studio bus via engine-hooks masterInput); no added line writes a param or
+# connects a node, the stops are the existing click-free editor.stop(), stopNow(), studioStop()
+# in the previous order; the Studio claims the output before transport.playing turns true, so
+# its own onClaimOutput stopPlayback does not stop itself; MIDI notes (#261) are not on main.
+#
+# R-2 is the lens (a) path the first pass missed: Measure without a reusable READY report runs
+# stopPlayback and then, in the same task, measure() -> runPreflight(s, recipe, calibration)
+# (engine.js:1225, otherAudio defaults to false) -> io.preflight, which reads
+# engine.audibleVoiceCount synchronously (capture.js:789). stopNow -> stopAll releases the voice
+# at stopAt >= _soon(ctx) + 0.008 + 0.01 >= currentTime + 0.038 (audio-engine.js:606-625), and
+# audibleVoiceCount counts it until endTime - 0.01, so a playing instrument always reads as one
+# voice there; the 0.3 s input-level window starts after the context/permission/input awaits
+# and freshClock, at currentTime + SCHEDULE_LEAD_S, when that fade has ended.
+#
+# Open: R-1 and R-2 (P2), R-3 to R-7 (P3). The verdict is changes-requested.
+schema: review-verdict/v1
+pr: 297
+verdict: changes-requested
+reviewer: "dev-68 (Claude Opus 5.5 session 4f90795d); did not build, merge or edit this change; wrote only this file"
+content: 5801e324780f03874f4dfe5584fa8d90d23ed341415efc491d4b02405bd00143
+findings:
+  - { id: R-1, severity: P2, status: open, title: "The quality bar still calls the reading the background: reduceQualityBar's 'preflight' case (src/js/measurement/views/quality-bar.js:138-142) builds the Noise item from facts.inputLevel alone and ignores facts.output.otherAudio, so with the sequencer or Studio sounding and rmsDb -20 the Live checks bar shows 'Noise HIGH' titled 'Preflight background -20.0 dB relative (dBFS-like); the noise check measures it.' (src/index.html:1495) while the NOISE_HIGH reason on the same screen says it is not the background level. The coupling-5 no-fake-science claim survives on a second surface, and the browser leg checks only the flow-step reason text. Fix: when facts.output.otherAudio (or audibleVoices > 0) the detail names the app's own output, with a views test." }
+  - { id: R-2, severity: P2, status: open, title: "On the Measure path the new texts are false: runMeasure (src/js/ui/measure.js:1452) stops the instrument, then measure() runs a fresh preflight in the same task whose io reads audibleVoiceCount (capture.js:789) while the stopped voice is still in its 8 ms fade (counted for about 28 ms), so ownOutput is true. OTHER_AUDIO then says 'this check leaves them playing and its input reading includes them', and in a noisy room NOISE_HIGH says the reading 'includes the app's own output, which is playing ... it is not the background level: stop it and check again', although Measure has just stopped it and the 0.3 s level window that follows is the room. That attributes the room's noise to the app (the inverse of coupling-5), it lands in result.preflight of the saved experiment, and before this PR the same path said, correctly, 'they will be stopped'. Fix: the measure() preflight passes the caller's fact (false after stopPlayback) and the io takes voices that are not releasing, or the voices are sampled at the level read (see R-5); add a unit case for measure() after a stop." }
+  - { id: R-3, severity: P3, status: open, title: "The unit tests check the capture io OR and the measure.js wiring by source regex only (tests/unit/output-owners.test.mjs:105-114): M1 (capture.js sets facts.output.otherAudio = voices > 0 after the literal) and M4 (otherAudioNow returns false &&...) pass every unit test. The browser app leg in CI kills both through its sequencer and Studio cases, so this is test strength, not missing coverage (lowered from P2). Fix: a capture io test with a fake engine that asserts output.otherAudio from opts, and a measure-UI test with a fake svc.outputBusy." }
+  - { id: R-4, severity: P3, status: open, title: "Escape, pagehide and the status-bar play key still read the 150 ms seqPlaying copy: stopSequencer (src/js/main.js:551-553) and workbench.js:254 statusPlay gate on cmp.seqPlaying, so Escape or hiding the page within 150 ms of editor.play() leaves the sequencer playing. Predates the PR, but these are readers of the sequencer owner outside the OUTPUT_OWNERS table the PR presents as the one list. Fix: read the table's sequencer busy() there too." }
+  - { id: R-5, severity: P3, status: open, title: "otherAudio is sampled once before the check, the input level seconds later: otherAudioNow(cmp) runs when me.preflight() is called (src/js/ui/measure.js:1426-1427) and capture.js:789 reads audibleVoiceCount before ensureContext, queryMicPermission, ensureRecorderMode and ensureInput (which can include a permission prompt). A non-looping sequence or finite tone that ends during the check still gets OTHER_AUDIO and 'the reading includes the app's own output'; a source started during it is missed. Fix: sample at the level read, or OR a second sample taken then." }
+  - { id: R-6, severity: P3, status: open, title: "The PR body overstates two things: 'runMeasure already stopped every source, so the measured run was never contaminated' is too strong, because on the merge base stopPlayback gated the sequencer on the 150 ms seqPlaying copy and a sequence started under 150 ms before Measure kept playing (this PR closes that); and 'npm test: 3282/3285 pass. The 2 failures ...' names only 2 of the 3 tests that did not pass (the third, probably a skip, is not named). The fail-first block is accurate (reproduced)." }
+  - { id: R-7, severity: P3, status: open, title: "The table covers stop and busy but not the refusal side: the instrument refuses while a measurement owns the output (engine.play wrapper, src/js/main.js:206) and so does the Studio (onClaimOutput, src/js/ui/studio/workspace.js:787), but the sequencer's editor.play() (src/js/labs/sequencer-panel.js:483/487) has no measureOwnsOutput check. Not reachable through the UI at this head (MEASURE hides .osc-workspace and leaving the workspace aborts the measurement, main.js:626), so a hardening note: add a claim/refuse column to OUTPUT_OWNERS when C002's claimOutput lands." }
