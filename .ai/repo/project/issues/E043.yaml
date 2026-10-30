@@ -18,6 +18,7 @@ acceptance_criteria:
   - "tests/unit/dialog-initial-focus.test.mjs: a control focused before the deferred initial focus runs keeps focus, the first control still receives it when focus was not moved, and a dialog closed before the timer takes none; the first and third cases fail on the merge base (fail-first)."
   - "With the openModal focus timer delayed by 300 ms in the page, the keyboard delete flow of findings-delete-focus deletes the row in chromium, firefox and webkit; on the merge base Enter presses Cancel and the row stays."
   - "findings-delete-focus passes repeatedly under load in all three browsers, from file:// and the sub-path; npm test passes."
+  - "The same CI class, evidence-at-completion [save] followed by older-claim and evidence [noSpl] (#276, #311): evidence-at-completion clears the calibrations it made on every way out (try/finally), so with its save click removed only that check fails and older-claim and evidence pass (they failed noSpl before); H.saved's timeout reports saved, savedId and the open dialogs, so the next [save] failure names its cause. The cause of the lost save itself is not established here."
 validation:
   - "node --test tests/unit/dialog-initial-focus.test.mjs"
   - "npm test"
