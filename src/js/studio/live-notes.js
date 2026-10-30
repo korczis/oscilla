@@ -15,8 +15,19 @@
 //            gate(at, null) and its clocked Random clock(at, k), k counted from arm (0 first)
 //       off  the stack empties: release(at); the top note changes: legato return, no gate
 //     notes.allOff(at) -> how many keys were held; notes.reset(); notes.held() -> [note]
+//   A polyphonic engine (nodes/engines.js, capabilities.notes, a handle with noteOn) takes the
+//   same events on its own id: on -> noteOn(at, note, velocity), off -> noteOff(at, note),
+//   all-off -> allOff(at, fast); its voice pool allocates (adapters/voices.js), no note stack.
+//   A note-on that takes no voice (it sounds nothing) is not held: { silent: true }.
 
 import { createNoteStack } from '../synth/note-stack.js';
+import { NODE_REGISTRY } from './registry.js';
+
+/** Whether a node type is a note source: Keys, or a type with capabilities.notes. */
+const playsNotes = (type) => {
+  const d = NODE_REGISTRY.get(type);
+  return type === 'keys' || !!(d && d.capabilities && d.capabilities.notes);
+};
 
 const unmuted = (e) => !(e.props && e.props.muted);
 
@@ -45,7 +56,7 @@ export function keysGatedEnvelopes(model) {
 
 export function liveModel(model) {
   const g = model.graph;
-  const keep = new Set(g.nodes.filter((n) => n.type === 'keys').map((n) => n.id));
+  const keep = new Set(g.nodes.filter((n) => playsNotes(n.type)).map((n) => n.id));
   const isMaster = new Set(g.nodes.filter((n) => n.type === 'master').map((n) => n.id));
   const queue = [...keep];
   while (queue.length) {
@@ -71,6 +82,7 @@ export function liveModel(model) {
 export function createLiveNotes({ getModel, handleOf }) {
   const stacks = new Map(); // keys id -> note stack
   const counts = new Map(); // clocked node id -> triggers since arm
+  const poly = new Map(); // engine id -> Set of held notes (its pool holds the voices)
 
   const stackOf = (id) => {
     if (!stacks.has(id)) stacks.set(id, createNoteStack());
@@ -94,7 +106,34 @@ export function createLiveNotes({ getModel, handleOf }) {
     }
   };
 
-  function event(keysId, { kind, note, velocity = 100, at }) {
+  function polyEvent(id, h, { kind, note, velocity = 100, at, fast = false }) {
+    if (!poly.has(id)) poly.set(id, new Set());
+    const held = poly.get(id);
+    if (kind === 'all-off') {
+      const n = held.size;
+      h.allOff(at, fast);
+      held.clear();
+      return { ok: true, held: 0, released: n };
+    }
+    if (kind === 'on') {
+      const r = h.noteOn(at, note, velocity);
+      // A note that sounds nothing takes no voice (adapters/voices.js: slot null, every
+      // operator above the limit, a ring with no modulator): it is not held either (review of
+      // #332, V5), so the held list names only notes that sound.
+      const silent = !!r && r.slot == null;
+      if (!silent) held.add(note);
+      return { ok: true, held: held.size, top: silent ? null : note, silent,
+        stolen: !!(r && r.stolen), dropped: r ? r.dropped : 0 };
+    }
+    held.delete(note);
+    h.noteOff(at, note);
+    return { ok: true, held: held.size, top: null };
+  }
+
+  function event(keysId, ev) {
+    const { kind, note, velocity = 100, at } = ev;
+    const ph = handleOf(keysId);
+    if (ph && typeof ph.noteOn === 'function') return polyEvent(keysId, ph, ev);
     const st = stackOf(keysId);
     if (kind === 'all-off') {
       const n = st.clear();
@@ -119,13 +158,17 @@ export function createLiveNotes({ getModel, handleOf }) {
     event,
     allOff(at) {
       let n = 0;
-      for (const id of stacks.keys()) n += event(id, { kind: 'all-off', at }).released || 0;
+      for (const id of [...stacks.keys(), ...poly.keys()]) {
+        n += event(id, { kind: 'all-off', at, fast: true }).released || 0;
+      }
       return n;
     },
     reset() {
       stacks.clear();
       counts.clear();
+      poly.clear();
     },
-    held: () => [...stacks.values()].flatMap((s) => s.notes),
+    held: () => [...stacks.values()].flatMap((s) => s.notes)
+      .concat([...poly.values()].flatMap((s) => [...s])),
   };
 }

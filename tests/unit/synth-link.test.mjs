@@ -23,7 +23,7 @@ test('round trip of a preset, values, an amount and a cable', () => {
     ['vco1.waveform', 'pulse'], ['lpf.lpf-eg2', 1.5]], cables: [['mg.control', 'lpf.frequency']] };
   const hash = encodeSynthLink(link);
   assert.match(hash, /^m=synth&yp=bass&yv=/);
-  assert.deepEqual(dec(`#${hash}`), { ok: true, link });
+  assert.deepEqual(dec(`#${hash}`), { ok: true, link: { ...link, engine: null } });
   assert.equal(dec('#m=playground'), null);
 });
 

@@ -2,9 +2,11 @@
 // a mixer, two 12 dB/oct filters in series (high-pass, then low-pass), two envelopes (EG 1 a
 // contour, EG 2 the amplifier's), a modulation generator, a sample-and-hold of a seeded random
 // source and the output. The whole panel is this one declaration (synth/panel.js): every knob,
-// switch and jack comes from the registry's node descriptors.
+// switch and jack comes from the registry's node descriptors. The Engines tab's modules join it
+// (panels/engines.js): the panel's amplifier feeds their chain into the one Output.
 
 import { definePanel } from '../panel.js';
+import { ENGINE_MODULES, ENGINE_TAB, enginesChain } from './engines.js';
 
 const FILTER_FIXED = { gain: 0, enabled: true };
 const FILTER_NOTE = 'A 12 dB/oct biquad: the peak rings but does not self-oscillate.';
@@ -17,6 +19,10 @@ export default definePanel({
   id: 'semi-mono',
   version: 1,
   title: 'Semi-modular mono voice',
+  tabs: [{ id: 'panel', title: 'Semi-modular mono voice', description: 'Two oscillators and '
+    + 'noise through two 12 dB/oct filters in series, high-pass then low-pass, into an '
+    + 'envelope-driven amplifier. Every jack is normalled: it sounds with no cable, and a cable '
+    + 'into a jack replaces what was normalled there.' }, ENGINE_TAB],
   description: 'Two oscillators and noise through two 12 dB/oct filters in series, high-pass '
     + 'then low-pass, into an envelope-driven amplifier. Every jack is normalled: it sounds '
     + 'with no cable, and a cable into a jack replaces what was normalled there.',
@@ -50,6 +56,7 @@ export default definePanel({
     { id: 'sh', label: 'S&H', node: 'random', note: 'Seeded random steps, one per gate; it '
       + 'samples no input.' },
     { id: 'out', label: 'OUTPUT', node: 'master' },
+    ...ENGINE_MODULES,
   ],
   // [id, from jack, to jack, edge props]. A cable into a `to` jack breaks every normal of that
   // jack; removing the last cable restores them, with the same ids (synth/normals.js).
@@ -67,7 +74,7 @@ export default definePanel({
     ['n11', 'mix.audio', 'hpf.audio'],
     ['n12', 'hpf.audio', 'lpf.audio'],
     ['n13', 'lpf.audio', 'vca.audio'],
-    ['n14', 'vca.audio', 'out.audio'],
+    ...enginesChain('vca.audio', 'out.audio'), // e1: VCA into the engines' chain, then Output
     ['n24', 'eg2.control', 'vca.gain', { depth: 1, polarity: 'unipolar', mapping: 'linear' }],
     ['n15', 'mg.control', 'vco1.fm', { depth: 0 }],
     ['n16', 'mg.control', 'vco2.fm', { depth: 0 }],
@@ -96,5 +103,5 @@ export default definePanel({
       to: ['lpf.frequency'], range: [-4, 4] },
   ],
   layout: { desktop: [['vco1', 'vco2', 'ring', 'noise', 'mix', 'hpf', 'lpf'],
-    ['keys', 'eg1', 'eg2', 'vca', 'mg', 'sh', 'out']] },
+    ['keys', 'eg1', 'eg2', 'vca', 'mg', 'sh', 'out'], ENGINE_MODULES.map((m) => m.id)] },
 });

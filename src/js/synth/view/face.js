@@ -4,9 +4,19 @@
 //
 //   plateHtml({ panel, module, node, model, tokens, collapsed }) -> markup string
 //   controlState(panel, module, node, model, control) -> { value, disabled, reason }
+//   platesShown({ panel, tab, engine, resolved, model }) -> [module]   the plates of a tab: its
+//     modules (on Engines, the chosen one), after any module of another tab that is removed and
+//     breaks a normal (an engine gone from the shared chain silences what is before it)
 
 import { knobModel, knobSvg } from './knob.js';
-import { amountEdges, amountReason } from '../normals.js';
+import { amountEdges, amountReason, brokenByRemoval } from '../normals.js';
+
+export function platesShown({ panel, tab, engine, resolved, model }) {
+  const own = tab === 'engines' ? [panel.module(engine)].filter(Boolean) : panel.modulesOf(tab);
+  const gone = brokenByRemoval(model, panel).map((r) => panel.module(r.module))
+    .filter((m) => !own.includes(m) && !resolved.get(m.id));
+  return [...gone, ...own];
+}
 
 export const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;',
   '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -22,6 +32,10 @@ const SH_CLOCKED = Object.freeze({
 /** Why a control on this face does nothing now, or null (project.no-inert-surfaces (b)). */
 export function controlReason(module, node, control, model, panel) {
   if (control.kind === 'amount') return amountReason(model, panel, control.amount);
+  // The node type's own rule (nodes/engines.js `inactive`): data, beside its parameters.
+  const own = typeof module.def.inactive === 'function'
+    ? module.def.inactive(node.params, control.key) : null;
+  if (own) return own;
   if (module.node === 'vco' && control.key === 'width' && node.params.waveform !== 'pulse') {
     return 'Pulse width applies to the pulse wave; choose Pulse to use it.';
   }
@@ -94,6 +108,17 @@ function toggleHtml(cid, c, value, reason) {
 }
 
 /**
+ * A readout derived from the parameters (the node type's `facts`, nodes/engines.js): computed,
+ * never observed, and labelled so (project.no-fake-science).
+ */
+function factsHtml(m, node) {
+  if (typeof m.def.facts !== 'function') return '';
+  return '<p class="relative px-3 pb-3 text-[11px] leading-snug text-gray-600 '
+    + `dark:text-gray-300" data-facts="${m.id}"><span class="font-semibold">Computed from the `
+    + `settings:</span> ${esc(m.def.facts(node.params))}</p>`;
+}
+
+/**
  * The plate of one module: header, face controls, locked values and the module's note. The
  * header is a disclosure button (K062): a collapsed card keeps its label and a one-line
  * summary from the registry; its jacks stay on the patch bay.
@@ -117,10 +142,13 @@ export function plateHtml({ panel, module: m, node, model, tokens, collapsed = f
     + `<stop offset="1" stop-color="${tokens.plateLo}"/></linearGradient></defs>`
     + `<rect width="100%" height="100%" fill="url(#pg-${m.id})" stroke="none"/></svg>`;
   if (!node) {
+    const row = model ? brokenByRemoval(model, panel).find((r) => r.module === m.id) : null;
     return `<section class="relative overflow-hidden bg-white rounded-lg shadow dark:bg-gray-800" `
       + `aria-labelledby="${hid}" data-module="${m.id}">${bg}${head}`
       + '<p class="relative px-3 pb-3 text-sm text-gray-600 dark:text-gray-300">This module was '
-      + 'removed in Studio. <button type="button" class="font-medium text-primary-600 underline '
+      + 'removed in Studio'
+      + (row ? `, so its normals no longer reach ${esc(row.jacks.join(', '))}` : '')
+      + '. <button type="button" class="font-medium text-primary-600 underline '
       + `dark:text-primary-400" data-restore-module="${m.id}">Restore module</button></p>`
       + '</section>';
   }
@@ -156,5 +184,6 @@ export function plateHtml({ panel, module: m, node, model, tokens, collapsed = f
     + (fixed || m.note ? `<div class="relative flex flex-wrap items-center gap-1 px-3 pb-3">`
       + `${fixed}${m.note ? `<span class="text-[11px] text-gray-600 dark:text-gray-400">`
       + `${esc(m.note)}</span>` : ''}</div>` : '')
+    + factsHtml(m, node)
     + '</div></section>';
 }
