@@ -139,6 +139,72 @@ test('C003: a restart while a pass fades keeps the session chain until every pas
   assert.equal(engine.activeNodeCount, 0);
 });
 
+test('C003: Stop keeps the stage chain open while the passes fade, then frees it (R-1)', () => {
+  const { fx, engine, ed, opened } = setup();
+  ed.play();
+  fx.advance(0.2);
+  const lp = fx.ctx.of('biquad').find((b) => b.type === 'lowpass');
+  assert.ok(lp && lp.outputs.length, 'the filter stage is wired while the sequence sounds');
+  ed.stop();
+  // The passes ramp down through the filter: disposing the chain now would disconnect the
+  // stage and every pass node under a live signal, a hard cut on every Stop.
+  assert.ok(ed.stats().voices > 0, `the stopped passes still fade: ${ed.stats().voices}`);
+  assert.equal(opened[0].disposed, false, 'Stop does not dispose the chain under a fading pass');
+  assert.ok(lp.outputs.length > 0 && !lp.disconnected, 'the filter stage stays connected');
+  assert.ok(engine.activeNodeCount > 0, 'the fading passes are still counted');
+  fx.advance(0.5);
+  assert.equal(ed.stats().voices, 0, 'the fade has ended');
+  assert.equal(opened[0].disposed, true, 'the chain goes once the last pass has faded');
+  assert.equal(engine.activeNodeCount, 0);
+  assert.equal(engine.activeSourceCount, 0);
+});
+
+test('C003: a looping sequence holds a steady census: each ended pass leaves it (R-2)', () => {
+  const { fx, engine, ed } = setup();
+  ed.play();
+  // Read the census at the same phase of a 0.5 s pass, after one pass and after many.
+  fx.advance(0.75);
+  const afterOne = engine.activeNodeCount;
+  assert.ok(afterOne > 0);
+  const samples = [];
+  for (let i = 0; i < 8; i++) {
+    fx.advance(1);
+    samples.push(engine.activeNodeCount);
+  }
+  assert.deepEqual(samples, samples.map(() => afterOne),
+    `an ended pass releases its nodes from the engine (census ${afterOne} -> ${samples})`);
+  ed.stop();
+  fx.advance(0.5);
+  assert.equal(engine.activeNodeCount, 0);
+});
+
+test('C003: a stage chain that throws leaves the editor stopped and says why (R-7)', () => {
+  const fx = createFakeAudioEnv({ sampleRate: 48000 });
+  const engine = new AudioEngine({ env: fx.env });
+  assert.ok(engine.init(), 'engine.init');
+  const ed = createSequencerEditor({
+    model: { ...TONE_4K },
+    timers: { setTimeout: fx.env.setTimeout, clearTimeout: fx.env.clearTimeout },
+    engine: {
+      getContext: () => engine.ctx,
+      getDestination: () => engine.master,
+      resume: () => null,
+      openStage: () => {
+        throw new Error('stage refused');
+      },
+    },
+  });
+  let started;
+  assert.doesNotThrow(() => {
+    started = ed.play();
+  }, 'Play reports the failure instead of throwing into the click handler');
+  assert.equal(started, false);
+  assert.equal(ed.playing, false, 'nothing plays, so the transport does not say it does');
+  assert.match(ed.error, /stage refused/);
+  assert.equal(ed.stats().voices, 0);
+  assert.equal(engine.activeNodeCount, 0);
+});
+
 test('C003: a closed context frees an open stage chain from the engine census', () => {
   const { fx, engine, ed, opened } = setup();
   ed.play();
@@ -190,6 +256,10 @@ test('C003: the Envelope and Additive panels and README say what shapes the sequ
       + '([^<]*)</span>'));
     assert.ok(m, `${panel} carries its ${key} note`);
     assert.match(m[1], /instrument only/i, `${key} says the lab shapes the instrument only`);
+    const title = m[0].match(/\stitle="([^"]*)"/);
+    assert.ok(title && title[1].trim(), `${key} explains the note in its tooltip`);
+    assert.doesNotMatch(title[1], /[\n\r]|\s{2}/,
+      `${key}'s tooltip is one line, without the source's newline and indentation (R-5)`);
     assert.match(m[0], /:hidden="[^"]*seqPlaying[^"]*"/, `${key} shows while the sequence plays`);
     assert.match(m[0], /:hidden="[^"]*workspace\s*!==\s*'sequencer'/,
       `${key} shows in the Sequencer workspace`);

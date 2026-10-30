@@ -448,7 +448,15 @@ export function createSequencerEditor(options = {}) {
       }
       this.error = '';
       this.playing = true;
-      const voice = this._schedulePass(ctx, ctx.currentTime + START_OFFSET_S);
+      let voice;
+      try {
+        voice = this._schedulePass(ctx, ctx.currentTime + START_OFFSET_S);
+      } catch (e) {
+        // A stage chain or a compile that throws leaves nothing sounding and says why.
+        this.playing = false;
+        this.error = String((e && e.message) || e);
+        return false;
+      }
       if (!voice) {
         this.playing = false;
         return false;
