@@ -1,0 +1,40 @@
+# Review verdict for pull request #307, T016: the MEASURE quality bar says AT RAIL, not CLIPPING NONE,
+# for a run whose peak reached the rail (branch fix/t016-quality-bar-at-rail).
+# Reviewed head fac5f817 against merge base origin/main. Another session built it (oscilla-b0); this
+# reviewer built none of it.
+#
+# The digest is the base branch's scripts/review-verdict.mjs (from git archive origin/main scripts),
+# run --content over the 2 guarded paths it names: src/js/measurement/engine.js and
+# src/js/measurement/views/quality-bar.js.
+#
+# How it was reviewed: three independent lenses (correctness at every boundary; tests and fail-first;
+# truth of the copy against project.no-fake-science), each in a detached worktree at the head, with
+# a scratch boundary probe of reduceQualityBar and checkCapture. Two skeptics per P0-P2 finding.
+#
+# What holds:
+# - runClipping uses peak >= CLIP_THRESHOLD on the same max|x| that checkCapture computes and that
+#   quality.js judges for CLIPPING_NOT_EXCLUDED, so the bar and the assessment agree at 0.98,
+#   at Float32(0.98) and one ULP or one 16-bit LSB below; a -0.98 rail sample gives AT RAIL.
+# - The bar can no longer say NONE for a run whose peak reached the rail, and cannot say AT RAIL
+#   below it; NaN, Infinity, undefined, an empty capture or NON_FINITE samples give NOT CHECKED.
+# - NONE truncates rather than rounds up (0.97996 shows 0.979); AT RAIL, NOT CHECKED and DETECTED
+#   are kept across later clean runs; live chunks no longer downgrade them; the reducer stays pure.
+# - No regression for the other bar items or the GOOD/USABLE/POOR/INVALID assessment; the copy
+#   says "not excluded" / "unknown" and names the threshold and the analog blind spot.
+# - readout-states-quality-bar.test.mjs passes 11/11 at the head and fails on the merge base
+#   (fail-first holds).
+#
+# Verdict: merge. One P2 test gap (R1) is open and should be closed in this PR or the next; it
+# does not block. The rest are P3 follow-ups, two of them on pre-existing lines.
+schema: review-verdict/v1
+pr: 307
+verdict: merge
+reviewer: oscilla-af (claude-code 901211e2)
+content: 30bf0d3b43e3b3d6c0d2347c18e658702e614029e487277630362e7698ae4cc6
+findings:
+  - { id: R1, severity: P2, status: open, title: "readout-states-quality-bar.test.mjs:131 no test reaches the rail first in a later run; two mutants of runClipping (never move up from NONE, or from NOT CHECKED) pass all 11 tests. Add reduceAll([runEvent(0,{peak:0.5}), runEvent(1,{peak:0.995})]) -> CLIPPING AT RAIL /Run 2/, and the NOT CHECKED -> rail variant" }
+  - { id: R2, severity: P3, status: open, title: "quality-bar.js:224 the reducer compares a signed peak; the engine passes |x| today, but take Math.abs (or NOT CHECKED for a negative) in the exported reducer" }
+  - { id: R3, severity: P3, status: open, title: "quality-bar.js:261 (pre-existing) a live chunk at the rail says DETECTED (fail) and is kept after the run, while the run says AT RAIL; inert today (capture.js emits no live peak) - align before any adapter reports live peaks" }
+  - { id: R4, severity: P3, status: open, title: "quality-bar.js:220 docstring 'severity never drops within a measurement' is not true for a preflight AT INPUT replaced by a clean run's NONE; narrow the comment or keep the warning" }
+  - { id: R5, severity: P3, status: open, title: "capture.js:116 (pre-existing) multi-channel input is downmixed before the rail check, so one channel at the rail can read as NONE; state it or check per channel" }
+  - { id: R6, severity: P3, status: open, title: "quality-bar.js:226 the AT RAIL copy describes the clip rule three ways and drops 'digital full scale'; GLOSSARY has no entry and the qualifier is only in a title tooltip; pin the analog disclaimer in a test" }
