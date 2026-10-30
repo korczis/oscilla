@@ -176,6 +176,21 @@ test('the shell state persists through storage and reads a damaged value as the 
   assert.equal(broken.sidebarCollapsed, false);
 });
 
+test('the workspace list is a navigation landmark and the open drawer holds the keyboard', () => {
+  // The legacy tab bar was <nav aria-label="Workspace">; the Pro sidebar is an <aside>
+  // (complementary), so the list inside it is the navigation landmark a screen reader jumps to.
+  assert.match(sidebar, /<nav aria-label="Workspaces">\s*<ul class="space-y-1" id="osc-nav">/);
+  assert.match(html, /id="osc-main-content"\s+data-osc="shell\.content" x-bind="shellContent\(\)"/);
+  // While the phone drawer is open, the workspace column behind its backdrop is inert.
+  const shell = createShell({ get: () => null, set: () => {} });
+  const content = shell.shellContent();
+  assert.equal(typeof content[':inert'], 'function', 'the workspace column binds inert');
+  shell.drawerOpen = true;
+  assert.equal(content[':inert'].call(shell), true);
+  shell.drawerOpen = false;
+  assert.equal(content[':inert'].call(shell), false);
+});
+
 test('the search finds a workspace by name, group or what it does', () => {
   assert.deepEqual(navSearch(''), WORKSPACE_IDS, 'an empty query shows everything');
   assert.deepEqual(navSearch('filt'), ['filter']);

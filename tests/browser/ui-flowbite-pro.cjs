@@ -405,6 +405,22 @@ function defineChecks() {
       want(opened.navShown.length === WORKSPACES.length, `every workspace in the drawer`);
       want(opened.overflow <= 0, `no sideways scroll with the drawer (${opened.overflow} px)`);
       want(opened.focusIn === 'sidebar', `focus moves into the drawer (${opened.focusIn})`);
+      // The drawer holds the keyboard: the workspace column behind the backdrop is inert, so
+      // Tab never reaches a control the backdrop covers (WCAG 2.4.11), and a screen reader
+      // does not read it.
+      const behind = [];
+      for (let i = 0; i < WORKSPACES.length + 6; i += 1) {
+        await page.keyboard.press('Tab');
+        const at = await page.evaluate(() => {
+          const a = document.activeElement;
+          return a && document.getElementById('osc-main-content').contains(a)
+            ? a.dataset.osc || a.id || a.tagName : null;
+        });
+        if (at) behind.push(at);
+      }
+      const inert = await page.evaluate(() => document.getElementById('osc-main-content').inert);
+      want(inert && !behind.length,
+        `the drawer holds the keyboard: inert ${inert}, reached behind it ${behind.slice(0, 4)}`);
       for (const ws of WORKSPACES) {
         const g = await page.evaluate(shellGeometry);
         if (!g.drawer) await openDrawer(`the drawer opens for ${ws}`);
@@ -423,6 +439,8 @@ function defineChecks() {
         .catch(() => page.evaluate(shellGeometry));
       const esc = await closedBy('Escape closes the drawer');
       want(!esc.sidebar && esc.focus === 'header.menu', `Escape ${JSON.stringify(esc)}`);
+      const live = await page.evaluate(() => !document.getElementById('osc-main-content').inert);
+      want(live, 'the workspace column is live again once the drawer closes');
       await openDrawer('the drawer opens for the backdrop');
       await page.tap('[data-osc="sidebar.backdrop"]', { position: { x: 370, y: 700 } });
       const out = await closedBy('the backdrop closes the drawer');

@@ -239,12 +239,18 @@ export function createShell({ get = storageGet, set = storageSet } = {}) {
     sidebarLabel() {
       return { ':class'() { return { 'lg:sr-only': this.sidebarIcons }; } };
     },
-    /** The workspace column keeps its margin while the sidebar peeks over it. */
+    /**
+     * The workspace column keeps its margin while the sidebar peeks over it, and is inert while
+     * the phone drawer is open: the backdrop covers it, so neither Tab nor a screen reader may
+     * reach it (the navbar stays live; its menu button closes the drawer). The dialogs sit
+     * outside the column, so one opened from the navbar is not caught by it.
+     */
     shellContent() {
       return {
         ':class'() {
           return { 'lg:ml-16': this.sidebarCollapsed, 'lg:ml-64': !this.sidebarCollapsed };
         },
+        ':inert'() { return this.drawerOpen; },
       };
     },
 
