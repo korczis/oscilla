@@ -10,6 +10,7 @@
         "width": 1536,
         "height": 1024
       },
+      "reference": "sha256:47ccceb65ef93d9611bdf59d3a7063e1d54b6202ab61f07e579004f952985d1c",
       "runs": 3,
       "total": 15.91,
       "totalExclData": 7.01,
@@ -291,6 +292,7 @@
         "width": 1536,
         "height": 1024
       },
+      "reference": "sha256:47ccceb65ef93d9611bdf59d3a7063e1d54b6202ab61f07e579004f952985d1c",
       "runs": 3,
       "total": 15.91,
       "totalExclData": 7.03,
@@ -564,7 +566,7 @@
       }
     }
   },
-  "note": "Accepted visual values per environment, written only by node scripts/visual-gate.mjs --update-baseline. Percentages are pixels that differ from tests/visual/reference.png (pixelmatch threshold 0.12). See scripts/visual-gate.mjs.",
+  "note": "Accepted visual values per environment, written only by node scripts/visual-gate.mjs --update-baseline. Percentages are pixels that differ from tests/visual/reference.png (pixelmatch threshold 0.12), whose sha256 each environment stores as reference. A re-acceptance may raise a region's mismatch by at most its stored runToRunPct + 2 pp; acceptedRises records each rise accepted beyond that, and each regeneration of the reference, with --accept-rise and its reason. See scripts/visual-gate.mjs.",
   "tolerance": {
     "chromePp": 0.5,
     "totalPp": 0.5,
