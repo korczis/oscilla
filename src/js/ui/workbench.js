@@ -257,19 +257,14 @@ export function createWorkbench(svc) {
       else this.trigger();
     },
     onContinuousToggle() {
+      // C011: setContinuous tells the sequencer (main.js onContinuousChange): its loop follows
+      // the permission and its Loop control restates the cap.
       this.setContinuous(!this.continuousAllowed);
-      // C011: the sequencer follows the permission (a loop already past the cap stops now) and
-      // its Loop control restates the cap.
-      const seq = svc.labs && svc.labs.sequencer;
-      if (seq) {
-        seq.editor.followPermission();
-        seq.render();
-      }
       this.notify('info', this.continuousAllowed ? 'Continuous playback allowed'
         : 'Hard limit active', this.continuousAllowed
-        ? 'Hold, latch and a looped sequence play until stopped. Keep the level low.'
+        ? 'Hold, latch and a looped sequencer sequence play until stopped. Keep the level low.'
         : `Hold, trigger and the finite tone stop after ${this.safetyLimit} s; a looped `
-          + `sequence stops at ${MAX_PROGRAMMED_S} s.`);
+          + `sequencer sequence stops at ${MAX_PROGRAMMED_S} s.`);
     },
     // setSafetyLimit is the instrument's (core/instrument.js): it reaches the sounding voice.
 

@@ -1,6 +1,7 @@
 // C011: safety limits reach what sounds (findings dead-controls-4 and coupling-4).
 //   - engine.tightenLimit(limitS): a lower hard limit shortens the voices it governs to
-//     t0 + limit on the audio clock, on the output-stage gain, and never lengthens anything;
+//     t0 + limit (the release inside it, as for a fresh note) on the audio clock, on the
+//     output-stage gain, and never lengthens anything;
 //   - instrument.setSafetyLimit reaches the engine when the limit drops (continuous off);
 //   - the sequencer's loop stops at LOOP_CAP_S (30 s, ADR 0005) without the continuous
 //     permission, with a stated reason, and the model's loop flag is never rewritten.
@@ -27,7 +28,7 @@ const { createSequencerEditor } = editorModule;
 // The cap is ADR 0005's MAX_PROGRAMMED_S; the test states it rather than reading the constant
 // under test (a broken constant must not loosen its own check).
 const CAP_S = 30;
-const REASON = /Loop stopped at 30 s: allow continuous playback/;
+const REASON = /Loop capped at 30 s: allow continuous playback/;
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const FREEZE_DIR = path.resolve(process.env.OSCILLA_FREEZE_DIR || path.join(here, '../freeze'));
@@ -60,7 +61,7 @@ function engineSetup() {
     clearTimeout: (id) => { timers.delete(id); },
   };
   const eng = new AudioEngine({ env });
-  return { eng, advance: (t) => eng.ctx.advance(t) };
+  return { eng, timers, advance: (t) => eng.ctx.advance(t) };
 }
 
 const lastStop = (v) => Math.max(...v.sources.map((s) => s.stops[s.stops.length - 1]));
@@ -68,8 +69,8 @@ const events = (pt) => JSON.stringify(pt.param.events);
 
 // ---------------------------------------------------------------- engine.tightenLimit
 
-test('C011 tightenLimit: a 5 s trigger lowered to 0.5 s ends at t0 + 0.5 s + release, on the '
-  + 'output stage; a higher limit does not extend it', { skip }, () => {
+test('C011 tightenLimit: a 5 s trigger lowered to 0.5 s ends at t0 + 0.5 s, its release inside '
+  + 'the limit, on the output stage; a higher limit does not extend it', { skip }, () => {
   const { eng, advance } = engineSetup();
   eng.play(plan({ source: 'single', pattern: 'tone' }), opt());
   const v = eng.voice;
@@ -79,17 +80,20 @@ test('C011 tightenLimit: a 5 s trigger lowered to 0.5 s ends at t0 + 0.5 s + rel
   assert.equal(eng.tightenLimit(0.5), 1, 'one voice shortened');
   const rel = v.release;
   const end = v.t0 + 0.5;
-  assert.ok(Math.abs(lastStop(v) - (end + rel + 0.01)) < 1e-9, `sources stop at ${lastStop(v)}`);
-  assert.equal(v.endTime, lastStop(v));
+  const q = 128 / eng.ctx.sampleRate;
+  const stop = lastStop(v);
+  assert.ok(stop <= end + 0.01 + 1e-9 && stop > end + 0.01 - q, `sources stop at ${stop - v.t0}`);
+  assert.equal(v.endTime, stop);
   assert.equal(events(v.env), envBefore, 'the sounding envelope is not edited (V249)');
   assert.deepEqual(v.fade.param.events.map((e) => e[0]), ['set', 'linear']);
-  assert.ok(Math.abs(v.fade.param.events[0][2] - end) < 1e-9, 'release starts at t0 + limit');
-  assert.ok(Math.abs(v.fade.param.events[1][2] - (end + rel)) < 1e-9);
+  const at = v.fade.param.events[0][2];
+  assert.ok(at <= end - rel + 1e-9 && at > end - rel - q, 'release starts at t0 + limit - release');
+  assert.ok(Math.abs(v.fade.param.events[1][2] - (at + rel)) < 1e-9, 'and ends inside the limit');
   assert.equal(v.opts.limitS, 0.5, 'a restart inherits the lower cap');
-  assert.ok(v.deadline <= end + rel + 1e-9);
+  assert.ok(v.deadline <= end + 1e-9);
   assert.equal(eng.tightenLimit(2), 0, 'a higher limit changes nothing that sounds');
-  assert.ok(Math.abs(lastStop(v) - (end + rel + 0.01)) < 1e-9, 'never extended');
-  advance(end + rel + 0.02);
+  assert.equal(lastStop(v), stop, 'never extended');
+  advance(end + 0.02);
   assert.equal(eng.activeNodeCount, 0);
   assert.equal(eng.voices.size, 0);
 });
@@ -104,7 +108,8 @@ test('C011 tightenLimit: a hold, a twice-lowered limit and a stop during the pen
     assert.equal(eng.tightenLimit(1), 1, 'the pending 2 s release is replaced by the 1 s one');
     assert.deepEqual(v.fade.param.events.map((e) => e[0]), ['set', 'linear', 'cancel', 'set',
       'linear']);
-    assert.ok(Math.abs(lastStop(v) - (v.t0 + 1 + v.release + 0.01)) < 1e-9);
+    const q = 128 / eng.ctx.sampleRate;
+    assert.ok(lastStop(v) <= v.t0 + 1.01 + 1e-9 && lastStop(v) > v.t0 + 1.01 - q);
     // A stop before the limit's release begins takes `fade` (still exactly 1) as on any voice,
     // so Escape keeps its fast `cut` stage.
     advance(v.t0 + 0.3);
@@ -150,7 +155,8 @@ test('C011 tightenLimit: a new end already due fades now; programmed patterns an
   v = eng.voice;
   advance(v.t0 + 0.05);
   assert.equal(eng.tightenLimit(1), 1);
-  assert.ok(Math.abs(lastStop(v) - (v.t0 + 1 + v.release + 0.01)) < 1e-9);
+  const q = 128 / eng.ctx.sampleRate;
+  assert.ok(lastStop(v) <= v.t0 + 1.01 + 1e-9 && lastStop(v) > v.t0 + 1.01 - q);
   advance(v.t0 + 2);
   assert.equal(eng.activeNodeCount, 0);
 });
@@ -297,4 +303,238 @@ test('C011 loop cap: withdrawn before the cap, the loop goes on up to it', () =>
   const maxEnd = run(t0 + CAP_S + 5);
   assert.ok(maxEnd <= t0 + CAP_S + 0.1);
   assert.equal(ed.playing, false);
+});
+
+// ---------------------------------------------------------------- review of #303 (R-1 to R-9)
+
+const RQ = 128; // frames per render quantum (constants.js RENDER_QUANTUM), stated, not imported
+const onQuantum = (t, sr) => Math.abs(t * sr / RQ - Math.round(t * sr / RQ)) < 1e-6;
+
+/** Where a fresh voice under limit L ends, relative to its start (voice.js envelopes). */
+function freshEnd(releaseS, limitS) {
+  const { eng, advance } = engineSetup();
+  eng.play(plan({ source: 'single', pattern: 'tone' }), opt({ releaseS, limitS }));
+  const v = eng.voice;
+  const end = lastStop(v) - v.t0;
+  advance(v.t0 + 10);
+  return end;
+}
+
+test('C011 R-1: a lowered limit ends the sounding note where a fresh note at that limit ends, '
+  + 'its release inside the limit, also when the release is longer than the drop', { skip },
+() => {
+  for (const [rel, lim] of [[0.03, 0.5], [0.3, 0.5], [3, 0.5], [3, 2], [3, 3]]) {
+    const fresh = freshEnd(rel, lim);
+    const { eng, advance } = engineSetup();
+    eng.play(plan({ source: 'single', pattern: 'tone' }), opt({ releaseS: rel }));
+    const v = eng.voice;
+    const sr = eng.ctx.sampleRate;
+    const q = RQ / sr;
+    const envBefore = events(v.env);
+    advance(v.t0 + 0.1);
+    const soon = eng.ctx.currentTime;
+    const label = `release ${rel} s, 5 -> ${lim} s`;
+    assert.equal(eng.tightenLimit(lim), 1, `${label}: shortened`);
+    const live = lastStop(v) - v.t0;
+    assert.ok(live <= fresh + 1e-9 && live >= fresh - q - 1e-9,
+      `${label}: ends ${live.toFixed(4)} s after t0, a fresh voice ${fresh.toFixed(4)} s`);
+    assert.ok(v.endTime <= v.t0 + lim + 0.01 + 1e-9, `${label}: endTime inside t0 + limit`);
+    assert.ok(v.deadline <= v.t0 + lim + 1e-9, `${label}: a restart inherits t0 + limit`);
+    const [set, lin] = v.fade.param.events;
+    assert.equal(set[0], 'set');
+    assert.equal(lin[0], 'linear');
+    assert.ok(set[2] >= soon, `${label}: the fade is not scheduled in the past`);
+    assert.ok(lin[2] <= v.t0 + lim + 1e-9, `${label}: the fade ends inside the limit`);
+    assert.ok(onQuantum(set[2], sr), `${label}: the fade starts on a render quantum (R-9)`);
+    assert.equal(events(v.env), envBefore, `${label}: the envelope is not edited (V249)`);
+    advance(v.t0 + lim + 1);
+    assert.equal(eng.activeNodeCount, 0, `${label}: nothing left`);
+  }
+});
+
+test('C011 R-5: a limit lowered below the time already sounded fades from _soon, never in the '
+  + 'past (no hard cut)', { skip }, () => {
+  for (const rel of [0.03, 3]) {
+    const { eng, advance } = engineSetup();
+    eng.play(plan({ source: 'single', pattern: 'tone' }), opt({ mode: 'hold', releaseS: rel }));
+    const v = eng.voice;
+    advance(v.t0 + 1.2);
+    const now = eng.ctx.currentTime;
+    const soon = eng._soon(eng.ctx);
+    assert.equal(eng.tightenLimit(0.5), 1, `release ${rel} s: released now`);
+    const [set, lin] = v.fade.param.events;
+    assert.equal(set[0], 'set');
+    assert.ok(set[2] >= soon - 1e-9, `release ${rel} s: fade starts at ${set[2] - now} s from now`);
+    assert.ok(lin[2] > set[2], 'a ramp, not a step');
+    assert.ok(lastStop(v) >= lin[2], 'the sources stop after the fade');
+    assert.ok(lastStop(v) <= soon + FAST_RELEASE_S + 0.011, 'and soon');
+    advance(v.t0 + 2);
+    assert.equal(eng.activeNodeCount, 0);
+  }
+});
+
+test('C011 R-6 (M11): the shortened voice re-arms its RELEASING notice and cleanup fallback for '
+  + 'its new end', { skip }, () => {
+  const { eng, timers, advance } = engineSetup();
+  eng.play(plan({ source: 'single', pattern: 'tone' }), opt());
+  const v = eng.voice;
+  advance(v.t0 + 0.1);
+  assert.equal(eng.tightenLimit(0.5), 1);
+  const ms = [...timers.values()].map((x) => x.ms);
+  const left = (v.endTime - eng.ctx.currentTime) * 1000;
+  assert.ok(ms.length >= 2, `notice and fallback armed (${ms.length} timer(s))`);
+  assert.ok(Math.max(...ms) <= left + 300, `every timer keyed on the new end (${ms})`);
+  advance(v.t0 + 1);
+});
+
+test('C011 R-7: a voice replaced by a live restart is limited from the note\'s start, not the '
+  + 'restart', { skip }, () => {
+  const { eng, advance } = engineSetup();
+  eng.play(plan({ source: 'single', pattern: 'tone' }), opt({ mode: 'hold' }));
+  const noteT0 = eng.voice.t0;
+  advance(noteT0 + 3);
+  assert.equal(eng._restart(eng.voice, plan({ source: 'single', pattern: 'tone', waveform: 'square' })),
+    'restarted');
+  const v = eng.voice;
+  assert.ok(v.t0 > noteT0 + 2.9, 'a new voice');
+  advance(v.t0 + 0.2);
+  const soon = eng._soon(eng.ctx);
+  assert.equal(eng.tightenLimit(0.5), 1);
+  assert.ok(lastStop(v) <= soon + FAST_RELEASE_S + 0.011,
+    `ends now: ${(lastStop(v) - eng.ctx.currentTime).toFixed(3)} s from now`);
+  advance(v.t0 + 2);
+  assert.equal(eng.activeNodeCount, 0);
+});
+
+test('C011 R-7: every change of the continuous permission reaches the sequencer, Reset included',
+  () => {
+    const seen = [];
+    const timers = {
+      setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {},
+    };
+    const app = createInstrument({ env: { document: {} }, timers,
+      onContinuousChange: (allowed) => seen.push(allowed) });
+    app.notify = () => {};
+    app.setContinuous(true);
+    app.setContinuous(false);
+    app.continuousAllowed = true;
+    app.resetDefaults();
+    assert.equal(app.continuousAllowed, false);
+    assert.deepEqual(seen, [true, false, false]);
+  });
+
+function longLoop(ed, blockMs) {
+  const json = {
+    ...serializeSequence(ed.model),
+    loop: true,
+    blocks: blockMs.map((ms, i) => ({ id: `b${i}`, type: 'tone', durationMs: ms,
+      params: { freq: 440 + 110 * i } })),
+  };
+  assert.deepEqual(ed.load(json), []);
+}
+
+test('C011 R-2: a looped first pass longer than 30 s is cut at the cap without the permission, '
+  + 'and the notice is true', () => {
+  const { ctx, ed, log, run } = seqSetup(false);
+  longLoop(ed, [30000, 30000]);
+  assert.equal(ed.totalDurationS, 60);
+  assert.equal(ed.play(), true);
+  const t0 = ed.currentPassTiming().t0;
+  assert.match(ed.loopNotice, REASON);
+  const sched = ed.loopSchedule();
+  assert.ok(sched.endsAt <= t0 + CAP_S + 1e-6, `endsAt ${sched.endsAt - t0} s after t0`);
+  const maxEnd = run(t0 + 65);
+  assert.ok(maxEnd <= t0 + CAP_S + 0.011, `last source stops ${maxEnd - t0} s after t0`);
+  assert.equal(ed.playing, false);
+  assert.match(ed.loopNotice, REASON);
+  assert.equal(ed.model.loop, true);
+  assert.equal(ctx.liveSources, 0);
+  assert.equal(log.at(-1)[0], 'ended');
+});
+
+test('C011 R-2: the permission withdrawn during a long first pass cuts it at the cap, not now',
+  () => {
+    const { ed, perm, run } = seqSetup(true);
+    longLoop(ed, [30000, 30000]);
+    ed.play();
+    const t0 = ed.currentPassTiming().t0;
+    assert.equal(ed.loopNotice, '');
+    run(t0 + 10);
+    perm.allowed = false;
+    assert.equal(ed.followPermission(), true);
+    run(t0 + 20);
+    assert.equal(ed.playing, true, 'still sounding before the cap');
+    const maxEnd = run(t0 + 65);
+    assert.ok(maxEnd <= t0 + CAP_S + 0.011, `ends ${maxEnd - t0} s after t0`);
+    assert.equal(ed.playing, false);
+    assert.match(ed.loopNotice, REASON);
+  });
+
+test('C011 R-6 (M17): a queued pass that would end past the cap is dropped when the permission '
+  + 'is withdrawn', () => {
+  const { ctx, ed, perm, run } = seqSetup(true);
+  ed.setLoop(true);
+  ed.play();
+  const t0 = ed.currentPassTiming().t0;
+  const passS = ed.totalDurationS;
+  const fits = Math.floor(CAP_S / passS);
+  // Just before the last pass that fits ends, the next one (past the cap) is already queued.
+  run(t0 + fits * passS - 0.3);
+  const queuedPast = ctx.oscillators.filter((o) => o.startAt >= t0 + fits * passS - 1e-6);
+  assert.ok(queuedPast.length >= 1, 'the pass past the cap is queued');
+  perm.allowed = false;
+  assert.equal(ed.followPermission(), true);
+  for (const o of queuedPast) {
+    assert.ok(o.stopAt <= t0 + fits * passS + 0.05, `a queued source stops at ${o.stopAt - t0}`);
+  }
+  run(t0 + CAP_S + 5);
+  assert.equal(ed.playing, false);
+  assert.match(ed.loopNotice, REASON);
+  assert.equal(ctx.liveSources, 0);
+});
+
+test('C011 R-6 (M20): after play() again the cap counts from the new start', () => {
+  const { ctx, ed, run } = seqSetup(false);
+  ed.setLoop(true);
+  ed.play();
+  const t0 = ed.currentPassTiming().t0;
+  const passS = ed.totalDurationS;
+  const fits = Math.floor(CAP_S / passS);
+  run(t0 + CAP_S - passS / 2);
+  const t1 = ctx.currentTime; // the second play's first pass starts just after this
+  assert.equal(ed.play(), true);
+  run(t1 + (fits - 0.5) * passS);
+  assert.equal(ed.playing, true, 'the second play is not ended by the first start\'s cap');
+  const maxEnd = run(t1 + CAP_S + 5);
+  assert.ok(maxEnd > t1 + (fits - 0.5) * passS && maxEnd <= t1 + CAP_S + 0.2,
+    `ends ${maxEnd - t1} s after the second play`);
+  assert.equal(ed.playing, false);
+});
+
+test('C011 R-2: Stop still ends a pass that is cut ahead at the cap, now and click-free', () => {
+  const { ctx, ed, run } = seqSetup(false);
+  longLoop(ed, [30000, 30000]);
+  ed.play();
+  const t0 = ed.currentPassTiming().t0;
+  run(t0 + 5);
+  assert.equal(ed.playing, true);
+  const now = ctx.currentTime;
+  assert.equal(ed.stop(), true);
+  const stops = ctx.oscillators.filter((o) => o.startAt !== null).map((o) => o.stopAt);
+  assert.ok(Math.max(...stops) < now + 0.1, `sources stop ${Math.max(...stops) - now} s from now`);
+  // The cap's fade is withdrawn while the output gain is still 1, and the stop fades from 1.
+  const out = ctx.created.filter((n) => n.kind === 'gain' && n.gain.calls
+    .some((c) => c[0] === 'cancelScheduledValues' && c[1] > now && c[1] < now + 0.1));
+  assert.equal(out.length, 1, 'one output gain gave up the cap fade');
+  const all = out[0].gain.calls;
+  const cancel = all.findIndex((c) => c[0] === 'cancelScheduledValues' && c[1] > now);
+  assert.ok(all.slice(0, cancel).some((c) => c[0] === 'linearRampToValueAtTime'
+    && c[2] > t0 + 29 && c[2] <= t0 + CAP_S), 'the cap fade was scheduled first');
+  const calls = all.slice(cancel + 1);
+  assert.deepEqual(calls.map((c) => c[0]), ['setValueAtTime', 'linearRampToValueAtTime']);
+  assert.equal(calls[0][1], 1);
+  run(now + 0.5);
+  assert.equal(ed.playing, false);
+  assert.equal(ctx.liveSources, 0);
+  assert.deepEqual(ed.stats(), { voices: 0, activeSourceCount: 0, activeNodeCount: 0 });
 });

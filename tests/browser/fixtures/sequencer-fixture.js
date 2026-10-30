@@ -24,13 +24,15 @@ async function until(cond, ms) {
 
 // ---------------------------------------------------------------- source instrumentation
 // Wrap OscillatorNode start/stop and count `ended`: a source is live from start() until ended.
-const probe = { started: 0, ended: 0, stopCalls: 0, live: new Set(), maxLive: 0 };
+const probe = { started: 0, ended: 0, stopCalls: 0, live: new Set(), maxLive: 0, recent: [] };
+const stopTimes = new WeakMap(); // the last time each source was told to stop (C011 seq-loop-cap)
 const origStart = OscillatorNode.prototype.start;
 const origStop = OscillatorNode.prototype.stop;
 OscillatorNode.prototype.start = function start(...args) {
   probe.started += 1;
   probe.live.add(this);
   probe.maxLive = Math.max(probe.maxLive, probe.live.size);
+  probe.recent.push(this);
   this.addEventListener('ended', () => {
     probe.ended += 1;
     probe.live.delete(this);
@@ -39,6 +41,7 @@ OscillatorNode.prototype.start = function start(...args) {
 };
 OscillatorNode.prototype.stop = function stop(...args) {
   probe.stopCalls += 1;
+  stopTimes.set(this, args.length ? args[0] : this.context.currentTime);
   return origStop.apply(this, args);
 };
 
@@ -57,6 +60,7 @@ function resetProbe() {
   probe.ended = 0;
   probe.stopCalls = 0;
   probe.maxLive = probe.live.size;
+  probe.recent = [];
 }
 
 function timelineSummary(tl) {
@@ -376,13 +380,16 @@ async function realtimeStopCapture(runs, { forceFallback = false } = {}) {
 
 // ---------------------------------------------------------------- C011 seq-loop-cap
 // The real sequencer panel on a minimal shell (its transport controls and message line), with
-// the adapter's read-only continuousAllowed(). Without the permission a loop may play passes
-// up to LOOP_CAP_S (30 s) since play(); the editor's schedule says where it stops, so the check
-// reads it instead of waiting 30 s (the unit test runs the whole loop on a fake clock).
+// the adapter's read-only continuousAllowed(). Without the permission a loop may sound up to
+// LOOP_CAP_S (30 s) since play(). A first pass longer than that is cut at play(), so the stop
+// times the scheduler gave its oscillators (nodeStopMax, from the wrapped stop()) show it at
+// once; for shorter passes the editor's forecast (loopSchedule) says where the loop ends, which
+// is what the check reads instead of waiting 30 s (the unit test runs the whole loop on a fake
+// clock).
 
 let capLab = null;
 
-function loopCapStart(passMs) {
+function loopCapStart(blocksMs) {
   const { ctx, master } = rt;
   resetProbe();
   const root = document.createElement('div');
@@ -401,7 +408,7 @@ function loopCapStart(passMs) {
   const ed = lab.editor;
   ed.load(createSequence({
     loop: true,
-    blocks: [{ type: 'tone', durationMs: passMs, params: { freq: 440 } }],
+    blocks: blocksMs.map((ms, i) => ({ type: 'tone', durationMs: ms, params: { freq: 440 + 110 * i } })),
   }, { sampleRate: ctx.sampleRate }));
   const loopBtn = root.querySelector('#osc-seq-record');
   loopBtn.click(); // the Loop control: off, then on again (the flag is the model's)
@@ -409,8 +416,12 @@ function loopCapStart(passMs) {
   loopBtn.click();
   const played = ed.play();
   lab.render();
+  const stops = probe.recent.map((s) => (stopTimes.has(s) ? stopTimes.get(s) : Infinity));
   return {
     played,
+    nodeStopMax: stops.length ? Math.max(...stops) : null,
+    notice: ed.loopNotice,
+    message: root.querySelector('[data-osc="seq.message"]').textContent,
     offAfterClick,
     loop: ed.model.loop,
     passS: ed.totalDurationS,

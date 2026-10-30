@@ -728,6 +728,13 @@ function createOscillaComponent(ui) {
   const instrument = createInstrument({
     engine, bridge, keyGuard: (e) => keyGuard(e), openModal: (id) => openModal(id),
     closeModal: (id) => closeModal(id),
+    // C011: the sequencer follows the continuous permission (a loop past the cap ends at it).
+    onContinuousChange: () => {
+      const seq = labs.sequencer;
+      if (!seq) return;
+      seq.editor.followPermission();
+      seq.render();
+    },
   });
   const shellInit = ui.init;
   const workbench = createWorkbench({

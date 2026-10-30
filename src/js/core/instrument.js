@@ -96,6 +96,16 @@ export function createInstrument(deps = {}) {
   const setInterval = (fn, ms) => timers.setInterval(fn, ms);
   const clearInterval = (id) => timers.clearInterval(id);
   const keyGuard = deps.keyGuard || (() => false);
+  // C011: told every time the continuous permission changes, so what else plays (the sequencer's
+  // loop and its Loop control) follows it; Reset included.
+  const continuousChanged = (allowed) => {
+    if (typeof deps.onContinuousChange !== 'function') return;
+    try {
+      deps.onContinuousChange(allowed);
+    } catch (e) {
+      /* theirs */
+    }
+  };
   const AudioEngine = { isSupported: () => engine.isSupported() };
   const env = (cmp) => ({ sampleRate: cmp.sampleRate, continuousAllowed: cmp.continuousAllowed });
 
@@ -502,6 +512,7 @@ export function createInstrument(deps = {}) {
     },
     setContinuous(on) {
       this.continuousAllowed = !!on;
+      continuousChanged(this.continuousAllowed);
       if (on) return;
       // Withdrawn: every voice the permission lengthened (latched, unlimited hold, continuous
       // sweep, finite tone beyond the limit) fades out now — before the sweep repeat is reset,
@@ -917,6 +928,7 @@ export function createInstrument(deps = {}) {
       this.stopNow();
       Object.assign(this, defaultInstrumentState());
       this.continuousAllowed = false;
+      continuousChanged(false); // C011: the sequencer's loop follows (a loop past its cap stops)
       this.safetyLimit = 2;
       this.noteMode = false;
       this.loadedLabel = '';

@@ -25,11 +25,14 @@
 // ahead); it never times audio. Edits made during playback apply from the next pass.
 //
 // C011, the loop cap (ADR 0005: a sequence keeps its programmed end, at most MAX_PROGRAMMED_S):
-// without the continuous permission no pass is scheduled that would end more than LOOP_CAP_S
-// after play() started the first one. The loop then ends with its last pass that fits (its own
-// click-free end) and `loopNotice` states why. Withdrawing the permission (followPermission)
-// stops a loop that already runs past the cap. The model's loop flag is never rewritten, so an
-// imported loop:true sequence is capped the same way and round-trips unchanged.
+// without the continuous permission a looped sequence sounds no later than LOOP_CAP_S after
+// play() started its first pass. No further pass is scheduled that would end past the cap, so
+// the loop ends with its last pass that fits (its own click-free end); a first pass that is
+// itself longer than the cap is cut at it with the voice's click-free stop fade, which ends at
+// the cap. `loopNotice` states why. Withdrawing the permission (followPermission) drops a queued
+// pass that would end past the cap, cuts a sounding one at the cap, and stops a loop that
+// already runs past it now. The model's loop flag is never rewritten, so an imported loop:true
+// sequence is capped the same way and round-trips unchanged.
 
 import {
   BLOCK_TYPES,
@@ -60,14 +63,14 @@ import {
   createSequence,
   describeBlock,
 } from './model.js';
-import { compileSequence, observeClock, START_OFFSET_S } from './compiler.js';
+import { compileSequence, observeClock, START_OFFSET_S, STOP_RAMP_S } from './compiler.js';
 import { reorderTarget } from './timeline.js';
-import { MAX_PROGRAMMED_S } from '../core/constants.js';
+import { MAX_PROGRAMMED_S, RENDER_QUANTUM } from '../core/constants.js';
 
 export const LOOKAHEAD_S = 1.0; // compile the next loop pass this far ahead of its start
 /** C011: how long a loop may play without the continuous permission (ADR 0005). */
 export const LOOP_CAP_S = MAX_PROGRAMMED_S;
-export const LOOP_CAP_REASON = `Loop stopped at ${LOOP_CAP_S} s: allow continuous playback to `
+export const LOOP_CAP_REASON = `Loop capped at ${LOOP_CAP_S} s: allow continuous playback to `
   + 'loop until stopped.';
 const CAP_EPS_S = 1e-6;
 const MAX_QUEUED_PASSES = 16; // guard for very short looped sequences
@@ -118,6 +121,19 @@ export function createSequencerEditor(options = {}) {
   /** Whether a pass ending at `end` may still be scheduled (the cap, C011). */
   const passFits = (end) =>
     continuousAllowed() || priv.playT0 === null || end - priv.playT0 <= LOOP_CAP_S + CAP_EPS_S;
+  /**
+   * Where a pass that would sound past the cap starts its stop fade: on a render-quantum
+   * boundary (rounded down) STOP_RAMP_S before the cap, so the fade ends at or before it.
+   */
+  const capFadeAt = (ctx) => {
+    const q = RENDER_QUANTUM / ctx.sampleRate;
+    return Math.floor((priv.playT0 + LOOP_CAP_S - STOP_RAMP_S) / q + 1e-9) * q;
+  };
+  /** Cut a scheduled pass at the cap (its click-free stop fade); keeps its recorded end. */
+  const cutAtCap = (ctx, p) => {
+    p.voice.stop(capFadeAt(ctx), { provisional: true }); // Stop and Escape still end it sooner
+    p.end = Math.min(p.end, p.voice.endTime);
+  };
   const getDest = () => resolve('destination', 'getDestination');
   const clearLoopTimer = () => {
     if (priv.loopTimer !== null && timers) timers.clearTimeout(priv.loopTimer);
@@ -418,25 +434,31 @@ export function createSequencerEditor(options = {}) {
       }
     },
     /**
-     * C011: follow the continuous permission after it changed. Withdrawn: a pass already
-     * scheduled to end past the cap is dropped before it starts; when the sounding pass runs
-     * past it, the loop stops now (click-free) with the reason. Returns true when it stopped
-     * or dropped something.
+     * C011: follow the continuous permission after it changed. Withdrawn: a pass scheduled to
+     * end past the cap is dropped when it has not started, and cut at the cap when it sounds;
+     * when the cap's fade time has already passed, the loop stops now (click-free). The reason
+     * is stated. Returns true when it stopped, cut or dropped something.
      */
     followPermission() {
       const self = priv.self || this;
       const ctx = getCtx();
-      if (!ctx || !self.playing || continuousAllowed() || priv.playT0 === null) return false;
+      if (!ctx || !self.playing || !self.model.loop || continuousAllowed() || priv.playT0 === null) {
+        return false;
+      }
       const capEnd = priv.playT0 + LOOP_CAP_S + CAP_EPS_S;
       const over = priv.passes.filter((p) => p.end > capEnd && !p.voice.stopping);
       if (!over.length) return false;
-      if (over.some((p) => p.t0 <= ctx.currentTime + START_OFFSET_S)) {
+      const soon = ctx.currentTime + START_OFFSET_S;
+      self.loopNotice = LOOP_CAP_REASON;
+      if (capFadeAt(ctx) <= soon) {
         self.stop();
-        self.loopNotice = LOOP_CAP_REASON;
         return true;
       }
-      for (const p of over) p.voice.stop();
-      const kept = priv.passes.filter((p) => !over.includes(p));
+      for (const p of over) {
+        if (p.t0 <= soon) cutAtCap(ctx, p);
+        else p.voice.stop();
+      }
+      const kept = priv.passes.filter((p) => !p.voice.stopping || p.t0 <= soon);
       priv.lastEnd = kept.length ? Math.max(...kept.map((p) => p.end)) : null;
       self._pump();
       return true;
@@ -495,6 +517,13 @@ export function createSequencerEditor(options = {}) {
         return false;
       }
       priv.playT0 = voice.t0;
+      // C011: a looped first pass longer than the cap is cut at it without the permission.
+      const first = priv.passes[priv.passes.length - 1];
+      if (this.model.loop && !passFits(first.end)) {
+        cutAtCap(ctx, first);
+        priv.lastEnd = first.end;
+        this.loopNotice = LOOP_CAP_REASON;
+      }
       if (typeof engine.onStart === 'function') {
         try {
           engine.onStart({ t0: voice.t0, duration: voice.duration });
