@@ -318,6 +318,7 @@ export function createMeasureUi(svc) {
     liveToken: 0,
     pending: null,         // the running measure()/preflight() promise
     lastRecipe: null,
+    checking: null,        // the recipe the setup check in flight was given (R6)
     onStateHook: null,     // test seam only (onceInState)
     // The input named last { device, constraints, sampleRate } and whether TEST CONTEXT named
     // it. Written by nameInput(); whatever decides a binding, an indicator or a displayed
@@ -462,8 +463,10 @@ export function createMeasureUi(svc) {
     if (a.message) announce(a.message);
     switch (e.type) {
       case 'preflight':
+        // `recipe`: the one this report checked, so the flow can tell a refusal of a sweep
+        // the user has corrected since from one of the setup as it is (review of #331, R6).
         ctx.preflight = { ready: e.ready, warnings: e.warnings, blockers: e.blockers,
-          facts: e.facts, sampleRate: e.sampleRate };
+          facts: e.facts, sampleRate: e.sampleRate, recipe: ctx.checking || null };
         if (e.facts && e.facts.input && e.facts.input.ok) {
           nameInput({ device: e.facts.input.device, constraints: e.facts.input.constraints,
             sampleRate: e.sampleRate }, kind === 'loopback');
@@ -1414,7 +1417,8 @@ export function createMeasureUi(svc) {
     cmp.meas.savedId = null;
     rebuildAll();
     try {
-      ctx.pending = me.preflight(recipeNow(), { calibration: calibrationInput() });
+      ctx.checking = recipeNow();
+      ctx.pending = me.preflight(ctx.checking, { calibration: calibrationInput() });
       await ctx.pending;
     } catch (e) {
       if (!(e && e.code === 'ABORTED')) {
@@ -1454,6 +1458,7 @@ export function createMeasureUi(svc) {
     const repeatOfAtStart = ctx.repeatOf;
     const recipe = given || recipeNow();
     ctx.lastRecipe = recipe;
+    ctx.checking = given ? null : recipe; // a Studio run's recipe is not the setup's
     ctx.runDefinition = !given && setupIsDefinition(recipe) ? ctx.definition : null;
     const definitionAtStart = ctx.runDefinition;
     if (!given && ctx.definition && !ctx.runDefinition) {

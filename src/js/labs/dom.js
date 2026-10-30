@@ -44,14 +44,18 @@ export function setSlider(input, value, valueText) {
 }
 
 // A field is being edited from the user's first keystroke ('input') until the edit is
-// committed ('change'). Both are heard in the capture phase, so a field's own change handler
-// already sees its edit as committed and may write back the value that applies (C021: the
-// typed "5000" of a field whose limit is 2 s read "5000" while 2 s played, because the field
-// still had the focus when the lab wrote "2 s" into it).
+// committed ('change') or the field loses the focus ('focusout'). All three are heard in the
+// capture phase, so a field's own change handler already sees its edit as committed and may
+// write back the value that applies (C021: the typed "5000" of a field whose limit is 2 s
+// read "5000" while 2 s played, because the field still had the focus when the lab wrote
+// "2 s" into it). A field typed back to the text it had gets 'input' but no 'change', so
+// leaving it ends the edit too; otherwise it would stop following its lab for good.
 const editing = new WeakSet();
 if (typeof document !== 'undefined' && document.addEventListener) {
+  const done = (e) => { if (e.target) editing.delete(e.target); };
   document.addEventListener('input', (e) => { if (e.target) editing.add(e.target); }, true);
-  document.addEventListener('change', (e) => { if (e.target) editing.delete(e.target); }, true);
+  document.addEventListener('change', done, true);
+  document.addEventListener('focusout', done, true);
 }
 
 /**

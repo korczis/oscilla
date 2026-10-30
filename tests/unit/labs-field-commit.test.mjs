@@ -4,14 +4,15 @@
 // mean "focused", and a field still has the focus when Enter commits it: the Envelope's Attack
 // read "5000" while 2 s played and "abc" while the previous value stayed, the Filter Lab's
 // cutoff a typed value above its limit. Editing now runs from the first keystroke ('input') to
-// the commit ('change'), both heard in the capture phase.
+// the commit ('change') or until the field loses the focus ('focusout'): a field typed back to
+// the text it had gets no 'change' and must not stop following its lab (review of #331, R4).
 //   node --test tests/unit/labs-field-commit.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
 /** A document that dispatches capture listeners, and an input element on it. */
 function fakeDom() {
-  const listeners = { input: [], change: [] };
+  const listeners = { input: [], change: [], focusout: [] };
   const doc = {
     activeElement: null,
     addEventListener(type, fn, capture) {
@@ -61,4 +62,21 @@ test('a field nobody edits follows the lab', () => {
   doc.activeElement = null;
   setField(el, '10 ms');
   assert.equal(el.value, '10 ms');
+});
+
+test('a field typed back to its text follows the lab again once it loses the focus', () => {
+  const { el, fire, doc } = dom;
+  el.ownChange = [];
+  doc.activeElement = el;
+  el.value = '10 ms';
+  setField(el, '10 ms');
+  el.value = '10 m';
+  fire('input');
+  el.value = '10 ms';
+  fire('input');
+  // no 'change': the browser fires none for a value equal to the one the field had at focus
+  doc.activeElement = null;
+  fire('focusout');
+  setField(el, '25 ms');
+  assert.equal(el.value, '25 ms', 'a slider, a preset or a History restore is shown again');
 });

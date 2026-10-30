@@ -302,12 +302,41 @@ row({ id: 'source.sweep.field.pointer', ws: 'playground', control: '[data-osc="s
 both({ id: 'device.continuous', ws: 'playground', control: '#osc-continuous-toggle',
   pointer: D.click('#osc-continuous-toggle'), keyboard: D.keys('#osc-continuous-toggle', 'Space'),
   expect: (s, b) => s.app.continuous !== b.app.continuous && s.aria.cont !== b.aria.cont });
+// The chosen limit cuts a held note. PLAY is held as in source.hold.pointer (the pointer stays
+// down until the context closes): a click releases the voice on its pointerup, and on WebKit
+// the first start frees it before the first poll. The row judges the value chosen, not the
+// limit as it is (an inert select keeps the 2 s default): one voice, limited, scheduled for
+// the 0.5 s limit, whose sources stop within the limit plus the release, and which ends while
+// the pointer is still down. The engine's own 'play' and 'ended' events are recorded, so a
+// poll that comes late still reads the voice it missed.
+const LIMIT_PROBE = () => {
+  const e = window.OSCILLA.engine;
+  const log = { plays: [], ended: [] };
+  window.__oscCensusVoices = log;
+  e.on((type, d) => {
+    if (type === 'play' && e.voice) {
+      log.plays.push({ id: d.id, start: d.start, end: d.end, limited: !!d.limited,
+        len: e.voice.deadline - e.voice.t0 });
+    }
+    if (type === 'ended') log.ended.push(d.id);
+  });
+};
 row({ id: 'device.safetyLimit.pointer', ws: 'playground', control: '#osc-safety-limit',
   how: 'pointer',
-  act: async (page) => { const v = await page.$$eval('#osc-safety-limit option',
-    (o) => o.map((x) => x.value)); await page.selectOption('#osc-safety-limit', v[0]);
-  await page.click('#osc-hold-play'); },
-  expect: (s) => s.engine.voice && s.engine.voice.len <= Number(s.app.safetyLimit) + 0.05 });
+  act: async (page) => {
+    await page.selectOption('#osc-safety-limit', '0.5');
+    await page.evaluate(LIMIT_PROBE);
+    const b = await page.locator('#osc-hold-play').boundingBox();
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await page.mouse.down();
+  },
+  read: () => window.__oscCensusVoices || null,
+  expect: (s, b, x) => {
+    const v = x && x.plays.length === 1 ? x.plays[0] : null;
+    return s.app.safetyLimit === 0.5 && !!v && v.limited && v.len <= 0.55
+      && v.end - v.start <= 0.5 + s.app.release / 1000 + 0.02
+      && x.ended.includes(v.id) && s.engine.voice === null;
+  } });
 
 // ---- Analysis (the tabs, the scope and the spectrum options)
 row({ id: 'analysis.pause.pointer', ws: 'analyzer', control: '#osc-viz-pause', how: 'pointer',
@@ -847,10 +876,25 @@ for (const [k, cmp] of [['zoomIn', (a, b) => a > b], ['zoomOut', (a, b) => a < b
     how: 'pointer', act: D.click(`[data-osc="studio.graph.${k}"]`),
     expect: (s, b) => cmp(s.studio.zoom, b.studio.zoom) });
 }
+// The setup zooms in twice and ends when that zoom is the Studio model's: the editor commits
+// its view 250 ms after the last change (graph-editor.js VIEW_COMMIT_MS), and a "before" read
+// earlier is the framed view that Frame All restores, so an inert Frame All would still see
+// the pending zoom land. The editor's own zoom is the one it applies to its world element.
+const zoomCommitted = (what) => async (page) => {
+  const live = (from) => {
+    const w = document.querySelector('[data-osc="studio.graph.viewport"] .osc-sg-world');
+    const z = Number(w.style.getPropertyValue('--osc-sg-z'));
+    return from === null ? z : z > from && window.OSCILLA.studio.model.view.graph.zoom === z;
+  };
+  const z0 = await page.evaluate(live, null);
+  await D.click('[data-osc="studio.graph.zoomIn"]')(page);
+  await D.click('[data-osc="studio.graph.zoomIn"]')(page);
+  await until(() => page.evaluate(live, z0),
+    { ms: ROW_MS, what: `${what}: the setup's zoom in is the model's` });
+};
 for (const k of ['studio.frameAll', 'studio.graph.frameAll', 'studio.graph.frameSelection']) {
   row({ id: `${k}.pointer`, ws: 'studio', control: `[data-osc="${k}"]`, how: 'pointer',
-    setup: seq(S.studioNode('oscillator'), D.click('[data-osc="studio.graph.zoomIn"]'),
-      D.click('[data-osc="studio.graph.zoomIn"]')),
+    setup: seq(S.studioNode('oscillator'), zoomCommitted(`${k}.pointer`)),
     act: D.click(`[data-osc="${k}"]`),
     expect: (s, b, x) => x.v !== b.x.v,
     read: () => ({ v: JSON.stringify(window.OSCILLA.studio.model.view.graph) }) });
