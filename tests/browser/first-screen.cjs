@@ -66,6 +66,10 @@
 //   layout others   the rest of the product is where it was: MEASURE shows its seven panels
 //                   with the sentence visually hidden, the Analyzer shows the Spectrogram panel,
 //                   Synthesis the Envelope and Filter Lab the filter
+//   layout widths   at 1280x800 and 1440x900, and at 1366x1024 under touch (a coarse pointer
+//                   where the engine emulates one), no control of the first row's panels ends
+//                   below its panel or under the measurement row, and HOLD TO PLAY, TRIGGER,
+//                   Gain and the analysis scale and range controls take a press at their centre
 //
 // Waits are condition polls through lib/wait.cjs with a named wall-clock deadline (rule
 // project.bounded-test-timing); the run goes through lib/suite.cjs (project.suite-harness).
@@ -829,9 +833,69 @@ async function layoutOthers(ctx) {
   }
 }
 
+// Widths between the phone and the 1536 px reference, where the first row follows its content
+// (integration.css, responsive.css Touch): nothing of row 1 may sit under the measurement row.
+const WIDTHS = [
+  { name: '1280x800', viewport: { width: 1280, height: 800 } },
+  { name: '1440x900', viewport: { width: 1440, height: 900 } },
+  { name: '1366x1024 touch', viewport: { width: 1366, height: 1024 }, touch: true },
+];
+const ROW1 = ['osc-panel-source', 'osc-panel-analysis', 'osc-panel-mic', 'osc-panel-device'];
+const PRESSABLE = ['#osc-hold-play', '#osc-trigger', '#osc-gain', '#osc-spec-log',
+  '#osc-spec-max'];
+
+async function layoutWidths(ctx) {
+  for (const w of WIDTHS) {
+    // Firefox has no mobile emulation (Playwright refuses isMobile there): touch only.
+    const c = await ctx.browser.newContext({ viewport: w.viewport, hasTouch: !!w.touch,
+      ...(w.touch && ctx.engine !== 'firefox' ? { isMobile: true } : {}) });
+    await c.addInitScript(recordNotices);
+    ctx.watch(c);
+    try {
+      const page = await H.open(c, ctx.base);
+      const f = await page.evaluate(({ row1 }) => {
+        const shown = (el) => el.getClientRects().length > 0
+          && getComputedStyle(el).visibility !== 'hidden';
+        const flow = document.getElementById('osc-measure-flow').getBoundingClientRect();
+        const spill = [];
+        for (const id of row1) {
+          const p = document.getElementById(id);
+          const pb = p.getBoundingClientRect();
+          for (const el of p.querySelectorAll('button, input, select, summary, [tabindex]')) {
+            if (!shown(el)) continue;
+            const b = el.getBoundingClientRect();
+            if (b.height > 0 && (b.bottom > pb.bottom + 2 || b.bottom > flow.top + 2)) {
+              spill.push(`${el.id || el.dataset.osc || el.tagName} ${Math.round(b.bottom)} > `
+                + `${id} ${Math.round(pb.bottom)} / row ${Math.round(flow.top)}`);
+            }
+          }
+        }
+        return { spill, coarse: matchMedia('(pointer: coarse)').matches };
+      }, { row1: ROW1 });
+      const wrong = [...f.spill];
+      for (const sel of PRESSABLE) {
+        const hit = await page.evaluate((q) => {
+          const el = document.querySelector(q);
+          el.scrollIntoView({ block: 'center' });
+          const b = el.getBoundingClientRect();
+          const at = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+          return !!at && (at === el || el.contains(at)) ? null
+            : (at ? (at.id || at.className || at.tagName) : 'nothing');
+        }, sel);
+        if (hit) wrong.push(`${sel} is covered by ${hit}`);
+      }
+      check(ctx.leg, `layout widths ${w.name}${w.touch ? ` (coarse ${f.coarse})` : ''}: `
+        + 'row 1 keeps its controls above the measurement row', !wrong.length,
+      wrong.slice(0, 8).join('; '));
+    } finally {
+      await c.close().catch(() => {});
+    }
+  }
+}
+
 async function layout(ctx) {
   for (const [name, fn] of [['desktop', layoutDesktop], ['phone', layoutPhone],
-    ['primary', layoutPrimary], ['others', layoutOthers]]) {
+    ['primary', layoutPrimary], ['others', layoutOthers], ['widths', layoutWidths]]) {
     try {
       await fn(ctx);
     } catch (err) {
