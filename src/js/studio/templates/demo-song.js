@@ -19,8 +19,9 @@ const round6 = (v) => Math.round(v * 1e6) / 1e6;
 const MIX = Object.freeze({ level1: 0.8, level2: 0.45, level3: 0.8 });
 /**
  * Gate lengths in beats: snare 0.1, closed hat 0.048 (30 ms at 96 BPM), open hat 0.25 (156 ms).
- * The hat envelope holds a sustain (0.25) so the open hat's longer gate rings on; with no sustain
- * its decay would end both hats at 31 ms and the open hat would play as a closed one.
+ * The open hat has its own envelope, which holds a sustain (0.25) so its longer gate rings on;
+ * the closed hat's envelope has none and ends at 31 ms. One shared envelope cannot do both: a
+ * sustain there would lengthen every closed hat too.
  */
 const GATE_BEATS = Object.freeze({ [S.SNARE]: 0.1, [S.HAT]: 0.048, [S.OPEN_HAT]: 0.25 });
 
@@ -49,9 +50,11 @@ const nodes = [
     release: 0.08 }, 'Snare envelope'),
   node('hat-filter', 'filter', 260, 780, { type: 'highpass', frequency: 7000, Q: 0.7 },
     'Hat tone'),
-  node('hat-env', 'envelope', 480, 780, { attack: 0.001, decay: 0.03, sustain: 0.25,
+  node('hat-env', 'envelope', 480, 780, { attack: 0.001, decay: 0.03, sustain: 0,
     release: 0.02 }, 'Hat envelope'),
-  node('drum-mix', 'mixer', 700, 640, { level1: 0.9, level2: 0.6, level3: 0.35, level4: 0 },
+  node('open-hat-env', 'envelope', 480, 900, { attack: 0.001, decay: 0.03, sustain: 0.25,
+    release: 0.02 }, 'Open hat envelope'),
+  node('drum-mix', 'mixer', 700, 640, { level1: 0.9, level2: 0.6, level3: 0.35, level4: 0.35 },
     'Drum mix'),
   node('main-mix', 'mixer', 920, 220, { ...MIX, level4: 0 }, 'Main mix'),
   node('master-1', 'master', 1140, 220, {}, 'Master'),
@@ -75,6 +78,8 @@ const wires = [
   ['noise-1', 'audio', 'hat-filter', 'audio'],
   ['hat-filter', 'audio', 'hat-env', 'audio'],
   ['hat-env', 'audio', 'drum-mix', 'in3'],
+  ['hat-filter', 'audio', 'open-hat-env', 'audio'],
+  ['open-hat-env', 'audio', 'drum-mix', 'in4'],
   ['drum-mix', 'audio', 'main-mix', 'in3'],
   ['main-mix', 'audio', 'master-1', 'audio'],
   ...['scope-1', 'spectrum-1', 'spectrogram-1', 'meter-1']
@@ -89,6 +94,7 @@ const tracks = [
   track('track-kick', 'event', 'Kick', 'kick-osc'),
   track('track-snare', 'event', 'Snare', 'snare-env'),
   track('track-hat', 'event', 'Hats', 'hat-env'),
+  track('track-open-hat', 'event', 'Open hat', 'open-hat-env'),
 ];
 
 const clips = [];
@@ -113,7 +119,8 @@ for (const [step, note] of S.partNotes('drums')) {
   } else if (note === S.SNARE) {
     clipAt('track-snare', 'event', at, GATE_BEATS[note], { action: 'gate' });
   } else {
-    clipAt('track-hat', 'event', at, GATE_BEATS[note], { action: 'gate' });
+    clipAt(note === S.OPEN_HAT ? 'track-open-hat' : 'track-hat', 'event', at, GATE_BEATS[note],
+      { action: 'gate' });
   }
 }
 
@@ -153,7 +160,7 @@ export default {
         + 'mix in the outro.',
     ],
   },
-  studioHash: '6501a09624237d091607a8882ccd92b4cf99d1a27252c15e07255d9c9a85012e',
+  studioHash: '6af3c386ab88fe2c98d1a11a65d2f537fafbb3cd49b4aed7ca0a234e733405b6',
   model: {
     kind: 'oscilla-studio',
     schemaVersion: 1,

@@ -14,24 +14,26 @@
 //                       stub: the stub input delivers all 24 messages in the page, the page
 //                       reports no error and the MIDI state stays connected (nothing on this
 //                       tree consumes them yet: midi-notes-sound is the expected failure)
-//   song-open           Templates, Open "Demo song: Lantern in the Slag Yard": 18 nodes, 18
-//                       edges, 744 tempo-linked clips on five tracks, 7 section markers, 96 BPM,
+//   song-open           Templates, Open "Demo song: Lantern in the Slag Yard": 19 nodes, 20
+//                       edges, 744 tempo-linked clips on six tracks, 7 section markers, 96 BPM,
 //                       clean
 //   tempo               the Inspector's Tempo field (nothing selected) at 120 BPM moves every
 //                       clip (the song ends at 88 s) and the timeline strip shows it; 96 restores
-//   drums               the Kick, Snare and Hats tracks hold the song's drum hits, and the Kick
-//                       track's Add clip control adds one more hit at the playhead (one undo)
+//   drums               the Kick, Snare, Hats and Open hat tracks hold the song's drum hits, and
+//                       the Kick track's Add clip control adds one more hit at the playhead (one
+//                       undo)
 //   tone                Lead voice: waveform sawtooth; Lead filter: Q 6, both typed in the
 //                       Inspector and in the model (they stay: PLAY, Save and the WAV carry them)
 //   automation          the build automation is on the timeline (bass cutoff, lead LFO rate, the
 //                       outro fade); Automate on the Bass filter's cutoff shows its lane
 //   play                PLAY: the running graph is the edited song (the runtime's applied
-//                       revision is the store's, all 18 nodes live, all 18 edges routed), the
+//                       revision is the store's, all 19 nodes live, all 20 edges routed), the
 //                       engine counts nodes and sources, the main output is not silent, and no
 //                       clip or lane of the song is left unplayed
 //   views               while it plays: the Analyzer's scope data is not silent, its spectrum
 //                       holds the bass band well above its idle level, and its spectrogram draws
-//                       the bass rows away from their idle colour
+//                       the bass rows away from their idle colour, against a baseline taken once
+//                       whatever an earlier step left in its history has scrolled out
 //   playhead            the timeline playhead the editor draws follows the transport position
 //   stop-restart        STOP leaves 0 engine nodes, sources and runtime nodes; PLAY plays again;
 //                       STOP is quiet again
@@ -43,10 +45,11 @@
 //                       (9.375 s). The window is short so the render stays cheap in WebKit; the
 //                       rest of the song is the same nodes and clips, which the play step runs
 //                       and tests/unit/demo-song.test.mjs plans offline in full
-//   save-reload         the page is closed without its unload prompt and opened again in the
-//                       same browser context; Projects, Open: the opened model serializes equal
-//                       to what Save stored, and what Save stored equals the live model it saved
-//                       but for its view state, which the editors commit on a debounce
+//   save-reload         once a draft of the edit is stored, or the draft wait has passed (see
+//                       DRAFT_MS), the page is closed without its unload prompt and opened again
+//                       in the same browser context; Projects, Open: the opened model serializes
+//                       equal to what Save stored, and what Save stored equals the live model it
+//                       saved but for its view state, which the editors commit on a debounce
 //   no-errors           no page error or console error during the journey
 //
 // Expected failures. A step that needs work that has not landed runs and is expected to fail;
@@ -81,6 +84,13 @@ const STEP_MS = 15000;      // a control the journey drives takes effect
 const PLAY_MS = 20000;      // PLAY of a 744-clip song reaches a running graph
 const NOTE_MS = 3000;       // a MIDI note would have made the engine count a node by then
 const OFFER_MS = 5000;      // after the library opens, a draft offer would be on screen by then
+// Before the page closes with the edit unsaved: until a draft other than the saved project is in
+// the Studio store, or this long after the edit, well past any debounce V604 may choose. Today
+// no draft is written and the wait runs out; that is restore-last's gap, not a failure.
+const DRAFT_MS = 5000;
+// The spectrogram spans 10 s of wall time across its width (spectrogram.js, timeSpanS) and
+// scrolls only while it is on screen, so an earlier step's history leaves it within that.
+const SETTLE_MS = 15000;
 const RENDER_S = 12;        // the WAV window: the intro and the snare pickup (9.0 s at 100 BPM)
 const RENDER_MS = 120000;   // that window rendered, encoded and downloaded (under 2 s on a Mac)
 const DRAFT_TEMPO = 100;    // the edit left unsaved before the render and the page closing
@@ -332,8 +342,12 @@ function firstHit(b, { start, end, channels, sampleRate }) {
 
 // What each named node card's canvases paint: the largest share of a canvas's pixels that
 // differ from its first pixel, and a fingerprint of the pixels to compare two reads with.
+// `card` says the node card itself is on screen, so that a selector that no longer matches is
+// told apart from a card without a canvas.
 const cardPaint = (page, ids) => page.evaluate((list) => list.map((id) => {
-  const canvases = [...document.querySelectorAll(`.osc-sg-node[data-node-id="${id}"] canvas`)];
+  const el = document.querySelector(`.osc-sg-node[data-node-id="${id}"]`);
+  const card = !!el && el.offsetWidth > 0 && el.offsetHeight > 0;
+  const canvases = el ? [...el.querySelectorAll('canvas')] : [];
   let painted = 0;
   const prints = [];
   for (const c of canvases) {
@@ -354,7 +368,7 @@ const cardPaint = (page, ids) => page.evaluate((list) => list.map((id) => {
     painted = Math.max(painted, n / (c.width * c.height));
     prints.push(print);
   }
-  return { id, canvases: canvases.length, painted, print: prints.join(',') };
+  return { id, card, canvases: canvases.length, painted, print: prints.join(',') };
 }), ids);
 
 // The keyboard canvas's pixels (RGBA), or null when the page has no keyboard canvas.
@@ -484,8 +498,9 @@ async function journey(browser, leg) {
     const tracks = {};
     for (const c of song.timeline.clips) tracks[c.trackId] = (tracks[c.trackId] || 0) + 1;
     check(leg, 'song-open', 'Templates, Open "Demo song": the whole song as one Studio document',
-      listed.includes(SONG_TITLE) && song.graph.nodes.length === 18
-        && song.graph.edges.length === 18 && song.timeline.clips.length === 744 && song.timeline.tracks.length === 5
+      listed.includes(SONG_TITLE) && song.graph.nodes.length === 19
+        && song.graph.edges.length === 20 && song.timeline.clips.length === 744
+        && song.timeline.tracks.length === 6
         && song.timeline.clips.every((c) => !!c.musical) && song.timeline.markers.length === 7
         && song.transport.tempo === 96 && song.transport.timeMode === 'musical' && !dirty,
       `${song.graph.nodes.length} nodes, ${song.graph.edges.length} edges, ${
@@ -526,9 +541,10 @@ async function journey(browser, leg) {
       return kicks(m) === k0 && m;
     }, { ms: STEP_MS, what: `${leg}: undo removes the added hit` });
     check(leg, 'drums', 'the drum tracks hold the song\'s hits; Add clip adds one, undo removes it',
-      k0 === 135 && tracks['track-snare'] === 107 && tracks['track-hat'] === 160
-        && kicks(added) === 136 && kicks(undone) === 135, `kick ${k0}, snare ${
-        tracks['track-snare']}, hats ${tracks['track-hat']}`);
+      k0 === 135 && tracks['track-snare'] === 107 && tracks['track-hat'] === 156
+        && tracks['track-open-hat'] === 4 && kicks(added) === 136 && kicks(undone) === 135,
+      `kick ${k0}, snare ${tracks['track-snare']}, hats ${tracks['track-hat']}, open hats ${
+        tracks['track-open-hat']}`);
     await expected(leg, 'drum-accents', 'the drum hits carry their velocities (accents)',
       async () => {
         const m = await model(page);
@@ -592,12 +608,24 @@ async function journey(browser, leg) {
         return { ok: r.offered, detail: r.note || 'no Automate control on Q' };
       });
 
-    // 8. PLAY. First the Analyzer as it is before anything plays: its empty spectrogram.
+    // 8. PLAY. First the Analyzer as it is before anything plays: its empty spectrogram. What
+    // an earlier step sounded (the MIDI riff, once V502 plays it) may still be in its history,
+    // which scrolls out while it is on screen; the baseline is taken once it has. If it never
+    // clears, the last read is kept and the views check FAILs on it (pre.lit is not relaxed).
     await analyzer(page, leg);
-    const pre = await until(async () => {
+    let pre = await until(async () => {
       const v = await analyzerView(page);
       return v.lit !== null && v;
     }, { ms: STEP_MS, what: `${leg}: the Analyzer's spectrogram is mounted` });
+    try {
+      pre = await until(async () => {
+        const v = await analyzerView(page);
+        if (v.lit !== null) pre = v;
+        return v.lit === 0 && v;
+      }, { ms: SETTLE_MS, what: `${leg}: the spectrogram's earlier history scrolls out` });
+    } catch (err) {
+      if (!(err instanceof WaitTimeout)) throw err;
+    }
     await studio(page, leg);
     await clearSelection(page);
     await page.locator('[data-osc="studio.play"]').first().click();
@@ -622,8 +650,8 @@ async function journey(browser, leg) {
     });
     check(leg, 'play', 'PLAY: the running graph is the edited song, the engine counts it, the '
       + 'output sounds, no clip or lane is left unplayed', playing.engineSources > 0
-      && sounding.rms > 0.002 && tr.applied === tr.revision && tr.handles === 18
-      && tr.routed === 18 && !tr.degraded.length && !tr.inactive.length
+      && sounding.rms > 0.002 && tr.applied === tr.revision && tr.handles === 19
+      && tr.routed === 20 && !tr.degraded.length && !tr.inactive.length
       && Array.isArray(tr.unplayed) && !tr.unplayed.length,
     `revision ${tr.revision}, applied ${tr.applied}; ${tr.handles} nodes live, ${tr.routed} `
       + `edges routed${tr.degraded.length ? `, degraded ${tr.degraded.join(', ')}` : ''}${
@@ -640,6 +668,13 @@ async function journey(browser, leg) {
       const first = await cardPaint(page, ids);
       const say = (v) => v.map((c) => `${c.id} ${c.canvases} canvas(es), ${
         (c.painted * 100).toFixed(2)} % painted`).join('; ');
+      // The cards are on screen today: a card that is not is a broken selector or a broken
+      // graph (a FAIL), never the K016 gap, which is a card without a live canvas.
+      const gone = first.filter((c) => !c.card).map((c) => c.id);
+      if (gone.length) {
+        throw new Error(`no node card on screen for ${gone.join(', ')}: the step cannot measure `
+          + 'what the cards paint');
+      }
       if (first.some((c) => !c.canvases)) throw new Unmet(say(first));
       let last = first;
       const live = await untilUnmet(async () => {
@@ -774,6 +809,7 @@ async function journey(browser, leg) {
       return m.transport.tempo === DRAFT_TEMPO
         && await page.evaluate(() => window.OSCILLA.studio.dirty) && m;
     }, { ms: STEP_MS, what: `${leg}: the unsaved tempo edit reaches the model` });
+    const editedAt = Date.now();
 
     // 11. Render WAV of the live, edited song: the offered length covers its last clip (the
     // timeline's end also counts the lanes, whose points are in seconds), and the window
@@ -814,7 +850,22 @@ async function journey(browser, leg) {
       ((Date.now() - t0) / 1000).toFixed(1)} s`);
 
     // 12. The page closes with the edit unsaved (no unload prompt, as a crash or a killed tab
-    // would) and opens again in the same browser context, whose storage it keeps.
+    // would) and opens again in the same browser context, whose storage it keeps. It closes
+    // once a draft is stored (a Studio record other than the saved project, as V604 specifies),
+    // or DRAFT_MS after the edit, so that a debounced draft save has had its time.
+    let stored = null;
+    try {
+      stored = await until(() => page.evaluate(async (savedId) => {
+        const all = await (await window.OSCILLA.studio.library()).list({});
+        const other = all.find((r) => r.id !== savedId);
+        return other ? `${other.kind} ${other.id}` : false;
+      }, saved.id), { ms: Math.max(1, DRAFT_MS - (Date.now() - editedAt)),
+        what: `${leg}: a draft of the unsaved edit is stored` });
+    } catch (err) {
+      if (!(err instanceof WaitTimeout)) throw err;
+    }
+    const draftNote = `${stored ? `draft stored (${stored})` : 'no draft stored'} ${
+      ((Date.now() - editedAt) / 1000).toFixed(1)} s after the edit, then the page closed`;
     await page.close({ runBeforeUnload: false });
     page = await openPage(`${leg}: the page is ready after it was closed and opened again`);
     await studio(page, leg);
@@ -828,7 +879,7 @@ async function journey(browser, leg) {
         .or(page.getByRole('button', { name: /restore|recover/i }));
       await untilUnmet(async () => (await offer.count()) > 0, { ms: OFFER_MS,
         what: `${leg}: the Studio offers the draft back` },
-      () => `no draft offered; the Studio opened "${opened}"`);
+      () => `no draft offered; the Studio opened "${opened}"; ${draftNote}`);
       // Offered: accepting must restore the draft, or the step FAILs (a WaitTimeout, not Unmet).
       await offer.first().click();
       const back = await until(async () => {
