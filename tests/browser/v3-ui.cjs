@@ -494,10 +494,14 @@ function defineChecks(fixtures) {
         && d.primary === 'Save experiment' && d.chart,
       ir: /^Impulse response: direct peak/.test(res.ir.text) && res.ir.chart
         && res.ir.tabs === 'true' && res.rtaTab === 'osc-m-tab-rta',
-      // T019: the full-overlap tail is an upper bound, with the window it was read over.
-      irTail: /tail level ≤ −?\d+ dB re peak \(noise or unfinished decay\)/.test(res.ir.text)
+      // T019: the full-overlap tail estimates an upper bound, with the window it was read over
+      // and the estimate's scatter (review of #343 R1: never an unconditional upper bound).
+      irTail: /tail level estimate ≤ −?\d+ dB re peak \(noise or unfinished decay\)/
+        .test(res.ir.text)
         && res.ir.notes.some((n) => /full-overlap-tail, the mean power [\d.]+ ms to [\d.]+ ms /
-          .test(n) && /after the peak\. A decay still running there counts as noise/.test(n))
+          .test(n) && /after the peak\. A decay still running there counts as noise, so the noise/
+          .test(n) && /lies at or below this level, within the estimate's own scatter;/.test(n))
+        && !res.ir.notes.some((n) => /so the level is an upper bound/.test(n))
         && !!res.irPhone && res.irPhone.fits,
       rtaStored: !!res.rtaStored && res.rtaStored.badges.includes('NOISE CHECK SNAPSHOT')
         && !res.rtaStored.badges.includes('LIVE') && res.rtaStored.live === false

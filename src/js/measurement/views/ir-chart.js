@@ -14,10 +14,14 @@
 //
 // Noise tail (T019): a 'full-overlap-tail' floor is the mean power of the last 10 % of the
 // full-overlap lags, which end about one post-roll after the peak. A decay still running there
-// is counted as noise, so the summary states the level as an upper bound ("tail level ≤ X dB
-// re peak (noise or unfinished decay)") and the note names the window it was read over
-// (impulse-response.js irNoiseFloorWindow; described in words without stimulusFrames). v1
-// results (no noiseFloorMethod) and a missing floor keep their wording.
+// is counted as noise, so the level is an upper bound on the noise only on average: one run's
+// estimate scatters about it (review of #343: sd 1.44 dB over 30 noise seeds), and no spread
+// is computed from the window (its samples are correlated). The summary therefore states the
+// estimate ("tail level estimate ≤ X dB re peak (noise or unfinished decay)", X rounded up, so
+// it holds of the level read) and the note says the noise lies at or below it within the
+// estimate's own scatter, naming the window it was read over (impulse-response.js
+// irNoiseFloorWindow; described in words without stimulusFrames). v1 results (no
+// noiseFloorMethod) and a missing floor keep their wording.
 //
 // Time (§214): x is milliseconds relative to the detected direct peak (0 ms = the peak); the
 // absolute position is kept in `origin` (capture offset + peak time, in s and ms) and in the
@@ -202,7 +206,7 @@ export function buildIrView(ir, options = {}) {
 
   const badges = [normalize ? 'NORMALIZED' : 'ORIGINAL SCALE', scale === 'db' ? 'dB' : 'LINEAR'];
   const notes = [origin.label + '.', `Method: ${ir.method || 'spectral'} (${ir.algorithm}).`];
-  // T019: a full-overlap tail still holding the decay is an upper bound on the noise.
+  // T019: a full-overlap tail still holding the decay estimates an upper bound on the noise.
   const tailBound = Number.isFinite(ir.noiseFloorDb) && ir.noiseFloorMethod === 'full-overlap-tail';
   if (!Number.isFinite(ir.noiseFloorDb)) notes.push('Noise tail: not available.');
   else if (tailBound) notes.push(tailBoundNote(ir, stimulusFrames, msPerSample));
@@ -220,9 +224,10 @@ export function buildIrView(ir, options = {}) {
     + `peak amplitude ${amp === null ? '—' : fixedText(amp, decimalsOf(amp))} (relative, `
     + `${amp !== null && amp < 0 ? 'inverted polarity, ' : ''}original scale), `
     // IR v2 may report no noise floor (noiseFloorDb null): say so, never print a number. The
-    // bound is rounded up, so the whole dB stated is never below the level read.
-    + `${tailBound ? `tail level ≤ ${fixedText(Math.ceil(ir.noiseFloorDb) || 0, 0)} dB re peak `
-      + '(noise or unfinished decay)' : `noise tail ${Number.isFinite(ir.noiseFloorDb)
+    // figure is rounded up, so the whole dB stated is never below the estimate read; the
+    // estimate itself scatters run to run (the note says so).
+    + `${tailBound ? `tail level estimate ≤ ${fixedText(Math.ceil(ir.noiseFloorDb) || 0, 0)} `
+      + 'dB re peak (noise or unfinished decay)' : `noise tail ${Number.isFinite(ir.noiseFloorDb)
       ? `${fixedText(ir.noiseFloorDb, 0)} dB re peak` : 'not available'}`}, `
     + `length ${msText(n * msPerSample, Math.max(1, msPerSample))}`
     + `${normalize ? '; display NORMALIZED' : ''}.`;
@@ -245,7 +250,7 @@ export function buildIrView(ir, options = {}) {
   };
 }
 
-/** The note of a 'full-overlap-tail' floor: the window it was read over and why it bounds. */
+/** The note of a 'full-overlap-tail' floor: the window it was read over and what it bounds. */
 function tailBoundNote(ir, stimulusFrames, msPerSample) {
   const w = irNoiseFloorWindow(ir, stimulusFrames);
   const where = w
@@ -254,7 +259,8 @@ function tailBoundNote(ir, stimulusFrames, msPerSample) {
     : `the mean power of the last ${Math.round(IR_TAIL_FRACTION * 100)} % of the lags at which `
       + 'the whole stimulus lies inside the capture (about one post-roll after the peak)';
   return `Noise tail estimate: full-overlap-tail, ${where}. A decay still running there counts `
-    + 'as noise, so the level is an upper bound; lengthen the post-roll to read past the decay.';
+    + 'as noise, so the noise lies at or below this level, within the estimate\'s own scatter; '
+    + 'lengthen the post-roll to read past the decay.';
 }
 
 function decimalsOf(v) {

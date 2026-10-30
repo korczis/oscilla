@@ -1,8 +1,10 @@
 // T019 (truth-table row MSR-26): the impulse-response "noise tail" is read over the last 10 % of
 // the full-overlap lags after the peak, which end about one post-roll after it. A decay still
-// running there is counted as noise, so the figure is an upper bound. The view says so: the
-// summary reads "tail level ≤ X dB re peak (noise or unfinished decay)" and the note names the
-// window (T1 to T2 ms after the peak) and that a longer post-roll reads past the decay.
+// running there is counted as noise, so the figure is an upper bound on the noise, on average:
+// one run's estimate scatters about it (review of #343 R1). The view says so: the summary reads
+// "tail level estimate ≤ X dB re peak (noise or unfinished decay)" and the note names the window
+// (T1 to T2 ms after the peak), that the noise lies at or below the level within the estimate's
+// own scatter, and that a longer post-roll reads past the decay.
 // Fixture F4 of the P05 audit: a noise-free system whose decay (T60 2 s) outlasts a 0.5 s
 // post-roll. At 8 kHz (not the audit's 48 kHz) so the direct convolution stays quick.
 import test from 'node:test';
@@ -67,19 +69,20 @@ function meanPowerDb(ir, [fromS, toS]) {
   return 10 * Math.log10(s / (b - a + 1) / (p * p));
 }
 
-test('T019 F4: the tail level is stated as an upper bound, with the window it was read in', () => {
+test('T019 F4: the tail level estimate bounds the noise, with the window it was read in', () => {
   assert.equal(IR.noiseFloorMethod, 'full-overlap-tail');
   const v = buildIrView(IR, { scale: 'db', stimulusFrames: FRAMES });
   const level = fixedText(Math.ceil(IR.noiseFloorDb), 0);
-  assert.ok(v.summary.includes(`tail level ≤ ${level} dB re peak (noise or unfinished decay), `),
-    v.summary);
+  assert.ok(v.summary.includes(`tail level estimate ≤ ${level} dB re peak `
+    + '(noise or unfinished decay), '), v.summary);
   assert.doesNotMatch(v.summary, /noise tail −?\d/);
   const note = v.notes.find((n) => n.startsWith('Noise tail estimate: full-overlap-tail'));
   assert.ok(note, v.notes.join(' | '));
   assert.ok(note.includes(WINDOW_TEXT), note);
   assert.match(note, /A decay still running there counts as noise/);
   assert.match(note, /lengthen the post-roll/);
-  assert.match(note, /upper bound/);
+  assert.ok(note.includes('so the noise lies at or below this level, within the estimate\'s own '
+    + 'scatter;'), note);
 
   assert.equal(STIM.stimulusFrames(SWEEP.spec), X.length, 'the frame count without rendering');
   const w = irNoiseFloorWindow(IR, FRAMES);
@@ -99,13 +102,15 @@ test('T019: the stated bound is rounded up, never below the level read', () => {
   for (const [db, text] of [[-66.5, '−66'], [-66.4, '−66'], [-66.6, '−66'], [-66, '−66'],
     [-0.3, '0']]) {
     const v = buildIrView({ ...IR, noiseFloorDb: db }, { stimulusFrames: FRAMES });
-    assert.ok(v.summary.includes(`tail level ≤ ${text} dB re peak `), `${db}: ${v.summary}`);
+    assert.ok(v.summary.includes(`tail level estimate ≤ ${text} dB re peak `),
+      `${db}: ${v.summary}`);
   }
 });
 
 test('T019: without the stimulus length the window is described, not invented', () => {
   const v = buildIrView(IR, {});
-  assert.match(v.summary, /tail level ≤ -?−?\d+ dB re peak \(noise or unfinished decay\)/);
+  assert.match(v.summary,
+    /tail level estimate ≤ -?−?\d+ dB re peak \(noise or unfinished decay\)/);
   const note = v.notes.find((n) => n.startsWith('Noise tail estimate: full-overlap-tail'));
   assert.match(note, /last 10 % of the lags at which the whole stimulus lies inside the capture/);
   assert.doesNotMatch(note, /\d ms to /);
@@ -123,6 +128,88 @@ test('T019: a capped IR states the window of the full IR it was read on', () => 
   const note = buildIrView(capped, { stimulusFrames: FRAMES }).notes
     .find((n) => n.startsWith('Noise tail estimate'));
   assert.ok(note.includes(WINDOW_TEXT), note);
+});
+
+// Review of #343 R1: over 30 noise seeds one run's estimate scatters about the power mean
+// (sd 1.44 dB) and the rounded-up figure is still below it in 5 of 30, so the level bounds the
+// noise only on average. The copy says it is an estimate and names its scatter; the first
+// head's unconditional "so the level is an upper bound" is refused wherever the note appears.
+const SCATTER = 'so the noise lies at or below this level, within the estimate\'s own scatter;';
+
+test('T019 R1: the bound is stated as an estimate with its scatter, never unconditionally', () => {
+  for (const [name, ir, opts] of [['F4', IR, { stimulusFrames: FRAMES }],
+    ['no stimulus length', IR, {}], ['capped', capIrLength(IR, 4096), { stimulusFrames: FRAMES }],
+    ['dB, normalized', IR, { stimulusFrames: FRAMES, scale: 'db', normalize: true }]]) {
+    const v = buildIrView(ir, opts);
+    const note = v.notes.find((n) => n.startsWith('Noise tail estimate: full-overlap-tail'));
+    assert.ok(note && note.includes(SCATTER), `${name}: ${note}`);
+    const text = `${v.summary} ${v.notes.join(' ')}`;
+    assert.doesNotMatch(text, /so the level is an upper bound/, name);
+    assert.doesNotMatch(text, /\b(level|figure|tail) is an upper bound\b/, name);
+    // The "≤" is the estimate's: the bare "tail level ≤" of the first head is gone.
+    assert.match(v.summary, /tail level estimate ≤ /, name);
+    assert.doesNotMatch(v.summary, /tail level ≤/, name);
+  }
+});
+
+/** A capture of the sweep through a unit delta: `post` samples of post-roll, peak-clipped at
+ *  `clip` (none by default), or all zero when `silent`. */
+function deltaCapture({ post = Math.round(POST_S * SR), clip = Infinity, silent = false } = {}) {
+  const pre = Math.round(PRE_S * SR);
+  const y = new Float32Array(pre + X.length + post);
+  if (silent) return { ...ARGS, captured: y, lagSamples: pre };
+  for (let i = 0; i < X.length; i++) y[pre + i] = Math.max(-clip, Math.min(clip, X[i]));
+  return { ...ARGS, captured: y, lagSamples: pre };
+}
+
+/** The note and summary of a full-overlap-tail IR state its window, and the window stated is
+ *  the one averaged (when the peak is not zero, its mean power is noiseFloorDb). */
+function assertTailStated(name, ir) {
+  assert.equal(ir.noiseFloorMethod, 'full-overlap-tail', name);
+  assert.ok(Number.isFinite(ir.noiseFloorDb), `${name}: ${ir.noiseFloorDb}`);
+  const w = irNoiseFloorWindow(ir, FRAMES);
+  assert.ok(w && w[1] > w[0], `${name}: window ${w}`);
+  const v = buildIrView(ir, { scale: 'db', stimulusFrames: FRAMES });
+  const ms = (t) => msText(t * 1000, 1000 / SR);
+  const where = `${ms(w[0])} to ${ms(w[1])} after the peak`;
+  const note = v.notes.find((n) => n.startsWith('Noise tail estimate: full-overlap-tail'));
+  assert.ok(note && note.includes(where) && note.includes(SCATTER), `${name}: ${note}`);
+  const level = fixedText(Math.ceil(ir.noiseFloorDb) || 0, 0);
+  assert.ok(v.summary.includes(`tail level estimate ≤ ${level} dB re peak `
+    + '(noise or unfinished decay), '), `${name}: ${v.summary}`);
+  if (Math.abs(ir.samples[ir.peakIndex]) > 0) {
+    assert.ok(Math.abs(meanPowerDb(ir, w) - ir.noiseFloorDb) < 1e-6,
+      `${name}: ${meanPowerDb(ir, w)} vs ${ir.noiseFloorDb}`);
+  }
+  return w;
+}
+
+test('T019 R3: a silent capture states its window and the estimate wording', () => {
+  // An all-zero capture: the IR is FFT rounding (a ~1e-16 "peak"), read as on the base.
+  const ir = computeImpulseResponse(deltaCapture({ silent: true }));
+  assertTailStated('silent', ir);
+});
+
+test('T019 R3: a clipped capture states the same window as the unclipped one', () => {
+  const ir = computeImpulseResponse(deltaCapture({ clip: 0.1 }));
+  const w = assertTailStated('clipped', ir);
+  assert.deepEqual(w, irNoiseFloorWindow(computeImpulseResponse(deltaCapture()), FRAMES));
+  const note = buildIrView(ir, { stimulusFrames: FRAMES }).notes
+    .find((n) => n.startsWith('Noise tail estimate'));
+  assert.ok(note.includes(WINDOW_TEXT), note);
+});
+
+test('T019 R3: the minimum window is IR_NOISE_MIN_SAMPLES lags; one fewer reads none', () => {
+  const MIN = IRM.IR_NOISE_MIN_SAMPLES;
+  assert.equal(MIN, 16);
+  const ir = computeImpulseResponse(deltaCapture({ post: MIN }));
+  const w = assertTailStated('16-sample window', ir);
+  // The whole span after the peak, both ends included: lags 1 to 16.
+  assert.deepEqual(w.map((t) => Math.round(t * SR)), [1, MIN]);
+  const none = computeImpulseResponse(deltaCapture({ post: MIN - 1 }));
+  assert.equal(none.noiseFloorMethod, 'none');
+  assert.equal(irNoiseFloorWindow(none, FRAMES), null);
+  assert.match(buildIrView(none, { stimulusFrames: FRAMES }).summary, /noise tail not available/);
 });
 
 test('T019 negative: a null floor still reads "not available", with no bound and no window',
