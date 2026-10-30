@@ -52,8 +52,9 @@ changes, change it here in the same commit.
               → store.js (IndexedDB oscilla-experiments, or memory)
               ⇄ export / import (validate.js, migrate.js) → compare.js (semantic-diff.js), csv.js
 
- UI adapters  ui/measure.js, ui/experiments.js: engine events and results → the pure
-              reducers and view builders of measurement/views/ → charts/measure-charts.js.
+ UI adapters  ui/measure.js (composing ui/measure/*), ui/experiments.js: engine events and
+              results → the pure reducers and view builders of measurement/views/
+              → charts/measure-charts.js.
               They render view models and compute nothing.
 ```
 
@@ -205,7 +206,9 @@ executed from a versioned definition: ADR 0043.
 ### The UI adapters
 
 `src/js/ui/measure.js` and `src/js/ui/experiments.js` are composed into the one Alpine
-component. They keep the measurement engine, its io, results with typed arrays, calibration
+component. Since E002 `src/js/ui/measure.js` is itself a composition root: its parts live
+under `src/js/ui/measure/` by responsibility (`session.js`, `input.js`, `views.js`, `live.js`,
+`run.js`, `saving.js`, `calibration.js`, the test seam `test-seam.js`, and `constants.js`). They keep the measurement engine, its io, results with typed arrays, calibration
 objects and chart instances in a closure, never in Alpine's reactive state. Engine events go
 through the pure reducers of `measurement/views/` (`quality-bar.js`, `announcements.js`), and
 results go through the pure view builders (`measure-flow.js`, `response-chart.js`,

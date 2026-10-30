@@ -33,7 +33,7 @@
   <!-- @inline-css -->
 </head>
 <body>
-<a class="osc-skip" href="#osc-main">Skip to the instrument</a>
+<a class="osc-skip" href="#osc-main">Skip to main content: Playground</a>
 
 <!-- Icon sprite: hand-drawn 24x24 strokes, currentColor. -->
 <svg class="osc-sr-only" aria-hidden="true" focusable="false">
@@ -111,7 +111,8 @@
 
   <!-- ================= Header ================= -->
   <header class="osc-header" role="banner">
-    <a class="osc-brand" href="#osc-main" aria-label="OSCILLA · Interactive Sound &amp; Frequency Lab">
+    <a class="osc-brand" href="#m=playground" x-bind="homeLink()"
+      aria-label="OSCILLA · Interactive Sound &amp; Frequency Lab" title="Open the Playground">
       <svg class="osc-logo" viewBox="0 0 50 36" aria-hidden="true" focusable="false">
         <defs>
           <linearGradient id="osc-logo-grad" x1="0" y1="0" x2="1" y2="0">
@@ -171,7 +172,7 @@
         <svg class="osc-ico" aria-hidden="true"><use href="#i-sun"/></svg>
       </button>
       <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-header-icon" id="osc-help"
-        data-osc="header.help" aria-label="Help" aria-haspopup="dialog" @click="openDialog('help')">
+        data-osc="header.help" aria-label="Keyboard shortcuts" aria-haspopup="dialog" @click="openDialog('help')">
         <svg class="osc-ico" aria-hidden="true"><use href="#i-help"/></svg>
       </button>
       <div class="osc-menu-anchor">
@@ -205,7 +206,6 @@
           <button type="button" class="osc-menu-item" role="menuitem" data-osc="export.seqWav" @click="exportAudio('sequence')" :aria-disabled="String(exportBusy)">Export sequence (WAV)</button>
           <button type="button" class="osc-menu-item" role="menuitem" data-osc="export.png" @click="screenshot()">Export graph (PNG)</button>
           <button type="button" class="osc-menu-item" role="menuitem" data-osc="export.config" @click="exportConfig()">Export config (JSON)</button>
-          <button type="button" class="osc-menu-item" role="menuitem" data-osc="export.import" @click="importConfigClick()">Import config (JSON)…</button>
           <button type="button" class="osc-menu-item" role="menuitem" data-osc="export.url" @click="copyConfigUrl()">Copy config URL</button>
         </div>
       </div>
@@ -1907,7 +1907,8 @@
                 data-osc="exp.row" :data-id="r.id">
                 <input type="checkbox" class="osc-x-check" data-osc="exp.select" :checked="r.selected"
                   :aria-label="'Select ' + r.name + ' for comparison'" @change="experimentsToggleSelect(r.id)">
-                <div class="osc-x-main" @click="experimentsOpen(r.id)">
+                <div class="osc-x-main" role="button" tabindex="0" @click="experimentsOpen(r.id)"
+                  @keydown.enter.prevent="experimentsOpen(r.id)" @keydown.space.prevent="experimentsOpen(r.id)">
                   <span class="osc-x-name"><span x-text="r.name"></span> <span class="osc-m-chip" x-show="r.baseline" style="display: none">BASELINE</span></span>
                   <span class="osc-x-meta osc-num" x-text="r.createdText + ' · ' + r.sizeText + ' · ' + r.versionText + r.defText"></span>
                 </div>

@@ -665,7 +665,10 @@ and CI fail.
 
 The browser suites need Playwright's browsers (`npx playwright install chromium firefox
 webkit`). Work lands through small pull requests. CI runs the gate on every pull request,
-branch protection requires the `gate` check, and a merge to `main` redeploys Pages.
+branch protection requires the `gate` check, and a merge to `main` redeploys Pages. The branch
+need not be up to date with `main` (`strict: false`, the owner's decision of 2026-10-30), so a
+pull request merges on its last green run and the gate's suites never run on `main` itself:
+ADR 0009's note of that date says what still catches a stale run or a red combination.
 
 Two of the gate's jobs check the pull request rather than the product. `fail-first`: when the
 title starts with `feat` or `fix`, a unit test the pull request adds or changes must fail on
