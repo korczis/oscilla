@@ -1,63 +1,165 @@
 # Review verdict for pull request #296, PACK 03 fix group C007 ("One Instrument, One Coherent
 # State"): the labs' V2 play options are built in one place and the current lab state always
-# wins (branch fix/c007-lab-play-options). Reviewed head 1c69d121b168 (== origin at fetch;
-# merge base origin/main cdda563c1982). Built by the builder's session; reviewed by dev-68.
-# The builder worktree (/Users/korczis/dev/oscilla-wt/fix/c007-lab-play-options) is the cwd of a
-# live `majordomus-cli serve` (pid 97811, lsof), so it was not touched: the review ran in a fresh
-# detached worktree of origin/fix/c007-lab-play-options in the scratchpad.
+# wins (branch fix/c007-lab-play-options). Round 2, a delta re-review of the fixes for round 1
+# (verdict 5f044599, reviewed head 1c69d121, changes-requested on R-1 and R-2). Reviewed head
+# aeec969ab5bb (== origin/fix/c007-lab-play-options at fetch, == the PR head): fix commits
+# cb9637f3 (R-1, R-2, R-3, R-5) and d02f17fd (the R-2 browser check waits for the output),
+# then a merge of origin/main fde49bd1 (#284). Built by the builder's session; reviewed by
+# dev-68 in a fresh detached worktree in its scratchpad; no builder worktree was touched.
 #
-# The digest: the branch's scripts/review-verdict.mjs, which is identical to origin/main's
-# (git diff origin/main HEAD -- scripts is empty), `--content --list --base origin/main` in that
-# fresh worktree over the three guarded paths the PR changes (src/js/audio/audio-engine.js,
-# src/js/audio/envelope.js, src/js/audio/lab-play-options.js): 88cdba57...786c, which matches the
-# PR body.
+# The main merge: origin/main cdda563c..fde49bd1 changes no guarded path (docs, .ai, tests
+# README, browser suite lib, two unit tests), and the merge commit brings exactly those nine
+# files against d02f17fd, so the guarded content is the fix commits' alone. origin/main has
+# since moved to 88b936cb (train #316): it changes no guarded path either, but the branch no
+# longer merges clean (conflict in tests/README.md only, git merge-tree); a scratch merge
+# (that file resolved to the branch side, dist rebuilt) was used for the browser runs below.
 #
-# Lenses (the owner flagged this group: controls that do not reach the sound): (a) every control
-# path from a lab to the voice: play, _restart (pattern change, phase restart), live onChange,
-# the WAV render, dual voices; (b) audio-engine discipline of the new code: tracked eg only, no
-# setTargetAtTime, no step on a sounding param, every step from the floor, no ramp to 0, the
-# shrink guards equal to V1 stepEnv (0.4 / 0.5 of dur, MIN_SEGMENT_S 1 ms); (c) tests and
-# fail-first; (d) PR body and docs vs code. A first review pass (same session) produced P2-1,
-# P2-2 and P3-1..P3-3; each was re-checked here against the code and kept at its severity.
-# R-6 is new from this pass.
+# The digest: the branch's scripts/review-verdict.mjs, identical to origin/main's (git diff
+# origin/main HEAD -- scripts/review-verdict.mjs is empty), `--content --list --base
+# origin/main` in the fresh worktree over the four guarded paths the PR changes
+# (src/js/audio/audio-engine.js, envelope.js, lab-play-options.js, scheduler.js):
+# 728bcf14...f4ac, which matches the PR body.
 #
-# Runs:
-# - git fetch: origin/fix/c007-lab-play-options = 1c69d121 = PR head; origin/main = cdda563c.
-# - node --test lab-play-options, engine, audio-envelope, freeze (fresh worktree, no
-#   node_modules needed): 1197/1197 pass; freeze golden unchanged.
-# - Probe on the freeze mock, scratchpad script importing the head's src (Envelope on, a 0.01
-#   d 0.1 s 0.1 r 0.3, makeAdsrEnvelope installed, the main.js wrapper reproduced): env level at
-#   t0 + 0.5 s is 1.0000 for the continuous ping-pong sweep (envelope 'whole') and 0.1000 for the
-#   ping-pong once and the continuous up sweep (envelope 'segment'); voice.adsr is set in all
-#   three (R-1). A held tone started with the Envelope on keeps voice.adsr and its 0.1 sustain
-#   after the lab is switched off with no restart (R-2). A held tone played with releaseS 0.03,
-#   then updateLive to a sweep: 'restarted', the new voice's release 0.03 and attack 0.01,
-#   whatever the instrument's Attack/Release now say (R-6).
-# - Not re-run here (the first pass ran them; nothing installed, disk near the floor): the
-#   mutation set M1-M9, build.mjs --check and the three browser checks on head and main dist.
+# Lenses: (a) try to refute each claimed fix: R-1 in realtime and the WAV render, R-2 on every
+# Envelope control (field, slider, graph, power switch) against held, programmed, sweep and
+# releasing voices, R-3 on the real wrapper; (b) audio-engine discipline of the new code: no
+# setTargetAtTime added (none in the delta), no edit of a rendering ramp (V249: setAdsr edits
+# no param, it restarts or only changes v.release read at note-off), no step on a sounding
+# param, no ramp to 0, click-free stops (the restart is the FAST_RELEASE_S fade of play()),
+# nodes tracked (activeNodeCount 0 after every unit case); (c) mutation of the fixes; (d) PR
+# body and docs vs code.
+#
+# Runs (head aeec969a unless noted):
+# - node --test lab-play-options, engine, audio-envelope, freeze: 1203/1203 pass (14 in
+#   lab-play-options, 6 of them new); freeze golden unchanged. Full unit suite: 3299 tests,
+#   3296 pass; the 2 fails (version-authority 7, 8: EISDIR) came from the reviewer's untracked
+#   node_modules symlink and pass 12/12 once it was removed.
+# - node scripts/build.mjs --check: dist/index.html is up to date (v3.13.0, 15e086a1f437).
+# - tests/browser/app.cjs --origins file --only envelope-follows-held, restart-follows-labs,
+#   adsr-reaches-programmed: PASS 4/4 in chromium, firefox and webkit. On the scratch merge with
+#   origin/main 88b936cb, the same plus main's C020 labs-basic and ui-envelope-controls (#324):
+#   PASS 6/6 in all three engines (load 22-35, OSC_LOAD_MAX 200).
+# - Mutation (git-archive copy of the head, node --test of the four unit files): the round-1
+#   set M1-M9 is still killed. New: N1 R-1 reverted to floor + linear attack, N2 adsr not
+#   handed to the open envelope, N4 setAdsr never restarts, N5 release in place on a programmed
+#   note, N6 voice options not updated, N7 live path keeps the old release, N8 sustain not
+#   compared, N12 release not compared, N15 followEnvelopeLab a no-op, N16 the off switch
+#   ignored, N17 the withLabOptions spread reversed: all killed. Survived: N9 decay not
+#   compared, N10 attack not compared, N14 setAdsr acts on a releasing voice (R-8); N3 per-play
+#   o.envelope ignored (equivalent: nothing passes o.envelope), N11 hook not compared
+#   (equivalent: the hook is null exactly when adsr is), N13 a continuous segment sweep counted
+#   as held (conservative branch; segments read v.release, so in place would also be right),
+#   N18 the measurement guard ignored (main.js only; tests/browser/v3-ui.cjs checks the refusal).
+# - Probe (scratchpad mut296d/probe/drag.mjs, freeze mock, the head's src, ADSR installed as in
+#   main.js): a held tone at s 0.6, then the Sustain slider dragged to 0.1 as 20 'input'
+#   events through followEnvelopeLab: 20 x 'restarted', 21 voices; one event per 16 ms gives
+#   20 local maxima of the summed output with dips to 0.013; one per 50 ms or 100 ms gives 20
+#   re-attacks peaking at 1.000 with dips to 0.000 / 0.002 (R-7).
+# - CI at aeec969a (gh): V3.1 Studio UI (webkit) failed on a Studio transport timing check
+#   (Tone -> Sweep boundary dip at 1.016 s); Studio imports only SCHEDULE_LEAD_S and
+#   TOP_UP_EVERY_MS from scheduler.js, which the PR leaves unchanged, and the job passed at
+#   1c69d121, so it is not attributed to this change; it needs a green re-run with the next
+#   push. review-verdict failed on the stale round-1 verdict, which this file replaces.
 # - No PR code was modified; this file is the only change.
 #
-# Checked and found correct: labPlayOptions returns all six keys and the engine treats null as
-# absent (adsr, stepEnvelope, inserts, periodicWave, dualRouter; dualPhaseDeg through
-# normalizePhaseDeg(null) = 0); a restart after Additive or Envelope off plays without them; a
-# dual plan gets no wave at play, at restart, live (setPeriodicWave refused) or from the additive
-# onChange; setDualPhase's restart reads the same phase from labs.phase; the WAV render builds
-# its options through the same function; AM/FM/LFO carriers go through _carrier, so the wave
-# reaches them; scheduleAdsrStep is stateless, schedules through the tracked eg only, starts at
-# the floor, never steps or ramps to 0, and keeps a + d + r <= dur; with the Envelope off V1's
-# stepEnv runs unchanged.
-#
-# Open: R-1 and R-2 are P2 (controls that do not reach the sound, the owner's lens), so the
-# verdict is changes-requested. R-3 to R-6 are P3.
+# Closed: R-1, R-2 (the live path exists and reaches the voice on every control), R-3, R-4,
+# R-5. Open: R-7 is P2 (new: the R-2 live path restarts the held note on every slider 'input'
+# and graph pointermove, so a drag is a train of re-attacks; not scoped as a follow-up: the
+# PR body's C008 note covers a sustain glide only), so the verdict is changes-requested.
+# R-6 and R-8 are P3.
 schema: review-verdict/v1
 pr: 296
 verdict: changes-requested
-reviewer: "dev-68 (Claude Opus 5.5 session 4f90795d); did not build, merge or edit this change; wrote only this file"
-content: 88cdba5703efb28efaa100114f588e36ca6ac92d9d111bcd23a855f19789686c
+reviewer: >-
+  dev-68 (Claude Opus 5.5 session 4f90795d); did not build, merge or edit this change; wrote
+  only this file
+content: 728bcf146a3329cd7a78e069ac86a2836cf997a6a18eaa00993b977820c9f4ac
 findings:
-  - { id: R-1, severity: P2, status: open, title: "engine-sync-7 is left behind for the continuous ping-pong sweep. scheduler.js:86-89 gives a continuous ramps plan with envelope 'whole' (patterns.js:320, pingpong + repeat continuous) only setValueAtTime(GAIN_FLOOR, t0) and a linear ramp to 1, and _scheduleCycles tops it up with no envelope, so it never calls v.stepEnv or the open ADSR envelope. With the Envelope on (s 0.1) it sounds at 1.0 while every other sweep holds 0.1, yet voice.adsr is set and labVizInputs (main.js:199) shows the ADSR; the WAV render goes through the same scheduler. README.md:89 and .ai/repo/features/adsr-envelope.md:26, changed by this PR, say the ADSR 'shapes every note'. Fix: give the whole-envelope continuous sweep the ADSR attack/decay/sustain (the open envelope fn with len Infinity), or exclude it from the claim and the views." }
-  - { id: R-2, severity: P2, status: open, title: "The Envelope lab has no live path to a sounding voice. main.js:449-450: labs.envelope.onChange only runs syncLabFlags and vizLabsChanged, nothing reaches engine.voice. Switching the Envelope off, or editing sustain/release, during a held tone or a long finite/steps note leaves the voice on the ADSR it started with (voice.adsr, v.release), while labVizInputs shows the new state at once; the change sounds only at the next restart or note. Additive (main.js:437-447), Filter (live config, crossfaded bypass) and Phase (setDualPhase) all have live paths; labs/envelope.js:3-4 says the engine subscribes with lab.onChange to follow edits, which nothing does. restart-follows-labs (tests/browser/app.cjs) switches the lab off and calls setPattern in one evaluate, so it never sees this. Pre-existing on main, but it contradicts the PR title ('the current lab state always wins'). Fix: on an Envelope change restart (or re-envelope) the sounding voice click-free, as setDualPhase does, or state the note-on semantics in the views." }
-  - { id: R-3, severity: P3, status: open, title: "The one real integration point, the spread order of the main.js:216 wrapper ({ ...o, ...v2PlayOptions(...) }), has no unit test: tests/unit/lab-play-options.test.mjs:83 wrap() re-implements it, and no unit test imports main.js. Reversing the spread passes every unit test; only the browser check restart-follows-labs would catch it (it passes on head and fails on main's dist per the first pass)." }
-  - { id: R-4, severity: P3, status: open, title: "The PR body's fail-first line for lab-play-options.test.mjs is module-not-found, which does not by itself show the behaviour fails on main. The first pass shimmed main's v2PlayOptions (keys omitted when a lab is off) behind the new API: with the key-presence asserts stripped, 7/8 still fail on behaviour (stale wave, stale adsr, level 1), so the test is real; the body should say so or show it." }
-  - { id: R-5, severity: P3, status: open, title: "The Sequencer lab and Studio do not consume labPlayOptions: the sequencer plays through compileSequence (compiler.js:590) with its own block envelopes, renderSequenceToWav (main.js:283-286) passes only level and waveform, and Studio has its own runtime, so Envelope/Filter/Additive never reach them. Pre-existing and outside C007, but README.md:89's 'each step of a programmed pattern' can be read as the Pattern sequencer panel (labs/sequencer-panel.js:1). Fix: name the instrument's patterns in the README, or route the labs into the sequencer." }
-  - { id: R-6, severity: P3, status: open, title: "The instrument's own play options still ride stale through _restart, the engine-sync-1 mechanism that labPlayOptions fixes only for lab keys: audio-engine.js:774 copies { ...v.opts }, so attackS, releaseS and durationS of a restarted voice are the ones of the first play. Probe: hold with releaseS 0.03, then updateLive to a sweep -> 'restarted', v.release 0.03, v.attack 0.01, whatever the Attack/Release fields now say (instrument.js:1065 passes only the plan; vizInputs show the new values). Pre-existing and with the Envelope off only (adsr.a/r win when it is on). Fix: have the wrapper (or updateLive's caller) pass the current instrument options on a restart, keeping until." }
+  - id: R-1
+    severity: P2
+    status: closed
+    title: >-
+      Closed at aeec969a. scheduler.js:89: a continuous sweep with envelope 'whole' (ping-pong)
+      now runs the voice's open envelope with no end, (o.envelope || this._envelope)(eg, t0,
+      Infinity, a, r, v.adsr), so the ADSR's decay and sustain reach it as they reach a held
+      tone; with the Envelope off v1OpenEnvelope(len Infinity) is exactly the old floor and
+      linear attack (freeze golden unchanged). The top-up (_scheduleCycles) never touches eg
+      for 'whole'. Verified: unit R-1 tests (realtime 0.1 at t0 + 0.5 s, WAV render 0.1,
+      Envelope off 1 and still attacking at 5 ms), mutants N1 and N2 killed, and
+      envelope-follows-held's ping-pong step passes in chromium, firefox and webkit.
+  - id: R-2
+    severity: P2
+    status: closed
+    title: >-
+      Closed at aeec969a. main.js:451 calls followEnvelopeLab(engine, labs.envelope) on every
+      Envelope change; it builds adsr/stepEnvelope through labPlayOptions and calls
+      engine.setAdsr (audio-engine.js:889): a release-only change on a voice with no scheduled
+      end (and not a continuous segment sweep) sets v.release/v.adsr in place, read at
+      note-off; any other change (a, d, s, off, on, or a release of a programmed or limited
+      note) restarts the voice through _restart with the same plan and deadline and the
+      updated options; a releasing or ended voice is left alone. No sounding param is edited
+      (V249). Verified: unit R-2 tests, mutants N4-N8, N12, N15, N16 killed, browser
+      envelope-follows-held (field edits, power switch) in three engines, also merged with
+      origin/main 88b936cb next to C020's ui-envelope-controls. The drag behaviour of this
+      path is R-7, its untested branches R-8.
+  - id: R-3
+    severity: P3
+    status: closed
+    title: >-
+      Closed at aeec969a. The wrapper is lab-play-options.js withLabOptions, used by main.js:209
+      and tested directly (R-3 unit test); reversing its spread (N17) fails it. The measurement
+      guard moved into it unchanged in meaning (refuses only while measureOwnsOutput), checked
+      by tests/browser/v3-ui.cjs.
+  - id: R-4
+    severity: P3
+    status: closed
+    title: >-
+      Closed at aeec969a. The PR body's Fail-first section now says module-not-found alone does
+      not show the behaviour fails on main, records the reviewer's shimmed run (7 of 8 fail on
+      behaviour), and states which round-2 tests fail on 1c69d121 by assertion (R-1) and which
+      by the missing API (R-2, R-3).
+  - id: R-5
+    severity: P3
+    status: closed
+    title: >-
+      Closed at aeec969a, in the docs as the finding offered: README.md:89-93 and
+      .ai/repo/features/adsr-envelope.md:26-31 say "every note of the instrument" and that the
+      Pattern sequencer and Studio keep their own envelopes.
+  - id: R-6
+    severity: P3
+    status: open
+    title: >-
+      Unchanged (the PR body leaves it). _restart (audio-engine.js:777) still copies the first
+      play's attackS, releaseS and durationS, and setAdsr's restart now reaches the same
+      mechanism: switching the Envelope off during a held tone gives the restarted voice the
+      first play's releaseS (the R-2 unit test asserts v3.release 0.03, the value the note
+      started with), whatever the instrument's Release field says now. Pre-existing; with the
+      Envelope on adsr.a/r win.
+  - id: R-7
+    severity: P2
+    status: open
+    title: >-
+      New, introduced by the R-2 fix. The Envelope's sliders notify on every 'input'
+      (labs/envelope.js:64, :73) and its graph on every pointermove (charts/envelope-graph.js:180
+      -> set), and each notification reaches setAdsr, which restarts the held voice for any
+      change of a, d or s. A drag is therefore a train of note-ons: probe (freeze mock, head
+      src) Sustain 0.6 -> 0.1 in 20 input events gives 20 restarts and 21 voices; at one event
+      per 50-100 ms each new voice re-attacks to 1.000 (+4 dB over 0.6, +20 dB over the target
+      0.1) and the output dips to 0.000-0.002 between them; at 16 ms it chops with dips to
+      0.013. Attack and decay drags on a note already at its sustain restart it for a change
+      that does not alter the held level. setDualPhase, the precedent the fix cites, restarts
+      only on the phase field's 'change' (labs/phase-stereo.js:188). envelope-follows-held types
+      into the fields ('change') and never drags, so no check sees it. Fix: coalesce (restart
+      on the slider's 'change' and the graph's pointerup, or a trailing debounce), keep the
+      in-place release, or scope the drag explicitly as a follow-up (C008 #310's sustain glide
+      covers s only).
+  - id: R-8
+    severity: P3
+    status: open
+    title: >-
+      New, test coverage of setAdsr. Three branches survive mutation of the head: comparing
+      decay (N9) and attack (N10) can be dropped, so an attack or decay edit would be taken
+      "live" and never reach the held voice, and the v.releasing guard can be dropped (N14), so
+      an edit during a release tail would restart, i.e. resurrect, a note the user let go; no
+      unit or browser check fails. The head's code is right on all three; add an attack and a
+      decay edit to the R-2 unit test and one setAdsr on a releasing voice expecting false.
