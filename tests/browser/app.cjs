@@ -167,6 +167,91 @@ const H = {
   }),
 };
 
+// ------------------------------------------------------------------------------ UI drivers
+// The control-drive checks (C020) operate each control the way a user does and then poll,
+// against a named wall-clock deadline (rule project.bounded-test-timing), until the subsystem
+// the control drives (engine voice, lab stage, model) and a view that reflects it (a readout, a
+// chart, an aria state) both show the change. tests/unit/control-drive-baseline.test.mjs
+// requires that every control of src/index.html is driven somewhere in tests/browser.
+const U = {
+  /** A typed value committed with Enter (text and number fields commit on change). */
+  fill: async (page, sel, text) => {
+    await page.fill(sel, text);
+    await page.press(sel, 'Enter');
+  },
+  /** Focus the control, then press keys (the keyboard path of a slider, radio or switch). */
+  press: async (page, sel, ...keys) => {
+    await page.focus(sel);
+    for (const k of keys) await page.keyboard.press(k);
+  },
+  /** A pointer click on a slider's track at the fraction `at` of its width. */
+  tap: async (page, sel, at) => {
+    const l = page.locator(sel);
+    await l.scrollIntoViewIfNeeded();
+    const b = await l.boundingBox();
+    await page.mouse.click(b.x + b.width * at, b.y + b.height / 2);
+  },
+  /**
+   * Poll fn() until test(value) holds and return that value; on the deadline the error names
+   * the step (`what`) and carries the last value read.
+   */
+  poll: async (fn, test, what, ms = 8000) => {
+    let last;
+    try {
+      const hit = await until(async () => {
+        last = await fn();
+        return test(last) ? { v: last } : null;
+      }, { ms, what });
+      return hit.v;
+    } catch (e) {
+      throw new Error(`${e.message}; last ${JSON.stringify(last).slice(0, 1500)}`);
+    }
+  },
+  /** Level (dBFS) of one frequency on the engine's post-chain analyser: Goertzel on a
+   *  Hann-windowed time block, so the analyser's smoothing does not decide the result. */
+  toneDb: (page, hz) => page.evaluate((f) => {
+    const e = window.OSCILLA.engine;
+    const an = e.analyser;
+    if (!an) return -240;
+    const n = an.fftSize;
+    const x = new Float32Array(n);
+    an.getFloatTimeDomainData(x);
+    const w = (2 * Math.PI * f) / e.ctx.sampleRate;
+    let re = 0;
+    let im = 0;
+    let ws = 0;
+    for (let i = 0; i < n; i++) {
+      const h = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (n - 1));
+      ws += h;
+      re += x[i] * h * Math.cos(w * i);
+      im -= x[i] * h * Math.sin(w * i);
+    }
+    return 20 * Math.log10((2 * Math.hypot(re, im)) / ws + 1e-12);
+  }, hz),
+  /** Latch the instrument on (the status bar's Play key with continuous playback allowed). */
+  latch: (page) => page.evaluate(() => {
+    const a = window.OSCILLA.app;
+    a.setContinuous(true);
+    if (!a.latched) a.toggleLatch();
+  }),
+  /** The oscillator source again (the dual switch off), from the Synthesis panel. */
+  singleSource: async (page) => {
+    if (await page.evaluate(() => window.OSCILLA.app.source) !== 'dual') return;
+    await H.workspace(page, 'synthesis');
+    await page.click('#osc-dual-enable');
+    await U.poll(() => page.evaluate(() => window.OSCILLA.app.source), (v) => v !== 'dual',
+      'the dual switch returns the instrument to one oscillator', 5000);
+  },
+  unlatch: async (page) => {
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      if (a.latched) a.toggleLatch();
+      a.stopNow();
+    });
+    await U.poll(() => H.nodes(page), (n) => n === 0, 'the latched tone is torn down', 5000);
+  },
+};
+
 /** Accessible-name + reachability audit of every interactive [data-osc] element, in-page. */
 function auditControls() {
   const INTERACTIVE = 'button, input, select, textarea, summary, a[href], [role="switch"],'
@@ -1569,56 +1654,66 @@ function defineChecks() {
   def('labs-basic', async ({ page }) => {
     await H.continuous(page, true);
     const out = {};
-    // filter: low-pass at 500 Hz must attenuate a 5 kHz tone when enabled
-    await page.evaluate(() => {
-      window.OSCILLA.app.setFrequency(5000);
-      window.OSCILLA.labs.filter.update({ type: 'lowpass', frequency: 500, Q: 0.7071, enabled: true });
-    });
-    await H.focusBody(page);
-    await page.keyboard.down(' ');
-    await sleep(400);
-    out.filteredPeak = +(await H.peak(page)).toFixed(4);
-    await page.keyboard.up(' ');
-    await H.waitNodes0(page);
-    await page.evaluate(() => window.OSCILLA.labs.filter.update({ enabled: false }));
-    await H.spaceDown(page);
-    await sleep(400);
-    out.bypassPeak = +(await H.peak(page)).toFixed(4);
-    await page.keyboard.up(' ');
-    await H.waitNodes0(page);
-    // ADSR: sustain 0.5 halves the held level
-    await page.evaluate(() => {
-      window.OSCILLA.app.setFrequency(440);
-      window.OSCILLA.labs.envelope.update({ adsr: { a: 0.01, d: 0.05, s: 0.5, r: 0.05 }, enabled: true });
-    });
-    await H.spaceDown(page);
-    await sleep(500);
-    out.adsrPeak = +(await H.peak(page)).toFixed(4);
-    await page.keyboard.up(' ');
-    await H.waitNodes0(page);
-    await page.evaluate(() => window.OSCILLA.labs.envelope.update({ enabled: false }));
+    const gain = await page.evaluate(() => window.OSCILLA.app.gainLevel);
+    const held = async (test, what) => {
+      await H.spaceDown(page);
+      const v = await U.poll(async () => +(await H.peak(page)).toFixed(4), test, what);
+      await page.keyboard.up(' ');
+      await H.waitNodes0(page);
+      return v;
+    };
+    // filter, set in the Filter Lab: low-pass at 500 Hz must attenuate a 5 kHz tone when enabled
+    await H.workspace(page, 'filter');
+    await page.evaluate(() => window.OSCILLA.app.setFrequency(5000));
+    if (await page.getAttribute('#osc-filter-enable', 'aria-checked') !== 'true') {
+      await page.click('#osc-filter-enable');
+    }
+    await page.click('#osc-ftype-lowpass');
+    await U.fill(page, '#osc-filter-cutoff-value', '500');
+    await U.fill(page, '#osc-filter-q-value', '0.707');
+    out.filter = await page.evaluate(() => window.OSCILLA.labs.filter.config);
+    out.filteredPeak = await held((p) => p > 0 && p < gain * 0.2,
+      'labs-basic: the 5 kHz tone is attenuated by the 500 Hz low-pass');
+    await page.click('#osc-filter-enable');
+    out.bypassPeak = await held((p) => Math.abs(p - gain) < 0.01,
+      'labs-basic: the filter switched off passes the tone at its level');
+    // ADSR, set in the Envelope panel: sustain 0.5 halves the held level
+    await H.workspace(page, 'synthesis');
+    await page.evaluate(() => window.OSCILLA.app.setFrequency(440));
+    if (await page.getAttribute('#osc-env-enable', 'aria-pressed') !== 'true') {
+      await page.click('#osc-env-enable');
+    }
+    await U.fill(page, '#osc-env-attack-value', '10 ms');
+    await U.fill(page, '#osc-env-decay-value', '50 ms');
+    await U.fill(page, '#osc-env-sustain-value', '0.5');
+    await U.fill(page, '#osc-env-release-value', '50 ms');
+    out.adsr = await page.evaluate(() => window.OSCILLA.labs.envelope.adsr);
+    out.adsrPeak = await held((p) => Math.abs(p - gain * 0.5) < 0.012,
+      'labs-basic: the held note settles at the typed sustain of 0.5');
+    await page.click('#osc-env-enable');
     // additive: enabled -> PeriodicWave on the carrier
     await page.click('#osc-add-enable');
     await H.spaceDown(page);
-    await sleep(300);
-    out.additiveCarrier = await page.evaluate(() => window.OSCILLA.engine.voice?.carrier?.type);
+    out.additiveCarrier = await U.poll(() => page.evaluate(() => window.OSCILLA.engine.voice
+      && window.OSCILLA.engine.voice.carrier && window.OSCILLA.engine.voice.carrier.type),
+    (t) => t === 'custom', 'labs-basic: the additive switch puts a PeriodicWave on the carrier');
     await page.keyboard.up(' ');
     await H.waitNodes0(page);
     await page.click('#osc-add-enable');
     // sequencer: play / stop
+    await H.workspace(page, 'sequencer');
     await page.click('#osc-seq-play');
-    await sleep(400);
-    out.seqPlaying = await page.evaluate(() => ({ app: window.OSCILLA.app.seqPlaying,
-      label: document.querySelector('[data-osc="status.label"]').textContent,
-      peak: 0 }));
-    out.seqPeak = +(await H.peak(page)).toFixed(4);
+    out.seqPlaying = await U.poll(() => page.evaluate(() => ({ app: window.OSCILLA.app.seqPlaying,
+      label: document.querySelector('[data-osc="status.label"]').textContent })),
+    (s) => s.app && s.label === 'PLAYING', 'labs-basic: the sequence plays and the status says so');
+    out.seqPeak = await U.poll(async () => +(await H.peak(page)).toFixed(4), (p) => p > 0.005,
+      'labs-basic: the sequence sounds');
     await page.click('#osc-seq-stop');
-    await sleep(300);
-    out.seqStopped = await page.evaluate(() => {
+    out.seqStopped = await U.poll(() => page.evaluate(() => {
       const s = window.OSCILLA.labs.sequencer.editor;
       const st = s.stats();
       return { playing: s.playing, sources: st.activeSourceCount, nodes: st.activeNodeCount };
-    });
+    }), (s) => !s.playing && s.sources === 0, 'labs-basic: STOP leaves no sequencer source');
     // device metrics are real after audio started
     out.device = await page.evaluate(() => ({
       sr: document.querySelector('#osc-dev-sr').textContent,
@@ -1629,22 +1724,601 @@ function defineChecks() {
     await page.click('#osc-dual-enable');
     await page.click('#osc-dual-stereo');
     await H.spaceDown(page);
-    await sleep(400);
-    out.dual = await page.evaluate(() => ({ source: window.OSCILLA.app.source,
+    out.dual = await U.poll(() => page.evaluate(() => ({ source: window.OSCILLA.app.source,
       router: !!window.OSCILLA.adapter.getStereoRouter(),
-      corr: document.querySelector('#osc-corr-value').textContent }));
+      corr: document.querySelector('#osc-corr-value').textContent })),
+    (d) => d.source === 'dual' && d.router,
+    'labs-basic: the stereo dual voice runs through the router');
     await page.keyboard.up(' ');
     await H.waitNodes0(page);
     await page.click('#osc-dual-mono');
     await page.click('#osc-dual-enable');
     await H.workspace(page, 'playground');
-    const gain = 0.08;
-    const ok = out.filteredPeak < gain * 0.2 && Math.abs(out.bypassPeak - gain) < 0.01
-      && Math.abs(out.adsrPeak - gain * 0.5) < 0.012 && out.additiveCarrier === 'custom'
-      && out.seqPlaying.app && out.seqPlaying.label === 'PLAYING' && out.seqPeak > 0.005
+    const ok = out.filter.type === 'lowpass' && Math.abs(out.filter.frequency - 500) < 0.5
+      && out.adsr.s === 0.5 && out.additiveCarrier === 'custom'
       && !out.seqStopped.playing && out.seqStopped.sources === 0
       && /\d/.test(out.device.sr) && out.dual.source === 'dual' && out.dual.router;
-    return { ok, ...out };
+    return { ok, gain, ...out };
+  });
+
+  // ---- C020 control drive: each control operated by pointer or keyboard reaches its
+  // subsystem (the live filter stage and the sound, the envelope of the next note, the dual
+  // voice, the router, the instrument state) and a view that reflects it. The envelope is
+  // judged on the next note and the filter on the instrument's tone: an edit reaching a held
+  // note and the filter reaching the sequencer are separate findings (PACK 03 control-census-3
+  // and -2), not asserted here.
+  const filterState = (page, hz) => page.evaluate((f) => {
+    const L = window.OSCILLA.labs.filter;
+    const st = L.stage;
+    const n = st && st.node;
+    const d = L.chart ? L.chart.getData() : null;
+    let at = null;
+    if (d && d.x.length) {
+      let k = 0;
+      for (let i = 1; i < d.x.length; i++) if (Math.abs(d.x[i] - f) < Math.abs(d.x[k] - f)) k = i;
+      at = Math.round(d.y[k] * 10) / 10;
+    }
+    const q = (s) => document.querySelector(s);
+    return { cfg: L.config, live: !L.previewOnly, type: n ? n.type : null,
+      hz: n ? Math.round(n.frequency.value) : null, chartDb: at,
+      on: q('#osc-filter-enable').getAttribute('aria-checked'),
+      cutoffText: q('#osc-filter-cutoff-value').value,
+      cutoffSlider: q('#osc-filter-cutoff').getAttribute('aria-valuetext'),
+      qText: q('#osc-filter-q-value').value,
+      qSlider: q('#osc-filter-q').getAttribute('aria-valuetext'),
+      gainShown: !q('[data-osc="filter.gainGroup"]').hidden,
+      gainSlider: q('#osc-filter-gain').getAttribute('aria-valuetext') };
+  }, hz);
+
+  def('ui-filter-controls', async ({ page }) => {
+    const HZ = 1000;
+    const out = {};
+    await H.workspace(page, 'filter');
+    await page.evaluate((f) => {
+      const a = window.OSCILLA.app;
+      a.setWaveform('sine');
+      a.setFrequency(f);
+    }, HZ);
+    if (await page.getAttribute('#osc-filter-enable', 'aria-checked') !== 'true') {
+      await page.click('#osc-filter-enable');
+    }
+    await page.click('#osc-ftype-lowpass');
+    await U.fill(page, '#osc-filter-cutoff-value', '20000');
+    const S = async () => ({ ...(await filterState(page, HZ)), db: +(await U.toneDb(page, HZ))
+      .toFixed(1) });
+    const step = (name, test) => U.poll(S, test, `ui-filter-controls: ${name}`);
+    // the tone's own level: its gain, in dBFS, through the open filter
+    const L0 = +(20 * Math.log10(await page.evaluate(() => window.OSCILLA.app.gainLevel)))
+      .toFixed(1);
+    out.L0 = L0;
+    try {
+      await U.latch(page);
+      await step('the open low-pass passes the tone at its level', (s) => s.live
+        && s.type === 'lowpass' && s.on === 'true' && s.cfg.frequency > 10000
+        && Math.abs(s.db - L0) < 1.5);
+      out.L0 = L0;
+      // cutoff typed, by pointer on the field: 150 Hz takes the 1 kHz tone down
+      await U.fill(page, '#osc-filter-cutoff-value', '150');
+      out.cutoffText = await step('typed cutoff 150 Hz', (s) => Math.abs(s.cfg.frequency - 150)
+        < 0.5 && Math.abs(s.hz - 150) < 2 && s.db < L0 - 20 && s.chartDb < -20
+        && /150/.test(s.cutoffSlider));
+      // cutoff slider by keyboard: End opens the filter again
+      await U.press(page, '#osc-filter-cutoff', 'End');
+      out.cutoffKey = await step('cutoff slider End', (s) => s.cfg.frequency > 10000
+        && s.db > L0 - 3 && s.cutoffText !== '150 Hz' && s.chartDb > -3);
+      // cutoff slider by pointer, near its low end
+      await U.tap(page, '#osc-filter-cutoff', 0.02);
+      out.cutoffTap = await step('cutoff slider tapped low', (s) => s.cfg.frequency < 200
+        && s.db < L0 - 15);
+      // the types, at a cutoff on the tone
+      await U.fill(page, '#osc-filter-cutoff-value', '1000');
+      await page.click('#osc-ftype-notch');
+      out.notch = await step('notch on the tone', (s) => s.cfg.type === 'notch'
+        && s.type === 'notch'
+        && s.db < L0 - 30 && s.chartDb < -30);
+      await page.click('#osc-ftype-bandpass');
+      out.bandpass = await step('band-pass on the tone', (s) => s.cfg.type === 'bandpass'
+        && s.type === 'bandpass' && Math.abs(s.db - L0) < 3 && s.chartDb > -3);
+      await U.press(page, '#osc-ftype-bandpass', 'ArrowLeft');
+      await U.fill(page, '#osc-filter-cutoff-value', '5000');
+      out.highpass = await step('high-pass by keyboard, 5 kHz', (s) => s.cfg.type === 'highpass'
+        && s.type === 'highpass' && s.db < L0 - 20 && s.chartDb < -20);
+      // Q: a narrow band-pass at 3 kHz rejects the 1 kHz tone more than a wide one
+      await page.click('#osc-ftype-bandpass');
+      await U.fill(page, '#osc-filter-cutoff-value', '3000');
+      await U.fill(page, '#osc-filter-q-value', '0.707');
+      // the level heard is the level the chart draws at the tone (within 2 dB)
+      const heard = (s) => Math.abs(s.db - (L0 + s.chartDb)) < 2;
+      const wide = await step('band-pass 3 kHz, Q 0.707', (s) => s.type === 'bandpass'
+        && Math.abs(s.cfg.Q - 0.707) < 0.01 && s.hz === 3000 && heard(s));
+      await U.fill(page, '#osc-filter-q-value', '20');
+      out.qText = await step('typed Q 20', (s) => Math.abs(s.cfg.Q - 20) < 0.01
+        && s.chartDb < wide.chartDb - 15 && s.db < wide.db - 15 && s.qSlider !== wide.qSlider);
+      await U.press(page, '#osc-filter-q', 'Home');
+      out.qKey = await step('Q slider Home', (s) => s.cfg.Q < 0.707 && s.db > out.qText.db + 10
+        && heard(s) && s.qText !== out.qText.qText);
+      // gain: peaking by keyboard from notch, then the gain slider by keyboard
+      await page.click('#osc-ftype-notch');
+      await U.press(page, '#osc-ftype-notch', 'ArrowRight');
+      await U.fill(page, '#osc-filter-cutoff-value', '1000');
+      await U.press(page, '#osc-filter-gain', 'Home');
+      out.cut = await step('peaking -24 dB', (s) => s.cfg.type === 'peaking' && s.gainShown
+        && s.cfg.gain === -24 && s.db < L0 - 12 && /-24/.test(s.gainSlider));
+      await U.press(page, '#osc-filter-gain', 'End');
+      out.boost = await step('peaking +24 dB', (s) => s.cfg.gain === 24 && s.db > L0 + 6
+        && s.chartDb > 20);
+      // the switch: off passes the tone the low-pass held back
+      await page.click('#osc-ftype-lowpass');
+      await U.fill(page, '#osc-filter-cutoff-value', '150');
+      await step('low-pass 150 Hz again', (s) => s.type === 'lowpass' && s.db < L0 - 20);
+      await page.click('#osc-filter-enable');
+      out.off = await step('filter switched off', (s) => !s.cfg.enabled && s.on === 'false'
+        && Math.abs(s.db - L0) < 3);
+    } finally {
+      await U.unlatch(page);
+      if (await page.getAttribute('#osc-filter-enable', 'aria-checked') === 'true') {
+        await page.click('#osc-filter-enable');
+      }
+      await page.click('#osc-ftype-lowpass');
+      await U.fill(page, '#osc-filter-cutoff-value', '2500');
+    }
+    return { ok: true, ...out };
+  });
+
+  def('ui-envelope-controls', async ({ page }) => {
+    const out = {};
+    await H.workspace(page, 'synthesis');
+    await H.continuous(page, true);
+    await page.evaluate(() => window.OSCILLA.app.setFrequency(440));
+    const gain = await page.evaluate(() => window.OSCILLA.app.gainLevel);
+    const E = () => page.evaluate(() => {
+      const L = window.OSCILLA.labs.envelope;
+      const q = (s) => document.querySelector(s);
+      const t = (k) => ({ text: q(`#osc-env-${k}-value`).value,
+        slider: q(`#osc-env-${k}`).getAttribute('aria-valuetext') || q(`#osc-env-${k}`).value });
+      return { on: L.enabled, pressed: q('#osc-env-enable').getAttribute('aria-pressed'),
+        adsr: L.adsr, graph: L.graph ? L.graph.adsr : null,
+        a: t('attack'), d: t('decay'), s: t('sustain'), r: t('release') };
+    });
+    const step = (name, test) => U.poll(E, test, `ui-envelope-controls: ${name}`);
+    const near = (x, y) => Math.abs(x - y) < 1e-6;
+    if (await page.getAttribute('#osc-env-enable', 'aria-pressed') !== 'true') {
+      await page.click('#osc-env-enable');
+    }
+    await step('the envelope is on', (e) => e.on && e.pressed === 'true');
+    await U.fill(page, '#osc-env-attack-value', '5 ms');
+    await U.fill(page, '#osc-env-decay-value', '20 ms');
+    await U.fill(page, '#osc-env-sustain-value', '0.25');
+    await U.fill(page, '#osc-env-release-value', '40 ms');
+    out.typed = await step('typed A 5 ms, D 20 ms, S 0.25, R 40 ms', (e) => near(e.adsr.a, 0.005)
+      && near(e.adsr.d, 0.02) && near(e.adsr.s, 0.25) && near(e.adsr.r, 0.04)
+      && e.graph && near(e.graph.s, 0.25) && near(e.graph.a, 0.005)
+      && /5/.test(e.a.slider) && /20/.test(e.d.slider) && /40/.test(e.r.slider));
+    const note = async (lo, hi, what) => {
+      await H.spaceDown(page);
+      const p = await U.poll(async () => +(await H.peak(page)).toFixed(4),
+        (v) => v > gain * lo && v < gain * hi, `ui-envelope-controls: ${what}`);
+      await page.keyboard.up(' ');
+      await H.waitNodes0(page);
+      return p;
+    };
+    out.note1 = await note(0.17, 0.33, 'the next note holds at sustain 0.25');
+    // the sliders by keyboard: each moves its value and its text field
+    await U.press(page, '#osc-env-sustain', 'ArrowRight', 'ArrowRight', 'ArrowRight',
+      'ArrowRight', 'ArrowRight');
+    out.sustainKey = await step('sustain slider by keyboard', (e) => Math.abs(e.adsr.s - 0.3) < 1e-6
+      && Number(e.s.text) === 0.3 && e.graph && Math.abs(e.graph.s - 0.3) < 1e-6);
+    out.note2 = await note(0.22, 0.38, 'the next note holds at sustain 0.30');
+    // the time sliders by keyboard, to their ends: the value, its field and the graph follow
+    await U.press(page, '#osc-env-attack', 'End');
+    await U.press(page, '#osc-env-decay', 'End');
+    await U.press(page, '#osc-env-release', 'Home');
+    out.timeKeys = await step('attack and decay to their maximum, release to its minimum',
+      (e) => e.adsr.a > 0.5 && e.a.text !== out.typed.a.text && e.adsr.d > 0.5
+        && e.d.text !== out.typed.d.text && e.adsr.r < 0.04 && e.r.text !== out.typed.r.text
+        && e.graph && e.graph.a === e.adsr.a && e.graph.d === e.adsr.d && e.graph.r === e.adsr.r);
+    await U.fill(page, '#osc-env-attack-value', '10 ms');
+    await U.fill(page, '#osc-env-decay-value', '100 ms');
+    await U.fill(page, '#osc-env-sustain-value', '0.6');
+    await U.fill(page, '#osc-env-release-value', '300 ms');
+    await page.click('#osc-env-enable');
+    out.off = await step('the envelope is off', (e) => !e.on && e.pressed === 'false');
+    out.note3 = await note(0.85, 1.15, 'with the envelope off the next note is at full level');
+    return { ok: true, gain, ...out };
+  });
+
+  const dualState = () => {
+    const O = window.OSCILLA;
+    const a = O.app;
+    const v = O.engine.voice && !O.engine.voice.ended ? O.engine.voice : null;
+    const side = (k) => {
+      const s = v && v.live && v.live[k];
+      return s ? { f: Math.round(s.osc.frequency.value * 2 ** (s.osc.detune.value / 1200) * 10)
+        / 10, g: s.g.gain.value, wave: s.osc.type } : null;
+    };
+    const q = (s) => document.querySelector(s);
+    return { source: a.source, dual: JSON.parse(JSON.stringify(a.dual)),
+      A: side('A'), B: side('B'), phase: O.labs.phase.config, router: O.labs.phase.routerConfig,
+      live: !!O.adapter.getStereoRouter(),
+      liveCfg: O.adapter.getStereoRouter() ? O.adapter.getStereoRouter().config : null,
+      corrState: O.labs.phase.correlationState,
+      dualPhase: v && v.opts ? v.opts.dualPhaseDeg : null,
+      enable: q('#osc-dual-enable').getAttribute('aria-checked'),
+      aFreq: q('#osc-dual-a-freq').value, bFreq: q('#osc-dual-b-freq').value,
+      fa: q('#osc-stereo-fa').value, fb: q('#osc-stereo-fb').value,
+      aGain: q('#osc-dual-a-gain').getAttribute('aria-valuetext'),
+      aDetune: q('#osc-dual-a-detune').getAttribute('aria-valuetext'),
+      levelA: q('#osc-dual-level-a').getAttribute('aria-valuetext'),
+      pan: q('#osc-stereo-pan').getAttribute('aria-valuetext'),
+      stereoBtn: q('#osc-dual-stereo').getAttribute('aria-checked'),
+      splitBtn: q('#osc-stereo-split').getAttribute('aria-checked'),
+      corr: q('#osc-corr-value').textContent.trim() };
+  };
+
+  def('ui-dual-phase-stereo-controls', async ({ page }) => {
+    const out = {};
+    await H.workspace(page, 'synthesis');
+    const D = () => page.evaluate(dualState);
+    const step = (name, test) => U.poll(D, test, `ui-dual-phase-stereo-controls: ${name}`);
+    const near = (x, y, tol = 1) => x != null && Math.abs(x - y) <= tol;
+    if (await page.getAttribute('#osc-dual-enable', 'aria-checked') !== 'true') {
+      await page.click('#osc-dual-enable');
+    }
+    try {
+      await U.latch(page);
+      const s0 = await step('the dual voice sounds', (d) => d.source === 'dual'
+        && d.enable === 'true'
+        && d.A && d.B);
+      out.gA = s0.A.g;
+      out.gB = s0.B.g;
+      await U.fill(page, '#osc-dual-a-freq', '330');
+      await U.fill(page, '#osc-dual-b-freq', '660');
+      out.freqs = await step('typed A 330 Hz, B 660 Hz', (d) => d.dual.a.freq === 330
+        && d.dual.b.freq === 660 && near(d.A.f, 330) && near(d.B.f, 660) && d.fa === '330'
+        && d.fb === '660' && d.phase.freqA === 330 && d.phase.freqB === 660);
+      await page.selectOption('#osc-dual-a-wave', 'square');
+      await page.selectOption('#osc-dual-b-wave', 'triangle');
+      out.waves = await step('A square, B triangle', (d) => d.dual.a.wave === 'square'
+        && d.A.wave === 'square' && d.dual.b.wave === 'triangle' && d.B.wave === 'triangle');
+      await U.press(page, '#osc-dual-a-detune', 'End');
+      await U.press(page, '#osc-dual-b-detune', 'Home');
+      out.detune = await step('A +100 cents, B -100 cents', (d) => d.dual.a.detune === 100
+        && d.dual.b.detune === -100 && near(d.A.f, 330 * 2 ** (1 / 12))
+        && near(d.B.f, 660 * 2 ** (-1 / 12)) && /100/.test(d.aDetune));
+      await U.press(page, '#osc-dual-a-detune', 'ArrowLeft');
+      await U.fill(page, '#osc-dual-a-freq', '330');
+      await U.press(page, '#osc-dual-a-gain', 'Home');
+      out.gainA0 = await step('A gain 0', (d) => d.dual.a.gain === 0 && d.A.g < 0.01 * out.gA + 1e-6
+        && /^0/.test(d.aGain));
+      await U.press(page, '#osc-dual-a-gain', 'End');
+      await U.tap(page, '#osc-dual-b-gain', 0.25);
+      out.gains = await step('A gain 100, B gain tapped low', (d) => d.dual.a.gain === 100
+        && near(d.A.g, out.gA, out.gA * 0.05) && d.dual.b.gain < 50 && d.B.g < out.gB * 0.6);
+      await U.press(page, '#osc-dual-level-a', 'Home');
+      await U.tap(page, '#osc-dual-level-b', 0.5);
+      out.levels = await step('level A 0, level B mid', (d) => d.dual.levelA === 0 && d.A.g < 1e-4
+        && d.dual.levelB > 30 && d.dual.levelB < 70 && /^0/.test(d.levelA));
+      await U.press(page, '#osc-dual-level-a', 'End');
+      const r0 = await D();
+      await U.press(page, '#osc-dual-a-range', 'ArrowRight', 'ArrowRight', 'ArrowRight');
+      await U.tap(page, '#osc-dual-b-range', 0.3);
+      out.ranges = await step('the A and B frequency sliders', (d) => d.dual.a.freq > r0.dual.a.freq
+        && d.aFreq !== r0.aFreq && near(d.A.f, d.dual.a.freq * 2 ** (d.dual.a.detune / 1200), 2)
+        && d.dual.b.freq !== r0.dual.b.freq && d.bFreq !== r0.bFreq
+        && near(d.B.f, d.dual.b.freq * 2 ** (d.dual.b.detune / 1200), 2));
+      // Phase & Stereo panel: the offset restarts the sounding B, the frequencies are the dual
+      // voice's own
+      await page.click('#osc-ptab-phase');
+      await U.fill(page, '#osc-phase-offset', '90');
+      out.offset = await step('phase offset 90 degrees', (d) => d.phase.phaseDeg === 90
+        && d.dualPhase === 90 && d.A && d.B);
+      await page.click('#osc-ptab-stereo');
+      await U.fill(page, '#osc-stereo-fa', '300');
+      await U.fill(page, '#osc-stereo-fb', '301');
+      out.stereoFreqs = await step('stereo A 300 Hz, B 301 Hz', (d) => d.phase.freqA === 300
+        && d.phase.freqB === 301 && d.dual.a.freq === 300 && d.dual.b.freq === 301
+        && d.aFreq === '300' && d.bFreq === '301'
+        && near(d.A.f, 300 * 2 ** (d.dual.a.detune / 1200), 1));
+      // The route is taken when a note starts (the router is built per note): a route chosen
+      // while a note sounds is judged on the next one.
+      await page.click('#osc-dual-stereo');
+      out.stereo = await step('dual routed stereo', (d) => d.dual.stereo
+        && d.phase.route === 'stereo' && d.router.mode === 'split' && d.stereoBtn === 'true'
+        && d.splitBtn === 'true');
+      await U.unlatch(page);
+      await U.latch(page);
+      out.stereoNote = await step('the next note runs through the stereo router', (d) => d.live
+        && d.liveCfg && d.liveCfg.mode === 'split' && d.corrState === 'live' && /\d/.test(d.corr)
+        && d.A && d.B);
+      await page.click('#osc-stereo-mono');
+      out.mono = await step('stereo mono again', (d) => d.phase.route === 'mono'
+        && !d.dual.stereo && d.splitBtn === 'false');
+      // pan (the mono mix): the next note is panned through the router, and a pan moved while
+      // it sounds reaches the live router
+      await U.press(page, '#osc-stereo-pan', 'End');
+      out.pan = await step('pan to the right', (d) => d.phase.pan === 1 && /right/.test(d.pan)
+        && d.router.mode === 'mono' && d.router.panA === 1);
+      await U.unlatch(page);
+      await U.latch(page);
+      out.panNote = await step('the next note is panned right', (d) => d.live && d.liveCfg
+        && d.liveCfg.panA === 1 && d.liveCfg.panB === 1);
+      await U.press(page, '#osc-stereo-pan', 'Home');
+      out.panLive = await step('pan to the left reaches the sounding note', (d) =>
+        d.phase.pan === -1
+        && /left/.test(d.pan) && d.live && d.liveCfg && d.liveCfg.panA === -1);
+      await U.tap(page, '#osc-stereo-pan', 0.5);
+      await step('pan tapped to the centre', (d) => Math.abs(d.phase.pan) < 0.05);
+      await page.click('#osc-stereo-split');
+      out.split = await step('stereo split from the panel', (d) => d.phase.route === 'stereo'
+        && d.dual.stereo && d.stereoBtn === 'true');
+      await page.click('#osc-dual-mono');
+      out.dualMono = await step('dual routed mono', (d) => !d.dual.stereo
+        && d.phase.route === 'mono' && d.splitBtn === 'false');
+    } finally {
+      await U.unlatch(page);
+      await U.singleSource(page);
+    }
+    const off = await D();
+    return { ok: off.source !== 'dual' && off.enable === 'false', ...out };
+  });
+
+  def('ui-additive-controls', async ({ page }) => {
+    const out = {};
+    await U.singleSource(page);
+    await H.workspace(page, 'synthesis');
+    const A = () => page.evaluate(() => {
+      const L = window.OSCILLA.labs.additive;
+      const v = window.OSCILLA.engine.voice;
+      const q = (s) => document.querySelector(s);
+      return { on: L.enabled, sel: L.selected, partials: L.partials.slice(0, 4),
+        coeff: L.coefficients().slice(0, 4).map((c) => ({ gainDb: c.gainDb })),
+        wave: v && !v.ended && v.carrier ? v.carrier.type : null,
+        same: !!(v && v.periodicWave && v.periodicWave === window.__c020wave),
+        sw: q('#osc-add-enable').getAttribute('aria-checked'), preset: q('#osc-add-preset').value,
+        gainText: q('#osc-add-gain-value').value, gainSlider: q('#osc-add-gain').value,
+        phaseText: q('#osc-add-phase').value };
+    });
+    const step = (name, test) => U.poll(A, test, `ui-additive-controls: ${name}`);
+    await page.evaluate(() => window.OSCILLA.app.setFrequency(220));
+    if (await page.getAttribute('#osc-add-enable', 'aria-checked') !== 'true') {
+      await page.click('#osc-add-enable');
+    }
+    try {
+      await U.latch(page);
+      out.on = await step('additive on: a PeriodicWave on the carrier', (a) => a.on
+        && a.sw === 'true'
+        && a.wave === 'custom');
+      await page.evaluate(() => { window.__c020wave = window.OSCILLA.engine.voice.periodicWave; });
+      await page.selectOption('#osc-add-preset', 'square');
+      out.preset = await step('square preset', (a) => a.preset === 'square'
+        && a.partials[1].gain < 1e-6 && a.partials[2].gain > 0.2 && !a.same && a.wave === 'custom');
+      await page.evaluate(() => { window.__c020wave = window.OSCILLA.engine.voice.periodicWave; });
+      await U.fill(page, '#osc-add-harmonic', '3');
+      await U.fill(page, '#osc-add-gain-value', '-12 dB');
+      // the fields and the bars show the level that plays, re full scale
+      out.gain = await step('harmonic 3 plays at -12 dB', (a) => a.sel === 3
+        && Math.abs(a.coeff[2].gainDb + 12) < 0.1 && Number(a.gainSlider) === -12 && !a.same);
+      await page.evaluate(() => { window.__c020wave = window.OSCILLA.engine.voice.periodicWave; });
+      await U.press(page, '#osc-add-gain', 'ArrowLeft', 'ArrowLeft');
+      out.gainKey = await step('gain slider by keyboard', (a) => Number(a.gainSlider) === -13
+        && a.gainText !== out.gain.gainText && Math.abs(a.coeff[2].gainDb + 13) < 0.1 && !a.same);
+      await U.fill(page, '#osc-add-phase', '90');
+      out.phase = await step('harmonic 3 at 90 degrees', (a) => Math.abs(a.partials[2].phase
+        - Math.PI / 2) < 1e-6 && /90/.test(a.phaseText) && a.preset === 'custom');
+      await page.click('#osc-add-enable');
+      out.off = await step('additive off: the carrier is a plain oscillator again', (a) => !a.on
+        && a.sw === 'false' && a.wave !== 'custom');
+    } finally {
+      await U.unlatch(page);
+      if (await page.getAttribute('#osc-add-enable', 'aria-checked') === 'true') {
+        await page.click('#osc-add-enable');
+      }
+      await page.selectOption('#osc-add-preset', 'sine');
+    }
+    return { ok: true, ...out };
+  });
+
+  const sourceState = () => {
+    const O = window.OSCILLA;
+    const a = O.app;
+    const v = O.engine.voice && !O.engine.voice.ended ? O.engine.voice : null;
+    const t = (s) => {
+      const el = document.querySelector(s);
+      return el ? el.textContent.replace(/\s+/g, ' ').trim() : null;
+    };
+    return { waveform: a.waveform, frequency: a.frequency, gainLevel: a.gainLevel,
+      engineGain: O.engine.gainLevel, inputMode: a.inputMode, sourceKind: a.sourceKind,
+      pattern: a.pattern, sweep: { ...a.sweep }, playing: a.playing,
+      voice: v && v.carrier ? { wave: v.carrier.type, f: Math.round(v.carrier.frequency.value * 100)
+        / 100, type: v.plan ? v.plan.type : null } : null,
+      freqText: t('#osc-freq-value'), freqAlt: t('#osc-freq-alt'), gainText: t('#osc-gain-value'),
+      sbFreq: t('[data-osc="status.frequency"]'), sbWave: t('[data-osc="status.waveform"]'),
+      sbGain: t('[data-osc="status.gain"]'), sbPattern: t('[data-osc="status.pattern"]') };
+  };
+
+  def('ui-source-controls', async ({ page }) => {
+    const out = {};
+    await U.singleSource(page);
+    await H.workspace(page, 'playground');
+    const S = () => page.evaluate(sourceState);
+    const step = (name, test) => U.poll(S, test, `ui-source-controls: ${name}`);
+    const near = (x, y, tol) => x != null && Math.abs(x - y) <= tol;
+    if (await page.getAttribute('#osc-source-osc', 'aria-checked') !== 'true') {
+      await page.click('#osc-source-osc');
+    }
+    await page.evaluate(() => window.OSCILLA.app.setFrequency(440));
+    await U.latch(page);
+    await step('a latched 440 Hz tone', (s) => s.voice && near(s.voice.f, 440, 0.5));
+    const wave = (w) => step(`waveform ${w}`, (s) => s.waveform === w && s.voice
+      && s.voice.wave === w && new RegExp(w.slice(0, 3), 'i').test(s.sbWave || ''));
+    await page.click('#osc-wave-sawtooth');
+    out.sawtooth = await wave('sawtooth');
+    await page.click('#osc-wave-square');
+    out.square = await wave('square');
+    await U.press(page, '#osc-wave-square', 'ArrowRight');
+    out.triangle = await wave('triangle');
+    await page.click('#osc-step-oct-down');
+    out.octDown = await step('one octave down', (s) => near(s.frequency, 220, 0.01)
+      && near(s.voice.f, 220, 0.5) && /220/.test(s.freqText) && /220/.test(s.sbFreq));
+    await page.click('#osc-step-st-down');
+    const st = 220 * 2 ** (-1 / 12);
+    out.stDown = await step('one semitone down', (s) => near(s.frequency, st, 0.01)
+      && near(s.voice.f, st, 0.5) && s.freqText !== out.octDown.freqText);
+    await U.press(page, '#osc-step-10-up', 'Enter');
+    out.tenUp = await step('ten hertz up by keyboard', (s) => near(s.frequency, st + 10, 0.01)
+      && near(s.voice.f, st + 10, 0.5));
+    const f0 = out.tenUp.frequency;
+    await U.press(page, '#osc-freq-slider', 'ArrowRight', 'ArrowRight');
+    out.slider = await step('frequency slider by keyboard', (s) => s.frequency > f0
+      && near(s.voice.f, s.frequency, s.frequency * 0.01) && s.sbFreq !== out.tenUp.sbFreq);
+    await page.click('#osc-mode-note');
+    out.note = await step('note entry mode', (s) => s.inputMode === 'note'
+      && s.freqAlt !== out.slider.freqAlt);
+    await page.click('#osc-mode-freq');
+    const g0 = out.note.gainLevel;
+    await U.press(page, '#osc-gain', 'ArrowLeft', 'ArrowLeft', 'ArrowLeft');
+    out.gain = await step('gain slider by keyboard', (s) => s.gainLevel < g0
+      && Math.abs(s.engineGain - s.gainLevel) < 1e-6 && s.gainText !== out.note.gainText
+      && s.sbGain !== out.note.sbGain);
+    await U.press(page, '#osc-gain', 'ArrowRight', 'ArrowRight', 'ArrowRight');
+    await U.unlatch(page);
+    await page.click('#osc-wave-sine');
+    // the pattern source: a pattern, one of its parameters, and the sweep mode with its fields
+    await page.click('#osc-source-pattern');
+    await page.selectOption('#osc-pattern-select', 'pulse');
+    out.pattern = await step('pattern Pulse', (s) => s.sourceKind === 'pattern'
+      && s.pattern === 'pulse' && /pulse/i.test(s.sbPattern || ''));
+    const param = page.locator('[data-osc="pattern.param"]').first();
+    const key = await param.getAttribute('data-key');
+    await param.fill('330');
+    await param.press('Enter');
+    out.param = await U.poll(() => page.evaluate(([k]) => {
+      const el = document.querySelector(`[data-osc="pattern.param"][data-key="${k}"]`);
+      return { key: k, value: el ? el.value : null };
+    }, [key]), (p) => /330/.test(p.value), 'ui-source-controls: a typed pattern parameter');
+    await page.selectOption('#osc-pattern-select', '__sweep');
+    await page.fill('[data-osc="sweep.param"][data-key="end"]', '5000');
+    await page.press('[data-osc="sweep.param"][data-key="end"]', 'Enter');
+    await page.selectOption('#sw-direction', 'down');
+    out.sweep = await step('sweep end 5 kHz, downwards', (s) => s.sweep.end === 5000
+      && s.sweep.direction === 'down');
+    await page.selectOption('#sw-direction', 'up');
+    await page.click('#osc-source-osc');
+    return { ok: true, ...out };
+  });
+
+  def('ui-device-and-analysis-controls', async ({ page }) => {
+    const out = {};
+    await H.workspace(page, 'analyzer');
+    const V = () => page.evaluate(() => {
+      const O = window.OSCILLA;
+      const a = O.app;
+      const v = O.engine.voice && !O.engine.voice.ended ? O.engine.voice : null;
+      const q = (s) => document.querySelector(s);
+      const mic = O.labs.mic && O.labs.mic.chart ? O.labs.mic.chart.options : null;
+      return { continuous: a.continuousAllowed, contAria: q('#osc-continuous-toggle')
+        .getAttribute('aria-checked'), limit: a.safetyLimit, limitDisabled: q('#osc-safety-limit')
+        .disabled, len: v && Number.isFinite(v.deadline) ? v.deadline - v.t0 : null,
+      timeWindowMs: a.timeWindowMs, specMax: O.labs.analysis.chart.options.maxHz,
+      spg: { span: O.labs.spectrogram.view.options.timeSpanS,
+        scale: O.labs.spectrogram.view.options.scale },
+      mic: mic ? { avg: mic.averagingS, peak: mic.peakHold } : null,
+      avgAria: q('[data-osc="mic.average"]').getAttribute('aria-checked'),
+      peakAria: q('[data-osc="mic.peakHold"]').getAttribute('aria-checked') };
+    });
+    const step = (name, test) => U.poll(V, test, `ui-device-and-analysis-controls: ${name}`);
+    const before = await V();
+    await page.click('#osc-continuous-toggle');
+    out.cont = await step('continuous toggled', (s) => s.continuous !== before.continuous
+      && s.contAria === String(s.continuous));
+    if (out.cont.continuous) {
+      await U.press(page, '#osc-continuous-toggle', 'Space');
+      await step('continuous off by keyboard', (s) => !s.continuous && s.contAria === 'false');
+    }
+    await page.selectOption('#osc-safety-limit', '0.5');
+    out.limit = await step('hard limit 0.5 s', (s) => s.limit === 0.5 && !s.limitDisabled);
+    await H.spaceDown(page);
+    out.held = await step('a held note stops at the 0.5 s limit', (s) => s.len != null
+      && s.len <= 0.5 + 0.05);
+    await page.keyboard.up(' ');
+    await H.waitNodes0(page);
+    await page.selectOption('#osc-safety-limit', '2');
+    await page.selectOption('#osc-time-window', '20');
+    await page.selectOption('#osc-spec-max', '5000');
+    await page.selectOption('#osc-spg-span-select', '5');
+    await page.selectOption('#osc-spg-scale-select', 'linear');
+    out.views = await step('time window, spectrum max, spectrogram span and scale', (s) =>
+      s.timeWindowMs === 20 && s.specMax === 5000 && s.spg.span === 5 && s.spg.scale === 'linear');
+    await page.click('[data-osc="mic.tab"][data-value="compare"]');
+    await page.click('[data-osc="mic.average"]');
+    await page.click('[data-osc="mic.peakHold"]');
+    out.mic = await step('mic compare: average and peak hold', (s) => s.avgAria === 'true'
+      && s.peakAria === 'true' && s.mic && s.mic.avg > 0 && s.mic.peak === true);
+    await page.click('[data-osc="mic.average"]');
+    await page.click('[data-osc="mic.peakHold"]');
+    await step('mic compare options off', (s) => s.avgAria === 'false' && s.peakAria === 'false'
+      && s.mic.avg === 0 && s.mic.peak === false);
+    await page.click('[data-osc="mic.tab"][data-value="live"]');
+    await page.selectOption('#osc-time-window', '5');
+    await page.selectOption('#osc-spec-max', '20000');
+    await page.selectOption('#osc-spg-span-select', '10');
+    await page.selectOption('#osc-spg-scale-select', 'log');
+    return { ok: true, ...out };
+  });
+
+  def('ui-settings-controls', async ({ page }) => {
+    const out = {};
+    await H.workspace(page, 'playground');
+    const T = () => page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      const v = window.OSCILLA.engine.voice;
+      const t = (s) => document.querySelector(s).textContent.replace(/\s+/g, ' ').trim();
+      return { a4: a.a4, duration: a.duration, attack: a.attack, release: a.release,
+        rangeMode: a.rangeMode, rangeMin: a.rangeMin, rangeMax: a.rangeMax,
+        open: document.querySelector('#osc-dlg-settings').open, freqAlt: t('#osc-freq-alt'),
+        len: v && !v.ended && Number.isFinite(v.deadline) ? v.deadline - v.t0 : null,
+        voice: v && !v.ended ? { attack: v.attack, release: v.release } : null };
+    });
+    const step = (name, test) => U.poll(T, test, `ui-settings-controls: ${name}`);
+    await page.click('#osc-mode-note');
+    await page.click('#osc-overflow');
+    await page.click('[data-osc="header.settings"]');
+    const s0 = await step('Settings opened from the menu', (s) => s.open);
+    await U.fill(page, '#osc-set-a4', '432');
+    out.a4 = await step('A4 432 Hz', (s) => s.a4 === 432 && s.freqAlt !== s0.freqAlt);
+    await U.fill(page, '#osc-set-duration', '300');
+    await U.fill(page, '#osc-set-attack', '50');
+    await U.fill(page, '#osc-set-release', '400');
+    out.env = await step('duration 300, attack 50, release 400 ms', (s) => s.duration === 300
+      && s.attack === 50 && s.release === 400);
+    await page.selectOption('#osc-set-range', 'advanced');
+    out.advanced = await step('range Advanced', (s) => s.rangeMode === 'advanced'
+      && s.rangeMax > s0.rangeMax);
+    await page.selectOption('#osc-set-range', 'custom');
+    await U.fill(page, '#osc-set-min', '100');
+    await U.fill(page, '#osc-set-max', '5000');
+    out.custom = await step('custom range 100 Hz to 5 kHz', (s) => s.rangeMode === 'custom'
+      && s.rangeMin === 100 && s.rangeMax === 5000);
+    await page.keyboard.press('Escape');
+    await step('Settings closed', (s) => !s.open);
+    await page.click('#osc-trigger');
+    out.trigger = await step('a triggered note lasts the set 300 ms with its edges', (s) =>
+      s.len != null && Math.abs(s.len - 0.3) < 0.02 && s.voice
+      && Math.abs(s.voice.attack - 0.05) < 1e-6 && Math.abs(s.voice.release - 0.4) < 1e-6);
+    await H.waitNodes0(page, 3000);
+    await page.click('#osc-overflow');
+    await page.click('[data-osc="header.settings"]');
+    await step('Settings reopened', (s) => s.open);
+    await page.selectOption('#osc-set-range', 'human');
+    await U.fill(page, '#osc-set-a4', '440');
+    await U.fill(page, '#osc-set-duration', '500');
+    await U.fill(page, '#osc-set-attack', '10');
+    await U.fill(page, '#osc-set-release', '30');
+    await step('defaults restored', (s) => s.a4 === 440 && s.duration === 500 && s.attack === 10
+      && s.release === 30 && s.rangeMode === 'human');
+    await page.keyboard.press('Escape');
+    await page.click('#osc-mode-freq');
+    return { ok: true, ...out };
   });
 
   // ---- accessibility residuals of the final V1 probe (WCAG 2.4.11, focus loss, overlap)
