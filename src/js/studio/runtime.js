@@ -45,7 +45,7 @@
 //   runtime.on(fn) -> off          fn(type, detail): 'applied' | 'error' | 'state' | 'handle'
 //                                  ('handle': { id, status, code }, a pending handle settled:
 //                                  a Microphone opened or failed after its permission prompt)
-//   runtime.setOwnedParams([{ node, param, peak?, initial? }], { releaseAt? }) -> list
+//   runtime.setOwnedParams([{ node, param, peak?, initial? }], { releaseAt?, gated? }) -> list
 //                                  parameters another
 //                                  owner drives (the transport: automation lanes, pattern-played
 //                                  oscillator levels). The runtime never glides their base value
@@ -65,6 +65,13 @@
 //                                  gain ramps as any edge's but is not connected to the
 //                                  parameter): the owner wires it (the transport's levelMods taps
 //                                  it onto the pattern bus and, closed, onto the carrier)
+//                                  `gated` (ids): the envelopes another owner gates (the
+//                                  transport: timeline gates, pattern triggers, a Keys gate);
+//                                  one the runtime builds is built closed (its adapter's
+//                                  `gated`), so it cannot open at the graph's start before its
+//                                  owner closes it (a main thread stalled inside the apply lets
+//                                  the audio thread render that attack: review of #332, V4);
+//                                  [] or no `gated` builds every envelope open, as before
 //   runtime.ownedParams()          the current claims, [{ node, param }]
 //   runtime.baseOffset(id, key)    the constant part the modulation edges add to a parameter's
 //                                  base (linear edges: unipolar polarity, offset), in its unit,
@@ -258,6 +265,7 @@ export function createStudioRuntime({
   const owned = new Map(); // node id → Set of parameter keys driven by another owner
   const peaks = new Map(); // node id → { key: peak value } of owned parameters (computeBases)
   const initials = new Map(); // node id → { key: value } an owned parameter is built at
+  const gated = new Set(); // envelope ids another owner gates: built closed (setOwnedParams)
   const peaksDirty = new Set(); // node ids whose peaks changed since the last apply
   // node id → { key: audio time } a released parameter is still held by its former owner until
   // (setOwnedParams releaseAt): its base is not glided before then.
@@ -519,12 +527,14 @@ export function createStudioRuntime({
     return out;
   }
 
-  function setOwnedParams(list = [], { releaseAt = null } = {}) {
+  function setOwnedParams(list = [], { releaseAt = null, gated: gates = null } = {}) {
     const was = new Map(owned);
     owned.clear();
     const before = new Map(peaks);
     peaks.clear();
     initials.clear();
+    gated.clear();
+    for (const id of gates || []) if (typeof id === 'string') gated.add(id);
     for (const e of Array.isArray(list) ? list : []) {
       if (!e || typeof e.node !== 'string' || typeof e.param !== 'string') continue;
       if (!owned.has(e.node)) owned.set(e.node, new Set());
@@ -617,7 +627,7 @@ export function createStudioRuntime({
     const now = ctx.currentTime;
     const X = opts.xfadeS;
     const env = { hooks, owners: [totals], now, at: now, options: opts, global: globalFx,
-      settled };
+      settled, gated: (id) => gated.has(id) };
     const createIds = new Set(ops.filter((o) => o.op === 'node-add' || o.op === 'node-replace')
       .map((o) => o.id));
     const edgeAdd = new Set(ops.filter((o) => o.op === 'edge-add' || o.op === 'edge-rewire')

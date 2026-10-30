@@ -383,7 +383,7 @@ export function createStudioTransport({
   function claimFor(m) {
     const now = ctxNow();
     const releaseAt = Math.max(safeHorizon(now, hooks.ctx.sampleRate), hooks.soon());
-    return runtime.setOwnedParams(ownedFor(m), { releaseAt });
+    return runtime.setOwnedParams(ownedFor(m), { releaseAt, gated: gatedEnvelopes(m) });
   }
 
   const laneOn = (id, param) => model.timeline.automation.some((l) => l.target.node === id
@@ -612,6 +612,9 @@ export function createStudioTransport({
   function ownEnvelope(id, fresh) {
     const h = ready(id);
     if (!h || typeof h.release !== 'function') return;
+    // Fresh: the runtime built it closed (setOwnedParams `gated`), so this release holds the
+    // floor; it does not close it, which at ctxNow() would come after a stalled apply had
+    // rendered the attack (review of #332, V4). Kept: open since its build, released from here.
     h.release(fresh ? ctxNow() : hooks.soon());
     gateOwned.set(id, h);
   }
@@ -1369,7 +1372,7 @@ export function createStudioTransport({
    * diagnostic. -> the refusal text.
    */
   function refusedBy(r, code, revision) {
-    runtime.setOwnedParams(ownedFor(model));
+    runtime.setOwnedParams(ownedFor(model), { gated: gatedEnvelopes(model) });
     note(code === 'sync-refused' ? 'sync' : 'admit', revision, 'refused', r, code);
     const message = errorOf(r, 'unknown error');
     lastError = { ...studioDiagnostic('transport', code, message, entityOf(r), 'error'),
@@ -1475,7 +1478,8 @@ export function createStudioTransport({
     }
     const m = view(store.getModel());
     const rev = store.getRevision();
-    runtime.setOwnedParams(ownedFor(m));
+    // `gated`: the envelopes this playback gates are built closed (review of #332, V4).
+    runtime.setOwnedParams(ownedFor(m), { gated: gatedEnvelopes(m) });
     const applied = runtime.apply(m, { revision: rev });
     if (!applied.ok) {
       runtime.setOwnedParams([]);

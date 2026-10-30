@@ -16,6 +16,12 @@
 //   s-rest     armed with no key held (Arm, no note), a cable from EG 1 into the VCA: below
 //              -70 dB rel over 0.5 s of audio time (no drone; the transport closes the
 //              Keys-gated envelopes at arm, and an EG cable rests at 0)
+//   s-armstall the first Arm with the page's main thread stalled inside the apply (every
+//              AudioNode.connect busy-waits 20 ms, as a loaded host did): from the click until
+//              0.5 s of audio time after armed, the analyser never reads above -70 dB rel (the
+//              Keys-gated envelopes are built closed; review of #332, V4). On b3f7d006 it fails
+//              in chromium (-42.6 dB rel); firefox and webkit did not reproduce the defect even
+//              at 100 ms per connect, so there it guards the fix and proves nothing more
 //   s-track    Keys pitch re-patched into VCO 1 pitch (VCO 2 muted): C4 then C5 peak at 130.8
 //              and 261.6 Hz, 1.00 oct per octave
 //   s-restpitch EG 1 patched into VCO 1 pitch (it replaces the Keys normal) with EG 1 sustain 0
@@ -82,6 +88,7 @@ const LOAD_MS = 60000;
 const SOUND_MS = 8000; // a note's attack, a knob change's glide and the analyser's smoothing
 const CHECK_MS = 120000;
 const C4 = 261.6256;
+const ARM_STALL_MS = 20; // per connect(): measured to reproduce V4 on b3f7d006 in chromium
 
 // ------------------------------------------------------------------------------ page probes
 function probe() {
@@ -202,6 +209,53 @@ function defineChecks() {
     }
     const after = await quiet(page, -70, 0.5, 'an EG cable into the VCA rests at 0');
     return { ok: true, before, after };
+  });
+
+  def('s-armstall', async ({ page }) => {
+    // The stimulus: the main thread blocks in every connect() of the arm's apply, so the audio
+    // clock passes the envelopes' build time before the transport owns them. A page interval
+    // keeps the loudest analyser window (fftSize samples back) from before the click on.
+    await page.evaluate((ms) => {
+      const connect = AudioNode.prototype.connect;
+      const s = { on: true, peak: -Infinity, timer: null };
+      window.__oscArmStall = s;
+      AudioNode.prototype.connect = function stalledConnect(...a) {
+        const end = performance.now() + (s.on ? ms : 0);
+        while (performance.now() < end) { /* the stall is the stimulus */ }
+        return connect.apply(this, a);
+      };
+      s.restore = () => {
+        AudioNode.prototype.connect = connect;
+        s.on = false;
+      };
+      s.timer = setInterval(() => {
+        const e = window.OSCILLA.engine;
+        const an = e && e.analyser;
+        if (!an) return;
+        const t = new Float32Array(an.fftSize);
+        an.getFloatTimeDomainData(t);
+        let sum = 0;
+        for (const x of t) sum += x * x;
+        s.peak = Math.max(s.peak, 10 * Math.log10(sum / t.length + 1e-24));
+      }, 4);
+    }, ARM_STALL_MS);
+    await page.locator('[data-osc="synth.arm"]').click();
+    await until(() => page.evaluate(() => window.OSCILLA.app.synthDebug().armed),
+      { ms: 30000, what: 'Arm arms the panel through the stalled apply' });
+    const t0 = await page.evaluate(() => {
+      window.__oscArmStall.restore();
+      return window.OSCILLA.engine.ctx.currentTime;
+    });
+    let peak = -Infinity;
+    await until(async () => {
+      const v = await page.evaluate(() => ({ peak: window.__oscArmStall.peak,
+        t: window.OSCILLA.engine.ctx.currentTime }));
+      peak = v.peak;
+      if (peak >= -70) throw new Error(`a stalled first Arm sounds: ${peak.toFixed(1)} dB rel`);
+      return v.t - t0 >= 0.5;
+    }, { ms: SOUND_MS, what: 'a stalled first Arm is silent over 0.5 s of audio time' });
+    await page.evaluate(() => clearInterval(window.__oscArmStall.timer));
+    return { ok: true, peak, stallMs: ARM_STALL_MS };
   });
 
   def('s-track', async ({ page }) => {
@@ -655,14 +709,16 @@ function defineChecks() {
 }
 
 // ------------------------------------------------------------------------------ runner
+/** Does check `name` run at `sizeName` under the --only selection? */
+const runsAt = (name, sizeName) => (!ONLY || ONLY.has(name))
+  && (sizeName === 'phone' ? PHONE_CHECKS.has(name) : name !== 's-mobile');
+
 async function runLeg(browserName, sizeName, base) {
   const browser = await playwright[browserName].launch(LAUNCH[browserName]);
   const results = {};
   try {
     for (const { name, fn } of defineChecks()) {
-      if (ONLY && !ONLY.has(name)) continue;
-      if (sizeName === 'phone' && !PHONE_CHECKS.has(name)) continue;
-      if (sizeName === 'desktop' && name === 's-mobile') continue;
+      if (!runsAt(name, sizeName)) continue;
       const context = await browser.newContext({ viewport: SIZES[sizeName],
         hasTouch: sizeName === 'phone' });
       const errors = [];
@@ -688,6 +744,15 @@ async function runLeg(browserName, sizeName, base) {
 }
 
 (async () => {
+  // --only names checks of this suite; a size none of them runs at is not a leg (a desktop
+  // check selected alone ran a phone leg of 0 checks, which the harness fails).
+  const known = defineChecks().map((c) => c.name);
+  const unknown = ONLY ? [...ONLY].filter((n) => !known.includes(n)) : [];
+  if (unknown.length) {
+    console.error(`unknown --only check(s) ${unknown.join(', ')}; known: ${known.join(', ')}`);
+    process.exit(2);
+  }
+  const sizes = Object.keys(SIZES).filter((sz) => known.some((n) => runsAt(n, sz)));
   await RUN.ready();
   if (!fs.existsSync(DIST)) {
     console.error(`missing ${DIST}: run npm run build`);
@@ -699,7 +764,7 @@ async function runLeg(browserName, sizeName, base) {
   try {
     for (const b of RUN.browsers) {
       for (const o of RUN.origins) {
-        for (const size of Object.keys(SIZES)) {
+        for (const size of sizes) {
           const base = o === 'file' ? pathToFileURL(DIST).href : server.url;
           const key = `${b}/${o}/${size}`;
           const t0 = Date.now();
