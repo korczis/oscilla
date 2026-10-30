@@ -6,7 +6,7 @@
 // svc: { engine, bridge, labs, exportConfigDoc(cmp), applyImport(cmp, parsed),
 //        renderWav(cmp, kind), screenshot(cmp), relayout() }
 
-import { STORAGE_KEYS, WAVEFORM_LABELS } from '../core/constants.js';
+import { MAX_PROGRAMMED_S, STORAGE_KEYS, WAVEFORM_LABELS } from '../core/constants.js';
 import { clamp, round } from '../core/math.js';
 import {
   formatFrequency, formatMs, frequencyToNormalized, normalizedToFrequency,
@@ -257,16 +257,16 @@ export function createWorkbench(svc) {
       else this.trigger();
     },
     onContinuousToggle() {
+      // C011: setContinuous tells the sequencer (main.js onContinuousChange): its loop follows
+      // the permission and its Loop control restates the cap.
       this.setContinuous(!this.continuousAllowed);
       this.notify('info', this.continuousAllowed ? 'Continuous playback allowed'
         : 'Hard limit active', this.continuousAllowed
-        ? 'Hold and latch play until stopped. Keep the level low.'
-        : `Hold, trigger and the finite tone stop after ${this.safetyLimit} s.`);
+        ? 'Hold, latch and a looped sequencer sequence play until stopped. Keep the level low.'
+        : `Hold, trigger and the finite tone stop after ${this.safetyLimit} s; a looped `
+          + `sequencer sequence stops at ${MAX_PROGRAMMED_S} s.`);
     },
-    setSafetyLimit(raw) {
-      const v = Number(raw);
-      if (this.SAFETY_LIMIT_OPTIONS.includes(v)) this.safetyLimit = v;
-    },
+    // setSafetyLimit is the instrument's (core/instrument.js): it reaches the sounding voice.
 
     // ------------------------------------------------------------------ dual oscillator
     setDualSource(on) {

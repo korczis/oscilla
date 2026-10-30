@@ -585,7 +585,11 @@ function defaultTimers() {
  * held value 1 to the floor over STOP_RAMP_S without editing the sounding schedules, stops every
  * source after the fade, and cancels the automation and disconnects every node once all
  * sources have ended (a timer fallback covers browsers that drop `ended`).
- * Returns false when the voice already ended or was already stopping.
+ * stop(at, { provisional: true }) (C011: the editor's loop cap) schedules a stop ahead that a
+ * later, earlier stop replaces while its fade has not begun: the out gain is still exactly 1
+ * there, so the pending fade is withdrawn (cancelScheduledValues from the new start) and the new
+ * fade runs from 1. Any other stop is final, as before.
+ * Returns false when the voice already ended or was already stopping (by then, if provisional).
  */
 export function compileSequence(model, ctx, destination, t0, opts = {}) {
   const sr = isNum(ctx.sampleRate) && ctx.sampleRate > 0 ? ctx.sampleRate : opts.sampleRate;
@@ -603,6 +607,7 @@ export function compileSequence(model, ctx, destination, t0, opts = {}) {
   const timerIds = [];
   let ended = false;
   let stopping = false;
+  let provisional = false; // the pending stop may give way to an earlier one (stop docs)
   let liveSources = 0;
   let lastStop = start + tl.duration + STOP_PAD_S;
   let endedCalled = false;
@@ -733,8 +738,8 @@ export function compileSequence(model, ctx, destination, t0, opts = {}) {
     blockIndexAt(time) {
       return isNum(time) ? blockIndexAtTime(tl.blocks, time - start) : -1;
     },
-    stop(at) {
-      if (ended || stopping) return false;
+    stop(at, how = {}) {
+      if (ended || (stopping && !provisional)) return false;
       // Default on a realtime context: like the engine's releases (AudioEngine._soon), at least
       // STOP_LEAD_S after the audio already rendered and on a render-quantum boundary, so the
       // fade starts on frames the audio thread has not rendered yet even when the main thread is
@@ -749,9 +754,13 @@ export function compileSequence(model, ctx, destination, t0, opts = {}) {
         t = Math.ceil((renderedTimeAtLeast(ctx) + lead) / q - 1e-9) * q;
       }
       if (t >= voice.endTime) return false; // already ending naturally
+      if (stopping && !(t < voice.stopTime)) return false; // the provisional stop comes first
+      const ahead = stopping; // the provisional fade starts after t: out gain is 1 until then
       stopping = true;
+      provisional = !!(how && how.provisional);
       voice.stopTime = t;
       try {
+        if (ahead) out.gain.cancelScheduledValues(t);
         // The envelope, frequency and AM schedules are not touched while they sound (see the
         // header): the exact current value of the out gain is 1, held from t and faded.
         out.gain.setValueAtTime(1, t);

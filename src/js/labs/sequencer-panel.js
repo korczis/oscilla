@@ -15,7 +15,7 @@
 // track click, horizontal or Shift+wheel on the lane); keyboard selection, added blocks and
 // the playhead are kept in view, so the keyboard needs no separate scroll control.
 
-import { createSequencerEditor } from '../sequencer/editor.js';
+import { createSequencerEditor, LOOP_CAP_S } from '../sequencer/editor.js';
 import { BLOCK_SCHEMA, totalDuration } from '../sequencer/model.js';
 import {
   createTimeScale,
@@ -158,8 +158,18 @@ export function mount(rootEl, adapter) {
         if (ctx && ctx.state === 'suspended') return ctx.resume();
         return null;
       },
+      // C011: read-only; without it the loop keeps to the cap (LOOP_CAP_S).
+      continuousAllowed: () => !!(adapter.continuousAllowed && adapter.continuousAllowed()),
     },
   });
+  /** The Loop control's title: the cap while it applies, and why a loop ended at it. */
+  function loopTitle() {
+    if (editor.loopNotice) return editor.loopNotice;
+    if (editor.loopSchedule().capped) {
+      return `Loop sequence: stops at ${LOOP_CAP_S} s unless continuous playback is allowed`;
+    }
+    return 'Loop sequence until stopped (continuous playback allowed)';
+  }
 
   const blockEls = new Map();
   const marker = document.createElement('div');
@@ -328,8 +338,9 @@ export function mount(rootEl, adapter) {
   function renderTransport() {
     setAttr(playBtn, 'aria-pressed', editor.playing ? 'true' : 'false');
     setAttr(loopBtn, 'aria-pressed', editor.model.loop ? 'true' : 'false');
+    setAttr(loopBtn, 'title', loopTitle());
     if (playBtn) setAttr(playBtn, 'title', editor.error || 'Play sequence');
-    setText(msgEl, editor.error || (editor.warnings || []).join(' '));
+    setText(msgEl, editor.error || editor.loopNotice || (editor.warnings || []).join(' '));
   }
 
   function renderScrollbar() {
@@ -527,6 +538,7 @@ export function mount(rootEl, adapter) {
   if (firstSweep) editor.selectBlock(firstSweep.id);
 
   let wasPlaying = false;
+  let lastNotice = '';
   offs.push(onFrame(() => {
     const ctx = getCtx();
     const timing = editor.playing ? editor.currentPassTiming() : null;
@@ -547,8 +559,9 @@ export function mount(rootEl, adapter) {
       const tf = `translateX(${Math.round(ph.x)}px)`;
       if (playhead.style.transform !== tf) playhead.style.transform = tf;
     }
-    if (editor.playing !== wasPlaying) {
+    if (editor.playing !== wasPlaying || editor.loopNotice !== lastNotice) {
       wasPlaying = editor.playing;
+      lastNotice = editor.loopNotice;
       renderTransport();
     }
   }));

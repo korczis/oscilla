@@ -14,13 +14,17 @@
 //   (c) stop mid-play on a realtime AudioContext leaves 0 live sources (OscillatorNode
 //       start/stop/ended are wrapped), also after a looped run;
 //   (d) restart 20x without growth: once each restart's earlier passes have delivered `ended`
-//       (bounded wait), none of their sources is live and only the current voice remains.
+//       (bounded wait), none of their sources is live and only the current voice remains;
+//   (e) seq-loop-cap (C011): without "Allow continuous playback" a looped sequence keeps to the
+//       30 s cap (ADR 0005): a 36 s first pass is cut at it on its nodes' own stop times; a 12 s
+//       loop's end is the editor's forecast; the cap is on the Loop control.
 // Exit code 0 only when every check passes in every browser.
 'use strict';
 
 const path = require('path');
 const esbuild = require('esbuild');
 const suite = require('./lib/suite.cjs');
+const { until } = require('./lib/wait.cjs');
 
 const args = process.argv.slice(2);
 const only = args.includes('--browser') ? args[args.indexOf('--browser') + 1] : null;
@@ -483,6 +487,76 @@ async function runEngine(engine, bundle) {
         `started ${many.after.started}, ended ${many.after.ended}, live after ${many.after.live} ` +
         `(${many.after.waitedMs} ms)`,
     );
+    // (e) seq-loop-cap (C011). A 36 s pass (two 18 s blocks) is longer than the 30 s cap: play()
+    // cuts it, so its oscillators are told to stop by t0 + 30 s (+ the 10 ms stop pad) at once.
+    const CAP_S = 30;
+    const longRun = await page.evaluate(() => window.seqFixture.loopCapStart([18000, 18000]));
+    const lsc = longRun.schedule;
+    check(
+      engine,
+      '(e) seq-loop-cap: a looped 36 s first pass is cut at t0 + 30 s on its oscillators (scheduler)',
+      longRun.played && longRun.loop && Math.abs(longRun.passS - 36) < 1e-6 && longRun.live >= 1 &&
+        longRun.nodeStopMax !== null && longRun.nodeStopMax <= lsc.t0 + CAP_S + 0.011 &&
+        longRun.nodeStopMax > lsc.t0 + CAP_S - 0.1 && /capped at 30 s/.test(longRun.notice) &&
+        longRun.message === longRun.notice,
+      JSON.stringify({ t0: lsc.t0, nodeStopMax: longRun.nodeStopMax, notice: longRun.notice,
+        message: longRun.message, live: longRun.live }),
+    );
+    await page.evaluate(() => window.seqFixture.loopCapStop());
+    const longTorn = await until(
+      () => page.evaluate(() => {
+        const r = window.seqFixture.loopCapTorn();
+        return r && r.torn ? r : null;
+      }),
+      { ms: 5000, what: 'seq-loop-cap: the cut 36 s pass torn down after stop' },
+    ).catch((e) => ({ torn: false, error: e.message }));
+    check(engine, '(e) seq-loop-cap: the cut pass stops with 0 sources and 0 nodes', longTorn.torn,
+      JSON.stringify(longTorn));
+    await page.evaluate(() => window.seqFixture.loopCapDispose());
+    // A 12 s pass: two passes (24 s) fit the 30 s cap, a third does not. This reads the editor's
+    // forecast (loopSchedule), not the scheduler; the unit test drives the pump on a fake clock.
+    const capRun = await page.evaluate(() => window.seqFixture.loopCapStart([12000]));
+    const sc = capRun.schedule;
+    check(
+      engine,
+      '(e) seq-loop-cap: the forecast ends a 12 s loop after two passes, within t0 + 30 s',
+      capRun.played && capRun.loop && capRun.offAfterClick === false && sc.capped &&
+        sc.capS === CAP_S && sc.lastScheduledEnd <= sc.t0 + CAP_S &&
+        Math.abs(sc.endsAt - (sc.t0 + 2 * capRun.passS)) < 1e-6 &&
+        sc.endsAt + capRun.passS > sc.t0 + CAP_S && capRun.live >= 1,
+      JSON.stringify({ ...sc, passS: capRun.passS, live: capRun.live }),
+    );
+    check(
+      engine,
+      '(e) seq-loop-cap: the cap is stated on the Loop control, which stays usable',
+      capRun.pressed === 'true' && /stops at 30 s/.test(capRun.title || '') &&
+        /continuous playback/.test(capRun.title || ''),
+      JSON.stringify({ title: capRun.title, pressed: capRun.pressed }),
+    );
+    const capStop = await page.evaluate(() => window.seqFixture.loopCapStop());
+    check(
+      engine,
+      '(e) seq-loop-cap: the Loop control and schedule follow the permission',
+      !capStop.allowed.schedule.capped && capStop.allowed.schedule.endsAt === null &&
+        /until stopped/.test(capStop.allowed.title || '') && capStop.withdrawn.playing &&
+        capStop.withdrawn.schedule.capped && /stops at 30 s/.test(capStop.withdrawn.title || ''),
+      JSON.stringify(capStop),
+    );
+    const capTorn = await until(
+      () => page.evaluate(() => {
+        const r = window.seqFixture.loopCapTorn();
+        return r && r.torn ? r : null;
+      }),
+      { ms: 5000, what: 'seq-loop-cap: the looped sequence torn down after stop' },
+    ).catch((e) => ({ torn: false, error: e.message }));
+    check(
+      engine,
+      '(e) seq-loop-cap: stop leaves 0 live sources and 0 nodes',
+      capTorn.torn,
+      JSON.stringify(capTorn),
+    );
+    await page.evaluate(() => window.seqFixture.loopCapDispose());
+
     const final = await page.evaluate(() => window.seqFixture.realtimeTeardown());
     check(engine, 'no live sources after teardown', final.live === 0, JSON.stringify(final));
     check(engine, 'no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));

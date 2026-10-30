@@ -486,6 +486,10 @@ Not yet built:
 - **Start quietly, especially on headphones.** Loudness is a poor guide to acoustic output,
   above all at very low and very high frequencies. Open-ended patterns stop at a hard time
   limit unless you allow continuous playback for the session, and a limiter caps the output.
+  Lowering the limit also ends a hold, trigger, latched or finite note that is sounding at its
+  start plus the new limit, release included (it never lengthens one), and a looped Pattern
+  Sequencer sequence sounds for at most 30 s without the permission, a first pass longer than
+  that included (the loop setting itself is kept).
 - **Levels are relative, not SPL.** Every level is relative to digital full scale (dBFS-like)
   and labelled as uncalibrated. A browser knows sample values, not sound pressure. The only
   exception is the Measure workspace with a valid absolute level calibration that you supply
