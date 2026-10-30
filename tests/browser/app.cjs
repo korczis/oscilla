@@ -2956,7 +2956,7 @@ function defineChecks() {
         // the layout, not today's station names and fonts, must keep it inside its station.
         const probe = document.createElement('li');
         probe.dataset.state = 'planned';
-        probe.innerHTML = '<span class="osc-about-step osc-num">99</span>'
+        probe.innerHTML = '<span>99</span>'
           + '<strong>Reproducibilityunderstandingly</strong><span>Probe</span><em>Probe</em>';
         view.querySelector('.osc-about-timeline').appendChild(probe);
         view.querySelectorAll('.osc-about-timeline > li').forEach((li, i) => {
