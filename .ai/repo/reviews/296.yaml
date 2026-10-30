@@ -1,0 +1,63 @@
+# Review verdict for pull request #296, PACK 03 fix group C007 ("One Instrument, One Coherent
+# State"): the labs' V2 play options are built in one place and the current lab state always
+# wins (branch fix/c007-lab-play-options). Reviewed head 1c69d121b168 (== origin at fetch;
+# merge base origin/main cdda563c1982). Built by the builder's session; reviewed by dev-68.
+# The builder worktree (/Users/korczis/dev/oscilla-wt/fix/c007-lab-play-options) is the cwd of a
+# live `majordomus-cli serve` (pid 97811, lsof), so it was not touched: the review ran in a fresh
+# detached worktree of origin/fix/c007-lab-play-options in the scratchpad.
+#
+# The digest: the branch's scripts/review-verdict.mjs, which is identical to origin/main's
+# (git diff origin/main HEAD -- scripts is empty), `--content --list --base origin/main` in that
+# fresh worktree over the three guarded paths the PR changes (src/js/audio/audio-engine.js,
+# src/js/audio/envelope.js, src/js/audio/lab-play-options.js): 88cdba57...786c, which matches the
+# PR body.
+#
+# Lenses (the owner flagged this group: controls that do not reach the sound): (a) every control
+# path from a lab to the voice: play, _restart (pattern change, phase restart), live onChange,
+# the WAV render, dual voices; (b) audio-engine discipline of the new code: tracked eg only, no
+# setTargetAtTime, no step on a sounding param, every step from the floor, no ramp to 0, the
+# shrink guards equal to V1 stepEnv (0.4 / 0.5 of dur, MIN_SEGMENT_S 1 ms); (c) tests and
+# fail-first; (d) PR body and docs vs code. A first review pass (same session) produced P2-1,
+# P2-2 and P3-1..P3-3; each was re-checked here against the code and kept at its severity.
+# R-6 is new from this pass.
+#
+# Runs:
+# - git fetch: origin/fix/c007-lab-play-options = 1c69d121 = PR head; origin/main = cdda563c.
+# - node --test lab-play-options, engine, audio-envelope, freeze (fresh worktree, no
+#   node_modules needed): 1197/1197 pass; freeze golden unchanged.
+# - Probe on the freeze mock, scratchpad script importing the head's src (Envelope on, a 0.01
+#   d 0.1 s 0.1 r 0.3, makeAdsrEnvelope installed, the main.js wrapper reproduced): env level at
+#   t0 + 0.5 s is 1.0000 for the continuous ping-pong sweep (envelope 'whole') and 0.1000 for the
+#   ping-pong once and the continuous up sweep (envelope 'segment'); voice.adsr is set in all
+#   three (R-1). A held tone started with the Envelope on keeps voice.adsr and its 0.1 sustain
+#   after the lab is switched off with no restart (R-2). A held tone played with releaseS 0.03,
+#   then updateLive to a sweep: 'restarted', the new voice's release 0.03 and attack 0.01,
+#   whatever the instrument's Attack/Release now say (R-6).
+# - Not re-run here (the first pass ran them; nothing installed, disk near the floor): the
+#   mutation set M1-M9, build.mjs --check and the three browser checks on head and main dist.
+# - No PR code was modified; this file is the only change.
+#
+# Checked and found correct: labPlayOptions returns all six keys and the engine treats null as
+# absent (adsr, stepEnvelope, inserts, periodicWave, dualRouter; dualPhaseDeg through
+# normalizePhaseDeg(null) = 0); a restart after Additive or Envelope off plays without them; a
+# dual plan gets no wave at play, at restart, live (setPeriodicWave refused) or from the additive
+# onChange; setDualPhase's restart reads the same phase from labs.phase; the WAV render builds
+# its options through the same function; AM/FM/LFO carriers go through _carrier, so the wave
+# reaches them; scheduleAdsrStep is stateless, schedules through the tracked eg only, starts at
+# the floor, never steps or ramps to 0, and keeps a + d + r <= dur; with the Envelope off V1's
+# stepEnv runs unchanged.
+#
+# Open: R-1 and R-2 are P2 (controls that do not reach the sound, the owner's lens), so the
+# verdict is changes-requested. R-3 to R-6 are P3.
+schema: review-verdict/v1
+pr: 296
+verdict: changes-requested
+reviewer: "dev-68 (Claude Opus 5.5 session 4f90795d); did not build, merge or edit this change; wrote only this file"
+content: 88cdba5703efb28efaa100114f588e36ca6ac92d9d111bcd23a855f19789686c
+findings:
+  - { id: R-1, severity: P2, status: open, title: "engine-sync-7 is left behind for the continuous ping-pong sweep. scheduler.js:86-89 gives a continuous ramps plan with envelope 'whole' (patterns.js:320, pingpong + repeat continuous) only setValueAtTime(GAIN_FLOOR, t0) and a linear ramp to 1, and _scheduleCycles tops it up with no envelope, so it never calls v.stepEnv or the open ADSR envelope. With the Envelope on (s 0.1) it sounds at 1.0 while every other sweep holds 0.1, yet voice.adsr is set and labVizInputs (main.js:199) shows the ADSR; the WAV render goes through the same scheduler. README.md:89 and .ai/repo/features/adsr-envelope.md:26, changed by this PR, say the ADSR 'shapes every note'. Fix: give the whole-envelope continuous sweep the ADSR attack/decay/sustain (the open envelope fn with len Infinity), or exclude it from the claim and the views." }
+  - { id: R-2, severity: P2, status: open, title: "The Envelope lab has no live path to a sounding voice. main.js:449-450: labs.envelope.onChange only runs syncLabFlags and vizLabsChanged, nothing reaches engine.voice. Switching the Envelope off, or editing sustain/release, during a held tone or a long finite/steps note leaves the voice on the ADSR it started with (voice.adsr, v.release), while labVizInputs shows the new state at once; the change sounds only at the next restart or note. Additive (main.js:437-447), Filter (live config, crossfaded bypass) and Phase (setDualPhase) all have live paths; labs/envelope.js:3-4 says the engine subscribes with lab.onChange to follow edits, which nothing does. restart-follows-labs (tests/browser/app.cjs) switches the lab off and calls setPattern in one evaluate, so it never sees this. Pre-existing on main, but it contradicts the PR title ('the current lab state always wins'). Fix: on an Envelope change restart (or re-envelope) the sounding voice click-free, as setDualPhase does, or state the note-on semantics in the views." }
+  - { id: R-3, severity: P3, status: open, title: "The one real integration point, the spread order of the main.js:216 wrapper ({ ...o, ...v2PlayOptions(...) }), has no unit test: tests/unit/lab-play-options.test.mjs:83 wrap() re-implements it, and no unit test imports main.js. Reversing the spread passes every unit test; only the browser check restart-follows-labs would catch it (it passes on head and fails on main's dist per the first pass)." }
+  - { id: R-4, severity: P3, status: open, title: "The PR body's fail-first line for lab-play-options.test.mjs is module-not-found, which does not by itself show the behaviour fails on main. The first pass shimmed main's v2PlayOptions (keys omitted when a lab is off) behind the new API: with the key-presence asserts stripped, 7/8 still fail on behaviour (stale wave, stale adsr, level 1), so the test is real; the body should say so or show it." }
+  - { id: R-5, severity: P3, status: open, title: "The Sequencer lab and Studio do not consume labPlayOptions: the sequencer plays through compileSequence (compiler.js:590) with its own block envelopes, renderSequenceToWav (main.js:283-286) passes only level and waveform, and Studio has its own runtime, so Envelope/Filter/Additive never reach them. Pre-existing and outside C007, but README.md:89's 'each step of a programmed pattern' can be read as the Pattern sequencer panel (labs/sequencer-panel.js:1). Fix: name the instrument's patterns in the README, or route the labs into the sequencer." }
+  - { id: R-6, severity: P3, status: open, title: "The instrument's own play options still ride stale through _restart, the engine-sync-1 mechanism that labPlayOptions fixes only for lab keys: audio-engine.js:774 copies { ...v.opts }, so attackS, releaseS and durationS of a restarted voice are the ones of the first play. Probe: hold with releaseS 0.03, then updateLive to a sweep -> 'restarted', v.release 0.03, v.attack 0.01, whatever the Attack/Release fields now say (instrument.js:1065 passes only the plan; vizInputs show the new values). Pre-existing and with the Envelope off only (adsr.a/r win when it is on). Fix: have the wrapper (or updateLive's caller) pass the current instrument options on a restart, keeping until." }
