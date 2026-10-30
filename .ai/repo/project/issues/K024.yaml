@@ -1,0 +1,27 @@
+id: K024
+milestone: M060
+serves:
+  - "audio-band-signal-lab#analytic-signal"
+title: "Analytic signal by Hilbert transform: envelope, instantaneous phase and frequency"
+slug: analytic-signal-by-hilbert-transform-envelope-instantaneous
+priority: p2
+profile: implementation
+objective: "Lands as feat(analysis). A new src/js/analysis/analytic.js computes the analytic signal of an audio buffer by FFT Hilbert transform with the inverse by conjugation, and derives the envelope, instantaneous phase and instantaneous frequency with stated error bounds. It is the analytic signal of the audio buffer, never device I/Q."
+why: "Owner direction of 2026-10-29 (session oscilla-b0): OSCILLA becomes a playable, patchable instrument and an audio-band signal lab; the plan checked every fact it relies on against main at 8b5792cd, and the sizes it quotes are unchanged at e2720e07."
+scope:
+  - "src/js/analysis/analytic.js"
+  - "tests/unit/analysis-analytic.test.mjs"
+  - "tests/README.md"
+  - "dist"
+acceptance_criteria:
+  - "For synthetic AM and FM signals at 44.1 kHz and 48 kHz the envelope, instantaneous phase and instantaneous frequency are within the bounds the module states, in a unit test that fails on the merge base."
+  - "The module's comments and any string call it the analytic signal of the audio buffer (project.no-fake-science)."
+  - "The pull request carries a reviewer's verdict (src/js/analysis is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/analysis-analytic.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

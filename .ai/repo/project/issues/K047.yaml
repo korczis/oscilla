@@ -1,0 +1,43 @@
+id: K047
+milestone: M062
+serves:
+  - "playable-instrument#chart-interaction"
+title: "Sequencer lane: requested-frequency glyphs, readout and playhead chip"
+slug: sequencer-lane-requested-frequency-glyphs-readout-and-playhe
+priority: p3
+profile: implementation
+objective: "Lands as feat(sequencer), after K017 (and so K003) of M059, which edit the same panel and change the units of its time readout (ms or beats). Each block of the V2 sequencer lane shows an SVG glyph of its requested frequency over its duration on a shared log-Hz scale (sweep curve, flat tone, shaded noise band) from planFreqAt, the maths the compiler uses; a hover crosshair across the lane \"2.35 s . Sweep 2 . 1.84 kHz (requested)\" in the units K017 chose; a playhead chip with the current block and frequency, its text changed only when it changes; the playhead moves by transform instead of left. The lane's keys stay the timeline's own (SEQUENCER_ROWS: arrows, Alt + arrows, Del), so it is a census host of kind timeline: selecting a block by keyboard announces its requested-frequency readout through the kit's region, and no second cursor is added. Under reduced motion the playhead still moves (it is essential) and follow-scroll jumps instead of smoothing."
+why: "Owner order of 2026-10-29: \"make the charts really sexy, modern, interactive\", for all charts; reviewer f3 scoped it to every surface that draws data. Revised after f3's review of the plan (CHANGES-REQUESTED, 2026-10-29): owner decisions are Q issues under M063, Pro chrome waits on F002 and on the card issue of its workspace, every chart that claims chart-interaction delivers the keyboard cursor and the announced readout, chart keys never take Escape or Space; revision 3 answers f3's delta review. Facts checked against origin/main at e2720e07 and the branches of #251, #253, #263 and #265 (charts-plan.md, charts-plan-changes.md)."
+scope:
+  - "src/js/labs/sequencer-panel.js"
+  - "src/js/sequencer/timeline.js"
+  - "tests/unit/sequencer-timeline.test.mjs"
+  - "tests/browser/sequencer.cjs"
+  - "tests/unit/chart-host-census.json"
+  - "tests/browser/charts-interaction.cjs"
+  - "tests/visual"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K053"
+  - "K017"
+  - "F003"
+acceptance_criteria:
+  - "tests/unit/sequencer-timeline.test.mjs, failing on the merge base: the glyph path equals planFreqAt samples."
+  - "tests/browser/sequencer.cjs: hovering at a known time shows the expected readout; selecting the next block with the keyboard announces its readout once. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline and assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac); tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Its hosts, seq-timeline and seq-ruler (index.html:796 and :789 on main), move from pending to done in tests/unit/chart-host-census.json as kind timeline, and tests/browser/charts-interaction.cjs checks their role, summary and the announcement on keyboard selection; Escape and Space keep their global meaning."
+  - "The readout and glyphs say \"requested\", never measured (project.no-fake-science)."
+  - "Chart chrome (legend, toolbar, toggle, badge, tooltip, readout row) is Flowbite Pro markup adapted from the matching Pro component and lands after F002 turned on preflight and the form base styles (the border trap of review #253, R-3) and after F003 placed the card it sits in; no osc-* class token or legacy selector is added and src/styles/tokens.css, charts.css, measure.css, studio.css and studio-timeline.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+  - "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no review verdict is needed; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+  - "The visual references of the sequencer region of test:visual are re-accepted in darwin-arm64 and linux-x64, in each theme that has references (light ones exist once F011 lands), with the reason \"requested-frequency glyphs\" in the pull request body (npm run test:visual)."
+  - "scripts/size-report.mjs shows at most 2 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of M062's figures stays within the cap Q014 records, under the 1 000 000 B gzip budget (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/sequencer-timeline.test.mjs"
+  - "node tests/browser/sequencer.cjs"
+  - "node tests/browser/charts-interaction.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

@@ -1,0 +1,25 @@
+id: Q017
+milestone: M063
+title: "Owner decision: accept the light chart references as the light design reference"
+slug: owner-decision-accept-the-light-chart-references-as-the-ligh
+priority: p2
+profile: routine
+owner: "repository owner"
+objective: "No light design image exists: tests/visual/reference.png is dark, and the light references of F011 and K050 are captures of the page, which pin the light theme but do not show it was designed. K050 produces a per-chart-host light reference for every chart host, its mark colours sampled against frozen expected values. Accept those images as the light design reference of the charts, or name what to change first. A change request is recorded in this issue's current_state and planned as follow-up issues under M062, which the same change adds to this issue's depends_on and to M062's acceptance; this issue stays open until a set is accepted, so DONE means accepted. A later change to a light reference is accepted through a new Q issue under M063, which the slice making the change opens (M063)."
+why: "Asked by the charts plan for M062 (owner order of 2026-10-29, session oscilla-b0); reviewer f3 found that the plan's open owner decisions let blocked slices derive READY (review of the charts plan, 2026-10-29). .ai/repo/project/README.md: work that waits on an answer names the Q issue in depends_on."
+current_state: "Open on 2026-10-29; it depends on K050, which produces the images. It serves no criterion (M063 is named by no intent); the criterion playable-instrument#chart-light-designed reads the acceptance it records as data (tests/visual/charts/accepted-light.json), not its status."
+scope:
+  - ".ai/repo/project/issues/Q017.yaml"
+  - "tests/visual/charts/accepted-light.json"
+depends_on:
+  - "K050"
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision), either in the owner's words with date and source, or as a decision of a coordinating session under an owner delegation it quotes with its date, stating its reasoning and that the owner may override it; a worker without such a delegation never answers it."
+  - "On acceptance, the owner_decision evidence's result quotes the digest that node scripts/visual-charts.mjs --digest prints for the references the owner saw, and the same change runs node scripts/visual-charts.mjs --record-acceptance Q017, which writes tests/visual/charts/accepted-light.json with that digest, this issue and the per-reference hashes. node scripts/visual-charts.mjs --check-accepted passes only when the file's digest matches the current references and is quoted by the owner_decision evidence of the completed Q issue it names, so the acceptance binds to the owner's recorded act."
+  - "A change request records the changes asked for and the follow-up issues planned from them, writes no acceptance and leaves this issue open."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-10-29
+updated_at: 2026-10-29
