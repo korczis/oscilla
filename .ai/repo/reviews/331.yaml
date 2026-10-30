@@ -1,0 +1,32 @@
+# Review verdict for pull request #331, C021: user-journey and control-census suites; a blocked
+# MEASURE step, a lab field and the Add block menu say what applies
+# (branch test/c021-journeys-control-census).
+# Reviewed head dbcd571c against merge base origin/main. Another session built it (oscilla-b0); this
+# reviewer built none of it.
+#
+# The digest is the base branch's scripts/review-verdict.mjs (from git archive origin/main scripts),
+# run --content over the 2 guarded paths it names: .github/workflows/ci.yml and
+# src/js/measurement/views/measure-flow.js.
+#
+# How it was reviewed: three independent lenses (the CI workflow change; the red webkit census job
+# read from run 41009333629 / job 123911409567; measure-flow and the lab/UI fixes with fail-first),
+# each in a detached worktree at the head. Two skeptics per P0-P2 finding; all four below survived.
+#
+# The red job is this pull request's, not the base's: Control census (webkit) reports
+# "323 pass, 3 expected failure(s), 3 fail"; the three failing rows are rows this PR adds, and the
+# census job is in gate.needs, so gate is red.
+#
+# Verdict: changes-requested. R1 and R2 are P1 and refuse the merge until fixed and re-reviewed.
+schema: review-verdict/v1
+pr: 331
+verdict: changes-requested
+reviewer: oscilla-af (claude-code 901211e2)
+content: 5688c5288f76ec7e9dbf4ef3b299cdb064e6c6dda4f85c7debaaae059130a85b
+findings:
+  - { id: R1, severity: P1, status: open, title: "control-census.cjs:305-310 device.safetyLimit.pointer clicks #osc-hold-play (pointerdown+pointerup at once); on WebKit the first audio start frees the voice before the first poll (audio-engine.js:631), so it always fails ('last value null'). Hold it like source.hold.pointer (mouse.down, released by the context) and judge that the note ends within limit + release" }
+  - { id: R2, severity: P1, status: open, title: "control-census.cjs:850-856 studio.frameAll / studio.graph.frameAll take 'before' (census:1630) before the setup's zoom is committed (graph-editor.js 250 ms debounce), so Frame All may change nothing ('last value false' on WebKit). End the setup with a condition wait until model.view.graph.zoom > z0" }
+  - { id: R3, severity: P2, status: open, title: "control-census.cjs:310 the safety-limit expectation compares with app.safetyLimit as it is now, so it passes with an inert select (default 2 s cap); judge the chosen value (app.safetyLimit === 0.5 and voice.len <= 0.55)" }
+  - { id: R4, severity: P2, status: open, title: "labs/dom.js:51-54,63 a field edited back to its original text gets 'input' but never 'change', stays in the editing set and stops following its slider, a preset or History restore - the 'controls not reflected' symptom C021 targets; also clear it on focusout and add a labs-field-commit case" }
+  - { id: R5, severity: P3, status: open, title: "ci.yml:294 the census job's timeout-minutes is less than the sum of its step limits; raise the job limit or lower the steps so the job bound is the real one" }
+  - { id: R6, severity: P3, status: open, title: "measure-flow.js:277 after the user corrects a refused recipe, the Stimulus step still shows the old refusal reason until the next transition" }
+  - { id: R7, severity: P3, status: open, title: "package.json test:release now includes the census suite; the local release gate grows considerably - state it in tests/README.md or keep census CI-only" }
