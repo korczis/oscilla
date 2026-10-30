@@ -322,8 +322,8 @@
         "height": 1024
       },
       "runs": 3,
-      "total": 3.32,
-      "totalExclData": 3.34,
+      "total": 3.43,
+      "totalExclData": 3.33,
       "regions": {
         "header": {
           "mismatch": 2.18,
@@ -344,8 +344,8 @@
           "dataPp": 0.5
         },
         "source": {
-          "mismatch": 3.91,
-          "mismatchExclData": 3.91,
+          "mismatch": 3.84,
+          "mismatchExclData": 3.84,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
@@ -368,10 +368,10 @@
           "dataPp": 0.5
         },
         "spectrogram": {
-          "mismatch": 3.06,
+          "mismatch": 3.84,
           "mismatchExclData": 1.36,
-          "runToRunPct": 1.01,
-          "dataPp": 2
+          "runToRunPct": 2.69,
+          "dataPp": 3.5
         },
         "sequencer": {
           "mismatch": 2.43,
@@ -398,9 +398,9 @@
           "dataPp": 0.5
         },
         "phase": {
-          "mismatch": 2.96,
+          "mismatch": 2.99,
           "mismatchExclData": 4.91,
-          "runToRunPct": 0.19,
+          "runToRunPct": 0.23,
           "dataPp": 1
         },
         "bio": {
@@ -469,17 +469,17 @@
           279,
           369,
           236.11,
-          27
+          59
         ],
         "modeSeg": [
           354,
-          409,
+          442,
           161.11,
           29
         ],
         "playRow": [
           279,
-          479,
+          512,
           236.11,
           40
         ],
