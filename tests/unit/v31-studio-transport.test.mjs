@@ -173,6 +173,64 @@ test('PLAY keeps the first clip when the audio clock passes baseTime during star
     0);
 });
 
+test('a clip voice compiled after the clock passed its start keeps the clip boundaries', () => {
+  // CI (webkit, linux-x64; #261, #262, run 40861009819): the first window's lateness check read
+  // the clock before baseTime, then the main thread was late before the Tone's voice was built.
+  // compileSequence clamped its start to the clock, so the whole voice moved late, its release
+  // overlapped the Sweep's attack at b + 1 s and the boundary had no dip. The voice now keeps
+  // its grid and joins it STOP_LEAD_S after the clock, as a stop.
+  const s = setup();
+  const late = 0.004; // > one render quantum (2.67 ms), < SAFE_HORIZON_S
+  let transport = null;
+  let jumped = null;
+  const real = s.runtime.nodes;
+  const nodes = Object.create(real, { get: { value: (id) => {
+    const st = transport ? transport.debugInfo() : null;
+    // After the first advance (the window is compiled), before its first voice is built.
+    if (jumped === null && id === 'osc-1' && st && st.scheduledUntil > st.baseTime) {
+      jumped = st.baseTime + late;
+      s.ctx.advance(jumped);
+    }
+    return real.get(id);
+  } } });
+  const runtime = Object.create(s.runtime, { nodes: { get: () => nodes } });
+  transport = createStudioTransport({ runtime, engine: s.engine, store: s.store });
+  const r = ok(transport.start());
+  const b = r.baseTime;
+  const bF = Math.round(b * SR);
+  assert.equal(jumped, b + late, 'the clock passed the Tone start before its voice was built');
+  assert.equal(transport.debugInfo().skippedLate, 0);
+  assert.equal(transport.debugInfo().decisions.filter((d) => d.decision === 'reanchor').length, 0);
+  const q = 128 / SR;
+  const joined = transport.debugInfo().decisions.filter((d) => d.decision === 'joined-late');
+  assert.equal(joined.length, 1);
+  assert.equal(joined[0].clipId, 'clip-1');
+  assert.equal(joined[0].from, at(bF, 0));
+  assert.ok(joined[0].to >= jumped + STOP_LEAD_S - EPS
+    && joined[0].to < jumped + STOP_LEAD_S + q + 0.2,
+    `joined at ${joined[0].to}`);
+  near((joined[0].to * SR) / 128, Math.round((joined[0].to * SR) / 128), 1e-6);
+  // carrier -> amp -> env -> out (compileSequence); read before the voice ends and disconnects.
+  const env = (o) => o.outputs[0].outputs[0].gain.scheduled;
+  const [tone] = voiceCarriers(s, 'sawtooth');
+  const toneEnv = env(tone);
+  const out = tone.outputs[0].outputs[0].outputs[0].gain.scheduled;
+  s.fx.advance(1.2);
+  const sweep = voiceCarriers(s, 'sawtooth')[1];
+  assert.deepEqual([tone.startAt, sweep.startAt], [at(bF, 0), at(bF, 1)],
+    'Tone at b (its grid, not the clock), Sweep at b + 1 s');
+  // The Tone's release meets the floor on the boundary frame, where the Sweep's attack leaves it.
+  const release = toneEnv.filter((e) => e.ramp === 'linear' && e.value === GAIN_FLOOR);
+  assert.equal(release.at(-1).t, at(bF, 1), 'the Tone releases to the floor at b + 1 s');
+  const attack = env(sweep).findIndex((e) => e.ramp === 'linear' && e.value === 1);
+  assert.deepEqual([env(sweep)[attack - 1].t, env(sweep)[attack - 1].value],
+    [at(bF, 1), GAIN_FLOOR], 'the Sweep attacks from the floor at b + 1 s');
+  near(env(sweep)[attack].t, at(bF, 1) + EDGE_S);
+  // The late Tone's output joins its grid with one edge from the floor.
+  assert.deepEqual(out.slice(1).map((e) => [e.t, e.value, e.ramp]), [
+    [joined[0].to, GAIN_FLOOR, 'set'], [joined[0].to + EDGE_S, 1, 'linear']]);
+});
+
 test('a PLAY starved past the graph start never sounds the pattern-played carrier', () => {
   // A main thread that stalls inside PLAY after runtime.start() lets the audio thread render the
   // graph from its crossfade time, routes ramping open, before the transport claims the

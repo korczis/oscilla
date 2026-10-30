@@ -253,6 +253,19 @@ The first audible sample depends on what follows the voice, not on the clip:
   `ROUTE_FLOOR` (the transport's owned `level` with `initial`, docs/v31/compiler.md), so until
   the first clip only that floor sounds (−74 dB re the Basic Synth's Tone, measured). A stall in any later window is handled as above: late items are
   skipped.
+- A pattern voice compiled after the clock passed its start (the window's lateness check read
+  the clock, then the main thread was late before the voice was built: seen in webkit on CI and
+  in a loaded linux container, 3 to 50 ms) keeps its grid instead of moving late as a whole:
+  `compileSequence(..., { keepGrid: true })` schedules every event at `startTime + t` as on
+  time and holds the voice's out gain at the floor until `joinAt`, the first render-quantum
+  boundary `STOP_LEAD_S` (at least two quanta) after the audio rendered so far, as a stop, read
+  once the voice is scheduled, then ramps it to 1 over `EDGE_S`. The voice loses its first
+  frames, never its boundaries: the Tone's release still
+  meets the Sweep's attack on the boundary frame (a clamped voice overlapped the next clip by
+  its lateness). The transport records a `joined-late` decision `{ from: startTime, to: joinAt }`.
+  A STOP before `joinAt` cancels the join (the out gain is a constant floor up to it, so the
+  edit is exact) and the voice never rises; a STOP inside the join edge starts where the edge
+  ends, at most `EDGE_S` later, so no ramping segment is edited (review #276 R-1).
 
 ## Edit during playback (§182-§183)
 
