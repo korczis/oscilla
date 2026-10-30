@@ -1,0 +1,27 @@
+id: E043
+milestone: M046
+serves:
+  - "engineering-integrity#dialog-focus-not-taken-back"
+title: "A dialog's deferred initial focus never takes focus back from the control the user chose"
+slug: a-dialogs-deferred-initial-focus-never-takes-focus-back
+priority: p2
+profile: implementation
+objective: "The browser check findings-delete-focus of tests/browser/v3-ui.cjs failed intermittently on unrelated pull requests (#273 chromium http, #290 chromium file) with rows still 2 and focus on the deleted row's Delete: the first deletion never happened. openModal in src/js/ui/dialogs.js calls showModal(), which focuses the dialog's first control (Cancel), and then focuses that control again on a 0 ms timer, unconditionally. On a loaded host the timer fired after the keyboard user had moved to Delete, took focus back to Cancel, Enter pressed Cancel and the dialog returned focus to the opener. The timer now runs only while focus is still where the opening left it (or outside the dialog) and the dialog is still open. A product race (focus theft), not a test race; the check's post-delete focus contract (next row's Edit, else New finding) was already correct."
+why: "A keyboard or assistive-technology user who moves within a dialog before its deferred focus fires has the choice silently undone: a confirmation becomes a cancel. The same race made a browser check fail on pull requests that did not touch it."
+scope:
+  - "src/js/ui/dialogs.js"
+  - "tests/unit/dialog-initial-focus.test.mjs"
+  - "tests/browser/v3-ui.cjs"
+  - "tests/README.md"
+  - "dist/index.html"
+acceptance_criteria:
+  - "tests/unit/dialog-initial-focus.test.mjs: a control focused before the deferred initial focus runs keeps focus, the first control still receives it when focus was not moved, and a dialog closed before the timer takes none; the first and third cases fail on the merge base (fail-first)."
+  - "With the openModal focus timer delayed by 300 ms in the page, the keyboard delete flow of findings-delete-focus deletes the row in chromium, firefox and webkit; on the merge base Enter presses Cancel and the row stays."
+  - "findings-delete-focus passes repeatedly under load in all three browsers, from file:// and the sub-path; npm test passes."
+validation:
+  - "node --test tests/unit/dialog-initial-focus.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-30
+updated_at: 2026-10-30

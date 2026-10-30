@@ -2607,8 +2607,10 @@ function defineChecks(fixtures) {
       }), Boolean, 5000);
       await page.focus('[data-osc="fnd.row"] [data-osc="fnd.delete"]');
       await page.keyboard.press('Enter');
-      // The dialog focuses its first button on a timer after it opens: wait until that initial
-      // focus is inside the dialog, or it would land after ours and Enter would press Cancel.
+      // Wait until the dialog is open with focus inside it. Its deferred initial focus (a
+      // timer in openModal) no longer takes focus back from a control moved to before it
+      // fires (E043); before that fix it did on a loaded host, Enter pressed Cancel and the
+      // row stayed (#273, #290).
       await H.until(() => page.evaluate(() => {
         const d = document.getElementById('osc-dlg-finding-delete');
         return d.open && d.contains(document.activeElement);

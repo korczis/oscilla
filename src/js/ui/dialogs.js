@@ -69,8 +69,19 @@ export function openModal(id, doc = document) {
       try { dlg.showModal(); } catch (e) { dlg.setAttribute('open', ''); }
     } else dlg.setAttribute('open', '');
   }
+  // showModal() has already focused the dialog's first control; the deferred focus is for
+  // content rendered after the dialog opens. It runs only while focus is still where the
+  // opening left it: a control the user (or assistive technology) moved to before the timer
+  // fired keeps focus. On a loaded machine the timer can fire long after the first keystroke,
+  // and taking focus back then sends Enter to Cancel instead of the button the user chose.
   const focus = dlg.querySelector('[autofocus], input, select, textarea, button');
-  if (focus) setTimeout(() => focus.focus(), 0);
+  if (focus) {
+    const placed = doc.activeElement;
+    setTimeout(() => {
+      const now = doc.activeElement;
+      if (dlg.open && (now === placed || !dlg.contains(now))) focus.focus();
+    }, 0);
+  }
   return true;
 }
 

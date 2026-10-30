@@ -36,6 +36,7 @@ for people, never gating · **DELETED** removed, with its replacement.
 | `unit/audio-wav.test.mjs` | GATE | WAV header bytes and PCM conversion |
 | `unit/bioacoustics.test.mjs` | GATE | species data is sourced and carries the disclaimer (no fake science) |
 | `unit/integration-ui.test.mjs` | GATE | config file schema, typing guard, WAV render length |
+| `unit/dialog-initial-focus.test.mjs` | GATE | E043: `openModal`'s deferred initial focus never takes focus back from a control moved to before it fires, still lands on the first control when focus was not moved, and takes none once the dialog has closed; the browser half is `v3-ui.cjs` `findings-delete-focus` |
 | `unit/ui-shell.test.mjs` | GATE | theme resolution, slider fill, tab restore, LUT ends (moved from `visual/ui.test.mjs`) |
 | `unit/sequencer-model.test.mjs` | GATE | block schemas, Nyquist-safe frequency clamps |
 | `unit/sequencer-compiler.test.mjs` | GATE | planned automation: sorted, never gain 0, frequencies in range |
