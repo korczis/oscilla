@@ -1,0 +1,52 @@
+id: U011
+milestone: M054
+serves:
+- "ui-current#ui-audited"
+title: "Every action of the header, the tab bar and the footer has one control in each view"
+slug: every-action-of-the-header-the-tab-bar-and-the-footer-has-one
+priority: p2
+profile: implementation
+objective: "Lands as fix(ui). Defect: the global chrome on screen in every workspace (header menus #osc-overflow-menu, src/index.html:184-192, and #osc-export-menu, src/index.html:203-210; the tab bar; the footer action bar #osc-sb-actions, src/index.html:2813-2831) binds the same handler to several controls of one view: importConfigClick() on config.import (l.185) and export.import (l.208); exportConfig() on config.export (l.186) and export.config (l.207); copyConfigUrl() on export.url (l.209) and action.copyUrl (l.2813); screenshot() on export.png (l.206) and action.screenshot (l.2817); openDialog('settings') on header.settings (l.189) and action.settings (l.2831); openDialog('help') on header.help (l.174), header.shortcuts (l.190) and, in the Studio, studio.keys (l.2399); setWorkspace('about') on header.about (l.191) and nav.about (l.163); and action.exportAudio (l.2821) calls exportAudio(), which resolves to export.wav's 'pattern' outside the Sequencer and to export.seqWav's 'sequence' inside it (src/js/ui/workbench.js:395-397). After: each action has one home. The Export menu holds the exports (pattern WAV, sequence WAV, PNG, config JSON, config URL); the More menu holds Import config, Explore hints, Settings and the Safety notice; the help icon is the one shortcuts entry, and the Studio toolbar does not repeat it; the About tab nav.about is the one About entry; the footer action bar keeps only Save Preset, whose action no menu holds. The removed hooks (config.export, header.shortcuts, header.about, studio.keys, action.copyUrl, action.screenshot, action.exportAudio, action.settings) are dropped from src/index.html and from the tests that drive them, and their entries in tests/unit/control-drive-baseline.json and tests/unit/no-inert-surfaces-allowance.json are removed. The remaining controls are Pro components (Flowbite dropdown items and buttons); the fix adds no osc-* class, legacy selector or inline style. Negative cases: a keyboard shortcut is not a control and stays (the dialog's shortcut list is unchanged); different arguments are different actions (exportAudio('pattern') and exportAudio('sequence') both stay); a control that only opens a menu is not an action. Rollback: revert the merge commit; no stored state or URL key changes. Not this: H004 (PR #346) item B13 already removes export.import, leaving config.import as the only import, and its item B8 renames header.help to the dialog it opens; U011 lands on top of them and does not repeat those two changes. F002 (PR #330) and F010 rebuild the header, the tab bar, the menus and the status bar on Pro and keep the existing hooks; U011 removes the duplicates on the rebuilt surface. G001 only declares components."
+why: "Found by the S074 quality-bar review of 2026-10-30 at origin/main d9db6bdf, section 74 symptom 'duplicate controls': the header menus and the footer action bar, visible in every workspace, hold the same actions more than once, and each pair has an identical handler. An independent verifier reproduced it. Evidence: the handlers quoted in the objective (src/index.html at d9db6bdf) and the desktop screenshot ws-playground.png in the review scratchpad (s074/), where the header and the footer are on screen together. This is behaviour, not styling, so tests/unit/ui-flowbite-pro-baseline.json does not record it as debt."
+scope:
+- src/index.html
+- src/js/ui/workbench.js
+- tests/unit/duplicate-controls.test.mjs
+- tests/unit/v4-shortcuts.test.mjs
+- tests/unit/control-drive-baseline.json
+- tests/unit/no-inert-surfaces-allowance.json
+- tests/unit/ui-flowbite-pro-baseline.json
+- tests/browser/navigation.cjs
+- tests/browser/app.cjs
+- tests/browser/midi.cjs
+- docs/ui-audit.md
+- tests/README.md
+- dist
+depends_on:
+- "F002"
+- "F010"
+- "H004"
+acceptance_criteria:
+- "Fail-first: tests/unit/duplicate-controls.test.mjs reads src/index.html and fails on the merge base. In the global chrome (header, tab bar, footer action bar), joined with each workspace's own toolbar, no two controls carry the same @click expression, no menu item calls setWorkspace for a workspace the tab bar already links, and exportAudio() is never called without an argument. The failure message names both hooks of each pair."
+- "tests/unit/v4-shortcuts.test.mjs no longer asserts three openers of the help dialog. It asserts that exactly one control opens it in each workspace, and that the dialog is still the one #osc-dlg-help."
+- "A check in tests/browser/navigation.cjs opens the Playground, the Sequencer, the Studio and MEASURE. In each, it collects the visible controls of the header menus, the tab bar and the footer, and asserts that no two share an action. It then drives each remaining entry (Export menu items, More > Import config, More > Settings, Help, the About tab, Save Preset) and asserts the download, dialog, workspace or notification each one reaches."
+- "Every removed hook is gone from tests/unit/control-drive-baseline.json and tests/unit/no-inert-surfaces-allowance.json. node --test tests/unit/control-drive-baseline.test.mjs and node --test tests/unit/no-inert-surfaces.test.mjs pass, and no remaining control becomes undriven (project.no-inert-surfaces)."
+- "The change adds no class token, selector, markup surface or inline style; it only removes legacy ones. tests/unit/ui-flowbite-pro-baseline.json stays equal or falls (node scripts/ui-flowbite-pro-record.mjs --check passes; the file is rewritten only where a count fell), and node --test tests/unit/ui-flowbite-pro.test.mjs passes (project.ui-uses-flowbite-pro, project.visual-identity-lock)."
+- "As a fix change, it carries a unit test that fails on the merge base and passes on the head (project.fail-first). It touches src/index.html, so it also carries a reviewer's verdict if project.review-verdict guards the path."
+- "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs, with a named deadline (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, extends: the S074 'duplicate controls' symptom gains a ratchet that refuses a second control for an action already on screen."
+- "Definition of done, interlinks: the objective names H004, F002, F010 and G001. The test file names U011, and the tests/README.md row names the symptom."
+- "Definition of done, interactivity: each action keeps one working control in every workspace; the browser check above drives each one."
+- "Definition of done, docs, menus and routes: docs/ui-audit.md records the one home of each action, and the menus change as stated. No route or URL-state key changes, and #m=about still opens About."
+- "Definition of done, tested: node --test tests/unit/duplicate-controls.test.mjs, node tests/browser/navigation.cjs and npm test. tests/README.md has a row for each new test, dist is rebuilt and npm run build:check passes."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often. The verified evidence names the main commit."
+validation:
+- node --test tests/unit/duplicate-controls.test.mjs
+- node --test tests/unit/v4-shortcuts.test.mjs
+- node --test tests/unit/control-drive-baseline.test.mjs
+- node tests/browser/navigation.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-30'
+updated_at: '2026-10-30'
