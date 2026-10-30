@@ -7,7 +7,9 @@
 are `package.json`'s scripts, held by `unit/docs-derived.test.mjs`; the suites each script runs
 are in the table below. CI runs the same scripts as parallel jobs aggregated by the required
 `gate` job, plus a `knowledge` job that runs a pinned `majordomus doctor`
-(`.github/workflows/ci.yml`).
+(`.github/workflows/ci.yml`). Every push to `main` runs that workflow's `unit`, `knowledge` and
+`browser` jobs again on the merge commit (`.github/workflows/main-checks.yml`, no `gate`, nothing
+requires it): a failure is a red check on that commit, with the failed jobs in its summary.
 `OSC_BROWSERS=chromium,firefox` narrows the multi-browser suites. `test:live` (post-deploy, needs
 the network) is not in release-gate: the Pages workflow (`.github/workflows/pages.yml`) runs it on
 every deployment, one browser per job, after `verify-deploy` has proven the page is the committed
