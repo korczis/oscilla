@@ -57,6 +57,7 @@ import { secondsPerBar, timelineEnd } from '../../studio/timeline.js';
 import { PORT_VISUALS } from '../../studio/ports.js';
 import { describeEdge, summarizeGraph, announceAction } from '../../studio/a11y.js';
 import { formatFrequency, parseFrequency } from '../../core/frequency.js';
+import { SAFE_NYQUIST_FACTOR_TEXT } from '../../core/constants.js';
 import { sig } from '../../core/math.js';
 import { CATEGORY_LABELS, STATUS_LABELS, edgeRoute, nodeConnections } from './graph-view.js';
 import { formatSecondsText } from './timeline-view.js';
@@ -151,7 +152,17 @@ function nodeOf(model, id) {
   return model.graph.nodes.find((n) => n.id === id) || null;
 }
 
-function fieldOf(model, node, p, registry, edgeStatus) {
+/**
+ * The runtime's `frequency-limited` diagnostic of a node's parameter (T023), when it is about
+ * the value the field holds: the running graph plays `details.played` instead.
+ */
+function limitOf(truth, node, key) {
+  return runtimeDiagnostics(truth).find((d) => d.code === 'frequency-limited' && d.details
+    && d.entity && d.entity.kind === 'node' && d.entity.id === node.id
+    && d.details.param === key && d.details.stored === node.params[key]) || null;
+}
+
+function fieldOf(model, node, p, registry, edgeStatus, truth = null) {
   const value = node.params[p.key];
   const lane = model.timeline.automation.find((l) => l.target.node === node.id
     && l.target.param === p.key);
@@ -165,6 +176,9 @@ function fieldOf(model, node, p, registry, edgeStatus) {
   const control = p.type === 'enum' ? 'select' : p.type === 'boolean' ? 'toggle'
     : p.type === 'id' ? 'readonly' : p.type === 'list' ? 'list' : 'number';
   const text = formatParamValue(p, value);
+  // A value the runtime lowers to stay at or below 0.95 × Nyquist reads what plays (T023).
+  const limit = lane ? null : limitOf(truth, node, p.key);
+  const played = limit ? `${text}, plays ${formatParamValue(p, limit.details.played)}` : text;
   return {
     key: p.key,
     label: p.label,
@@ -175,10 +189,14 @@ function fieldOf(model, node, p, registry, edgeStatus) {
     // A lane owns an automated parameter (the runtime does not write its AudioParam, compiler.md
     // "Automated parameters belong to their lane"): the node's value is the base used only
     // without the lane, and the readout, the slider and a note say so (§272 B10).
-    readout: lane ? `Base ${text}` : text,
-    valueText: lane ? `${text}, base, overridden by the lane` : text,
+    readout: lane ? `Base ${text}` : played,
+    valueText: lane ? `${text}, base, overridden by the lane` : played,
     laneNote: lane ? `Automated: the lane sets ${p.label}. ${text} is the base value, used only `
       + 'without the lane; a change here is not heard while the lane exists.' : null,
+    limitNote: limit ? `Plays ${formatParamValue(p, limit.details.played)}: the Studio keeps `
+      + `${p.unit === 'Hz' ? 'a frequency' : 'the pitch'} at or below `
+      + `${formatFrequency(limit.details.safeMaximum)}, ${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist at `
+      + `${Number((limit.details.sampleRate / 1000).toFixed(3))} kHz.` : null,
     input: p.type === 'list' ? (value || []).join(', ')
       : finite(value) ? String(Number(value.toPrecision(6))) : '',
     unit: p.unit || '',
@@ -306,7 +324,11 @@ export function runtimeView(model, truth, opts = {}) {
   const a = v && v.applied;
   const d = v ? v.desired : { revision: null, studioHash: null };
   const why = v && v.reason ? v.reason.message : '';
-  const text = state === 'in-sync' ? `Revision ${a.revision} plays as edited.`
+  // A value the runtime plays below the stored one is not "as edited" (T023).
+  const lowered = runtimeDiagnostics(truth).filter((x) => x.code === 'frequency-limited').length;
+  const text = state === 'in-sync' ? (lowered ? `Revision ${a.revision} plays with ${lowered} `
+    + `frequenc${lowered === 1 ? 'y' : 'ies'} lowered to ${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist; `
+    + 'see the diagnostics below.' : `Revision ${a.revision} plays as edited.`)
     : state === 'degraded' ? `Revision ${a.revision} plays, short of its plan: ${why}`
     : state === 'behind' ? `Revision ${a.revision} plays; revision ${d.revision} is not `
       + 'applied yet.'
@@ -508,7 +530,7 @@ export function inspectorView(model, selection, opts = {}) {
     const st = opts.status && opts.status.get(node.id);
     const warn = (opts.warnings && opts.warnings.get(node.id)) || [];
     const fields = def ? def.params.map((p) => fieldOf(model, node, p, registry,
-      opts.edgeStatus)) : [];
+      opts.edgeStatus, opts.truth)) : [];
     const label = st ? STATUS_LABELS[st.status] || null : null;
     const reason = st && st.reason ? st.reason : null;
     const notes = entityNotes(opts.truth, 'node', node.id, warn);
@@ -656,7 +678,9 @@ export function inspectorRebuildKey(view) {
     ...view.connections.map((c) => c.text), ...view.fields.map((f) =>
       // Whether Automate is offered can change with another parameter (a filter type, R7);
       // whether a lane exists changes the Automate action and the lane note (§272 C3, B10).
-      `${f.modulatedBy.join('|')}|${f.automatable}|${f.automateReason || ''}|${f.automated}`)]
+      // whether the runtime lowers the value adds or removes its note (T023).
+      `${f.modulatedBy.join('|')}|${f.automatable}|${f.automateReason || ''}|${f.automated}`
+      + `|${!!f.limitNote}`)]
     .join('\n');
 }
 
@@ -715,14 +739,15 @@ export function mountInspector(host, svc) {
     // The unit beside the field and the lane note are part of its description (§272 C8, B10).
     const unitId = f.unit ? `${id}-unit` : null;
     const laneId = f.laneNote ? `${id}-lane` : null;
+    const limitId = f.limitNote ? `${id}-limit` : null;
     const input = h('input', { class: 'osc-number osc-si-input osc-num', id, type: 'text',
       inputmode: 'decimal', autocomplete: 'off', spellcheck: 'false', 'data-key': f.key,
       'data-osc': 'studio.inspector.param', value: f.input,
-      'aria-describedby': describedBy(unitId, laneId, `${id}-err`) });
+      'aria-describedby': describedBy(unitId, laneId, limitId, `${id}-err`) });
     const slider = h('input', { class: 'osc-slider osc-si-slider', type: 'range',
       min: 0, max: SLIDER_STEPS, step: 1, value: f.slider, 'data-key': f.key,
       'aria-label': `${f.label} slider`, 'aria-valuetext': f.valueText,
-      'aria-describedby': laneId });
+      'aria-describedby': describedBy(laneId, limitId) || null });
     slider.style.setProperty('--osc-fill', sliderFill(slider));
     const readout = h('span', { class: 'osc-si-readout osc-num', text: f.readout });
     const error = h('p', { class: 'osc-si-error', id: `${id}-err`, hidden: true });
@@ -762,19 +787,25 @@ export function mountInspector(host, svc) {
         f.unit ? h('span', { class: 'osc-si-unit', id: unitId, text: f.unit }) : null]),
       slider,
       error,
-      fieldNotes(view, f, ref, laneId),
+      fieldNotes(view, f, ref, laneId, limitId),
     ]);
   }
 
-  function fieldNotes(view, f, fieldRef, laneId) {
+  function fieldNotes(view, f, fieldRef, laneId, limitId = null) {
     const notes = [];
     if (f.laneNote) {
       fieldRef.laneNote = h('p', { class: 'osc-si-note', id: laneId,
         'data-osc': 'studio.inspector.laneNote', text: f.laneNote });
       notes.push(fieldRef.laneNote);
     }
-    if (f.modulatedBy.length) {
-      notes.push(h('p', { class: 'osc-si-note', text: `Modulated: ${f.modulatedBy.join('; ')}` }));
+    // The value the runtime plays below the stored one (T023), then the modulation sources.
+    for (const [text, attrs] of [[f.limitNote, { id: limitId,
+      'data-osc': 'studio.inspector.limitNote' }],
+    [f.modulatedBy.length ? `Modulated: ${f.modulatedBy.join('; ')}` : null, {}]]) {
+      if (!text) continue;
+      const note = h('p', { class: 'osc-si-note', ...attrs, text });
+      if (attrs.id) fieldRef.limitNote = note;
+      notes.push(note);
     }
     if (f.automateReason) {
       notes.push(h('p', { class: 'osc-si-note', 'data-osc': 'studio.inspector.no-automate',
@@ -1362,6 +1393,7 @@ export function mountInspector(host, svc) {
         r.field = f;
         if (r.readout) setText(r.readout, f.readout || f.text);
         if (r.laneNote) setText(r.laneNote, f.laneNote || '');
+        if (r.limitNote) setText(r.limitNote, f.limitNote || '');
         if (r.toggle) setAttr(r.input, 'aria-checked', f.value ? 'true' : 'false');
         else if (r.input && r.input !== active) {
           if (r.input.tagName === 'SELECT') r.input.value = f.value;

@@ -37,8 +37,10 @@
 //                                                      toPort, kind, gain, detached); connect
 //                                                      false: the gain is not connected to its
 //                                                      target (an owner wires it, runtime.js)
-//   computeBases(planNode, incoming, hooks, peaks) -> { base, gains, limited, clamped,
-//                                                      lowered, exceeds }
+//   computeBases(planNode, incoming, hooks, peaks) -> { base, gains, limited, scaled,
+//                                                      clamped, lowered, exceeds }
+//   frequencyLimits(planNode, cb, ctx) -> [Diagnostic]   pure: the `frequency-limited`
+//                                                      diagnostics of one node's bases (T023)
 //   disposeHandle(handle, acct)                       stop, disconnect, untrack
 //
 // Routing semantics:
@@ -56,7 +58,8 @@
 //     cents on the node's detune AudioParam (frequency · 2^(cents/1200), exact). Several edges
 //     on one parameter add (§104). Frequency parameters are kept at or below 0.95 × Nyquist:
 //     the base is clamped and the upward excursion of the edges is scaled down to fit
-//     (`limited`, visible in debugInfo). A frequency an automation lane owns is sized from the
+//     (`limited`, its factor in `scaled`; the runtime reports both as `frequency-limited`
+//     diagnostics, T023). A frequency an automation lane owns is sized from the
 //     lane's peak, not from the static parameter it overrides (`peaks`, V431 review X1).
 //     An Oscillator's detune (cents) shifts its frequency and spends the same headroom: the
 //     static detune is lowered to fit (`clamped`, by `lowered` cents), its edges scaled (V272
@@ -78,10 +81,12 @@ import { studioHash } from './schema.js';
 import { canonicalJson } from '../experiments/canonical-json.js';
 import { sha256Hex } from '../calibration/sha256.js';
 import { NODE_ADAPTERS, inertHandle } from './adapters/nodes.js';
+import { formatFrequency } from '../core/frequency.js';
+import { sig } from '../core/math.js';
 import { createAccounting } from './adapters/engine-hooks.js';
 import { createRamp } from './adapters/ramp.js';
 import { hasMicrophoneApi } from '../audio/microphone.js';
-import { GAIN_FLOOR } from '../core/constants.js';
+import { GAIN_FLOOR, SAFE_NYQUIST_FACTOR_TEXT } from '../core/constants.js';
 import { CENTS_PER_OCTAVE } from '../core/music.js';
 
 /** Route crossfade (connect, disconnect, reconnect, replace): filters.js CROSSFADE_S. */
@@ -451,6 +456,7 @@ export function createEdgeHandle(planEdge, fromHandle, toHandle, ctxEnv,
  *   base:    { key: { value (parameter unit, offsets included), cents (log edges) } }
  *   gains:   Map<edgeId, edge GainNode value>   (muted edges: 0)
  *   limited: Set<edgeId>   upward excursion scaled down to stay ≤ 0.95 × Nyquist
+ *   scaled:  Map<edgeId, factor>  the factor (0..1) each limited edge's excursion got (T023)
  *   clamped: Set<key>      static base lowered to stay ≤ 0.95 × Nyquist
  *   lowered: { key: amount } how far each base was moved to fit its range (positive: down), so
  *                          base.value + lowered − param is the edges' constant part alone
@@ -478,6 +484,7 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
   }
   const gains = new Map();
   const limited = new Set();
+  const scaled = new Map();
   const clamped = new Set();
   const lowered = {};
   const lower = (key, to) => {
@@ -552,6 +559,7 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
       k = Math.max(0, capF - ref) / up;
       for (const x of lin) limited.add(x.id);
     }
+    if (k !== 1) for (const x of lin) if (limited.has(x.id)) scaled.set(x.id, k);
     up *= k;
     for (const x of lin) gains.set(x.id, x.a * k * x.scale);
     let kc = 1;
@@ -569,6 +577,7 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
         for (const x of logs) limited.add(x.id);
       }
       for (const x of logs) gains.set(x.id, x.a * kc * x.scale);
+      for (const x of logs) if (limited.has(x.id)) scaled.set(x.id, kc);
       usedC = b.cents + upC * kc;
     }
     // The detune's edges share the detune AudioParam with the log edges: what is left of it.
@@ -588,5 +597,61 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
       exceeds.push(key);
     }
   }
-  return { base, gains, limited, clamped, lowered, exceeds };
+  return { base, gains, limited, scaled, clamped, lowered, exceeds };
+}
+
+/** A value in its unit as the Inspector writes it ("22.80 kHz", "1111 cents"). */
+const valueText = (v, unit) => (unit === 'Hz' ? formatFrequency(v) : `${sig(v, 4)} ${unit}`);
+
+/**
+ * The `frequency-limited` diagnostics of one node's parameter bases (T023, truth-table LAB-15):
+ * what the running graph plays below what the model stores, because the runtime keeps every
+ * frequency at or below 0.95 × Nyquist (computeBases above). One per static base it lowered (a
+ * frequency, an Oscillator's detune; entity: the node) and one per CONTROL edge whose upward
+ * excursion it scaled (entity: the edge). details = { node, param, unit, stored, played,
+ * safeMaximum, sampleRate }: a base's stored value and the value it plays in the parameter's
+ * unit; an edge's stored depth and played depth (depth × scale, in the parameter's unit or
+ * octaves for a log mapping), plus its `mapping` and `scale`. Severity warning, owner runtime.
+ * ctx = { sampleRate, safeMaximum, edges: Map edge id -> PlanEdge, nodes: Map id -> PlanNode }.
+ */
+export function frequencyLimits(planNode, cb, { sampleRate, safeMaximum, edges, nodes }) {
+  const out = [];
+  if (!planNode || !cb) return out;
+  const defs = new Map(planNode.def.params.map((p) => [p.key, p]));
+  const at = `${formatFrequency(safeMaximum)}, ${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist at `
+    + `${Number((sampleRate / 1000).toFixed(3))} kHz`;
+  const freq = defs.get('frequency');
+  const pitch = `${planNode.name} ${freq ? freq.label : 'Frequency'}`;
+  for (const key of cb.clamped || []) {
+    const p = defs.get(key);
+    const stored = planNode.params[key];
+    const played = stored - ((cb.lowered && cb.lowered[key]) || 0);
+    if (!p || !Number.isFinite(played) || played === stored) continue;
+    const what = p.unit === 'Hz' ? 'a frequency' : `${planNode.name}'s detuned frequency`;
+    out.push({ ...studioDiagnostic('runtime', 'frequency-limited', `${planNode.name} `
+      + `${p.label} is ${valueText(stored, p.unit)} but plays ${valueText(played, p.unit)}: `
+      + `the Studio keeps ${what} at or below ${at}.`, { kind: 'node', id: planNode.id }),
+    details: { node: planNode.id, param: key, unit: p.unit, stored, played, safeMaximum,
+      sampleRate } });
+  }
+  for (const id of cb.limited || []) {
+    const e = edges && edges.get(id);
+    if (!e) continue;
+    const p = defs.get(e.to.port);
+    const from = nodes && nodes.get(e.from.node);
+    const scale = cb.scaled && cb.scaled.has(id) ? cb.scaled.get(id) : 1;
+    const log = e.props.mapping === 'log';
+    const unit = log ? 'octaves' : (p && p.unit) || '';
+    const stored = e.props.depth;
+    const played = stored * scale;
+    const cable = `The cable ${from ? from.name : e.from.node} → ${planNode.name} `
+      + `${p ? p.label : e.to.port}`;
+    const how = scale < 1 ? `plays ${Math.round(scale * 100)}% of its depth `
+      + `(${valueText(played, unit)} of ${valueText(stored, unit)})` : 'plays a lower offset';
+    out.push({ ...studioDiagnostic('runtime', 'frequency-limited', `${cable} ${how}: the `
+      + `Studio keeps ${pitch} at or below ${at}.`, { kind: 'edge', id }),
+    details: { node: planNode.id, param: e.to.port, unit, mapping: log ? 'log' : 'linear',
+      stored, played, scale, safeMaximum, sampleRate } });
+  }
+  return out;
 }

@@ -29,7 +29,9 @@
 //                                  capabilities the next compile uses (the stopped status)
 //   runtime.flush({ force })       run due (or all) deferred disposals now
 //   runtime.debugInfo()            runtime node count, compiled revision, last error, applied
-//                                  record, diagnostics, ... (§177)
+//                                  record, diagnostics, ... (§177); diagnostics include one
+//                                  `frequency-limited` per value the Nyquist headroom lowered
+//                                  (compiler.js frequencyLimits, T023), while the graph runs
 //   runtime.applied() -> { revision, studioHash, planHash, at } | null   the applied record:
 //                                  what the running graph holds, set only when a transaction
 //                                  commits (start, apply while running), null while stopped;
@@ -155,8 +157,8 @@ import { createEngineHooks } from './adapters/engine-hooks.js';
 import {
   CLEANUP_MARGIN_S, EMPTY_PLAN, ROUTE_FLOOR, SOURCE_STOP_PAD_S, STUDIO_STOP_S, STUDIO_XFADE_S,
   compileStudio,
-  computeBases, createEdgeHandle, diffPlans, disposeHandle, instantiateNode, planHash,
-  studioHashOf,
+  computeBases, createEdgeHandle, diffPlans, disposeHandle, frequencyLimits, instantiateNode,
+  planHash, studioHashOf,
 } from './compiler.js';
 import { sameExecutionState } from './schema.js';
 import { studioDiagnostic } from './validate.js';
@@ -564,6 +566,21 @@ export function createStudioRuntime({
     return ownedParams();
   }
 
+  /**
+   * The `frequency-limited` diagnostics in effect (frequencyLimits), node by node; a base
+   * another owner drives (an automation lane) is left out: its static value does not play.
+   */
+  function limitDiagnostics() {
+    const out = [];
+    for (const cb of bases.values()) {
+      for (const d of cb.diagnostics || []) {
+        const own = d.entity.kind === 'node' && owned.get(d.details.node);
+        if (!own || !own.has(d.details.param)) out.push(d);
+      }
+    }
+    return out;
+  }
+
   function ownedParams() {
     const out = [];
     for (const [node, keys] of owned) for (const param of keys) out.push({ node, param });
@@ -773,7 +790,9 @@ export function createStudioRuntime({
           cb = computeBases(pn, incomingControl(next, id, edgeOf), hooks, peaks.get(id) || null);
         })) continue;
         const prev = bases.get(id);
-        bases.set(id, cb);
+        bases.set(id, { ...cb, diagnostics: frequencyLimits(pn, cb, { sampleRate:
+          ctx.sampleRate, safeMaximum: hooks.safeMaximum, edges: next.edges,
+          nodes: next.nodes }) });
         if (!created.handles.has(id)) {
           // A parameter released by this apply's claims glides from its owner's hold, not now.
           const own = heldKeys(h, now);
@@ -844,7 +863,9 @@ export function createStudioRuntime({
     }
     lastOps = ops;
     lastWarnings = warnings;
-    return { ok: true, applied: true, ops, warnings, at: t };
+    // What the running graph plays below the model, as diagnostics in effect (T023).
+    return { ok: true, applied: true, ops, warnings: [...warnings, ...limitDiagnostics()],
+      at: t };
   }
 
   // ------------------------------------------------------------ public API
@@ -1055,8 +1076,10 @@ export function createStudioRuntime({
       const st = status(e, edges.get(e.id));
       if (st.status === 'inactive') inactiveEdges.push(st);
     }
-    // Validation's warnings, the last transaction's, and failures still in effect (once each).
-    const warned = [...new Set([...plan.warnings, ...lastWarnings, ...unresolved()])];
+    // Validation's warnings, the last transaction's, failures still in effect and the values
+    // the Nyquist headroom lowers (T023), once each.
+    const warned = [...new Set([...plan.warnings, ...lastWarnings, ...unresolved(),
+      ...limitDiagnostics()])];
     const limitedEdges = [];
     const limitedParams = []; // static bases lowered below 0.95 × Nyquist (V272 A7)
     const exceeds = [];
