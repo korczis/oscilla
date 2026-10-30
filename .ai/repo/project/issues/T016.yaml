@@ -1,0 +1,31 @@
+id: T016
+milestone: M073
+serves:
+  - "v3-measure#readout-states"
+title: "The MEASURE quality bar does not say \"CLIPPING NONE\" for a run whose peak reached the rail"
+slug: the-measure-quality-bar-does-not-say-clipping-none-for-a-run
+priority: p1
+profile: implementation
+objective: "Truth-table rows MSR-07 (scratchpad p05/truth-table.md). The run event carries the peak; the bar shows \"AT RAIL\" (warn) with \"brief clipping is not excluded\" when the peak is ≥ CLIP_THRESHOLD without a clip region, keeps it across later clean runs, says \"NOT CHECKED\" when the peak is unknown, and words NONE as \"no sample at or above 0.98 of digital full scale\"."
+why: "P05 audit of origin/main b67d1e58 (v3.13.0): A run whose peak reaches 0.995 without a 3-in-1-ms flat top gets \"CLIPPING NONE: no sample at digital full scale\" in the live bar, while assessQuality reports CLIPPING_NOT_EXCLUDED (warn) for the same capture. The engine emits only { run, invalid, reasons }, so the bar never sees the peak."
+scope:
+  - "src/js/measurement/engine.js"
+  - "src/js/measurement/views/quality-bar.js"
+  - "tests/unit/readout-states-quality-bar.test.mjs"
+  - "tests/unit/v3-views.test.mjs"
+  - "tests/README.md"
+  - "dist"
+acceptance_criteria:
+  - "Fail-first fixture: tests/unit/readout-states-quality-bar.test.mjs (or an added case in v3-views.test.mjs): a run event with peak 0.995 and reasons [] is not \"CLIPPING NONE\" and has status warn; fixture F1 (1 s sweep at 0.25 with two isolated ±0.995 samples) end to end. Fails on the merge base; a mutation restoring the old branch fails it."
+  - "Negative cases, each asserted: A clean run with peak 0.5 shows NONE; a real clip region still shows CLIPPING; quality status and reasons are unchanged (the bar only reports)."
+  - "Revertible on its own: Revert: one event field and the reducer branch."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "The pull request touches a guarded path and carries a reviewer-written .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+  - "tests/README.md has a row for each new test; this issue does not edit docs/CLAIMS.yaml or the intent (T027 does)."
+validation:
+  - "npm test"
+  - "npm run verify"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

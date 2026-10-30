@@ -1,0 +1,30 @@
+id: P006
+milestone: M098
+serves:
+  - "public-discoverability#readme-front-page"
+title: "README as a GitHub front page: tagline, original signal-path illustration, native Mermaid journey"
+slug: readme-as-a-github-front-page-tagline-original-signal-path-illustration-native-mermaid-journey
+priority: p2
+profile: routine
+objective: "On top of E028's landing (three routed deep links; pull request #286, landing in train #316, and P006's own pull request #318 is stacked on it), put the tagline after the positioning sentence, an original illustration of OSCILLA's signal path under docs/assets labelled as an illustration, and a native GitHub mermaid flowchart of the real journey (generate, observe, measure, interpret, save and repeat, compare; the Studio on the same engine), and caption the screenshot as the real built app captured by npm run social."
+why: "The owner's prompt pack (2026-10-29) asks for a front page that convinces in seconds; the README today opens on the right sentence but shows only the share card."
+scope:
+  - "README.md"
+  - "docs/assets"
+  - "tests/unit/readme-landing-art.test.mjs"
+  - "tests/README.md"
+  - ".ai/repo/project/issues/P006.yaml"
+depends_on:
+  - "E028"
+acceptance_criteria:
+  - "tests/unit/readme-landing-art.test.mjs passes: the tagline follows the sentence; every docs/assets image README shows exists, has alt text and is an SVG with title and desc, no script, handler, foreign object, font file or external reference, labelled not a measurement; the mermaid flowchart's edges end on declared nodes; broken fixtures prove each refusal."
+  - "positioning-consistency, docs-derived, knowledge-integrity and extending-guide still pass, and version:check finds no version literal in README or the SVG."
+  - "Every colour the SVG uses is a colour of src/styles/tokens.css, checked by the same test."
+  - "The pushed README renders its diagram and image on GitHub, recorded before merge as a comment on the pull request with what was seen and the mermaid versions it parses in (dark theme; the SVG carries its own dark ground in the light theme)."
+  - "E028 (#286) lands before or with P006: both ride train #316, and P006 depends on E028."
+validation:
+  - "node --test tests/unit/readme-landing-art.test.mjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-30
+updated_at: 2026-10-30

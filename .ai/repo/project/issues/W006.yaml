@@ -1,0 +1,47 @@
+id: W006
+milestone: M101
+serves:
+- "instrument-kinds#sequencer-surfaces"
+title: "Transport kind: the Studio's transports share one set of labels, titles and shortcuts, with tap tempo"
+slug: transport-kind-the-studio-s-transports-share-one-set-of-labe
+priority: p2
+profile: implementation
+objective: "Lands as feat(studio-ui). transport-bar.js is declared as the transport kind (props keys, tempo, timeMode, tap, density; events to transport-commands.js), mounted by the timeline strip and the compact Studio (G006) with the same labels, titles and aria-keyshortcuts; role=toolbar with roving focus; the clock a W002 readout; on a phone Play, Stop, Loop and the clock in one row and the rest in a Pro overflow dropdown. Tap tempo (the Tap button, Enter on it): the mean of the last four taps within 2 s, clamped to TEMPO_RANGE, one TRANSPORT_SET per tap series, in the kind's pure model so K068 reuses it. Before: VERIFIED three Studio transports with different labels, Loop as text in one, Return missing in one, titles and shortcuts in one (inventory D1). After: one transport kind. Negative cases: a refused play while MEASURE owns the output (stated); Loop with no loop region; a tap series beyond the tempo range (clamped, stated); Space inside the toolbar (the workspace's, never the kind's). Rollback: revert. Merged plan of the component follow-up (2026-10-30): tapTempo(taps, now) is pure and returns { taps, bpm }; the tap series is held by the owner (view state of the surface), never by the kind. K068 calls this function instead of a second tap-tempo rule (K068 depends on W006)."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs, knowledge and interlinking, and add more; add p5.js, WebGL and interactivity, and deploy; a full DAW, a full sequencer and a full piano, everything interlinked, clickable, parameterized and joined; knobs, sliders and control panels done one generic way, integrated with Majordomus; the landing easy to use, easy to extend and open to hack; mobile first. The architecture still binds: one AudioEngine, the Studio model canonical, typed ports, one offline file under the 1.2 MB gzip budget, the cockpit identity, no fake science, Flowbite Pro (ADR 0061). Design: the instrument-kinds design of 2026-10-29 (scratchpad components-followup/components-new.md), on the component-system design (G001-G019) and the synth and studio-siggen drafts of the same day, facts checked against origin/main cdda563c."
+scope:
+- src/js/ui/studio/transport-bar.js
+- src/js/ui/studio/transport-view.js
+- src/js/ui/kinds/transport-model.js
+- src/js/ui/catalog/kinds/transport.js
+- tests/unit/ui-kind-transport.test.mjs
+- tests/browser/v31-studio-transport.cjs
+- tests/unit/ui-flowbite-pro-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- W001
+- G006
+- F001
+acceptance_criteria:
+- "tests/unit/ui-kind-transport.test.mjs fails on the merge base: each event maps to its command; every instance renders the same labels, titles and aria-keyshortcuts; tap tempo maths and its clamp; a refused play states the refusal."
+- "Negative cases, each asserted by a test that fails on the merge base: the four of the objective."
+- "Definition of done, tested: tests/browser/v31-studio-transport.cjs taps tempo four times by pointer, by T and by hasTouch taps and waits with until() (deadline 'tapped tempo applied', 2 s) for the store's tempo; at 390x844 the overflow holds Return and tempo. The check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, runs at 1536x1024 and 390x844, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, extends: transport-bar.js and G006; interlinks: the clock's provenance popover (W002)."
+- "Definition of done, interactivity: every transport control by pointer, keyboard and touch."
+- "Every Studio edit it builds is one plain action the owning surface dispatches through the one Studio store; a continuous gesture is one history entry and undo and redo restore the exact serialized model; a refusal leaves model, history and runtime unchanged and the kind states the store's sentence once in the polite live region (project.studio-model-is-canonical, project.typed-ports)."
+- "Definition of done, docs, menus and routes: the kind's declaration names its docs, links and tests; docs/ui-catalog.md (G014) lists it; the Keyboard shortcuts dialog lists its keys; tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Its trace entry in scripts/ui-catalog/trace/kinds.mjs names the intent criterion, this issue, its rules, ADRs and tests, each resolved by the trace check, for the Majordomus knowledge projection."
+- "The kind's modules pass W001's static scan: no import of src/js/studio/actions.js, a store, sources.js or a lab module; no dispatch or owner writer called; no AudioContext, AudioNode or worklet created (project.audio-engine-discipline v2: one AudioEngine); no requestAnimationFrame, setInterval or setTimeout outside src/js/charts/frame-loop.js; no allocation in a frame callback (1000 ticks keep the same typed arrays) and frameSubscriberCount() returns to its value after destroy()."
+- "Its chrome (buttons, button groups, popovers, dropdowns, inputs) is markup adapted from the matching Flowbite Pro block and names its flowbite-pro reference.md section; its instrument surface is a domain view under ADR 0061 decision 3 as J001's ADR 0061 resolution note records it: inline SVG or canvas and Tailwind utilities inside a Pro card, no stylesheet, no selector, no osc-* class token, no el.style write or style attribute; no osc-* name in the ratchet record rises and the domain views' stylesheets gain nothing (project.ui-uses-flowbite-pro, project.visual-identity-lock v2, ADR 0061; node scripts/ui-flowbite-pro-record.mjs --check and node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "No input path of the build gains a components, widgets, ui-kit or design-system segment (the COMPONENT_LIBRARY check of scripts/ui-flowbite-pro-measure.mjs): declarations live in src/js/ui/catalog/kinds, views in src/js/ui/kinds."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat change it carries a unit test that fails on the merge base (project.fail-first)."
+- "scripts/size-report.mjs shows at most 1 KB gzip added, compiled CSS included, with the base and head figures in the pull request body, inside the component line's cap Q037 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+- node --test tests/unit/ui-kind-transport.test.mjs
+- node tests/browser/v31-studio-transport.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-30'

@@ -1,0 +1,29 @@
+id: E029
+milestone: M046
+serves:
+  - "engineering-integrity#studio-perf-budget-cpu-time"
+title: "The Studio performance budgets (§145-§147) are judged on CPU time, and the build's also on a machine-relative bound that fails a 2x slower build"
+slug: studio-performance-budgets-judged-on-cpu-time
+priority: p1
+profile: implementation
+objective: "tests/unit/v31-studio-performance.test.mjs compared the fastest wall time of each operation with its budget. On the shared Mac at loads of 55-110 on 18 cores (2026-10-29) the build of the 100-node / 200-edge fixture took 1138-3262 ms of wall time against its 1000 ms budget while its CPU time was about 280-310 ms, so npm test failed for every builder and majordomus finish --verify-command 'npm test' refused (#282, #283, #284, #286, #291); it fails the same way on origin/main. Measure each operation's main-thread CPU time (process.threadCpuUsage) instead, keep the wall-clock re-measure deadline, and give the build a second bound, BUILD_REFERENCE_RATIO times the CPU time of a fixed product-free reference workload measured in the same process, because the 1000 ms is about 3.5 times the build's cost and passes a build twice as slow."
+why: "The test measured the host, not OSCILLA: re-measuring and the minimum could not help once the load starved the process, and a test that is red for everyone teaches re-running until green, which also hides a real regression. A budget that a 2x slower build still passes does not catch that regression either."
+scope:
+  - "tests/unit/v31-studio-performance.test.mjs"
+  - "tests/unit/fixtures/v31-large-studio.mjs"
+  - "docs/v31/performance.md"
+  - "tests/README.md"
+  - ".ai/repo/project/intents/engineering-integrity.yaml"
+  - ".ai/repo/project/issues/E029.yaml"
+acceptance_criteria:
+  - "Each operation's cost is the fastest repeat of the main thread's CPU time; the re-measure deadline and the shared total deadline stay wall time; fake-clock cases show that wall time the host takes from the process does not count against a budget and that a starved process still stops at the wall-clock deadline."
+  - "The build's budget is the smaller of 1000 ms and BUILD_REFERENCE_RATIO times the reference workload's CPU time, and the test asserts that twice the measured build is over it, so a bound that drifted loose fails."
+  - "With the build slowed down twice in a scratch copy the test fails on the loaded Mac; unmodified it passes at a load of about 80 or more; npm test passes there, run several times."
+  - "docs/v31/performance.md states the method, the ratio measured on the Mac and on the CI runner and the bound; tests/README.md's row describes the test as it is."
+validation:
+  - "node --test tests/unit/v31-studio-performance.test.mjs tests/unit/v31-studio-docs.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

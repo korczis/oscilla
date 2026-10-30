@@ -298,3 +298,58 @@ this note (commit 9ef1585) was corrected in place before it merged:
   member kinds (see the seam above).
 - Row 1's copy advised opening the page from a file, which in Firefox's gate build leads to
   `unsupported`. Row 13 (now 9) used `{name}`, which the note did not define.
+
+### 2026-10-29: rotary knobs (D11), and an instrument system on the Studio model
+
+**Note of 2026-10-29 (intent `connected-instrument`, owner decision Q018).** Appended; the
+sections above are unchanged and the status stays `proposed`, because accepting it is the
+owner's act.
+
+**What the owner decided.** Through AskUserQuestion in the coordinating session of
+2026-10-29 (Czech, relayed in English), the owner answered two questions:
+
+1. **Controls (D11).** Continuous instrument parameters are rotary knobs that always show their
+   value with a unit. Drag up or down turns them, with fine adjustment on Shift; the arrow keys
+   and PageUp/PageDown work; double-click resets to the default; a value can be typed. This
+   replaces D5 of intent `playable-instrument` ("Pro range sliders with number inputs, no
+   custom rotary knob"), which that intent recorded together with the sentence "ADR 0058 stays
+   unchanged"; this note is the amendment that sentence ruled out at the time.
+2. **Placement.** A new workspace, Synth: a front panel with a patch bay, built on the Studio
+   model, in which every cable is a typed Studio connection and the sequencer plays it directly.
+
+The owner then widened the direction in the same session (relayed by the coordinator): a proper
+sequencer, every kind of synthesis needed, a beat machine, an XY performance pad, clip-based
+MIDI arrangement and a piano keyboard, all interlinked and connected to modulation, the labs, the
+visualizations and MEASURE.
+
+**How the decisions above read now.**
+
+- Decision 1 holds: MIDI is a control layer and the AudioEngine the rendering layer. The
+  instruments of `connected-instrument` are Studio node kinds compiled into the one engine
+  through its accounting; none is a second engine. The knob is a control, not an engine.
+- Decision 2 holds: MIDI stays optional and its thirteen-state support table above is
+  unchanged; everything works without it.
+- Decision 3 holds: every note, step and clip event is scheduled on the AudioContext clock, and
+  nothing in the event path calls a network or a model.
+- Decision 4 is answered for the new clips: a recorded take is a `steps` or `notes` clip of the
+  StudioModel (issues K067, K099, K100), never a second state.
+- Decision 5 named MIDI clock, MIDI output and multiple tracks as out of scope for the first
+  version (M045). The owner's later direction of the same day (about 22:00, relayed by the
+  coordinator: "full DAW, full sequencer, full piano, everything interlinked, everything
+  clickable, everything parameterized, joined") takes multiple tracks, MIDI output and MIDI
+  files into scope of `connected-instrument` (K067, K100, K118); MIDI output follows the same
+  support-state table and states that its timing follows the browser's MIDI clock. MIDI clock
+  and AI improvisation stay out of scope.
+- The rejected alternative "turning the block sequencer into a MIDI sequencer" stands: the V2
+  block sequencer remains a sound-pattern editor, and the step sequencer and piano roll are
+  Studio timeline clips.
+- The boundary "not another DAW or a copy of a commercial synthesizer" is superseded in scope
+  by that direction: OSCILLA builds a full DAW, but on its own architecture (one AudioEngine,
+  the canonical StudioModel, typed ports, one file offline, the cockpit identity, measurement
+  provenance travelling with patches) and never as a copy of any product's name, branding,
+  artwork, panel layout or trade dress, with no analog-modelling claim
+  (`tests/unit/instrument-wording.test.mjs`, K059).
+
+**Consequences.** Intent `playable-instrument` records D5 as superseded by D11 and hands its
+unissued Wave 3 instrument items to `connected-instrument`; issues K016-K021, K025 and K026
+state D11 where they stated D5. The knob is built in K058. The status of this ADR is unchanged.

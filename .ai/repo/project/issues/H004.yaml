@@ -1,0 +1,35 @@
+id: H004
+milestone: M054
+serves:
+  - "ui-current#ui-audited"
+title: "The logo, the skip link, Help, Import and row focus do what their names say"
+slug: the-logo-the-skip-link-help-import-and-row-focus-do-what-their
+priority: p2
+profile: implementation
+objective: "Lands as fix(ui). Five controls named for something they do not do (links probe of the G1 inventory): B6 the logo only moves focus; it opens the Playground, or stops being a control. B7 'Skip to the instrument' appears in every workspace; it names and targets the main content of the workspace shown. B8 'Help' opens the keyboard shortcuts only; it is named for the dialog it opens (a help hub is not planned here). B13 Import sits in the Export menu; it moves out of it, beside the import it already has (More, Import). B14 a div row has a click handler; it becomes a focusable control with keyboard activation. B1 ('Open Filter Lab page') is the UX-audit plan's control-naming slice and is not repeated here."
+why: "Links probe B6, B7, B8, B13 and B14 of the G1 coherence contract of 2026-10-29 (scratchpad g1/coherence-contract.md, section 5 row 6.3; inventory g1/inventory.md; critique g1/critique.md) (VERIFIED on main cdda563c); serves ui-current#ui-audited, an INFERRED fit."
+scope:
+  - "src/index.html"
+  - "src/partials"
+  - "src/js/ui/app.js"
+  - "src/js/ui/dialogs.js"
+  - "tests/unit/control-names.test.mjs"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/browser/navigation.cjs"
+  - "tests/README.md"
+  - "dist"
+acceptance_criteria:
+  - "Fail-first: tests/unit/control-names.test.mjs reads src/index.html and src/partials and fails on the merge base: the header help control's accessible name is the title of the dialog it opens; the Export menu holds no Import item; no element without an interactive role and tabindex carries a click handler; the skip link's label is bound to the workspace shown."
+  - "A check in tests/browser/navigation.cjs activates the logo, the skip link in three workspaces, Help and Import, and asserts the workspace, focus target or dialog each one reaches."
+  - "It adds no class token, selector, markup surface or inline style and only removes legacy ones, so tests/unit/ui-flowbite-pro-baseline.json stays equal or falls (node scripts/ui-flowbite-pro-record.mjs --check passes, rewritten only where a count fell) and node --test tests/unit/ui-flowbite-pro.test.mjs passes (project.ui-uses-flowbite-pro, project.visual-identity-lock v2)."
+  - "As a fix change it carries a unit test that fails on the merge base and passes on the head (project.fail-first)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named deadline (project.suite-harness, project.bounded-test-timing)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/control-names.test.mjs"
+  - "node tests/browser/navigation.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

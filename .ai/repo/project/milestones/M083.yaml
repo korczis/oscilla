@@ -1,0 +1,18 @@
+id: M083
+title: "The owner's definition of done is judged on every pull request"
+slug: the-owner-s-definition-of-done-is-judged-on-every-pull-reque
+order: 83
+priority: p2
+problem: "The owner's definition of done (extends, cross-links, dynamics, docs and routes, tested, deployed) is a sentence; nothing checks a pull request against it."
+outcome: "A base-branch script judges every pull request that changes src/ against the checkable items, under a rule that names its enforcement."
+acceptance_criteria:
+- E030 is done with its evidence; npm run release-gate passes.
+validation:
+- npm run release-gate
+evidence_required:
+- milestone_verified
+risks:
+- "The integration-map clause waits for the synth line's K075 map on the base; until then it reports and passes."
+- "R022 (#255) reads the same pull-request metadata: one parser, not two."
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

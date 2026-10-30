@@ -1,0 +1,33 @@
+id: C015
+milestone: M090
+serves:
+  - "coherent-state#views-describe-what-sounds"
+title: "The mic lab stops honestly when the engine discards its audio context"
+slug: the-mic-lab-stops-honestly-when-the-engine-discards-its-audi
+priority: p2
+profile: implementation
+objective: "Lands as fix(labs). Finding engine-sync-3. When the context closes from outside, _discardContext calls detachMicrophone('closed'), which stops the tracks and emits 'micAttachment' { attached: false }; nothing subscribes (cmp.onEngine has no such case) and MediaStreamTrack.stop() fires no 'ended', so the lab stays active with aria-pressed=true 'Stop microphone' and an analyser of the closed context, and after the next gesture rebuilds the context it is still on the old one. Include the detached analyser in the event (_emit('micAttachment', { attached: false, reason, analyser })), give the lab adapter onMicDetached(fn) fed from engine.on in main.js and passed through src/js/labs/index.js, and in src/js/labs/mic-analyzer.js react only when d.analyser is the lab's own: clear stream, attachment, estimate and comparison, reset the button and say 'The audio context was closed; the microphone was stopped.' Never stop on reason 'replaced', which attachMicrophone emits from inside the lab's own start() after the new stream is set."
+why: "Owner brief OSCILLA PACK 03, 'One Instrument, One Coherent State' (2026-10-29): every control must provably reach its subsystem and every view that reflects it, and be covered by a test (owner: 'filters, sequencer, bpm and many other interactive knobs / sliders / control elements are not reflected / working / tested'). The findings named here were reproduced by an independent skeptic on a fresh export of origin/main b67d1e58 (v3.13.0)."
+scope:
+  - "src/js/audio/audio-engine.js"
+  - "src/js/labs/mic-analyzer.js"
+  - "src/js/labs/index.js"
+  - "src/js/main.js"
+  - "tests/unit"
+  - "tests/browser/app.cjs"
+  - "tests/README.md"
+  - "dist"
+acceptance_criteria:
+  - "A unit test with a fake adapter: a detach for the lab's own analyser leaves active false, aria-pressed false and the stated reason; a 'replaced' detach for another analyser leaves the lab active; it fails on the merge base."
+  - "Browser check `mic-detach-on-close` in tests/browser/app.cjs with a fake media device: Use microphone, then ctx.close(): within a named deadline the button reads 'Use microphone' with aria-pressed=false and the reason is shown; after the next gesture rebuilds the context a new start attaches to engine.ctx."
+  - "fail-first holds: the unit test or browser check named above fails on the merge base (project.fail-first)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named wall-clock deadline; tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "The pull request carries a reviewer-written .ai/repo/reviews/<pr>.yaml because it changes src/js/audio/audio-engine.js (project.review-verdict); the builder never writes it."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node tests/browser/app.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29
