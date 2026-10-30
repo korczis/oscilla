@@ -1,0 +1,65 @@
+# Review verdict for pull request #290, plan item C012: the Studio master level has one writer;
+# the status bar shows what the Studio plays (branch fix/c012-studio-master-level-one-writer).
+# Reviewed head 41d2034fe666 (== origin at fetch; merge base cdda563c, origin/main fde49bd1,
+# which adds only #284 docs; git merge-tree with it is clean).
+# Built by the builder's session; reviewed by dev-68. This is a second, independent pass over a
+# first review; every finding below was re-derived from the code and kept only where it held.
+#
+# The digest: the branch's scripts/review-verdict.mjs, identical to origin/main's (diff empty),
+# `--content --list --base origin/main` in the PR worktree, over the one guarded path the pull
+# request changes, src/js/studio/runtime.js: 37a33a98...42df2, which matches the PR body.
+#
+# Lenses: (a) a control that does not reach the sound (PACK03, owner-flagged): every writer of
+# engine.setMasterGain / holdMasterGain (main.js gainLevel $watch, instrument.js ensureAudio and
+# resetDefaults, engine-hooks via the runtime gate) and every way the output is claimed from a
+# playing Studio (the playing / seqPlaying $watch, stopPlayback for MEASURE, the Studio
+# measurement run, Escape, visibilitychange / pagehide, a closed context via dropAll);
+# (b) audio-engine discipline: no new automation, master.gain still built at gainLevel, level
+# changes stay setTargetAtTime glides (tau 20 ms); (c) fail-first; (d) PR body and docs vs code;
+# (e) tests and mutation coverage.
+#
+# Runs:
+# - The PR worktree held no Claude session at review time (only `majordomus serve`, PID 89667,
+#   which logs to .ai/local); it was used for read-only git commands, the digest and this file.
+#   Code was read in a fresh detached worktree of origin/fix/c012-studio-master-level-one-writer.
+# - Fail-first: git archive cdda563c (src, the fake-audio helper) plus the PR's
+#   tests/unit/c012-studio-master-level.test.mjs: tests 1, 2 and 4 fail by assertion, test 3 by
+#   TypeError, test 5 passes (F3). At HEAD 5/5 pass.
+# - CI run 40960482032: everything passes except V3 measurement and UI (chromium), one check
+#   findings-delete-focus that this diff does not touch (F5), and review-verdict / gate, which
+#   wait for this file.
+# - Not re-run here (disk at the floor, nothing installed): the first pass's chromium probes on
+#   the built dist (F1 master.gain trace, F2 status bar after resetDefaults) and its 8 mutants.
+#   F1 and F2 were confirmed by reading the code paths they name; the numbers are the first
+#   pass's.
+#
+# Checked and found correct: ensureAudio writes only when it builds or rebuilds a context, before
+# init() builds master.gain from it; restoreMaster emits 'master' null on every way out (stop,
+# refused start, dropAll, setOptions 'ignore', dispose via stop), so no exit leaves the status
+# bar on Master; the Master Output adapter writes only on engage and a changed level; MEASURE
+# and the Studio measurement go through stopStudio; nothing else writes the master level
+# (src/js grep: main.js:591, instrument.js:386 and :912, engine-hooks only); engine objects stay
+# out of Alpine state (the mirror is two numbers).
+# Lens (a), what the first pass did not name: no further writer bypasses the fix. The F1 gap is
+# wider than the Playground trigger: it is every claim that relies on the async playing /
+# seqPlaying $watch (the status-bar Play button, Space / Enter triggers, the Pattern Sequencer's
+# PLAY), since none of them writes cmp.gainLevel any more and the Studio's held restore is the
+# only thing that brings the level back.
+# F2 is kept at P2 for its readout half: Reset instrument re-setting the Playground gain while
+# the Studio plays is defensible under the documented rule (a Playground gain set while the
+# Studio plays takes over), but when gainLevel is already the default no reactive dependency
+# changes, so the status bar keeps showing `Master <Studio dB>` for a level no longer in effect:
+# the dup-stale-4 defect this PR closes, on a path its own workbench.js comment names.
+#
+# Open: F1 and F2 (P2), F3 to F5 (P3). Verdict: changes.
+schema: review-verdict/v1
+pr: 290
+verdict: changes
+reviewer: "dev-68 (Claude Opus 5.5 session 4f90795d); did not build, merge or edit this change; wrote only this file"
+content: 37a33a9885d03fa0176f56e49e9d6adbe61d20197a1cbb246566312563442df2
+findings:
+  - { id: F1, severity: P2, status: open, title: "A Playground, status-bar Play or Pattern Sequencer voice started over a playing Studio sounds its first ~70 ms at the Studio's Master level, then glides to the Playground gain (src/js/core/instrument.js:386). `if (first)` also removed the write on the play() path (instrument.js:432 -> ensureAudio), so the newcomer's level now arrives only via the playing / seqPlaying $watch (src/js/ui/studio/workspace.js:1158-1159) -> runtime.stop -> restoreMaster(t + S) (src/js/studio/runtime.js:981) -> engine.holdMasterGain(saved, t + S). First pass, chromium on dist, Studio Master 0.02, Playground 0.08: master.gain 0.02 to 64 ms, 0.0543 at 96 ms, 0.08 at 229 ms (base: 0.0448 at 10.7 ms). The onset is 12 dB low (or high, if the Studio Master is above the Playground gain): the Playground gain does not reach the start of the sound it governs. Click-free (setTargetAtTime). Untested: the unit test counts ensureAudio writes and no browser check starts the Playground over the Studio. Fix: write cmp.gainLevel when the instrument or sequencer claims the output (the play path, not the unlock listener), or make that hand-off restore at once, and add the browser check." }
+  - { id: F2, severity: P2, status: open, title: "resetDefaults (src/js/core/instrument.js:912) is still an unconditional second writer: with gainLevel already at the default, the main.js gainLevel $watch (src/js/main.js:590-595) does not fire, cmp.studio.masterLevel is not cleared, and the workbench getter's only reactive hook on engine writes is `void this.gainLevel` (src/js/ui/workbench.js:102), which did not change, so statusGainText is never re-evaluated. First pass, chromium, Studio Master 0.02, Playground 0.08, Reset instrument (src/index.html:3006, also presets.reset at :2258): engine and master.gain 0.08, Studio still PLAYING, status bar 'Master -34.0 dB': the readout shows a level not in effect (dup-stale-4). The unit test's 'resetDefaults supersedes it' (tests/unit/c012-studio-master-level.test.mjs:148-150) bumps masterWrites on a plain object and never exercises Alpine reactivity. Fix: write in resetDefaults only when gainLevel did not change and then clear cmp.studio.masterLevel (or mirror engine.masterWrites into a reactive counter), with a browser check." }
+  - { id: F3, severity: P3, status: open, title: "tests/README.md:140 says every C012 test fails before its fix; against merge base cdda563c test 5 ('the status bar never writes the Studio level into the Playground gain') passes and test 3 fails by TypeError (events.at(-1) undefined), not by assertion. The PR body's fail-first block (4 failures) is accurate. Fix: say which four fail first, and make test 3 assert the event exists." }
+  - { id: F4, severity: P3, status: open, title: "The workspace 'master' mirror (src/js/ui/studio/workspace.js:761-768) and the main.js clear (src/js/main.js:594) have no unit coverage, and dropping `void this.gainLevel` (src/js/ui/workbench.js:102) survives the unit test (first pass, mutant M8; 7 of 8 mutants killed). The main.js clear and the getter's masterWrites check cover each other, so either can go without any check failing; F2 shows that this reactive path is the weak one." }
+  - { id: F5, severity: P3, status: open, title: "CI run 40960482032 is red on V3 measurement and UI (chromium), one check v3-ui findings-delete-focus (dialog keyboard race) in code this diff does not touch; the first pass reran it locally on the HEAD dist, PASS 2/2. Rerun CI before merge." }
