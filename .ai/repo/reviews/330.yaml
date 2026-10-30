@@ -39,15 +39,57 @@
 # the mark; the dark greys read as the cockpit; the light theme was not judged (no light capture).
 #
 # Verdict: changes-requested. Two open P1s (F1, F2) refuse the merge.
+#
+# Re-review of round 2 (head 769d0c51; base origin/feat/f001-tailwind-build e7e12423, refreshed
+# with main 27ce813e v3.14.0). The digest, from the base branch's script, is e1a5c2b1...d769
+# over the three guarded paths it now names: ci.yml (the browser job 45 -> 55 min and its suite
+# step 15 -> 25 min, because every suite now runs), build-config.mjs (DARK_THEME_SELECTOR is every
+# theme but light, plus the size comment) and build.mjs (a comment). No CI run has reported on
+# this head yet, so the Linux judgement below is the reviewer's own: the head and the base
+# exported under $HOME and run in mcr.microsoft.com/playwright:v1.63.0-noble, the image the PR's
+# own baselines were taken in.
+#
+# F1: closed. The fine-step row wraps beside the sidebar; in the container frequency-slider-and-
+#   fine-steps passes in chromium and webkit, and in firefox +1 oct is pressed (app 2517.85 ->
+#   5035.7). Its one remaining firefox failure (the engine stays at 440 Hz, FFT peak 5 Hz) is the
+#   container's audio: the base branch fails it identically there, and CI passes it on the base.
+# F2: closed. a11y-header-no-overlap-narrow and a11y-phone-bars-every-state pass at 320-414 px in
+#   chromium, firefox (with a PulseAudio null sink, as CI installs one) and webkit; the wordmark
+#   hides below 375 px and the mark stays.
+# F3: closed. v31-studio-timeline passes 15/15 in chromium and in firefox; dark is every theme but
+#   light, matching tokens.css and ui/theme.js. The webkit controls-labelled race is closed by the
+#   audit holding the render before it starts (not re-run here).
+# F4: closed. nav-groups-keyboard passes in all three engines; the heading takes focus in a
+#   microtask of the press's task, and the $nextTick path only retries.
+# F5: closed. test:browser runs every suite through tests/browser/lib/run-suites.cjs and fails if
+#   any failed; browser-run-suites.test.mjs proves it; the job's timeouts grow to hold all six.
+# F6: closed. The aside is the landmark "Sidebar", its list "Workspaces".
+# The related unit tests (ci-workflows, ui-flowbite-pro-shell, browser-run-suites,
+# ui-flowbite-pro-build) pass, 62 of 62.
+#
+# New in this round:
+# F7 (P2): #337 (E044, verdict merge from this reviewer) copies ci.yml's browser job into
+#   main-checks.yml with the old timeouts (45 and 15), and its test fails when the copy differs.
+#   Whichever of #330 and #337 lands second makes npm test red on main unless it carries the
+#   other's numbers: land #337 with 55 and 25, or refresh it after #330.
+# F8 (P3): the dark: variant is :not(:where([data-theme="light"])...) and adds no specificity, but
+#   the flowbite plugin's .dark rules are rewritten to :root:not([data-theme="light"]), which adds
+#   two classes' worth; in the dark theme a flowbite rule can outweigh an explicit dark: utility
+#   on the same element.
+#
+# Verdict: merge. F1-F6 are closed; F7 is a landing-order note for the two pull requests, not a
+# defect of this head; F8 is P3.
 schema: review-verdict/v1
 pr: 330
-verdict: changes-requested
+verdict: merge
 reviewer: prismatic-majordomus-1d (claude-code 1423ad2b)
-content: 2694abbc77d308b0fbafaa8e72fb852abdca7472014388b69e833fb4aed972f0
+content: e1a5c2b18151e9bf4b71e064e6426f48a7f4b4abf8f6e05990d25534038bd769
 findings:
-  - { id: F1, severity: P1, status: open, title: "app.cjs frequency-slider-and-fine-steps fails in chromium, firefox and webkit, file and http (run 41011340141): page.click timeout on #osc-step-oct-up. The 256 px sidebar leaves the Source panel too narrow for the fine-step row (the 1536 reference itself shows '+1 oc' clipped); on Linux fonts the +1 oct button cannot be clicked at all. The PR defers the wrap as cosmetic, but it removes a control; the base passes this check" }
-  - { id: F2, severity: P1, status: open, title: "app.cjs a11y-header-no-overlap-narrow and a11y-phone-bars-every-state fail at 360 px in all three engines: header.brand overlaps osc-theme-toggle (flex x inline-flex) in every status. The PR's phone checks use 390 px; at 360 on Linux fonts the navbar's logo, wordmark and four 44 px controls do not fit. Hide the wordmark (keep the mark) below the colliding width, or drop a control into the more menu" }
-  - { id: F3, severity: P2, status: open, title: "V3.1 Studio UI fails in all three engines, green on the base: v31-studio-timeline layout fails its [dark] case in chromium and firefox (a dark-theme measurement; help reads 2.08), and v31-studio-graph controls-labelled in webkit never shows studio.task.abort. Likely the gray scale remap or preflight reaching Studio; cause not established by this review" }
-  - { id: F4, severity: P2, status: open, title: "webkit nav-groups-keyboard: at 375 px a tap on About closes the drawer and leaves focus on BODY, not on the destination or the menu button (WCAG 2.4.3, focus lost); chromium and firefox pass it" }
-  - { id: F5, severity: P2, status: open, title: "the deep-link inventory and the shell-phone/shell-search/shell-a11y checks (ui-flowbite-pro.cjs), layout, qa-regressions and navigation have not run in CI: test:browser stops at the first failing suite (&&). They need one green Linux run before the PR body's evidence stands" }
-  - { id: F6, severity: P3, status: open, title: "index.html:249/266 the complementary landmark 'Workspace' (aside) and the navigation landmark 'Workspaces' (nav) differ by one letter; a landmark list reads them as the same thing twice. Name the aside for what it is (e.g. Sidebar), keeping the ratchet's selector in step" }
+  - { id: F1, severity: P1, status: closed, title: "app.cjs frequency-slider-and-fine-steps fails in chromium, firefox and webkit, file and http (run 41011340141): page.click timeout on #osc-step-oct-up. The 256 px sidebar leaves the Source panel too narrow for the fine-step row (the 1536 reference itself shows '+1 oc' clipped); on Linux fonts the +1 oct button cannot be clicked at all. The PR defers the wrap as cosmetic, but it removes a control; the base passes this check" }
+  - { id: F2, severity: P1, status: closed, title: "app.cjs a11y-header-no-overlap-narrow and a11y-phone-bars-every-state fail at 360 px in all three engines: header.brand overlaps osc-theme-toggle (flex x inline-flex) in every status. The PR's phone checks use 390 px; at 360 on Linux fonts the navbar's logo, wordmark and four 44 px controls do not fit. Hide the wordmark (keep the mark) below the colliding width, or drop a control into the more menu" }
+  - { id: F3, severity: P2, status: closed, title: "V3.1 Studio UI fails in all three engines, green on the base: v31-studio-timeline layout fails its [dark] case in chromium and firefox (a dark-theme measurement; help reads 2.08), and v31-studio-graph controls-labelled in webkit never shows studio.task.abort. Likely the gray scale remap or preflight reaching Studio; cause not established by this review" }
+  - { id: F4, severity: P2, status: closed, title: "webkit nav-groups-keyboard: at 375 px a tap on About closes the drawer and leaves focus on BODY, not on the destination or the menu button (WCAG 2.4.3, focus lost); chromium and firefox pass it" }
+  - { id: F5, severity: P2, status: closed, title: "the deep-link inventory and the shell-phone/shell-search/shell-a11y checks (ui-flowbite-pro.cjs), layout, qa-regressions and navigation have not run in CI: test:browser stops at the first failing suite (&&). They need one green Linux run before the PR body's evidence stands" }
+  - { id: F6, severity: P3, status: closed, title: "index.html:249/266 the complementary landmark 'Workspace' (aside) and the navigation landmark 'Workspaces' (nav) differ by one letter; a landmark list reads them as the same thing twice. Name the aside for what it is (e.g. Sidebar), keeping the ratchet's selector in step" }
+  - { id: F7, severity: P2, status: open, title: "main-checks.yml of #337 copies ci.yml's browser job with timeouts 45/15 and its test fails on a differing copy; #330 raises them to 55/25, so whichever lands second must carry the other's numbers or npm test is red on main" }
+  - { id: F8, severity: P3, status: open, title: "build-config.mjs rewrites flowbite's .dark ancestor to :root:not([data-theme=light]), which adds specificity the dark: variant (:not(:where(...))) does not, so a flowbite dark rule can outweigh an explicit dark: utility on one element" }
