@@ -1411,6 +1411,131 @@ function defineChecks() {
     return { ok, missing, file: path.basename(dl.suggestedFilename()), after, rejectsBadVersion: !bad };
   });
 
+  // H002: a continuous sweep saved as a preset, a History entry, a config file and a link
+  // restores as once (the permission is never restored, ADR 0005), and every one of the four
+  // restore paths says so in a notice, at desktop and at 390x844. The link's "Configuration
+  // restored from link" names the drop, and the import never says "All settings were restored".
+  def('continuous-repeat-restore-named', async ({ page, context, baseUrl }) => {
+    const DROP = 'Continuous repeat not restored';
+    const inPage = (fn, arg) => page.evaluate(fn, arg);
+    /** The notices the page shows, as "title: message", read from the DOM. */
+    const shown = (p) => p.evaluate(() => [...document.querySelectorAll('[data-osc="alert"]')]
+      .filter((el) => el.getClientRects().length > 0)
+      .map((el) => `${el.querySelector('strong').textContent}: `
+        + `${el.querySelector('span').textContent}`.replace(/\s+/g, ' ').trim()));
+    /** Waits for the drop notice on p; resolves to the notices and the restored state. */
+    const told = (p, what) => until(async () => {
+      const notices = await shown(p);
+      if (!notices.some((t) => t.startsWith(`${DROP}: Continuous repeat saved; it plays once`))) {
+        return null;
+      }
+      const st = await p.evaluate(() => ({ repeat: window.OSCILLA.app.sweep.repeat,
+        allowed: window.OSCILLA.app.continuousAllowed }));
+      return { notices, ...st };
+    }, { ms: 8000, what });
+    const clearAlerts = (repeat) => inPage((r) => {
+      const a = window.OSCILLA.app;
+      a.alerts = [];
+      if (r) a.sweep.repeat = r; // so the restore, not an earlier one, sets it back to once
+    }, repeat);
+    const legs = {};
+    try {
+      for (const [w, h] of [[1536, 1024], [390, 844]]) {
+        await page.setViewportSize({ width: w, height: h });
+        const leg = {};
+        legs[w] = leg;
+        // Save one continuous sweep four ways.
+        await inPage(() => {
+          const a = window.OSCILLA.app;
+          a.customPresets = a.customPresets.filter((p) => p.name !== 'H002 sweep');
+          a.clearHistory(); // the one History entry is this leg's
+          a.setMode('sweep');
+          a.setContinuous(true);
+          a.setSweepRepeat('continuous');
+          a.alerts = [];
+        });
+        await H.workspace(page, 'presets');
+        await page.click('[data-osc="presets.save"]');
+        await page.waitForSelector('#osc-dlg-save[open]', { timeout: 8000 });
+        await page.fill('#osc-save-name', 'H002 sweep');
+        await page.click('[data-osc="save.confirm"]');
+        leg.saved = await until(() => inPage(() => {
+          const a = window.OSCILLA.app;
+          const p = a.customPresets.find((x) => x.name === 'H002 sweep');
+          if (!p) return null;
+          a.addHistory(a.currentPlan().plan);
+          return { preset: p.cfg.sweep.repeat, history: a.history[0].cfg.sweep.repeat };
+        }), { ms: 8000, what: `the continuous sweep is saved as a preset at ${w}px` });
+        await page.click('#osc-export');
+        const [dl] = await Promise.all([
+          page.waitForEvent('download', { timeout: 10000 }),
+          page.click('[data-osc="export.config"]'),
+        ]);
+        const file = fs.readFileSync(await dl.path(), 'utf8');
+        leg.saved.file = JSON.parse(file).pattern.sweep.repeat;
+        const hash = await inPage(() => window.OSCILLA.app.configLinkHash());
+        const url = `${baseUrl.split('#')[0]}#${hash}`;
+        // A new page view has no permission; withdraw it here too.
+        await inPage(() => window.OSCILLA.app.setContinuous(false));
+        await clearAlerts();
+        // 1. Preset
+        await page.click('[data-osc="presets.tab"][data-value="custom"]');
+        await page.locator('[data-osc="presets.item"]', { hasText: 'H002 sweep' }).first()
+          .locator('[data-osc="presets.load"]').click();
+        leg.preset = await told(page, `preset restore names the drop at ${w}px`);
+        // 2. History
+        await clearAlerts('n');
+        await page.click('[data-osc="presets.tab"][data-value="history"]');
+        await page.locator('[data-osc="presets.history"]').first()
+          .locator('button', { hasText: 'Recall' }).click();
+        leg.history = await told(page, `History recall names the drop at ${w}px`);
+        // 3. Config import, through the real file input
+        await clearAlerts('n');
+        await page.setInputFiles('#osc-import-file', { name: 'h002.json',
+          mimeType: 'application/json', buffer: Buffer.from(file) });
+        leg.import = await told(page, `config import names the drop at ${w}px`);
+        leg.import.summary = await until(async () => (await shown(page))
+          .find((t) => t.startsWith('Config imported:')),
+        { ms: 8000, what: `config import summary at ${w}px` });
+        // 4. Link, in a new page view
+        const p2 = await context.newPage();
+        try {
+          await p2.setViewportSize({ width: w, height: h });
+          await p2.goto(url);
+          await H.ready(p2);
+          leg.link = await told(p2, `link restore names the drop at ${w}px`);
+          leg.link.summary = leg.link.notices.find((t) => t.startsWith('Configuration restored'));
+        } finally {
+          await p2.close();
+        }
+        // Clean up this leg's preset and History entry.
+        await inPage(() => {
+          const a = window.OSCILLA.app;
+          a.customPresets = a.customPresets.filter((p) => p.name !== 'H002 sweep');
+          a.persistPresets();
+          a.clearHistory();
+          a.alerts = [];
+        });
+        await H.workspace(page, 'playground');
+        await inPage(() => window.OSCILLA.app.setMode('playground'));
+        leg.done = true;
+      }
+    } catch (e) {
+      return { ok: false, detail: String(e.message || e).split('\n')[0], legs };
+    } finally {
+      await page.setViewportSize({ width: 1536, height: 1024 });
+    }
+    const legOk = (l) => l.done && l.saved.preset === 'continuous' && l.saved.history === 'continuous'
+      && l.saved.file === 'continuous'
+      && ['preset', 'history', 'import', 'link'].every((k) => l[k] && l[k].repeat === 'once'
+        && l[k].allowed === false)
+      && !/All settings were restored/.test(l.import.summary)
+      && /Not restored: continuous repeat/.test(l.import.summary)
+      && /Not restored: continuous repeat/.test(l.link.summary || '');
+    const ok = Object.keys(legs).length === 2 && Object.values(legs).every(legOk);
+    return { ok, legs };
+  });
+
   def('wav-export-valid', async ({ page }) => {
     await page.evaluate(() => {
       const a = window.OSCILLA.app;

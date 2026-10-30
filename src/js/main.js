@@ -248,8 +248,10 @@ function exportConfigDoc(cmp) {
   });
 }
 
+/** Apply an import; { issues, dropped } (dropped: the instrument's report, H002). */
 function applyImport(cmp, parsed) {
-  let issues = cmp.applyConfig(parsed.instrument, 'import');
+  const restored = cmp.restoreConfig(parsed.instrument, 'import');
+  let issues = restored.issues;
   if (parsed.envelope && labs.envelope) {
     labs.envelope.update({ adsr: parsed.envelope.adsr, enabled: parsed.envelope.enabled });
   }
@@ -270,7 +272,7 @@ function applyImport(cmp, parsed) {
   }
   cmp.sourceKind = cmp.source === 'single' && cmp.pattern === 'tone' ? 'oscillator' : 'pattern';
   syncLabFlags();
-  return issues;
+  return { issues, dropped: restored.dropped };
 }
 
 async function renderWav(cmp, what) {
