@@ -144,6 +144,12 @@ What it cannot see:
   blockquotes but not indented code, so an indented `dod-browser: n/a <reason>` counts as
   prose. That reading belongs to `project.fail-first`'s program and is shared on purpose.
 - That an item's path or plan id is the right one: the head must hold it, not prove it.
+- That a train's members exist, landed, and cover its own `src/` commits: a `train/` branch
+  whose table lists any `#<n>` is judged by its members, and the program does not read them.
+  The merge-train skill (members only, one rebuild) and the train's non-builder review verdict
+  hold that; a train that carries a commit of its own under `src/` is a defect of the train.
+- A deleted document: it is not a document change, so the docs clause needs another changed
+  document or the waiver.
 - The deployment, as above.
 - The pull request that introduces the program: the base has no copy, so
   `.github/scripts/base-rule.sh` prints a warning and runs the pull request's own. That pull

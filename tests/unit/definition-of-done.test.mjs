@@ -196,6 +196,15 @@ test('(c) a src/ change without a doc or its waiver is refused', (t) => {
   }
 });
 
+test('(c) deleting a doc is not a doc change', (t) => {
+  const repo = fixture(t, { 'docs/OLD.md': '# Old\n' });
+  repo.git('rm', '-q', 'docs/OLD.md');
+  repo.commit('feat', { ...DONE, 'docs/GUIDE.md': '# Guide\n' });
+  const r = run(repo);
+  assert.equal(r.status, 1, r.out);
+  assert.deepEqual(refused(r.out), ['docs']);
+});
+
 test('a waiver with a real reason passes; without one, or not in the prose, it fails', (t) => {
   const repo = fixture(t);
   repo.commit('feat', { 'src/js/ui/app.js': 'export const app = 2;\n' });

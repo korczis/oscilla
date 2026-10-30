@@ -476,7 +476,7 @@ export function judge({ repo, title, body, head, headBranch = '', base,
   // browser and docs: a changed file, or a reasoned waiver
   for (const [clause, has, what] of [
     ['browser', live.some((p) => BROWSER_TEST.test(p)), 'adds or changes no tests/browser/*.cjs'],
-    ['docs', changed.some((c) => DOCS.test(c.path)),
+    ['docs', live.some((p) => DOCS.test(p)),
       'changes nothing under docs/, README.md or .ai/repo/features/'],
   ]) {
     if (has) {
