@@ -70,7 +70,7 @@ function meanPowerDb(ir, [fromS, toS]) {
 test('T019 F4: the tail level is stated as an upper bound, with the window it was read in', () => {
   assert.equal(IR.noiseFloorMethod, 'full-overlap-tail');
   const v = buildIrView(IR, { scale: 'db', stimulusFrames: FRAMES });
-  const level = fixedText(IR.noiseFloorDb, 0);
+  const level = fixedText(Math.ceil(IR.noiseFloorDb), 0);
   assert.ok(v.summary.includes(`tail level ≤ ${level} dB re peak (noise or unfinished decay), `),
     v.summary);
   assert.doesNotMatch(v.summary, /noise tail −?\d/);
@@ -92,6 +92,15 @@ test('T019 F4: the tail level is stated as an upper bound, with the window it wa
     `${meanPowerDb(IR, w)} vs ${IR.noiseFloorDb}`);
   // The decay is still running there: the level is the decay's, far above any noise (none).
   assert.ok(IR.noiseFloorDb > -70, `${IR.noiseFloorDb}`);
+});
+
+test('T019: the stated bound is rounded up, never below the level read', () => {
+  // Rounded to the nearest dB, −66.5 would read "≤ −67", 0.5 dB below the measured level.
+  for (const [db, text] of [[-66.5, '−66'], [-66.4, '−66'], [-66.6, '−66'], [-66, '−66'],
+    [-0.3, '0']]) {
+    const v = buildIrView({ ...IR, noiseFloorDb: db }, { stimulusFrames: FRAMES });
+    assert.ok(v.summary.includes(`tail level ≤ ${text} dB re peak `), `${db}: ${v.summary}`);
+  }
 });
 
 test('T019: without the stimulus length the window is described, not invented', () => {

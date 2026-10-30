@@ -802,8 +802,13 @@ minus the latency, so a decay longer than the post-roll makes the v2 figure an u
 (decay, not noise). Known truth (`v3-review-fixes` "M5"): for white noise σ² in y the floor is
 `σ²·(1/N)·Σ_k |X[k]|²/(|X[k]|² + ε[k])² / h_peak²` (Parseval); the v2 estimate is within 0.5 dB
 of it (power mean of three noise seeds, each within 1.5 dB) and v1 reads > 20 dB below.
-`ir-chart.js` uses only the field name and its meaning (dB re peak, or non-finite → "—"),
-both unchanged.
+The IR view (`ir-chart.js`, T019) states that bound: a 'full-overlap-tail' floor reads "tail
+level ≤ X dB re peak (noise or unfinished decay)", X rounded up to the whole dB so it is never
+below the level read, and its note names the window averaged (`irNoiseFloorWindow`, T1 to T2 ms
+after the peak, from the stimulus length the caller gives; described in words without it) and
+says a decay still running there counts as noise, so a longer post-roll reads past it. No decay
+detector and no confidence figure. A null floor reads "noise tail not available"; v1 keeps
+"noise tail X dB re peak".
 
 The full causal length is kept for later ETC, Schroeder, RT60 or EDT work (§90); none of those
 are implemented. **Changed (M10):** a result carries at most `IR_MAX_SAMPLES` = 2²¹ samples

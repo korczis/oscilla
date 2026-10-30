@@ -219,9 +219,10 @@ export function buildIrView(ir, options = {}) {
     + `${msText(absolutePeakS * 1000, msPerSample)} after the capture start (shown at 0 ms), `
     + `peak amplitude ${amp === null ? '—' : fixedText(amp, decimalsOf(amp))} (relative, `
     + `${amp !== null && amp < 0 ? 'inverted polarity, ' : ''}original scale), `
-    // IR v2 may report no noise floor (noiseFloorDb null): say so, never print a number.
-    + `${tailBound ? `tail level ≤ ${fixedText(ir.noiseFloorDb, 0)} dB re peak (noise or `
-      + 'unfinished decay)' : `noise tail ${Number.isFinite(ir.noiseFloorDb)
+    // IR v2 may report no noise floor (noiseFloorDb null): say so, never print a number. The
+    // bound is rounded up, so the whole dB stated is never below the level read.
+    + `${tailBound ? `tail level ≤ ${fixedText(Math.ceil(ir.noiseFloorDb) || 0, 0)} dB re peak `
+      + '(noise or unfinished decay)' : `noise tail ${Number.isFinite(ir.noiseFloorDb)
       ? `${fixedText(ir.noiseFloorDb, 0)} dB re peak` : 'not available'}`}, `
     + `length ${msText(n * msPerSample, Math.max(1, msPerSample))}`
     + `${normalize ? '; display NORMALIZED' : ''}.`;
