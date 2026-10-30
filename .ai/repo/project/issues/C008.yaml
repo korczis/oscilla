@@ -1,0 +1,42 @@
+id: C008
+milestone: M090
+serves:
+  - "coherent-state#live-edits-reach-the-voice"
+  - "coherent-state#views-describe-what-sounds"
+title: "Envelope sustain and power reach a held note, and the Signal Path shows the envelope that sounds"
+slug: envelope-sustain-and-power-reach-a-held-note-and-the-signal
+priority: p1
+profile: implementation
+objective: "Lands as fix(audio). Findings dead-controls-3, control-census-3 and vis-divergence-5. labs.envelope.onChange only runs syncLabFlags and vizLabsChanged: on a held sine, Sustain 0.60 -> 0.10 moves the output by -0.007 dB (about -15.6 dB expected) and switching the envelope off by +0.008 dB, while the Signal Path, captioned 'Active Web Audio processing graph', redraws from the lab state (docs/v31/signal-path.md: the path shows what plays). The Filter, Additive and Phase labs already reach a sounding voice; the envelope is the only one that does not, and the header of src/js/labs/envelope.js says the engine follows its edits. Add retargetSustain(param, t, s) to src/js/audio/envelope.js (the value at t from the recorded schedule, anchored with setValueAtTime, an exponential ramp of at least MIN_SEGMENT_S to max(s, ENVELOPE_FLOOR); in attack or decay it re-ends the decay at the new target) and one engine method beside setPeriodicWave and setDualPhase that glides the tracked eg to the new sustain, or to 1.0 when the envelope is switched off, never above 1.0, and updates v.adsr and v.opts.adsr so _restart and top-ups follow. main.js writes no voice param. Attack and decay changes stay next-note: labVizInputs draws the envelope stage from the sounding voice's own adsr, attack and release as plain values and shows a differing lab setting as a 'next note: ...' annotation, re-synced when the voice ends; the Filter, Additive and router stages keep coming from the lab state because those labs are live. Correct the header comments of src/js/labs/envelope.js and src/js/audio/audio-engine.js."
+why: "Owner brief OSCILLA PACK 03, 'One Instrument, One Coherent State' (2026-10-29): every control must provably reach its subsystem and every view that reflects it, and be covered by a test (owner: 'filters, sequencer, bpm and many other interactive knobs / sliders / control elements are not reflected / working / tested'). The findings named here were reproduced by an independent skeptic on a fresh export of origin/main b67d1e58 (v3.13.0)."
+scope:
+  - "src/js/audio/envelope.js"
+  - "src/js/audio/audio-engine.js"
+  - "src/js/labs/envelope.js"
+  - "src/js/main.js"
+  - "src/js/studio/playground-voice.js"
+  - "src/js/visualization/signal-path.js"
+  - "src/js/visualization/visualization-bridge.js"
+  - "tests/unit"
+  - "tests/browser/app.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "C007"
+acceptance_criteria:
+  - "A unit test of retargetSustain against valueAtTime during sustain and during decay: the target is reached in at least MIN_SEGMENT_S and the value never exceeds 1; it fails on the merge base."
+  - "Browser check `env-sustain-held-note` in tests/browser/app.cjs: on a latched 1 kHz note, typing 0.1 into #osc-env-sustain-value lowers the output by 14 to 17 dB within a named deadline, and #osc-env-enable off brings it to the envelope-off level within 1 dB."
+  - "Browser check `signal-path-sounding-envelope` in tests/browser/app.cjs: latch a sine with the Envelope off, switch it on and change attack while it sounds: the envelope stage still reads the voice's 'A 10 ms · R 30 ms' with a 'next note' annotation; a cutoff change while sounding does change the filter stage; after release and a new note the ADSR stage is the drawn one."
+  - "fail-first holds: the unit test or browser check named above fails on the merge base (project.fail-first)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named wall-clock deadline; tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "engine.activeNodeCount returns to 0 after every stop in the new checks, in Chromium, Firefox and WebKit (project.audio-engine-discipline v2)."
+  - "The pull request carries a reviewer-written .ai/repo/reviews/<pr>.yaml because it changes src/js/audio and src/js/studio (project.review-verdict); the builder never writes it."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/engine.test.mjs"
+  - "node tests/browser/app.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29
