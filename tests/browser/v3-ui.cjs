@@ -18,11 +18,13 @@
 //   loopback-workflow       Check setup -> READY -> measure -> COMPLETE through the UI: the
 //                           analysis ran in ONE Worker started from a data: URL of the page's
 //                           own <script data-analysis> text (ready ... result; no silent inline
-//                           fallback), the seven steps, quality bar, quality status with reasons,
-//                           response / IR
-//                           summaries, TEST CONTEXT banner, one announcement per stage and no
-//                           progress chatter, save, repeat (new experiment, repeatOf), 0 engine
-//                           and io nodes, sources, captures and ports afterwards
+//                           fallback), the seven steps, quality bar (CLIPPING NONE from the run
+//                           event's peak, naming 0.98 of full scale, while the assessment has no
+//                           CLIPPING_NOT_EXCLUDED; every item inside 390 x 844, T016), quality
+//                           status with reasons, response / IR summaries, TEST CONTEXT banner,
+//                           one announcement per stage and no progress chatter, save, repeat
+//                           (new experiment, repeatOf), 0 engine and io nodes, sources, captures
+//                           and ports afterwards
 //   abort-stages            abort in PREFLIGHT, NOISE_CHECK, ARMED, MEASURING and ANALYZING via
 //                           Escape, STOP, page hide and leaving the workspace: ABORTED, the
 //                           stopped announcement, 0 nodes/sources/captures/ports after
@@ -421,8 +423,27 @@ function defineChecks(fixtures) {
         shown: text('[data-osc="measure.shown"]'),
         primary: text('#osc-measure-primary'),
         chart: !!q('#osc-measure-chart-response .uplot'),
+        // T016: CLIPPING from the run event's peak, as the page shows it, beside the codes of
+        // the assessment of the same capture.
+        clipping: [...document.querySelectorAll('[data-osc="measure.bar"] .osc-q')]
+          .map((li) => ({ text: li.textContent.replace(/\s+/g, ' ').trim(), title: li.title }))
+          .find((x) => /^CLIPPING /.test(x.text)) || null,
+        codes: window.OSCILLA.app.meas.quality.reasons.map((r) => r.code),
       };
     });
+    // T016: at 390 x 844 every bar item, CLIPPING included, lies inside the viewport unclipped.
+    await page.setViewportSize({ width: 390, height: 844 });
+    res.barPhone = await until(() => page.evaluate(() => {
+      const items = [...document.querySelectorAll('[data-osc="measure.bar"] .osc-q')];
+      const fits = items.length === 5 && items.every((li) => {
+        const r = li.getBoundingClientRect();
+        return r.width > 0 && r.left >= 0 && r.right <= window.innerWidth
+          && li.scrollWidth <= li.clientWidth + 1;
+      });
+      return window.innerWidth === 390 && fits ? { fits, n: items.length } : null;
+    }), { ms: 3000, what: 'the quality bar fits 390 px' }).catch((e) => ({ fits: false,
+      error: e.message }));
+    await page.setViewportSize({ width: 1536, height: 1024 });
     await page.click('[data-osc="measure.tab"][data-value="ir"]');
     await sleep(150);
     res.ir = await page.evaluate(() => ({
@@ -476,6 +497,10 @@ function defineChecks(fixtures) {
       history: d.state === 'COMPLETE' && d.history.includes('ANALYZING')
         && d.history.includes('ARMED'),
       bar: d.bar.length === 5 && d.bar.includes('CAPTURE COMPLETE') && d.bar.includes('INPUT OK'),
+      clippingFromPeak: !!d.clipping && d.clipping.text === 'CLIPPING NONE'
+        && /no sample at or above 0\.98 of digital full scale/.test(d.clipping.title)
+        && !d.codes.includes('CLIPPING_NOT_EXCLUDED'),
+      barPhone: res.barPhone.fits === true,
       quality: /^(GOOD|USABLE)$/.test(d.quality) && d.reasons > 0,
       response: /^Frequency response \(/.test(d.response) && /TEST CONTEXT/.test(d.shown)
         && d.primary === 'Save experiment' && d.chart,
