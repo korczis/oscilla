@@ -1833,6 +1833,10 @@ function defineChecks() {
       e.analyser.getFloatTimeDomainData(d);
       let pk = 0;
       for (let i = 0; i < d.length; i++) pk = Math.max(pk, Math.abs(d[i]));
+      // the analyser's window may still hold the attack (Firefox under load): wait until the
+      // output is at the envelope's level (the instrument level times the sustain), +-25 %
+      const out = O.app.gainLevel * (w == null ? env : w);
+      if (Math.abs(pk - out) > out * 0.25) return null;
       return { id: v.id, adsr: v.adsr, release: v.release, env, peak: pk,
         viz: O.viz.labInputs(v.plan).adsr, lab: O.labs.envelope.enabled };
     }, [old, want]), { ms: 10000, what });
