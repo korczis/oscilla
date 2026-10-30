@@ -905,11 +905,12 @@ export class AudioEngine {
   /**
    * setEnvelopeSustain's scheduling: now when the envelope holds steady, else once it does.
    * Steady means rendered (V249): the render quantum holding the end of the last attack, decay
-   * or glide lies before the time the audio thread has rendered at least up to (clock.js
-   * renderedTimeAtLeast, the estimate _soon starts from). The scheduling time _soon is later
-   * than that by SCHEDULE_LEAD_S, so comparing the ramp end with it would edit a ramp that
-   * still sounds (an edit in the last SCHEDULE_LEAD_S of a decay, a drag's next edit during
-   * the previous glide).
+   * or glide lies at or before ctx.currentTime. currentTime is a lower bound of what has
+   * rendered in every browser: Chromium's is the rendered position and moves in device-callback
+   * bursts, a stale Firefox value only delays the edit to a later timer task. clock.js
+   * renderedTimeAtLeast is not: it extrapolates readings by real time, so between bursts it
+   * runs ahead of rendering and would edit the last quanta of a ramp (review #310 R-9). Nor is
+   * the scheduling time _soon, later still by SCHEDULE_LEAD_S.
    */
   _retargetSustain(v) {
     const want = v.sustainWant;
@@ -922,7 +923,7 @@ export class AudioEngine {
     }
     const q = RENDER_QUANTUM / ctx.sampleRate;
     const ready = Math.ceil(steady / q - 1e-6) * q;
-    const rendered = renderedTimeAtLeast(ctx, this._perfNow(), { outputTimestamp: false });
+    const rendered = ctx.currentTime;
     if (rendered < ready) {
       if (!v.sustainTimer) {
         const { setTimeout } = this._timers;

@@ -215,7 +215,9 @@ function setup({ perf = null } = {}) {
   let seq = 0;
   const env = {
     AudioContext: audio.AudioContext,
-    setTimeout: (fn, ms) => { timers.set(++seq, { fn, ms }); return seq; },
+    // due: the performance time (ms) the timer is due at, when the test moves a perf clock.
+    setTimeout: (fn, ms) => { timers.set(++seq, { fn, ms, due: perf ? perf.ms + ms : null });
+      return seq; },
     clearTimeout: (id) => { timers.delete(id); },
   };
   // A performance clock (ms) the test moves, for the engine's rendered-time estimate.
@@ -449,20 +451,91 @@ test('R-1: a Sustain drag (an edit every 16 ms) never edits a glide that still r
   assert.equal(eng.activeNodeCount, 0);
 });
 
-test('R-1: the guard reads the rendered clock, not a stale currentTime', { skip }, () => {
+test('R-9: the guard reads ctx.currentTime, never a wall-time estimate ahead of it',
+  { skip }, () => {
   const perf = { ms: 0 };
-  const { eng, advance } = setup({ perf });
+  const { eng, advance, flush } = setup({ perf });
   eng.play(plan({ pattern: 'tone' }), opt({ adsr: { ...ADSR } })); // a clock reading: ct 0, 0 ms
   const v = eng.voice;
   const end = decayEnd(v);
-  // currentTime still reads 10 ms before the decay end (Firefox within a task), while the real
-  // time since the reading says the audio thread rendered 10 ms past it.
+  // currentTime, the rendered position, reads 10 ms before the decay end, while the real time
+  // since the reading would extrapolate to 10 ms past it (Chromium between two bursts): the
+  // last quanta of the decay have not rendered, so the edit waits.
   advance(end - 0.01);
   perf.ms = (end + 0.01) * 1000;
-  assert.equal(eng.setEnvelopeSustain({ ...ADSR, s: 0.2 }), 'applied');
+  const n = JSON.stringify(v.env.ev);
+  assert.equal(eng.setEnvelopeSustain({ ...ADSR, s: 0.2 }), 'deferred');
+  assert.equal(JSON.stringify(v.env.ev), n, 'the sounding decay is not edited');
+  close(v.adsr.s, ADSR.s);
+  // Once currentTime has passed the render quantum holding the decay end, it applies.
+  const q = 128 / eng.ctx.sampleRate;
+  advance(Math.ceil(end / q) * q);
+  flush();
+  close(v.adsr.s, 0.2);
   close(valueAt(v.env, 5), 0.2, 1e-9);
   eng.stopAll();
   advance(3);
+});
+
+/**
+ * A Sustain drag under a bursty audio clock (Chromium: currentTime is the rendered position
+ * and moves in device-callback bursts of `frames`), rAF clock readings every 16 ms, an edit
+ * every 16 ms and the deferral timers fired at their due wall time. Counts the edits that
+ * reached the param, and those that did while ctx.currentTime was still before the render
+ * quantum holding the end of the ramp they follow (review #310 R-9, V249).
+ */
+function burstyDrag(frames) {
+  const perf = { ms: 0 };
+  const { eng, timers, advance } = setup({ perf });
+  eng.play(plan({ pattern: 'tone' }), opt({ adsr: { ...ADSR } }));
+  const v = eng.voice;
+  const ctx = eng.ctx;
+  const q = 128 / ctx.sampleRate;
+  const burst = frames / ctx.sampleRate;
+  let applied = 0;
+  let early = 0;
+  let last = null;
+  const act = (fn) => {
+    const before = JSON.stringify(v.env.ev);
+    const steady = envelopeJs.sustainSteadyFrom(getSchedule(v.eg), { releaseEnd: v.deadline });
+    const ready = Math.ceil(steady / q - 1e-6) * q;
+    fn();
+    if (JSON.stringify(v.env.ev) === before) return;
+    applied++;
+    if (ctx.currentTime < ready - 1e-9) early++;
+  };
+  const stepMs = 0.25;
+  let k = 0;
+  for (let ms = 0; ms <= 1200; ms += stepMs) {
+    perf.ms = ms;
+    const ct = Math.floor(ms / 1000 / burst + 1e-9) * burst;
+    if (ct !== ctx.currentTime) advance(ct);
+    for (const [id, t] of [...timers]) {
+      if (t.due <= ms) { timers.delete(id); act(t.fn); }
+    }
+    if (ms % 16 === 0) {
+      eng.snapshot(); // the per-frame clock reading
+      if (ms >= 200 && ms <= 900) {
+        last = Math.round((0.15 + 0.6 * ((k++ * 7) % 13) / 13) * 1000) / 1000;
+        act(() => eng.setEnvelopeSustain({ ...ADSR, s: last }));
+      }
+    }
+  }
+  const final = v.adsr.s;
+  eng.stopAll();
+  advance(4);
+  return { applied, early, final, last, nodes: eng.activeNodeCount };
+}
+
+test('R-9: a Sustain drag under a bursty clock never edits a ramp before it rendered',
+  { skip }, () => {
+  for (const frames of [128, 512, 1024]) {
+    const r = burstyDrag(frames);
+    assert.equal(r.early, 0, `${frames}-frame bursts: ${r.early} of ${r.applied} edits early`);
+    assert.ok(r.applied >= 10, `${frames}-frame bursts: ${r.applied} edits applied`);
+    close(r.final, r.last, 1e-12);
+    assert.equal(r.nodes, 0);
+  }
 });
 
 test('R-2: a finite note at sustain 0 (the default HOLD path) takes a raised Sustain',
@@ -569,4 +642,46 @@ test('F3: the Signal Path leaves the release out of "next note" (C009 owns it)',
     .nextNote, null);
   assert.ok(soundingEnvelope({ voice, labAdsr: { ...ADSR, r: 0.9, a: 0.05 } }).nextNote,
     'an attack edit still is');
+});
+
+// ---------------------------------------------------------------- review #310 R-11
+
+test('R-11: a finite note at sustain 0 edited mid-decay waits for the decay end', { skip },
+  () => {
+  const { eng, advance, flush } = setup();
+  const zero = { ...ADSR, s: 0 };
+  eng.play(plan({ pattern: 'tone' }), opt({ continuous: false, limitS: 2, adsr: zero }));
+  const v = eng.voice;
+  const end = decayEnd(v);
+  advance(end - ADSR.d / 2);
+  const n = JSON.stringify(v.env.ev);
+  assert.equal(eng.setEnvelopeSustain({ ...zero, s: 0.5 }), 'deferred');
+  assert.equal(JSON.stringify(v.env.ev), n, 'the sounding decay is not edited');
+  advance(end + 0.01);
+  flush();
+  close(v.adsr.s, 0.5);
+  close(valueAtTime(realEnv(v), 1, 1), 0.5, 1e-9);
+  advance(4);
+  assert.equal(eng.activeNodeCount, 0);
+});
+
+test('R-11: the clock past the decay end but inside its render quantum still waits', { skip },
+  () => {
+  const { eng, advance, flush } = setup();
+  eng.play(plan({ pattern: 'tone' }), opt({ adsr: { ...ADSR } }));
+  const v = eng.voice;
+  const end = decayEnd(v);
+  const q = 128 / eng.ctx.sampleRate;
+  const quantumEnd = Math.ceil(end / q - 1e-6) * q;
+  assert.ok(quantumEnd - end > 1e-5, `the decay ends inside a quantum (${end}, ${quantumEnd})`);
+  advance((end + quantumEnd) / 2);
+  const n = JSON.stringify(v.env.ev);
+  assert.equal(eng.setEnvelopeSustain({ ...ADSR, s: 0.2 }), 'deferred');
+  assert.equal(JSON.stringify(v.env.ev), n);
+  advance(quantumEnd);
+  flush();
+  close(v.adsr.s, 0.2);
+  eng.stopAll();
+  advance(3);
+  assert.equal(eng.activeNodeCount, 0);
 });

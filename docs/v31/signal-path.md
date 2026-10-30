@@ -122,8 +122,10 @@ is not part of the voice and never was a stage. The Playground has no noise sour
   the voice (`engine.setEnvelopeSustain` glides the tracked envelope to the new sustain, or to 1
   when switched off, with `retargetSustain` in `audio/envelope.js`; a note the safety limit ends
   keeps its release, which starts from the new level), while attack and decay apply from the
-  next note. An edit during the attack, the decay or an earlier glide waits until the audio
-  thread has rendered that ramp's end, so a sounding ramp is never edited (V249). So while a
+  next note. An edit during the attack, the decay or an earlier glide waits until
+  `ctx.currentTime` has passed the render quantum holding that ramp's end, so a sounding ramp
+  is never edited (V249; a wall-time estimate of the rendered position runs ahead of Chromium's
+  bursty clock, review #310 R-9). So while a
   voice sounds the envelope stage is drawn from the voice's own `adsr` (or its attack and
   release without the ADSR), and a lab setting whose attack, decay, sustain or envelope kind
   differs is shown after it as `next note: ...` (main.js `envelopeVizInputs`, `soundingEnvelope`
