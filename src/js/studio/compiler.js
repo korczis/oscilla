@@ -608,10 +608,11 @@ const valueText = (v, unit) => (unit === 'Hz' ? formatFrequency(v) : `${sig(v, 4
  * what the running graph plays below what the model stores, because the runtime keeps every
  * frequency at or below 0.95 × Nyquist (computeBases above). One per static base it lowered (a
  * frequency, an Oscillator's detune; entity: the node) and one per CONTROL edge whose upward
- * excursion it scaled (entity: the edge). details = { node, param, unit, stored, played,
- * safeMaximum, sampleRate }: a base's stored value and the value it plays in the parameter's
- * unit; an edge's stored depth and played depth (depth × scale, in the parameter's unit or
- * octaves for a log mapping), plus its `mapping` and `scale`. Severity warning, owner runtime.
+ * excursion it scaled (entity: the edge). details = { node, param, unit, stored, offset,
+ * played, safeMaximum, sampleRate }: a base's stored value, the constant part its cables add
+ * (0 without one) and the value its AudioParam holds, in the parameter's unit; an edge's
+ * stored depth and played depth (depth × scale, in the parameter's unit or octaves for a log
+ * mapping), plus its `mapping` and `scale`. Severity warning, owner runtime.
  * ctx = { sampleRate, safeMaximum, edges: Map edge id -> PlanEdge, nodes: Map id -> PlanNode }.
  */
 export function frequencyLimits(planNode, cb, { sampleRate, safeMaximum, edges, nodes }) {
@@ -625,14 +626,21 @@ export function frequencyLimits(planNode, cb, { sampleRate, safeMaximum, edges, 
   for (const key of cb.clamped || []) {
     const p = defs.get(key);
     const stored = planNode.params[key];
-    const played = stored - ((cb.lowered && cb.lowered[key]) || 0);
-    if (!p || !Number.isFinite(played) || played === stored) continue;
+    // What the AudioParam holds: the base after the clamp, the cables' constant part included
+    // (a unipolar centre, an offset), so a cable's +5 kHz on 20 kHz plays the cap, not 17.8 kHz.
+    const played = cb.base && cb.base[key] ? cb.base[key].value : NaN;
+    const offset = played + ((cb.lowered && cb.lowered[key]) || 0) - stored;
+    if (!p || !Number.isFinite(played) || !Number.isFinite(offset)
+      || played >= stored + offset) continue;
     const what = p.unit === 'Hz' ? 'a frequency' : `${planNode.name}'s detuned frequency`;
+    const asked = Math.abs(offset) > 1e-9 * Math.max(1, Math.abs(stored))
+      ? `, ${valueText(stored + offset, p.unit)} with its cables' constant offset,` : '';
     out.push({ ...studioDiagnostic('runtime', 'frequency-limited', `${planNode.name} `
-      + `${p.label} is ${valueText(stored, p.unit)} but plays ${valueText(played, p.unit)}: `
-      + `the Studio keeps ${what} at or below ${at}.`, { kind: 'node', id: planNode.id }),
-    details: { node: planNode.id, param: key, unit: p.unit, stored, played, safeMaximum,
-      sampleRate } });
+      + `${p.label} is ${valueText(stored, p.unit)}${asked} but plays `
+      + `${valueText(played, p.unit)}: the Studio keeps ${what} at or below ${at}.`,
+    { kind: 'node', id: planNode.id }),
+    details: { node: planNode.id, param: key, unit: p.unit, stored, offset: asked ? offset : 0,
+      played, safeMaximum, sampleRate } });
   }
   for (const id of cb.limited || []) {
     const e = edges && edges.get(id);

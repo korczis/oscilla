@@ -112,7 +112,8 @@ test('T023: an Oscillator stored at 30 kHz says it plays 0.95 x Nyquist, at 44.1
       const rv = inspector.runtimeView(s.store.getModel(), truthOf(s));
       assert.equal(rv.state, 'in-sync');
       assert.ok(!rv.text.includes('plays as edited'), rv.text);
-      assert.match(rv.text, /1 frequency lowered/);
+      assert.match(rv.text,
+        /plays with 1 value lowered to keep frequencies at or below 0\.95 × Nyquist/);
       const named = rv.diagnostics.filter((x) => x.code === CODE);
       assert.equal(named.length, 1);
       assert.equal(named[0].entity.kind, 'node');
@@ -211,4 +212,54 @@ test('T023: a static detune lowered into the headroom says what it plays', () =>
   assert.equal(f.readout, '1200 cents, plays 1111 cents');
   assert.ok(f.limitNote && f.limitNote.startsWith('Plays 1111 cents:'), f.limitNote);
   assert.equal(fieldOf(s, 'frequency').readout, '12.00 kHz');
+});
+
+// Review of #342 (P2): a cable's constant part (an offset, a unipolar centre) is part of the
+// base the clamp lowers. 20 kHz plus a +5 kHz offset plays 22.8 kHz, the AudioParam value; the
+// readout must not say 17.8 kHz (stored minus the amount lowered), which nothing plays. And the
+// Runtime section counts values, not frequencies: a clamped base and its cable are 2 values.
+test('T023 review: a cable offset is included in what plays, and the count is of values', () => {
+  const s = rig(48000, { frequency: 20000 },
+    { port: 'frequency', props: { depth: 100, offset: 5000 } });
+  const o = s.runtime.nodes.get(s.osc).info.oscillator;
+  assert.ok(close(target(o.frequency), 22800), `AudioParam ${target(o.frequency)}`);
+  const node = limits(s.runtime.debugInfo().diagnostics).find((d) => d.entity.kind === 'node');
+  assert.ok(node, 'the clamped base is a diagnostic');
+  assert.equal(node.details.stored, 20000);
+  assert.ok(close(node.details.offset, 5000), `offset ${node.details.offset}`);
+  assert.ok(close(node.details.played, target(o.frequency)), `played ${node.details.played}`);
+  assert.match(node.message,
+    /is 20\.00 kHz, 25\.00 kHz with its cables' constant offset, but plays 22\.80 kHz/);
+  const f = fieldOf(s, 'frequency');
+  assert.equal(f.readout, '20.00 kHz, plays 22.80 kHz');
+  assert.ok(f.limitNote.startsWith('Plays 22.80 kHz, its cables\' constant 5.00 kHz included:'),
+    f.limitNote);
+  const rv = inspector.runtimeView(s.store.getModel(), truthOf(s));
+  assert.match(rv.text, /plays with 2 values lowered to keep frequencies at or below/);
+});
+
+// Review of #342 (P2): a base an automation lane owns plays its lane, so neither the runtime
+// nor the field claims its static value is lowered; a field whose stored value changed since
+// the running graph was built reads the stored value, not a stale played one.
+test('T023 review: a lane-owned base and a not-yet-applied edit claim no lowered value', () => {
+  const s = rig(48000, { frequency: 1000 });
+  ok(s.store.dispatch({ type: 'AUTOMATION_POINT_ADD',
+    target: { node: s.osc, param: 'frequency' }, time: 0, value: 440, curve: 'step' }));
+  s.runtime.setOwnedParams([{ node: s.osc, param: 'frequency' }]);
+  const r = s.set('frequency', 30000);
+  assert.deepEqual(s.runtime.debugInfo().limitedParams, [{ node: s.osc, param: 'frequency' }],
+    'the static base is still clamped inside the runtime');
+  assert.deepEqual(limits(r.warnings), [], JSON.stringify(r.warnings));
+  assert.deepEqual(limits(s.runtime.debugInfo().diagnostics), []);
+  const f = fieldOf(s, 'frequency');
+  assert.equal(f.readout, 'Base 30.00 kHz');
+  assert.equal(f.limitNote, null);
+
+  const b = rig(48000, { frequency: 30000 });
+  assert.equal(fieldOf(b, 'frequency').readout, '30.00 kHz, plays 22.80 kHz');
+  ok(b.store.dispatch({ type: 'NODE_PARAM_SET', nodeId: b.osc, key: 'frequency', value: 1000 }));
+  assert.equal(truthOf(b).verdict.state, 'behind');
+  const g = fieldOf(b, 'frequency');
+  assert.equal(g.readout, '1.00 kHz');
+  assert.equal(g.limitNote, null);
 });

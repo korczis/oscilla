@@ -193,7 +193,9 @@ function fieldOf(model, node, p, registry, edgeStatus, truth = null) {
     valueText: lane ? `${text}, base, overridden by the lane` : played,
     laneNote: lane ? `Automated: the lane sets ${p.label}. ${text} is the base value, used only `
       + 'without the lane; a change here is not heard while the lane exists.' : null,
-    limitNote: limit ? `Plays ${formatParamValue(p, limit.details.played)}: the Studio keeps `
+    limitNote: limit ? `Plays ${formatParamValue(p, limit.details.played)}${limit.details.offset
+      ? `, its cables' constant ${formatParamValue(p, limit.details.offset)} included` : ''}: `
+      + `the Studio keeps `
       + `${p.unit === 'Hz' ? 'a frequency' : 'the pitch'} at or below `
       + `${formatFrequency(limit.details.safeMaximum)}, ${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist at `
       + `${Number((limit.details.sampleRate / 1000).toFixed(3))} kHz.` : null,
@@ -326,9 +328,11 @@ export function runtimeView(model, truth, opts = {}) {
   const why = v && v.reason ? v.reason.message : '';
   // A value the runtime plays below the stored one is not "as edited" (T023).
   const lowered = runtimeDiagnostics(truth).filter((x) => x.code === 'frequency-limited').length;
+  // Each one is a value (a parameter, a cable's depth), not a frequency of its own.
   const text = state === 'in-sync' ? (lowered ? `Revision ${a.revision} plays with ${lowered} `
-    + `frequenc${lowered === 1 ? 'y' : 'ies'} lowered to ${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist; `
-    + 'see the diagnostics below.' : `Revision ${a.revision} plays as edited.`)
+    + `value${lowered === 1 ? '' : 's'} lowered to keep frequencies at or below `
+    + `${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist; see the diagnostics below.`
+    : `Revision ${a.revision} plays as edited.`)
     : state === 'degraded' ? `Revision ${a.revision} plays, short of its plan: ${why}`
     : state === 'behind' ? `Revision ${a.revision} plays; revision ${d.revision} is not `
       + 'applied yet.'
