@@ -529,12 +529,14 @@ release and deployment are evidenced is the [final report](docs/v31/studio-repor
   unmodified. An optional **Fullscreen** button uses the browser's Fullscreen API where it
   exists; where it does not (Safari on iPhone), the button says so.
 
-Studio output and the Playground take turns, with two gaps. Starting the Studio stops the
-instrument and the sequencer, and playing the instrument stops the Studio; a measurement stops
-all three and refuses a new instrument note. But the Playground's instrument and sequencer are
-not exclusive: they sum into one output. Starting the sequencer stops a playing Studio only
-when a status poll notices it a moment later, so the two overlap briefly, and the sequencer is
-not refused while a measurement owns the output. C002 (ADR 0063) gives the output one owner.
+Studio output and the Playground take turns, with gaps. Starting the Studio stops the
+instrument and a sequence the status poll already reports as playing, and playing the
+instrument stops the Studio; a measurement stops all three and refuses a new instrument note.
+But the Playground's instrument and sequencer are not exclusive: they sum into one output. The
+sequencer and the Studio hand over only through that poll, a moment after the sequencer
+starts: until it notices, both play, and a Studio started in that moment is the one stopped.
+The sequencer is not refused while a measurement owns the output. C002 (ADR 0063) gives the
+output one owner.
 
 Not yet built:
 - node groups

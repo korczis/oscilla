@@ -28,7 +28,8 @@
 //     own licence is package.json's (E042);
 //   - CLAUDE.md and AGENTS.md (H006): a status they state for the ADRs as a whole ("all
 //     `proposed`") is every ADR's front-matter status; README.md's Studio "Not yet built" list
-//     names no feature whose unit test exists and runs in `npm test` (minimap, timeline pinch).
+//     and the Studio user guide's "Not built yet" sentence name no feature whose unit test
+//     exists and runs in `npm test` (minimap, timeline pinch).
 //   node --test tests/unit/docs-derived.test.mjs
 
 import test from 'node:test';
@@ -438,7 +439,8 @@ const ADR_STATUS = 'proposed|accepted|superseded|rejected|deprecated|extracted';
 export function adrStatusProblems(text, statuses, where) {
   const problems = [];
   const t = flat(text);
-  const subject = '(?:all|every (?:ADR|decision)(?: here)?(?: is| has)?)';
+  const subject = '(?:all(?: (?:the )?(?:ADRs|decisions)(?: here)?(?: are)?)?'
+    + '|every (?:ADR|decision)(?: here)?(?: is| has)?)';
   const all = new RegExp(`\\b${subject}\\s+(?:status:?\\s*)?\`?(${ADR_STATUS})\`?`, 'gi');
   for (const m of t.matchAll(all)) {
     const want = m[1].toLowerCase();
@@ -475,6 +477,7 @@ test('H006 mutation: "all proposed" beside an accepted ADR is named, and a true 
   assert.equal(p.length, 1);
   assert.match(p[0], /all `proposed`.*1 ADR\(s\) are not proposed \(0002 accepted\)/);
   assert.match(adrStatusProblems('none is accepted', mixed, 'x')[0], /0002 is accepted/);
+  assert.equal(adrStatusProblems('All the ADRs here are `proposed`.', mixed, 'x').length, 1);
   const same = [{ adr: '0051', status: 'proposed' }];
   assert.deepEqual(adrStatusProblems('all `proposed`; none is accepted', same, 'x'), []);
 });
@@ -537,4 +540,24 @@ test('H006 mutation: a shipped feature put back on the "Not yet built" list is n
   ]);
   const gone = [{ ...SHIPPED[0], test: 'tests/unit/no-such.test.mjs' }];
   assert.deepEqual(shippedButListed(items, gone), [], 'a feature with no unit test is not judged');
+});
+
+/** The items of the Studio user guide's "Not built yet:" sentence (its Limits section). */
+export function guideNotBuilt(text) {
+  const m = flat(text).match(/Not built yet: ([^.]*)\./);
+  assert.ok(m, 'the user guide\'s "Not built yet:" sentence exists');
+  return m[1].split(/,\s*|\s+and\s+/).map((s) => s.trim()).filter(Boolean);
+}
+
+test('H006: the Studio user guide\'s "Not built yet" sentence names no feature that ships', () => {
+  const items = guideNotBuilt(read('docs/v31/user-guide.md'));
+  assert.ok(items.length >= 1, 'the sentence has items');
+  assert.deepEqual(shippedButListed(items), []);
+});
+
+test('H006 mutation: a shipped feature put back in the user guide\'s sentence is named', () => {
+  const items = guideNotBuilt('- Not built yet: a minimap, node groups, pinch zoom on the\n'
+    + '  timeline. A link opens a shipped template only.');
+  assert.deepEqual(items, ['a minimap', 'node groups', 'pinch zoom on the timeline']);
+  assert.equal(shippedButListed(items).length, 2);
 });
