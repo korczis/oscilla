@@ -276,6 +276,49 @@ async function runEngine(engine, base) {
   await page.click('#osc-spec-log');
   await page.selectOption('#osc-spec-max', '20000');
 
+  // T006 (SPC-04): a Max chosen before audio follows the rate once audio starts. The fake
+  // adapter's rate is set to null (engine.sampleRate before an AudioContext exists), then to a
+  // named 48 kHz and 44.1 kHz (not the context's own: these are the rates under test); each
+  // change is announced through the adapter's listeners, as main.js does when cmp.sampleRate
+  // changes. 'real' restores the context's rate for the checks after this block.
+  const setRate = (rate) => page.evaluate((r) => {
+    const L = window.__labs;
+    if (!L.realRate) L.realRate = L.adapter.getSampleRate;
+    L.adapter.getSampleRate = r === 'real' ? L.realRate : () => r && r.sampleRate;
+    L.setFrequency(L.adapter.requestedFrequency()); // notifies the adapter's listeners
+  }, rate);
+  const readMax = () => page.evaluate(() => ({
+    max: window.__labs.labs.analysis.chart.uplot.scales.x.max,
+    label: document.querySelector('#osc-spec-max option[value="nyquist"]').textContent,
+  }));
+  const maxIs = (hz, label, what) => settled(readMax,
+    (m) => m.max === hz && (label === null || m.label === label), { ms: 5000, what });
+  await setRate(null);
+  await page.selectOption('#osc-spec-max', 'nyquist');
+  const pend = await maxIs(20000, 'Max: Nyquist (pending audio)',
+    'Nyquist before audio: axis at 20 kHz, option pending');
+  check('T006: Nyquist before audio keeps 20 kHz and says it is pending',
+    pend.max === 20000 && pend.label === 'Max: Nyquist (pending audio)', JSON.stringify(pend));
+  await setRate({ sampleRate: 48000 });
+  const ny48 = await maxIs(24000, 'Max: Nyquist (24 kHz)', 'Nyquist follows a 48 kHz start');
+  check('T006: Nyquist chosen before audio follows a 48 kHz context (24 kHz)',
+    ny48.max === 24000 && ny48.label === 'Max: Nyquist (24 kHz)', JSON.stringify(ny48));
+  await setRate({ sampleRate: 44100 });
+  const ny44 = await maxIs(22050, 'Max: Nyquist (22.05 kHz)', 'Nyquist follows 44.1 kHz');
+  check('T006: at 44.1 kHz Nyquist is 22050 Hz', ny44.max === 22050
+    && ny44.label === 'Max: Nyquist (22.05 kHz)', JSON.stringify(ny44));
+  for (const hz of [20000, 2000]) {
+    await setRate(null);
+    await page.selectOption('#osc-spec-max', String(hz));
+    const before = await maxIs(hz, null, `Max ${hz} Hz before audio`);
+    await setRate({ sampleRate: 48000 });
+    const after = await maxIs(hz, null, `Max ${hz} Hz after a 48 kHz start`);
+    check(`T006: Max ${hz} Hz unchanged before and after audio`,
+      before.max === hz && after.max === hz, JSON.stringify({ before, after }));
+  }
+  await setRate('real');
+  await page.selectOption('#osc-spec-max', '20000');
+
   // (2) Filter curve = getFrequencyResponse of an independent BiquadFilterNode.
   const filterCompare = () => page.evaluate(() => {
     const { labs, ctx } = window.__labs;
