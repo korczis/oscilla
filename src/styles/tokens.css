@@ -10,7 +10,6 @@
 
   /* Surfaces */
   --osc-bg: #020b15;               /* page, gaps between panels */
-  --osc-header-bg: #061220;        /* header strip */
   --osc-statusbar-bg: #05111e;     /* bottom status bar */
   --osc-surface-0: #020a16;        /* chart/canvas inset (waveform, mic plot) */
   --osc-surface-1: #06111d;        /* panel body */
@@ -157,14 +156,12 @@
   --osc-touch: 44px;
 
   /* Layout (desktop reference geometry, px measured on reference.png) */
-  --osc-header-h: 62px;
   --osc-statusbar-h: 55px;
 }
 
 [data-theme="light"] {
   color-scheme: light;
   --osc-bg: #e9eef4;
-  --osc-header-bg: #f7f9fc;
   --osc-statusbar-bg: #f7f9fc;
   --osc-surface-0: #f3f6fa;
   --osc-surface-1: #ffffff;

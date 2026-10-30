@@ -3,7 +3,7 @@
 // in the one <style> of dist/index.html. Nothing is fetched at run time.
 //
 // The theme is the Flowbite Pro admin dashboard's (the flowbite-pro reference, section 0):
-//   - primary is the Tailwind blue scale, surfaces use the gray palette;
+//   - primary and the surface grays are OSCILLA's own scales (below), in the Pro class names;
 //   - transitionProperty width, which the sidebar's transition-width needs;
 //   - Inter first in the sans stack, then the system stack of src/styles/tokens.css. No font is
 //     downloaded: Inter applies only where it is installed.
@@ -13,26 +13,38 @@
 // [data-theme="dark"] (darkThemeSelector, scripts/build-config.mjs), as OSCILLA never sets
 // class="dark".
 //
-// Preflight is off and the flowbite plugin runs with forms: false: its form base styles restyle
-// every input, select, checkbox, radio and range by element selector, so the legacy interface
-// would no longer render as before. F002 turns them on with the migration.
+// The colours are OSCILLA's (rule project.visual-identity-lock v2, issue F002): primary is its
+// blue interaction accent (600 is --osc-blue, 700 the deeper fill that carries white text at
+// 4.8:1, 400 the focus and link blue) and the surface greys are its cockpit: in the dark theme
+// the Pro shell's gray-800 bars are the header navy, gray-900 the page, gray-700 the borders and
+// the hover inset; in the light theme gray-50 is the page and gray-200 the borders, as in
+// src/styles/tokens.css. The Pro class lists are unchanged; only the palette they read is ours.
 //
-// F002 prerequisite, the border trap (review #253, R-3): preflight is what gives every element
-// border-width:0, border-style:solid and border-color:theme(borderColor.DEFAULT). Without it a
-// Tailwind border utility (.border, .border-b, .border-blue-600 from the tabs' activeClasses)
-// sets only a width or a colour and the border style stays the browser's `none`, so it draws
-// nothing. Before F002 puts the first Pro markup in, it restores that part of preflight, scoped
-// to the Pro shell's root so legacy elements keep their native borders, with a test that the
-// compiled CSS gives a .border element a solid style.
+// Preflight and the flowbite plugin's form base styles are on (F002): the Pro shell's borders,
+// buttons and the search field need them (the border trap of review #253, R-3). They stay out
+// of the legacy interface's way because src/styles/tailwind.css compiles the whole base inside
+// the cascade layer tailwind-base: the legacy stylesheets are unlayered, so every legacy rule
+// wins over every base rule whatever their specificity or order (input[type="range"] thumbs and
+// body's line-height included), and the base only fills what the legacy CSS leaves unsaid.
+// Tailwind's utilities stay unlayered and after the legacy CSS, as F001 placed them.
 //
 // Order: this file lands only after #250 is on main (ADR 0061, rule
 // project.ui-uses-flowbite-pro and the ratchet tests/unit/ui-flowbite-pro.test.mjs). Until
 // then the ADR it cites does not exist on main.
-const colors = require('tailwindcss/colors');
-
 const SYSTEM_SANS = ['system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto',
   'sans-serif'];
 const SYSTEM_MONO = ['ui-monospace', '"SF Mono"', 'Menlo', 'Consolas', 'monospace'];
+
+/** OSCILLA's blue accent as the Pro primary scale. */
+const PRIMARY = {
+  50: '#eef6ff', 100: '#d9eaff', 200: '#b5d7ff', 300: '#80bcff', 400: '#4da3ff',
+  500: '#1a88ff', 600: '#007afd', 700: '#006ee6', 800: '#00468c', 900: '#002f5e', 950: '#001b38',
+};
+/** OSCILLA's cockpit surfaces as the Pro gray scale (light end: tokens.css light theme). */
+const GRAY = {
+  50: '#e9eef4', 100: '#e4eaf2', 200: '#d3dbe6', 300: '#c3cddb', 400: '#94a9bd',
+  500: '#52657a', 600: '#33465b', 700: '#142233', 800: '#061220', 900: '#020b15', 950: '#01060c',
+};
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
@@ -59,9 +71,6 @@ module.exports = {
     ],
   },
   darkMode: ['selector', '[data-theme="dark"]'],
-  corePlugins: {
-    preflight: false,
-  },
   // Classes the Pro shell's script toggles (sidebar collapse and the dropdown/backdrop states):
   // they never appear literally in the markup it starts from.
   safelist: [
@@ -72,7 +81,8 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        primary: colors.blue,
+        primary: PRIMARY,
+        gray: GRAY,
       },
       fontFamily: {
         sans: ['Inter', ...SYSTEM_SANS],
@@ -84,5 +94,5 @@ module.exports = {
       },
     },
   },
-  plugins: [require('flowbite/plugin')({ forms: false })],
+  plugins: [require('flowbite/plugin')({ forms: true })],
 };

@@ -34,13 +34,19 @@ definition, calibration, trace) are defined in the [glossary](docs/GLOSSARY.md).
 
 ## Navigation
 
-The header has these entries: **Playground**, **Measure**, **Experiments**, **Analyze**,
+The sidebar has these entries: **Playground**, **Measure**, **Experiments**, **Analyze**,
 **Synthesis**, **Learn**, **Studio** and **About**, in that order. Analyze and Synthesis are
 groups. Analyze opens Analyzer, Filter Lab and Compare; Synthesis opens Synthesis, Sequencer and
-Presets. A group is a button that shows its list of workspaces: Enter or Space opens it and Tab
-walks the list, or ArrowDown opens it on the current workspace and the arrow keys move. Escape
-closes it. Every V2 workspace is still there under the same name, and only the way to it has
-changed.
+Presets. Every workspace is one tap away: the groups start expanded, and a group's button
+collapses or expands its list (the choice is kept). On a desktop (1024 px and wider) the sidebar
+sits beside the workspace and its button in the top bar collapses it to icons (kept too; it
+expands while the pointer or focus is in it); on a phone or tablet it is a drawer behind the
+menu button, over a backdrop. The arrow keys, Home and End move through the sidebar, Escape
+closes the drawer (or, on a desktop, collapses the group you are in) and focus returns to the
+button that opened it. **Find a workspace** (in the top bar, or at the top of the drawer)
+filters the list by name or by what the workspace does, and Enter opens the first match. Every
+V2 workspace is still there under the same name, and only the way to it has changed; the
+entries come from one registry (`src/js/ui/shell.js`), so adding a workspace is one row there.
 
 - **The address names the workspace.** Each switch writes `m=<workspace>` into the page address
   (`#m=measure`, `#m=analyzer`, …) and adds one browser history entry, also from `file://`.

@@ -11,273 +11,303 @@
         "height": 1024
       },
       "runs": 3,
-      "total": 15.91,
-      "totalExclData": 7.01,
+      "total": 0.01,
+      "totalExclData": 0,
       "regions": {
         "header": {
-          "mismatch": 5.95,
-          "mismatchExclData": 5.95,
+          "mismatch": 0,
+          "mismatchExclData": 0,
+          "runToRunPct": 0,
+          "dataPp": 0.5
+        },
+        "sidebar": {
+          "mismatch": 0,
+          "mismatchExclData": 0,
+          "runToRunPct": 0,
+          "dataPp": 0.5
+        },
+        "pageHeader": {
+          "mismatch": 0,
+          "mismatchExclData": 0,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "source": {
-          "mismatch": 8.02,
-          "mismatchExclData": 8.02,
+          "mismatch": 0,
+          "mismatchExclData": 0,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "analysis": {
-          "mismatch": 15.46,
-          "mismatchExclData": 4.65,
+          "mismatch": 0,
+          "mismatchExclData": 0,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "mic": {
-          "mismatch": 11.76,
-          "mismatchExclData": 10.5,
+          "mismatch": 0,
+          "mismatchExclData": 0,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "device": {
-          "mismatch": 18.37,
-          "mismatchExclData": 18.37,
+          "mismatch": 0,
+          "mismatchExclData": 0,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "spectrogram": {
-          "mismatch": 46.95,
-          "mismatchExclData": 4.19,
-          "runToRunPct": 0.01,
+          "mismatch": 0.02,
+          "mismatchExclData": 0,
+          "runToRunPct": 0.03,
           "dataPp": 1
         },
         "sequencer": {
-          "mismatch": 14.17,
-          "mismatchExclData": 4.25,
+          "mismatch": 0,
+          "mismatchExclData": 0,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "filter": {
-          "mismatch": 7.74,
-          "mismatchExclData": 7.03,
+          "mismatch": 0,
+          "mismatchExclData": 0,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "envelope": {
-          "mismatch": 8.89,
-          "mismatchExclData": 8.23,
+          "mismatch": 0,
+          "mismatchExclData": 0,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "additive": {
-          "mismatch": 11.23,
-          "mismatchExclData": 9.21,
+          "mismatch": 0,
+          "mismatchExclData": 0,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "phase": {
-          "mismatch": 11.05,
-          "mismatchExclData": 10.21,
-          "runToRunPct": 2.53,
-          "dataPp": 3.5
+          "mismatch": 0.23,
+          "mismatchExclData": 0,
+          "runToRunPct": 0.25,
+          "dataPp": 1
         },
         "bio": {
-          "mismatch": 14.89,
-          "mismatchExclData": 11.81,
+          "mismatch": 0,
+          "mismatchExclData": 0,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "statusbar": {
-          "mismatch": 6.77,
-          "mismatchExclData": 6.77,
+          "mismatch": 0,
+          "mismatchExclData": 0,
           "runToRunPct": 0,
           "dataPp": 0.5
         }
       },
       "controls": {
         "export": [
-          1440,
-          13,
-          81,
-          35
+          1424.66,
+          10,
+          91.34,
+          44
         ],
         "theme": [
-          1302,
-          13.5,
-          34,
-          34
+          1276.66,
+          10,
+          44,
+          44
+        ],
+        "sidebarToggle": [
+          12,
+          10,
+          44,
+          44
+        ],
+        "search": [
+          370.3,
+          10,
+          320,
+          44
+        ],
+        "navActive": [
+          12,
+          85,
+          231,
+          44
         ],
         "sourceSeg": [
-          23,
-          111,
-          290,
+          279,
+          159,
+          236.11,
           32
         ],
         "waveTiles": [
-          23,
-          151,
-          290,
+          279,
+          199,
+          236.11,
           55
         ],
         "freqSlider": [
-          23,
-          276,
-          290,
+          279,
+          324,
+          236.11,
           16
         ],
         "fineRow": [
-          23,
-          321,
-          290,
+          279,
+          369,
+          236.11,
           27
         ],
         "modeSeg": [
-          98,
-          361,
-          215,
+          354,
+          409,
+          161.11,
           29
         ],
         "playRow": [
-          23,
-          431,
-          290,
+          279,
+          479,
+          236.11,
           40
         ],
         "analysisTabs": [
-          346,
-          81,
+          548.11,
+          129,
           427.84,
           32
         ],
         "timeSelect": [
-          821,
-          81,
+          914.14,
+          167,
           93,
           32
         ],
         "waveformHost": [
-          343,
-          133,
-          610,
+          545.11,
+          219,
+          501.03,
           114
         ],
         "spectrumHost": [
-          343,
-          258,
-          617,
+          545.11,
+          344,
+          508.03,
           170
         ],
         "scaleSeg": [
-          346,
-          444,
+          548.11,
+          530,
           125,
           28
         ],
         "maxSelect": [
-          483,
-          444,
+          685.11,
+          530,
           104,
           28
         ],
         "micUse": [
-          1194,
-          76,
+          1223.02,
+          124,
           110,
           32
         ],
         "micTabs": [
-          990,
-          113,
-          351,
+          1083.14,
+          161,
+          286.88,
           33
         ],
         "micHost": [
-          984,
-          159,
-          360,
+          1077.14,
+          207,
+          295.88,
           185
         ],
         "micReadout": [
-          989,
-          352,
-          352,
+          1082.14,
+          400,
+          287.88,
           77
         ],
         "devAlert": [
-          1366,
-          311.34,
-          154,
-          95
+          1395.02,
+          429.34,
+          124.98,
+          127
         ],
         "spgHost": [
-          23,
-          528,
-          867,
+          279,
+          614,
+          704.14,
           190
         ],
         "spgColorbar": [
-          900,
-          535,
+          993.14,
+          621,
           15,
           159
         ],
         "seqTransport": [
-          1186,
-          452,
+          1235.27,
+          588.5,
           117,
           32
         ],
         "seqTempo": [
           1409,
-          452,
+          588.5,
           108,
           32
         ],
         "seqAdd": [
           1409,
-          579,
+          715.5,
           108,
           30
         ],
         "seqEditor": [
-          988,
-          617,
-          529,
+          1081.14,
+          753.5,
+          435.86,
           96
         ],
         "filterTabs": [
-          23,
-          765,
-          334,
+          279,
+          901.5,
+          272.23,
           34
         ],
         "filterHost": [
-          23,
-          807,
+          279,
+          943.5,
           224,
           140
         ],
         "envHost": [
-          389,
-          770,
+          583.23,
+          906.5,
           143,
           150
         ],
         "addHost": [
-          704,
-          770,
-          261,
+          844.63,
+          906.5,
+          212.39,
           112
         ],
         "phaseTabs": [
-          997,
-          764,
-          238,
+          1089.02,
+          900.5,
+          193.38,
           31
         ],
         "bioTabs": [
-          1261,
-          763,
-          257,
+          1308.39,
+          899.5,
+          209.61,
           25
         ]
       }
@@ -292,273 +322,303 @@
         "height": 1024
       },
       "runs": 3,
-      "total": 15.91,
-      "totalExclData": 7.03,
+      "total": 3.32,
+      "totalExclData": 3.34,
       "regions": {
         "header": {
-          "mismatch": 6.98,
-          "mismatchExclData": 6.98,
+          "mismatch": 2.18,
+          "mismatchExclData": 2.18,
+          "runToRunPct": 0,
+          "dataPp": 0.5
+        },
+        "sidebar": {
+          "mismatch": 1.42,
+          "mismatchExclData": 1.42,
+          "runToRunPct": 0,
+          "dataPp": 0.5
+        },
+        "pageHeader": {
+          "mismatch": 0.89,
+          "mismatchExclData": 0.89,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "source": {
-          "mismatch": 8.11,
-          "mismatchExclData": 8.11,
+          "mismatch": 3.91,
+          "mismatchExclData": 3.91,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "analysis": {
-          "mismatch": 15.41,
-          "mismatchExclData": 4.65,
+          "mismatch": 2.11,
+          "mismatchExclData": 2.43,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "mic": {
-          "mismatch": 11.29,
-          "mismatchExclData": 9.82,
+          "mismatch": 3.79,
+          "mismatchExclData": 4.07,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "device": {
-          "mismatch": 17.79,
-          "mismatchExclData": 17.79,
+          "mismatch": 20.16,
+          "mismatchExclData": 20.16,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "spectrogram": {
-          "mismatch": 47.11,
-          "mismatchExclData": 4.3,
-          "runToRunPct": 2.48,
-          "dataPp": 3
+          "mismatch": 3.06,
+          "mismatchExclData": 1.36,
+          "runToRunPct": 1.01,
+          "dataPp": 2
         },
         "sequencer": {
-          "mismatch": 14.29,
-          "mismatchExclData": 4.35,
+          "mismatch": 2.43,
+          "mismatchExclData": 2.06,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "filter": {
-          "mismatch": 7.75,
-          "mismatchExclData": 6.99,
+          "mismatch": 3.24,
+          "mismatchExclData": 4.71,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "envelope": {
-          "mismatch": 8.89,
-          "mismatchExclData": 8.21,
+          "mismatch": 2.78,
+          "mismatchExclData": 4.51,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "additive": {
-          "mismatch": 11.12,
-          "mismatchExclData": 9.05,
+          "mismatch": 1.75,
+          "mismatchExclData": 3.62,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "phase": {
-          "mismatch": 11.02,
-          "mismatchExclData": 10.3,
-          "runToRunPct": 2.61,
-          "dataPp": 3.5
+          "mismatch": 2.96,
+          "mismatchExclData": 4.91,
+          "runToRunPct": 0.19,
+          "dataPp": 1
         },
         "bio": {
-          "mismatch": 14.42,
-          "mismatchExclData": 11.48,
+          "mismatch": 3.69,
+          "mismatchExclData": 5.63,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "statusbar": {
-          "mismatch": 6.74,
-          "mismatchExclData": 6.74,
+          "mismatch": 4.54,
+          "mismatchExclData": 3.8,
           "runToRunPct": 0,
           "dataPp": 0.5
         }
       },
       "controls": {
         "export": [
-          1440,
-          13,
-          81,
-          35
+          1429.97,
+          10,
+          86.03,
+          44
         ],
         "theme": [
-          1302,
-          13.5,
-          34,
-          34
+          1281.97,
+          10,
+          44,
+          44
+        ],
+        "sidebarToggle": [
+          12,
+          10,
+          44,
+          44
+        ],
+        "search": [
+          353.91,
+          10,
+          320,
+          44
+        ],
+        "navActive": [
+          12,
+          85,
+          231,
+          44
         ],
         "sourceSeg": [
-          23,
-          111,
-          290,
+          279,
+          159,
+          236.11,
           32
         ],
         "waveTiles": [
-          23,
-          151,
-          290,
+          279,
+          199,
+          236.11,
           55
         ],
         "freqSlider": [
-          23,
-          276,
-          290,
+          279,
+          324,
+          236.11,
           16
         ],
         "fineRow": [
-          23,
-          321,
-          290,
+          279,
+          369,
+          236.11,
           27
         ],
         "modeSeg": [
-          98,
-          361,
-          215,
+          354,
+          409,
+          161.11,
           29
         ],
         "playRow": [
-          23,
-          431,
-          290,
+          279,
+          479,
+          236.11,
           40
         ],
         "analysisTabs": [
-          346,
-          81,
+          548.11,
+          129,
           420.61,
           32
         ],
         "timeSelect": [
-          821,
-          81,
+          914.14,
+          167,
           93,
           32
         ],
         "waveformHost": [
-          343,
-          133,
-          610,
+          545.11,
+          219,
+          501.03,
           114
         ],
         "spectrumHost": [
-          343,
-          258,
-          617,
+          545.11,
+          344,
+          508.03,
           170
         ],
         "scaleSeg": [
-          346,
-          444,
+          548.11,
+          530,
           125,
           28
         ],
         "maxSelect": [
-          483,
-          444,
+          685.11,
+          530,
           104,
           28
         ],
         "micUse": [
-          1194,
-          76,
+          1223.02,
+          124,
           110,
           32
         ],
         "micTabs": [
-          990,
-          113,
-          351,
+          1083.14,
+          161,
+          286.88,
           33
         ],
         "micHost": [
-          984,
-          159,
-          360,
+          1077.14,
+          207,
+          295.88,
           185
         ],
         "micReadout": [
-          989,
-          352,
-          352,
+          1082.14,
+          400,
+          287.88,
           77
         ],
         "devAlert": [
-          1366,
-          311.34,
-          154,
-          95
+          1395.02,
+          405.34,
+          124.98,
+          111
         ],
         "spgHost": [
-          23,
-          528,
-          867,
+          279,
+          614,
+          704.14,
           190
         ],
         "spgColorbar": [
-          900,
-          535,
+          993.14,
+          621,
           15,
           159
         ],
         "seqTransport": [
-          1186,
-          452,
+          1238.22,
+          588.5,
           117,
           32
         ],
         "seqTempo": [
           1409,
-          452,
+          588.5,
           108,
           32
         ],
         "seqAdd": [
           1409,
-          579,
+          715.5,
           108,
           30
         ],
         "seqEditor": [
-          988,
-          617,
-          529,
+          1081.14,
+          753.5,
+          435.86,
           96
         ],
         "filterTabs": [
-          23,
-          765,
-          334,
+          279,
+          901.5,
+          272.23,
           34
         ],
         "filterHost": [
-          23,
-          807,
+          279,
+          943.5,
           224,
           140
         ],
         "envHost": [
-          389,
-          770,
+          583.23,
+          906.5,
           143,
           150
         ],
         "addHost": [
-          704,
-          770,
-          261,
+          844.63,
+          906.5,
+          212.39,
           112
         ],
         "phaseTabs": [
-          997,
-          764,
-          238,
+          1089.02,
+          900.5,
+          193.38,
           31
         ],
         "bioTabs": [
-          1261,
-          763,
-          257,
+          1308.39,
+          899.5,
+          209.61,
           25
         ]
       }

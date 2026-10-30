@@ -1,6 +1,11 @@
 /* The one Tailwind entry (ADR 0061): scripts/build.mjs compiles it with tailwind.config.cjs
    through Tailwind's PostCSS API and emits it after the legacy CSS of main.css in the one
-   <style>. At-rules only: no selector rule is written here. Preflight is off (the config). */
-@tailwind base;
+   <style>. At-rules only: no selector rule is written here.
+   The base (preflight and the flowbite plugin's form base styles) is compiled inside the cascade
+   layer tailwind-base (issue F002), so the unlayered legacy stylesheets always win over it and
+   it only fills what they leave unsaid; components and utilities stay unlayered. */
+@layer tailwind-base {
+  @tailwind base;
+}
 @tailwind components;
 @tailwind utilities;

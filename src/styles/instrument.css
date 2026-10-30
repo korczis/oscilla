@@ -12,205 +12,9 @@
   min-height: 100dvh;
 }
 
-/* ================= Header ================= */
-.osc-header {
-  position: relative;
-  z-index: 20;
-  display: flex;
-  flex: none;
-  align-items: center;
-  height: var(--osc-header-h);
-  padding: 0 15px 0 20px;
-  border-bottom: 1px solid var(--osc-border);
-  background: var(--osc-header-bg);
-}
-
-.osc-brand {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 11px;
-  color: inherit;
-  text-decoration: none;
-}
-
 .osc-logo {
   width: 50px;
   height: 36px;
-}
-
-.osc-brand-text {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.osc-brand-name {
-  color: var(--osc-text);
-  font-size: 21px;
-  font-weight: var(--osc-fw-semibold);
-  line-height: 22px;
-  letter-spacing: 0.19em;
-}
-
-.osc-brand-sub {
-  color: var(--osc-text-2);
-  font-size: 12.6px;
-  line-height: 16px;
-  white-space: nowrap;
-}
-
-/* The nav scrolls inside its own strip at every width, never over the header actions: the
-   eight top-level entries (§73, §198) fit from 1280 px, the strip scrolls below that, and
-   focusing an entry scrolls it into view. When the entries fit, nothing changes. */
-.osc-nav {
-  align-self: stretch;
-  display: flex;
-  flex: 1 1 auto;
-  min-width: 0;
-  margin-left: 13px;
-  padding-left: 8px;
-  border-left: 1px solid var(--osc-border);
-  border-left-color: transparent;
-  position: relative;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
-}
-
-.osc-nav::-webkit-scrollbar {
-  display: none;
-}
-
-.osc-nav::before {
-  content: "";
-  position: absolute;
-  top: 15px;
-  bottom: 12px;
-  left: 0;
-  width: 1px;
-  background: var(--osc-border);
-}
-
-.osc-nav .osc-tabs {
-  align-items: stretch;
-  gap: 0;
-}
-
-.osc-nav li {
-  display: flex;
-}
-
-.osc-nav .osc-tab {
-  padding: 0 13px;
-  color: var(--osc-text-2);
-  text-decoration: none;
-}
-
-.osc-nav .osc-tab:hover {
-  color: var(--osc-text);
-}
-
-/* Navigation groups (ANALYZE, SYNTHESIS): the button is a header tab with a caret; its items are
-   the existing menu primitive, fixed under the button so the scrolling strip cannot clip them. */
-.osc-nav-group-btn {
-  gap: 5px;
-  border: 0;
-  font-family: inherit;
-  cursor: pointer;
-}
-
-.osc-nav-caret {
-  width: 12px;
-  height: 12px;
-  fill: none;
-  stroke: currentcolor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  transition: transform 0.12s;
-}
-
-.osc-nav-group.is-open .osc-nav-caret {
-  transform: rotate(180deg);
-}
-
-.osc-nav-menu {
-  position: fixed;
-  min-width: 168px;
-  margin: 0;
-  list-style: none;
-}
-
-.osc-nav-item {
-  position: relative;
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.osc-nav-item.is-active {
-  color: var(--osc-text);
-  font-weight: var(--osc-fw-semibold);
-}
-
-.osc-nav-item.is-active::before {
-  content: "";
-  position: absolute;
-  top: 7px;
-  bottom: 7px;
-  left: 2px;
-  width: 3px;
-  border-radius: 2px;
-  background: var(--osc-blue-underline);
-}
-
-.osc-header-actions {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 10px;
-  margin-left: auto;
-  padding-left: 12px;
-}
-
-.osc-header-actions .osc-icon-btn {
-  width: 34px;
-  height: 34px;
-}
-
-.osc-header-theme {
-  border-color: var(--osc-border-strong);
-  background: var(--osc-surface-3);
-}
-
-.osc-header-theme svg {
-  width: 18px;
-  height: 18px;
-}
-
-.osc-header-icon {
-  color: var(--osc-text);
-}
-
-.osc-header-icon svg {
-  width: 21px;
-  height: 21px;
-}
-
-.osc-header-export {
-  width: 81px;
-  gap: 6px;
-  height: 35px;
-  margin-left: 6px;
-  padding: 0 12px 0 14px;
-  border-radius: 5px;
-  font-size: var(--osc-fs-md);
-  font-weight: var(--osc-fw-medium);
-}
-
-.osc-header-export svg {
-  width: 16px;
-  height: 16px;
 }
 
 .osc-menu-anchor {
@@ -556,7 +360,7 @@
 
 /* ================= Primary analysis ================= */
 /* The header wraps (Pause, Time and fullscreen move to a second row) instead of letting them
-   cover the last tabs when the panel is narrower than tabs + tools (1280-1535 px Playground). */
+   cover the last tabs when the panel is narrower than tabs + tools (1280-1535 px of lab). */
 .osc-analysis-head {
   display: flex;
   flex-wrap: wrap;
@@ -572,13 +376,13 @@
   margin-left: auto;
 }
 
-@media (max-width: 1279.98px) {
+@media (max-width: 1535.98px) {
   .osc-analysis-tools {
     gap: 8px;
   }
 }
 
-@media (max-width: 1535.98px) {
+@media (max-width: 1791.98px) {
   .osc-analysis-tabs {
     max-width: 100%;
     overflow-x: auto;

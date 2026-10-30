@@ -79,6 +79,11 @@ export const BUILD_TIME_ASSETS = ['flowbite', 'lucide-static', 'tailwindcss'];
 // notice. The gzip figure is "about" because this file is an
 // input of the source digest that dist carries: writing a figure here changes the digest and so
 // moves gzip by a few bytes (raw does not move: the digest has a fixed length).
+// F002 (the Pro admin shell) turns on preflight and the flowbite form base inside the cascade
+// layer tailwind-base, and adds the navbar, the sidebar rendered from the workspace registry and
+// 16 inlined lucide symbols, while it removes the legacy header's CSS: before (F001 cb5f5f7)
+// 2 902 810 B raw / 837 741 B gzip, after about 2 935 000 B raw / about 844 200 B gzip
+// (+32 KB raw, +6.4 KB gzip), within the budget.
 export const BUDGET = {
   rawBytes: 3_500_000,
   gzipBytes: 1_000_000,

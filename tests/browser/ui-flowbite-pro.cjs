@@ -15,6 +15,26 @@
 //                 codec owns). The inventory landed passing on the interface before the shell
 //                 changed (F002's first commit) and must pass unchanged after it.
 //   default       an address naming nothing opens the Playground
+//   shell-desktop at 1536x1024 the Pro navbar and the sidebar column: every workspace is one
+//                 press on its own entry (aria-current="page" and bg-gray-100/dark:bg-gray-700
+//                 on it), every navbar control is at least 44 x 44 px, nothing scrolls sideways;
+//                 the sidebar collapses to icons (64 px, the labels kept as accessible names),
+//                 the choice survives a reload, the collapsed sidebar expands over the workspace
+//                 under the pointer without moving it, and expands again on its button
+//   shell-phone   at 390x844 with touch: the sidebar is a drawer behind the menu button, over
+//                 a backdrop; every control of the navbar and the open drawer is at least 44 x
+//                 44 px; every workspace is one tap in the open drawer, which closes over it
+//                 with focus kept off <body>; Escape and the backdrop close it, focus back on
+//                 the menu button; nothing scrolls sideways; the workspace deep links open at
+//                 390 px with the drawer closed
+//   shell-search  Find a workspace (navbar, and the drawer's on a phone) filters the sidebar
+//                 by name or by what a workspace does, says when nothing matches, and Enter
+//                 opens the first match
+//   shell-a11y    in both themes at 1536 and 390 px: text of the navbar, the sidebar entries
+//                 (the active one too), the page header and the search field has a contrast of
+//                 at least 4.5:1 against what it sits on; a sidebar entry reached by keyboard
+//                 shows a visible focus ring; the theme button switches the two-state theme
+//                 (oscilla.v2.theme) and its icon
 //   no-console-errors
 'use strict';
 const { serveDist } = require('./lib/serve.cjs');
@@ -110,6 +130,123 @@ function navigationState() {
     params: Object.fromEntries(q) };
 }
 
+/** In-page: the shell's geometry and state (sizes in CSS px). */
+function shellGeometry() {
+  const q = (sel) => document.querySelector(sel);
+  const shown = (el) => !!el && el.getClientRects().length > 0
+    && getComputedStyle(el).visibility !== 'hidden';
+  const sidebar = q('#osc-sidebar');
+  const sb = sidebar.getBoundingClientRect();
+  const content = q('#osc-main-content').getBoundingClientRect();
+  // Every visible control of the navbar, and of the sidebar when it is shown.
+  const scope = [q('[role="banner"]'), ...(shown(sidebar) ? [sidebar] : [])];
+  const small = [];
+  for (const root of scope) {
+    for (const el of root.querySelectorAll('a[href], button, input:not([type=hidden])')) {
+      if (!shown(el)) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < 44 - 0.5 || r.height < 44 - 0.5) {
+        const name = el.dataset.osc || el.id || el.tagName;
+        small.push(`${name} ${Math.round(r.width)}x${Math.round(r.height)}`);
+      }
+    }
+  }
+  const navShown = [...document.querySelectorAll('[data-osc^="nav."]')].filter(shown)
+    .map((el) => el.dataset.osc);
+  const names = [...document.querySelectorAll('[data-osc^="nav."]')]
+    .map((el) => el.textContent.trim());
+  let stored = null;
+  try { stored = localStorage.getItem('oscilla.v2.sidebar'); } catch (e) { stored = null; }
+  const a = document.activeElement;
+  return { sidebar: shown(sidebar), drawer: shown(sidebar)
+    && getComputedStyle(sidebar).position === 'fixed', sidebarWidth: Math.round(sb.width),
+  contentLeft: content.left, backdrop: shown(q('[data-osc="sidebar.backdrop"]')),
+  menuButton: shown(q('[data-osc="header.menu"]')), small, navShown, names, stored,
+  overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  workspace: window.OSCILLA.app.workspace,
+  focus: a && a !== document.body ? a.dataset.osc || a.id || a.tagName : 'body',
+  focusIn: !a || a === document.body ? 'body' : sidebar.contains(a) ? 'sidebar' : 'page' };
+}
+
+/** In-page: workspace `ws` is the one marked current, with the Pro active colour. */
+function activeEntry(ws) {
+  const el = document.querySelector(`[data-osc="nav.${ws}"]`);
+  const current = [...document.querySelectorAll('[data-osc^="nav."][aria-current="page"]')]
+    .map((x) => x.dataset.osc);
+  const active = el.classList.contains('bg-gray-100') && el.classList.contains('dark:bg-gray-700');
+  return { ok: window.OSCILLA.app.workspace === ws && current.length === 1
+    && current[0] === `nav.${ws}` && active, workspace: window.OSCILLA.app.workspace, current,
+  active };
+}
+
+/**
+ * In-page: the contrast of the shell's text against what it sits on (WCAG 2 relative
+ * luminance), for every visible text of the navbar, the sidebar and the page header.
+ */
+function shellContrast() {
+  const rgb = (c) => {
+    const m = c.match(/rgba?\(([^)]+)\)/);
+    if (!m) return null;
+    const p = m[1].split(/[ ,/]+/).filter(Boolean).map(Number);
+    return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 };
+  };
+  const lum = ({ r, g, b }) => {
+    const f = (v) => {
+      const s = v / 255;
+      return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  };
+  const over = (top, bottom) => ({ r: top.r * top.a + bottom.r * (1 - top.a),
+    g: top.g * top.a + bottom.g * (1 - top.a), b: top.b * top.a + bottom.b * (1 - top.a), a: 1 });
+  const background = (el) => {
+    const layers = [];
+    for (let p = el; p; p = p.parentElement) {
+      const c = rgb(getComputedStyle(p).backgroundColor);
+      if (c && c.a > 0) layers.push(c);
+      if (c && c.a >= 1) break;
+    }
+    let base = { r: 255, g: 255, b: 255, a: 1 };
+    for (const c of layers.reverse()) base = over(c, base);
+    return base;
+  };
+  const roots = ['[role="banner"]', '#osc-sidebar', '[data-osc="page.header"]']
+    .map((s) => document.querySelector(s)).filter((r) => r && r.getClientRects().length);
+  const low = [];
+  let min = 21;
+  for (const root of roots) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      if (!n.textContent.trim()) continue;
+      const el = n.parentElement;
+      if (!el.getClientRects().length || el.closest('.sr-only, [aria-hidden="true"]')) continue;
+      const cs = getComputedStyle(el);
+      if (cs.visibility === 'hidden' || parseFloat(cs.opacity) === 0) continue;
+      const fg = rgb(cs.color);
+      const bg = background(el);
+      const L1 = lum(over(fg, bg));
+      const L2 = lum(bg);
+      const ratio = (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05);
+      min = Math.min(min, ratio);
+      const text = n.textContent.trim().slice(0, 20);
+      if (ratio < 4.5) low.push(`${el.dataset.osc || el.tagName}:"${text}" ${ratio.toFixed(2)}`);
+    }
+    // The search field's placeholder is text too.
+    for (const input of root.querySelectorAll('input[placeholder]')) {
+      if (!input.getClientRects().length) continue;
+      const fg = rgb(getComputedStyle(input, '::placeholder').color);
+      const bg = background(input);
+      if (!fg) continue;
+      const L1 = lum(over(fg, bg));
+      const L2 = lum(bg);
+      const ratio = (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05);
+      min = Math.min(min, ratio);
+      if (ratio < 4.5) low.push(`${input.dataset.osc} placeholder ${ratio.toFixed(2)}`);
+    }
+  }
+  return { min: Number(min.toFixed(2)), low: low.slice(0, 8) };
+}
+
 // ------------------------------------------------------------------------------ page helpers
 const H = {
   verdict: (conds) => {
@@ -180,6 +317,247 @@ function defineChecks() {
     await page.close();
     return { ...H.verdict({ playground: st.workspace === 'playground',
       mode: st.mode === 'playground' }), workspace: st.workspace };
+  });
+
+  // ---------------------------------------------------------------- the Pro shell (F002)
+  def('shell-desktop', async (ctx) => {
+    const page = await H.open(ctx, ctx.baseUrl);
+    const res = { bad: [] };
+    const want = (cond, msg) => { if (!cond) res.bad.push(msg); };
+    res.start = await page.evaluate(shellGeometry);
+    want(res.start.sidebar && res.start.sidebarWidth === 256 && !res.start.drawer,
+      `the sidebar is an open column ${JSON.stringify(res.start)}`);
+    want(Math.round(res.start.contentLeft) === 256, `the workspace column starts at 256 px`);
+    want(res.start.overflow <= 0, `no sideways scroll (${res.start.overflow} px)`);
+    want(res.start.small.length === 0, `navbar targets under 44 px: ${res.start.small}`);
+    want(res.start.navShown.length === WORKSPACES.length,
+      `every workspace has a visible entry: ${res.start.navShown}`);
+    for (const ws of WORKSPACES) {
+      await page.click(`[data-osc="nav.${ws}"]`);
+      const v = await until(() => page.evaluate(activeEntry, ws).then((x) => (x.ok ? x : null)),
+        { ms: 5000, what: `one press opens ${ws}` }).catch(() => page.evaluate(activeEntry, ws));
+      want(v.ok, `one press on nav.${ws}: ${JSON.stringify(v)}`);
+    }
+    await page.click('[data-osc="nav.playground"]');
+    // Collapse to icons: 64 px, the workspace column follows, the labels stay accessible names.
+    await page.click('[data-osc="header.sidebar"]');
+    const icons = await until(() => page.evaluate(shellGeometry)
+      .then((g) => (g.sidebarWidth === 64 ? g : null)), { ms: 3000, what: 'collapse to icons' })
+      .catch(() => page.evaluate(shellGeometry));
+    want(icons.sidebarWidth === 64 && Math.round(icons.contentLeft) === 64,
+      `collapsed to icons ${JSON.stringify(icons)}`);
+    want(icons.names.length === WORKSPACES.length && icons.names.every(Boolean),
+      `entries keep their names: ${icons.names}`);
+    want(icons.stored === 'icons', `the choice is stored (${icons.stored})`);
+    // Hover: the sidebar expands over the workspace, which does not move.
+    await page.mouse.move(30, 400);
+    const peek = await until(() => page.evaluate(shellGeometry)
+      .then((g) => (g.sidebarWidth === 256 ? g : null)), { ms: 3000, what: 'hover expands' })
+      .catch(() => page.evaluate(shellGeometry));
+    want(peek.sidebarWidth === 256 && Math.round(peek.contentLeft) === 64,
+      `hover expands over the workspace ${JSON.stringify(peek)}`);
+    await page.mouse.move(900, 500);
+    const back = await until(() => page.evaluate(shellGeometry)
+      .then((g) => (g.sidebarWidth === 64 ? g : null)), { ms: 3000, what: 'leave collapses' })
+      .catch(() => page.evaluate(shellGeometry));
+    want(back.sidebarWidth === 64, `leaving collapses it again (${back.sidebarWidth})`);
+    // The choice survives a reload.
+    await page.reload({ waitUntil: 'load' });
+    await H.ready(page);
+    const reloaded = await until(() => page.evaluate(shellGeometry)
+      .then((g) => (g.sidebarWidth === 64 ? g : null)), { ms: 5000, what: 'reload keeps icons' })
+      .catch(() => page.evaluate(shellGeometry));
+    want(reloaded.sidebarWidth === 64, `the reload keeps it collapsed (${reloaded.sidebarWidth})`);
+    await page.click('[data-osc="header.sidebar"]');
+    const open = await until(() => page.evaluate(shellGeometry)
+      .then((g) => (g.sidebarWidth === 256 && g.stored === 'open' ? g : null)),
+    { ms: 3000, what: 'expand again' }).catch(() => page.evaluate(shellGeometry));
+    want(open.sidebarWidth === 256 && Math.round(open.contentLeft) === 256
+      && open.stored === 'open',
+      `expanded again ${JSON.stringify(open)}`);
+    await page.close();
+    return { ok: !res.bad.length, bad: res.bad.slice(0, 8) };
+  });
+
+  def('shell-phone', async (ctx) => {
+    const phone = await ctx.browser.newContext({ viewport: { width: 390, height: 844 },
+      hasTouch: true, reducedMotion: 'reduce' });
+    const res = { bad: [] };
+    const want = (cond, msg) => { if (!cond) res.bad.push(msg); };
+    try {
+      const page = await H.open(ctx, ctx.baseUrl, phone);
+      const start = await page.evaluate(shellGeometry);
+      want(!start.sidebar && start.menuButton,
+        `a drawer behind the menu button ${JSON.stringify(start)}`);
+      want(start.overflow <= 0, `no sideways scroll (${start.overflow} px)`);
+      want(start.small.length === 0, `navbar targets under 44 px: ${start.small}`);
+      const openDrawer = async (what) => {
+        await page.tap('[data-osc="header.menu"]');
+        // Focus moves into the drawer once Alpine has rendered it (its next tick).
+        return until(() => page.evaluate(shellGeometry)
+          .then((g) => (g.drawer && g.focusIn === 'sidebar' ? g : null)),
+        { ms: 5000, what }).catch(() => page.evaluate(shellGeometry));
+      };
+      const opened = await openDrawer('the drawer opens');
+      want(opened.drawer && opened.backdrop,
+        `the drawer over a backdrop ${JSON.stringify(opened)}`);
+      want(opened.small.length === 0, `drawer targets under 44 px: ${opened.small}`);
+      want(opened.navShown.length === WORKSPACES.length, `every workspace in the drawer`);
+      want(opened.overflow <= 0, `no sideways scroll with the drawer (${opened.overflow} px)`);
+      want(opened.focusIn === 'sidebar', `focus moves into the drawer (${opened.focusIn})`);
+      for (const ws of WORKSPACES) {
+        const g = await page.evaluate(shellGeometry);
+        if (!g.drawer) await openDrawer(`the drawer opens for ${ws}`);
+        await page.tap(`[data-osc="nav.${ws}"]`);
+        const v = await until(() => page.evaluate(shellGeometry).then((x) => (
+          x.workspace === ws && !x.sidebar ? x : null)), { ms: 5000, what: `one tap opens ${ws}` })
+          .catch(() => page.evaluate(shellGeometry));
+        want(v.workspace === ws && !v.sidebar && v.focusIn !== 'body',
+          `one tap on nav.${ws}: ${JSON.stringify({ ws: v.workspace, sidebar: v.sidebar,
+            focus: v.focusIn })}`);
+      }
+      await openDrawer('the drawer opens for Escape');
+      await page.keyboard.press('Escape');
+      const closedBy = (what) => until(() => page.evaluate(shellGeometry)
+        .then((g) => (!g.sidebar ? g : null)), { ms: 3000, what })
+        .catch(() => page.evaluate(shellGeometry));
+      const esc = await closedBy('Escape closes the drawer');
+      want(!esc.sidebar && esc.focus === 'header.menu', `Escape ${JSON.stringify(esc)}`);
+      await openDrawer('the drawer opens for the backdrop');
+      await page.tap('[data-osc="sidebar.backdrop"]', { position: { x: 370, y: 700 } });
+      const out = await closedBy('the backdrop closes the drawer');
+      want(!out.sidebar && out.focus === 'header.menu', `backdrop ${JSON.stringify(out)}`);
+      await page.close();
+      // The deep links at 390 px: the workspace, the drawer closed, nothing sideways.
+      for (const row of ROUTES.filter((r) => /^m=|^studio template and view$/.test(r.name))) {
+        const p = await H.open(ctx, `${ctx.baseUrl}${row.search || ''}${row.hash}`, phone);
+        const st = await until(async () => {
+          const x = await H.state(p);
+          return missed(row, x).length === 0 ? x : null;
+        }, { ms: 5000, what: `390 deep link ${row.name}` }).catch(() => H.state(p));
+        const g = await p.evaluate(shellGeometry);
+        const m = missed(row, st);
+        want(!m.length && !g.sidebar && g.overflow <= 0,
+          `390 ${row.name}: ${JSON.stringify({ missed: m, sidebar: g.sidebar,
+            overflow: g.overflow })}`);
+        await p.close();
+      }
+    } finally {
+      await bounded(phone.close(), { ms: 10000, what: 'closing the phone context' })
+        .catch(() => {});
+    }
+    return { ok: !res.bad.length, bad: res.bad.slice(0, 8) };
+  }, ROW_MS * 20);
+
+  def('shell-search', async (ctx) => {
+    const res = { bad: [] };
+    const want = (cond, msg) => { if (!cond) res.bad.push(msg); };
+    const page = await H.open(ctx, ctx.baseUrl);
+    const shown = () => page.evaluate(() => [...document.querySelectorAll('[data-osc^="nav."]')]
+      .filter((el) => el.getClientRects().length).map((el) => el.dataset.osc));
+    await page.fill('[data-osc="header.search"]', 'filt');
+    const one = await until(() => shown().then((v) => (v.length === 1 ? v : null)),
+      { ms: 3000, what: 'the search filters' }).catch(() => shown());
+    want(JSON.stringify(one) === '["nav.filter"]', `"filt" finds Filter Lab: ${one}`);
+    await page.fill('[data-osc="header.search"]', 'spectrum');
+    const spec = await until(() => shown().then((v) => (v.includes('nav.analyzer') ? v : null)),
+      { ms: 3000, what: 'the search reads what a workspace does' }).catch(() => shown());
+    want(spec.includes('nav.analyzer'), `"spectrum" finds the Analyzer: ${spec}`);
+    await page.fill('[data-osc="header.search"]', 'zzzz');
+    const none = await until(() => page.evaluate(() => document
+      .querySelector('[data-osc="sidebar.noMatch"]').getClientRects().length > 0),
+    { ms: 3000, what: 'no match is said' }).catch(() => false);
+    want(none, 'a query that finds nothing says so');
+    await page.fill('[data-osc="header.search"]', 'seq');
+    await page.press('[data-osc="header.search"]', 'Enter');
+    const went = await until(() => H.state(page)
+      .then((x) => (x.workspace === 'sequencer' ? x : null)),
+      { ms: 5000, what: 'Enter opens the first match' }).catch(() => H.state(page));
+    want(went.workspace === 'sequencer', `Enter opens the Sequencer (${went.workspace})`);
+    // x-show shows an entry again in a later task, so the whole list is a condition to await.
+    const cleared = await until(() => shown()
+      .then((v) => (v.length === WORKSPACES.length ? v : null)),
+    { ms: 3000, what: 'the list is whole again' }).catch(() => shown());
+    want(cleared.length === WORKSPACES.length, `the list is whole again: ${cleared.length}`);
+    await page.close();
+    // The drawer's own field on a phone.
+    const phone = await ctx.browser.newContext({ viewport: { width: 390, height: 844 },
+      hasTouch: true, reducedMotion: 'reduce' });
+    try {
+      const p = await H.open(ctx, ctx.baseUrl, phone);
+      await p.tap('[data-osc="header.menu"]');
+      await p.waitForSelector('[data-osc="sidebar.search"]', { state: 'visible', timeout: 5000 });
+      await p.fill('[data-osc="sidebar.search"]', 'graph');
+      await p.press('[data-osc="sidebar.search"]', 'Enter');
+      const st = await until(() => H.state(p).then((x) => (x.workspace === 'studio' ? x : null)),
+        { ms: 5000, what: 'the drawer search opens Studio' }).catch(() => H.state(p));
+      const g = await p.evaluate(shellGeometry);
+      want(st.workspace === 'studio' && !g.sidebar,
+        `"graph" opens Studio, drawer closed: ${st.workspace} ${g.sidebar}`);
+    } finally {
+      await bounded(phone.close(), { ms: 10000, what: 'closing the phone context' })
+        .catch(() => {});
+    }
+    return { ok: !res.bad.length, bad: res.bad.slice(0, 8) };
+  });
+
+  def('shell-a11y', async (ctx) => {
+    const res = { bad: [], min: {} };
+    const want = (cond, msg) => { if (!cond) res.bad.push(msg); };
+    for (const [w, h] of [[1536, 1024], [390, 844]]) {
+      const context = await ctx.browser.newContext({ viewport: { width: w, height: h },
+        hasTouch: w < 500, reducedMotion: 'reduce' });
+      try {
+        const page = await H.open(ctx, ctx.baseUrl, context);
+        for (const theme of ['dark', 'light']) {
+          const now = await page.evaluate(() => document.documentElement.dataset.theme);
+          if (now !== theme) {
+            await page.click('[data-osc="header.theme"]');
+            const t = await until(() => page.evaluate(() => ({
+              theme: document.documentElement.dataset.theme,
+              stored: localStorage.getItem('oscilla.v2.theme'),
+              icon: [...document.querySelectorAll('[data-osc="header.theme"] svg')]
+                .filter((s) => s.getClientRects().length).map((s) => s.querySelector('use')
+                  .getAttribute('href')) })).then((x) => (x.theme === theme ? x : null)),
+            { ms: 3000, what: `the theme button switches to ${theme}` }).catch(() => null);
+            want(t && t.stored === theme && t.icon.length === 1
+              && t.icon[0] === (theme === 'dark' ? '#i-sun' : '#i-moon'),
+            `${w} theme ${theme}: ${JSON.stringify(t)}`);
+          }
+          if (w < 500) {
+            await page.tap('[data-osc="header.menu"]');
+            await until(() => page.evaluate(shellGeometry).then((g) => g.drawer),
+              { ms: 5000, what: 'the drawer opens' }).catch(() => {});
+          }
+          // The theme's colours settle within the deadline (a transition may still run).
+          const c = await until(() => page.evaluate(shellContrast)
+            .then((x) => (x.low.length === 0 ? x : null)),
+          { ms: 3000, what: `${w} ${theme} contrast` }).catch(() => page.evaluate(shellContrast));
+          res.min[`${w}/${theme}`] = c.min;
+          want(c.low.length === 0, `${w} ${theme} contrast under 4.5: ${JSON.stringify(c.low)}`);
+          // Keyboard focus is visible on a sidebar entry.
+          await page.focus('[data-osc="nav.playground"]');
+          await page.keyboard.press('ArrowDown');
+          const ring = await page.evaluate(() => {
+            const el = document.activeElement;
+            const cs = getComputedStyle(el);
+            return { osc: el.dataset.osc, ring: (cs.outlineStyle !== 'none'
+              && parseFloat(cs.outlineWidth) >= 1) || /\d+px/.test(cs.boxShadow) };
+          });
+          want(ring.osc === 'nav.measure' && ring.ring,
+            `${w} ${theme} focus ring ${JSON.stringify(ring)}`);
+          if (w < 500) {
+            await page.keyboard.press('Escape');
+            await until(() => page.evaluate(shellGeometry).then((g) => !g.sidebar),
+              { ms: 3000, what: 'the drawer closes' }).catch(() => {});
+          }
+        }
+        await page.close();
+      } finally {
+        await bounded(context.close(), { ms: 10000, what: 'closing a context' }).catch(() => {});
+      }
+    }
+    return { ok: !res.bad.length, min: res.min, bad: res.bad.slice(0, 8) };
   });
 
   def('no-console-errors', async (ctx) => ({ ok: ctx.errors.length === 0,

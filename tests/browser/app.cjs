@@ -15,6 +15,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
+const shell = require('./lib/shell.cjs');
 const { until } = require('./lib/wait.cjs');
 const seam = require('./lib/measure-seam.cjs');
 
@@ -138,16 +139,9 @@ const H = {
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     document.body.focus();
   }),
-  /** Reach a workspace through the nav; a grouped one (ANALYZE, SYNTHESIS) opens its group. */
+  /** Reach a workspace through the sidebar (lib/shell.cjs: the drawer and a group as needed). */
   navTo: async (page, ws) => {
-    const item = `[data-osc="nav.${ws}"]`;
-    const group = await page.evaluate((s) => {
-      const el = document.querySelector(s);
-      const g = el && el.closest('[data-osc-nav-group]');
-      return g && el.offsetParent === null ? g.dataset.oscNavGroup : null;
-    }, item);
-    if (group) await page.click(`[data-osc="nav-group.${group}"]`);
-    await page.click(item);
+    await shell.navTo(page, ws);
   },
   workspace: async (page, ws) => {
     await H.navTo(page, ws);
@@ -244,7 +238,7 @@ function focusObscured() {
   const iy = Math.min(2, r.height / 4);
   const pts = [[r.left + r.width / 2, r.top + r.height / 2], [r.left + ix, r.top + iy],
     [r.right - ix, r.top + iy], [r.left + ix, r.bottom - iy], [r.right - ix, r.bottom - iy]];
-  const COVER = '.osc-header, .osc-statusbar, [data-osc="alerts"], .osc-hints';
+  const COVER = '[role="banner"], .osc-statusbar, [data-osc="alerts"], .osc-hints';
   const coverOf = (hit) => {
     const bar = hit.closest(COVER);
     if (bar && !bar.contains(el)) return bar.className.split(' ')[0];
@@ -329,18 +323,17 @@ function phoneBars() {
     return out;
   };
   const bad = [];
-  const header = document.querySelector('.osc-header');
+  // The Pro navbar (F002): the menu button, the brand and the actions in one row; the
+  // workspaces are in the drawer behind the menu button.
+  const header = document.querySelector('[role="banner"]');
   const hb = header.getBoundingClientRect();
-  const nav = header.querySelector('.osc-nav').getBoundingClientRect();
-  const top = boxes([...header.querySelectorAll('.osc-brand, .osc-header-actions > *')]);
-  const hparts = [...top, { n: 'osc-nav', b: nav }];
+  const hparts = boxes([...header.querySelectorAll('[data-osc="header.menu"], '
+    + '[data-osc="header.brand"], [data-osc="header.actions"] > *')]);
   bad.push(...overlaps(hparts).map((o) => `header ${o}`));
   for (const p of hparts) {
     if (p.b.left < hb.left - 0.5 || p.b.right > hb.right + 0.5) bad.push(`${p.n} outside header`);
+    if (p.b.top < hb.top - 0.5 || p.b.bottom > hb.bottom + 0.5) bad.push(`${p.n} outside header`);
   }
-  // On phones the workspace strip is the header's second row, under the brand and actions.
-  const firstRow = Math.max(...top.map((p) => p.b.bottom));
-  if (nav.top < firstRow - 0.5) bad.push(`nav row ${nav.top} above ${firstRow}`);
   let next = header.nextElementSibling;
   while (next && !vis(next)) next = next.nextElementSibling;
   if (next && next.getBoundingClientRect().top < hb.bottom - 0.5) {
@@ -846,8 +839,8 @@ function defineChecks() {
     await page.click('#osc-source-pattern');
     await collect();
     await page.click('#osc-source-osc');
-    for (const menu of ['#osc-nav-group-analyze', '#osc-nav-group-synthesis', '#osc-overflow',
-      '#osc-export', '#osc-seq-add']) {
+    // The sidebar groups start expanded (F002), so their items are already collected.
+    for (const menu of ['#osc-overflow', '#osc-export', '#osc-seq-add']) {
       await page.click(menu);
       await collect();
       await page.keyboard.press('Escape');
@@ -1089,6 +1082,11 @@ function defineChecks() {
     await page.click('#osc-sb-actions-toggle');
     await collect();
     await page.click('#osc-sb-actions-toggle');
+    // The phone drawer (F002) holds its own search field.
+    await page.click('[data-osc="header.menu"]');
+    await page.waitForSelector('[data-osc="sidebar.search"]', { state: 'visible', timeout: 5000 });
+    await collect();
+    await page.keyboard.press('Escape');
     await page.setViewportSize({ width: 1536, height: 1024 });
     await sleep(200);
     const list = [...seen.values()];
@@ -1376,114 +1374,125 @@ function defineChecks() {
     return { ok, res };
   });
 
-  // V371 (spec §73, §75, §198): eight top-level entries; ANALYZE and SYNTHESIS are disclosure
-  // groups whose items are the V2 workspaces with their old nav ids. Every workspace is reached
-  // by keyboard (Tab through an open group; arrows from its button), aria-current marks the item
-  // (page) and its group (true), Escape and a click outside close a group, focus never drops,
-  // and the dropdown stays inside the viewport at desktop and phone widths.
+  // V371 (spec §73, §75, §198) in the Pro sidebar (F002): eight top-level entries from the
+  // registry; ANALYZE and SYNTHESIS are collapsible groups that start expanded, so every
+  // workspace is one press away. Tab walks the entries in order (a group's items after its
+  // button), the arrows, Home and End move through them, aria-current marks the item (page) and
+  // its group (true); a group's button collapses and expands its list, and Escape in the list
+  // collapses it with focus back on the button. On a phone the sidebar is a drawer behind the
+  // menu button: it opens with focus on the current workspace, a press on an item closes it over
+  // that workspace (focus never drops), and Escape closes it with focus back on the button.
   def('nav-groups-keyboard', async ({ page, browserName }) => {
     const TOP = ['nav.playground', 'nav.measure', 'nav.experiments', 'nav-group.analyze',
       'nav-group.synthesis', 'nav.learn', 'nav.studio', 'nav.about'];
+    const ORDER = ['nav.playground', 'nav.measure', 'nav.experiments', 'nav-group.analyze',
+      'nav.analyzer', 'nav.filter', 'nav.compare', 'nav-group.synthesis', 'nav.synthesis',
+      'nav.sequencer', 'nav.presets', 'nav.learn', 'nav.studio', 'nav.about'];
     const GROUPS = { analyze: ['analyzer', 'filter', 'compare'],
       synthesis: ['synthesis', 'sequencer', 'presets'] };
     const state = () => page.evaluate(() => {
       const q = (s) => document.querySelector(s);
+      const shown = (el) => !!el && el.getClientRects().length > 0;
       return { mode: q('#osc-app').dataset.mode,
         active: document.activeElement && document.activeElement !== document.body
-          ? document.activeElement.dataset.osc : 'BODY',
+          ? document.activeElement.dataset.osc || document.activeElement.tagName : 'BODY',
         current: [...document.querySelectorAll('#osc-nav [aria-current]')]
           .map((e) => `${e.dataset.osc}=${e.getAttribute('aria-current')}`),
         expanded: [...document.querySelectorAll('[data-osc^="nav-group."]')]
-          .filter((b) => b.getAttribute('aria-expanded') === 'true').map((b) => b.dataset.osc) };
+          .filter((b) => b.getAttribute('aria-expanded') === 'true').map((b) => b.dataset.osc),
+        drawer: shown(q('#osc-sidebar')) && getComputedStyle(q('#osc-sidebar')).position === 'fixed',
+        sidebar: shown(q('#osc-sidebar')) };
     });
+    const settle = (pred, what) => until(async () => {
+      const v = await state();
+      return pred(v) ? v : null;
+    }, { ms: 3000, what }).catch(() => state());
     const res = { bad: [] };
     const want = (cond, msg) => { if (!cond) res.bad.push(msg); };
     res.top = await page.evaluate(() => [...document.querySelectorAll('#osc-nav > li')]
       .map((li) => li.querySelector(':scope > a, :scope > button').dataset.osc));
     want(JSON.stringify(res.top) === JSON.stringify(TOP), `top level ${res.top.join(',')}`);
-    for (const w of [1536, 375]) {
-      await page.setViewportSize({ width: w, height: w > 400 ? 1024 : 812 });
-      await sleep(150);
-      // Tab order: the top level in order, an open group's items right after its button.
-      // WebKit (macOS default) skips links and buttons on Tab unless the user opts in, so the
-      // Tab paths run in chromium and firefox; the arrow paths run everywhere.
-      if (browserName !== 'webkit') {
-        await H.workspace(page, 'playground');
-        await page.focus('[data-osc="nav.playground"]');
-        const seen = ['nav.playground'];
-        for (let i = 0; i < TOP.length - 1; i++) {
-          await page.keyboard.press('Tab');
-          seen.push((await state()).active);
-        }
-        want(JSON.stringify(seen) === JSON.stringify(TOP), `${w} tab order ${seen.join(',')}`);
+    // Desktop: the sidebar is a column; every workspace is one press, by Tab or by arrow.
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    await H.workspace(page, 'playground');
+    const desk = await state();
+    want(desk.sidebar && !desk.drawer && desk.expanded.length === 2,
+      `1536 sidebar open, groups expanded: ${JSON.stringify(desk)}`);
+    // WebKit (macOS default) skips links and buttons on Tab unless the user opts in, so the
+    // Tab path runs in chromium and firefox; the arrow path runs everywhere.
+    if (browserName !== 'webkit') {
+      await page.focus('[data-osc="nav.playground"]');
+      const seen = ['nav.playground'];
+      for (let i = 0; i < ORDER.length - 1; i++) {
+        await page.keyboard.press('Tab');
+        seen.push((await state()).active);
       }
-      for (const [g, items] of Object.entries(GROUPS)) {
-        const btn = `[data-osc="nav-group.${g}"]`;
-        for (const [i, ws] of items.entries()) {
-          // Tab path: Enter opens, Tab walks into the list, Enter on the item navigates.
-          if (browserName !== 'webkit') {
-            await H.workspace(page, 'playground');
-            await page.focus(btn);
-            await page.keyboard.press('Enter');
-            for (let k = 0; k <= i; k++) await page.keyboard.press('Tab');
-            const at = (await state()).active;
-            want(at === `nav.${ws}`, `${w} tab into ${g} reached ${at}, not nav.${ws}`);
-            await page.keyboard.press('Enter');
-            await sleep(120);
-            const v = await state();
-            want(v.mode === ws, `${w} tab ${ws}: mode ${v.mode}`);
-          }
-          // Arrow path: ArrowDown opens on the current (or first) item, Home, then ArrowDown.
-          await H.workspace(page, 'playground');
-          await page.focus(btn);
-          await page.keyboard.press('ArrowDown');
-          await sleep(60);
-          const open = await page.evaluate((sel) => {
-            const panel = document.getElementById(document.querySelector(sel)
-              .getAttribute('aria-controls'));
-            const r = panel.getBoundingClientRect();
-            const items = [...panel.querySelectorAll('a')].map((a) => a.getBoundingClientRect());
-            const hit = items.every((b) => {
-              const el = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
-              return el && panel.contains(el);
-            });
-            return { shown: r.width > 0 && r.height > 0, inside: r.left >= 0 && r.top >= 0
-              && r.right <= innerWidth && r.bottom <= innerHeight, hit,
-              minH: Math.min(...items.map((b) => b.height)) };
-          }, btn);
-          want(open.shown && open.inside && open.hit, `${w} ${g} panel ${JSON.stringify(open)}`);
-          await page.keyboard.press('Home');
-          for (let k = 0; k < i; k++) await page.keyboard.press('ArrowDown');
-          await page.keyboard.press('Enter');
-          await sleep(120);
-          const v = await state();
-          want(v.mode === ws && v.active === `nav-group.${g}` && !v.expanded.length
-            && v.current.includes(`nav.${ws}=page`) && v.current.includes(`nav-group.${g}=true`)
-            && v.current.length === 2, `${w} arrow ${ws}: ${JSON.stringify(v)}`);
-        }
-        // Escape closes and returns focus to the button; reopening marks the current item.
-        await page.focus(btn);
-        await page.keyboard.press('ArrowDown');
-        await sleep(60);
-        const reopened = await state();
-        want(reopened.active === `nav.${items.at(-1)}`, `${w} reopen ${g} at ${reopened.active}`);
-        await page.keyboard.press('Escape');
-        await sleep(60);
-        const esc = await state();
-        want(!esc.expanded.length && esc.active === `nav-group.${g}`,
-          `${w} escape ${g} ${JSON.stringify(esc)}`);
-        // Click toggles; a click elsewhere closes.
-        await page.click(btn);
-        want((await state()).expanded.includes(`nav-group.${g}`), `${w} click opens ${g}`);
-        await page.click('.osc-header', { position: { x: 3, y: 3 } });
-        await sleep(60);
-        want(!(await state()).expanded.length, `${w} outside click closes ${g}`);
-      }
-      // A top-level workspace clears the group mark.
-      await H.workspace(page, 'learn');
-      const learn = await state();
-      want(JSON.stringify(learn.current) === '["nav.learn=page"]', `${w} learn ${learn.current}`);
+      want(JSON.stringify(seen) === JSON.stringify(ORDER), `1536 tab order ${seen.join(',')}`);
     }
+    await page.focus('[data-osc="nav.playground"]');
+    const walked = ['nav.playground'];
+    for (let i = 0; i < ORDER.length - 1; i++) {
+      await page.keyboard.press('ArrowDown');
+      walked.push((await state()).active);
+    }
+    want(JSON.stringify(walked) === JSON.stringify(ORDER), `1536 arrows ${walked.join(',')}`);
+    await page.keyboard.press('Home');
+    want((await state()).active === 'nav.playground', '1536 Home');
+    await page.keyboard.press('End');
+    want((await state()).active === 'nav.about', '1536 End');
+    for (const [g, items] of Object.entries(GROUPS)) {
+      for (const ws of items) {
+        await H.workspace(page, 'playground');
+        await page.focus(`[data-osc="nav.${ws}"]`);
+        await page.keyboard.press('Enter');
+        const v = await settle((x) => x.mode === ws, `1536 Enter on nav.${ws}`);
+        want(v.mode === ws && v.active === `nav.${ws}` && v.current.includes(`nav.${ws}=page`)
+          && v.current.includes(`nav-group.${g}=true`) && v.current.length === 2,
+        `1536 enter ${ws}: ${JSON.stringify(v)}`);
+      }
+      // Escape in the list collapses the group, focus back on its button; the button reopens.
+      await page.focus(`[data-osc="nav.${items[0]}"]`);
+      await page.keyboard.press('Escape');
+      const esc = await settle((x) => !x.expanded.includes(`nav-group.${g}`), `escape ${g}`);
+      want(!esc.expanded.includes(`nav-group.${g}`) && esc.active === `nav-group.${g}`,
+        `1536 escape ${g} ${JSON.stringify(esc)}`);
+      await page.keyboard.press('Enter');
+      const re = await settle((x) => x.expanded.includes(`nav-group.${g}`), `reopen ${g}`);
+      want(re.expanded.includes(`nav-group.${g}`), `1536 Enter reopens ${g}`);
+    }
+    // A top-level workspace clears the group mark.
+    await H.workspace(page, 'learn');
+    const learn = await state();
+    want(JSON.stringify(learn.current) === '["nav.learn=page"]', `1536 learn ${learn.current}`);
+    // Phone: the drawer.
+    await page.setViewportSize({ width: 375, height: 812 });
+    await H.workspace(page, 'playground');
+    const closed = await settle((x) => !x.sidebar, '375 the drawer starts closed');
+    want(!closed.sidebar, `375 drawer closed at start ${JSON.stringify(closed)}`);
+    for (const ws of ['analyzer', 'presets', 'about']) {
+      await page.click('[data-osc="header.menu"]');
+      // Focus moves into the drawer once Alpine has rendered it (its next tick).
+      const open = await settle((x) => x.drawer && x.active !== 'header.menu',
+        `375 the drawer opens for ${ws}, focus inside`);
+      want(open.drawer && open.active === 'nav.playground',
+        `375 drawer opens on the current workspace ${JSON.stringify(open)}`);
+      await page.click(`[data-osc="nav.${ws}"]`);
+      const v = await settle((x) => x.mode === ws && !x.sidebar, `375 tap ${ws}`);
+      want(v.mode === ws && !v.sidebar && v.active !== 'BODY',
+        `375 tap ${ws} closes the drawer: ${JSON.stringify(v)}`);
+      await H.workspace(page, 'playground');
+    }
+    await page.click('[data-osc="header.menu"]');
+    await settle((x) => x.drawer, '375 the drawer opens for Escape');
+    await page.keyboard.press('Escape');
+    const esc = await settle((x) => !x.sidebar, '375 Escape closes the drawer');
+    want(!esc.sidebar && esc.active === 'header.menu', `375 escape ${JSON.stringify(esc)}`);
+    await page.click('[data-osc="header.menu"]');
+    await settle((x) => x.drawer, '375 the drawer opens for the backdrop');
+    // At once, as a hurried tap would: the backdrop appears with the drawer, in the same frame.
+    await page.mouse.click(360, 600);
+    const tapOut = await settle((x) => !x.sidebar, '375 a tap on the backdrop closes it');
+    want(!tapOut.sidebar && tapOut.mode === 'playground', `375 backdrop ${JSON.stringify(tapOut)}`);
     await page.setViewportSize({ width: 1536, height: 1024 });
     await H.workspace(page, 'playground');
     return { ok: !res.bad.length, top: res.top, bad: res.bad.slice(0, 8) };
@@ -1672,7 +1681,14 @@ function defineChecks() {
         const r = await page.evaluate(() => {
           const a = document.activeElement;
           if (!a || a === document.body) return { body: true };
-          const key = a.id || a.dataset.osc || a.outerHTML.slice(0, 60);
+          // One key per element: two toasts' dismiss buttons have the same markup, and with the
+          // sidebar's entries ahead of them (F002) the second one used to read as a repeat.
+          const ids = window.__oscFocusKeys || (window.__oscFocusKeys = new WeakMap());
+          if (!ids.has(a)) {
+            window.__oscFocusN = (window.__oscFocusN || 0) + 1;
+            ids.set(a, window.__oscFocusN);
+          }
+          const key = `${a.id || a.dataset.osc || a.tagName}#${ids.get(a)}`;
           const box = a.getBoundingClientRect();
           const region = document.querySelector('[data-osc="alerts"]');
           const inAlert = region.contains(a);
@@ -1792,9 +1808,10 @@ function defineChecks() {
         await enter();
         await sleep(150);
         const r = await page.evaluate(() => {
-          const header = document.querySelector('.osc-header');
+          const header = document.querySelector('[role="banner"]');
           const hb = header.getBoundingClientRect();
-          const parts = [...header.querySelectorAll('.osc-brand, .osc-nav, .osc-header-actions > *')]
+          const parts = [...header.querySelectorAll('[data-osc="header.menu"], '
+            + '[data-osc="header.brand"], [data-osc="header.actions"] > *')]
             .filter((el) => el.getBoundingClientRect().width > 0);
           const boxes = parts.map((el) => ({ el: el.className.split(' ')[0] || el.tagName, b: el.getBoundingClientRect() }));
           const overlaps = [];
@@ -1859,7 +1876,7 @@ function defineChecks() {
             if (!hit || el.contains(hit) || hit.contains(el)) continue;
             const label = hit.closest('label');
             if (label && (label.control === el || label.contains(el))) continue;
-            const bar = hit.closest('.osc-statusbar, .osc-header, [data-osc="alerts"]');
+            const bar = hit.closest('.osc-statusbar, [role="banner"], [data-osc="alerts"]');
             if (bar && !bar.contains(el)) {
               bad.push(`${el.id || el.dataset.osc || el.tagName} under ${bar.className.split(' ')[0]}`);
               break;

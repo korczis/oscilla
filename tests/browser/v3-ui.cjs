@@ -183,6 +183,7 @@
 //   no-console-errors
 'use strict';
 const { serveDist } = require('./lib/serve.cjs');
+const shell = require('./lib/shell.cjs');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -268,16 +269,9 @@ const H = {
     && c.ports === 0 && c.tracks === 0,
   waitState: (page, states, ms = RUN_MS) => page.waitForFunction(
     (list) => list.includes(window.OSCILLA.measure.state), states, { timeout: ms, polling: 50 }),
-  /** Reach a workspace through the nav; a grouped one (ANALYZE, SYNTHESIS) opens its group. */
+  /** Reach a workspace through the sidebar (lib/shell.cjs: the drawer and a group as needed). */
   navTo: async (page, ws) => {
-    const item = `[data-osc="nav.${ws}"]`;
-    const group = await page.evaluate((s) => {
-      const el = document.querySelector(s);
-      const g = el && el.closest('[data-osc-nav-group]');
-      return g && el.offsetParent === null ? g.dataset.oscNavGroup : null;
-    }, item);
-    if (group) await page.click(`[data-osc="nav-group.${group}"]`);
-    await page.click(item);
+    await shell.navTo(page, ws);
   },
   workspace: async (page, ws) => {
     await H.navTo(page, ws);

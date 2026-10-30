@@ -2,16 +2,20 @@
 // at build time into the one dist/index.html, so the file stays self-contained (ADR 0012).
 //   - package.json pins tailwindcss 3.4.x, postcss and flowbite 2.5.x exactly, as build-time
 //     (dev) dependencies;
-//   - tailwind.config.cjs carries the Pro theme of the flowbite-pro reference, section 0
-//     (primary = the Tailwind blue scale, Inter first and then the system stack, no font
-//     downloaded, transitionProperty width, the shell's safelist), darkMode on
-//     [data-theme="dark"], preflight off, the flowbite plugin with forms: false;
-//   - src/styles/tailwind.css holds at-rules only, scripts/build.mjs compiles it through
-//     Tailwind's PostCSS API, and the config and the entry are inputs of the source digest;
+//   - tailwind.config.cjs carries the Pro theme of the flowbite-pro reference, section 0, in
+//     OSCILLA's colours (issue F002, rule project.visual-identity-lock v2: primary is the
+//     tokens' blue accent, the gray scale their cockpit surfaces in both themes; Inter first and
+//     then the system stack, no font downloaded, transitionProperty width, the shell's
+//     safelist), darkMode on [data-theme="dark"], preflight on and the flowbite plugin with its
+//     form base styles (forms: true), both since F002;
+//   - src/styles/tailwind.css holds at-rules only (the base inside the cascade layer
+//     tailwind-base, F002), scripts/build.mjs compiles it through Tailwind's PostCSS API, and
+//     the config and the entry are inputs of the source digest;
 //   - dist/index.html carries the compiled Tailwind after the legacy CSS in the one <style>,
-//     with the theme, the dark selector and the safelist, without preflight and without a
-//     flowbite rule for a bare input, select, textarea, [type] or [multiple] selector (a
-//     fixture compile with forms: true shows that check finds them);
+//     with the theme, the dark selector and the safelist; its base (preflight and every flowbite
+//     rule for a bare input, select, textarea, [type] or [multiple] selector) sits inside the
+//     layer tailwind-base, so the unlayered legacy CSS wins over all of it, and none of it is
+//     outside the layer (a fixture compile of an entry without the layer shows the check bites);
 //   - the app script carries the five flowbite components the shell uses (drawer, dropdown,
 //     collapse, tooltip, tabs) and no other, started on 'alpine:initialized';
 //   - the notice names flowbite and tailwindcss (MIT), and verify-dist refuses a dist that
@@ -63,6 +67,27 @@ const OTHER_INITIALISERS = ['initAccordions', 'initCarousels', 'initCopyClipboar
 const stripCssComments = (css) => css.replace(/\/\*[\s\S]*?\*\//g, '');
 const installed = (pkg) => require(`${pkg}/package.json`).version;
 
+/**
+ * A compiled Tailwind text split at its cascade layer tailwind-base: what is inside the layer's
+ * block, and everything else. A text without the layer is all `rest`.
+ */
+function layerSplit(css) {
+  const at = css.search(/@layer\s+tailwind-base\s*\{/);
+  if (at < 0) return { base: '', rest: css };
+  const open = css.indexOf('{', at);
+  let depth = 0;
+  for (let i = open; i < css.length; i += 1) {
+    if (css[i] === '{') depth += 1;
+    else if (css[i] === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return { base: css.slice(open + 1, i), rest: css.slice(0, at) + css.slice(i + 1) };
+      }
+    }
+  }
+  throw new Error('the tailwind-base layer is not closed');
+}
+
 /** The one <style> of dist and its two parts: the legacy CSS, then the compiled Tailwind. */
 function distStyle() {
   const html = read(DIST);
@@ -110,12 +135,24 @@ function bareFormSelectors(css) {
     || /^\[(?:type|multiple)\b/i.test(compound))));
 }
 
-async function compileTailwind(config, { from = path.join(ROOT, ENTRY), dark = false } = {}) {
+async function compileTailwind(config, { from = path.join(ROOT, ENTRY), dark = false,
+  entry = read(ENTRY) } = {}) {
   const postcss = require('postcss');
   const tailwindcss = require('tailwindcss');
   const plugins = [tailwindcss(config), ...(dark ? [darkThemeSelector()] : [])];
-  const result = await postcss(plugins).process(read(ENTRY), { from });
+  const result = await postcss(plugins).process(entry, { from });
   return result.css;
+}
+
+/** The tokens.css value of a custom property, in the dark :root or the light theme block. */
+function token(name, theme = 'dark') {
+  const css = read('src/styles/tokens.css');
+  const at = css.search(theme === 'dark' ? /^:root\s*\{/m : /^\[data-theme="light"\]\s*\{/m);
+  assert.ok(at >= 0, `tokens.css has the ${theme} block`);
+  const block = css.slice(at, css.indexOf('}', at));
+  const m = block.match(new RegExp(`${name}:\\s*([^;]+);`));
+  assert.ok(m, `tokens.css defines ${name} (${theme})`);
+  return m[1].trim().toLowerCase();
 }
 
 /**
@@ -150,7 +187,7 @@ function componentClasses() {
 /** A .dark class selector (not the escaped dark: variant class, e.g. .dark\:bg-gray-900\/80). */
 const DARK_CLASS = /\.dark(?![\w\\-])/;
 
-/** The flowbite plugin with its form base styles on, compiled with the shipped config. */
+/** The shipped config (the flowbite plugin with its form base styles on), a minimal content. */
 async function compileForms(opts) {
   const config = require(path.join(ROOT, CONFIG));
   return compileTailwind({
@@ -171,11 +208,12 @@ test('package.json pins tailwindcss 3.4, postcss and flowbite 2.5 exactly, at bu
   }
 });
 
-test('tailwind.config.cjs carries the Pro theme, the data-theme dark mode and no preflight',
+test('tailwind.config.cjs carries the Pro theme in OSCILLA colours, preflight and the form base',
   () => {
     const config = require(path.join(ROOT, CONFIG));
     assert.deepEqual(config.darkMode, ['selector', '[data-theme="dark"]']);
-    assert.equal(config.corePlugins && config.corePlugins.preflight, false, 'preflight is off');
+    assert.notEqual(config.corePlugins && config.corePlugins.preflight, false,
+      'preflight is on (F002; the layer keeps it under the legacy CSS)');
     const files = Array.isArray(config.content) ? config.content : config.content.files;
     assert.ok(config.content.relative === true, 'content globs resolve from the config file');
     assert.ok(files.includes('./src/index.html'), 'content: src/index.html');
@@ -189,18 +227,28 @@ test('tailwind.config.cjs carries the Pro theme, the data-theme dark mode and no
       [`./${COMPONENT_DIR}/{${['drawer', 'dropdown', 'collapse', 'tooltip', 'tabs']}}/index.js`],
       'content: exactly the five bundled components, nothing else of node_modules');
     assert.equal(config.plugins.length, 1, 'one plugin: flowbite');
-    assert.deepEqual(config.plugins[0].__options, { forms: false },
-      'the flowbite plugin runs with forms: false');
+    assert.deepEqual(config.plugins[0].__options, { forms: true },
+      'the flowbite plugin runs with its form base styles (F002)');
     assert.equal(config.plugins[0].handler.toString(),
-      require('flowbite/plugin')({ forms: false }).handler.toString(), 'it is flowbite/plugin');
+      require('flowbite/plugin')({ forms: true }).handler.toString(), 'it is flowbite/plugin');
     assert.match(read(CONFIG), /\bplugins\s*:\s*\[\s*require\('flowbite\/plugin'\)/);
 
+    // The Pro class lists read OSCILLA's palette (rule project.visual-identity-lock v2).
     const theme = require('tailwindcss/resolveConfig')(config).theme;
-    const blue = require('tailwindcss/colors').blue;
-    for (const shade of Object.keys(blue)) {
-      assert.equal(theme.colors.primary[shade], blue[shade], `primary-${shade} is Tailwind blue`);
+    const { primary, gray } = theme.colors;
+    assert.equal(primary['600'], token('--osc-blue'), 'primary-600 is the blue accent');
+    assert.equal(primary['700'], token('--osc-blue-fill'), 'primary-700 carries white text');
+    assert.equal(primary['400'], token('--osc-focus'), 'primary-400 is the focus blue');
+    assert.equal(gray['900'], token('--osc-bg'), 'gray-900 is the dark page');
+    assert.equal(gray['700'], token('--osc-surface-3'), 'gray-700 is the dark inset and hover');
+    assert.equal(gray['50'], token('--osc-bg', 'light'), 'gray-50 is the light page');
+    assert.equal(gray['100'], token('--osc-surface-3', 'light'), 'gray-100 is the light hover');
+    assert.equal(gray['200'], token('--osc-border', 'light'), 'gray-200 is the light border');
+    for (const scale of [primary, gray]) {
+      for (const shade of ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900']) {
+        assert.match(scale[shade], /^#[0-9a-f]{6}$/, `a full scale (${shade})`);
+      }
     }
-    assert.equal(theme.colors.gray['200'].toLowerCase(), '#e5e7eb', 'the gray surface palette');
     assert.equal(theme.fontFamily.sans[0], 'Inter', 'Inter leads the sans stack');
     const system = read('src/styles/tokens.css').match(/--osc-font:\s*([^;]+);/)[1]
       .split(',').map((s) => s.trim());
@@ -211,9 +259,10 @@ test('tailwind.config.cjs carries the Pro theme, the data-theme dark mode and no
 test('the Tailwind entry holds at-rules only and the build compiles it through PostCSS', () => {
   const entry = stripCssComments(read(ENTRY)).trim();
   assert.ok(entry.length > 0, `${ENTRY} is not empty`);
-  for (const line of entry.split('\n').map((l) => l.trim()).filter(Boolean)) {
-    assert.match(line, /^@tailwind (?:base|components|utilities);$/, `${ENTRY}: ${line}`);
-  }
+  // The base inside the cascade layer tailwind-base (F002); components and utilities unlayered.
+  assert.deepEqual(entry.split('\n').map((l) => l.trim()).filter(Boolean),
+    ['@layer tailwind-base {', '@tailwind base;', '}', '@tailwind components;',
+      '@tailwind utilities;'], `${ENTRY}: exactly these at-rules`);
   const build = read('scripts/build.mjs');
   assert.match(build, /^import postcss from 'postcss';$/m, 'build.mjs imports postcss');
   assert.match(build, /^import tailwindcss from 'tailwindcss';$/m, 'build.mjs imports Tailwind');
@@ -232,8 +281,8 @@ test('the Tailwind config and entry are inputs of the source digest', async () =
 test('dist carries the compiled Tailwind after the legacy CSS, with the theme and safelist',
   () => {
     const { legacy, tailwind } = distStyle();
-    assert.ok(tailwind.startsWith('*,:before,:after{--tw-'),
-      'the Tailwind part starts with its base (variable defaults), after the legacy CSS');
+    assert.ok(tailwind.startsWith('@layer tailwind-base{*,:before,:after{--tw-'),
+      'the Tailwind part starts with its base (variable defaults) in its layer, after the legacy');
     assert.ok(!/--tw-/.test(legacy), 'no Tailwind output inside the legacy part');
     assert.ok(/\.osc-/.test(legacy), 'the legacy part is the OSCILLA stylesheet');
     assert.ok(/@media\s*\(min-width:\s*1024px\)\s*\{(?:[^{}]*\{[^{}]*\})*?[^{}]*\.lg\\:w-16\{width:4rem\}/
@@ -245,21 +294,30 @@ test('dist carries the compiled Tailwind after the legacy CSS, with the theme an
       'the dark variant (the drawer backdrop\'s) matches [data-theme="dark"]');
     assert.ok(!/prefers-color-scheme/.test(tailwind), 'dark mode is never the media query');
     assert.ok(/\.tooltip-arrow/.test(tailwind), 'the flowbite plugin base (tooltip arrows) is in');
-    // Preflight would reset html, body, headings, buttons and form controls.
-    assert.ok(!/(?:^|[},])html,:host\{|-webkit-text-size-adjust:100%/.test(tailwind),
-      'no preflight');
+    // Preflight resets html, body, headings, buttons and form controls: only inside the layer,
+    // where every unlayered legacy rule wins over it (F002).
+    const { base, rest } = layerSplit(tailwind);
+    assert.ok(/(?:^|[},])html,:host\{/.test(base), 'preflight is in the tailwind-base layer');
+    assert.ok(!/(?:^|[},])html,:host\{|-webkit-text-size-adjust:100%/.test(rest),
+      'no preflight outside the layer');
+    assert.ok(!/--tw-/.test(legacy) && !/@layer/.test(legacy), 'the legacy CSS is unlayered');
     assert.ok(!/@import|url\((?!\s*["']?data:)/.test(tailwind), 'no import and no remote url()');
     assert.ok(!/@font-face|fonts\.googleapis/.test(tailwind), 'no font is downloaded');
   });
 
-test('the built CSS carries no flowbite rule for a bare input, select or [type] selector',
+test('every flowbite rule for a bare input, select or [type] selector is inside the layer',
   async () => {
     const { tailwind } = distStyle();
-    assert.deepEqual(bareFormSelectors(tailwind), [], 'no bare form-control selector');
-    // The check bites: the same plugin with its form base styles on produces such rules.
-    const forms = await compileForms();
-    const found = bareFormSelectors(forms);
-    assert.ok(found.some((s) => /^\[type=/.test(s)), `forms: true has [type] rules: ${found}`);
+    const { base, rest } = layerSplit(tailwind);
+    assert.deepEqual(bareFormSelectors(rest), [], 'no bare form-control selector outside it');
+    const inside = bareFormSelectors(base);
+    assert.ok(inside.some((s) => /^\[type=/.test(s)), `the form base is in the layer: ${inside}`);
+    assert.ok(inside.some((s) => /^input\[type=["']?range/.test(s)), 'with the range thumbs');
+    // The check bites: the same config compiled from an entry without the layer puts them out.
+    const flat = await compileForms({ entry: '@tailwind base;\n@tailwind components;\n'
+      + '@tailwind utilities;\n' });
+    const found = bareFormSelectors(layerSplit(flat).rest);
+    assert.ok(found.some((s) => /^\[type=/.test(s)), `without the layer: [type] rules ${found}`);
     assert.ok(found.some((s) => /^select\b/.test(s)), 'and select rules');
     assert.deepEqual(bareFormSelectors('.osc-x input.osc-y{a:b}[data-type=x]{a:b}'), []);
   });
