@@ -779,26 +779,52 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
       return true;
     },
 
-    async preflight() {
+    /**
+     * opts.otherAudio: the caller's fact that an output owner the engine does not count (the
+     * sequencer, the Studio transport) sounds, as a boolean or a probe () => boolean; reported
+     * as output.otherAudio with the engine voices. Both are read where the input level is read
+     * (C016 review R-2, R-5): when its window is scheduled, for the voices that still sound at
+     * its start, and after it, for a source started during it; without a reading, at the end.
+     * A voice Measure stopped just before this check is still fading when the check starts and
+     * silent when the window opens, so it is not counted.
+     */
+    async preflight(opts) {
       dropLive('measurement');
       const since = epoch;
+      const given = opts ? opts.otherAudio : undefined;
+      let voices = null;
+      let other = false;
+      const sample = (t) => {
+        const n = t !== undefined && typeof engine.audibleVoiceCountAt === 'function'
+          ? engine.audibleVoiceCountAt(t) : engine.audibleVoiceCount || 0;
+        voices = Math.max(voices || 0, n);
+        let busy = false;
+        try { busy = typeof given === 'function' ? !!given() : given === true; }
+        catch (e) { busy = false; } // the caller's probe never fails the check
+        other = other || busy;
+      };
       const facts = {
         audioContext: { available: true, state: null },
         sampleRate: null,
         permission: kind === 'loopback' ? 'not-required' : 'unknown',
         input: null,
         inputLevel: null,
-        output: { gain: engine.gainLevel, maxGain: MAX_OUTPUT_GAIN,
-          audibleVoices: engine.audibleVoiceCount || 0 },
+        output: null, // set by done(), from the samples taken at the level read
         worklet: null,
         testContext,
+      };
+      const done = () => {
+        if (voices === null) sample();
+        facts.output = { gain: engine.gainLevel, maxGain: MAX_OUTPUT_GAIN, audibleVoices: voices,
+          otherAudio: other || voices > 0 };
+        return facts;
       };
       let ctx;
       try {
         ctx = await ensureContext({ requireRunning: false });
       } catch (e) {
         facts.audioContext = { available: false, state: null };
-        return facts;
+        return done();
       }
       facts.audioContext.state = ctx.state;
       facts.sampleRate = ctx.sampleRate;
@@ -809,7 +835,7 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
           .message || workletError) : null, loader: m === 'audioworklet' ? 'data:' : null };
       } catch (e) {
         facts.worklet = { supported: false, mode: null, error: e.message };
-        return facts;
+        return done();
       }
       try {
         const inp = await ensureInput(ctx, since);
@@ -819,7 +845,7 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
         if (me.code === 'ABORTED') throw me;
         facts.input = { ok: false, error: { name: e && e.name, code: me.code,
           message: me.message } };
-        return facts;
+        return done();
       }
       if (ctx.state === 'running') {
         try {
@@ -827,7 +853,10 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
           await freshClock(since);
           const sr = ctx.sampleRate;
           const start = ceilFrame(ctx.currentTime + SCHEDULE_LEAD_S, sr);
-          const w = await openWindow(ctx, start, Math.round(PREFLIGHT_LEVEL_S * sr), null);
+          const p = openWindow(ctx, start, Math.round(PREFLIGHT_LEVEL_S * sr), null);
+          sample(start / sr); // what still sounds when the window opens
+          const w = await p;
+          sample(); // and what sounds after it (started during the reading)
           let s = 0;
           let peak = 0;
           for (let i = 0; i < w.samples.length; i++) {
@@ -843,7 +872,7 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
           facts.inputLevel = null;
         }
       }
-      return facts;
+      return done();
     },
 
     async captureNoise(seconds, { notBefore = null, onScheduled, onChunk } = {}) {
