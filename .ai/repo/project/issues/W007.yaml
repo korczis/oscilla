@@ -1,0 +1,50 @@
+id: W007
+milestone: M101
+serves:
+- "instrument-kinds#piano-surface"
+title: "Piano kind with 88 keys: a named button per key, octave scroll and zoom, velocity by position, a vertical orientation, on K026's keyboard model"
+slug: piano-kind-with-88-keys-a-named-button-per-key-octave-scroll
+priority: p1
+profile: implementation
+objective: "Lands as feat(midi). The piano kind over K026's src/js/midi/keyboard.js and keyboard-view.js (one key map, one layout; no copy): range A0-C8 (MIDI 21-108); the visible range computed from the width so a white key is at least 44 px (8 white keys at 390 px portrait, two octaves at 844 px landscape, four at 1536 px); an octave scroll (two buttons and a role=slider for the lowest visible note) and a zoom; velocity by the pointer's position on the key (lower is louder, stated) or MIDI velocity; orientation horizontal or vertical (for the piano roll, W011); the scale highlight as a shape mark; lights per source; and DOM keys instead of K026's canvas drawing: one button per visible key, white keys in a flex row and each black key an absolutely positioned child of the white key before it, all with literal Tailwind utilities (no canvas, no el.style; K026's canvas.style writes leave), named 'C sharp 4', aria-pressed while held, the group named 'Keyboard: plays <target>'. Its sizing uses Tailwind utilities, not canvas.style writes. First consumer: K026's Playground and Studio keyboard; K065, K115, K142, K070 and W011 then mount it. Before: INFERRED from the K026 worktree, a canvas of a few octaves with one list for assistive technology. After: 88 keys, each a named button. Negative cases: a key outside 21-108 (none drawn); a field or dialog focused (no key plays); blur, hide and Escape (every note released, ADR 0062); Space (never a key, ADR 0050). Rollback: revert; no saved state depends on it. Merged plan of the component follow-up (2026-10-30): Wave 1: it needs F001 and K026 (#299). K065 and K115 depend on W007 and keep only their placement; K142 plays the generator through the same kind."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs, knowledge and interlinking, and add more; add p5.js, WebGL and interactivity, and deploy; a full DAW, a full sequencer and a full piano, everything interlinked, clickable, parameterized and joined; knobs, sliders and control panels done one generic way, integrated with Majordomus; the landing easy to use, easy to extend and open to hack; mobile first. The architecture still binds: one AudioEngine, the Studio model canonical, typed ports, one offline file under the 1.2 MB gzip budget, the cockpit identity, no fake science, Flowbite Pro (ADR 0061). Design: the instrument-kinds design of 2026-10-29 (scratchpad components-followup/components-new.md), on the component-system design (G001-G019) and the synth and studio-siggen drafts of the same day, facts checked against origin/main cdda563c."
+scope:
+- src/js/midi/keyboard.js
+- src/js/midi/keyboard-view.js
+- src/js/midi/keyboard-ui.js
+- src/js/ui/kinds/piano.js
+- src/js/ui/catalog/kinds/piano.js
+- src/index.html
+- tests/unit/ui-kind-piano.test.mjs
+- tests/browser/midi.cjs
+- tests/unit/ui-flowbite-pro-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- W001
+- K026
+- F001
+- Q063
+acceptance_criteria:
+- "tests/unit/ui-kind-piano.test.mjs fails on the merge base: the layout spans 21-108 and nothing outside; every visible key has a named button; white keys are 44 px or wider at 390, 844 and 1536 px; velocity by position is monotonic and bounded; scrolling keeps the focused key; every held note is released on the forced-release events; the key map is K026's (one import, no copy)."
+- "Negative cases, each asserted by a test that fails on the merge base: the four of the objective."
+- "Definition of done, tested: tests/browser/midi.cjs plays A0 and C8 by pointer, by keyboard on a focused key and by two simultaneous hasTouch points, waits with until() (deadline 'piano note sounding', 2 s) for the note layer's held notes and the key's aria-pressed, then releases on Escape; at 390x844 the octave scroll reaches C8 by buttons, the slider and PageUp. The check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, runs at 1536x1024 and 390x844, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, extends: K026; interlinks: the group's target name jumps to the instrument it plays."
+- "Definition of done, interactivity: pointer with glissando, multi-touch, the computer keyboard when armed, MIDI (ADR 0058's support states unchanged)."
+- "The black keys' target exemption is the one Q063 records, stated in the kind."
+- "Definition of done, docs, menus and routes: the kind's declaration names its docs, links and tests; docs/ui-catalog.md (G014) lists it; the Keyboard shortcuts dialog lists its keys; tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Its trace entry in scripts/ui-catalog/trace/kinds.mjs names the intent criterion, this issue, its rules, ADRs and tests, each resolved by the trace check, for the Majordomus knowledge projection."
+- "The kind's modules pass W001's static scan: no import of src/js/studio/actions.js, a store, sources.js or a lab module; no dispatch or owner writer called; no AudioContext, AudioNode or worklet created (project.audio-engine-discipline v2: one AudioEngine); no requestAnimationFrame, setInterval or setTimeout outside src/js/charts/frame-loop.js; no allocation in a frame callback (1000 ticks keep the same typed arrays) and frameSubscriberCount() returns to its value after destroy()."
+- "Its chrome (buttons, button groups, popovers, dropdowns, inputs) is markup adapted from the matching Flowbite Pro block and names its flowbite-pro reference.md section; its instrument surface is a domain view under ADR 0061 decision 3 as J001's ADR 0061 resolution note records it: inline SVG or canvas and Tailwind utilities inside a Pro card, no stylesheet, no selector, no osc-* class token, no el.style write or style attribute; no osc-* name in the ratchet record rises and the domain views' stylesheets gain nothing (project.ui-uses-flowbite-pro, project.visual-identity-lock v2, ADR 0061; node scripts/ui-flowbite-pro-record.mjs --check and node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "No input path of the build gains a components, widgets, ui-kit or design-system segment (the COMPONENT_LIBRARY check of scripts/ui-flowbite-pro-measure.mjs): declarations live in src/js/ui/catalog/kinds, views in src/js/ui/kinds."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat change it carries a unit test that fails on the merge base (project.fail-first)."
+- "scripts/size-report.mjs shows at most 3 KB gzip added, compiled CSS included, with the base and head figures in the pull request body, inside the component line's cap Q037 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+- node --test tests/unit/ui-kind-piano.test.mjs
+- node tests/browser/midi.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-30'

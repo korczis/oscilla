@@ -1,0 +1,25 @@
+id: definition-of-done
+title: "Every update meets the owner's definition of done, and a base-branch script judges what of it a pull request can show"
+statement: "The owner set on 2026-10-29 (relayed in Czech by the coordinator) a definition of done for every update: it extends something, it cross-links, it adds charts, dynamics or interactivity, it updates markdown, docs, menus, pages and routes as needed, it is fully tested and functional, and it is deployed. Rule project.definition-of-done v1 makes the checkable part a gate, judged by the base branch's copy of its script as project.review-verdict and project.fail-first are; deployment is held after merge by the release cadence."
+invariants:
+- "The judge is the base branch's copy, so a pull request cannot weaken it"
+- "A waiver names a real reason in the body's prose"
+- The rule names its enforcement (project.rules-name-their-enforcement)
+milestones:
+- M083
+satisfaction:
+- id: done-judged
+  criterion: "A pull request that changes src/ without the definition-of-done section, a browser test, a doc, a tests/README.md row, a route test or an integration-map row (where the base holds the map) is refused unless it waives the item with a reason"
+  evidence: command
+  ref: node --test tests/unit/definition-of-done.test.mjs
+governance:
+- "rule:project.rules-name-their-enforcement"
+- "rule:project.review-verdict"
+- "rule:project.fail-first"
+- "rule:project.deploy-often"
+- "rule:project.ci-bounded"
+non_goals:
+- "Judging whether a change is good: the reviewer's verdict does that"
+- Judging deployment inside the pull request
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

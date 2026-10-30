@@ -1,0 +1,61 @@
+id: K062
+milestone: M064
+serves:
+  - "connected-instrument#synth-panel"
+  - "connected-instrument#integration-map"
+  - "connected-instrument#one-transport"
+title: "Synth workspace: the panel as Pro cards with knobs on the one Studio store"
+slug: synth-workspace-the-panel-as-pro-cards-with-knobs-on-the-one
+priority: p1
+profile: implementation
+objective: "Lands as feat(synth). A new workspace synth (#m=synth, sub-view sv=panel) in the Pro shell: page header with breadcrumb, the transport group (Play/Stop, tempo, Tap, Loop) of the one Studio transport, presets dropdown and Open in Studio; the panel as a responsive grid of Pro cards, one per module, showing every parameter of its node on its face (owner decision of 2026-10-29: every parameter on a box face, not a subset), with collapse and expand first-class: each card's header is a disclosure button with aria-expanded, a collapsed card keeps its jacks, label and a one-line summary from the registry, Expand all and Collapse all act on the panel, and the expanded set is view state (persisted per view, never in history or the hash); every continuous parameter a K058 knob bound to NODE_PARAM_SET and every amount knob to EDGE_UPDATE of its normal or patched edge, disabled with its reason when nothing is patched. It reads the store from the handle createStudioUi returns (the Studio workspace still calls createStudioStore once; tests/unit/v4-one-studio-store.test.mjs stays green) and adds at most 300 B to src/js/main.js, else it waits on K028's wiring module. SPACE_OWNER (keyed by app.js WORKSPACES) gains synth: 'studio' and WORKSPACE_LABELS its label, and the Studio keydown handler of src/js/ui/studio/workspace.js, which acts only while the workspace is studio, also acts in synth (ADR 0050's table gains its row). Its place in the sidebar and its sub-views follow Q019. Opening the workspace with no panel in the model offers 'New Synth voice' (K061). Before: there is no instrument front panel. After: the Synth workspace shows the voice as cards of knobs on the one store. User-value tier 1 of 4 (synth-design.md section 17). Rollback: revert the pull request; no saved state depends on it. Merged plan of the component follow-up (2026-10-30): Its cards are N008 panels. The folding owner is stated, not unified (params-controls.md section 7.1): a Synth-workspace card's folding is view state (K062: persisted per view, never in history or the hash), a Studio box's folding is node presentation state (V622: saved, undoable, never hashed), and the two projections of one node fold independently."
+why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
+scope:
+  - "src/js/ui/synth"
+  - "src/js/ui/app.js"
+  - "src/js/ui/navigation.js"
+  - "src/js/ui/shortcuts.js"
+  - "src/js/ui/studio/workspace.js"
+  - "src/js/main.js"
+  - "src/index.html"
+  - "src/partials"
+  - ".ai/repo/adrs"
+  - "tests/unit/v4-shortcuts.test.mjs"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/unit/source-size-baseline.json"
+  - "tests/browser/integration-map.json"
+  - "tests/visual"
+  - "README.md"
+  - "package.json"
+  - "tests/unit/synth-workspace.test.mjs"
+  - "tests/browser/synth-panel.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K058"
+  - "K061"
+  - "K104"
+  - "F002"
+  - "K075"
+  - "Q019"
+  - "N008"
+acceptance_criteria:
+  - "tests/unit/synth-workspace.test.mjs, failing on the merge base: the panel projection maps every module of the panel definition to its node and every knob to its parameter or edge, every registry parameter of every panel node has a control on its card, collapsing a card keeps its jacks and summary and changes no model, history or revision, a knob gesture produces exactly one NODE_PARAM_SET or EDGE_UPDATE, SPACE_OWNER maps synth to studio, and Space in the Synth workspace reaches the transport handler."
+  - "The visual references gain the Synth workspace at 1536x1024 and 390x844 in each theme that has references, with the reason 'new Synth workspace' in the pull request body (npm run test:visual)."
+  - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: an amount knob with nothing patched (disabled with its reason); Space in a focused text field; main.js over its cap."
+  - "A browser check in tests/browser/synth-panel.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: Open in Studio shows the panel's nodes selected in the Studio graph at the same store revision, Back returns to #m=synth with focus on its heading, and reload keeps the workspace, sub-view and panel. Real-time: turning the Low-pass cutoff knob changes the runtime's cutoff AudioParam target (read back from the graph) and the Studio Inspector's value for that node, each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: every knob of the panel is reached by Tab and changed by arrow keys, one knob by pointer drag and one by touch drag; Space plays and stops the transport; the workspace heading, the tabs (role=tab) and the knobs (role=slider) are asserted in the accessibility tree. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Every edit is one undoable dispatch through the one Studio store (a continuous gesture is one history entry, undo and redo restore the exact serialized model) and the model holds plain data only (project.studio-model-is-canonical); every connection goes through canConnect and full-model validation, and a refusal shows the validator's sentence and leaves model, history and runtime unchanged (project.typed-ports, project.no-silent-feedback)."
+  - "Every link it adds (open in, send to, a modulation route, a probe or a jump between views) is a row of tests/browser/integration-map.json, and tests/browser/integration-map.cjs walks it: the control works by pointer and by keyboard, the target shows the same Studio revision, focus lands on the target heading, and Back, Forward and reload keep the state."
+  - "Every string it adds passes tests/unit/instrument-wording.test.mjs (added by K059): no product, brand or model name, no analog-modelling or vintage claim, and every approximation it makes labelled where it is shown (project.no-fake-science)."
+  - "Its chrome uses the Flowbite Pro component where Pro has one (card, button, button group, input, dropdown, tabs, tooltip, popover), adapted from that block, lands after F002, is recorded as migrated (never pending) and lowers or keeps the ratchet; the instrument visuals Pro has no component for (the knob arc, the cable layer, the piano keys, the pad surface) are inline SVG and Tailwind utilities inside Pro cards, as the ADR 0061 resolution note of K058 records; it adds no osc-* class token, no legacy selector, no inline style and no stylesheet (project.ui-uses-flowbite-pro, project.visual-identity-lock v2, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs); every continuous instrument parameter it shows is the knob of K058 (D11)."
+  - "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no review verdict is needed; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+  - "scripts/size-report.mjs shows at most 6 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; it does not wait on Q023, and its figure joins the line's sum once Q023 records the cap, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/synth-workspace.test.mjs"
+  - "node tests/browser/synth-panel.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-30
