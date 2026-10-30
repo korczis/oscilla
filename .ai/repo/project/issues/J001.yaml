@@ -1,0 +1,31 @@
+id: J001
+milestone: M118
+serves:
+- "component-system#majordomus-served"
+title: "The component contract and registry ADR, and the ADR 0058 note on knobs and MIDI controllers"
+slug: the-component-contract-and-registry-adr-and-the-adr-0058-not
+priority: p1
+profile: implementation
+objective: "Lands as docs(adr). Files the decision drafted in components-followup/plan/majordomus-kb-adr/adr/ with majordomus adr propose (the number is allocated then: 0062 is held by #299 (feat/k026-qwerty-piano) and 0063 by the G1 coherence ADR of #285, so the next free number was 0064 on 2026-10-29): one declaration per component in a registry built into the single file; the catalogue holds no value, resolves no state path, subscribes to nothing, evaluates no condition and registers no directive; a closed list of kinds, each with its interface and a contract test; a trace per declaration (plan, serves, rules, adrs, tests, claims, features, moments, since) kept outside src/ and inherited parameter to component to family; Majordomus served from a generated knowledge/v1 projection under .ai/repo/knowledge/components/ with a context README whose tracks are the declared source modules; and a check that fails a component with no plan or knowledge link. Appends the resolution note of 2026-10-29 to ADR 0058: a knob is a view of a parameter declaration; a MIDI controller reaches a parameter only as a midi-cc node and a typed CONTROL edge in the Studio model (a modulation, never a write of the stored value); Learn is an item of the one control menu; MEASURE settings are never mapped; the 7-bit value goes through the declaration's scale; the support-state table is unchanged. Adds the new decision's line to .ai/repo/adrs/README.md. Before: no decision says how a component is declared or how Majordomus reaches it, and ADR 0058 does not say what a controller may change. After: both are recorded as proposed. Negative cases: a related reference that does not resolve; a status other than proposed. Rollback: revert; records only. Merged plan of the component follow-up (2026-10-30): J001 also lands the ADR 0061 resolution note for the instrument visuals (adr/0061-resolution-note-instrument-views.md: knob, piano keys, step cells, piano roll, XY pad, jacks and cables, meter bar, scope trace are domain views inside Pro cards, inline SVG or canvas with literal Tailwind utilities, no stylesheet, no osc-* name, no el.style; the exemption is not widened). It subsumes the note K058 planned and the question Q061 asked. It is wave 1: K058, N001 and W001 cite it."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs and knowledge base, interlink them and add more; knobs, sliders and control panels in one generic way, Majordomus integrated: each component and parameter declaration carries its intent, issue and rule ids, a deterministic generator projects the registry into .ai/repo/knowledge so that Majordomus serves it (context resolve, why, traceability), and a check fails when a component has no plan or knowledge link. Design: components-followup/majordomus-kb-adr.md of this plan change, measured with Majordomus 1.0.0-alpha.1 (the CI pin) and 1.0.0-alpha.8 on a throwaway copy of origin/main cdda563c."
+scope:
+- .ai/repo/adrs
+depends_on: []
+acceptance_criteria:
+- "majordomus adr check reports every identity unique, every status known and every reference resolving, under the pinned Majordomus and the launcher's (measured on a throwaway copy on 2026-10-29: 62 decisions, 0 problems, with the draft numbered 0063 and the 0058 note appended)."
+- "The new decision's status is proposed and the 0058 note leaves every section above '## Resolution notes' and the status unchanged; the note names the planned work it binds (K058, K077, N001, N004, N005, N006, Q062) by plan id only, never a rule id that is not in force (project.rules-name-their-enforcement)."
+- "npm test passes, including tests/unit/knowledge-integrity.test.mjs (every path the records name exists), and majordomus knowledge validate reports no new finding."
+- "Definition of done, extends: ADR 0058 gains its knob note; the decision record set gains the component contract that G001, N001, N003, K105, V619, W001 and Y001 build on."
+- "Definition of done, interlinks: The new decision names rules project.ui-uses-flowbite-pro, project.studio-model-is-canonical, project.typed-ports, project.single-file-deliverable and project.no-inert-surfaces and ADRs 0030, 0032 and 0061; majordomus knowledge related rule:project.typed-ports lists it."
+- "Definition of done, interactivity: none: a decision record (stated)."
+- "Definition of done, docs, menus and routes: .ai/repo/adrs/README.md lists the new decision and why it is proposed; no route changes."
+- "Definition of done, tested: majordomus adr check and npm test (no browser surface; stated)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+- "Docs-only: not a feat or fix change, so project.fail-first does not apply; its paths are not guarded, so no review verdict is needed."
+validation:
+- majordomus adr check
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-30'

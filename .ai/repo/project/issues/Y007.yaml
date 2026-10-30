@@ -1,0 +1,54 @@
+id: Y007
+milestone: M096
+serves:
+- "gl-live-views#views-interactive"
+title: "Markers: pinned chart markers with live readouts, linked across the spectrum, density, spectrogram 2D and 3D and XY views"
+slug: markers-pinned-chart-markers-with-live-readouts-linked-acros
+priority: p2
+profile: implementation
+objective: "Lands as feat(charts). Enter on a focused plot surface, or the Pin button of the readout, pins a marker at the cursor (the order's 'probe'; the word stays the Studio probe tap's, V616); up to four markers per quantity, numbered 1-4 on the plot and in a Pro table under the card. A frequency marker is published on K053's cursor bus (link.js, keyed by quantity), so a marker pinned on the spectrum appears on the density layer, the 2D and 3D spectrogram and the mic spectrum at the same frequency, and K025's shared tuning cursor is one of its readers. Each marker row shows its live readout, rewritten at most 4 times a second through K053's live-readout.js with the 'live' and 'held' markers: frequency with the bin resolution K030 prints, level dB rel, and per view what it measures (density %, age and quantized level of the newest column, L/R at an XY point). Delete on a focused marker or its row's remove button removes it; Copy readouts copies the table as text with the provenance line. Markers are ephemeral view state: not in the StudioModel, not in history, not in the URL, cleared by Clear markers and by a change of the analysis axes, which the state note states. Merged plan of the component follow-up (2026-10-30): The pinned markers are view state held by the workspace that shows them and passed to markers.js, which is pure (add, remove, readout rows); the cursor bus carries them and holds none, so no chart module owns marker state."
+why: "Owner orders of 2026-10-29 (session oscilla-b0, in Czech): add p5.js, WebGL and interactivity and deploy; plan WebGL renderers for the scrolling spectrogram (with a 3D option), a phosphor XY scope and a live spectrum, falling back to canvas/p5 when WebGL is unavailable, one frame loop with no per-frame allocation, the single file and its gzip budget, axes and units from the analysis (no-fake-science). Built on the M062 charts plan (#269, merged as cdda563c): the frame loop K036, the interaction kit K053, the shared zoom K052, the level history K033 and the chart-cost check of K036 are reused, never duplicated (components-followup/render-gl.md)."
+scope:
+- src/js/charts/markers.js
+- src/js/charts/interaction
+- src/js/charts/gl
+- src/js/charts/spectrum-chart.js
+- src/js/charts/spectrogram-view.js
+- src/js/labs/phase-stereo.js
+- src/index.html
+- src/partials
+- tests/unit/chart-markers.test.mjs
+- tests/browser/gl-markers.cjs
+- tests/unit/chart-host-census.json
+- tests/unit/ui-flowbite-pro-baseline.json
+- src/js/ui/shortcuts.js
+- tests/README.md
+- package.json
+- dist
+depends_on:
+- Y003
+- Y004
+- Y005
+- Y006
+- K025
+- K053
+acceptance_criteria:
+- "As a feat change it carries tests/unit/chart-markers.test.mjs: a marker published on the bus reaches every subscriber of its quantity and no other; the fifth marker is refused with its sentence; an axes change clears and notifies; the copied text carries the provenance line; nothing is written to the model, history or URL, which fails on the merge base (project.fail-first)."
+- "tests/browser/gl-markers.cjs: a marker pinned with Enter on the spectrum appears on the density layer, the 2D and the 3D spectrogram at the same frequency; its row's readout follows a frequency change of the tone within the 4-per-second bound; Delete removes it everywhere; touch: a long press on the readout's Pin button pins. Every GL check states per gate browser and OS whether it drew on WebGL 2, WebGL 1 or was skipped, with the reason Y001 recorded for that leg (no leg claims a GL path it did not draw), and the same check runs with ?gl=0 on every leg and passes on the Canvas 2D path. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline and assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac); tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+- "Enter and Delete are not in K053's key map (its objective lists arrows, PageUp, PageDown, Home, End and the zoom keys); this slice adds them to keys.js and to the chart rows of src/js/ui/shortcuts.js, the one list the shortcuts dialog shows; neither takes Space, Tab, letters or Escape (K053's key map, ADR 0050)."
+- "Levels say dB relative (dBFS-like) unless a valid LevelCalibration applies; every axis, tick, unit and caption comes from the analysis descriptor axesOf() and never from a constant (the static scan of tests/unit/gl-views-wording.test.mjs finds no sample-rate, Nyquist or dB-range literal under src/js/charts/gl); no data value is tweened or eased; every string it adds is registered in its chart's wording table and passes tests/unit/charts-readout-wording.test.mjs; the word waterfall is never displayed (D7; it stays a search alias only) (project.no-fake-science)."
+- "Chart chrome (toolbar, toggle, badge, tooltip, readout row, marker table) is Flowbite Pro markup adapted from the matching Pro component and lands after F002 turned on preflight and the form base styles and after the card issue of its workspace placed the card; no osc-* class token or legacy selector is added, no name of the new modules or strings carries an osc- prefix, and src/styles/tokens.css, charts.css, measure.css, studio.css and studio-timeline.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs and node scripts/ui-flowbite-pro-record.mjs --check). The GL canvas is a domain view inside the card."
+- "The view reads existing AnalyserNodes or the CPU-held analysis data on the main thread only, creates no audio node, adds no work to the audio path and writes no DOM per frame (project.audio-engine-discipline v2)."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no review verdict is needed."
+- "The owner's definition of done, one item each: extends the K053 cursor into pinned, linked markers; interlinks spectrum, density, spectrogram 2D and 3D, mic and XY views through one bus; interactive: pin, remove, copy, live readouts; docs, menus and routes: the shortcuts dialog rows, docs/renderers.md; tested with pointer, keyboard and touch; deployed by merge commit under project.deploy-often (Pages deploys on the merge)."
+- "Designed at 390x844 first: every check runs at 390x844 and at 1536x1024, touch targets are at least 44 px, and each gesture has a pointer, a keyboard and a touch path."
+- "scripts/size-report.mjs shows at most 2 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of the Y line's figures stays within the component line's cap Q037 records, under the gzip budget of scripts/build-config.mjs (1 000 000 B on main at b67d1e58, 1 200 000 B once #279 lands; project.single-file-deliverable)."
+- "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+- node --test tests/unit/chart-markers.test.mjs
+- node tests/browser/gl-markers.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-30'

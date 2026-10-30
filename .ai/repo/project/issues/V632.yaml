@@ -1,0 +1,35 @@
+id: V632
+milestone: M080
+serves:
+- "studio-box-system#model-and-views"
+title: "Selection, viewport and the selected cable survive Expand, Back and browser fullscreen"
+slug: selection-viewport-and-the-selected-cable-survive-expand-bac
+priority: p2
+profile: implementation
+objective: "P04 slice B (cross-view identity). Lands as test(studio-ui) with any fix it forces as fix(studio-ui). A check 'view-identity' in tests/browser/v31-studio-graph.cjs asserts one identity across the two surfaces that exist on main, the compact Studio of the Playground and Synthesis workspaces and the full Studio, and across browser fullscreen where the browser grants it: the selected nodes, the selected edge, the Inspector target and the viewport are equal before and after Expand, Back and entering and leaving fullscreen; a chip selected in the compact Studio is selected and framed in the full graph after Expand. The existing compact-sync check replaces its sleep(150) and sleep(120) with until() conditions, shrinking tests/browser/timing-baseline.json. The Synth workspace of the synth line is a third surface only once it exists; this slice claims nothing about it (PROPOSED there)."
+why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings S1-S14 measured on origin/main b67d1e58)."
+scope:
+- tests/browser/v31-studio-graph.cjs
+- tests/browser/timing-baseline.json
+- src/js/ui/studio/compact.js
+- src/js/ui/studio/workspace.js
+- tests/README.md
+- dist
+acceptance_criteria:
+- "Before: VERIFIED: the compact Studio (Playground, Synthesis) and the full Studio read one store (compact.js header; check compact-sync of tests/browser/v31-studio-graph.cjs, which still waits with sleep(150)); browser fullscreen exists, feature-detected (workspace.js V422). UNKNOWN: whether selection, viewport and the selected edge survive Expand, Back and fullscreen in every browser, because no check asserts it."
+- "After: a check asserts that the selected nodes, the selected edge, the viewport and the Inspector target are the same after compact to full (Expand), full to compact (Back) and entering and leaving browser fullscreen, and compact-sync waits through until() instead of sleep."
+- "Negative cases: a node deleted in one view is gone from the selection in the other (pruned, not stale); fullscreen refused by the browser leaves selection and viewport as they were and states FULLSCREEN_BLOCKED; no view keeps its own copy of the topology."
+- "Rollback: revert the merge commit. Nothing changes the schema, a studioHash or a stored record, so documents saved while it was live load unchanged after the revert."
+- "The check fails on a fixture build whose Expand drops the selection (mutation) and passes on main if main already holds identity, in which case the slice records that as VERIFIED evidence and lands only the timing change; a fix it forces carries a unit test that fails on the merge base (project.fail-first)."
+- "Fullscreen refused by the browser (headless, or an embedding page) is a stated skip with FULLSCREEN_UNSUPPORTED or FULLSCREEN_BLOCKED, never a pass."
+- "Definition of done: extends compact-sync of tests/browser/v31-studio-graph.cjs; cross-links the compact Studio, the full Studio and fullscreen; dynamics: none beyond the existing views (stated); docs: docs/v31/user-guide.md states what Expand keeps; tested: pointer (Expand, chip), keyboard (Enter on Expand and chips, Back), touch (tap the chip and Expand in a hasTouch context), each wait an until() with a named deadline; deployed with the next release."
+- "Wave 1: it adds no class token, selector, markup surface or inline style, so the Flowbite Pro record does not change: node scripts/ui-flowbite-pro-record.mjs --check passes with no rewrite and node --test tests/unit/ui-flowbite-pro.test.mjs passes (project.ui-uses-flowbite-pro); live drawing is on a canvas, a domain view."
+validation:
+- "node tests/browser/v31-studio-graph.cjs --only view-identity,compact-sync"
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'
+depends_on:
+- V631

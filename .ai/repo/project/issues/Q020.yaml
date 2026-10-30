@@ -1,0 +1,21 @@
+id: Q020
+milestone: M070
+title: "Owner decision: knobs beyond the Synth workspace"
+slug: owner-decision-knobs-beyond-the-synth-workspace
+priority: p2
+profile: routine
+owner: "repository owner"
+objective: "D11 makes the knob the control of every continuous instrument parameter in the Synth workspace. The Studio Inspector shows the same parameters with Pro range sliders and numbers. The plan recommends that the Inspector's continuous node parameters use the same knob (one control for one parameter definition), while labs, MEASURE and settings keep Pro range and number inputs."
+why: "Asked by the connected-instrument plan (owner direction of 2026-10-29). .ai/repo/project/README.md: work that waits on an answer names the Q issue in depends_on."
+current_state: "Open on 2026-10-29. The plan's recommendation is not an answer. K096 name this issue in depends_on, so majordomus plan next does not hand them out before it is answered."
+scope:
+  - ".ai/repo/project/issues/Q020.yaml"
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision), either in the owner's words with date and source, or as a decision of a coordinating session under an owner delegation it quotes with its date, stating its reasoning and that the owner may override it; a worker without such a delegation never answers it."
+  - "The answer says whether the Inspector moves to knobs, and names any other surface that does."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-10-29
+updated_at: 2026-10-29
