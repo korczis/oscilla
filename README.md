@@ -77,7 +77,9 @@ changed.
   oscillator.
 - **Analyzer:** a live spectrum on log or linear frequency axes, with the requested frequency
   marked.
-- **Spectrogram:** a scrolling time-frequency view, with level shown as colour.
+- **Spectrogram:** a scrolling time-frequency view, with level shown as colour. Freeze,
+  Pause animation and a hidden page pause its time axis: the paused interval is left unwritten,
+  never filled with the first spectrum read afterwards.
 - **Microphone analyzer and compare:** your microphone's spectrum and spectrogram, the detected
   frequency with its uncertainty, and a generator-versus-microphone comparison with freeze,
   averaging and peak hold.

@@ -18,8 +18,16 @@
 // Time axis: columns advance with wall time (timeSpanS across the canvas width). When several
 // columns are due in one frame (dropped frames) the latest analyser snapshot is repeated:
 // sample-and-hold of a real measurement. Freezing or a hidden document pauses the time axis;
-// nothing is written for the paused interval. A null spectrum (no analyser yet) or silence
-// writes the floor colour — never synthetic data.
+// nothing is written for the paused interval. A gap longer than MAX_PUSH_GAP_MS between two
+// pushes is a pause as well (the caller's frame loop stopped calling, or the main thread
+// stalled): the axis restarts there with one column instead of holding one snapshot across
+// the gap, which would paint time that was never measured (C014). The bound is a little more
+// than one analyser window (8192 samples at 44.1 kHz is 186 ms), so the held snapshot still
+// describes the interval it fills. A null spectrum (no analyser yet) or silence writes the
+// floor colour — never synthetic data.
+
+/** Longest wall-clock gap between two pushes that is filled by sample-and-hold (ms). */
+export const MAX_PUSH_GAP_MS = 250;
 
 export const DEFAULT_SPECTROGRAM_STOPS = Object.freeze([
   { at: 0.0, color: [3, 5, 16] }, // floor: near-black navy
@@ -297,7 +305,7 @@ export function createSpectrogram(canvas, options = {}) {
       return 0;
     }
     if (!map) return 0;
-    if (lastNow == null) {
+    if (lastNow == null || nowMs - lastNow > MAX_PUSH_GAP_MS) {
       lastNow = nowMs;
       acc = 1;
     }
