@@ -24,12 +24,26 @@
 //                        an instantaneous feedback loop → refused with the §39 sentence
 //   cable-to-blank       a cable dropped on blank canvas opens the picker of compatible types;
 //                        choosing one adds the node AND the connection as one undo entry
+//   cable-reroute        K008: a cable dropped on an occupied input replaces its cable; a cable
+//                        dragged off its input is re-routed to another input or deleted on
+//                        empty canvas; each is one undo entry (undo restores it); a type
+//                        mismatch and a feedback loop are refused with their sentence and
+//                        leave the model and the history as they were, the picked-up cable
+//                        drawn again where it was
+//   graph-keys-k009      K009: Shift+Delete on the Envelope deletes it and bridges Oscillator ->
+//                        Filter in one undo entry; M mutes the clicked cable and M again
+//                        unmutes it (is-muted drawn); L tidies the graph in one undo entry and
+//                        a second L changes nothing (it says the graph is already tidy)
 //   select-delete-cable  clicking a cable selects it (Inspector: Connection); Delete removes it
 //   multi-select         Shift-click, Shift-drag rectangle; Ctrl/Cmd C, V (new ids, offset,
 //                        internal edges kept), Ctrl/Cmd D; Delete removes nodes and their edges;
 //                        focus lands on a node, never on <body>
-//   pan-zoom-frame       blank-canvas drag pans, wheel zooms at the pointer (logical point kept),
-//                        buttons and F / A frame; view changes are not undoable and not dirty
+//   pan-zoom-frame       blank-canvas drag pans; K007: a wheel (two-finger scroll) pans by its
+//                        deltaX / deltaY without zooming, Ctrl + wheel (a trackpad pinch in
+//                        Chromium and Firefox) zooms at the pointer (logical point kept), and
+//                        so do Safari's gesturestart / gesturechange events (synthesized here:
+//                        no real trackpad), their default (page zoom) prevented; buttons and
+//                        F / A frame; view changes are not undoable and not dirty
 //   minimap              V602 (§153): the Minimap toggle shows the graph and the viewport
 //                        rectangle; a pointer press, a pointer drag and the keys (arrows,
 //                        Shift+arrows, Home) move the viewport, and a key and the pointer at
@@ -201,6 +215,15 @@ const H = {
     await page.mouse.up();
     await sleep(60);
   },
+  /** Press at a and move to b without releasing (no settling sleep: the caller polls). */
+  stroke: async (page, a, b, steps = 12) => {
+    await page.mouse.move(a.x, a.y);
+    await page.mouse.down();
+    await page.mouse.move(a.x + (b.x - a.x) / steps, a.y + (b.y - a.y) / steps);
+    await page.mouse.move(b.x, b.y, { steps });
+  },
+  banner: (page) => page.evaluate(() => document.querySelector('[data-osc="studio.graph.banner"]')
+    .textContent),
   /** Record every text the two Studio live regions receive. */
   recordLive: (page) => page.evaluate(() => {
     if (window.__studioLive) { window.__studioLive.length = 0; return; }
@@ -588,6 +611,134 @@ function defineChecks() {
     }), types };
   });
 
+  def('cable-reroute', async ({ page }) => {
+    await H.fresh(page);
+    await H.recordLive(page);
+    const key = (e) => `${e.from.node}.${e.from.port}>${e.to.node}.${e.to.port}`;
+    const keys = async () => (await H.model(page)).edges.map(key).sort();
+    const changed = (before) => H.settle(keys, (k) => k.join() !== before.join(),
+      'the drop changed the graph');
+    const k0 = await keys();
+    const d0 = await H.undoDepth(page);
+    // Refused: Filter -> the Envelope's occupied input would loop env -> filter -> env.
+    await H.stroke(page, await H.center(page, H.port('filter-1', 'out', 'audio')),
+      await H.center(page, H.port('env-1', 'in', 'audio')));
+    await page.mouse.up();
+    const loopLive = await H.settle(() => H.live(page),
+      (l) => l.some((x) => x.startsWith(FEEDBACK)), 'feedback refusal announced');
+    const kLoop = await keys();
+    const dLoop = await H.undoDepth(page);
+    // Replace: Oscillator -> the Filter's occupied audio input.
+    await H.stroke(page, await H.center(page, H.port('osc-1', 'out', 'audio')),
+      await H.center(page, H.port('filter-1', 'in', 'audio')));
+    const replaceBanner = await H.banner(page);
+    await page.mouse.up();
+    const k1 = await changed(k0);
+    const d1 = await H.undoDepth(page);
+    await page.keyboard.press(`${MOD}+z`);
+    const kUndo = await changed(k1);
+    await page.keyboard.press(`${MOD}+Shift+z`);
+    await changed(kUndo);
+    // Re-route: pick the LFO cable up at the cutoff input and drop it on Q.
+    await H.stroke(page, await H.center(page, H.port('filter-1', 'in', 'frequency')),
+      await H.center(page, H.port('filter-1', 'in', 'Q')));
+    await page.mouse.up();
+    const k2 = await changed(k1);
+    const d2 = await H.undoDepth(page);
+    // Delete: pick it up at Q and drop it on empty canvas (no Add node picker).
+    const vp = await H.center(page, '.osc-sg-viewport');
+    await H.stroke(page, await H.center(page, H.port('filter-1', 'in', 'Q')),
+      { x: vp.x - vp.w / 2 + 40, y: vp.y + vp.h / 2 - 40 });
+    const deleteBanner = await H.banner(page);
+    await page.mouse.up();
+    const k3 = await changed(k2);
+    const d3 = await H.undoDepth(page);
+    const picker = await page.evaluate(() => !!document.querySelector('#osc-dlg-studio-add[open]'));
+    // Refused: the Master's Filter cable picked up and dropped on the LFO rate (type).
+    await H.stroke(page, await H.center(page, H.port('master-1', 'in', 'audio')),
+      await H.center(page, H.port('lfo-1', 'in', 'rate')));
+    await page.mouse.up();
+    const typeLive = await H.settle(() => H.live(page), (l) => l.some((x) =>
+      x.startsWith('Connection rejected: Audio output cannot connect to a control input.')),
+    'type refusal announced');
+    const k4 = await keys();
+    const d4 = await H.undoDepth(page);
+    // The refused drop leaves the picked-up Filter -> Master cable drawn where it was.
+    const redrawn = await H.settle(() => page.evaluate(() => {
+      const e = window.OSCILLA.studio.store.getModel().graph.edges.find((x) => x.to.node
+        === 'master-1');
+      const line = e && document.querySelector(
+        `.osc-sg-edge[data-edge-id="${e.id}"] .osc-sg-edge-line`);
+      return line ? line.getAttribute('d') || '' : '';
+    }), (d) => d.length > 0, 'the refused cable is drawn again');
+    const live = await H.live(page);
+    return { ...H.verdict({
+      replaceBanner: /^Release to connect to Filter 1 \/ Audio input, replacing its connection$/
+        .test(replaceBanner),
+      replaced: k1.includes('osc-1.audio>filter-1.audio')
+        && !k1.includes('env-1.audio>filter-1.audio') && k1.length === k0.length,
+      replaceOneEntry: d1 === d0 + 1,
+      undoRestores: kUndo.join() === k0.join(),
+      rerouted: k2.includes('lfo-1.control>filter-1.Q')
+        && !k2.includes('lfo-1.control>filter-1.frequency') && k2.length === k1.length,
+      rerouteOneEntry: d2 === d1 + 1,
+      deleteBanner: deleteBanner === 'Release to delete this connection',
+      deleted: !k3.some((x) => x.startsWith('lfo-1.')) && k3.length === k2.length - 1,
+      deleteOneEntry: d3 === d2 + 1, noPicker: !picker,
+      typeRefused: typeLive.some((x) => x.startsWith('Connection rejected: Audio output')),
+      loopRefused: loopLive.some((x) => x.startsWith(FEEDBACK)),
+      refusedUnchanged: kLoop.join() === k0.join() && dLoop === d0 && k4.join() === k3.join()
+        && d4 === d3,
+      refusedRedrawn: redrawn.length > 0,
+      announced: live.some((x) => x.startsWith('Connected Oscillator 1 to Filter 1, replacing')),
+    }), replaceBanner, deleteBanner, k0, k1, k2, k3, k4, live: live.slice(-6) };
+  });
+
+  def('graph-keys-k009', async ({ page }) => {
+    await H.fresh(page);
+    await H.recordLive(page);
+    const d0 = await H.undoDepth(page);
+    await page.click(H.nodeTitle('env-1'));
+    await page.keyboard.press('Shift+Delete');
+    const m1 = await H.settle(() => H.model(page), (m) => !m.nodes.some((n) => n.id === 'env-1'),
+      'Shift+Delete removed the Envelope');
+    const d1 = await H.undoDepth(page);
+    // M on a clicked cable (edge-3, Filter -> Master), twice.
+    const pt = await page.evaluate(() => {
+      const p = document.querySelector('.osc-sg-edge[data-edge-id="edge-3"] .osc-sg-edge-line');
+      const q = p.getPointAtLength(p.getTotalLength() / 2);
+      const m = p.getScreenCTM();
+      return { x: q.x * m.a + q.y * m.c + m.e, y: q.x * m.b + q.y * m.d + m.f };
+    });
+    await page.mouse.click(pt.x, pt.y);
+    await page.keyboard.press('m');
+    const mutedOf = async () => ({ model: (await H.model(page)).edges.find((e) => e.id === 'edge-3')
+      .props.muted, drawn: await page.evaluate(() => document.querySelector(
+      '.osc-sg-edge[data-edge-id="edge-3"]').getAttribute('class').includes('is-muted')) });
+    const mu1 = await H.settle(mutedOf, (v) => v.model && v.drawn, 'M muted the cable');
+    await page.keyboard.press('m');
+    const mu2 = await H.settle(mutedOf, (v) => !v.model && !v.drawn, 'M unmuted the cable');
+    const d2 = await H.undoDepth(page);
+    // L tidies: positions change once, as one entry.
+    const pos = async () => (await H.model(page)).nodes.map((n) => `${n.id}@${n.x},${n.y}`).join();
+    const p0 = await pos();
+    await page.keyboard.press('l');
+    const p1 = await H.settle(pos, (p) => p !== p0, 'L tidied the graph');
+    const d3 = await H.undoDepth(page);
+    await page.keyboard.press('l');
+    await H.settle(() => H.live(page), (l) => l.includes('The graph is already tidy'),
+      'the second L was handled');
+    const p2 = await pos();
+    const d4 = await H.undoDepth(page);
+    return { ...H.verdict({
+      bridged: m1.edges.some((e) => e.from.node === 'osc-1' && e.to.node === 'filter-1'
+        && e.to.port === 'audio'),
+      bridgeOneEntry: d1 === d0 + 1,
+      muted: mu1.model && mu1.drawn, unmuted: !mu2.model && !mu2.drawn, muteEntries: d2 === d1 + 2,
+      tidied: p1 !== p0, tidyOneEntry: d3 === d2 + 1, tidyStable: p2 === p1 && d4 === d3,
+    }), mu1, mu2, p0, p1 };
+  });
+
   def('select-delete-cable', async ({ page }) => {
     await H.fresh(page);
     const pt = await page.evaluate(() => {
@@ -671,14 +822,38 @@ function defineChecks() {
     await H.drag(page, blank, { x: blank.x + 60, y: blank.y - 30 });
     const v1 = await page.evaluate(() => window.OSCILLA.studio.editor.getView());
     const target = { x: vp.left + vp.width / 2, y: vp.top + vp.height / 2 };
+    const getView = () => page.evaluate(() => window.OSCILLA.studio.editor.getView());
+    await page.mouse.move(target.x, target.y);
+    // K007: a plain wheel pans by its deltas and keeps the zoom.
+    await page.mouse.wheel(30, 40);
+    const vw = await H.settle(getView, (v) => v.panY !== v1.panY, 'wheel pans');
     const before = await page.evaluate((p) => window.OSCILLA.studio.editor.clientToGraph(p.x, p.y),
       target);
-    await page.mouse.move(target.x, target.y);
-    await page.mouse.wheel(0, -200);
-    await sleep(100);
-    const v2 = await page.evaluate(() => window.OSCILLA.studio.editor.getView());
+    await page.keyboard.down('Control');
+    await page.mouse.wheel(0, -8);
+    await page.keyboard.up('Control');
+    const v2 = await H.settle(getView, (v) => v.zoom !== vw.zoom, 'ctrl wheel zooms');
     const after = await page.evaluate((p) => window.OSCILLA.studio.editor.clientToGraph(p.x, p.y),
       target);
+    // Safari's pinch: gesturestart, gesturechange (scale cumulative), gestureend at the target.
+    const pinch = await page.evaluate((p) => {
+      const el = document.querySelector('.osc-sg-viewport');
+      const fire = (type, scale) => {
+        const ev = new Event(type, { bubbles: true, cancelable: true });
+        Object.defineProperties(ev, { scale: { value: scale }, clientX: { value: p.x },
+          clientY: { value: p.y } });
+        el.dispatchEvent(ev);
+        return ev.defaultPrevented;
+      };
+      const ed = window.OSCILLA.studio.editor;
+      const g0 = ed.clientToGraph(p.x, p.y);
+      const z0 = ed.getView().zoom;
+      const prevented = [fire('gesturestart', 1), fire('gesturechange', 1.25),
+        fire('gestureend', 1.25)];
+      const g1 = ed.clientToGraph(p.x, p.y);
+      return { prevented, zoom: ed.getView().zoom, ratio: ed.getView().zoom / z0,
+        dx: g1.x - g0.x, dy: g1.y - g0.y };
+    }, target);
     await page.click('[data-osc="studio.graph.zoomIn"]');
     const v3 = await page.evaluate(() => window.OSCILLA.studio.editor.getView());
     await page.click('[data-osc="studio.graph.frameAll"]');
@@ -693,13 +868,17 @@ function defineChecks() {
       '[data-osc="studio.graph.zoom"]').textContent);
     return { ...H.verdict({
       panned: Math.abs(v1.panX - v0.panX - 60) < 1 && Math.abs(v1.panY - v0.panY + 30) < 1,
-      wheelZoom: v2.zoom > v1.zoom,
+      wheelPans: Math.abs(vw.panX - v1.panX + 30) < 1 && Math.abs(vw.panY - v1.panY + 40) < 1
+        && vw.zoom === v1.zoom,
+      wheelZoom: v2.zoom > vw.zoom,
       pointerAnchored: Math.abs(after.x - before.x) < 0.5 && Math.abs(after.y - before.y) < 0.5,
-      button: Math.abs(v3.zoom / v2.zoom - 1.2) < 1e-6 || v3.zoom === 2.5,
+      gesturePinch: Math.abs(pinch.ratio - 1.25) < 1e-6 && pinch.prevented.every(Boolean)
+        && Math.abs(pinch.dx) < 0.5 && Math.abs(pinch.dy) < 0.5,
+      button: Math.abs(v3.zoom / pinch.zoom - 1.2) < 1e-6 || v3.zoom === 2.5,
       frameAll: v4.zoom !== v3.zoom, frameSelection: v5.zoom > v4.zoom,
       notUndoable: depth1 === depth0, notDirty: dirty === false,
       zoomShown: zoomText === `${Math.round(v5.zoom * 100)} %`,
-    }), v0, v1, v2, v3, v4, v5 };
+    }), v0, v1, vw, v2, pinch, v3, v4, v5 };
   });
 
   def('minimap', async ({ page }) => {

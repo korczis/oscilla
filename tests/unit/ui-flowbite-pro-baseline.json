@@ -15,7 +15,7 @@
     "selectors": 1189,
     "domainViewSelectors": 438
   },
-  "debt": 3910,
+  "debt": 3906,
   "surfaces": {
     "pending": [
       "card#osc-exp-compare",
@@ -507,14 +507,14 @@
     "osc-settings-pair": 1,
     "osc-settings-wide": 1,
     "osc-sg": 1,
-    "osc-sg-banner": 3,
+    "osc-sg-banner": 1,
     "osc-sg-banner-text": 1,
     "osc-sg-cables": 1,
     "osc-sg-cat": 1,
     "osc-sg-col": 2,
     "osc-sg-col--in": 1,
     "osc-sg-col--out": 1,
-    "osc-sg-controls": 3,
+    "osc-sg-controls": 1,
     "osc-sg-ctl": 1,
     "osc-sg-ctl-glyph": 1,
     "osc-sg-edge": 3,

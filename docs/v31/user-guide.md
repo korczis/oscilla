@@ -28,6 +28,13 @@ Below 768 px the workspace shows one of **Graph**, **Timeline** and **Inspector*
 out so far that a port is smaller than 24 px: a large graph is centred, and you pan to the
 rest.
 
+On the graph, drag empty canvas, turn the wheel or scroll with two fingers to pan (Shift turns
+a vertical wheel sideways). Ctrl/⌘ + wheel, a trackpad pinch and a two-finger touch pinch zoom
+at the pointer, as do **+** and **−**. Chromium and Firefox report a trackpad pinch as a Ctrl
+wheel and Safari as its own gesture events; both are handled, but the browser checks send
+these events rather than a real trackpad pinch. **Minimap** in the graph controls shows the whole graph
+and the part in view; press or drag on it to move there.
+
 ## Links and fullscreen
 
 - **Copy link** (the chain-link button after Frame all in the toolbar) puts a link to the current view in the
@@ -77,6 +84,17 @@ rest.
   list of inputs that can take its output; Enter connects. On a touch screen, tap an output,
   then tap a highlighted input.
 - Drop a cable on empty canvas to add a node that accepts it, already connected.
+- Drop a cable on a single input that already has one: the new cable replaces it (a parameter
+  input takes several cables, so the new one is added beside them). Dropped on a node's body, a
+  cable takes a free input first. Drag a cable off its input to move it to another input, or
+  drop it on empty canvas to delete it; a muted cable stays muted, and its depth and mapping
+  carry over only to the same parameter. On a parameter input with several cables, click the
+  cable you want first. Each is one undo step, and a move the types or a feedback loop forbid
+  is refused with the reason.
+- **Shift+Delete** deletes the selected node and connects what fed its signal input (not a
+  modulator of its own parameters) to what it fed, where the types allow, muted if either
+  cable was (otherwise it deletes the node and says why; a source left out is named). **L** lays the graph out in signal
+  order as one undo step; **M** mutes or unmutes the selected connections.
 - With a screen reader, a node reads its name, kind, settings and how many input and output
   connections it has; the Inspector's Connections list and the Connect dialog name each port
   and what it is connected to.
@@ -272,6 +290,7 @@ anywhere else in those workspaces Space is the instrument's.
 | Space | Play / stop the Studio transport |
 | Esc | Cancel a drag or connection, close a picker, else stop |
 | Delete / Backspace | Delete the selected nodes or connection |
+| Shift Delete / Backspace | Delete the selected node and connect its input to its outputs where the types allow |
 | Ctrl/⌘ C | Copy the selected nodes |
 | Ctrl/⌘ X | Cut the selected nodes |
 | Ctrl/⌘ V | Paste (new ids, small offset) |
@@ -285,6 +304,8 @@ anywhere else in those workspaces Space is the instrument's.
 | C | Connect the selected node (list of compatible inputs) |
 | F | Frame the selection |
 | A | Frame the whole graph |
+| L | Tidy the graph: lay the nodes out in signal order |
+| M | Mute or unmute the selected connections |
 | + | Zoom in |
 | − | Zoom out |
 | Arrows (Shift: ×4) | Move the selected nodes by the grid |
@@ -293,7 +314,6 @@ anywhere else in those workspaces Space is the instrument's.
 
 ## Limits
 
-- Not built yet: a minimap, node groups, dragging several clips at once, pinch zoom on the
-  timeline. A link opens a shipped template only; a saved project is shared as a file.
+- Not built yet: node groups, dragging several clips at once. A link opens a shipped template only; a saved project is shared as a file.
 - Studio is responsive at about 100 nodes and 200 connections ([performance](performance.md));
   it is not designed for much larger graphs.
