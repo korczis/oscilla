@@ -545,6 +545,11 @@ Not yet built:
   and labelled as uncalibrated. A browser knows sample values, not sound pressure. The only
   exception is the Measure workspace with a valid absolute level calibration that you supply
   from an external reference.
+- **The analyser scale is not 0 dB at full scale.** The live spectrum and the microphone
+  analyser plot the dB of a Blackman-windowed analyser FFT (dBFS-like, uncalibrated), on which a
+  full-scale sine reads near -13.6 dB. The detected-peak level corrects it so that sine reads
+  0 dBFS, and the Measure analysis has its own tone and mean-square (RTA) scales, defined in
+  [docs/v3/algorithms.md](docs/v3/algorithms.md).
 - **The microphone is not calibrated.** Its response, the input processing and the room are
   unknown, so readings are only comparisons. In Measure, a frequency-response profile corrects
   the microphone only inside the profile's range. Detected frequencies are never shown with more
