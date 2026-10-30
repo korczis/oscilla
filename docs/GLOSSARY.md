@@ -135,6 +135,22 @@ the bare word. Not to be confused with the two words beside it: the *lineage* of
 0044) traces one value within one experiment, and the Studio operation *trace* (ADR 0042)
 follows one Studio operation in memory.
 
+**Frequency entry.** What every frequency text field accepts (the Playground's frequency,
+pattern, sweep and dual oscillator fields, the Filter Lab cutoff, the Studio Inspector; the
+number fields of the sequencer and of Phase & Stereo take a plain number in Hz): one grammar,
+`parseFrequency` in `src/js/core/frequency.js`, the one units module (G002). A number with a
+point or a comma as the decimal mark and an optional exponent (`440`, `15.5`, `2,5`, `.5`,
+`1e3`), then an optional unit, matched without case or spaces: `Hz` or `hertz`, `k`, `kHz` or
+`kilohertz` (times 1000). So `2,5k`, `2.5 kHz`, `2500` and `2500 Hz` are the same 2.50 kHz.
+The comma is never a thousands separator (`2,500` is 2.5 Hz); in a list of frequencies (a user
+sequence) the comma separates the values, so there the decimal mark is the point. Zero, a
+negative and a non-finite value (`0`, `-5`, `1e309`) are refused with one sentence, "Frequency
+must be a finite number greater than 0 Hz."; any other text (`abc`) is not a frequency. The same
+module gives the one text of each quantity: a frequency in a control or readout ("440 Hz",
+"2.50 kHz"), a compact one in charts and the sequencer ("2.5 kHz"), a duration in
+milliseconds ("250 ms", "1.5 s"), in seconds ("1.250 s") and the clock ("01:04.210", which
+floors, so it never shows a time not yet reached).
+
 ## Repository
 
 **Knowledge.** What the repository knows about itself, outside the code: the claims matrix

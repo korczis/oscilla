@@ -11,6 +11,7 @@
 //   mountCompact(host, svc) -> { render(), setTransport(t), setPlayhead(pos), destroy() }
 //     svc: { store, registry, announce, play(), stop(), toggleLoop(), expand(nodeId?) }
 
+import { formatClock as compactTime } from '../../core/frequency.js';
 import { NODE_REGISTRY } from '../../studio/registry.js';
 import {
   announceAction, announceSelection, clipLabel, summarizeStudio,
@@ -29,13 +30,8 @@ export function chipLabel(name) {
 /** "Tone", "Sweep", "Noise check", ... (a11y.js: the selection announcement names it too). */
 export { clipLabel };
 
-/** "00:04.210" (minutes, seconds, milliseconds). */
-export function compactTime(seconds) {
-  const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0);
-  const m = Math.floor(t / 60);
-  const sec = t - m * 60;
-  return `${String(m).padStart(2, '0')}:${sec.toFixed(3).padStart(6, '0')}`;
-}
+/** "00:04.210": the one clock of core/frequency.js (G002), the full Studio's text too. */
+export { compactTime };
 
 /**
  * The compact view. opts: { registry, minClipPx (24 fine, 44 coarse), basePxPerSecond }.

@@ -21,6 +21,9 @@
 // 44.1 kHz one.
 
 import { PROVISIONAL_SAMPLE_RATE, SAFE_NYQUIST_FACTOR, WAVEFORMS } from '../core/constants.js';
+import {
+  formatFrequencyCompact as formatCompactFrequency, formatMs,
+} from '../core/frequency.js';
 
 // ============================================================ constants
 
@@ -116,11 +119,12 @@ export function safeMaximum(sampleRate) {
   return (sr / 2) * SAFE_NYQUIST_FACTOR;
 }
 
-/** Compact frequency label as in the reference timeline: 440 Hz, 1.2 kHz, 15.5 kHz. */
-export function formatCompactFrequency(f) {
-  if (!isNum(f)) return '—';
-  return f >= 1000 ? `${sig(f / 1000, 3)} kHz` : `${sig(f, 3)} Hz`;
-}
+/**
+ * Compact frequency label as in the reference timeline: 440 Hz, 1.2 kHz, 15.5 kHz; and the
+ * duration label (from V1 formatMs, index.html@95dfa81:1437). Both are core/frequency.js's
+ * (G002, the one units module), here under the sequencer's names.
+ */
+export { formatCompactFrequency, formatMs };
 
 /** Frequency range label: "440 → 880 Hz", "1 → 8 kHz", "440 Hz → 8 kHz". */
 export function formatFrequencyRange(a, b, sep = ' → ') {
@@ -128,12 +132,6 @@ export function formatFrequencyRange(a, b, sep = ' → ') {
   if (a >= 1000 && b >= 1000) return `${sig(a / 1000, 3)}${sep}${sig(b / 1000, 3)} kHz`;
   if (a < 1000 && b < 1000) return `${sig(a, 3)}${sep}${sig(b, 3)} Hz`;
   return `${formatCompactFrequency(a)}${sep}${formatCompactFrequency(b)}`;
-}
-
-// from V1 formatMs (index.html@95dfa81:1437)
-export function formatMs(ms) {
-  if (!isNum(ms)) return '—';
-  return ms >= 1000 ? `${sig(ms / 1000, 3)} s` : `${sig(ms, 3)} ms`;
 }
 
 const deepCopy = (o) => JSON.parse(JSON.stringify(o)); // from V1 deepCopy (index.html@95dfa81:1174)
