@@ -46,8 +46,11 @@
 //   o-clap      the clap decays at -60 dB per 0.28 s (from its last burst) within 10 %
 //   o-perc      every pitch class (C4-B4): its voice decays at -60 dB per its longest layer's
 //               decay within 12 %, the slope fitted from -20 to -50 dB below the peak
-//   o-pitch     every FM algorithm's default patch at A3 and A4: the line nearest the note stays
-//               within 5 cents of it in every window from 0.1 to 2.9 s (the index decay)
+//   o-pitch     every FM algorithm, its default patch and every ratio at 1, at A0, E1, A1, A3 and
+//               A4: operator 1's pitch from what drives its frequency (the 0 Hz line of the
+//               deviation, a Hann mean over whole periods of the note) within 5 cents of the
+//               note in every window from 0.05 to 2.9 s; and at A3 and A4 the spectrum's line
+//               nearest the note within 5 cents of it in every window from 0.1 to 2.9 s
 //   o-headroom  16 notes at full velocity at the default Level, each engine: the sum peaks at
 //               or below digital full scale; one voice at Level 4 peaks at or below 1/16
 //               (every FM algorithm, AM and ring, every percussion key, the additive shapes)
@@ -561,8 +564,31 @@ function defineChecks() {
 
   def('o-pitch', null, async ({ context }) => {
     const page = await offline(context);
-    // From 0.1 s: in the first tenth the index falls fastest and the line's own level changes
-    // inside a window, which biases a peak reading of any algorithm (a pure 4-three included).
+    // The carrier's pitch (review of #332, round 3): the deviation into operator 1's frequency,
+    // its 0 Hz line from 50 ms after the onset, at the bass notes too. A modulator's 0 Hz line
+    // reaching it (a stack at commensurate ratios) is a pitch offset, which this reads directly.
+    const NOTES = [21, 28, 33, 57, 69]; // A0, E1, A1, A3, A4
+    const PATCHES = { default: {}, r1: { ratio1: 1, ratio2: 1, ratio3: 1, ratio4: 1 } };
+    const drive = await page.evaluate(async ([algs, notes, patches]) => {
+      const out = [];
+      for (const [patch, p] of Object.entries(patches)) {
+        for (const algorithm of algs) {
+          const worst = [];
+          for (const note of notes) {
+            const r = await window.E.drive({ algorithm, ...p }, note);
+            worst.push(Math.max(...r.map((x) => Math.abs(x.cents))));
+          }
+          out.push({ patch, algorithm, worst });
+        }
+      }
+      return out;
+    }, [ALGORITHMS, NOTES, PATCHES]);
+    // The spectrum at A3 and A4, from 0.1 s: in the first tenth the index falls fastest and
+    // the line's own level changes inside a window, which biases a peak reading of any
+    // algorithm (a pure 4-three included). At the bass notes the sidebands that coincide on
+    // the note's line move its peak as the index falls in every algorithm with two or more
+    // modulators on a carrier (4-three, no stack, reads 42 cents at A0): not a pitch, so the
+    // bass is judged from the drive above.
     const W = [[0.1, 0.4], [0.4, 0.8], [0.8, 1.5], [1.5, 2.9]];
     const rows = await page.evaluate(async ([algs, w]) => {
       const out = [];
@@ -574,9 +600,12 @@ function defineChecks() {
       }
       return out;
     }, [ALGORITHMS, W]);
-    const worst = Math.max(...rows.flatMap((r) => r.cents.map(Math.abs)));
-    return { ok: rows.length === 14 && worst <= 5, worst,
-      rows: rows.map((r) => `${r.algorithm}@${r.note}:${r.cents.join('/')}`) };
+    const worstLine = Math.max(...rows.flatMap((r) => r.cents.map(Math.abs)));
+    const worstDrive = Math.max(...drive.flatMap((r) => r.worst));
+    return { ok: drive.length === 14 && worstDrive <= 5 && rows.length === 14 && worstLine <= 5,
+      worstDrive: +worstDrive.toFixed(3), worstLine,
+      drive: drive.map((r) => `${r.patch}:${r.algorithm}:${r.worst.map((c) => +c.toFixed(2))
+        .join('/')}`) };
   });
 
   def('o-headroom', null, async ({ context }) => {

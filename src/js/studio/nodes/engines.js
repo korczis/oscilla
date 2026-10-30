@@ -127,8 +127,15 @@ export const fmVoice = engine({
     }
     return null;
   },
-  facts: () => 'Linear FM: a modulator of index I moves its target by I × its own frequency '
-    + `in Hz. ${FM_FEEDBACK_BLOCKED}`,
+  facts: (p) => {
+    const a = FM_ALGORITHMS.find((x) => x.id === p.algorithm) || FM_ALGORITHMS[0];
+    const mods = new Set(a.edges.map(([m]) => m));
+    const stack = a.edges.some(([, t]) => mods.has(t));
+    return 'Linear FM: a modulator of index I moves its carrier by I × its own frequency in Hz.'
+      + (stack ? ' A modulator into a modulator adds I · sin of its phase to that one\'s '
+        + 'phase (the same peak deviation), so the stack has no 0 Hz line and holds the '
+        + 'pitch.' : '') + ` ${FM_FEEDBACK_BLOCKED}`;
+  },
   help: {
     what: 'FM synthesis with 2 to 4 sine operators routed by an algorithm table: modulators '
       + 'drive the frequency of their targets, carriers sum into the voice.',
@@ -136,13 +143,47 @@ export const fmVoice = engine({
       + 'falls from I to I × Index sustain over Index decay. Sidebands above the digital '
       + 'Nyquist limit fold back (linear FM is not band-limited); an operator above '
       + `${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist is left out of that note (with the modulators `
-      + 'that only drive it). A modulator that is itself modulated reaches its target through a '
-      + 'DC block at a tenth of the lowest operator frequency: its 0 Hz line would otherwise '
-      + "shift the note's pitch. A carrier at a whole multiple of its modulator's frequency has a "
+      + 'that only drive it). A modulator that is itself modulated (the middle of a stack) is '
+      + 'phase-modulated by its inputs and computed in the phase domain, so it has no 0 Hz line '
+      + 'at any ratio and the carrier keeps its pitch from the onset, bass notes included (within '
+      + '5 cents from 50 ms after it, tested from A0 to A4). A carrier at a whole multiple of its '
+      + "modulator's frequency has a "
       + '0 Hz line of its own: a DC offset in the voice, not removed (a high-pass would raise the '
       + `voice's peak above its stated bound). ${FM_FEEDBACK_BLOCKED}`,
   },
 });
+
+/** The harmonics each waveform has: 'all', 'odd' or the fundamental alone. */
+const WAVE_HARMONICS = { sine: 'one', triangle: 'odd', square: 'odd', sawtooth: 'all' };
+const hasHarmonic = (wave, n) => {
+  const set = WAVE_HARMONICS[wave] || 'one';
+  return set === 'all' || (set === 'odd' ? n % 2 === 1 : n === 1);
+};
+const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+
+/**
+ * The 0 Hz line of a ring or AM voice (review of #332, round 3, for the plate): the Ratio p/q
+ * in lowest terms (to its 0.01 step) puts the carrier's harmonic p on the modulator's harmonic
+ * q, so the product has a mean when both waves have them. Sines at ratio 1 start in phase: the
+ * mean is half the voice's peak in ring and d/4 of it in AM. -> text | null.
+ */
+export function amDcText(p) {
+  const r = Math.round(Number(p.ratio) * 100);
+  if (!(r > 0)) return null;
+  const k = gcd(r, 100);
+  const [num, den] = [r / k, 100 / k];
+  if (!hasHarmonic(p.carrier, num) || !hasHarmonic(p.modulator, den)) return null;
+  const not = 'not removed: a high-pass would raise the voice\'s peak above its stated bound';
+  if (p.carrier === 'sine' && p.modulator === 'sine') {
+    const mean = p.mode === 'am' ? `${(Number(p.depth) / 4).toFixed(2)} of` : 'half';
+    return `DC: at ratio 1 the two sines coincide, so the product has a mean of ${mean} the `
+      + `voice's peak (${not}).`;
+  }
+  const which = num === 1 && den === 1 ? 'fundamentals' : `harmonic ${num} of the carrier and `
+    + `harmonic ${den} of the modulator`;
+  return `DC: at ratio ${p.ratio} the ${which} coincide (where both are below the Nyquist `
+    + `limit), so the product has a mean, a DC offset (${not}).`;
+}
 
 export const amVoice = engine({
   type: 'am-voice',
@@ -160,19 +201,22 @@ export const amVoice = engine({
   summary: (p) => parts(optionLabel(amVoice, 'mode', p.mode), `ratio ${p.ratio}`),
   inactive: (p, key) => (key === 'depth' && p.mode !== 'am'
     ? 'Depth applies to AM; ring modulation is the full product.' : null),
-  facts: (p) => (p.mode === 'ring' ? 'Ring: c·m, the sum and difference frequencies of the '
+  facts: (p) => [p.mode === 'ring' ? 'Ring: c·m, the sum and difference frequencies of the '
     + 'carrier and the modulator, the carrier itself suppressed.' : `AM: c·(1 − d/2 + d/2·m): `
     + `the carrier at ${(1 - p.depth / 2).toFixed(2)} and each sideband at `
-    + `${(p.depth / 4).toFixed(2)} of a sine pair's full level.`),
+    + `${(p.depth / 4).toFixed(2)} of a sine pair's full level.`, amDcText(p)]
+    .filter(Boolean).join(' '),
   reuses: ['studio/adapters/instrument.js#ringLaw'],
   help: {
     what: 'Ring and amplitude modulation: a carrier at the note times a modulator at Ratio × '
       + 'the note.',
     constraints: 'Digital multiplication, levels relative (the Ring node of the Synth panel, '
-      + 'per voice). Where a carrier harmonic and a modulator harmonic coincide (ratio 1; a whole '
-      + 'ratio with a saw, square or triangle) the product has a mean, a DC offset: sines at ratio '
-      + "1 put half the voice's peak there. It is not removed: a high-pass would raise the "
-      + "voice's peak above its stated bound.",
+      + 'per voice). Where a carrier harmonic and a modulator harmonic coincide (the Ratio p/q in '
+      + "lowest terms puts the carrier's harmonic p on the modulator's harmonic q: ratio 1 always, "
+      + 'others with a saw, square or triangle) the product has a mean, a DC offset: sines at '
+      + "ratio 1 put half the voice's peak there in ring, d/4 of it in AM. It is not removed: a "
+      + "high-pass would raise the voice's peak above its stated bound; the face states it at "
+      + 'the settings that have it.',
   },
 });
 

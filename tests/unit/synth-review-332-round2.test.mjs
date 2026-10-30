@@ -1,8 +1,9 @@
 // Review of #332, round 2 (K090-K092, K121-K123): what the engines must do, on the fake Web
 // Audio context (the measured sound is tests/browser/synth-engines.cjs, its offline checks).
 //   P1  the clap keeps its 0.28 s decay after the last burst; a modulator that is itself
-//       modulated reaches its target through a DC block (its 0 Hz line would detune the
-//       note); 16 voices at the highest Level and velocity sum to at most digital full scale
+//       modulated is a phase operator, no frequency drive and no high-pass (round 3: its 0 Hz
+//       line would detune the note, the block rang at bass notes); 16 voices at the highest
+//       Level and velocity sum to at most digital full scale
 //       (ADR 0058's rule for note voices), and a steal starts after the stolen voice's fade
 //   P2  the wavetable morph is level-continuous and never peaks above one table; the hat sum
 //       is bounded by its coherent peak and a voice's layers by their sum; a note that sounds
@@ -77,27 +78,58 @@ test('P1 the clap decays from its last burst: -30 dB at half its decay, not -80 
 /** The nodes a node's output reaches through gains and filters, up to `depth`. */
 const outputsOf = (n) => n.outputs || [];
 
-test('P1 a modulator that is itself modulated reaches its target through a DC block', () => {
+/**
+ * The operators of a built FM voice: op k -> { oscs, input } by frequency (ratios distinct).
+ * A plain operator's input is its oscillator's frequency; a phase operator (two oscillators,
+ * sine and cosine tables) takes its input at the shapers that drive its two products.
+ */
+function fmOperators(ctx, a, hz, ratios) {
+  const ops = new Map();
+  for (let k = 1; k <= a.ops; k++) {
+    const oscs = ctx.oscillators.filter((o) => Math.abs(o.frequency.calls[0][1]
+      - hz * ratios[`ratio${k}`]) < 1e-9);
+    const products = oscs.flatMap(outputsOf).filter((g) => g.kind === 'gain');
+    const shapers = ctx.of('waveshaper').filter((sh) => products.some((g) => sh.outputs
+      .includes(g.gain)));
+    ops.set(k, { oscs, shapers, products, input: shapers.length ? shapers
+      : [oscs[0].frequency] });
+  }
+  return ops;
+}
+/** Whether `from` reaches one of `to`, through gains (never through an oscillator or shaper). */
+const reaches = (from, to, depth = 6) => outputsOf(from).some((x) => to.includes(x)
+  || (depth > 0 && x.kind !== 'oscillator' && x.kind !== 'waveshaper'
+    && reaches(x, to, depth - 1)));
+
+test('P1 a modulator that is itself modulated is a phase operator: no drive, no high-pass', () => {
+  const ratios = { ratio1: 1, ratio2: 2, ratio3: 3, ratio4: 4 };
   for (const a of FM_ALGORITHMS) {
-    const { ctx, h } = engineEnv('fm-voice', { algorithm: a.id });
+    const { ctx, h } = engineEnv('fm-voice', { algorithm: a.id, ...ratios });
     h.noteOn(0.1, 57, 127);
-    const oscs = ctx.oscillators;
-    const modulated = new Set(a.edges.map(([, t]) => t));
+    const mods = new Set(a.edges.map(([m]) => m));
+    const ops = fmOperators(ctx, a, 220, ratios);
+    assert.ok(!ctx.created.some((n) => n.kind === 'biquad'), `${a.id}: nothing high-passes`);
+    for (const [k, op] of ops) {
+      const phase = mods.has(k) && a.edges.some(([, t]) => t === k);
+      assert.equal(op.oscs.length, phase ? 2 : 1, `${a.id}: op ${k}`);
+      if (!phase) continue;
+      // sin(ω t) and cos(ω t) at the operator's fixed frequency, never driven.
+      assert.deepEqual(op.oscs.map((o) => [...o.wave.imag, ...o.wave.real]),
+        [[0, 1, 0, 0], [0, 0, 0, 1]], `${a.id}: op ${k} sine and cosine tables`);
+      assert.ok(!ctx.created.some((n) => op.oscs.some((o) => outputsOf(n).includes(o.frequency))),
+        `${a.id}: op ${k} has no frequency drive`);
+      // the shapers cos(Φ x) and sin(Φ x), Φ the sum of the inputs' indices, x = 0 a point
+      const phi = a.edges.filter(([, t]) => t === k).reduce((s, [m]) => s + (m === 2 ? 2 : 1), 0);
+      const [cos, sin] = op.shapers.map((sh) => sh.curve);
+      const n = cos.length;
+      assert.equal(n % 2, 1, `${a.id}: an odd curve length`);
+      assert.equal(cos[(n - 1) / 2], 1);
+      assert.equal(sin[(n - 1) / 2], 0);
+      assert.ok(Math.abs(cos[n - 1] - Math.cos(phi)) < 1e-6 && Math.abs(sin[0] + Math.sin(phi))
+        < 1e-6, `${a.id}: op ${k} curves at Φ = ${phi}`);
+    }
     for (const [m, t] of a.edges) {
-      const om = oscs[m - 1];
-      const target = oscs[t - 1].frequency;
-      const idx = outputsOf(om).find((g) => g.kind === 'gain');
-      assert.ok(idx, `${a.id}: op ${m} feeds an index gain`);
-      if (modulated.has(m)) {
-        const hp = outputsOf(idx).find((x) => x.kind === 'biquad');
-        assert.ok(hp && hp.type === 'highpass', `${a.id}: op ${m} (modulated) is DC-blocked`);
-        assert.ok(outputsOf(hp).includes(target), `${a.id}: ${m} -> ${t} through the block`);
-        assert.ok(!outputsOf(idx).includes(target), `${a.id}: and never around it`);
-        const fc = hp.frequency.calls.at(-1)[1];
-        assert.ok(fc > 0 && fc <= 0.1 * 220 + 1e-9, `${a.id}: block at ${fc} Hz`);
-      } else {
-        assert.ok(outputsOf(idx).includes(target), `${a.id}: ${m} -> ${t}`);
-      }
+      assert.ok(ops.get(m).oscs.some((o) => reaches(o, ops.get(t).input)), `${a.id}: ${m} -> ${t}`);
     }
   }
 });
@@ -243,23 +275,22 @@ test('P2 every FM algorithm (all 7) connects its table: edges, carriers, ratios,
   for (const a of FM_ALGORITHMS) {
     const { ctx, h } = engineEnv('fm-voice', { algorithm: a.id, ...ratios, ...levels });
     h.noteOn(0.1, 57, 127);
-    const oscs = ctx.oscillators;
-    assert.equal(oscs.length, a.ops, `${a.id}: ${a.ops} operators`);
-    oscs.forEach((o, k) => {
-      const f = o.frequency.calls[0][1];
-      assert.ok(Math.abs(f - 220 * ratios[`ratio${k + 1}`]) < 1e-9, `${a.id}: op ${k + 1} ratio`);
-    });
-    const reach = (from, to, depth = 3) => outputsOf(from).some((x) => x === to
-      || (depth > 0 && x.kind !== 'oscillator' && reach(x, to, depth - 1)));
+    const mods = new Set(a.edges.map(([m]) => m));
+    const phaseOps = [...mods].filter((k) => a.edges.some(([, t]) => t === k)).length;
+    assert.equal(ctx.oscillators.length, a.ops + phaseOps, `${a.id}: ${a.ops} operators`);
+    const ops = fmOperators(ctx, a, 220, ratios);
+    for (const [k, op] of ops) assert.ok(op.oscs.length >= 1, `${a.id}: op ${k} ratio`);
     for (let m = 1; m <= a.ops; m++) {
       for (let t = 1; t <= a.ops; t++) {
         if (m === t) continue;
         const want = a.edges.some(([x, y]) => x === m && y === t);
-        assert.equal(reach(oscs[m - 1], oscs[t - 1].frequency), want, `${a.id}: ${m} -> ${t}`);
+        assert.equal(ops.get(m).oscs.some((o) => reaches(o, ops.get(t).input)), want,
+          `${a.id}: ${m} -> ${t}`);
       }
     }
+    const shaped = (g) => ctx.of('waveshaper').some((sh) => sh.outputs.includes(g.gain));
     for (let k = 1; k <= a.ops; k++) {
-      const g = outputsOf(oscs[k - 1]).find((x) => x.kind === 'gain'
+      const g = outputsOf(ops.get(k).oscs[0]).find((x) => x.kind === 'gain' && !shaped(x)
         && x.gain.calls[0] && x.gain.calls[0][0] === 'setValueAtTime'
         && !x.gain.calls.some((c) => c[0] === 'setTargetAtTime'));
       if (a.carriers.includes(k)) {

@@ -96,19 +96,53 @@ export const additiveVoice = {
 // ------------------------------------------------------------------ FM (K090)
 
 /**
- * A modulator that is itself modulated (the middle of a stack) has a 0 Hz line when its ratio
- * and its modulator's are commensurate; into its target's frequency that line would be a
- * constant offset, detuning the note by up to semitones and gliding as the index decays
- * (review of #332). Its index output passes a 2nd-order high-pass at FM_DC_BLOCK_RATIO × the
- * voice's lowest operator frequency, below every line it should pass.
+ * A modulator that is itself modulated (the middle of a stack) is a phase operator, computed
+ * in the phase domain (review of #332, round 3): its inputs add I(t) · sin θ_j to its phase,
+ * and its output is built from two fixed-frequency oscillators and two wave shapers,
+ *
+ *   sin θ_m = sin(ω_m t) · cos φ + cos(ω_m t) · sin φ,   φ = Σ_j I_j(t) · sin θ_j,
+ *
+ * the shapers cos(Φ x) and sin(Φ x) of x = φ / Φ (Φ: the sum of the inputs' peak indices).
+ * Every operator starts at phase 0 and nothing is integrated, so every phase in the stack is a
+ * sum of sines of the time and the modulator's output is a sum of lines sin(Ω t): the line at
+ * Ω = 0 is sin 0, so it has no 0 Hz line at any ratio, index or moment, and the carrier it
+ * drives keeps its pitch from the onset (an earlier high-pass at a tenth of the lowest operator
+ * rang at bass notes, ±50-230 cents for 0.2-0.5 s). The phase modulation of index I has the
+ * peak drive I · f_mod, so its sidebands have the levels |J_k(I)| of the linear FM it replaces.
+ * The edges into a carrier stay linear FM, Δf = I · f_mod · sin θ_mod Hz: the non-stack
+ * algorithms are those alone, unchanged.
  */
-export const FM_DC_BLOCK_RATIO = 0.1;
+export const FM_PHASE_CURVE_POINTS = 4097; // odd: x = 0 is a curve point, cos 0 = 1, sin 0 = 0
+
+/** The shaper curve fn(Φ x) for x in [-1, 1]. */
+export function phaseCurve(fn, phi, n = FM_PHASE_CURVE_POINTS) {
+  const c = new Float32Array(n);
+  for (let i = 0; i < n; i++) c[i] = fn((phi * (2 * i - (n - 1))) / (n - 1));
+  return c;
+}
 
 export const fmVoice = {
   compiler: 'audio/audio-engine.js#AudioEngine',
   structural: [],
   create({ ctx, hooks, acct, params }) {
     let last = { dropped: 0 };
+    let waves = null; // [sine, cosine] tables of the phase operators' fixed oscillators
+    const quadrature = () => {
+      if (!waves) {
+        const mk = (re, im) => ctx.createPeriodicWave(new Float32Array(re), new Float32Array(im),
+          { disableNormalization: true });
+        waves = [mk([0, 0], [0, 1]), mk([0, 1], [0, 0])];
+      }
+      return waves;
+    };
+    const curves = new Map(); // Φ -> [cos, sin] curves, the last 16 indices played
+    const curvesFor = (phi) => {
+      if (!curves.has(phi)) {
+        if (curves.size >= 16) curves.delete(curves.keys().next().value);
+        curves.set(phi, [phaseCurve(Math.cos, phi), phaseCurve(Math.sin, phi)]);
+      }
+      return curves.get(phi);
+    };
     const host = createVoiceHost({ ctx, acct, params, build(v) {
       const a = fmAlgorithm(v.p.algorithm);
       const max = limitHz(ctx);
@@ -124,33 +158,70 @@ export const fmVoice = {
         for (const [m, t] of a.edges) if (needed.has(t) && kept(m)) needed.add(m);
       }
       if (!needed.size) return { dropped };
+      const modulators = new Set(a.edges.map(([m]) => m));
+      const inputsOf = (k) => a.edges.filter(([m, t]) => t === k && needed.has(m)).map(([m]) => m);
+      const phaseOp = (k) => needed.has(k) && modulators.has(k) && inputsOf(k).length > 0;
+      const tau = Math.max(1e-3, v.p.modDecay / 3);
+      const sus = v.p.modSustain;
+      const index = (m) => v.p[`index${m}`];
+      /** I(t) × scale: the index falls from I to I × Index sustain over Index decay. */
+      const indexGain = (m, scale) => {
+        const g = v.track(ctx.createGain());
+        g.gain.setValueAtTime(index(m) * scale, v.t);
+        g.gain.setTargetAtTime(index(m) * scale * sus, v.t, tau);
+        return g;
+      };
       const ops = new Map();
       for (let k = 1; k <= a.ops; k++) {
         if (!needed.has(k)) continue;
-        ops.set(k, { f: freq(k), osc: v.source(hooks.oscillator('sine', freq(k), v.t)) });
-      }
-      const lowest = Math.min(...[...ops.values()].map((o) => o.f));
-      const modulated = new Set(a.edges.map(([, t]) => t));
-      const modulators = new Set(a.edges.map(([m]) => m));
-      for (const m of modulators) {
-        const op = ops.get(m);
-        if (!op) continue;
-        // Δf = I · f_mod: the modulator's unit sine times I · f_mod Hz into the target's frequency.
-        const idx = v.track(ctx.createGain());
-        const peak = v.p[`index${m}`] * op.f;
-        idx.gain.setValueAtTime(peak, v.t);
-        idx.gain.setTargetAtTime(peak * v.p.modSustain, v.t, Math.max(1e-3, v.p.modDecay / 3));
-        op.osc.connect(idx);
-        let via = idx;
-        if (modulated.has(m)) {
-          via = v.track(ctx.createBiquadFilter());
-          via.type = 'highpass';
-          via.frequency.setValueAtTime(FM_DC_BLOCK_RATIO * lowest, v.t);
-          via.Q.setValueAtTime(Math.SQRT1_2, v.t);
-          idx.connect(via);
+        const f = freq(k);
+        if (!phaseOp(k)) {
+          const osc = v.source(hooks.oscillator('sine', f, v.t));
+          // Into a phase operator: the same sine table as its own oscillators, so a browser's
+          // table and phase rounding is the same on both sides of the edge (Firefox's 'sine'
+          // and a table differ by some 5e-3 at bass notes).
+          const feedsPhase = a.edges.some(([m, t]) => m === k && phaseOp(t));
+          if (feedsPhase) osc.setPeriodicWave(quadrature()[0]);
+          ops.set(k, { f, osc, out: osc });
+          continue;
         }
-        for (const [mm, target] of a.edges) {
-          if (mm === m && ops.get(target)) via.connect(ops.get(target).osc.frequency);
+        // A phase operator: sin(ω t) · cos φ + cos(ω t) · sin φ.
+        const [sinWave, cosWave] = quadrature();
+        const sine = v.source(hooks.oscillator('sine', f, v.t));
+        sine.setPeriodicWave(sinWave);
+        const cosine = v.source(hooks.oscillator('sine', f, v.t));
+        cosine.setPeriodicWave(cosWave);
+        const phi = inputsOf(k).reduce((sum, m) => sum + index(m), 0) || 1;
+        const x = v.track(ctx.createGain()); // φ / Φ
+        const [cosCurve, sinCurve] = curvesFor(phi);
+        const shaper = (curve) => {
+          const sh = v.track(ctx.createWaveShaper());
+          sh.curve = curve;
+          sh.oversample = 'none';
+          x.connect(sh);
+          return sh;
+        };
+        const out = v.track(ctx.createGain());
+        const times = (src, sh) => {
+          const g = v.track(ctx.createGain());
+          g.gain.setValueAtTime(0, v.t);
+          sh.connect(g.gain);
+          src.connect(g).connect(out);
+        };
+        times(sine, shaper(cosCurve));
+        times(cosine, shaper(sinCurve));
+        ops.set(k, { f, out, phase: x, phi });
+      }
+      for (const [m, target] of a.edges) {
+        const op = ops.get(m);
+        const to = ops.get(target);
+        if (!op || !to) continue;
+        if (to.phase) {
+          // I(t) · sin θ_m into the target's phase (scaled by 1 / Φ for its shapers).
+          op.out.connect(indexGain(m, 1 / to.phi)).connect(to.phase);
+        } else {
+          // Δf = I · f_mod: the modulator's unit sine times I · f_mod Hz.
+          op.out.connect(indexGain(m, op.f)).connect(to.osc.frequency);
         }
       }
       for (const c of a.carriers) {

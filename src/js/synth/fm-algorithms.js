@@ -1,8 +1,10 @@
 // The FM engine's algorithm table (plan K090): data only. An algorithm is a routing of 2 to 4
 // sine operators as a directed acyclic graph: [modulator, target] edges, operators numbered
-// from 1, and the carriers whose sum is the voice. A modulator drives its target's frequency
+// from 1, and the carriers whose sum is the voice. A modulator drives a carrier's frequency
 // linearly: Δf = I · f_mod Hz, where I is the modulator's index and f_mod its frequency, so the
-// sidebands of a sine pair sit at f_c ± k · f_mod with levels |J_k(I)|.
+// sidebands of a sine pair sit at f_c ± k · f_mod with levels |J_k(I)|. A modulator into a
+// modulator adds I · sin θ_mod to its phase instead (the same peak deviation and line levels),
+// which keeps a stack free of a 0 Hz line (studio/adapters/engines.js, review of #332).
 //
 // Operator feedback (an operator modulating itself, a one-sample recurrence) is not offered:
 // it is a cycle in the audio graph, which project.no-silent-feedback v1 refuses, and a

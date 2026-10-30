@@ -15,10 +15,14 @@ const SR = 48000;
 const defaults = (type) => Object.fromEntries(NODE_REGISTRY.get(type).params
   .map((p) => [p.key, p.default]));
 
-/** The adapter on a fresh OfflineAudioContext, its output into the destination. */
-function build(type, params = {}, { seconds = 2, sampleRate = SR } = {}) {
-  const ctx = new OfflineAudioContext(1, Math.round(seconds * sampleRate), sampleRate);
+/**
+ * The adapter on a fresh OfflineAudioContext, its output into the destination. With
+ * `channels: 2` the output is channel 0 and channel 1 is `drive`, a gain the caller feeds.
+ */
+function build(type, params = {}, { seconds = 2, sampleRate = SR, channels = 1 } = {}) {
+  const ctx = new OfflineAudioContext(channels, Math.round(seconds * sampleRate), sampleRate);
   const acct = { track: (n) => n, source: (n) => n, untrack() {} };
+  const oscillators = [];
   const hooks = {
     ctx,
     clampFrequency: (f) => Math.min((ctx.sampleRate / 2) * 0.95, f),
@@ -27,14 +31,22 @@ function build(type, params = {}, { seconds = 2, sampleRate = SR } = {}) {
       o.type = t;
       o.frequency.setValueAtTime(this.clampFrequency(f), ctx.currentTime);
       o.start(at);
+      oscillators.push(o);
       return o;
     },
   };
   const p = { ...defaults(type), ...params };
   const h = NODE_ADAPTERS[type].create({ ctx, hooks, acct, at: 0, now: 0, params: p,
     node: { id: 'n1', type, params: p }, def: NODE_REGISTRY.get(type) });
-  if (h.outputs && h.outputs.audio) h.outputs.audio.connect(ctx.destination);
-  return { ctx, h, p };
+  let drive = null;
+  if (channels === 2) {
+    const merge = ctx.createChannelMerger(2);
+    drive = ctx.createGain();
+    if (h.outputs && h.outputs.audio) h.outputs.audio.connect(merge, 0, 0);
+    drive.connect(merge, 0, 1);
+    merge.connect(ctx.destination);
+  } else if (h.outputs && h.outputs.audio) h.outputs.audio.connect(ctx.destination);
+  return { ctx, h, p, oscillators, drive };
 }
 
 /**
@@ -158,6 +170,47 @@ window.E = {
     return windows.map(([t0, t1]) => ({ t0, t1,
       ...lineCents(r.data.subarray(at(r.sampleRate, t0), at(r.sampleRate, t1)), f0,
         r.sampleRate) }));
+  },
+
+  /**
+   * FM: the pitch of operator 1 (a carrier in every algorithm) from what drives it (review of
+   * #332, round 3). Every connection into its frequency is mirrored into a second rendered
+   * channel, so the render holds the deviation in Hz the oscillator integrates. A window's
+   * offset is that deviation's 0 Hz line: its mean under a Hann window of a whole number of the
+   * note's periods (`periods`, at least 0.3 s), which nulls every line at a multiple of the
+   * note. Windows start every `hop` s from `from` s -> [{ t0, t1, hz, cents }].
+   */
+  async drive(params, note, { from = 0.05, to = 2.9, hop = 0.05, seconds = 3 } = {}) {
+    const { ctx, h, p, oscillators, drive } = build('fm-voice', { sustain: 1, ...params },
+      { seconds, channels: 2 });
+    const proto = AudioNode.prototype;
+    const connect = proto.connect;
+    proto.connect = function mirrored(dest, ...rest) {
+      const r = connect.call(this, dest, ...rest);
+      if (oscillators[0] && dest === oscillators[0].frequency) connect.call(this, drive);
+      return r;
+    };
+    try { h.noteOn(0, note, 127); } finally { proto.connect = connect; }
+    const buf = await ctx.startRendering();
+    const x = buf.getChannelData(1);
+    const sr = buf.sampleRate;
+    const f0 = 440 * 2 ** ((note - 69) / 12);
+    const f1 = f0 * p.ratio1;
+    const len = Math.max(2, Math.ceil(0.3 * f0)) / f0;
+    const out = [];
+    for (let t0 = from; t0 + len <= to + 1e-9; t0 += hop) {
+      let s = 0;
+      let ws = 0;
+      for (let i = Math.ceil(t0 * sr); i / sr <= t0 + len; i++) {
+        const w = Math.sin((Math.PI * (i / sr - t0)) / len) ** 2;
+        s += w * x[i];
+        ws += w;
+      }
+      const hz = s / ws;
+      out.push({ t0: +t0.toFixed(3), t1: +(t0 + len).toFixed(3), hz,
+        cents: 1200 * Math.log2((f1 + hz) / f1) });
+    }
+    return out;
   },
 
   /** Wavetable: the steady RMS (dB) and the peak of one held note at each morph. */
