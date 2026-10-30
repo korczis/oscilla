@@ -1,0 +1,38 @@
+id: G014
+milestone: M087
+serves:
+- "component-system#generated-docs"
+title: "A generated component catalogue: docs/ui-catalog.md from the declarations, kept current by npm test"
+slug: a-generated-component-catalogue-docs-ui-catalog-md-from-the
+priority: p2
+profile: implementation
+objective: "Lands as feat(docs). scripts/ui-catalog.mjs imports the registry (pure modules only) and writes docs/ui-catalog.md: per workspace, its panels and their components with id, kind, label, unit and range, state owner and persistence (from sources.js, so 'kept in the configuration file only' is stated where pack03/dataflow.md measured it), links in and out, tests and source module; node faces are the registry's (the same source as V619's node reference, linked, never repeated). npm run docs:ui writes it, --check (run by npm test) fails when it is stale; the output is byte-stable (sorted, no clock). What a component means stays authored in its declaration; nothing is inferred. Before: VERIFIED no catalogue (inventory 4.4). After: one generated reference. Negative cases: a stale file, a declaration whose docs are empty, two declarations claiming one hook. Rollback: revert; docs only."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: \"the embedded Studio is ugly as hell\"; components in general must be generic, linkable, traceable, composable, unified, documented, dynamic, generated and interlinked; \"everything must be interlinked with everything\"; improve the main page and the first experience, deploy often. The owner's evolution prompt pack (MASTER, P02, P04, P06) binds it: the dark technical cockpit is locked, shared primitives only where duplication is proven, no new framework, generated docs only where deterministic, no decorative wires. Findings: the UI component inventory of 2026-10-29 (D1-D14 duplication, U1-U15 on the embedded Studio, measured on origin/main b67d1e58, v3.13.0); design: the component-system design of 2026-10-29 (scratchpad components/design.md)."
+scope:
+- scripts/ui-catalog.mjs
+- docs/ui-catalog.md
+- package.json
+- tests/unit/ui-catalog-docs.test.mjs
+- tests/README.md
+depends_on:
+- G001
+- V619
+acceptance_criteria:
+- "tests/unit/ui-catalog-docs.test.mjs fails on the merge base: the generated text equals the committed file, a fixture declaration change makes --check fail, and two runs give identical bytes."
+- "Definition of done, extends: the registry of G001 and the node reference V619 generates."
+- "Definition of done, interlinks: every row links its workspace route, its component address (G007) and the node reference."
+- "Definition of done, interactivity: none: a document (stated)."
+- "Definition of done, docs, menus and routes: README.md and docs/v3/ui-integration.md link the catalogue; package.json gains docs:ui. tests/README.md has a row for each new test; the component's catalogue declaration (G001) names its docs, links and tests; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: the unit test only (no browser surface; stated). The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit, and the release that carried it is recorded when the milestone is verified."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "Before Pro (it may land before F001): it adds no class token, selector, markup surface or inline style and only removes legacy ones, so tests/unit/ui-flowbite-pro-baseline.json stays equal or falls (node scripts/ui-flowbite-pro-record.mjs --check passes, rewritten only where a count fell) and node --test tests/unit/ui-flowbite-pro.test.mjs passes; studio.css, studio-timeline.css, charts.css and tokens.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock v2)."
+- "scripts/size-report.mjs shows at most 0 KB gzip added, with the base and head figures in the pull request body, inside the cap Q037 records (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/ui-catalog-docs.test.mjs
+- node scripts/ui-catalog.mjs --check
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

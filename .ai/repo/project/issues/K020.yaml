@@ -20,7 +20,7 @@ depends_on:
 acceptance_criteria:
   - "Applying a preset changes only the node's parameters, keeps its edges and is one undo entry, in a unit test that fails on the merge base."
   - "Every factory preset validates against its node type."
-  - "Any new chrome is Flowbite Pro markup adapted from the matching Pro block and lowers or keeps the ratchet (project.ui-uses-flowbite-pro, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs); controls are Pro range sliders with number inputs, never a custom rotary knob (D5)."
+  - "Any new chrome is Flowbite Pro markup adapted from the matching Pro block and lowers or keeps the ratchet (project.ui-uses-flowbite-pro, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs); controls are Pro range sliders with number inputs; a continuous instrument parameter in the Synth workspace is the knob of K058 (D11, Q018, superseding D5 there)."
   - "The pull request carries a reviewer's verdict (src/js/studio is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
   - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
 validation:

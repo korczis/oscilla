@@ -24,6 +24,7 @@ milestones:
   - M037
   - M039
   - M042
+  - M079
 satisfaction:
   - id: model-plain-data
     criterion: "A StudioModel is plain serializable data; runtime values are rejected before it is stored or serialized"
@@ -142,4 +143,4 @@ non_goals:
   - "An audio-file editor: the timeline is an event and control timeline (section 81)"
   - "A second audio engine or a second measurement orchestration (sections 2 and 42)"
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-10-29

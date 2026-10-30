@@ -23,7 +23,8 @@ depends_on:
 acceptance_criteria:
   - "Note-name entry parses A4, C#3 and MIDI numbers to the frequency core/music.js gives and refuses anything else with a readable sentence, in a unit test that fails on the merge base."
   - "A BPM outside 20-300 is refused, not clamped silently."
-  - "Any new chrome is Flowbite Pro markup adapted from the matching Pro block and lowers or keeps the ratchet (project.ui-uses-flowbite-pro, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs); controls are Pro range sliders with number inputs, never a custom rotary knob (D5)."
+  - "After a load or an import of a sequence or configuration file, the tempo control re-renders from the model and shows model.tempoBpm, including a value outside the offered steps (G1 coherence contract 2.4, persist-5), asserted by tests/unit/sequencer-chrome.test.mjs on a fixture whose tempo is not an offered step."
+  - "Any new chrome is Flowbite Pro markup adapted from the matching Pro block and lowers or keeps the ratchet (project.ui-uses-flowbite-pro, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs); controls are Pro range sliders with number inputs; a continuous instrument parameter in the Synth workspace is the knob of K058 (D11, Q018, superseding D5 there)."
   - "No reviewer's verdict is needed (src/js/sequencer is not a guarded path); as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
   - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
 validation:

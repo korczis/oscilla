@@ -1,0 +1,18 @@
+id: M103
+title: "Instrument kinds, wave 3 and 4: the mini-scope, the DAW kinds under Q062, and the sweep"
+slug: instrument-kinds-wave-3-and-4-the-mini-scope-the-daw-kinds
+order: 98
+priority: p2
+problem: "The DAW slices of the synth drafts (K101, K108, K111, K113) need clip slots, channel strips, track headers and a DAW transport that do not exist."
+outcome: "Clip slots and scenes, channel strips, track headers and the DAW transport are kinds; every kind instance is in the integration map and the control census and passes the 390x844 sweep."
+acceptance_criteria:
+- "W004, W011, W012, W015 and W016 are done with their evidence (W011, W012 and W015 cancelled with Q062 as the reason if Q062 is answered (b)); npm run release-gate passes at the last one."
+validation:
+- npm run release-gate
+evidence_required:
+- milestone_verified
+risks:
+- W014 and W015 touch guarded src/js/studio and src/js/audio paths and need reviewer verdicts.
+- "W012 is model first and waits on K101, which waits on V601's schema step."
+created_at: '2026-10-29'
+updated_at: '2026-10-30'
