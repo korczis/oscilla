@@ -156,8 +156,9 @@ test('the guarded paths are the rule\'s list', () => {
     'tests/unit/release-*', 'tests/unit/version-authority.test.mjs',
     'tests/browser/live-smoke.cjs',
     '.github/*', 'scripts/review-verdict.mjs', 'scripts/fail-first.mjs',
-    'scripts/ci-workflow-rules.mjs', 'scripts/yaml-subset.mjs',
+    'scripts/definition-of-done.mjs', 'scripts/ci-workflow-rules.mjs', 'scripts/yaml-subset.mjs',
     'tests/unit/review-verdict.test.mjs', 'tests/unit/fail-first.test.mjs',
+    'tests/unit/definition-of-done.test.mjs', 'tests/unit/fixtures/definition-of-done/*',
     'tests/unit/ci-workflows.test.mjs', 'tests/unit/ci-knowledge-job.test.mjs',
     'tests/unit/yaml-subset.test.mjs', 'tests/unit/base-rule.test.mjs',
     'tests/unit/fixtures/git-repo.mjs']);
@@ -166,11 +167,13 @@ test('the guarded paths are the rule\'s list', () => {
     'src/js/core/storage-inventory.js', 'scripts/release-publish.mjs',
     '.github/workflows/ci.yml', '.github/scripts/ci-install.sh', '.github/scripts/base-rule.sh',
     '.github/actions/setup/action.yml', '.github/doctor-verdict.jq',
+    'tests/unit/fixtures/definition-of-done/train.md',
     ...GUARDED.filter((g) => !g.endsWith('*'))]) {
     assert.equal(isGuarded(f), true, f);
   }
   for (const f of ['src/js/main.js', 'src/index.html', 'src/js/ui/shell.js',
-    'scripts/review-verdict.mjs.bak', 'tests/unit/v3-engine.test.mjs', 'docs/src/js/audio/x.md',
+    'scripts/review-verdict.mjs.bak', 'tests/unit/fixtures/definition-of-done.md',
+    'tests/unit/v3-engine.test.mjs', 'docs/src/js/audio/x.md',
     'docs/.github/workflows/ci.yml', '.ai/repo/reviews/1.yaml']) {
     assert.equal(isGuarded(f), false, f);
   }
@@ -218,7 +221,9 @@ test('V272 D5: the files of the cited incidents and the deploy and release proof
 
 test('a PR changing what enforces the process rules needs a verdict', (t) => {
   for (const file of ['scripts/review-verdict.mjs', 'scripts/fail-first.mjs',
-    'scripts/ci-workflow-rules.mjs', 'scripts/yaml-subset.mjs', '.github/scripts/ci-install.sh',
+    'scripts/definition-of-done.mjs', 'tests/unit/definition-of-done.test.mjs',
+    'tests/unit/fixtures/definition-of-done/complete.md', 'scripts/ci-workflow-rules.mjs',
+    'scripts/yaml-subset.mjs', '.github/scripts/ci-install.sh',
     '.github/actions/setup/action.yml', '.github/doctor-verdict.jq',
     'tests/unit/review-verdict.test.mjs', 'tests/unit/fixtures/git-repo.mjs']) {
     const repo = gitRepo('oscilla-review-verdict-');

@@ -156,6 +156,12 @@ gates:
     runs: .github/scripts/base-rule.sh origin/<base> scripts/review-verdict.mjs --pr <pr> --head HEAD --base-branch origin/<base>
     summary: a pull request that changes a guarded path carries a reviewer's verdict for the content it changes (project.review-verdict)
 
+  - id: definition-of-done
+    job: definition-of-done
+    always: true
+    runs: .github/scripts/base-rule.sh origin/<base> scripts/definition-of-done.mjs --pr-json <pr.json> --head <head> --base-branch origin/<base>
+    summary: a pull request that changes src/ carries the definition of done (the six items, each with a path or a plan id), a browser test and a document or their reasoned waivers, a tests/README.md row for every added test, a route test for a new url-state key and an integration-map row for a new link producer (project.definition-of-done)
+
   - id: gate
     job: gate
     always: true
@@ -164,6 +170,7 @@ gates:
       - knowledge
       - fail-first
       - review-verdict
+      - definition-of-done
       - engine-chromium
       - engine-firefox
       - engine-webkit

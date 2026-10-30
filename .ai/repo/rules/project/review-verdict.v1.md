@@ -4,7 +4,7 @@ version: 1
 kind: rule
 title: Risky changes merge only with a recorded review verdict for the reviewed content
 description: A pull request that changes a guarded path merges only with a committed verdict file that says merge, names the reviewer, records the digest of the guarded content the pull request changes and lists no open P0 or P1 finding.
-statement: A pull request touching src/js/audio, src/js/analysis, src/js/experiments, src/js/studio, src/js/measurement, src/js/calibration, src/js/core/storage*, src/js/core/safety*, src/js/ui/measure.js, src/js/ui/experiments.js, src/js/ui/findings.js, scripts/release-*, the build, pack, stamp and deploy-verification scripts (scripts/build*, scripts/pack-single-file.mjs, scripts/stamp-build.mjs, scripts/verify-deploy.mjs, scripts/verify-dist.mjs), the release rules' tests (tests/unit/release-*, tests/unit/version-authority.test.mjs, tests/browser/live-smoke.cjs), anything under .github/, or the programs and tests that enforce the process rules (scripts/review-verdict.mjs, scripts/fail-first.mjs, scripts/ci-workflow-rules.mjs, scripts/yaml-subset.mjs, their tests under tests/unit/ and tests/unit/fixtures/git-repo.mjs) merges only with .ai/repo/reviews/<pr>.yaml carrying `verdict: merge`, the reviewer session, a `content` equal to the SHA-256 of the guarded paths the pull request changes against its merge base (mode, blob and name of each, as merged with the base branch for the run), and no finding of severity P0 or P1 with status open; the guarded list that applies is the base branch's, the verdict is written by a reviewer who did not build the change, and a pull request is bound from the first CI run of a head that contains this rule's job.
+statement: A pull request touching src/js/audio, src/js/analysis, src/js/experiments, src/js/studio, src/js/measurement, src/js/calibration, src/js/core/storage*, src/js/core/safety*, src/js/ui/measure.js, src/js/ui/experiments.js, src/js/ui/findings.js, scripts/release-*, the build, pack, stamp and deploy-verification scripts (scripts/build*, scripts/pack-single-file.mjs, scripts/stamp-build.mjs, scripts/verify-deploy.mjs, scripts/verify-dist.mjs), the release rules' tests (tests/unit/release-*, tests/unit/version-authority.test.mjs, tests/browser/live-smoke.cjs), anything under .github/, or the programs and tests that enforce the process rules (scripts/review-verdict.mjs, scripts/fail-first.mjs, scripts/definition-of-done.mjs, scripts/ci-workflow-rules.mjs, scripts/yaml-subset.mjs, their tests under tests/unit/, tests/unit/fixtures/definition-of-done/ and tests/unit/fixtures/git-repo.mjs) merges only with .ai/repo/reviews/<pr>.yaml carrying `verdict: merge`, the reviewer session, a `content` equal to the SHA-256 of the guarded paths the pull request changes against its merge base (mode, blob and name of each, as merged with the base branch for the run), and no finding of severity P0 or P1 with status open; the guarded list that applies is the base branch's, the verdict is written by a reviewer who did not build the change, and a pull request is bound from the first CI run of a head that contains this rule's job.
 status: active
 class: blocking
 depends_on: []
@@ -41,10 +41,15 @@ never reviewed.
   `tests/unit/version-authority.test.mjs`, `tests/browser/live-smoke.cjs`); and what
   enforces the process rules: everything under `.github/` (the workflows, `ci-install.sh`,
   `base-rule.sh`, composite actions, `doctor-verdict.jq`), the programs
-  `scripts/review-verdict.mjs`, `scripts/fail-first.mjs`, `scripts/ci-workflow-rules.mjs` and
-  `scripts/yaml-subset.mjs`, their tests `tests/unit/review-verdict.test.mjs`,
-  `fail-first.test.mjs`, `ci-workflows.test.mjs`, `ci-knowledge-job.test.mjs`,
-  `yaml-subset.test.mjs` and `base-rule.test.mjs`, and `tests/unit/fixtures/git-repo.mjs`.
+  `scripts/review-verdict.mjs`, `scripts/fail-first.mjs`, `scripts/definition-of-done.mjs`,
+  `scripts/ci-workflow-rules.mjs` and `scripts/yaml-subset.mjs`, their tests
+  `tests/unit/review-verdict.test.mjs`, `fail-first.test.mjs`, `definition-of-done.test.mjs`,
+  `ci-workflows.test.mjs`, `ci-knowledge-job.test.mjs`, `yaml-subset.test.mjs` and
+  `base-rule.test.mjs`, the fixtures under `tests/unit/fixtures/definition-of-done/`, and
+  `tests/unit/fixtures/git-repo.mjs`. The judge of `project.definition-of-done` is here
+  because the base branch's copy runs: a pull request that changes only that program, and
+  nothing under `.github/`, would otherwise land a weaker judge for every pull request after
+  it with no review.
   An added, changed, renamed or deleted file there counts. The list is `GUARDED` in
   `scripts/review-verdict.mjs`. Left out on purpose: `src/index.html`, `src/js/main.js` (the
   composition root) and `src/styles/`, which nearly every user-facing change touches and

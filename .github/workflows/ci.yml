@@ -22,9 +22,9 @@
 # its own step, and the engine suite names a stalled check itself well before either.
 name: CI
 
-# pull_request only (project.ci-bounded, `triggers`): the fail-first and review-verdict jobs
-# judge a pull request, and a manual run on a PR's branch would have none to judge while its
-# `gate` landed on the same commit as the required check.
+# pull_request only (project.ci-bounded, `triggers`): the fail-first, review-verdict and
+# definition-of-done jobs judge a pull request, and a manual run on a PR's branch would have
+# none to judge while its `gate` landed on the same commit as the required check.
 on:
   pull_request:
 
@@ -410,7 +410,7 @@ jobs:
   review-verdict:
     # project.review-verdict: a PR that changes a guarded path (the audio, analysis, experiments
     # and studio modules, core/storage*, scripts/release-*, all of .github/, and the programs
-    # and tests of the three process rules: GUARDED in scripts/review-verdict.mjs) needs
+    # and tests of the four process rules: GUARDED in scripts/review-verdict.mjs) needs
     # .ai/repo/reviews/<pr>.yaml: `verdict: merge`, the reviewer session, the content it
     # reviewed and no open P0 or P1 finding (scripts/review-verdict.mjs, tested by
     # tests/unit/review-verdict.test.mjs). `content` is a SHA-256 over the guarded paths the PR
@@ -440,10 +440,52 @@ jobs:
           .github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF" scripts/review-verdict.mjs \
             --pr "$PR" --head HEAD --base-branch "origin/$GITHUB_BASE_REF"
 
+  definition-of-done:
+    # project.definition-of-done: a PR that changes src/ carries the owner's definition of done
+    # in its body (the six items, each with a path or plan id the head holds), adds or
+    # changes a browser suite and a document or waives each with `dod-browser: n/a <reason>` /
+    # `dod-docs: n/a <reason>`, lists every added test file in tests/README.md, proves a new
+    # url-state key with a route test and gives a new link producer its integration-map row
+    # (scripts/definition-of-done.mjs, tested by tests/unit/definition-of-done.test.mjs). A
+    # train is judged by its member table; a PR that changes nothing under src/ passes. Title,
+    # body and head branch are read from the PR as it is now, retried like fail-first's, so
+    # re-running the job after editing the body is enough. The program that judges is the base
+    # branch's copy (.github/scripts/base-rule.sh); it needs no dependency, so nothing is
+    # installed.
+    name: definition-of-done (a src/ change meets the definition of done)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: A src/ change carries the definition of done, a browser test and its docs
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ -z "$PR" ]; then echo "::error::definition-of-done: no pull request to judge"; exit 1; fi
+          n=0
+          until gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body,headRefName > "$RUNNER_TEMP/pr.json"; do
+            n=$((n + 1)); [ "$n" -lt 3 ] || { echo "::error::could not read PR $PR"; exit 1; }
+            sleep 10
+          done
+          .github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF" scripts/definition-of-done.mjs \
+            --pr-json "$RUNNER_TEMP/pr.json" --head "$HEAD_SHA" \
+            --base-branch "origin/$GITHUB_BASE_REF"
+
   gate:
     name: gate
     if: always()
-    needs: [unit, knowledge, fail-first, review-verdict, engine, suites, measure, studio, browser, visual]
+    needs: [unit, knowledge, fail-first, review-verdict, definition-of-done, engine, suites, measure, studio, browser, visual]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
