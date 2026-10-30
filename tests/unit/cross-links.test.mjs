@@ -158,3 +158,39 @@ test('the Sequencer offers its own pattern to Studio through importSequence (P4)
   const main = readFileSync(new URL('../../src/js/main.js', import.meta.url), 'utf8');
   assert.match(main, /currentSequence: \(\) => \(labs\.sequencer \? serializeSequence\(labs\.sequencer\.editor\.model\) : null\)/);
 });
+
+// The notices are in flow: one that never closed would push the page down until dismissed. A
+// notice with a link (the way back to a lesson) closes on its own too, later than a plain one,
+// and waits while the pointer is over the notices or focus is in them.
+test('a notice with a link closes on its own, later, and never under the pointer or focus',
+  async (t) => {
+    const { ACTION_NOTICE_MS, NOTICE_MS, createInstrument } = await import(
+      '../../src/js/core/instrument.js');
+    assert.ok(ACTION_NOTICE_MS > NOTICE_MS);
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const app = createInstrument({ engine: null });
+    const topic = LEARN_TOPICS.find((x) => x.id === 'harmonic');
+    app.notify('success', 'Demo ready: x', 'Press', { action: learnReturnAction(topic) });
+    app.notify('info', 'Plain', 'no link');
+    t.mock.timers.tick(NOTICE_MS);
+    assert.deepEqual(app.alerts.map((a) => a.title), ['Demo ready: x'],
+      'the plain notice closed, the one with a link stays longer');
+    t.mock.timers.tick(ACTION_NOTICE_MS - NOTICE_MS);
+    assert.equal(app.alerts.length, 0, 'the notice with a link closed on its own');
+
+    // The pointer over the notices (or focus in them) holds a notice with a link open.
+    let hovered = true;
+    const region = { matches: () => hovered, contains: () => false };
+    globalThis.document = { querySelector: () => region, activeElement: null };
+    try {
+      app.notify('info', 'Opened Analyzer from the lesson', 'Harmonics',
+        { action: learnReturnAction(topic) });
+      t.mock.timers.tick(ACTION_NOTICE_MS + 3 * NOTICE_MS);
+      assert.equal(app.alerts.length, 1, 'held open while the pointer is on it');
+      hovered = false;
+      t.mock.timers.tick(NOTICE_MS);
+      assert.equal(app.alerts.length, 0, 'closes once the pointer has left');
+    } finally {
+      delete globalThis.document;
+    }
+  });

@@ -254,8 +254,9 @@ Tab onto a node selects it; to select several by keyboard, Tab to the next one a
 it joins the nodes selected before. Tab onto a node that is already part of the selection
 keeps the selection, and **T** on a selected node takes it out.
 The same table is the Studio part of the one **Keyboard shortcuts** dialog. The keyboard button
-in the toolbar, Help (**?**) and the menu all open that dialog, and it lists the keys of the
-workspace in view and the keys that work everywhere (ADR 0050).
+in the toolbar, the header's **?** (named Keyboard shortcuts) and the menu all open that
+dialog, and it lists the keys of the workspace in view and the keys that work everywhere
+(ADR 0050).
 
 Space has one owner in each workspace, the same at every window width. In the workspaces that
 play, load or analyse the instrument's signal it is the instrument's Hold to Play, whether or

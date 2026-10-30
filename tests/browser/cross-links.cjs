@@ -37,7 +37,8 @@
 //   learn-tool      (P5, one-way link 2) a Learn topic's "Open <tool>" opens the tool; its
 //                   notice carries "Back to the lesson: <topic>", which returns to Learn with
 //                   the topic current; a topic without a tool has no link
-//   learn-demo-back (one-way link 2) a Learn demo's notice carries the way back to the lesson
+//   learn-demo-back (one-way link 2) a Learn demo's notice carries the way back to the lesson;
+//                   left untouched it still closes on its own (the notices are in flow)
 //   citations       (B10) every Bioacoustics citation link names its source, not the raw URL,
 //                   says "(opens in a new tab)" in its accessible name, keeps rel=noopener and
 //                   carries the URL as its title
@@ -69,6 +70,8 @@ const want = (name) => !ONLY || ONLY.has(name);
 
 const READY_MS = 30000;
 const NAV_MS = 10000;
+// src/js/core/instrument.js ACTION_NOTICE_MS: a notice with a link closes on its own after it.
+const ACTION_NOTICE_MS = 15000;
 const INPUTS = ['pointer', 'keyboard', 'touch'];
 
 // [data-osc, the workspace that shows it, Studio template id, template title, Back label]
@@ -542,6 +545,20 @@ async function runLeg(name, origin) {
         const hb = await H.traverse(page, 'back', 'playground');
         if (!hb) wrong.push(`${input}: Back did not return to the demo`);
       }
+      // The notices are in flow: one that never closed would push the page down until
+      // dismissed. Untouched (focus on Hold to Play, the pointer away), it closes on its own.
+      await H.setWorkspace(page, 'learn');
+      await H.activate(page, '#osc-view-learn .osc-learn-item:has(> h3:text-is("Frequency")) '
+        + '[data-osc="learn.demo"]', 'keyboard');
+      const offered = await until(() => page.evaluate(() =>
+        !!document.querySelector('[data-osc="alert.action"]')),
+      { ms: NAV_MS, what: 'the demo notice offers the way back' }).catch(() => false);
+      await page.mouse.move(2, 1020);
+      const closed = offered && await until(() => page.evaluate(() =>
+        !document.querySelector('[data-osc="alert.action"]')),
+      { ms: ACTION_NOTICE_MS + NAV_MS, what: 'the untouched demo notice closes on its own' })
+        .catch(() => false);
+      if (!closed) wrong.push(`the untouched demo notice did not close (offered ${offered})`);
       check(leg, 'a Learn demo leads back to its lesson (one-way link 2)',
         !wrong.length, wrong.join(' | '));
       await page.close();
