@@ -1,0 +1,41 @@
+id: K070
+milestone: M065
+serves:
+  - "connected-instrument#step-sequencer"
+  - "connected-instrument#piano-keyboard"
+title: "Record, transpose, randomise and quantise within a scale"
+slug: record-transpose-randomise-and-quantise-within-a-scale
+priority: p1
+profile: implementation
+objective: "Lands as feat(synth). Step record (a piano, computer-key or MIDI note writes the focused step and advances), live record while playing (notes quantised to the nearest step, the quantise shown, replace or overdub), transpose of the running pattern (with Transpose latched a key sets the transpose relative to the root, one history entry per key), randomise within the scale (seeded, the seed stored, one history entry) and quantise to the scale. Input comes through the note router, so the piano, the computer keys and MIDI behave the same. Before: patterns are entered step by step only. After: record, transpose, randomise and quantise in a scale. User-value tier 2 of 4 (synth-design.md section 17). Rollback: revert the pull request; no saved state depends on it."
+why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
+scope:
+  - "src/js/ui/synth"
+  - "src/js/synth"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/unit/synth-record.test.mjs"
+  - "tests/browser/steps.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K069"
+  - "K065"
+acceptance_criteria:
+  - "tests/unit/synth-record.test.mjs, failing on the merge base: step record writes and advances, live record quantises a note 20 ms late onto its step at 120 BPM, transpose sets the clip's transpose, randomise with one seed is reproducible and stays in the scale, and quantise moves every note into the scale."
+  - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: a note while not armed; a transpose outside -24..+24; randomise with the same seed twice (same result)."
+  - "A browser check in tests/browser/steps.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: notes recorded from the piano are the steps the Studio timeline's clip holds after reload. Real-time: a MIDI note from the stub while recording appears in the grid and sounds on the next pass; a transpose key changes the playing pitch on the next step, each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: Record, Step record and Transpose toggles work by pointer, keyboard and touch and are role=switch with aria-checked. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Every edit is one undoable dispatch through the one Studio store (a continuous gesture is one history entry, undo and redo restore the exact serialized model) and the model holds plain data only (project.studio-model-is-canonical); every connection goes through canConnect and full-model validation, and a refusal shows the validator's sentence and leaves model, history and runtime unchanged (project.typed-ports, project.no-silent-feedback)."
+  - "Every string it adds passes tests/unit/instrument-wording.test.mjs (added by K059): no product, brand or model name, no analog-modelling or vintage claim, and every approximation it makes labelled where it is shown (project.no-fake-science)."
+  - "Its chrome uses the Flowbite Pro component where Pro has one (card, button, button group, input, dropdown, tabs, tooltip, popover), adapted from that block, lands after F002, is recorded as migrated (never pending) and lowers or keeps the ratchet; the instrument visuals Pro has no component for (the knob arc, the cable layer, the piano keys, the pad surface) are inline SVG and Tailwind utilities inside Pro cards, as the ADR 0061 resolution note of K058 records; it adds no osc-* class token, no legacy selector, no inline style and no stylesheet (project.ui-uses-flowbite-pro, project.visual-identity-lock v2, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs); every continuous instrument parameter it shows is the knob of K058 (D11)."
+  - "The pull request carries a reviewer's verdict (src/js/synth is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "scripts/size-report.mjs shows at most 3 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; it does not wait on Q023, and its figure joins the line's sum once Q023 records the cap, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/synth-record.test.mjs"
+  - "node tests/browser/steps.cjs"
+  - "node tests/browser/midi.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

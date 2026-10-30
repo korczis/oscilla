@@ -1,0 +1,40 @@
+id: J005
+milestone: M118
+serves:
+- "component-system#majordomus-served"
+title: Majordomus judges the projection in CI and points a task at the components it changes
+slug: majordomus-judges-the-projection-in-ci-and-points-a-task-at
+priority: p2
+profile: implementation
+objective: "Lands as ci(knowledge). The CI knowledge job gains a step after doctor that runs majordomus knowledge validate --json under the pinned version and fails on any finding whose source is under .ai/repo/knowledge/components/ (doctor reports a dangling edge as WARN only, and the doctor verdict fails on FAIL lines; measured 2026-10-29). The step is bounded, retried and pinned like its neighbours (project.ci-bounded). .ai/repo/profiles/implementation.yaml sets context.knowledge: true, so that majordomus context for a task bound to an issue prints its knowledge pointers: the issue, its milestone and every node in its scope, including the component records an issue names in scope (measured: a record named in an issue's scope is pointed to; one that only relates to the issue is not). .ai/repo/project/README.md gains the convention: an issue that changes a declaration names the records it rewrites in its scope. Before: a dangling component edge passes CI, and a task's context names no component. After: it fails, and the context points to them. Negative cases: a fixture validate output with a components finding fails the verdict; one with only findings elsewhere (the duplicate_id of project.visual-identity-lock v1 and v2 on main) passes it. Rollback: revert the step and the profile key."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs and knowledge base, interlink them and add more; knobs, sliders and control panels in one generic way, Majordomus integrated: each component and parameter declaration carries its intent, issue and rule ids, a deterministic generator projects the registry into .ai/repo/knowledge so that Majordomus serves it (context resolve, why, traceability), and a check fails when a component has no plan or knowledge link. Design: components-followup/majordomus-kb-adr.md of this plan change, measured with Majordomus 1.0.0-alpha.1 (the CI pin) and 1.0.0-alpha.8 on a throwaway copy of origin/main cdda563c."
+scope:
+- .github/workflows/ci.yml
+- tests/unit/ci-knowledge-job.test.mjs
+- tests/unit/fixtures/knowledge-validate-components.json
+- .ai/repo/profiles/implementation.yaml
+- .ai/repo/project/README.md
+- tests/README.md
+depends_on:
+- J003
+acceptance_criteria:
+- "tests/unit/ci-knowledge-job.test.mjs fails on the merge base: the new step exists, runs after doctor under the pinned version, has a timeout, and its verdict fails the fixture with a components finding and passes the fixture without one."
+- "majordomus context for a task bound to a component issue prints a KNOWLEDGE POINTERS section that lists the component records in its scope, and stays inside context.builder_budget_lines (the line counts before and after are in the pull request body)."
+- "majordomus doctor passes under the pinned version and the launcher's with the profile key (the key is in the profile schema of both, checked 2026-10-29)."
+- "Its paths are guarded (.github/*): it needs a reviewer's .ai/repo/reviews/<pr>.yaml for the content it changes, written by a reviewer and never by its builder (project.review-verdict); as a ci change it is not owed a fail-first test, and it carries one anyway."
+- "It adds no class token, selector, markup surface or inline style, so tests/unit/ui-flowbite-pro-baseline.json stays equal (node scripts/ui-flowbite-pro-record.mjs --check and node --test tests/unit/ui-flowbite-pro.test.mjs pass) (project.ui-uses-flowbite-pro, ADR 0061)."
+- "scripts/size-report.mjs shows 0 B gzip added: nothing it adds is under src/ or bundled (project.single-file-deliverable)."
+- tests/README.md has a row for each new test.
+- "Definition of done, extends: the CI knowledge job judges the component projection with Majordomus's own validator."
+- "Definition of done, interlinks: each task bound to a component issue is pointed to that component's record."
+- "Definition of done, interactivity: none: CI and context (stated)."
+- "Definition of done, docs, menus and routes: the project README states the scope convention; no route changes."
+- "Definition of done, tested: the unit test over fixtures (no browser surface; stated)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+- node --test tests/unit/ci-knowledge-job.test.mjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

@@ -1,0 +1,39 @@
+id: C006
+milestone: M090
+serves:
+  - "coherent-state#sequence-state-one-owner"
+  - "coherent-state#views-describe-what-sounds"
+title: "The sequencer playhead marks the block that sounds after an edit during playback"
+slug: the-sequencer-playhead-marks-the-block-that-sounds-after-an
+priority: p2
+profile: implementation
+objective: "Lands as fix(sequencer). Finding vis-divergence-3. Edits during playback apply from the next pass (editor.js:21-23), but the panel builds the timeline scale and block rects from the edited editor.model and maps the sounding pass's clock onto it linearly: after a Tone block is lengthened to 3000 ms in pass 1, the playhead sits inside that Tone while the Pulse 1.2 kHz block sounds. Keep a snapshot of the compiled pass's layout (block ids, starts and durations) in the pass record and expose currentPassBlock() -> { id, index, startS, endS, t } read on the audio clock. A pure passPlayheadX(rects, passBlock) in src/js/sequencer/timeline.js finds the rect by block id, not index, so moves, duplicates and deletes stay right, and returns null when the block is gone. While the pass's layout differs from the edited model the panel marks the sounding block (aria-current) and, on null, ghosts the playhead with 'changes apply from the next pass'; the status bar shows the sounding and the next length. The pass is never restarted on an edit (that would be audible). Rebase over K003 (pull request #266), which edits the same two files."
+why: "Owner brief OSCILLA PACK 03, 'One Instrument, One Coherent State' (2026-10-29): every control must provably reach its subsystem and every view that reflects it, and be covered by a test (owner: 'filters, sequencer, bpm and many other interactive knobs / sliders / control elements are not reflected / working / tested'). The findings named here were reproduced by an independent skeptic on a fresh export of origin/main b67d1e58 (v3.13.0)."
+scope:
+  - "src/js/sequencer/editor.js"
+  - "src/js/sequencer/timeline.js"
+  - "src/js/labs/sequencer-panel.js"
+  - "src/js/ui/workbench.js"
+  - "src/index.html"
+  - "tests/unit/sequencer-editor.test.mjs"
+  - "tests/unit/sequencer-timeline.test.mjs"
+  - "tests/browser/sequencer.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "C004"
+acceptance_criteria:
+  - "A unit test in tests/unit/sequencer-editor.test.mjs with the fake context: play, lengthen block 0, advance the clock into block 3: currentPassBlock().id is the Pulse block's id and passPlayheadX on the edited layout falls inside the Pulse rect; it fails on the merge base."
+  - "Browser check `seq-playhead-after-edit` in tests/browser/sequencer.cjs: type Duration 3000 ms and Tab during pass 1; when editor.currentFrequency() reads 1200 Hz, the block under the playhead is the Pulse block, and the pass was not restarted."
+  - "fail-first holds: the unit test or browser check named above fails on the merge base (project.fail-first)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named wall-clock deadline; tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "The change adds no osc-* class token, stylesheet selector or inline style, so the Flowbite Pro ratchet only shrinks (node --test tests/unit/ui-flowbite-pro.test.mjs)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/sequencer-editor.test.mjs tests/unit/sequencer-timeline.test.mjs"
+  - "node tests/browser/sequencer.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

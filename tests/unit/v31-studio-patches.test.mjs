@@ -33,6 +33,7 @@ import {
   openExperimentStore, openExperimentStoreOrMemory, studioRecordProblem, upgradeExperimentDb,
 } from '../../src/js/experiments/store.js';
 import { createExperiment, createRecipe } from '../../src/js/experiments/schema.js';
+import { fakeIndexedDB } from './fixtures/fake-indexeddb.mjs';
 
 // ---------------------------------------------------------------- fixtures
 
@@ -45,114 +46,6 @@ const storeOf = (model) => createStudioStore(model, { idGenerator: createIdGener
 function experiment(id = 'exp-1') {
   return createExperiment({ id, now: NOW, recipe: createRecipe({ stimulus: { kind: 'log-sweep',
     sampleRate: 48000, duration: 2, level: 0.5, f1: 20, f2: 20000, fade: 0.01 } }) });
-}
-
-// A minimal in-memory IndexedDB (the v3-experiments.test.mjs helper): open/upgrade, object
-// stores with keyPath, readonly/readwrite transactions with put/get/getAll/delete, async events,
-// rollback on abort, and a quota-error switch.
-function fakeIndexedDB() {
-  const dbs = new Map();
-  const state = { upgrades: [], quota: null };
-  const later = (fn) => setImmediate(fn);
-  const quotaError = () => new DOMException('The quota has been exceeded.', 'QuotaExceededError');
-  class Tx {
-    constructor(rec, names, mode) {
-      this.rec = rec;
-      this.names = names;
-      this.mode = mode;
-      this.pending = 0;
-      this.finished = false;
-      this.error = null;
-      this.oncomplete = this.onerror = this.onabort = null;
-      this.snapshot = new Map([...rec.stores].map(([k, s]) => [k, new Map(s.data)]));
-      later(() => this.settle());
-    }
-
-    objectStore(name) {
-      if (!this.names.includes(name)) throw new DOMException('not in scope', 'NotFoundError');
-      const s = this.rec.stores.get(name);
-      return {
-        put: (value) => this.op(() => {
-          if (this.mode !== 'readwrite') throw new DOMException('readonly', 'ReadOnlyError');
-          if (state.quota === 'request') throw quotaError();
-          s.data.set(value[s.keyPath], structuredClone(value));
-          return value[s.keyPath];
-        }),
-        get: (key) => this.op(() => (s.data.has(key) ? structuredClone(s.data.get(key))
-          : undefined)),
-        getAll: () => this.op(() => [...s.data.values()].map((v) => structuredClone(v))),
-        delete: (key) => this.op(() => {
-          s.data.delete(key);
-          return undefined;
-        }),
-      };
-    }
-
-    op(fn) {
-      const req = { result: undefined, error: null, onsuccess: null, onerror: null };
-      this.pending++;
-      later(() => {
-        this.pending--;
-        if (this.finished) return;
-        try {
-          req.result = fn();
-          if (req.onsuccess) req.onsuccess({ target: req });
-        } catch (err) {
-          req.error = err;
-          const ev = { target: req, prevented: false, preventDefault() { this.prevented = true; } };
-          if (req.onerror) req.onerror(ev);
-          if (this.onerror) this.onerror(ev);
-          if (!ev.prevented) this.abort(err);
-        }
-        this.settle();
-      });
-      return req;
-    }
-
-    settle() {
-      later(() => {
-        if (this.finished || this.pending) return;
-        this.finished = true;
-        if (this.oncomplete) this.oncomplete({});
-      });
-    }
-
-    abort(err = new DOMException('aborted', 'AbortError')) {
-      if (this.finished) throw new DOMException('finished', 'InvalidStateError');
-      this.finished = true;
-      this.error = err;
-      for (const [k, data] of this.snapshot) this.rec.stores.get(k).data = data;
-      later(() => this.onabort && this.onabort({}));
-    }
-  }
-  const indexedDB = {
-    open(name, version) {
-      const req = { result: null, error: null, transaction: null, onsuccess: null, onerror: null,
-        onupgradeneeded: null, onblocked: null };
-      later(() => {
-        if (!dbs.has(name)) dbs.set(name, { version: 0, stores: new Map() });
-        const rec = dbs.get(name);
-        const db = {
-          objectStoreNames: { contains: (k) => rec.stores.has(k) },
-          createObjectStore: (k, { keyPath }) => rec.stores.set(k, { keyPath, data: new Map() }),
-          deleteObjectStore: () => { throw new Error('an upgrade must never delete a store'); },
-          transaction: (names, mode = 'readonly') => new Tx(rec, [].concat(names), mode),
-          close() {},
-        };
-        req.result = db;
-        if (version > rec.version) {
-          state.upgrades.push([rec.version, version]);
-          const oldVersion = rec.version;
-          rec.version = version;
-          req.transaction = { abort() {} };
-          if (req.onupgradeneeded) req.onupgradeneeded({ oldVersion, newVersion: version });
-        }
-        if (req.onsuccess) req.onsuccess({ target: req });
-      });
-      return req;
-    },
-  };
-  return { indexedDB, dbs, state };
 }
 
 /** A version-1 database as V3.0 left it: the two experiment stores and one experiment. */
