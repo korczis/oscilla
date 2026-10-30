@@ -11,8 +11,8 @@
         "height": 1024
       },
       "runs": 3,
-      "total": 3.08,
-      "totalExclData": 3.28,
+      "total": 3.11,
+      "totalExclData": 3.32,
       "regions": {
         "header": {
           "mismatch": 3.06,
@@ -63,8 +63,8 @@
           "dataPp": 0.5
         },
         "studio": {
-          "mismatch": 5.32,
-          "mismatchExclData": 5.32,
+          "mismatch": 5.61,
+          "mismatchExclData": 5.61,
           "runToRunPct": 0,
           "dataPp": 0.5
         },

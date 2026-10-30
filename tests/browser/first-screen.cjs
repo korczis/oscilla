@@ -50,7 +50,8 @@
 //                   Guided measurement row across the full width (seven steps, Check setup
 //                   enabled, Frequency and Level UNCALIBRATED) entirely in the viewport, and
 //                   under it the Pattern Sequencer with the compact Studio beside it, the
-//                   compact Studio starting in the viewport; the Spectrogram panel, Filter Lab,
+//                   compact Studio starting in the viewport with its whole signal path in view
+//                   (no node behind a scroll); the Spectrogram panel, Filter Lab,
 //                   Envelope, Additive Synthesis, Phase & Stereo, Bioacoustics and the other
 //                   MEASURE panels are not shown, nor anything else (no guided path)
 //   layout phone    at 390x844 (a phone: isMobile, hasTouch) the same order top to bottom: the
@@ -68,7 +69,8 @@
 //                   Synthesis the Envelope and Filter Lab the filter
 //   layout widths   at 1280x800 and 1440x900, and at 1366x1024 under touch (a coarse pointer
 //                   where the engine emulates one), no control of the first row's panels ends
-//                   below its panel or under the measurement row, and HOLD TO PLAY, TRIGGER,
+//                   below its panel or under the measurement row, the compact Studio's signal
+//                   path is in view whole, and HOLD TO PLAY, TRIGGER,
 //                   Gain and the analysis scale and range controls take a press at their centre
 //
 // Waits are condition polls through lib/wait.cjs with a named wall-clock deadline (rule
@@ -653,6 +655,11 @@ function layoutFacts() {
     primary: shown(primary) ? { text: primary.textContent.trim(), enabled: !primary.disabled }
       : null,
     freq: ind('freqIndicator'), level: ind('levelIndicator'),
+    // The compact Studio's signal path: its whole width in view, no node behind a scroll.
+    studioPath: (() => {
+      const p = document.querySelector('#osc-panel-studio .osc-sc-path');
+      return p ? { client: p.clientWidth, scroll: p.scrollWidth } : null;
+    })(),
     // Source & Pattern's own disclosures: the six frequency steps and Mode.
     folds: ['osc-fine-fold', 'osc-mode-fold'].map((id) => {
       const d = document.getElementById(id);
@@ -702,6 +709,9 @@ async function layoutDesktop(ctx) {
       }
       if (Math.min(seq.top, st.top) < flow.bottom) wrong.push('row 3 overlaps the measurement row');
       if (st.top >= f.vh) wrong.push(`the compact Studio starts below the viewport (${st.top})`);
+    }
+    if (!f.studioPath || f.studioPath.scroll > f.studioPath.client + 1) {
+      wrong.push(`the compact Studio's signal path is clipped ${JSON.stringify(f.studioPath)}`);
     }
     if (f.steps.length !== 7) wrong.push(`${f.steps.length} measurement steps shown`);
     if (!f.primary || f.primary.text !== 'Check setup' || !f.primary.enabled) {
@@ -870,6 +880,12 @@ async function layoutWidths(ctx) {
             }
           }
         }
+        // The compact Studio's signal path keeps its whole width in view (no node clipped).
+        const sp = document.querySelector('#osc-panel-studio .osc-sc-path');
+        if (!sp || sp.scrollWidth > sp.clientWidth + 1) {
+          spill.push(`compact Studio path ${sp ? `${sp.scrollWidth} > ${sp.clientWidth}`
+            : 'missing'}`);
+        }
         return { spill, coarse: matchMedia('(pointer: coarse)').matches };
       }, { row1: ROW1 });
       const wrong = [...f.spill];
@@ -885,7 +901,8 @@ async function layoutWidths(ctx) {
         if (hit) wrong.push(`${sel} is covered by ${hit}`);
       }
       check(ctx.leg, `layout widths ${w.name}${w.touch ? ` (coarse ${f.coarse})` : ''}: `
-        + 'row 1 keeps its controls above the measurement row', !wrong.length,
+        + 'row 1 keeps its controls above the measurement row, the compact Studio path whole',
+      !wrong.length,
       wrong.slice(0, 8).join('; '));
     } finally {
       await c.close().catch(() => {});
