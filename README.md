@@ -650,6 +650,15 @@ from the background, or hold-to-play by touch. The owner declined real-device ch
 Every V3 browser check runs on a TEST CONTEXT digital loopback or a fake microphone. No
 automated test proves how a physical speaker, room or microphone behaves.
 
+Every control of the page is operated by a browser suite, or is listed as debt that only
+shrinks (`tests/unit/control-drive-baseline.test.mjs` with its `.json` record). The filter,
+envelope, additive, dual oscillator, phase and stereo, source, device, analysis and Settings
+controls are driven by pointer and keyboard in `tests/browser/app.cjs` (the `ui-*-controls`
+checks and `labs-basic`), each judged where it acts (the live filter stage and the tone's
+level, the next note's envelope, the dual voice, the stereo router) and in a view that shows
+it; the Sequencer panel's Tempo (BPM), Loop, timeline, block fields, Move, Add, Delete and
+transport are driven in `tests/browser/sequencer.cjs`.
+
 `npm run release-gate` is the authority on what the gate runs and in what order; the table
 names every suite and visual script its `test:release` runs (`tests/unit/docs-derived.test.mjs`
 holds it to `package.json`). [`tests/README.md`](tests/README.md) describes each file and how to
