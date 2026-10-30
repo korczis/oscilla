@@ -1,0 +1,35 @@
+id: T011
+milestone: M073
+serves:
+  - "v3-measure#readout-states"
+  - "v3-measure#readout-labels"
+title: "The microphone level states its scale, and a clipped input says so"
+slug: the-microphone-level-states-its-scale-and-a-clipped-input-sa
+priority: p2
+profile: implementation
+objective: "Truth-table rows SPC-07, MIC-04, MIC-13 (scratchpad p05/truth-table.md). Per Q041: either the sinusoid level is shown as levelDbfs with \"dBFS-like, uncalibrated\" and a \"single stationary tone\" caveat while the chart axis follows, or the readout keeps the analyser dB and says \"analyser dB\" in place. If Q041 asks for it, the time buffer the readout already receives is checked with the oscilla.clip.v2 rail rule (≥ 3 samples ≥ 0.98 within 1 ms, the helper T020 exports from capture-checks.js) and the readout appends \"INPUT CLIPPING: level and harmonics unreliable\"."
+why: "P05 audit of origin/main b67d1e58 (v3.13.0): The readout shows the raw analyser level at the peak (\"relative level -14 dB\" for a full-scale sine); a sine driven 12 dB over full scale and clipped at ±1 reads \"440 Hz ± 3 Hz (relative level -12 dB)\" with no clip state, suggesting headroom. The two audit passes disagree on whether this breaks ADR 0017 (see Q041)."
+scope:
+  - "src/js/labs/mic-analyzer.js"
+  - "src/js/charts/spectrum-chart.js"
+  - "tests/unit/readout-states-mic-level.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "Q041"
+  - "T007"
+  - "T020"
+acceptance_criteria:
+  - "Fail-first fixture: tests/unit/readout-states-mic-level.test.mjs: a 4x sine clipped at ±1 (fixture F3) carries the clipping text; a full-scale sine reads the level the chosen scale defines (about 0 dBFS-like, or about -14 analyser dB with that name); a 0.5 sine carries no flag. Fails on the merge base."
+  - "Negative cases, each asserted: A clean -20 dBFS sine has no flag; one isolated rail sample is not clipping (run rule); the frequency of a clipped tone still reads 440 Hz; no SPL wording appears anywhere in the lab."
+  - "Revertible on its own: Revert: readout text and one helper call."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "Any new visible element follows the Flowbite Pro components and the locked tokens (project.ui-uses-flowbite-pro, project.visual-identity-lock); npm run visual passes or the baseline change is declared."
+  - "tests/README.md has a row for each new test; this issue does not edit docs/CLAIMS.yaml or the intent (T027 does)."
+validation:
+  - "npm test"
+  - "npm run verify"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

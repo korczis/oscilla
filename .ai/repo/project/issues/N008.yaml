@@ -1,0 +1,44 @@
+id: N008
+milestone: M111
+serves:
+- "parameter-controls#every-parameter-shown"
+- "parameter-controls#generated-views"
+title: "Control panel: a group of parameters laid out from their declarations, sections, primary controls, collapse and expand, mobile first"
+slug: control-panel-a-group-of-parameters-laid-out-from-their-declar
+priority: p2
+profile: implementation
+objective: "Lands as feat(ui). src/js/ui/kinds/panel.js exports mountPanel(host, { id, title, sections, primary, summary }, { surface, density, values, commit, menu, expanded, onToggle }) -> { set, setDisabled, setModulation, setAutomation, setExpanded, destroy }. For a node the group is V619's face declaration (sections holding every parameter, at most three primary) and defineNode's summary; for a lab or settings form it is authored. Each section is a Pro card whose header is a disclosure button with aria-expanded and aria-controls; Expand all and Collapse all sit in the panel header; collapsed shows title, summary, the primary controls (live) and the jacks, expanded every section, so every parameter (owner decision Q031). Layout is designed at 390x844 first: one column of sections, knobs in grid-cols-3 (about 119 px a cell), sm:grid-cols-4, lg:grid-cols-6, slider rows full width, no horizontal scroll; 44 px targets on a coarse pointer. The panel stores nothing: the box's folding is V622's node presentation state (saved, undoable, never hashed), a Synth card's is K062's view state (never in history or the hash); the two projections of one node fold independently, which project.studio-model-is-canonical allows and both docs state. Consumers: V620 (box face), K062 (Synth cards), K096 (Inspector), F003 (Playground-family labs). Before: VERIFIED every surface lays out its fields by hand (inventory C5). After: one panel. Negative cases: a node type whose expanded panel misses a parameter, a panel that writes its folding, 390 px with horizontal scroll, a collapsed primary that is not operable. Rollback: revert. Merged plan of the component follow-up (2026-10-30): Wave 1: it needs F001, not F002. Its disclosure buttons and cards carry explicit utilities that do not rely on preflight, so F002 turning preflight on changes nothing the visual gate sees; the knob view appears in the Inspector's panel through K096 under Q020's answer."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs, KB and interlinking; full DAW, full sequencer, full piano, everything interlinked, clickable, parameterized and joined; knobs, sliders and control panels in one generic way, integrated with Majordomus; every element tweakable; mobile first; the landing easy to use, easy to extend and open to hack. Owner decisions: knobs that always show value and unit (D11, Q018, the ADR 0058 note of 2026-10-29), every parameter on the box face (Q031), the generator in its own workspace (Q033). Design: the params-controls part of the component follow-up of 2026-10-29 (scratchpad components-followup/params-controls.md), checked against origin/main b67d1e58 and the head of plan pull request #285 (c0a631b2)."
+scope:
+- src/js/ui/kinds/panel.js
+- src/js/ui/studio/inspector.js
+- tests/unit/control-panel.test.mjs
+- tests/browser/v31-studio-graph.cjs
+- tests/visual
+- tests/unit/ui-flowbite-pro-baseline.json
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- N003
+- V619
+- F001
+acceptance_criteria:
+- "tests/unit/control-panel.test.mjs fails on the merge base: for every NODE_REGISTRY type the expanded projection has exactly one control per parameter and the collapsed one exactly the primary controls; the panel module calls onToggle and writes no folding (static scan and a recording owner)."
+- "Definition of done, tested: tests/browser/v31-studio-graph.cjs mounts the Inspector's parameters as a panel at 390x844 and 1536x1024, toggles a section by click, Enter and a hasTouch tap, uses Expand all and Collapse all, and waits with until() (deadline 'panel folded', 2 s) for aria-expanded, the visible control count and the owner's recorded state to agree; document.scrollingElement.scrollWidth equals clientWidth at 390. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), runs at 390x844 and at 1536x1024, adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, extends: V619's face sections and the Inspector's parameter list."
+- "Definition of done, interlinks: each section header is addressable (c=<panel>#<section>), and each control keeps its data-osc-param."
+- "Definition of done, interactivity: sections fold and unfold by pointer, keyboard and touch; every control inside stays live."
+- "Definition of done, docs, menus and routes: docs/ui-catalog.md (N010) documents the panel; EXTENDING.md says a face section is all a node author writes. tests/README.md has a row for each new test; the parameter's or view's catalogue entry names its docs, links and tests (G001 trace part); dist is rebuilt and npm run build:check passes."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit, and the release that carried it is recorded when the milestone is verified."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "After F001 (Tailwind compiled, preflight off until F002): its chrome is markup adapted from the matching Flowbite Pro block (named by its flowbite-pro reference.md section) with Tailwind class lists only; the knob arc and the band are inline SVG with Tailwind utilities under the ADR 0061 resolution note of K058; it adds no osc-* class token, no legacy vocabulary use and no selector, and the domain views' stylesheets gain nothing; the record's debt does not rise (project.ui-uses-flowbite-pro, project.visual-identity-lock v2, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "scripts/size-report.mjs shows at most 1.5 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the line's sum stays within its row of the cap Q037 records, under the 1.2 MB gzip budget of scripts/build-config.mjs (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/control-panel.test.mjs
+- node tests/browser/v31-studio-graph.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-30'

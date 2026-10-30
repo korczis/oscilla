@@ -1,0 +1,45 @@
+id: N003
+milestone: M111
+serves:
+- "parameter-controls#generated-views"
+- "parameter-controls#accessible-contract"
+title: "One control interface: mountControl, its pure attribute model and a shared browser contract every surface's suite runs"
+slug: one-control-interface-mountcontrol-its-pure-attribute-model-an
+priority: p2
+profile: implementation
+objective: "Lands as feat(ui). src/js/ui/kinds/param/control.js defines mountControl(host, spec, { view, surface, value, commit, menu, density }) -> { set, setDisabled, setModulation, setAutomation, focus, destroy, element }, the one interface the knob (K058), the slider and field of G008, the toggle and the choice implement; viewFor(spec, surface) picks the view deterministically (number and integer: knob on instrument surfaces, slider and field on forms, per D11; enum up to five options a button group, more a select; boolean a toggle; list a field; id readonly). commit(value, gesture) takes begin, update, end or once and returns true or { refused }; the control holds no value, resolves no state path, subscribes to nothing and evaluates no condition. controlAttrs(spec, view, state) is pure and gives role, name, aria-valuenow as the position 0..1000 (so a log parameter steps in its log domain and a value beyond the display range stays truthful in aria-valuetext), aria-valuetext with value and unit, aria-describedby ids for unit, modulation, automation, error and disabled reason, aria-disabled with the control still focusable, and the coarse-pointer target size. tests/browser/lib/control-contract.cjs exports assertControlContract(page, locator, spec, view): role, name, valuetext, the keys of N002, Shift fine, Home and End, double-click and double-tap reset, typed entry and its stated refusal, a touch drag where the view has one, the disabled reason, and 44 px on a coarse pointer. First subject after F001: the Studio Inspector's number field is adapted to the interface without markup change. Before: VERIFIED seven parameter-field variants with different labels, valuetext missing on two sliders (inventory C4, C5). After: one interface and one contract. Negative cases: a refused commit (the owner's value is shown again and the refusal stated), destroy leaving a listener behind, a view missing aria-valuetext or the disabled reason. Rollback: revert. Merged plan of the component follow-up (2026-10-30): The handle shape { element, set, setDisabled, destroy } and the commit result true or { refused } are the ones every kind of W001 uses, so the param kind is one kind among them; this slice adds the param kind record to W001's table. The views keep only transient interaction state (focus, an in-progress drag preview, an open typed entry), never readable from outside and never persisted. The slider and field views carry the Pro range and number-input class lists as literal Tailwind utilities (F001 compiles them; F002's form base styles then apply without change); no class name is built from a template literal and no view writes el.style. G008 mounts these views in the labs."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs, KB and interlinking; full DAW, full sequencer, full piano, everything interlinked, clickable, parameterized and joined; knobs, sliders and control panels in one generic way, integrated with Majordomus; every element tweakable; mobile first; the landing easy to use, easy to extend and open to hack. Owner decisions: knobs that always show value and unit (D11, Q018, the ADR 0058 note of 2026-10-29), every parameter on the box face (Q031), the generator in its own workspace (Q033). Design: the params-controls part of the component follow-up of 2026-10-29 (scratchpad components-followup/params-controls.md), checked against origin/main b67d1e58 and the head of plan pull request #285 (c0a631b2)."
+scope:
+- src/js/ui/kinds/param/control.js
+- src/js/ui/catalog
+- src/js/ui/studio/inspector.js
+- tests/unit/control-contract.test.mjs
+- tests/browser/lib/control-contract.cjs
+- tests/browser/v31-studio-graph.cjs
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- N001
+- N002
+- W001
+- F001
+acceptance_criteria:
+- "tests/unit/control-contract.test.mjs fails on the merge base: for every view, controlAttrs over a table of specs and states (plain, beyond the display range, disabled, modulated, automated) gives the role, name, valuenow position, valuetext with unit and describedby ids; every view module exports the interface; a static scan finds no store subscription, state-path resolution or osc- name in src/js/ui/kinds/param."
+- "Definition of done, tested: tests/browser/v31-studio-graph.cjs runs assertControlContract on the Inspector's cutoff field and slider of a Filter node, by keyboard, pointer and touch (hasTouch), waiting with until() (deadline 'control contract', 3 s) for each step; the harness itself has a unit self-test against a fixture that violates each clause. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), runs at 390x844 and at 1536x1024, adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, extends: G008's mountControl entry point, widened with modulation, automation and the gesture phases."
+- "Definition of done, interlinks: every control carries data-osc-param with its spec id, which the census (N009), the explain panel (G015) and the link graph (G016) find."
+- "Definition of done, interactivity: every control of every view has the same keys, drag, typed entry, reset and stated refusal."
+- "Definition of done, docs, menus and routes: docs/ui-catalog.md (generated by N010) documents the interface; until then its section in docs/v31/user-guide.md. tests/README.md has a row for each new test; the parameter's or view's catalogue entry names its docs, links and tests (G001 trace part); dist is rebuilt and npm run build:check passes."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit, and the release that carried it is recorded when the milestone is verified."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "After F001: its views carry Pro class lists as literal Tailwind utilities only; it adds no osc-* class token, no legacy vocabulary use, no selector and no inline style, and removes legacy ones where it touches them, so tests/unit/ui-flowbite-pro-baseline.json stays equal or falls (node scripts/ui-flowbite-pro-record.mjs --check passes) and node --test tests/unit/ui-flowbite-pro.test.mjs passes; studio.css, studio-timeline.css, charts.css and tokens.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock v2)."
+- "scripts/size-report.mjs shows at most 0.8 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the line's sum stays within its row of the cap Q037 records, under the 1.2 MB gzip budget of scripts/build-config.mjs (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/control-contract.test.mjs
+- node tests/browser/v31-studio-graph.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-30'

@@ -1,0 +1,54 @@
+id: V616
+milestone: M080
+serves:
+- "studio-box-system#cable-probe"
+title: "Cable probe: live level and a mini scope in the edge Inspector"
+slug: cable-probe-live-level-and-a-mini-scope-in-the-edge-inspecto
+priority: p2
+profile: implementation
+objective: "P04 slice C (typed edge UX). The Studio edge Inspector reads the one engine-owned probe tap of synth K064 (one AnalyserNode on one edge at a time, created and disposed inside the engine's accounting, project.audio-engine-discipline v2) through src/js/studio/probe.js: if K064 left the tap inside the Synth panel's code, this slice moves it there so both surfaces share one module and one test. The tap runs only while the edge is selected, the Inspector is visible and the transport plays. A new src/js/ui/studio/edge-probe.js draws on a canvas in the edge Inspector: sample peak and window RMS in dB relative to full scale (dBFS-like, 'relative, uncalibrated'), and a mini scope of the last 20 ms with the actual sample rate stated; a TRIGGER edge lists the last trigger times instead (TRIGGER edges carry no audio). Stopped, the card says 'Not running: press Play to probe this connection'. 'Pin as Scope node' adds a Scope node on that output through one EDGE_ADD batch. The draw is one rAF subscriber that stops when the card is hidden; when K036's frame loop is on main it subscribes there, else K036's census lists it by name. Merged plan of the component follow-up (2026-10-30): The probe's level and mini-scope are W003's and W004's kinds; the tap module stays this slice's probe.js, which N006 reuses."
+why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings S1-S14 measured on origin/main b67d1e58)."
+scope:
+- src/js/studio/probe.js
+- src/js/studio/runtime.js
+- src/js/audio/audio-engine.js
+- src/js/ui/studio/edge-probe.js
+- src/js/ui/studio/inspector.js
+- tests/unit/studio-probe.test.mjs
+- tests/browser/v31-studio-graph.cjs
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+- docs/v3/readout-truth.yaml
+- tests/unit/synth-probe.test.mjs
+acceptance_criteria:
+- "Before: VERIFIED (S8): the edge Inspector shows From, To, Signal, Muted, Depth and Offset, and nothing about the signal; PROPOSED by the synth drafts: K064's engine-owned probe for the Synth panel's cables."
+- "After: the Studio edge Inspector reads the same engine-owned probe tap as synth K064 (one module, src/js/studio/probe.js), showing live peak and RMS and a mini scope for AUDIO and CONTROL cables and trigger times for TRIGGER cables."
+- "Negative cases: stopped: no tap exists and the card says so; an ANALYSIS edge shows its role (reference or observed), not a level; hidden Inspector: the tap is disposed; the tap never changes the path's level (render with and without it is bit-identical offline)."
+- "Rollback: revert the merge commit. Nothing changes the schema, a studioHash or a stored record, so documents saved while it was live load unchanged after the revert."
+- "Scientific-truth rows (Quantity | Unit | Source | Algorithm | Resolution | Calibration | Limitations | Tests | UI label) are added to T026's canonical readout table docs/v3/readout-truth.yaml and checked by T026's tests/unit/readout-provenance.test.mjs, which this issue extends so that each UI label's text is in the source, each Tests path exists, and a setpoint row never shares its label with an observed row: Cable peak and RMS (observed) | dBFS-like | engine probe AnalyserNode on the edge's source output | max |x| and RMS over one analyser window | 0.1 dB; window = fftSize / fs, stated | uncalibrated | a read every frame sees one window; a peak between reads is not seen (stated) | tests/unit/studio-probe.test.mjs | Peak -6.1, RMS -9.1 dB rel (dBFS-like, 43 ms window)"
+- "tests/unit/studio-probe.test.mjs, failing on the merge base: on the recording mock context a probe is one AnalyserNode counted by the engine, connected from the source's output only, disposed on deselect, hide and stop (engine node count back to its value before), never created while stopped; the level of a full-scale sine frame reads 0 dBFS-like peak and -3.01 dB RMS within 0.05 dB; a TRIGGER edge creates no analyser."
+- "The card's wording says 'relative' and never dB SPL (project.no-fake-science v2, tests/unit/no-fake-science.test.mjs)."
+- "Definition of done, extends: the edge Inspector of V427 (From, To, Signal, Muted, Depth, Offset)."
+- "Definition of done, cross-links: 'Pin as Scope node' adds a Scope wired to the probed output, selected in the graph (round trip through the store); the probed edge stays selected in the graph and the Inspector. The link is a row of tests/browser/integration-map.json once that map (synth line K075) is on main."
+- "Definition of done, dynamics: a live level readout and a mini scope drawn on a canvas while the transport plays."
+- "Definition of done, docs and routes: docs/v31/user-guide.md and .ai/repo/features/studio-signal-graph.md say what changed; docs/v31/compiler.md names the probe tap. tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: A check 'cable-probe' in tests/browser/v31-studio-graph.cjs opens the Basic Tone template, clicks the Oscillator to Master cable by pointer, presses Play and waits with until() (deadline 'probe level above -60 dB', 5 s) for the card's level and a non-flat scope trace read from the canvas pixels; stops and waits until the engine node count returns to its stopped value; selects the cable by keyboard (Tab to the graph, the connection list) and pins it as a Scope node, waiting for the new node and edge; taps the cable in a hasTouch context and waits for the card; on the merge base the card has no level and the check fails. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit and the completed evidence the release that carried it; E030's judge passes on the pull request once E030 is on main."
+- "The pull request carries a reviewer's verdict (it touches a guarded path; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+- "Wave 1: it adds no class token, selector, markup surface or inline style, so the Flowbite Pro record does not change: node scripts/ui-flowbite-pro-record.mjs --check passes with no rewrite and node --test tests/unit/ui-flowbite-pro.test.mjs passes (project.ui-uses-flowbite-pro); live drawing is on a canvas, a domain view."
+- "scripts/size-report.mjs shows at most 2 KB gzip added, with the base and head figures in the pull request body, within the owner's dist budget of 1 200 000 B gzip (decision of 2026-10-29, about 355 KB of headroom at origin/main b67d1e58); the ceiling of this line is 35 KB gzip in all (Studio boxes 35 KB, signal generator 25 KB), stated in the milestone (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/studio-probe.test.mjs
+- node tests/browser/v31-studio-graph.cjs --only cable-probe
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: 2026-10-30
+depends_on:
+- "V631"
+- "T026"
+- "K064"
+- "W003"
+- "W004"
