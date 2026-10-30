@@ -29,10 +29,13 @@ This skill is the one procedure for a train; `project.fail-first` judges what it
 
 - Several pull requests are ready at once and each one that changes `src/` would conflict on
   `dist/index.html` after the first lands; or
-- branch protection on `main` requires `gate` on an up-to-date branch (`strict: true`; read it
-  with `gh api repos/korczis/oscilla/branches/main/protection -q .required_status_checks`), so
-  every merge makes every other open pull request merge `main` and run CI again, and while
-  runners are slow or stalled a queue lands one pull request per CI round (#248, 2026-10-28).
+- runners are slow or stalled and several pull requests wait for a CI round each. Branch
+  protection on `main` no longer requires an up-to-date branch (`strict: false` since the
+  owner's decision of 2026-10-30; read it with
+  `gh api repos/korczis/oscilla/branches/main/protection -q .required_status_checks`), so a
+  green pull request merges without merging `main` again; under `strict: true` every merge
+  made every other one rerun CI (#248, 2026-10-28). A train still gives its members one run
+  on their combination, which separate merges no longer get (ADR 0009, note of 2026-10-30).
 
 # Who may join
 

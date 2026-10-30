@@ -1,0 +1,33 @@
+id: Q036
+milestone: M088
+title: "Owner decision: the deep-link key for a component, and whether a Studio node is addressable"
+slug: owner-decision-the-deep-link-key-for-a-component-and-whether
+priority: p2
+profile: routine
+owner: repository owner
+objective: "Nothing below workspace level has an address today. (1) A hash key for a catalogued component: (a) c=<id> (focus and reveal it; refused and removed when unknown); (b) no component links. (2) A Studio node: (a) only together with an unmodified shipped template (st=<template>&c=studio.node:<node id>), since node ids are local to a document; (b) never. The plan recommends (1a) and (2a)."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: \"the embedded Studio is ugly as hell\"; components in general must be generic, linkable, traceable, composable, unified, documented, dynamic, generated and interlinked; \"everything must be interlinked with everything\"; improve the main page and the first experience, deploy often. The owner's evolution prompt pack (MASTER, P02, P04, P06) binds it: the dark technical cockpit is locked, shared primitives only where duplication is proven, no new framework, generated docs only where deterministic, no decorative wires. Findings: the UI component inventory of 2026-10-29 (D1-D14 duplication, U1-U15 on the embedded Studio, measured on origin/main b67d1e58, v3.13.0); design: the component-system design of 2026-10-29 (scratchpad components/design.md)."
+current_state: "Open on 2026-10-29. The plan's recommendation is not an answer. G007 name this issue in depends_on, so majordomus plan next does not hand them out before it is answered."
+scope:
+- .ai/repo/project/issues/Q036.yaml
+acceptance_criteria:
+- "The decision is recorded as evidence on this issue (covers owner_decision), either in the owner's words with date and source, or as a decision of a coordinating session under an owner delegation it quotes with its date, stating its reasoning and that the owner may override it; a worker without such a delegation never answers it."
+- The answer names an option for each part.
+validation:
+- manual
+evidence_required:
+- owner_decision
+created_at: '2026-10-29'
+updated_at: 2026-10-30T09:57:34Z
+started_at: 2026-10-30T09:57:17Z
+started_event: sha256:4ceb48c36a4ca8ec12804f01246886c36cd24cae969230ebef8f4eb3e3972bd0
+completed_at: 2026-10-30T09:57:34Z
+completed_event: sha256:405d2a861107073e4bf0ac48ab8a145c252fcc65c075710b9645b3dc596cbbbc
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "AskUserQuestion in Claude Code session oscilla-21, 2026-10-30 (Czech), after the U063 census measured 47 surfaces without a deep link"
+    result: "Owner chose (1a) and (2a), the plan's recommendation: (1) a catalogued component is addressed by the hash key c=<id> (#...&c=<id> opens its workspace, reveals and focuses it; an unknown, repeated, empty or over-long id is refused and leaves the address), a fifth hash domain of ADR 0045's one dispatcher; (2) a Studio node is addressable only together with an unmodified shipped template (st=<template>&c=studio.node:<node id>), since node ids are local to a document; never inside a user's own document."
+    artifact: ".ai/repo/project/issues/G007.yaml"
+    commit: 88b936cb023f14028e02d525ec8e691a6d09c870
+    recorded_at: 2026-10-30T09:56:47Z

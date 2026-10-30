@@ -1,0 +1,18 @@
+id: M068
+title: "Instrument wave 3: synthesis engines and the instrument DSP worklet"
+slug: instrument-wave-3-synthesis-engines-and-the-instrument-dsp-w
+order: 68
+priority: p3
+problem: "No FM, additive, wavetable, granular, physical-model or modal engine exists as an instrument; hard sync, a self-oscillating filter, input sample and hold and a full-range plucked string need an AudioWorklet that the engine does not have."
+outcome: "Each engine a Studio node with stated figures checked offline, playable from the piano and the sequencer; one worklet host from embedded source behind its ADR; bounded recurrences inside a node under project.no-silent-feedback v2."
+acceptance_criteria:
+  - "K088, K089, K090, K091, K092, K093, K095, K094 are done with their evidence; npm run release-gate passes at the last one; npm run test:synth and node tests/browser/integration-map.cjs pass."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "Engines wait on Q021 (polyphony inside engine nodes) and Q023 (gzip cap); K094 on Q022."
+  - "K088's worklet support in each gate browser's OfflineAudioContext is measured, not assumed (design R9)."
+created_at: 2026-10-29
+updated_at: 2026-10-29

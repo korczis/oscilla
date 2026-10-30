@@ -22,4 +22,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-28
-updated_at: 2026-10-28
+updated_at: 2026-10-29T17:42:32Z
+started_at: 2026-10-29T17:42:21Z
+started_event: sha256:f4d164e4a267c9a93fdbdbed497db9b5bc0bb2dad89ca6b749be976d710ce879
+completed_at: 2026-10-29T17:42:32Z
+completed_event: sha256:3652a03b0e5ae16710d4da8d866864fac86ad1faa1ddd1cf740bc50591fccb86
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/release-publish.test.mjs && node scripts/review-verdict.mjs --pr 242 --head 86e03ddf --base-branch 86e03ddf^1 && majordomus plan validate && npm test"
+    result: "MET at c7e04169 (main, contains the merge 86e03ddf of #242). release-publish.test.mjs 34/34 pass (stubbed git and gh: a remote tag at the receipt's commit resumes from the redeploy, verify-deploy and the Release; a remote tag at another commit refuses; the dry run lists the resumed steps). Fail-first: the CI job 'fail-first (feat/fix tests fail without the change)' passed on #242, run 40899096939. Review verdict .ai/repo/reviews/242.yaml on main (047276e5): verdict merge by dev-68 for content 2f984c9e...8d3f74f7, 3 guarded paths, accepted by the base program at the merge, no open P0 or P1 (R-5, R-6 open at P3). project.release-flow-complete updated in #242 (R-4) to describe the resume. plan validate 0 failures; npm test 0 failures."
+    artifact: ".ai/repo/reviews/242.yaml"
+    commit: c7e041698d65d76aaee4f85aa79ff17991dcf143
+    recorded_at: 2026-10-29T17:42:28Z
