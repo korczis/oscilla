@@ -39,6 +39,9 @@ observations:
   - id: update-2026-10-18-public-page
     statement: "Update 2026-10-18, appended by the coordinating Claude session (not the critic), observed at main 044f98a after observed_at 62cccb3; the observations above are kept as they were made. Pages serves region.commit 044f98a, version 3.11.0, sourceDigest fa7cf5c0, sourceDate 2026-10-18T08:54:25Z; node scripts/verify-deploy.mjs --commit 044f98a passes attempt 1/2 (live page is the committed dist stamped with that commit), and its artifact sha256 898270c4 equals the artifact sha256 of .ai/repo/releases/v3.11.0.yaml. Tag v3.11.0 is 2b63ec3 (2026-10-18T04:36:10Z); 21 commits separate it from 044f98a and they change nothing under src/ or dist/index.html (git diff --stat is empty). No tag matching *rc* exists, and V386 is still open."
     source: "command:node scripts/verify-deploy.mjs --commit 044f98a6a3f74ebe4471404eedaea5ec91ce97ae --attempts 2 --delay 5"
+  - id: update-2026-10-29-p05-readout-audit
+    statement: "Update 2026-10-29, appended by the P05 audit session (not the critic), observed at main b67d1e58 (v3.13.0); the observations above are kept as they were made. A readout audit traced 126 readouts of the Playground, Synthesis, Analyzer, Filter Lab, MEASURE and Studio with an adversarial second pass: 41 defects survived and one is contested; out-of-range, clipped and absent signals are shown as ordinary readings (output ceiling, scope clamp, live RTA, quality bar at the rail, Render WAV), several labels name the wrong quantity or scale, several controls show a value not in effect, and no test binds a readout to its provenance. M073 plans the fixes."
+    source: "file:.ai/repo/project/milestones/M073.yaml"
 conditions:
   - criterion: algorithm-ids
     state: satisfied
@@ -134,6 +137,26 @@ conditions:
     observations:
       - public-is-main
       - v386-open
+  - criterion: readout-states
+    state: missing
+    because: "No out-of-range, clipped or absent state at the readouts listed in the criterion (audit 2026-10-29)."
+    observations:
+      - update-2026-10-29-p05-readout-audit
+  - criterion: readout-labels
+    state: missing
+    because: "The audit found labels that name the wrong quantity, scale or statistic."
+    observations:
+      - update-2026-10-29-p05-readout-audit
+  - criterion: readout-in-effect
+    state: missing
+    because: "The audit found controls, an axis and comparisons that show a value not in effect."
+    observations:
+      - update-2026-10-29-p05-readout-audit
+  - criterion: readout-provenance
+    state: missing
+    because: "No canonical readout table and no test exist."
+    observations:
+      - update-2026-10-29-p05-readout-audit
 risks:
   - "The v4.0 fixes to V3 truth (C1, D1/D2, D4, W7f) are held by claims no intent reads; a regression of them would leave every criterion of this intent met, as the original defects did."
   - "No acoustic measurement is ever automated, so latency, drift and room noise are untested inputs to a quality model that claims to say how far results can be trusted."

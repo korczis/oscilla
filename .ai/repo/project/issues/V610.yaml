@@ -1,0 +1,43 @@
+id: V610
+milestone: M080
+serves:
+- "studio-box-system#find-and-layout"
+title: "Fuzzy node search with meaning-first ranking in quick add, the library and find"
+slug: fuzzy-node-search-with-meaning-first-ranking-in-quick-add-th
+priority: p2
+profile: implementation
+objective: "P04 slice F (visual, keyboard and responsive). Lands as feat(studio-ui). src/js/ui/studio/graph-search.js gains a subsequence fuzzy match (\"fltr\" finds Filter, \"lp\" the low-pass alias) and one ranking for node types and nodes: exact name, name prefix, word start, alias, then subsequence, ties by category order; an empty quick-add query lists the five most recently added types first (view state, never saved). Aliases are added in the node definitions (lp, hp, bp, eq on Filter; vco on Oscillator; vca on Gain). The quick-add dialog, the node library's search field and the find dialog (/) all call the same function; no dialog carries its own matcher. It searches node types and nodes only, so it is not the command palette intent studio-completion lists as a non-goal."
+why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings S1-S14 measured on origin/main b67d1e58)."
+scope:
+- src/js/ui/studio/graph-search.js
+- src/js/ui/studio/graph-picker.js
+- src/js/ui/studio/library-panel.js
+- src/js/studio/nodes
+- tests/unit/studio-graph-search.test.mjs
+- tests/browser/v31-studio-graph.cjs
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+acceptance_criteria:
+- "Before: VERIFIED (S2, S3): 'fltr' and 'lp' find nothing; 'eq' ranks types that only contain the letters next to Filter."
+- "After: fuzzy match with meaning-first ranking in quick add, library and find."
+- "Negative cases: a query matching nothing says so; an alias is a search term, never a displayed name; ranking is deterministic for equal scores."
+- "Rollback: revert the merge commit. Nothing changes the schema, a studioHash or a stored record, so documents saved while it was live load unchanged after the revert."
+- "tests/unit/studio-graph-search.test.mjs, failing on the merge base, holds a ranking table: fltr, lp, hp, eq, vco, vca, osc and nois each return the expected first type, eq ranks Filter above every type that only contains the letters, and a 100-node graph search stays within the search budget of docs/v31/performance.md."
+- "Definition of done, extends: the quick-add, library and find search of V428 and spec §66 (graph-search.js searchNodes)."
+- "Definition of done, cross-links: the library search, quick add and create-node-from-cable all use it; a node added from a fuzzy match is selected in the graph and shown in the Inspector (round trip through the store). The link is a row of tests/browser/integration-map.json once that map (synth line K075) is on main."
+- "Definition of done, dynamics: the status line updates per keystroke with the match count and the Enter target; the first match is highlighted as the user types."
+- "Definition of done, docs and routes: docs/v31/user-guide.md and .ai/repo/features/studio-signal-graph.md say what changed; the in-app shortcut list is unchanged (STUDIO_SHORTCUTS). tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: A check 'fuzzy-add' in tests/browser/v31-studio-graph.cjs opens quick add by the N key, types 'fltr', waits with until() (deadline 'quick add lists Filter for fltr', 3 s) for the status line, presses Enter and waits until the store holds one more Filter node and the Inspector names it; then repeats by pointer (Add node button, typed 'lp', click on the first row) and by touch (tap on Add node, tap on the row) in a hasTouch context; on the merge base 'fltr' lists nothing and the check fails. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit and the completed evidence the release that carried it; E030's judge passes on the pull request once E030 is on main."
+- "The pull request carries a reviewer's verdict (it touches a guarded path; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+- "Wave 1: it adds no class token, selector, markup surface or inline style, so the Flowbite Pro record does not change: node scripts/ui-flowbite-pro-record.mjs --check passes with no rewrite and node --test tests/unit/ui-flowbite-pro.test.mjs passes (project.ui-uses-flowbite-pro); live drawing is on a canvas, a domain view."
+- "scripts/size-report.mjs shows at most 1.5 KB gzip added, with the base and head figures in the pull request body, within the owner's dist budget of 1 200 000 B gzip (decision of 2026-10-29, about 355 KB of headroom at origin/main b67d1e58); the ceiling of this line is 35 KB gzip in all (Studio boxes 35 KB, signal generator 25 KB), stated in the milestone (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/studio-graph-search.test.mjs
+- node tests/browser/v31-studio-graph.cjs --only fuzzy-add
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

@@ -1,0 +1,40 @@
+id: N009
+milestone: M113
+serves:
+- "parameter-controls#every-parameter-shown"
+- "parameter-controls#accessible-contract"
+title: "Parameter census: every declared parameter shown, every continuous control declared and conforming, the allowance shrinking to zero"
+slug: parameter-census-every-declared-parameter-shown-every-continuo
+priority: p2
+profile: implementation
+objective: "Lands as test(ui). tests/unit/param-census.test.mjs: every NODE_REGISTRY parameter appears once in its expanded panel projection, every spec has a view, and every kind param declaration of G018 and G019 is a valid paramSpec. In the browser, inside the PACK 03 control census of #280 (C020's control-drive ratchet), not a second census: on every workspace at 390x844 and 1536x1024, every [data-osc-param] passes the light contract (role, accessible name, aria-valuetext with a unit, reachable by Tab, 44 px on a coarse pointer, a described reason when disabled), and every continuous input[type=range] and knob carries a data-osc-param naming a spec; the controls without one are a recorded allowance that only shrinks and is empty when G019 lands. The full contract of N003 runs on one control per view and surface. Before: VERIFIED 19 range inputs in src/index.html and the Inspector's builder declare nothing (inventory C4). After: every continuous control is declared and conforms. Negative cases: a new range input without a spec, the allowance rising, a control under 44 px on a coarse pointer. Rollback: revert. Merged plan of the component follow-up (2026-10-30): The allowance of controls without a spec is the params section of G001's one allowance file, tests/unit/ui-catalog-allowance.json, and the browser half runs in tests/browser/ui-kinds.cjs, the one kinds suite. PACK 03's control-drive ratchet (C020, #280) stays the census of controls driven through the UI; this slice adds no second census of drives."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs, KB and interlinking; full DAW, full sequencer, full piano, everything interlinked, clickable, parameterized and joined; knobs, sliders and control panels in one generic way, integrated with Majordomus; every element tweakable; mobile first; the landing easy to use, easy to extend and open to hack. Owner decisions: knobs that always show value and unit (D11, Q018, the ADR 0058 note of 2026-10-29), every parameter on the box face (Q031), the generator in its own workspace (Q033). Design: the params-controls part of the component follow-up of 2026-10-29 (scratchpad components-followup/params-controls.md), checked against origin/main b67d1e58 and the head of plan pull request #285 (c0a631b2)."
+scope:
+- tests/unit/param-census.test.mjs
+- tests/unit/ui-catalog-allowance.json
+- tests/browser/ui-kinds.cjs
+- tests/browser/lib
+- tests/README.md
+depends_on:
+- N001
+- N008
+- G019
+acceptance_criteria:
+- "tests/unit/param-census.test.mjs fails on the merge base: the registry projection, the view table and the allowance file are checked as above; an allowance entry that no longer exists fails, so the list only shrinks."
+- "Definition of done, tested: tests/browser/ui-kinds.cjs (PACK 03's census, extended) walks every workspace at both sizes and waits with until() (deadline 'census settled', 5 s) for each workspace's controls before asserting the light contract on each. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), runs at 390x844 and at 1536x1024, adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, extends: the PACK 03 control census of #280."
+- "Definition of done, interlinks: each finding names the spec id and its catalogue address."
+- "Definition of done, interactivity: it drives each control once by keyboard and once by touch."
+- "Definition of done, docs, menus and routes: tests/README.md states what the census proves and the allowance rule. tests/README.md has a row for each new test; the parameter's or view's catalogue entry names its docs, links and tests (G001 trace part); dist is rebuilt and npm run build:check passes."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit, and the release that carried it is recorded when the milestone is verified."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "It changes no markup, class token or stylesheet (tests and docs only), so the Flowbite Pro record is untouched (node scripts/ui-flowbite-pro-record.mjs --check passes)."
+- "scripts/size-report.mjs shows no bundled byte added (tests, scripts and docs only), with the base and head figures in the pull request body (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/param-census.test.mjs
+- node tests/browser/ui-kinds.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-30'

@@ -1,0 +1,78 @@
+id: component-system
+title: "Every UI component of OSCILLA is declared once, renders from that declaration where its duplication is proven, explains itself, is reachable by address and from its related views, and traces to its source, tests and decisions"
+statement: "On 2026-10-29 the owner said, in Czech, that the embedded Studio is ugly, that components in general must be generic, linkable, traceable, composable, unified, documented, dynamic, generated and interlinked, that everything must be interlinked with everything, and that the main page and the first experience improve and deploy often. The inventory of the same day (origin/main b67d1e58, v3.13.0) found the interface built four ways (Alpine markup, labs wired by id, a Studio built in JavaScript with two DOM helper modules, a hand-built sequencer), 576 data-osc hooks with no declaration, 14 semantics implemented several ways that already disagree (D1-D14) and an embedded Studio that is unseen, mostly empty, set in 10 px uppercase, without category or state and with cables that lose their meaning (U1-U15). This intent extends what exists, not a framework: the section 79 parameter descriptor and defineNode registry become the model of a catalogue under src/js/ui/catalog that every component is declared in, with its state path, links, docs, tests and source; the proven duplicates render from one declaration as Flowbite Pro markup (intent ui-flowbite-pro, ADR 0061); the docs, the in-app explanation, the link graph and the traceability chain are generated from the same declarations; and the embedded Studio becomes a compact cockpit drawn by the full Studio's own renderer on the one store."
+invariants:
+- "A component never owns state: its declaration names a canonical state path as documentation and for the tests, the catalogue holds, resolves, writes and subscribes to no value at run time, and the surface that owns a value passes it and commits it; the StudioModel stays the only Studio state and a compact view writes no layout position or viewport into it (project.studio-model-is-canonical)"
+- Only kinds with proven duplication render from a template; everything else is declared as metadata and keeps its markup until its F issue (prompt pack P02 step 3)
+- "Templates are adapted Flowbite Pro markup with Tailwind classes only; the catalogue holds no CSS and no input path of the build has a components, widgets, ui-kit or design-system segment; the Flowbite Pro ratchet only falls (project.ui-uses-flowbite-pro, ADR 0061)"
+- Generated documents are byte-stable projections of the declarations and registries; what a component means stays authored (prompt pack P06)
+- "Edges keep their meaning in every view: one style per signal type, ending at their ports (project.typed-ports; prompt pack P04 item 6)"
+- "The single file opens from file:// and the sub-path with nothing fetched (project.single-file-deliverable)"
+- "Every control has a pointer, keyboard and touch path, and a disabled control states why (project.no-inert-surfaces)"
+milestones:
+- M085
+- M086
+- M087
+- M118
+satisfaction:
+- id: contract-and-registry
+  criterion: "Every data-osc hook is covered by one declaration with docs, a resolvable state path, resolvable links and a test that names it, and the allowance of undeclared hooks is empty"
+  evidence: command
+  ref: node --test tests/unit/ui-catalog.test.mjs
+- id: proven-duplicates
+  criterion: "Units, the parameter model, the clip face, the counts, parameter fields, lab switches, single choices, empty states and open-versus-fullscreen each have one implementation, and parameter fields, switches and choices render from their declarations"
+  evidence: command
+  ref: node --test tests/unit/units.test.mjs tests/unit/param-model.test.mjs tests/unit/studio-a11y-text.test.mjs tests/unit/ui-catalog-render.test.mjs
+- id: embedded-cockpit
+  criterion: "The embedded Studio is the full Studio's renderer at compact density on the one store, with the Studio's transport strip and timeline miniature, port-anchored typed cables, readable cards with category and state, a mini level and scope, and Open in Studio and Back that keep the selection, in every gate browser at desktop and phone sizes"
+  evidence: command
+  ref: "node --test tests/unit/studio-compact-density.test.mjs tests/unit/studio-cockpit.test.mjs && node tests/browser/studio-cockpit.cjs"
+- id: sequence-pipeline
+  criterion: "A sequencer pattern opens in the Studio and plays end to end in the cockpit, with level, scope and playhead moving and the node census 0 after stop"
+  evidence: command
+  ref: "node --test tests/unit/studio-open-sequence.test.mjs && node tests/browser/studio-cockpit.cjs --only song-pipeline"
+- id: generated-docs
+  criterion: docs/ui-catalog.md is generated from the declarations and current
+  evidence: command
+  ref: node scripts/ui-catalog.mjs --check
+- id: in-app-explain
+  criterion: Every catalogued component explains itself in the app and opens its related views from that panel
+  evidence: command
+  ref: node tests/browser/ui-catalog-explain.cjs
+- id: interlinked
+  criterion: "Every component has an address, and every related view is at most two in-content steps away or carries an exemption with a reason, walked by pointer, keyboard and touch"
+  evidence: command
+  ref: "node --test tests/unit/url-state-catalog.test.mjs tests/unit/ui-link-graph.test.mjs && node tests/browser/ui-link-graph.cjs"
+- id: traceable
+  criterion: "Every component names its source, plan, tests and ADRs, each checked, and the capability to source to test to ADR chain is generated and current"
+  evidence: command
+  ref: "node --test tests/unit/ui-catalog-trace.test.mjs && node scripts/ui-catalog.mjs --trace --check"
+- id: majordomus-served
+  criterion: "Every declared kind, component, node type and parameter names its plan and its rule or ADR ids in its trace and every id resolves; Majordomus serves each from a current generated knowledge record (knowledge validate reports nothing under .ai/repo/knowledge/components/, context resolve on its source module returns the component contract); and the allowance of untraced declarations is empty"
+  evidence: command
+  ref: "node --test tests/unit/component-trace.test.mjs tests/unit/component-links.test.mjs tests/unit/component-kb.test.mjs && node scripts/ui-catalog.mjs --check"
+governance:
+- "rule:project.rules-name-their-enforcement"
+- "rule:project.majordomus-layer-current"
+- "rule:project.ui-uses-flowbite-pro"
+- "rule:project.visual-identity-lock"
+- "rule:project.studio-model-is-canonical"
+- "rule:project.single-file-deliverable"
+- "rule:project.no-inert-surfaces"
+- "rule:project.typed-ports"
+- "rule:project.no-fake-science"
+- "rule:project.suite-harness"
+- "rule:project.bounded-test-timing"
+- "rule:project.review-verdict"
+- "rule:project.fail-first"
+- "adr:adr-0034"
+- "adr:adr-0045"
+- "adr:adr-0061"
+non_goals:
+- "A UI framework, a virtual DOM or a component library beside Flowbite Pro: the catalogue is declarations, one render function per proven-duplicate kind and generated documents, with no binding layer, condition language or directive of its own"
+- "Rendering every component from a template: only proven duplicates get one"
+- "A second Studio state, a second planner, or a knowledge database"
+- "Choosing the first screen's layout: Q004 chose option A and P002 builds it"
+- "Changing what the domain views (Signal Path, graph, timeline, charts) mean"
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

@@ -1,0 +1,19 @@
+id: M080
+title: "Studio boxes, wave 1: wiring, find, layout, probe, first patch, large graphs, one declaration per node"
+slug: studio-boxes-wave-1-wiring-find-layout-probe-first-patch-lar
+order: 80
+priority: p2
+problem: "Studio wiring is node-level and exact-hit (findings S2, S6, S13), the multi selection only duplicates or deletes (S5), nothing moves while it plays (S7), the edge Inspector has no signal (S8), there is no first-patch template (S9), and nothing measures a graph above 100 nodes (S14)."
+outcome: "Wiring captures, explains refusals, inserts, duplicates and fans out in one undo step each; search is fuzzy; selections align and boxes mute; a cable shows its signal; a first patch teaches the gestures; 300-node graphs stay within budget; a node is one declaration with a generated reference. Nothing grows the Flowbite Pro ratchet."
+acceptance_criteria:
+- "V631, V632, V610, V611, V612, V613, V614, V616, V617, V618, V619 and V633 are done with their evidence, in P04 order A (V631, V619), B (V632), C (V611-V613, V616), D (V614), E (V633), F (V610, V617, V618); npm run release-gate passes at the last one."
+validation:
+- npm run release-gate
+evidence_required:
+- milestone_verified
+risks:
+- "V611-V613 and V614 build on K008 and K009 of #268: they rebase after it."
+- "graph-editor.js and inspector.js are near their caps: the slices add modules and hooks of at most 600 B, declared in the size baseline."
+- "V616's probe tap and the synth line's K064 cable mini-scope must share one module; whichever lands first owns src/js/studio/probe.js."
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

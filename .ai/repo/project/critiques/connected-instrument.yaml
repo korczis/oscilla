@@ -1,0 +1,139 @@
+intent: connected-instrument
+reviewed_at: "a655cb1c39e653be5be7eedc015d5bbe10ca9635"
+reviewed_by: "claude-opus-5.5 (one independent reviewer agent of the instrument plan session, 2026-10-29, reading the drafts staged on #269's head); the findings are theirs, transcribed by the plan builder, who wrote the resolutions"
+findings:
+  - id: dsp-figures-cannot-run-in-node-unit-tests
+    class: delivery_verification
+    subject: "K059"
+    finding: "Spectral, level and decay figures were written into tests/unit, but node --test has only the fake context (tests/unit/sequencer-fake-audio.mjs:1-3: it records scheduling calls; real rendering is a browser suite), so those criteria could not pass."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "K059"
+      because: "Every figure moved to tests/browser/instrument-dsp.cjs, a real OfflineAudioContext in three browsers in the style of tests/browser/dsp.cjs; each unit test now asserts scheduling, times, ramps and census on StudioFakeContext; the intent's refs name the suite (2026-10-29)."
+  - id: trigger-edges-from-keys-are-never-applied
+    class: unproven_assumption
+    subject: "K061"
+    finding: "Only a pattern clip's source port 'trigger' gates Envelopes (transport.js:317-339), event clips gate only Envelopes (clip-targets.js:133) and the live router has no trigger fan-out, so N3, N4 and N15 and the drum triggers would never fire; K061's non-silent render and K087's measurement would see a closed amp."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "K103"
+      because: "K103 adds one fan-out from any TRIGGER output, for the transport and the router, with one ownership rule, after K023; K061, K071 and K073 depend on it; K087 holds Envelope 2 open for the run and says so (2026-10-29)."
+  - id: live-notes-have-no-running-graph-while-stopped
+    class: missed_requirement
+    subject: "K060"
+    finding: "Only transport.start starts the runtime (transport.js:1472), so a live note with the transport stopped reaches no graph."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "K104"
+      because: "K104 adds an armed monitoring state (runtime started without a timeline, output claimed against the Playground, counted, disarmed on leave, hide and Escape); K062, K065 and K097 depend on it (2026-10-29)."
+  - id: keys-pitch-cv-does-not-track-under-edge-semantics
+    class: unproven_assumption
+    subject: "K060"
+    finding: "A CONTROL edge maps the source range onto the depth, so a 'unit depth' edge from a wide Keys CV tracks wrongly, and computeBases scales log edges near Nyquist, changing the tracking ratio."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "K060"
+      because: "The Keys pitch range is [-6, 6] octaves with a bipolar log edge of depth 6 (gain exactly 1); pitch edges are exempt from kc and clamped in frequency instead, stated; criteria at octave +3 with notes 0 and 127 (2026-10-29)."
+  - id: pulse-width-by-delaynode-breaks-under-pitch-cv
+    class: unproven_assumption
+    subject: "K059"
+    finding: "A saw-minus-delayed-saw pulse keeps its delay at the base frequency while the pitch CV arrives as cents on detune, so the width changes with the note."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "K059"
+      because: "Wave 1's pulse is a band-limited PeriodicWave of a set width (tracks pitch exactly, not modulatable); PWM moves to K089's worklet oscillator; a criterion checks the width at A4, A5 and A6 from Keys (2026-10-29)."
+  - id: clip-target-policy-not-in-scope
+    class: missed_requirement
+    subject: "K067"
+    finding: "clip-targets.js is the one answer of store, timeline UI, transport and offline render, with tests/unit/v4-clip-target-policy.test.mjs, and the slices changing clip targets did not scope it."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "K067"
+      because: "K060, K067, K068, K071, K099 and K109 scope clip-targets.js and the policy test, K067 and K099 also offline.js and timeline-view.js; K067 extends the policy first (2026-10-29)."
+  - id: metadata-panel-refused-by-import-structure
+    class: missed_requirement
+    subject: "K061"
+    finding: "The import structure check allows only name in node metadata (validate.js:700-708) and patches.js rebuilds metadata as { name }."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "K061"
+      because: "K061 scopes validate.js and its tests and states what PATCH_INSERT (renumbers), PASTE and DUPLICATE (drop) do with metadata.panel, each tested (2026-10-29)."
+  - id: store-handle-batch-does-not-exist
+    class: unproven_assumption
+    subject: "K061"
+    finding: "#268's handle.hold only merges change events; a gesture admits each step to the running graph on its own, so patching over a normal would apply an in-between model."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "K061"
+      because: "K061 adds a guarded BATCH action validated and admitted as a whole (one transport.admit, one history entry), with criteria for a refused second step and for no in-between apply (2026-10-29)."
+  - id: normal-invariant-has-no-enforcement-point
+    class: regression_risk
+    subject: "K063"
+    finding: "Normals present iff no user cable held only for writes through normals.js; restoring a normal deleted in the Studio graph would be an implicit repair, and connectionTargets' probe shows single-input normalled jacks as refused."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "K061"
+      because: "The invariant is a Synth projection, never a repair: a normal deleted in the Studio stays deleted and the panel offers Restore normal (one BATCH); K063 judges jacks on the whole drop batch (2026-10-29)."
+  - id: space-and-letter-key-collisions
+    class: regression_risk
+    subject: "K065"
+    finding: "SPACE_MEANING is keyed by owner, SPACE_OWNER by workspace; the Studio keydown acts only in studio; the piano's letters collide with the graph's bare keys and the grid's keys."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "K065"
+      because: "K062 sets SPACE_OWNER and WORKSPACE_LABELS and scopes workspace.js; K065 has one arming rule (dock focus or Arm keys) with collision criteria and the key table in ADR 0050's row (2026-10-29)."
+  - id: knob-and-panel-chrome-have-no-pro-block
+    class: regression_risk
+    subject: "K058"
+    finding: "Pro has no knob, piano, cable layer or XY pad, so 'adapted from the matching Pro block' could not be met, and editing tailwind.css widens nothing the rule allows."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "K058"
+      because: "K058 first records an ADR 0061 resolution note: these visuals are inline SVG and Tailwind utilities inside Pro cards with no new stylesheet or measure change; the knob is a Pro range input under its arc; the Pro clause of every slice says so (2026-10-29)."
+  - id: missing-dependencies-and-nonexistent-targets
+    class: missed_requirement
+    subject: "K086"
+    finding: "K067 had no legal target before K060; K082 relied on K048 and rebinds K043's and K045's charts; K086 offered a Lissajous node that does not exist; slices assumed Q019's answer."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "K082"
+      because: "K067 depends on K060 and introduces notes and hits; K082 depends on K043, K045 and K048; K086 offers scope, spectrum, spectrogram and meter only; K062, the engines, K099, K101, K108 and K111 depend on Q019 (2026-10-29)."
+  - id: follower-detector-cannot-render-offline
+    class: unproven_assumption
+    subject: "K080"
+    finding: "Main-thread gate and pitch detection cannot run in an offline render, and polled gate times are not audio-clock timing."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "K080"
+      because: "Gate and pitch are live only, compiled offline to a stated status; they are scheduled at currentTime plus the stated latency; the envelope renders offline (2026-10-29)."
+  - id: integration-map-scan-is-vacuous
+    class: delivery_verification
+    subject: "K075"
+    finding: "No data-osc-link, openIn or sendTo exists in src, Open in Studio is not on main, and verify-dist allows blob: so K088's check could not fail."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "K075"
+      because: "K075 defines the marker, puts it on every existing producer and scans hash-route writes; Open in Studio is not a first row; K088 asserts the data: URL on the addModule argument (2026-10-29)."
+  - id: guarded-list-change-needs-rule-version
+    class: missed_requirement
+    subject: "K060"
+    finding: "GUARDED is the rule's list (review-verdict.v1.md, tests/unit/review-verdict.test.mjs:149), so adding src/js/synth needs a new rule version and the CLAUDE.md enumeration."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "K060"
+      because: "K060 records project.review-verdict v2 before code and scopes the rules, CLAUDE.md and AGENTS.md; later slices' verdict claims hold after K060 merges (2026-10-29)."

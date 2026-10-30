@@ -1,0 +1,30 @@
+id: T017
+milestone: M073
+serves:
+  - "v3-measure#readout-labels"
+title: "A frequency profile that covers none of the measured points never reads CALIBRATED"
+slug: a-frequency-profile-that-covers-none-of-the-measured-points
+priority: p1
+profile: implementation
+objective: "Truth-table rows MSR-18, MSR-30 (scratchpad p05/truth-table.md). A correction with no covered point is treated as no correction: RAW is primary, the badge reads UNCALIBRATED, the summary gives the RAW extremes, and a note says the profile covers none of the measured range (no extrapolation, ADR 0020). Band mode badges from the coverage mask exactly as FFT mode does."
+why: "P05 audit of origin/main b67d1e58 (v3.13.0): A profile with points only at 12-16 kHz on a 100 Hz-10 kHz sweep covers 0 of 319 grid points, yet the result badge reads \"CALIBRATED (frequency)\" and the summary \"Frequency response (calibrated): no measured points\" (badge keyed on the correction object, response-chart.js:426). A one-point profile at 1 kHz does the same. In live RTA band mode a 30-40 kHz profile covers no band and badges CALIBRATED, while FFT mode reads UNCALIBRATED."
+scope:
+  - "src/js/measurement/views/response-chart.js"
+  - "src/js/measurement/views/rta-chart.js"
+  - "tests/unit/readout-labels-calibration-coverage.test.mjs"
+  - "tests/README.md"
+  - "dist"
+acceptance_criteria:
+  - "Fail-first fixture: tests/unit/readout-labels-calibration-coverage.test.mjs: fixtures3 (12-16 kHz profile) and the one-point 1 kHz profile on the 100 Hz-10 kHz sweep → no \"CALIBRATED (frequency)\" badge, summary starts \"Frequency response (observed, uncalibrated): maximum\"; fixtures4 (30-40 kHz) in third and octave mode → \"UNCALIBRATED (frequency)\". Fails on the merge base."
+  - "Negative cases, each asserted: A partly covering profile keeps CALIBRATED plus the uncovered note (v3-views.test.mjs:476 unchanged); FFT mode unchanged; the stored result and its hash unchanged."
+  - "Revertible on its own: Revert: view logic only; nothing stored changes."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "The pull request touches a guarded path and carries a reviewer-written .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+  - "tests/README.md has a row for each new test; this issue does not edit docs/CLAIMS.yaml or the intent (T027 does)."
+validation:
+  - "npm test"
+  - "npm run verify"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

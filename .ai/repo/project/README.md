@@ -50,15 +50,31 @@ R0xx        release engineering (M011, M035)
 V3xx        V3 MEASURE (M012-M020); V39x its measurement extensions after 3.11 (M047)
 V4xx        V3.1 Studio (M021-M033)
 V5xx        MIDI jam companion (M045)
-V6xx        Studio completion after 3.11 (M048)
-E0xx        engineering integrity: structure, size and checks of the code base (M046)
-K0xx        playable instrument (M057-M059, M061), audio-band signal lab (M060) and charts (M062)
+V6xx        Studio completion after 3.11 (M048) and Studio boxes (M080-M081)
+E0xx        engineering integrity: structure, size and checks of the code base (M046); E030
+            the definition of done (M083)
+K0xx-K1xx   playable instrument (M057-M059, M061), audio-band signal lab (M060), charts (M062),
+            connected instrument (M064-M069, M071-M072) and signal generator lab (M082)
 L0xx        Learn lessons (M049)
 P0xx        product: first run (M050), positioning, product path, public story (M051)
 U0xx        the whole interface shows the current product (M054)
 F0xx        the whole interface on Flowbite Pro (M055)
+T0xx        measurement truth in the interface: readout states, labels, values in effect and
+            provenance (M073)
+G0xx        the component system: one declaration per UI component, the embedded Studio cockpit
+            (M085-M087)
+H0xx        coherence-contract gaps of the G1 audit (M079; H004 under M054, H006 under M046)
+N0xx        parameters and controls: one declaration per parameter, its views, menu,
+            modulation and automation hooks, panels (M111-M113)
+W0xx        instrument component kinds: one declaration and one contract test per kind
+            (M101-M103)
+Y0xx        live views on WebGL where it pays, with a Canvas 2D twin (M096)
+J0xx        Majordomus serves every component: trace, knowledge projection, links gate
+            (M118)
 Q0xx        questions and acts only the owner can answer or take (M052; Q001 under M005, Q004 under
-            M050, Q007 under M053, Q008-Q017 under M063)
+            M050, Q007 under M053, Q008-Q017 under M063, Q018-Q024 under M070, Q030-Q033 under
+            M084, Q034-Q037 under M088, Q040-Q041 under M073, Q050, Q051, Q062, Q063 and Q068
+            under M104)
 ```
 
 A Q issue is answered by the owner, or by a session the owner delegated the decision to. The
@@ -66,11 +82,15 @@ answer is recorded as evidence (covers `owner_decision`) with its date and sourc
 words, or attributed to the deciding session together with the delegation's date and words, its
 reasoning and the note that the owner may override it, never presented as the owner's own words.
 A worker without such a delegation never answers one. Work that waits on an answer names the Q
-issue in `depends_on`, and M052 (questions), M053 (owner acts on published releases, Q007)
-and M063 (the charts line's questions, Q008-Q017) sort after every live milestone, so `majordomus plan next` does not nominate them first. That is a convention, not a guarantee: a Q issue is READY to
-`majordomus plan start` like any other, and its `owner` field only informs. A question recorded
-with `majordomus question add` lives in one checkout's `.ai/local/` and is read by nobody else;
-a question the next worker must see is a Q issue.
+issue in `depends_on`, and M052 (questions), M053 (owner acts on published releases, Q007),
+M063 (the charts line's questions, Q008-Q017), M070 (the instrument line's, Q018-Q024),
+M084 (the Studio boxes and generator lines', Q030-Q033), M088 (the component system's,
+Q034-Q037) and M104 (the component follow-up's, Q050, Q051, Q062, Q063, Q068) sort after
+every live milestone, so `majordomus plan next` does not nominate them first. That is a
+convention, not a guarantee: a Q issue is READY to `majordomus plan start` like any other, and
+its `owner` field only informs.
+A question recorded with `majordomus question add` lives in one checkout's `.ai/local/` and is
+read by nobody else; a question the next worker must see is a Q issue.
 
 ## Shared files and closing issues
 

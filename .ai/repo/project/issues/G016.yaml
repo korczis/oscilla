@@ -1,0 +1,49 @@
+id: G016
+milestone: M087
+serves:
+- "component-system#interlinked"
+title: "Everything interlinked, checked: the link graph is generated from the declarations and every component reaches its related views in at most two steps"
+slug: everything-interlinked-checked-the-link-graph-is-generated-f
+priority: p2
+profile: implementation
+objective: "Lands as feat(test). The link graph's nodes are the workspaces, panels and catalogued components; its edges are containment (a component is shown in its panel and workspace) and the declared links, each realised by an in-content control (neither the global navigation nor the What is this panel of G015 counts: the navigation reaches every workspace in one step, as links.md's reachability matrix notes, and the panel lists every related view of every component, so either would make the property true by construction). A step is one activation (a click, Enter, a tap) of a visible control that is not inside the navigation or that panel; scrolling and focus moves are not steps. Derived relations are computed by rules listed in one table, src/js/ui/catalog/links.js RELATION_RULES, each with its registry and its join key, and a unit test that prints the relations each rule yields: a lab parameter relates to the Studio node type whose parameter shares its section 79 unit and its role, from an explicit pairs list where the join is not unique (Filter Lab cutoff to the Filter node's frequency), a Studio node type to its lab (links.md P7), a Learn topic to its tool (P5, LEARN_TOPICS.tool), a lab to its template (P3); a hand-listed related entry is allowed but counted apart, so the generated catalogue shows how much of the graph is derived. tests/unit/ui-link-graph.test.mjs fails when a component's derived or declared related view is more than two in-content activations away and it carries no exemption (a reason of at least three words, in an exemption list that only shrinks), and when a producer of a link (a data-osc-link attribute, an open-kind declaration, an href to a route) has no declaration. The integration map of the synth line (tests/browser/integration-map.json, K075) is this graph's generated output when K075 is on main, not a second table; K075 has no dependency and lands first in every order the plans allow, so it owns the file and this slice converts it: a K075 row whose producer is not yet declared is kept as a hand row until its declaration exists, and no row leaves the map in the conversion. The property is judged over the whole catalogue, so this slice waits for G018 and G019 (every hook declared); before them a related view of an undeclared component cannot be checked. If K075 has not landed, this slice defines the data-osc-link marker K075 describes. tests/browser/ui-link-graph.cjs (reusing the link-integrity crawl of links.md section 6 where it has landed) walks every edge by pointer, Enter and a hasTouch tap and checks focus on the target heading, Back and Forward. Before: VERIFIED 17 controls switch workspace, 6 are one-way, P1-P11 missing (links.md). After: a property the gate checks. Negative cases: a removed link control, a target refused by the router, a new producer without a row. Rollback: revert; tests and data only."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: \"the embedded Studio is ugly as hell\"; components in general must be generic, linkable, traceable, composable, unified, documented, dynamic, generated and interlinked; \"everything must be interlinked with everything\"; improve the main page and the first experience, deploy often. The owner's evolution prompt pack (MASTER, P02, P04, P06) binds it: the dark technical cockpit is locked, shared primitives only where duplication is proven, no new framework, generated docs only where deterministic, no decorative wires. Findings: the UI component inventory of 2026-10-29 (D1-D14 duplication, U1-U15 on the embedded Studio, measured on origin/main b67d1e58, v3.13.0); design: the component-system design of 2026-10-29 (scratchpad components/design.md)."
+scope:
+- src/js/ui/catalog/links.js
+- src/js/ui/catalog/registry.js
+- tests/unit/ui-link-graph.test.mjs
+- tests/unit/ui-link-graph-exemptions.json
+- tests/browser/ui-link-graph.cjs
+- tests/browser/integration-map.json
+- scripts/ui-catalog.mjs
+- docs/ui-catalog.md
+- package.json
+- tests/browser/timing-baseline.json
+- tests/README.md
+depends_on:
+- G007
+- G014
+- G018
+- G019
+- K075
+acceptance_criteria:
+- "tests/unit/ui-link-graph.test.mjs fails on the merge base, and fixtures make it fail on a related view three steps away, a related view reachable only through the What is this panel or the navigation, a relation rule whose join yields nothing, an undeclared producer and an exemption that rises or returns; the real graph passes with its exemptions listed."
+- "A declared link counts as an edge only with the control that realises it: each row of the generated map names that control's hook, the unit test refuses a link whose row names none, and the browser walk fails a row whose control is missing or hidden."
+- "The browser walk runs in Chromium, Firefox and WebKit from file:// and the sub-path through npm run test:browser (no workflow file changes, so no .github verdict)."
+- "Definition of done, extends: the declarations of G001, the addresses of G007 and the link-integrity crawl of links.md; the integration map of K075."
+- "Definition of done, interlinks: it is the check of 'everything interlinked with everything'."
+- "Definition of done, interactivity: every edge is activated by pointer, keyboard and touch."
+- "Definition of done, docs, menus and routes: docs/ui-catalog.md gains the link section, generated. tests/README.md has a row for each new test; the component's catalogue declaration (G001) names its docs, links and tests; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: tests/browser/ui-link-graph.cjs, as described, each wait an until() with a named deadline ('link target focused', 2 s). The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit, and the release that carried it is recorded when the milestone is verified."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "Before Pro (it may land before F001): it adds no class token, selector, markup surface or inline style and only removes legacy ones, so tests/unit/ui-flowbite-pro-baseline.json stays equal or falls (node scripts/ui-flowbite-pro-record.mjs --check passes, rewritten only where a count fell) and node --test tests/unit/ui-flowbite-pro.test.mjs passes; studio.css, studio-timeline.css, charts.css and tokens.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock v2)."
+- "scripts/size-report.mjs shows at most 0 KB gzip added, with the base and head figures in the pull request body, inside the cap Q037 records (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/ui-link-graph.test.mjs
+- node tests/browser/ui-link-graph.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'
