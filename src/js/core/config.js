@@ -127,12 +127,20 @@ export function fitRangeOn(s, lo, hi, env = {}) {
 
 // ---------------------------------------------------------------- applyConfig
 
-/** The notice of a continuous repeat restored as once (H002); never the permission itself. */
+/**
+ * The notice of a continuous repeat restored as once (H002); never the permission itself. It
+ * says only what brings the repeat back: allowing continuous playback changes the permission,
+ * not the repeat (setContinuous), and no control chooses the repeat, so the way back is to
+ * restore the same record again with the permission given. A link carries no permission and
+ * opens in a new page view, so its notice (`linkMessage`) promises no re-load.
+ */
 export const CONTINUOUS_REPEAT_DROPPED = Object.freeze({
   level: 'info',
   title: 'Continuous repeat not restored',
-  message: 'Continuous repeat saved; it plays once until continuous playback is allowed again '
-    + 'in Playback safety.',
+  message: 'Continuous repeat saved; it plays once. To repeat it continuously, allow continuous '
+    + 'playback in Playback safety, then load it again.',
+  linkMessage: 'Continuous repeat saved; it plays once. A link never carries the permission to '
+    + 'play continuously.',
 });
 
 /** One sentence naming the dropped values, for a restore summary ('' when none). */
@@ -243,7 +251,7 @@ export function applyConfigTo(s, cfg, origin, env = {}, notices = []) {
         dropped.push({ key: 'sweep.repeat', label: 'continuous repeat', saved: 'continuous',
           applied: 'once' });
         const n = CONTINUOUS_REPEAT_DROPPED;
-        notify(n.level, n.title, n.message);
+        notify(n.level, n.title, origin === 'hash' ? n.linkMessage : n.message);
       } else issues++;
     }
     if (sw.repeatCount !== undefined) { const v = num(sw.repeatCount, 1, 1000); if (v == null) issues++; else s.sweep.repeatCount = Math.round(v); }

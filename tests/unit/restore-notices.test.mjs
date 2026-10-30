@@ -19,7 +19,7 @@ import * as configFile from '../../src/js/ui/config-file.js';
 
 const SR = 48000;
 const DROP_TITLE = 'Continuous repeat not restored';
-const DROP_TEXT = /Continuous repeat saved; it plays once until continuous playback is allowed/;
+const DROP_TEXT = /^Continuous repeat saved; it plays once\. /;
 
 /** A saved sweep record (the instrument part of a preset, history entry, file or link). */
 const sweepRecord = (repeat) => ({
@@ -191,4 +191,40 @@ test('limited names the values lowered to a limit, the link gain among them', ()
   const h = restoreFromHash(null, '#v=1&f=440&g=0.25', { sampleRate: SR });
   assert.deepEqual(h.limited, [{ key: 'gain', saved: 0.25, applied: 0.08 }]);
   assert.deepEqual(h.dropped, []);
+});
+
+// The notice says only what is true (project.no-fake-science): allowing continuous playback
+// does not bring a dropped repeat back (setContinuous changes the permission, never the repeat,
+// and no control chooses the repeat), so the notice never says the sweep "plays once until
+// continuous playback is allowed again". Restoring the same record again with the permission
+// given keeps continuous; a link carries no permission, and its notice promises no re-load.
+test('the drop notice promises only what restores continuous repeat', () => {
+  const restore = {
+    preset: (app, cfg) => app.applyPreset({ id: 'u4', name: 'Continuous sweep', cfg }),
+    history: (app, cfg) => app.recallHistory({ label: 'Sweep', cfg }),
+    import: (app, cfg) => app.applyConfig(cfg, 'import'),
+  };
+  for (const [origin, again] of Object.entries(restore)) {
+    const app = instrument();
+    again(app, sweepRecord('continuous'));
+    const n = app.alerts.find((a) => a.title === DROP_TITLE);
+    assert.ok(n, `${origin}: ${JSON.stringify(titles(app.alerts))}`);
+    assert.doesNotMatch(n.message, /until continuous playback is allowed/, origin);
+    assert.match(n.message, /allow continuous playback in Playback safety, then load it again/,
+      origin);
+    app.setContinuous(true);
+    assert.equal(app.sweep.repeat, 'once', `${origin}: allowing alone does not bring it back`);
+    app.alerts = [];
+    again(app, sweepRecord('continuous'));
+    assert.equal(app.sweep.repeat, 'continuous', `${origin}: loading it again with permission`);
+    assert.ok(!app.alerts.some((a) => a.title === DROP_TITLE), `${origin}: nothing dropped`);
+  }
+  const app = instrument(continuousLink());
+  app.restoreFromHash();
+  const n = app.alerts.find((a) => a.title === DROP_TITLE);
+  assert.ok(n, JSON.stringify(titles(app.alerts)));
+  assert.doesNotMatch(n.message, /until continuous playback is allowed|load it again/);
+  assert.match(n.message, /A link never carries the permission to play continuously\.$/);
+  app.setContinuous(true);
+  assert.equal(app.sweep.repeat, 'once', 'allowing alone does not bring the link repeat back');
 });
