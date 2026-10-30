@@ -43,7 +43,7 @@ definition, calibration, trace) are defined in the [glossary](docs/GLOSSARY.md).
 ## Navigation
 
 The header has these entries: **Playground**, **Measure**, **Experiments**, **Analyze**,
-**Synthesis**, **Learn**, **Studio** and **About**, in that order. Analyze and Synthesis are
+**Synthesis**, **Learn**, **Studio**, **Synth** and **About**, in that order. Analyze and Synthesis are
 groups. Analyze opens Analyzer, Filter Lab and Compare; Synthesis opens Synthesis, Sequencer and
 Presets. A group is a button that shows its list of workspaces: Enter or Space opens it and Tab
 walks the list, or ArrowDown opens it on the current workspace and the arrow keys move. Escape
@@ -403,6 +403,16 @@ is in the proposed [ADR 0025](.ai/repo/adrs/0025-data-driven-quality-with-reason
 - **No medical or certification claims.** OSCILLA is not audiometry and not an IEC 61672
   sound level meter.
 
+## The Synth
+
+**Synth** (`#m=synth`) is a playable semi-modular mono voice with a docked keyboard: two VCOs, a
+ring modulator and noise into a mixer, a high-pass and a low-pass 12 dB/oct filter in series,
+two envelopes, a VCA, a modulation generator and a sample-and-hold, every jack normalled so it
+sounds with no cable, and a patch bay to re-route it. The panel is generated from one data
+declaration and the Studio node registry, and it is the same document as Studio: **Open in
+Studio** shows its nodes. The keyboard, the computer keys and MIDI play it; presets and **Copy
+link** keep a sound. Details, cables and the honest limits: [docs/synth.md](docs/synth.md).
+
 ## The V3.1 Studio
 
 **Studio** is the last workspace before About. It is a patching and composition workspace
@@ -655,7 +665,7 @@ from the background, or hold-to-play by touch. The owner declined real-device ch
 | V3 unit | `tests/unit/v3-*.test.mjs` | Measurement core, transfer and impulse response on synthetic systems with known answers, RTA and aggregation, calibration, quality, experiments (schema, round trip, corrupt imports, store), goldens per algorithm ID, the engine on a fake io and the view models, all in `npm test` |
 | V3 browser | `npm run test:measure` | `tests/browser/v3-measure.cjs`: the measurement engine on real Web Audio, a recovered digital loopback response, limiter transparency, 0 nodes after finish and abort. `tests/browser/analysis-worker.cjs`: the offline analysis in its Worker against the inline run, identical results, no inline fallback, abort. `tests/browser/v3-ui.cjs`: Measure and Experiments of the built page, guided flow, abort at every stage, calibration, experiment import, compare and export, and no "SPL" without a level calibration. All run in Chromium, Firefox and WebKit, from `file://` and `/oscilla/` |
 | V3 visual | `scripts/visual-measure.mjs`, `tests/visual/measure/` | Measure at 1536x1024 and 390x844 showing a deterministic TEST CONTEXT experiment, against the accepted reference for each environment (part of `npm run test:visual`) |
-| Studio browser | `npm run test:studio` | The Studio of the built page: the graph editor (`tests/browser/v31-studio-graph.cjs`), the timeline editor (`tests/browser/v31-studio-timeline.cjs`), the compiler and runtime on the real engine (`tests/browser/v31-studio-audio.cjs`), the transport on the audio clock (`tests/browser/v31-studio-transport.cjs`), offline rendering of the templates (`tests/browser/v31-studio-offline.cjs`), the transport Inspector, Find node, Render WAV and a measurement from Studio (`tests/browser/v31-studio-workflows.cjs`), deep links and fullscreen (`tests/browser/v31-studio-links.cjs`), and the Inspector's Runtime and Trace sections (`tests/browser/v31-studio-runtime.cjs`) |
+| Studio browser | `npm run test:studio` | The Studio of the built page: the graph editor (`tests/browser/v31-studio-graph.cjs`), the timeline editor (`tests/browser/v31-studio-timeline.cjs`), the compiler and runtime on the real engine (`tests/browser/v31-studio-audio.cjs`), the transport on the audio clock (`tests/browser/v31-studio-transport.cjs`), offline rendering of the templates (`tests/browser/v31-studio-offline.cjs`), the transport Inspector, Find node, Render WAV and a measurement from Studio (`tests/browser/v31-studio-workflows.cjs`), deep links and fullscreen (`tests/browser/v31-studio-links.cjs`), and the Inspector's Runtime and Trace sections (`tests/browser/v31-studio-runtime.cjs`), and the Synth panel's sound, cables, links and phone layout (`tests/browser/synth.cjs`) |
 | Studio visual | `scripts/visual-studio.mjs`, `tests/visual/studio/` | Studio at 1536x1024 and its GRAPH and TIMELINE subviews at 390x844, against the accepted reference for each environment (part of `npm run test:visual`) |
 
 Every V3 browser check runs on a TEST CONTEXT digital loopback or a fake microphone. No

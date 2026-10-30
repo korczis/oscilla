@@ -31,6 +31,7 @@ import * as constants from '../../src/js/core/constants.js';
 import * as math from '../../src/js/core/math.js';
 import * as frequency from '../../src/js/core/frequency.js';
 import * as music from '../../src/js/core/music.js';
+import { LEARN_INSTRUMENT_TOPICS } from '../../src/js/data/learn.js';
 import * as config from '../../src/js/core/config.js';
 import * as storage from '../../src/js/core/storage.js';
 import { createInstrument } from '../../src/js/core/instrument.js';
@@ -77,7 +78,15 @@ const DEVIATIONS = {
   }),
   // the 'hearing' demo sets pp.octave (V1's cfg has no pp); the 'samplerate' body names the
   // Filter Lab's model rate (V1 had no Filter Lab), appended after V1's sentence
-  'presets.data/LEARN_TOPICS': (out) => out.map((t) => {
+  // the V3 topic's demo opens an address (runLearnDemo), so V1's demo runner has no case for it
+  'presets.apply/learn-demos@48000': (out) => {
+    const q = { ...out };
+    for (const t of LEARN_INSTRUMENT_TOPICS) delete q[t.id];
+    return q;
+  },
+  // V3 adds topics after the V1 ones (data/learn.js LEARN_INSTRUMENT_TOPICS, K058): a demo with
+  // an href opens an address instead of configuring the Playground; V1 has none of them.
+  'presets.data/LEARN_TOPICS': (all) => all.filter((t) => !t.demo.href).map((t) => {
     if (t.id === 'samplerate') {
       const q = structuredClone(t);
       const added = '; the Filter Lab models its response at 48 kHz and labels it.';

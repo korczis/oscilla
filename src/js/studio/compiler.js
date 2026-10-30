@@ -360,7 +360,8 @@ export function instantiateNode(planNode, ctxEnv) {
     const h = planNode.adapter.create({ ctx: hooks.ctx, hooks, acct, now: ctxEnv.now,
       at: ctxEnv.at, params: planNode.params, node: planNode, def: planNode.def,
       options: ctxEnv.options || {}, global: ctxEnv.global || null,
-      settled: ctxEnv.settled || null });
+      settled: ctxEnv.settled || null,
+      gated: typeof ctxEnv.gated === 'function' && ctxEnv.gated(planNode.id) === true });
     return Object.assign(h, base, { nodes: own.nodes, sources: own.sources, acct });
   } catch (e) {
     stopAndDisconnect(own.nodes, own.sources);

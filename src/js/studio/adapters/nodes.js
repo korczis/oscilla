@@ -10,7 +10,9 @@
 //             check?(params, caps) -> reason | { code, reason } | null, create(env) -> handle }
 // env     = { ctx, hooks, acct: { track, source }, now, at, params, node, def, options,
 //             global: { setMasterLevel(g) -> wrote },  the runtime's gate to global engine state
-//             settled(handle) }                        a pending handle has settled (async)
+//             settled(handle),                         a pending handle has settled (async)
+//             gated }                                  another owner gates this envelope: it
+//                                                      is built closed (runtime setOwnedParams)
 // handle  = { inputs: { portId: AudioNode }, outputs: { portId: AudioNode },
 //             outputRange: { portId: [lo, hi] }        control signal range (default [-1, 1]),
 //             modTarget(key, mapping) -> { param: AudioParam, scale } | { reason },
@@ -63,6 +65,7 @@ import * as processing from './processing.js';
 import * as output from './output.js';
 import * as analysis from './analysis.js';
 import * as measurement from './measurement.js';
+import * as instrument from './instrument.js';
 
 export { PARAM_TAU_S, inertHandle } from './common.js';
 export { MIC_ENDED_TEXT, MIC_OFF_TEXT, SWEEP_FADE_S } from './sources.js';
@@ -85,4 +88,5 @@ export const NODE_ADAPTERS = Object.freeze({
   calibration: dataNode('calibration/interpolate.js#applyFrequencyCorrection'),
   'transfer-analyzer': dataNode('measurement/transfer.js#computeTransfer'),
   'measurement-result': dataNode('experiments/schema.js#withResults'),
+  keys: instrument.keys, vco: instrument.vco, ring: instrument.ring,
 });

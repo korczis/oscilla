@@ -13,6 +13,22 @@ import {
 
 const kHz = (hz) => `${hz / 1000} kHz`;
 
+/**
+ * V3 topics (K058-K066): a demo with `href` opens that address through the one hash dispatcher
+ * (ui/navigation.js) instead of configuring the Playground. They follow the V1 topics in
+ * LEARN_TOPICS (tests/unit/freeze.test.mjs compares the V1 ones with the golden file).
+ */
+export const LEARN_INSTRUMENT_TOPICS = Object.freeze([
+  { id: 'semi-modular-voice', title: 'Semi-modular voice',
+    body: 'A semi-modular voice sounds with no cable: every input jack is normalled to a default '
+      + 'source (the keyboard pitch to both oscillators, the gate to both envelopes, oscillators '
+      + 'into the mixer, then a high-pass and a low-pass 12 dB/oct filter in series into the '
+      + 'VCA). A cable into a jack replaces its normal. Pitch is a control voltage in octaves '
+      + '(1.00 oct per octave, exact in the digital domain); the gate opens the envelopes. The '
+      + 'filter peak rings but does not self-oscillate, the pulse width is set, not modulated, '
+      + 'and the S&H steps a seeded random source: it samples no input.',
+    demo: { label: 'Open the Synth panel', viz: 'spectrum', href: '#m=synth&yp=init' } },
+]);
 // V1: LEARN_TOPICS (index.html@a7b7a23)
 export const LEARN_TOPICS = [
   { id: 'frequency', title: 'Frequency', body: 'Frequency is the number of cycles per second, measured in hertz (Hz). Doubling it raises the pitch by one octave.',
@@ -53,7 +69,9 @@ export const LEARN_TOPICS = [
     demo: { label: 'High range sweep', viz: 'spectrum', cfg: { source: 'sweep', sweep: { start: 8000, end: 'max', durationMs: 4000, curve: 'log', direction: 'up', repeat: 'once' } } } },
   { id: 'speakers', title: 'Speaker limitations', body: 'Speakers, headphones, DACs and amplifiers can attenuate or distort very low and very high frequencies. Perceived loudness is not a measure of acoustic output.',
     demo: { label: '40 Hz sub-bass', viz: 'spectrum', cfg: { source: 'single', pattern: 'finite', waveform: 'sine', frequency: 40, duration: 2000 } } },
+  ...LEARN_INSTRUMENT_TOPICS,
 ];
+
 
 /**
  * V2 extension: where each V1 demo.viz id is shown in the V2 layout (analysis tab ids of the

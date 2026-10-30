@@ -146,7 +146,7 @@ test('the on-screen keys: 2 or 3 octaves that follow the octave, black keys hit 
 
 test('the link key arms the view a link opens and leaves with the first workspace change', () => {
   assert.equal(KEYBOARD_LINK_KEY, 'kbd');
-  assert.deepEqual([...KEYBOARD_VIEWS], ['playground', 'studio']);
+  assert.deepEqual([...KEYBOARD_VIEWS], ['playground', 'studio', 'synth']);
   assert.ok(HASH_DOMAINS.includes('keyboard'), 'one dispatcher reads it (ADR 0045)');
   assert.equal(new URLSearchParams(hashForWorkspace('m=playground&kbd=1', 'playground'))
     .get('kbd'), '1', 'kept while the workspace stays');

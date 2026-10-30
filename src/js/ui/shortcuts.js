@@ -35,6 +35,7 @@ export const SPACE_OWNER = Object.freeze({
   presets: 'instrument',
   learn: null,
   studio: 'studio',
+  synth: null, // the Synth plays from its keys; Space starts nothing there (ADR 0050)
   about: null,
 });
 
@@ -51,6 +52,7 @@ export const WORKSPACE_LABELS = Object.freeze({
   presets: 'Presets',
   learn: 'Learn',
   studio: 'Studio',
+  synth: 'Synth',
   about: 'About',
 });
 

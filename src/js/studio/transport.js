@@ -23,6 +23,11 @@
 //   transport.escape({ gesture, popup, selectionMode }) -> action   resolveEscape (§185);
 //                                                'stop-audio' stops fast (8 ms)
 //   transport.playhead() -> { position, pass, playing }   from AudioContext.currentTime (§94)
+//   transport.arm() -> result                  K104: play the Synth panel live (live-notes.js
+//                                                liveModel: no timeline, no end); edits are
+//                                                admitted as while playing; PLAY promotes it
+//   transport.disarm() -> Promise               every live note off; an armed run stops
+//   transport.live(keysId, { kind, note, velocity, at }) -> result   a note on a Keys node
 //   transport.debugInfo(), transport.on(fn) -> off ('state' | 'ended' | 'warning': a
 //                                                Diagnostic), transport.dispose(), .playing
 // Diagnostics (validate.js studioDiagnostic, owner 'transport'): debugInfo().diagnostics, and
@@ -119,6 +124,7 @@ import { effectiveTarget } from './timeline.js';
 import { CLIP_TARGET_TEXT, clipTarget, clipUse } from './clip-targets.js';
 import { studioDiagnostic } from './validate.js';
 import { NO_TRACE } from '../core/trace.js';
+import { createLiveNotes, keysGatedEnvelopes, liveModel } from './live-notes.js';
 
 /** Reasons shown for what the transport does not play. */
 export const TRANSPORT_TEXT = Object.freeze({
@@ -213,6 +219,9 @@ export function createStudioTransport({
   // pattern-played oscillator's level, re-routed onto its pattern bus (levelMods).
   const levelTaps = new Map();
   const gateOwned = new Map(); // envelope id → handle (closed at PLAY, gated by the timeline)
+  let armedOnly = false; // armed (K104): the live model plays, no timeline and no end
+  const live = createLiveNotes({ getModel: () => model, handleOf: (id) => ready(id) });
+  const view = (m) => (armedOnly && m ? liveModel(m) : m);
   const unplayed = new Map(); // clip or lane id → { code, reason }
   const decisions = [];
   const warnings = []; // Diagnostics, owner 'transport'
@@ -348,6 +357,7 @@ export function createStudioTransport({
         for (const env of triggerEnvelopes(m, id)) out.add(env);
       }
     }
+    for (const env of keysGatedEnvelopes(m)) out.add(env); // a key opens them (live-notes.js)
     return out;
   }
 
@@ -373,7 +383,7 @@ export function createStudioTransport({
   function claimFor(m) {
     const now = ctxNow();
     const releaseAt = Math.max(safeHorizon(now, hooks.ctx.sampleRate), hooks.soon());
-    return runtime.setOwnedParams(ownedFor(m), { releaseAt });
+    return runtime.setOwnedParams(ownedFor(m), { releaseAt, gated: gatedEnvelopes(m) });
   }
 
   const laneOn = (id, param) => model.timeline.automation.some((l) => l.target.node === id
@@ -602,6 +612,9 @@ export function createStudioTransport({
   function ownEnvelope(id, fresh) {
     const h = ready(id);
     if (!h || typeof h.release !== 'function') return;
+    // Fresh: the runtime built it closed (setOwnedParams `gated`), so this release holds the
+    // floor; it does not close it, which at ctxNow() would come after a stalled apply had
+    // rendered the attack (review of #332, V4). Kept: open since its build, released from here.
     h.release(fresh ? ctxNow() : hooks.soon());
     gateOwned.set(id, h);
   }
@@ -1337,8 +1350,8 @@ export function createStudioTransport({
       levelMods(c);
     }
     const wake = scheduler.nextWakeMs(now);
-    if (wake !== null) {
-      arm(wake);
+    if (wake !== null || armedOnly) {
+      arm(wake === null ? 250 : wake); // armed: keep syncing edits, never end
       return;
     }
     const end = anchorEndTime(scheduler.getState().anchor) + STOP_PAD_S;
@@ -1359,7 +1372,7 @@ export function createStudioTransport({
    * diagnostic. -> the refusal text.
    */
   function refusedBy(r, code, revision) {
-    runtime.setOwnedParams(ownedFor(model));
+    runtime.setOwnedParams(ownedFor(model), { gated: gatedEnvelopes(model) });
     note(code === 'sync-refused' ? 'sync' : 'admit', revision, 'refused', r, code);
     const message = errorOf(r, 'unknown error');
     lastError = { ...studioDiagnostic('transport', code, message, entityOf(r), 'error'),
@@ -1372,7 +1385,7 @@ export function createStudioTransport({
   function syncNow() {
     const rev = store.getRevision();
     lastRevision = rev; // not retried every wake-up; the next store change tries again
-    const next = store.getModel();
+    const next = view(store.getModel());
     claimFor(next);
     const r = runtime.apply(next, { revision: rev });
     if (!r.ok) {
@@ -1402,7 +1415,8 @@ export function createStudioTransport({
     return trace.run(() => admitNow(next, info));
   }
 
-  function admitNow(next, { revision } = {}) {
+  function admitNow(candidate, { revision } = {}) {
+    const next = view(candidate);
     if (!playing || disposed || !next) {
       trace.record('transport', 'admit', { revision, outcome: 'not-applied',
         detail: { playing, disposed } });
@@ -1446,7 +1460,12 @@ export function createStudioTransport({
 
   function startNow({ position } = {}) {
     if (disposed) return fail('start', 'The Studio transport is disposed.', 'disposed');
-    if (playing) return { ok: true, playing: true, already: true };
+    if (playing && !armedOnly) return { ok: true, playing: true, already: true };
+    if (playing) { // PLAY while armed: the whole document, on the same running runtime
+      applyStop(scheduler.stop(ctxNow()));
+      playing = false;
+      armedOnly = false; // view() is the document from here (review of #329)
+    }
     const pos = clampPosition(position);
     if (typeof onClaimOutput === 'function') {
       let claimed;
@@ -1457,9 +1476,10 @@ export function createStudioTransport({
       }
       if (claimed === false) return fail('claim', TRANSPORT_TEXT.claimRefused, 'claim-refused');
     }
-    const m = store.getModel();
+    const m = view(store.getModel());
     const rev = store.getRevision();
-    runtime.setOwnedParams(ownedFor(m));
+    // `gated`: the envelopes this playback gates are built closed (review of #332, V4).
+    runtime.setOwnedParams(ownedFor(m), { gated: gatedEnvelopes(m) });
     const applied = runtime.apply(m, { revision: rev });
     if (!applied.ok) {
       runtime.setOwnedParams([]);
@@ -1502,6 +1522,8 @@ export function createStudioTransport({
   function abort(reason) {
     clearTimer();
     playing = false;
+    armedOnly = false;
+    live.reset();
     trace.record('transport', 'stop', { outcome: 'aborted', detail: { reason } });
     for (const v of voices.values()) {
       try { v.voice.dispose(); } catch (e) { /* the context is gone */ }
@@ -1534,6 +1556,8 @@ export function createStudioTransport({
     const ctx = hooks.ctx;
     if (ctx && ctx.state !== 'closed') applyStop(scheduler.stop(ctx.currentTime));
     playing = false;
+    armedOnly = false;
+    live.reset();
     lanes.clear();
     claims.clear();
     levelTaps.clear();
@@ -1614,6 +1638,8 @@ export function createStudioTransport({
     const st = scheduler ? scheduler.getState() : null;
     return {
       playing,
+      armed: playing && armedOnly,
+      heldNotes: live.held(),
       startPosition,
       playhead: playhead(),
       scheduledUntil: st ? st.scheduledUntil : null,
@@ -1642,9 +1668,31 @@ export function createStudioTransport({
     };
   }
 
+  /** K104: arm the live model; the first note is a user gesture (the Synth workspace). */
+  function armLive() {
+    if (playing) return { ok: true, armed: armedOnly, already: true };
+    armedOnly = true;
+    const r = start({ position: 0 });
+    if (!r.ok) armedOnly = false;
+    return r;
+  }
+
+  function disarm() {
+    if (playing) live.allOff(hooks.soon());
+    return armedOnly ? stop({ fast: true, reason: 'disarm' }) : Promise.resolve(null);
+  }
+
   return Object.freeze({
     start,
     stop,
+    arm: armLive,
+    disarm,
+    live(keysId, ev = {}) {
+      if (!playing) return { ok: false, reason: 'not-armed' };
+      return live.event(keysId, { ...ev, at: Number.isFinite(ev.at) ? ev.at : hooks.soon() });
+    },
+    get armed() { return playing && armedOnly; },
+    heldNotes: () => live.held(),
     locate,
     returnToStart: () => locate(0),
     setLoop,
