@@ -11,8 +11,8 @@
         "height": 1024
       },
       "runs": 3,
-      "total": 0.05,
-      "totalExclData": 0,
+      "total": 0.17,
+      "totalExclData": 0.03,
       "regions": {
         "header": {
           "mismatch": 0,
@@ -39,7 +39,7 @@
           "dataPp": 0.5
         },
         "analysis": {
-          "mismatch": 0,
+          "mismatch": 0.04,
           "mismatchExclData": 0,
           "runToRunPct": 0,
           "dataPp": 0.5
@@ -51,15 +51,15 @@
           "dataPp": 0.5
         },
         "device": {
-          "mismatch": 0,
-          "mismatchExclData": 0,
+          "mismatch": 0.39,
+          "mismatchExclData": 0.39,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "spectrogram": {
-          "mismatch": 0.33,
+          "mismatch": 0.81,
           "mismatchExclData": 0,
-          "runToRunPct": 0.71,
+          "runToRunPct": 0.52,
           "dataPp": 1.5
         },
         "sequencer": {
@@ -69,27 +69,27 @@
           "dataPp": 0.5
         },
         "filter": {
-          "mismatch": 0,
-          "mismatchExclData": 0,
+          "mismatch": 0.23,
+          "mismatchExclData": 0.15,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "envelope": {
-          "mismatch": 0,
-          "mismatchExclData": 0,
+          "mismatch": 0.21,
+          "mismatchExclData": 0.18,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "additive": {
-          "mismatch": 0,
-          "mismatchExclData": 0,
+          "mismatch": 0.18,
+          "mismatchExclData": 0.05,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "phase": {
           "mismatch": 0.24,
           "mismatchExclData": 0,
-          "runToRunPct": 0.23,
+          "runToRunPct": 0.2,
           "dataPp": 1
         },
         "bio": {
@@ -99,8 +99,8 @@
           "dataPp": 0.5
         },
         "statusbar": {
-          "mismatch": 0,
-          "mismatchExclData": 0,
+          "mismatch": 0.58,
+          "mismatchExclData": 0.69,
           "runToRunPct": 0,
           "dataPp": 0.5
         }
@@ -322,7 +322,7 @@
         "height": 1024
       },
       "runs": 3,
-      "total": 3.43,
+      "total": 3.32,
       "totalExclData": 3.33,
       "regions": {
         "header": {
@@ -368,10 +368,10 @@
           "dataPp": 0.5
         },
         "spectrogram": {
-          "mismatch": 3.84,
+          "mismatch": 3.08,
           "mismatchExclData": 1.36,
-          "runToRunPct": 2.69,
-          "dataPp": 3.5
+          "runToRunPct": 2.29,
+          "dataPp": 3
         },
         "sequencer": {
           "mismatch": 2.43,
@@ -380,7 +380,7 @@
           "dataPp": 0.5
         },
         "filter": {
-          "mismatch": 3.24,
+          "mismatch": 3.22,
           "mismatchExclData": 4.71,
           "runToRunPct": 0,
           "dataPp": 0.5
@@ -400,7 +400,7 @@
         "phase": {
           "mismatch": 2.99,
           "mismatchExclData": 4.91,
-          "runToRunPct": 0.23,
+          "runToRunPct": 0.22,
           "dataPp": 1
         },
         "bio": {
@@ -410,7 +410,7 @@
           "dataPp": 0.5
         },
         "statusbar": {
-          "mismatch": 4.54,
+          "mismatch": 4.53,
           "mismatchExclData": 3.8,
           "runToRunPct": 0,
           "dataPp": 0.5
