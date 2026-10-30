@@ -1421,7 +1421,7 @@ async function runBrowser() {
         && ch.lowered > s0.t0 + 0.51 - q - 1e-6, JSON.stringify({ ...ch, t0: s0.t0 }));
     check('limit-tightens-live: raising the limit again does not extend the voice',
       ch.raised === ch.lowered, JSON.stringify(ch));
-    check('limit-tightens-live: oscillators stop within release + 50 ms of t0 + 0.5 s (audio clock)',
+    check('limit-tightens-live: oscillators stop within 50 ms of t0 + 0.5 s (audio clock)',
       r.oscs >= 1 && r.stopAt > 0.49 && r.stopAt <= bound, JSON.stringify({ ...r, bound }));
     check('limit-tightens-live: it sounded until the limit and is silent after its release',
       r.before > 0.01 && r.after < 1e-4, JSON.stringify(r));
