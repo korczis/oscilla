@@ -184,6 +184,26 @@ test('periodicWave: carrier only, kept by updateLive (no wave dip), swappable', 
   assert.strictEqual(v.carrier.wave.id, 'B');
 });
 
+test('setPeriodicWave refuses a dual voice: A and B keep their waves (C007)', { skip }, () => {
+  const { eng, audio, advance } = setup();
+  withPeriodicWave(audio);
+  const st = defaultInstrumentState();
+  const dual = buildPlan({ ...st, source: 'dual' }, ENV_S).plan;
+  assert.strictEqual(dual.type, 'dual');
+  eng.play(dual, opt());
+  const v = eng.voice;
+  const types = () => [v.live.A.osc.type, v.live.B.osc.type];
+  const before = types();
+  assert.strictEqual(eng.setPeriodicWave({ id: 'additive' }), false, 'refused');
+  assert.strictEqual(v.periodicWave, null);
+  assert.deepStrictEqual(types(), before, 'neither oscillator changed');
+  assert.strictEqual(v.live.A.osc.wave, undefined);
+  assert.strictEqual(eng.clearPeriodicWave(), false, 'nothing to clear on a dual voice');
+  eng.stopAll();
+  advance(3);
+  assert.strictEqual(eng.activeNodeCount, 0);
+});
+
 test('clearPeriodicWave: back to plan.wave through the click-free dip', { skip }, () => {
   const { eng, audio, advance, flush } = setup();
   withPeriodicWave(audio);

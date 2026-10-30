@@ -35,12 +35,17 @@
 //                    create nodes through track/source. engine.updateInserts(cfgs) updates the
 //                    sounding voice; dispose() runs at voice cleanup.
 //     o.periodicWave a PeriodicWave for the carrier of const/steps/ramps/lfo/am/fm plans
-//                    (additive synthesis); engine.setPeriodicWave(wave) changes it live and
-//                    engine.clearPeriodicWave() returns to plan.wave with a click-free dip.
+//                    (additive synthesis; never dual); engine.setPeriodicWave(wave) changes it
+//                    live (refused for a dual voice) and engine.clearPeriodicWave() returns to
+//                    plan.wave with a click-free dip.
 //     o.adsr         { a, d, s, r } (seconds, sustain 0..1): attack/release times come from it
 //                    and it is handed to the envelope function (see voice.js v1OpenEnvelope);
 //                    the default envelope uses only a and r. Install the DSP ADSR with
-//                    engine.setEnvelope(makeAdsrEnvelope(envelopeModule)).
+//                    engine.setEnvelope(makeAdsrEnvelope(envelopeModule)). It shapes the
+//                    open envelope, a continuous ping-pong sweep's whole envelope included.
+//                    engine.setAdsr(adsr, stepEnvelope) applies a change to the sounding
+//                    voice: a release in place while held, anything else by a click-free
+//                    restart, once per drag (setAdsr(..., { settling }), #296 R-7).
 //     o.envelope     per-play envelope function (overrides engine.setEnvelope).
 //     o.stepEnvelope (eg, t, dur, a, r, adsr) => void, replaces the V1 step envelope of
 //                    programmed patterns (must schedule through eg).
@@ -54,7 +59,9 @@
 //   attachMicrophone(stream, opts) / detachMicrophone(): the analysis graph of a stream the
 //   caller opened (mic lab), built through the engine's mic accounting (micNodeCount).
 //   A replacement voice (_restart) is started through this.play with the voice's own options,
-//   so a wrapper installed on the instance (main.js) re-applies the V2 options.
+//   so a wrapper installed on the instance (main.js) re-applies the V2 options. That wrapper
+//   spreads audio/lab-play-options.js over them, which names every V2 key (value or null): a
+//   lab switched off while the voice sounded stays off on the replacement (C007).
 //   snapshot(out?)   plain read-only engine state for the visualization (risk 3).
 
 import {
@@ -446,6 +453,7 @@ export class AudioEngine {
       attack: Math.max(0.001, adsr ? adsr.a : o.attackS), release: Math.max(0.005, adsr ? adsr.r : o.releaseS),
       limited: !!o.limited, extended: false,
       inserts: [], periodicWave: o.periodicWave || null, adsr, eg: null, stepEnv: null,
+      stepHook: typeof o.stepEnvelope === 'function' ? o.stepEnvelope : null,
     };
     const t0 = v.t0;
     const track = (n) => { v.nodes.push(n); this.nodes.add(n); return n; };
@@ -869,6 +877,45 @@ export class AudioEngine {
   }
 
   /**
+   * The Envelope lab changed while a voice sounds (C007 R-2; main.js through lab-play-options.js
+   * followEnvelopeLab). adsr { a, d, s, r } or null (the lab off); stepEnvelope the step hook
+   * that goes with it, or null. The voice's options take both, so a later restart keeps them.
+   * A change of the release alone, on a voice whose release is not scheduled yet (held: no end,
+   * no per-segment envelope), applies in place: the release is read at note-off and nothing
+   * sounding is edited. Any other change alters the scheduled shape, and a sounding envelope is
+   * never re-automated (V249), so the voice is replaced click-free with the same plan, options
+   * and deadline, as setDualPhase does.
+   * #296 R-7: a slider or graph drag is one edit made of many notifications. With
+   * { settling: true } (a slider's 'input', a graph pointermove) a shape change only reaches the
+   * voice's options and answers 'pending'; the drag's end (the slider's 'change', the graph's
+   * pointerup: settling false) compares the voice's scheduled shape (v.adsr, v.stepHook) with
+   * the edit and restarts once. A release-only change is in place either way.
+   * Returns 'same' | 'live' | 'pending' | 'restarted' | false (no voice, releasing, or about to
+   * end).
+   */
+  setAdsr(adsr, stepEnvelope = null, { settling = false } = {}) {
+    const v = this.voice;
+    if (!v || v.ended || v.releasing || !v.plan) return false;
+    const next = adsr ? { ...adsr } : null;
+    const hook = next && typeof stepEnvelope === 'function' ? stepEnvelope : null;
+    const prev = v.adsr;
+    const keep = (k) => !!prev && !!next && prev[k] === next[k];
+    const shapeKept = (!prev && !next) || (keep('a') && keep('d') && keep('s'));
+    const sameHook = v.stepHook === hook;
+    v.opts = { ...v.opts, adsr: next, stepEnvelope: hook };
+    if (shapeKept && sameHook && (!next || keep('r'))) return 'same';
+    const held = !Number.isFinite(v.endTime)
+      && !(v.plan.kind === 'continuous' && v.plan.envelope === 'segment');
+    if (shapeKept && sameHook && next && held) {
+      v.adsr = next;
+      v.release = Math.max(0.005, next.r);
+      return 'live';
+    }
+    if (settling) return 'pending';
+    return this._restart(v, v.plan);
+  }
+
+  /**
    * Analysis graph for a microphone stream the caller opened (the mic lab asks for the stream
    * itself): MediaStreamSource → Analyser, never connected to the output. Every node is tracked
    * in micNodes. Replaces an earlier attachment. Returns the AnalyserNode, or null without a
@@ -913,10 +960,14 @@ export class AudioEngine {
     return true;
   }
 
-  /** Swap the carrier's PeriodicWave of the sounding voice (additive synthesis, live). */
+  /**
+   * Swap the carrier's PeriodicWave of the sounding voice (additive synthesis, live). A dual
+   * voice is refused (false): additive does not apply to dual plans (main.js labPlayOptions), and
+   * its carrier is oscillator A only, so a wave there would change A and leave B (C007).
+   */
   setPeriodicWave(wave) {
     const v = this.voice;
-    if (!v || v.ended || !v.carrier || !wave) return false;
+    if (!v || v.ended || !v.carrier || !wave || (v.plan && v.plan.type === 'dual')) return false;
     v.periodicWave = wave;
     v.carrier.setPeriodicWave(wave);
     return true;

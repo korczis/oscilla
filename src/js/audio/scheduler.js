@@ -19,7 +19,6 @@
 // cycles therefore goes into a lane whose value is constant when it is written (envelopeLanes).
 // Frequency stays on the carrier: a flattened quantum of the frequency keeps the phase continuous.
 
-import { GAIN_FLOOR } from '../core/constants.js';
 import { coherentTime, trackedParam } from './voice.js';
 
 // V1: SCHEDULE_LEAD_S, FAST_RELEASE_S, ESCAPE_RELEASE_S, WAVE_DIP_S, SCHEDULE_AHEAD_S,
@@ -74,7 +73,7 @@ export function scheduleSteps(v, plan, b) {
 
 /** V1: AudioEngine.play case 'ramps' (index.html@a7b7a23). Returns the programmed end. */
 export function scheduleRamps(v, plan, b) {
-  const { t0, source, env, eg, a, r } = b;
+  const { t0, source, env, eg, a, r, o } = b;
   const osc = source(this._carrier(v, plan.wave, plan.segments[0].f0, t0));
   const lanes = plan.kind === 'continuous' && plan.envelope === 'segment'
     && typeof b.ctx.createConstantSource === 'function';
@@ -84,8 +83,10 @@ export function scheduleRamps(v, plan, b) {
   if (plan.kind === 'continuous') {
     v.extended = true;
     if (plan.envelope !== 'segment') {
-      eg.setValueAtTime(GAIN_FLOOR, t0);
-      eg.linearRampToValueAtTime(1, t0 + a);
+      // One envelope over the whole repeat (ping-pong): the voice's open envelope with no end,
+      // so the ADSR's decay and sustain reach it as they reach a held tone (C007 R-1). With
+      // V1's envelope (no ADSR) this is V1's floor and linear attack to 1, unchanged.
+      (o.envelope || this._envelope)(eg, t0, Infinity, a, r, v.adsr);
     }
     this._scheduleCycles(v);
     return Infinity;

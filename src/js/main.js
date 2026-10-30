@@ -21,7 +21,10 @@
 // engine.play is wrapped once (instance property) so every play — instrument, Learn demo,
 // preset — carries the V2 options: ADSR (envelope lab), the filter insert (filter lab; always
 // inserted, its own crossfaded bypass handles "disabled"), the additive PeriodicWave and the
-// stereo router for dual plans.
+// stereo router for dual plans. audio/lab-play-options.js builds them, with every key present
+// (value or null), for the realtime wrapper and the WAV render alike, so the current lab state
+// wins over the options a restarted voice copies (C007). With the Envelope on, notes of known
+// length (finite tone, steps, ramps) take the whole ADSR through o.stepEnvelope.
 
 import Alpine from 'alpinejs';
 import p5 from 'p5';
@@ -32,6 +35,9 @@ import { applyAdsr, releaseAt } from './audio/envelope.js';
 import { createStereoRouter } from './audio/stereo.js';
 import { createFilterStage } from './audio/filters.js';
 import { buildPeriodicWave } from './audio/additive.js';
+import {
+  followEnvelopeLab, labPlayOptions, withLabOptions,
+} from './audio/lab-play-options.js';
 import { encodeWav, parseWav } from './audio/wav.js';
 import { buildPlan, planFreqAt, PATTERNS } from './audio/patterns.js';
 import { createVisualizationBridge } from './visualization/visualization-bridge.js';
@@ -159,24 +165,25 @@ function dualRouterFactory(live) {
   };
 }
 
-/** The V2 options for a plan on `ctx`. live: the realtime engine (labs track its stages). */
+/**
+ * The V2 options for a plan on `ctx`. live: the realtime engine (labs track its stages).
+ * Built by audio/lab-play-options.js, which returns every V2 key (value or null), so the
+ * current lab state wins over the options a restarted voice copies from its predecessor (C007).
+ */
 function v2PlayOptions(plan, ctx, live) {
-  const o = {};
-  const env = labs.envelope;
-  if (env && env.enabled) o.adsr = env.adsr;
   const filter = labs.filter;
-  if (filter) {
-    o.inserts = live ? [filter.createInsert]
-      : [(c, track) => createFilterStage(c, filter.config, { track })];
-  }
   const add = labs.additive;
-  if (add && add.enabled && plan.type !== 'dual' && ctx) {
-    const wave = live ? add.periodicWave(ctx) : buildPeriodicWave(ctx, add.partials).wave;
-    if (wave) o.periodicWave = wave;
-  }
-  if (plan.type === 'dual' && needsRouter(plan)) o.dualRouter = dualRouterFactory(live);
-  if (plan.type === 'dual' && labs.phase) o.dualPhaseDeg = labs.phase.config.phaseDeg;
-  return o;
+  return labPlayOptions(plan, ctx, {
+    envelope: labs.envelope,
+    insert: !filter ? null : live ? filter.createInsert
+      : (c, track) => createFilterStage(c, filter.config, { track }),
+    additive: add ? {
+      enabled: add.enabled,
+      wave: (c) => (live ? add.periodicWave(c) : buildPeriodicWave(c, add.partials).wave),
+    } : null,
+    dualRouter: (p) => (needsRouter(p) ? dualRouterFactory(live) : null),
+    phaseDeg: labs.phase ? labs.phase.config.phaseDeg : null,
+  });
 }
 
 /**
@@ -199,17 +206,14 @@ function labVizInputs(plan) {
 }
 bridge.labInputs = labVizInputs;
 
-const basePlay = engine.play.bind(engine);
-engine.play = (plan, o = {}) => {
+withLabOptions(engine, (plan) => v2PlayOptions(plan, engine.ctx, true), () => {
   // Playground and Measure share one output (spec §74): no instrument voice while a measurement
   // owns it. The measurement itself never calls play (capture.js schedules its own source).
-  if (app && app.measureOwnsOutput()) {
-    app.notify('info', 'Measurement in progress', 'The output belongs to the measurement: stop '
-      + 'it (Esc) before playing.');
-    return null;
-  }
-  return basePlay(plan, { ...o, ...v2PlayOptions(plan, engine.ctx, true) });
-};
+  if (!app || !app.measureOwnsOutput()) return false;
+  app.notify('info', 'Measurement in progress', 'The output belongs to the measurement: stop '
+    + 'it (Esc) before playing.');
+  return true;
+});
 
 /**
  * Measure (and Studio PLAY) take the output: stop the instrument and the sequencer (their
@@ -432,6 +436,9 @@ function mountLabs(root) {
       syncLabFlags();
       vizLabsChanged(); // Harmonics tab and signal path show the additive table
       if (!engine.voice || engine.voice.ended) return;
+      // Additive does not apply to a dual plan (labPlayOptions, labVizInputs); the engine
+      // refuses it too, so no wave is built for nothing.
+      if (engine.voice.plan && engine.voice.plan.type === 'dual') return;
       if (labs.additive.enabled) {
         const wave = labs.additive.periodicWave(engine.ctx);
         if (wave) engine.setPeriodicWave(wave);
@@ -439,7 +446,14 @@ function mountLabs(root) {
     });
   }
   const labChanged = () => { syncLabFlags(); vizLabsChanged(); };
-  if (labs.envelope) labs.envelope.onChange(labChanged);
+  if (labs.envelope) {
+    // The live path (C007 R-2): an edit reaches the sounding voice, which the views show; a
+    // drag restarts it once, at its end (meta.settling while it moves, #296 R-7).
+    labs.envelope.onChange((adsr, enabled, meta) => {
+      labChanged();
+      followEnvelopeLab(engine, labs.envelope, meta);
+    });
+  }
   if (labs.filter) labs.filter.onChange(labChanged);
   if (labs.phase) {
     let lastPhaseDeg = labs.phase.config.phaseDeg;
