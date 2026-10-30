@@ -79,7 +79,8 @@ import {
 } from '../../studio/templates/index.js';
 import { decodeStudioLink, encodeStudioLink } from '../../core/url-state-studio.js';
 import {
-  createDirtyTracker, createStudioLibrary, exportProjectFile, fileSlug, importStudioFile,
+  createDirtyTracker, createStudioLibrary, exportProjectFile, exportSequenceFile, fileSlug,
+  importStudioFile,
 } from '../../studio/library.js';
 import { announceRedo, announceUndo, announceAction } from '../../studio/a11y.js';
 import { observeMemoryStore, openExperimentStoreOrMemory } from '../../experiments/store.js';
@@ -822,6 +823,9 @@ export function createStudioUi(svc = {}) {
   }
 
   // ---------------------------------------------------------------- documents
+  /** The running context's rate, or null before audio (a V2 sequence file is read at it). */
+  const studioSampleRate = () => (svc.engine ? svc.engine.sampleRate : null);
+
   function openDocument(model, { reason, projectId = null, templateId = null } = {}) {
     if (ctx.transport && ctx.transport.playing) stopStudio({ fast: true });
     ctx.handle.replace(model, reason);
@@ -1629,9 +1633,30 @@ export function createStudioUi(svc = {}) {
       }
     },
 
-    /** Import a project (replaces the document) or a patch (inserted, undoable). */
+    /**
+     * The V2 sequence file of one event track (default: the first with pattern clips), at the
+     * Studio's rate. No control calls it yet (K004 part: the entry point is the owner's choice).
+     */
+    studioExportTrackSequence(trackId = null) {
+      try {
+        const f = exportSequenceFile(ctx.handle.getModel(), { trackId: trackId || undefined,
+          sampleRate: studioSampleRate() });
+        downloadFile(f);
+        announce(`Exported ${f.name}${f.issues.length ? `: ${f.issues.join(' ')}` : ''}`,
+          { assertive: f.issues.length > 0 });
+        return f;
+      } catch (e) {
+        announce(`Not exported: ${(e && e.message) || e}`, { assertive: true });
+        return null;
+      }
+    },
+
+    /**
+     * Import a project or a V2 sequence or configuration file (replaces the document), or a
+     * patch (inserted, undoable). A refused file leaves the document as it was.
+     */
     studioImportText(text) {
-      const r = importStudioFile(text);
+      const r = importStudioFile(text, { sampleRate: studioSampleRate() });
       if (!r.ok) {
         const e = r.errors && r.errors[0];
         const msg = `Not imported: ${e ? `${e.path ? `${e.path}: ` : ''}${e.message}`
@@ -1646,6 +1671,12 @@ export function createStudioUi(svc = {}) {
         return res;
       }
       openDocument(r.model, { reason: 'import' });
+      if (r.kind === 'sequence') {
+        const n = r.model.timeline.clips.length;
+        announce(`Imported the ${r.source === 'config' ? 'configuration file\'s ' : ''}V2 `
+          + `sequence: ${n} pattern clip${n === 1 ? '' : 's'} on one track`);
+        return { ok: true, kind: 'sequence', clips: n };
+      }
       announce(`Imported ${r.model.metadata.title}`);
       return { ok: true, kind: 'project' };
     },

@@ -1,0 +1,27 @@
+id: K056
+milestone: M062
+serves:
+  - "playable-instrument#chart-light-designed"
+title: "Visual re-acceptance bound beyond measured variance, with a recorded override"
+slug: visual-re-acceptance-bound-beyond-measured-variance-with-a-r
+priority: p1
+profile: implementation
+objective: "Lands as test(visual), before the pixel-changing slices of M062, which depend on it, so their re-acceptances are bounded. scripts/visual-gate.mjs --update-baseline refuses a region whose accepted mismatch against the identity image rises, in one acceptance, by more than 2 pp beyond the region's run-to-run variance as stored in the baseline being replaced (runToRunPct in tests/visual/baseline.json, about 2.5 pp for the phase and spectrogram hosts and 0 for most regions), never the variance the same run measures, so a slice cannot widen its own allowance by making a region noisier. A browser bump (visual-gate.mjs:187-189 forces a re-accept) usually stays within the bound; one that does not, and a regeneration of tests/visual/reference.png (F011), which resets every region's mismatch, pass with --accept-rise and its recorded reason. A legitimate redesign passes with --accept-rise \"<reason>\", which records the region, the rise, the reason and the date in baseline.json; the pull request body repeats the reason. The visual scripts are not guarded; as a test change it is outside project.fail-first. It waits on nothing: it adds no bytes and no markup."
+why: "Owner order of 2026-10-29: \"make the charts really sexy, modern, interactive\", for all charts; reviewer f3 scoped it to every surface that draws data. Revised after f3's review of the plan (CHANGES-REQUESTED, 2026-10-29): owner decisions are Q issues under M063, Pro chrome waits on F002 and on the card issue of its workspace, every chart that claims chart-interaction delivers the keyboard cursor and the announced readout, chart keys never take Escape or Space; revision 3 answers f3's delta review. Facts checked against origin/main at e2720e07 and the branches of #251, #253, #263 and #265 (charts-plan.md, charts-plan-changes.md)."
+scope:
+  - "scripts/visual-gate.mjs"
+  - "tests/unit/visual-gate-bound.test.mjs"
+  - "tests/visual/baseline.json"
+  - "tests/README.md"
+acceptance_criteria:
+  - "tests/unit/visual-gate-bound.test.mjs: the decision table on fixtures (a rise within variance plus 2 pp passes; a larger rise is refused with the region named; --accept-rise with a reason passes and writes the record; --accept-rise without a reason is refused)."
+  - "node scripts/visual-gate.mjs dist passes unchanged on the current references in the environment it runs in (npm run test:visual)."
+  - "tests/README.md has a row for each new test."
+validation:
+  - "node --test tests/unit/visual-gate-bound.test.mjs"
+  - "node scripts/visual-gate.mjs dist"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

@@ -1,0 +1,21 @@
+id: Q008
+milestone: M063
+title: "Owner decision: where the chart role colours live in each theme"
+slug: owner-decision-where-the-chart-role-colours-live-in-each-the
+priority: p2
+profile: routine
+owner: "repository owner"
+objective: "OD1 of the charts plan. Every chart role colour needs one source per theme, read by the canvas and by the legend swatch alike, and src/styles/tokens.css may gain no declaration under the domainViews ratchet of tests/unit/ui-flowbite-pro.test.mjs. (a) Collapse the 18-stop spectrogram LUT into one list property per theme (a net -26 declarations) to make room in tokens.css; (b) chart role pairs in tailwind.config.cjs theme.extend.colors.viz, legend swatches use bg-viz-* and stroke-viz-* classes, and src/js/charts/palette.js reads the computed colour of one hidden probe per theme event, so no hex sits in JS; (c) a frozen JS table in src/js/charts/palette.js, with the legend swatches styled from it. The plan recommends (b): legend and mark share one source by construction and it is the Pro-consistent route; it was checked that Tailwind on #253 scans src/js/**/*.js, and the slice first checks that tests/unit/ui-flowbite-pro.test.mjs does not count bg-viz-* as debt."
+why: "Asked by the charts plan for M062 (owner order of 2026-10-29, session oscilla-b0); reviewer f3 found that the plan's open owner decisions let blocked slices derive READY (review of the charts plan, 2026-10-29). .ai/repo/project/README.md: work that waits on an answer names the Q issue in depends_on."
+current_state: "Open on 2026-10-29. The plan's recommendation is not an answer. K027 (and through it every slice that draws with a palette role) name this issue in depends_on, so majordomus plan next does not hand them out before it is answered."
+scope:
+  - ".ai/repo/project/issues/Q008.yaml"
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision), either in the owner's words with date and source, or as a decision of a coordinating session under an owner delegation it quotes with its date, stating its reasoning and that the owner may override it; a worker without such a delegation never answers it."
+  - "The answer names one of (a), (b) or (c), or another source, specific enough for K027 to list the files it edits."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-10-29
+updated_at: 2026-10-29
