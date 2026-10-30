@@ -1,0 +1,45 @@
+id: V624
+milestone: M081
+serves:
+- "studio-box-system#cable-probe"
+title: "Cable activity: level and modulation drawn along the cables while playing"
+slug: cable-activity-level-and-modulation-drawn-along-the-cables-w
+priority: p2
+profile: implementation
+objective: "P04 slice C (typed edge UX). Lands as feat(studio-ui). One canvas layer under the cable SVG draws, while the transport plays, each AUDIO cable's level as its stroke intensity and each CONTROL cable's current modulation value as a moving marker along it, read from the face views' taps (V621); one K036 subscriber, viewport-culled, nothing per frame in the DOM (project.audio-engine-discipline: draw loops do not touch the DOM per frame); static under prefers-reduced-motion (intensity only)."
+why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings S1-S14 measured on origin/main b67d1e58)."
+scope:
+- src/js/ui/studio/cable-activity.js
+- src/js/ui/studio/graph-editor.js
+- tests/unit/studio-cable-activity.test.mjs
+- tests/browser/studio-boxes.cjs
+- tests/browser/chart-cost.cjs
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- V621
+- K036
+acceptance_criteria:
+- "Before: VERIFIED (S7): nothing on a cable shows activity while playing; the four edge types differ by colour and dash pattern (studio.css: control 6 4, trigger 2 3, analysis 9 3 2 3, audio solid)."
+- "After: while playing, AUDIO cables show level as intensity, CONTROL cables a marker at the current modulation value, TRIGGER cables a tick per trigger; ANALYSIS cables show nothing moving."
+- "Negative cases: no activity is drawn on a muted cable or while stopped; a type is never drawn with another type's marker; under reduced motion nothing moves; no animation exists that is not read from runtime state."
+- "Rollback: revert the merge commit. Nothing changes the schema, a studioHash or a stored record, so documents saved while it was live load unchanged after the revert."
+- "tests/unit/studio-cable-activity.test.mjs, failing on the merge base: intensity from level is monotonic and silent at -90 dBFS-like; the marker position of a CONTROL cable equals the edge's mapped modulation value; reduced motion draws no marker."
+- "Definition of done, extends: the cable drawing of V430 and the probe of V616."
+- "Definition of done, cross-links: the marker of an LFO cable and the modulation dot of V620's knob show the same value. The link is a row of tests/browser/integration-map.json once that map (synth line K075) is on main."
+- "Definition of done, dynamics: cables carry their signal visibly while playing."
+- "Definition of done, docs and routes: docs/v31/user-guide.md and .ai/repo/features/studio-signal-graph.md say what changed; tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: A check 'cable-activity' in tests/browser/studio-boxes.cjs plays the Subtractive Synth template by pointer and by Space and waits with until() (deadline 'LFO cable marker moves', 5 s) for the marker's canvas position to change; emulates reduced motion and waits for no marker; taps Stop in a hasTouch context and waits for the layer to clear; on the merge base the layer does not exist. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit and the completed evidence the release that carried it; E030's judge passes on the pull request once E030 is on main."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "Wave 2: its chrome is Flowbite Pro markup adapted from the matching Pro component, lands after F002, adds no osc-* class token or legacy selector, and studio.css, studio-timeline.css, charts.css and tokens.css gain no selector or declaration; the domain drawing stays OSCILLA's own inside Pro cards (project.ui-uses-flowbite-pro, project.visual-identity-lock v2; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "scripts/size-report.mjs shows at most 2 KB gzip added, with the base and head figures in the pull request body, within the owner's dist budget of 1 200 000 B gzip (decision of 2026-10-29, about 355 KB of headroom at origin/main b67d1e58); the ceiling of this line is 35 KB gzip in all (Studio boxes 35 KB, signal generator 25 KB), stated in the milestone (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/studio-cable-activity.test.mjs
+- node tests/browser/studio-boxes.cjs --only cable-activity
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

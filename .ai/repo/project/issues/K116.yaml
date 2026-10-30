@@ -1,0 +1,39 @@
+id: K116
+milestone: M071
+serves:
+  - "connected-instrument#piano-keyboard"
+title: "Splits, layers and chords onto instruments"
+slug: splits-layers-and-chords-onto-instruments
+priority: p1
+profile: implementation
+objective: "Lands as feat(synth). The piano plays every armed instrument track whose target's key range (the key range parameters K060 declared) contains the note, so a split is two armed targets with adjacent ranges and a layer two with overlapping ranges; a target's chord parameter plays a chord shape in the pattern's scale per key; the picker shows the zones over the keys. Before: the piano plays one target. After: splits, layers and chords onto armed targets. User-value tier 2 of 4 (synth-design.md section 17). Rollback: revert the pull request; no saved state depends on it."
+why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
+scope:
+  - "src/js/synth"
+  - "src/js/ui/piano"
+  - "src/js/ui/synth"
+  - "tests/unit/piano-zones.test.mjs"
+  - "tests/browser/piano.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K115"
+  - "K066"
+acceptance_criteria:
+  - "tests/unit/piano-zones.test.mjs, failing on the merge base: a note below a split reaches only the lower target, a layered note reaches both, a chord shape in C major from E gives E, G and B, and an empty zone set plays nothing with a stated reason."
+  - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: an empty zone set (stated); overlapping splits (a layer, shown)."
+  - "A browser check in tests/browser/piano.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: the zones shown on the keys are the key-range parameters the Inspector shows. Real-time: a key in a layer gates both targets in the runtime, each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: zones are edited by pointer drag on the keys, by keyboard and by touch. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Every edit is one undoable dispatch through the one Studio store (a continuous gesture is one history entry, undo and redo restore the exact serialized model) and the model holds plain data only (project.studio-model-is-canonical); every connection goes through canConnect and full-model validation, and a refusal shows the validator's sentence and leaves model, history and runtime unchanged (project.typed-ports, project.no-silent-feedback)."
+  - "Every string it adds passes tests/unit/instrument-wording.test.mjs (added by K059): no product, brand or model name, no analog-modelling or vintage claim, and every approximation it makes labelled where it is shown (project.no-fake-science)."
+  - "Its chrome uses the Flowbite Pro component where Pro has one (card, button, button group, input, dropdown, tabs, tooltip, popover), adapted from that block, lands after F002, is recorded as migrated (never pending) and lowers or keeps the ratchet; the instrument visuals Pro has no component for (the knob arc, the cable layer, the piano keys, the pad surface) are inline SVG and Tailwind utilities inside Pro cards, as the ADR 0061 resolution note of K058 records; it adds no osc-* class token, no legacy selector, no inline style and no stylesheet (project.ui-uses-flowbite-pro, project.visual-identity-lock v2, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs); every continuous instrument parameter it shows is the knob of K058 (D11)."
+  - "The pull request carries a reviewer's verdict (src/js/synth is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "scripts/size-report.mjs shows at most 2 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of the line's figures stays within the cap Q023 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/piano-zones.test.mjs"
+  - "node tests/browser/piano.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

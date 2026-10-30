@@ -1,0 +1,60 @@
+id: signal-generator-lab
+title: "A Generator workspace is OSCILLA's lab-grade signal generator: every signal typed in Hz or notes, stated as setpoint or observation in dBFS, visible on the scope and spectrum, and handed to Studio, the Analyzer, MEASURE and the sequencer"
+statement: "The owner asked on 2026-10-29 (relayed in Czech by the coordinator) to make the signal generator lab the best it can be. The generator is the Playground's Source & Pattern panel (src/js/audio/patterns.js, core/instrument.js, ui/workbench.js) with its 17 patterns; the findings of 2026-10-29 (G1-G14 on origin/main b67d1e58) show no typed frequency or note entry, no noise, no pulse, polarity or channel, no two-tone or multi-tone, no cycle-counted burst, a sweep form without units, a level not stated as dBFS, and no hand-off to the other workspaces. The owner decided on 2026-10-29 (Q033) that the generator gets a Generator workspace of its own, with the Playground's Source panel kept as a second projection of the same instrument state and linked to it. One generator vocabulary serves the workspace, the panel, the Studio source nodes and MEASURE's stimulus."
+invariants:
+- "Levels are dBFS-like at the generator, before the limiter and the output ceiling, and SPL only under a valid LevelCalibration (project.no-fake-science v2)"
+- "Every frequency stays below 0.95 x Nyquist of the running context, and a signal that cannot is refused with the reason (project.audio-engine-discipline v2)"
+- "Every waveform is band-limited and the help says by what (the browser's table oscillator, or a PeriodicWave whose partials stop below the limit)"
+- Every source is engine-owned and the node census is 0 after stop
+- Continuous playback stays opt-in per session and is never persisted (ADR 0005)
+- "Wave 1 adds no class token, selector or markup surface; later chrome is Flowbite Pro (project.ui-uses-flowbite-pro)"
+- "Every slice meets the owner's definition of done (intent definition-of-done)"
+- "The Generator workspace and the Playground's Source panel project one instrument state: no copy, no second voice (project.audio-engine-discipline v2)"
+- "A setpoint and an observation never share a label; no readout claims the acoustic output (project.no-fake-science v2; docs/v3/readout-truth.yaml, T026)"
+milestones:
+- M082
+satisfaction:
+- id: pitch-entry
+  criterion: "Hz and note names parse and format both ways in every typed frequency field, and the panel has a typed field with the other form beside it"
+  evidence: command
+  ref: node --test tests/unit/pitch-entry.test.mjs tests/unit/generator-workspace.test.mjs
+- id: noise-and-tones
+  criterion: "White, pink and brown noise, two-tone, multi-tone and pulse render with their stated slopes, ratios, levels and partials at 44.1 and 48 kHz"
+  evidence: command
+  ref: node --test tests/unit/generator-noise.test.mjs tests/unit/generator-multitone.test.mjs tests/unit/generator-pulse.test.mjs
+- id: bursts-and-sweeps
+  criterion: "Cycle-counted windowed bursts render exactly, and every sweep field shows its unit"
+  evidence: command
+  ref: node --test tests/unit/generator-burst.test.mjs
+- id: honest-level
+  criterion: "The stated peak and RMS equal the render's within 0.2 dB, and SPL appears only under calibration"
+  evidence: command
+  ref: node --test tests/unit/generator-level.test.mjs
+- id: measured-imd
+  criterion: The SMPTE and CCIF IMD of synthetic frames read within 0.1 points and are stated as a measured residual
+  evidence: command
+  ref: node --test tests/unit/analysis-imd.test.mjs
+- id: presets
+  criterion: Lab presets build valid plans that match their names
+  evidence: command
+  ref: node --test tests/unit/generator-presets.test.mjs
+- id: hand-offs
+  criterion: "The generator's signal opens in Studio, the Analyzer and MEASURE, follows the keyboard and becomes a sequencer block, each a round trip"
+  evidence: command
+  ref: node --test tests/unit/generator-handoff.test.mjs tests/unit/generator-keyboard.test.mjs tests/unit/generator-to-sequencer.test.mjs
+governance:
+- "rule:project.no-fake-science"
+- "rule:project.audio-engine-discipline"
+- "rule:project.no-inert-surfaces"
+- "rule:project.ui-uses-flowbite-pro"
+- "rule:project.single-file-deliverable"
+- "rule:project.review-verdict"
+- "rule:project.fail-first"
+- "adr:adr-0005"
+- "adr:adr-0061"
+non_goals:
+- "An MLS or other measurement method in MEASURE: MEASURE measures with the log sweep"
+- "Any claim about what a signal does to a listener, an animal or a device"
+- "A pulse width parameter on the Studio Oscillator node outside a hash epoch (D2); the Studio's pulse is the synth line's vco"
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

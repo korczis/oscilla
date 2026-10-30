@@ -1,0 +1,50 @@
+id: G006
+milestone: M085
+serves:
+- "component-system#embedded-cockpit"
+title: "The embedded Studio's transport is the Studio transport strip, and its clip strip is the built and tested timeline miniature"
+slug: the-embedded-studio-s-transport-is-the-studio-transport-stri
+priority: p2
+profile: implementation
+objective: "Lands as fix(studio-ui). D1, U7, U9 and U12: three implementations of the Studio transport over one store (the toolbar, transport-bar.js, compact.js:97-109), the embedded one without Return, title or shortcut and with a text Loop; a clip strip without ruler, lanes, markers or loop while compact-timeline.js (V430: tracks, automation lanes, markers, loop, playhead) is imported only by a unit test. The embedded Studio mounts mountTransportBar(host, ctx, { ownFrame: true, hookPrefix: 'studio.compact' }) (a new option that keeps the hooks studio.compact.play, .stop and .loop that the live smoke and the suites read) and renderCompactTimeline() in place of its strip; its own buttons and clip strip code and their osc-sc-* selectors are deleted. The miniature is read-only today (V430, spec sections 127 and 129: a role=img projection whose clips are plain elements without a hook or an id), while the strip it replaces offers clip selection and CLIP_MOVE by drag and arrow keys, and tests/browser/live-smoke.cjs (guarded; it runs after every Pages deployment) asserts that the compact Studio's [data-osc=\"studio.compact.clip\"] elements, by data-clip-id, are the model's clips. So renderCompactTimeline gains an opt-in interactive mode used only by the embedded Studio: the root becomes role=group with the summary as its accessible name (an interactive child inside role=img is not allowed), each clip is a focusable element carrying data-osc studio.compact.clip, its data-clip-id and aria-current when selected, and selection (SELECTION_CHANGE) and CLIP_MOVE by drag and arrow keys keep working, with a visible hint ('Drag or use the arrow keys to move a clip') bound by aria-describedby; the read-only mode stays the default. The live smoke's compact check then passes unchanged against the built file, which this slice shows; if it cannot, the slice widens to tests/browser/live-smoke.cjs and needs a reviewer's verdict. The transport sits at a fixed position whatever the document title's length. Before: VERIFIED (inventory 3.2, U7, U9, U12; compact-timeline.js and live-smoke.cjs read 2026-10-29). After: one transport, a real miniature that keeps every operation and hook of the strip. Negative cases: a model with no tracks, a loop longer than the content, a playhead past the end, a refused CLIP_MOVE while playing (admit) stated, a clip of a deleted node. Rollback: revert; no model or record change."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: \"the embedded Studio is ugly as hell\"; components in general must be generic, linkable, traceable, composable, unified, documented, dynamic, generated and interlinked; \"everything must be interlinked with everything\"; improve the main page and the first experience, deploy often. The owner's evolution prompt pack (MASTER, P02, P04, P06) binds it: the dark technical cockpit is locked, shared primitives only where duplication is proven, no new framework, generated docs only where deterministic, no decorative wires. Findings: the UI component inventory of 2026-10-29 (D1-D14 duplication, U1-U15 on the embedded Studio, measured on origin/main b67d1e58, v3.13.0); design: the component-system design of 2026-10-29 (scratchpad components/design.md)."
+scope:
+- src/js/ui/studio/compact.js
+- src/js/ui/studio/transport-bar.js
+- src/js/ui/studio/compact-timeline.js
+- src/js/ui/studio/workspace.js
+- src/styles/studio.css
+- src/styles/studio-timeline.css
+- tests/unit/v31-studio-ui-timeline.test.mjs
+- tests/unit/studio-compact-mount.test.mjs
+- tests/browser/v31-studio-graph.cjs
+- tests/browser/v31-studio-timeline.cjs
+- tests/visual/studio
+- tests/unit/ui-flowbite-pro-baseline.json
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- G005
+- V632
+acceptance_criteria:
+- "tests/unit/studio-compact-mount.test.mjs fails on the merge base: compact.js defines no transport button and no clip strip of its own, it mounts transport-bar.js and compact-timeline.js, and the hooks studio.compact.play, .stop, .loop and .clip (with data-clip-id) are kept; the interactive miniature's root is role=group, the read-only one's role=img."
+- "tests/browser/live-smoke.cjs is not changed and its compact Studio check passes against the built file (node tests/browser/live-smoke.cjs --url pointed at the built dist, served locally, the clip set equal to the model's; the output is in the pull request), so no verdict is needed; a change to it moves this slice to guarded."
+- "No class token or selector is added: the miniature's eight osc-stc* names are already in the record (inventory 3.5, VERIFIED) and the deleted osc-sc-* selectors lower it."
+- "Definition of done, extends: transport-bar.js (V418, already built for a shell that mounts the strip on its own) and compact-timeline.js (V430)."
+- "Definition of done, interlinks: the embedded transport is the full Studio's commands (transport-commands.js), so Play in either is the same action."
+- "Definition of done, interactivity: Return is added; markers, loop and automation lanes are drawn and the playhead moves from the transport's own clock."
+- "Definition of done, docs, menus and routes: docs/v31/user-guide.md says what the embedded Studio shows and that clips move there. tests/README.md has a row for each new test; the component's catalogue declaration (G001) names its docs, links and tests; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: A check 'compact-transport' in tests/browser/v31-studio-graph.cjs plays, stops and returns by pointer, by keyboard (Enter on each) and by a hasTouch tap, and waits with until() (deadline 'compact transport state', 2 s) for aria-pressed and the time to match the full Studio's after each; Filter Automation shows its lane and Measurement Sweep its three markers. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit, and the release that carried it is recorded when the milestone is verified."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "Before Pro (it may land before F001): it adds no class token, selector, markup surface or inline style and only removes legacy ones, so tests/unit/ui-flowbite-pro-baseline.json stays equal or falls (node scripts/ui-flowbite-pro-record.mjs --check passes, rewritten only where a count fell) and node --test tests/unit/ui-flowbite-pro.test.mjs passes; studio.css, studio-timeline.css, charts.css and tokens.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock v2)."
+- "scripts/size-report.mjs shows at most 1 KB gzip added, with the base and head figures in the pull request body, inside the cap Q037 records (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/studio-compact-mount.test.mjs tests/unit/v31-studio-ui-timeline.test.mjs
+- "node tests/browser/v31-studio-graph.cjs --only compact-transport,compact-sync"
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

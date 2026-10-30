@@ -1,0 +1,34 @@
+id: T020
+milestone: M073
+serves:
+  - "v3-measure#readout-states"
+title: "The live RTA shows a clipped state, and a calibrated level is never shown in dB SPL while clipped"
+slug: the-live-rta-shows-a-clipped-state-and-a-calibrated-level-is
+priority: p1
+profile: implementation
+objective: "Truth-table rows MSR-29 (scratchpad p05/truth-table.md). live-rta.js counts rail samples with the oscilla.clip.v2 run rule (a pure helper exported from capture-checks.js, no allocation per frame) and latches \"clipped within the last N s\"; the view adds a CLIPPED badge and the analog-clip note from quality-bar.js; while clipped a calibrated level is shown as a lower bound or without dB SPL; clipping is announced once in the polite live region."
+why: "P05 audit of origin/main b67d1e58 (v3.13.0): A frame driven 12 dB past full scale and hard-clipped reads \"highest band 1 kHz at −1.0 dB relative (dBFS-like)\" with no clip state; under the test level calibration it reads \"CALIBRATED … 123.5 dB SPL\" where the unclipped input would be about 133.6 dB SPL, with no warning."
+scope:
+  - "src/js/measurement/live-rta.js"
+  - "src/js/measurement/capture-checks.js"
+  - "src/js/measurement/views/rta-chart.js"
+  - "src/js/ui/measure.js"
+  - "tests/unit/readout-states-live-rta.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "T017"
+acceptance_criteria:
+  - "Fail-first fixture: tests/unit/readout-states-live-rta.test.mjs: a clamp(4·sin) frame sets clipped, adds the badge and the note; under the LEVEL fixture no \"dB SPL\" appears without the lower-bound wording. Fails on the merge base."
+  - "Negative cases, each asserted: A 0.5 sine is not flagged; one isolated rail transient is not flagged; the latch clears after reset; unclipped calibrated readings unchanged."
+  - "Revertible on its own: Revert: counter, badge and copy."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "The pull request touches a guarded path and carries a reviewer-written .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+  - "tests/README.md has a row for each new test; this issue does not edit docs/CLAIMS.yaml or the intent (T027 does)."
+validation:
+  - "npm test"
+  - "npm run verify"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29
