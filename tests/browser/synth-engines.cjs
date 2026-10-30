@@ -50,7 +50,14 @@
 //               A4: operator 1's pitch from what drives its frequency (the 0 Hz line of the
 //               deviation, a Hann mean over whole periods of the note) within 5 cents of the
 //               note in every window from 0.05 to 2.9 s; and at A3 and A4 the spectrum's line
-//               nearest the note within 5 cents of it in every window from 0.1 to 2.9 s
+//               nearest the note within 5 cents of it in every window from 0.1 to 2.9 s.
+//               The margin is the browser's (review of #332, V2): chromium and webkit read
+//               0.29 cents at worst, firefox 1.64 (4-stack at A4, firefox-1543 on 2026-10-30;
+//               the reviewer read 4.67 on its own run). Firefox's oscillators drift from an exact
+//               sine by about 3e-3 rad over 1 s (chromium and webkit 1e-4) while its sine and
+//               cosine tables stay in quadrature, so a stack's 0 Hz line becomes a slow line
+//               there; closing that needs sample-exact operators (an AudioWorklet), not a table.
+//               The result prints each browser's `margin` (5 cents minus the worst reading)
 //   o-headroom  16 notes at full velocity at the default Level, each engine: the sum peaks at
 //               or below digital full scale; one voice at Level 4 peaks at or below 1/16
 //               (every FM algorithm, AM and ring, every percussion key, the additive shapes)
@@ -604,6 +611,7 @@ function defineChecks() {
     const worstDrive = Math.max(...drive.flatMap((r) => r.worst));
     return { ok: drive.length === 14 && worstDrive <= 5 && rows.length === 14 && worstLine <= 5,
       worstDrive: +worstDrive.toFixed(3), worstLine,
+      margin: +(5 - Math.max(worstDrive, worstLine)).toFixed(3),
       drive: drive.map((r) => `${r.patch}:${r.algorithm}:${r.worst.map((c) => +c.toFixed(2))
         .join('/')}`) };
   });
