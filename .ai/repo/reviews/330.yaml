@@ -1,0 +1,53 @@
+# Review verdict for pull request #330, F002: the Flowbite Pro admin shell (navbar, sidebar drawer,
+# page header) replaces the header and the tab bar (branch feat/f002-pro-shell, stacked on
+# feat/f001-tailwind-build, #253). Reviewed head bbdeac8d in a detached worktree of its own; base
+# origin/feat/f001-tailwind-build cb5f5f74, which the head contains. Another session built it
+# (oscilla-b0); this reviewer did not build or edit any of it.
+#
+# The digest: the base branch's scripts/review-verdict.mjs, run from `git archive
+# origin/feat/f001-tailwind-build scripts` with --repo on this worktree, gives 2694abbc...72f0 over
+# the one guarded path it names, scripts/build-config.mjs. That change is a comment only (the
+# F002 size figures); BUDGET is unchanged, and dist/index.html at the head is 2 935 499 B raw,
+# within 3.5 MB / 1 MB.
+#
+# How it was reviewed: read src/js/ui/shell.js whole, the shell markup of src/index.html, the
+# wiring in app.js, shortcuts.js and navigation.js, against project.ui-uses-flowbite-pro (ADR 0061)
+# and project.visual-identity-lock; ran ui-flowbite-pro-shell, ui-flowbite-pro-build, navigation,
+# no-inert-surfaces, v3-ui and docs-derived with the branch's own node_modules (pass); ran the three
+# app.cjs checks CI fails, in chromium on darwin (4/4 pass, see F1 and F2); read CI run
+# 41011340141 of this head and run 40969046038 of the base head cb5f5f74 (Browser gate and V3.1
+# Studio UI green in all three browsers there); looked at the re-accepted references.
+#
+# What holds: WORKSPACE_REGISTRY is the one navigation source (app.js MODES, the router ids,
+# shortcuts.js names, the sidebar x-for, groups and search all import it; no second list in
+# src/js; every i-ws-* symbol exists). The phone drawer contains the keyboard as claimed:
+# #osc-main-content is inert while drawerOpen and it encloses the main, the debug panel and the
+# status bar (it closes after the footer), the backdrop and the dialogs sit outside it, and the
+# navbar stays live so its menu button can close the drawer. Escape closes the drawer and returns
+# focus to the menu button, and a nav group to its button; the arrows, Home and End walk the shown
+# entries. The list is a navigation landmark again (<nav aria-label="Workspaces">). No flowbite
+# data-* toggle and nothing of the Pro sidebar.js. The dark references read as the cockpit.
+#
+# What fails: CI on this head is red in every browser, on checks the base passes, so the
+# failures are this pull request's. The PR body's "test:browser passes in chromium, firefox and
+# webkit" holds on darwin only: the three app.cjs checks below pass locally on macOS fonts and fail
+# on the Linux runner in all three engines. And test:browser chains its suites with &&, so in CI
+# layout, qa-regressions, navigation and ui-flowbite-pro (the deep-link inventory, shell-phone,
+# shell-a11y) never ran; the deep-link and drawer claims have no Linux run yet.
+#
+# On the review-only questions: hide the wordmark below the width where it collides (F2) and keep
+# the mark; the dark greys read as the cockpit; the light theme was not judged (no light capture).
+#
+# Verdict: changes-requested. Two open P1s (F1, F2) refuse the merge.
+schema: review-verdict/v1
+pr: 330
+verdict: changes-requested
+reviewer: prismatic-majordomus-1d (claude-code 1423ad2b)
+content: 2694abbc77d308b0fbafaa8e72fb852abdca7472014388b69e833fb4aed972f0
+findings:
+  - { id: F1, severity: P1, status: open, title: "app.cjs frequency-slider-and-fine-steps fails in chromium, firefox and webkit, file and http (run 41011340141): page.click timeout on #osc-step-oct-up. The 256 px sidebar leaves the Source panel too narrow for the fine-step row (the 1536 reference itself shows '+1 oc' clipped); on Linux fonts the +1 oct button cannot be clicked at all. The PR defers the wrap as cosmetic, but it removes a control; the base passes this check" }
+  - { id: F2, severity: P1, status: open, title: "app.cjs a11y-header-no-overlap-narrow and a11y-phone-bars-every-state fail at 360 px in all three engines: header.brand overlaps osc-theme-toggle (flex x inline-flex) in every status. The PR's phone checks use 390 px; at 360 on Linux fonts the navbar's logo, wordmark and four 44 px controls do not fit. Hide the wordmark (keep the mark) below the colliding width, or drop a control into the more menu" }
+  - { id: F3, severity: P2, status: open, title: "V3.1 Studio UI fails in all three engines, green on the base: v31-studio-timeline layout fails its [dark] case in chromium and firefox (a dark-theme measurement; help reads 2.08), and v31-studio-graph controls-labelled in webkit never shows studio.task.abort. Likely the gray scale remap or preflight reaching Studio; cause not established by this review" }
+  - { id: F4, severity: P2, status: open, title: "webkit nav-groups-keyboard: at 375 px a tap on About closes the drawer and leaves focus on BODY, not on the destination or the menu button (WCAG 2.4.3, focus lost); chromium and firefox pass it" }
+  - { id: F5, severity: P2, status: open, title: "the deep-link inventory and the shell-phone/shell-search/shell-a11y checks (ui-flowbite-pro.cjs), layout, qa-regressions and navigation have not run in CI: test:browser stops at the first failing suite (&&). They need one green Linux run before the PR body's evidence stands" }
+  - { id: F6, severity: P3, status: open, title: "index.html:249/266 the complementary landmark 'Workspace' (aside) and the navigation landmark 'Workspaces' (nav) differ by one letter; a landmark list reads them as the same thing twice. Name the aside for what it is (e.g. Sidebar), keeping the ratchet's selector in step" }
