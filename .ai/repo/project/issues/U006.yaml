@@ -6,7 +6,7 @@ title: "Every workspace links to the workspaces related to it"
 slug: every-workspace-links-to-the-workspaces-related-to-it
 priority: p2
 profile: implementation
-objective: "Resolves docs/ui-audit.md A08, A09, A10, A11, A17. Add one consistent 'Related' affordance per workspace naming the workspaces that do the same thing in depth (Synthesis to Studio, Sequencer to the Studio timeline, Learn concepts to their demo and to Studio templates, Presets to Studio patches), from one table in src/js so links cannot drift from the navigation."
+objective: "Resolves docs/ui-audit.md A08, A09, A10, A11, A17. Built on Flowbite Pro (intent ui-flowbite-pro, owner 2026-10-28): the Related affordance is one Pro component in the actions slot of the page header F002 lands, its table read by the shell, and adds no surface off Pro and no legacy primitive (the ratchet of tests/unit/ui-flowbite-pro.test.mjs refuses either). Add one consistent 'Related' affordance per workspace naming the workspaces that do the same thing in depth (Synthesis to Studio, Sequencer to the Studio timeline, Learn concepts to their demo and to Studio templates, Presets to Studio patches), from one table in src/js so links cannot drift from the navigation."
 why: "Audit 2026-10-28: the workspaces do not lead to each other beyond the navigation bar."
 scope:
   - "src/js/ui"
@@ -19,6 +19,7 @@ scope:
 depends_on:
   - "U001"
   - "U005"
+  - "F002"
 acceptance_criteria:
   - "A unit test fails when a Related entry names a workspace that the navigation does not have."
   - "Every Related link opens its workspace in the browser check."

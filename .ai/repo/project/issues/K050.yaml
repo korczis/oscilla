@@ -1,0 +1,60 @@
+id: K050
+milestone: M062
+serves:
+  - "playable-instrument#chart-light-designed"
+title: "Per-chart-host references in light and dark, with sampled light role colours"
+slug: per-chart-host-references-in-light-and-dark-with-sampled-lig
+priority: p2
+profile: implementation
+objective: "Lands as test(visual), after F011 and after every M062 slice that changes pixels; the K049 edge is removed in the change that cancels K049 if Q010 answers no. F011 (#251) regenerates the full-page references from the Pro shell in both themes at 1536x1024 and 390x844; this slice does not repeat that. It adds what F011 lacks, in a new scripts/visual-charts.mjs. (1) Every chart host of tests/unit/chart-host-census.json is captured clipped to the host element (plot, axes and the legend or readout row inside the host; card headers are outside it) in light and dark, from a frozen scene: paused, from recorded fixture data, at deviceScaleFactor 1, so live data does not move between runs. References are kept per environment under tests/visual/charts (darwin-arm64 on the Mac, linux-x64 in the CI runner's container image), and each host's bound is its measured run-to-run mismatch over 3 runs plus 0.5 pp, recorded with the reference, the way visual-gate derives dataPp. (2) A colour-sampling pass compares each registry mark with frozen expected values, tests/visual/charts/palette-expected.json (per theme and role), recorded with the references and re-recorded only by a deliberate --update-baseline with a reason, never read from the live palette; marks are sampled from full-coverage pixels of a test scene that draws each role as a flat segment at least 3 px wide or as an opaque fill, faded and alpha marks after compositing over the plot surface, within CIEDE2000 1. A drift of a role in its palette source therefore fails, which neither the per-host bound (pixelmatch threshold 0.12 does not see a CIEDE2000 3 shift) nor K027's threshold checks can show. (3) --digest prints the sha256 over every light per-host reference in both environments; --record-acceptance <Q id> writes tests/visual/charts/accepted-light.json with that digest, the Q id and the per-reference hashes; --check-accepted fails unless the file exists, lists every current light reference (a reference missing from it fails), matches each hash, and names a Q issue whose record (.ai/repo/project/issues/<Q id>.yaml) is completed and carries an owner_decision evidence entry whose result quotes the same digest. So the file binds to the owner's recorded act, and no slice can produce a passing acceptance on its own. Q017 is the first acceptance. Any slice that moves a light per-host reference after it opens, in the same change, a new Q issue under M063 (\"Owner decision: re-accept the light chart references after <change>\"), and the criterion is red until that issue is answered and its digest recorded. The light references pin the light theme; they are its design reference only while the owner's acceptance matches them. The re-acceptance bound of visual-gate is K056. The optional export K051 moves no host reference: its menu sits in the card header, outside the clip. The visual scripts are not guarded; as a test change it is outside project.fail-first."
+why: "Owner order of 2026-10-29: \"make the charts really sexy, modern, interactive\", for all charts; reviewer f3 scoped it to every surface that draws data. Revised after f3's review of the plan (CHANGES-REQUESTED, 2026-10-29): owner decisions are Q issues under M063, Pro chrome waits on F002 and on the card issue of its workspace, every chart that claims chart-interaction delivers the keyboard cursor and the announced readout, chart keys never take Escape or Space; revision 3 answers f3's delta review. Facts checked against origin/main at e2720e07 and the branches of #251, #253, #263 and #265 (charts-plan.md, charts-plan-changes.md)."
+scope:
+  - "scripts/visual-charts.mjs"
+  - "tests/visual/charts"
+  - "tests/unit/chart-light-references.test.mjs"
+  - "package.json"
+  - "README.md"
+  - "tests/README.md"
+depends_on:
+  - "F011"
+  - "K027"
+  - "K029"
+  - "K030"
+  - "K031"
+  - "K032"
+  - "K033"
+  - "K034"
+  - "K035"
+  - "K036"
+  - "K037"
+  - "K038"
+  - "K039"
+  - "K040"
+  - "K041"
+  - "K042"
+  - "K043"
+  - "K044"
+  - "K045"
+  - "K046"
+  - "K047"
+  - "K048"
+  - "K049"
+  - "K053"
+  - "K054"
+  - "K055"
+acceptance_criteria:
+  - "tests/unit/chart-light-references.test.mjs fails while any census host lacks a light or a dark per-host reference, a recorded bound or an expected-colour entry for darwin-arm64 or linux-x64; it fails on the merge base."
+  - "node scripts/visual-charts.mjs passes in the environment it runs in, three times in a row on unchanged code; a mutation that shifts one light trace role by CIEDE2000 3 in its palette source (the file Q008 names), with the renderer unchanged, makes the colour sampling fail, recorded in the pull request with the role named."
+  - "node scripts/visual-charts.mjs --check-accepted fails, each in a fixture: with no accepted-light.json; with a current light reference the file does not list; with a hash that differs; and with a file whose Q issue is open or whose owner_decision evidence does not quote the digest. It passes on a fixture Q record that quotes it."
+  - "package.json runs scripts/visual-charts.mjs in npm run test:visual, and README.md's Testing table names it."
+  - "The new references are accepted in darwin-arm64 and linux-x64 with the reason \"light theme was never referenced per chart host\" in the pull request body."
+  - "tests/browser/timing-baseline.json does not grow (project.bounded-test-timing)."
+  - "tests/README.md has a row for each new test."
+validation:
+  - "node --test tests/unit/chart-light-references.test.mjs"
+  - "node scripts/visual-charts.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29
