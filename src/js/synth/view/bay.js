@@ -6,7 +6,8 @@
 //
 //   bayLayout(panel, width) -> { jacks: Map<jack key, { x, y, jack }>, groups, width, height }
 //   cablePath(a, b) -> SVG path of a hanging cable;  sagOf(a, b) = min(80, 0.25 · distance)
-//   baySvg({ panel, layout, cables, states, pending, compatible, tokens, selected }) -> markup
+//   baySvg({ panel, layout, cables, states, pending, compatible, verdicts, tokens, selected })
+//   jackLabel(panel, jack, state, verdict) -> the jack's accessible name
 
 import { PORT_VISUALS } from '../../studio/ports.js';
 import { esc } from './face.js';
@@ -70,11 +71,33 @@ function glyph(shape, x, y, r) {
   return `<circle cx="${x}" cy="${y}" r="${r}"`;
 }
 
-/** state: 'normalled' | 'patched' | 'open' | 'free' (normals.js jackState). */
+const STATE_LABEL = { open: 'open: normal removed in Studio',
+  mixed: 'patched in Studio while its normal still sounds' };
+
+/**
+ * The accessible name of a jack: module, label, direction, signal type, its state and, while a
+ * connection is pending, whether it can take the cable (with the refusal's sentence).
+ */
+export function jackLabel(panel, j, st, verdict = null) {
+  const base = `${panel.module(j.module).label} ${j.label} ${j.direction === 'in' ? 'input'
+    : 'output'}, ${PORT_VISUALS[j.type].noun}${st === 'free' ? '' : `, ${STATE_LABEL[st] || st}`}`;
+  if (!verdict) return base;
+  return verdict.ok ? `${base}, can take the cable` : `${base}, refused: ${verdict.reason}`;
+}
+
+/**
+ * state: 'normalled' | 'patched' | 'mixed' | 'open' | 'free' (normals.js jackState).
+ * verdicts: Map<jack key, { ok, reason }> while a connection is pending (ui.js).
+ * Every shape sets its own stroke: an inherited `svg { stroke }` of the legacy stylesheet must
+ * never draw on the panel. A jack shows keyboard focus with its own ring (group-focus-visible).
+ */
 export function baySvg({ panel, layout, cables = [], states = new Map(), pending = null,
-  compatible = new Set(), tokens: t, selected = null }) {
+  compatible = new Set(), verdicts = new Map(), tokens: t, selected = null }) {
   const colourOf = (module) => t.cables[Math.max(0, panel.modules.findIndex((m) => m.id
     === module)) % t.cables.length];
+  // A patched input shows its cable's colour, the source module's (as the cable does).
+  const feeders = new Map(cables.map((c) => [`${c.to}:in`, c.fromModule]));
+  const feederOf = (key) => feeders.get(key) || null;
   const groups = layout.groups.map((g) => `<text x="${g.x + 2}" y="${g.y + 12}" `
     + `font-size="10" font-weight="700" letter-spacing="1" stroke="none" `
     + `fill="${t.label}">${esc(g.label)}`
@@ -83,19 +106,23 @@ export function baySvg({ panel, layout, cables = [], states = new Map(), pending
     const shape = PORT_VISUALS[j.type].shape;
     const st = states.get(j.key) || 'free';
     const ring = pending === j.key ? t.focus : compatible.has(j.key) ? t.accent
-      : st === 'open' ? t.refuse : t.jackRing;
-    const label = `${panel.module(j.module).label} ${j.label} ${j.direction === 'in' ? 'input'
-      : 'output'}, ${PORT_VISUALS[j.type].noun}${st === 'free' ? '' : `, ${st === 'open'
-      ? 'open: normal removed in Studio' : st}`}`;
-    const inner = st === 'patched' ? colourOf(j.module) : st === 'normalled' ? t.normal : t.jack;
+      : st === 'open' || st === 'mixed' ? t.refuse : t.jackRing;
+    const label = jackLabel(panel, j, st, pending && pending !== j.key ? verdicts.get(j.key)
+      : null);
+    const src = j.direction === 'out' ? j.module : feederOf(j.key);
+    const inner = st === 'patched' || st === 'mixed' ? colourOf(src || j.module)
+      : st === 'normalled' ? t.normal : t.jack;
     return `<g role="button" tabindex="0" data-jack="${j.key}" aria-label="${esc(label)}" `
-      + `aria-pressed="${pending === j.key}" class="cursor-pointer outline-none">`
+      + `aria-pressed="${pending === j.key}" class="group cursor-pointer outline-none">`
       + `<rect x="${x - JACK_HIT / 2}" y="${y - JACK_HIT / 2}" width="${JACK_HIT}" `
-      + `height="${JACK_HIT}" rx="10" fill="${t.jack}" fill-opacity="0.001"/>`
+      + `height="${JACK_HIT}" rx="10" fill="${t.jack}" fill-opacity="0.001" stroke="none"/>`
+      + `<rect data-focus-ring="" x="${x - JACK_HIT / 2 + 1.5}" y="${y - JACK_HIT / 2 + 1.5}" `
+      + `width="${JACK_HIT - 3}" height="${JACK_HIT - 3}" rx="9" fill="none" `
+      + `stroke="${t.focus}" stroke-width="3" class="opacity-0 group-focus-visible:opacity-100"/>`
       + `${glyph(shape, x, y, 13)} fill="${t.jack}" stroke="${ring}" stroke-width="`
       + `${pending === j.key || compatible.has(j.key) ? 3.5 : 2}"`
-      + `${st === 'open' ? ' stroke-dasharray="3 3"' : ''}/>`
-      + `${glyph(shape, x, y, 5)} fill="${inner}"/>`
+      + `${st === 'open' || st === 'mixed' ? ' stroke-dasharray="3 3"' : ''}/>`
+      + `${glyph(shape, x, y, 5)} fill="${inner}" stroke="none"/>`
       + `<text x="${x}" y="${y + 33}" font-size="10" text-anchor="middle" stroke="none" `
       + `fill="${t.label}">`
       + `${esc(j.label.length > 9 ? `${j.label.slice(0, 8)}…` : j.label)}${j.direction === 'out'

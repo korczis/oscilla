@@ -13,7 +13,15 @@
 //                                           module, port, direction,
 //                                           type, label, normals: [normal id] }
 //   panel.resolve(model)    -> Map<module id, node | null>
-//   panel.instantiate(model, { at }) -> BATCH action   one history entry, deterministic ids
+//   panel.sourceRange(jack) -> [lo, hi]     a CONTROL output's range (the runtime adapter's
+//                                           outputRange; tests/unit prove they agree), which
+//                                           sizes a new cable's props (normals.js cableProps)
+//   panel.cutsOf(model)     -> [edge]       document edges instantiate removes (the feed of a
+//                                           one-per-Studio node the panel reuses: Master)
+//   panel.instantiate(model, { at }) -> BATCH action   one history entry, deterministic ids;
+//                                           a module still in the model (a panel partly deleted
+//                                           in Studio) is reused, and only the normals that
+//                                           touch a module it adds are added
 //   panel.tabs -> [{ id, title, description }]   the workspace tabs a panel's modules sit on
 //   panel.modulesOf(tab) -> [module]              (module.tab, default the first tab)
 //
@@ -22,6 +30,7 @@
 
 import { NODE_REGISTRY, validateParamValue } from '../studio/registry.js';
 import { canConnect, validateEdgeProps } from '../studio/ports.js';
+import { KEYS_PITCH_RANGE } from '../studio/nodes/instrument.js';
 
 const fail = (panel, text) => {
   throw new TypeError(`definePanel ${panel}: ${text}`);
@@ -32,6 +41,18 @@ export const splitJack = (id) => {
   return { module: id.slice(0, i), port: id.slice(i + 1) };
 };
 const KIND = { number: 'knob', integer: 'knob', enum: 'switch', boolean: 'toggle', list: 'list' };
+
+/**
+ * The value range of a CONTROL output per node type and port, as the runtime adapters declare
+ * it (adapters/instrument.js, modulation.js `outputRange`; [-1, 1] when they declare none, as
+ * compiler.js DEFAULT_RANGE). `unit: 'oct'` marks a pitch source in octaves.
+ */
+export const SOURCE_RANGES = Object.freeze({
+  keys: { pitch: { range: KEYS_PITCH_RANGE, unit: 'oct' }, velocity: { range: [0, 1] } },
+  envelope: { control: { range: [0, 1] } },
+  macro: { control: { range: [0, 1] } },
+});
+const DEFAULT_SOURCE = Object.freeze({ range: Object.freeze([-1, 1]), unit: null });
 
 /** The registry parameter narrowed by the panel (label, range, options), validated. */
 function narrow(pid, mod, p) {
@@ -111,6 +132,44 @@ export function definePanel(decl, registry = NODE_REGISTRY) {
     normals: normals.filter((n) => n.to === j.id || (j.direction === 'out' && n.from === j.id))
       .map((n) => n.id) }));
 
+  /**
+   * What instantiate does to `model`: the node id of every module (a module still in the model
+   * is reused, `kept`; a one-per-Studio node is the model's), the normals it adds (each touches
+   * a module it adds and has a free id; the normals between surviving modules stay as the user
+   * left them, and a single input of a reused module that something feeds keeps its feed), and
+   * the document edges it removes (`cuts`: the feed of a reused one-per-Studio single input,
+   * Master Output, that an added normal takes).
+   */
+  function plan(model) {
+    const ids = new Map();
+    const kept = new Set();
+    const have = panel.resolve(model);
+    for (const m of modules) {
+      const single = m.def.maxInstances === 1
+        ? model.graph.nodes.find((n) => n.type === m.node) : null;
+      if (single) ids.set(m.id, single.id);
+      else if (have.get(m.id)) {
+        ids.set(m.id, have.get(m.id).id);
+        kept.add(m.id);
+      } else ids.set(m.id, panel.nodeIdOf(m.id));
+    }
+    const old = (mid) => kept.has(mid) || byId.get(mid).def.maxInstances === 1;
+    const portIn = (j) => registry.port(byId.get(splitJack(j).module).node, splitJack(j).port,
+      'in');
+    const feeds = (j) => model.graph.edges.filter((e) => e.to.node === ids.get(splitJack(j)
+      .module) && e.to.port === splitJack(j).port);
+    const added = normals.filter((n) => {
+      const a = splitJack(n.from).module;
+      const b = splitJack(n.to).module;
+      if (kept.size && old(a) && old(b)) return false;
+      if (model.graph.edges.some((e) => e.id === n.edgeId)) return false;
+      return !(kept.has(b) && !portIn(n.to).multiple && feeds(n.to).length);
+    });
+    const cuts = added.filter((n) => byId.get(splitJack(n.to).module).def.maxInstances === 1
+      && !portIn(n.to).multiple).flatMap((n) => feeds(n.to));
+    return { ids, kept, added, cuts };
+  }
+
   const panel = {
     id: pid, instance, version: decl.version || 1, title: decl.title,
     description: decl.description || '', modules, normals, amounts, layout: decl.layout || {},
@@ -148,9 +207,18 @@ export function definePanel(decl, registry = NODE_REGISTRY) {
       return out;
     },
     nodeIdOf: (mid) => `${instance}-${mid}`,
+    /** { range, unit } of the CONTROL output jack `jack` ('module.port'). */
+    source(jack) {
+      const { module, port } = splitJack(jack);
+      const m = byId.get(module);
+      const s = m && SOURCE_RANGES[m.node] && SOURCE_RANGES[m.node][port];
+      return s ? { range: s.range, unit: s.unit || null } : DEFAULT_SOURCE;
+    },
+    sourceRange: (jack) => panel.source(jack).range,
+    cutsOf: (model) => plan(model).cuts,
     instantiate(model, { at = { x: 0, y: 0 } } = {}) {
+      const { ids, kept, added, cuts } = plan(model);
       const steps = [];
-      const ids = new Map();
       const rows = (panel.layout.desktop || [modules.map((m) => m.id)]);
       const pos = (mid) => {
         const r = rows.findIndex((row) => row.includes(mid));
@@ -158,30 +226,17 @@ export function definePanel(decl, registry = NODE_REGISTRY) {
         return { x: at.x + c * 220, y: at.y + Math.max(0, r) * 200 };
       };
       for (const m of modules) {
-        const single = m.def.maxInstances === 1
-          ? model.graph.nodes.find((n) => n.type === m.node) : null;
-        if (single) { ids.set(m.id, single.id); continue; }
-        ids.set(m.id, panel.nodeIdOf(m.id));
-        steps.push({ type: 'NODE_ADD', id: panel.nodeIdOf(m.id), nodeType: m.node,
+        if (kept.has(m.id) || m.def.maxInstances === 1) continue;
+        steps.push({ type: 'NODE_ADD', id: ids.get(m.id), nodeType: m.node,
           position: pos(m.id), params: { ...m.values }, name: m.label.slice(0, 64),
           panel: { id: instance, module: m.id } });
       }
-      // A one-per-Studio node the panel reuses (Master Output): a single-input jack of it that
-      // something else feeds is re-patched to the panel, in the same history entry.
-      for (const n of normals) {
-        const b = splitJack(n.to);
-        const node = model.graph.nodes.find((x) => x.id === ids.get(b.module));
-        const port = registry.port(byId.get(b.module).node, b.port, 'in');
-        if (!node || port.multiple) continue;
-        const taken = model.graph.edges.filter((e) => e.to.node === node.id && e.to.port === b.port)
-          .map((e) => e.id);
-        if (taken.length) steps.push({ type: 'EDGE_REMOVE', edgeIds: taken });
-      }
-      for (const n of normals) {
-        const a = splitJack(n.from);
-        const b = splitJack(n.to);
-        steps.push({ type: 'EDGE_ADD', id: n.edgeId, from: { node: ids.get(a.module),
-          port: a.port }, to: { node: ids.get(b.module), port: b.port }, props: n.props });
+      if (cuts.length) steps.push({ type: 'EDGE_REMOVE', edgeIds: cuts.map((e) => e.id) });
+      for (const n of added) {
+        const x = splitJack(n.from);
+        const y = splitJack(n.to);
+        steps.push({ type: 'EDGE_ADD', id: n.edgeId, from: { node: ids.get(x.module),
+          port: x.port }, to: { node: ids.get(y.module), port: y.port }, props: n.props });
       }
       return { type: 'BATCH', label: `Insert ${panel.title}`, steps };
     },

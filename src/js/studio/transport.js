@@ -1461,6 +1461,7 @@ export function createStudioTransport({
     if (playing) { // PLAY while armed: the whole document, on the same running runtime
       applyStop(scheduler.stop(ctxNow()));
       playing = false;
+      armedOnly = false; // view() is the document from here (review of #329)
     }
     const pos = clampPosition(position);
     if (typeof onClaimOutput === 'function') {

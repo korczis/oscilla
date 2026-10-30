@@ -2,7 +2,7 @@
 // hand-written markup. A Flowbite Pro card holds it; inside, the instrument face is OSCILLA's own
 // domain view (knob SVGs, a two-token plate gradient), coloured from tokens only.
 //
-//   plateHtml({ panel, module, node, model, tokens, reasons }) -> markup string
+//   plateHtml({ panel, module, node, model, tokens, collapsed }) -> markup string
 //   controlState(panel, module, node, model, control) -> { value, disabled, reason }
 //   platesShown({ panel, tab, engine, resolved, model }) -> [module]   the plates of a tab: its
 //     modules (on Engines, the chosen one), after any module of another tab that is removed and
@@ -55,7 +55,9 @@ export function controlValue(control, node, model, panel) {
   return e ? e.props.depth : 0;
 }
 
-const LABEL = 'text-[11px] font-semibold uppercase tracking-wide text-gray-500 '
+// Labels sit on the plate gradient (surface-3 to surface-1): gray-600 is 6.2:1 on its light top,
+// gray-400 5.8:1 or more on the dark one (4.5:1 for small text).
+const LABEL = 'text-[11px] font-semibold uppercase tracking-wide text-gray-600 '
   + 'dark:text-gray-400';
 const VALUE = 'font-mono text-xs tabular-nums text-gray-900 dark:text-white';
 
@@ -116,19 +118,29 @@ function factsHtml(m, node) {
     + `settings:</span> ${esc(m.def.facts(node.params))}</p>`;
 }
 
-/** The plate of one module: header, face controls, locked values and the module's note. */
-export function plateHtml({ panel, module: m, node, model, tokens }) {
+/**
+ * The plate of one module: header, face controls, locked values and the module's note. The
+ * header is a disclosure button (K062): a collapsed card keeps its label and a one-line
+ * summary from the registry; its jacks stay on the patch bay.
+ */
+export function plateHtml({ panel, module: m, node, model, tokens, collapsed = false }) {
   const hid = `synth-m-${m.id}`;
-  const head = `<header class="relative flex items-baseline justify-between gap-2 px-3 pt-2">`
+  const bid = `synth-b-${m.id}`;
+  const summary = node && typeof m.def.summary === 'function' ? m.def.summary(node.params) : '';
+  const head = `<header class="relative flex items-center justify-between gap-2 px-1 pt-1">`
     + `<h3 id="${hid}" class="text-sm font-bold tracking-widest text-gray-900 dark:text-white">`
-    + `${esc(m.label)}</h3><span class="text-[11px] text-gray-500 dark:text-gray-400">`
+    + `<button type="button" data-collapse="${m.id}" aria-expanded="${!collapsed}" `
+    + `aria-controls="${bid}" class="flex h-11 items-center gap-2 rounded-lg px-2 `
+    + 'tracking-widest focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500">'
+    + `<span aria-hidden="true" class="text-xs">${collapsed ? '▸' : '▾'}</span>${esc(m.label)}`
+    + '</button></h3><span class="px-2 text-[11px] text-gray-600 dark:text-gray-400">'
     + `${esc(m.def.displayName)}</span></header>`;
   const bg = '<svg class="absolute inset-0 h-full w-full" preserveAspectRatio="none" '
     + 'aria-hidden="true" focusable="false"><defs>'
     + `<linearGradient id="pg-${m.id}" x1="0" y1="0" x2="0" y2="1">`
     + `<stop offset="0" stop-color="${tokens.plateHi}"/>`
     + `<stop offset="1" stop-color="${tokens.plateLo}"/></linearGradient></defs>`
-    + `<rect width="100%" height="100%" fill="url(#pg-${m.id})"/></svg>`;
+    + `<rect width="100%" height="100%" fill="url(#pg-${m.id})" stroke="none"/></svg>`;
   if (!node) {
     const row = model ? brokenByRemoval(model, panel).find((r) => r.module === m.id) : null;
     return `<section class="relative overflow-hidden bg-white rounded-lg shadow dark:bg-gray-800" `
@@ -139,6 +151,12 @@ export function plateHtml({ panel, module: m, node, model, tokens }) {
       + '. <button type="button" class="font-medium text-primary-600 underline '
       + `dark:text-primary-400" data-restore-module="${m.id}">Restore module</button></p>`
       + '</section>';
+  }
+  if (collapsed) {
+    return `<section class="relative overflow-hidden bg-white rounded-lg shadow dark:bg-gray-800" `
+      + `aria-labelledby="${hid}" data-module="${m.id}">${bg}${head}<p id="${bid}" `
+      + 'class="relative px-3 pb-3 text-xs text-gray-700 dark:text-gray-300" '
+      + `data-summary="${m.id}">${esc(summary || m.def.displayName)}</p></section>`;
   }
   const controls = panel.faceOf(m.id).map((c) => {
     const cid = `${m.id}.${c.key}`;
@@ -160,12 +178,12 @@ export function plateHtml({ panel, module: m, node, model, tokens }) {
       + `${esc(shown)}</span>`;
   }).join('');
   return `<section class="relative overflow-hidden bg-white rounded-lg shadow dark:bg-gray-800" `
-    + `aria-labelledby="${hid}" data-module="${m.id}">${bg}${head}`
+    + `aria-labelledby="${hid}" data-module="${m.id}">${bg}${head}<div id="${bid}">`
     + `<div class="relative flex flex-wrap items-start gap-x-2 gap-y-3 px-3 pb-3 pt-2">`
     + `${controls}</div>`
     + (fixed || m.note ? `<div class="relative flex flex-wrap items-center gap-1 px-3 pb-3">`
-      + `${fixed}${m.note ? `<span class="text-[11px] text-gray-500 dark:text-gray-400">`
+      + `${fixed}${m.note ? `<span class="text-[11px] text-gray-600 dark:text-gray-400">`
       + `${esc(m.note)}</span>` : ''}</div>` : '')
     + factsHtml(m, node)
-    + '</section>';
+    + '</div></section>';
 }

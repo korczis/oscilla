@@ -93,9 +93,13 @@ export function decodeSynthLink(hash, panel, presets) {
   const rawCables = q.get(K.cables);
   for (const item of rawCables ? rawCables.split(',') : []) {
     const [a, b] = item.split('>');
-    const out = a && panel.jacksOf(a.split('.')[0]).find((j) => j.id === a);
-    const inp = b && panel.jacksOf(b.split('.')[0]).find((j) => j.id === b);
-    if (!out || out.direction !== 'out' || !inp || inp.direction !== 'in') {
+    // A port id may name an input and an output of one module (a filter's or a gain's
+    // 'audio'), so each end is looked up by its id AND its direction.
+    const jack = (id, direction) => id && panel.jacksOf(id.split('.')[0])
+      .find((j) => j.id === id && j.direction === direction);
+    const out = jack(a, 'out');
+    const inp = jack(b, 'in');
+    if (!out || !inp) {
       return no(`"${item.slice(0, 48)}" is not a cable from an output to an input jack.`);
     }
     cables.push([a, b]);
