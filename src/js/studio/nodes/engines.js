@@ -148,8 +148,9 @@ export const fmVoice = engine({
       + 'at any ratio and the carrier keeps its pitch from the onset, bass notes included (within '
       + '5 cents from 50 ms after it, tested from A0 to A4). A carrier at a whole multiple of its '
       + "modulator's frequency has a "
-      + '0 Hz line of its own: a DC offset in the voice, not removed (a high-pass would raise the '
-      + `voice's peak above its stated bound). ${FM_FEEDBACK_BLOCKED}`,
+      + '0 Hz line of its own: a DC offset in the voice, not removed (no high-pass follows a '
+      + 'voice: at some settings, a square at E2 for one, a high-pass raises the peak above the '
+      + `voice's stated bound). ${FM_FEEDBACK_BLOCKED}`,
   },
 });
 
@@ -175,7 +176,11 @@ export function amDcText(p) {
   const k = gcd(r, 100);
   const [num, den] = [r / k, 100 / k];
   if (!hasHarmonic(p.carrier, num) || !hasHarmonic(p.modulator, den)) return null;
-  const not = 'not removed: a high-pass would raise the voice\'s peak above its stated bound';
+  // Why it stays (review of #332, V7): here a high-pass would lower the peak (ring of sines at
+  // ratio 1: to half), but no high-pass follows any voice, because at other settings one raises
+  // the peak above the bound (a square at E2: +16 % at a 5 Hz, +58 % at a 20 Hz cut-off).
+  const not = 'not removed: no high-pass follows a voice, since at other settings, a square at '
+    + 'E2 for one, a high-pass raises the peak above the voice\'s stated bound';
   if (p.carrier === 'sine' && p.modulator === 'sine') {
     const mean = p.mode === 'am' ? `${(Number(p.depth) / 4).toFixed(2)} of` : 'half';
     return `DC: at ratio 1 the two sines coincide, so the product has a mean of ${mean} the `
@@ -216,9 +221,10 @@ export const amVoice = engine({
       + 'per voice). Where a carrier harmonic and a modulator harmonic coincide (the Ratio p/q in '
       + "lowest terms puts the carrier's harmonic p on the modulator's harmonic q: ratio 1 always, "
       + 'others with a saw, square or triangle) the product has a mean, a DC offset: sines at '
-      + "ratio 1 put half the voice's peak there in ring, d/4 of it in AM. It is not removed: a "
-      + "high-pass would raise the voice's peak above its stated bound; the face states it at "
-      + 'the settings that have it.',
+      + "ratio 1 put half the voice's peak there in ring, d/4 of it in AM (none at AM Depth 0). It "
+      + 'is not removed: no high-pass follows a voice, since at other settings, a square at E2 '
+      + "for one, a high-pass raises the peak above the voice's stated bound (at these it would "
+      + 'lower it); the face states the mean at the settings that have it.',
   },
 });
 

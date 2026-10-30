@@ -6,6 +6,8 @@
 //       edge's scale to 0.5 / Φ passed every earlier test)
 //   V5  a note-on that takes no voice (it sounds nothing) does not enter the held list
 //   V6  AM at Depth 0 is the carrier alone: no product term, so the face states no DC
+//   V7  the reason a voice's DC stays is a true one: at the DC settings a high-pass would lower
+//       the peak; it is kept out of every voice because it raises others (a square at E2)
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { FM_ALGORITHMS } from '../../src/js/synth/fm-algorithms.js';
@@ -117,5 +119,62 @@ test('V6 AM at Depth 0 states no DC: the carrier alone has no product term', asy
     assert.match(amDcText({ ...p, depth: 0.5 }), /DC/, 'any depth above 0 has the mean');
     assert.match(amDcText({ ...p, mode: 'ring', depth: 0 }), /DC/,
       'ring is the full product whatever Depth says');
+  }
+});
+
+// ------------------------------------------------------------------ V7 why the DC stays
+
+/** Steady-state peak after a second-order (two one-pole) high-pass at fc, relative to before. */
+function highPassPeakRatio(x, fc, sr) {
+  const a = 1 / (1 + (2 * Math.PI * fc) / sr);
+  let y = x;
+  for (let pass = 0; pass < 2; pass++) {
+    const out = new Float64Array(y.length);
+    let py = 0;
+    let px = 0;
+    for (let i = 0; i < y.length; i++) {
+      py = a * (py + y[i] - px);
+      px = y[i];
+      out[i] = py;
+    }
+    y = out;
+  }
+  const peak = (v) => v.subarray(v.length >> 1).reduce((m, s) => Math.max(m, Math.abs(s)), 0);
+  return peak(y) / peak(Float64Array.from(x));
+}
+
+test('V7 the reason the DC stays is true: a high-pass lowers these voices, raises a square', async () => {
+  const { amDcText } = await import('../../src/js/studio/nodes/engines.js');
+  const { NODE_REGISTRY } = await import('../../src/js/studio/registry.js');
+  const fs = await import('node:fs');
+  const docs = fs.readFileSync(new URL('../../docs/synth.md', import.meta.url), 'utf8');
+  const sines = { carrier: 'sine', modulator: 'sine', ratio: 1 };
+  const texts = [amDcText({ ...sines, mode: 'ring', depth: 1 }),
+    amDcText({ ...sines, mode: 'am', depth: 1 }),
+    amDcText({ carrier: 'square', modulator: 'sine', mode: 'ring', depth: 1, ratio: 3 }),
+    NODE_REGISTRY.get('am-voice').help.constraints, NODE_REGISTRY.get('fm-voice').help.constraints,
+    docs];
+  for (const t of texts) {
+    assert.doesNotMatch(t, /a high-pass would raise the voice's peak/, 'the false reason is gone');
+    assert.match(t, /no high-pass follows a voice/);
+    assert.match(t, /square at E2/, 'the reason names a setting where it holds');
+  }
+  // The facts behind it (48 kHz, 1.5 s, the second half judged).
+  const sr = 48000; // the rate of these computed signals
+  const n = Math.round(1.5 * sr);
+  const sig = (fn) => Float64Array.from({ length: n }, (_, i) => fn(i / sr));
+  const w = (f, t) => 2 * Math.PI * f * t;
+  const e2 = 82.4069;
+  const square = sig((t) => {
+    let s = 0;
+    for (let k = 1; k * e2 < sr / 2; k += 2) s += Math.sin(w(k * e2, t)) / k;
+    return (4 / Math.PI) * s;
+  });
+  const ring = sig((t) => Math.sin(w(220, t)) ** 2);
+  const am = sig((t) => Math.sin(w(220, t)) * (0.5 + 0.5 * Math.sin(w(220, t))));
+  for (const fc of [5, 20]) {
+    assert.ok(highPassPeakRatio(square, fc, sr) > 1.1, `a square at E2 rises at ${fc} Hz`);
+    assert.ok(highPassPeakRatio(ring, fc, sr) < 0.55, `ring of sines at ratio 1 falls at ${fc} Hz`);
+    assert.ok(highPassPeakRatio(am, fc, sr) < 0.8, `AM of sines at ratio 1 falls at ${fc} Hz`);
   }
 });

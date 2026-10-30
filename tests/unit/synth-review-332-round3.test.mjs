@@ -47,7 +47,7 @@ test('P3 the ring and AM plate states the DC of coinciding lines', () => {
   assert.match(facts({ ...sines, mode: 'ring', ratio: 1 }),
     /DC: at ratio 1 the two sines coincide, so the product has a mean of half the voice's peak/);
   assert.match(facts({ ...sines, mode: 'am', ratio: 1, depth: 0.6 }), /mean of 0\.15 of the/);
-  assert.match(facts({ ...sines, mode: 'ring', ratio: 1 }), /not removed: a high-pass/);
+  assert.match(facts({ ...sines, mode: 'ring', ratio: 1 }), /not removed: no high-pass follows/);
   assert.equal(amDcText({ ...sines, mode: 'ring', ratio: 1.25 }), null);
   assert.equal(amDcText({ ...sines, mode: 'ring', ratio: 2 }), null);
   // a square has odd harmonics: its 3rd meets a sine modulator at ratio 3, nothing at ratio 2

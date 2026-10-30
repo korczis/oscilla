@@ -30,10 +30,13 @@
 // Headroom (ADR 0058's rule for note voices, review of #332): a voice peaks at Level / 4 /
 // MAX_VOICES of digital full scale times the velocity law, so the 16 voices at the highest
 // Level (4) and velocity together peak at most at full scale and the Master Output level stays
-// the cap: the output ceiling is never the limiter. No high-pass follows a voice: one would
-// raise its peak above that bound (measured: an FM stack +35 %, a square at E2 +27 %), so a
-// voice whose spectrum has a 0 Hz line (ring at ratio 1, a carrier at a whole multiple of its
-// modulator) keeps that mean, and its engine's face says so.
+// the cap: the output ceiling is never the limiter. No high-pass follows a voice: at some
+// settings one raises its peak above that bound (measured: an FM stack +35 %, a square at E2
+// +27 %; computed for review of #332 V7: a square at E2 +16 % at a 5 Hz and +58 % at a 20 Hz
+// second-order cut-off), although at the settings that have a 0 Hz line it would lower it (ring
+// of sines at ratio 1: to half, AM at depth 1: to 0.75). So a voice whose spectrum has a 0 Hz
+// line (ring at ratio 1, a carrier at a whole multiple of its modulator) keeps that mean, and
+// its engine's face says so.
 
 import { applyAdsr, forgetParam, releaseAt } from '../../audio/envelope.js';
 import { midiToFrequency } from '../../core/music.js';

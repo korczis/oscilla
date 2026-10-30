@@ -10,8 +10,8 @@
 //       nothing steals no voice; a held note retriggered re-attacks from the level it holds;
 //       every FM algorithm connects what its table says; every percussion key and the choke
 //       group are what the face says
-//   P3  all-off cuts ringing one-shots; the DC of coinciding lines is stated (a high-pass would
-//       break the peak bound); an engine preset sets
+//   P3  all-off cuts ringing one-shots; the DC of coinciding lines is stated (no high-pass
+//       follows a voice: at some settings one breaks the peak bound); an engine preset sets
 //       its own engine; the offline plan says why an engine plays no notes; a degraded
 //       wavetable still passes its Chain input; the steal order is released-first.
 import test from 'node:test';
