@@ -17,8 +17,10 @@
 //     now(),                          the AUDIO clock in seconds (AudioContext.currentTime)
 //     preflight({ otherAudio }) → PreflightFacts, opens/validates the context, permission,
 //                                     input, worklet; otherAudio: the caller's fact that the
-//                                     app's own output sounds (reported back as
-//                                     output.otherAudio, OR-ed with the engine voices)
+//                                     app's own output sounds, a boolean or a probe
+//                                     () => boolean (reported back as output.otherAudio,
+//                                     OR-ed with the engine voices, both read at the input
+//                                     level reading)
 //     captureNoise(seconds, { notBefore, onScheduled, onChunk }) → Capture
 //     runStimulus(stimulus, { preRollS, postRollS, notBefore, onScheduled, onChunk }) → Capture
 //     cancel(reason),                 stop everything in flight and release session resources
@@ -852,12 +854,15 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
   const samePrepared = (recipe, calibration) => !!prepared && prepared.key !== null
     && prepared.key === recipeKey(recipe) && prepared.calibration === (calibration ?? null);
 
+  // otherAudio: false on the measure() path, whose caller stops every output owner first.
   async function runPreflight(s, recipe, calibration, otherAudio = false) {
     const warnings = [];
     const blockers = [];
     const facts = await guard(s, (async () => {
-      try { return await io.preflight({ otherAudio: otherAudio === true }); }
-      catch (e) {
+      try {
+        return await io.preflight({ otherAudio: typeof otherAudio === 'function' ? otherAudio
+          : otherAudio === true });
+      } catch (e) {
         if (s.dead) throw e;
         const me = mapError(e);
         if (me.code === 'ABORTED') throw me;
@@ -1424,8 +1429,8 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
 
     /**
      * preflight(recipe, { calibration, otherAudio }) → { ready, warnings, blockers, facts,
-     * sampleRate }. otherAudio: true while an output owner of the app sounds (OTHER_AUDIO; the
-     * check stops nothing).
+     * sampleRate }. otherAudio: true, or a probe () => boolean the io reads at the input level
+     * reading, while an output owner of the app sounds (OTHER_AUDIO; the check stops nothing).
      * IDLE → PREFLIGHT → READY (ready) or INVALID (blockers). Warnings never block (§30). A
      * following measure() with the same recipe and calibration starts from READY.
      */

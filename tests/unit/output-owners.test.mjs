@@ -22,14 +22,19 @@ function topFunction(src, name) {
   return src.slice(at + 1, end + 2);
 }
 
-/** OUTPUT_OWNERS, stopPlayback and outputBusy of main.js, bound to the given `labs`. */
+/**
+ * OUTPUT_OWNERS, stopPlayback, outputBusy and (where main.js defines it, R-4) stopSequencer of
+ * main.js, bound to the given `labs`.
+ */
 function ownersOf(labs) {
   const at = MAIN.indexOf('\nconst OUTPUT_OWNERS = ');
   assert.ok(at >= 0, 'main.js declares const OUTPUT_OWNERS');
   const end = MAIN.indexOf('\n]);\n', at);
   const table = MAIN.slice(at + 1, end + 5);
   const body = `${table}\n${topFunction(MAIN, 'stopPlayback')}\n${topFunction(MAIN, 'outputBusy')}`
-    + '\nreturn { OUTPUT_OWNERS, stopPlayback, outputBusy };';
+    + (MAIN.includes('\nfunction stopSequencer(') ? `\n${topFunction(MAIN, 'stopSequencer')}`
+      : '\nconst stopSequencer = undefined;')
+    + '\nreturn { OUTPUT_OWNERS, stopPlayback, outputBusy, stopSequencer };';
   // eslint-disable-next-line no-new-func
   return new Function('labs', body)(labs);
 }
@@ -58,7 +63,9 @@ test('C016: the output owners are the sequencer, the instrument and the Studio t
 });
 
 test('C016: stopPlayback and outputBusy name the same owners (one table, nothing inline)', () => {
-  for (const name of ['stopPlayback', 'outputBusy']) {
+  const names = ['stopPlayback', 'outputBusy'];
+  if (MAIN.includes('\nfunction stopSequencer(')) names.push('stopSequencer'); // R-4, below
+  for (const name of names) {
     const fn = topFunction(MAIN, name);
     assert.match(fn, /OUTPUT_OWNERS/, `${name} reads OUTPUT_OWNERS`);
     for (const inline of [/seqPlaying/, /\.editor\b/, /studioOwnsOutput/, /stopNow/,
@@ -105,11 +112,26 @@ test('C016: MEASURE receives outputBusy and the setup check hands it to the pref
   const at = measure.indexOf('async function runPreflight(cmp)');
   assert.ok(at >= 0, 'measure.js runPreflight');
   const body = measure.slice(at, measure.indexOf('\n  }\n', at));
-  assert.match(body, /me\.preflight\([^;]*otherAudio:\s*otherAudioNow\(cmp\)/,
-    'runPreflight passes otherAudio from svc.outputBusy');
+  assert.match(body, /me\.preflight\([^;]*otherAudio:\s*\(\)\s*=>\s*otherAudioNow\(cmp\)/,
+    'runPreflight passes a probe of svc.outputBusy (behaviour: preflight-own-output.test.mjs)');
   assert.doesNotMatch(body, /stopPlayback/, 'the setup check stops nothing');
   assert.match(measure, /function otherAudioNow\(cmp\)\s*\{[^}]*svc\.outputBusy\(cmp\)/);
-  const capture = read('src/js/measurement/capture.js');
-  assert.match(capture, /otherAudio:\s*!!\(opts\s*&&\s*opts\.otherAudio\)\s*\|\|\s*voices > 0/,
-    'the io reports the caller\'s fact OR-ed with the engine voices');
+  // The capture io's OR of the caller's fact and the voices is checked by behaviour in
+  // tests/unit/preflight-own-output.test.mjs (C016 review R-3).
+});
+
+test('C016 R-4: Escape and pagehide stop a sequence started under 150 ms ago', () => {
+  const f = fakes();
+  const o = ownersOf(f.labs);
+  assert.equal(typeof o.stopSequencer, 'function', 'main.js defines stopSequencer(cmp)');
+  f.editor.playing = true; // the 150 ms poll has not set seqPlaying yet
+  f.cmp.seqPlaying = false;
+  f.cmp.playing = true;
+  o.stopSequencer(f.cmp);
+  assert.deepEqual(f.log, ['sequencer'], 'the sequencer only, read live');
+  o.stopSequencer(f.cmp);
+  assert.deepEqual(f.log, ['sequencer'], 'nothing to stop once it is stopped');
+  assert.equal(ownersOf({}).stopSequencer(f.cmp), undefined, 'no sequencer lab: no-op');
+  assert.match(MAIN, /e\.key === 'Escape'\) \{\s*stopSequencer\(cmp\);/, 'Escape uses it');
+  assert.match(MAIN, /const hide = \(\) => \{[^}]*stopSequencer\(cmp\);/, 'pagehide uses it');
 });

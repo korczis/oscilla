@@ -200,9 +200,18 @@ export class AudioEngine {
    */
   get audibleVoiceCount() {
     if (!this.ctx) return 0;
-    const now = this.ctx.currentTime;
+    return this.audibleVoiceCountAt(this.ctx.currentTime);
+  }
+
+  /**
+   * The voices that still sound at audio time t (C016): a voice released now is in its fade
+   * until endTime - 0.01, so a reading that starts later (MEASURE's input level, a scheduling
+   * lead ahead) does not contain it. Read-only; it schedules and edits nothing.
+   */
+  audibleVoiceCountAt(t) {
+    if (!this.ctx) return 0;
     let n = 0;
-    for (const v of this.voices) if (!v.ended && now < v.endTime - 0.01) n++;
+    for (const v of this.voices) if (!v.ended && t < v.endTime - 0.01) n++;
     return n;
   }
 

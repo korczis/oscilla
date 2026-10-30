@@ -1423,8 +1423,9 @@ export function createMeasureUi(svc) {
     cmp.meas.savedId = null;
     rebuildAll();
     try {
+      // A probe, read by the io where it reads the input level (C016 review R-5).
       ctx.pending = me.preflight(recipeNow(), { calibration: calibrationInput(),
-        otherAudio: otherAudioNow(cmp) });
+        otherAudio: () => otherAudioNow(cmp) });
       await ctx.pending;
     } catch (e) {
       if (!(e && e.code === 'ABORTED')) {

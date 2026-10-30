@@ -237,6 +237,12 @@ function outputBusy(cmp) {
   return OUTPUT_OWNERS.some((owner) => owner.busy(cmp));
 }
 
+/** Escape and pagehide: stop the sequencer, read live through its OUTPUT_OWNERS row. */
+function stopSequencer(cmp) {
+  const seq = OUTPUT_OWNERS.find((owner) => owner.id === 'sequencer');
+  if (seq.busy(cmp)) seq.stop(cmp);
+}
+
 /** Revert the sounding voice from a PeriodicWave to its oscillator type (additive off). */
 function clearPeriodicWave() {
   if (typeof engine.clearPeriodicWave === 'function') engine.clearPeriodicWave(); // click-free dip
@@ -548,12 +554,9 @@ function integrationInit() {
   const unlock = () => { if (engine.isSupported()) cmp.ensureAudio(); };
   window.addEventListener('pointerdown', unlock, { capture: true });
   window.addEventListener('keydown', unlock, { capture: true });
-  const stopSequencer = () => {
-    if (cmp.seqPlaying && labs.sequencer) labs.sequencer.editor.stop();
-  };
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      stopSequencer();
+      stopSequencer(cmp);
       cmp.measureAbort('escape'); // spec §111: Escape aborts a measurement (after the sequencer)
     }
     // ADR 0050: Space is Hold to Play only in the workspaces that play, load or analyse the
@@ -566,7 +569,7 @@ function integrationInit() {
   window.addEventListener('blur', () => cmp.releaseHold());
   const hide = () => {
     cmp.releaseHold();
-    stopSequencer();
+    stopSequencer(cmp);
     cmp.measureAbort('pagehide'); // spec §169 (the capture io also aborts on its own)
     if (!cmp.latched) return;
     cmp.stop();
