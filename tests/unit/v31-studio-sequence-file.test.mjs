@@ -379,6 +379,20 @@ test('a tempo-locked durationMs outside the rounding of its beats is still refus
     // The Sequencer stores milliseconds to 3 decimals.
     [at(20, 100.0004, 0.033333),
       'Block 1: durationMs is 100.0004 in the file but would open as 99.999'],
+    // Each end of a rounding range is one double: 1.000501 beats at 60 BPM open 1000.501 ms
+    // and refuse the next millisecond step either way (review of #355, V1).
+    [at(60, 1000.502, 1.000501),
+      'Block 1: durationMs is 1000.502 in the file but would open as 1000.501'],
+    [at(60, 1001.4, 1.001401),
+      'Block 1: durationMs is 1001.4 in the file but would open as 1001.401'],
+    // A derived duration past a bound is clamped to it, so a millisecond past the clamp is
+    // refused: a chirp's 5000 ms ceiling and a block's 10 ms floor (review of #355, V2).
+    [at(20, 5000.001, 1.666667, 'chirp'),
+      'Block 1: durationMs is 5000.001 in the file but would open as 5000'],
+    [at(20, 5000.002, 1.666667, 'chirp'),
+      'Block 1: durationMs is 5000.002 in the file but would open as 5000'],
+    [at(20, 9.999, 0.003333),
+      'Block 1: durationMs is 9.999 in the file but would open as 10'],
     // Beats past a bound by more than their rounding are clamped, which changes them.
     [at(20, 5000, 1.666668, 'chirp'),
       'Block 1: beats is 1.666668 in the file but would open as 1.666667'],
