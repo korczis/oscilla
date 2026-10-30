@@ -14,7 +14,7 @@ const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.ur
 /** The evolution timeline: each station's state, release line (if any) and named commit. */
 function timeline() {
   const list = aboutView.slice(aboutView.indexOf('osc-about-timeline'), aboutView.indexOf('</ol>'));
-  return [...list.matchAll(/<li data-state="([a-z]+)"(?: data-osc-release="([0-9]+\.[0-9]+)")?>\s*<span class="osc-about-step[^"]*">[^<]*<time data-osc-commit="([0-9a-f]+)"/g)]
+  return [...list.matchAll(/<li data-state="([a-z]+)"(?: data-osc-release="([0-9]+\.[0-9]+)")?>\s*<span>[^<]*<time data-osc-commit="([0-9a-f]+)"/g)]
     .map(([, state, release, commit]) => ({ state, release: release || null, commit }));
 }
 
@@ -149,7 +149,7 @@ export function stationProblems(view) {
   items.forEach(([, release, body], i) => {
     const at = `station ${i + 1}`;
     const step = body.match(
-      /<span class="osc-about-step[^"]*">\s*(\d+) · <time [^>]*datetime="([^"]+)"[^>]*>([^<]*)<\/time>/);
+      /<span>\s*(\d+) · <time [^>]*datetime="([^"]+)"[^>]*>([^<]*)<\/time>/);
     if (!step) {
       problems.push(`${at}: no step number and time`);
       return;

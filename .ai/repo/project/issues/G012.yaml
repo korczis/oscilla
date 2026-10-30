@@ -1,0 +1,44 @@
+id: G012
+milestone: M086
+serves:
+- "component-system#embedded-cockpit"
+title: Open in Studio keeps the selection and frames it; Back returns to the workspace it came from with the cockpit as it was
+slug: open-in-studio-keeps-the-selection-and-frames-it-back-return
+priority: p2
+profile: implementation
+objective: "Lands as feat(studio-ui). P4 slice B (cross-view identity) for the cockpit, and links.md P8: today Expand from the Sequencer and Back drop the user in the Playground, and nothing asserts that the selection survives. studioExpand records the workspace it was called from; the full Studio opens with the store's selection and frames the selected nodes (or keeps its stored viewport when nothing is selected); Back reads '< Sequencer' or '< Playground' and returns there with the cockpit's scroll position and selection kept; browser fullscreen of either view keeps them too, or states FULLSCREEN_BLOCKED. A card's double-click and Enter do the same for that node. When V632 is on main this slice extends its view-identity check instead of adding a second one. Before: VERIFIED one-way (links.md P8); UNKNOWN identity. After: asserted identity across Open, Back and fullscreen. Negative cases: the selected node deleted in the full Studio (pruned, not stale), Back after a reload (the origin is in the history entry's state, not in memory), fullscreen refused. Rollback: revert."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: \"the embedded Studio is ugly as hell\"; components in general must be generic, linkable, traceable, composable, unified, documented, dynamic, generated and interlinked; \"everything must be interlinked with everything\"; improve the main page and the first experience, deploy often. The owner's evolution prompt pack (MASTER, P02, P04, P06) binds it: the dark technical cockpit is locked, shared primitives only where duplication is proven, no new framework, generated docs only where deterministic, no decorative wires. Findings: the UI component inventory of 2026-10-29 (D1-D14 duplication, U1-U15 on the embedded Studio, measured on origin/main b67d1e58, v3.13.0); design: the component-system design of 2026-10-29 (scratchpad components/design.md)."
+scope:
+- src/js/ui/studio/workspace.js
+- src/js/ui/studio/compact.js
+- src/js/ui/navigation.js
+- src/index.html
+- tests/unit/studio-expand-origin.test.mjs
+- tests/browser/v31-studio-graph.cjs
+- tests/browser/studio-cockpit.cjs
+- tests/browser/timing-baseline.json
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- G011
+- V632
+acceptance_criteria:
+- "tests/unit/studio-expand-origin.test.mjs fails on the merge base: the expand origin is stored in the history entry, Back's label names it, and a pruned selection is empty, not stale."
+- "Definition of done, extends: studioExpand and the ADR 0045 history entries."
+- "Definition of done, interlinks: the cockpit, the full Studio and fullscreen are one identity; Back is a declared link (G016)."
+- "Definition of done, interactivity: selection and framing follow the user across views."
+- "Definition of done, docs, menus and routes: docs/v31/user-guide.md states what Open in Studio and Back keep. tests/README.md has a row for each new test; the component's catalogue declaration (G001) names its docs, links and tests; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: A check 'cockpit-identity' in tests/browser/studio-cockpit.cjs selects a node in the cockpit of the Sequencer and of the Playground, opens the Studio by pointer, Enter and a hasTouch tap, waits with until() (deadline 'studio framed', 2 s) for the same selection framed, goes Back and waits (deadline 'back at origin', 2 s) for the origin workspace with the selection kept. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit, and the release that carried it is recorded when the milestone is verified."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "On Pro (after F002): its chrome is markup adapted from the matching Flowbite Pro block (the template names its flowbite-pro reference.md section), recorded as migrated, never pending; it adds no osc-* class token, no legacy vocabulary use and no selector, removes the legacy ones it replaces, and the domain views' stylesheets gain nothing (compact density is Tailwind utilities on the domain view's own elements); the record's debt falls (project.ui-uses-flowbite-pro, project.visual-identity-lock v2, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "scripts/size-report.mjs shows at most 1 KB gzip added, with the base and head figures in the pull request body, inside the cap Q037 records (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/studio-expand-origin.test.mjs
+- node tests/browser/studio-cockpit.cjs --only cockpit-identity
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'
