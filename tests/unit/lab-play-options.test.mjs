@@ -439,6 +439,209 @@ test('R-2: on the engine alone, setAdsr updates the voice options a restart copi
     assert.strictEqual(eng.activeNodeCount, 0);
   });
 
+// #296 R-8: every compared field and the releasing guard of setAdsr has a case of its own.
+test('R-8: an attack or a decay edit restarts a held voice; a releasing voice is left alone',
+  { skip }, () => {
+    const { eng, advance } = setupApp();
+    const adsr = { a: 0.01, d: 0.1, s: 0.6, r: 0.3 };
+    let plays = 0;
+    eng.on((type) => { if (type === 'play') plays++; });
+    eng.play(plan({ pattern: 'tone', frequency: 440 }), opt({ adsr,
+      stepEnvelope: adsrStepEnvelope }));
+    const v1 = eng.voice;
+    advance(0.5);
+    assert.strictEqual(eng.setAdsr({ ...adsr, a: 0.2 }, adsrStepEnvelope), 'restarted',
+      'an attack edit reaches the held voice');
+    const v2 = eng.voice;
+    assert.notStrictEqual(v2, v1);
+    assert.strictEqual(v2.adsr.a, 0.2);
+    advance(0.5);
+    assert.strictEqual(eng.setAdsr({ ...adsr, a: 0.2, d: 0.3 }, adsrStepEnvelope), 'restarted',
+      'a decay edit reaches the held voice');
+    const v3 = eng.voice;
+    assert.notStrictEqual(v3, v2);
+    assert.strictEqual(v3.adsr.d, 0.3);
+    advance(0.5);
+    // note-off: the voice is in its release tail; no edit may bring it back
+    assert.ok(eng.release());
+    assert.ok(v3.releasing);
+    const before = plays;
+    assert.strictEqual(eng.setAdsr({ ...adsr, s: 0.1 }, adsrStepEnvelope), false,
+      'a released note is not restarted');
+    assert.strictEqual(plays, before, 'no new voice');
+    assert.strictEqual(eng.voice, v3);
+    advance(3);
+    assert.strictEqual(eng.activeNodeCount, 0);
+  });
+
+// #296 R-7: the Envelope's sliders notify on every 'input' and its graph on every pointermove.
+// A drag is one edit: while it settles the held voice keeps sounding (its options take the
+// values, so a later note has them), and the drag's end (the slider's 'change', the graph's
+// pointerup) restarts it once. A release change stays in place, as before.
+test('R-7: a 20-event drag restarts the held voice at most once, on the commit', { skip }, () => {
+  const { eng, advance } = setupApp();
+  const labs = makeLabs();
+  labs.envelope.enabled = true;
+  labs.envelope.adsr = { a: 0.01, d: 0.1, s: 0.6, r: 0.3 };
+  labOpts.withLabOptions(eng, (p) => labPlayOptions(p, eng.ctx, labs));
+  let plays = 0;
+  eng.on((type) => { if (type === 'play') plays++; });
+  eng.play(plan({ pattern: 'tone', frequency: 440 }), opt());
+  const v1 = eng.voice;
+  advance(1);
+  plays = 0;
+  const drag = (key, to) => {
+    const from = labs.envelope.adsr[key];
+    const answers = new Set();
+    for (let i = 1; i <= 20; i++) {
+      labs.envelope.adsr = { ...labs.envelope.adsr, [key]: from + ((to - from) * i) / 20 };
+      answers.add(labOpts.followEnvelopeLab(eng, labs.envelope, { settling: true }));
+      advance(0.016);
+    }
+    return [...answers];
+  };
+
+  assert.deepStrictEqual(drag('s', 0.1), ['pending']);
+  assert.strictEqual(plays, 0, 'no restart while the Sustain drag settles');
+  assert.strictEqual(eng.voice, v1);
+  assert.strictEqual(eng.voices.size, 1, 'no extra voice');
+  assert.strictEqual(v1.adsr.s, 0.6, 'the sounding shape is the one that was scheduled');
+  assert.strictEqual(v1.opts.adsr.s, labs.envelope.adsr.s, 'the options have the drag');
+  assert.strictEqual(labOpts.followEnvelopeLab(eng, labs.envelope), 'restarted', 'the commit');
+  assert.strictEqual(plays, 1, 'one restart for the whole drag');
+  const v2 = eng.voice;
+  assert.ok(Math.abs(v2.adsr.s - 0.1) < 1e-9);
+  assert.ok(Math.abs(valueAt(v2.env, v2.t0 + 0.5) - 0.1) < 0.005, 'sounds at the new sustain');
+  assert.strictEqual(labOpts.followEnvelopeLab(eng, labs.envelope), 'same',
+    'a second commit of the same values does nothing');
+  assert.strictEqual(plays, 1);
+  advance(1);
+
+  // attack (a graph drag of the A handle): the same, one restart at its end
+  plays = 0;
+  assert.deepStrictEqual(drag('a', 0.2), ['pending']);
+  assert.strictEqual(plays, 0, 'no restart while the Attack drag settles');
+  assert.strictEqual(eng.voice, v2);
+  assert.strictEqual(labOpts.followEnvelopeLab(eng, labs.envelope), 'restarted');
+  assert.strictEqual(plays, 1);
+  const v3 = eng.voice;
+  advance(1);
+
+  // release: in place on the same voice, while settling and at the commit
+  plays = 0;
+  assert.deepStrictEqual(drag('r', 0.05), ['live']);
+  assert.strictEqual(eng.voice, v3);
+  assert.ok(Math.abs(v3.release - 0.05) < 1e-9);
+  assert.strictEqual(labOpts.followEnvelopeLab(eng, labs.envelope), 'same');
+  assert.strictEqual(plays, 0, 'a release drag never restarts');
+
+  // a drag still settling when the note is let go: the commit does not bring it back
+  drag('s', 0.4);
+  assert.ok(eng.release());
+  assert.strictEqual(labOpts.followEnvelopeLab(eng, labs.envelope), false);
+  assert.strictEqual(plays, 0);
+  advance(3);
+  assert.strictEqual(eng.activeNodeCount, 0);
+});
+
+/** The Envelope lab (labs/envelope.js) on stand-in elements: fields, sliders and the switch. */
+function mountEnvelopeLab(mount) {
+  class El extends EventTarget {
+    constructor(value = '', attrs = {}) {
+      super();
+      this.value = value;
+      this.min = '0';
+      this.max = '1000';
+      this.attrs = new Map(Object.entries(attrs));
+      this.style = { setProperty() {} };
+      this.classList = { toggle() {}, contains: () => false };
+    }
+    getAttribute(n) { return this.attrs.has(n) ? this.attrs.get(n) : null; }
+    setAttribute(n, v) { this.attrs.set(n, String(v)); }
+    hasAttribute(n) { return this.attrs.has(n); }
+  }
+  const els = {
+    '#osc-env-enable': new El('', { 'aria-checked': 'true' }),
+    '#osc-env-sustain': new El('0.6'),
+    '#osc-env-sustain-value': new El('0.6'),
+  };
+  for (const k of ['attack', 'decay', 'release']) {
+    els[`#osc-env-${k}`] = new El('0');
+    els[`#osc-env-${k}-value`] = new El('');
+  }
+  const root = new El();
+  root.querySelector = (sel) => els[sel] || null;
+  return { lab: mount(root), els };
+}
+
+test('R-7: the Envelope lab says when an edit settles; a 20-input slider drag restarts once',
+  { skip }, async () => {
+    const hadDocument = 'document' in globalThis;
+    if (!hadDocument) globalThis.document = { activeElement: null };
+    try {
+      const { mount } = await import('../../src/js/labs/envelope.js');
+      const { lab, els } = mountEnvelopeLab(mount);
+      const { eng, advance } = setupApp();
+      const labs = { envelope: lab };
+      labOpts.withLabOptions(eng, (p) => labPlayOptions(p, eng.ctx, labs));
+      const notes = [];
+      const answers = [];
+      // as main.js wires it
+      lab.onChange((adsr, enabled, meta) => {
+        notes.push(!!(meta && meta.settling));
+        answers.push(labOpts.followEnvelopeLab(eng, lab, meta));
+      });
+      let plays = 0;
+      eng.on((type) => { if (type === 'play') plays++; });
+      eng.play(plan({ pattern: 'tone', frequency: 440 }), opt());
+      const v1 = eng.voice;
+      assert.strictEqual(v1.adsr.s, 0.6);
+      advance(1);
+      plays = 0;
+      const slider = els['#osc-env-sustain'];
+      for (let i = 1; i <= 20; i++) {
+        slider.value = String(0.6 - (0.5 * i) / 20);
+        slider.dispatchEvent(new Event('input'));
+        advance(0.016);
+      }
+      assert.deepStrictEqual([...new Set(notes)], [true], 'every input settles');
+      assert.strictEqual(plays, 0, '20 inputs, no restart');
+      assert.strictEqual(eng.voice, v1);
+      assert.strictEqual(eng.voices.size, 1, 'no extra voice');
+      slider.dispatchEvent(new Event('change'));
+      assert.strictEqual(notes[notes.length - 1], false, 'the change commits');
+      assert.strictEqual(answers[answers.length - 1], 'restarted');
+      assert.strictEqual(plays, 1, 'one restart for the drag');
+      assert.ok(Math.abs(eng.voice.adsr.s - 0.1) < 1e-9);
+      // a typed field edit is a commit of its own
+      advance(1);
+      els['#osc-env-sustain-value'].value = '0.3';
+      els['#osc-env-sustain-value'].dispatchEvent(new Event('change'));
+      assert.strictEqual(notes[notes.length - 1], false);
+      assert.strictEqual(plays, 2);
+      // the Attack slider (a log slider, 0..1000): 20 inputs, then its change
+      advance(1);
+      const attack = els['#osc-env-attack'];
+      const v3 = eng.voice;
+      for (let i = 1; i <= 20; i++) {
+        attack.value = String(100 + i * 20);
+        attack.dispatchEvent(new Event('input'));
+        advance(0.016);
+      }
+      assert.strictEqual(plays, 2, '20 Attack inputs, no restart');
+      assert.strictEqual(eng.voice, v3);
+      attack.dispatchEvent(new Event('change'));
+      assert.strictEqual(plays, 3, 'one restart at the Attack change');
+      assert.strictEqual(eng.voice.adsr.a, lab.adsr.a);
+      eng.stopAll();
+      advance(3);
+      assert.strictEqual(eng.activeNodeCount, 0);
+      lab.dispose();
+    } finally {
+      if (!hadDocument) delete globalThis.document;
+    }
+  });
+
 test('R-3: withLabOptions spreads the labs over the caller\'s options, a restart included',
   { skip }, () => {
     const { eng, advance } = setupApp();

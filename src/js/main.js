@@ -447,8 +447,12 @@ function mountLabs(root) {
   }
   const labChanged = () => { syncLabFlags(); vizLabsChanged(); };
   if (labs.envelope) {
-    // The live path (C007 R-2): an edit reaches the sounding voice, which the views show.
-    labs.envelope.onChange(() => { labChanged(); followEnvelopeLab(engine, labs.envelope); });
+    // The live path (C007 R-2): an edit reaches the sounding voice, which the views show; a
+    // drag restarts it once, at its end (meta.settling while it moves, #296 R-7).
+    labs.envelope.onChange((adsr, enabled, meta) => {
+      labChanged();
+      followEnvelopeLab(engine, labs.envelope, meta);
+    });
   }
   if (labs.filter) labs.filter.onChange(labChanged);
   if (labs.phase) {

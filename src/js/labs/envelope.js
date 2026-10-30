@@ -2,6 +2,9 @@
 // Attack/Decay/Sustain/Release fields and sliders, the power toggle and the draggable graph
 // (charts/envelope-graph.js). main.js hands lab.adsr to every play (audio/lab-play-options.js)
 // and, through lab.onChange, to the sounding voice (followEnvelopeLab -> engine.setAdsr).
+// A listener's third argument says whether the edit is still settling (#296 R-7): a slider's
+// 'input' and a graph pointermove are, the slider's 'change', the graph's pointerup, a typed
+// field, the power switch and update() are not, so a drag reaches the voice as one edit.
 
 import { createEnvelopeGraph } from '../charts/envelope-graph.js';
 import { ADSR_LIMITS, clampAdsr } from '../charts/drag-math.js';
@@ -30,8 +33,11 @@ export function mount(rootEl) {
   const sustainSlider = q('#osc-env-sustain');
   const sustainText = q('#osc-env-sustain-value');
   const host = q('#osc-chart-envelope');
-  const graph = host ? createEnvelopeGraph(host, { adsr, onChange: (next) => set(next, 'graph') })
-    : null;
+  let graphSettling = false;
+  const graph = host ? createEnvelopeGraph(host, { adsr, onChange: (next) => {
+    graphSettling = true;
+    set(next, 'graph', true);
+  } }) : null;
 
   function sync(source) {
     for (const [k, sel] of Object.entries(TIME_KEYS)) {
@@ -44,33 +50,43 @@ export function mount(rootEl) {
     if (graph && source !== 'graph') graph.setAdsr(adsr);
   }
 
-  function set(patch, source) {
+  function set(patch, source, settling = false) {
     adsr = clampAdsr({ ...adsr, ...patch });
     sync(source);
-    for (const fn of listeners) fn({ ...adsr }, enable.value);
+    for (const fn of listeners) fn({ ...adsr }, enable.value, { settling });
     return { ...adsr };
   }
 
   const enable = bindSwitch(q('#osc-env-enable'), (v) => {
     if (graph) graph.setEnabled(v);
-    for (const fn of listeners) fn({ ...adsr }, v);
+    for (const fn of listeners) fn({ ...adsr }, v, { settling: false });
   });
 
-  const offs = [enable.dispose];
+  // The graph's drag ends on its canvas (pointer capture), and the event bubbles to the host.
+  const graphDone = () => {
+    if (!graphSettling) return;
+    graphSettling = false;
+    set({}, 'graph');
+  };
+  const offs = [enable.dispose, on(host, 'pointerup', graphDone),
+    on(host, 'pointercancel', graphDone)];
   for (const [k, sel] of Object.entries(TIME_KEYS)) {
     const [lo, hi] = ADSR_LIMITS[k];
     const slider = q(sel.slider);
     const text = q(sel.text);
-    offs.push(on(slider, 'input', () => {
-      set({ [k]: logSliderToValue(Number(slider.value), lo, hi) });
-    }));
+    const fromSlider = (settling) => set({ [k]: logSliderToValue(Number(slider.value), lo, hi) },
+      undefined, settling);
+    offs.push(on(slider, 'input', () => fromSlider(true)));
+    offs.push(on(slider, 'change', () => fromSlider(false)));
     offs.push(on(text, 'change', () => {
       const s = parseDurationS(text.value);
       if (s != null) set({ [k]: s });
       else setField(text, formatDuration(adsr[k]));
     }));
   }
-  offs.push(on(sustainSlider, 'input', () => set({ s: Number(sustainSlider.value) })));
+  offs.push(on(sustainSlider, 'input', () => set({ s: Number(sustainSlider.value) }, undefined,
+    true)));
+  offs.push(on(sustainSlider, 'change', () => set({ s: Number(sustainSlider.value) })));
   offs.push(on(sustainText, 'change', () => {
     const v = parseNumber(sustainText.value);
     if (v != null) set({ s: v > 1 ? v / 100 : v }); // "60" is read as 60 %
@@ -103,7 +119,9 @@ export function mount(rootEl) {
         enable.set(!!state.enabled, true);
         if (graph) graph.setEnabled(!!state.enabled);
         // A programmatic switch (config import) notifies like a click (status flags, path).
-        if (changed) for (const fn of listeners) fn({ ...adsr }, enable.value);
+        if (changed) {
+          for (const fn of listeners) fn({ ...adsr }, enable.value, { settling: false });
+        }
       }
     },
     dispose() {

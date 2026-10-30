@@ -28,7 +28,8 @@ ping-pong sweep through the voice envelope, and a note of known length (a finite
 step of a steps pattern, a ramps pass or sweep segment) through `scheduleAdsrStep`, which
 shrinks the attack, decay and release to fit the step. An edit reaches the sounding note
 (`engine.setAdsr`): a release change in place while the note is held, anything else by a
-click-free restart of the note. The Pattern sequencer and Studio keep their own envelopes.
+click-free restart of the note. A slider or graph drag is one edit: the note restarts once,
+when the drag ends (the slider's `change`, the graph's pointerup), not on every move. The Pattern sequencer and Studio keep their own envelopes.
 
 ## What it does not do
 

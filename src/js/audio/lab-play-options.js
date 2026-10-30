@@ -81,11 +81,13 @@ export function withLabOptions(engine, labOptions, guard = null) {
  * followEnvelopeLab(engine, envelope) -> what engine.setAdsr answered, or false when nothing
  * sounds. The Envelope lab's live path (C007 R-2): its onChange hands the lab's current ADSR
  * (or null while it is off) and the step hook that goes with it to the sounding voice, built
- * by labPlayOptions like every other play option.
+ * by labPlayOptions like every other play option. meta { settling } is what the lab said of
+ * the edit (#296 R-7): true while a slider or graph drag is still moving, so the voice restarts
+ * once, at the drag's end, and not on every notification.
  */
-export function followEnvelopeLab(engine, envelope) {
+export function followEnvelopeLab(engine, envelope, meta = null) {
   const v = engine && engine.voice;
   if (!v || v.ended || typeof engine.setAdsr !== 'function') return false;
   const o = labPlayOptions(v.plan, null, { envelope });
-  return engine.setAdsr(o.adsr, o.stepEnvelope);
+  return engine.setAdsr(o.adsr, o.stepEnvelope, { settling: !!(meta && meta.settling) });
 }

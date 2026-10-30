@@ -45,7 +45,7 @@
 //                    open envelope, a continuous ping-pong sweep's whole envelope included.
 //                    engine.setAdsr(adsr, stepEnvelope) applies a change to the sounding
 //                    voice: a release in place while held, anything else by a click-free
-//                    restart.
+//                    restart, once per drag (setAdsr(..., { settling }), #296 R-7).
 //     o.envelope     per-play envelope function (overrides engine.setEnvelope).
 //     o.stepEnvelope (eg, t, dur, a, r, adsr) => void, replaces the V1 step envelope of
 //                    programmed patterns (must schedule through eg).
@@ -453,6 +453,7 @@ export class AudioEngine {
       attack: Math.max(0.001, adsr ? adsr.a : o.attackS), release: Math.max(0.005, adsr ? adsr.r : o.releaseS),
       limited: !!o.limited, extended: false,
       inserts: [], periodicWave: o.periodicWave || null, adsr, eg: null, stepEnv: null,
+      stepHook: typeof o.stepEnvelope === 'function' ? o.stepEnvelope : null,
     };
     const t0 = v.t0;
     const track = (n) => { v.nodes.push(n); this.nodes.add(n); return n; };
@@ -883,10 +884,16 @@ export class AudioEngine {
    * no per-segment envelope), applies in place: the release is read at note-off and nothing
    * sounding is edited. Any other change alters the scheduled shape, and a sounding envelope is
    * never re-automated (V249), so the voice is replaced click-free with the same plan, options
-   * and deadline, as setDualPhase does. Returns 'same' | 'live' | 'restarted' | false (no voice,
-   * releasing, or about to end).
+   * and deadline, as setDualPhase does.
+   * #296 R-7: a slider or graph drag is one edit made of many notifications. With
+   * { settling: true } (a slider's 'input', a graph pointermove) a shape change only reaches the
+   * voice's options and answers 'pending'; the drag's end (the slider's 'change', the graph's
+   * pointerup: settling false) compares the voice's scheduled shape (v.adsr, v.stepHook) with
+   * the edit and restarts once. A release-only change is in place either way.
+   * Returns 'same' | 'live' | 'pending' | 'restarted' | false (no voice, releasing, or about to
+   * end).
    */
-  setAdsr(adsr, stepEnvelope = null) {
+  setAdsr(adsr, stepEnvelope = null, { settling = false } = {}) {
     const v = this.voice;
     if (!v || v.ended || v.releasing || !v.plan) return false;
     const next = adsr ? { ...adsr } : null;
@@ -894,7 +901,7 @@ export class AudioEngine {
     const prev = v.adsr;
     const keep = (k) => !!prev && !!next && prev[k] === next[k];
     const shapeKept = (!prev && !next) || (keep('a') && keep('d') && keep('s'));
-    const sameHook = (v.opts.stepEnvelope || null) === hook;
+    const sameHook = v.stepHook === hook;
     v.opts = { ...v.opts, adsr: next, stepEnvelope: hook };
     if (shapeKept && sameHook && (!next || keep('r'))) return 'same';
     const held = !Number.isFinite(v.endTime)
@@ -904,6 +911,7 @@ export class AudioEngine {
       v.release = Math.max(0.005, next.r);
       return 'live';
     }
+    if (settling) return 'pending';
     return this._restart(v, v.plan);
   }
 

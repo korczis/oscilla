@@ -1905,6 +1905,108 @@ function defineChecks() {
     return { ok: Object.values(res).every((r) => r.ok), ...res };
   });
 
+  // #296 R-7: a drag is one edit. The Sustain slider dragged in 20 'input' events and the
+  // graph's S handle dragged in 20 pointer moves leave the held voice sounding (no restart, no
+  // extra voice) until the drag ends; its 'change' / pointerup restarts it once, at the value
+  // the drag ended on. The counters are engine 'play' events and audibleVoiceCount, sampled
+  // after each event's handlers have run. At the desktop size and at 390x844.
+  const envelopeDragOneRestart = async (page, what) => {
+    await H.continuous(page, true);
+    await H.workspace(page, 'synthesis');
+    const voiceAt = (old, label, want) => until(() => page.evaluate(([prev, w]) => {
+      const e = window.OSCILLA.engine;
+      const v = e.voice;
+      if (!v || v.ended || v.releasing || v.id === prev || !v.adsr) return null;
+      if (e.ctx.currentTime - v.t0 < 0.4) return null;
+      const env = e._valueAt(v.env, e.ctx.currentTime);
+      return Math.abs(env - w) < 0.01 && Math.abs(v.adsr.s - w) < 1e-9 ? { id: v.id, env } : null;
+    }, [old, want]), { ms: 10000, what: `${what}: ${label}` });
+    await page.evaluate(() => {
+      const O = window.OSCILLA;
+      const a = O.app;
+      a.setWaveform('sine'); a.setPattern('tone'); a.setFrequency(440);
+      O.labs.envelope.update({ adsr: { a: 0.01, d: 0.1, s: 0.6, r: 0.3 }, enabled: true });
+      a.holding = true; a.play('hold');
+      const e = O.engine;
+      const c = { plays: 0, maxAudible: 0 };
+      window.__r7 = c;
+      c.off = e.on((t) => { if (t === 'play') c.plays++; });
+      // bubbling listeners on window run after the controls' own handlers
+      const sample = () => { c.maxAudible = Math.max(c.maxAudible, e.audibleVoiceCount); };
+      window.addEventListener('input', sample);
+      window.addEventListener('pointermove', sample);
+      c.unsample = () => {
+        window.removeEventListener('input', sample);
+        window.removeEventListener('pointermove', sample);
+      };
+    });
+    const res = {};
+    res.start = await voiceAt(null, 'held tone at sustain 0.6', 0.6);
+    res.slider = await page.evaluate(() => {
+      const c = window.__r7;
+      const id = window.OSCILLA.engine.voice.id;
+      c.plays = 0;
+      c.maxAudible = 0;
+      const el = document.querySelector('#osc-env-sustain');
+      for (let i = 1; i <= 20; i++) {
+        el.value = (0.6 - (0.5 * i) / 20).toFixed(2);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      const during = { plays: c.plays, maxAudible: c.maxAudible,
+        same: window.OSCILLA.engine.voice.id === id };
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      return { during, plays: c.plays, lab: window.OSCILLA.labs.envelope.adsr.s };
+    });
+    res.afterSlider = await voiceAt(res.start.id, 'Sustain 0.1 after the slider drag', 0.1);
+    const canvas = page.locator('#osc-chart-envelope canvas');
+    await canvas.scrollIntoViewIfNeeded({ timeout: 5000 });
+    const at = await page.evaluate(() => {
+      const l = window.OSCILLA.labs.envelope.graph.getLayout();
+      const c = document.querySelector('#osc-chart-envelope canvas').getBoundingClientRect();
+      window.__r7.plays = 0;
+      window.__r7.maxAudible = 0;
+      return { x: c.left + l.handles.sustain.x, y: c.top + l.handles.sustain.y,
+        id: window.OSCILLA.engine.voice.id };
+    });
+    await page.mouse.move(at.x, at.y);
+    await page.mouse.down();
+    await page.mouse.move(at.x, at.y - 30, { steps: 20 });
+    res.graphDuring = await page.evaluate((id) => ({ plays: window.__r7.plays,
+      maxAudible: window.__r7.maxAudible, same: window.OSCILLA.engine.voice.id === id,
+      lab: window.OSCILLA.labs.envelope.adsr.s }), at.id);
+    await page.mouse.up();
+    res.graph = await page.evaluate(() => ({ plays: window.__r7.plays,
+      lab: window.OSCILLA.labs.envelope.adsr.s }));
+    res.afterGraph = await voiceAt(at.id, 'the graph drag\'s sustain reaches the held voice',
+      res.graph.lab);
+    await page.evaluate(() => {
+      const c = window.__r7;
+      c.off(); c.unsample(); delete window.__r7;
+      window.OSCILLA.app.stopNow();
+      window.OSCILLA.labs.envelope.update({ adsr: { a: 0.01, d: 0.1, s: 0.6, r: 0.3 },
+        enabled: false });
+    });
+    await quiet(page, `${what}: quiet at the end`);
+    await H.workspace(page, 'playground');
+    const s = res.slider;
+    const g = res.graphDuring;
+    const ok = s.during.plays === 0 && s.during.same && s.during.maxAudible === 1
+      && s.plays === 1 && Math.abs(s.lab - 0.1) < 1e-9
+      && g.plays === 0 && g.same && g.maxAudible === 1 && g.lab > 0.1 + 1e-6
+      && res.graph.plays === 1;
+    return { ok, ...res };
+  };
+  def('envelope-drag-one-restart', async ({ page }) => {
+    const res = {};
+    for (const [width, height] of [[1536, 1024], [390, 844]]) {
+      await page.setViewportSize({ width, height });
+      const size = `${width}x${height}`;
+      res[size] = await envelopeDragOneRestart(page, `envelope-drag-one-restart ${size}`);
+    }
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    return { ok: Object.values(res).every((r) => r.ok), ...res };
+  });
+
   // ---- accessibility residuals of the final V1 probe (WCAG 2.4.11, focus loss, overlap)
   def('a11y-alerts-never-cover-focus', async ({ page, browserName, run }) => {
     const res = {};
