@@ -137,8 +137,10 @@ changed.
   frequency with its uncertainty, and a generator-versus-microphone comparison with freeze,
   averaging and peak hold.
 - **Sequencer:** a timeline of tone, silence, sweep, pulse, chirp, burst, siren, AM, FM and
-  random blocks, with drag-and-drop editing, keyboard control, looping and tempo-locked
-  durations.
+  random blocks, with drag-and-drop editing, keyboard control and looping. Block durations are
+  in milliseconds: the Tempo (BPM) control re-times only blocks stored in beats, which the
+  editor does not create (an imported sequence can carry them), so for a sequence made here it
+  changes nothing you hear. K002 makes tempo audible and K017 adds a beats unit.
 - **Filter Lab:** biquad filters with a response chart drawn from the browser's own filter
   response. Cutoff and Q can be dragged on the chart.
 - **ADSR:** an attack/decay/sustain/release envelope with a draggable graph.
@@ -527,14 +529,18 @@ release and deployment are evidenced is the [final report](docs/v31/studio-repor
   unmodified. An optional **Fullscreen** button uses the browser's Fullscreen API where it
   exists; where it does not (Safari on iPhone), the button says so.
 
-Studio output and Playground output are exclusive: starting one stops the other, and a
-measurement stops the Studio.
+Studio output and the Playground take turns, with gaps. Starting the Studio stops the
+instrument and a sequence the status poll already reports as playing, and playing the
+instrument stops the Studio; a measurement stops all three and refuses a new instrument note.
+But the Playground's instrument and sequencer are not exclusive: they sum into one output. The
+sequencer and the Studio hand over only through that poll, a moment after the sequencer
+starts: until it notices, both play, and a Studio started in that moment is the one stopped.
+The sequencer is not refused while a measurement owns the output. C002 (ADR 0063) gives the
+output one owner.
 
 Not yet built:
-- a minimap
 - node groups
 - dragging several clips at once
-- pinch zoom on the timeline
 
 ## Safety and measurement limits
 
