@@ -1,0 +1,57 @@
+id: Y003
+milestone: M096
+serves:
+- "gl-live-views#gl-parity"
+- "gl-live-views#gl-cost"
+- "gl-live-views#views-interactive"
+title: "Scrolling spectrogram composed on the GPU from the K033 level history, the Canvas 2D path its twin"
+slug: scrolling-spectrogram-composed-on-the-gpu-from-the-k033-leve
+priority: p2
+profile: implementation
+objective: "Lands as feat(charts) with a guarded part. The GL view is a compositor of the level history K033 stores (one Uint8 level index per device pixel over its fixed dB range), never a second spectrogram: the history stays CPU-held in analysis/spectrogram.js, which gains one read-only accessor for the ring, its head index and its axes. Per frame the newest column is uploaded with one texSubImage2D (R8 on WebGL 2, LUMINANCE on WebGL 1 from the preallocated column buffer), and one quad samples it with NEAREST filtering at the ring offset, so the old two-blit compose and its ImageData leave the GL path. Colour is a 256 x 1 LUT texture from K027's palette, so a theme change, a floor and ceiling change or a colour-key drag (K033) rewrites 1 KB instead of recolouring W x H bytes on the CPU. The orientation is K025's time-down view. The three spectrogram hosts (analysis panel, analysis tab, mic) mount through createLiveView with the existing Canvas 2D compose as the twin; the cursor, keyboard row and column, readout ('-3.2 s', quantized +-0.3 dB) and colour key stay K033's and K053's, drawn on the overlay above the GL canvas. The frequency axis does not zoom (OD11 of the charts plan stands)."
+why: "Owner orders of 2026-10-29 (session oscilla-b0, in Czech): add p5.js, WebGL and interactivity and deploy; plan WebGL renderers for the scrolling spectrogram (with a 3D option), a phosphor XY scope and a live spectrum, falling back to canvas/p5 when WebGL is unavailable, one frame loop with no per-frame allocation, the single file and its gzip budget, axes and units from the analysis (no-fake-science). Built on the M062 charts plan (#269, merged as cdda563c): the frame loop K036, the interaction kit K053, the shared zoom K052, the level history K033 and the chart-cost check of K036 are reused, never duplicated (components-followup/render-gl.md)."
+scope:
+- src/js/charts/gl/spectrogram-gl.js
+- src/js/charts/spectrogram-view.js
+- src/js/charts/spectrogram-panel.js
+- src/js/analysis/spectrogram.js
+- src/js/labs/mic-analyzer.js
+- tests/unit/gl-spectrogram.test.mjs
+- tests/browser/gl-parity.cjs
+- tests/browser/chart-cost.cjs
+- tests/browser/chart-cost-baseline.json
+- tests/unit/chart-host-census.json
+- tests/visual
+- tests/README.md
+- package.json
+- dist
+depends_on:
+- Y002
+- K033
+- K025
+- K027
+- Q050
+acceptance_criteria:
+- "As a feat change it carries tests/unit/gl-spectrogram.test.mjs: the ring offset maps column c at head h to the texture column the shader samples for every c and h; the LUT texture bytes equal K027's LUT for each theme; a range change rewrites only the LUT; the ring accessor returns the same buffer object across frames, which fails on the merge base (project.fail-first)."
+- "tests/browser/gl-parity.cjs: a synthetic level ring (every index 0-255 in known cells, with the head mid-ring) drawn on GL and on Canvas 2D gives the same RGBA within 1 per channel at each named cell centre, in each theme, after a theme toggle and after a range change; the history survives a context loss (the twin shows the same rows) and a restore. Every GL check states per gate browser and OS whether it drew on WebGL 2, WebGL 1 or was skipped, with the reason Y001 recorded for that leg (no leg claims a GL path it did not draw), and the same check runs with ?gl=0 on every leg and passes on the Canvas 2D path. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline and assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac); tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+- "tests/browser/chart-cost.cjs gains the spectrogram rows: its GL subscriber is a frame-loop subscriber with its host (K036) and allocates nothing per tick (Chromium CDP heap sampling over a polled window, the per-tick ceiling of tests/browser/chart-cost-baseline.json not raised); its draw calls per frame are counted by the gl.cjs spy and stay at the stated figure; its main-thread time per frame (median and p95 of performance.now() around the subscriber) is recorded for the GL and the Canvas 2D path in tests/browser/chart-cost-baseline.json, with both figures in the pull request; the GL path is the automatic choice only where its median is not above the 2D path's, otherwise the 2D path stays automatic and the baseline says why; nothing is drawn while the host is hidden or Pause animation is on."
+- Its three hosts keep their done census entries and gain the backend list; the charts-interaction pass holds on both backends.
+- "The view reads existing AnalyserNodes or the CPU-held analysis data on the main thread only, creates no audio node, adds no work to the audio path and writes no DOM per frame (project.audio-engine-discipline v2)."
+- "Levels say dB relative (dBFS-like) unless a valid LevelCalibration applies; every axis, tick, unit and caption comes from the analysis descriptor axesOf() and never from a constant (the static scan of tests/unit/gl-views-wording.test.mjs finds no sample-rate, Nyquist or dB-range literal under src/js/charts/gl); no data value is tweened or eased; every string it adds is registered in its chart's wording table and passes tests/unit/charts-readout-wording.test.mjs; the word waterfall is never displayed (D7; it stays a search alias only) (project.no-fake-science)."
+- "Memory is stated in the pull request: the CPU ring (W x H bytes, K033) plus one texture of the same size per mounted GL host."
+- "It changes guarded paths (src/js/analysis/spectrogram.js, the ring accessor only), so the pull request carries a reviewer's .ai/repo/reviews/<pr>.yaml for the content it changes (project.review-verdict)."
+- "The visual references of the spectrogram regions are taken with ?gl=0 and stay unchanged (the 2D twin is the reference, Q050); if a region moves, it is re-accepted in darwin-arm64 and linux-x64 in each theme that has references, with the reason in the pull request (npm run test:visual)."
+- "It adds no markup, class name or stylesheet rule, so the Flowbite Pro ratchet is unchanged (node --test tests/unit/ui-flowbite-pro.test.mjs and node scripts/ui-flowbite-pro-record.mjs --check pass with the record untouched), and no new string or module name carries an osc- prefix (ADR 0061)."
+- "The owner's definition of done, one item each: extends the K033 spectrogram with a GPU path; interlinks the three spectrogram hosts through one view and OSCILLA.charts.renderers(); interactive: the K033 cursor, keyboard and readout on both backends; docs, menus and routes: docs/renderers.md lists the view, README's Testing table names gl-parity.cjs; tested with pointer, keyboard and touch; deployed by merge commit under project.deploy-often (Pages deploys on the merge)."
+- "Designed at 390x844 first: every check runs at 390x844 and at 1536x1024, touch targets are at least 44 px, and each gesture has a pointer, a keyboard and a touch path."
+- "scripts/size-report.mjs shows at most 2 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of the Y line's figures stays within the component line's cap Q037 records, under the gzip budget of scripts/build-config.mjs (1 000 000 B on main at b67d1e58, 1 200 000 B once #279 lands; project.single-file-deliverable)."
+- "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+- node --test tests/unit/gl-spectrogram.test.mjs
+- node tests/browser/gl-parity.cjs
+- node tests/browser/chart-cost.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-30'

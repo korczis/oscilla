@@ -1,0 +1,21 @@
+id: Q063
+milestone: M104
+title: "Owner decision: the piano's black keys below 44 px on a touch screen"
+slug: owner-decision-the-piano-s-black-keys-below-44-px-on-a-touch
+priority: p2
+profile: routine
+owner: repository owner
+objective: "With white keys at 44 px, black keys are about 27 px wide (0.6 of a white key): above WCAG 2.5.8's 24 px, below the owner's 44 px touch target. (a) Accept that geometry as the one target exemption, stated in the piano kind, with zoom (fewer, wider keys) one tap away; (b) black keys at 44 px, so white keys become about 73 px and a 390 px phone shows under five white keys. The plan recommends (a)."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs, knowledge and interlinking, and add more; add p5.js, WebGL and interactivity, and deploy; a full DAW, a full sequencer and a full piano, everything interlinked, clickable, parameterized and joined; knobs, sliders and control panels done one generic way, integrated with Majordomus; the landing easy to use, easy to extend and open to hack; mobile first. The architecture still binds: one AudioEngine, the Studio model canonical, typed ports, one offline file under the 1.2 MB gzip budget, the cockpit identity, no fake science, Flowbite Pro (ADR 0061). Design: the instrument-kinds design of 2026-10-29 (scratchpad components-followup/components-new.md), on the component-system design (G001-G019) and the synth and studio-siggen drafts of the same day, facts checked against origin/main cdda563c."
+current_state: Open on 2026-10-29. W007 names this issue in depends_on.
+scope:
+- .ai/repo/project/issues/Q063.yaml
+acceptance_criteria:
+- "The decision is recorded as evidence on this issue (covers owner_decision), either in the owner's words with date and source, or as a decision of a coordinating session under an owner delegation it quotes with its date, stating its reasoning and that the owner may override it; a worker without such a delegation never answers it."
+- The answer names an option for each part.
+validation:
+- manual
+evidence_required:
+- owner_decision
+created_at: '2026-10-29'
+updated_at: '2026-10-30'

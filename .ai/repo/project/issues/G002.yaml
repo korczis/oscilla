@@ -1,0 +1,45 @@
+id: G002
+milestone: M085
+serves:
+- "component-system#proven-duplicates"
+title: "One units module: one frequency grammar, one millisecond and one clock formatter for every control, readout and chart"
+slug: one-units-module-one-frequency-grammar-one-millisecond-and-o
+priority: p2
+profile: implementation
+objective: "Lands as fix(ui). D3 of the inventory: six frequency formatters, two frequency parsers with different grammars, two byte-identical formatMs bodies and four clock formatters. src/js/core/frequency.js becomes the one units module (parseFrequency, formatFrequency, formatFrequencyShort, formatMs, formatSeconds, formatClock); charts/axes.js parseFrequency and formatHz, sequencer/model.js formatCompactFrequency and formatMs, the compact Studio's compactTime and timeline-view.js formatClock / formatSecondsText import it. The one grammar accepts what either parser accepted (a comma decimal, a k suffix, a unit) and refuses zero, negatives and non-finite values with one sentence. The scientific formatters of src/js/measurement/smoothing.js and src/js/experiments/schema.js keep their method-specific precision and stay out of scope (project.no-fake-science); src/js/studio/timeline.js formatSeconds is folded only if a reviewer's verdict covers it. Before: VERIFIED Filter Lab accepts '2,5k' and the Playground frequency field does not; the clock rounds in one place and floors in another (inventory X2-X4, R3). After: one grammar and one text per quantity. Negative cases: '0', '-5', 'abc', '1e309' refused the same way everywhere. Rollback: revert; no stored record holds formatted text."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: \"the embedded Studio is ugly as hell\"; components in general must be generic, linkable, traceable, composable, unified, documented, dynamic, generated and interlinked; \"everything must be interlinked with everything\"; improve the main page and the first experience, deploy often. The owner's evolution prompt pack (MASTER, P02, P04, P06) binds it: the dark technical cockpit is locked, shared primitives only where duplication is proven, no new framework, generated docs only where deterministic, no decorative wires. Findings: the UI component inventory of 2026-10-29 (D1-D14 duplication, U1-U15 on the embedded Studio, measured on origin/main b67d1e58, v3.13.0); design: the component-system design of 2026-10-29 (scratchpad components/design.md)."
+scope:
+- src/js/core/frequency.js
+- src/js/charts/axes.js
+- src/js/sequencer/model.js
+- src/js/ui/studio/compact.js
+- src/js/ui/studio/timeline-view.js
+- src/js/ui/app.js
+- tests/unit/units.test.mjs
+- tests/unit/core.test.mjs
+- tests/unit/charts.test.mjs
+- tests/unit/sequencer-model.test.mjs
+- tests/visual
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+acceptance_criteria:
+- "tests/unit/units.test.mjs fails on the merge base: the same input table (\"2,5k\", \"2.5 kHz\", \"2500\", \"0\", \"-5\", \"abc\") gives the same result through every entry point, and formatMs, formatClock and formatFrequency have one definition each (a static scan of src/js, comments removed, finds no second body)."
+- Every text a user saw before is listed with its after value in the pull request; a visual reference that changes is re-accepted through the visual gate with the reason.
+- "Definition of done, extends: core/frequency.js, which already owns parseFrequency and formatFrequency."
+- "Definition of done, interlinks: the catalogue's param and readout kinds (G001, G008) format through this module only."
+- "Definition of done, interactivity: typed entry in the Playground frequency field accepts what Filter Lab accepts."
+- "Definition of done, docs, menus and routes: docs/GLOSSARY.md states the accepted frequency forms. tests/README.md has a row for each new test; the component's catalogue declaration (G001) names its docs, links and tests; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: tests/browser/labs.cjs types '2,5k' into the Playground frequency field and the Filter Lab cutoff by keyboard and waits with until() (deadline 'frequency accepted', 2 s) for both readouts to read 2.50 kHz. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit, and the release that carried it is recorded when the milestone is verified."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "Before Pro (it may land before F001): it adds no class token, selector, markup surface or inline style and only removes legacy ones, so tests/unit/ui-flowbite-pro-baseline.json stays equal or falls (node scripts/ui-flowbite-pro-record.mjs --check passes, rewritten only where a count fell) and node --test tests/unit/ui-flowbite-pro.test.mjs passes; studio.css, studio-timeline.css, charts.css and tokens.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock v2)."
+- "scripts/size-report.mjs shows at most 1 KB gzip added, with the base and head figures in the pull request body, inside the cap Q037 records (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/units.test.mjs tests/unit/core.test.mjs tests/unit/charts.test.mjs tests/unit/sequencer-model.test.mjs
+- node tests/browser/labs.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

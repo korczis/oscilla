@@ -1,0 +1,38 @@
+id: T001
+milestone: M073
+serves:
+  - "v3-measure#readout-states"
+  - "v3-measure#readout-labels"
+title: "The output says when the safety ceiling acts, and the gain readout says it is a setpoint"
+slug: the-output-says-when-the-safety-ceiling-acts-and-the-gain-re
+priority: p1
+profile: implementation
+objective: "Truth-table rows GEN-01 (scratchpad p05/truth-table.md). The engine reports when its ceiling acts, read from the signal before the ceiling (an engine-owned tap: max |x| before the WaveShaper above MAX_OUTPUT_GAIN), sampled in the existing draw loop without per-frame DOM work. The status bar and the gain readout show OUTPUT AT CEILING (clipped) with text and a glyph; the gain title reads as a setpoint before filter, envelope, limiter and the -12 dBFS ceiling (relative, not SPL); the engine comment is corrected and ADR 0002 gets a resolution note that an insert can push one voice past the cap and the UI then says so. The ceiling itself stays (ADR 0002 safety backstop)."
+why: "P05 audit of origin/main b67d1e58 (v3.13.0): A 1 kHz sine at the default gain 0.08 through Filter Lab peaking 1 kHz, Q 1, +24 dB is hard-clipped by the -12.04 dBFS output ceiling (peak -12.04 dBFS, crest factor 0.69 dB, 79.2 % of samples at the ceiling) while the gain readout says -21.9 dB, the status bar says nothing, and audio-engine.js:245-247 claims the UI gain is the level that reaches the output."
+scope:
+  - "src/js/audio"
+  - "src/js/ui/workbench.js"
+  - "src/js/core/config.js"
+  - "src/index.html"
+  - ".ai/repo/adrs/0002-voice-replacement-and-output-ceiling.md"
+  - "tests/unit/readout-states-ceiling.test.mjs"
+  - "tests/browser/app.cjs"
+  - "tests/README.md"
+  - "dist"
+acceptance_criteria:
+  - "Fail-first fixture: tests/unit/readout-states-ceiling.test.mjs: a pure ceilingState({ pre, cap }) on synthetic buffers. 0.08·sin → not acting; 1.27·sin (0.08 boosted by +24 dB) → acting, with the fraction of samples above the cap; fails on the merge base (no such state). Browser check in tests/browser/app.cjs (Chromium, file://): the path of the audit probe (setContinuous, setFrequency 1000, latch, filter peaking 1 kHz Q 1 +24 dB) shows the indicator; the same path without the filter does not."
+  - "Negative cases, each asserted: A sine, square and sawtooth at 100 % gain with no insert do not trigger it: their pre-ceiling peak is at or below the cap (sine -12.04, square -12.45, saw -12.70 dBFS), compared with a float tolerance of 2^-20, so a 20 Hz sine whose neighbouring samples sit within 1e-4 of its peak is not flagged; idle shows nothing; the indicator clears within a named deadline after the boost is removed."
+  - "Revertible on its own: Revert the pull request: indicator, copy and ADR note only; the audio path is unchanged apart from the read-only tap, which the revert removes."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "The pull request touches a guarded path and carries a reviewer-written .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named deadline (project.suite-harness, project.bounded-test-timing)."
+  - "Any new visible element follows the Flowbite Pro components and the locked tokens (project.ui-uses-flowbite-pro, project.visual-identity-lock); npm run visual passes or the baseline change is declared."
+  - "tests/README.md has a row for each new test; this issue does not edit docs/CLAIMS.yaml or the intent (T027 does)."
+validation:
+  - "npm test"
+  - "npm run verify"
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

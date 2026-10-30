@@ -1,0 +1,19 @@
+id: M118
+title: "Component system: Majordomus serves every component"
+slug: component-system-majordomus-serves-every-component
+order: 91
+priority: p1
+problem: "No declaration of OSCILLA names its plan, criteria or rules; Majordomus reaches no component (knowledge search, related and context resolve return nothing for one); Majordomus itself does not resolve issue references or intent criteria and does not check knowledge records outside curated/ and candidates/ (measured 2026-10-29); nothing fails when a component has no plan or knowledge link."
+outcome: "Every kind, component, node type and parameter carries a checked trace; a generated knowledge projection and its context document make Majordomus serve each one; a gate fails a component with no plan or knowledge link; CI judges the projection with Majordomus's validator; the gaps on the Majordomus side are filed."
+acceptance_criteria:
+- J001-J008 are done with their evidence; npm run release-gate passes at the last one.
+validation:
+- npm run release-gate
+evidence_required:
+- milestone_verified
+risks:
+- "The generated directory grows with the registry (about 80 records after G018 and G019, one per synth node type after that): every declaration change rewrites its record, and an issue names it in scope or finish refuses the write."
+- The pinned Majordomus (1.0.0-alpha.1) and the launcher (1.0.0-alpha.8) differ on this machine; every Majordomus acceptance is run under both.
+- "Seeding traces (J006) is evidence work: an entry written to pass the gate is a review rejection."
+created_at: '2026-10-29'
+updated_at: '2026-10-30'

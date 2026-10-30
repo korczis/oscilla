@@ -1,0 +1,19 @@
+id: M067
+title: "Instrument wave 2: modulation everywhere, labs, probes, sequencer depth, follower and MEASURE"
+slug: instrument-wave-2-modulation-everywhere-labs-probes-sequence
+order: 67
+priority: p2
+problem: "Wave 1 instruments are playable but not yet woven into modulation, the labs, the visualizations and MEASURE, and the sequencer lacks locks, lanes, chains and conditions."
+outcome: "Any knob of any instrument a modulation destination from every source; labs that open and send the instrument's sound; probes into the Studio views; step onsets on the spectrogram; notes in the note view; parameter locks, CV lanes, bank, chain, song mode and conditional trigs; the follower; a sample slot; a patch measured and saved as an experiment."
+acceptance_criteria:
+  - "K076, K077, K078, K079, K080, K081, K082, K083, K084, K085, K086, K087, K074, K096 are done with their evidence; npm run release-gate passes at the last one; npm run test:synth and node tests/browser/integration-map.cjs pass."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "Most slices wait on the line's gzip cap (Q023)."
+  - "K082 waits on F003 and F006, K086 on K016, K084 on K025, K085 on V504, K087 reuses M029."
+  - "K096 waits on Q020 (knobs in the Inspector) and E004."
+created_at: 2026-10-29
+updated_at: 2026-10-29

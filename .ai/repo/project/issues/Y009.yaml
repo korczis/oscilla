@@ -1,0 +1,41 @@
+id: Y009
+milestone: M096
+serves:
+- "gl-live-views#backend-honest"
+- "gl-live-views#gl-parity"
+- "gl-live-views#gl-cost"
+- "gl-live-views#views-honest"
+- "gl-live-views#views-interactive"
+- "gl-live-views#hackable"
+title: "Close the GL line: claims, intent references, the knowledge record re-verified and the ADR put to the owner"
+slug: close-the-gl-line-claims-intent-references-the-knowledge-rec
+priority: p2
+profile: implementation
+objective: "Lands as chore(plan). The closing issue of M096 and the only one that edits docs/CLAIMS.yaml and the intent file (.ai/repo/project/README.md, shared files): it registers one claim per criterion of intent gl-live-views, each pointing at the tests that prove it, points the intent's refs at them, re-runs Y001's probe on the then-current CI images and updates the curated record webgl-in-the-gate-browsers with a dated section if a leg changed, and asks the owner to accept the ADR Y002 wrote (its status stays proposed until the owner does)."
+why: "Owner orders of 2026-10-29 (session oscilla-b0, in Czech): add p5.js, WebGL and interactivity and deploy; plan WebGL renderers for the scrolling spectrogram (with a 3D option), a phosphor XY scope and a live spectrum, falling back to canvas/p5 when WebGL is unavailable, one frame loop with no per-frame allocation, the single file and its gzip budget, axes and units from the analysis (no-fake-science). Built on the M062 charts plan (#269, merged as cdda563c): the frame loop K036, the interaction kit K053, the shared zoom K052, the level history K033 and the chart-cost check of K036 are reused, never duplicated (components-followup/render-gl.md)."
+scope:
+- docs/CLAIMS.yaml
+- .ai/repo/project/intents/gl-live-views.yaml
+- .ai/repo/knowledge/curated/webgl-in-the-gate-browsers.md
+depends_on:
+- Y002
+- Y003
+- Y004
+- Y005
+- Y006
+- Y007
+- Y008
+acceptance_criteria:
+- docs/CLAIMS.yaml carries one claim per criterion of gl-live-views and tests/unit/knowledge-integrity.test.mjs passes (the paths the claims name exist).
+- node tests/browser/chart-cost.cjs --require-complete and node scripts/chart-census.mjs --require-complete pass with every GL host done and no GL row pending.
+- "majordomus intent validate reports 0 failures for gl-live-views, majordomus knowledge check and validate report no finding for the record, and majordomus adr check passes."
+- "The line's gzip cost, the sum of the head minus base figures its pull requests recorded, is within the component line's cap Q037 records."
+- npm run release-gate passes at this commit.
+validation:
+- npm run release-gate
+- majordomus intent validate
+- majordomus knowledge check
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

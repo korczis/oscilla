@@ -1,0 +1,31 @@
+id: Y001
+milestone: M096
+serves:
+- "gl-live-views#backend-honest"
+- "gl-live-views#gl-cost"
+title: "Spike: WebGL in the gate browsers, and what raw WebGL, p5 WEBGL and Canvas 2D cost per view"
+slug: spike-webgl-in-the-gate-browsers-and-what-raw-webgl-p5-webgl
+priority: p2
+profile: implementation
+objective: "Measure before building, as E012 did for p5. On the branch spike/gl-views, in its own worktree (majordomus worktree create spike/gl-views), never opened for merge: (1) a probe page run by Playwright in Chromium, Firefox and WebKit on darwin-arm64 and linux-x64, headless as CI runs them and headed on the Mac, records for each leg getContext('webgl2') and getContext('webgl') with and without failIfMajorPerformanceCaveat, the renderer string where WEBGL_debug_renderer_info gives it, MAX_TEXTURE_SIZE, MAX_VERTEX_TEXTURE_IMAGE_UNITS, R8 and LUMINANCE textures, EXT_color_buffer_float and EXT_color_buffer_half_float, OES_element_index_uint, and how many live contexts a page holds before the oldest is lost (the figure the context budget of Y002 takes); (2) three throwaway backends for a 1024 x 512 level ring (the K033 storage) and a 2048-sample XY trace: raw WebGL, p5's WEBGL renderer (already inside the shipped p5@1.11.3 block, so it costs no bytes) and Canvas 2D, each measured for bytes allocated per frame (CDP heap sampling), main-thread time per frame and draw calls, and their gzip cost from npm run build; (3) the live spectrum's uPlot draw time per frame, which decides whether a GL spectrum line is worth anything. The numbers are recorded, each with its command and the spike commit, as a dated resolution note on ADR 0016 ('### <date>: where WebGL pays') and as the curated knowledge record webgl-in-the-gate-browsers (epistemics observed). Nothing is adopted; Q050 decides the backend from the numbers."
+why: "Owner orders of 2026-10-29 (session oscilla-b0, in Czech): add p5.js, WebGL and interactivity and deploy; plan WebGL renderers for the scrolling spectrogram (with a 3D option), a phosphor XY scope and a live spectrum, falling back to canvas/p5 when WebGL is unavailable, one frame loop with no per-frame allocation, the single file and its gzip budget, axes and units from the analysis (no-fake-science). Built on the M062 charts plan (#269, merged as cdda563c): the frame loop K036, the interaction kit K053, the shared zoom K052, the level history K033 and the chart-cost check of K036 are reused, never duplicated (components-followup/render-gl.md)."
+scope:
+- .ai/repo/adrs/0016-renderer-split.md
+- .ai/repo/knowledge/curated/webgl-in-the-gate-browsers.md
+non_scope:
+- "Any probe, backend or harness on main: they stay on spike/gl-views"
+depends_on: []
+acceptance_criteria:
+- "ADR 0016 carries a dated resolution note with the capability table per browser, OS and mode (headless, headed), the context limit observed per browser, and the per-frame allocation, main-thread time, draw calls and gzip cost of each backend for the level ring and the XY trace, each figure with its command and the spike commit it ran at; the note is appended and leaves the sections above it and the status as written (.ai/repo/adrs/README.md)."
+- "The curated record webgl-in-the-gate-browsers (schema knowledge/v1, class fact, epistemics observed, derived_from the spike commit) states what each CI leg can draw, so every later GL check names its skips from it; majordomus knowledge check and majordomus knowledge validate report no finding for it, and majordomus knowledge search webgl finds it."
+- "The note states the uPlot spectrum's measured draw time and says whether a GL spectrum line would save anything measurable; Y006 builds only the density layer unless it would."
+- "main carries no spike code: git grep -n -i webgl -- src on main finds nothing the spike added."
+validation:
+- "grep -q 'where WebGL pays' .ai/repo/adrs/0016-renderer-split.md"
+- majordomus adr check
+- majordomus knowledge check
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

@@ -1,0 +1,21 @@
+id: M090
+title: "One instrument, one coherent state"
+slug: one-instrument-one-coherent-state
+order: 90
+priority: p1
+problem: "At v3.13.0 (main b67d1e58) a PACK 03 audit of the integration between the generator, the AudioEngine, the analysis, the views, the Studio, configuration and export reproduced 35 defects: controls that do not reach a sounding voice (envelope sustain and release, pan, the hard limit) or the sequencer at all (the Filter), stop and hand-over paths that decide on a 150 ms polled copy, the sequencer playing beside the instrument and during a measurement and outside the engine's census, views that describe the instrument while the sequencer or the Studio sounds, and save paths that drop the lab state or report a restore that did not happen. 64 of the 90 controls the owner named are driven by no browser test."
+outcome: "Every control reaches its subsystem and every view that reflects it, in the same event; one output owner sounds at a time and every stop is immediate; the sequencer plays through the engine's stages and census; every save path restores what it claims or says what it does not; the six user journeys and a control-drive ratchet at zero hold it in every gate browser."
+acceptance_criteria:
+  - "C001 to C022 are done with their evidence; npm run release-gate passes at the last one."
+  - "tests/browser/journeys.cjs (J1 to J6) and the control-drive ratchet run in CI and are green in Chromium, Firefox and WebKit."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "src/js/main.js is touched by C001-C004, C007-C013 and C016-C019, src/js/sequencer/editor.js by C002-C006, C011 and C019, and src/js/audio/audio-engine.js by C003, C007-C011 and C015: the depends_on edges chain the issues that share an engine method or a seam, and the rest rebase on each other, a merge rather than a design conflict."
+  - "Open plan pull requests overlap: K001 (sequencer census, #265/#266) with C003, K003 (sequencer undo and setWaveform without history) with C004 and C006, K017 (loop icon) with C005, K036 (one frame loop) with C014, E002 (#262, the MEASURE adapter split) with C016 and V502 (#261, MIDI and a sequencerPlaying helper) with C001 and C016. Whichever lands second builds on the first and records a criterion the first already met as evidence instead of redoing it."
+  - "C007, C008 and C010 change voice options and envelopes on a guarded path: the V1 freeze golden vectors (tests/unit/freeze.test.mjs) must stay unchanged with the labs off, and centred dual voices keep their level (no always-on router)."
+  - "Owner choices are kept explicit rather than assumed: C002 records in ADR 0050 whether Space stops a playing loop, C003 labels the Envelope and Synthesis labs instrument-only for the sequence, C011 leaves the Studio transport loop unchanged, and C019 keeps lab settings unguarded as ADR 0045 decided. The owner may override any of them, and the issue then changes before it starts."
+created_at: 2026-10-29
+updated_at: 2026-10-29

@@ -244,7 +244,7 @@
   border-top-style: dashed;
 }
 
-.osc-about-step {
+.osc-about-timeline li > span:first-child {
   color: var(--osc-text-muted);
   font-family: var(--osc-font-mono);
   font-size: var(--osc-fs-xs);
@@ -259,12 +259,12 @@
 /* A station word longer than its column wraps (hyphenated where the language allows) instead
    of running into the next station: column width depends on the station count and the fonts. */
 .osc-about-timeline strong,
-.osc-about-timeline span:not(.osc-about-step) {
+.osc-about-timeline span:not(:first-child) {
   overflow-wrap: anywhere;
   hyphens: auto;
 }
 
-.osc-about-timeline span:not(.osc-about-step) {
+.osc-about-timeline span:not(:first-child) {
   color: var(--osc-text-2);
   font-size: var(--osc-fs-sm);
   line-height: 1.45;

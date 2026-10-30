@@ -1,0 +1,45 @@
+id: V613
+milestone: M080
+serves:
+- "studio-box-system#wiring-gestures"
+title: Alt-drag duplicates a cable and Shift-drag fans one output out to several inputs
+slug: alt-drag-duplicates-a-cable-and-shift-drag-fans-one-output-o
+priority: p2
+profile: implementation
+objective: "P04 slice C (typed edge UX). Lands as feat(studio-ui). Alt-dragging the input end of an existing cable leaves it in place and draws a new cable from the same source to the drop target (one EDGE_ADD). Shift held while a cable from an output is dropped keeps a new cable live from the same output after each connection, until Shift is released, Escape is pressed or the pointer is released over empty canvas; all connections of the gesture are one batch and one history entry 'Connect Oscillator 1 to 3 inputs'. Each connection goes through canConnect; a refused one in the middle is announced and skipped, and the batch keeps the accepted ones, saying how many were refused. On the keyboard, the connection dialog takes several inputs with Space to mark and Enter to connect them as one batch."
+why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings S1-S14 measured on origin/main b67d1e58)."
+scope:
+- src/js/ui/studio/graph-wire.js
+- src/js/ui/studio/graph-gestures.js
+- src/js/ui/studio/graph-picker.js
+- tests/unit/studio-graph-fanout.test.mjs
+- tests/browser/v31-studio-graph.cjs
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- V631
+- V611
+acceptance_criteria:
+- "Before: VERIFIED: one drag makes one cable; duplicating a cable needs a new drag from the source."
+- "After: Alt-drag duplicates a cable; Shift-drag fans one output out to several inputs in one entry."
+- "Negative cases: fan-out never crosses types (an AUDIO output offers only AUDIO inputs); a refused target is reported and skipped, never coerced; Alt on an input end of a single-input port that is occupied follows K008's replace."
+- "Rollback: revert the merge commit. Nothing changes the schema, a studioHash or a stored record, so documents saved while it was live load unchanged after the revert."
+- "tests/unit/studio-graph-fanout.test.mjs, failing on the merge base: a fan-out to three inputs is one history entry with three edges; one refused target is reported and does not abort the others; Alt on a cable end duplicates and keeps the original by id; a duplicate onto a single-input port that is occupied follows K008's replace."
+- "Definition of done, extends: K008's cable re-route and the connection dialog of §139."
+- "Definition of done, cross-links: the fanned-out edges are the edges the compact Studio and the edge Inspector show. The link is a row of tests/browser/integration-map.json once that map (synth line K075) is on main."
+- "Definition of done, dynamics: the live cable follows the pointer after each Shift-drop; the count of connected inputs is shown in the banner."
+- "Definition of done, docs and routes: docs/v31/user-guide.md and .ai/repo/features/studio-signal-graph.md say what changed; STUDIO_SHORTCUTS and the shortcut dialog list Alt-drag, Shift-drag and Space in the connection dialog. tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: A check 'fan-out' in tests/browser/v31-studio-graph.cjs holds Shift and drops one Oscillator output on three inputs by pointer, waits with until() (deadline 'three edges from one gesture', 3 s) for three edges and one history entry, undoes once and waits for none; Alt-drags a cable end and waits for two edges from one source; connects two inputs from the connection dialog by Space, Space, Enter; repeats the duplicate on touch with the on-screen Alt-equivalent (the cable menu's Duplicate) in a hasTouch context; on the merge base the second drop ends the gesture and the check fails. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit and the completed evidence the release that carried it; E030's judge passes on the pull request once E030 is on main."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "Wave 1: it adds no class token, selector, markup surface or inline style, so the Flowbite Pro record does not change: node scripts/ui-flowbite-pro-record.mjs --check passes with no rewrite and node --test tests/unit/ui-flowbite-pro.test.mjs passes (project.ui-uses-flowbite-pro); live drawing is on a canvas, a domain view."
+- "scripts/size-report.mjs shows at most 1 KB gzip added, with the base and head figures in the pull request body, within the owner's dist budget of 1 200 000 B gzip (decision of 2026-10-29, about 355 KB of headroom at origin/main b67d1e58); the ceiling of this line is 35 KB gzip in all (Studio boxes 35 KB, signal generator 25 KB), stated in the milestone (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/studio-graph-fanout.test.mjs
+- node tests/browser/v31-studio-graph.cjs --only fan-out
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

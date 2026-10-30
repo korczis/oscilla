@@ -1,0 +1,45 @@
+id: K106
+milestone: M071
+serves:
+  - "connected-instrument#deep-links"
+  - "connected-instrument#integration-map"
+title: "Deep links from every element to its related views"
+slug: deep-links-from-every-element-to-its-related-views
+priority: p2
+profile: implementation
+objective: "Lands as feat(ui). Size: big; it is split further into landable pull requests when started, each with its own fail-first test. The one hash dispatcher of ADR 0045 gains selection keys for a node, a parameter, an edge, a track, a clip, a lane and a pattern step; every element in the Synth, mixer, arrangement, session and Studio views has a context menu (pointer, ContextMenu key, long-press) of its related views (open in Studio, the mod matrix row, the automation lane, the clip in the arrangement, the lab, the probe), each a row of the integration map. Before: only workspaces and a few records have addresses. After: every element deep-links to its related views. User-value tier 3 of 4 (synth-design.md section 17). Rollback: revert the pull request; no saved state depends on it."
+why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
+scope:
+  - "src/js/ui/app.js"
+  - "src/js/ui/navigation.js"
+  - "src/js/ui/synth"
+  - "src/js/ui/studio"
+  - "src/js/core/url-state.js"
+  - "tests/browser/integration-map.json"
+  - ".ai/repo/adrs"
+  - "tests/unit/deep-links.test.mjs"
+  - "tests/browser/integration-map.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K075"
+  - "K062"
+  - "K105"
+acceptance_criteria:
+  - "tests/unit/deep-links.test.mjs, failing on the merge base: each selection key round-trips through the dispatcher, an address naming a missing element is refused and leaves the address naming what is shown (ADR 0048's rule), and the dispatcher's precedence (Studio keys over m over mr) holds."
+  - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: an address naming a missing element (refused, address corrected); dispatcher precedence."
+  - "A browser check in tests/browser/integration-map.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: every related-view item of every element kind is a walked row. Real-time: a related view opens with the element selected, each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: the context menus open by pointer, ContextMenu key and long-press and are role=menu. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Every edit is one undoable dispatch through the one Studio store (a continuous gesture is one history entry, undo and redo restore the exact serialized model) and the model holds plain data only (project.studio-model-is-canonical); every connection goes through canConnect and full-model validation, and a refusal shows the validator's sentence and leaves model, history and runtime unchanged (project.typed-ports, project.no-silent-feedback)."
+  - "Every link it adds (open in, send to, a modulation route, a probe or a jump between views) is a row of tests/browser/integration-map.json, and tests/browser/integration-map.cjs walks it: the control works by pointer and by keyboard, the target shows the same Studio revision, focus lands on the target heading, and Back, Forward and reload keep the state."
+  - "Every string it adds passes tests/unit/instrument-wording.test.mjs (added by K059): no product, brand or model name, no analog-modelling or vintage claim, and every approximation it makes labelled where it is shown (project.no-fake-science)."
+  - "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no review verdict is needed; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+  - "scripts/size-report.mjs shows at most 3 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of the line's figures stays within the cap Q023 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/deep-links.test.mjs"
+  - "node tests/browser/integration-map.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

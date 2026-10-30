@@ -1,0 +1,38 @@
+id: T024
+milestone: M073
+serves:
+  - "v3-measure#readout-states"
+title: "Render WAV says when the file it wrote is clipped"
+slug: render-wav-says-when-the-file-it-wrote-is-clipped
+priority: p2
+profile: implementation
+objective: "Truth-table rows LAB-16 (scratchpad p05/truth-table.md). When clippedSamples > 0 the workspace sets a visible warning (\"Rendered with clipping: N samples over full scale were clamped in the 16-bit WAV (peak +13.2 dBFS). Lower Master or the gain before it.\") and announces it; a positive peak prints with \"+\" here and in the sequencer export; the constraint text says the live ceiling applies only to playback."
+why: "P05 audit of origin/main b67d1e58 (v3.13.0): The offline chain has no limiter; a Filter at peaking +40 dB with Master 0.25 renders a peak of 4.56 (13.17 dBFS) with 16008 clipped samples, and 16008 of 48000 int16 codes sit at the rails. bufferStats counts clippedSamples but nothing reads it; the only output is a screen-reader announcement \"peak 13.2 dBFS\" with no sign. processing.js:53 says the output ceiling still applies at Master, which is false for Render WAV."
+scope:
+  - "src/js/ui/studio/workspace.js"
+  - "src/js/ui/workbench.js"
+  - "src/js/studio/nodes/processing.js"
+  - "src/js/studio/offline.js"
+  - "docs/v31/patches-and-provenance.md"
+  - "tests/unit/readout-states-render-wav.test.mjs"
+  - "tests/browser/v31-studio-workflows.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "T023"
+acceptance_criteria:
+  - "Fail-first fixture: tests/unit/readout-states-render-wav.test.mjs: the announcement and warning formatter with clippedSamples > 0 and with 0; a v31-studio-workflows.cjs check renders the clipping model and finds the visible warning. Fails on the merge base."
+  - "Negative cases, each asserted: clippedSamples 0 gives no warning and a peak like \"-6.0 dBFS\"; the WAV bytes are unchanged."
+  - "Revertible on its own: Revert: formatter and copy."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "The pull request touches a guarded path and carries a reviewer-written .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named deadline (project.suite-harness, project.bounded-test-timing)."
+  - "tests/README.md has a row for each new test; this issue does not edit docs/CLAIMS.yaml or the intent (T027 does)."
+validation:
+  - "npm test"
+  - "npm run verify"
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

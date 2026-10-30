@@ -15,7 +15,7 @@
     "selectors": 1189,
     "domainViewSelectors": 438
   },
-  "debt": 3769,
+  "debt": 3735,
   "surfaces": {
     "pending": [
       "card#osc-exp-compare",
@@ -111,7 +111,6 @@
     "osc-about-stamp": 1,
     "osc-about-stamp-sep": 2,
     "osc-about-statement": 1,
-    "osc-about-step": 17,
     "osc-about-sub": 1,
     "osc-about-tagline": 1,
     "osc-about-timeline": 1,
@@ -343,7 +342,7 @@
     "osc-mode-row": 1,
     "osc-mode-seg": 1,
     "osc-muted": 20,
-    "osc-num": 75,
+    "osc-num": 58,
     "osc-number": 60,
     "osc-p-additive": 1,
     "osc-p-analysis": 3,
