@@ -12,6 +12,8 @@
 // reads it. isSounding and the status Play button stay the instrument's (ADR 0050).
 import test from 'node:test';
 import assert from 'node:assert/strict';
+// Alpine.reactive and Alpine.effect are @vue/reactivity's; alpinejs itself needs a DOM.
+import { effect, reactive, stop } from '@vue/reactivity';
 
 import { AudioEngine } from '../../src/js/audio/audio-engine.js';
 import { createInstrument } from '../../src/js/core/instrument.js';
@@ -259,4 +261,64 @@ test('F2: Reset instrument with a changed gain leaves the write to the gainLevel
   assert.equal(engine.writes.length, before,
     `resetDefaults wrote the level itself (${engine.writes.slice(before)}): the gainLevel $watch `
       + 'in main.js is its one writer');
+});
+
+// ---------------------------------------------------------------- review 33ada8b4 (F4, F6)
+//
+// F4: the status bar's Studio readout is a reactive read; it must be re-read when the Playground
+// gain is written, also by a writer that leaves cmp.studio.masterLevel in place (the engine's
+// write count is not reactive). F6: a start that is refused after its first guard claims
+// nothing either: a refused configuration (the plan check) and a refused scheduled pass.
+
+test('F4: the Studio readout is re-read when the Playground gain is written', () => {
+  const engine = { masterWrites: 7 };
+  const { cmp } = statusBar({ engine });
+  const r = reactive(cmp);
+  r.studio.playing = true;
+  r.studio.masterLevel = 0.05;
+  r.studio.masterWrites = engine.masterWrites;
+  const seen = [];
+  const runner = effect(() => { seen.push(r.statusGainText); });
+  assert.deepEqual(seen, ['Master -26.0 dB'], 'the Studio holds the level');
+  // The gainLevel $watch writes the engine (its write count moves, which nothing tracks) and
+  // the gain changes; the Studio's mirror is not cleared here.
+  engine.masterWrites += 1;
+  r.gainLevel = 0.03;
+  assert.equal(seen.at(-1), `Gain ${r.gainDbText}`,
+    `the readout went on showing the Studio level after the Playground gain was written: ${seen}`);
+  stop(runner);
+});
+
+test('F6: a configuration the plan check refuses claims no level from a playing Studio', () => {
+  const engine = countingEngine();
+  const app = createInstrument({ engine, env: {}, timers: TIMERS });
+  assert.equal(app.ensureAudio(), true);
+  app.studio = { playing: true, masterLevel: STUDIO_LEVEL, masterWrites: null };
+  let played = 0;
+  engine.play = () => { played += 1; return {}; };
+  app.frequency = -1; // not a valid frequency: currentPlan() refuses
+  assert.equal(app.currentPlan().ok, false, 'the configuration is refused');
+  const before = engine.writes.length;
+  assert.equal(app.play('trigger'), false);
+  assert.equal(played, 0, 'no voice started');
+  assert.deepEqual(engine.writes.slice(before), [],
+    'a refused configuration wrote the master level: the Studio may still play');
+  assert.equal(app.studio.masterLevel, STUDIO_LEVEL, 'the Studio readout stays');
+});
+
+test('F6: the Pattern Sequencer claims nothing when its scheduled pass is refused', () => {
+  const ctx = new FakeContext({ sampleRate: 48000, currentTime: 5 });
+  ctx.state = 'suspended'; // PLAY resumes the context before it schedules the pass
+  let claims = 0;
+  let resumes = 0;
+  ctx.resume = () => { resumes += 1; return Promise.resolve(); };
+  const engine = sequencerPanel.sequencerEngine({ getContext: () => ctx,
+    getDestination: () => ctx.destination, claimOutput: () => { claims += 1; } });
+  const ed = createSequencerEditor({ engine, timers: fakeTimers() });
+  assert.ok(ed.model.blocks.length > 0, 'the sequence has blocks: the early guard passes');
+  ed._schedulePass = () => null; // the compiled pass ended at once: nothing scheduled
+  assert.equal(ed.play(), false);
+  assert.equal(resumes, 1, 'PLAY got past its early guards to the resume');
+  assert.equal(claims, 0, 'a PLAY refused at the scheduled pass claimed the output level');
+  assert.equal(ed.playing, false);
 });
