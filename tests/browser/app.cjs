@@ -1703,21 +1703,27 @@ function defineChecks() {
       // A = B the level is 20 log10 |cos(Δφ/2)| of a single-tone pair, so the default 45° makes
       // it depend on whether B's start delay reached the sound (0.69 dB, review F1); at 0° the
       // two voices compared (fresh and restarted) have the same level whatever their start.
+      // The offset is set before B's frequency: the lab learns the dual's frequencies in an
+      // Alpine effect (later), and a lab change emitted before that would write its stale B back.
       res.setup = await inPage(() => {
         const a = window.OSCILLA.app;
         const lab = window.OSCILLA.labs.phase;
         a.setDualSource(true);
         a.setStereo(false);
-        const fb = a.dual.b.freq;
-        a.setDualFreq('b', String(a.dual.a.freq));
         const deg = lab.config.phaseDeg;
         lab.set({ phaseDeg: 0 });
+        const fb = a.dual.b.freq;
+        a.setDualFreq('b', String(a.dual.a.freq));
         return { fb, deg, deg0: lab.config.phaseDeg };
       });
       res.mono = await until(async () => {
         const s = await panState();
-        return !s.disabled && !s.why ? s : null;
-      }, { ms: 5000, what: 'pan-live-dual: the pan is enabled for the dual voice in Mono' });
+        const ab = await inPage(() => {
+          const { app: a, labs } = window.OSCILLA;
+          return a.dual.b.freq === a.dual.a.freq && labs.phase.config.freqB === a.dual.a.freq;
+        });
+        return !s.disabled && !s.why && ab ? { ...s, ab } : null;
+      }, { ms: 5000, what: 'pan-live-dual: the pan is enabled for the dual voice in Mono, A = B' });
       res.pan0 = await setPan(0);
       await H.spaceDown(page);
       res.centred = await until(async () => {
@@ -1750,8 +1756,9 @@ function defineChecks() {
         const a = window.OSCILLA.app;
         a.stopNow();
         a.setStereo(false);
-        if (fb != null) a.setDualFreq('b', String(fb));
+        // the offset first, as in the setup: the lab's change would write its B back
         if (deg != null) window.OSCILLA.labs.phase.set({ phaseDeg: deg });
+        if (fb != null) a.setDualFreq('b', String(fb));
         a.setDualSource(false);
         a.alerts = [];
       }, res.setup || {});
@@ -1761,7 +1768,7 @@ function defineChecks() {
     }
     const v = {
       single: res.single.describedBy === 'osc-stereo-pan-why' && /dual voice/.test(res.single.why),
-      mono: !res.mono.disabled,
+      mono: !res.mono.disabled && res.mono.ab,
       phase0: res.setup.deg0 === 0,
       centredNoRouter: res.pan0 === 0 && !res.centred.router,
       panReachesVoice: res.panLeft === -1 && res.left.balanceDb > 6 && res.left.vizRouter
