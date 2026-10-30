@@ -21,9 +21,10 @@
 //
 // The engine may detach the graph itself: when it discards a context that closed from outside
 // it stops the tracks, and a stopped track dispatches no 'ended'. adapter.onMicDetached(fn)
-// tells the lab; it stops when the detached analyser is its own (never on 'replaced', which
-// its own start() causes) and says why (MIC_CONTEXT_CLOSED), so no reading of a closed graph
-// is presented as live.
+// tells the lab; it stops when the detached analyser is its own and says why
+// (MIC_CONTEXT_CLOSED, or MIC_ENGINE_DETACHED when another caller replaced its graph), so no
+// reading of a dead graph is presented as live. Its own Stop lets the analyser go before it
+// calls detachMicrophone(), whose 'user' event therefore names no analyser of the lab's.
 
 import { createSpectrumChart } from '../charts/spectrum-chart.js';
 import { createSpectrogramView } from '../charts/spectrogram-view.js';
@@ -212,10 +213,11 @@ export function mount(rootEl, adapter) {
     }
   }
 
-  // The engine detached a graph itself. Only the lab's own analyser concerns it, and never a
-  // 'replaced' (attachMicrophone replacing an earlier graph, from inside start()).
+  // The engine detached a graph itself. Only the lab's own analyser concerns it: closed with
+  // the context, or 'replaced' by another caller's attachMicrophone (the lab's own start()
+  // attaches while it holds none, so that event never names its analyser).
   function onEngineDetached(d) {
-    if (!d || d.attached || d.reason === 'replaced') return;
+    if (!d || d.attached) return;
     if (!attached || d.analyser !== attached) return;
     attached = null; // already disconnected by the engine: stop() must not detach again
     error = d.reason === 'closed' ? MIC_CONTEXT_CLOSED : MIC_ENGINE_DETACHED;

@@ -7,8 +7,8 @@
 //
 // Engine half: the detach event names the analyser it detached, so a listener can tell its own
 // graph from another. Lab half, on a fake adapter and a fake DOM: the lab reacts to a detach of
-// its own analyser (any reason but 'replaced'), clears the stream, resets the button and says
-// why; a detach of another analyser, or a 'replaced', leaves it alone.
+// its own analyser (for any reason but its own Stop), clears the stream, resets the button and
+// says why; a detach of another analyser, or of none named, leaves it alone.
 //   node --test tests/unit/mic-detach-on-close.test.mjs
 // The browser half is `mic-detach-on-close` in tests/browser/app.cjs.
 
@@ -58,6 +58,7 @@ function fakeEl() {
     hasAttribute: (k) => attrs.has(k),
     addEventListener: (t, fn) => { listeners.set(t, fn); },
     removeEventListener: (t) => { listeners.delete(t); },
+    click: () => { const fn = listeners.get('click'); if (fn) fn({ type: 'click' }); },
   };
 }
 
@@ -74,31 +75,55 @@ function fakeRoot() {
   return { root, els };
 }
 
-/** The adapter of labs/index.js, with an engine-owned mic graph and a detach notification. */
+/**
+ * The adapter of labs/index.js, with an engine-owned mic graph and a detach notification. Like
+ * the engine (audio-engine.js attachMicrophone/detachMicrophone), it holds one attachment, and
+ * it emits the detach synchronously inside the call that detaches: 'replaced' (with the earlier
+ * analyser) from attachMicrophone, 'user' (with the current one) from detachMicrophone. So the
+ * lab's own Stop meets its own 'user' event while stop() is still running, as in the app.
+ */
 function fakeAdapter() {
   const listeners = new Set();
   const analysers = [];
   const ctx = { state: 'running', sampleRate: 48000, resume: () => Promise.resolve() };
+  let current = null; // { analyser, stream }, the engine's micAttachment
+  const emit = (d) => {
+    for (const fn of [...listeners]) fn({ attached: false, ...d });
+  };
+  const detach = (reason) => {
+    const m = current;
+    if (!m) return false;
+    current = null;
+    for (const t of m.stream.getTracks()) t.stop(); // closeMicrophone: no 'ended'
+    emit({ reason, analyser: m.analyser });
+    return true;
+  };
   const a = {
     detachCalls: 0,
     analysers,
     getContext: () => ctx,
     getAnalyser: () => null,
     requestedFrequency: () => null,
-    attachMicrophone() {
+    attachMicrophone(stream) {
+      detach('replaced');
       const an = { context: ctx, fftSize: 8192, id: analysers.length + 1 };
       analysers.push(an);
+      current = { analyser: an, stream };
       return an;
     },
-    detachMicrophone() { a.detachCalls += 1; return true; },
+    detachMicrophone() {
+      a.detachCalls += 1;
+      return detach('user');
+    },
     onMicDetached(fn) {
       listeners.add(fn);
       return () => listeners.delete(fn);
     },
-    /** What main.js feeds from engine.on('micAttachment', { attached: false, ... }). */
-    emitDetached(d) {
-      for (const fn of listeners) fn({ attached: false, ...d });
-    },
+    /** The engine's own detach ('closed': _discardContext), outside any lab call. */
+    engineDetach(reason) { return detach(reason); },
+    /** A detach event for a graph the engine does not hold (another analyser, or none named). */
+    emitDetached(d) { emit(d); },
+    get attachedAnalyser() { return current ? current.analyser : null; },
     get listenerCount() { return listeners.size; },
   };
   return a;
@@ -186,8 +211,7 @@ test('lab: subscribes to the adapter detach notification while mounted', async (
 
 test('lab: the engine detaching its analyser on close stops it and says why', async () => {
   const { lab, adapter, stream, toggle, detected } = await liveLab();
-  const own = adapter.analysers[0];
-  adapter.emitDetached({ reason: 'closed', analyser: own });
+  assert.equal(adapter.engineDetach('closed'), true, 'setup: the engine held the lab graph');
   assert.equal(lab.active, false, 'the lab no longer reports a live microphone');
   assert.equal(lab.analyser, null, 'and reads no analyser of the dead context');
   assert.equal(lab.stream, null);
@@ -202,36 +226,63 @@ test('lab: the engine detaching its analyser on close stops it and says why', as
   lab.dispose();
 });
 
-test('lab: a detach of another analyser, or a replacement, leaves the live lab alone',
+test('lab: a detach of another analyser, or of none named, leaves the live lab alone',
   async () => {
     const { lab, adapter, toggle } = await liveLab();
     adapter.emitDetached({ reason: 'closed', analyser: { id: 'someone-else' } });
     adapter.emitDetached({ reason: 'closed' }); // no analyser named: not provably ours
-    adapter.emitDetached({ reason: 'replaced', analyser: adapter.analysers[0] });
+    adapter.emitDetached({ reason: 'replaced', analyser: { id: 'someone-else' } });
     assert.equal(lab.active, true);
     assert.equal(toggle.getAttribute('aria-pressed'), 'true');
     assert.equal(lab.error, '');
     lab.dispose();
   });
 
+// Review F2 (#289): only another caller can replace the lab's live graph (its own start()
+// attaches while it holds none). The engine then stops the lab's tracks with no 'ended', so a
+// lab that ignored 'replaced' would stay on "Stop microphone" over a dead analyser.
+test('lab: another caller replacing its graph stops it, says why, keeps the new graph',
+  async () => {
+    const { lab, adapter, stream, toggle, detected } = await liveLab();
+    const other = adapter.attachMicrophone(fakeStream());
+    assert.equal(lab.active, false, 'the lab no longer reports the replaced microphone live');
+    assert.equal(lab.analyser, null);
+    assert.equal(toggle.getAttribute('aria-pressed'), 'false');
+    assert.equal(lab.error, micLab.MIC_ENGINE_DETACHED);
+    assert.equal(detected.textContent, micLab.MIC_ENGINE_DETACHED, 'the readout states it');
+    assert.equal(stream.tracks[0].readyState, 'ended');
+    assert.equal(adapter.detachCalls, 0, 'the lab does not detach the graph that replaced it');
+    assert.equal(adapter.attachedAnalyser, other);
+    lab.dispose();
+  });
+
+// Review F1 (#289): the engine emits the 'user' detach inside detachMicrophone(), while the
+// lab's stop() is still running; the lab must have let its analyser go before that call.
 test('lab: its own stop is not reported as an engine detach; a restart works', async () => {
   const { lab, adapter, toggle, detected } = await liveLab();
-  const own = adapter.analysers[0];
   lab.stop();
-  // The engine emits the user's own detach; the lab has already let the analyser go.
-  adapter.emitDetached({ reason: 'user', analyser: own });
-  assert.equal(adapter.detachCalls, 1);
-  assert.equal(lab.error, '');
+  assert.equal(adapter.detachCalls, 1, 'the lab detached its graph once');
+  assert.equal(adapter.attachedAnalyser, null, 'and the engine emitted that detach');
+  assert.equal(lab.error, '', 'a user Stop states no engine loss');
+  assert.equal(detected.textContent, MIC_OFF);
+  assert.equal(toggle.getAttribute('aria-pressed'), 'false');
+  // The same through the button.
+  await withMediaDevices(fakeStream(), () => lab.start());
+  assert.equal(lab.active, true);
+  toggle.click();
+  assert.equal(lab.active, false);
+  assert.equal(adapter.detachCalls, 2);
+  assert.equal(lab.error, '', 'a Stop by the button states no engine loss');
   assert.equal(detected.textContent, MIC_OFF);
   // After a closed-context stop the next start is a fresh stream on a fresh analyser.
   await withMediaDevices(fakeStream(), () => lab.start());
   assert.equal(lab.active, true);
-  adapter.emitDetached({ reason: 'closed', analyser: adapter.analysers[1] });
+  adapter.engineDetach('closed');
   assert.equal(lab.active, false);
   await withMediaDevices(fakeStream(), () => lab.start());
   assert.equal(lab.active, true, 'a start after the close opens the microphone again');
   assert.equal(lab.error, '', 'and clears the close reason');
-  assert.equal(lab.analyser, adapter.analysers[2]);
+  assert.equal(lab.analyser, adapter.analysers[3]);
   assert.equal(toggle.getAttribute('aria-pressed'), 'true');
   lab.dispose();
 });

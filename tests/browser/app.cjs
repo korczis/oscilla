@@ -2186,8 +2186,12 @@ function defineChecks() {
       reasonStated: /audio context was closed/.test(c.error) && c.detected === c.error,
       restartOnNewContext: r.active === true && r.newCtx && r.analyserOnEngineCtx
         && r.pressed === 'true' && r.error === '',
+      // The user's own Stop states no engine loss (review F1 of #289): the engine emits its
+      // 'user' detach inside the lab's stop(), so a lab that released its analyser after the
+      // call would read "The audio engine disconnected the microphone" here.
       stopAfterRestart: st.active === false && st.pressed === 'false'
-        && st.engineMicNodes === 0,
+        && st.engineMicNodes === 0 && st.error === ''
+        && st.detected === 'UNAVAILABLE (microphone off)',
       noPageErrors: errors.length === errorsBefore,
     };
     const ok = Object.values(v).every(Boolean);
