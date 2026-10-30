@@ -12,6 +12,7 @@
 //     pool.free(slot)   -> void             the slot is disposed: empty
 //     pool.allOff(t)    -> [slot]           every held slot, now releasing
 //     pool.active(t)    -> number           slots sounding at t (held, or releasing before end)
+//     pool.heldSlot(note) -> slot | null    the slot holding `note` (not released), if any
 //     pool.slots()      -> [{ slot, note, on, released, end }]
 // Every loop runs over the `max` slots once: no loop depends on a side effect to terminate
 // (the lesson of #261's R-2).
@@ -70,6 +71,10 @@ export function createVoicePool({ max = MAX_VOICES } = {}) {
       return out;
     },
     active: (t) => slots.filter((s) => sounding(s, t)).length,
+    heldSlot(note) {
+      const s = slots.find((x) => x.note === note && x.released === null);
+      return s ? s.slot : null;
+    },
     held: () => slots.filter((s) => s.note !== null && s.released === null).map((s) => s.note),
     slots: () => slots.map((s) => ({ ...s })),
   };

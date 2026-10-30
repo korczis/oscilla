@@ -13,14 +13,15 @@
 //   e-additive  drawbars 1, 0.5, 0.25 at C4: harmonics 2 and 3 at -6.0 and -12.0 dB rel to the
 //               fundamental within 1 dB (line energy over +-3 bins)
 //   e-wavetable morph 0 (sine): the 2nd harmonic 40 dB down; morph 3 (saw): within 3 dB of -6 dB;
-//               MG patched into Morph by two jack taps: the centroid moves 100 Hz+ across frames
+//               the MG at 0.5 Hz patched into Morph at 1.5 by two jack taps: the centroid moves
+//               by a quarter of the morph 0 to 3 span measured above (times the cable's reach)
 //   e-sync      sync ratio 2 (morph 1) at A4: 880 Hz present, 440 and 1320 Hz 30 dB below it;
 //               ratio 4.5 (morph 3): the master's grid, 440 Hz present
 //   e-am        ring ratio 1.25 at A4: 110 and 990 Hz, the carrier 20 dB below; AM depth 1: the
 //               sidebands -6.0 dB rel to the carrier within 2 dB
-//   e-perc      the kick's decay slope is -60 dB per 0.5 s within 10 %; a closed hat chokes an
-//               open one (40 dB down within 0.3 s of it), with Hat choke off the open hat takes
-//               0.38 s+ for those 40 dB (its 0.5 s decay)
+//   e-perc      the kick (QWERTY A) decays at -60 dB per 0.5 s within 10 %, fitted from 6 to
+//               30 dB below its peak (the idle panel's floor is some 55 dB below it); the hat
+//               choke is o-choke (the hats sit too close to that floor live)
 //   e-poly      16 held notes: voice census 16; a 17th: still 16 and the oldest note's line gone;
 //               all off: the runtime node census back to its count before the notes
 //   e-nosource  every drawbar at 0: a held note sounds nothing and holds no voice (census 0)
@@ -36,11 +37,32 @@
 //               and sounds; the copied link names yt=engines&ye=fm; a bad ye is refused
 //   e-mobile    390 x 844 with touch: no horizontal page scroll, every tab, engine and knob 44 px+,
 //               a tap on an engine selects it and a tap on the docked keys sounds
+//   e-headroom  16 notes held at full velocity at the default Level with the Master Output at
+//               its highest level: no sample of the output reaches the ceiling (MAX_OUTPUT_GAIN)
+//
+// Offline checks (review of #332; desktop leg): tests/browser/fixtures/synth-engines-offline-
+// entry.js, bundled in memory with esbuild, builds the real engine adapters on an
+// OfflineAudioContext and plays notes on them; these assert the rendered samples.
+//   o-clap      the clap decays at -60 dB per 0.28 s (from its last burst) within 10 %
+//   o-perc      every pitch class (C4-B4): its voice decays at -60 dB per its longest layer's
+//               decay within 12 %, the slope fitted from -20 to -50 dB below the peak
+//   o-pitch     every FM algorithm's default patch at A3 and A4: the line nearest the note stays
+//               within 5 cents of it in every window from 0.1 to 2.9 s (the index decay)
+//   o-headroom  16 notes at full velocity at the default Level, each engine: the sum peaks at
+//               or below digital full scale; one voice at Level 4 peaks at or below 1/16
+//               (every FM algorithm, AM and ring, every percussion key, the additive shapes)
+//   o-morph     every wavetable bank at morph 0 to 3 in steps of 0.25: the level within 0.5 dB
+//               of its two tables' levels interpolated in dB, the peak at or below 1/16
+//   o-retrig    a held formant pad retriggered: its level never falls more than 1 dB
+//   o-choke     a closed hat chokes an open one: 40 dB down within 0.1 s of it; with Hat choke
+//               off the open hat takes 0.3 s+ for those 40 dB (its 0.5 s decay: 0.33 s)
+//   o-alloff    a ringing open hat (Decay x4): all-off cuts it 60 dB within 50 ms
 'use strict';
 
 const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
+const esbuild = require('esbuild');
 const suite = require('./lib/suite.cjs');
 const { serveDist } = require('./lib/serve.cjs');
 const { until, bounded } = require('./lib/wait.cjs');
@@ -72,6 +94,20 @@ const A4 = 440;
 const C4 = 261.6256;
 const J = [0.22389, 0.57672, 0.35283]; // J0(2), J1(2), J2(2)
 const db = (x) => 20 * Math.log10(x);
+const MAX_OUTPUT_GAIN = 0.25; // src/js/core/constants.js: the ceiling
+const OFFLINE_JS = esbuild.buildSync({ entryPoints: [path.join(__dirname, 'fixtures',
+  'synth-engines-offline-entry.js')], bundle: true, format: 'iife', write: false,
+logLevel: 'error' }).outputFiles[0].text;
+const OFFLINE_HTML = '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>OSCILLA '
+  + 'Synth engines offline fixture</title></head><body><script>'
+  + `${OFFLINE_JS.replace(/<\/script/gi, '<\\/script')}</script></body></html>`;
+async function offline(context) {
+  const page = await context.newPage();
+  await page.setContent(OFFLINE_HTML);
+  await until(() => page.evaluate(() => !!window.E), { ms: LOAD_MS, what: 'the fixture loads' });
+  return page;
+}
+const ALGORITHMS = ['2-op', '3-stack', '3-y', '4-stack', '4-pairs', '4-three', '4-parallel'];
 
 // ------------------------------------------------------------------------------ page probes
 function probe() {
@@ -133,6 +169,14 @@ async function openSynth(context, base, hash) {
     && window.OSCILLA.app.synthDebug && window.OSCILLA.app.synthDebug().present
     && document.querySelector('[data-osc="synth.bay.svg"]'))),
   { ms: LOAD_MS, what: 'the Synth is rendered' });
+  // The Master Output at its highest level: a voice peaks at 1/16 of full scale at Level 4
+  // (16 voices sum to full scale), so the checks read the engines 10 dB above the default.
+  const r = await page.evaluate((v) => {
+    const st = window.OSCILLA.studio.store;
+    const m = st.getModel().graph.nodes.find((n) => n.type === 'master');
+    return st.dispatch({ type: 'NODE_PARAM_SET', nodeId: m.id, key: 'level', value: v });
+  }, MAX_OUTPUT_GAIN);
+  if (!r.ok) throw new Error(`the Master level is not set: ${r.reason}`);
   await page.locator('#osc-synth-title').click();
   return page;
 }
@@ -183,7 +227,7 @@ function defineChecks() {
       - lineDb(p, C4)].map((x) => +x.toFixed(2)) };
   });
 
-  def('e-wavetable', engines('wavetable', 'wavetable.morph:0,wavetable.sustain:1'),
+  def('e-wavetable', engines('wavetable', 'wavetable.morph:0,wavetable.sustain:1,mg.rate:0.5'),
     async ({ page }) => {
       await hold(page, 'KeyA');
       const sine = await sound(page, (q) => peakAt(q, C4)
@@ -195,25 +239,37 @@ function defineChecks() {
       const saw = await sound(page, (q) => peakAt(q, 2 * C4)
         && Math.abs(lineDb(q, 2 * C4) - lineDb(q, C4) - db(0.5)) <= 3, 'morph 3: a saw');
       await page.keyboard.up('KeyA');
-      await page.locator('[data-knob="wavetable.morph"]').focus();
-      await page.keyboard.press('Home');
+      // The MG swing, against a threshold measured here: the centroids of morph 0 and 3 (the
+      // sine and the saw above) bound what the morph can do; the MG, patched into Morph at 1.5
+      // and run at 0.5 Hz (the analyser's 0.17 s window sees a twelfth of its cycle), must
+      // swing the centroid by a quarter of that span times the share of it the cable reaches.
+      const wtId = (await dbg(page)).nodes.wavetable;
+      await page.evaluate((id) => window.OSCILLA.studio.store.dispatch({ type: 'NODE_PARAM_SET',
+        nodeId: id, key: 'morph', value: 1.5 }), wtId);
       await tapJack(page, 'mg.control:out');
       await tapJack(page, 'wavetable.morph:in');
       const d = await dbg(page);
       const patched = d.cables.some((c) => c.from === 'mg.control' && c.to === 'wavetable.morph');
+      const edge = await page.evaluate((ids) => window.OSCILLA.studio.store.getModel().graph.edges
+        .find((e) => e.from.node === ids.mg && e.to.node === ids.wavetable
+          && e.to.port === 'morph'), d.nodes);
+      const depth = Math.abs(edge && edge.props && edge.props.depth != null ? edge.props.depth : 1);
+      const span = Math.abs(centroid(saw, 100, 4000) - centroid(sine, 100, 4000));
+      const want = 0.25 * span * Math.min(1, depth / 1.5);
       await hold(page, 'KeyA');
       let lo = Infinity;
       let hi = -Infinity;
       await sound(page, (q) => {
-        if (q.rmsDb < -60) return false;
+        if (q.rmsDb < -70) return false;
         const c = centroid(q, 100, 4000);
         lo = Math.min(lo, c);
         hi = Math.max(hi, c);
-        return hi - lo >= 100;
-      }, 'the MG moves the morph: the centroid swings 100 Hz');
+        return hi - lo >= want;
+      }, `the MG moves the morph: the centroid swings ${want.toFixed(0)} Hz`, 12000);
       await page.keyboard.up('KeyA');
-      return { ok: patched, sine: +(lineDb(sine, 2 * C4) - lineDb(sine, C4)).toFixed(1),
-        saw: +(lineDb(saw, 2 * C4) - lineDb(saw, C4)).toFixed(1), swing: +(hi - lo).toFixed(0) };
+      return { ok: patched && want >= 25, sine: +(lineDb(sine, 2 * C4) - lineDb(sine, C4))
+        .toFixed(1), saw: +(lineDb(saw, 2 * C4) - lineDb(saw, C4)).toFixed(1),
+      span: +span.toFixed(0), depth, want: +want.toFixed(0), swing: +(hi - lo).toFixed(0) };
     });
 
   def('e-sync', engines('sync', 'sync.morph:1,sync.sustain:1'), async ({ page }) => {
@@ -287,10 +343,14 @@ function defineChecks() {
   }, [code, then]);
 
   def('e-perc', engines('perc'), async ({ page }) => {
+    // Armed first, and quiet, so the kick is the first sound after the arm (a slow arm under
+    // load can let the idle panel through until its Keys-gated envelopes close).
+    await page.evaluate(() => window.OSCILLA.app.synthArm());
+    await silent(page, 'armed, nothing sounds');
     await page.locator('#osc-synth-title').click();
     const kick = await decayIn(page, 'KeyA');
     const peak = Math.max(...kick.pts.map((p) => p[1]));
-    const fit = kick.pts.filter((p) => p[1] <= peak - 6 && p[1] >= peak - 40
+    const fit = kick.pts.filter((p) => p[1] <= peak - 6 && p[1] >= peak - 30
       && p[0] > kick.pts.find((q) => q[1] === peak)[0]);
     const n = fit.length;
     const mx = fit.reduce((s, p) => s + p[0], 0) / n;
@@ -298,23 +358,9 @@ function defineChecks() {
     const slope = fit.reduce((s, p) => s + (p[0] - mx) * (p[1] - my), 0)
       / fit.reduce((s, p) => s + (p[0] - mx) ** 2, 0);
     await silent(page, 'the kick has ended');
-    /** Seconds from the closed hat until the sound is 40 dB below its level then. */
-    const fall = (r) => {
-      const top = Math.max(...r.pts.slice(0, 3).map((x) => x[1]));
-      const hit = r.pts.find((x) => x[1] <= top - 40);
-      return hit ? hit[0] - r.pts[0][0] : Infinity;
-    };
-    const chokeS = fall(await decayIn(page, 'KeyU', 'KeyT'));
-    await silent(page, 'the hats have ended');
-    await page.locator('[data-toggle="perc.choke"]').click();
-    const ringS = fall(await decayIn(page, 'KeyU', 'KeyT'));
     const want = -60 / 0.5;
-    // Choked: the closed hat's 0.06 s decay falls 40 dB in 0.04 s, plus the scheduling lead,
-    // the analyser's window and one frame; not choked, the open hat's 0.5 s decay needs 0.33 s
-    // for 40 dB, plus the same. The two are told apart with a margin either side.
-    return { ok: n >= 4 && Math.abs(slope / want - 1) <= 0.1 && chokeS < 0.3 && ringS > 0.38,
-      slope: +slope.toFixed(1), want, points: n, chokeS: +chokeS.toFixed(3),
-      ringS: +ringS.toFixed(3) };
+    return { ok: n >= 4 && Math.abs(slope / want - 1) <= 0.1, slope: +slope.toFixed(1), want,
+      points: n };
   });
 
   def('e-poly', engines('additive', 'additive.release:0.05,additive.sustain:1'),
@@ -456,6 +502,156 @@ function defineChecks() {
     await silent(page, 'releasing the key silences it');
     return { ok: m.scroll <= m.inner && m.small.length === 0 && d.engine === 'fm', ...m,
       engine: d.engine, rmsDb: p.rmsDb };
+  });
+  def('e-headroom', engines('additive', 'additive.sustain:1'), async ({ page }) => {
+    const masterId = await page.evaluate(() => window.OSCILLA.studio.store.getModel().graph.nodes
+      .find((n) => n.type === 'master').id);
+    const set = await page.evaluate(([id, v]) => window.OSCILLA.studio.store.dispatch({
+      type: 'NODE_PARAM_SET', nodeId: id, key: 'level', value: v }), [masterId, MAX_OUTPUT_GAIN]);
+    const notes = Array.from({ length: 16 }, (_, i) => 48 + i);
+    for (const n of notes) await sink(page, 'noteOn', n, 127);
+    await sound(page, (q) => q.rmsDb > -60, 'the 16 voices sound');
+    // The output after the safety chain, frame by frame over 1 s of audio clock.
+    const r = await page.evaluate(async () => {
+      const e = window.OSCILLA.engine;
+      const buf = new Float32Array(e.analyser.fftSize);
+      const start = e.ctx.currentTime;
+      const wall = performance.now() + 8000;
+      let peak = 0;
+      let frames = 0;
+      while (e.ctx.currentTime - start < 1 && performance.now() < wall) {
+        await new Promise((res) => requestAnimationFrame(res));
+        e.analyser.getFloatTimeDomainData(buf);
+        for (const x of buf) peak = Math.max(peak, Math.abs(x));
+        frames++;
+      }
+      return { peak, frames, voices: window.OSCILLA.app.synthDebug().voices };
+    });
+    await sink(page, 'allOff');
+    return { ok: set.ok && r.voices === 16 && r.frames >= 5 && r.peak < MAX_OUTPUT_GAIN * 0.999,
+      peak: +r.peak.toFixed(4), ceiling: MAX_OUTPUT_GAIN, frames: r.frames, voices: r.voices };
+  });
+
+  // ---------------------------------------------------------------- offline (review of #332)
+  def('o-clap', null, async ({ context }) => {
+    const page = await offline(context);
+    const r = await page.evaluate(() => window.E.decay(61, {}, { win: 0.01, hi: -20, lo: -50 }));
+    const want = -60 / 0.28;
+    return { ok: r.points >= 8 && Math.abs(r.slope / want - 1) <= 0.1, slope: r.slope && +r
+      .slope.toFixed(1), want: +want.toFixed(1), points: r.points };
+  });
+
+  def('o-perc', null, async ({ context }) => {
+    const page = await offline(context);
+    const rows = await page.evaluate(async () => {
+      const out = [];
+      for (let n = 60; n < 72; n++) {
+        const hat = n === 66 || n === 68;
+        out.push({ n, ...window.E.percVoice(n), ...(await window.E.decay(n, {}, {
+          win: hat ? 0.004 : 0.01, hi: -20, lo: -50 })) });
+      }
+      return out;
+    });
+    const bad = rows.filter((r) => !(r.points >= 4
+      && Math.abs(r.slope / (-60 / r.decayS) - 1) <= 0.12));
+    return { ok: bad.length === 0 && new Set(rows.map((r) => r.id)).size === 9,
+      slopes: rows.map((r) => `${r.id}:${Math.round(r.slope)}/${Math.round(-60 / r.decayS)}`),
+      bad: bad.map((r) => r.n) };
+  });
+
+  def('o-pitch', null, async ({ context }) => {
+    const page = await offline(context);
+    // From 0.1 s: in the first tenth the index falls fastest and the line's own level changes
+    // inside a window, which biases a peak reading of any algorithm (a pure 4-three included).
+    const W = [[0.1, 0.4], [0.4, 0.8], [0.8, 1.5], [1.5, 2.9]];
+    const rows = await page.evaluate(async ([algs, w]) => {
+      const out = [];
+      for (const algorithm of algs) {
+        for (const note of [57, 69]) {
+          const r = await window.E.pitch({ algorithm }, note, w);
+          out.push({ algorithm, note, cents: r.map((x) => +x.cents.toFixed(2)) });
+        }
+      }
+      return out;
+    }, [ALGORITHMS, W]);
+    const worst = Math.max(...rows.flatMap((r) => r.cents.map(Math.abs)));
+    return { ok: rows.length === 14 && worst <= 5, worst,
+      rows: rows.map((r) => `${r.algorithm}@${r.note}:${r.cents.join('/')}`) };
+  });
+
+  def('o-headroom', null, async ({ context }) => {
+    const page = await offline(context);
+    const r = await page.evaluate(async (algs) => {
+      const sum = {};
+      const notes = Array.from({ length: 16 }, (_, i) => 48 + i);
+      for (const t of ['additive-voice', 'fm-voice', 'am-voice', 'wavetable-voice',
+        'perc-voice']) sum[t] = (await window.E.peak(t, { sustain: 1 }, notes)).peak;
+      const one = [];
+      const voice = async (t, p, n) => one.push([`${t} ${JSON.stringify(p)} ${n}`,
+        (await window.E.peak(t, { sustain: 1, level: 4, ...p }, [n])).peak]);
+      for (const shape of ['custom', 'sawtooth', 'square', 'triangle']) {
+        await voice('additive-voice', { shape }, 40);
+      }
+      for (const algorithm of algs) await voice('fm-voice', { algorithm }, 57);
+      for (const p of [{ mode: 'ring' }, { mode: 'am' }, { mode: 'ring', ratio: 1 },
+        { mode: 'am', carrier: 'square', modulator: 'sawtooth' }]) await voice('am-voice', p, 45);
+      for (let n = 60; n < 72; n++) await voice('perc-voice', {}, n);
+      for (const tone of [0, 1]) await voice('perc-voice', { tone }, 62);
+      return { sum, one };
+    }, ALGORITHMS);
+    const over = r.one.filter(([, pk]) => pk > (1 / 16) * 1.001);
+    return { ok: Object.values(r.sum).every((x) => x <= 1) && over.length === 0,
+      sum: Object.fromEntries(Object.entries(r.sum).map(([k, v]) => [k, +v.toFixed(3)])),
+      worstVoice: +Math.max(...r.one.map((x) => x[1] * 16)).toFixed(3), over };
+  });
+
+  def('o-morph', null, async ({ context }) => {
+    const page = await offline(context);
+    const ms = Array.from({ length: 13 }, (_, i) => i * 0.25);
+    const banks = await page.evaluate(async (m) => {
+      const out = {};
+      for (const b of ['basic', 'formant', 'pulse', 'sync']) out[b] = await window.E.morph(b, m);
+      return out;
+    }, ms);
+    let worst = 0;
+    let peak = 0;
+    for (const rows of Object.values(banks)) {
+      const at = (m) => rows.find((x) => Math.abs(x.m - m) < 1e-9);
+      for (const r of rows) {
+        const i = Math.min(2, Math.floor(r.m));
+        const x = r.m - i;
+        const want = at(i).rmsDb + (at(i + 1).rmsDb - at(i).rmsDb) * x;
+        worst = Math.max(worst, Math.abs(r.rmsDb - want));
+        peak = Math.max(peak, r.peak * 16);
+      }
+    }
+    return { ok: worst <= 0.5 && peak <= 1.001, worstDb: +worst.toFixed(3),
+      peakRelVoice: +peak.toFixed(3) };
+  });
+
+  def('o-retrig', null, async ({ context }) => {
+    const page = await offline(context);
+    const r = await page.evaluate(() => window.E.retrigger('wavetable-voice', { bank: 'formant',
+      morph: 1.5, attack: 0.6, release: 1.2, sustain: 0.8 }));
+    return { ok: r.results[1].retrigger === true && r.min >= r.held - 1, held: +r.held.toFixed(2),
+      min: +r.min.toFixed(2) };
+  });
+
+  def('o-choke', null, async ({ context }) => {
+    const page = await offline(context);
+    const on = await page.evaluate(() => window.E.choke({ choke: true }));
+    const off = await page.evaluate(() => window.E.choke({ choke: false }));
+    // Choked: the open hat released in CHOKE_RELEASE_S under the closed hat's 0.06 s decay
+    // (40 dB in 0.04 s); not choked, the open hat's 0.5 s decay needs 0.33 s for 40 dB.
+    return { ok: on.fallS <= 0.1 && off.fallS >= 0.3, chokedS: +on.fallS.toFixed(3),
+      ringS: +off.fallS.toFixed(3) };
+  });
+
+  def('o-alloff', null, async ({ context }) => {
+    const page = await offline(context);
+    const r = await page.evaluate(() => window.E.allOff(70, { decay: 4 }));
+    return { ok: r.before > -80 && r.after <= r.before - 60, before: +r.before.toFixed(1),
+      after: +r.after.toFixed(1) };
   });
   return checks;
 }

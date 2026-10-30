@@ -34,7 +34,7 @@ export const LEARN_INSTRUMENT_TOPICS = Object.freeze([
       + 'modulator of index I moves its target by I times its own frequency, so sidebands sit at '
       + 'the carrier plus and minus multiples of the modulator. Ring modulation multiplies two '
       + 'signals into their sum and difference frequencies; AM keeps the carrier. Wavetable '
-      + 'crossfades two neighbouring tables with equal power; the hard-sync bank holds saws '
+      + 'crossfades two neighbouring tables, its level continuous; the hard-sync bank holds saws '
       + 'synced at set ratios, not a continuous sync sweep. Percussion builds each hit from tones '
       + 'and filtered noise that decay to -60 dB rel. Harmonics above 0.95 times the digital '
       + 'Nyquist limit are dropped and counted. The plucked string and FM operator feedback need '

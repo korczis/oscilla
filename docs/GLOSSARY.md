@@ -25,8 +25,8 @@ drawn.
 **Engine.** A polyphonic note source of the Synth's Engines tab (`docs/synth.md`): additive,
 FM, AM / ring, wavetable, hard sync or percussion, up to 16 **voices**; a 17th note takes the
 voice released first, else the oldest (**voice stealing**). **FM index**: how far a modulator
-moves its target's frequency, Δf = I x f_mod Hz. **Morph**: the wavetable position, an
-equal-power crossfade of two neighbouring tables. **Hard sync**: a wave reset at every period of
+moves its target's frequency, Δf = I x f_mod Hz. **Morph**: the wavetable position, a
+level-continuous crossfade of two neighbouring tables. **Hard sync**: a wave reset at every period of
 the note, here at set ratios. **Chain**: an engine's input that passes audio to its output
 unchanged, so every instrument reaches the one Master Output.
 

@@ -1,4 +1,5 @@
-// K092 and K089 (part): the wavetable engine. The morph weights are equal-power (Σ w² = 1); the
+// K092 and K089 (part): the wavetable engine. The morph weights are the level-continuous law
+// (synth/wavetables.js; its measured continuity is tests/unit/synth-review-332-round2); the
 // banks hold four tables each; the hard-sync table is the closed-form Fourier series of a synced
 // saw (ratio 1 is the saw, an integer ratio r has energy only at multiples of r, and it matches a
 // time-domain DFT); morph is one audio-rate input driving four shapers into every voice.
@@ -6,22 +7,29 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { harmonicSeries, syncedSawSeries } from '../../src/js/audio/additive.js';
 import {
-  MORPH_MAX, WAVETABLE_BANKS, morphCurve, morphText, morphWeight,
+  MORPH_MAX, WAVETABLE_BANKS, WAVETABLE_BANK_IDS, morphCurve, morphLaw, morphText, morphWeight,
 } from '../../src/js/synth/wavetables.js';
 import { engineEnv, hasCycle } from './engine-fixture.mjs';
 
-test('morph weights are equal-power: Σ w² = 1 over [0, 3], and at the curve points', () => {
-  for (let m = 0; m <= MORPH_MAX + 1e-9; m += 0.01) {
-    const s = [0, 1, 2, 3].reduce((a, i) => a + morphWeight(i, m) ** 2, 0);
-    assert.ok(Math.abs(s - 1) < 1e-6, `m ${m}: ${s}`);
+test('morph weights: two neighbouring tables, the headroom at a table, the curves agree', () => {
+  for (const bank of WAVETABLE_BANK_IDS) {
+    const { headroom } = morphLaw(bank);
+    assert.ok(headroom > 0.5 && headroom <= 1, `${bank}: headroom ${headroom}`);
+    for (let m = 0; m <= MORPH_MAX + 1e-9; m += 0.01) {
+      const w = [0, 1, 2, 3].map((i) => morphWeight(i, m, bank));
+      assert.ok(w.filter((x) => x > 0).length <= 2, `${bank} ${m}: two tables at most`);
+      w.forEach((x, i) => assert.ok(Math.abs(m - i) < 1 || x === 0, `${bank} ${m}: ${i}`));
+    }
+    for (let i = 0; i <= MORPH_MAX; i++) {
+      assert.ok(Math.abs(morphWeight(i, i, bank) - headroom) < 1e-12, `${bank}: table ${i}`);
+    }
+    const curves = [0, 1, 2, 3].map((i) => morphCurve(i, undefined, bank));
+    for (let k = 0; k < curves[0].length; k += 64) {
+      const m = (k / (curves[0].length - 1)) * MORPH_MAX;
+      curves.forEach((c, i) => assert.ok(Math.abs(c[k] - morphWeight(i, m, bank)) < 1e-6));
+    }
   }
-  const curves = [0, 1, 2, 3].map((i) => morphCurve(i));
-  for (let k = 0; k < curves[0].length; k++) {
-    const s = curves.reduce((a, c) => a + c[k] ** 2, 0);
-    assert.ok(Math.abs(s - 1) < 1e-6, `point ${k}`);
-  }
-  assert.equal(morphWeight(2, 2), 1);
-  assert.match(morphText('basic', 0.5), /Sine 71 % · Triangle 71 %/);
+  assert.match(morphText('basic', 0.5), /Sine 50 % · Triangle 50 %/);
 });
 
 test('every bank holds four tables of partials', () => {

@@ -95,11 +95,11 @@ releases the held notes.
 | Engine | Node | What it does | Honest limits |
 | --- | --- | --- | --- |
 | Additive | `additive-voice` | drawbars H1-H12 (linear amplitudes) or a saw, square or triangle series, tilt in dB/oct | each note drops the harmonics above 0.95 x Nyquist and the status line says how many |
-| FM | `fm-voice` | 2-4 sine operators routed by 7 algorithms (`src/js/synth/fm-algorithms.js`); a modulator moves its target by I x f_mod Hz; the index falls to Index sustain over Index decay | linear FM is not band-limited: sidebands above Nyquist fold back; an operator above 0.95 x Nyquist is left out of the note; no operator feedback (below) |
-| AM / ring | `am-voice` | a carrier times a modulator at Ratio x the note, by the panel's ring law: ring c·m, AM c·(1 - d/2 + d/2·m) | digital multiplication, levels relative |
-| Wavetable | `wavetable-voice` | four band-limited tables per bank (Basic, Formant, Pulse), Morph 0-3 crossfades two neighbours with equal power; Morph is a jack (audio-rate) | a crossfade of two tables, not a per-sample interpolation across many |
+| FM | `fm-voice` | 2-4 sine operators routed by 7 algorithms (`src/js/synth/fm-algorithms.js`); a modulator moves its target by I x f_mod Hz; the index falls to Index sustain over Index decay | linear FM is not band-limited: sidebands above Nyquist fold back; an operator above 0.95 x Nyquist is left out of the note (with the modulators that only drive it); a modulator that is itself modulated reaches its target through a DC block at a tenth of the lowest operator frequency, so a stack stays in tune (its 0 Hz line would shift the pitch); a carrier at a whole multiple of its modulator keeps its own 0 Hz line, a DC offset; no operator feedback (below) |
+| AM / ring | `am-voice` | a carrier times a modulator at Ratio x the note, by the panel's ring law: ring c·m, AM c·(1 - d/2 + d/2·m) | digital multiplication, levels relative; coinciding carrier and modulator harmonics (ratio 1, a whole ratio with a saw, square or triangle) give the product a mean, a DC offset (sines at ratio 1: half the voice's peak), not removed: a high-pass would raise the voice's peak above its bound |
+| Wavetable | `wavetable-voice` | four band-limited tables per bank (Basic, Formant, Pulse), Morph 0-3 crossfades two neighbours, the level following the two tables' levels in dB (their correlation is taken into account) and never peaking above one table; Morph is a jack (audio-rate) | a crossfade of two tables, not a per-sample interpolation across many |
 | Hard sync | `wavetable-voice`, bank fixed to Hard sync | saws hard-synced at 1, 2, 3 and 4.5 x the note, each an exact closed-form table (`syncedSawSeries`) | sync at set ratios; Morph crossfades neighbouring ratios, it is not a continuous sync sweep (that needs an AudioWorklet, K089) |
-| Percussion | `perc-voice` | kick, snare, clap, three toms, closed and open hats (six squares at fixed non-harmonic ratios through a high-pass), a noise hit; the pitch class picks the voice, the octave tunes by 12 st; Hat choke | each decay is to -60 dB rel (τ = decay / ln 1000), stated on the face; a key release does not shorten a hit |
+| Percussion | `perc-voice` | kick, snare, clap, three toms, closed and open hats (six squares at fixed non-harmonic ratios through a high-pass), a noise hit; the pitch class picks the voice, the octave tunes by 12 st; Hat choke | each decay is to -60 dB rel (τ = decay / ln 1000), stated on the face (the clap's from its last burst); a key release does not shorten a hit, all-off (Escape, a tab switch, MIDI all-off) cuts it; a voice's layers sum to at most 1 and the six in-phase hat squares are scaled by 1/6 |
 
 Disabled in the picker, with their reason: the **plucked string** and **FM operator feedback**
 need a loop in the audio graph (a delay shorter than one render quantum, or a one-sample
@@ -115,20 +115,25 @@ engine before it: the patch bay lists the gone module and the jacks it leaves op
 normal for those jacks), and the tab you are on shows the gone module's plate first, with the
 same button, which brings it back with its normals.
 
-**Voices.** A note whose voice would hold no source (every drawbar at 0, every FM operator above
-0.95 × Nyquist) takes no voice: the voice count and the 16-voice ceiling count only what
-sounds.
+**Voices.** A note whose voice would sound nothing (every drawbar at 0, every FM carrier above
+0.95 × Nyquist, ring with its modulator above it) takes no voice and steals none: the voice
+count and the 16-voice ceiling count only what sounds.
 
-**Levels.** A voice peaks at Level / 4 of digital full scale times (velocity / 127)²; several
-voices can pass 0 dB rel, where the output ceiling limits them.
+**Levels.** A voice peaks at Level / 64 of digital full scale times (velocity / 127)², so the
+16 voices of an engine at Level 4 (the highest and the default) and full velocity together peak
+at most at digital full scale: the Master Output level is the cap and the output ceiling never
+limits them (ADR 0058's rule for MIDI note voices; `src/js/studio/adapters/voices.js`). One
+voice is therefore 24 dB below full scale; raise the Master Output for more. A stolen voice
+fades for 5 ms before the new note starts, so the pool never sounds 17. A note-on for a note
+already held re-attacks its voice from the level it holds (its oscillators run on).
 
 ## Presets and links
 
 Five panel presets (`src/js/synth/presets.js`): Init, Bass, Lead, Sweep and Ring bell, and seven
 engine presets: Organ, FM bell, FM keys, Ring metal, Formant pad, Sync lead and Kit. The menu
 lists the presets of the tab you are on. A preset sets every knob and amount of its own tab as
-one history entry (an engine preset also chooses its engine); the other tab and the cables
-stay. **Copy link** writes `#m=synth[&yt=engines&ye=<engine>]&yp=<preset>&yv=<values that
+one history entry; an engine preset sets its own engine only and chooses it, leaving the panel
+and the other engines; the cables stay. **Copy link** writes `#m=synth[&yt=engines&ye=<engine>]&yp=<preset>&yv=<values that
 differ>&yc=<cables>`; the keys are the Synth's own, so a Synth link never opens Studio, and a
 link with one unknown item is refused whole. A link reopens the whole instrument: every module
 from the preset, then the values that differ. A cable in

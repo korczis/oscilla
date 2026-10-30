@@ -1,7 +1,12 @@
 // The wavetable engine's banks and its morph law (plan K092; the sync bank, K089 part): data and
 // pure maths only. A bank is four tables, each a list of partials (audio/additive.js), played as
-// four band-limited PeriodicWaves. Morph m in [0, 3] crossfades the two neighbouring tables with
-// equal power: table i weighs cos((m − i)·π/2) when |m − i| < 1, else 0, so Σ w² = 1 everywhere.
+// four band-limited PeriodicWaves, each scaled to a peak of 1. Morph m in [0, 3] crossfades the
+// two neighbouring tables i and i + 1 (x = m − i): their linear weights (1 − x, x) times a
+// level factor g(x) that holds the mix's power at the tables' own powers interpolated in dB
+// (review of #332: the tables are correlated, so an equal-power law bumped the level by up to
+// 3 dB between tables). g comes from the tables' powers and their cross term (closed form over
+// the partials), so the morph is level-continuous; one headroom factor per bank, the largest
+// peak of the mix over the morph, keeps every mix at or below one table's peak.
 // It crossfades neighbouring tables; it is not a per-sample interpolation across many
 // tables (that needs an AudioWorklet, K088).
 //
@@ -10,7 +15,9 @@
 // crossfades neighbouring ratios; it is not a continuous sync sweep (that needs the worklet,
 // K089).
 
-import { harmonicSeries, pulseSeries, syncedSawSeries } from '../audio/additive.js';
+import {
+  harmonicSeries, pulseSeries, synthesizePeriod, syncedSawSeries, waveformPeak,
+} from '../audio/additive.js';
 
 export const WAVETABLE_PARTIALS = 64;
 export const MORPH_MAX = 3;
@@ -38,26 +45,106 @@ export const WAVETABLE_BANKS = Object.freeze({
 });
 export const WAVETABLE_BANK_IDS = Object.freeze(Object.keys(WAVETABLE_BANKS));
 
-/** Weight of table `i` (0..3) at morph `m`: the equal-power law above. */
-export function morphWeight(i, m) {
-  const x = Math.min(MORPH_MAX, Math.max(0, m)) - i;
-  return Math.abs(x) < 1 ? Math.cos((x * Math.PI) / 2) : 0;
+const G_MAX = 4; // a bound on the level factor (no bank comes near it)
+const laws = new Map();
+
+/**
+ * Each bank's headroom: 1 / the largest peak of its morph mix (a table peaks at 1), rounded
+ * down. Searching that peak takes tens of milliseconds per bank, too long for the moment an
+ * engine is built, so it is data here and tests/unit/synth-review-332-round2 recomputes it
+ * (morphPeak) and proves every value at or below 1 / the peak and within 1 % of it.
+ */
+export const MORPH_HEADROOM = Object.freeze({ basic: 0.992, formant: 0.799, pulse: 0.952,
+  sync: 0.818 });
+
+/** A table's partials scaled to peak 1, as { n -> [a, b] } (sin and cos coefficients). */
+function coefficients(ps) {
+  const k = 1 / waveformPeak(ps);
+  const out = new Map();
+  for (const p of ps) {
+    if (p.gain) out.set(p.n, [p.gain * k * Math.cos(p.phase), p.gain * k * Math.sin(p.phase)]);
+  }
+  return out;
+}
+/** Mean of x·y over a period for two coefficient maps (Parseval). */
+function crossPower(a, b) {
+  let s = 0;
+  for (const [n, [p, q]] of a) {
+    const o = b.get(n);
+    if (o) s += (p * o[0] + q * o[1]) / 2;
+  }
+  return s;
+}
+
+/** The level factor g(x) of segment `seg` of a law: mix power = the tables' dB-interpolated. */
+function levelFactor(seg, x) {
+  const lin = (1 - x) ** 2 * seg.pa + x ** 2 * seg.pb + 2 * x * (1 - x) * seg.c;
+  const want = seg.pa ** (1 - x) * seg.pb ** x;
+  return lin > 0 ? Math.min(G_MAX, Math.sqrt(want / lin)) : 1;
+}
+
+/** The morph law of a bank (cached): per segment its powers and cross term, and the headroom. */
+export function morphLaw(bank) {
+  const id = WAVETABLE_BANKS[bank] ? bank : 'basic';
+  if (laws.has(id)) return laws.get(id);
+  const co = WAVETABLE_BANKS[id].partials().map(coefficients);
+  const segs = [0, 1, 2].map((i) => ({ pa: crossPower(co[i], co[i]),
+    pb: crossPower(co[i + 1], co[i + 1]), c: crossPower(co[i], co[i + 1]) }));
+  const law = Object.freeze({ bank: id, segs, headroom: MORPH_HEADROOM[id] });
+  laws.set(id, law);
+  return law;
 }
 
 /**
- * The WaveShaper curve of table `i`: input x in [−1, 1] is morph (x + 1) · MORPH_MAX / 2, so
- * one morph signal through four shapers gives the four weights; a modulated morph outside
- * [0, 3] holds at the end table (the shaper clamps its input).
+ * The largest peak of a bank's morph mix before its headroom (the search MORPH_HEADROOM is
+ * taken from): `points` samples of a period at `steps` morph points per segment.
  */
-export function morphCurve(i, size = MORPH_CURVE_POINTS) {
+export function morphPeak(bank, { points = 8192, steps = 64 } = {}) {
+  const law = morphLaw(bank);
+  const wave = WAVETABLE_BANKS[law.bank].partials().map((ps) => synthesizePeriod(ps, points,
+    1 / waveformPeak(ps)));
+  let peak = 1;
+  law.segs.forEach((seg, i) => {
+    for (let k = 1; k < steps; k++) {
+      const x = k / steps;
+      const g = levelFactor(seg, x);
+      for (let j = 0; j < points; j++) {
+        peak = Math.max(peak, Math.abs(g * ((1 - x) * wave[i][j] + x * wave[i + 1][j])));
+      }
+    }
+  });
+  return peak;
+}
+
+/** Weight of table `i` (0..3) at morph `m` in `bank`: the level-continuous law above. */
+export function morphWeight(i, m, bank = 'basic') {
+  const law = morphLaw(bank);
+  const mm = Math.min(MORPH_MAX, Math.max(0, m));
+  const seg = Math.min(MORPH_MAX - 1, Math.floor(mm));
+  const x = mm - seg;
+  if (i !== seg && i !== seg + 1) return 0;
+  const w = i === seg ? 1 - x : x;
+  return w ? w * levelFactor(law.segs[seg], x) * law.headroom : 0;
+}
+
+/** Table i's share of the crossfade at morph m (1 − |m − i| within 1 of it, else 0). */
+export const morphShare = (i, m) => Math.max(0, 1 - Math.abs(Math.min(MORPH_MAX,
+  Math.max(0, m)) - i));
+
+/**
+ * The WaveShaper curve of table `i` in `bank`: input x in [−1, 1] is morph (x + 1) ·
+ * MORPH_MAX / 2, so one morph signal through four shapers gives the four weights; a modulated
+ * morph outside [0, 3] holds at the end table (the shaper clamps its input).
+ */
+export function morphCurve(i, size = MORPH_CURVE_POINTS, bank = 'basic') {
   const out = new Float32Array(size);
-  for (let k = 0; k < size; k++) out[k] = morphWeight(i, (k / (size - 1)) * MORPH_MAX);
+  for (let k = 0; k < size; k++) out[k] = morphWeight(i, (k / (size - 1)) * MORPH_MAX, bank);
   return out;
 }
 
-/** Which tables sound at morph `m`, for the face: "Saw 100 %" or "Square 71 % · Saw 71 %". */
+/** Which tables sound at morph `m`, for the face: "Saw 100 %" or "Square 50 % · Saw 50 %". */
 export function morphText(bank, m) {
   const b = WAVETABLE_BANKS[bank] || WAVETABLE_BANKS.basic;
-  return b.tables.map((t, i) => [t, morphWeight(i, m)]).filter(([, w]) => w > 0.005)
+  return b.tables.map((t, i) => [t, morphShare(i, m)]).filter(([, w]) => w > 0.005)
     .map(([t, w]) => `${t} ${Math.round(w * 100)} %`).join(' · ');
 }

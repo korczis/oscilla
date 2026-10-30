@@ -18,7 +18,8 @@ export const CHOKE_TAU_S = 0.002;
 export const HAT_RATIOS = Object.freeze([2, 3, 4.16, 5.43, 6.79, 8.21]);
 
 const voice = (id, label, layers, extra = {}) => Object.freeze({ id, label,
-  layers: Object.freeze(layers.map((l) => Object.freeze(l))), ...extra });
+  keyLabel: label.toLowerCase(), layers: Object.freeze(layers.map((l) => Object.freeze(l))),
+  ...extra });
 
 export const PERC_VOICES = Object.freeze({
   kick: voice('kick', 'Kick', [
@@ -34,25 +35,38 @@ export const PERC_VOICES = Object.freeze({
     { kind: 'noise', filter: 'bandpass', hz: 1200, q: 1.4, decayS: 0.28, level: 1, noise: true,
       bursts: [[0, 0.008], [0.011, 0.008], [0.022, 0.008]] }]),
   tomLow: voice('tomLow', 'Tom low', [
-    { kind: 'tone', wave: 'sine', hz: 140, toHz: 100, sweepS: 0.09, decayS: 0.45, level: 1 }]),
+    { kind: 'tone', wave: 'sine', hz: 140, toHz: 100, sweepS: 0.09, decayS: 0.45, level: 1 }],
+    { keyLabel: 'low tom' }),
   tomMid: voice('tomMid', 'Tom mid', [
-    { kind: 'tone', wave: 'sine', hz: 200, toHz: 145, sweepS: 0.08, decayS: 0.38, level: 1 }]),
+    { kind: 'tone', wave: 'sine', hz: 200, toHz: 145, sweepS: 0.08, decayS: 0.38, level: 1 }],
+    { keyLabel: 'mid tom' }),
   tomHigh: voice('tomHigh', 'Tom high', [
-    { kind: 'tone', wave: 'sine', hz: 280, toHz: 205, sweepS: 0.07, decayS: 0.32, level: 1 }]),
+    { kind: 'tone', wave: 'sine', hz: 280, toHz: 205, sweepS: 0.07, decayS: 0.32, level: 1 }],
+    { keyLabel: 'high tom' }),
   hatClosed: voice('hatClosed', 'Hat closed', [
     { kind: 'metal', ratios: HAT_RATIOS, baseHz: 400, filterHz: 7000, decayS: 0.06,
-      level: 1 }], { chokes: 'hatOpen' }),
+      level: 1 }], { chokes: 'hatOpen', keyLabel: 'closed hat' }),
   hatOpen: voice('hatOpen', 'Hat open', [
     { kind: 'metal', ratios: HAT_RATIOS, baseHz: 400, filterHz: 7000, decayS: 0.5,
-      level: 1 }], { group: 'hatOpen' }),
+      level: 1 }], { group: 'hatOpen', keyLabel: 'open hat' }),
   noise: voice('noise', 'Noise hit', [
     { kind: 'noise', filter: 'bandpass', hz: 2500, q: 2, decayS: 0.3, level: 1, noise: true,
-      tracks: true }]),
+      tracks: true }], { keyLabel: 'noise' }),
 });
 
 /** Pitch class (C = 0) → voice id: the whole kit in every octave. */
 export const PERC_KEYMAP = Object.freeze(['kick', 'clap', 'snare', 'clap', 'tomLow', 'tomMid',
   'hatClosed', 'tomHigh', 'hatClosed', 'noise', 'hatOpen', 'noise']);
+
+const PITCH_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+/** The key map as the face states it: "C kick, C# and D# clap, D snare, ...". */
+export function percKeysText() {
+  const keys = new Map();
+  PERC_KEYMAP.forEach((id, pc) => keys.set(id, [...(keys.get(id) || []), PITCH_NAMES[pc]]));
+  return [...keys].map(([id, names]) => `${names.join(' and ')} ${PERC_VOICES[id].keyLabel}`)
+    .join(', ');
+}
 
 /** The voice a note plays, and its tuning in semitones from the octave around C4. */
 export function percNote(note) {
@@ -75,4 +89,12 @@ export function layerLevel(v, layer, tone) {
   const mixed = v.layers.some((l) => l.noise) && v.layers.some((l) => l.kind === 'tone');
   if (!mixed) return layer.level;
   return layer.level * Math.min(1, 2 * (layer.noise ? 1 - tone : tone));
+}
+
+/**
+ * The factor that keeps a voice's layers at or below 1 together (each layer peaks at its level
+ * at most, so their sum bounds the voice's peak): 1 / max(1, Σ layerLevel).
+ */
+export function percLevelScale(v, tone) {
+  return 1 / Math.max(1, v.layers.reduce((s, l) => s + layerLevel(v, l, tone), 0));
 }

@@ -33,7 +33,7 @@ import { NODE_REGISTRY } from '../studio/registry.js';
 import { canConnect } from '../studio/ports.js';
 import { decodeSynthLink, encodeSynthLink } from '../core/url-state-synth.js';
 import { ENGINE_BLOCKED } from './panels/engines.js';
-import { SAFE_NYQUIST_FACTOR_TEXT } from '../core/constants.js';
+import { CHIP, droppedText, enginePickerHtml } from './view/engines.js';
 import { isSemanticallyEqual } from '../studio/schema.js';
 import { REFERENCE_TEMPLATE_ID, templateModel } from '../studio/templates/index.js';
 
@@ -321,28 +321,6 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   }
 
   const PLATE_GRID = 'grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-4';
-  const CHIP = 'snap-start shrink-0 rounded-full border border-solid px-3 h-11 text-xs '
-    + 'font-semibold tracking-wide';
-
-  /** The engine picker: one radio per engine module, then the blocked engines, disabled. */
-  function enginePicker() {
-    const on = engineId();
-    const res = nodes();
-    return '<div role="radiogroup" aria-label="Engine the keys play" class="flex shrink-0 '
-      + 'gap-2 lg:flex-wrap">' + ENGINE_IDS.map((id) => {
-      const x = panel.module(id);
-      const sel = id === on;
-      return `<button type="button" role="radio" aria-checked="${sel}" data-engine="${id}" `
-        + `class="${CHIP} ${sel ? 'border-primary-600 bg-primary-600 text-white '
-          + 'dark:bg-primary-500' : 'border-gray-300 bg-white text-gray-800 '
-          + 'dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200'}">${esc(x.label)}`
-        + `${res.get(id) ? '' : ' (removed)'}</button>`;
-    }).join('') + '</div>' + ENGINE_BLOCKED.map((b) => `<button type="button" aria-disabled="true" `
-      + `aria-describedby="synth-blocked-${b.id}" data-blocked="${b.id}" class="${CHIP} `
-      + 'cursor-not-allowed border-dashed border-gray-300 bg-gray-100 text-gray-500 '
-      + `dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400">${esc(b.label)}<span `
-      + `class="sr-only" id="synth-blocked-${b.id}">${esc(b.reason)}</span></button>`).join('');
-  }
   function renderAll() {
     const el = host();
     if (!el || !cmp) return;
@@ -368,7 +346,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     const tokens = panelTokens(el);
     const engines = tab() === 'engines';
     const shown = platesShown({ panel, tab: tab(), engine: engineId(), resolved: res, model: m });
-    const chips = engines ? enginePicker() : shown.map((x) => `<button type="button" `
+    const chips = engines ? enginePickerHtml({ panel, ids: ENGINE_IDS, on: engineId(),
+      resolved: res }) : shown.map((x) => `<button type="button" `
       + `data-goto="${x.id}" class="${CHIP} border-gray-300 bg-white text-gray-800 `
       + `dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200">${esc(x.label)}</button>`)
       .join('');
@@ -733,11 +712,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       return { ok: false, reason: 'removed' };
     }
     const r = t.live(target.id, { kind: 'on', note, velocity });
-    if (r && r.dropped) {
-      const limit = `${SAFE_NYQUIST_FACTOR_TEXT} × the digital Nyquist limit`;
-      say(target.type === 'fm-voice' ? `${r.dropped} operator(s) above ${limit} left out of `
-        + 'this note.' : `${r.dropped} harmonic(s) above ${limit} dropped from this note.`);
-    }
+    if (r && r.dropped) say(droppedText(target, r.dropped));
     return r;
   }
 

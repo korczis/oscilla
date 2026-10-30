@@ -78,8 +78,10 @@ test('a note off releases with the Release time through cancelAndHoldAtTime', ()
   assert.equal(h.noteOff(0.5, 69), false, 'a released note is not released twice');
 });
 
-test('voice peak: Level / 4 times the velocity law', () => {
-  assert.equal(voicePeak(2, 127), 0.5);
-  assert.ok(Math.abs(voicePeak(4, 127 / 2) - (127 / 2 / 127) ** 2) < 0.02);
+test('voice peak: Level / 64 times the velocity law; 16 at Level 4 sum to full scale', () => {
+  assert.equal(voicePeak(4, 127), 1 / 16);
+  assert.equal(voicePeak(2, 127), 1 / 32);
+  assert.ok(Math.abs(voicePeak(4, 127 / 2) - (127 / 2 / 127) ** 2 / 16) < 0.002);
   assert.equal(voicePeak(0, 127), 0);
+  assert.equal(voicePeak(9, 127), 1 / 16, 'a Level above 4 is held at 4');
 });

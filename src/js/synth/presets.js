@@ -4,9 +4,10 @@
 // stay as they are. presetAction(model, panel, id, { all }) -> { action } | { reason }.
 //
 // A preset belongs to one tab (`tab`, default 'panel') and sets only that tab's modules, so a
-// panel preset leaves the engines as they are and an engine preset (`engine`: the module the
-// keys then play) leaves the panel; { all: true } resets every module (a link reopens the whole
-// instrument from its preset, synth/link.js).
+// panel preset leaves the engines as they are; an engine preset (`engine`: the module the keys
+// then play) sets that engine's module only, leaving the panel and the other engines;
+// { all: true } resets every module (a link reopens the whole instrument from its preset,
+// synth/link.js).
 
 import { amountEdges } from './normals.js';
 
@@ -85,11 +86,12 @@ export function presetAction(model, panel, id, { all = false } = {}) {
   for (const m of panel.modules) {
     const node = nodes.get(m.id);
     if (!node || m.def.maxInstances === 1) continue; // Master Output keeps the Studio's level
-    if (!all && m.tab !== p.tab) continue;
+    if (!all && (m.tab !== p.tab || (p.engine && m.id !== p.engine))) continue;
     steps.push({ type: 'NODE_PARAM_SET', nodeId: node.id, params: values[m.id] });
   }
   for (const a of panel.amounts) {
-    if (!all && (panel.module(a.module) || {}).tab !== p.tab) continue;
+    const owner = panel.module(a.module) || {};
+    if (!all && (owner.tab !== p.tab || (p.engine && owner.id !== p.engine))) continue;
     const depth = p.amounts[a.id] ?? 0;
     for (const e of amountEdges(model, panel, a)) {
       steps.push({ type: 'EDGE_UPDATE', edgeId: e.id, props: { depth } });

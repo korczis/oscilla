@@ -7,9 +7,11 @@
 //
 // Every engine has a Chain input: the audio there passes to the output unchanged and the
 // engine's voices are added to it, which is how several instruments share the one Master
-// Output (its input takes one cable). Levels are relative: a voice peaks at Level / 4 of
-// digital full scale times the velocity law, so a few voices can pass 0 dB rel and the output
-// ceiling then limits them. Pitch is a requested digital frequency (project.no-fake-science).
+// Output (its input takes one cable). Levels are relative: a voice peaks at Level / 64 of
+// digital full scale times the velocity law, so the 16 voices at Level 4 and full velocity
+// together peak at most at full scale and the Master Output level stays the cap (ADR 0058's
+// rule for note voices; adapters/voices.js). Pitch is a requested digital frequency
+// (project.no-fake-science).
 //
 // A definition may name `inactive(params, key) -> reason | null` (why a control does nothing
 // at these settings, project.no-inert-surfaces (b)) and `facts(params) -> text` (a readout
@@ -21,7 +23,7 @@ import { FM_ALGORITHMS, FM_FEEDBACK_BLOCKED, FM_OPERATORS, operatorRole } from
   '../../synth/fm-algorithms.js';
 import { MORPH_MAX, WAVETABLE_BANKS, WAVETABLE_BANK_IDS, morphText } from
   '../../synth/wavetables.js';
-import { percDecays } from '../../synth/perc-recipes.js';
+import { percDecays, percKeysText } from '../../synth/perc-recipes.js';
 import { MAX_VOICES } from '../../synth/voice-pool.js';
 import {
   CATEGORIES, boolParam, defineNode, enumParam, levelParam, numberParam, optionLabel, parts,
@@ -37,15 +39,17 @@ const chainIn = definePort({ id: 'thru', direction: 'in', type: 'AUDIO', label: 
 
 /** The parameters every engine shares: its level and the amplitude ADSR of each voice. */
 const voiceParams = (release = 0.3) => [
-  numberParam('level', 'Level', { min: 0, max: 4, step: 0.01, default: 2 }),
+  numberParam('level', 'Level', { min: 0, max: 4, step: 0.01, default: 4 }),
   secondsParam('attack', 'Attack', 0.005, 0.001, 5, { scale: 'log' }),
   secondsParam('decay', 'Decay', 0.3, 0.001, 5, { scale: 'log' }),
   levelParam('sustain', 'Sustain', 0.7),
   secondsParam('release', 'Release', release, 0.001, 10, { scale: 'log' }),
 ];
 const POLY = `Up to ${MAX_VOICES} voices: a ${MAX_VOICES + 1}th note takes the voice released `
-  + 'first, else the oldest. A voice peaks at Level / 4 of digital full scale times (velocity / '
-  + '127)²; several voices can pass 0 dB rel, where the output ceiling limits them.';
+  + 'first, else the oldest, after a 5 ms fade. A voice peaks at Level / 64 of digital full scale '
+  + `times (velocity / 127)², so the ${MAX_VOICES} voices together peak at most at digital full `
+  + 'scale (at Level 4, the highest) and the Master Output level stays the cap. A note-on for a '
+  + 'held note re-attacks it from the level it holds.';
 const engine = (def) => defineNode({
   category: CATEGORIES.SOURCES,
   inputs: [chainIn],
@@ -131,7 +135,12 @@ export const fmVoice = engine({
     constraints: 'Linear frequency modulation, index stated: Δf = I · f_mod Hz; the index '
       + 'falls from I to I × Index sustain over Index decay. Sidebands above the digital '
       + 'Nyquist limit fold back (linear FM is not band-limited); an operator above '
-      + `${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist is left out of that note. ${FM_FEEDBACK_BLOCKED}`,
+      + `${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist is left out of that note (with the modulators `
+      + 'that only drive it). A modulator that is itself modulated reaches its target through a '
+      + 'DC block at a tenth of the lowest operator frequency: its 0 Hz line would otherwise '
+      + "shift the note's pitch. A carrier at a whole multiple of its modulator's frequency has a "
+      + '0 Hz line of its own: a DC offset in the voice, not removed (a high-pass would raise the '
+      + `voice's peak above its stated bound). ${FM_FEEDBACK_BLOCKED}`,
   },
 });
 
@@ -160,7 +169,10 @@ export const amVoice = engine({
     what: 'Ring and amplitude modulation: a carrier at the note times a modulator at Ratio × '
       + 'the note.',
     constraints: 'Digital multiplication, levels relative (the Ring node of the Synth panel, '
-      + 'per voice).',
+      + 'per voice). Where a carrier harmonic and a modulator harmonic coincide (ratio 1; a whole '
+      + 'ratio with a saw, square or triangle) the product has a mean, a DC offset: sines at ratio '
+      + "1 put half the voice's peak there. It is not removed: a high-pass would raise the "
+      + "voice's peak above its stated bound.",
   },
 });
 
@@ -178,7 +190,7 @@ export const wavetableVoice = engine({
   ],
   summary: (p) => parts(optionLabel(wavetableVoice, 'bank', p.bank), `morph ${p.morph}`),
   facts: (p) => `Morph ${Number(p.morph).toFixed(2)}: ${morphText(p.bank, p.morph)} (an `
-    + 'equal-power crossfade of two neighbouring tables).'
+    + 'level-continuous crossfade of two neighbouring tables).'
     + (p.bank === 'sync' ? ' Hard sync at set ratios; morph crossfades neighbouring ratios, it '
       + 'is not a continuous sync sweep (that needs an AudioWorklet).' : ''),
   reuses: ['audio/additive.js#syncedSawSeries', 'audio/additive.js#buildPeriodicWave'],
@@ -186,9 +198,9 @@ export const wavetableVoice = engine({
     what: 'Wavetable synthesis: four band-limited tables per bank, crossfaded by Morph (0 to 3, '
       + 'modulatable at audio rate). The Hard sync bank holds saws hard-synced at 1, 2, 3 and '
       + '4.5 times the note.',
-    constraints: 'Morph crossfades two neighbouring tables with equal power; it is not a '
-      + 'per-sample interpolation across many tables. A modulated morph beyond 0 or 3 holds the '
-      + 'end table.',
+    constraints: 'Morph crossfades two neighbouring tables, its level following the two '
+      + "tables' levels (in dB) and never peaking above one table; it is not a per-sample "
+      + 'interpolation across many tables. A modulated morph beyond 0 or 3 holds the end table.',
   },
 });
 
@@ -203,20 +215,21 @@ export const percVoice = engine({
       scale: 'log' }),
     levelParam('tone', 'Tone / noise', 0.5),
     boolParam('choke', 'Hat choke', true),
-    numberParam('level', 'Level', { min: 0, max: 4, step: 0.01, default: 2 }),
+    numberParam('level', 'Level', { min: 0, max: 4, step: 0.01, default: 4 }),
   ],
   summary: (p) => parts(p.tune ? `${p.tune} st` : null, `decay × ${p.decay}`),
   facts: (p) => `Decay to −60 dB rel: ${percDecays(p.decay).map((d) => `${d.label} `
-    + `${secs(d.decayS)}`).join(' · ')}. Keys: C kick, C# and D# clap, D snare, E F G toms, `
-    + 'F# and G# closed hat, A# open hat, A and B noise; each octave tunes ±12 st.',
+    + `${secs(d.decayS)}`).join(' · ')}. Keys: ${percKeysText()}; each octave tunes ±12 st.`,
   help: {
     what: 'A percussion kit on the keys: kick (a sine with a falling pitch and a noise click), '
       + 'snare (two tones and noise), clap (noise with three short bursts), three toms, hats '
       + '(six square oscillators at fixed non-harmonic ratios through a high-pass) and a noise '
       + 'hit.',
-    constraints: 'Each hit decays exponentially to −60 dB rel at its stated decay; a key '
-      + 'release does not shorten it. With Hat choke on, a closed hat releases a sounding open '
-      + 'hat on the audio clock.',
+    constraints: 'Each hit decays exponentially to −60 dB rel at its stated decay (the clap '
+      + 'from its last burst); a key release does not shorten it, all-off cuts it. A voice\'s '
+      + 'layers are scaled to sum to at most 1, and the six hat squares by 1/6 (they start in '
+      + 'phase, so their sum is coherent). With Hat choke on, a closed hat releases a sounding '
+      + 'open hat on the audio clock.',
   },
 });
 
