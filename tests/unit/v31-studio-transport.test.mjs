@@ -64,15 +64,27 @@ const isFrame = (t) => Math.abs(t * SR - Math.round(t * SR)) < 1e-6;
 const at = (bF, p, k = 0, loopS = 0) => (bF + Math.round(p * SR) + k * Math.round(loopS * SR))
   / SR;
 
-/** Pattern voice carriers: oscillators created by compileSequence (not the graph's own). */
-function voiceCarriers(s, type) {
+/**
+ * Pattern voice carriers: oscillators created by compileSequence (not the graph's own), of
+ * `type` (every type when null).
+ */
+function voiceCarriers(s, type = null) {
   const own = new Set();
   for (const h of s.runtime.nodes.values()) {
     if (h.info && h.info.oscillator) own.add(h.info.oscillator);
   }
-  return s.ctx.oscillators.filter((o) => o.type === type && !own.has(o) && o.startAt !== null)
-    .sort((a, b) => a.startAt - b.startAt);
+  return s.ctx.oscillators.filter((o) => (type === null || o.type === type) && !own.has(o)
+    && o.startAt !== null).sort((a, b) => a.startAt - b.startAt);
 }
+
+/**
+ * Every voice carrier, of any waveform, that sounds from a start in [t0, t1) (H001: a
+ * continuation counted by its new waveform alone let an extra voice on the old one pass). A
+ * carrier stopped at or before its start (a scheduled voice cancelled unheard) never sounds.
+ */
+const startedIn = (s, t0, t1 = Infinity) => voiceCarriers(s)
+  .filter((o) => o.startAt >= t0 - EPS && o.startAt < t1 - EPS
+    && !(o.stopAt !== null && o.stopAt <= o.startAt + EPS));
 
 /** Every node reachable from `node` through connections (AudioParams are leaves). */
 function reach(node, seen = new Set()) {
@@ -481,7 +493,8 @@ test('Basic Synth: a rebuilt node keeps its lane and its pattern clips (node-rep
   assert.deepEqual(osc.modTarget('level', 'linear').param.calls.at(-1),
     ['setValueAtTime', ROUTE_FLOOR, now]);
   // The sounding Tone continues on it from the edit (H001, the next test), the Sweep after it.
-  const square = voiceCarriers(s, 'square');
+  const square = startedIn(s, horizon);
+  assert.deepEqual(square.map((o) => o.type), ['square', 'square']);
   assert.deepEqual(square.slice(1).map((o) => o.startAt), [at(bF, 1)]);
   assert.ok(square[0].startAt >= horizon && square[0].startAt < at(bF, 1));
   const route = s.runtime.edges.get('edge-1').gain;
@@ -510,8 +523,9 @@ test('H001: a waveform edit while a pattern clip sounds continues the clip on th
   assert.deepEqual(r.applied.ops.filter((o) => o.op === 'node-replace').map((o) => o.id),
     ['osc-1']);
   const q = 128 / SR;
-  const cont = voiceCarriers(s, 'square').filter((o) => o.startAt < at(bF, 1));
-  assert.equal(cont.length, 1, 'the rest of the Tone plays on the new oscillator');
+  const cont = startedIn(s, horizon, at(bF, 1));
+  assert.deepEqual(cont.map((o) => o.type), ['square'],
+    'the rest of the Tone plays on the new oscillator, one voice');
   const t0 = cont[0].startAt;
   assert.ok(t0 >= horizon && t0 < horizon + 2 * q + EPS, `continued at ${t0} from ${horizon}`);
   near(t0 / q, Math.round(t0 / q), 1e-6);
@@ -543,7 +557,8 @@ test('H001: a waveform edit while a pattern clip sounds continues the clip on th
     'square', 'the model holds the edit');
   // The Sweep still plays on the new node, and STOP leaves nothing behind.
   s.fx.advance(1.0);
-  assert.deepEqual(voiceCarriers(s, 'square').map((o) => o.startAt), [t0, at(bF, 1)]);
+  assert.deepEqual(startedIn(s, horizon).map((o) => [o.type, o.startAt]),
+    [['square', t0], ['square', at(bF, 1)]]);
   const done = s.transport.stop();
   s.fx.advance(0.5);
   const counts = await done;
@@ -568,7 +583,8 @@ function waveformEdit({ model, editAt = 0.4, transport = null, pre = null, s = s
   dispatch(s, { type: 'NODE_PARAM_SET', nodeId: 'osc-1', key: 'waveform', value: 'square' });
   const horizon = frameCeil(s.ctx.currentTime + SAFE_HORIZON_S, SR);
   const r = tr.sync();
-  const cont = voiceCarriers(s, 'square').filter((o) => o.startAt < at(bF, 1) - EPS);
+  const cont = startedIn(s, horizon, at(bF, 1));
+  assert.ok(cont.every((o) => o.type === 'square'), `continued as ${cont.map((o) => o.type)}`);
   return { s, tr, b, bF, tone, horizon, r, cont };
 }
 
@@ -658,9 +674,10 @@ test('H001: a sounding clip shortened earlier in the playback continues to its n
   // A later edit (the scheduler decides retime-end again) still finds it to its end.
   s.fx.advance(0.05);
   dispatch(s, { type: 'NODE_PARAM_SET', nodeId: 'osc-1', key: 'waveform', value: 'triangle' });
+  const h2 = frameCeil(s.ctx.currentTime + SAFE_HORIZON_S, SR);
   tr.sync();
-  const tri = voiceCarriers(s, 'triangle').filter((o) => o.startAt < end);
-  assert.equal(tri.length, 1);
+  const tri = startedIn(s, h2, end);
+  assert.deepEqual(tri.map((o) => o.type), ['triangle']);
   near(tri[0].stopAt, end + STOP_RAMP_S + STOP_PAD_S, 1e-9);
   await noLeaks(s, tr);
 });

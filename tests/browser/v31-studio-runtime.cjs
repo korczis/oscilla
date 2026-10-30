@@ -41,9 +41,10 @@
 //                        within LEVEL_DB (it fell to the floor, -107 dB, until the Sweep: the
 //                        rebuilt oscillator dropped the sounding voice); the transport recorded
 //                        the continuation, and across the seam (from before the edit to
-//                        SEAM_AFTER_S after the continuation) every SEAM_WIN_S window stays
-//                        within SEAM_DB below and SEAM_PEAK_DB above the levels on either side
-//                        (no gap, no dip, no double level); no click across the switch (the
+//                        SEAM_AFTER_S after the continuation) every SEAM_WIN_S window (its RMS
+//                        over the frames the tap holds, SEAM_MIN_COVER of them at least, the
+//                        seam SEAM_SPAN_COVER) stays within SEAM_DB below and SEAM_PEAK_DB above
+//                        the levels on either side (no gap, no dip, no double level); no click across the switch (the
 //                        largest one-sample step around it within CLICK_MAX times the larger of
 //                        the steady windows' own); the model holds square and the runtime has
 //                        applied its revision
@@ -110,12 +111,20 @@ const LEVEL_DB = 3;
 // The seam: RMS windows of SEAM_WIN_S (two periods of the 220 Hz Tone and more), every
 // SEAM_HOP_S, from before the edit to SEAM_AFTER_S after the continuation starts. None falls more
 // than SEAM_DB below the lower of the levels before and after (a gap of one window or more reads
-// the floor) or rises SEAM_PEAK_DB above the higher (both voices at full level).
+// the floor) or rises SEAM_PEAK_DB above the higher (both voices at full level). Each window's
+// RMS is over the tapped frames it holds: the tap sometimes labels one 128-frame quantum off by
+// one under load, a hole in its record (never in the audio: the samples either side are
+// contiguous), which leaves a 10 ms window 70-80 % covered. A window is measured when it holds
+// SEAM_MIN_COVER of its frames (5 ms, more than a period of the Tone; one hole leaves more),
+// and the seam as a whole SEAM_SPAN_COVER (a late resume or a gap is silence on the tap, which
+// the tap records: it reads the floor in the windows over it, measured).
 const SEAM_WIN_S = 0.01;
 const SEAM_HOP_S = 0.0025;
 const SEAM_AFTER_S = 0.06;
 const SEAM_DB = 10;
 const SEAM_PEAK_DB = 4;
+const SEAM_MIN_COVER = 0.5;
+const SEAM_SPAN_COVER = 0.9;
 const dbOf = (x) => 20 * Math.log10(Math.max(x, 1e-12));
 
 const H = {
@@ -287,8 +296,12 @@ const H = {
     }
     return { rms: n ? Math.sqrt(sum / n) : 0, n, want: f1 - f0 };
   }, [t0, t1]),
-  /** RMS of the tapped audio in windows of `win` s every `hop` s from t0 to t1: [[t, rms]]. */
-  windows: (page, t0, t1, win, hop) => page.evaluate(([a, b, w, h]) => {
+  /**
+   * RMS of the tapped audio in windows of `win` s every `hop` s from t0 to t1: [[t, rms, cover]],
+   * the RMS over the frames the tap holds in the window (null below `min` of them) and the share
+   * it holds.
+   */
+  windows: (page, t0, t1, win, hop, min) => page.evaluate(([a, b, w, h, m]) => {
     const sr = window.OSCILLA.engine.ctx.sampleRate;
     const out = [];
     for (let t = a; t + w <= b; t += h) {
@@ -300,10 +313,11 @@ const H = {
         const hi = Math.min(f1, c.f + c.L.length);
         for (let k = lo; k < hi; k += 1) { const v = c.L[k - c.f]; sum += v * v; n += 1; }
       }
-      out.push([t, n >= 0.9 * (f1 - f0) ? Math.sqrt(sum / n) : null]);
+      const cover = n / (f1 - f0);
+      out.push([t, n > 0 && cover >= m ? Math.sqrt(sum / n) : null, cover]);
     }
     return out;
-  }, [t0, t1, win, hop]),
+  }, [t0, t1, win, hop, min]),
   /** The last context time the output tap has delivered. */
   tapped: (page) => page.evaluate(() => {
     const sr = window.OSCILLA.engine.ctx.sampleRate;
@@ -360,14 +374,19 @@ const H = {
     const sync = await page.evaluate(() => {
       const s = window.OSCILLA.studio;
       const a = s.runtime.applied();
-      return { applied: a && a.revision, revision: s.store.getRevision() };
+      // The runtime's crossfade time for the edit (diagnostic: a continuation later than it by
+      // more than the crossfade is a gap in the audio, not in the tap).
+      const xf = s.trace.steps().filter((x) => x.owner === 'runtime' && x.kind === 'apply'
+        && a && x.revision === a.revision).map((x) => x.detail && x.detail.at);
+      return { applied: a && a.revision, revision: s.store.getRevision(), xfadeAt: xf.at(-1) };
     });
     // Where the Tone continued on the rebuilt oscillator (the transport's decision).
     const resume = await page.evaluate(() => window.OSCILLA.studio.transport.debugInfo().decisions
       .filter((x) => x.clipId === 'clip-1' && x.decision === 'continue').map((x) => x.at));
     const seamEnd = Math.max(edit.t, ...resume) + SEAM_AFTER_S;
     const seam = seamEnd <= post[1]
-      ? await H.windows(page, ask.t, seamEnd, SEAM_WIN_S, SEAM_HOP_S) : [];
+      ? await H.windows(page, ask.t, seamEnd, SEAM_WIN_S, SEAM_HOP_S, SEAM_MIN_COVER) : [];
+    const span = await H.rms(page, ask.t, seamEnd);
     await page.evaluate(() => window.OSCILLA.app.studioStop());
     const beforeDb = dbOf(before.rms);
     const afterDb = dbOf(after.rms);
@@ -375,7 +394,8 @@ const H = {
     const low = seamDb.reduce((m, x) => (x[1] < m[1] ? x : m), [null, Infinity]);
     const high = seamDb.reduce((m, x) => (x[1] > m[1] ? x : m), [null, -Infinity]);
     const d = { was, editAt: [ask.p, edit.p], beforeDb, afterDb, resume,
-      rise: afterDb - beforeDb, seam: { windows: seam.length, low, high },
+      rise: afterDb - beforeDb, seam: { windows: seam.length, low, high,
+        cover: [Math.min(...seam.map((x) => x[2])), span.n / span.want] },
       covered: [before.n / before.want, after.n / after.want], click: around.max,
       steady: Math.max(steadyPre.max, steadyPost.max), model, sync,
       clips: await page.evaluate(() => window.OSCILLA.studio.model.timeline.clips
@@ -388,7 +408,8 @@ const H = {
       sounds: afterDb > FLOOR_DB,
       level: Math.abs(afterDb - beforeDb - SQUARE_OVER_SAW_DB) <= LEVEL_DB,
       continued: resume.length === 1 && resume[0] >= ask.t && resume[0] < post[0],
-      seamCovered: seam.length > 0 && seamDb.length === seam.length,
+      seamCovered: seam.length > 0 && seamDb.length === seam.length
+        && span.n >= SEAM_SPAN_COVER * span.want,
       noGap: low[1] >= Math.min(beforeDb, afterDb) - SEAM_DB,
       noDouble: high[1] <= Math.max(beforeDb, afterDb) + SEAM_PEAK_DB,
       noClick: around.n > 0 && around.max <= CLICK_MAX * d.steady,
