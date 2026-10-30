@@ -48,6 +48,8 @@
 //                    voice's rel gain and the master (stereo/dual output stage).
 //     o.dualRouter   (ctx, track, plan, source) => { inputA, inputB, output, update(plan),
 //                    dispose() } replaces the dual plan's panners (Phase & Stereo routing).
+//                    engine.setDualRouter(factory) updates it on a sounding voice, or adds
+//                    one to a voice built without it by a click-free restart.
 //     o.dualPhaseDeg phase of the dual plan's B against A at the voice start (degrees; B starts
 //                    later by less than one period, modulation.js phaseStartDelay).
 //                    engine.setDualPhase(deg) applies a change by a click-free restart.
@@ -865,6 +867,32 @@ export class AudioEngine {
     const want = normalizePhaseDeg(deg);
     if (Math.abs(normalizePhaseDeg(v.opts.dualPhaseDeg) - want) < 1e-9) return 'same';
     v.opts = { ...v.opts, dualPhaseDeg: want };
+    return this._restart(v, v.plan);
+  }
+
+  /**
+   * Bring the sounding dual voice's routing up to date after its router's configuration changed
+   * (main.js: the Phase & Stereo pan). A voice that has a router re-reads it in place
+   * (router.update(plan), which glides) and keeps it, whatever `factory` is. A voice without
+   * one, given a router factory (o.dualRouter), is replaced by a click-free restart
+   * (FAST_RELEASE_S fade, then the same plan, options and deadline) that builds it; without a
+   * factory it is left as it is. Returns 'live' | 'restarted' | 'same' | false (no sounding
+   * dual voice, or a voice about to end).
+   */
+  setDualRouter(factory) {
+    const v = this.voice;
+    if (!v || v.ended || v.releasing || !v.plan || v.plan.type !== 'dual') return false;
+    if (v.live && v.live.router) {
+      try {
+        v.live.router.update(v.plan);
+      } catch (e) {
+        this._fail(e, 'router update');
+        return false;
+      }
+      return 'live';
+    }
+    if (typeof factory !== 'function') return 'same';
+    v.opts = { ...v.opts, dualRouter: factory };
     return this._restart(v, v.plan);
   }
 

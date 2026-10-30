@@ -193,7 +193,8 @@ function labVizInputs(plan) {
     additive,
     adsr: env && env.enabled ? { ...env.adsr } : null,
     filter: filter && filter.enabled ? { ...filter } : null,
-    router: dual && needsRouter(plan) ? routerConfigFor(plan) : null,
+    // A sounding voice keeps its router once built, at centre too (C010).
+    router: dual && (needsRouter(plan) || liveRouter) ? routerConfigFor(plan) : null,
     phaseDeg: dual && labs.phase ? labs.phase.config.phaseDeg : 0,
   };
 }
@@ -443,13 +444,24 @@ function mountLabs(root) {
   if (labs.filter) labs.filter.onChange(labChanged);
   if (labs.phase) {
     let lastPhaseDeg = labs.phase.config.phaseDeg;
+    let lastPan = labs.phase.config.pan;
     labs.phase.onChange((cfg) => {
       if (!app) return;
       if (Math.abs(app.dual.a.freq - cfg.freqA) > 1e-6) app.setDualFreq('a', String(cfg.freqA));
       if (Math.abs(app.dual.b.freq - cfg.freqB) > 1e-6) app.setDualFreq('b', String(cfg.freqB));
       const stereo = cfg.route === 'stereo';
       if (app.dual.stereo !== stereo) app.setStereo(stereo);
-      if (liveRouter) liveRouter.wrapper.refresh();
+      // Pan: a sounding dual voice with the router re-reads it (a glide). One started centred in
+      // Mono output has none, so the first pan off centre restarts it click-free with one, and
+      // it keeps it, at centre too (C010). The level does not step: the StereoPanners it
+      // replaces use the same equal-power law.
+      const v = engine.voice;
+      const want = !!(v && v.plan && v.plan.type === 'dual' && needsRouter(v.plan));
+      const routed = engine.setDualRouter(want ? dualRouterFactory(true) : null);
+      if (routed === 'restarted' || cfg.pan !== lastPan) {
+        lastPan = cfg.pan;
+        vizLabsChanged(); // the signal path shows the router and its pan
+      }
       if (cfg.phaseDeg !== lastPhaseDeg) {
         // B's phase offset is a start time: a sounding dual voice restarts click-free with it.
         lastPhaseDeg = cfg.phaseDeg;

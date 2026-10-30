@@ -1647,6 +1647,125 @@ function defineChecks() {
     return { ok, ...out };
   });
 
+  // C010: the Phase & Stereo pan reaches the sounding dual voice. A mono dual voice started
+  // centred has no stereo router; moving #osc-stereo-pan while it sounds restarts it once,
+  // click-free, with one (L/R balance from the router's own analysers), and the router stays:
+  // back at centre the voice is not restarted again and its level is the centred level it had
+  // without the router (the StereoPanners it replaced use the same equal-power law). Where pan
+  // does not apply (a single source, Stereo output) the slider is disabled with its visible
+  // reason. Every wait is a condition poll with a named deadline.
+  def('pan-live-dual', async ({ page }) => {
+    const inPage = (fn, arg) => page.evaluate(fn, arg);
+    const res = {};
+    const setPan = (v) => inPage((p) => {
+      const el = document.getElementById('osc-stereo-pan');
+      el.value = String(p);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      return window.OSCILLA.labs.phase.config.pan;
+    }, v);
+    // RMS of the engine's output analyser (dB) and the router's L/R balance (dB, L over R).
+    const read = () => inPage(() => {
+      const e = window.OSCILLA.engine;
+      const rms = (b) => { let s = 0; for (const x of b) s += x * x; return Math.sqrt(s / b.length); };
+      const out = new Float32Array(e.analyser.fftSize);
+      e.analyser.getFloatTimeDomainData(out);
+      const v = e.voice;
+      const router = window.OSCILLA.adapter.getStereoRouter();
+      let balanceDb = null;
+      if (router) {
+        const { left, right } = router.readTimeDomain();
+        balanceDb = 20 * Math.log10((rms(left) + 1e-12) / (rms(right) + 1e-12));
+      }
+      return { id: v ? v.id : null, sounding: !!(v && e.ctx.currentTime > v.t0 + 0.25),
+        levelDb: 20 * Math.log10(rms(out) + 1e-12), router: !!router, balanceDb,
+        vizRouter: !!(v && (window.OSCILLA.viz.labInputs(v.plan) || {}).router) };
+    });
+    const panState = () => inPage(() => {
+      const el = document.getElementById('osc-stereo-pan');
+      const why = document.getElementById('osc-stereo-pan-why');
+      return { disabled: el.disabled, describedBy: el.getAttribute('aria-describedby'),
+        why: why && why.offsetParent !== null ? why.textContent.trim() : '' };
+    });
+    const mode = (ws) => until(() => inPage((w) => document.querySelector('#osc-app').dataset
+      .mode === w, ws), { ms: 8000, what: `pan-live-dual: the ${ws} workspace is shown` });
+    try {
+      await H.continuous(page, true);
+      await H.navTo(page, 'synthesis');
+      await mode('synthesis');
+      await page.click('#osc-ptab-stereo');
+      // A single source: pan does not apply, and the slider says why.
+      await inPage(() => window.OSCILLA.app.setDualSource(false));
+      res.single = await until(async () => {
+        const s = await panState();
+        return s.disabled && s.why ? s : null;
+      }, { ms: 5000, what: 'pan-live-dual: the pan is disabled with its reason for one source' });
+      // Equal A and B frequencies: no beat, so the RMS of the output is steady.
+      res.setup = await inPage(() => {
+        const a = window.OSCILLA.app;
+        a.setDualSource(true);
+        a.setStereo(false);
+        const fb = a.dual.b.freq;
+        a.setDualFreq('b', String(a.dual.a.freq));
+        return { fb };
+      });
+      res.mono = await until(async () => {
+        const s = await panState();
+        return !s.disabled && !s.why ? s : null;
+      }, { ms: 5000, what: 'pan-live-dual: the pan is enabled for the dual voice in Mono' });
+      res.pan0 = await setPan(0);
+      await H.spaceDown(page);
+      res.centred = await until(async () => {
+        const r = await read();
+        return r.sounding && r.levelDb > -60 ? r : null;
+      }, { ms: 15000, what: 'pan-live-dual: the centred mono dual voice sounds' });
+      res.panLeft = await setPan(-1);
+      res.left = await until(async () => {
+        const r = await read();
+        return r.router && r.sounding && r.balanceDb > 6 ? r : null;
+      }, { ms: 15000, what: 'pan-live-dual: the live pan to the left reaches the L/R balance' });
+      res.panBack = await setPan(0);
+      res.back = await until(async () => {
+        const r = await read();
+        return r.router && r.sounding && Math.abs(r.balanceDb) < 0.5
+          && Math.abs(r.levelDb - res.centred.levelDb) < 0.5 ? r : null;
+      }, { ms: 15000, what: 'pan-live-dual: back at centre, balanced, at the centred level' });
+      await page.keyboard.up(' ');
+      res.quiet = await until(() => inPage(() => window.OSCILLA.engine.activeNodeCount === 0),
+        { ms: 10000, what: 'pan-live-dual: 0 engine nodes after the release' });
+      // Stereo output: A left and B right, pan does not apply.
+      await page.click('#osc-dual-stereo');
+      res.stereo = await until(async () => {
+        const s = await panState();
+        return s.disabled && /Stereo output/.test(s.why) ? s : null;
+      }, { ms: 5000, what: 'pan-live-dual: the pan is disabled with its reason in Stereo' });
+    } finally {
+      await page.keyboard.up(' ');
+      await inPage((fb) => {
+        const a = window.OSCILLA.app;
+        a.stopNow();
+        a.setStereo(false);
+        if (fb != null) a.setDualFreq('b', String(fb));
+        a.setDualSource(false);
+        a.alerts = [];
+      }, res.setup ? res.setup.fb : null);
+      await setPan(0);
+      await page.click('#osc-ptab-phase');
+      await H.continuous(page, false);
+    }
+    const v = {
+      single: res.single.describedBy === 'osc-stereo-pan-why' && /dual voice/.test(res.single.why),
+      mono: !res.mono.disabled,
+      centredNoRouter: res.pan0 === 0 && !res.centred.router,
+      panReachesVoice: res.panLeft === -1 && res.left.balanceDb > 6 && res.left.vizRouter
+        && res.left.id !== res.centred.id,
+      routerKept: res.panBack === 0 && res.back.id === res.left.id && res.back.vizRouter,
+      levelKept: Math.abs(res.back.levelDb - res.centred.levelDb) < 0.5,
+      quiet: res.quiet === true,
+      stereo: res.stereo.disabled && res.stereo.describedBy === 'osc-stereo-pan-why',
+    };
+    return { ok: Object.values(v).every(Boolean), v, ...res };
+  });
+
   // ---- accessibility residuals of the final V1 probe (WCAG 2.4.11, focus loss, overlap)
   def('a11y-alerts-never-cover-focus', async ({ page, browserName, run }) => {
     const res = {};
