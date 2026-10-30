@@ -1,0 +1,51 @@
+id: K049
+milestone: M062
+serves:
+  - "playable-instrument#chart-states-honest"
+title: "Level meter: sample peak and window RMS, peak hold, clip latch and stated read gaps"
+slug: level-meter-sample-peak-and-window-rms-peak-hold-clip-latch
+priority: p2
+profile: implementation
+objective: "Lands as feat(charts), if Q010 (OD3) answers yes; otherwise it is cancelled citing Q010, and the same change removes it from K050's depends_on (majordomus counts a cancelled dependency as not done; M062's acceptance already reads \"done or cancelled under Q010\"). A pure, allocation-free src/js/charts/level-meter-model.js reusing amplitudeToDb, and a canvas bar meter in a Pro card of the analysis panel, placed inside the panel's reference box so tests/visual/regions.json keeps its geometry, scaled -60 to 0 \"dB rel (dBFS-like)\": sample peak and RMS of the analyser window with its length in ms (fftSize / sampleRate) stated; labels never say VU, LUFS or true peak (\"sample peak, not true peak\"); a 2 s peak-hold line with its number; a clip latch \"sample >= 0 dBFS seen\" reset by a click. Gaps: when the time between reads times fs exceeds fftSize, samples were missed; only the quantities that accumulate across reads become lower bounds, so the peak hold and the clip latch show \">=\", while the window RMS and the window peak stay exact for their window and are not marked; a \"reads had gaps\" badge appears after a gap and clears after 2 s without one (hysteresis), and the status region announces it at most once per appearance. L and R come from the stereo router analysers while stereo plays, otherwise the meter says \"mono\"; a fall of 20 dB/s labelled as display ballistics snaps under reduced motion; it draws on the shared loop only when a value changed. If K016 lands first with its own meter maths, this slice moves it into level-meter-model.js and K016's Meter node view imports it."
+why: "Owner order of 2026-10-29: \"make the charts really sexy, modern, interactive\", for all charts; reviewer f3 scoped it to every surface that draws data. Revised after f3's review of the plan (CHANGES-REQUESTED, 2026-10-29): owner decisions are Q issues under M063, Pro chrome waits on F002 and on the card issue of its workspace, every chart that claims chart-interaction delivers the keyboard cursor and the announced readout, chart keys never take Escape or Space; revision 3 answers f3's delta review. Facts checked against origin/main at e2720e07 and the branches of #251, #253, #263 and #265 (charts-plan.md, charts-plan-changes.md)."
+scope:
+  - "src/js/charts/level-meter-model.js"
+  - "src/js/charts/level-meter.js"
+  - "src/js/charts/wire.js"
+  - "src/js/charts/palette.js"
+  - "src/js/labs/analysis.js"
+  - "src/index.html"
+  - "src/partials"
+  - "tests/unit/level-meter-model.test.mjs"
+  - "tests/browser/labs.cjs"
+  - "tests/unit/chart-host-census.json"
+  - "tests/browser/charts-interaction.cjs"
+  - "tests/visual"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "Q010"
+  - "K027"
+  - "K053"
+  - "K036"
+  - "K030"
+  - "F006"
+acceptance_criteria:
+  - "tests/unit/level-meter-model.test.mjs, failing on the merge base: peak, window RMS, coverage and hold maths; for a sine RMS = peak - 3.01 dB within 0.05 dB, so no absolute output level is assumed; gap detection at 44.1 kHz and 48 kHz; \">=\" only on the hold and the latch after a gap, never on the window RMS; the badge's hysteresis under a fake clock."
+  - "tests/browser/labs.cjs: while a tone plays the meter shows the peak and RMS relation within tolerance, and \"No signal\" when stopped. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline and assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac); tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Its hosts (level meter) move from pending to done in tests/unit/chart-host-census.json as kind meter: role=meter with aria-valuetext that states the value and its unit, rewritten at most 4 times a second, an aria-describedby summary of the window and the estimate, and no keyboard cursor (a meter has no axis to move along); tests/browser/charts-interaction.cjs checks the role, the valuetext and the summary."
+  - "Levels say dB relative (dBFS-like) unless a valid LevelCalibration applies, every estimate is labelled as one, and no data value is tweened or eased; every readout, tooltip, axis title and caption string it adds is registered in its chart's wording table and passes tests/unit/charts-readout-wording.test.mjs (project.no-fake-science)."
+  - "The chart reads existing AnalyserNodes on the main thread only, creates no audio node and adds no work to the audio path; hover and keyboard work runs on events only, a live readout under a still pointer is rewritten at most 4 times a second through the kit's live-readout, and no draw loop writes the DOM per frame (project.audio-engine-discipline v2)."
+  - "Chart chrome (legend, toolbar, toggle, badge, tooltip, readout row) is Flowbite Pro markup adapted from the matching Pro component and lands after F002 turned on preflight and the form base styles (the border trap of review #253, R-3) and after F006 placed the card it sits in; no osc-* class token or legacy selector is added and src/styles/tokens.css, charts.css, measure.css, studio.css and studio-timeline.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs). The card is live and its reset works (project.no-inert-surfaces); the meter states are palette roles of K027's registry."
+  - "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no review verdict is needed; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+  - "The analysis region's accepted mismatch is re-accepted in darwin-arm64 and linux-x64 with the reason \"level meter card inside the analysis panel\" (node scripts/visual-gate.mjs dist --update-baseline re-records mismatch and control boxes; it creates no per-card reference), with --accept-rise \"level meter card\" if the rise passes K056's bound; the panel's box stays within 2 px and tests/visual/regions.json does not change."
+  - "scripts/size-report.mjs shows at most 3 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of M062's figures stays within the cap Q014 records, under the 1 000 000 B gzip budget (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/level-meter-model.test.mjs"
+  - "node tests/browser/labs.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

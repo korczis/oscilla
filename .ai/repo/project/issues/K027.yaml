@@ -1,0 +1,52 @@
+id: K027
+milestone: M062
+serves:
+  - "playable-instrument#chart-palette"
+title: "Chart role palette validated in both themes, legend and mark from one source"
+slug: chart-role-palette-validated-in-both-themes-legend-and-mark
+priority: p1
+profile: implementation
+objective: "Lands as feat(charts). One source per theme for every chart role colour, as Q008 decides (OD1; the plan recommends role pairs in tailwind.config.cjs theme.extend.colors.viz, legend swatches as bg-viz-* and stroke-viz-* classes, and src/js/charts/palette.js reading the computed colour of one hidden probe per theme event). palette.js exports the registry of every role set a chart draws with: the measurement roles, compare A-D and the neutral entries after them, the bio ranges, phase A/B, the spectrum stroke and fill, the spectrogram LUT of each theme, the Studio node families (K046), the envelope and filter handles (K043, K045) and the level-meter states (K049); a slice that adds a role adds it here. Light gets its own values where they are missing or fail today (orange 1.73-1.88:1, red, green-2, the five bio ranges, light text-dim, the spectrum gradient end hard-coded as #fff2a8); the values in the plan are candidates, and the numbers that count are the validator's output, stated in the pull request; the colour-vision simulation applies the Machado matrices in linear RGB. A faded or inactive set enters the registry in the slice that owns its drawing: the MEASURE faded lines in K054, the phase comparison overlays in K034, the filter's bypassed trace in K043, and the disabled envelope in K045 as an inactive exemption (WCAG 1.4.11 exempts inactive components), named in the test. The existing HTML legend swatches (the spectrum legend dots at index.html:587-588, the MEASURE legend swatches at :1576 and :1578 and the compare swatch at :2156 on main) get their colour from the palette's swatch classes: K027 replaces only their colour modifiers (osc-legend-dot--purple and --blue, the osc-m-swatch .is-* modifiers) and keeps the swatch shapes that K030, K041 and F004 rebuild; each swap is one attribute of an element inside a card F004, F005 or F006 rebuilds, so whichever lands second rebases it. The light spectrogram LUT (--osc-lut-0..17 in src/styles/tokens.css) runs L* 98 to 38, back to 70 and down to 39, so a mid level and the top look equally dark: its stops are re-chosen so CIE L* falls monotonically, by editing values only (tokens.css gains no declaration). Dark values stay, except what Q009 (OD2) lets move: the plan recommends moving dark text-dim (#66798d, 4.43:1 on surface-0 and 4.24:1 on surface-1) only, and keeping the dark trace set. The faded MEASURE lines are not changed here: their alpha lives in the guarded src/js/measurement/views/common.js and K054 changes it there. The screenshot background reads --osc-surface-0 instead of '#020a16' (src/js/ui/exporters.js)."
+why: "Owner order of 2026-10-29: \"make the charts really sexy, modern, interactive\", for all charts; reviewer f3 scoped it to every surface that draws data. Revised after f3's review of the plan (CHANGES-REQUESTED, 2026-10-29): owner decisions are Q issues under M063, Pro chrome waits on F002 and on the card issue of its workspace, every chart that claims chart-interaction delivers the keyboard cursor and the announced readout, chart keys never take Escape or Space; revision 3 answers f3's delta review. Facts checked against origin/main at e2720e07 and the branches of #251, #253, #263 and #265 (charts-plan.md, charts-plan-changes.md)."
+scope:
+  - "src/js/charts/palette.js"
+  - "src/js/charts/chart-theme.js"
+  - "src/js/charts/spectrum-chart.js"
+  - "src/js/ui/theme.js"
+  - "src/js/ui/exporters.js"
+  - "tailwind.config.cjs"
+  - "src/styles/tokens.css"
+  - "src/index.html"
+  - "src/styles/components.css"
+  - "src/styles/measure.css"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/unit/chart-palette.test.mjs"
+  - "tests/browser/qa-regressions.cjs"
+  - "tests/visual"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "Q008"
+  - "Q009"
+  - "Q014"
+  - "Q016"
+  - "F002"
+  - "K056"
+acceptance_criteria:
+  - "tests/unit/chart-palette.test.mjs, failing on the merge base, checks every role set of the registry in both themes: marks at least 3:1 and text at least 4.5:1 (WCAG 2.x relative luminance) on --osc-surface-0 and --osc-surface-1, a faded mark at the alpha it is drawn at; adjacent categorical colours at least CIEDE2000 8 apart after the Machado, Oliveira and Fernandes (2009) simulation at severity 1.0 for deuteranopia, protanopia and tritanopia (6-8 only for a set declared direct-labelled, such as the bio ranges, whose rows are named); CIE L* strictly monotonic along each theme's spectrogram LUT; the exceptions Q009's answer keeps (dark text-dim and the dark faded lines under (a)) and the inactive exemptions listed by name."
+  - "The same test refuses a hex colour literal in src/js/charts, src/js/visualization, src/js/ui/p5-views.js, src/js/ui/studio, src/js/labs, src/js/sequencer and src/js/measurement/views, and asserts that each legend swatch resolves to the colour of its mark."
+  - "A check in tests/browser/qa-regressions.cjs reads chartTheme() in both themes and finds every registry mark colour at or above 3:1 on the plot surface. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline and assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac); tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Chart chrome (legend, toolbar, toggle, badge, tooltip, readout row) is Flowbite Pro markup adapted from the matching Pro component and lands after F002 turned on preflight and the form base styles (the border trap of review #253, R-3); no osc-* class token or legacy selector is added and src/styles/tokens.css, charts.css, measure.css, studio.css and studio-timeline.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs). The swatch colour classes are the only markup it adds."
+  - "Every osc-* use it removes leaves the record in the same change: tests/unit/ui-flowbite-pro-baseline.json is rewritten by node scripts/ui-flowbite-pro-record.mjs (the colour modifiers osc-legend-dot--purple and --blue and the osc-m-swatch .is-* modifiers leave), and a selector left without a producer is deleted from src/styles/components.css (:672-673 on main) and src/styles/measure.css (tests/unit/css-producers.test.mjs); the pull request states by how much the debt fell."
+  - "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no review verdict is needed; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+  - "Dark references move only for the values Q009 lets move, re-accepted in darwin-arm64 and linux-x64 with the reason \"dark values moved under Q009\" (npm run test:visual); light references, where F011 has added them, are re-accepted with the reason \"validated light chart roles\"."
+  - "scripts/size-report.mjs shows at most 1.5 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of M062's figures stays within the cap Q014 records, under the 1 000 000 B gzip budget (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/chart-palette.test.mjs"
+  - "node tests/browser/qa-regressions.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

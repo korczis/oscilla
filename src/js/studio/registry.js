@@ -130,6 +130,9 @@ export function validateNodeDefinition(def) {
     if (p.softRange && !(p.softRange[0] >= p.min && p.softRange[1] <= p.max)) {
       err(`${p.key}: softRange outside the range`);
     }
+    if (p.laneRange && !(p.laneRange[0] >= p.min && p.laneRange[1] <= p.max)) {
+      err(`${p.key}: laneRange outside the range`);
+    }
     const why = PARAM_TYPES.includes(p.type) ? validateParamValue(p, p.default) : null;
     if (why) err(`${p.key}: default ${why}`);
     if (p.modulatable && p.modDepth != null && !(Math.abs(p.modDepth) <= p.max - p.min)) {

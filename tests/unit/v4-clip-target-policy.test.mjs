@@ -470,15 +470,15 @@ test('R7 lanes (B1): a band-pass Q lane after low-pass and a Stereo Split pan la
   assert.ok(sp.limitations.includes(`Automation ${pan.laneId}: ${why}`));
 });
 
-test('R7 lanes (P2): a filter gain lane plays only where Web Audio uses the gain (peaking)',
-  () => {
+test('R7 lanes (P2): a filter gain lane plays only where Web Audio uses the gain (peaking, '
+  + 'shelves)', () => {
     const wrong = [];
     for (const type of FILTER_TYPES) {
       const { model, id } = withNode('filter', { type });
       const t = transportLane(model, id, 'gain');
       const v = policyOf()(model.graph.nodes.find((n) => n.id === id),
         { kind: 'automation', param: 'gain' });
-      const want = type === 'peaking';
+      const want = type === 'peaking' || type === 'lowshelf' || type === 'highshelf';
       if (t.plays !== want || v.plays !== want || t.adapter !== want) {
         wrong.push(`${type}: transport ${t.plays}, policy ${v.plays}, adapter ${t.adapter}`);
       }
