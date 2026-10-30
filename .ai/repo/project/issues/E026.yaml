@@ -1,0 +1,32 @@
+id: E026
+milestone: M046
+serves:
+  - "engineering-integrity#ci-path-gated"
+title: "Path-gated CI: a plan, review, release-record or docs-only pull request skips the browser and visual legs, judged by the base branch's classifier"
+slug: path-gated-ci-non-runtime-pull-requests-skip-the-browser-legs
+priority: p2
+profile: implementation
+objective: "GitHub Actions on this account runs about 20 jobs at a time and every run of .github/workflows/ci.yml is 21 jobs (unit, 15 browser legs: engine, suites, measure, studio and browser on three engines, visual, knowledge, fail-first, review-verdict and gate), so the account lands about one pull request per CI round (40 minutes or more) with 17 queued on 2026-10-29. A pull request that changes only plan records, review verdicts, release records or documentation cannot change dist/index.html or any test, yet runs every browser leg. Add a first job, changes, that diffs the pull request against its merge base (full history, git diff --raw -z --no-renames) with the base branch's copy of .github/scripts/ci-changes.mjs and writes runtime=true or false; the engine, suites, measure, studio, browser and visual jobs need it and run unless the answer is exactly false; unit, knowledge, fail-first and review-verdict always run; gate accepts a skip only of those six jobs and only while changes succeeded with runtime=false."
+why: "Throughput: a non-runtime pull request then costs 6 jobs (unit, knowledge, fail-first, review-verdict, changes, gate) instead of 21, so the 20-job account runs about three of them beside one full run instead of none, and the plan, review and release-record pull requests stop queueing behind the browser legs."
+scope:
+  - ".github/workflows/ci.yml"
+  - ".github/scripts/ci-changes.mjs"
+  - "tests/unit/ci-changes.test.mjs"
+  - "tests/unit/ci-gates-model.test.mjs"
+  - "tests/unit/ci-workflows.test.mjs"
+  - ".ai/repo/ci/gates.yaml"
+  - ".ai/repo/rules/project/ci-bounded.v1.md"
+  - "tests/README.md"
+acceptance_criteria:
+  - "tests/unit/ci-changes.test.mjs, table-driven, fails on the merge base (the classifier does not exist there: fail-first) and passes on the head."
+  - "Fail closed: a .md under tests/, a rename into or out of the allowlist (both sides judged), a deleted runtime file, a runtime path with spaces, a symbolic link or submodule, a type change, an empty diff, a malformed git diff record, every event but pull_request and a pull request into any base but main (a train or stacked base: its gate check on the head commit would satisfy main's required check too) classify as runtime; a docs path with spaces, a deleted docs file and a rename within docs do not."
+  - "The gate job's own VERDICT, run by jq on every combination of results, passes a skip only of engine, suites, measure, studio, browser and visual, and only while changes succeeded with runtime=false; a skip on runtime=true, an empty or missing output, a failed, cancelled or skipped changes, a cancelled or failed leg and a skip of unit, knowledge, fail-first or review-verdict fail it."
+  - "The classifier that decides is the base branch's blob (git cat-file blob of refs/remotes/origin/<base>); a base without it answers runtime=true and runs no copy of the pull request; the classifier imports only Node built-ins."
+  - "project.ci-bounded states the exception and names tests/unit/ci-changes.test.mjs; the CI model .ai/repo/ci/gates.yaml carries the changes gate and the gate's verdict; npm test passes; the pull request carries a review verdict by a reviewer other than the builder (.github is guarded)."
+validation:
+  - "node --test tests/unit/ci-changes.test.mjs tests/unit/ci-gates-model.test.mjs tests/unit/ci-workflows.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29
