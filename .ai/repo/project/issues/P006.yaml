@@ -14,12 +14,14 @@ scope:
   - "tests/unit/readme-landing-art.test.mjs"
   - "tests/README.md"
   - ".ai/repo/project/issues/P006.yaml"
+depends_on:
+  - "E028"
 acceptance_criteria:
   - "tests/unit/readme-landing-art.test.mjs passes: the tagline follows the sentence; every docs/assets image README shows exists, has alt text and is an SVG with title and desc, no script, handler, foreign object, font file or external reference, labelled not a measurement; the mermaid flowchart's edges end on declared nodes; broken fixtures prove each refusal."
   - "positioning-consistency, docs-derived, knowledge-integrity and extending-guide still pass, and version:check finds no version literal in README or the SVG."
   - "Every colour the SVG uses is a colour of src/styles/tokens.css, checked by the same test."
   - "The pushed README renders its diagram and image on GitHub, recorded before merge as a comment on the pull request with what was seen and the mermaid versions it parses in (dark theme; the SVG carries its own dark ground in the light theme)."
-  - "E028 (#286, train #316) is on main before P006 lands; P006 gains depends_on E028 as soon as E028's record is on main, which plan validate needs."
+  - "E028 (#286) lands before or with P006: both ride train #316, and P006 depends on E028."
 validation:
   - "node --test tests/unit/readme-landing-art.test.mjs"
 evidence_required:

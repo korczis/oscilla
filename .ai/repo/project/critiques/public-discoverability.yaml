@@ -64,7 +64,7 @@ findings:
     resolution:
       state: planned
       issue: "P006"
-      because: "E028's record is not on main yet, so depends_on cannot name it without failing plan validate; P006's acceptance requires E028 on main before it lands and adds the edge once it is; #318 will carry P006.yaml and name P006 instead of plan: n/a (2026-10-30)."
+      because: "P006 depends on E028 now that both ride train #316 (E028 from #286, P006 with #318 and #319), so plan next no longer shows P006 READY ahead of E028; P006 names its implementing pull request #318 in its objective, and #318 changes no plan record (2026-10-30)."
   - id: palette-invariant-unenforced
     class: regression_risk
     subject: "public-discoverability"
