@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import { WORKSPACES, NAV_GROUPS, navGroupOf } from '../../src/js/ui/app.js';
+import { NAV_TREE, WORKSPACE_REGISTRY } from '../../src/js/ui/shell.js';
 import {
   experimentFromResult, experimentTestContext, DEFAULT_EXPERIMENT_NAME,
 } from '../../src/js/ui/measure-experiment.js';
@@ -20,38 +21,37 @@ const between = (from, to) => html.slice(html.indexOf(from), html.indexOf(to, ht
 const measureView = between('id="osc-view-measure"', 'id="osc-view-experiments"');
 const experimentsView = between('id="osc-view-experiments"', 'id="osc-view-learn"');
 
+// The sidebar is rendered from the one registry (shell.js, issue F002): its x-for walks NAV_TREE,
+// so the order and the groups are read from there, and the markup is checked for the bindings
+// that turn each entry into its nav item.
+const sidebar = between('id="osc-nav"', '</aside>');
+
 test('Measure and Experiments follow Playground; About stays last', () => {
   assert.deepEqual(WORKSPACES.slice(0, 3), ['playground', 'measure', 'experiments']);
   assert.equal(WORKSPACES.at(-1), 'about');
-  const nav = between('id="osc-nav"', '</nav>');
-  const items = [...nav.matchAll(/data-osc="(nav\.[a-z]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(items.slice(0, 3), ['nav.playground', 'nav.measure', 'nav.experiments']);
-  assert.equal(items.at(-1), 'nav.about');
+  assert.deepEqual(WORKSPACE_REGISTRY.map((w) => w.id), WORKSPACES, 'one registry, one order');
+  assert.match(sidebar, /<template x-for="entry in navTree" :key="entry\.id">/);
+  assert.equal(NAV_TREE.at(-1).id, 'about');
 });
 
 test('the top level is §73 plus Studio (§198) and About; groups hold the V2 workspaces', () => {
-  const nav = between('id="osc-nav"', '</nav>');
-  const menuRe = /<ul class="osc-menu osc-nav-menu"[\s\S]*?<\/ul>/g;
-  const menus = [...nav.matchAll(menuRe)].map((m) => m[0]);
-  const top = nav.replace(menuRe, '');
-  const ids = [...top.matchAll(/data-osc="(nav(?:-group)?\.[a-z]+)"/g)].map((m) => m[1]);
+  const ids = NAV_TREE.map((e) => `${e.kind === 'group' ? 'nav-group' : 'nav'}.${e.id}`);
   assert.deepEqual(ids, ['nav.playground', 'nav.measure', 'nav.experiments', 'nav-group.analyze',
     'nav-group.synthesis', 'nav.learn', 'nav.studio', 'nav.about']);
   assert.deepEqual(Object.keys(NAV_GROUPS), ['analyze', 'synthesis']);
-  assert.equal(menus.length, 2);
-  for (const [i, g] of Object.keys(NAV_GROUPS).entries()) {
-    const items = [...menus[i].matchAll(/data-osc="nav\.([a-z]+)"/g)].map((m) => m[1]);
-    assert.deepEqual(items, [...NAV_GROUPS[g]]);
-    assert.match(menus[i], new RegExp(`id="osc-nav-menu-${g}" hidden`));
-    // A disclosure button controls the list: aria-expanded + aria-controls, no ARIA menu role.
-    assert.match(nav, new RegExp(`data-osc="nav-group\\.${g}" aria-expanded="false" `
-      + `aria-controls="osc-nav-menu-${g}"`));
-    assert.doesNotMatch(menus[i], /role="menu/);
-    for (const ws of NAV_GROUPS[g]) assert.equal(navGroupOf(ws), g);
+  for (const g of NAV_TREE.filter((e) => e.kind === 'group')) {
+    assert.deepEqual(g.items.map((w) => w.id), [...NAV_GROUPS[g.id]]);
+    for (const ws of NAV_GROUPS[g.id]) assert.equal(navGroupOf(ws), g.id);
   }
-  // Every workspace keeps its nav id, once, in navigation order (V2 functions preserved, §183).
-  const all = [...nav.matchAll(/data-osc="nav\.([a-z]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(all, WORKSPACES);
+  // A disclosure button controls the list: aria-controls names it, x-bind adds aria-expanded,
+  // no ARIA menu role.
+  assert.match(sidebar, /:data-osc="'nav-group\.' \+ entry\.id" :aria-controls="'osc-nav-menu-' \+ entry\.id"/);
+  assert.match(sidebar, /<ul :id="'osc-nav-menu-' \+ entry\.id"[^>]*x-bind="navGroupPanel\(entry\.id\)"/);
+  assert.doesNotMatch(sidebar, /role="menu/);
+  // Every workspace keeps its nav id (nav.<id>), top level and nested, from the registry.
+  assert.equal((sidebar.match(/:data-osc="'nav\.' \+ (?:entry|w)\.id"/g) || []).length, 2);
+  const flat = NAV_TREE.flatMap((e) => (e.kind === 'group' ? e.items : [e])).map((w) => w.id);
+  assert.deepEqual(flat, WORKSPACES);
   for (const ws of ['playground', 'measure', 'experiments', 'learn', 'studio', 'about']) {
     assert.equal(navGroupOf(ws), null);
   }

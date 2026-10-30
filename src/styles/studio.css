@@ -1385,8 +1385,8 @@
   font-size: var(--osc-fs-sm);
 }
 
-/* ================= 768-1279: graph + Inspector, timeline below; library in the picker ===== */
-@media (max-width: 1279.98px) {
+/* ================= 768-1535: graph + Inspector, timeline below; library in the picker ===== */
+@media (max-width: 1535.98px) {
   .osc-studio {
     grid-template-columns: minmax(0, 1fr) 272px;
     grid-template-rows: auto minmax(0, 1fr) minmax(0, 36%);

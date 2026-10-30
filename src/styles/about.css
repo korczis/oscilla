@@ -542,7 +542,7 @@
 }
 
 /* ---------- Responsive ---------- */
-@media (max-width: 1279.98px) {
+@media (max-width: 1535.98px) {
   .osc-about-grid {
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
   }

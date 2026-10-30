@@ -1509,12 +1509,12 @@ export function createStudioUi(svc = {}) {
     studioBack() {
       this.setWorkspace('playground');
       // The button that had focus is now hidden: focus the compact Studio's Expand (the way
-      // back), else the Playground tab, never <body> (WCAG 2.4.3; V431 U6).
+      // back), else the Playground's sidebar entry, never <body> (WCAG 2.4.3; V431 U6).
       requestAnimationFrame(() => {
         const a = document.activeElement;
         if (a && a !== document.body && a.getClientRects().length) return;
         const to = [document.querySelector('[data-osc="studio.compact.expand"]'),
-          document.querySelector('.osc-nav .osc-tab.is-active')]
+          document.querySelector('#osc-nav [aria-current="page"]')]
           .find((el) => el && el.getClientRects().length);
         if (to) to.focus({ preventScroll: true });
       });

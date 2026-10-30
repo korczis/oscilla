@@ -35,6 +35,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { PREFLIGHT_LEVEL_S } from '../../src/js/measurement/capture.js';
+import { NAV_TREE } from '../../src/js/ui/shell.js';
 import { REFERENCE_CAPTURE_S } from '../../src/js/calibration/reference.js';
 import { DEFAULT_TIMING } from '../../src/js/measurement/engine.js';
 import { KNOWN_ALGORITHM_IDS } from '../../src/js/measurement/algorithms.js';
@@ -135,7 +136,10 @@ function filesRun(script, scripts = PKG.scripts, seen = new Set()) {
   seen.add(script);
   const body = scripts[script];
   return [
-    ...[...body.matchAll(/\bnode ((?:tests|scripts)\/\S+)/g)].map((m) => ({ script, file: m[1] })),
+    // `node <file>`, and every file after it: tests/browser/lib/run-suites.cjs runs the suites
+    // it is given (review #330 F5).
+    ...[...body.matchAll(/\bnode ((?:tests|scripts)\/\S+(?: (?:tests|scripts)\/\S+)*)/g)]
+      .flatMap((m) => m[1].split(' ').map((file) => ({ script, file }))),
     ...[...body.matchAll(/\bnpm run ([\w:-]+)/g)].flatMap((m) => filesRun(m[1], scripts, seen)),
   ];
 }
@@ -181,25 +185,19 @@ test('the README never calls About a dialog: it is a workspace', () => {
   assert.ok(!read('src/index.html').includes('osc-dlg-about'), 'there is no About dialog');
 });
 
-/** The header navigation of src/index.html: top-level labels and each group's labels. */
+/** The sidebar navigation (shell.js NAV_TREE): top-level labels and each group's labels. */
 function navigation() {
-  const html = read('src/index.html');
-  const nav = html.slice(html.indexOf('id="osc-nav"'), html.indexOf('</nav>'));
-  const menuRe = /<ul class="osc-menu osc-nav-menu"[\s\S]*?<\/ul>/g;
-  const labels = (t) => [...t.matchAll(/data-osc="nav(?:-group)?\.[a-z]+"[^>]*>(?:<span>)?([^<]+)</g)]
-    .map((m) => m[1].trim());
-  const groups = [...nav.matchAll(/data-osc="nav-group\.[a-z]+"[^>]*><span>([^<]+)<\/span>/g)]
-    .map((m) => m[1]);
-  const menus = [...nav.matchAll(menuRe)].map((m) => labels(m[0]));
-  return { top: labels(nav.replace(menuRe, '')), groups: groups.map((g, i) => [g, menus[i]]) };
+  return { top: NAV_TREE.map((e) => e.label),
+    groups: NAV_TREE.filter((e) => e.kind === 'group')
+      .map((g) => [g.label, g.items.map((w) => w.label)]) };
 }
 
-test('the README navigation names the header entries and groups of src/index.html, in order', () => {
+test('the README navigation names the sidebar entries and groups of the registry, in order', () => {
   const { top, groups } = navigation();
   assert.ok(top.length >= 5 && groups.length >= 1, 'the navigation is read');
   const text = flat(section(README, 'Navigation'));
-  const entries = text.match(/The header has (?:(\w+) )?entries: ([^.]*), in that order\./);
-  assert.ok(entries, 'the README lists the header entries');
+  const entries = text.match(/The sidebar has (?:(\w+) )?entries: ([^.]*), in that order\./);
+  assert.ok(entries, 'the README lists the sidebar entries');
   if (entries[1] && numberOf(entries[1]) >= 0) {
     assert.equal(numberOf(entries[1]), top.length, `"${entries[1]} entries"`);
   }

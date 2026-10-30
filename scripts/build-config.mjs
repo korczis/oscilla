@@ -7,10 +7,12 @@ export const CSS_ENTRY = 'src/styles/main.css';
 export const TAILWIND_ENTRY = 'src/styles/tailwind.css';
 export const TAILWIND_CONFIG = 'tailwind.config.cjs';
 
-// OSCILLA's dark theme is data-theme="dark" on <html> (never class="dark"). tailwind.config.cjs
-// points the dark: variant at it, but the flowbite plugin hard-codes a .dark ancestor whatever
-// darkMode says (its tooltip arrows; with forms: true, F002, its form controls too).
-export const DARK_THEME_SELECTOR = '[data-theme="dark"]';
+// OSCILLA's dark theme is every theme but data-theme="light" on <html> (never class="dark"):
+// tokens.css is dark on :root and ui/theme.js reads an absent attribute as dark (review #330
+// F3). tailwind.config.cjs points the dark: variant at it, but the flowbite plugin hard-codes a
+// .dark ancestor whatever darkMode says (its tooltip arrows; with forms: true, F002, its form
+// controls too).
+export const DARK_THEME_SELECTOR = ':root:not([data-theme="light"])';
 // A .dark class in a selector: not the escaped dark: variant class (.dark\:bg-opacity-80).
 const DARK_CLASS = /\.dark(?![\w\\-])/g;
 
@@ -79,6 +81,11 @@ export const BUILD_TIME_ASSETS = ['flowbite', 'lucide-static', 'tailwindcss'];
 // notice. The gzip figure is "about" because this file is an
 // input of the source digest that dist carries: writing a figure here changes the digest and so
 // moves gzip by a few bytes (raw does not move: the digest has a fixed length).
+// F002 (the Pro admin shell) turns on preflight and the flowbite form base inside the cascade
+// layer tailwind-base, and adds the navbar, the sidebar rendered from the workspace registry and
+// 16 inlined lucide symbols, while it removes the legacy header's CSS: before (F001 cb5f5f7)
+// 2 902 810 B raw / 837 741 B gzip, after about 2 935 000 B raw / about 844 200 B gzip
+// (+32 KB raw, +6.4 KB gzip), within the budget.
 export const BUDGET = {
   rawBytes: 3_500_000,
   gzipBytes: 1_000_000,

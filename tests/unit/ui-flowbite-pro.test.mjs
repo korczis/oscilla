@@ -16,7 +16,8 @@
 //               specifiers, untracked files under node_modules) are clause (c)'s.
 //     surfaces  the UI surfaces of src/index.html (HTML comments removed):
 //                 navbar   the element with role="banner"
-//                 sidebar  the element with aria-label="Workspace"
+//                 sidebar  the element with aria-label="Sidebar" (the legacy tab bar's
+//                          "Workspace" too)
 //                 main     the <main> element
 //                 footer   the element with aria-label="Status and actions"
 //                 page     every element whose id starts with "osc-view-" (a workspace)

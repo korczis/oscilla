@@ -70,7 +70,11 @@ function keepOnly(src, spans) {
   return out.join('');
 }
 
-/** src/index.html as a reader sees it: text and attribute values, comments and names blank. */
+/**
+ * src/index.html as a reader sees it: text and attribute values, comments and names blank. A
+ * class list (class, :class, x-bind:class) is never shown: its names are styling, and Tailwind's
+ * placeholder-* utilities (the Pro search field's) name the placeholder attribute's colour.
+ */
 export function htmlShown(src) {
   const text = src.replace(/<!--[\s\S]*?-->/g, blankOf);
   const out = text.split('');
@@ -79,6 +83,8 @@ export function htmlShown(src) {
     const at = m.index;
     for (let k = 0; k < tag.length; k += 1) if (tag[k] !== '\n') out[at + k] = ' ';
     for (const v of tag.matchAll(/=\s*(["'])([\s\S]*?)\1/g)) {
+      const name = tag.slice(0, v.index).match(/([^\s=]+)\s*$/);
+      if (name && /^(?:class|:class|x-bind:class)$/.test(name[1])) continue;
       const q = at + v.index + v[0].indexOf(v[1]);
       out[q] = SEP;
       for (let k = 0; k < v[2].length; k += 1) out[q + 1 + k] = v[2][k];
@@ -441,6 +447,9 @@ test('mutation (a): comments, attribute names and code are not copy', () => {
   for (const readText of [
     inBody('<!-- TODO: lorem ipsum -->'),
     inBody('<input type="text" placeholder="e.g. 440">'),
+    // A class list is styling: Tailwind's placeholder-* utilities colour the attribute (F002).
+    inBody('<input class="placeholder-gray-500 dark:placeholder-gray-400" '
+      + ':class="{ \'placeholder-gray-500\': a }" placeholder="Find a workspace">'),
     appended('src/js/ui/app.js', '// TODO coming soon\n/* mock */\nconst mockup = 1;'),
     appended('src/js/ui/app.js', "const a = { placeholder: 'Search nodes' };\n"
       + "b.setAttribute('placeholder', 'x');"),

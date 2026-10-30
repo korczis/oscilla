@@ -100,6 +100,24 @@
     <symbol id="s-back" viewBox="0 0 24 24"><!-- @icon:arrow-left --></symbol>
     <symbol id="s-search" viewBox="0 0 24 24"><!-- @icon:search --></symbol>
     <symbol id="s-wav" viewBox="0 0 24 24"><!-- @icon:file-audio --></symbol>
+    <!-- Workspace and shell icons (lucide, inlined at build time): one per row of the registry,
+         src/js/ui/shell.js WORKSPACE_REGISTRY (i-ws-<id>) and GROUP_REGISTRY. -->
+    <symbol id="i-ws-playground" viewBox="0 0 24 24"><!-- @icon:audio-waveform --></symbol>
+    <symbol id="i-ws-measure" viewBox="0 0 24 24"><!-- @icon:gauge --></symbol>
+    <symbol id="i-ws-experiments" viewBox="0 0 24 24"><!-- @icon:flask-conical --></symbol>
+    <symbol id="i-ws-analyze" viewBox="0 0 24 24"><!-- @icon:chart-spline --></symbol>
+    <symbol id="i-ws-analyzer" viewBox="0 0 24 24"><!-- @icon:activity --></symbol>
+    <symbol id="i-ws-filter" viewBox="0 0 24 24"><!-- @icon:funnel --></symbol>
+    <symbol id="i-ws-compare" viewBox="0 0 24 24"><!-- @icon:git-compare --></symbol>
+    <symbol id="i-ws-synthesis-group" viewBox="0 0 24 24"><!-- @icon:sliders-horizontal --></symbol>
+    <symbol id="i-ws-synthesis" viewBox="0 0 24 24"><!-- @icon:audio-lines --></symbol>
+    <symbol id="i-ws-sequencer" viewBox="0 0 24 24"><!-- @icon:list-music --></symbol>
+    <symbol id="i-ws-presets" viewBox="0 0 24 24"><!-- @icon:bookmark --></symbol>
+    <symbol id="i-ws-learn" viewBox="0 0 24 24"><!-- @icon:graduation-cap --></symbol>
+    <symbol id="i-ws-studio" viewBox="0 0 24 24"><!-- @icon:workflow --></symbol>
+    <symbol id="i-ws-about" viewBox="0 0 24 24"><!-- @icon:info --></symbol>
+    <symbol id="i-ws-collapse" viewBox="0 0 24 24"><!-- @icon:panel-left-close --></symbol>
+    <symbol id="i-ws-expand" viewBox="0 0 24 24"><!-- @icon:panel-left-open --></symbol>
     <symbol id="w-sine" viewBox="0 0 24 18"><path d="M1.5 9c2.4-8.5 4.8-8.5 7 0s4.6 8.5 7 0 4.7-8.5 7 0"/></symbol>
     <symbol id="w-square" viewBox="0 0 24 18"><path d="M1.5 15.5h3.5v-13h14v13h3.5"/></symbol>
     <symbol id="w-triangle" viewBox="0 0 24 18"><path d="M1.5 15.5l10.5-13 10.5 13"/></symbol>
@@ -109,108 +127,198 @@
 
 <div class="osc-app" id="osc-app" x-data="oscilla" data-mode="playground" :data-mode="workspace">
 
-  <!-- ================= Header ================= -->
-  <header class="osc-header" role="banner">
-    <a class="osc-brand" href="#osc-main" aria-label="OSCILLA · Interactive Sound &amp; Frequency Lab">
-      <svg class="osc-logo" viewBox="0 0 50 36" aria-hidden="true" focusable="false">
-        <defs>
-          <linearGradient id="osc-logo-grad" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0" style="stop-color: var(--osc-cyan)"/>
-            <stop offset="0.22" style="stop-color: var(--osc-blue)"/>
-            <stop offset="0.38" style="stop-color: var(--osc-purple)"/>
-            <stop offset="0.52" style="stop-color: var(--osc-magenta)"/>
-            <stop offset="0.72" style="stop-color: var(--osc-orange)"/>
-            <stop offset="1" style="stop-color: var(--osc-orange)"/>
-          </linearGradient>
-        </defs>
-        <path d="M1.5 18C2.7 18 3.4 15.5 4.5 15.5S6.3 22 7.5 22C9.5 22 10.5 8 12.5 8C15 8 16.5 31.5 19 31.5S23.5 3 26 3C28.5 3 30 32.5 32.5 32.5S36.2 11 38.5 11C40.5 11 41.2 21.5 43 21.5S46.3 16.5 48 16.5" fill="none" stroke="url(#osc-logo-grad)" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      <span class="osc-brand-text">
-        <span class="osc-brand-name">OSCILLA</span>
-        <span class="osc-brand-sub">Interactive Sound &amp; Frequency Lab</span>
-      </span>
-    </a>
-
-    <nav class="osc-nav" aria-label="Workspace">
-      <ul class="osc-tabs osc-tabs--underline" id="osc-nav">
-        <li><a class="osc-tab is-active" href="#m=playground" aria-current="page" data-osc="nav.playground" x-bind="navItem('playground')">Playground</a></li>
-        <li><a class="osc-tab" href="#m=measure" data-osc="nav.measure" x-bind="navItem('measure')">Measure</a></li>
-        <li><a class="osc-tab" href="#m=experiments" data-osc="nav.experiments" x-bind="navItem('experiments')">Experiments</a></li>
-        <li class="osc-nav-group" data-osc-nav-group="analyze" x-bind="navGroup('analyze')">
-          <button type="button" class="osc-tab osc-nav-group-btn" id="osc-nav-group-analyze"
-            data-osc="nav-group.analyze" aria-expanded="false" aria-controls="osc-nav-menu-analyze"
-            x-bind="navGroupButton('analyze')"><span>Analyze</span><svg class="osc-nav-caret" aria-hidden="true" focusable="false"><use href="#i-down"/></svg></button>
-          <ul class="osc-menu osc-nav-menu" id="osc-nav-menu-analyze" hidden
-            aria-labelledby="osc-nav-group-analyze" x-bind="navGroupPanel('analyze')">
-            <li><a class="osc-menu-item osc-nav-item" href="#m=analyzer" data-osc="nav.analyzer" x-bind="navItem('analyzer')">Analyzer</a></li>
-            <li><a class="osc-menu-item osc-nav-item" href="#m=filter" data-osc="nav.filter" x-bind="navItem('filter')">Filter Lab</a></li>
-            <li><a class="osc-menu-item osc-nav-item" href="#m=compare" data-osc="nav.compare" x-bind="navItem('compare')">Compare</a></li>
-          </ul>
-        </li>
-        <li class="osc-nav-group" data-osc-nav-group="synthesis" x-bind="navGroup('synthesis')">
-          <button type="button" class="osc-tab osc-nav-group-btn" id="osc-nav-group-synthesis"
-            data-osc="nav-group.synthesis" aria-expanded="false" aria-controls="osc-nav-menu-synthesis"
-            x-bind="navGroupButton('synthesis')"><span>Synthesis</span><svg class="osc-nav-caret" aria-hidden="true" focusable="false"><use href="#i-down"/></svg></button>
-          <ul class="osc-menu osc-nav-menu" id="osc-nav-menu-synthesis" hidden
-            aria-labelledby="osc-nav-group-synthesis" x-bind="navGroupPanel('synthesis')">
-            <li><a class="osc-menu-item osc-nav-item" href="#m=synthesis" data-osc="nav.synthesis" x-bind="navItem('synthesis')">Synthesis</a></li>
-            <li><a class="osc-menu-item osc-nav-item" href="#m=sequencer" data-osc="nav.sequencer" x-bind="navItem('sequencer')">Sequencer</a></li>
-            <li><a class="osc-menu-item osc-nav-item" href="#m=presets" data-osc="nav.presets" x-bind="navItem('presets')">Presets</a></li>
-          </ul>
-        </li>
-        <li><a class="osc-tab" href="#m=learn" data-osc="nav.learn" x-bind="navItem('learn')">Learn</a></li>
-        <li><a class="osc-tab" href="#m=studio" data-osc="nav.studio" x-bind="navItem('studio')">Studio</a></li>
-        <li><a class="osc-tab" href="#m=about" data-osc="nav.about" x-bind="navItem('about')">About</a></li>
-      </ul>
-    </nav>
-
-    <div class="osc-header-actions">
-      <button type="button" class="osc-icon-btn osc-header-theme" id="osc-theme-toggle"
-        data-osc="header.theme" aria-label="Switch to light theme" @click="toggleTheme()"
-        :aria-label="theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'">
-        <svg class="osc-ico" aria-hidden="true"><use href="#i-sun"/></svg>
-      </button>
-      <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-header-icon" id="osc-help"
-        data-osc="header.help" aria-label="Help" aria-haspopup="dialog" @click="openDialog('help')">
-        <svg class="osc-ico" aria-hidden="true"><use href="#i-help"/></svg>
-      </button>
-      <div class="osc-menu-anchor">
-        <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-header-icon" id="osc-overflow"
-          data-osc="header.overflow" aria-label="More actions" aria-haspopup="menu"
-          aria-expanded="false" aria-controls="osc-overflow-menu" x-bind="menuButton('overflow')">
-          <svg class="osc-ico" aria-hidden="true"><use href="#i-more"/></svg>
+  <!-- ================= Navbar (the Flowbite Pro admin shell's, adapted; issue F002) ========
+       The sidebar toggle (desktop: collapse to icons; phone: the drawer), the brand, the
+       workspace search and the actions. Shell state and behaviour: src/js/ui/shell.js. -->
+  <header role="banner" data-osc="header"
+    class="relative z-50 flex-none w-full bg-white border-b border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+    <div class="flex items-center justify-between h-16 px-3 lg:px-5 lg:pl-3">
+      <div class="flex items-center justify-start min-w-0">
+        <button type="button" id="osc-sidebar-toggle" data-osc="header.sidebar"
+          aria-controls="osc-sidebar" aria-expanded="true" :aria-expanded="String(!sidebarCollapsed)"
+          :aria-label="sidebarCollapsed ? 'Expand the workspace sidebar' : 'Collapse the workspace sidebar to icons'"
+          aria-label="Collapse the workspace sidebar to icons" @click="toggleSidebar()"
+          class="hidden items-center justify-center flex-none w-11 h-11 mr-2 text-gray-600 rounded-lg cursor-pointer lg:inline-flex hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-700">
+          <svg class="w-6 h-6" aria-hidden="true" x-show="!sidebarCollapsed"><use href="#i-ws-collapse"/></svg>
+          <svg class="w-6 h-6" aria-hidden="true" x-show="sidebarCollapsed" x-cloak><use href="#i-ws-expand"/></svg>
         </button>
-        <div class="osc-menu osc-menu--right" id="osc-overflow-menu" role="menu" hidden
-          aria-labelledby="osc-overflow" x-bind="menuPanel('overflow')">
-          <button type="button" class="osc-menu-item" role="menuitem" data-osc="config.import" @click="importConfigClick()">Import config…</button>
-          <button type="button" class="osc-menu-item" role="menuitem" data-osc="config.export" @click="exportConfig()">Export config</button>
-          <button type="button" class="osc-menu-item" role="menuitemcheckbox" data-osc="header.explore"
-            :aria-checked="String(explore)" aria-checked="false" @click="explore = !explore">Explore hints</button>
-          <button type="button" class="osc-menu-item" role="menuitem" data-osc="header.settings" @click="openDialog('settings')">Settings…</button>
-          <button type="button" class="osc-menu-item" role="menuitem" data-osc="header.shortcuts" @click="openDialog('help')">Keyboard shortcuts</button>
-          <button type="button" class="osc-menu-item" role="menuitem" data-osc="header.about" @click="setWorkspace('about')">About OSCILLA</button>
-          <button type="button" class="osc-menu-item" role="menuitem" data-osc="safety.reopenMenu" @click="reopenSafety()">Safety notice</button>
-        </div>
+        <button type="button" id="osc-drawer-toggle" data-osc="header.menu"
+          aria-controls="osc-sidebar" aria-expanded="false" :aria-expanded="String(drawerOpen)"
+          :aria-label="drawerOpen ? 'Close the workspace menu' : 'Open the workspace menu'"
+          aria-label="Open the workspace menu" @click="toggleDrawer()"
+          class="inline-flex items-center justify-center flex-none w-11 h-11 mr-1 text-gray-600 rounded-lg cursor-pointer lg:hidden hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white">
+          <svg class="w-6 h-6" aria-hidden="true" x-show="!drawerOpen"><use href="#i-menu"/></svg>
+          <svg class="w-6 h-6" aria-hidden="true" x-show="drawerOpen" x-cloak><use href="#i-close"/></svg>
+        </button>
+        <!-- Below lg the brand gives way to the actions (it shrinks and cuts its own content,
+             never drawing over a control) and drops the wordmark below 375 px, where it
+             collides on wider fonts (review #330 F2); the mark always stays. -->
+        <a href="#osc-main" data-osc="header.brand" aria-label="OSCILLA · Interactive Sound &amp; Frequency Lab"
+          class="flex items-center min-w-0 overflow-hidden min-h-11 mr-3 rounded-lg lg:flex-none lg:mr-10 focus:outline-none focus:ring-2 focus:ring-primary-500">
+          <svg class="osc-logo flex-none mr-2.5" viewBox="0 0 50 36" aria-hidden="true" focusable="false">
+            <defs>
+              <linearGradient id="osc-logo-grad" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0" style="stop-color: var(--osc-cyan)"/>
+                <stop offset="0.22" style="stop-color: var(--osc-blue)"/>
+                <stop offset="0.38" style="stop-color: var(--osc-purple)"/>
+                <stop offset="0.52" style="stop-color: var(--osc-magenta)"/>
+                <stop offset="0.72" style="stop-color: var(--osc-orange)"/>
+                <stop offset="1" style="stop-color: var(--osc-orange)"/>
+              </linearGradient>
+            </defs>
+            <path d="M1.5 18C2.7 18 3.4 15.5 4.5 15.5S6.3 22 7.5 22C9.5 22 10.5 8 12.5 8C15 8 16.5 31.5 19 31.5S23.5 3 26 3C28.5 3 30 32.5 32.5 32.5S36.2 11 38.5 11C40.5 11 41.2 21.5 43 21.5S46.3 16.5 48 16.5" fill="none" stroke="url(#osc-logo-grad)" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span class="flex flex-col min-w-0 max-[374.98px]:hidden">
+            <span class="text-lg font-semibold leading-tight tracking-widest text-gray-900 whitespace-nowrap sm:text-xl dark:text-white">OSCILLA</span>
+            <span class="hidden text-xs leading-4 text-gray-500 whitespace-nowrap xl:block dark:text-gray-400">Interactive Sound &amp; Frequency Lab</span>
+          </span>
+        </a>
+        <form class="hidden lg:block lg:pl-2" role="search" @submit.prevent="navSearchGo()">
+          <label for="osc-nav-search" class="sr-only">Find a workspace</label>
+          <div class="relative lg:w-64 xl:w-80">
+            <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+              <svg class="w-5 h-5 text-gray-500 dark:text-gray-400" aria-hidden="true"><use href="#s-search"/></svg>
+            </div>
+            <input type="search" id="osc-nav-search" data-osc="header.search" autocomplete="off"
+              placeholder="Find a workspace" x-model="navQuery" @keydown="navSearchKeydown($event)"
+              aria-describedby="osc-nav-search-result"
+              class="block w-full h-11 p-2.5 pl-10 text-sm text-gray-900 border border-gray-300 rounded-lg bg-gray-50 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white">
+          </div>
+        </form>
+        <p class="sr-only" id="osc-nav-search-result" role="status" aria-live="polite"
+          x-text="navQuery.trim() ? navSearchResults().length + ' workspaces found; Enter opens the first' : ''"></p>
       </div>
-      <div class="osc-menu-anchor">
-        <button type="button" class="osc-btn osc-btn-primary osc-header-export" id="osc-export"
-          data-osc="header.export" aria-haspopup="menu" aria-expanded="false"
-          aria-controls="osc-export-menu" x-bind="menuButton('export')">
-          <svg aria-hidden="true"><use href="#i-export"/></svg>
-          <span>Export</span>
+      <div class="flex items-center flex-none gap-1" data-osc="header.actions">
+        <button type="button" id="osc-theme-toggle" data-osc="header.theme"
+          aria-label="Switch to light theme" @click="toggleTheme()"
+          :aria-label="theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'"
+          class="inline-flex items-center justify-center w-11 h-11 text-gray-500 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white">
+          <svg class="w-5 h-5" aria-hidden="true" x-show="theme === 'dark'"><use href="#i-sun"/></svg>
+          <svg class="w-5 h-5" aria-hidden="true" x-show="theme !== 'dark'" x-cloak><use href="#i-moon"/></svg>
         </button>
-        <div class="osc-menu osc-menu--right" id="osc-export-menu" role="menu" hidden
-          aria-labelledby="osc-export" x-bind="menuPanel('export')">
-          <button type="button" class="osc-menu-item" role="menuitem" data-osc="export.wav" @click="exportAudio('pattern')" :aria-disabled="String(exportBusy)">Export tone / pattern (WAV)</button>
-          <button type="button" class="osc-menu-item" role="menuitem" data-osc="export.seqWav" @click="exportAudio('sequence')" :aria-disabled="String(exportBusy)">Export sequence (WAV)</button>
-          <button type="button" class="osc-menu-item" role="menuitem" data-osc="export.png" @click="screenshot()">Export graph (PNG)</button>
-          <button type="button" class="osc-menu-item" role="menuitem" data-osc="export.config" @click="exportConfig()">Export config (JSON)</button>
-          <button type="button" class="osc-menu-item" role="menuitem" data-osc="export.import" @click="importConfigClick()">Import config (JSON)…</button>
-          <button type="button" class="osc-menu-item" role="menuitem" data-osc="export.url" @click="copyConfigUrl()">Copy config URL</button>
+        <button type="button" id="osc-help" data-osc="header.help" aria-label="Help"
+          aria-haspopup="dialog" @click="openDialog('help')"
+          class="items-center justify-center hidden w-11 h-11 text-gray-500 rounded-lg sm:inline-flex hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-700">
+          <svg class="w-6 h-6" aria-hidden="true"><use href="#i-help"/></svg>
+        </button>
+        <div class="relative" data-osc-menu-anchor>
+          <button type="button" id="osc-overflow" data-osc="header.overflow" aria-label="More actions"
+            aria-haspopup="menu" aria-expanded="false" aria-controls="osc-overflow-menu"
+            x-bind="menuButton('overflow')"
+            class="inline-flex items-center justify-center w-11 h-11 text-gray-500 rounded-lg hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-700">
+            <svg class="w-6 h-6" aria-hidden="true"><use href="#i-more"/></svg>
+          </button>
+          <div id="osc-overflow-menu" role="menu" hidden aria-labelledby="osc-overflow"
+            x-bind="menuPanel('overflow')"
+            class="absolute right-0 z-50 w-56 py-1 mt-2 text-base list-none bg-white rounded-lg shadow-lg top-full dark:bg-gray-700">
+            <button type="button" role="menuitem" data-osc="config.import" @click="importConfigClick()" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Import config…</button>
+            <button type="button" role="menuitem" data-osc="config.export" @click="exportConfig()" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Export config</button>
+            <button type="button" role="menuitemcheckbox" data-osc="header.explore"
+              :aria-checked="String(explore)" aria-checked="false" @click="explore = !explore" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Explore hints</button>
+            <button type="button" role="menuitem" data-osc="header.settings" @click="openDialog('settings')" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Settings…</button>
+            <button type="button" role="menuitem" data-osc="header.shortcuts" @click="openDialog('help')" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Keyboard shortcuts</button>
+            <button type="button" role="menuitem" data-osc="header.about" @click="setWorkspace('about')" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">About OSCILLA</button>
+            <button type="button" role="menuitem" data-osc="safety.reopenMenu" @click="reopenSafety()" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Safety notice</button>
+          </div>
+        </div>
+        <div class="relative" data-osc-menu-anchor>
+          <button type="button" id="osc-export" data-osc="header.export" aria-haspopup="menu"
+            aria-expanded="false" aria-controls="osc-export-menu" x-bind="menuButton('export')"
+            class="inline-flex items-center justify-center h-11 min-w-11 px-3 ml-1 text-sm font-medium text-center text-white rounded-lg bg-primary-700 hover:bg-primary-800 focus:outline-none focus:ring-4 focus:ring-primary-300 dark:bg-primary-700 dark:hover:bg-primary-800 dark:focus:ring-primary-800">
+            <svg class="w-5 h-5 sm:mr-2 sm:-ml-1" aria-hidden="true"><use href="#i-export"/></svg>
+            <span class="sr-only sm:not-sr-only">Export</span>
+          </button>
+          <div id="osc-export-menu" role="menu" hidden aria-labelledby="osc-export"
+            x-bind="menuPanel('export')"
+            class="absolute right-0 z-50 py-1 mt-2 text-base list-none bg-white rounded-lg shadow-lg w-72 top-full dark:bg-gray-700">
+            <button type="button" role="menuitem" data-osc="export.wav" @click="exportAudio('pattern')" :aria-disabled="String(exportBusy)" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Export tone / pattern (WAV)</button>
+            <button type="button" role="menuitem" data-osc="export.seqWav" @click="exportAudio('sequence')" :aria-disabled="String(exportBusy)" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Export sequence (WAV)</button>
+            <button type="button" role="menuitem" data-osc="export.png" @click="screenshot()" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Export graph (PNG)</button>
+            <button type="button" role="menuitem" data-osc="export.config" @click="exportConfig()" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Export config (JSON)</button>
+            <button type="button" role="menuitem" data-osc="export.import" @click="importConfigClick()" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Import config (JSON)…</button>
+            <button type="button" role="menuitem" data-osc="export.url" @click="copyConfigUrl()" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Copy config URL</button>
+          </div>
         </div>
       </div>
     </div>
   </header>
+
+  <!-- ================= Shell body: the workspace sidebar beside the workspace column =======
+       Desktop (lg, 1024 px and up): the sidebar is a column, open or collapsed to icons (the
+       choice persists), expanding over the workspace while the pointer or focus is in it.
+       Phones and tablets: a drawer behind the hamburger, over a backdrop. The entries are
+       rendered from the one registry, src/js/ui/shell.js WORKSPACE_REGISTRY. -->
+  <div class="relative flex flex-1 min-h-0" data-osc="shell">
+    <aside id="osc-sidebar" aria-label="Sidebar" data-osc="sidebar" x-bind="sidebar()"
+      class="fixed top-0 left-0 z-40 flex-col flex-shrink-0 hidden w-64 h-full pt-16 duration-75 transition-width lg:absolute lg:flex lg:pt-0">
+      <div class="relative flex flex-col flex-1 min-h-0 bg-white border-r border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+        <div class="flex flex-col flex-1 pt-4 pb-4 overflow-x-hidden overflow-y-auto">
+          <div class="flex-1 px-3">
+            <form class="pb-3 lg:hidden" role="search" @submit.prevent="navSearchGo()">
+              <label for="osc-nav-search-drawer" class="sr-only">Find a workspace</label>
+              <div class="relative">
+                <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                  <svg class="w-5 h-5 text-gray-500 dark:text-gray-400" aria-hidden="true"><use href="#s-search"/></svg>
+                </div>
+                <input type="search" id="osc-nav-search-drawer" data-osc="sidebar.search"
+                  autocomplete="off" placeholder="Find a workspace" x-model="navQuery"
+                  @keydown="navSearchKeydown($event)" aria-describedby="osc-nav-search-result"
+                  class="block w-full p-2.5 pl-10 text-base text-gray-900 border border-gray-300 rounded-lg bg-gray-50 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white">
+              </div>
+            </form>
+            <nav aria-label="Workspaces">
+            <ul class="space-y-1" id="osc-nav">
+              <template x-for="entry in navTree" :key="entry.id">
+                <li :data-osc-nav-group="entry.kind === 'group' ? entry.id : null"
+                  x-show="entry.kind === 'group' ? navGroupMatches(entry.id) : navShown(entry.id)">
+                  <template x-if="entry.kind === 'item'">
+                    <a :href="'#m=' + entry.id" :data-osc="'nav.' + entry.id" x-bind="navItem(entry.id)"
+                      :title="sidebarIcons ? entry.label : null"
+                      class="flex items-center p-2 text-base font-normal text-gray-900 rounded-lg min-h-11 group hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-200 dark:hover:bg-gray-700">
+                      <svg class="flex-shrink-0 w-6 h-6 text-gray-500 transition duration-75 group-hover:text-gray-900 dark:text-gray-400 dark:group-hover:text-white" aria-hidden="true"><use :href="'#' + entry.icon"/></svg>
+                      <span class="flex-1 ml-3 whitespace-nowrap" x-bind="sidebarLabel()" x-text="entry.label"></span>
+                    </a>
+                  </template>
+                  <template x-if="entry.kind === 'group'">
+                    <button type="button" :id="'osc-nav-group-' + entry.id"
+                      :data-osc="'nav-group.' + entry.id" :aria-controls="'osc-nav-menu-' + entry.id"
+                      x-bind="navGroupButton(entry.id)" :title="sidebarIcons ? entry.label : null"
+                      class="flex items-center w-full p-2 text-base font-normal text-gray-900 transition duration-75 rounded-lg min-h-11 group hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-200 dark:hover:bg-gray-700">
+                      <svg class="flex-shrink-0 w-6 h-6 text-gray-500 transition duration-75 group-hover:text-gray-900 dark:text-gray-400 dark:group-hover:text-white" aria-hidden="true"><use :href="'#' + entry.icon"/></svg>
+                      <span class="flex-1 ml-3 text-left whitespace-nowrap" x-bind="sidebarLabel()" x-text="entry.label"></span>
+                      <svg class="w-5 h-5 text-gray-500 transition-transform dark:text-gray-400" aria-hidden="true"
+                        :class="{ 'rotate-180': navGroupShown(entry.id), 'lg:hidden': sidebarIcons }"><use href="#i-down"/></svg>
+                    </button>
+                  </template>
+                  <template x-if="entry.kind === 'group'">
+                    <ul :id="'osc-nav-menu-' + entry.id" :aria-labelledby="'osc-nav-group-' + entry.id"
+                      x-bind="navGroupPanel(entry.id)" class="py-1 space-y-1">
+                      <template x-for="w in entry.items" :key="w.id">
+                        <li x-show="navShown(w.id)">
+                          <a :href="'#m=' + w.id" :data-osc="'nav.' + w.id" x-bind="navItem(w.id, true)"
+                            :title="sidebarIcons ? w.label : null"
+                            class="flex items-center p-2 pl-6 text-base font-normal text-gray-900 rounded-lg min-h-11 group hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-200 dark:hover:bg-gray-700">
+                            <svg class="flex-shrink-0 w-5 h-5 text-gray-500 transition duration-75 group-hover:text-gray-900 dark:text-gray-400 dark:group-hover:text-white" aria-hidden="true"><use :href="'#' + w.icon"/></svg>
+                            <span class="flex-1 ml-3 whitespace-nowrap" x-bind="sidebarLabel()" x-text="w.label"></span>
+                          </a>
+                        </li>
+                      </template>
+                    </ul>
+                  </template>
+                </li>
+              </template>
+            </ul>
+            </nav>
+            <p class="px-2 py-3 text-sm text-gray-500 dark:text-gray-400" data-osc="sidebar.noMatch"
+              x-show="navQuery.trim() && !navSearchResults().length" x-cloak>No workspace matches.</p>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ================= Workspace column: notices, page header, the workspace, status ==== -->
+    <div class="flex flex-col flex-1 min-w-0 min-h-0 bg-gray-50 dark:bg-gray-900" id="osc-main-content"
+      data-osc="shell.content" x-bind="shellContent()">
 
   <!-- ================= Notifications (in flow: never cover a control) ================= -->
   <div class="osc-toasts" role="region" aria-label="Notifications" data-osc="alerts"
@@ -264,12 +372,41 @@
     </button>
   </section>
 
+    <!-- ================= Page header: where the user is (breadcrumb and the workspace's H1)
+         and the workspace's actions slot, which the workspace issues fill (U006's Related
+         links). One header for every workspace, derived from the registry. ================ -->
+    <div data-osc="page.header"
+      class="flex items-center flex-none min-w-0 gap-3 px-4 py-1.5 bg-white border-b border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+      <nav class="flex min-w-0" aria-label="Breadcrumb">
+        <ol class="inline-flex items-center min-w-0 space-x-1 md:space-x-2">
+          <li class="inline-flex items-center flex-none">
+            <a href="#m=playground" data-osc="page.home" x-bind="crumbHome()"
+              class="inline-flex items-center text-sm font-medium text-gray-700 rounded-lg min-h-8 [@media(pointer:coarse)]:min-h-11 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-300 dark:hover:text-white">
+              <svg class="w-4 h-4 mr-2" aria-hidden="true"><use href="#i-ws-playground"/></svg>OSCILLA</a>
+          </li>
+          <li class="flex-none" x-show="workspaceGroupLabel()" x-cloak>
+            <div class="flex items-center">
+              <svg class="w-5 h-5 text-gray-400" aria-hidden="true"><use href="#i-right"/></svg>
+              <span class="ml-1 text-sm font-medium text-gray-500 md:ml-2 dark:text-gray-400" x-text="workspaceGroupLabel()"></span>
+            </div>
+          </li>
+          <li class="min-w-0" aria-current="page">
+            <div class="flex items-center min-w-0">
+              <svg class="flex-none w-5 h-5 text-gray-400" aria-hidden="true"><use href="#i-right"/></svg>
+              <h1 class="ml-1 text-sm font-semibold text-gray-900 truncate md:ml-2 dark:text-white"
+                data-osc="page.title" x-text="workspaceLabel()">Playground</h1>
+            </div>
+          </li>
+        </ol>
+      </nav>
+      <div class="flex items-center gap-2 ml-auto" data-osc="page.actions"></div>
+    </div>
+
   <!-- ================= Main grid ================= -->
   <main class="osc-main" id="osc-main" tabindex="-1">
-    <h1 class="osc-sr-only">OSCILLA playground</h1>
 
     <div class="osc-top">
-      <div class="osc-top-left">
+      <div class="osc-top-left min-[1536px]:max-[1791.98px]:[[data-mode=playground]_&]:row-span-2 min-[1536px]:max-[1791.98px]:[[data-mode=playground]_&]:grid-rows-subgrid">
         <div class="osc-row1-left">
 
           <!-- ---------- Source & Pattern ---------- -->
@@ -298,7 +435,7 @@
                 x-bind="choice('sourceKind', 'pattern')">Pattern</button>
             </div>
 
-            <div class="osc-source-view osc-source-view--osc" id="osc-source-view-osc"
+            <div class="osc-source-view osc-source-view--osc lg:h-auto lg:min-h-[204px]" id="osc-source-view-osc"
               data-osc="source.oscView" :hidden="sourceKind !== 'oscillator'">
             <div class="osc-wave-tiles" role="radiogroup" aria-label="Waveform"
               data-osc="source.waveform">
@@ -346,7 +483,11 @@
               </div>
             </div>
 
-            <div class="osc-fine" role="group" aria-label="Fine frequency steps">
+            <!-- Beside the desktop sidebar the panel can be narrower than the six buttons
+                 (review #330 F1): from lg up one row while the row is 20rem or wider, three a
+                 row below that; on any width the row wraps rather than leaving the panel, and
+                 the view above grows from its 204 px to hold the second row (lg:h-auto). -->
+            <div class="osc-fine flex-wrap lg:*:basis-[clamp(0px,calc((20rem-100%)*999),calc(33.333%-4px))]" role="group" aria-label="Fine frequency steps">
               <button type="button" class="osc-btn osc-btn-secondary osc-fine-btn" id="osc-step-oct-down"
                 data-osc="source.step" data-step="-1oct" @click="stepFine('-1oct')" aria-label="Down one octave">-1 oct</button>
               <button type="button" class="osc-btn osc-btn-secondary osc-fine-btn" id="osc-step-st-down"
@@ -637,7 +778,7 @@
         </section>
       </div>
 
-      <div class="osc-top-right">
+      <div class="osc-top-right min-[1536px]:max-[1791.98px]:[[data-mode=playground]_&]:row-span-2 min-[1536px]:max-[1791.98px]:[[data-mode=playground]_&]:grid-rows-subgrid">
         <div class="osc-row1-right">
 
           <!-- ---------- Microphone analyzer ---------- -->
@@ -2835,6 +2976,14 @@
       </div>
     </div>
   </footer>
+    </div>
+
+    <!-- The phone drawer's backdrop: a tap outside the drawer closes it. Shown by a class
+         binding, as the drawer is, so both appear in the same frame (x-show defers a show to
+         a later task, which left a first tap on the backdrop landing on the page beneath). -->
+    <div class="fixed inset-0 z-30 hidden bg-gray-900/50 dark:bg-gray-900/80 lg:hidden" data-osc="sidebar.backdrop"
+      aria-hidden="true" :class="{ hidden: !drawerOpen }" @click="closeDrawer(true)"></div>
+  </div>
 
   <input type="file" id="osc-import-file" class="osc-sr-only" accept="application/json,.json"
     tabindex="-1" aria-hidden="true" data-osc="config.importFile" @change="importConfigFile($event)">

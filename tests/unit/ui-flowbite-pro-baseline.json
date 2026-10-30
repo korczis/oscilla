@@ -15,7 +15,7 @@
     "selectors": 1189,
     "domainViewSelectors": 438
   },
-  "debt": 3876,
+  "debt": 3735,
   "surfaces": {
     "pending": [
       "card#osc-exp-compare",
@@ -77,11 +77,12 @@
       "page#osc-view-presets",
       "page#osc-view-studio",
       "shell:footer",
-      "shell:main",
+      "shell:main"
+    ],
+    "migrated": [
       "shell:navbar",
       "shell:sidebar"
-    ],
-    "migrated": []
+    ]
   },
   "classes": {
     "osc-about": 1,
@@ -137,13 +138,9 @@
     "osc-block--": 3,
     "osc-block-detail": 2,
     "osc-block-name": 2,
-    "osc-brand": 1,
-    "osc-brand-name": 1,
-    "osc-brand-sub": 1,
-    "osc-brand-text": 1,
-    "osc-btn": 127,
+    "osc-btn": 126,
     "osc-btn-lg": 2,
-    "osc-btn-primary": 34,
+    "osc-btn-primary": 33,
     "osc-btn-secondary": 95,
     "osc-btn-success": 1,
     "osc-cal-convention": 1,
@@ -233,17 +230,12 @@
     "osc-h-spectrogram": 1,
     "osc-h-spectrum": 1,
     "osc-h-waveform": 1,
-    "osc-header": 1,
-    "osc-header-actions": 1,
-    "osc-header-export": 1,
-    "osc-header-icon": 2,
-    "osc-header-theme": 1,
     "osc-hints": 1,
     "osc-hints-list": 1,
     "osc-hold": 1,
-    "osc-ico": 6,
-    "osc-icon-btn": 47,
-    "osc-icon-btn--ghost": 15,
+    "osc-ico": 3,
+    "osc-icon-btn": 44,
+    "osc-icon-btn--ghost": 13,
     "osc-icon-btn--sm": 19,
     "osc-label": 94,
     "osc-learn": 1,
@@ -325,14 +317,14 @@
     "osc-m-textarea": 5,
     "osc-m-toolbar": 3,
     "osc-m-unsaved": 1,
-    "osc-main": 12,
+    "osc-main": 11,
     "osc-max-select": 1,
     "osc-measure": 1,
-    "osc-menu": 5,
+    "osc-menu": 1,
     "osc-menu--grid": 1,
-    "osc-menu--right": 3,
-    "osc-menu-anchor": 4,
-    "osc-menu-item": 29,
+    "osc-menu--right": 1,
+    "osc-menu-anchor": 2,
+    "osc-menu-item": 10,
     "osc-meter": 3,
     "osc-meter-fill": 3,
     "osc-metric": 12,
@@ -350,12 +342,6 @@
     "osc-mode-row": 1,
     "osc-mode-seg": 1,
     "osc-muted": 20,
-    "osc-nav": 6,
-    "osc-nav-caret": 2,
-    "osc-nav-group": 3,
-    "osc-nav-group-btn": 2,
-    "osc-nav-item": 6,
-    "osc-nav-menu": 2,
     "osc-num": 58,
     "osc-number": 60,
     "osc-p-additive": 1,
@@ -622,7 +608,7 @@
     "osc-spg-scale": 1,
     "osc-spg-scale-col": 1,
     "osc-spg-span": 1,
-    "osc-sr-only": 42,
+    "osc-sr-only": 41,
     "osc-st-add": 1,
     "osc-st-back": 1,
     "osc-st-bar": 1,
@@ -755,12 +741,11 @@
     "osc-stl-zoom": 1,
     "osc-studio": 1,
     "osc-studio-timeline-host": 1,
-    "osc-tab": 34,
-    "osc-tabs": 9,
+    "osc-tab": 23,
+    "osc-tabs": 8,
     "osc-tabs--auto": 2,
     "osc-tabs--mid": 1,
     "osc-tabs--primary": 2,
-    "osc-tabs--underline": 1,
     "osc-tabular": 5,
     "osc-time-select": 1,
     "osc-timeline": 2,
@@ -844,7 +829,7 @@
   "vocabulary": {
     "execution": 2,
     "is-": 8,
-    "is-active": 27,
+    "is-active": 25,
     "is-band": 1,
     "is-bypassed": 1,
     "is-compatible": 2,
@@ -891,16 +876,16 @@
       "declarations": 63
     },
     "src/styles/components.css": {
-      "selectors": 137,
-      "declarations": 509
+      "selectors": 132,
+      "declarations": 489
     },
     "src/styles/instrument.css": {
-      "selectors": 272,
-      "declarations": 743
+      "selectors": 245,
+      "declarations": 634
     },
     "src/styles/integration.css": {
-      "selectors": 199,
-      "declarations": 382
+      "selectors": 198,
+      "declarations": 381
     },
     "src/styles/main.css": {
       "selectors": 0,
@@ -911,8 +896,8 @@
       "declarations": 623
     },
     "src/styles/responsive.css": {
-      "selectors": 192,
-      "declarations": 234
+      "selectors": 171,
+      "declarations": 184
     }
   },
   "domainViews": {
@@ -930,7 +915,7 @@
     },
     "src/styles/tokens.css": {
       "selectors": 4,
-      "declarations": 193
+      "declarations": 190
     }
   },
   "inlineStyles": 89

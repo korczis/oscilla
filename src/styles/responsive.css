@@ -1,15 +1,17 @@
 /*
- * Responsive behaviour.
- *   >= 1280px  desktop reference grid (instrument.css)
- *   768-1279   two columns, every panel visible, compact header and status bar
+ * Responsive behaviour. From 1024 px the workspace sidebar (issue F002) takes 256 px beside the
+ * workspace column, so the viewport bands of the lab grid sit 256 px higher than the content
+ * widths they were measured for (a 1536 px window gives the lab 1280 px):
+ *   >= 1536px  desktop reference grid (instrument.css), rows follow content up to 1791 px
+ *   768-1535   two columns, every panel visible, compact status bar
  *   < 768      single-column focused instrument: Source & Pattern + analysis always shown,
- *              the nav becomes a workspace switcher that shows one group of secondary panels,
+ *              the sidebar is a drawer behind the hamburger that shows one workspace at a time,
  *              the status bar collapses to a compact transport plus an actions menu
  *   pointer: coarse  every control is at least 44px
  */
 
 /* ---------- Below the reference width: flatten the nested desktop grid ---------- */
-@media (max-width: 1279.98px) {
+@media (max-width: 1535.98px) {
   /* .osc-main is the page's scroller (definite height): auto rows would be squeezed to fit
      it and the panels would overlap, so every row takes its content height and scrolls. */
   .osc-main {
@@ -57,28 +59,6 @@
   .osc-app[data-mode="presets"] .osc-panel,
   .osc-app[data-mode="about"] .osc-panel {
     display: none;
-  }
-
-  /* Header: nav scrolls inside its own strip, never the page. */
-  .osc-brand-sub {
-    display: none;
-  }
-
-  .osc-nav {
-    flex: 1 1 auto;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scrollbar-width: none;
-  }
-
-  .osc-nav::-webkit-scrollbar {
-    display: none;
-  }
-
-  .osc-header-actions {
-    flex: none;
-    margin-left: auto;
-    padding-left: 12px;
   }
 
   /* Panels: natural height; hosts keep explicit heights. */
@@ -176,66 +156,9 @@
 
 /* ---------- Mobile: single-column focused instrument ---------- */
 @media (max-width: 767.98px) {
-  .osc-header {
-    flex-wrap: wrap;
-    height: auto;
-    padding: 8px 12px 0;
-  }
-
-  .osc-brand-name {
-    font-size: 18px;
-    letter-spacing: 0.14em;
-  }
-
   .osc-logo {
     width: 40px;
     height: 29px;
-  }
-
-  .osc-header-actions {
-    gap: 4px;
-  }
-
-  .osc-header-export span {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-  }
-
-  .osc-header-export {
-    width: 36px;
-    margin-left: 0;
-    padding: 0;
-  }
-
-  #osc-help {
-    display: none;
-  }
-
-  /* The nav becomes the workspace switcher strip under the brand row. */
-  .osc-nav {
-    order: 3;
-    flex: 1 0 100%;
-    height: 44px;
-    margin: 6px -12px 0;
-    padding: 0 4px;
-    border-top: 1px solid var(--osc-border-soft);
-  }
-
-  .osc-nav::before {
-    display: none;
-  }
-
-  .osc-nav .osc-tab {
-    padding: 0 12px;
-    font-size: var(--osc-fs-md);
-  }
-
-  .osc-tabs--underline .osc-tab.is-active::after {
-    bottom: 4px;
-    height: 3px;
   }
 
   .osc-main {
@@ -428,10 +351,6 @@
 }
 
 @media (max-width: 359.98px) {
-  .osc-brand-text {
-    display: none;
-  }
-
   /* The status bar keeps frequency and state; the waveform is in the source panel. On CI fonts
      it did not fit next to RELEASING at 320 px. */
   [data-osc="status.waveform"],
@@ -470,13 +389,7 @@
   .osc-icon-btn--sm,
   .osc-transport-btn,
   .osc-seq-start,
-  .osc-header-export,
   .osc-sb-action {
-    min-width: 44px;
-    min-height: 44px;
-  }
-
-  .osc-brand {
     min-width: 44px;
     min-height: 44px;
   }
@@ -528,7 +441,7 @@
   }
 
   /* Fixed desktop heights that 44 px controls overflowed onto their neighbours: the gain slider
-     onto HOLD TO PLAY (13 px), at 768-1279 px the fine-step buttons onto the Mode row, ... */
+     onto HOLD TO PLAY (13 px), at 768-1535 px the fine-step buttons onto the Mode row, ... */
   .osc-gain-row {
     height: auto;
   }
@@ -610,36 +523,9 @@
   }
 }
 
-/* 768-1023: the nav gets its own scrollable row so every item stays reachable. */
-@media (min-width: 768px) and (max-width: 1023.98px) {
-  .osc-header {
-    flex-wrap: wrap;
-    height: auto;
-    padding-top: 8px;
-  }
-
-  .osc-nav {
-    order: 3;
-    flex: 1 0 100%;
-    height: 44px;
-    margin: 6px -15px 0 -20px;
-    padding: 0 8px;
-    border-top: 1px solid var(--osc-border-soft);
-  }
-
-  .osc-nav::before {
-    display: none;
-  }
-
-  .osc-tabs--underline .osc-tab.is-active::after {
-    bottom: 4px;
-    height: 3px;
-  }
-}
-
-/* 768-1279: every panel stays visible (no focus layout), so the nav rings the workspace's
+/* 768-1535: every panel stays visible (no focus layout), so the nav rings the workspace's
    panels and scrolls the first of them to the top (ui/app.js focusWorkspace). */
-@media (min-width: 768px) and (max-width: 1279.98px) {
+@media (min-width: 768px) and (max-width: 1535.98px) {
   .osc-panel.is-focused {
     border-color: var(--osc-blue-underline);
     box-shadow: 0 0 0 1px var(--osc-blue-underline), var(--osc-shadow-panel);

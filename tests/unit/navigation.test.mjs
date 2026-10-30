@@ -13,6 +13,7 @@ import {
 } from '../../src/js/ui/navigation.js';
 import { createMemoryStore, observeMemoryStore } from '../../src/js/experiments/store.js';
 import { WORKSPACES } from '../../src/js/ui/app.js';
+import { NAV_TREE } from '../../src/js/ui/shell.js';
 import { collectUnsaved, createUnsavedGuard } from '../../src/js/ui/unsaved.js';
 import { decodeHash, serializeHash } from '../../src/js/core/url-state.js';
 import { decodeStudioLink } from '../../src/js/core/url-state-studio.js';
@@ -194,13 +195,14 @@ test('a refused link leaves the address: its keys out, m the workspace the user 
 
 test('every nav item links to its workspace address (a new tab opens it)', () => {
   const html = readFileSync(new URL('../../src/index.html', import.meta.url), 'utf8');
-  const links = [...html.matchAll(/<a [^>]*href="([^"]+)"[^>]*data-osc="nav\.([a-z]+)"/g)]
-    .map((m) => ({ href: m[1], id: m[2] }));
-  assert.deepEqual(links.map((l) => l.id).sort(), [...WORKSPACES].sort());
-  for (const l of links) {
-    assert.equal(l.href, `#m=${l.id}`);
-    assert.equal(routeOfHash(l.href).workspace, l.id);
-  }
+  // The sidebar renders each registry entry (shell.js NAV_TREE, issue F002) as a link whose href
+  // is `#m=<id>` and whose hook is `nav.<id>`, top level and nested alike.
+  const links = [...html.matchAll(/<a :href="'#m=' \+ (\w+)\.id" :data-osc="'nav\.' \+ (\w+)\.id"/g)];
+  assert.equal(links.length, 2, 'the top-level and the nested link templates');
+  for (const m of links) assert.equal(m[1], m[2], 'href and hook name the same workspace');
+  const ids = NAV_TREE.flatMap((e) => (e.kind === 'group' ? e.items : [e])).map((w) => w.id);
+  assert.deepEqual([...ids].sort(), [...WORKSPACES].sort());
+  for (const id of ids) assert.equal(routeOfHash(`#m=${id}`).workspace, id);
 });
 
 test('the memory store says what it holds, and an observer hears every write', async () => {

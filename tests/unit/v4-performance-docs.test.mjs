@@ -26,6 +26,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { WORKSPACE_IDS } from '../../src/js/ui/shell.js';
 import { LIBRARY } from '../browser/fixtures/large-library.mjs';
 import { BROWSERS, FACTOR_RANGE, KEYS, budgetFileOf, compactJson, docRegions, measuredOf,
   region, ruled } from '../browser/fixtures/perf-sessions.mjs';
@@ -225,8 +226,13 @@ test('every selector, id and state field the suite reads exists in src/', () => 
   const experiments = read('src/js/ui/experiments.js');
   assert.equal(dom.attribute, 'data-osc');
   assert.ok(Object.keys(dom.osc).length >= 7 && Object.keys(dom.ids).length >= 5);
+  // The sidebar's hooks are rendered from the registry (shell.js, issue F002): nav.<id> exists
+  // for every registry row, through the template that binds it.
+  const navHook = (value) => /^nav\.([a-z]+)$/.test(value)
+    && WORKSPACE_IDS.includes(value.slice(4)) && html.includes(`:${dom.attribute}="'nav.' + `);
   for (const [name, value] of Object.entries(dom.osc)) {
-    assert.ok(html.includes(`${dom.attribute}="${value}"`), `src/index.html has ${value}`);
+    assert.ok(html.includes(`${dom.attribute}="${value}"`) || navHook(value),
+      `src/index.html has ${value}`);
     assert.ok(suite.includes(`sel('${name}')`), `the suite uses selector ${name}`);
   }
   for (const [name, id] of Object.entries(dom.ids)) {

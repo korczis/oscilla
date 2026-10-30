@@ -249,42 +249,6 @@
   color: var(--osc-text-on-accent);
 }
 
-/* Underline variant: header navigation. */
-.osc-tabs--underline {
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: none;
-}
-
-.osc-tabs--underline .osc-tab {
-  flex: 0 0 auto;
-  border-radius: 0;
-  background: none;
-  font-size: var(--osc-fs-nav);
-}
-
-.osc-tabs--underline .osc-tab::before {
-  display: none;
-}
-
-.osc-tabs--underline .osc-tab.is-active {
-  background: none;
-  color: var(--osc-text);
-  font-weight: var(--osc-fw-semibold);
-}
-
-.osc-tabs--underline .osc-tab.is-active::after {
-  content: "";
-  position: absolute;
-  right: 10px;
-  bottom: 10px;
-  left: 10px;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--osc-blue-underline);
-}
-
 /* ---------- Segmented control ---------- */
 .osc-seg {
   display: flex;

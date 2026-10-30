@@ -40,6 +40,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
+const shell = require('./lib/shell.cjs');
 const { until } = require('./lib/wait.cjs');
 
 const argv = process.argv.slice(2);
@@ -74,17 +75,8 @@ try {
 } catch (e) { /* optional: npm i --no-save axe-core */ }
 
 // ------------------------------------------------------------------------------ page helpers
-/** Reach a workspace through the nav; a grouped one (ANALYZE, SYNTHESIS) opens its group. */
-async function navTo(page, ws) {
-  const item = `[data-osc="nav.${ws}"]`;
-  const group = await page.evaluate((s) => {
-    const el = document.querySelector(s);
-    const g = el && el.closest('[data-osc-nav-group]');
-    return g && el.offsetParent === null ? g.dataset.oscNavGroup : null;
-  }, item);
-  if (group) await page.click(`[data-osc="nav-group.${group}"]`);
-  await page.click(item);
-}
+/** Reach a workspace through the sidebar (lib/shell.cjs: the drawer and a group as needed). */
+const navTo = (page, ws) => shell.navTo(page, ws);
 
 async function open(browser, { width = 1536, height = 1024 } = {}) {
   const context = await browser.newContext({ viewport: { width, height }, acceptDownloads: true });
