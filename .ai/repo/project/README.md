@@ -55,6 +55,7 @@ E0xx        engineering integrity: structure, size and checks of the code base (
 K0xx        playable instrument (M057-M059, M061), audio-band signal lab (M060) and charts (M062)
 L0xx        Learn lessons (M049)
 P0xx        product: first run (M050), positioning, product path, public story (M051)
+C0xx        one instrument, one coherent state: controls, engine, views and saved state agree (M090)
 U0xx        the whole interface shows the current product (M054)
 F0xx        the whole interface on Flowbite Pro (M055)
 Q0xx        questions and acts only the owner can answer or take (M052; Q001 under M005, Q004 under
