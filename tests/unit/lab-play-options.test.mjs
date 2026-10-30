@@ -642,6 +642,165 @@ test('R-7: the Envelope lab says when an edit settles; a 20-input slider drag re
     }
   });
 
+/** The Envelope lab wired to a held tone as main.js wires it; counts the restarts. */
+async function heldToneOnLab() {
+  const { mount, KEY_COMMIT_MS } = await import('../../src/js/labs/envelope.js');
+  const { lab, els } = mountEnvelopeLab(mount);
+  const { eng, advance } = setupApp();
+  labOpts.withLabOptions(eng, (p) => labPlayOptions(p, eng.ctx, { envelope: lab }));
+  const log = { notes: [], answers: [], plays: 0 };
+  lab.onChange((adsr, enabled, meta) => {
+    log.notes.push(!!(meta && meta.settling));
+    log.answers.push(labOpts.followEnvelopeLab(eng, lab, meta));
+  });
+  eng.on((type) => { if (type === 'play') log.plays++; });
+  eng.play(plan({ pattern: 'tone', frequency: 440 }), opt());
+  advance(1);
+  log.plays = 0;
+  return { lab, els, eng, advance, log, KEY_COMMIT_MS };
+}
+
+// #296 R-9: a range input fires 'input' and 'change' for every keyboard step, so 'change'
+// committing restarted the held voice on every arrow press and auto-repeat. While a key is
+// down on a slider its steps settle; the keyup commits once after KEY_COMMIT_MS unless another
+// keydown comes, and a blur commits at once. A pointer drag (no key) still commits on 'change'.
+test('R-9: arrow steps held or pressed on a slider restart the held voice once',
+  { skip }, async (t) => {
+    const hadDocument = 'document' in globalThis;
+    if (!hadDocument) globalThis.document = { activeElement: null };
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    try {
+      const { lab, els, eng, advance, log, KEY_COMMIT_MS: exported } = await heldToneOnLab();
+      // a lab without the constant (the merge base) is judged by its behaviour, not its export
+      const KEY_COMMIT_MS = exported ?? 250;
+      const v1 = eng.voice;
+      const slider = els['#osc-env-sustain'];
+      const step = (el, value) => {
+        el.dispatchEvent(new Event('keydown'));
+        el.value = value;
+        el.dispatchEvent(new Event('input'));
+        el.dispatchEvent(new Event('change'));
+      };
+      // ArrowLeft held: 20 auto-repeat keydowns, each with its input and change, one keyup
+      for (let i = 1; i <= 20; i++) {
+        step(slider, (0.6 - i * 0.01).toFixed(2));
+        advance(0.033);
+      }
+      assert.deepStrictEqual([...new Set(log.notes)], [true], 'every keyboard step settles');
+      assert.strictEqual(log.plays, 0, '20 held steps, no restart');
+      assert.strictEqual(eng.voice, v1);
+      assert.strictEqual(eng.voices.size, 1, 'no extra voice');
+      slider.dispatchEvent(new Event('keyup'));
+      assert.strictEqual(log.plays, 0, 'the keyup arms the commit');
+      t.mock.timers.tick(KEY_COMMIT_MS - 1);
+      assert.strictEqual(log.plays, 0);
+      t.mock.timers.tick(1);
+      assert.strictEqual(log.notes[log.notes.length - 1], false, 'the commit');
+      assert.strictEqual(log.answers[log.answers.length - 1], 'restarted');
+      assert.strictEqual(log.plays, 1, 'one restart for the held key');
+      assert.ok(Math.abs(eng.voice.adsr.s - 0.4) < 1e-9, 'at the value the key stopped on');
+      t.mock.timers.tick(KEY_COMMIT_MS * 4);
+      assert.strictEqual(log.plays, 1, 'the commit fires once');
+      advance(1);
+
+      // 20 quick presses (keydown, input, change, keyup), each within the window of the last
+      for (let i = 1; i <= 20; i++) {
+        step(slider, (0.4 - i * 0.01).toFixed(2));
+        slider.dispatchEvent(new Event('keyup'));
+        t.mock.timers.tick(Math.floor(KEY_COMMIT_MS / 5));
+        advance(0.05);
+      }
+      assert.strictEqual(log.plays, 1, '20 presses, no restart yet');
+      t.mock.timers.tick(KEY_COMMIT_MS);
+      assert.strictEqual(log.plays, 2, 'one restart for the run of presses');
+      assert.ok(Math.abs(eng.voice.adsr.s - 0.2) < 1e-9);
+      advance(1);
+
+      // a press, then the key held again within the window: the hold cancels the pending
+      // commit, so nothing restarts while the key is down, however long it is held
+      step(slider, '0.21');
+      slider.dispatchEvent(new Event('keyup'));
+      for (let i = 2; i <= 10; i++) {
+        step(slider, (0.2 + i * 0.01).toFixed(2));
+        t.mock.timers.tick(KEY_COMMIT_MS);
+      }
+      assert.strictEqual(log.plays, 2, 'no commit while the key is held');
+      slider.dispatchEvent(new Event('keyup'));
+      t.mock.timers.tick(KEY_COMMIT_MS);
+      assert.strictEqual(log.plays, 3, 'one restart for press and hold');
+      assert.ok(Math.abs(eng.voice.adsr.s - 0.3) < 1e-9);
+      advance(1);
+
+      // a key down and the focus leaves the slider (Tab): the blur commits at once
+      step(slider, '0.25');
+      assert.strictEqual(log.plays, 3);
+      slider.dispatchEvent(new Event('blur'));
+      assert.strictEqual(log.plays, 4, 'the blur commits');
+      assert.ok(Math.abs(eng.voice.adsr.s - 0.25) < 1e-9);
+      t.mock.timers.tick(KEY_COMMIT_MS * 2);
+      slider.dispatchEvent(new Event('blur'));
+      assert.strictEqual(log.plays, 4, 'nothing left to commit');
+      advance(1);
+
+      // the Attack slider (a log slider) held: one restart
+      const attack = els['#osc-env-attack'];
+      for (let i = 1; i <= 10; i++) step(attack, String(100 + i * 20));
+      attack.dispatchEvent(new Event('keyup'));
+      assert.strictEqual(log.plays, 4, 'held Attack steps settle');
+      t.mock.timers.tick(KEY_COMMIT_MS);
+      assert.strictEqual(log.plays, 5, 'one restart at the Attack keyup');
+      assert.strictEqual(eng.voice.adsr.a, lab.adsr.a);
+      advance(1);
+
+      // a pointer drag (no key): its inputs settle and its change commits, as in R-7
+      for (let i = 1; i <= 10; i++) {
+        slider.value = (0.3 + i * 0.01).toFixed(2);
+        slider.dispatchEvent(new Event('input'));
+      }
+      assert.strictEqual(log.plays, 5);
+      slider.dispatchEvent(new Event('change'));
+      assert.strictEqual(log.plays, 6, 'the pointer change commits at once');
+      assert.ok(Math.abs(eng.voice.adsr.s - 0.4) < 1e-9);
+      assert.ok(exported > 0 && exported <= 500, 'the window is a bounded constant');
+      eng.stopAll();
+      advance(3);
+      assert.strictEqual(eng.activeNodeCount, 0);
+      lab.dispose();
+    } finally {
+      if (!hadDocument) delete globalThis.document;
+    }
+  });
+
+// #296 R-10: update({ enabled }) (a config import) notifies as a commit, so switching the
+// Envelope by update() during a held tone reaches the voice at once (mutant P16 settled it).
+test('R-10: update({ enabled }) during a held tone restarts the voice off and back on',
+  { skip }, async () => {
+    const hadDocument = 'document' in globalThis;
+    if (!hadDocument) globalThis.document = { activeElement: null };
+    try {
+      const { lab, eng, advance, log } = await heldToneOnLab();
+      assert.strictEqual(eng.voice.adsr.s, 0.6);
+      lab.update({ enabled: false });
+      assert.strictEqual(log.notes[log.notes.length - 1], false, 'a commit, not settling');
+      assert.strictEqual(log.answers[log.answers.length - 1], 'restarted');
+      assert.strictEqual(log.plays, 1);
+      assert.strictEqual(eng.voice.adsr, null, 'the voice plays without the ADSR');
+      advance(1);
+      lab.update({ enabled: true });
+      assert.strictEqual(log.answers[log.answers.length - 1], 'restarted');
+      assert.strictEqual(log.plays, 2);
+      assert.strictEqual(eng.voice.adsr.s, 0.6, 'and with it again');
+      lab.update({ enabled: true });
+      assert.strictEqual(log.plays, 2, 'no switch, no notification');
+      eng.stopAll();
+      advance(3);
+      assert.strictEqual(eng.activeNodeCount, 0);
+      lab.dispose();
+    } finally {
+      if (!hadDocument) delete globalThis.document;
+    }
+  });
+
 test('R-3: withLabOptions spreads the labs over the caller\'s options, a restart included',
   { skip }, () => {
     const { eng, advance } = setupApp();

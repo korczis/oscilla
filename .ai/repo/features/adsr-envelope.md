@@ -29,7 +29,12 @@ step of a steps pattern, a ramps pass or sweep segment) through `scheduleAdsrSte
 shrinks the attack, decay and release to fit the step. An edit reaches the sounding note
 (`engine.setAdsr`): a release change in place while the note is held, anything else by a
 click-free restart of the note. A slider or graph drag is one edit: the note restarts once,
-when the drag ends (the slider's `change`, the graph's pointerup), not on every move. The Pattern sequencer and Studio keep their own envelopes.
+when the drag ends (the slider's `change`, the graph's pointerup), not on every move. The
+keyboard is the same: a range input fires `input` and `change` for every arrow step, so
+while a key is down on a slider its steps settle, and the keyup commits once
+`KEY_COMMIT_MS` (250 ms, `labs/envelope.js`) later unless another key goes down first (a
+held key and a run of presses are one edit each); leaving the slider (blur) commits at once.
+The Pattern sequencer and Studio keep their own envelopes.
 
 ## What it does not do
 

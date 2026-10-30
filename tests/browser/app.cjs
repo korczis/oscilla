@@ -2394,6 +2394,8 @@ function defineChecks() {
     await page.evaluate(() => {
       const a = window.OSCILLA.app;
       a.source = 'dual'; a.setStereo(false); a.setDualFreq('a', '300'); a.setDualFreq('b', '1111');
+      // an earlier check (ui-dual-phase-stereo-controls) leaves A square and B triangle
+      a.dual.a.wave = 'sine'; a.dual.b.wave = 'sine';
       a.holding = true; a.play('hold');
     });
     await until(() => page.evaluate(() => {
@@ -2676,6 +2678,131 @@ function defineChecks() {
       await page.setViewportSize({ width, height });
       const size = `${width}x${height}`;
       res[size] = await envelopeDragOneRestart(page, `envelope-drag-one-restart ${size}`);
+    }
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    return { ok: Object.values(res).every((r) => r.ok), ...res };
+  });
+
+  // #296 R-9: the keyboard is one edit too. A range input fires 'input' and 'change' for
+  // every arrow step, so the Sustain slider's keys settle while one is down and its keyup
+  // commits once after the lab's keyCommitMs. ArrowLeft held for 20 auto-repeats leaves the
+  // held voice sounding (no restart, one audible voice) and restarts it once, at the value it
+  // stopped on; 20 ArrowRight presses restart it once, plus one per gap between a keyup and
+  // the next keydown longer than the window (measured in the page, so a slow host is not
+  // a failure); a real mouse drag of the slider still restarts it once, at the release.
+  const envelopeKeysOneRestart = async (page, what) => {
+    await H.continuous(page, true);
+    await H.workspace(page, 'synthesis');
+    const voiceAt = (old, label, want) => until(() => page.evaluate(([prev, w]) => {
+      const e = window.OSCILLA.engine;
+      const v = e.voice;
+      if (!v || v.ended || v.releasing || v.id === prev || !v.adsr) return null;
+      if (e.ctx.currentTime - v.t0 < 0.4) return null;
+      const env = e._valueAt(v.env, e.ctx.currentTime);
+      return Math.abs(env - w) < 0.01 && Math.abs(v.adsr.s - w) < 1e-9 ? { id: v.id, env } : null;
+    }, [old, want]), { ms: 10000, what: `${what}: ${label}` });
+    const committed = (label, n) => until(() => page.evaluate((k) => (window.__r9.plays >= k
+      ? window.__r9.plays : null), n), { ms: 5000, what: `${what}: ${label}` });
+    await page.evaluate(() => {
+      const O = window.OSCILLA;
+      const a = O.app;
+      a.setWaveform('sine'); a.setPattern('tone'); a.setFrequency(440);
+      O.labs.envelope.update({ adsr: { a: 0.01, d: 0.1, s: 0.6, r: 0.3 }, enabled: true });
+      a.holding = true; a.play('hold');
+      const e = O.engine;
+      const el = document.querySelector('#osc-env-sustain');
+      const c = { plays: 0, maxAudible: 0, downs: [], ups: [] };
+      window.__r9 = c;
+      c.off = e.on((t) => { if (t === 'play') c.plays++; });
+      // bubbling listeners on window run after the slider's own handlers
+      const sample = () => { c.maxAudible = Math.max(c.maxAudible, e.audibleVoiceCount); };
+      const down = (ev) => { if (ev.target === el) c.downs.push(performance.now()); };
+      const up = (ev) => { if (ev.target === el) c.ups.push(performance.now()); };
+      for (const t of ['input', 'change', 'pointermove']) window.addEventListener(t, sample);
+      window.addEventListener('keydown', down);
+      window.addEventListener('keyup', up);
+      c.unsample = () => {
+        for (const t of ['input', 'change', 'pointermove']) window.removeEventListener(t, sample);
+        window.removeEventListener('keydown', down);
+        window.removeEventListener('keyup', up);
+      };
+      c.reset = () => {
+        c.plays = 0; c.maxAudible = 0; c.downs = []; c.ups = [];
+        return e.voice.id;
+      };
+      c.read = (id) => ({ plays: c.plays, maxAudible: c.maxAudible, downs: c.downs.length,
+        same: e.voice.id === id, lab: O.labs.envelope.adsr.s, slider: Number(el.value) });
+    });
+    const res = { windowMs: await page.evaluate(() => window.OSCILLA.labs.envelope.keyCommitMs) };
+    res.start = await voiceAt(null, 'held tone at sustain 0.6', 0.6);
+    const slider = page.locator('#osc-env-sustain');
+    await slider.scrollIntoViewIfNeeded({ timeout: 5000 });
+    await slider.focus({ timeout: 5000 });
+
+    // ArrowLeft held: one keydown, 19 auto-repeats, then the keyup
+    let id = await page.evaluate(() => window.__r9.reset());
+    for (let i = 0; i < 20; i++) await page.keyboard.down('ArrowLeft');
+    res.held = await page.evaluate((v) => window.__r9.read(v), id);
+    await page.keyboard.up('ArrowLeft');
+    res.heldPlays = await committed('the held keys commit', 1);
+    res.afterHeld = await voiceAt(res.start.id, 'Sustain 0.4 after the held key', 0.4);
+    res.heldEnd = await page.evaluate((v) => window.__r9.read(v), id);
+
+    // 20 presses of ArrowRight
+    id = await page.evaluate(() => window.__r9.reset());
+    for (let i = 0; i < 20; i++) await page.keyboard.press('ArrowRight');
+    res.pressed = await page.evaluate((v) => window.__r9.read(v), id);
+    res.pressPlays = await committed('the presses commit', 1);
+    res.afterPresses = await voiceAt(res.afterHeld.id, 'Sustain 0.6 after the presses', 0.6);
+    res.pressEnd = await page.evaluate((w) => {
+      const c = window.__r9;
+      let gaps = 0;
+      for (let i = 1; i < c.downs.length; i++) if (c.downs[i] - c.ups[i - 1] > w) gaps++;
+      return { plays: c.plays, gaps, downs: c.downs.length, ups: c.ups.length };
+    }, res.windowMs);
+
+    // a real mouse drag of the slider: no key, so its inputs settle and its change commits
+    const box = await slider.boundingBox();
+    id = await page.evaluate(() => window.__r9.reset());
+    const y = box.y + box.height / 2;
+    await page.mouse.move(box.x + box.width * 0.6, y);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.2, y, { steps: 20 });
+    res.dragDuring = await page.evaluate((v) => window.__r9.read(v), id);
+    await page.mouse.up();
+    res.dragPlays = await committed('the mouse drag commits', 1);
+    res.drag = await page.evaluate((v) => window.__r9.read(v), id);
+    res.afterDrag = await voiceAt(res.afterPresses.id, 'the drag\'s sustain reaches the voice',
+      res.drag.lab);
+    res.dragEnd = await page.evaluate((v) => window.__r9.read(v), id);
+
+    await page.evaluate(() => {
+      const c = window.__r9;
+      c.off(); c.unsample(); delete window.__r9;
+      document.activeElement.blur();
+      window.OSCILLA.app.stopNow();
+      window.OSCILLA.labs.envelope.update({ adsr: { a: 0.01, d: 0.1, s: 0.6, r: 0.3 },
+        enabled: false });
+    });
+    await quiet(page, `${what}: quiet at the end`);
+    await H.workspace(page, 'playground');
+    const h = res.held;
+    const d = res.dragDuring;
+    const ok = res.windowMs > 0 && res.windowMs <= 500
+      && h.downs === 20 && h.plays === 0 && h.same && h.maxAudible === 1
+      && Math.abs(h.lab - 0.4) < 1e-9 && res.heldEnd.plays === 1
+      && res.pressed.downs === 20 && res.pressEnd.ups === 20
+      && res.pressEnd.plays >= 1 && res.pressEnd.plays <= 1 + res.pressEnd.gaps
+      && d.plays === 0 && d.same && d.maxAudible === 1 && d.lab < 0.6 - 1e-6
+      && res.dragEnd.plays === 1;
+    return { ok, ...res };
+  };
+  def('envelope-keys-one-restart', async ({ page }) => {
+    const res = {};
+    for (const [width, height] of [[1536, 1024], [390, 844]]) {
+      await page.setViewportSize({ width, height });
+      const size = `${width}x${height}`;
+      res[size] = await envelopeKeysOneRestart(page, `envelope-keys-one-restart ${size}`);
     }
     await page.setViewportSize({ width: 1536, height: 1024 });
     return { ok: Object.values(res).every((r) => r.ok), ...res };

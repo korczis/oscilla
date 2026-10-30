@@ -5,6 +5,10 @@
 // A listener's third argument says whether the edit is still settling (#296 R-7): a slider's
 // 'input' and a graph pointermove are, the slider's 'change', the graph's pointerup, a typed
 // field, the power switch and update() are not, so a drag reaches the voice as one edit.
+// The keyboard (#296 R-9): a range input fires 'input' and 'change' for every arrow step, a
+// press or an auto-repeat, so while a key is down on a slider both settle; the keyup commits
+// once KEY_COMMIT_MS later unless another keydown comes first (a run of presses is one edit,
+// like a held key), and leaving the slider (blur) commits at once.
 
 import { createEnvelopeGraph } from '../charts/envelope-graph.js';
 import { ADSR_LIMITS, clampAdsr } from '../charts/drag-math.js';
@@ -18,6 +22,9 @@ import {
 import { on, onUi, bindSwitch, setSlider, setField } from './dom.js';
 
 export const ADSR_DEFAULTS = Object.freeze({ a: 0.01, d: 0.1, s: 0.6, r: 0.3 });
+
+/** How long after the last keyup on a slider its keyboard steps commit (#296 R-9). */
+export const KEY_COMMIT_MS = 250;
 
 const TIME_KEYS = {
   a: { slider: '#osc-env-attack', text: '#osc-env-attack-value' },
@@ -70,23 +77,55 @@ export function mount(rootEl) {
   };
   const offs = [enable.dispose, on(host, 'pointerup', graphDone),
     on(host, 'pointercancel', graphDone)];
+
+  // A slider: 'input' settles, 'change' commits, except while the keyboard steps it (R-9).
+  function bindSlider(slider, read) {
+    if (!slider) return;
+    let keying = false;
+    let dirty = false;
+    let timer = null;
+    const disarm = () => {
+      if (timer != null) clearTimeout(timer);
+      timer = null;
+    };
+    const commit = () => {
+      disarm();
+      keying = false;
+      if (!dirty) return;
+      dirty = false;
+      set(read());
+    };
+    const edit = (settling) => {
+      if (keying) dirty = true;
+      set(read(), undefined, settling || keying);
+    };
+    offs.push(on(slider, 'keydown', () => {
+      disarm();
+      keying = true;
+    }));
+    offs.push(on(slider, 'keyup', () => {
+      if (!keying) return;
+      disarm();
+      timer = setTimeout(commit, KEY_COMMIT_MS);
+    }));
+    offs.push(on(slider, 'blur', commit));
+    offs.push(on(slider, 'input', () => edit(true)));
+    offs.push(on(slider, 'change', () => edit(false)));
+    offs.push(disarm);
+  }
+
   for (const [k, sel] of Object.entries(TIME_KEYS)) {
     const [lo, hi] = ADSR_LIMITS[k];
     const slider = q(sel.slider);
     const text = q(sel.text);
-    const fromSlider = (settling) => set({ [k]: logSliderToValue(Number(slider.value), lo, hi) },
-      undefined, settling);
-    offs.push(on(slider, 'input', () => fromSlider(true)));
-    offs.push(on(slider, 'change', () => fromSlider(false)));
+    bindSlider(slider, () => ({ [k]: logSliderToValue(Number(slider.value), lo, hi) }));
     offs.push(on(text, 'change', () => {
       const s = parseDurationS(text.value);
       if (s != null) set({ [k]: s });
       else setField(text, formatDuration(adsr[k]));
     }));
   }
-  offs.push(on(sustainSlider, 'input', () => set({ s: Number(sustainSlider.value) }, undefined,
-    true)));
-  offs.push(on(sustainSlider, 'change', () => set({ s: Number(sustainSlider.value) })));
+  bindSlider(sustainSlider, () => ({ s: Number(sustainSlider.value) }));
   offs.push(on(sustainText, 'change', () => {
     const v = parseNumber(sustainText.value);
     if (v != null) set({ s: v > 1 ? v / 100 : v }); // "60" is read as 60 %
@@ -108,6 +147,8 @@ export function mount(rootEl) {
       return q('#osc-env-enable') ? enable.value : true;
     },
     set,
+    /** The keyboard commit window (ms, #296 R-9), for the checks that judge it. */
+    keyCommitMs: KEY_COMMIT_MS,
     onChange(fn) {
       listeners.add(fn);
       return () => listeners.delete(fn);
