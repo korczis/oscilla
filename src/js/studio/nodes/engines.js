@@ -170,6 +170,8 @@ const gcd = (a, b) => (b ? gcd(b, a % b) : a);
 export function amDcText(p) {
   const r = Math.round(Number(p.ratio) * 100);
   if (!(r > 0)) return null;
+  // AM at Depth 0 is the carrier alone, c · 1: no product term, so no mean (review of #332, V6).
+  if (p.mode === 'am' && !(Number(p.depth) > 0)) return null;
   const k = gcd(r, 100);
   const [num, den] = [r / k, 100 / k];
   if (!hasHarmonic(p.carrier, num) || !hasHarmonic(p.modulator, den)) return null;

@@ -5,6 +5,7 @@
 //       shapers cos(Φ_k x), sin(Φ_k x) see the phase deviation I_m · sin θ_m (changing the
 //       edge's scale to 0.5 / Φ passed every earlier test)
 //   V5  a note-on that takes no voice (it sounds nothing) does not enter the held list
+//   V6  AM at Depth 0 is the carrier alone: no product term, so the face states no DC
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { FM_ALGORITHMS } from '../../src/js/synth/fm-algorithms.js';
@@ -100,4 +101,21 @@ test('V5 a note that sounds nothing does not enter the held list', async () => {
   assert.equal(live.event('fm-1', { kind: 'off', note: 120, at: 1 }).held, 1);
   assert.equal(live.allOff(2), 1, 'all-off counts the held notes that sound');
   assert.deepEqual(calls, [['on', 60], ['on', 120], ['off', 120]], 'every event reached it');
+});
+
+// ------------------------------------------------------------------ V6 AM at Depth 0
+
+test('V6 AM at Depth 0 states no DC: the carrier alone has no product term', async () => {
+  const { amDcText } = await import('../../src/js/studio/nodes/engines.js');
+  const { NODE_REGISTRY } = await import('../../src/js/studio/registry.js');
+  const facts = NODE_REGISTRY.get('am-voice').facts;
+  for (const [carrier, modulator, ratio] of [['sine', 'sine', 1], ['sawtooth', 'sawtooth', 1.5],
+    ['square', 'sine', 3]]) {
+    const p = { carrier, modulator, ratio, mode: 'am' };
+    assert.equal(amDcText({ ...p, depth: 0 }), null, `${carrier} x ${modulator} at ${ratio}`);
+    assert.doesNotMatch(facts({ ...p, depth: 0 }), /DC/);
+    assert.match(amDcText({ ...p, depth: 0.5 }), /DC/, 'any depth above 0 has the mean');
+    assert.match(amDcText({ ...p, mode: 'ring', depth: 0 }), /DC/,
+      'ring is the full product whatever Depth says');
+  }
 });
