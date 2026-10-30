@@ -93,6 +93,11 @@ test('T001: float rounding at the cap is tolerated; a sample beyond the toleranc
     'a few ulps above the cap is rounding, and the ceiling passes it');
   assert.equal(ceilingState({ pre: flat(CAP + 2 ** -18), cap: CAP }).acting, true,
     '4x the tolerance above the cap is flattened, and reported');
+  const one = wave('sine', DEFAULT_GAIN, 1000);
+  one[100] = CAP * 1.01;
+  const single = ceilingState({ pre: one, cap: CAP });
+  assert.equal(single.acting, true, 'one flattened sample is reported');
+  assert.equal(single.over, 1);
   // A 20 Hz sine at the cap, with the rounding of the gain chain: many neighbouring samples sit
   // within 1e-4 of its peak, which a near-the-peak heuristic would read as a flat top.
   const slow = wave('sine', CAP * (1 + 2 ** -23), 20);
@@ -167,7 +172,12 @@ test('T001: the UI shows the state while sounding; the gain readout is labelled 
   assert.equal(o.ceilingText, 'OUTPUT AT CEILING (clipped)');
   assert.match(o.gainTitle, /setpoint/);
   assert.match(o.gainTitle, /-21\.9 dB/);
-  assert.match(o.gainTitle, /before the filter, envelope, limiter and the -12\.0 dBFS output ceiling/);
+  // The master gain sits after the envelope and the inserts and before the limiter and the
+  // ceiling (audio-engine.js voice chain): the title must not place it before the filter.
+  assert.match(o.gainTitle, /not the output level/);
+  assert.match(o.gainTitle, /leaves out the envelope and filter before it/);
+  assert.match(o.gainTitle, /and the limiter and -12\.0 dBFS output ceiling after it/);
+  assert.doesNotMatch(o.gainTitle, /set before the filter/);
   assert.match(o.gainTitle, /relative, not SPL/);
   assert.doesNotMatch(o.gainTitle, /dB SPL/);
   assert.match(o.gainTitle, /OUTPUT AT CEILING \(clipped\)/, 'the title says so while acting');

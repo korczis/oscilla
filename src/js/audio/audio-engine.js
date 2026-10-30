@@ -251,8 +251,9 @@ export class AudioEngine {
       // Conservative limiter. DynamicsCompressorNode applies automatic makeup gain
       // ((1 / fullRangeGain) ^ 0.6 per the Web Audio spec); `trim` removes it, so a single
       // unprocessed voice leaves at the logical gain. The UI gain is a setpoint, not the
-      // emitted level: a filter boost, the envelope, additive normalisation, the limiter and
-      // the ceiling all act after it, and an insert can push one voice past the cap.
+      // emitted level: the envelope, additive normalisation and a filter boost (inserts) act
+      // before `master`, the limiter and the ceiling after it, and an insert can push one
+      // voice past the cap.
       // enableCeilingTap() reports when the ceiling then flattens it (T001, ADR 0002 note).
       this.limiter = ctx.createDynamicsCompressor();
       this.limiter.threshold.value = LIMITER_THRESHOLD_DB;

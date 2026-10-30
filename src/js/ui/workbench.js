@@ -97,8 +97,9 @@ export function createWorkbench(svc) {
     /** The gain readout is the master setpoint, not the level the output carries. */
     get gainTitle() {
       return `Gain setpoint ${this.gainDbText} (logical gain ${this.gainLevel.toFixed(3)} re `
-        + `digital full scale), set before the filter, envelope, limiter and the `
-        + `${CEILING_DB_TEXT} output ceiling; relative, not SPL.`
+        + `digital full scale), not the output level: it leaves out the envelope and filter `
+        + `before it and the limiter and ${CEILING_DB_TEXT} output ceiling after it; `
+        + 'relative, not SPL.'
         + (this.ceilingActing ? ` Now: ${CEILING_TEXT}, the ceiling flattens the output.` : '');
     },
     get holdLabel() {

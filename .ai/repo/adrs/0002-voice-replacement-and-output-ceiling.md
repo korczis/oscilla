@@ -81,7 +81,8 @@ acts silently. The engine taps the signal between `trim` and the ceiling with a 
 `src/js/audio/output-ceiling.js`: a sample above the cap by more than 2^-20 counts) and
 reports a change of that state; while it acts and something sounds, the source panel and the
 status bar show "OUTPUT AT CEILING (clipped)" with a warning sign, and the gain readout's title
-calls the gain a setpoint before the filter, envelope, limiter and ceiling. The engine comment
+calls the gain a setpoint that leaves out the envelope and filter before `master` and the
+limiter and ceiling after it. The engine comment
 that said the UI gain is the level that reaches the output is corrected. Firefox's
 DynamicsCompressorNode starts with a gain-reduction transient on the first sound of a new
 context; at 100 % gain that briefly puts a sine about 0.04 dB above the cap, and the state then
