@@ -52,8 +52,9 @@ export const SCHEMA = 'review-verdict/v1';
  * experiments and findings); the second is what proves a build, a deployment and a release
  * (the build and pack scripts, the deploy stamp and its verifiers, the release scripts and
  * the release rules' tests); the third is what enforces the process rules
- * (project.ci-bounded, project.fail-first, project.review-verdict): the workflows and
- * everything else under .github/, the three programs with their parser, and their tests.
+ * (project.ci-bounded, project.fail-first, project.review-verdict,
+ * project.definition-of-done): the workflows and everything else under .github/, the four
+ * programs with their parser, and their tests and fixtures.
  */
 export const GUARDED = [
   'src/js/audio/*',
@@ -81,10 +82,13 @@ export const GUARDED = [
   '.github/*',
   'scripts/review-verdict.mjs',
   'scripts/fail-first.mjs',
+  'scripts/definition-of-done.mjs',
   'scripts/ci-workflow-rules.mjs',
   'scripts/yaml-subset.mjs',
   'tests/unit/review-verdict.test.mjs',
   'tests/unit/fail-first.test.mjs',
+  'tests/unit/definition-of-done.test.mjs',
+  'tests/unit/fixtures/definition-of-done/*',
   'tests/unit/ci-workflows.test.mjs',
   'tests/unit/ci-knowledge-job.test.mjs',
   'tests/unit/yaml-subset.test.mjs',

@@ -85,6 +85,13 @@ record is on main.
      --jq '.[] | select(.autoMergeRequest != null)'     # only this pull request
    ```
 
+   The release changes `src/` (the About station), so rule `project.definition-of-done` judges
+   it: the body carries the `Definition of done` section of `.github/pull_request_template.md`,
+   each item naming a path or plan id the head holds (for example `extends: src/index.html`,
+   `tested: tests/browser/app.cjs`, `deployed: package.json`), and, when no document under
+   `docs/`, `README.md` or `.ai/repo/features/` changes, the line
+   `dod-docs: n/a the About station is the release's documentation`.
+
 6. Publish from a fresh clone of main (the primary checkout hosts the owner's trunk), with
    the receipt copied into its git directory:
 

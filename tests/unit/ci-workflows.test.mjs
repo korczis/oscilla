@@ -408,28 +408,40 @@ test('the pull-request rules are judged by the base branch\'s programs, and need
     ['review-verdict', '.github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF"'
       + ' scripts/review-verdict.mjs --pr "$PR" --head HEAD'
       + ' --base-branch "origin/$GITHUB_BASE_REF"'],
+    ['definition-of-done', '.github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF"'
+      + ' scripts/definition-of-done.mjs --pr-json "$RUNNER_TEMP/pr.json" --head "$HEAD_SHA"'
+      + ' --base-branch "origin/$GITHUB_BASE_REF"'],
   ]) {
     assert.deepEqual(problemsOfRuleJob(jobs[job], call), [], job);
   }
 });
 
-// scripts/fail-first.mjs knows a train by its head branch (train/...) as well as its title, and
-// reads the branch from the PR JSON this step writes: without headRefName in the --json list
-// the branch rule silently stops in CI and only the title is left.
-/** The fields the fail-first job's `gh pr view --json` asks for, or [] when it asks none. */
-function failFirstPrFields(job) {
+// scripts/fail-first.mjs and scripts/definition-of-done.mjs know a train by its head branch
+// (train/...) as well as its title, and read the branch from the PR JSON their step writes:
+// without headRefName in the --json list the branch rule silently stops in CI and only the
+// title is left.
+/** The fields a rule job's `gh pr view --json` asks for, or [] when it asks none. */
+function prFields(job) {
   const run = String(job.steps.at(-1).run || '');
   const m = run.match(/\bgh pr view\b[^\n]*?--json[ =]([\w,]+)/);
   return m ? m[1].split(',') : [];
 }
 
-test('the fail-first job reads the PR\'s title, body and head branch', () => {
-  const fields = failFirstPrFields(parse(CI).jobs['fail-first']);
-  for (const f of ['title', 'body', 'headRefName']) assert.ok(fields.includes(f), f);
-  const without = parse(mutate(CI, '--json title,body,headRefName', '--json title,body'))
-    .jobs['fail-first'];
-  assert.ok(!failFirstPrFields(without).includes('headRefName'));
-});
+test('the fail-first and definition-of-done jobs read the PR\'s title, body and head branch',
+  () => {
+    for (const name of ['fail-first', 'definition-of-done']) {
+      const job = parse(CI).jobs[name];
+      const fields = prFields(job);
+      for (const f of ['title', 'body', 'headRefName']) {
+        assert.ok(fields.includes(f), `${name} ${f}`);
+      }
+      const last = job.steps.at(-1);
+      const run = last.run.replace('--json title,body,headRefName', '--json title,body');
+      assert.notEqual(run, last.run, name);
+      const without = { ...job, steps: [...job.steps.slice(0, -1), { ...last, run }] };
+      assert.ok(!prFields(without).includes('headRefName'), name);
+    }
+  });
 
 /** What stops a rule job from judging: [] when its last command is exactly `call`. */
 function problemsOfRuleJob(job, call) {
@@ -554,4 +566,18 @@ test('lines that only name a program are not commands', (t) => {
   assert.deepEqual(rules(ci(pre)), []);
   assert.deepEqual(rules(ci(mutate(CI, 'actions/setup-node@v7', 'actions/setup-node@next'))),
     ['pinned@unit']);
+});
+
+// The review-verdict job says how many process rules GUARDED holds the programs of; the count
+// is the rules scripts/review-verdict.mjs names above GUARDED, so a fourth rule cannot land
+// with a comment that still says three.
+test('the review-verdict job counts the process rules GUARDED names', () => {
+  const named = /\((project\.ci-bounded[^)]*)\)/.exec(read('scripts/review-verdict.mjs'));
+  assert.ok(named, 'scripts/review-verdict.mjs names the process rules above GUARDED');
+  const count = [...named[1].matchAll(/project\.[\w-]+/g)].length;
+  const job = CI.slice(CI.indexOf('\n  review-verdict:\n'));
+  const said = /the (\w+) process rules/.exec(job.slice(0, job.indexOf('\n    name:')));
+  assert.ok(said, 'the review-verdict job comment counts the process rules');
+  const WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight'];
+  assert.equal(said[1], WORDS[count], `the job says ${said[1]}; GUARDED names ${count}`);
 });

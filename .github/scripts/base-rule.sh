@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Run a pull-request rule with the BASE branch's copy of its program, so a pull request
-# cannot change the program that judges it (rules project.fail-first, project.review-verdict).
+# cannot change the program that judges it (rules project.fail-first, project.review-verdict,
+# project.definition-of-done).
 #
 #   .github/scripts/base-rule.sh <base-ref> scripts/<rule>.mjs [arguments of the program...]
 #
@@ -14,7 +15,7 @@ base="${1:?usage: $0 <base-ref> scripts/<rule>.mjs [arguments...]}"
 program="${2:?usage: $0 <base-ref> scripts/<rule>.mjs [arguments...]}"
 shift 2
 case "$program" in
-  scripts/fail-first.mjs | scripts/review-verdict.mjs) ;;
+  scripts/fail-first.mjs | scripts/review-verdict.mjs | scripts/definition-of-done.mjs) ;;
   *) echo "base-rule: $program is not a pull-request rule" >&2; exit 2 ;;
 esac
 

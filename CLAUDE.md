@@ -40,13 +40,17 @@ limit (`OSC_LOAD_MAX`, `OSC_LOAD_WAIT_MS`; see `tests/README.md`).
 
 How a change reaches `main` is ruled too: `project.ci-bounded` (every workflow job and
 network step bounded, pinned, retried), `project.fail-first` (a `feat`/`fix` PR's unit tests
-fail on the merge base, or the body says `fail-first: n/a <reason>`) and
+fail on the merge base, or the body says `fail-first: n/a <reason>`),
 `project.review-verdict` (a PR touching the audio, analysis, experiments, studio,
 measurement, calibration, storage or safety paths, the MEASURE, Experiments and Findings
 adapters, the build, stamp, deploy-verification and release scripts and the release rules'
-tests, anything under `.github/`, or the programs and tests of these three rules needs a
-reviewer's `.ai/repo/reviews/<pr>.yaml` for the content it changes). The builder of a
-change never writes its own verdict, and the base branch's copy of each program judges.
+tests, anything under `.github/`, or the programs and tests of the four rules named here
+needs a reviewer's `.ai/repo/reviews/<pr>.yaml` for the content it changes) and
+`project.definition-of-done` (a PR changing `src/` fills the `Definition of done` section of
+`.github/pull_request_template.md`, with a path or plan id per item, adds a browser test and a
+doc or says `dod-browser: n/a <reason>` / `dod-docs: n/a <reason>`, and lists added tests in
+`tests/README.md`). The builder of a change never writes its own verdict, and the base
+branch's copy of each program judges.
 
 ## Commands
 
@@ -101,7 +105,7 @@ enumerates neither, because ranges written here go stale.
 - Build and release: `scripts/`. Tests: `tests/unit/`, `tests/browser/`, `tests/visual/`;
   `tests/README.md` says what each proves and which gate runs it.
 
-<!-- majordomus:begin 891aae631b23 f2d9a1017395dba3 -->
+<!-- majordomus:begin dd8cf37c46fe f2d9a1017395dba3 -->
 # CLAUDE.md
 
 Claude Code bootstrap. The repository's provider-neutral AI context lives under
