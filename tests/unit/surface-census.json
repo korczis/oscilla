@@ -1,0 +1,1719 @@
+{
+  "note": "U063 navigable-surface census. One contract per navigable surface the code holds; tests/unit/surface-census.test.mjs derives the surfaces (WORKSPACES of src/js/ui/app.js, the data-osc-modes elements, role=tab and exps.panel views and dialogs of src/index.html, HASH_DOMAINS of src/js/ui/navigation.js) and refuses a surface without an entry and an entry without a surface; tests/browser/surface-census.cjs holds it to the running page. reachedFrom of a panel or subview is the data-osc-modes of the element that holds it (what the phone layout shows; at 1280 px and wider the Playground lays every instrument panel out as an overview). charts names the chart hosts of a panel, which are K053's census (tests/unit/chart-host-census.json) and are not described here. The debt is the entries whose deepLink is null or whose tests are empty; its count only shrinks against this file's git history. A <placeholder> in a deep link stands for a stored record's id.",
+  "evidenceClasses": {
+    "measured": "values captured from a real input of this device (the microphone, MEASURE), relative unless a level calibration applies",
+    "derived": "values computed from the instrument's own signal, the running audio context or a model (analyser views, computed responses)",
+    "inferred": "values estimated from other values by a stated method where the method may be wrong",
+    "recorded": "values read from a record: a stored experiment, definition, finding, preset or project, or a cited published dataset",
+    "planned": "what will play or run: a pattern, a sequence, a Studio graph or timeline, an envelope",
+    "test-context": "values of the TEST CONTEXT digital loopback, never of a physical input",
+    "none": "controls, text or a form with no data shown as a result"
+  },
+  "surfaces": [
+    {
+      "id": "playground",
+      "kind": "workspace",
+      "reachedFrom": [
+        "playground"
+      ],
+      "purpose": "The instrument: play a tone or pattern and watch its waveform and spectrum",
+      "state": "src/js/core/instrument.js",
+      "evidence": "derived",
+      "deepLink": "#m=playground",
+      "tests": [
+        "tests/browser/navigation.cjs",
+        "tests/browser/app.cjs"
+      ],
+      "plan": [
+        "F003"
+      ]
+    },
+    {
+      "id": "measure",
+      "kind": "workspace",
+      "reachedFrom": [
+        "measure"
+      ],
+      "purpose": "Measure a transfer function, impulse response or RTA through a guided flow from a real input",
+      "state": "src/js/ui/measure.js",
+      "evidence": "measured",
+      "deepLink": "#m=measure",
+      "tests": [
+        "tests/browser/navigation.cjs",
+        "tests/browser/v3-ui.cjs"
+      ],
+      "plan": [
+        "F004"
+      ]
+    },
+    {
+      "id": "experiments",
+      "kind": "workspace",
+      "reachedFrom": [
+        "experiments"
+      ],
+      "purpose": "List, open, compare, rename and delete the experiments, definitions and findings stored in this browser",
+      "state": "src/js/ui/experiments.js",
+      "evidence": "recorded",
+      "deepLink": "#m=experiments",
+      "tests": [
+        "tests/browser/navigation.cjs",
+        "tests/browser/v3-ui.cjs"
+      ],
+      "plan": [
+        "F005"
+      ]
+    },
+    {
+      "id": "analyzer",
+      "kind": "workspace",
+      "reachedFrom": [
+        "analyzer"
+      ],
+      "purpose": "Analyse the instrument signal and the microphone: spectrum, spectrogram, mic analyzer, device limits",
+      "state": "src/js/labs/index.js",
+      "evidence": "derived",
+      "deepLink": "#m=analyzer",
+      "tests": [
+        "tests/browser/navigation.cjs",
+        "tests/browser/qa-regressions.cjs"
+      ],
+      "plan": [
+        "F006",
+        "U005"
+      ]
+    },
+    {
+      "id": "filter",
+      "kind": "workspace",
+      "reachedFrom": [
+        "filter"
+      ],
+      "purpose": "The Filter Lab: a biquad filter on the instrument signal with its computed response",
+      "state": "src/js/labs/filter-lab.js",
+      "evidence": "derived",
+      "deepLink": "#m=filter",
+      "tests": [
+        "tests/browser/navigation.cjs",
+        "tests/browser/qa-regressions.cjs"
+      ],
+      "plan": [
+        "F006",
+        "U004"
+      ]
+    },
+    {
+      "id": "compare",
+      "kind": "workspace",
+      "reachedFrom": [
+        "compare"
+      ],
+      "purpose": "Compare signals: microphone against target, phase and stereo, bioacoustic hearing ranges",
+      "state": "src/js/labs/index.js",
+      "evidence": "derived",
+      "deepLink": "#m=compare",
+      "tests": [
+        "tests/browser/navigation.cjs",
+        "tests/browser/qa-regressions.cjs"
+      ],
+      "plan": [
+        "F006",
+        "U005"
+      ]
+    },
+    {
+      "id": "synthesis",
+      "kind": "workspace",
+      "reachedFrom": [
+        "synthesis"
+      ],
+      "purpose": "Shape the tone: envelope, additive partials, phase and the dual oscillator",
+      "state": "src/js/core/instrument.js",
+      "evidence": "derived",
+      "deepLink": "#m=synthesis",
+      "tests": [
+        "tests/browser/navigation.cjs",
+        "tests/browser/app.cjs"
+      ],
+      "plan": [
+        "F003"
+      ]
+    },
+    {
+      "id": "sequencer",
+      "kind": "workspace",
+      "reachedFrom": [
+        "sequencer"
+      ],
+      "purpose": "Arrange a pattern of tone, sweep and silence blocks on a timeline and play it",
+      "state": "src/js/sequencer/model.js",
+      "evidence": "planned",
+      "deepLink": "#m=sequencer",
+      "tests": [
+        "tests/browser/navigation.cjs",
+        "tests/browser/qa-regressions.cjs"
+      ],
+      "plan": [
+        "F003",
+        "K017"
+      ]
+    },
+    {
+      "id": "presets",
+      "kind": "workspace",
+      "reachedFrom": [
+        "presets"
+      ],
+      "purpose": "Load shipped presets by category, save custom ones and reopen the history",
+      "state": "src/js/data/presets.js",
+      "evidence": "recorded",
+      "deepLink": "#m=presets",
+      "tests": [
+        "tests/browser/navigation.cjs",
+        "tests/browser/app.cjs"
+      ],
+      "plan": [
+        "F003"
+      ]
+    },
+    {
+      "id": "learn",
+      "kind": "workspace",
+      "reachedFrom": [
+        "learn"
+      ],
+      "purpose": "Short topics on sound and frequency, each with a demo configuration to play",
+      "state": "src/js/data/learn.js",
+      "evidence": "none",
+      "deepLink": "#m=learn",
+      "tests": [
+        "tests/browser/navigation.cjs",
+        "tests/browser/app.cjs"
+      ],
+      "plan": [
+        "F007"
+      ]
+    },
+    {
+      "id": "studio",
+      "kind": "workspace",
+      "reachedFrom": [
+        "studio"
+      ],
+      "purpose": "The modular Studio: a node graph, a timeline and an inspector over one Studio model",
+      "state": "src/js/studio/schema.js",
+      "evidence": "planned",
+      "deepLink": "#m=studio",
+      "tests": [
+        "tests/browser/navigation.cjs",
+        "tests/browser/v31-studio-links.cjs"
+      ],
+      "plan": [
+        "F008"
+      ]
+    },
+    {
+      "id": "about",
+      "kind": "workspace",
+      "reachedFrom": [
+        "about"
+      ],
+      "purpose": "What OSCILLA is, its build provenance, its limits and where it goes next",
+      "state": "src/js/core/build-info.js",
+      "evidence": "none",
+      "deepLink": "#m=about",
+      "tests": [
+        "tests/browser/navigation.cjs",
+        "tests/unit/about.test.mjs"
+      ],
+      "plan": [
+        "F009",
+        "U002"
+      ]
+    },
+    {
+      "id": "osc-panel-source",
+      "kind": "panel",
+      "reachedFrom": [
+        "playground",
+        "sequencer",
+        "synthesis"
+      ],
+      "purpose": "Choose the source (single tone, sweep, pattern or dual) and edit its pattern",
+      "state": "src/js/core/instrument.js",
+      "evidence": "planned",
+      "deepLink": "#m=playground",
+      "tests": [
+        "tests/browser/app.cjs",
+        "tests/browser/live-smoke.cjs"
+      ],
+      "plan": [
+        "F003"
+      ],
+      "charts": []
+    },
+    {
+      "id": "osc-panel-analysis",
+      "kind": "panel",
+      "reachedFrom": [
+        "playground",
+        "analyzer",
+        "synthesis"
+      ],
+      "purpose": "The analysis of the output: waveform, spectrum, spectrogram, harmonics and signal path tabs",
+      "state": "src/js/labs/analysis.js",
+      "evidence": "derived",
+      "deepLink": "#m=playground",
+      "tests": [
+        "tests/browser/app.cjs",
+        "tests/browser/live-smoke.cjs"
+      ],
+      "plan": [
+        "F003",
+        "K030",
+        "K032"
+      ],
+      "charts": [
+        "osc-chart-waveform",
+        "osc-chart-spectrum",
+        "osc-chart-analysis-spg"
+      ]
+    },
+    {
+      "id": "osc-panel-spectrogram",
+      "kind": "panel",
+      "reachedFrom": [
+        "analyzer"
+      ],
+      "purpose": "A scrolling spectrogram of the output with freeze, span and scale",
+      "state": "src/js/charts/spectrogram-panel.js",
+      "evidence": "derived",
+      "deepLink": "#m=analyzer",
+      "tests": [
+        "tests/browser/app.cjs",
+        "tests/browser/live-smoke.cjs"
+      ],
+      "plan": [
+        "F006",
+        "K033"
+      ],
+      "charts": [
+        "osc-chart-spectrogram"
+      ]
+    },
+    {
+      "id": "osc-panel-mic",
+      "kind": "panel",
+      "reachedFrom": [
+        "analyzer",
+        "compare"
+      ],
+      "purpose": "The microphone analyzer: live spectrum, spectrogram and compare against the requested tone",
+      "state": "src/js/labs/mic-analyzer.js",
+      "evidence": "measured",
+      "deepLink": "#m=analyzer",
+      "tests": [
+        "tests/browser/app.cjs",
+        "tests/browser/qa-regressions.cjs",
+        "tests/browser/live-smoke.cjs"
+      ],
+      "plan": [
+        "F006",
+        "K030"
+      ],
+      "charts": [
+        "osc-chart-mic"
+      ]
+    },
+    {
+      "id": "osc-panel-device",
+      "kind": "panel",
+      "reachedFrom": [
+        "analyzer"
+      ],
+      "purpose": "The sample rate, Nyquist and safe maximum of the running context, and the playback limits",
+      "state": "src/js/charts/device-panel.js",
+      "evidence": "derived",
+      "deepLink": "#m=analyzer",
+      "tests": [
+        "tests/browser/live-smoke.cjs"
+      ],
+      "plan": [
+        "F006"
+      ],
+      "charts": []
+    },
+    {
+      "id": "osc-panel-sequencer",
+      "kind": "panel",
+      "reachedFrom": [
+        "sequencer"
+      ],
+      "purpose": "The pattern sequencer: block timeline, ruler, playhead and the selected block editor",
+      "state": "src/js/labs/sequencer-panel.js",
+      "evidence": "planned",
+      "deepLink": "#m=sequencer",
+      "tests": [
+        "tests/browser/app.cjs",
+        "tests/browser/qa-regressions.cjs",
+        "tests/browser/live-smoke.cjs"
+      ],
+      "plan": [
+        "F003",
+        "K047"
+      ],
+      "charts": [
+        "osc-seq-ruler",
+        "osc-seq-timeline"
+      ]
+    },
+    {
+      "id": "osc-panel-filter",
+      "kind": "panel",
+      "reachedFrom": [
+        "filter"
+      ],
+      "purpose": "The Filter Lab panel: filter type, cutoff and Q with the computed magnitude response",
+      "state": "src/js/labs/filter-lab.js",
+      "evidence": "derived",
+      "deepLink": "#m=filter",
+      "tests": [
+        "tests/browser/app.cjs",
+        "tests/browser/qa-regressions.cjs",
+        "tests/browser/live-smoke.cjs"
+      ],
+      "plan": [
+        "F006",
+        "K043"
+      ],
+      "charts": [
+        "osc-chart-filter"
+      ]
+    },
+    {
+      "id": "osc-panel-envelope",
+      "kind": "panel",
+      "reachedFrom": [
+        "synthesis"
+      ],
+      "purpose": "The ADSR envelope editor and its graph",
+      "state": "src/js/labs/envelope.js",
+      "evidence": "planned",
+      "deepLink": "#m=synthesis",
+      "tests": [
+        "tests/browser/app.cjs",
+        "tests/browser/live-smoke.cjs"
+      ],
+      "plan": [
+        "F003",
+        "K045"
+      ],
+      "charts": [
+        "osc-chart-envelope"
+      ]
+    },
+    {
+      "id": "osc-panel-additive",
+      "kind": "panel",
+      "reachedFrom": [
+        "synthesis"
+      ],
+      "purpose": "Additive synthesis: partial amplitudes and the resulting spectrum bars",
+      "state": "src/js/labs/additive.js",
+      "evidence": "derived",
+      "deepLink": "#m=synthesis",
+      "tests": [
+        "tests/browser/live-smoke.cjs",
+        "tests/browser/qa-regressions.cjs"
+      ],
+      "plan": [
+        "F003",
+        "K044"
+      ],
+      "charts": [
+        "osc-chart-additive"
+      ]
+    },
+    {
+      "id": "osc-panel-phase",
+      "kind": "panel",
+      "reachedFrom": [
+        "compare",
+        "synthesis"
+      ],
+      "purpose": "Phase and stereo: phase, Lissajous and stereo views with the correlation meter",
+      "state": "src/js/labs/phase-stereo.js",
+      "evidence": "derived",
+      "deepLink": "#m=compare",
+      "tests": [
+        "tests/browser/live-smoke.cjs"
+      ],
+      "plan": [
+        "F006",
+        "K034",
+        "K035"
+      ],
+      "charts": [
+        "osc-chart-phase"
+      ]
+    },
+    {
+      "id": "osc-panel-bio",
+      "kind": "panel",
+      "reachedFrom": [
+        "compare"
+      ],
+      "purpose": "Bioacoustics: sourced hearing ranges and call examples of species against the tone",
+      "state": "src/js/labs/bioacoustics.js",
+      "evidence": "recorded",
+      "deepLink": "#m=compare",
+      "tests": [
+        "tests/browser/app.cjs",
+        "tests/browser/live-smoke.cjs"
+      ],
+      "plan": [
+        "F006",
+        "K044"
+      ],
+      "charts": [
+        "osc-chart-bio"
+      ]
+    },
+    {
+      "id": "osc-panel-dual",
+      "kind": "panel",
+      "reachedFrom": [
+        "synthesis"
+      ],
+      "purpose": "The dual oscillator: two tones, their beat and the binaural option",
+      "state": "src/js/core/instrument.js",
+      "evidence": "derived",
+      "deepLink": "#m=synthesis",
+      "tests": [
+        "tests/browser/app.cjs",
+        "tests/browser/qa-regressions.cjs"
+      ],
+      "plan": [
+        "F003"
+      ],
+      "charts": []
+    },
+    {
+      "id": "osc-panel-studio",
+      "kind": "panel",
+      "reachedFrom": [
+        "playground",
+        "sequencer"
+      ],
+      "purpose": "The compact Studio: a projection of the one Studio store with Expand Studio",
+      "state": "src/js/ui/studio/compact.js",
+      "evidence": "planned",
+      "deepLink": "#m=playground",
+      "tests": [
+        "tests/browser/v31-studio-graph.cjs",
+        "tests/browser/live-smoke.cjs",
+        "tests/browser/v31-studio-timeline.cjs"
+      ],
+      "plan": [
+        "F008",
+        "K018"
+      ],
+      "charts": []
+    },
+    {
+      "id": "osc-view-measure",
+      "kind": "panel",
+      "reachedFrom": [
+        "measure"
+      ],
+      "purpose": "The MEASURE view: guided flow, stimulus, live input, quality, result and setup panels",
+      "state": "src/js/ui/measure.js",
+      "evidence": "measured",
+      "deepLink": "#m=measure",
+      "tests": [
+        "tests/browser/v3-ui.cjs",
+        "tests/browser/live-smoke.cjs",
+        "tests/unit/v3-ui.test.mjs"
+      ],
+      "plan": [
+        "F004",
+        "K055"
+      ],
+      "charts": [
+        "osc-measure-chart-response",
+        "osc-measure-chart-ir",
+        "osc-measure-chart-rta"
+      ]
+    },
+    {
+      "id": "osc-view-experiments",
+      "kind": "panel",
+      "reachedFrom": [
+        "experiments"
+      ],
+      "purpose": "The Experiments view: the stored experiments, definitions and findings with detail and compare",
+      "state": "src/js/ui/experiments.js",
+      "evidence": "recorded",
+      "deepLink": "#m=experiments",
+      "tests": [
+        "tests/unit/v3-ui.test.mjs",
+        "tests/browser/v3-ui.cjs",
+        "tests/browser/app.cjs"
+      ],
+      "plan": [
+        "F005",
+        "K041"
+      ],
+      "charts": [
+        "osc-exp-chart-detail",
+        "osc-exp-chart-overlay",
+        "osc-exp-chart-delta",
+        "osc-exp-chart-ir"
+      ]
+    },
+    {
+      "id": "osc-view-learn",
+      "kind": "panel",
+      "reachedFrom": [
+        "learn"
+      ],
+      "purpose": "The Learn view: topic list and text with a demo to load",
+      "state": "src/js/data/learn.js",
+      "evidence": "none",
+      "deepLink": "#m=learn",
+      "tests": [
+        "tests/browser/app.cjs",
+        "tests/browser/navigation.cjs",
+        "tests/unit/v3-ui.test.mjs"
+      ],
+      "plan": [
+        "F007"
+      ],
+      "charts": []
+    },
+    {
+      "id": "osc-view-presets",
+      "kind": "panel",
+      "reachedFrom": [
+        "presets"
+      ],
+      "purpose": "The Presets view: category tabs, preset list, load, save and delete",
+      "state": "src/js/data/presets.js",
+      "evidence": "recorded",
+      "deepLink": "#m=presets",
+      "tests": [
+        "tests/browser/app.cjs",
+        "tests/browser/layout.cjs",
+        "tests/browser/navigation.cjs"
+      ],
+      "plan": [
+        "F003"
+      ],
+      "charts": []
+    },
+    {
+      "id": "osc-view-studio",
+      "kind": "panel",
+      "reachedFrom": [
+        "studio"
+      ],
+      "purpose": "The Studio view: transport, graph, timeline and inspector regions",
+      "state": "src/js/ui/studio/workspace.js",
+      "evidence": "planned",
+      "deepLink": "#m=studio",
+      "tests": [
+        "tests/browser/v31-studio-links.cjs",
+        "tests/browser/app.cjs",
+        "tests/browser/live-smoke.cjs"
+      ],
+      "plan": [
+        "F008"
+      ],
+      "charts": []
+    },
+    {
+      "id": "osc-view-about",
+      "kind": "panel",
+      "reachedFrom": [
+        "about"
+      ],
+      "purpose": "The About view: positioning, provenance, limits and links",
+      "state": "src/js/core/build-info.js",
+      "evidence": "none",
+      "deepLink": "#m=about",
+      "tests": [
+        "tests/browser/app.cjs",
+        "tests/unit/about-origin.test.mjs",
+        "tests/unit/about.test.mjs"
+      ],
+      "plan": [
+        "F009",
+        "U002"
+      ],
+      "charts": []
+    },
+    {
+      "id": "analysis.tab:waveform",
+      "kind": "subview",
+      "reachedFrom": [
+        "playground",
+        "analyzer",
+        "synthesis"
+      ],
+      "purpose": "The oscilloscope view of the output waveform",
+      "state": "src/js/visualization/waveform.js",
+      "evidence": "derived",
+      "deepLink": null,
+      "deepLinkWhyNot": "the analysis view is shell state restored from localStorage (oscilla.v2.analysisTab in src/js/ui/app.js); no key of the address names it",
+      "tests": [
+        "tests/browser/app.cjs"
+      ],
+      "plan": [
+        "K032"
+      ]
+    },
+    {
+      "id": "analysis.tab:spectrum",
+      "kind": "subview",
+      "reachedFrom": [
+        "playground",
+        "analyzer",
+        "synthesis"
+      ],
+      "purpose": "The live spectrum of the output with the requested-frequency marker",
+      "state": "src/js/labs/analysis.js",
+      "evidence": "derived",
+      "deepLink": null,
+      "deepLinkWhyNot": "the analysis view is shell state restored from localStorage (oscilla.v2.analysisTab in src/js/ui/app.js); no key of the address names it",
+      "tests": [
+        "tests/browser/app.cjs"
+      ],
+      "plan": [
+        "K030",
+        "K031"
+      ]
+    },
+    {
+      "id": "analysis.tab:spectrogram",
+      "kind": "subview",
+      "reachedFrom": [
+        "playground",
+        "analyzer",
+        "synthesis"
+      ],
+      "purpose": "The spectrogram of the output inside the analysis panel",
+      "state": "src/js/analysis/spectrogram.js",
+      "evidence": "derived",
+      "deepLink": null,
+      "deepLinkWhyNot": "the analysis view is shell state restored from localStorage (oscilla.v2.analysisTab in src/js/ui/app.js); no key of the address names it",
+      "tests": [
+        "tests/browser/app.cjs"
+      ],
+      "plan": [
+        "K033"
+      ]
+    },
+    {
+      "id": "analysis.tab:harmonics",
+      "kind": "subview",
+      "reachedFrom": [
+        "playground",
+        "analyzer",
+        "synthesis"
+      ],
+      "purpose": "The harmonics of the requested tone as bars",
+      "state": "src/js/visualization/harmonics.js",
+      "evidence": "derived",
+      "deepLink": null,
+      "deepLinkWhyNot": "the analysis view is shell state restored from localStorage (oscilla.v2.analysisTab in src/js/ui/app.js); no key of the address names it",
+      "tests": [
+        "tests/browser/qa-regressions.cjs",
+        "tests/browser/app.cjs"
+      ],
+      "plan": [
+        "K044"
+      ]
+    },
+    {
+      "id": "analysis.tab:signalPath",
+      "kind": "subview",
+      "reachedFrom": [
+        "playground",
+        "analyzer",
+        "synthesis"
+      ],
+      "purpose": "The signal path diagram of the instrument voice",
+      "state": "src/js/visualization/signal-path.js",
+      "evidence": "derived",
+      "deepLink": null,
+      "deepLinkWhyNot": "the analysis view is shell state restored from localStorage (oscilla.v2.analysisTab in src/js/ui/app.js); no key of the address names it",
+      "tests": [
+        "tests/browser/app.cjs"
+      ],
+      "plan": [
+        "F003"
+      ]
+    },
+    {
+      "id": "mic.tab:live",
+      "kind": "subview",
+      "reachedFrom": [
+        "analyzer",
+        "compare"
+      ],
+      "purpose": "The live microphone spectrum against the requested tone",
+      "state": "src/js/labs/mic-analyzer.js",
+      "evidence": "measured",
+      "deepLink": null,
+      "deepLinkWhyNot": "the microphone view is shell tab state (src/js/ui/app.js tabs.mic); no key of the address names it",
+      "tests": [
+        "tests/browser/labs.cjs",
+        "tests/browser/app.cjs"
+      ],
+      "plan": [
+        "K030"
+      ]
+    },
+    {
+      "id": "mic.tab:spectrogram",
+      "kind": "subview",
+      "reachedFrom": [
+        "analyzer",
+        "compare"
+      ],
+      "purpose": "The spectrogram of the microphone input",
+      "state": "src/js/labs/mic-analyzer.js",
+      "evidence": "measured",
+      "deepLink": null,
+      "deepLinkWhyNot": "the microphone view is shell tab state (src/js/ui/app.js tabs.mic); no key of the address names it",
+      "tests": [
+        "tests/browser/app.cjs"
+      ],
+      "plan": [
+        "K033"
+      ]
+    },
+    {
+      "id": "mic.tab:compare",
+      "kind": "subview",
+      "reachedFrom": [
+        "analyzer",
+        "compare"
+      ],
+      "purpose": "Freeze, averaging and peak hold of the microphone spectrum",
+      "state": "src/js/labs/mic-analyzer.js",
+      "evidence": "measured",
+      "deepLink": null,
+      "deepLinkWhyNot": "the microphone view is shell tab state (src/js/ui/app.js tabs.mic); no key of the address names it",
+      "tests": [
+        "tests/browser/labs.cjs",
+        "tests/browser/app.cjs"
+      ],
+      "plan": [
+        "F006"
+      ]
+    },
+    {
+      "id": "phase.tab:phase",
+      "kind": "subview",
+      "reachedFrom": [
+        "compare",
+        "synthesis"
+      ],
+      "purpose": "The phase relation of the two channels over time",
+      "state": "src/js/labs/phase-stereo.js",
+      "evidence": "derived",
+      "deepLink": null,
+      "deepLinkWhyNot": "the phase view is shell tab state (src/js/ui/app.js tabs.phase); no key of the address names it",
+      "tests": [
+        "tests/browser/app.cjs"
+      ],
+      "plan": [
+        "K034"
+      ]
+    },
+    {
+      "id": "phase.tab:lissajous",
+      "kind": "subview",
+      "reachedFrom": [
+        "compare",
+        "synthesis"
+      ],
+      "purpose": "The Lissajous figure of left against right",
+      "state": "src/js/labs/phase-stereo.js",
+      "evidence": "derived",
+      "deepLink": null,
+      "deepLinkWhyNot": "the phase view is shell tab state (src/js/ui/app.js tabs.phase); no key of the address names it",
+      "tests": [],
+      "plan": [
+        "K034"
+      ]
+    },
+    {
+      "id": "phase.tab:stereo",
+      "kind": "subview",
+      "reachedFrom": [
+        "compare",
+        "synthesis"
+      ],
+      "purpose": "The stereo view with the correlation estimate",
+      "state": "src/js/labs/phase-stereo.js",
+      "evidence": "derived",
+      "deepLink": null,
+      "deepLinkWhyNot": "the phase view is shell tab state (src/js/ui/app.js tabs.phase); no key of the address names it",
+      "tests": [
+        "tests/browser/app.cjs"
+      ],
+      "plan": [
+        "K035"
+      ]
+    },
+    {
+      "id": "bio.tab:ranges",
+      "kind": "subview",
+      "reachedFrom": [
+        "compare"
+      ],
+      "purpose": "Hearing ranges of species from the cited sources against the tone",
+      "state": "src/js/labs/bioacoustics.js",
+      "evidence": "recorded",
+      "deepLink": null,
+      "deepLinkWhyNot": "the bioacoustics view is shell tab state (src/js/ui/app.js tabs.bio); no key of the address names it",
+      "tests": [],
+      "plan": [
+        "K044"
+      ]
+    },
+    {
+      "id": "bio.tab:calls",
+      "kind": "subview",
+      "reachedFrom": [
+        "compare"
+      ],
+      "purpose": "Call frequency ranges of species from the cited sources",
+      "state": "src/js/labs/bioacoustics.js",
+      "evidence": "recorded",
+      "deepLink": null,
+      "deepLinkWhyNot": "the bioacoustics view is shell tab state (src/js/ui/app.js tabs.bio); no key of the address names it",
+      "tests": [
+        "tests/browser/qa-regressions.cjs"
+      ],
+      "plan": [
+        "K044"
+      ]
+    },
+    {
+      "id": "measure.tab:response",
+      "kind": "subview",
+      "reachedFrom": [
+        "measure"
+      ],
+      "purpose": "The measured frequency response of the shown result",
+      "state": "src/js/ui/measure.js",
+      "evidence": "measured",
+      "deepLink": null,
+      "deepLinkWhyNot": "the result view is MEASURE adapter state (meas.tab); the recipe link carries no result or view",
+      "tests": [
+        "tests/browser/v3-ui.cjs",
+        "tests/browser/app.cjs"
+      ],
+      "plan": [
+        "K055"
+      ]
+    },
+    {
+      "id": "measure.tab:ir",
+      "kind": "subview",
+      "reachedFrom": [
+        "measure"
+      ],
+      "purpose": "The impulse response of the shown result with its zoom spans",
+      "state": "src/js/ui/measure.js",
+      "evidence": "measured",
+      "deepLink": null,
+      "deepLinkWhyNot": "the result view is MEASURE adapter state (meas.tab); the recipe link carries no result or view",
+      "tests": [
+        "tests/browser/v3-ui.cjs",
+        "tests/browser/app.cjs"
+      ],
+      "plan": [
+        "K038"
+      ]
+    },
+    {
+      "id": "measure.tab:rta",
+      "kind": "subview",
+      "reachedFrom": [
+        "measure"
+      ],
+      "purpose": "The real-time analyser of the live input",
+      "state": "src/js/measurement/live-rta.js",
+      "evidence": "measured",
+      "deepLink": null,
+      "deepLinkWhyNot": "the result view is MEASURE adapter state (meas.tab); the recipe link carries no result or view",
+      "tests": [
+        "tests/browser/v3-ui.cjs",
+        "tests/browser/app.cjs"
+      ],
+      "plan": [
+        "K037"
+      ]
+    },
+    {
+      "id": "presets.tab:reference",
+      "kind": "subview",
+      "reachedFrom": [
+        "presets"
+      ],
+      "purpose": "The shipped reference tone presets",
+      "state": "src/js/data/presets.js",
+      "evidence": "recorded",
+      "deepLink": null,
+      "deepLinkWhyNot": "the preset category is instrument UI state (presetTab); no key of the address names it",
+      "tests": [
+        "tests/browser/app.cjs"
+      ],
+      "plan": [
+        "F003"
+      ]
+    },
+    {
+      "id": "presets.tab:musical",
+      "kind": "subview",
+      "reachedFrom": [
+        "presets"
+      ],
+      "purpose": "The shipped musical presets",
+      "state": "src/js/data/presets.js",
+      "evidence": "recorded",
+      "deepLink": null,
+      "deepLinkWhyNot": "the preset category is instrument UI state (presetTab); no key of the address names it",
+      "tests": [],
+      "plan": [
+        "F003"
+      ]
+    },
+    {
+      "id": "presets.tab:sweeps",
+      "kind": "subview",
+      "reachedFrom": [
+        "presets"
+      ],
+      "purpose": "The shipped sweep presets",
+      "state": "src/js/data/presets.js",
+      "evidence": "recorded",
+      "deepLink": null,
+      "deepLinkWhyNot": "the preset category is instrument UI state (presetTab); no key of the address names it",
+      "tests": [],
+      "plan": [
+        "F003"
+      ]
+    },
+    {
+      "id": "presets.tab:patterns",
+      "kind": "subview",
+      "reachedFrom": [
+        "presets"
+      ],
+      "purpose": "The shipped pattern presets",
+      "state": "src/js/data/presets.js",
+      "evidence": "recorded",
+      "deepLink": null,
+      "deepLinkWhyNot": "the preset category is instrument UI state (presetTab); no key of the address names it",
+      "tests": [
+        "tests/browser/app.cjs"
+      ],
+      "plan": [
+        "F003"
+      ]
+    },
+    {
+      "id": "presets.tab:high",
+      "kind": "subview",
+      "reachedFrom": [
+        "presets"
+      ],
+      "purpose": "The shipped high frequency presets",
+      "state": "src/js/data/presets.js",
+      "evidence": "recorded",
+      "deepLink": null,
+      "deepLinkWhyNot": "the preset category is instrument UI state (presetTab); no key of the address names it",
+      "tests": [],
+      "plan": [
+        "F003"
+      ]
+    },
+    {
+      "id": "presets.tab:dual",
+      "kind": "subview",
+      "reachedFrom": [
+        "presets"
+      ],
+      "purpose": "The shipped dual oscillator presets",
+      "state": "src/js/data/presets.js",
+      "evidence": "recorded",
+      "deepLink": null,
+      "deepLinkWhyNot": "the preset category is instrument UI state (presetTab); no key of the address names it",
+      "tests": [
+        "tests/browser/app.cjs"
+      ],
+      "plan": [
+        "F003"
+      ]
+    },
+    {
+      "id": "presets.tab:custom",
+      "kind": "subview",
+      "reachedFrom": [
+        "presets"
+      ],
+      "purpose": "The custom presets saved in this browser",
+      "state": "src/js/core/storage.js",
+      "evidence": "recorded",
+      "deepLink": null,
+      "deepLinkWhyNot": "the preset category is instrument UI state (presetTab); no key of the address names it",
+      "tests": [
+        "tests/browser/app.cjs"
+      ],
+      "plan": [
+        "F003"
+      ]
+    },
+    {
+      "id": "presets.tab:history",
+      "kind": "subview",
+      "reachedFrom": [
+        "presets"
+      ],
+      "purpose": "The session history of the configurations played in this browser",
+      "state": "src/js/core/storage.js",
+      "evidence": "recorded",
+      "deepLink": null,
+      "deepLinkWhyNot": "the preset category is instrument UI state (presetTab); no key of the address names it",
+      "tests": [
+        "tests/browser/app.cjs"
+      ],
+      "plan": [
+        "F003"
+      ]
+    },
+    {
+      "id": "studio.subview:graph",
+      "kind": "subview",
+      "reachedFrom": [
+        "studio"
+      ],
+      "purpose": "The Studio node graph editor",
+      "state": "src/js/ui/studio/graph-editor.js",
+      "evidence": "planned",
+      "deepLink": "#m=studio&sv=graph",
+      "tests": [
+        "tests/browser/v31-studio-graph.cjs",
+        "tests/browser/v31-studio-links.cjs",
+        "tests/unit/v31-studio-links.test.mjs"
+      ],
+      "plan": [
+        "F008"
+      ]
+    },
+    {
+      "id": "studio.subview:timeline",
+      "kind": "subview",
+      "reachedFrom": [
+        "studio"
+      ],
+      "purpose": "The Studio timeline of tracks, clips and automation lanes",
+      "state": "src/js/ui/studio/timeline-editor.js",
+      "evidence": "planned",
+      "deepLink": "#m=studio&sv=timeline",
+      "tests": [
+        "tests/browser/v31-studio-graph.cjs",
+        "tests/browser/navigation.cjs",
+        "tests/browser/v31-studio-links.cjs"
+      ],
+      "plan": [
+        "K046"
+      ]
+    },
+    {
+      "id": "studio.subview:inspector",
+      "kind": "subview",
+      "reachedFrom": [
+        "studio"
+      ],
+      "purpose": "The Studio inspector of the selection or the transport",
+      "state": "src/js/ui/studio/inspector.js",
+      "evidence": "planned",
+      "deepLink": "#m=studio&sv=inspector",
+      "tests": [
+        "tests/browser/v31-studio-graph.cjs",
+        "tests/browser/v31-studio-links.cjs",
+        "tests/unit/v31-studio-links.test.mjs"
+      ],
+      "plan": [
+        "K048"
+      ]
+    },
+    {
+      "id": "exps.panel:detail",
+      "kind": "subview",
+      "reachedFrom": [
+        "experiments"
+      ],
+      "purpose": "The detail of one stored experiment with its evidence lineage and connections",
+      "state": "src/js/ui/experiments.js",
+      "evidence": "recorded",
+      "deepLink": "#m=experiments&exp=<experiment id>",
+      "tests": [
+        "tests/browser/v3-ui.cjs",
+        "tests/browser/app.cjs"
+      ],
+      "plan": [
+        "K042"
+      ]
+    },
+    {
+      "id": "exps.panel:compare",
+      "kind": "subview",
+      "reachedFrom": [
+        "experiments"
+      ],
+      "purpose": "The comparison of a baseline and one selected stored experiment",
+      "state": "src/js/experiments/compare.js",
+      "evidence": "recorded",
+      "deepLink": null,
+      "deepLinkWhyNot": "a comparison is of a selection of stored experiments; a record link names one record and opens its detail",
+      "tests": [
+        "tests/browser/app.cjs"
+      ],
+      "plan": [
+        "K041"
+      ]
+    },
+    {
+      "id": "osc-dlg-save",
+      "kind": "dialog",
+      "reachedFrom": [
+        "playground",
+        "measure",
+        "experiments",
+        "analyzer",
+        "filter",
+        "compare",
+        "synthesis",
+        "sequencer",
+        "presets",
+        "learn",
+        "studio",
+        "about"
+      ],
+      "purpose": "Name and save the current configuration as a custom preset",
+      "state": "src/js/core/instrument.js",
+      "evidence": "none",
+      "deepLink": null,
+      "deepLinkWhyNot": "a dialog opens from a control in the page; no key of the address opens a dialog",
+      "tests": [
+        "tests/browser/app.cjs"
+      ],
+      "plan": [
+        "F010"
+      ]
+    },
+    {
+      "id": "osc-dlg-headphones",
+      "kind": "dialog",
+      "reachedFrom": [
+        "synthesis",
+        "presets"
+      ],
+      "purpose": "Confirm headphones before binaural beats are turned on",
+      "state": "src/js/core/instrument.js",
+      "evidence": "none",
+      "deepLink": null,
+      "deepLinkWhyNot": "a dialog opens from a control in the page; no key of the address opens a dialog",
+      "tests": [],
+      "plan": [
+        "F010"
+      ]
+    },
+    {
+      "id": "osc-dlg-copy",
+      "kind": "dialog",
+      "reachedFrom": [
+        "playground",
+        "measure",
+        "experiments",
+        "analyzer",
+        "filter",
+        "compare",
+        "synthesis",
+        "sequencer",
+        "presets",
+        "learn",
+        "studio",
+        "about"
+      ],
+      "purpose": "Show the config link to copy by hand when the clipboard is unavailable",
+      "state": "src/js/core/instrument.js",
+      "evidence": "none",
+      "deepLink": null,
+      "deepLinkWhyNot": "a dialog opens from a control in the page; no key of the address opens a dialog",
+      "tests": [],
+      "plan": [
+        "F010"
+      ]
+    },
+    {
+      "id": "osc-dlg-help",
+      "kind": "dialog",
+      "reachedFrom": [
+        "playground",
+        "measure",
+        "experiments",
+        "analyzer",
+        "filter",
+        "compare",
+        "synthesis",
+        "sequencer",
+        "presets",
+        "learn",
+        "studio",
+        "about"
+      ],
+      "purpose": "The one keyboard shortcut list of the workspace in view and the global keys",
+      "state": "src/js/ui/shortcuts.js",
+      "evidence": "none",
+      "deepLink": null,
+      "deepLinkWhyNot": "a dialog opens from a control in the page; no key of the address opens a dialog",
+      "tests": [
+        "tests/browser/navigation.cjs",
+        "tests/browser/app.cjs",
+        "tests/unit/v4-shortcuts.test.mjs"
+      ],
+      "plan": [
+        "F010"
+      ]
+    },
+    {
+      "id": "osc-dlg-mic",
+      "kind": "dialog",
+      "reachedFrom": [
+        "analyzer",
+        "compare"
+      ],
+      "purpose": "Explain how the microphone analyzer reads its input and what it is not",
+      "state": "src/js/labs/mic-analyzer.js",
+      "evidence": "none",
+      "deepLink": null,
+      "deepLinkWhyNot": "a dialog opens from a control in the page; no key of the address opens a dialog",
+      "tests": [
+        "tests/browser/app.cjs"
+      ],
+      "plan": [
+        "F010"
+      ]
+    },
+    {
+      "id": "osc-dlg-settings",
+      "kind": "dialog",
+      "reachedFrom": [
+        "playground",
+        "measure",
+        "experiments",
+        "analyzer",
+        "filter",
+        "compare",
+        "synthesis",
+        "sequencer",
+        "presets",
+        "learn",
+        "studio",
+        "about"
+      ],
+      "purpose": "Settings: frequency range, A4 reference, trigger timing, MIDI input and instrument reset",
+      "state": "src/js/core/instrument.js",
+      "evidence": "none",
+      "deepLink": null,
+      "deepLinkWhyNot": "a dialog opens from a control in the page; no key of the address opens a dialog",
+      "tests": [
+        "tests/browser/midi.cjs"
+      ],
+      "plan": [
+        "F010"
+      ]
+    },
+    {
+      "id": "osc-dlg-level-cal",
+      "kind": "dialog",
+      "reachedFrom": [
+        "measure"
+      ],
+      "purpose": "Capture or type a level calibration from a known acoustic reference",
+      "state": "src/js/calibration/level.js",
+      "evidence": "measured",
+      "deepLink": null,
+      "deepLinkWhyNot": "a dialog opens from a control in the page; no key of the address opens a dialog",
+      "tests": [
+        "tests/browser/v3-ui.cjs",
+        "tests/unit/v3-ui.test.mjs"
+      ],
+      "plan": [
+        "F010",
+        "F004"
+      ]
+    },
+    {
+      "id": "osc-dlg-cal-convention",
+      "kind": "dialog",
+      "reachedFrom": [
+        "measure"
+      ],
+      "purpose": "Ask what an imported calibration file states before it is applied",
+      "state": "src/js/calibration/parse.js",
+      "evidence": "none",
+      "deepLink": null,
+      "deepLinkWhyNot": "a dialog opens from a control in the page; no key of the address opens a dialog",
+      "tests": [
+        "tests/browser/v3-ui.cjs"
+      ],
+      "plan": [
+        "F010",
+        "F004"
+      ]
+    },
+    {
+      "id": "osc-dlg-recipe-link",
+      "kind": "dialog",
+      "reachedFrom": [
+        "measure"
+      ],
+      "purpose": "Show the measurement recipe link to copy by hand when the clipboard is unavailable",
+      "state": "src/js/core/url-state-measure.js",
+      "evidence": "none",
+      "deepLink": null,
+      "deepLinkWhyNot": "a dialog opens from a control in the page; no key of the address opens a dialog",
+      "tests": [
+        "tests/browser/app.cjs",
+        "tests/browser/v3-ui.cjs"
+      ],
+      "plan": [
+        "F010",
+        "F004"
+      ]
+    },
+    {
+      "id": "osc-dlg-exp-rename",
+      "kind": "dialog",
+      "reachedFrom": [
+        "experiments"
+      ],
+      "purpose": "Rename a stored experiment",
+      "state": "src/js/ui/experiments.js",
+      "evidence": "none",
+      "deepLink": null,
+      "deepLinkWhyNot": "a dialog opens from a control in the page; no key of the address opens a dialog",
+      "tests": [
+        "tests/browser/app.cjs"
+      ],
+      "plan": [
+        "F010",
+        "F005"
+      ]
+    },
+    {
+      "id": "osc-dlg-def",
+      "kind": "dialog",
+      "reachedFrom": [
+        "experiments"
+      ],
+      "purpose": "Create or edit an experiment definition",
+      "state": "src/js/experiments/definition.js",
+      "evidence": "none",
+      "deepLink": null,
+      "deepLinkWhyNot": "a dialog opens from a control in the page; no key of the address opens a dialog",
+      "tests": [
+        "tests/browser/v3-ui.cjs",
+        "tests/browser/app.cjs"
+      ],
+      "plan": [
+        "F010",
+        "F005"
+      ]
+    },
+    {
+      "id": "osc-dlg-exp-delete",
+      "kind": "dialog",
+      "reachedFrom": [
+        "experiments"
+      ],
+      "purpose": "Confirm the deletion of a stored experiment",
+      "state": "src/js/ui/experiments.js",
+      "evidence": "none",
+      "deepLink": null,
+      "deepLinkWhyNot": "a dialog opens from a control in the page; no key of the address opens a dialog",
+      "tests": [],
+      "plan": [
+        "F010",
+        "F005"
+      ]
+    },
+    {
+      "id": "osc-dlg-finding",
+      "kind": "dialog",
+      "reachedFrom": [
+        "experiments"
+      ],
+      "purpose": "Write or edit a finding and link the experiments and comparisons it rests on",
+      "state": "src/js/experiments/findings.js",
+      "evidence": "recorded",
+      "deepLink": null,
+      "deepLinkWhyNot": "a dialog opens from a control in the page; no key of the address opens a dialog",
+      "tests": [
+        "tests/browser/v3-ui.cjs"
+      ],
+      "plan": [
+        "F010",
+        "F005"
+      ]
+    },
+    {
+      "id": "osc-dlg-finding-delete",
+      "kind": "dialog",
+      "reachedFrom": [
+        "experiments"
+      ],
+      "purpose": "Confirm the deletion of a stored finding",
+      "state": "src/js/ui/findings.js",
+      "evidence": "none",
+      "deepLink": null,
+      "deepLinkWhyNot": "a dialog opens from a control in the page; no key of the address opens a dialog",
+      "tests": [
+        "tests/browser/v3-ui.cjs"
+      ],
+      "plan": [
+        "F010",
+        "F005"
+      ]
+    },
+    {
+      "id": "osc-dlg-studio-templates",
+      "kind": "dialog",
+      "reachedFrom": [
+        "studio"
+      ],
+      "purpose": "Start the Studio from one of the shipped templates",
+      "state": "src/js/studio/templates/index.js",
+      "evidence": "none",
+      "deepLink": null,
+      "deepLinkWhyNot": "a dialog opens from a control in the page; no key of the address opens a dialog",
+      "tests": [
+        "tests/browser/v31-studio-graph.cjs",
+        "tests/browser/v31-studio-links.cjs"
+      ],
+      "plan": [
+        "F010",
+        "F008"
+      ]
+    },
+    {
+      "id": "osc-dlg-studio-link",
+      "kind": "dialog",
+      "reachedFrom": [
+        "studio"
+      ],
+      "purpose": "Show the Studio link to copy by hand when the clipboard is unavailable",
+      "state": "src/js/core/url-state-studio.js",
+      "evidence": "none",
+      "deepLink": null,
+      "deepLinkWhyNot": "a dialog opens from a control in the page; no key of the address opens a dialog",
+      "tests": [
+        "tests/browser/v31-studio-links.cjs"
+      ],
+      "plan": [
+        "F010",
+        "F008"
+      ]
+    },
+    {
+      "id": "osc-dlg-studio-add",
+      "kind": "dialog",
+      "reachedFrom": [
+        "studio"
+      ],
+      "purpose": "Quick add: search the node library and add a node, also from a dragged cable",
+      "state": "src/js/ui/studio/graph-picker.js",
+      "evidence": "none",
+      "deepLink": null,
+      "deepLinkWhyNot": "a dialog opens from a control in the page; no key of the address opens a dialog",
+      "tests": [
+        "tests/browser/v31-studio-graph.cjs"
+      ],
+      "plan": [
+        "F010",
+        "F008"
+      ]
+    },
+    {
+      "id": "osc-dlg-studio-connect",
+      "kind": "dialog",
+      "reachedFrom": [
+        "studio"
+      ],
+      "purpose": "Connect an output of a node to an input that can take it, without dragging",
+      "state": "src/js/ui/studio/graph-picker.js",
+      "evidence": "none",
+      "deepLink": null,
+      "deepLinkWhyNot": "a dialog opens from a control in the page; no key of the address opens a dialog",
+      "tests": [
+        "tests/browser/v31-studio-graph.cjs"
+      ],
+      "plan": [
+        "F010",
+        "F008"
+      ]
+    },
+    {
+      "id": "osc-dlg-studio-find",
+      "kind": "dialog",
+      "reachedFrom": [
+        "studio"
+      ],
+      "purpose": "Find a node of the graph by name and select it",
+      "state": "src/js/ui/studio/graph-search.js",
+      "evidence": "none",
+      "deepLink": null,
+      "deepLinkWhyNot": "a dialog opens from a control in the page; no key of the address opens a dialog",
+      "tests": [
+        "tests/browser/v31-studio-workflows.cjs"
+      ],
+      "plan": [
+        "F010",
+        "F008"
+      ]
+    },
+    {
+      "id": "osc-dlg-studio-render",
+      "kind": "dialog",
+      "reachedFrom": [
+        "studio"
+      ],
+      "purpose": "Render the Studio to a WAV file offline",
+      "state": "src/js/studio/offline.js",
+      "evidence": "none",
+      "deepLink": null,
+      "deepLinkWhyNot": "a dialog opens from a control in the page; no key of the address opens a dialog",
+      "tests": [
+        "tests/browser/v31-studio-workflows.cjs"
+      ],
+      "plan": [
+        "F010",
+        "F008"
+      ]
+    },
+    {
+      "id": "osc-dlg-studio-library",
+      "kind": "dialog",
+      "reachedFrom": [
+        "studio"
+      ],
+      "purpose": "Save, open, export and import Studio projects and patches stored in this browser",
+      "state": "src/js/studio/library.js",
+      "evidence": "recorded",
+      "deepLink": null,
+      "deepLinkWhyNot": "a dialog opens from a control in the page; no key of the address opens a dialog",
+      "tests": [
+        "tests/browser/v31-studio-graph.cjs",
+        "tests/browser/v31-studio-workflows.cjs"
+      ],
+      "plan": [
+        "F010",
+        "F008"
+      ]
+    },
+    {
+      "id": "osc-dlg-studio-patch",
+      "kind": "dialog",
+      "reachedFrom": [
+        "studio"
+      ],
+      "purpose": "Save the selected nodes as a patch",
+      "state": "src/js/studio/patches.js",
+      "evidence": "none",
+      "deepLink": null,
+      "deepLinkWhyNot": "a dialog opens from a control in the page; no key of the address opens a dialog",
+      "tests": [
+        "tests/browser/v31-studio-graph.cjs"
+      ],
+      "plan": [
+        "F010",
+        "F008"
+      ]
+    },
+    {
+      "id": "instrument",
+      "kind": "route",
+      "reachedFrom": [
+        "playground",
+        "synthesis",
+        "presets",
+        "learn"
+      ],
+      "purpose": "The instrument configuration in the address, restored without starting playback",
+      "state": "src/js/core/url-state.js",
+      "evidence": "none",
+      "deepLink": "#v=1&f=1000",
+      "tests": [
+        "tests/unit/navigation.test.mjs",
+        "tests/browser/navigation.cjs"
+      ],
+      "plan": []
+    },
+    {
+      "id": "measure",
+      "kind": "route",
+      "reachedFrom": [
+        "measure"
+      ],
+      "purpose": "The MEASURE recipe in the address, loaded into the setup and never run",
+      "state": "src/js/core/url-state-measure.js",
+      "evidence": "none",
+      "deepLink": "#m=measure&mr=eyJ2IjoxLCJmMSI6NTAsImYyIjoxMjAwMH0",
+      "tests": [
+        "tests/browser/navigation.cjs",
+        "tests/browser/v3-ui.cjs"
+      ],
+      "plan": []
+    },
+    {
+      "id": "studio",
+      "kind": "route",
+      "reachedFrom": [
+        "studio"
+      ],
+      "purpose": "A shipped Studio template and subview in the address",
+      "state": "src/js/core/url-state-studio.js",
+      "evidence": "none",
+      "deepLink": "#m=studio&st=filter-automation&sv=timeline",
+      "tests": [
+        "tests/browser/v31-studio-links.cjs",
+        "tests/browser/navigation.cjs"
+      ],
+      "plan": []
+    },
+    {
+      "id": "records",
+      "kind": "route",
+      "reachedFrom": [
+        "experiments"
+      ],
+      "purpose": "A stored experiment, definition or finding named in the address",
+      "state": "src/js/core/url-state-records.js",
+      "evidence": "recorded",
+      "deepLink": "#m=experiments&exp=<experiment id>",
+      "tests": [
+        "tests/unit/v4-connections.test.mjs"
+      ],
+      "plan": []
+    }
+  ]
+}
