@@ -1,0 +1,31 @@
+id: T005
+milestone: M073
+serves:
+  - "v3-measure#readout-labels"
+title: "About and the docs name the analyser scale: dBFS-like, uncalibrated, a full-scale sine near -13.6 dB"
+slug: about-and-the-docs-name-the-analyser-scale-dbfs-like-uncalib
+priority: p2
+profile: implementation
+objective: "Truth-table rows SPC-01 (MIC-05 is planned by K030) (scratchpad p05/truth-table.md). About reads \"Relative (dBFS-like, uncalibrated)\"; README and docs/GLOSSARY.md say in one line that the analyser scale puts a full-scale sine near -13.6 dB and that the MEASURE scales differ (docs/v3/algorithms.md). The microphone chart caption and the dB rel readouts are K030 (M062): the mic plot gets the relative caption there, and T026 holds it."
+why: "P05 audit of origin/main b67d1e58 (v3.13.0): About says \"Levels: Relative (dBFS)\" (index.html:2506), the bare dBFS that accepted ADR 0017 says these readings are not. The microphone chart passes yLabel: null, so its \"0 dB\" top tick has no reference, while the single-mode spectrum shows \"RELATIVE LEVEL (dBFS-like, uncalibrated)\". The -13.56 dB offset of a full-scale sine is stated only in the ADR."
+scope:
+  - "src/index.html"
+  - "README.md"
+  - "docs/GLOSSARY.md"
+  - "tests/unit/readout-labels-analyser-scale.test.mjs"
+  - "tests/README.md"
+  - "dist"
+acceptance_criteria:
+  - "Fail-first fixture: tests/unit/readout-labels-analyser-scale.test.mjs: the About levels line in src/index.html matches /dBFS-like/ and not /Relative \\(dBFS\\)/, and README and docs/GLOSSARY.md state the offset. Fails on the merge base."
+  - "Negative cases, each asserted: The single-mode spectrum caption is unchanged (ADR 0017 chose it); MEASURE \"dB SPL\" text and level calibration untouched; no-fake-science.test.mjs passes; the visual reference at 1536x1024 still matches or the change is declared."
+  - "Revertible on its own: Revert: copy and one chart option."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "Any new visible element follows the Flowbite Pro components and the locked tokens (project.ui-uses-flowbite-pro, project.visual-identity-lock); npm run visual passes or the baseline change is declared."
+  - "tests/README.md has a row for each new test; this issue does not edit docs/CLAIMS.yaml or the intent (T027 does)."
+validation:
+  - "npm test"
+  - "npm run verify"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29
