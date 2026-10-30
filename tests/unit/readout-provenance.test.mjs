@@ -111,6 +111,31 @@ test('mutation: a new readout in a copy of the markup with no row fails', () => 
   assert.deepEqual(problems, [`fake.readout: a readout with no row and not in ${BASELINE_REL}`]);
 });
 
+test('mutation: a new readout behind a > in an earlier attribute or in single quotes fails', () => {
+  // Alpine expressions carry arrow functions and comparisons (13 start tags of the shell do);
+  // a > inside a quoted value does not end the tag, and single quotes are attribute quotes.
+  for (const tag of [
+    '<span data-osc="fake.readout" x-show="xs.some((x) => x)" x-text="v"></span>',
+    '<span x-show="n > 0" data-osc="fake.readout" x-text="v"></span>',
+    '<span x-show="n > 0" data-osc="fake.readout" role="meter"></span>',
+    '<span data-osc=\'fake.readout\' x-text=\'v\'></span>',
+    '<span data-osc="fake.readout" role=\'meter\'></span>',
+  ]) {
+    const html = HTML.replace('</body>', `${tag}</body>`);
+    assert.deepEqual(mutated({ html }),
+      [`fake.readout: a readout with no row and not in ${BASELINE_REL}`], tag);
+  }
+  assert.deepEqual(readoutsOf('<div x-show="a > b" data-osc-chart=\'plot\'></div>')
+    .map((r) => r.key), ['chart:plot']);
+});
+
+test('mutation: a row described twice and a wrong schema fail', () => {
+  assert.deepEqual(mutated({ table: (t) => { t.readouts.push(clone(rowOf(t, 'dual.beat'))); } }),
+    ['dual.beat: described twice']);
+  assert.deepEqual(mutated({ table: (t) => { t.schema = 'readout-truth/v0'; } }),
+    ['schema must be readout-truth/v1']);
+});
+
 test('mutation: deleting the row of a readout that exists fails', () => {
   const problems = mutated({ table: (t) => {
     t.readouts = t.readouts.filter((r) => r.key !== 'source.gainValue');

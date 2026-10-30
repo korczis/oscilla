@@ -46,13 +46,16 @@ export const LABELS = Object.freeze(['VERIFIED', 'DERIVED', 'INFERRED', 'PROPOSE
 export const TEXT_FIELDS = Object.freeze(['readout', 'quantity', 'unit', 'algorithm',
   'resolution', 'calibration', 'limitations']);
 
-const START_TAG = /<([a-zA-Z][a-zA-Z0-9-]*)\b[^>]*>/g;
+// A start tag ends at the first > outside a quoted value: Alpine expressions in attribute
+// values carry arrow functions and comparisons, and a value may be in single quotes.
+const START_TAG = /<([a-zA-Z][a-zA-Z0-9-]*)\b(?:[^>"']|"[^"]*"|'[^']*')*>/g;
 const CONTROL_TAGS = new Set(['button', 'a', 'select', 'option', 'textarea']);
-const CONTROL_ROLE = /\srole="(?:button|link|radio|tab|checkbox|switch|menuitem|option)"/;
+const CONTROL_ROLES = new Set(['button', 'link', 'radio', 'tab', 'checkbox', 'switch',
+  'menuitem', 'option']);
 
 const attr = (tag, name) => {
-  const m = new RegExp(`\\s${name}="([^"]*)"`).exec(tag);
-  return m ? m[1] : null;
+  const m = new RegExp(`\\s${name}=(?:"([^"]*)"|'([^']*)')`).exec(tag);
+  return m ? (m[1] ?? m[2]) : null;
 };
 
 /** Why a start tag is a readout, or null: ['x-text', 'valuetext', 'meter', 'img', 'live']. */
@@ -60,12 +63,13 @@ export function readoutReasons(tag, name) {
   const why = [];
   if (/\sx-text=/.test(tag)) why.push('x-text');
   if (/\s:?aria-valuetext=/.test(tag)) why.push('valuetext');
-  if (/\srole="meter"/.test(tag)) why.push('meter');
-  if (/\srole="img"/.test(tag)) why.push('img');
+  const role = attr(tag, 'role');
+  if (role === 'meter') why.push('meter');
+  if (role === 'img') why.push('img');
   if (/\saria-live=/.test(tag)) why.push('live');
   if (!why.length) return null;
   const lower = name.toLowerCase();
-  if (CONTROL_TAGS.has(lower) || CONTROL_ROLE.test(tag)) return null;
+  if (CONTROL_TAGS.has(lower) || CONTROL_ROLES.has(role)) return null;
   if (lower === 'input' && !why.includes('valuetext')) return null;
   return why;
 }

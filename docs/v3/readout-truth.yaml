@@ -478,7 +478,7 @@ readouts:
       - tests/unit/qa-regressions.test.mjs
       - tests/browser/labs.cjs
       - tests/browser/qa-regressions.cjs
-    label: DERIVED
+    label: UNKNOWN
     defects:
       - issue: T012
         summary: >-
