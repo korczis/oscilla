@@ -17,7 +17,11 @@ const STEP_BEATS = 0.25;
 const round6 = (v) => Math.round(v * 1e6) / 1e6;
 /** Mixer input levels: bass, lead, drums. The outro fade scales each to 0. */
 const MIX = Object.freeze({ level1: 0.8, level2: 0.45, level3: 0.8 });
-/** Gate lengths in beats: snare 0.1, closed hat 0.048 (30 ms at 96 BPM), open hat 0.25. */
+/**
+ * Gate lengths in beats: snare 0.1, closed hat 0.048 (30 ms at 96 BPM), open hat 0.25 (156 ms).
+ * The hat envelope holds a sustain (0.25) so the open hat's longer gate rings on; with no sustain
+ * its decay would end both hats at 31 ms and the open hat would play as a closed one.
+ */
 const GATE_BEATS = Object.freeze({ [S.SNARE]: 0.1, [S.HAT]: 0.048, [S.OPEN_HAT]: 0.25 });
 
 /** What the score holds that the template does not play, and why (Learn text, README). */
@@ -45,7 +49,7 @@ const nodes = [
     release: 0.08 }, 'Snare envelope'),
   node('hat-filter', 'filter', 260, 780, { type: 'highpass', frequency: 7000, Q: 0.7 },
     'Hat tone'),
-  node('hat-env', 'envelope', 480, 780, { attack: 0.001, decay: 0.03, sustain: 0,
+  node('hat-env', 'envelope', 480, 780, { attack: 0.001, decay: 0.03, sustain: 0.25,
     release: 0.02 }, 'Hat envelope'),
   node('drum-mix', 'mixer', 700, 640, { level1: 0.9, level2: 0.6, level3: 0.35, level4: 0 },
     'Drum mix'),
@@ -149,7 +153,7 @@ export default {
         + 'mix in the outro.',
     ],
   },
-  studioHash: '127c000239753fc7750abb5682df2c077bdb2ea54c178083618f954841fbab2f',
+  studioHash: '6501a09624237d091607a8882ccd92b4cf99d1a27252c15e07255d9c9a85012e',
   model: {
     kind: 'oscilla-studio',
     schemaVersion: 1,

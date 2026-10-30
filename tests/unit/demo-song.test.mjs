@@ -16,6 +16,7 @@ import { serializeStudio, studioHash } from '../../src/js/studio/schema.js';
 import { importStudio } from '../../src/js/studio/migrate.js';
 import { createStudioStore } from '../../src/js/studio/actions.js';
 import { planOfflineRender } from '../../src/js/studio/offline.js';
+import { adsrEvents, releaseEvents, valueAtTime } from '../../src/js/audio/envelope.js';
 import { decodeStudioLink, encodeStudioLink } from '../../src/js/core/url-state-studio.js';
 
 const ids = () => {
@@ -54,7 +55,7 @@ test('K144 the song validates without a warning, with its hash pinned', () => {
   assert.deepEqual(v.errors, []);
   assert.deepEqual(v.warnings.map((w) => w.code), []);
   assert.equal(demoSong.studioHash,
-    '127c000239753fc7750abb5682df2c077bdb2ea54c178083618f954841fbab2f');
+    '6501a09624237d091607a8882ccd92b4cf99d1a27252c15e07255d9c9a85012e');
   assert.equal(studioHash(templateModel('demo-song')), demoSong.studioHash);
   const m = templateModel('demo-song');
   const back = importStudio(serializeStudio(m));
@@ -107,6 +108,30 @@ test('K144 the parts are wired: synth voices, filter, LFO, drums, mixer and four
   assert.deepEqual(m.timeline.automation.map((l) => `${l.target.node}.${l.target.param}`), [
     'bass-filter.frequency', 'lead-lfo.rate', 'main-mix.level1', 'main-mix.level2',
     'main-mix.level3']);
+});
+
+test('K144 the open hat rings on: its longer gate is heard, not lost to a zero sustain', () => {
+  // The hats' envelope through the schedule the Studio envelope node plays (adapters/nodes.js:
+  // applyAdsr at the gate, releaseAt after the clip's duration), read every 0.1 ms: how long
+  // each hat rings above -30 dB of its peak.
+  const m = templateModel('demo-song');
+  const p = m.graph.nodes.find((n) => n.id === 'hat-env').params;
+  const adsr = { a: p.attack, d: p.decay, s: p.sustain, r: p.release };
+  const gates = [...new Set(m.timeline.clips.filter((c) => c.trackId === 'track-hat')
+    .map((c) => c.duration))].sort((a, b) => a - b);
+  assert.equal(gates.length, 2, `closed and open hat gates: ${gates.join(', ')}`);
+  const rings = (gate) => {
+    const { events, endTime } = releaseEvents(adsrEvents(0, adsr), gate, adsr.r);
+    let n = 0;
+    for (let i = 0; i * 1e-4 <= endTime; i++) {
+      if (valueAtTime(events, i * 1e-4) > 10 ** -1.5) n += 1;
+    }
+    return n * 1e-4;
+  };
+  const [closed, open] = gates.map(rings);
+  assert.ok(closed < 0.05, `the closed hat rings ${closed.toFixed(4)} s above -30 dB`);
+  assert.ok(open - closed > 0.1, `the open hat rings ${open.toFixed(4)} s above -30 dB, the `
+    + `closed one ${closed.toFixed(4)} s`);
 });
 
 test('K144 the offline render plays every clip and lane, 110 s, with no limitation', () => {
