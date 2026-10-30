@@ -1,60 +1,122 @@
 # Review verdict for pull request #289, plan item C015 (finding engine-sync-3): the mic lab stops
 # honestly when the engine discards its audio context (branch fix/c015-mic-detach-on-close).
-# Reviewed head b211d3e00161 (== origin at fetch; merge base origin/main cdda563c1982; origin/main
-# has moved on to fde49bd15ed6, and git merge-tree against it is clean). Built by the builder's
-# session; reviewed by dev-68, which re-checked an earlier dev-68 review pass independently.
+# Delta re-review of the fixes for the round-1 verdict (b0de9181, changes, reviewed head
+# b211d3e00161). Reviewed head 7f9f04da62c2 (== origin at fetch). The delta is one commit,
+# 7f9f04da "fix(labs): C015 address review F1 and F2 of #289"; the branch has no merge of main
+# since b211d3e0 (merge base still origin/main cdda563c1982). Built by the builder's session;
+# reviewed by dev-68, which did not build, merge or edit this change.
 #
-# Worktree: /Users/korczis/dev/oscilla-wt/fix/c015-mic-detach-on-close was in use (lsof: the cwd
-# of majordomus pid 23621), so it was not touched. The review ran in a fresh detached worktree of
-# origin/fix/c015-mic-detach-on-close in the session scratchpad, with that worktree's node_modules
-# symlinked read-only. Nothing was installed.
+# Worktree: a fresh detached worktree of 7f9f04da in the session scratchpad. The builder
+# worktrees under /Users/korczis/dev/oscilla-wt/ and the primary checkout were not touched.
+# Mutants and probes ran in git-archive copies (scratchpad/dm289 at 7f9f04da, dm289-merged at
+# the merge-tree result against origin/main), node_modules symlinked read-only from the builder
+# worktree of this branch. Nothing was installed.
 #
-# The digest: the branch's scripts/review-verdict.mjs (byte-identical to origin/main's: git diff
-# origin/main HEAD -- scripts/review-verdict.mjs is empty), `--content --list --base origin/main`
-# at b211d3e0. It lists one guarded path, src/js/audio/audio-engine.js, and gives
-# 91c936d2...6aff4.
+# The digest: the branch's scripts/review-verdict.mjs (byte-identical to origin/main 88b936cb's:
+# git diff origin/main HEAD -- scripts/review-verdict.mjs is empty), `--content --list --base
+# origin/main` at 7f9f04da. One guarded path, src/js/audio/audio-engine.js, and 91c936d2...6aff4:
+# unchanged from round 1 (the delta touches no guarded path) and equal to the builder's claim.
 #
-# Lenses: (a) does the fix reach every path where a lab reading outlives its graph; (b) audio
-# safety: AudioParam writes, the output path, node accounting; (c) fail-first and mutation;
-# (d) PR body, tests/README.md and code comments vs behaviour.
+# Delta (git diff b211d3e0..7f9f04da): src/js/labs/mic-analyzer.js (the 'replaced' clause
+# dropped, comments), tests/unit/mic-detach-on-close.test.mjs (the fake adapter holds one
+# attachment and emits 'replaced'/'user' inside attachMicrophone/detachMicrophone, as
+# audio-engine.js:877-908 does; new test 6; test 7 asserts error '' and MIC_OFF after stop()
+# and after a button click), tests/browser/app.cjs (stopAfterRestart asserts error '' and the
+# off readout), tests/README.md, dist/index.html (rebuilt). Nothing under src/js/audio.
+#
+# Lenses: (a) is each round-1 finding closed on the new content, refuted first; (b) audio
+# safety; (c) mutation and fail-first; (d) PR body, tests/README.md and comments vs behaviour;
+# (e) does the branch still merge with main.
 #
 # Runs:
-# - (b) the diff writes no AudioParam and never connects the mic graph to the output. It is
-#   event plumbing (the micAttachment event now carries the detached analyser) plus lab state.
-#   Nodes stay engine-owned; init() and attachMicrophone() reach the mic graph only through
-#   _discardContext/detachMicrophone, so no context replacement skips the new event.
-# - (c) unit test at head 6/6 in a git-archive copy of b211d3e0. Mutation M3 (releaseNodes()
-#   clearing `attached` after adapter.detachMicrophone(), the pre-PR order) re-applied
-#   independently in that copy: 6/6 still pass (F1). The earlier pass's fail-first (5 of 6 on
-#   origin/main's src) and its mutations M1-M10 were not repeated, except M3.
-# - (a) probe /private/tmp/claude-501/-Users-korczis-dev/4f90795d-f221-4908-9efd-3685a6cdea5c/
-#   scratchpad/probe289/suspend.cjs, chromium with a fake capture device, file:// dist: start the
-#   lab, then window.OSCILLA.engine.ctx.suspend(). At b211d3e0, 0.8 s and 1.6 s later: ctx
-#   'suspended', lab active, aria-pressed 'true', error '', readout '398 Hz ± 3 Hz (relative
-#   level -51 dB)', and the analyser's time-domain sum is identical across reads (a frozen
-#   buffer). The same on origin/main's dist ('1.179 kHz ± 3 Hz', frozen). That is F4, which this
-#   PR does not cause.
-# - Read: every caller of attachMicrophone/detachMicrophone/stopMic (only the lab and
-#   _discardContext); the browser verdict mic-detach-on-close (tests/browser/app.cjs:2180-2191);
-#   the other mic stop checks (tests/browser/labs.cjs:590-598, qa-regressions.cjs
-#   mic-through-engine). None asserts the error or readout after a user Stop.
+# - (b) the delta writes no AudioParam (no setTargetAtTime, setValueAtTime, ramp or step), adds
+#   no node and no connect; the mic graph stays engine-owned and off the output. The only
+#   behaviour change is lab state: a 'replaced' naming the lab's own analyser now stops the lab.
+# - (c) unit at head: mic-detach-on-close 7/7; with qa-regressions, engine, v3-engine 78/78.
+#   Whole unit suite in the git-archive copy: 3266 pass, 9 fail, 10 skipped; the 9 are
+#   plan-yaml-strict, repo-hygiene and version-authority, which need a git checkout. In the
+#   worktree those three files pass 26/26. node scripts/build.mjs --check: dist up to date.
+# - (c) mutants at head (scratchpad/dmut289.sh): M3, `attached` cleared after
+#   adapter.detachMicrophone(): 6/7, test 7 fails "a user Stop states no engine loss" (actual
+#   MIC_ENGINE_DETACHED). F2-readd, the round-1 `|| d.reason === 'replaced'` restored: 6/7,
+#   test 6 fails. No identity check: test 5 fails. 'closed' text for every reason: test 6
+#   fails. attached not cleared before stop(): tests 4 and 6 fail. No stop(): tests 4, 6, 7
+#   fail. Subscription not returned: test 3 fails. All killed.
+# - (c) browser: app.cjs --only mic-detach-on-close at head, chromium, firefox, webkit, file://
+#   and /oscilla/: PASS 2/2 each. On a dist built from M3 (chromium and webkit, file://): FAIL,
+#   stopAfterRestart false, every other condition true.
+# - (a) probe scratchpad/probe289d/replace.cjs (chromium, fake device, dist of 7f9f04da): lab
+#   live, then a second caller's engine.attachMicrophone: the lab is off, error and readout
+#   MIC_ENGINE_DETACHED, its track ended, the engine holds the other graph (2 nodes); the next
+#   press restarts the lab on its own graph, and its Stop leaves 0 nodes, error '', readout
+#   'UNAVAILABLE (microphone off)', no page errors.
+# - (a) probe scratchpad/probe289/suspend.cjs at 7f9f04da: after ctx.suspend() the lab stays
+#   active, aria-pressed 'true', error '', with an identical analyser time-domain sum across
+#   reads (F4 unchanged, not caused by this PR).
+# - (e) git merge-tree HEAD origin/main (88b936cb): CONFLICT in tests/README.md, the
+#   browser/app.cjs row (main added C020 text after "ledger W7b", the branch the C015 clause).
+#   gh: mergeable CONFLICTING, no checks on 7f9f04da. origin/main changed no guarded file since
+#   cdda563c. In dm289-merged, resolved as main's row with the C015 clause appended, rebuilt:
+#   unit 3297 pass, the same 9 git-checkout failures, 11 skipped; mic-detach-on-close PASS 2/2
+#   in the three engines and both origins. That is F5.
+# - (d) the PR body's round-2 section matches what was measured here (M3 unit and browser,
+#   F2's new test failing on the round-1 src). Comments at mic-analyzer.js:24-27 and 216-218
+#   now say who causes 'replaced' and why the lab's own Stop names no analyser of its own.
 #
-# Re-checks of the earlier pass's findings: F1 holds. At head the order is right, but the fake
-# adapter's detachMicrophone() never emits, and the 'user' event in test 6 is sent after stop()
-# has returned, so the reorder is not pinned; M3 survives. F2 holds: `attached` is null whenever
-# start() calls attachMicrophone (start returns while `stream` is set, and stop clears both), so
-# the identity check already ignores that 'replaced' event, and the clause only matters for a
-# second writer, which the shipped app does not have. F3 holds as a scope note (instrument.js:545
-# notifies only on 'ended'; studio/runtime.js:388 drops its sources on 'context' closed).
-#
-# Open: F1 (P2), F2 to F4 (P3). A P2 is open, so the verdict is changes.
+# Closed: F1 (P2), F2 (P3). Open: F3, F4, F5 (P3). No open P1 or P2, so the verdict is merge.
+# F5 must still be resolved before GitHub can merge; a merge of main that leaves
+# src/js/audio/audio-engine.js as reviewed keeps this verdict (README: "stands").
 schema: review-verdict/v1
 pr: 289
-verdict: changes
-reviewer: "dev-68 (Claude Opus 5.5 session 4f90795d); did not build, merge or edit this change; wrote only this file"
+verdict: merge
+reviewer: "dev-68 (Claude Opus 5.5 session 4f90795d); did not build, merge or edit it"
 content: 91c936d227d3fb468e89e83f11c04feade931eeb488fb2c7be7e60b9a6d6aff4
 findings:
-  - { id: F1, severity: P2, status: open, title: "No test pins the release order in releaseNodes() (src/js/labs/mic-analyzer.js:203-212). The real engine emits micAttachment {reason 'user', analyser} synchronously inside detachMicrophone() (audio-engine.js:906). If `attached` were cleared after that call (mutation M3, the pre-PR order), onEngineDetached would take the user's own Stop for an engine loss: readout 'The audio engine disconnected the microphone; it was stopped.' on every normal stop, a false reason. The fake adapter's detachMicrophone() (tests/unit/mic-detach-on-close.test.mjs:93) does not emit, and test 6 emits 'user' only after lab.stop() returns, so M3 passes 6/6 here, and per the earlier pass it also passes app.cjs mic-detach-on-close. The PR body and tests/README.md:120 ('does not take its own stop for a loss', a GATE row) claim coverage that is not there. Fix: have the fake detachMicrophone() emit {reason 'user', analyser: last attached} synchronously, as the engine does, and assert st.error === '' (and the MIC_OFF readout) in stopAfterRestart (tests/browser/app.cjs:2189)." }
-  - { id: F2, severity: P3, status: open, title: "The 'replaced' exclusion in onEngineDetached (src/js/labs/mic-analyzer.js:218), with its comments at 216-217 and 24-25, says the lab's own start() causes the event. It cannot: `attached` is null whenever start() calls attachMicrophone, so the identity check already ignores it. The clause only takes effect when another caller replaces the lab's live graph. Then engine.detachMicrophone('replaced') stops the lab's tracks (closeMicrophone, no 'ended') and the lab stays on 'Stop microphone' over a dead analyser: the C015 defect. No second writer exists in the shipped app (only the lab calls adapter.attachMicrophone), so nothing is broken today. Fix: drop the clause and its test line, or justify it correctly." }
-  - { id: F3, severity: P3, status: open, title: "Scope note: the V1 instrument mic indicator (src/js/core/instrument.js:545-549) goes off when _discardContext calls stopMic('closed') but notifies only on 'ended', so a closed context turns it off with no reason given. It is honest, not stale, and C015 leaves it unchanged. Studio drops its mic source on 'context' closed (src/js/studio/runtime.js:388-390). Informational." }
-  - { id: F4, severity: P3, status: open, title: "Lens (a) residual, not caused by this PR: a context suspended or interrupted from outside still bypasses the lab. The engine emits 'context' but detaches only on 'closed', and the lab hears only micAttachment, so the button stays on 'Stop microphone' and measure() (src/js/labs/mic-analyzer.js:300) presents a frequency estimated from a frozen analyser buffer as live. Probe at b211d3e0: '398 Hz ± 3 Hz', with an identical time-domain sum across reads; origin/main behaves the same. Measurement capture already treats 'suspended'/'interrupted' as an interruption (src/js/measurement/capture.js:385). Fix (follow-up): forward 'context' state to the lab and pause the readout with a stated reason (or stop) while the context is not running." }
+  - id: F1
+    severity: P2
+    status: closed
+    title: >-
+      No test pinned the release order in releaseNodes() (src/js/labs/mic-analyzer.js:204-212).
+      Closed at 7f9f04da: the fake adapter's detachMicrophone() emits {reason 'user', analyser}
+      inside the call, as audio-engine.js:900-908 does, and test 7 asserts error '' and the
+      MIC_OFF readout after stop() and after a button click; app.cjs stopAfterRestart asserts
+      the same. Mutation M3 (attached cleared after detachMicrophone()) now fails unit test 7
+      (actual 'The audio engine disconnected the microphone; it was stopped.') and the browser
+      check in chromium and webkit (stopAfterRestart false); the head passes both.
+  - id: F2
+    severity: P3
+    status: closed
+    title: >-
+      The 'replaced' exclusion in onEngineDetached said the lab's own start() causes the event,
+      which it cannot. Closed at 7f9f04da: the clause is gone (mic-analyzer.js:219-225), the
+      comments say a 'replaced' naming the lab's analyser comes from another caller, and test 6
+      pins the stop with MIC_ENGINE_DETACHED and the other graph kept; restoring the clause
+      fails test 6. Probe replace.cjs in chromium confirms it on the real engine.
+  - id: F3
+    severity: P3
+    status: open
+    title: >-
+      Scope note, unchanged: the V1 instrument mic indicator (src/js/core/instrument.js:545-549)
+      goes off when _discardContext calls stopMic('closed') but notifies only on 'ended', so a
+      closed context turns it off with no reason given. Honest, not stale; C015 leaves it.
+      Studio drops its mic source on 'context' closed (src/js/studio/runtime.js:388-390).
+  - id: F4
+    severity: P3
+    status: open
+    title: >-
+      Lens (a) residual, not caused by this PR, re-probed at 7f9f04da: a context suspended or
+      interrupted from outside still bypasses the lab. The engine detaches only on 'closed', so
+      the button stays on 'Stop microphone' and measure() reads a frozen analyser buffer (the
+      time-domain sum identical across reads). Follow-up: forward 'context' state to the lab and
+      pause the readout with a stated reason (or stop) while the context is not running, as
+      src/js/measurement/capture.js:385 already treats 'suspended'/'interrupted'.
+  - id: F5
+    severity: P3
+    status: open
+    title: >-
+      The branch conflicts with origin/main 88b936cb in tests/README.md (the browser/app.cjs
+      row: main appended C020 text after 'ledger W7b', the branch the C015 clause); GitHub
+      reports CONFLICTING and no checks ran on 7f9f04da. Not a code defect and main touched no
+      guarded file, so a merge resolved as main's row plus the C015 clause keeps this verdict;
+      done so in a scratch copy, it passes unit (3297) and mic-detach-on-close in all engines.
+      Fix: merge origin/main with that resolution and rerun CI.
