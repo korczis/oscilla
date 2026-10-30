@@ -13,6 +13,14 @@
 //   s-filter   LPF cutoff to its minimum by keyboard (Home): the energy above 2 kHz falls 12 dB+
 //   s-wave     Square on VCO 1 (VCO 2 muted): the 2nd harmonic 30 dB+ below the 3rd; Pulse with a
 //              typed width of 25 %: the 4th harmonic 30 dB+ below the 3rd
+//   s-rest     armed with no key held (Arm, no note), a cable from EG 1 into the VCA: below
+//              -70 dB rel over 0.5 s of audio time (no drone; the transport closes the
+//              Keys-gated envelopes at arm, and an EG cable rests at 0)
+//   s-track    Keys pitch re-patched into VCO 1 pitch (VCO 2 muted): C4 then C5 peak at 130.8
+//              and 261.6 Hz, 1.00 oct per octave
+//   s-restpitch EG 1 patched into VCO 1 pitch (it replaces the Keys normal) with EG 1 sustain 0
+//              (VCO 2 muted): once EG 1 has decayed, VCO 1 rests at its base, A at 16' (220 Hz),
+//              not an octave low
 //   s-cable    Keys velocity patched into VCO 2 pitch by two jack taps breaks its normal: across
 //              C4 and E4 the VCO 2 peak stays put (VCO 1 muted); removing the cable restores
 //              tracking; the Studio model holds the same cable
@@ -28,7 +36,16 @@
 //              cutoff on both pages (the 1-3 kHz band swings 10 dB+)
 //   s-studio   Open in Studio: #m=studio, the panel's nodes selected, the same revision
 //   s-escape   Escape releases a held note; leaving the workspace disarms: runtime census 0
-//   s-preset   the Ring bell preset is one undo entry and moves the spectrum
+//   s-preset   each preset is one undo entry, sets its knobs on the face and changes the sound by
+//              its own mark: Bass (LPF 180 Hz: the 1-4 kHz band 12 dB+ further below the
+//              fundamental than Init), Lead (VCO 1 at 8': no 130.8 Hz, a fifth at 392 Hz),
+//              Sweep (the MG sweeps the LPF: the 1-3 kHz band swings 8 dB+) and Ring bell (ring
+//              products of 523.3 and 327.0 Hz at 196.2 and 850.3 Hz)
+//   s-look     the rendered panel: no legacy svg stroke on a jack or a plate, every jack ring and
+//              cable colour 3:1+ and every plate label 4.5:1+ on its background in the dark and
+//              light themes, a focused jack shows its focus ring, a card folds (aria-expanded)
+//   s-connect  Enter on a jack opens the connection list (targets, refused ones with reasons);
+//              choosing a target patches; the jack names say which can take the cable
 //   s-mobile   390 x 844 with touch: no horizontal page scroll, every knob and jack box 44 px+,
 //              a section chip lands its plate's heading below the sticky chip bar, the docked
 //              keys are visible and a tap on them sounds
@@ -60,7 +77,7 @@ const LAUNCH = {
   webkit: {},
 };
 const SIZES = { desktop: { width: 1536, height: 1024 }, phone: { width: 390, height: 844 } };
-const PHONE_CHECKS = new Set(['s-sound', 's-cable', 's-mobile']);
+const PHONE_CHECKS = new Set(['s-sound', 's-cable', 's-mobile', 's-look']);
 const LOAD_MS = 60000;
 const SOUND_MS = 8000; // a note's attack, a knob change's glide and the analyser's smoothing
 const CHECK_MS = 120000;
@@ -76,7 +93,7 @@ function probe() {
   a.getFloatTimeDomainData(t);
   let s = 0;
   for (const x of t) s += x * x;
-  return { sr: e.ctx.sampleRate, n: a.fftSize, db: Array.from(f),
+  return { sr: e.ctx.sampleRate, n: a.fftSize, db: Array.from(f), t: e.ctx.currentTime,
     rmsDb: 10 * Math.log10(s / t.length + 1e-24) };
 }
 const binOf = (p, hz) => Math.round((hz * p.n) / p.sr);
@@ -159,6 +176,73 @@ function defineChecks() {
     return { ok: true, rmsDb: p.rmsDb, off: q.rmsDb, at: [levelAt(p, C4 / 2), levelAt(p, C4)] };
   });
 
+  /** RMS stays below `db` while the audio clock runs `span` s; the loudest probe is returned. */
+  async function quiet(page, db, span, what) {
+    const t0 = await page.evaluate(() => window.OSCILLA.engine.ctx.currentTime);
+    let worst = -Infinity;
+    await until(async () => {
+      const p = await read(page);
+      worst = Math.max(worst, p.rmsDb);
+      if (worst >= db) throw new Error(`${what}: ${worst.toFixed(1)} dB rel`);
+      return (await page.evaluate(() => window.OSCILLA.engine.ctx.currentTime)) - t0 >= span;
+    }, { ms: SOUND_MS, what });
+    return worst;
+  }
+
+  def('s-rest', async ({ page }) => {
+    await page.locator('[data-osc="synth.arm"]').click();
+    await until(() => page.evaluate(() => window.OSCILLA.app.synthDebug().armed),
+      { ms: 10000, what: 'Arm arms the panel' });
+    const before = await quiet(page, -70, 0.5, 'armed with no key held is silent');
+    await tapJack(page, 'eg1.control:out');
+    await tapJack(page, 'vca.gain:in');
+    const d = await dbg(page);
+    if (!d.cables.some((c) => c.from === 'eg1.control' && c.to === 'vca.gain')) {
+      return { ok: false, detail: 'EG 1 into the VCA is not patched', cables: d.cables };
+    }
+    const after = await quiet(page, -70, 0.5, 'an EG cable into the VCA rests at 0');
+    return { ok: true, before, after };
+  });
+
+  def('s-track', async ({ page }) => {
+    await keyKnob(page, 'mix.level2', 'Home');
+    await tapJack(page, 'keys.pitch:out');
+    await tapJack(page, 'vco1.pitch:in');
+    const d = await dbg(page);
+    if (!d.cables.some((c) => c.from === 'keys.pitch' && c.to === 'vco1.pitch')) {
+      return { ok: false, detail: 'Keys pitch into VCO 1 pitch is not a cable', cables: d.cables };
+    }
+    const at = [];
+    for (const [code, hz] of [['KeyA', C4 / 2], ['KeyK', C4]]) {
+      await hold(page, code);
+      const p = await sound(page, (q) => q.rmsDb > -45 && peakAt(q, hz),
+        `VCO 1 at ${hz.toFixed(1)} Hz (1.00 oct per octave)`);
+      at.push(levelAt(p, hz));
+      await page.keyboard.up(code);
+      await silent(page, 'the note releases');
+    }
+    return { ok: true, at };
+  });
+
+  def('s-restpitch', async ({ page }) => {
+    await keyKnob(page, 'mix.level2', 'Home');
+    await keyKnob(page, 'eg1.sustain', 'Home');
+    await typeKnob(page, 'eg1.decay', '0.05');
+    await tapJack(page, 'eg1.control:out');
+    await tapJack(page, 'vco1.pitch:in');
+    const d = await dbg(page);
+    if (!d.cables.some((c) => c.from === 'eg1.control' && c.to === 'vco1.pitch')) {
+      return { ok: false, detail: 'EG 1 into VCO 1 pitch is not a cable', cables: d.cables };
+    }
+    await hold(page, 'KeyA');
+    // The cable replaces the Keys pitch normal, so VCO 1 plays its base: A4 at 16', 220 Hz.
+    const p = await sound(page, (q) => q.rmsDb > -45 && peakAt(q, 220)
+      && levelAt(q, 110) < levelAt(q, 220) - 20,
+    "EG 1 at rest leaves VCO 1 at its base, 220 Hz at 16', not an octave low");
+    await page.keyboard.up('KeyA');
+    return { ok: true, rest: levelAt(p, 220), low: levelAt(p, 110) };
+  });
+
   def('s-filter', async ({ page }) => {
     await hold(page, 'KeyA');
     const open = await sound(page, (q) => q.rmsDb > -40, 'C4 sounds with the LPF at 1.2 kHz');
@@ -198,8 +282,9 @@ function defineChecks() {
     }
     const model = await page.evaluate(() => window.OSCILLA.studio.model.graph.edges
       .map((e) => e.id));
-    // Velocity 100 / 127 into a bipolar 1-octave depth: VCO 2 at 440 x 2^(2 x 100/127 - 1).
-    const fixed = 440 * 2 ** (2 * (100 / 127) - 1);
+    // Velocity (0..1, unipolar like its source) 100 / 127 at a 1-octave depth: VCO 2 at
+    // 440 x 2^(100/127), the same for every note.
+    const fixed = 440 * 2 ** (100 / 127);
     const peaks = [];
     for (const code of ['KeyA', 'KeyD']) {
       await hold(page, code);
@@ -356,25 +441,188 @@ function defineChecks() {
     return { ok: !(await dbg(page)).armed, off: q.rmsDb, counts: await counts(page) };
   });
 
+  /** The note's steady level: two probes 0.25 s of audio time apart agree within 0.5 dB. */
+  async function steady(page, f, what) {
+    let last = null;
+    let lastT = 0;
+    return sound(page, (q) => {
+      if (q.rmsDb <= -45) return false;
+      const v = f(q);
+      const ok = last !== null && q.t - lastT >= 0.25 && Math.abs(v - last) < 0.5;
+      if (last === null || q.t - lastT >= 0.25) { last = v; lastT = q.t; }
+      return ok;
+    }, what);
+  }
+  const tilt = (q) => bandDb(q, 1000, 4000) - levelAt(q, C4 / 2);
+
   def('s-preset', async ({ page }) => {
+    const knobText = (cid) => page.locator(`[data-value="${cid}"]`).textContent()
+      .then((x) => x.trim());
+    const choose = async (id) => {
+      const before = await page.evaluate(() => window.OSCILLA.studio.store.debugInfo().undoDepth);
+      await page.locator('[data-osc="synth.preset"]').selectOption(id);
+      await until(() => page.evaluate((b) => window.OSCILLA.studio.store.debugInfo().undoDepth
+        === b + 1, before), { ms: 10000, what: `the ${id} preset is one undo entry` });
+      return page.evaluate(() => window.OSCILLA.studio.store.undoLabel());
+    };
+    const out = {};
+    // Init, from a panel off it (a knob moved), as the reference of Bass.
+    await keyKnob(page, 'mix.level3', 'End');
+    out.init = await choose('init');
     await hold(page, 'KeyA');
-    const a = await sound(page, (q) => q.rmsDb > -40, 'the init preset sounds');
+    const ref = tilt(await steady(page, tilt, 'Init settles'));
     await page.keyboard.up('KeyA');
-    await page.locator('[data-osc="synth.preset"]').selectOption('ring-bell');
-    const label = await page.evaluate(() => window.OSCILLA.studio.model && document
-      .querySelector('[data-osc="synth.status"]').textContent);
+    await silent(page, 'Init releases');
+
+    out.bass = await choose('bass');
+    out.bassKnob = await knobText('lpf.frequency');
     await hold(page, 'KeyA');
-    const b = await sound(page, (q) => q.rmsDb > -60 && Math.abs(bandDb(q, 600, 3000)
-      - bandDb(a, 600, 3000)) > 3, 'the Ring bell preset changes the spectrum');
+    const bass = await sound(page, (q) => q.rmsDb > -50 && tilt(q) <= ref - 12,
+      'Bass: the 1-4 kHz band falls 12 dB further below the fundamental');
     await page.keyboard.up('KeyA');
-    return { ok: /Ring bell/.test(label), label, before: bandDb(a, 600, 3000),
-      after: bandDb(b, 600, 3000) };
+    await silent(page, 'Bass releases');
+
+    out.lead = await choose('lead');
+    out.leadScale = await page.locator('[data-option="vco1.scale"][aria-checked="true"]')
+      .getAttribute('data-v');
+    await hold(page, 'KeyA');
+    await sound(page, (q) => q.rmsDb > -45 && peakAt(q, C4 * 1.5) && peakAt(q, C4)
+      && levelAt(q, C4 / 2) < levelAt(q, C4) - 20, "Lead: VCO 1 at 8', a fifth at 392 Hz");
+    await page.keyboard.up('KeyA');
+    await silent(page, 'Lead releases');
+
+    out.sweep = await choose('sweep');
+    out.sweepKnob = await knobText('lpf.lpf-mg');
+    const swing = await swings(page, 8, 'Sweep: the MG sweeps the low-pass');
+    await silent(page, 'Sweep releases');
+
+    out.ring = await choose('ring-bell');
+    out.ringKnob = await knobText('mix.level4');
+    const f1 = C4 * 2; // VCO 1 at 4'
+    const f2 = C4 * 2 ** (386 / 1200); // VCO 2 at 8', +386 cents
+    await hold(page, 'KeyA');
+    await sound(page, (q) => peakAt(q, f1 + f2) && peakAt(q, f1 - f2),
+      'Ring bell: ring products at 196.2 and 850.3 Hz');
+    await page.keyboard.up('KeyA');
+    return { ok: /^Preset Init$/.test(out.init) && /^Preset Bass$/.test(out.bass)
+      && out.bassKnob === '180 Hz' && out.leadScale === '8' && out.sweepKnob !== '0.00 oct'
+      && /^Preset Ring bell$/.test(out.ring) && out.ringKnob !== '0.00', ...out, ref,
+    bass: tilt(bass), swing };
+  });
+
+  def('s-look', async ({ page }) => {
+    const look = () => page.evaluate(() => {
+      const hex = (c) => {
+        const m = /rgba?\(([\d.]+), ([\d.]+), ([\d.]+)(?:, ([\d.]+))?\)/.exec(c);
+        return m ? { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] } : null;
+      };
+      const paint = (v) => {
+        const d = document.createElement('i');
+        d.style.color = v;
+        document.body.appendChild(d);
+        const c = hex(getComputedStyle(d).color);
+        d.remove();
+        return c;
+      };
+      const lum = ({ r, g, b }) => [r, g, b].map((x) => {
+        const c = x / 255;
+        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+      }).reduce((s, c, i) => s + c * [0.2126, 0.7152, 0.0722][i], 0);
+      const ratio = (a, b) => {
+        const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+        return (x + 0.05) / (y + 0.05);
+      };
+      const bay = document.querySelector('[data-osc="synth.bay"]');
+      const card = hex(getComputedStyle(bay).backgroundColor);
+      const svg = document.querySelector('[data-osc="synth.bay.svg"]');
+      // A jack: hit area, focus ring, ring, inner glyph, label (bay.js).
+      const leaks = [...svg.querySelectorAll('[data-jack] > :nth-child(1), '
+        + '[data-jack] > :nth-child(4)')].concat([...document.querySelectorAll(
+        '[data-module] > svg rect')]).filter((el) => getComputedStyle(el).stroke !== 'none')
+        .length;
+      const rings = [...svg.querySelectorAll('[data-jack] > :nth-child(3)')]
+        .map((el) => ratio(paint(el.getAttribute('stroke')), card));
+      const wires = [...svg.querySelectorAll('[data-cable] > path:last-child')]
+        .map((el) => ratio(paint(el.getAttribute('stroke')), card));
+      const top = paint(getComputedStyle(document.querySelector('[data-osc="synth.panel"]'))
+        .getPropertyValue('--osc-surface-3'));
+      const labels = [...document.querySelectorAll('[data-module] [id$="-label"]')]
+        .map((el) => ratio(hex(getComputedStyle(el).color), top));
+      return { card, leaks, ring: Math.min(...rings), wire: Math.min(...wires),
+        label: Math.min(...labels), wires: wires.length };
+    });
+    // One cable from each of the six source colours' modules, so every cable colour is drawn.
+    for (const [a, b] of [['keys.velocity', 'vco2.tune'], ['vco1.audio', 'ring.modulator'],
+      ['vco2.audio', 'mix.in4'], ['ring.audio', 'mix.in3'], ['noise.audio', 'mix.in1'],
+      ['mix.audio', 'vca.audio']]) {
+      await tapJack(page, `${a}:out`);
+      await tapJack(page, `${b}:in`);
+    }
+    const themes = {};
+    for (const theme of ['dark', 'light']) {
+      await page.evaluate((t) => {
+        if (window.OSCILLA.app.theme !== t) window.OSCILLA.app.toggleTheme();
+      }, theme);
+      // The bay is redrawn from the theme's tokens: a free jack's ring is --osc-text-dim.
+      await until(() => page.evaluate((t) => {
+        const doc = document.documentElement;
+        const dim = getComputedStyle(doc).getPropertyValue('--osc-text-dim').trim();
+        const ring = document.querySelector('[data-jack="out.audio:in"] > :nth-child(3)');
+        return doc.dataset.theme === t && ring && ring.getAttribute('stroke') !== null
+          && document.querySelector('[data-jack="mg.rate:in"] > :nth-child(3)')
+            .getAttribute('stroke') === dim;
+      }, theme), { ms: 10000, what: `the ${theme} theme redraws the bay` });
+      themes[theme] = await look();
+    }
+    // Focus: Tab onto a jack shows its ring (opacity 1), and it is hidden otherwise.
+    await page.locator('[data-jack="keys.pitch:out"]').focus();
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Tab');
+    const focus = await page.evaluate(() => {
+      const j = document.activeElement.closest('[data-jack]');
+      const ring = j && j.querySelector('[data-focus-ring]');
+      const other = document.querySelector('[data-jack]:not(:focus) [data-focus-ring]');
+      return { jack: j && j.dataset.jack, on: ring && getComputedStyle(ring).opacity,
+        off: other && getComputedStyle(other).opacity };
+    });
+    // Fold: a card header is a disclosure button.
+    await page.locator('[data-collapse="lpf"]').click();
+    const fold = await page.evaluate(() => ({
+      expanded: document.querySelector('[data-collapse="lpf"]').getAttribute('aria-expanded'),
+      knobs: document.querySelectorAll('[data-module="lpf"] [data-knob]').length,
+      summary: !!document.querySelector('[data-summary="lpf"]') }));
+    await page.locator('[data-fold-all="open"]').click();
+    const ok = Object.values(themes).every((t) => t.leaks === 0 && t.ring >= 3 && t.wire >= 3
+      && t.label >= 4.5 && t.wires === 6) && focus.on === '1' && focus.off === '0'
+      && fold.expanded === 'false' && fold.knobs === 0 && fold.summary;
+    return { ok, themes, focus, fold };
+  });
+
+  def('s-connect', async ({ page }) => {
+    await page.locator('[data-jack="mg.control:out"]').focus();
+    await page.keyboard.press('Enter');
+    const list = await page.evaluate(() => {
+      const box = document.querySelector('[data-osc="synth.connect"]');
+      const can = document.querySelector('[data-jack="lpf.frequency:in"]').getAttribute(
+        'aria-label');
+      const no = document.querySelector('[data-jack="mix.in1:in"]').getAttribute('aria-label');
+      return { hidden: box.hidden, targets: box.querySelectorAll('[data-connect-to]').length,
+        refused: box.querySelectorAll('s').length, can, no };
+    });
+    await page.locator('[data-connect-to="lpf.frequency:in"]').focus();
+    await page.keyboard.press('Enter');
+    const d = await dbg(page);
+    return { ok: !list.hidden && list.targets > 5 && list.refused > 5
+      && /can take the cable/.test(list.can) && /refused: /.test(list.no)
+      && d.cables.some((c) => c.from === 'mg.control' && c.to === 'lpf.frequency'), list,
+    cables: d.cables };
   });
 
   def('s-mobile', async ({ page }) => {
     const m = await page.evaluate(() => {
-      const small = [...document.querySelectorAll('[data-knob], [data-jack] rect, '
-        + '[data-osc="synth.view"] button, [data-option]')].filter((el) => {
+      const small = [...document.querySelectorAll('[data-knob], '
+        + '[data-jack] rect:not([data-focus-ring]), [data-osc="synth.view"] button, '
+        + '[data-option]')].filter((el) => {
         const r = el.getBoundingClientRect();
         return r.width > 0 && (r.width < 43.5 || r.height < 43.5);
       }).map((el) => el.getAttribute('data-knob') || el.getAttribute('data-option')

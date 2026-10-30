@@ -6,13 +6,31 @@
 //     cables: [['module.port', 'module.port']] the user's cables (normals.js panelCables).
 //   linkAction(model, panel, link, { registry }) -> BATCH action   one history entry
 //
-// A cable takes the depth of the amount knob that covers it (its source and its jack), from
-// the link or else from the preset, because linkOf records an amount only where it differs
-// from the preset. Normals a cable breaks are removed once, however many cables break them.
+// A link reopens the sender's patch whatever the receiver's panel holds: the receiver's cables
+// are removed and the normals they broke restored first (in the same BATCH), then the preset,
+// the values and the link's cables apply on that panel. A cable takes the depth of the amount
+// knob that covers it (its source and its jack), from the link or else from the preset,
+// because linkOf records an amount only where it differs from the preset. Normals a cable
+// breaks are removed once, however many cables break them.
 
 import { NODE_REGISTRY } from '../studio/registry.js';
-import { amountEdges, panelCables, patchCable } from './normals.js';
+import { amountEdges, normalSteps, panelCables, panelEdges, patchCable } from './normals.js';
 import { presetAction, presetOf, presetValues } from './presets.js';
+
+/** `model` with the panel's cables removed and the normals they broke back (declared props). */
+function unpatched(model, panel) {
+  const { cables } = panelEdges(model, panel);
+  if (!cables.length) return { model, steps: [] };
+  const gone = new Set(cables.map((e) => e.id));
+  const bare = { ...model, graph: { ...model.graph,
+    edges: model.graph.edges.filter((e) => !gone.has(e.id)) } };
+  const jacks = [...new Set(panelCables(model, panel).map((c) => c.to))];
+  const adds = jacks.flatMap((j) => normalSteps(bare, panel, j));
+  const edges = adds.map((s) => ({ id: s.id, from: s.from, to: s.to,
+    props: { muted: false, ...s.props } }));
+  return { model: { ...bare, graph: { ...bare.graph, edges: [...bare.graph.edges, ...edges] } },
+    steps: [{ type: 'EDGE_REMOVE', edgeIds: [...gone] }, ...adds] };
+}
 
 export function linkOf(model, panel, presetId) {
   const p = presetOf(presetId) || presetOf('init');
@@ -36,9 +54,11 @@ export function linkOf(model, panel, presetId) {
   return { preset: p.id, values, cables: panelCables(model, panel).map((c) => [c.from, c.to]) };
 }
 
-export function linkAction(model, panel, link, { registry = NODE_REGISTRY } = {}) {
+export function linkAction(model0, panel, link, { registry = NODE_REGISTRY } = {}) {
   const p = presetOf(link.preset || 'init') || presetOf('init');
-  const steps = [...presetAction(model, panel, p.id).action.steps];
+  const clean = unpatched(model0, panel);
+  const model = clean.model;
+  const steps = [...clean.steps, ...presetAction(model, panel, p.id).action.steps];
   const given = new Map(link.values);
   const nodes = panel.resolve(model);
   for (const [k, v] of link.values) {

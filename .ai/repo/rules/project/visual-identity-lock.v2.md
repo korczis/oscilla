@@ -11,8 +11,9 @@ depends_on: []
 tags: [design, visual, studio, v3, flowbite]
 ---
 
-> Deprecated on 2026-10-30: superseded by `visual-identity-lock.v3.md` (the owner's order of
-> 2026-10-30 for the Synth workspace: an instrument-panel carve-out drawn from OSCILLA tokens).
+> Deprecated on 2026-10-30: superseded by `visual-identity-lock.v3.md`, which restates every
+> clause below and narrows one, the skeuomorphism ban, on the Synth panel surface only (the
+> owner's order of 2026-10-30; ADR 0061's resolution note of that date).
 
 # Rationale
 

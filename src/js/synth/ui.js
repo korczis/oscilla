@@ -16,7 +16,8 @@
 import SEMI_MONO from './panels/semi-mono.js';
 import { PRESETS, presetAction, presetOf, presetValues } from './presets.js';
 import {
-  amountEdges, jackState, panelCables, patchCable, restoreNormals, setAmount, unpatch,
+  STATE_TEXT, amountEdges, breakNormals, createAmountMemory, jackReason, jackState, panelCables,
+  patchCable, restoreNormals, setAmount, unpatch,
 } from './normals.js';
 import { linkAction, linkOf } from './link.js';
 import { splitJack } from './panel.js';
@@ -27,17 +28,38 @@ import { panelTokens } from './view/tokens.js';
 import { NODE_REGISTRY } from '../studio/registry.js';
 import { canConnect } from '../studio/ports.js';
 import { decodeSynthLink, encodeSynthLink } from '../core/url-state-synth.js';
+import { isSemanticallyEqual } from '../studio/schema.js';
+import { REFERENCE_TEMPLATE_ID, templateModel } from '../studio/templates/index.js';
 
 export const SYNTH_PANEL = SEMI_MONO;
 export const SYNTH_TEXT = Object.freeze({
   inserted: `Inserted the ${SEMI_MONO.title} into the Studio document; it feeds Master Output. `
     + 'Undo removes it.',
+  /** Master holds one input: inserting the panel takes it from the document's chain. */
+  takes: (names) => `Master Output is fed by ${names} in this Studio document. Inserting the `
+    + `${SEMI_MONO.title} takes Master Output from it (Undo gives it back).`,
+  took: (names) => `Inserted the ${SEMI_MONO.title} into the Studio document; it took Master `
+    + `Output from ${names}. Undo removes the panel and gives it back.`,
+  notInserted: 'The Synth panel is not in this Studio document: press Insert first.',
   armed: 'Synth armed: the keys play the panel.',
   disarmed: 'Synth disarmed: no note sounds.',
   refused: 'The Synth did not arm: the output belongs to the measurement. Stop it first (Esc).',
   direction: 'A cable runs from an output jack to an input jack.',
 });
 const DRAG_PX = 4;
+
+/**
+ * Whether opening the workspace (or a note, Arm, a preset, a link) may insert the panel by
+ * itself: when that cuts nothing, or when the document is still the untouched reference
+ * template the app opens with (no work of the user's to cut; the notice says what it took and
+ * Undo gives it back). A document the user has changed whose own chain feeds Master Output
+ * gets the panel only from the Insert button. -> { auto, cuts: [edge] }
+ */
+export function insertDecision(model, panel = SEMI_MONO) {
+  const cuts = panel.cutsOf(model);
+  if (!cuts.length) return { auto: true, cuts };
+  return { auto: isSemanticallyEqual(model, templateModel(REFERENCE_TEMPLATE_ID)), cuts };
+}
 
 export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   registry = NODE_REGISTRY } = {}) {
@@ -49,6 +71,10 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   let pending = null; // tap-tap connect: the first jack
   let selected = null; // a selected cable id
   let layout = null;
+  const memory = createAmountMemory(panel); // amount depths of this session (normals.js)
+  // The folded cards (K062): view state of this page, never in history, the hash or browser
+  // storage (the README's privacy inventory lists no Synth key), so a reload expands them.
+  let collapsed = new Set();
 
   const handle = () => get().handle;
   const transport = () => {
@@ -66,16 +92,39 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   const dispatch = (action) => {
     const r = handle().dispatch(action);
     if (!r.ok) say(r.reason, true);
+    else memory.note(model());
     return r;
   };
+  /** A jack's friendly name ('VCO 1 Audio'), as its accessible name starts. */
+  const jackName = (id) => {
+    const { module, port } = splitJack(String(id).split(':')[0]);
+    const m = panel.module(module);
+    const j = m && m.jacks.find((x) => x.port === port);
+    return m && j ? `${m.label} ${j.label}` : String(id);
+  };
+  const feedNames = (cuts) => {
+    const byId = new Map(model().graph.nodes.map((n) => [n.id, n]));
+    return [...new Set(cuts.map((e) => (byId.get(e.from.node) || { metadata: {} }).metadata.name
+      || e.from.node))].join(', ');
+  };
 
-  function ensurePanel() {
+  /**
+   * Insert the panel when the document has none: by itself when insertDecision allows it,
+   * else only from the Insert button (`explicit`); the notice names the Master feed it took.
+   */
+  function ensurePanel({ explicit = false } = {}) {
     if (present()) return true;
     const m = model();
+    const { auto, cuts } = insertDecision(m, panel);
+    if (!auto && !explicit) {
+      say(`${SYNTH_TEXT.notInserted} ${SYNTH_TEXT.takes(feedNames(cuts))}`);
+      return false;
+    }
+    const names = cuts.length ? feedNames(cuts) : '';
     const ys = m.graph.nodes.map((n) => n.position.y);
     const at = { x: 0, y: (ys.length ? Math.max(...ys) : 0) + 240 };
     const r = dispatch(panel.instantiate(m, { at }));
-    if (r.ok) say(SYNTH_TEXT.inserted);
+    if (r.ok) say(names ? SYNTH_TEXT.took(names) : SYNTH_TEXT.inserted);
     return r.ok;
   }
 
@@ -108,37 +157,54 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     return panel.jacksOf(module).find((j) => j.key === key) || null;
   };
   const portOf = (j) => registry.port(panel.module(j.module).node, j.port, j.direction);
-  function compatibleWith(id) {
+  /**
+   * Every other jack's verdict for a cable from or to `id`: { ok, reason } from the typed-port
+   * validator, then the panel's own refusals (normals.js patchCable: a jack where the cable
+   * would do nothing). A feedback loop is judged by the store at the drop, with its sentence.
+   */
+  function verdictsFor(id) {
     const a = jackOf(id);
-    const out = new Set();
+    const out = new Map();
     if (!a) return out;
-    for (const m of panel.modules) {
-      for (const j of panel.jacksOf(m.id)) {
-        if (j.direction === a.direction || j.module === a.module) continue;
+    const m = model();
+    for (const mod of panel.modules) {
+      for (const j of panel.jacksOf(mod.id)) {
+        if (j.direction === a.direction) continue;
+        if (j.module === a.module) {
+          out.set(j.key, { ok: false, reason: 'A module cannot patch into itself.' });
+          continue;
+        }
         const [s, t] = a.direction === 'out' ? [portOf(a), portOf(j)] : [portOf(j), portOf(a)];
-        if (canConnect(s, t).allowed) out.add(j.key);
+        const v = canConnect(s, t);
+        if (!v.allowed) { out.set(j.key, { ok: false, reason: v.reason }); continue; }
+        const to = a.direction === 'out' ? j.id : a.id;
+        const why = jackReason(m, panel, to);
+        out.set(j.key, why ? { ok: false, reason: why } : { ok: true, reason: null });
       }
     }
     return out;
   }
+  const compatibleWith = (id) => new Set([...verdictsFor(id)].filter(([, v]) => v.ok)
+    .map(([k]) => k));
 
   function connect(a, b) {
     const ja = jackOf(a);
     const jb = jackOf(b);
     if (!ja || !jb || ja.direction === jb.direction) return say(SYNTH_TEXT.direction, true);
     const [from, to] = ja.direction === 'out' ? [ja.id, jb.id] : [jb.id, ja.id];
-    const r = patchCable(model(), panel, from, to, { registry });
+    const r = patchCable(model(), panel, from, to, { registry, memory });
     if (r.reason) return say(r.reason, true);
     const done = dispatch(r.action);
-    if (done.ok) say(`Patched ${from} to ${to}.`);
+    if (done.ok) say(`Patched ${jackName(from)} to ${jackName(to)}.`);
     return done;
   }
 
   function tapJack(id) {
     if (!pending) {
       pending = id;
-      say(`Connecting from ${jackOf(id).id}: choose a highlighted jack, or the same jack to `
-        + 'cancel.');
+      const n = compatibleWith(id).size;
+      say(`Connecting from ${jackName(id)}: ${n} jacks can take the cable. Choose one in the `
+        + 'connection list below the patch bay or on the bay, or the same jack to cancel.');
     } else if (pending === id) {
       pending = null;
       say('Connection cancelled.');
@@ -160,6 +226,38 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
   // ------------------------------------------------------------------ rendering
 
+  const ITEM = 'flex items-center justify-between gap-2 py-1 text-xs text-gray-700 '
+    + 'dark:text-gray-300';
+  const BTN = 'rounded-lg px-3 h-11 text-xs font-medium text-primary-700 border border-solid '
+    + 'border-primary-600 hover:bg-primary-50 focus:outline-none focus-visible:ring-2 '
+    + 'focus-visible:ring-primary-500 dark:text-primary-400 dark:hover:bg-gray-700';
+
+  /**
+   * The connection list of a pending jack (K063): the jacks that can take the cable, then the
+   * refused ones with the validator's sentence, then Remove for each cable on the jack.
+   */
+  function connectList(m, verdicts, cables) {
+    const a = jackOf(pending);
+    if (!a) return '';
+    const name = (k) => `${jackName(k)} ${jackOf(k).direction === 'in' ? 'input' : 'output'}`;
+    const ok = [...verdicts].filter(([, v]) => v.ok).map(([k]) => `<li class="${ITEM}">`
+      + `<span>${esc(name(k))}</span><button type="button" class="${BTN}" data-connect-to=`
+      + `"${esc(k)}" aria-label="Patch ${esc(jackName(pending))} to ${esc(name(k))}">Patch`
+      + '</button></li>').join('');
+    const no = [...verdicts].filter(([, v]) => !v.ok).map(([k, v]) => '<li class="py-1 text-xs '
+      + `text-gray-600 dark:text-gray-400"><s>${esc(name(k))}</s>: ${esc(v.reason)}</li>`)
+      .join('');
+    const mine = cables.filter((c) => `${c.from}:out` === pending || `${c.to}:in` === pending)
+      .map((c) => `<li class="${ITEM}"><span>${esc(jackName(c.from))} → ${esc(jackName(c.to))}`
+      + `</span><button type="button" class="${BTN}" data-remove-cable="${esc(c.id)}">Remove `
+      + 'cable</button></li>').join('');
+    return `<h4 class="mt-3 text-xs font-bold tracking-widest text-gray-900 dark:text-white" `
+      + `id="synth-connect-title">CONNECT FROM ${esc(name(pending).toUpperCase())}</h4>`
+      + '<ul class="divide-y divide-gray-200 dark:divide-gray-700" '
+      + `aria-labelledby="synth-connect-title">${mine}${ok}${no}</ul>`
+      + `<button type="button" class="${BTN} mt-2" data-connect-cancel="">Cancel</button>`;
+  }
+
   function renderBay() {
     const el = host();
     const box = el && el.querySelector('[data-osc="synth.bay.canvas"]');
@@ -175,23 +273,31 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     }
     const cables = userCables();
     for (const c of cables) states.set(`${c.from}:out`, 'patched');
-    box.innerHTML = baySvg({ panel, layout, cables, states, pending, tokens, selected,
-      compatible: pending ? compatibleWith(pending) : new Set() });
+    const verdicts = pending ? verdictsFor(pending) : new Map();
+    box.innerHTML = baySvg({ panel, layout, cables, states, pending, tokens, selected, verdicts,
+      compatible: new Set([...verdicts].filter(([, v]) => v.ok).map(([k]) => k)) });
+    const conn = el.querySelector('[data-osc="synth.connect"]');
+    if (conn) {
+      conn.innerHTML = pending ? connectList(m, verdicts, cables) : '';
+      conn.hidden = !pending;
+    }
     const list = el.querySelector('[data-osc="synth.cables"]');
-    const open = [...states].filter(([, s]) => s === 'open').map(([k]) => k.split(':')[0]);
-    const item = 'flex items-center justify-between gap-2 py-1 text-xs text-gray-700 '
-      + 'dark:text-gray-300';
-    const btn = 'rounded-lg px-3 h-9 text-xs font-medium text-primary-700 border border-solid '
-      + 'border-primary-600 hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-gray-700';
+    const jacksIn = (st) => [...states].filter(([, s]) => s === st).map(([k]) => k.split(':')[0]);
+    const open = jacksIn('open');
+    const mixed = jacksIn('mixed');
     if (list) {
-      list.innerHTML = cables.map((c) => `<li class="${item}"><span>${esc(c.from)} → `
-        + `${esc(c.to)}</span><button type="button" class="${btn}" data-remove-cable=`
-        + `"${esc(c.id)}">Remove</button></li>`).join('')
-        + open.map((j) => `<li class="${item}"><span>${esc(j)}: open, normal removed in Studio`
-        + `</span><button type="button" class="${btn}" data-restore-normal="${esc(j)}">`
+      list.innerHTML = cables.map((c) => `<li class="${ITEM}"><span>${esc(jackName(c.from))} → `
+        + `${esc(jackName(c.to))}</span><button type="button" class="${BTN}" data-remove-cable=`
+        + `"${esc(c.id)}" aria-label="Remove cable ${esc(jackName(c.from))} to `
+        + `${esc(jackName(c.to))}">Remove</button></li>`).join('')
+        + mixed.map((j) => `<li class="${ITEM}"><span>${esc(jackName(j))}: ${STATE_TEXT.mixed}`
+        + `</span><button type="button" class="${BTN}" data-break-normal="${esc(j)}">`
+        + 'Break normal</button></li>').join('')
+        + open.map((j) => `<li class="${ITEM}"><span>${esc(jackName(j))}: open, normal removed `
+        + `in Studio</span><button type="button" class="${BTN}" data-restore-normal="${esc(j)}">`
         + 'Restore normal</button></li>').join('')
-        + (cables.length || open.length ? '' : `<li class="${item}">No cables: every jack plays `
-        + 'its normal. Drag from one jack to another, or tap two jacks.</li>');
+        + (cables.length || open.length || mixed.length ? '' : `<li class="${ITEM}">No cables: `
+        + 'every jack plays its normal. Drag from one jack to another, or tap two jacks.</li>');
     }
   }
 
@@ -201,13 +307,18 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     if (!el || !cmp) return;
     const focus = document.activeElement;
     const keep = focus && el.contains(focus) ? ['data-knob', 'data-option', 'data-toggle',
-      'data-jack'].map((a) => [a, focus.getAttribute(a), focus.getAttribute('data-v')])
+      'data-jack', 'data-collapse', 'data-fold-all'].map((a) => [a, focus.getAttribute(a),
+      focus.getAttribute('data-v')])
       .find(([, v]) => v) : null;
     if (!present()) {
+      const cuts = panel.cutsOf(model());
       el.innerHTML = '<div class="bg-white rounded-lg shadow dark:bg-gray-800 p-6 text-sm '
         + 'text-gray-700 dark:text-gray-300"><p>This Studio document has no Synth panel.</p>'
+        + (cuts.length ? `<p class="mt-2" data-osc="synth.insert-cuts">`
+          + `${esc(SYNTH_TEXT.takes(feedNames(cuts)))}</p>` : '')
         + '<button type="button" data-insert-panel="" class="mt-3 rounded-lg bg-primary-600 px-4 '
-        + `h-11 font-medium text-white">Insert the ${esc(panel.title)}</button></div>`;
+        + 'h-11 font-medium text-white focus:outline-none focus-visible:ring-2 '
+        + `focus-visible:ring-primary-500">Insert the ${esc(panel.title)}</button></div>`;
       shape = 'empty';
       return;
     }
@@ -219,14 +330,21 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       + 'text-xs font-semibold tracking-wide text-gray-800 dark:border-gray-600 dark:bg-gray-800 '
       + `dark:text-gray-200">${esc(x.label)}</button>`).join('');
     const plates = panel.modules.map((x) => plateHtml({ panel, module: x, node: res.get(x.id),
-      model: m, tokens })).join('');
+      model: m, tokens, collapsed: collapsed.has(x.id) })).join('');
+    const fold = 'rounded-lg px-3 h-11 text-xs font-medium text-gray-900 bg-white border '
+      + 'border-solid border-gray-200 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 '
+      + 'focus-visible:ring-primary-500 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 '
+      + 'dark:hover:bg-gray-700';
     el.innerHTML = '<nav aria-label="Synth sections" class="sticky top-0 z-20 -mx-4 mb-3 flex '
       + 'snap-x snap-mandatory gap-2 overflow-x-auto bg-gray-50 px-4 py-2 dark:bg-gray-900 '
       + `xl:hidden">${chips}<button type="button" data-goto="bay" class="snap-start shrink-0 `
       + 'rounded-full border border-solid border-primary-600 px-3 h-11 text-xs font-semibold '
       + 'text-primary-700 dark:text-primary-400">PATCH BAY</button></nav>'
       + '<div class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">'
-      + `<div class="${PLATE_GRID}" data-osc="synth.modules">${plates}</div>`
+      + '<div><div class="mb-2 flex gap-2" role="group" aria-label="Module cards">'
+      + `<button type="button" class="${fold}" data-fold-all="open">Expand all</button>`
+      + `<button type="button" class="${fold}" data-fold-all="closed">Collapse all</button></div>`
+      + `<div class="${PLATE_GRID}" data-osc="synth.modules">${plates}</div></div>`
       + '<section class="bg-white rounded-lg shadow dark:bg-gray-800 self-start p-3 '
       + 'xl:sticky xl:top-4" aria-labelledby="synth-bay-title" data-osc="synth.bay" '
       + 'data-module="bay"><h3 id="synth-bay-title" class="text-sm font-bold tracking-widest '
@@ -234,8 +352,11 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       + 'dark:text-gray-400">Every input is normalled: it plays with no cable. A cable into a '
       + 'jack replaces its normal; removing the cable restores it.</p>'
       + '<div class="mt-2 w-full" data-osc="synth.bay.canvas"></div>'
-      + '<ul class="mt-2 divide-y divide-gray-200 dark:divide-gray-700" data-osc="synth.cables">'
-      + '</ul></section></div>';
+      + '<div data-osc="synth.connect" hidden></div>'
+      + '<h4 class="mt-3 text-xs font-bold tracking-widest text-gray-900 dark:text-white" '
+      + 'id="synth-cables-title">CABLES</h4>'
+      + '<ul class="mt-1 divide-y divide-gray-200 dark:divide-gray-700" data-osc="synth.cables" '
+      + 'aria-labelledby="synth-cables-title"></ul></section></div>';
     shape = shapeOf();
     renderBay();
     if (keep) {
@@ -267,6 +388,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   }
 
   function refresh() {
+    memory.note(model());
     if (!cmp || cmp.workspace !== 'synth') return;
     const t = get().transport;
     cmp.synth.armed = !!(t && t.armed);
@@ -347,7 +469,9 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
   function onClick(e) {
     const t = e.target.closest('[data-option],[data-toggle],[data-goto],[data-cable],'
-      + '[data-remove-cable],[data-restore-normal],[data-restore-module],[data-insert-panel]');
+      + '[data-remove-cable],[data-restore-normal],[data-restore-module],[data-insert-panel],'
+      + '[data-break-normal],[data-connect-to],[data-connect-cancel],[data-collapse],'
+      + '[data-fold-all]');
     if (!t) return;
     const d = t.dataset;
     if (d.option) {
@@ -367,17 +491,43 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       say(selected ? 'Cable selected: Delete removes it.' : 'Cable deselected.');
       renderBay();
     } else if (d.removeCable) {
-      const r = unpatch(model(), panel, d.removeCable);
+      const r = unpatch(model(), panel, d.removeCable, { memory });
+      pending = null;
       if (r.reason) say(r.reason, true);
       else if (dispatch(r.action).ok) say('Cable removed; the normal is restored.');
     } else if (d.restoreNormal) {
-      const r = restoreNormals(model(), panel, d.restoreNormal);
+      const r = restoreNormals(model(), panel, d.restoreNormal, { memory });
       if (r.reason) say(r.reason);
       else dispatch(r.action);
+    } else if (d.breakNormal) {
+      const r = breakNormals(model(), panel, d.breakNormal);
+      if (r.reason) say(r.reason);
+      else if (dispatch(r.action).ok) say(`The normal of ${jackName(d.breakNormal)} is broken.`);
+    } else if (d.connectTo) {
+      const from = pending;
+      pending = null;
+      if (from) connect(from, d.connectTo);
+      renderAll();
+      const j = host().querySelector(`[data-jack="${d.connectTo}"]`);
+      if (j) j.focus({ preventScroll: true });
+    } else if ('connectCancel' in d) {
+      const j = pending;
+      pending = null;
+      say('Connection cancelled.');
+      renderBay();
+      const again = j && host().querySelector(`[data-jack="${j}"]`);
+      if (again) again.focus({ preventScroll: true });
+    } else if (d.collapse) {
+      if (collapsed.has(d.collapse)) collapsed.delete(d.collapse);
+      else collapsed.add(d.collapse);
+      renderAll();
+    } else if (d.foldAll) {
+      collapsed = d.foldAll === 'closed' ? new Set(panel.modules.map((x) => x.id)) : new Set();
+      renderAll();
     } else if (d.restoreModule) {
       restoreModule(d.restoreModule);
     } else if ('insertPanel' in d) {
-      ensurePanel();
+      ensurePanel({ explicit: true });
     }
   }
 
@@ -461,7 +611,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     }
     if ((e.key === 'Delete' || e.key === 'Backspace') && selected) {
       e.preventDefault();
-      const r = unpatch(model(), panel, selected);
+      const r = unpatch(model(), panel, selected, { memory });
       selected = null;
       if (!r.reason) dispatch(r.action);
     }
@@ -576,6 +726,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
     synthInit() {
       cmp = this;
+      memory.note(model());
       handle().subscribe(() => queueMicrotask(refresh));
       const el = document.querySelector('[data-osc="synth-view"]');
       if (el) {

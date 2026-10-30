@@ -8,6 +8,10 @@ import { definePanel } from '../panel.js';
 
 const FILTER_FIXED = { gain: 0, enabled: true };
 const FILTER_NOTE = 'A 12 dB/oct biquad: the peak rings but does not self-oscillate.';
+// Peak (Q) has a knob and no jack: a low- or high-pass Q is a dB AudioParam in Web Audio, so the
+// runtime refuses a linear Q modulation (clip-targets.js filterQ), and a jack that takes a cable
+// and does nothing is an inert surface (project.no-inert-surfaces).
+const FILTER_JACKS = { hide: ['gain', 'Q'] };
 
 export default definePanel({
   id: 'semi-mono',
@@ -28,11 +32,11 @@ export default definePanel({
       init: { level1: 0.7, level2: 0.5, level3: 0, level4: 0 },
       labels: { level1: 'VCO 1', level2: 'VCO 2', level3: 'Noise', level4: 'Ring' } },
     { id: 'hpf', label: 'HPF', node: 'filter', note: FILTER_NOTE, fixed: { type: 'highpass', ...FILTER_FIXED },
-      jacks: { hide: ['gain'] },
+      jacks: FILTER_JACKS,
       init: { frequency: 20, Q: 0.7 }, labels: { frequency: 'Cutoff', Q: 'Peak' },
       ranges: { frequency: [10, 20000], Q: [0.5, 30] } },
     { id: 'lpf', label: 'LPF', node: 'filter', note: FILTER_NOTE, fixed: { type: 'lowpass', ...FILTER_FIXED },
-      jacks: { hide: ['gain'] },
+      jacks: FILTER_JACKS,
       init: { frequency: 1200, Q: 1 }, labels: { frequency: 'Cutoff', Q: 'Peak' },
       ranges: { frequency: [10, 20000], Q: [0.5, 30] } },
     { id: 'eg1', label: 'EG 1', node: 'envelope', jacks: { hide: ['audio'] },
