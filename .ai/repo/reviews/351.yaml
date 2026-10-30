@@ -1,0 +1,42 @@
+# Review verdict for pull request #351, E030: the owner's definition of done judged on every
+# pull request by the base branch's copy of scripts/definition-of-done.mjs
+# (branch feat/e030-definition-of-done, builder oscilla-af).
+# Reviewed head 361738df, merge base origin/main d9db6bdf. Neither this reviewer nor the session
+# that started it built the change.
+#
+# The digest: the base branch's scripts/review-verdict.mjs, run from `git archive origin/main
+# scripts .github/scripts` with --repo on this worktree: 1d7ff906...b4db over the 6 guarded paths
+# the base's GUARDED names (.github/pull_request_template.md, .github/scripts/base-rule.sh,
+# .github/workflows/ci.yml, scripts/review-verdict.mjs, tests/unit/ci-workflows.test.mjs,
+# tests/unit/review-verdict.test.mjs). The new program, its test and fixtures are not in the
+# base's list yet, so this digest does not bind them (R5): what was reviewed is 361738df.
+#
+# What holds:
+# - The CI job runs the base copy through base-rule.sh (only the introducing PR falls back to its
+#   own copy, with a warning); the last command is the wrapper call, unconditional; the job and
+#   step are bounded, actions pinned @v7 like the others, the gh read retried 3x;
+#   ci-workflow-rules.mjs exits 0; gate needs definition-of-done and requires every need success.
+# - The review-verdict.mjs change only appends GUARDED entries for paths this PR introduces; the
+#   digest code is untouched, so no existing verdict stales or is wrongly accepted.
+# - Placeholders, globs, `..`, unheld paths/ids, commented calls/keys, waivers in comments, code
+#   fences and blockquotes, and a train title off a train/ branch are refused (probed and tested).
+# - Unit: definition-of-done 19/19 (fails on the merge base: ERR_MODULE_NOT_FOUND), with
+#   review-verdict, ci-workflows, ci-gates-model, base-rule, fail-first 104/104;
+#   knowledge-integrity 34/34; majordomus doctor 0 failures.
+# - Real bodies: open src/ PRs #349 #346 #332 #330 #315 #321 are all refused on the missing
+#   section (expected adoption cost, R2/R3); train #347 and the no-src PRs pass.
+#
+# Verdict: merge. No P0 or P1; two P2s to take up next (R1, R2).
+schema: review-verdict/v1
+pr: 351
+verdict: merge
+reviewer: oscilla-26-review
+content: 1d7ff906a8228fb6225dbf392689cee64d820be579bb297e298853f6f3c0b4db
+findings:
+  - { id: R1, severity: P2, status: open, title: "definition-of-done.mjs:447,405-422 a train/ branch with a non-feat/fix title and any '| #n |' row passes unjudged: members are not checked to exist or be in the head (#999999 accepted in a probe), and the train's own src/ commits are judged by nobody; the output claims 'each judged as its own pull request'. Verify members via gh (head sha ancestor of the train head, src/ paths covered by members) or name it under the rule's 'What it cannot see'" }
+  - { id: R2, severity: P2, status: open, title: "skills/release/SKILL.md:82 a release PR changes src/index.html every minor (project.about-names-current-release; #333 did), so chore(release) is now refused without the section and dod-docs waiver; the release and merge-train skills do not say so. Add the section to the release body recipe" }
+  - { id: R3, severity: P3, status: open, title: "about 20 open src/ PRs (#349 #346 #332 #330 #315 #321 checked) go red on their next CI run until their bodies gain the section; announce it to the peers when this lands" }
+  - { id: R4, severity: P3, status: open, title: "definition-of-done.mjs:479 the docs clause reads `changed`, deletions included (browser reads `live`): deleting docs/x.md satisfies it" }
+  - { id: R5, severity: P3, status: open, title: "the base GUARDED lacks scripts/definition-of-done.mjs, its test and fixtures, so this verdict's digest does not bind them; a later push to the program on this PR would not stale it (reviewed head 361738df)" }
+  - { id: R6, severity: P3, status: open, title: "definition-of-done.mjs:123-139 a GitHub blob URL to a repository file names nothing (the token keeps https:), a false refusal for an honest item; strip the github.com/<owner>/<repo>/(blob|tree)/<ref>/ prefix" }
+  - { id: R7, severity: P3, status: open, title: "providers/agents.tmpl overrides the whole generated AGENTS.md template, so a Majordomus upgrade of the built-in text does not reach AGENTS.md while it exists (providers README records when it goes)" }
