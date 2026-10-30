@@ -17,17 +17,34 @@ Oscillator → Filter → Gain → Pan, five Mixers into a sixth, the Master Out
 One copy, `PERF_BUDGETS` and `BROWSER_BUDGETS` in the fixture module, used by the tests and
 checked against this table by `tests/unit/v31-studio-docs.test.mjs`. A budget is what an
 interaction may cost: one 60 Hz frame (16.7 ms) for what a single gesture commits, a few frames
-for whole-document work. The times below (the fastest of the repeats) are about 8 times
-(build) to several hundred times under them on a quiet machine, so a budget fails on a real
-regression (an accidental O(n²) per action), not on a slower CI runner. The headroom shrinks
-under load: build measured 281 ms of its 1000 at a load of 60 on the shared Mac (2026-10-28).
+for whole-document work. The unit test compares each budget with the fastest repeat of the
+operation's main-thread CPU time (`process.threadCpuUsage`); the browser suite measures wall
+time in the browser.
+
+Why CPU time (plan E029): the operations are synchronous JavaScript on the main thread, so their
+wall time is their CPU time plus the time the scheduler gave other processes. On the shared Mac
+at loads of 55-110 on 18 cores (2026-10-29) the second part was most of it: the fastest of 15
+builds took 2459 ms of wall time and 280 ms of CPU time, and the 1000 ms wall budget failed on
+every batch (1138-3262 ms), however often it was re-measured. Main-thread CPU time is what a
+frame pays; helper threads (concurrent GC, the compiler) do not block it and are not counted.
+
+The build has a second bound, relative to the machine. Its 1000 ms is about 3.5 times its cost,
+so on its own it would pass a build twice as slow. The build's CPU time may be at most
+`BUILD_REFERENCE_RATIO` times the CPU time of `referenceWork()`, a fixed workload of no product
+code in the build's shape (300 steps growing a 100-node / 200-edge graph of plain objects, each
+followed by a JSON round trip and a check of the whole graph), measured first in the same
+process on the same clock. The test also asserts that twice the measured build is over the
+bound, so a bound that a faster build left loose fails and names the ratio to lower it to.
+
+| Where | build / reference |
+| --- | --- |
+| Apple M5 Pro (arm64), Node 22.20.0, loads 79-112, 2026-10-29 | 5.5-6.5 |
 
 An operation whose fastest repeat is over its budget is re-measured in further batches,
 keeping the running minimum, until it is within budget or `REMEASURE_DEADLINE_MS` (20 s, wall
 clock) passes; all operations together share `TOTAL_DEADLINE_MS` (60 s), so the file stays
-well inside fail-first's 180 s per-file timeout. A failure names the minimum, the batch count
-and the load. This narrows the load flake and does not remove it: when the load starves the CPU
-(build missed its budget by 28 ms at a load of 90.7), more batches do not help.
+well inside fail-first's 180 s per-file timeout. A failure names the CPU and wall minimum, the
+batch count and the load.
 
 <!-- budgets:begin -->
 | Operation (fastest repeat) | Budget (ms) |
@@ -54,7 +71,7 @@ and the load. This narrows the load flake and does not remove it: when the load 
 Apple M5 Pro, Node 22.20.0, Playwright 1.63.0 browsers, 2026-10-03.
 
 Model, compiler and views (`node --test tests/unit/v31-studio-performance.test.mjs`, fastest of
-15 after a warm-up):
+15 after a warm-up; wall time on a quiet machine, before E029):
 
 | Operation | What it covers | Median (ms) |
 | --- | --- | --- |

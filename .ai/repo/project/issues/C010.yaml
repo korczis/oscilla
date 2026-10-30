@@ -1,0 +1,44 @@
+id: C010
+milestone: M090
+serves:
+  - "coherent-state#live-edits-reach-the-voice"
+  - "coherent-state#current-lab-state-wins"
+title: "Phase & Stereo pan reaches the sounding dual voice, its controls show the configuration, and it says where it does not apply"
+slug: phase-stereo-pan-reaches-the-sounding-dual-voice-its-control
+priority: p1
+profile: implementation
+objective: "Lands as fix(audio). Findings dead-controls-2, engine-sync-4 and dup-stale-2. needsRouter(plan) is decided once at play, so a mono dual voice started at pan 0 has no router, liveRouter is null and every later pan move is dropped (R/L 0 dB against 207 dB for a fresh voice at pan +1) while viz.labInputs shows a router at pan +1. In Stereo output and for a single source pan is ignored by design (stereo.js split mode; the router serves the A/B dual voice) but #osc-stereo-pan stays enabled with no reason. setCfg writes only aria-valuetext, so after importing phaseStereo { phaseDeg: 90, pan: 0.5 } the slider sits at centre with fill 50% while its text says '50% right' and #osc-phase-offset shows 45 while 90 plays. Keep the router conditional: at pan 0 it is the equal-power law (0.707 per side), not transparent, so an always-on router would cut every centred dual voice by 3 dB and change the freeze vectors. When needsRouter flips to true on a sounding dual voice, an engine method beside setDualPhase restarts it click-free through _restart, which goes through the C007 wrapper; once the router exists it stays and pan back to 0 only updates it. The 3 dB step where the router engages is stated in the lab and in docs/v31/signal-path.md. Bind :disabled on #osc-stereo-pan to (source !== 'dual' || dual.stereo) with aria-describedby pointing at visible text ('Pan applies to the A/B dual voice in Mono output; Stereo output sends A left and B right'). In setCfg use setSlider(el.pan, cfg.pan, panText) and setField(el.offset, ...) from src/js/labs/dom.js, which leave a control the user is dragging or editing alone."
+why: "Owner brief OSCILLA PACK 03, 'One Instrument, One Coherent State' (2026-10-29): every control must provably reach its subsystem and every view that reflects it, and be covered by a test (owner: 'filters, sequencer, bpm and many other interactive knobs / sliders / control elements are not reflected / working / tested'). The findings named here were reproduced by an independent skeptic on a fresh export of origin/main b67d1e58 (v3.13.0)."
+scope:
+  - "src/js/main.js"
+  - "src/js/audio/audio-engine.js"
+  - "src/js/labs/phase-stereo.js"
+  - "src/js/labs/dom.js"
+  - "src/index.html"
+  - "docs/v31/signal-path.md"
+  - "tests/unit"
+  - "tests/browser/app.cjs"
+  - "tests/browser/labs.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "C007"
+acceptance_criteria:
+  - "A unit test: a needsRouter flip on a sounding dual voice calls the engine restart once, and pan back to 0 does not restart it again; it fails on the merge base."
+  - "Browser check `pan-live-dual` in tests/browser/app.cjs: a dual mono voice started centred, #osc-stereo-pan moved to -1 while it sounds: the L/R balance exceeds 6 dB within a named deadline; a centred dual voice keeps its level within 0.5 dB of the merge base."
+  - "Browser check `phase-stereo-import-sync` in tests/browser/labs.cjs: after importing phaseStereo { phaseDeg: 90, pan: 0.5 }, #osc-stereo-pan.value is 0.5 with a matching --osc-fill and aria-valuetext, and #osc-phase-offset reads 90."
+  - "#osc-stereo-pan is disabled with its visible reason in Stereo output and for a single source (project.no-inert-surfaces), checked in the same suite."
+  - "fail-first holds: the unit test or browser check named above fails on the merge base (project.fail-first)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named wall-clock deadline; tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "engine.activeNodeCount returns to 0 after every stop in the new checks, in Chromium, Firefox and WebKit (project.audio-engine-discipline v2)."
+  - "The pull request carries a reviewer-written .ai/repo/reviews/<pr>.yaml because it changes src/js/audio/audio-engine.js (project.review-verdict); the builder never writes it."
+  - "The change adds no osc-* class token, stylesheet selector or inline style, so the Flowbite Pro ratchet only shrinks (node --test tests/unit/ui-flowbite-pro.test.mjs)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node tests/browser/app.cjs"
+  - "node tests/browser/labs.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29
