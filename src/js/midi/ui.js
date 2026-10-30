@@ -56,6 +56,9 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
           return sequencerPlaying() ? 'sequencer' : null;
         },
         refused,
+        // In the Synth workspace the notes play its panel (src/js/synth/ui.js synthSink).
+        route: () => (cmp.workspace === 'synth' && typeof cmp.synthSink === 'function'
+          ? cmp.synthSink() : null),
       });
       notes = notesFor((by) => {
         if (typeof cmp.notify === 'function') cmp.notify('info', 'MIDI', MIDI_REFUSED[by]);

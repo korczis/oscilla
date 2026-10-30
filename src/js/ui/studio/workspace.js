@@ -78,6 +78,7 @@ import {
   REFERENCE_TEMPLATE_ID, getTemplate, listTemplates, templateModel,
 } from '../../studio/templates/index.js';
 import { decodeStudioLink, encodeStudioLink } from '../../core/url-state-studio.js';
+import { createSynthUi } from '../../synth/ui.js';
 import {
   createDirtyTracker, createStudioLibrary, exportProjectFile, exportSequenceFile, fileSlug,
   importStudioFile,
@@ -1097,8 +1098,13 @@ export function createStudioUi(svc = {}) {
     cmp.studio.ready = true;
   }
 
+  // The Synth workspace (K058-K066) shares this part's ONE store and transport.
+  const synth = createSynthUi({ get: () => ({ handle: ctx.handle, transport: ctx.transport }),
+    setupAudio: () => setupAudio(), announce, registry });
+
   // ---------------------------------------------------------------- the Alpine part
   return {
+    ...synth,
     studio: {
       ready: false,
       title: '',
@@ -1138,6 +1144,7 @@ export function createStudioUi(svc = {}) {
       ctx.templateBaseline = createDirtyTracker(ctx.handle.getModel());
       ctx.handle.subscribe(onStoreChange);
       setupAudio();
+      this.synthInit();
       // Registered before main.js's own window keydown listener: Studio keys run first and
       // stop the instrument's Space / Escape handling when they belong to Studio (§125).
       window.addEventListener('keydown', onKeyDown);

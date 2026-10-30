@@ -57,7 +57,7 @@ export function createKeyboardUi({ win = window } = {}) {
   const kbdRelease = () => (kb ? kb.releaseAll() : 0);
 
   return {
-    kbdArmed: { playground: false, studio: false },
+    kbdArmed: { playground: false, studio: false, synth: true }, // the Synth plays from its keys
     kbdBase: 60,
     kbdVelocity: 100,
     kbdHeld: '',
@@ -75,7 +75,7 @@ export function createKeyboardUi({ win = window } = {}) {
     /** What the readout says: armed or not, the keys' range, the velocity. */
     get kbdReadout() {
       const range = this.kbdRange;
-      const where = this.kbdView === 'studio' ? 'Studio' : 'Playground';
+      const where = { studio: 'Studio', synth: 'Synth' }[this.kbdView] || 'Playground';
       return this.kbdArmedHere
         ? `Armed in the ${where}: keys A to ' play ${range}. Velocity ${this.kbdVelocity}. `
           + 'Z / X octave, C / V velocity; Esc releases every note.'

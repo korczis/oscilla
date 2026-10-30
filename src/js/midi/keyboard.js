@@ -32,7 +32,7 @@ export const KEY_LABELS = Object.freeze(Object.fromEntries(
 ));
 
 /** The views the keyboard is armed in, each with its own switch. */
-export const KEYBOARD_VIEWS = Object.freeze(['playground', 'studio']);
+export const KEYBOARD_VIEWS = Object.freeze(['playground', 'studio', 'synth']);
 /** The link key that arms (1) or disarms (0) the keyboard of the view a link opens. */
 export const KEYBOARD_LINK_KEY = 'kbd';
 

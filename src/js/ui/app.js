@@ -25,7 +25,7 @@ const NAV_GROUPS = Object.freeze({
 });
 const MODES = [
   'playground', 'measure', 'experiments', ...NAV_GROUPS.analyze, ...NAV_GROUPS.synthesis,
-  'learn', 'studio', 'about',
+  'learn', 'studio', 'synth', 'about',
 ];
 const WORKSPACE_TITLES = { about: 'About' };
 const ROVING_ROLES = ['tab', 'radio'];

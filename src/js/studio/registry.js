@@ -27,11 +27,12 @@ import processing from './nodes/processing.js';
 import analysis from './nodes/analysis.js';
 import output from './nodes/output.js';
 import measurement from './nodes/measurement.js';
+import instrument from './nodes/instrument.js';
 
 export { CATEGORIES, CATEGORY_ORDER, CLIP_KINDS };
 
 export const NODE_DEFINITIONS = Object.freeze([
-  ...sources, ...modulation, ...processing, ...analysis, ...output, ...measurement,
+  ...sources, ...modulation, ...processing, ...analysis, ...output, ...measurement, ...instrument,
 ]);
 
 export const PARAM_TYPES = Object.freeze(['number', 'integer', 'enum', 'boolean', 'list', 'id']);

@@ -76,6 +76,22 @@ export function harmonicSeries(shape, count = 10) {
 }
 
 /**
+ * pulseSeries(width, count) → the partials of a pulse wave high for `width` (0..1) of the
+ * period: gain 2·sin(nπw)/(nπ) on a cosine (phase π/2), DC left out (a PeriodicWave has none),
+ * so width 0.5 is the square and a width of 1/k nulls every k-th harmonic. The Synth panel's
+ * pulse (K059): a set width, band-limited by the browser's PeriodicWave, tracking pitch exactly.
+ */
+export function pulseSeries(width, count = MAX_PARTIALS) {
+  const w = Math.min(1, Math.max(0, Number(width) || 0));
+  const N = clampCount(count);
+  const out = [];
+  for (let n = 1; n <= N; n++) {
+    out.push({ n, gain: (2 * Math.sin(n * Math.PI * w)) / (n * Math.PI), phase: Math.PI / 2 });
+  }
+  return out;
+}
+
+/**
  * customSeries(gainsDb, phasesDeg) → partials from per-harmonic gain (dB, ≤ OFF_DB or
  * −Infinity = off) and phase (degrees). Index i is harmonic i + 1.
  */

@@ -36,7 +36,7 @@ test('the top level is §73 plus Studio (§198) and About; groups hold the V2 wo
   const top = nav.replace(menuRe, '');
   const ids = [...top.matchAll(/data-osc="(nav(?:-group)?\.[a-z]+)"/g)].map((m) => m[1]);
   assert.deepEqual(ids, ['nav.playground', 'nav.measure', 'nav.experiments', 'nav-group.analyze',
-    'nav-group.synthesis', 'nav.learn', 'nav.studio', 'nav.about']);
+    'nav-group.synthesis', 'nav.learn', 'nav.studio', 'nav.synth', 'nav.about']);
   assert.deepEqual(Object.keys(NAV_GROUPS), ['analyze', 'synthesis']);
   assert.equal(menus.length, 2);
   for (const [i, g] of Object.keys(NAV_GROUPS).entries()) {

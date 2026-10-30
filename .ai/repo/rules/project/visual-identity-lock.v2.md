@@ -5,11 +5,14 @@ kind: rule
 title: Visual identity lock - the Flowbite Pro interface around OSCILLA's own domain views
 description: Every surface's interface (shell, panels, dialogs, controls) is Flowbite Pro on Tailwind themed to OSCILLA, and the domain views (charts, Signal Path, the Studio graph and timeline) keep OSCILLA's own visual language inside Pro cards; no surface imports the visual identity of another audio product, flow editor or UI kit.
 statement: The interface of every surface, Studio included, is built from Flowbite Pro on Tailwind (project.ui-uses-flowbite-pro, ADR 0061), themed with OSCILLA's palette in dark and light; the domain views (charts, Signal Path, the Studio graph, nodes, cables and timeline, the spectrogram, meters and readouts) keep OSCILLA's own visual language, the dataviz rules and tabular numerals as the content of Pro cards; no surface imports the visual identity of another audio product, of a generic flow editor or of another UI kit; and with the logo hidden the screen still obviously belongs to OSCILLA.
-status: active
+status: deprecated
 class: blocking
 depends_on: []
 tags: [design, visual, studio, v3, flowbite]
 ---
+
+> Deprecated on 2026-10-30: superseded by `visual-identity-lock.v3.md` (the owner's order of
+> 2026-10-30 for the Synth workspace: an instrument-panel carve-out drawn from OSCILLA tokens).
 
 # Rationale
 
