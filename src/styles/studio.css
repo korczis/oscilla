@@ -1468,10 +1468,11 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  /* The compact widget stays in the phone Playground, after the analysis panel. */
+  /* The compact widget stays in the phone Playground, after the measurement row (order 5,
+     instrument.css; the same order and the document order put the measurement first). */
   .osc-app[data-mode="playground"] .osc-panel.osc-p-studio {
     display: flex;
-    order: 3;
+    order: 5;
   }
 }
 
