@@ -188,9 +188,20 @@ test('scripts/social-assets.mjs exports DESCRIPTION, and the generated block use
   assert.ok(block.includes(`<meta name="twitter:description" content="${SENTENCE}">`));
 });
 
+// The README copy between the sentence and the level-2 heading "## What it does". The heading is
+// matched as a whole line: a deeper heading that contains the words ("### What it does today")
+// must not end the window before the jobs it introduces.
+export function readmeJobsWindow(md) {
+  const start = md.indexOf(SENTENCE);
+  const heading = md.search(/^## What it does[ \t]*$/m);
+  if (start < 0 || heading < 0 || heading < start) return null;
+  return md.slice(start + SENTENCE.length, heading);
+}
+
 test('README and About follow the sentence with concrete jobs, never "measure a speaker"', () => {
   const md = read('README.md');
-  const after = md.slice(md.indexOf(SENTENCE) + SENTENCE.length, md.indexOf('## What it does'));
+  const after = readmeJobsWindow(md);
+  assert.ok(after, 'README carries the sentence and, after it, the heading "## What it does"');
   assert.match(after, /speaker, room and microphone chain/);
   assert.match(after, /Studio/);
   const shell = shellMarkup();
@@ -215,6 +226,14 @@ test('mutation: a change to any one checked surface fails', () => {
     const removed = surfaces.filter((s) => s.key !== key);
     assert.notDeepEqual(failures(removed), [], `a missing ${key} passes`);
   }
+});
+
+test('mutation: the jobs window reaches past a deeper "What it does" heading', () => {
+  const md = `# X\n\n${SENTENCE}\n\n### What it does today\n\n- measure your speaker\n\n## What it does\n\nmore`;
+  const window = readmeJobsWindow(md);
+  assert.ok(window.includes('measure your speaker'), 'the jobs under a ### heading are inside the window');
+  assert.match(window, /\bmeasur\w* (a|your|the) speaker\b(?!,)/i);
+  assert.equal(readmeJobsWindow(md.replace('## What it does\n', '## Elsewhere\n')), null);
 });
 
 test('mutation: a sentence or a surface over 200 characters fails', () => {
