@@ -331,11 +331,21 @@ function defineChecks() {
       await step(() => page.click(`[data-osc="${open}"]`));
       await close();
     }
-    // The task strip of a running render (its Abort button): a long render, aborted.
-    await page.evaluate(() => { window.__auditRender = window.OSCILLA.app.studioRenderWav({
-      duration: 60 }); });
+    // The task strip of a running render (its Abort button): a render held before it starts,
+    // then aborted. A 60 s render finishes in 0.4-1.3 s in WebKit, and the strip was audited
+    // two frames later: on a busy main thread the render won that race and the Abort button
+    // was never seen (review #330 F3). Held, the task stays active until the audit is done;
+    // the abort resolves the render at once, and the held one is dropped, never started.
+    await page.evaluate(() => {
+      const proto = OfflineAudioContext.prototype;
+      const start = proto.startRendering;
+      window.__auditRestore = () => { proto.startRendering = start; };
+      proto.startRendering = function held() { return new Promise(() => {}); };
+      window.__auditRender = window.OSCILLA.app.studioRenderWav({ duration: 60 });
+    });
     await step(() => Promise.resolve());
     await page.evaluate(() => { window.OSCILLA.app.studioAbortTask();
+      window.__auditRestore();
       return window.__auditRender; });
     await page.click(H.nodeTitle('filter-1'));
     await step(() => page.click('[data-osc="studio.inspector.connect"]'));

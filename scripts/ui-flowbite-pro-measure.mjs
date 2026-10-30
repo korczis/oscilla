@@ -265,7 +265,9 @@ const isExpression = (name) => (isBound(name) && !ID_REFERENCE.test(bound(name))
 function surfaceOf(tag, attrs) {
   const id = attrs.id || '';
   if (attrs.role === 'banner') return ['navbar', 'shell:navbar'];
-  if (attrs['aria-label'] === 'Workspace') return ['sidebar', 'shell:sidebar'];
+  // The Pro shell's <aside aria-label="Sidebar"> (review #330 F6: its list is the navigation
+  // landmark "Workspaces"); "Workspace" named the legacy tab bar the records before F002 read.
+  if (['Sidebar', 'Workspace'].includes(attrs['aria-label'])) return ['sidebar', 'shell:sidebar'];
   if (tag === 'main') return ['main', 'shell:main'];
   if (attrs['aria-label'] === 'Status and actions') return ['footer', 'shell:footer'];
   if (id.startsWith('osc-view-')) return ['page', `page#${id}`];

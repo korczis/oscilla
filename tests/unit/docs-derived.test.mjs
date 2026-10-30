@@ -124,7 +124,10 @@ function filesRun(script, scripts = PKG.scripts, seen = new Set()) {
   seen.add(script);
   const body = scripts[script];
   return [
-    ...[...body.matchAll(/\bnode ((?:tests|scripts)\/\S+)/g)].map((m) => ({ script, file: m[1] })),
+    // `node <file>`, and every file after it: tests/browser/lib/run-suites.cjs runs the suites
+    // it is given (review #330 F5).
+    ...[...body.matchAll(/\bnode ((?:tests|scripts)\/\S+(?: (?:tests|scripts)\/\S+)*)/g)]
+      .flatMap((m) => m[1].split(' ').map((file) => ({ script, file }))),
     ...[...body.matchAll(/\bnpm run ([\w:-]+)/g)].flatMap((m) => filesRun(m[1], scripts, seen)),
   ];
 }

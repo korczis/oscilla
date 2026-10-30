@@ -7,10 +7,12 @@ export const CSS_ENTRY = 'src/styles/main.css';
 export const TAILWIND_ENTRY = 'src/styles/tailwind.css';
 export const TAILWIND_CONFIG = 'tailwind.config.cjs';
 
-// OSCILLA's dark theme is data-theme="dark" on <html> (never class="dark"). tailwind.config.cjs
-// points the dark: variant at it, but the flowbite plugin hard-codes a .dark ancestor whatever
-// darkMode says (its tooltip arrows; with forms: true, F002, its form controls too).
-export const DARK_THEME_SELECTOR = '[data-theme="dark"]';
+// OSCILLA's dark theme is every theme but data-theme="light" on <html> (never class="dark"):
+// tokens.css is dark on :root and ui/theme.js reads an absent attribute as dark (review #330
+// F3). tailwind.config.cjs points the dark: variant at it, but the flowbite plugin hard-codes a
+// .dark ancestor whatever darkMode says (its tooltip arrows; with forms: true, F002, its form
+// controls too).
+export const DARK_THEME_SELECTOR = ':root:not([data-theme="light"])';
 // A .dark class in a selector: not the escaped dark: variant class (.dark\:bg-opacity-80).
 const DARK_CLASS = /\.dark(?![\w\\-])/g;
 

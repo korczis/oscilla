@@ -6,7 +6,9 @@
 //     OSCILLA's colours (issue F002, rule project.visual-identity-lock v2: primary is the
 //     tokens' blue accent, the gray scale their cockpit surfaces in both themes; Inter first and
 //     then the system stack, no font downloaded, transitionProperty width, the shell's
-//     safelist), darkMode on [data-theme="dark"], preflight on and the flowbite plugin with its
+//     safelist), darkMode on every theme but data-theme="light" (review #330 F3: the absent
+//     attribute is dark, as tokens.css and ui/theme.js read it), preflight on and the flowbite
+//     plugin with its
 //     form base styles (forms: true), both since F002;
 //   - src/styles/tailwind.css holds at-rules only (the base inside the cascade layer
 //     tailwind-base, F002), scripts/build.mjs compiles it through Tailwind's PostCSS API, and
@@ -24,8 +26,8 @@
 //     F001 sizes;
 //   - the two parts of the <style> are split on TAILWIND_BOUNDARY, which pack() emits once and
 //     refuses inside either part;
-//   - the plugin's hard-coded .dark ancestor is rewritten to [data-theme="dark"], the selector
-//     OSCILLA sets (it never sets class="dark");
+//   - the plugin's hard-coded .dark ancestor is rewritten to :root:not([data-theme="light"]),
+//     OSCILLA's dark theme (it never sets class="dark"; the absent attribute is dark, #330 F3);
 //   - no class the legacy CSS styles is also a class the compiled Tailwind defines, because the
 //     Tailwind part follows it in the cascade and would win silently;
 //   - verify-dist examines every url() the plugin emits (forms: true included) and finds data:
@@ -211,7 +213,13 @@ test('package.json pins tailwindcss 3.4, postcss and flowbite 2.5 exactly, at bu
 test('tailwind.config.cjs carries the Pro theme in OSCILLA colours, preflight and the form base',
   () => {
     const config = require(path.join(ROOT, CONFIG));
-    assert.deepEqual(config.darkMode, ['selector', '[data-theme="dark"]']);
+    // Dark is every theme but light (review #330 F3): tokens.css is dark on :root and light
+    // only on [data-theme="light"], and ui/theme.js reads the absent attribute as dark, so the
+    // dark: variant must not need data-theme="dark" (no added specificity, as before).
+    assert.deepEqual(config.darkMode,
+      ['variant', '&:not(:where([data-theme="light"], [data-theme="light"] *))']);
+    assert.match(read('src/js/ui/theme.js'), /\(el\.dataset\.theme \|\| 'dark'\) !== 'light'/,
+      'theme.js reads the absent attribute as dark');
     assert.notEqual(config.corePlugins && config.corePlugins.preflight, false,
       'preflight is on (F002; the layer keeps it under the legacy CSS)');
     const files = Array.isArray(config.content) ? config.content : config.content.files;
@@ -290,8 +298,12 @@ test('dist carries the compiled Tailwind after the legacy CSS, with the theme an
     for (const cls of ['lg\\:ml-16', 'lg\\:hidden', 'lg\\:absolute', 'w-64', 'pl-11']) {
       assert.ok(tailwind.includes(`.${cls}{`), `safelisted .${cls}`);
     }
-    assert.ok(/\.dark\\:bg-gray-900\\\/80:where\(\[data-theme=["']?dark["']?\]/.test(tailwind),
-      'the dark variant (the drawer backdrop\'s) matches [data-theme="dark"]');
+    const light = String.raw`\[data-theme=["']?light["']?\]`;
+    assert.ok(new RegExp(String.raw`\.dark\\:bg-gray-900\\\/80:not\(:where\(`
+      + `${light},${light} \\*\\)\\)\\{`).test(tailwind),
+    'the dark variant (the drawer backdrop\'s) matches every theme but light');
+    assert.ok(!/:where\(\[data-theme=["']?dark["']?\]/.test(tailwind),
+      'no dark: rule needs data-theme="dark" (#330 F3)');
     assert.ok(!/prefers-color-scheme/.test(tailwind), 'dark mode is never the media query');
     assert.ok(/\.tooltip-arrow/.test(tailwind), 'the flowbite plugin base (tooltip arrows) is in');
     // Preflight resets html, body, headings, buttons and form controls: only inside the layer,
@@ -340,18 +352,22 @@ test('the <style> parts are split on TAILWIND_BOUNDARY, which pack() emits exact
   assert.throws(() => pack({ ...base, css: 'a', tailwind: `${TAILWIND_BOUNDARY}b` }), /boundary/);
 });
 
-test('the plugin\'s .dark ancestor is rewritten to the data-theme selector OSCILLA sets',
+test('the plugin\'s .dark ancestor is rewritten to OSCILLA\'s dark theme (not light)',
   async () => {
     const { tailwind } = distStyle();
     assert.ok(!DARK_CLASS.test(tailwind), 'no .dark class selector in the Tailwind part');
-    assert.match(tailwind, /\[data-theme=["']?dark["']?\] \[role=tooltip\]>\[data-popper-arrow\]/,
-      'the tooltip arrow\'s dark rule follows data-theme');
+    assert.match(tailwind,
+      /:root:not\(\[data-theme=["']?light["']?\]\) \[role=tooltip\]>\[data-popper-arrow\]/,
+      'the tooltip arrow\'s dark rule follows data-theme: every theme but light (#330 F3)');
+    assert.ok(!/\[data-theme=["']?dark["']?\]/.test(tailwind),
+      'no rule needs data-theme="dark"');
     // The plugin does hard-code .dark, and with forms: true on many more rules (F002).
     const raw = await compileForms();
     assert.ok(DARK_CLASS.test(raw), 'the plugin emits .dark selectors');
     const fixed = await compileForms({ dark: true });
     assert.ok(!DARK_CLASS.test(fixed), 'darkThemeSelector rewrites every one of them');
-    assert.match(fixed, /\[data-theme="dark"\] \[type=['"]?checkbox/, 'the form rules too');
+    assert.match(fixed, /:root:not\(\[data-theme="light"\]\) \[type=['"]?checkbox/,
+      'the form rules too');
     assert.ok(/\.dark\\:bg-gray-900\\\/80/.test(tailwind), 'the dark: variant class is untouched');
   });
 

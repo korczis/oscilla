@@ -7,11 +7,15 @@
 //   - transitionProperty width, which the sidebar's transition-width needs;
 //   - Inter first in the sans stack, then the system stack of src/styles/tokens.css. No font is
 //     downloaded: Inter applies only where it is installed.
-// darkMode follows OSCILLA's own two-state theme (data-theme="dark" | "light" on <html>), so the
-// dark: variant matches [data-theme="dark"] and never the media query. The flowbite plugin's
-// own dark rules hard-code a .dark ancestor instead; scripts/build.mjs rewrites it to
-// [data-theme="dark"] (darkThemeSelector, scripts/build-config.mjs), as OSCILLA never sets
-// class="dark".
+// darkMode follows OSCILLA's own two-state theme (data-theme="dark" | "light" on <html>) and
+// never the media query. Dark is every theme but light: tokens.css is dark on :root and light
+// only on [data-theme="light"], and ui/theme.js reads an absent attribute as dark, so the dark:
+// variant matches unless the element is in [data-theme="light"] (review #330 F3: on
+// [data-theme="dark"] alone the shell turned light under the dark legacy text when the
+// attribute was absent). :not(:where(...)) adds no specificity, as the selector strategy's
+// :where() did. The flowbite plugin's own dark rules hard-code a .dark ancestor instead;
+// scripts/build.mjs rewrites it to the same theme (darkThemeSelector,
+// scripts/build-config.mjs), as OSCILLA never sets class="dark".
 //
 // The colours are OSCILLA's (rule project.visual-identity-lock v2, issue F002): primary is its
 // blue interaction accent (600 is --osc-blue, 700 the deeper fill that carries white text at
@@ -70,7 +74,7 @@ module.exports = {
       './node_modules/flowbite/lib/esm/components/{drawer,dropdown,collapse,tooltip,tabs}/index.js',
     ],
   },
-  darkMode: ['selector', '[data-theme="dark"]'],
+  darkMode: ['variant', '&:not(:where([data-theme="light"], [data-theme="light"] *))'],
   // Classes the Pro shell's script toggles (sidebar collapse and the dropdown/backdrop states):
   // they never appear literally in the markup it starts from.
   safelist: [

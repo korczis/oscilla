@@ -3,7 +3,7 @@
 //   - the navigation is derived from ONE registry (src/js/ui/shell.js WORKSPACE_REGISTRY): the
 //     workspace ids the router reads, the groups, the sidebar's entries, the shortcut dialog's
 //     names, and an icon symbol per row in the sprite;
-//   - the navbar (role="banner") and the sidebar (aria-label="Workspace") carry the Pro class
+//   - the navbar (role="banner") and the sidebar (aria-label="Sidebar") carry the Pro class
 //     sets of their kinds and no legacy class; the hooks the suites address are kept (header.*,
 //     nav.<id>, nav-group.<group>, #osc-theme-toggle, #osc-help, #osc-overflow, #osc-export);
 //   - the sidebar collapse, the hover expansion, the phone drawer and the theme button are
@@ -25,7 +25,7 @@ import {
   navTree, navGroupOf, navMatches, navSearch, resolveSidebar, resolveNavGroups, createShell,
   SIDEBAR_KEY, NAV_GROUPS_KEY,
 } from '../../src/js/ui/shell.js';
-import { WORKSPACES } from '../../src/js/ui/app.js';
+import { WORKSPACES, createOscillaUi } from '../../src/js/ui/app.js';
 import { SPACE_OWNER, WORKSPACE_LABELS as SHORTCUT_LABELS } from '../../src/js/ui/shortcuts.js';
 import { PRO_STRUCTURE } from '../../scripts/ui-flowbite-pro-measure.mjs';
 
@@ -44,7 +44,7 @@ const tagOf = (re) => {
 const classesOf = (tag) => new Set((tag.match(/\sclass="([^"]*)"/) || [, ''])[1].split(/\s+/)
   .filter(Boolean));
 const navbarTag = tagOf(/<header\b[^>]*role="banner"[^>]*>/);
-const sidebarTag = tagOf(/<aside\b[^>]*aria-label="Workspace"[^>]*>/);
+const sidebarTag = tagOf(/<aside\b[^>]*id="osc-sidebar"[^>]*>/);
 const region = (tag, end) => html.slice(html.indexOf(tag), html.indexOf(end, html.indexOf(tag)));
 const navbar = region(navbarTag, '</header>');
 const sidebar = region(sidebarTag, '</aside>');
@@ -213,4 +213,94 @@ test('the ratchet: the navbar and the sidebar are migrated and the legacy header
     assert.equal(record.classes[gone], undefined, `${gone} has left the record`);
   }
   assert.ok(record.debt < DEBT_BEFORE_F002, `debt ${record.debt} < ${DEBT_BEFORE_F002}`);
+});
+
+// ---- review #330 (verdict bfbad77b): the findings F1-F4 and F6, each failing before its fix.
+
+test('#330 F1: the fine-step row wraps rather than leaving the Source panel beside the sidebar',
+  () => {
+    const row = tagOf(
+      /<div class="osc-fine\b[^"]*" role="group" aria-label="Fine frequency steps">/);
+    const classes = classesOf(row);
+    assert.ok(classes.has('flex-wrap'), 'the row wraps when its six buttons do not fit');
+    // From lg up, beside the sidebar: one row while the row is at least 20rem wide, and three
+    // buttons a row below that (the clamp switches the basis; flex-grow fills each row).
+    const basis = [...classes].filter((c) => c.startsWith('lg:*:basis-'));
+    assert.deepEqual(basis, ['lg:*:basis-[clamp(0px,calc((20rem-100%)*999),calc(33.333%-4px))]'],
+      `the buttons' basis at lg: ${basis}`);
+    const dist = readFileSync(new URL('../../dist/index.html', import.meta.url), 'utf8');
+    const rule = new RegExp(String.raw`\.lg\\:\\\*\\:basis-\\\[clamp[^{]*\{`
+      + String.raw`flex-basis:clamp\(0px,calc\(\(20rem - 100%\) ?\* ?999\),`
+      + String.raw`calc\(33\.333% - 4px\)\)`);
+    assert.match(dist, rule, 'the build compiles it');
+  });
+
+test('#330 F2: the brand gives way to the navbar controls and drops the wordmark below 375 px',
+  () => {
+    const brandTag = tagOf(/<a [^>]*data-osc="header\.brand"[^>]*>/);
+    const brand = classesOf(brandTag);
+    // Below lg the brand shrinks and cuts its own content rather than drawing over a control;
+    // from lg up it keeps its size (the search field takes the room).
+    for (const c of ['min-w-0', 'overflow-hidden', 'lg:flex-none']) {
+      assert.ok(brand.has(c), `the brand link carries ${c}`);
+    }
+    assert.ok(!brand.has('flex-none'), 'the brand link may shrink below lg');
+    const inner = region(brandTag, '</a>');
+    assert.ok(classesOf(tagOf(/<svg class="osc-logo[^"]*"[^>]*>/)).has('flex-none'),
+      'the mark never shrinks');
+    const word = inner.match(/<span class="([^"]*)">\s*<span [^>]*>OSCILLA<\/span>/);
+    assert.ok(word, 'the wordmark span');
+    const wc = new Set(word[1].split(/\s+/));
+    assert.ok(wc.has('max-[374.98px]:hidden'), `the wordmark hides below 375 px: ${word[1]}`);
+    assert.deepEqual([...wc].filter((c) => /^max-\[/.test(c)), ['max-[374.98px]:hidden'],
+      'one collision width');
+  });
+
+test('#330 F4: a drawer entry hands focus to the workspace heading within the press\'s task',
+  async () => {
+    // A minimal page: the About view, shown, labelled by its heading.
+    const focused = [];
+    const heading = { id: 'osc-about-title', attrs: {},
+      hasAttribute(k) { return k in this.attrs; },
+      setAttribute(k, v) { this.attrs[k] = v; },
+      focus() { focused.push(this.id); active = this; } };
+    let active = null;
+    const view = { dataset: { oscModes: 'about' }, classList: { contains: (c) => c === 'osc-view' },
+      getClientRects: () => [{}], getAttribute: (k) => (k === 'aria-labelledby'
+        ? 'osc-about-title' : null), querySelector: () => null, matches: () => false };
+    const root = { querySelectorAll: () => [view],
+      querySelector: (s) => (s === '#osc-about-title' ? heading : null) };
+    const saved = globalThis.document;
+    globalThis.document = { querySelector: () => null, get activeElement() { return active; } };
+    try {
+      const ui = createOscillaUi({ storedAnalysisTab: null });
+      const timers = [];
+      Object.assign(ui, { $root: root, emit() {}, $nextTick: (fn) => { timers.push(fn); } });
+      ui.setWorkspace('about', { focusHeading: true });
+      for (let i = 0; i < 4; i += 1) await null; // the task's microtasks; no timer has run
+      assert.deepEqual(focused, ['osc-about-title'],
+        'focus is on the heading before any timer (Alpine\'s $nextTick) runs');
+      assert.equal(heading.attrs.tabindex, '-1', 'focusable by script only');
+      // A press on the desktop sidebar keeps focus on the entry: no heading focus at all.
+      focused.length = 0;
+      ui.setWorkspace('about');
+      for (let i = 0; i < 4; i += 1) await null;
+      for (const fn of timers.splice(0)) {
+        try { fn(); } catch (e) { /* focusWorkspace needs a real page; not judged here */ }
+      }
+      assert.deepEqual(focused, [], 'no heading focus without focusHeading');
+    } finally {
+      globalThis.document = saved;
+    }
+  });
+
+test('#330 F6: the sidebar and the workspace list are two distinct landmarks by name', () => {
+  const aside = tagOf(/<aside\b[^>]*id="osc-sidebar"[^>]*>/);
+  const asideName = aside.match(/aria-label="([^"]*)"/)[1];
+  const navName = sidebar
+    .match(/<nav aria-label="([^"]*)">\s*<ul class="space-y-1" id="osc-nav">/)[1];
+  assert.equal(asideName, 'Sidebar');
+  assert.equal(navName, 'Workspaces');
+  const norm = (s) => s.toLowerCase().replace(/s$/, '');
+  assert.notEqual(norm(asideName), norm(navName), 'not the same name but for a plural s');
 });

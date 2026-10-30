@@ -150,9 +150,12 @@
           <svg class="w-6 h-6" aria-hidden="true" x-show="!drawerOpen"><use href="#i-menu"/></svg>
           <svg class="w-6 h-6" aria-hidden="true" x-show="drawerOpen" x-cloak><use href="#i-close"/></svg>
         </button>
+        <!-- Below lg the brand gives way to the actions (it shrinks and cuts its own content,
+             never drawing over a control) and drops the wordmark below 375 px, where it
+             collides on wider fonts (review #330 F2); the mark always stays. -->
         <a href="#osc-main" data-osc="header.brand" aria-label="OSCILLA · Interactive Sound &amp; Frequency Lab"
-          class="flex items-center flex-none min-h-11 mr-3 rounded-lg lg:mr-10 focus:outline-none focus:ring-2 focus:ring-primary-500">
-          <svg class="osc-logo mr-2.5" viewBox="0 0 50 36" aria-hidden="true" focusable="false">
+          class="flex items-center min-w-0 overflow-hidden min-h-11 mr-3 rounded-lg lg:flex-none lg:mr-10 focus:outline-none focus:ring-2 focus:ring-primary-500">
+          <svg class="osc-logo flex-none mr-2.5" viewBox="0 0 50 36" aria-hidden="true" focusable="false">
             <defs>
               <linearGradient id="osc-logo-grad" x1="0" y1="0" x2="1" y2="0">
                 <stop offset="0" style="stop-color: var(--osc-cyan)"/>
@@ -165,7 +168,7 @@
             </defs>
             <path d="M1.5 18C2.7 18 3.4 15.5 4.5 15.5S6.3 22 7.5 22C9.5 22 10.5 8 12.5 8C15 8 16.5 31.5 19 31.5S23.5 3 26 3C28.5 3 30 32.5 32.5 32.5S36.2 11 38.5 11C40.5 11 41.2 21.5 43 21.5S46.3 16.5 48 16.5" fill="none" stroke="url(#osc-logo-grad)" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          <span class="flex flex-col min-w-0 max-[359.98px]:hidden">
+          <span class="flex flex-col min-w-0 max-[374.98px]:hidden">
             <span class="text-lg font-semibold leading-tight tracking-widest text-gray-900 whitespace-nowrap sm:text-xl dark:text-white">OSCILLA</span>
             <span class="hidden text-xs leading-4 text-gray-500 whitespace-nowrap xl:block dark:text-gray-400">Interactive Sound &amp; Frequency Lab</span>
           </span>
@@ -246,7 +249,7 @@
        Phones and tablets: a drawer behind the hamburger, over a backdrop. The entries are
        rendered from the one registry, src/js/ui/shell.js WORKSPACE_REGISTRY. -->
   <div class="relative flex flex-1 min-h-0" data-osc="shell">
-    <aside id="osc-sidebar" aria-label="Workspace" data-osc="sidebar" x-bind="sidebar()"
+    <aside id="osc-sidebar" aria-label="Sidebar" data-osc="sidebar" x-bind="sidebar()"
       class="fixed top-0 left-0 z-40 flex-col flex-shrink-0 hidden w-64 h-full pt-16 duration-75 transition-width lg:absolute lg:flex lg:pt-0">
       <div class="relative flex flex-col flex-1 min-h-0 bg-white border-r border-gray-200 dark:bg-gray-800 dark:border-gray-700">
         <div class="flex flex-col flex-1 pt-4 pb-4 overflow-x-hidden overflow-y-auto">
@@ -432,7 +435,7 @@
                 x-bind="choice('sourceKind', 'pattern')">Pattern</button>
             </div>
 
-            <div class="osc-source-view osc-source-view--osc" id="osc-source-view-osc"
+            <div class="osc-source-view osc-source-view--osc lg:h-auto lg:min-h-[204px]" id="osc-source-view-osc"
               data-osc="source.oscView" :hidden="sourceKind !== 'oscillator'">
             <div class="osc-wave-tiles" role="radiogroup" aria-label="Waveform"
               data-osc="source.waveform">
@@ -480,7 +483,11 @@
               </div>
             </div>
 
-            <div class="osc-fine" role="group" aria-label="Fine frequency steps">
+            <!-- Beside the desktop sidebar the panel can be narrower than the six buttons
+                 (review #330 F1): from lg up one row while the row is 20rem or wider, three a
+                 row below that; on any width the row wraps rather than leaving the panel, and
+                 the view above grows from its 204 px to hold the second row (lg:h-auto). -->
+            <div class="osc-fine flex-wrap lg:*:basis-[clamp(0px,calc((20rem-100%)*999),calc(33.333%-4px))]" role="group" aria-label="Fine frequency steps">
               <button type="button" class="osc-btn osc-btn-secondary osc-fine-btn" id="osc-step-oct-down"
                 data-osc="source.step" data-step="-1oct" @click="stepFine('-1oct')" aria-label="Down one octave">-1 oct</button>
               <button type="button" class="osc-btn osc-btn-secondary osc-fine-btn" id="osc-step-st-down"

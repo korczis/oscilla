@@ -11,7 +11,7 @@
         "height": 1024
       },
       "runs": 3,
-      "total": 0.01,
+      "total": 0.05,
       "totalExclData": 0,
       "regions": {
         "header": {
@@ -57,10 +57,10 @@
           "dataPp": 0.5
         },
         "spectrogram": {
-          "mismatch": 0.02,
+          "mismatch": 0.33,
           "mismatchExclData": 0,
-          "runToRunPct": 0.03,
-          "dataPp": 1
+          "runToRunPct": 0.71,
+          "dataPp": 1.5
         },
         "sequencer": {
           "mismatch": 0,
@@ -87,9 +87,9 @@
           "dataPp": 0.5
         },
         "phase": {
-          "mismatch": 0.23,
+          "mismatch": 0.24,
           "mismatchExclData": 0,
-          "runToRunPct": 0.25,
+          "runToRunPct": 0.23,
           "dataPp": 1
         },
         "bio": {
@@ -158,17 +158,17 @@
           279,
           369,
           236.11,
-          27
+          59
         ],
         "modeSeg": [
           354,
-          409,
+          442,
           161.11,
           29
         ],
         "playRow": [
           279,
-          479,
+          512,
           236.11,
           40
         ],

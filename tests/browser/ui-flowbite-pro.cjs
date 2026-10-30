@@ -35,6 +35,16 @@
 //                 at least 4.5:1 against what it sits on; a sidebar entry reached by keyboard
 //                 shows a visible focus ring; the theme button switches the two-state theme
 //                 (oscilla.v2.theme) and its icon
+//   shell-fit-source     review #330 F1: beside the open sidebar at 1280-1791 px every fine-step
+//                 button lies inside the Source panel and is what a press at its centre
+//                 reaches (the row fits or wraps), also with wider labels
+//   shell-fit-navbar     review #330 F2: at 320-414 px the brand never overlaps a navbar
+//                 control, the wordmark is hidden below 375 px and shown from 375, also with a
+//                 wider wordmark
+//   shell-focus-handoff  review #330 F4: at 375 px a press on each drawer entry leaves focus in
+//                 the workspace column within the press's task (never on <body>)
+//   shell-theme-default  review #330 F3: with data-theme absent the shell reads the dark
+//                 theme's colours, with "light" the light ones
 //   no-console-errors
 'use strict';
 const { serveDist } = require('./lib/serve.cjs');
@@ -166,6 +176,63 @@ function shellGeometry() {
   workspace: window.OSCILLA.app.workspace,
   focus: a && a !== document.body ? a.dataset.osc || a.id || a.tagName : 'body',
   focusIn: !a || a === document.body ? 'body' : sidebar.contains(a) ? 'sidebar' : 'page' };
+}
+
+/**
+ * In-page: each fine-step button of the Source panel lies inside the panel and is the element a
+ * press at its centre reaches (review #330 F1: beside the 256 px sidebar the row overflowed
+ * the panel and +1 oct could not be pressed).
+ */
+function fineStepFit() {
+  const panel = document.querySelector('.osc-p-source').getBoundingClientRect();
+  const steps = [...document.querySelectorAll('[data-osc="source.step"]')];
+  const out = [];
+  for (const b of steps) {
+    const r = b.getBoundingClientRect();
+    const inside = r.width > 0 && r.left >= panel.left - 0.5 && r.right <= panel.right + 0.5;
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    const pressable = !!hit && (hit === b || b.contains(hit));
+    const clipped = b.scrollWidth > b.clientWidth + 1;
+    if (!inside || !pressable || clipped) {
+      out.push(`${b.id} [${Math.round(r.left)}-${Math.round(r.right)} in `
+        + `${Math.round(panel.left)}-${Math.round(panel.right)}]${pressable ? '' : ' covered'}`
+        + `${clipped ? ' clipped' : ''}`);
+    }
+  }
+  return { bad: out,
+    rows: new Set(steps.map((b) => Math.round(b.getBoundingClientRect().top))).size };
+}
+
+/**
+ * In-page: the navbar's brand and its controls do not overlap (review #330 F2), and whether the
+ * brand shows its mark and its wordmark (the brand link's own <span>).
+ */
+function navbarFit() {
+  const q = (s) => document.querySelector(s);
+  const shown = (el) => !!el && el.getClientRects().length > 0
+    && getComputedStyle(el).visibility !== 'hidden';
+  const brand = q('[data-osc="header.brand"]');
+  const parts = [q('[data-osc="header.menu"]'), brand,
+    ...q('[data-osc="header.actions"]').children].filter(shown);
+  const name = (el) => el.dataset.osc || (el.firstElementChild && el.firstElementChild.dataset.osc)
+    || el.tagName;
+  const overlaps = [];
+  for (let i = 0; i < parts.length; i += 1) {
+    for (let j = i + 1; j < parts.length; j += 1) {
+      const a = parts[i].getBoundingClientRect();
+      const b = parts[j].getBoundingClientRect();
+      const ix = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+      const iy = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+      if (ix > 0.5 && iy > 0.5) overlaps.push(`${name(parts[i])}x${name(parts[j])}`);
+    }
+  }
+  const word = brand.querySelector(':scope > span');
+  const wr = shown(word) ? word.getBoundingClientRect() : null;
+  const br = brand.getBoundingClientRect();
+  return { overlaps, mark: shown(brand.querySelector('svg')),
+    // Shown: laid out and not cut by the brand's own box.
+    wordmark: !!wr && wr.width > 0 && wr.right <= br.right + 0.5,
+    overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
 }
 
 /** In-page: workspace `ws` is the one marked current, with the Pro active colour. */
@@ -576,6 +643,152 @@ function defineChecks() {
       }
     }
     return { ok: !res.bad.length, min: res.min, bad: res.bad.slice(0, 8) };
+  });
+
+  // Review #330 F1: beside the open 256 px sidebar, at every desktop width up to the 1792 px
+  // of the wide layout, every fine-step button of the Source panel is inside the panel and
+  // pressable: the row fits, or wraps. Then once more with the labels 0.3 em wider per letter
+  // (a style this check adds), since the runner's fonts are not this machine's.
+  def('shell-fit-source', async (ctx) => {
+    const res = { bad: [], rows: {} };
+    const want = (cond, msg) => { if (!cond) res.bad.push(msg); };
+    const page = await H.open(ctx, ctx.baseUrl);
+    const g = await page.evaluate(shellGeometry);
+    want(g.sidebarWidth === 256, `the sidebar is open (${g.sidebarWidth})`);
+    for (const wide of [false, true]) {
+      if (wide) {
+        await page.addStyleTag({ content: '[data-osc="source.step"] { letter-spacing: 0.3em; }' });
+      }
+      for (const w of [1280, 1366, 1440, 1536, 1600, 1680, 1791]) {
+        await page.setViewportSize({ width: w, height: 1024 });
+        const key = `${w}${wide ? ' wide labels' : ''}`;
+        const f = await until(() => page.evaluate(fineStepFit)
+          .then((x) => (x.bad.length === 0 ? x : null)),
+        { ms: 3000, what: `the fine steps fit at ${key}` })
+          .catch(() => page.evaluate(fineStepFit));
+        res.rows[key] = f.rows;
+        want(f.bad.length === 0, `${key}: ${f.bad.join('; ')}`);
+      }
+    }
+    await page.close();
+    return { ok: !res.bad.length, rows: res.rows, bad: res.bad.slice(0, 8) };
+  });
+
+  // Review #330 F2: from 320 to 414 px the navbar's brand never overlaps its controls; below
+  // 375 px it keeps the mark and drops the wordmark, from 375 px it shows both. Once more with
+  // the wordmark 0.4 em wider per letter: the brand gives way (the wordmark is cut by the
+  // brand's own box), never drawing over a control, whatever the fonts.
+  def('shell-fit-navbar', async (ctx) => {
+    const res = { bad: [], seen: {} };
+    const want = (cond, msg) => { if (!cond) res.bad.push(msg); };
+    const phone = await ctx.browser.newContext({ viewport: { width: 390, height: 844 },
+      hasTouch: true, reducedMotion: 'reduce' });
+    try {
+      const page = await H.open(ctx, ctx.baseUrl, phone);
+      for (const wide of [false, true]) {
+        if (wide) {
+          await page.addStyleTag({ content: '[data-osc="header.brand"] span'
+            + ' { letter-spacing: 0.4em !important; }' });
+        }
+        for (const w of [320, 340, 360, 374, 375, 390, 414]) {
+          await page.setViewportSize({ width: w, height: 844 });
+          const key = `${w}${wide ? ' wide wordmark' : ''}`;
+          const n = await until(() => page.evaluate(navbarFit)
+            .then((x) => (x.overlaps.length === 0 ? x : null)),
+          { ms: 3000, what: `the navbar fits at ${key}` })
+            .catch(() => page.evaluate(navbarFit));
+          res.seen[key] = n.wordmark ? 'mark+wordmark' : 'mark';
+          want(!n.overlaps.length && n.overflow <= 0 && n.mark, `${key}: ${JSON.stringify(n)}`);
+          if (!wide) {
+            want(n.wordmark === (w >= 375),
+              `${key}: the wordmark is ${n.wordmark ? 'shown' : 'hidden'}`);
+          }
+        }
+      }
+    } finally {
+      await bounded(phone.close(), { ms: 10000, what: 'closing the phone context' })
+        .catch(() => {});
+    }
+    return { ok: !res.bad.length, seen: res.seen, bad: res.bad.slice(0, 8) };
+  });
+
+  // Review #330 F4: a press on a drawer entry hands focus to the workspace heading within the
+  // press's own task. The drawer hides the pressed link as it closes; a heading focused only
+  // after a timer left focus on <body> in between, where WebKit read it (375 px, About). The
+  // press is dispatched in the page and focus is read after the task's microtasks, before any
+  // timer or frame can run, so the check does not depend on timing.
+  def('shell-focus-handoff', async (ctx) => {
+    const res = { bad: [], at: {} };
+    const want = (cond, msg) => { if (!cond) res.bad.push(msg); };
+    const phone = await ctx.browser.newContext({ viewport: { width: 375, height: 812 },
+      hasTouch: true, reducedMotion: 'reduce' });
+    try {
+      const page = await H.open(ctx, ctx.baseUrl, phone);
+      for (const ws of WORKSPACES.filter((w) => w !== 'playground').concat('playground')) {
+        await page.tap('[data-osc="header.menu"]');
+        await until(() => page.evaluate(shellGeometry)
+          .then((g) => (g.drawer && g.focusIn === 'sidebar' ? g : null)),
+        { ms: 5000, what: `the drawer opens for ${ws}` }).catch(() => null);
+        const v = await page.evaluate(async (w) => {
+          document.querySelector(`[data-osc="nav.${w}"]`).click();
+          for (let i = 0; i < 8; i += 1) await null; // the press's microtasks, no timer
+          const a = document.activeElement;
+          const main = document.getElementById('osc-main-content');
+          return { ws: window.OSCILLA.app.workspace,
+            focus: !a || a === document.body ? 'body' : a.id || a.dataset.osc || a.tagName,
+            inPage: !!a && a !== document.body && main.contains(a) };
+        }, ws);
+        res.at[ws] = v.focus;
+        want(v.ws === ws && v.inPage, `${ws}: ${JSON.stringify(v)}`);
+        await until(() => page.evaluate(shellGeometry).then((g) => (!g.sidebar ? g : null)),
+          { ms: 3000, what: `the drawer closes over ${ws}` }).catch(() => null);
+      }
+    } finally {
+      await bounded(phone.close(), { ms: 10000, what: 'closing the phone context' })
+        .catch(() => {});
+    }
+    return { ok: !res.bad.length, at: res.at, bad: res.bad.slice(0, 8) };
+  }, ROW_MS * 6);
+
+  // Review #330 F3: a page without data-theme is dark (tokens.css and ui/theme.js read the
+  // absent attribute as dark), and so are the Pro surfaces: the navbar, the sidebar and the
+  // workspace column read the same colours with the attribute absent as with it "dark", and
+  // the light ones only with "light". With the dark: variant on [data-theme="dark"] alone, the
+  // shell turned light under the dark legacy text (the Studio timeline's help at 2.08:1).
+  def('shell-theme-default', async (ctx) => {
+    const page = await H.open(ctx, ctx.baseUrl);
+    // The colours once the theme's transitions have ended (a transition reports its start
+    // value at first; reduced motion shortens them to 0.01 ms): each reading two frames after
+    // the last, two equal readings in a row. Running animations are not awaited: Firefox
+    // keeps one running whose end never comes (see v31-studio-timeline.cjs, layout).
+    const colours = () => page.evaluate(async () => {
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const bg = (s) => getComputedStyle(document.querySelector(s)).backgroundColor;
+      return { navbar: bg('[role="banner"]'), sidebar: bg('[data-osc="sidebar"] > div'),
+        column: bg('#osc-main-content'), page: getComputedStyle(document.body).backgroundColor };
+    });
+    const read = async (theme) => {
+      await page.evaluate((t) => {
+        const html = document.documentElement;
+        if (t) html.setAttribute('data-theme', t);
+        else html.removeAttribute('data-theme');
+      }, theme);
+      let last = null;
+      return until(async () => {
+        const c = await colours();
+        const same = c && last && JSON.stringify(c) === JSON.stringify(last);
+        last = c;
+        return same ? c : null;
+      }, { ms: 5000, what: `the ${theme || 'absent'} theme settles` });
+    };
+    const dark = await read('dark');
+    const absent = await read(null);
+    const light = await read('light');
+    await read('dark');
+    await page.close();
+    return { ...H.verdict({ absentIsDark: JSON.stringify(absent) === JSON.stringify(dark),
+      lightDiffers: light.column !== dark.column && light.navbar !== dark.navbar }),
+    dark, absent, light };
   });
 
   def('no-console-errors', async (ctx) => ({ ok: ctx.errors.length === 0,

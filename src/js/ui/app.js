@@ -242,9 +242,18 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
       if (!MODES.includes(mode)) return;
       this.workspace = mode;
       this.emit('mode', 'mode', mode);
+      // The heading takes focus within this task: a microtask queued after the change above
+      // runs once Alpine has applied it (its effects flush in an earlier microtask) and before
+      // any timer or frame. A drawer entry hides itself as the drawer closes; with the focus
+      // only in $nextTick (a timer), focus rested on <body> in between (review #330 F4). The
+      // timer tries again when the heading was not shown yet.
+      let moved = false;
+      if (focusHeading) {
+        queueMicrotask(() => { moved = focusWorkspaceHeading(this.$root, mode); });
+      }
       this.$nextTick(() => {
         this.focusWorkspace(mode);
-        if (focusHeading) focusWorkspaceHeading(this.$root, mode);
+        if (focusHeading && !moved) focusWorkspaceHeading(this.$root, mode);
       });
     },
     focusWorkspace(mode) {

@@ -252,7 +252,7 @@ jobs:
   browser:
     name: Browser gate (${{ matrix.browser }})
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 55
     strategy:
       fail-fast: false
       matrix:
@@ -277,9 +277,13 @@ jobs:
           pulseaudio --start --exit-idle-time=-1
           pactl load-module module-null-sink sink_name=ci_null
           pactl set-default-sink ci_null
+      # Every suite of test:browser runs now, whatever the one before returned (review #330 F5,
+      # tests/browser/lib/run-suites.cjs); before, the && chain stopped at the first failure.
+      # Measured on the Linux Playwright container: chromium 747 s, webkit 1171 s for all six
+      # (app.cjs there takes 1.4-1.7x its runner time), so 15 minutes no longer holds WebKit.
       - name: dist from file:// and the /oscilla/ sub-path; layout, touch targets, stop
         run: mkdir -p logs && npm run test:browser 2>&1 | tee logs/browser-${{ matrix.browser }}.log
-        timeout-minutes: 15
+        timeout-minutes: 25
       - name: Upload the log on failure
         if: failure()
         uses: actions/upload-artifact@v7
