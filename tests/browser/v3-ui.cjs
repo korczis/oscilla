@@ -429,7 +429,20 @@ function defineChecks(fixtures) {
       text: document.querySelector('[data-osc="measure.irSummary"]').textContent,
       chart: !!document.querySelector('#osc-measure-chart-ir .uplot'),
       tabs: document.querySelector('#osc-m-tab-ir').getAttribute('aria-selected'),
+      notes: [...document.querySelectorAll('#osc-m-sum-ir + ul li')].map((e) => e.textContent),
     }));
+    // T019 at 390x844: the IR summary and its notes (the noise-tail window) wrap, never scroll.
+    await page.setViewportSize({ width: 390, height: 844 });
+    res.irPhone = await until(() => page.evaluate(() => {
+      const doc = document.documentElement;
+      const ul = document.querySelector('#osc-m-sum-ir + ul');
+      const sum = document.getElementById('osc-m-sum-ir');
+      const r = ul.getBoundingClientRect();
+      const fits = doc.scrollWidth <= doc.clientWidth && r.width > 0 && r.right <= 390 + 0.5
+        && sum.getBoundingClientRect().right <= 390 + 0.5;
+      return fits ? { fits, width: r.width } : null;
+    }), { ms: 3000, what: 'the IR summary and notes fit 390 px' });
+    await page.setViewportSize({ width: 1536, height: 1024 });
     // The stored noise-check band levels are a SNAPSHOT, never badged LIVE; their under-
     // resolved low bands are flagged (hatched).
     res.rtaStored = await page.evaluate(() => {
@@ -481,6 +494,11 @@ function defineChecks(fixtures) {
         && d.primary === 'Save experiment' && d.chart,
       ir: /^Impulse response: direct peak/.test(res.ir.text) && res.ir.chart
         && res.ir.tabs === 'true' && res.rtaTab === 'osc-m-tab-rta',
+      // T019: the full-overlap tail is an upper bound, with the window it was read over.
+      irTail: /tail level ≤ −?\d+ dB re peak \(noise or unfinished decay\)/.test(res.ir.text)
+        && res.ir.notes.some((n) => /full-overlap-tail, the mean power [\d.]+ ms to [\d.]+ ms /
+          .test(n) && /after the peak\. A decay still running there counts as noise/.test(n))
+        && !!res.irPhone && res.irPhone.fits,
       rtaStored: !!res.rtaStored && res.rtaStored.badges.includes('NOISE CHECK SNAPSHOT')
         && !res.rtaStored.badges.includes('LIVE') && res.rtaStored.live === false
         && /fewer than 6 FFT bins/.test(res.rtaStored.notes), // rta.v2: Hann limit (V382)
