@@ -296,6 +296,44 @@ the redo stack. A refused undo or redo leaves its entry in place. A refused canc
 gesture's edit as one undo entry. The Studio workspace passes `transport.admit`, so while
 playing, an edit the running graph cannot prepare is refused instead of committed.
 
+### Invariants under seeded edit sequences (V631)
+
+`tests/unit/studio-model-invariants.test.mjs` drives the one store with seeded sequences of
+every action in `ACTION_TYPES`, built valid and built invalid, mixed with undo, redo and
+gestures (the generator is `tests/unit/fixtures/studio-actions.mjs`). After every step it holds:
+
+| Invariant | What holds |
+| --- | --- |
+| `no-dangling-edge` | every edge names an existing node and a port of the right direction on it |
+| `targets-exist` | every automation lane names an existing node and parameter; every clip an existing track and, when it has one, an existing target; every track target exists |
+| `model-validates` | `validateStudioCommit` accepts the model (`validateStudioModel` and the import's rules) |
+| `round-trip` | `serializeStudio`, `importStudio`, `serializeStudio` again is byte-identical |
+| `selection-exists` | the selection names only what the model holds |
+| `hash-tracks-execution` | `studioHash` changes exactly when the execution state (§163) changes, and never on a presentation or view action |
+| `refusal-changes-nothing` | a refused action leaves model, selection, revision and the undo and redo stacks as they were, and says why |
+| `invalid-refused` | an action built invalid is refused: wrong port type, missing port, stale node id, a closed loop, a second Master Output, an unknown action, and the rest of the generator's kinds |
+| `no-silent-coercion` | an accepted EDGE_ADD adds exactly the edge asked for, on the ports asked for |
+| `no-silent-feedback` | an EDGE_ADD that closes a loop is refused with a cycle diagnostic, and no accepted EDGE_ADD removes an edge (`project.no-silent-feedback`) |
+| `revision`, `history` | a committed change, undo and redo each raise the revision by one; an edit or a gesture with a change adds one undo entry and clears redo; a cancelled gesture leaves both stacks |
+| `undo-oracle` | undo returns the model before the entry it undoes and redo the one after, keeping the current view |
+
+At the end of a sequence undo-all returns the initial model and redo-all the final one
+(`undo-all`, `redo-all`; the view is not undoable and stays). A dispatch that throws instead of
+refusing breaks `dispatch-throws`.
+
+Seed rule. The generator is mulberry32. The base seed is fixed in the test, so CI runs the
+same 200 sequences of 50 steps every time; `OSC_STUDIO_SEED=<seed>` replaces it and
+`OSC_STUDIO_SEQUENCES=<n>` asks for more sequences (never fewer). Sequence 0 runs the base seed
+itself and sequence i `sequenceSeed(base, i)`; the base seed is printed. A violation prints the
+invariant, its sequence's seed and the shortest prefix of the recorded steps that still fails
+(each step as plain data), and `OSC_STUDIO_SEED=<that seed>` reproduces it as sequence 0. A seed
+that found a defect is kept in the test's `REGRESSION_SEEDS`, which run before the seeded
+sequences. Three mutant stores prove the invariants can fail: one whose NODE_REMOVE keeps the
+removed node's edges (`no-dangling-edge`), one that retries a refused EDGE_ADD on another
+input (`no-silent-coercion`) and one that removes an edge of a loop to connect anyway
+(`no-silent-feedback`). A slice that adds a store action adds its maker to the generator in the
+same pull request; the test fails while the generator and `ACTION_TYPES` differ.
+
 ## Decisions recorded in code
 
 Values future work depends on (specification §19). They were first listed here as candidates for
