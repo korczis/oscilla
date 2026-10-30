@@ -407,7 +407,7 @@ function defineChecks() {
     }
     await page.click('[data-osc="nav.playground"]');
     // Collapse to icons: 64 px, the workspace column follows, the labels stay accessible names.
-    await page.click('[data-osc="header.sidebar"]');
+    await page.click('#osc-sidebar-toggle');
     const icons = await until(() => page.evaluate(shellGeometry)
       .then((g) => (g.sidebarWidth === 64 ? g : null)), { ms: 3000, what: 'collapse to icons' })
       .catch(() => page.evaluate(shellGeometry));
@@ -459,7 +459,7 @@ function defineChecks() {
       want(start.overflow <= 0, `no sideways scroll (${start.overflow} px)`);
       want(start.small.length === 0, `navbar targets under 44 px: ${start.small}`);
       const openDrawer = async (what) => {
-        await page.tap('[data-osc="header.menu"]');
+        await page.tap('#osc-drawer-toggle');
         // Focus moves into the drawer once Alpine has rendered it (its next tick).
         return until(() => page.evaluate(shellGeometry)
           .then((g) => (g.drawer && g.focusIn === 'sidebar' ? g : null)),
@@ -540,7 +540,7 @@ function defineChecks() {
     const page = await H.open(ctx, ctx.baseUrl);
     const shown = () => page.evaluate(() => [...document.querySelectorAll('[data-osc^="nav."]')]
       .filter((el) => el.getClientRects().length).map((el) => el.dataset.osc));
-    await page.fill('[data-osc="header.search"]', 'filt');
+    await page.fill('#osc-nav-search', 'filt');
     const one = await until(() => shown().then((v) => (v.length === 1 ? v : null)),
       { ms: 3000, what: 'the search filters' }).catch(() => shown());
     want(JSON.stringify(one) === '["nav.filter"]', `"filt" finds Filter Lab: ${one}`);
@@ -572,7 +572,7 @@ function defineChecks() {
       const p = await H.open(ctx, ctx.baseUrl, phone);
       await p.tap('[data-osc="header.menu"]');
       await p.waitForSelector('[data-osc="sidebar.search"]', { state: 'visible', timeout: 5000 });
-      await p.fill('[data-osc="sidebar.search"]', 'graph');
+      await p.fill('#osc-nav-search-drawer', 'graph');
       await p.press('[data-osc="sidebar.search"]', 'Enter');
       const st = await until(() => H.state(p).then((x) => (x.workspace === 'studio' ? x : null)),
         { ms: 5000, what: 'the drawer search opens Studio' }).catch(() => H.state(p));
