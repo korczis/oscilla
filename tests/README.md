@@ -30,6 +30,7 @@ for people, never gating · **DELETED** removed, with its replacement.
 | `unit/charts.test.mjs` | GATE | chart axis, log mapping, FFT-to-pixel and drag maths |
 | `unit/analysis-peak.test.mjs` | GATE | FFT, Blackman window, dBFS calibration, peak interpolation |
 | `unit/analysis-spectrogram.test.mjs` | GATE | colour LUT and dB-to-index mapping |
+| `unit/analysis-analytic.test.mjs` | GATE | K024: the analytic signal of the audio buffer by FFT Hilbert transform (inverse by conjugation) has the buffer as its real part and no negative-frequency content, and its envelope, instantaneous phase and instantaneous frequency of synthetic AM and FM tones at 44.1 and 48 kHz, and of AM tones on both edges of `trustedBand()`, stay within `ANALYTIC_BOUNDS` on the interior; without the edge taper the frequency error is over ten times the bound |
 | `unit/analysis-misc.test.mjs` | GATE | analyser bin maths, reader throttle, frame-rate independent averaging |
 | `unit/audio-envelope.test.mjs` | GATE | ADSR clamps and Web Audio automation semantics |
 | `unit/audio-synthesis.test.mjs` | GATE | Fourier series and PeriodicWave arrays |

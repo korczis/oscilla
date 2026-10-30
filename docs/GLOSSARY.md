@@ -135,6 +135,15 @@ the bare word. Not to be confused with the two words beside it: the *lineage* of
 0044) traces one value within one experiment, and the Studio operation *trace* (ADR 0042)
 follows one Studio operation in memory.
 
+**Analytic signal.** The analytic signal of the audio buffer: the buffer as its real part and
+its Hilbert transform as its imaginary part, computed by FFT with the inverse by conjugation
+(`src/js/analysis/analytic.js`, K024). Its magnitude is the *envelope*, its angle the
+*instantaneous phase* and its phase step per sample the *instantaneous frequency*, each within
+the error bounds the module states (`ANALYTIC_BOUNDS`) on the interior of the buffer and inside
+its `trustedBand()`. It is computed from a digital signal generated in this page or captured
+from the microphone; OSCILLA's "I/Q" means this pair, never device I/Q, and no radio is
+received.
+
 ## Repository
 
 **Knowledge.** What the repository knows about itself, outside the code: the claims matrix
