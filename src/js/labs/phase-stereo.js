@@ -182,8 +182,8 @@ export function mount(rootEl, adapter) {
   }
 
   // The controls show the configuration whoever changed it (a config import, the dual
-  // oscillator): setSlider and setField leave the value of a control the user is dragging or
-  // editing as it is.
+  // oscillator). setField leaves a field the user is editing as it is; setSlider writes only a
+  // value that differs, so a drag, whose input already holds the value it set, is not moved.
   function syncControls() {
     setSlider(el.pan, cfg.pan, panText(cfg.pan));
     setField(el.offset, offsetText(cfg.phaseDeg));

@@ -372,8 +372,12 @@ export class AudioEngine {
     // thread late inside one would anchor a fade in the past. Without a performance clock in the
     // environment, or without readings, this is currentTime + SCHEDULE_LEAD_S (V1).
     const q = RENDER_QUANTUM / ctx.sampleRate;
-    const rendered = renderedTimeAtLeast(ctx, this._perfNow(), { outputTimestamp: false });
-    return Math.ceil((rendered + Math.max(SCHEDULE_LEAD_S, 2 * q)) / q) * q;
+    return Math.ceil((this._rendered(ctx) + Math.max(SCHEDULE_LEAD_S, 2 * q)) / q) * q;
+  }
+
+  /** A context time the audio has rendered at least up to (currentTime without a clock). */
+  _rendered(ctx) {
+    return renderedTimeAtLeast(ctx, this._perfNow(), { outputTimestamp: false });
   }
 
   /** Frequencies are clamped once more here, against the running context. */
@@ -437,8 +441,14 @@ export class AudioEngine {
     const replacing = this.voices.size > 0;
     this._releaseAll(FAST_RELEASE_S, true);
     // A replacement starts once its predecessors have faded: no overlap, so no momentary sum
-    // above the single-voice level (the output ceiling is only a backstop).
-    const startAt = replacing ? this._soon(ctx) + FAST_RELEASE_S : ctx.currentTime + START_OFFSET_S;
+    // above the single-voice level (the output ceiling is only a backstop). A fresh voice starts
+    // START_OFFSET_S after what the audio already rendered (C010 F2): from a stale currentTime
+    // (Firefox, a main thread late within a task) its t0, and a dual voice's B start delay
+    // (the phase offset), could be rendered before the graph reaches the audio thread, and A and
+    // B would start together. Without a performance clock this is V1's currentTime + offset.
+    const startAt = replacing
+      ? this._soon(ctx) + FAST_RELEASE_S
+      : this._rendered(ctx) + START_OFFSET_S;
     const adsr = o.adsr || null;
     const v = {
       id: ++this._seq, ctx, plan, opts: o, t0: startAt, nodes: [], sources: [],
