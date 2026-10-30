@@ -322,10 +322,10 @@ jobs:
   knowledge:
     # The .ai/ layer, checked by the same `majordomus doctor` the pre-commit hook and
     # `npm run verify` run locally, at a pinned release: the archive is downloaded from the
-    # release and checked against its SHA-256 here (the digest of v1.0.0-alpha.1's x86_64 Linux
-    # glibc archive in https://majordomus.dev/releases/v1.0.0-alpha.1.json), so neither the
-    # installer script nor the latest release can change what CI runs. Bump the version and the
-    # digest together.
+    # release and checked against its SHA-256 here (the digest of v1.0.0-alpha.9's x86_64 Linux
+    # glibc archive in the release's SHA256SUMS and its record .ai/repo/releases/v1.0.0-alpha.9.yaml
+    # in korczis/prismatic-majordomus), so neither the installer script nor the latest release
+    # can change what CI runs. Bump the version and the digest together.
     # The verdict is .github/doctor-verdict.jq (tested by tests/unit/ci-knowledge-job.test.mjs):
     # every doctor FAIL fails the job except the git-hook wiring entries of policy
     # `enforcement`, which describe a developer checkout's hooks that a CI runner does not
@@ -333,13 +333,13 @@ jobs:
     # output without an OK layout line.
     # The download retries, so one transient asset error does not stall every merge. Full
     # history, because curated knowledge cites V1 commits and the ADR check reads every ref.
-    name: .ai layer (majordomus doctor 1.0.0-alpha.1)
+    name: .ai layer (majordomus doctor 1.0.0-alpha.9)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      MJ_VERSION: 1.0.0-alpha.1
+      MJ_VERSION: 1.0.0-alpha.9
       MJ_TARGET: x86_64-unknown-linux-gnu
-      MJ_SHA256: 45b14249c8faf8e47095ce3382369973fc4a5dd672f10941f3e4b2667475a5d2
+      MJ_SHA256: a73710f2e52b3712017c850739d8bebc95764ba51333fddfb369df49eeeb8063
     steps:
       - uses: actions/checkout@v7
         with:

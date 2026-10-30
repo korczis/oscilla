@@ -28,4 +28,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-10-30T16:04:56Z
+started_at: 2026-10-30T16:04:21Z
+started_event: sha256:bb0861ce80a629452715fa302a524ea964fa06ef46daf36b8018e9a4fde87e56
+completed_at: 2026-10-30T16:04:56Z
+completed_event: sha256:656cb1dde20df41df0f44be665d733eedec486887620463fca6548db2fbfc112
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/extending-guide.test.mjs"
+    result: "7/7 pass at main e872c444; landed in #286 via train #316 (88b936cb), README landing routes checked; npm test green in the train's CI (run on 79d59cc3/c7ad616c)"
+    artifact: "docs/EXTENDING.md"
+    commit: e872c44489bd66ecfd8a6b58a0dd868270da3cf0
+    recorded_at: 2026-10-30T16:04:46Z

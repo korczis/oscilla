@@ -1,0 +1,29 @@
+# Review verdict for pull request #347, merge train train/2026-10-30 (#326, #338, #336, #337),
+# builder oscilla-b0. Reviewed head 2841f8c8, merge base origin/main d9db6bdf. Neither this
+# reviewer nor the session that started it built the train or any member.
+#
+# The digest: the base branch's scripts/review-verdict.mjs (git archive origin/main scripts
+# .github/scripts), --content --list at 2841f8c8: cd616801...f595 over the one guarded path the
+# train changes, .github/workflows/main-checks.yml (new; from #337).
+#
+# What was reviewed: the whole main-checks.yml at the train head. It differs from #337's reviewed
+# blob (prismatic-majordomus-1d's verdict, content a3962ff8...) only in the knowledge job's pin,
+# 1.0.0-alpha.1 -> 1.0.0-alpha.9 with MJ_SHA256 a73710f2...8063, the same version and digest as
+# ci.yml's knowledge job on main since R027 (#291, e872c444), which main-checks.test.mjs requires
+# (a job here equals its ci.yml job). The rest holds as 1d found it: push to main only, no gate
+# job (project.ci-bounded triggers), every job and network step bounded, actions pinned @v7, the
+# curl retried, the download checked against its digest, the report job always() and naming
+# failed jobs, no concurrency group by design.
+# Tests at 2841f8c8: main-checks, ci-bounded and ci-workflows 38/38; scripts/ci-workflow-rules.mjs
+# exits 0. The other members change no guarded path (#326 docs, #336 and #338 plan records).
+#
+# Verdict: merge. No P0 or P1; 1d's three P3 findings of #337 carried forward.
+schema: review-verdict/v1
+pr: 347
+verdict: merge
+reviewer: oscilla-26-review
+content: cd6168014e4685d5f3f6f6ad42b5c5ae74a0d7db38ebf2fb9fe494332c6bf595
+findings:
+  - { id: F1, severity: P3, status: open, title: "(from #337) main-checks.yml copies ci.yml's unit, knowledge and browser jobs, held equal by tests/unit/main-checks.test.mjs; one reusable workflow called from both would leave one definition" }
+  - { id: F2, severity: P3, status: open, title: "(from #337) a red main-checks run does not stop pages.yml, which deploys main on the same push" }
+  - { id: F3, severity: P3, status: open, title: "(from #337) about 28-30 runner minutes in six jobs per merge commit, no concurrency group by design; measure after a week of merges" }
