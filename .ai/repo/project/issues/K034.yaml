@@ -1,0 +1,51 @@
+id: K034
+milestone: M062
+serves:
+  - "playable-instrument#chart-cost"
+  - "playable-instrument#chart-interaction"
+title: "Phase and Lissajous views on Canvas 2D, drawn on change, static under reduced motion"
+slug: phase-and-lissajous-views-on-canvas-2d-drawn-on-change-stati
+priority: p2
+profile: implementation
+objective: "Lands as feat(charts). phase-view.js and lissajous.js move from the second p5 instance to Canvas 2D with preallocated paths (the CDP probe measured about 96-112 KB per frame plus the Lissajous allocation). They redraw only on a configuration change, new live L/R data or model drift (fA != fB); refreshTheme redraws while paused; the model is not computed while the view is hidden. Under reduced motion the model freezes, labelled \"model . frozen (reduced motion)\". Wave rows get ms ticks over the 2/fA window and +-1 relative, the Lissajous \"L ->\" and \"R ^\"; the comparison overlays (alpha 0.6 on main, 2.3-2.8:1) are drawn with faded colours registered in K027's palette at 3:1 in both themes; the kit's crosshair and keyboard cursor on the wave rows read t, A(t) and B(t); no estimated phase readout is added. The phase and Lissajous pending checks of tests/browser/chart-cost-baseline.json are removed. p5 stays bundled for the main visualizer, so gzip does not fall."
+why: "Owner order of 2026-10-29: \"make the charts really sexy, modern, interactive\", for all charts; reviewer f3 scoped it to every surface that draws data. Revised after f3's review of the plan (CHANGES-REQUESTED, 2026-10-29): owner decisions are Q issues under M063, Pro chrome waits on F002 and on the card issue of its workspace, every chart that claims chart-interaction delivers the keyboard cursor and the announced readout, chart keys never take Escape or Space; revision 3 answers f3's delta review. Facts checked against origin/main at e2720e07 and the branches of #251, #253, #263 and #265 (charts-plan.md, charts-plan-changes.md)."
+scope:
+  - "src/js/charts/phase-view.js"
+  - "src/js/charts/lissajous.js"
+  - "src/js/charts/phase-model.js"
+  - "src/js/labs/phase-stereo.js"
+  - "src/js/charts/palette.js"
+  - "tests/unit/chart-palette.test.mjs"
+  - "tests/unit/phase-view.test.mjs"
+  - "tests/browser/labs.cjs"
+  - "tests/browser/chart-cost.cjs"
+  - "tests/browser/chart-cost-baseline.json"
+  - "tests/unit/chart-host-census.json"
+  - "tests/browser/charts-interaction.cjs"
+  - "tests/visual"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K027"
+  - "K053"
+  - "K036"
+  - "F003"
+acceptance_criteria:
+  - "tests/unit/phase-view.test.mjs, failing on the merge base: the draw-on-change decision table and the frozen model under reduced motion."
+  - "tests/browser/labs.cjs: under emulated prefers-reduced-motion, model canvas snapshots taken across polled frame-loop ticks are identical while the spectrum still updates; the view's draw counter does not rise while nothing changes; a theme toggle while paused redraws. tests/browser/chart-cost.cjs: the phase and Lissajous vertex checks pass and are no longer pending, and the allocation ceiling is lowered to the measured figure. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline and assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac); tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Its chart hosts (phase wave rows) move from pending to done in tests/unit/chart-host-census.json, each carrying data-osc-chart, and the table-driven pass of tests/browser/charts-interaction.cjs holds for each: the host is role=group holding the aria-describedby summary and the snapshot data table, and its focusable plot surface is role=application with aria-roledescription \"interactive chart\" (never role=img), both asserted in the accessibility tree, with a visible focus ring; ArrowRight moves the cursor one step and the one polite live region announces the readout once after the keys settle; Escape clears the cursor and still reaches the page's stop (a playing tone stops); Space keeps its workspace meaning (SPACE_MEANING of src/js/ui/shortcuts.js) and is never taken (ADR 0050); on a touch pointer a tap pins the cursor and it stays after the finger lifts."
+  - "The chart reads existing AnalyserNodes on the main thread only, creates no audio node and adds no work to the audio path; hover and keyboard work runs on events only, a live readout under a still pointer is rewritten at most 4 times a second through the kit's live-readout, and no draw loop writes the DOM per frame (project.audio-engine-discipline v2)."
+  - "Chart chrome (legend, toolbar, toggle, badge, tooltip, readout row) is Flowbite Pro markup adapted from the matching Pro component and lands after F002 turned on preflight and the form base styles (the border trap of review #253, R-3) and after F003 placed the card it sits in; no osc-* class token or legacy selector is added and src/styles/tokens.css, charts.css, measure.css, studio.css and studio-timeline.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+  - "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no review verdict is needed; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+  - "The visual references of the phase region of test:visual are re-accepted in darwin-arm64 and linux-x64, in each theme that has references (light ones exist once F011 lands), with the reason \"Canvas 2D port and axes\" in the pull request body (npm run test:visual)."
+  - "scripts/size-report.mjs shows at most 1 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of M062's figures stays within the cap Q014 records, under the 1 000 000 B gzip budget (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/phase-view.test.mjs"
+  - "node tests/browser/labs.cjs"
+  - "node tests/browser/chart-cost.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29
