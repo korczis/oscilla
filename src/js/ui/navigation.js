@@ -17,10 +17,11 @@
 //   3. exp, def or finding (a record link without m) → EXPERIMENTS (owner: records)
 //   4. mr (a recipe link without m)                  → MEASURE (owner: measure)
 //   5. none of these (an empty hash, bare `v=1&f=…`) → PLAYGROUND
-//   An in-page anchor (`#osc-main`, no `=`) is not a route: a click on one (the skip link, the
-//   brand) moves focus with no fragment navigation, so it adds no history entry. The nav items'
-//   hrefs are the workspaces' addresses (`#m=measure`): a modified click or "open in new tab"
-//   opens that workspace; a plain click goes through the router. The V1 mode follows from the
+//   An in-page anchor (`#osc-main`, no `=`) is not a route: a click on one (the skip link)
+//   moves focus with no fragment navigation, so it adds no history entry. The nav items' and
+//   the brand's hrefs are the workspaces' addresses (`#m=measure`; the brand is `#m=playground`,
+//   home): a modified click or "open in new tab" opens that workspace; a plain click goes
+//   through the router. The V1 mode follows from the
 //   workspace and the source (v1ModeFor), so `mode` and `workspace` cannot disagree.
 // A domain applies its own keys whatever the route: `#m=studio&mr=…` opens STUDIO and still
 // loads the recipe into the MEASURE setup (and says so). A link whose route owner refuses it
@@ -304,7 +305,7 @@ export function createNavigation(svc = {}) {
         } catch (e) { /* the entry stays unstamped: Back to it re-applies its link */ }
       }
       nav.routed = { href: loc().href, workspace: this.workspace };
-      // In-page anchors (the skip link, the brand) move focus without a fragment navigation, so
+      // In-page anchors (the skip link) move focus without a fragment navigation, so
       // they add no history entry and the address keeps naming the workspace.
       const doc = w.document;
       if (doc) {

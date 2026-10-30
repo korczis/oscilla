@@ -82,6 +82,7 @@ import {
   createDirtyTracker, createStudioLibrary, exportProjectFile, exportSequenceFile, fileSlug,
   importStudioFile,
 } from '../../studio/library.js';
+import { importSequence } from '../../studio/sequence-import.js';
 import { announceRedo, announceUndo, announceAction } from '../../studio/a11y.js';
 import { observeMemoryStore, openExperimentStoreOrMemory } from '../../experiments/store.js';
 import { pageIndexedDb } from '../experiments.js';
@@ -97,6 +98,8 @@ import { mountLibrary } from './library-panel.js';
 import { compactTime, mountCompact } from './compact.js';
 import { STUDIO_STORE_FALLBACK_TEXT, mountPatches, recordId } from './patches-panel.js';
 import { mountStudioTimeline } from './timeline-editor.js';
+import { studioBackTarget, workspacePhrase } from '../cross-links.js';
+import { WORKSPACE_LABELS } from '../shortcuts.js';
 
 /** First keyboard-reachable control inside a pane. */
 const TABBABLE = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), '
@@ -1128,6 +1131,7 @@ export function createStudioUi(svc = {}) {
       link: '', // the last link Copy link wrote (the dialog shows it when there is no clipboard)
       linkNote: '',
       linkPending: '', // a linked template waiting for an explicit Open (unsaved changes)
+      backTo: 'playground', // the workspace the Studio was opened from (Back returns there)
     },
 
     studioInit() {
@@ -1150,7 +1154,10 @@ export function createStudioUi(svc = {}) {
       };
       this.$watch('meas.state', follow);
       this.$watch('meas.progressPct', follow);
-      this.$watch('workspace', (ws) => {
+      this.$watch('workspace', (ws, was) => {
+        // Back returns where the Studio was opened from (links.md P8): Expand in the Sequencer,
+        // a lab's template link, the navigation, Back / Forward.
+        if (ws === 'studio' && was !== 'studio') this.studio.backTo = studioBackTarget(was);
         if (ws === 'studio' && ctx.editor) requestAnimationFrame(() => ctx.editor.onShow());
         // The hidden workspace must not stay fullscreen (a blank screen). The browser's
         // fullscreenchange may still be on its way, so ask the document, not the flag.
@@ -1506,10 +1513,18 @@ export function createStudioUi(svc = {}) {
       });
     },
 
+    /** "Back to the Sequencer": the Studio's Back button's name; its label is the workspace's. */
+    studioBackText() {
+      return `Back to ${workspacePhrase(studioBackTarget(this.studio.backTo))}`;
+    },
+    studioBackLabel() {
+      return WORKSPACE_LABELS[studioBackTarget(this.studio.backTo)];
+    },
+
     studioBack() {
-      this.setWorkspace('playground');
+      this.setWorkspace(studioBackTarget(this.studio.backTo));
       // The button that had focus is now hidden: focus the compact Studio's Expand (the way
-      // back), else the Playground tab, never <body> (WCAG 2.4.3; V431 U6).
+      // back) where it is shown, else the workspace's tab, never <body> (WCAG 2.4.3; V431 U6).
       requestAnimationFrame(() => {
         const a = document.activeElement;
         if (a && a !== document.body && a.getClientRects().length) return;
@@ -1625,6 +1640,48 @@ export function createStudioUi(svc = {}) {
         announce(`Not exported: ${(e && e.message) || e}`, { assertive: true });
         return null;
       }
+    },
+
+    /**
+     * The Sequencer's own pattern as a Studio document (U010; links.md P4). The V2 sequence the
+     * Sequencer holds now (svc.currentSequence, sequencer/model.js serializeSequence) goes
+     * through importSequence, the pipeline of a sequence file (K004), and opens as a new
+     * document; Studio then edits its copy, the Sequencer keeps its own. Unsaved Studio changes
+     * are never replaced: nothing opens and the notice says so. A modified click is left to the
+     * browser (the link's address opens Studio). -> { ok, clips? , reason? }
+     */
+    studioOpenSequence(e) {
+      if (e && (e.button > 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)) return null;
+      if (e && typeof e.preventDefault === 'function') e.preventDefault();
+      const seq = typeof svc.currentSequence === 'function' ? svc.currentSequence() : null;
+      if (!seq) {
+        this.notify('warning', 'Pattern not opened', 'The Sequencer is not available here.');
+        return { ok: false, reason: 'no-sequencer' };
+      }
+      const r = importSequence(seq, { sampleRate: studioSampleRate(),
+        title: 'Sequencer pattern' });
+      if (!r.ok) {
+        const why = (r.errors && r.errors[0] && r.errors[0].message) || 'invalid pattern';
+        this.notify('warning', 'Pattern not opened', `${why}. Nothing was changed.`);
+        return { ok: false, reason: why };
+      }
+      if (ctx.dirty && ctx.dirty.isDirty(ctx.handle.getModel())) {
+        this.notify('warning', 'Pattern not opened', 'This Studio has unsaved changes, so the '
+          + 'pattern did not replace them. Save or export them in Studio, then open the pattern '
+          + 'again.', { action: { href: '#m=studio', text: 'Open Studio' } });
+        announce('The pattern was not opened: this Studio has unsaved changes.',
+          { assertive: true });
+        return { ok: false, reason: 'unsaved' };
+      }
+      openDocument(r.model, { reason: 'import' });
+      this.setWorkspace('studio', { focusHeading: true });
+      const n = r.model.timeline.clips.length;
+      const issues = r.issues && r.issues.length ? ` ${r.issues.join(' ')}` : '';
+      this.notify('info', 'Pattern opened in Studio', `${n} pattern clip${n === 1 ? '' : 's'} `
+        + `on one track, a copy of the Sequencer's pattern.${issues} Nothing plays until you `
+        + 'press Play.');
+      announce(`Opened the Sequencer pattern in Studio: ${n} pattern clip${n === 1 ? '' : 's'}`);
+      return { ok: true, clips: n };
     },
 
     /**

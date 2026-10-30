@@ -49,6 +49,7 @@ import {
 import { nearestNote, noteToFrequency } from './core/music.js';
 import { BUILTIN_PRESETS } from './data/presets.js';
 import { LEARN_TOPICS } from './data/learn.js';
+import { createCrossLinksUi } from './ui/cross-links.js';
 import { serializeSequence } from './sequencer/model.js';
 
 import { registerOscillaUi, workspaceTitle } from './ui/app.js';
@@ -739,11 +740,14 @@ function createOscillaComponent(ui) {
   const experiments = createExperimentsUi();
   const findings = createFindingsUi();
   const connections = createConnectionsUi();
-  const studio = createStudioUi({ engine, stopPlayback });
+  const studio = createStudioUi({ engine, stopPlayback,
+    // The Sequencer's pattern now, for Studio's "Open this pattern in Studio" (U010, P4).
+    currentSequence: () => (labs.sequencer ? serializeSequence(labs.sequencer.editor.model) : null),
+  });
   const navigation = createNavigation();
   const midi = createMidiUi(); // optional input (ADR 0058): reads support at load, never requests
   const cmp = compose(instrument, ui, workbench, measure, experiments, findings, connections,
-    studio, navigation, midi, provenancePart(), TEMPLATE_HELPERS);
+    studio, navigation, midi, createCrossLinksUi(), provenancePart(), TEMPLATE_HELPERS);
   cmp.dismissAlert = focusSafeDismiss(cmp.dismissAlert);
   const baseRefreshDebug = cmp.refreshDebug;
   Object.defineProperty(cmp, 'refreshDebug', {

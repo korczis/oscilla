@@ -65,6 +65,18 @@ import { LEARN_TOPICS } from '../data/learn.js';
 
 let alertSeq = 0;
 
+/** How long a success or info notice stays (ms); one that carries a link stays longer. */
+export const NOTICE_MS = 6000;
+export const ACTION_NOTICE_MS = 15000;
+
+/** True while the pointer is over the notifications region or focus is inside it. */
+function noticesInUse() {
+  const doc = typeof document === 'undefined' ? null : document;
+  const region = doc && doc.querySelector('[data-osc="alerts"]');
+  if (!region) return false;
+  return region.matches(':hover') || region.contains(doc.activeElement);
+}
+
 /** An engine stand-in when none is given: the instrument works, nothing sounds. */
 function nullEngine() {
   return {
@@ -991,24 +1003,36 @@ export function createInstrument(deps = {}) {
       if (m === 'dual') { this.source = 'dual'; if (this.vizMode !== 'spectrum') this.vizMode = 'interference'; }
     },
     // V1: oscillaApp: runDemo (index.html@a7b7a23)
-    runDemo(topic) {
+    /** opts.action: a link the demo's notice carries ({ href, text }, e.g. back to the lesson). */
+    runDemo(topic, { action = null } = {}) {
       const d = topic.demo;
       // A demo that needs another mode's source sets it fully, so earlier settings cannot skew it.
       if (d.cfg && d.cfg.source === 'dual') this.source = 'dual';
       this.applyConfig(d.cfg, 'learn');
       if (d.viz) this.vizMode = d.viz;
       this.loadedLabel = d.label;
-      this.notify('success', `Demo ready: ${d.label}`, this.isProgrammed ? 'Press TRIGGER (or Space) to hear it.' : 'Press and hold HOLD TO PLAY.');
+      this.notify('success', `Demo ready: ${d.label}`, this.isProgrammed ? 'Press TRIGGER (or Space) to hear it.' : 'Press and hold HOLD TO PLAY.', { action });
     },
 
 
     // ============================== alerts, dialogs, microphone
     // V1: oscillaApp: notify, dismissAlert (index.html@a7b7a23)
-    notify(level, title, message) {
+    // V2: opts.action { href, text } adds a link to the notice (a way back, U010). The notices
+    // are in flow, so a success or info notice still closes on its own (it would otherwise push
+    // the page down until dismissed): one with a link after ACTION_NOTICE_MS, and never while
+    // the pointer is over the notices or focus is in them (it waits NOTICE_MS more), so the
+    // link does not vanish under the pointer.
+    notify(level, title, message, { action = null } = {}) {
       if (this.alerts.some((a) => a.title === title && a.message === message)) return;
       const id = ++alertSeq;
-      this.alerts = [...this.alerts, { id, level, title, message }].slice(-4);
-      if (level === 'success' || level === 'info') setTimeout(() => this.dismissAlert(id), 6000);
+      this.alerts = [...this.alerts, { id, level, title, message, action }].slice(-4);
+      if (level === 'success' || level === 'info') {
+        const expire = () => {
+          if (action && noticesInUse()) setTimeout(expire, NOTICE_MS);
+          else this.dismissAlert(id);
+        };
+        setTimeout(expire, action ? ACTION_NOTICE_MS : NOTICE_MS);
+      }
       if (level === 'error') engine.lastError = { message: `${title}: ${message}`, context: 'ui' };
     },
     dismissAlert(id) { this.alerts = this.alerts.filter((a) => a.id !== id); },
