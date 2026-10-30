@@ -1,0 +1,43 @@
+id: U018
+milestone: M054
+serves:
+  - "ui-current#ui-audited"
+title: "An idle Measure check shows no loading spinner, and a safety caution is not marked as information"
+slug: an-idle-measure-check-shows-no-loading-spinner-and-a-safety-cau
+priority: p3
+profile: implementation
+objective: "Lands as fix(measure). Two glyphs say something false on the Measure workspace. (1) Before anything runs, initialQualityBar() in src/js/measurement/views/quality-bar.js:59-67 gives all five live checks status 'pending'. src/index.html:1496 renders that as '#q-pending' (sprite line 86, lucide loader-circle), so INPUT UNKNOWN ('Run the setup check.'), NOISE NOT MEASURED, CLIPPING NOT CHECKED YET, SIGNAL NOT MEASURED and CAPTURE IDLE show a loading spinner while nothing is running. Beside them, [data-osc=measure.quality] NOT ASSESSED shows the same 'nothing yet' state as '#q-unknown' (circle-dashed, line 87). After: the idle items carry status 'unknown' (STATUS_PRESENTATION.unknown in src/js/measurement/views/common.js, an existing class and shape), and 'pending' is kept only for states that name work in progress (CHECKING, MEASURING, ARMED, STIMULUS PLAYING, ANALYZING, the progress percentages). (2) safetyNotes() in src/js/measurement/views/measure-flow.js:129-145 marks the conservative-level, hard-stop and low-frequency excursion notes as severity 'info'. src/index.html:1444 therefore draws them with '#q-info' (line 88), so a safety caution looks like neutral information. After: those three notes carry severity 'caution', drawn with a caution glyph distinct from info: a lucide sprite symbol such as q-caution (shield-alert), added through the packer's @icon marker. Headphones keeps 'warn' and '#q-warn'. The high-frequency note keeps 'info' because it is about interpreting the measurement, not about safety. Negative cases: no chip, note or status text changes (the CLIPPING wording is T016, PR #307); warn and fail glyphs and the in-progress spinner are unchanged; no state is shown as observed that was not measured (project.no-fake-science). No new osc-* class, stylesheet rule or inline style; the markup change is one :href expression and one sprite symbol, which F004 carries into the Pro status badges (project.ui-uses-flowbite-pro). Rollback: revert; view models and markup only, no stored data. Not this: G009 (one meaning for the expand/fullscreen icon), T016 (CLIPPING text), V375 (glyph plus text, done), T001 (output-ceiling glyph), C005 (sequencer Loop/Record glyph), K035 (correlation warning icon), F002 and F008 (Pro chrome)."
+why: "Found by the S074 quality-bar review of 2026-10-30 at origin/main d9db6bdf, section 74 symptom 'random icon usage: a loading spinner glyph marks idle states, and an info glyph marks safety cautions', reproduced by an independent verifier. Evidence: scratchpad s074/d-measure.png (y=327-354) and s074/m-measure.png show the loader on chips whose text says IDLE or NOT MEASURED and the info glyph on the Stimulus cautions. A loader means work in progress, so on an idle state it is false; two glyphs encode one 'not yet' state; cautions are drawn as neutral info. Serves ui-current#ui-audited."
+scope:
+  - "src/js/measurement/views/quality-bar.js"
+  - "src/js/measurement/views/measure-flow.js"
+  - "src/js/measurement/views/common.js"
+  - "src/index.html"
+  - "tests/unit/v3-views.test.mjs"
+  - "tests/unit/v3-ui.test.mjs"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/browser/v3-ui.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/v3-views.test.mjs fails on the merge base and passes on the head. qualityBarView(initialQualityBar()) gives every item status 'unknown' and none 'pending'. After a reduceQualityBar transition into an active state (setup check, noise check, armed, stimulus, analysis), that item is 'pending'. safetyNotes() gives conservative, stop and low-frequency severity 'caution', headphones 'warn' and high-frequency 'info'. Every chip and note text equals the merge base."
+  - "tests/unit/v3-ui.test.mjs reads src/index.html: the Safety notes list maps 'caution' to a sprite symbol that is neither q-info nor q-pending, and that symbol exists in the sprite with an @icon marker."
+  - "A check in tests/browser/v3-ui.cjs opens Measure from dist in every gate browser and asserts the idle [data-osc=measure.bar] items use '#q-unknown', not '#q-pending', and that each Stimulus safety note whose text is a caution uses the caution symbol, not '#q-info'. It runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named deadline (project.suite-harness, project.bounded-test-timing)."
+  - "It adds no class token, selector, markup surface or inline style, so tests/unit/ui-flowbite-pro-baseline.json stays equal or falls: node scripts/ui-flowbite-pro-record.mjs --check passes, and node --test tests/unit/ui-flowbite-pro.test.mjs passes (project.ui-uses-flowbite-pro, project.visual-identity-lock)."
+  - "src/js/measurement is guarded, so the pull request carries a reviewer's .ai/repo/reviews/<pr>.yaml (project.review-verdict). As a fix change, its unit test fails on the merge base (project.fail-first)."
+  - "Definition of done, extends: the quality-bar and safety-note view models gain a 'not yet' versus 'in progress' split and a caution severity; F004 builds its Pro status badges on these."
+  - "Definition of done, interlinks: the objective names G009, T016, V375 and F004 by plan id; the caution severity is documented in the safetyNotes() JSDoc and in STATUS_PRESENTATION."
+  - "Definition of done, interactivity: none added, and no control changes (stated); the glyphs stay aria-hidden and the text carries the meaning."
+  - "Definition of done, docs, menus and routes: tests/README.md rows for v3-views.test.mjs, v3-ui.test.mjs and v3-ui.cjs name the new assertions; no route or menu changes."
+  - "Definition of done, tested: the unit and browser checks above; dist is rebuilt and npm run build:check passes."
+  - "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+  - "node --test tests/unit/v3-views.test.mjs"
+  - "node --test tests/unit/v3-ui.test.mjs"
+  - "node tests/browser/v3-ui.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-10-30'
+updated_at: '2026-10-30'
