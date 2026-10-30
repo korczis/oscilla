@@ -16,6 +16,7 @@ import { serializeStudio, studioHash } from '../../src/js/studio/schema.js';
 import { importStudio } from '../../src/js/studio/migrate.js';
 import { createStudioStore } from '../../src/js/studio/actions.js';
 import { planOfflineRender } from '../../src/js/studio/offline.js';
+import { adsrEvents, releaseEvents, valueAtTime } from '../../src/js/audio/envelope.js';
 import { decodeStudioLink, encodeStudioLink } from '../../src/js/core/url-state-studio.js';
 
 const ids = () => {
@@ -54,7 +55,7 @@ test('K144 the song validates without a warning, with its hash pinned', () => {
   assert.deepEqual(v.errors, []);
   assert.deepEqual(v.warnings.map((w) => w.code), []);
   assert.equal(demoSong.studioHash,
-    '127c000239753fc7750abb5682df2c077bdb2ea54c178083618f954841fbab2f');
+    '6af3c386ab88fe2c98d1a11a65d2f537fafbb3cd49b4aed7ca0a234e733405b6');
   assert.equal(studioHash(templateModel('demo-song')), demoSong.studioHash);
   const m = templateModel('demo-song');
   const back = importStudio(serializeStudio(m));
@@ -69,7 +70,7 @@ test('K144 the whole song: 44 bars at 96 BPM, 744 tempo-linked clips, 7 sections
   assert.equal(DEMO_SONG_SECONDS, 110);
   assert.equal(m.timeline.clips.length, 744);
   assert.deepEqual(byTrack(m), { 'track-bass': 266, 'track-lead': 76, 'track-kick': 135,
-    'track-snare': 107, 'track-hat': 160 });
+    'track-snare': 107, 'track-hat': 156, 'track-open-hat': 4 });
   assert.equal(S.partNotes('bass').length + S.partNotes('lead').length
     + S.partNotes('drums').length, 744, 'one clip per note of the score');
   const spb = 60 / 96;
@@ -96,17 +97,63 @@ test('K144 the parts are wired: synth voices, filter, LFO, drums, mixer and four
   for (const [id, type] of [['bass-osc', 'oscillator'], ['bass-filter', 'filter'],
     ['lead-filter', 'filter'], ['lead-lfo', 'lfo'], ['kick-osc', 'oscillator'],
     ['noise-1', 'noise'], ['snare-env', 'envelope'], ['hat-env', 'envelope'],
-    ['main-mix', 'mixer'], ['master-1', 'master'], ['scope-1', 'scope'],
+    ['open-hat-env', 'envelope'], ['main-mix', 'mixer'], ['master-1', 'master'],
+    ['scope-1', 'scope'],
     ['spectrum-1', 'spectrum'], ['spectrogram-1', 'spectrogram'], ['meter-1', 'meter']]) {
     assert.equal(types[id], type, id);
   }
+  assert.deepEqual([m.graph.nodes.length, m.graph.edges.length], [19, 20]);
   const lfo = m.graph.edges.find((e) => e.from.node === 'lead-lfo');
   assert.deepEqual([lfo.to.node, lfo.to.port], ['lead-filter', 'frequency']);
   assert.deepEqual(m.timeline.tracks.map((t) => [t.name, t.target]), [['Bass', 'bass-osc'],
-    ['Lead', 'lead-osc'], ['Kick', 'kick-osc'], ['Snare', 'snare-env'], ['Hats', 'hat-env']]);
+    ['Lead', 'lead-osc'], ['Kick', 'kick-osc'], ['Snare', 'snare-env'], ['Hats', 'hat-env'],
+    ['Open hat', 'open-hat-env']]);
+  // Both hats are the same noise through the same high-pass, each into its own envelope.
+  const into = (id) => m.graph.edges.filter((e) => e.to.node === id)
+    .map((e) => `${e.from.node}>${e.to.port}`);
+  assert.deepEqual([into('hat-env'), into('open-hat-env')], [['hat-filter>audio'],
+    ['hat-filter>audio']]);
+  assert.deepEqual(m.graph.edges.filter((e) => e.from.node === 'open-hat-env')
+    .map((e) => `${e.to.node}.${e.to.port}`), ['drum-mix.in4']);
+  const drums = m.graph.nodes.find((n) => n.id === 'drum-mix').params;
+  assert.equal(drums.level4, drums.level3, 'the open hat plays at the closed hat\'s level');
   assert.deepEqual(m.timeline.automation.map((l) => `${l.target.node}.${l.target.param}`), [
     'bass-filter.frequency', 'lead-lfo.rate', 'main-mix.level1', 'main-mix.level2',
     'main-mix.level3']);
+});
+
+test('K144 the open hat rings on, and the closed hat keeps its 12 ms ring', () => {
+  // Each hat's envelope through the schedule the Studio envelope node plays (adapters/nodes.js:
+  // applyAdsr at the gate, releaseAt after the clip's duration), read every 0.1 ms: how long it
+  // rings above -30 dB of its peak. The open hat has its own envelope node, so its sustain
+  // cannot lengthen the 156 closed hats (#323 review: a shared sustain 0.25 made every closed
+  // hat ring 35 ms, +7.3 dB of envelope energy).
+  const m = templateModel('demo-song');
+  const envOf = (id) => {
+    const p = m.graph.nodes.find((n) => n.id === id).params;
+    return { a: p.attack, d: p.decay, s: p.sustain, r: p.release };
+  };
+  const gatesOf = (trackId) => [...new Set(m.timeline.clips.filter((c) => c.trackId === trackId)
+    .map((c) => c.duration))];
+  const rings = (adsr, gate) => {
+    const { events, endTime } = releaseEvents(adsrEvents(0, adsr), gate, adsr.r);
+    let n = 0;
+    for (let i = 0; i * 1e-4 <= endTime; i++) {
+      if (valueAtTime(events, i * 1e-4) > 10 ** -1.5) n += 1;
+    }
+    return n * 1e-4;
+  };
+  const closedEnv = envOf('hat-env');
+  const openEnv = envOf('open-hat-env');
+  assert.deepEqual([gatesOf('track-hat'), gatesOf('track-open-hat')], [[0.03], [0.15625]]);
+  const closed = rings(closedEnv, 0.03);
+  const open = rings(openEnv, 0.15625);
+  assert.ok(Math.abs(closed - 0.0122) <= 2e-4,
+    `the closed hat rings ${closed.toFixed(4)} s above -30 dB, not 0.0122 s`);
+  assert.ok(open - closed > 0.1, `the open hat rings ${open.toFixed(4)} s above -30 dB, the `
+    + `closed one ${closed.toFixed(4)} s`);
+  assert.deepEqual(closedEnv, { a: 0.001, d: 0.03, s: 0, r: 0.02 },
+    'the closed hat\'s envelope is the one it was written with');
 });
 
 test('K144 the offline render plays every clip and lane, 110 s, with no limitation', () => {

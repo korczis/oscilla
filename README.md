@@ -496,10 +496,11 @@ today, to show where the parts meet and where they do not yet.
 - **Studio graph.** A sawtooth bass voice goes into a low-pass filter. A square lead voice goes
   into a resonant low-pass filter, with an LFO on its cutoff. The kick is a sine Oscillator
   swept from 140 to 45 Hz. Snare and hats are white noise through band-pass and high-pass
-  filters, each into an Envelope. Everything meets in a mixer that feeds the Master Output, and
+  filters, each into an Envelope; the open hat has an Envelope of its own, which holds on for
+  its longer note. Everything meets in a mixer that feeds the Master Output, and
   Scope, Spectrum, Spectrogram and Meter nodes tap the mix.
-- **Timeline.** Every note is a tempo-linked clip on one of five tracks (Bass, Lead, Kick,
-  Snare, Hats), 744 in all, so a tempo change moves the whole song. Seven markers name the
+- **Timeline.** Every note is a tempo-linked clip on one of six tracks (Bass, Lead, Kick,
+  Snare, Hats, Open hat), 744 in all, so a tempo change moves the whole song. Seven markers name the
   sections.
 - **Automation.** The bass filter opens during the build, the lead LFO speeds up, and the
   outro fades the mix.
