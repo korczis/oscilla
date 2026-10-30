@@ -1,0 +1,36 @@
+id: K003
+milestone: M059
+serves:
+  - "playable-instrument#sequencer-editing"
+title: "Space play and stop, undo and redo, copy and paste of sequencer blocks"
+slug: space-play-and-stop-undo-and-redo-copy-and-paste-of-sequence
+priority: p2
+profile: implementation
+objective: "Lands as feat(sequencer). Extend onKeydown in src/js/sequencer/editor.js: Space plays and stops under ADR 0050 (the play key of the workspace in view), Ctrl+Z and Shift+Ctrl+Z undo and redo by restoring the serialized model, Ctrl+C and Ctrl+V copy and paste blocks; the shortcut data lists them."
+why: "Owner direction of 2026-10-29 (session oscilla-b0): OSCILLA becomes a playable, patchable instrument and an audio-band signal lab; the plan checked every fact it relies on against main at 8b5792cd, and the sizes it quotes are unchanged at e2720e07."
+scope:
+  - "src/js/sequencer/editor.js"
+  - "src/js/sequencer/model.js"
+  - "src/js/labs/sequencer-panel.js"
+  - "src/js/ui/shortcuts.js"
+  - "tests/unit/sequencer-editor.test.mjs"
+  - "tests/unit/sequencer-model.test.mjs"
+  - "tests/unit/v4-shortcuts.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K002"
+acceptance_criteria:
+  - "Undo restores the exact serialized model."
+  - "Ctrl+Z, Shift+Ctrl+Z, Ctrl+C and Ctrl+V are covered by unit tests that fail on the merge base."
+  - "Space follows ADR 0050 and the shortcut list shows the new keys."
+  - "No reviewer's verdict is needed (src/js/sequencer is not a guarded path); as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first). It adds no markup, osc-* class token or stylesheet selector, so the Flowbite Pro ratchet stays flat (node --test tests/unit/ui-flowbite-pro.test.mjs)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/sequencer-editor.test.mjs"
+  - "node --test tests/unit/v4-shortcuts.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

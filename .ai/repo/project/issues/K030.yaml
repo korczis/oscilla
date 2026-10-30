@@ -1,0 +1,61 @@
+id: K030
+milestone: M062
+serves:
+  - "playable-instrument#chart-interaction"
+  - "playable-instrument#chart-states-honest"
+title: "Spectrum and mic spectrum: bin-honest readout, matched legend, stated peaks, last frame"
+slug: spectrum-and-mic-spectrum-bin-honest-readout-matched-legend
+priority: p2
+profile: implementation
+objective: "Lands as feat(charts) with a guarded part. spectrum-chart.js (analysis spectrum and mic dual) gets the kit's crosshair and keyboard cursor with a readout such as \"1.00 kHz . bin 11.7 Hz . max of 3 bins . -23.4 dB rel\": the frequency is printed by formatFrequencyWithResolution (src/js/measurement/format.js), with no digit finer than the bin width allows (\"1.00 kHz\" at 11.7 Hz, \"1.002 kHz\" only at 2.93 or 5.86 Hz), note name and cents only where the bin width resolves them, and a provenance line read from the node (smoothingTimeConstant, fftSize, sampleRate). under a still pointer the readout of a live chart is rewritten at most 4 times a second with a \"live\" marker, and says \"held\" once the data stops (paused, frozen); it is announced only for keyboard moves. Peaks: a new, guarded findPeaks(spectrum, { count, minSeparationBins, minProminenceDb }) in src/js/analysis/peak-detector.js (it has only the one-peak findPeak today): local maxima at least minSeparationBins apart and minProminenceDb above bandMedianDb of their neighbourhood, ranked by level, each refined by parabolicPeak and labelled at its interpolated frequency with its uncertainty, the method stated in the module header; the top three are laid out by layoutMarkerLabels. The legend becomes Pro toggles whose SVG swatches are drawn with the series' real stroke and dash from the palette; the mic plot (yLabel null) gets the relative caption; the analysis spectrum gains peak hold (\"Peak hold since hh:mm:ss\", Reset) and averaging with its mode and window, as Pro toggles; the peak-hold dash is named in the legend. F1 analogue: one Float32Array snapshot of the last drawn frame per configuration, so pause followed by Log/Linear, Max or a theme change re-renders it under a \"Paused, last frame\" badge, and a state note says why a plot without a snapshot is empty. No setData or redraw while Audio not started or paused; the spectrum and the mic analyzer subscribe to the frame loop with their hosts. It builds the chrome F006 places on the Analyzer card."
+why: "Owner order of 2026-10-29: \"make the charts really sexy, modern, interactive\", for all charts; reviewer f3 scoped it to every surface that draws data. Revised after f3's review of the plan (CHANGES-REQUESTED, 2026-10-29): owner decisions are Q issues under M063, Pro chrome waits on F002 and on the card issue of its workspace, every chart that claims chart-interaction delivers the keyboard cursor and the announced readout, chart keys never take Escape or Space; revision 3 answers f3's delta review. Facts checked against origin/main at e2720e07 and the branches of #251, #253, #263 and #265 (charts-plan.md, charts-plan-changes.md)."
+scope:
+  - "src/js/charts/spectrum-chart.js"
+  - "src/js/charts/spectrum-data.js"
+  - "src/js/analysis/peak-detector.js"
+  - "src/js/labs/analysis.js"
+  - "src/js/labs/mic-analyzer.js"
+  - "src/index.html"
+  - "src/partials"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "src/styles/charts.css"
+  - "src/styles/components.css"
+  - "src/styles/instrument.css"
+  - "src/styles/responsive.css"
+  - "tests/unit/charts.test.mjs"
+  - "tests/unit/analysis-peaks.test.mjs"
+  - "tests/unit/charts-readout-wording.test.mjs"
+  - "tests/unit/chart-host-census.json"
+  - "tests/browser/labs.cjs"
+  - "tests/browser/charts-interaction.cjs"
+  - "tests/browser/qa-regressions.cjs"
+  - "tests/visual"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K027"
+  - "K053"
+  - "K036"
+  - "F006"
+acceptance_criteria:
+  - "Unit tests that fail on the merge base: the readout's frequency equals formatFrequencyWithResolution at 2.93, 5.86 and 11.72 Hz bins (\"1.002 kHz\", \"1.002 kHz\", \"1.00 kHz\" for 1002 Hz) and states the aggregation; cents appear only under the stated bin-width rule; the snapshot redraw after a reconfigure equals the snapshot; the live-readout bound holds under a fake clock."
+  - "tests/unit/analysis-peaks.test.mjs, failing on the merge base: findPeaks on synthetic spectra at 44.1 and 48 kHz finds two and three tones within one bin, keeps two tones minSeparationBins apart separate, finds nothing in noise below minProminenceDb, ignores DC, and states its uncertainty."
+  - "tests/browser/labs.cjs: after pause and Log/Linear the plot is not at the floor (getImageData above the floor colour); the hover bin width equals the one computed from the live sampleRate; a legend toggle hides its series and leaves the other colours unchanged; uPlot setData is called 0 times across polled frame-loop ticks while audio has not started. A qa check in tests/browser/qa-regressions.cjs parks the pointer over the spectrum while a tone plays and finds the readout's DOM writes over a polled window within the live-readout bound (the hovered variant of no-per-frame-dom-writes). Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline and assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac); tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Its chart hosts (analysis spectrum, mic spectrum) move from pending to done in tests/unit/chart-host-census.json, each carrying data-osc-chart, and the table-driven pass of tests/browser/charts-interaction.cjs holds for each: the host is role=group holding the aria-describedby summary and the snapshot data table, and its focusable plot surface is role=application with aria-roledescription \"interactive chart\" (never role=img), both asserted in the accessibility tree, with a visible focus ring; ArrowRight moves the cursor one step and the one polite live region announces the readout once after the keys settle; Escape clears the cursor and still reaches the page's stop (a playing tone stops); Space keeps its workspace meaning (SPACE_MEANING of src/js/ui/shortcuts.js) and is never taken (ADR 0050); on a touch pointer a tap pins the cursor and it stays after the finger lifts."
+  - "Levels say dB relative (dBFS-like) unless a valid LevelCalibration applies, every estimate is labelled as one, and no data value is tweened or eased; every readout, tooltip, axis title and caption string it adds is registered in its chart's wording table and passes tests/unit/charts-readout-wording.test.mjs (project.no-fake-science)."
+  - "The chart reads existing AnalyserNodes on the main thread only, creates no audio node and adds no work to the audio path; hover and keyboard work runs on events only, a live readout under a still pointer is rewritten at most 4 times a second through the kit's live-readout, and no draw loop writes the DOM per frame (project.audio-engine-discipline v2)."
+  - "The pull request carries a reviewer's verdict (src/js/analysis is guarded for findPeaks; the chart files are not; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "Chart chrome (legend, toolbar, toggle, badge, tooltip, readout row) is Flowbite Pro markup adapted from the matching Pro component and lands after F002 turned on preflight and the form base styles (the border trap of review #253, R-3) and after F006 placed the card it sits in; no osc-* class token or legacy selector is added and src/styles/tokens.css, charts.css, measure.css, studio.css and studio-timeline.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+  - "Every osc-* use it removes leaves the record in the same change: tests/unit/ui-flowbite-pro-baseline.json is rewritten by node scripts/ui-flowbite-pro-record.mjs (osc-chip-readout falls by the spectrum chip's use, and the legend's osc-* uses leave (osc-legend, osc-analysis-legend, osc-legend-item, osc-legend-dot at index.html:586-588 on main)), and a selector left without a producer is deleted from src/styles/charts.css (.osc-chip-readout, if this removes its last use), src/styles/components.css (.osc-legend, -item and -dot; K027, on which this slice depends, already removed the dot colour modifiers at :672-673, :650-673 on main), src/styles/instrument.css and src/styles/responsive.css (.osc-analysis-legend, :652 and :121) (tests/unit/css-producers.test.mjs); the pull request states by how much the debt fell."
+  - "The visual references of the analysis and mic regions of test:visual are re-accepted in darwin-arm64 and linux-x64, in each theme that has references (light ones exist once F011 lands), with the reason \"spectrum legend, caption and peak labels\" in the pull request body (npm run test:visual)."
+  - "scripts/size-report.mjs shows at most 3 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of M062's figures stays within the cap Q014 records, under the 1 000 000 B gzip budget (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/charts.test.mjs tests/unit/analysis-peaks.test.mjs tests/unit/charts-readout-wording.test.mjs"
+  - "node tests/browser/labs.cjs"
+  - "node tests/browser/charts-interaction.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

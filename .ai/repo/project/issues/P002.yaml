@@ -6,7 +6,7 @@ title: "Build the first screen the owner chose"
 slug: build-the-first-screen-the-owner-chose
 priority: p2
 profile: implementation
-objective: "Implement the layout Q004 records, with acceptance criteria written from it before any code, in the words of the positioning sentence Q002 records and after P003 has put that sentence in the page's self-description. First commit, as its own change, tests/browser/first-screen.cjs with a table-driven inventory of every entry path that passes on the current first screen: the hash dispatcher of ADR 0045, the URL state keys (among them 'm' for the V1 mode ids playground, sweep, dual, presets and learn; src/js/ui/app.js, src/js/ui/navigation.js), ?mock=1, the Studio links of tests/browser/v31-studio-links.cjs and the instrument's direct path; then build the layout with that inventory unchanged."
+objective: "Built on Flowbite Pro (intent ui-flowbite-pro, owner 2026-10-28): the layout is built from Pro components inside the Pro shell F002 lands, after F003 has put today's Playground on Pro; the inventory below is imported from tests/browser/ui-flowbite-pro.cjs, which F002 lands with the same entries, rather than restated. Implement the layout Q004 records, with acceptance criteria written from it before any code, in the words of the positioning sentence Q002 records and after P003 has put that sentence in the page's self-description. First commit, as its own change, tests/browser/first-screen.cjs with a table-driven inventory of every entry path that passes on the current first screen: the hash dispatcher of ADR 0045, the URL state keys (among them 'm' for the V1 mode ids playground, sweep, dual, presets and learn; src/js/ui/app.js, src/js/ui/navigation.js), ?mock=1, the Studio links of tests/browser/v31-studio-links.cjs and the instrument's direct path; then build the layout with that inventory unchanged."
 why: "'As before' is decidable only against an inventory (critique first-run-experience, deep-links-have-no-inventory); the first screen must say what Q002 chose (first-screen-copy-skips-q002)."
 scope:
   - "src"
@@ -22,6 +22,7 @@ depends_on:
   - "Q004"
   - "Q002"
   - "P003"
+  - "F003"
 acceptance_criteria:
   - "tests/browser/first-screen.cjs lands with the deep-link inventory passing on the current first screen before the layout changes, and passes unchanged after it in Chromium, Firefox and WebKit from file:// and from the sub-path; the criteria written from Q004 are checks in the same suite."
   - "tests/browser/live-smoke.cjs (which checks after every Pages deployment that the Playground's Studio widget loads and the compact Studio is visible; specification section 269) and the visual gate (scripts/visual-gate.mjs, tests/visual/regions.json) are updated in the same pull request where the layout moves what they check, with the reason; the claim compact-sync stays true or the pull request says why it changes."
