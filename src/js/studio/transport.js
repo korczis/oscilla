@@ -160,6 +160,29 @@ const errorOf = (r, fallback) => (r.errors && r.errors[0] && r.errors[0].message
 
 const REFUSALS = Object.freeze(['edit-refused', 'sync-refused']);
 
+/** Segments of a continued voice's fade gain (fadeCurve). */
+export const FADE_KNOTS = 8;
+
+/**
+ * The fade gain of a pattern voice continued on a rebuilt node from `t0` (H001,
+ * continueVoice), as [[time, gain], ...] from t0 to t0 + xfadeS, linear between the knots. The
+ * voice should rise as E = (tau - t0) / xfadeS. The new node's routes already ramp 0 -> 1 over
+ * [rampAt, rampAt + xfadeS] (the runtime's crossfade, equal-gain against the old routes), so the
+ * gain is E / route: 1 when t0 is the crossfade time (the routes alone fade the voice in, and a
+ * second ramp on top would dip the crossfade to E^2), 0 at a later t0 the routes are already
+ * open by. With no route ramp (rampAt null) it is E.
+ */
+export function fadeCurve(t0, rampAt, xfadeS = STUDIO_XFADE_S) {
+  const route = (tau) => (rampAt === null ? 1 : clamp((tau - rampAt) / xfadeS, 0, 1));
+  const out = [];
+  for (let i = 0; i <= FADE_KNOTS; i += 1) {
+    const tau = t0 + (i * xfadeS) / FADE_KNOTS;
+    const r = route(tau);
+    out.push([tau, r <= 1e-6 ? 1 : Math.min(1, i / FADE_KNOTS / r)]);
+  }
+  return out;
+}
+
 /** The clip-target verdict (clip-targets.js) of a model clip on its effective target. */
 export function clipVerdict(model, clip, registry = NODE_REGISTRY) {
   const id = effectiveTarget(model, clip);
@@ -651,16 +674,20 @@ export function createStudioTransport({
    * structural, so the Inspector's waveform edit replaces the node): the old voice plays into
    * the old node's pattern bus and fades out with its routes (the runtime's crossfade), which
    * left the clip silent until its next trigger. Its item continues on the new node from `t`
-   * (at or after the edit's horizon, on a render quantum): the same compiled sequence from the
-   * offset it has reached there, with the node's waveform now, faded in from 0 over the
-   * runtime's crossfade while the old one fades out. -> true when it continues.
+   * (at or after the edit's horizon, on a render quantum) until `end` (the item's, or the end a
+   * retime gave it): the same compiled sequence from the offset it has reached there, with the
+   * node's waveform now, faded in from 0 over STUDIO_XFADE_S while the old one fades out.
+   * `rampAt`: when the runtime's crossfade ramps the new node's routes 0 -> 1 (over
+   * STUDIO_XFADE_S from it), null when they do not ramp (only the pattern bus changed); the
+   * fade gain is then the quotient that makes fade x route rise linearly from 0 at t (fadeCurve),
+   * not a second ramp on top of the routes'. -> true when it continues.
    */
-  function continueVoice(v, t) {
+  function continueVoice(v, t, end, rampAt = null) {
     const h = ready(v.nodeId);
     const dest = destOf(v.item);
     const n = nodeOf(model, v.nodeId);
     if (!h || !h.acct || !dest || !n || v.item.type !== 'pattern'
-      || t >= v.item.endTime - STUDIO_XFADE_S) return false;
+      || !(t < end - STUDIO_XFADE_S)) return false;
     const ctx = hooks.ctx;
     const fade = h.acct.track(ctx.createGain());
     fade.gain.value = 0;
@@ -668,9 +695,13 @@ export function createStudioTransport({
     fade.connect(dest);
     const voice = voiceOn(h, v.item.sequence, fade, t, { offset: t - v.item.startTime,
       waveform: n.params.waveform, fade });
-    fade.gain.setValueAtTime(0, voice.t0);
-    fade.gain.linearRampToValueAtTime(1, voice.t0 + STUDIO_XFADE_S);
-    voices.set(v.key, { ...v, voice, handle: h, dest, replacedNoted: false });
+    const curve = fadeCurve(voice.t0, rampAt);
+    fade.gain.setValueAtTime(curve[0][1], curve[0][0]);
+    for (const [at, g] of curve.slice(1)) fade.gain.linearRampToValueAtTime(g, at);
+    const retimed = end < voice.endTime - 1e-6;
+    if (retimed) voice.stop(end);
+    voices.set(v.key, { ...v, voice, handle: h, dest, replacedNoted: false,
+      until: retimed ? end : undefined });
     return true;
   }
 
@@ -1190,8 +1221,11 @@ export function createStudioTransport({
     return c && c.handle === h ? c.bus : (h.info && h.info.destination) || null;
   }
 
-  /** Apply a scheduler.edit() plan (EDIT_POLICY, docs/v31/timeline.md). */
-  function applyEdit(plan) {
+  /**
+   * Apply a scheduler.edit() plan (EDIT_POLICY, docs/v31/timeline.md). `applied`: what the
+   * runtime's apply did before it ({ at: its crossfade time, fresh: the node ids it built }).
+   */
+  function applyEdit(plan, applied = null) {
     const touched = new Set();
     for (const key of plan.cancel) cancelItem(key, touched);
     // A future voice the scheduler kept is rebuilt when the node it plays into was replaced
@@ -1205,15 +1239,26 @@ export function createStudioTransport({
       if (resume === null) resume = Math.max(hooks.soon(), Math.ceil(plan.horizon / q - 1e-9) * q);
       return resume;
     };
+    const replaced = (v) => v.handle !== ready(v.nodeId) || v.dest !== destOf(v.item);
+    // The end a sounding voice still plays to: its item's, or the one a retime gave it (a voice
+    // stopping for any other reason, a release, is not continued).
+    const soundsUntil = (v) => (v.voice.ended ? null : !v.voice.stopping ? v.item.endTime
+      : finite(v.until) ? v.until : null);
+    const carryOn = (key, v, end) => {
+      if (end === null) return;
+      // The runtime ramped this node's new routes from its crossfade time only when it built it.
+      const rampAt = applied && finite(applied.at) && applied.fresh && applied.fresh.has(v.nodeId)
+        && v.handle !== ready(v.nodeId) ? applied.at : null;
+      if (continueVoice(v, resumeAt(), end, rampAt)) {
+        record({ key, clipId: v.item.clipId, decision: 'continue', at: resume,
+          reason: 'node-replaced' });
+      }
+    };
     for (const key of plan.keep) {
       const v = voices.get(key);
-      if (!v) continue;
-      if (v.handle === ready(v.nodeId) && v.dest === destOf(v.item)) continue;
+      if (!v || !replaced(v)) continue;
       if (v.item.startTime < plan.horizon) {
-        if (!v.voice.ended && !v.voice.stopping && continueVoice(v, resumeAt())) {
-          record({ key, clipId: v.item.clipId, decision: 'continue', at: resume,
-            reason: 'node-replaced' });
-        }
+        carryOn(key, v, soundsUntil(v));
         continue;
       }
       cancelItem(key, touched);
@@ -1226,7 +1271,15 @@ export function createStudioTransport({
     }
     for (const { key, at } of plan.retime) {
       const v = voices.get(key);
-      if (v) v.voice.stop(at);
+      if (v) {
+        // A sounding clip shortened now or earlier (the scheduler decides retime-end again on
+        // every later edit) whose node was replaced: continued to its new end, as one kept.
+        const end = soundsUntil(v);
+        if (v.voice.stop(at)) v.until = at;
+        if (replaced(v) && v.item.startTime < plan.horizon) {
+          carryOn(key, v, end === null ? null : Math.min(end, at));
+        }
+      }
       for (const g of gatesOf(key)) {
         g.end = at;
         touched.add(g.nodeId);
@@ -1440,9 +1493,10 @@ export function createStudioTransport({
     settled();
     model = next;
     if (r.presentation) return { ok: true, synced: true, revision: rev, applied: r, plan: null };
-    afterApply(freshOf(r));
+    const fresh = freshOf(r);
+    afterApply(fresh);
     const plan = scheduler.edit(next, ctxNow());
-    applyEdit(plan);
+    applyEdit(plan, { at: r.at, fresh });
     edited(next);
     return { ok: true, synced: true, revision: rev, applied: r, plan };
   }
@@ -1478,8 +1532,9 @@ export function createStudioTransport({
     // transaction, and nothing the transport plays changed (the execution state holds the clips,
     // lanes, loop and tempo): no claims, lanes or timeline re-plan to bring in line.
     if (r.presentation) return null;
-    afterApply(freshOf(r));
-    applyEdit(scheduler.edit(next, ctxNow()));
+    const fresh = freshOf(r);
+    afterApply(fresh);
+    applyEdit(scheduler.edit(next, ctxNow()), { at: r.at, fresh });
     edited(next);
     if (playing && timer == null) arm(1);
     return null;

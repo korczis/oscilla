@@ -37,12 +37,16 @@
 //                        Waveform changed to Square in its Inspector select inside the Tone
 //                        clip (lengthened to TONE_S, edited from 0.25 s): the Tone keeps
 //                        sounding on the output tap from 0.1 s to 0.6 s after the edit, its RMS
-//                        above FLOOR_DB and within LEVEL_DB of
-//                        its level before the edit (it fell to the floor, -107 dB, until the
-//                        Sweep: the rebuilt oscillator dropped the sounding voice); no click
-//                        across the switch (the largest one-sample step around it within
-//                        CLICK_MAX times the larger of the steady windows' own); the model
-//                        holds square and the runtime has applied its revision
+//                        above FLOOR_DB and SQUARE_OVER_SAW_DB above its level before the edit
+//                        within LEVEL_DB (it fell to the floor, -107 dB, until the Sweep: the
+//                        rebuilt oscillator dropped the sounding voice); the transport recorded
+//                        the continuation, and across the seam (from before the edit to
+//                        SEAM_AFTER_S after the continuation) every SEAM_WIN_S window stays
+//                        within SEAM_DB below and SEAM_PEAK_DB above the levels on either side
+//                        (no gap, no dip, no double level); no click across the switch (the
+//                        largest one-sample step around it within CLICK_MAX times the larger of
+//                        the steady windows' own); the model holds square and the runtime has
+//                        applied its revision
 //   waveform-live-phone  the same at 390 x 844 touch, the select in the Inspector subview
 //   trace-edit           an edit while playing: the Trace section (a real h5 heading, an
 //                        ordered list) shows it first as "<op> · Change ... Detune · committed,
@@ -95,10 +99,23 @@ const CLICK_MAX = 3;
 const TR = '[data-osc="studio.inspector.trace"]';
 // waveform-live: the Tone's RMS after the edit stays above this floor (dBFS; it plays about
 // -31 dB on the tap, and fell to -107 dB without the H001 fix) and within LEVEL_DB of its level
-// before the edit (a square wave carries more power than the sawtooth: about +4 dB measured).
+// before the edit raised by SQUARE_OVER_SAW_DB: a square wave of the same peak carries sqrt(3)
+// times the RMS of a sawtooth (+4.8 dB; +5.3 measured after the synth's lowpass). A voice at
+// half or double its level, or none, is outside it (review of #320, T2: +-12 dB around the old
+// level passed both).
 const FLOOR_DB = -60;
 const TONE_S = 4;
-const LEVEL_DB = 12;
+const SQUARE_OVER_SAW_DB = 20 * Math.log10(Math.sqrt(3));
+const LEVEL_DB = 3;
+// The seam: RMS windows of SEAM_WIN_S (two periods of the 220 Hz Tone and more), every
+// SEAM_HOP_S, from before the edit to SEAM_AFTER_S after the continuation starts. None falls more
+// than SEAM_DB below the lower of the levels before and after (a gap of one window or more reads
+// the floor) or rises SEAM_PEAK_DB above the higher (both voices at full level).
+const SEAM_WIN_S = 0.01;
+const SEAM_HOP_S = 0.0025;
+const SEAM_AFTER_S = 0.06;
+const SEAM_DB = 10;
+const SEAM_PEAK_DB = 4;
 const dbOf = (x) => 20 * Math.log10(Math.max(x, 1e-12));
 
 const H = {
@@ -270,6 +287,23 @@ const H = {
     }
     return { rms: n ? Math.sqrt(sum / n) : 0, n, want: f1 - f0 };
   }, [t0, t1]),
+  /** RMS of the tapped audio in windows of `win` s every `hop` s from t0 to t1: [[t, rms]]. */
+  windows: (page, t0, t1, win, hop) => page.evaluate(([a, b, w, h]) => {
+    const sr = window.OSCILLA.engine.ctx.sampleRate;
+    const out = [];
+    for (let t = a; t + w <= b; t += h) {
+      const f0 = Math.round(t * sr);
+      const f1 = Math.round((t + w) * sr);
+      let sum = 0; let n = 0;
+      for (const c of window.__rtTap) {
+        const lo = Math.max(f0, c.f);
+        const hi = Math.min(f1, c.f + c.L.length);
+        for (let k = lo; k < hi; k += 1) { const v = c.L[k - c.f]; sum += v * v; n += 1; }
+      }
+      out.push([t, n >= 0.9 * (f1 - f0) ? Math.sqrt(sum / n) : null]);
+    }
+    return out;
+  }, [t0, t1, win, hop]),
   /** The last context time the output tap has delivered. */
   tapped: (page) => page.evaluate(() => {
     const sr = window.OSCILLA.engine.ctx.sampleRate;
@@ -328,8 +362,20 @@ const H = {
       const a = s.runtime.applied();
       return { applied: a && a.revision, revision: s.store.getRevision() };
     });
+    // Where the Tone continued on the rebuilt oscillator (the transport's decision).
+    const resume = await page.evaluate(() => window.OSCILLA.studio.transport.debugInfo().decisions
+      .filter((x) => x.clipId === 'clip-1' && x.decision === 'continue').map((x) => x.at));
+    const seamEnd = Math.max(edit.t, ...resume) + SEAM_AFTER_S;
+    const seam = seamEnd <= post[1]
+      ? await H.windows(page, ask.t, seamEnd, SEAM_WIN_S, SEAM_HOP_S) : [];
     await page.evaluate(() => window.OSCILLA.app.studioStop());
-    const d = { was, editAt: [ask.p, edit.p], beforeDb: dbOf(before.rms), afterDb: dbOf(after.rms),
+    const beforeDb = dbOf(before.rms);
+    const afterDb = dbOf(after.rms);
+    const seamDb = seam.filter(([, r]) => r !== null).map(([t, r]) => [t, dbOf(r)]);
+    const low = seamDb.reduce((m, x) => (x[1] < m[1] ? x : m), [null, Infinity]);
+    const high = seamDb.reduce((m, x) => (x[1] > m[1] ? x : m), [null, -Infinity]);
+    const d = { was, editAt: [ask.p, edit.p], beforeDb, afterDb, resume,
+      rise: afterDb - beforeDb, seam: { windows: seam.length, low, high },
       covered: [before.n / before.want, after.n / after.want], click: around.max,
       steady: Math.max(steadyPre.max, steadyPost.max), model, sync,
       clips: await page.evaluate(() => window.OSCILLA.studio.model.timeline.clips
@@ -339,8 +385,12 @@ const H = {
       lengthened: d.clips.some(([id, at, len]) => id === 'clip-1' && at === 0 && len === TONE_S),
       editInTone: post[1] < base + TONE_S - 0.05,
       tapped: before.n >= 0.9 * before.want && after.n >= 0.9 * after.want,
-      sounds: d.afterDb > FLOOR_DB,
-      level: Math.abs(d.afterDb - d.beforeDb) <= LEVEL_DB,
+      sounds: afterDb > FLOOR_DB,
+      level: Math.abs(afterDb - beforeDb - SQUARE_OVER_SAW_DB) <= LEVEL_DB,
+      continued: resume.length === 1 && resume[0] >= ask.t && resume[0] < post[0],
+      seamCovered: seam.length > 0 && seamDb.length === seam.length,
+      noGap: low[1] >= Math.min(beforeDb, afterDb) - SEAM_DB,
+      noDouble: high[1] <= Math.max(beforeDb, afterDb) + SEAM_PEAK_DB,
       noClick: around.n > 0 && around.max <= CLICK_MAX * d.steady,
       model: model === 'square',
       inSync: sync.applied === sync.revision,

@@ -75,6 +75,35 @@ export function lfoShape(shape, phase) {
   return Math.sin(2 * Math.PI * p);
 }
 
+// Harmonics of a phased triangle (phasedWaveCoefficients); its terms fall as 1/n^2.
+export const PHASED_HARMONICS = 64;
+
+/**
+ * Fourier coefficients { real, imag } (PeriodicWave convention: x = sum real[n] cos(n w t) +
+ * imag[n] sin(n w t)) of a modulator shape ('sine' | 'triangle', the shapes planFromTimeline
+ * gives a source) advanced by `phase` cycles: the waveform lfoShape(shape, phase + f t), i.e.
+ * the oscillator type as if it had started `phase` periods earlier. An OscillatorNode always
+ * starts at phase 0, and one started in the past does not catch up, so a voice continued from
+ * an offset (H001) starts each sounding modulator on this wave instead. The triangle is the Web
+ * Audio type's series (b_n = 8 sin(n pi / 2) / (n pi)^2, odd n) to PHASED_HARMONICS terms; the
+ * PeriodicWave's normalisation scales it to the peak 1 the type has. -> null for phase 0 (the
+ * type itself) or another shape.
+ */
+export function phasedWaveCoefficients(shape, phase) {
+  const p = phase - Math.floor(phase);
+  if (!(p > 0) || (shape !== 'sine' && shape !== 'triangle')) return null;
+  const n = shape === 'triangle' ? PHASED_HARMONICS : 1;
+  const real = new Float32Array(n + 1);
+  const imag = new Float32Array(n + 1);
+  for (let k = 1; k <= n; k += 1) {
+    // sin(k (x + phi)) = sin(k x) cos(k phi) + cos(k x) sin(k phi), phi = 2 pi p
+    const b = shape === 'sine' ? 1 : k % 2 ? (8 * (k % 4 === 1 ? 1 : -1)) / (k * Math.PI) ** 2 : 0;
+    real[k] = b * Math.sin(2 * Math.PI * k * p);
+    imag[k] = b * Math.cos(2 * Math.PI * k * p);
+  }
+  return { real, imag };
+}
+
 // derived from V1 stepsFromFrequencies (index.html@95dfa81:1748): the cap is the block length
 // instead of MAX_PROGRAMMED_S, and a step never overruns it.
 function stepsWithin(freqs, toneS, gapS, blockS) {
@@ -581,7 +610,8 @@ function defaultTimers() {
  * offset > 0 plays the rest of the sequence from `offset` at t0 (a Studio voice continued on a
  * rebuilt node, H001): every automated parameter starts at t0 with its exact scheduled value at
  * `offset` (automationValueAt), later events keep their times relative to t0 - offset, sources
- * that ended before `offset` are not created, and the others start at t0. The voice then starts
+ * that ended before `offset` are not created, and the others start at t0, each modulator (siren,
+ * AM, FM) on the phase it has reached there (phasedWaveCoefficients). The voice then starts
  * at its programmed level, not from the floor: the caller fades it in. voice.t0 is the start,
  * voice.duration what remains, voice.offset the offset; freqAt and blockIndexAt stay in
  * sequence time.
@@ -852,9 +882,12 @@ export function compileSequence(model, ctx, destination, t0, opts = {}) {
     }
   }
 
-  const modulator = (e, at) => {
+  // `phase`: the cycles it has run at the offset (a modulator started before it, H001).
+  const modulator = (e, at, phase = 0) => {
     const lfo = oscillator();
-    lfo.type = e.shape;
+    const w = phase > 0 ? phasedWaveCoefficients(e.shape, phase) : null;
+    if (w) lfo.setPeriodicWave(ctx.createPeriodicWave(w.real, w.imag));
+    else lfo.type = e.shape;
     lfo.frequency.setValueAtTime(e.value, now);
     const depth = track(ctx.createGain());
     depth.gain.setValueAtTime(e.depth, now);
@@ -870,12 +903,13 @@ export function compileSequence(model, ctx, destination, t0, opts = {}) {
     const at = base + e.t;
     if (offset > 0 && e.t <= offset) {
       // Before (or at) the offset: automation is in the held value above; a source still to
-      // sound starts at t0, one that already ended is never created.
+      // sound starts at t0 (a modulator at the phase it has reached there, its rate being
+      // constant), one that already ended is never created.
       if (e.kind !== 'source' || e.action !== 'start' || !stopsAfter.has(e.key || e.param)) {
         continue;
       }
       if (e.param === 'carrier') pending.set('carrier', { node: carrier, at: start });
-      else modulator(e, start);
+      else modulator(e, start, e.value * (offset - e.t));
       continue;
     }
     if (e.kind !== 'source') {

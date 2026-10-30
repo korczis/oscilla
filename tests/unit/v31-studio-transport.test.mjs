@@ -15,7 +15,7 @@ import assert from 'node:assert/strict';
 import { AudioEngine } from '../../src/js/audio/audio-engine.js';
 import { valueAtTime } from '../../src/js/audio/envelope.js';
 import {
-  EDGE_S, GAIN_FLOOR, STOP_LEAD_S, STOP_PAD_S, STOP_RAMP_S,
+  EDGE_S, GAIN_FLOOR, STOP_LEAD_S, STOP_PAD_S, STOP_RAMP_S, automationValueAt,
 } from '../../src/js/sequencer/compiler.js';
 import { createIdGenerator, createStudioStore } from '../../src/js/studio/actions.js';
 import { laneValueAt } from '../../src/js/studio/automation.js';
@@ -86,6 +86,36 @@ const filterFreq = (s) => s.runtime.nodes.get('filter-1').modTarget('frequency',
 const callsFrom = (param, t0) => param.calls.filter((c) => c[0] === 'cancelScheduledValues'
   ? c[1] >= t0 - EPS : c[2] >= t0 - EPS);
 const near = (a, b, tol = EPS) => assert.ok(Math.abs(a - b) <= tol, `${a} vs ${b}`);
+/** The node `k` connections down the first output of `node`. */
+const hop = (node, k) => (k > 0 ? hop(node.outputs[0], k - 1) : node);
+/** A gain node's scheduled value at `tau` (its value before the first event). */
+const gainAt = (g, tau) => automationValueAt(g.gain.events, tau, g.gain.value);
+
+/**
+ * The fade gain of continued voice `carrier` (H001): the node after the voice's own chain
+ * (carrier -> amp -> envelope -> out -> fade -> the new pattern bus; the old voice `old` has its
+ * bus there), never a route of the runtime.
+ */
+function continuedFade(s, carrier, old, route) {
+  const fade = hop(carrier, 4);
+  assert.equal(fade.kind, 'gain');
+  assert.notEqual(fade, route, 'the fade is not the route');
+  assert.ok(![...s.runtime.edges.values()].some((e) => e.gain === fade), 'nor any route');
+  assert.ok(!reach(old).has(fade), 'the old voice does not pass the fade');
+  assert.notEqual(hop(carrier, 5), hop(old, 4), 'into the new pattern bus, not the old one');
+  return fade;
+}
+
+/** Through fade x route a voice continued at t0 rises as (tau - t0) / STUDIO_XFADE_S. */
+function assertRise(fade, route, t0, tol) {
+  for (let i = 0; i <= 20; i += 1) {
+    const tau = t0 + (i / 20) * STUDIO_XFADE_S;
+    const got = gainAt(fade, tau) * gainAt(route, tau);
+    assert.ok(Math.abs(got - i / 20) <= tol, `level ${got} at t0 + ${tau - t0} s, not ${i / 20}`);
+  }
+  const after = t0 + 2 * STUDIO_XFADE_S;
+  near(gainAt(fade, after) * gainAt(route, after), 1, tol);
+}
 
 // ---------------------------------------------------------------- Basic Synth (§257)
 
@@ -491,17 +521,22 @@ test('H001: a waveform edit while a pattern clip sounds continues the clip on th
   const env = cont[0].outputs[0].outputs[0].gain.scheduled;
   assert.ok(env.some((e) => e.t === t0 && e.ramp === 'set' && e.value === 1), 'sustain at t0');
   assert.ok(cont[0].stopAt > at(bF, 1) - EPS && cont[0].stopAt < at(bF, 1) + STOP_PAD_S + EPS);
-  // Into the new node's pattern bus and its new routes, through a gain faded 0 -> 1 over the
-  // runtime's crossfade from t0, while the old voice's routes fade out.
+  // Into the new node's pattern bus and its new routes, through the gain continueVoice puts
+  // between the voice and the bus (found by its place: the new route ramps 0 -> 1 at t0 too, and
+  // a search by ramp found the route when the fade was gone, review of #320 T1), while the old
+  // voice's routes fade out.
   const route = s.runtime.edges.get('edge-1').gain;
   assert.ok(reach(cont[0]).has(route), 'into the new route');
-  const fade = [...reach(cont[0])].find((n) => n.kind === 'gain' && n.gain.calls.some((c) =>
-    c[0] === 'linearRampToValueAtTime' && c[1] === 1 && c[2] === t0 + STUDIO_XFADE_S));
-  assert.ok(fade, 'a fade-in gain on the continued voice');
-  assert.deepEqual(fade.gain.events.map((e) => [e.ramp, e.value]).slice(-2),
-    [['set', 0], ['linear', 1]]);
-  assert.equal(fade.gain.events.at(-2).t, t0);
+  const fade = continuedFade(s, cont[0], tone[0], route);
   assert.ok(!reach(tone[0]).has(route), 'the old voice stays on the old routes');
+  // The clock did not move during the sync, so the runtime's crossfade starts at t0: its new
+  // route alone fades the voice in, linearly and complementary to the old routes, and the fade
+  // gain is silent until t0 and 1 from there (a second 0 -> 1 ramp would make the level E^2, a
+  // dip of 5 dB). A t0 after the crossfade time: the next test.
+  near(gainAt(route, t0), 0);
+  near(gainAt(fade, t0 - 1e-4), 0);
+  for (let i = 0; i <= 10; i += 1) near(gainAt(fade, t0 + (i / 10) * STUDIO_XFADE_S), 1);
+  assertRise(fade, route, t0, 1e-9);
   assert.ok(s.transport.debugInfo().decisions.some((d) => d.clipId === 'clip-1'
     && d.decision === 'continue' && d.reason === 'node-replaced' && d.at === t0));
   assert.equal(s.store.getModel().graph.nodes.find((n) => n.id === 'osc-1').params.waveform,
@@ -516,6 +551,128 @@ test('H001: a waveform edit while a pattern clip sounds continues the clip on th
     counts.voices], [0, 0, 0, 0, 0]);
   assert.equal(s.ctx.liveAllSources, 0, 'every source of the context has ended');
   assert.equal(s.fx.timers.size, 0, 'no timer left behind');
+});
+
+/**
+ * The reference template playing, `pre` run before the edit at `editAt` s, then osc-1's
+ * waveform set to square and synced: -> { s, b, bF, tone (the sawtooth carriers sounding),
+ * horizon, r, cont (the square carriers before the Sweep), decisions (clip-1's) }.
+ */
+function waveformEdit({ model, editAt = 0.4, transport = null, pre = null, s = setup(model) }) {
+  const tr = transport ? transport(s) : s.transport;
+  const { baseTime: b } = ok(tr.start());
+  const bF = Math.round(b * SR);
+  if (pre) pre(s, tr, b);
+  s.fx.advanceTo(b + editAt);
+  const tone = voiceCarriers(s, 'sawtooth');
+  dispatch(s, { type: 'NODE_PARAM_SET', nodeId: 'osc-1', key: 'waveform', value: 'square' });
+  const horizon = frameCeil(s.ctx.currentTime + SAFE_HORIZON_S, SR);
+  const r = tr.sync();
+  const cont = voiceCarriers(s, 'square').filter((o) => o.startAt < at(bF, 1) - EPS);
+  return { s, tr, b, bF, tone, horizon, r, cont };
+}
+
+const continued = (tr, clipId) => tr.debugInfo().decisions.filter((d) => d.clipId === clipId
+  && d.decision === 'continue');
+
+async function noLeaks(s, tr) {
+  const done = tr.stop();
+  s.fx.advance(0.5);
+  const counts = await done;
+  assert.deepEqual([counts.nodes, counts.sources, counts.engineNodes, counts.engineSources,
+    counts.voices], [0, 0, 0, 0, 0]);
+  assert.equal(s.ctx.liveAllSources, 0, 'every source of the context has ended');
+  assert.equal(s.fx.timers.size, 0, 'no timer left behind');
+}
+
+test('H001: a continuation that starts after the runtime crossfade fades in from 0 through '
+  + 'the open route, with no step and no dip', async () => {
+  // The audio clock moves between runtime.apply choosing its crossfade time (hooks.soon()) and
+  // the transport's continuation (a main-thread delay of three render quanta): the new route is
+  // already partly open at t0, so a voice started there at its programmed level would step up
+  // (a click), and its own 0 -> 1 ramp on top of the route's would dip. The level through fade x
+  // route rises linearly from 0 at t0 (review of #320, T1 and the double-fade P3).
+  let xfadeAt = null;
+  const view = (s) => createStudioTransport({ engine: s.engine, store: s.store,
+    runtime: Object.create(s.runtime, { apply: { value: (...args) => {
+      const r = s.runtime.apply(...args);
+      if (r && r.at !== undefined) xfadeAt = r.at;
+      s.ctx.advance(s.ctx.currentTime + (3 * 128) / SR);
+      return r;
+    } } }) });
+  const { s, tr, tone, horizon, cont } = waveformEdit({ transport: view });
+  assert.equal(cont.length, 1);
+  const t0 = cont[0].startAt;
+  assert.ok(t0 >= horizon && t0 > xfadeAt + 2 * (128 / SR) - EPS, `${t0} after ${xfadeAt}`);
+  const route = s.runtime.edges.get('edge-1').gain;
+  near(gainAt(route, xfadeAt), 0);
+  assert.ok(gainAt(route, t0) > 0.3, 'the route is partly open at t0');
+  const fade = continuedFade(s, cont[0], tone[0], route);
+  near(gainAt(fade, t0), 0);
+  assertRise(fade, route, t0, 0.02);
+  assert.deepEqual(continued(tr, 'clip-1').map((d) => d.at), [t0]);
+  await noLeaks(s, tr);
+});
+
+test('H001: every voice sounding into the rebuilt oscillator continues, each its own clip',
+  async () => {
+  // Two pattern clips on two tracks play into osc-1 at once (review of #320, T3: continuing
+  // only the first voice passed every test).
+  const model = templateModel(REFERENCE_TEMPLATE_ID);
+  model.timeline.tracks.push({ id: 'track-2', kind: 'event', name: 'Second', target: 'osc-1' });
+  model.timeline.clips.push({ id: 'clip-3', trackId: 'track-2', kind: 'pattern', start: 0,
+    duration: 1, target: null, payload: { blockType: 'tone', params: { freq: 330 } } });
+  const { s, tr, tone, horizon, cont } = waveformEdit({ model });
+  assert.equal(tone.length, 2, 'two voices sounding before the edit');
+  assert.equal(cont.length, 2, 'both continue on the new oscillator');
+  const t0 = cont[0].startAt;
+  assert.ok(t0 >= horizon && t0 < horizon + 2 * (128 / SR) + EPS);
+  assert.deepEqual(cont.map((o) => o.startAt), [t0, t0]);
+  const freqs = cont.map((o) => o.frequency.scheduled.find((e) => e.t === t0).value).sort();
+  assert.deepEqual(freqs, [220, 330]);
+  assert.deepEqual(['clip-1', 'clip-3'].map((id) => continued(tr, id).length), [1, 1]);
+  await noLeaks(s, tr);
+});
+
+test('H001: a sounding clip shortened earlier in the playback continues to its new end on a '
+  + 'waveform edit', async () => {
+  // CLIP_RESIZE first (retime-end: the voice is stopping at its new end, and the scheduler
+  // decides retime-end again on every later edit), then the waveform edit: the clip was silent
+  // until its shortened end (review of #320, A2).
+  const { s, tr, bF, horizon, cont } = waveformEdit({ editAt: 0.58, pre: (fs, t, b) => {
+    fs.fx.advanceTo(b + 0.2);
+    dispatch(fs, { type: 'CLIP_RESIZE', clipId: 'clip-1', duration: 0.8 });
+    t.sync();
+  } });
+  const end = at(bF, 0.8);
+  assert.equal(cont.length, 1, 'the rest of the shortened Tone plays on the new oscillator');
+  const t0 = cont[0].startAt;
+  assert.ok(t0 >= horizon && t0 < horizon + 2 * (128 / SR) + EPS);
+  near(cont[0].stopAt, end + STOP_RAMP_S + STOP_PAD_S, 1e-9);
+  // Its output fades at the new end, as the shortened voice did.
+  const out = hop(cont[0], 3);
+  assert.deepEqual(out.gain.events.slice(-2).map((e) => [e.ramp, e.value]),
+    [['set', 1], ['linear', GAIN_FLOOR]]);
+  near(out.gain.events.at(-2).t, end);
+  assert.deepEqual(continued(tr, 'clip-1').map((d) => d.at), [t0]);
+  // A later edit (the scheduler decides retime-end again) still finds it to its end.
+  s.fx.advance(0.05);
+  dispatch(s, { type: 'NODE_PARAM_SET', nodeId: 'osc-1', key: 'waveform', value: 'triangle' });
+  tr.sync();
+  const tri = voiceCarriers(s, 'triangle').filter((o) => o.startAt < end);
+  assert.equal(tri.length, 1);
+  near(tri[0].stopAt, end + STOP_RAMP_S + STOP_PAD_S, 1e-9);
+  await noLeaks(s, tr);
+});
+
+test('H001: an edit inside the last crossfade of a clip does not continue it', async () => {
+  // A continuation shorter than STUDIO_XFADE_S would only start a fade-in to cut it.
+  const editAt = 1 - STUDIO_XFADE_S - SAFE_HORIZON_S + 0.002;
+  const { s, tr, bF, tone, cont } = waveformEdit({ editAt });
+  assert.equal(tone.filter((o) => o.startAt < at(bF, 1)).length, 1, 'the Tone sounds at the edit');
+  assert.equal(cont.length, 0);
+  assert.equal(continued(tr, 'clip-1').length, 0);
+  await noLeaks(s, tr);
 });
 
 test('Basic Synth: STOP releases everything, holds automation, leaves the model; no leaks',

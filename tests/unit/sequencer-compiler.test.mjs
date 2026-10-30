@@ -371,7 +371,7 @@ test('compileSequence offset: the rest of the sequence from the offset, values e
   const tl = ref.timeline;
   const siren = tl.blocks[5];
   const offset = siren.start + 0.1; // inside the siren block: its LFO is sounding
-  const ctx = new FakeContext({ sampleRate: SR, currentTime: 2 });
+  const ctx = waveContext({ sampleRate: SR, currentTime: 2 });
   const voice = compileSequence(m, ctx, ctx.destination, 2, { timers: null, offset,
     waveform: 'square' });
   assert.equal(voice.t0, 2);
@@ -409,6 +409,73 @@ test('compileSequence offset: the rest of the sequence from the offset, values e
   const none = compileSequence(m, c2, c2.destination, 2, { timers: null, offset: tl.duration });
   assert.equal(none.ended, true);
   assert.equal(c2.oscillators.length, 0);
+});
+
+/** A FakeContext whose createPeriodicWave keeps the coefficients (setPeriodicWave stores it). */
+function waveContext(opts) {
+  const ctx = new FakeContext(opts);
+  ctx.createPeriodicWave = (real, imag) => ({ real, imag });
+  return ctx;
+}
+
+/** The waveform an oscillator of a FakeContext plays at audio time `tau`, peak 1. */
+function lfoAt(o, tau) {
+  const f = o.frequency.events[0].value;
+  const c = f * (tau - o.startAt);
+  if (!o.wave) return lfoShape(o.type, c); // the type's ideal shape
+  // A PeriodicWave, normalised to peak 1 as Web Audio does by default.
+  const { real, imag } = o.wave;
+  const at = (x) => {
+    let v = 0;
+    for (let k = 1; k < real.length; k += 1) {
+      v += real[k] * Math.cos(2 * Math.PI * k * x) + imag[k] * Math.sin(2 * Math.PI * k * x);
+    }
+    return v;
+  };
+  let peak = 0;
+  for (let i = 0; i < 4096; i += 1) peak = Math.max(peak, Math.abs(at(i / 4096)));
+  return at(c) / peak;
+}
+
+test('compileSequence offset: every modulator continues on the phase it has reached (H001)',
+  () => {
+  // An OscillatorNode starts at phase 0; a siren, AM or FM modulator continued from an offset
+  // inside its block must play on from rate x (offset - block start) cycles, or the pitch or
+  // level jumps at the seam and the contour stays shifted (review of #320, A1).
+  let m = createSequence({ blocks: [] }, { sampleRate: SR });
+  m = addBlock(m, 'am', { durationMs: 400, sampleRate: SR }); // ends before every offset
+  m = addBlock(m, 'siren', { durationMs: 1000, sampleRate: SR, params: { rate: 2.3 } });
+  m = addBlock(m, 'siren', { durationMs: 1000, sampleRate: SR,
+    params: { rate: 3.7, shape: 'triangle' } });
+  m = addBlock(m, 'am', { durationMs: 1000, sampleRate: SR });
+  m = addBlock(m, 'fm', { durationMs: 1000, sampleRate: SR });
+  const full = new FakeContext({ sampleRate: SR, currentTime: 1 });
+  const ref = compileSequence(m, full, full.destination, 1, { timers: null });
+  const tl = ref.timeline;
+  const mods = full.oscillators.slice(1); // one per modulated block, in block order
+  assert.equal(mods.length, 5);
+  for (const [i, tol] of [[1, 1e-6], [2, 0.01], [3, 1e-6], [4, 1e-6]]) {
+    const blk = tl.blocks[i];
+    const offset = blk.start + 0.37;
+    const ctx = waveContext({ sampleRate: SR, currentTime: 2 });
+    compileSequence(m, ctx, ctx.destination, 2, { timers: null, offset });
+    // The carrier, this block's modulator at t0, and the modulators of the blocks after it; the
+    // first AM block (and every block before this one) ended before the offset.
+    const oscs = ctx.oscillators;
+    assert.equal(oscs.length, 1 + 1 + (tl.blocks.length - 1 - i), `block ${i}`);
+    const cont = oscs[1];
+    assert.equal(cont.startAt, 2);
+    assertNear(cont.stopAt, 2 - offset + blk.end, 1e-12);
+    assert.ok(cont.wave, `block ${i}: the modulator plays a phased PeriodicWave`);
+    for (let x = offset; x < blk.end; x += 0.0123) {
+      const want = lfoAt(mods[i], 1 + x);
+      const got = lfoAt(cont, 2 - offset + x);
+      assert.ok(Math.abs(got - want) <= tol,
+        `block ${i} (${blk.kind}) at sequence time ${x}: ${got} vs ${want}`);
+    }
+    // The later blocks' modulators start at their own block start, on the type (phase 0).
+    for (const o of oscs.slice(2)) assert.ok(!o.wave && o.startAt > 2);
+  }
 });
 
 test('natural end: ended events release every node and call onEnded once', () => {
