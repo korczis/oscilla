@@ -391,6 +391,35 @@ function installPendingMic() {
   window.__oscGum = gum;
 }
 
+/**
+ * In-page: a fake media device that every engine has (WebKit has no fake capture device):
+ * getUserMedia answers with a fresh stream of a MediaStreamDestination of a context the test
+ * owns, never connected to OSCILLA's output. window.__oscSynthMic.restore() puts the original
+ * getUserMedia back and closes that context.
+ */
+function installSynthMic() {
+  const md = navigator.mediaDevices;
+  const orig = md && typeof md.getUserMedia === 'function' ? md.getUserMedia : null;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  const ctx = new AC();
+  const gum = () => {
+    const dst = ctx.createMediaStreamDestination();
+    return Promise.resolve(dst.stream);
+  };
+  const mic = { restore: () => {} };
+  if (md) {
+    md.getUserMedia = gum;
+    mic.restore = () => { if (orig) md.getUserMedia = orig; else delete md.getUserMedia; };
+  } else {
+    Object.defineProperty(navigator, 'mediaDevices', { value: { getUserMedia: gum },
+      configurable: true });
+    mic.restore = () => { delete navigator.mediaDevices; };
+  }
+  const restore = mic.restore;
+  mic.restore = () => { restore(); ctx.close().catch(() => {}); };
+  window.__oscSynthMic = mic;
+}
+
 /** In-page: phone header and status bar geometry (rows, overlaps, clipping, scrolling). */
 function phoneBars() {
   const vis = (el) => {
@@ -2747,6 +2776,100 @@ function defineChecks() {
         && out.stopped.focus === 'osc-mic-toggle' && !out.stopped.active
         : !out.started.active && !!out.started.error);
     return { ok, realStream: real, ...out };
+  });
+
+  // C015 (finding engine-sync-3): a context closed from outside makes the engine discard it and
+  // detach the microphone graph, stopping its tracks. A stopped track dispatches no 'ended', so
+  // the lab learns of it only from the engine's detach event (adapter.onMicDetached). It must
+  // then report off, reset its button and say why, and the next start must read the new
+  // context, not the analyser of the dead one. The stream comes from installSynthMic, so all
+  // three engines run every step.
+  def('mic-detach-on-close', async ({ page, errors }) => {
+    const errorsBefore = errors.length;
+    const shows = (ws) => page.waitForFunction(
+      (w) => document.querySelector('#osc-app').dataset.mode === w, ws, { timeout: 8000 });
+    await page.evaluate(installSynthMic);
+    await H.navTo(page, 'analyzer');
+    await shows('analyzer');
+    const state = () => page.evaluate(() => {
+      const e = window.OSCILLA.engine;
+      const m = window.OSCILLA.labs.mic;
+      const b = document.getElementById('osc-mic-toggle');
+      const an = m.analyser;
+      return { active: m.active, error: m.error, hasAnalyser: !!an,
+        analyserOnEngineCtx: !!(an && e.ctx && an.context === e.ctx),
+        engineCtx: !!e.ctx, newCtx: !!(e.ctx && e.ctx !== window.__oscOldCtx),
+        engineMicNodes: e.micNodeCount, engineAttachment: !!e.micAttachment,
+        pressed: b.getAttribute('aria-pressed'), label: b.textContent.trim(),
+        detected: document.getElementById('osc-mic-detected').textContent.trim() };
+    });
+    const out = {};
+    try {
+      await page.click('#osc-mic-toggle');
+      out.live = await until(async () => {
+        const s = await state();
+        return s.active && s.engineMicNodes > 0 && s.analyserOnEngineCtx && s;
+      }, { ms: 10000, what: 'mic-detach-on-close: the mic lab is live on the engine context' });
+      out.liveTracks = await page.evaluate(() => {
+        window.__oscLabStream = window.OSCILLA.labs.mic.stream;
+        return window.__oscLabStream.getTracks().map((t) => t.readyState);
+      });
+      await page.evaluate(() => {
+        window.__oscOldCtx = window.OSCILLA.engine.ctx;
+        return window.__oscOldCtx.close();
+      });
+      // The engine discards the context and emits the detach in one onstatechange call, so the
+      // lab's state is final once the engine has dropped the context.
+      await until(() => page.evaluate(() => window.OSCILLA.engine.ctx === null),
+        { ms: 10000, what: 'mic-detach-on-close: the engine discards the closed context' });
+      out.closed = await state();
+      out.closedTracks = await page.evaluate(
+        () => window.__oscLabStream.getTracks().map((t) => t.readyState));
+      // The next press starts the microphone again on a context the engine rebuilds. A lab
+      // that still reports live (the defect) would take that press as a stop: not pressed.
+      if (!out.closed.active) {
+        await page.click('#osc-mic-toggle');
+        out.restarted = await until(async () => {
+          const s = await state();
+          return (s.active || s.error) && s;
+        }, { ms: 10000, what: 'mic-detach-on-close: the second start settles' });
+        await page.click('#osc-mic-toggle');
+        out.stopped = await state();
+      }
+    } finally {
+      await page.evaluate(() => {
+        const m = window.OSCILLA.labs.mic;
+        if (m.active) m.stop();
+        if (window.__oscSynthMic) window.__oscSynthMic.restore();
+        delete window.__oscOldCtx;
+        delete window.__oscLabStream;
+        window.OSCILLA.app.alerts = [];
+      });
+      await H.navTo(page, 'playground');
+      await shows('playground');
+    }
+    const c = out.closed;
+    const r = out.restarted || {};
+    const st = out.stopped || {};
+    const v = {
+      setupLive: out.live.pressed === 'true' && out.liveTracks.every((t) => t === 'live'),
+      engineDetached: !c.engineCtx && c.engineMicNodes === 0 && !c.engineAttachment,
+      tracksEnded: out.closedTracks.length > 0 && out.closedTracks.every((t) => t === 'ended'),
+      labOffAfterClose: c.active === false && c.hasAnalyser === false,
+      buttonOffAfterClose: c.pressed === 'false' && c.label === 'Use microphone',
+      reasonStated: /audio context was closed/.test(c.error) && c.detected === c.error,
+      restartOnNewContext: r.active === true && r.newCtx && r.analyserOnEngineCtx
+        && r.pressed === 'true' && r.error === '',
+      // The user's own Stop states no engine loss (review F1 of #289): the engine emits its
+      // 'user' detach inside the lab's stop(), so a lab that released its analyser after the
+      // call would read "The audio engine disconnected the microphone" here.
+      stopAfterRestart: st.active === false && st.pressed === 'false'
+        && st.engineMicNodes === 0 && st.error === ''
+        && st.detected === 'UNAVAILABLE (microphone off)',
+      noPageErrors: errors.length === errorsBefore,
+    };
+    const ok = Object.values(v).every(Boolean);
+    return { ok, v, ...out, errors: errors.slice(errorsBefore, errorsBefore + 5) };
   });
 
   // §49 (c): dismissing a notification whose Dismiss button has focus moves focus to the next
