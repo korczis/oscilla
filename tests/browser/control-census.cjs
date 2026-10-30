@@ -326,7 +326,9 @@ row({ id: 'device.safetyLimit.pointer', ws: 'playground', control: '#osc-safety-
   act: async (page) => {
     await page.selectOption('#osc-safety-limit', '0.5');
     await page.evaluate(LIMIT_PROBE);
-    const b = await page.locator('#osc-hold-play').boundingBox();
+    const hold = page.locator('#osc-hold-play');
+    await hold.scrollIntoViewIfNeeded(); // choosing the limit may have scrolled PLAY away
+    const b = await hold.boundingBox();
     await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
     await page.mouse.down();
   },
