@@ -20,11 +20,12 @@
 import SEMI_MONO from './panels/semi-mono.js';
 import { PRESETS, presetAction, presetOf, presetValues } from './presets.js';
 import {
-  amountEdges, jackState, panelCables, patchCable, restoreNormals, setAmount, unpatch,
+  amountEdges, brokenByRemoval, jackState, panelCables, patchCable, restoreNormals, setAmount,
+  unpatch,
 } from './normals.js';
 import { linkAction, linkOf } from './link.js';
 import { splitJack } from './panel.js';
-import { esc, plateHtml } from './view/face.js';
+import { esc, plateHtml, platesShown } from './view/face.js';
 import { knobModel, knobSvg, stepOption } from './view/knob.js';
 import { bayLayout, baySvg, cablePath } from './view/bay.js';
 import { panelTokens } from './view/tokens.js';
@@ -190,7 +191,10 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     box.innerHTML = baySvg({ panel, layout, cables, states, pending, tokens, selected,
       compatible: pending ? compatibleWith(pending) : new Set() });
     const list = el.querySelector('[data-osc="synth.cables"]');
-    const open = [...states].filter(([, s]) => s === 'open').map(([k]) => k.split(':')[0]);
+    const gone = brokenByRemoval(m, panel); // open because a module is gone: Restore module
+    const goneJacks = new Set(gone.flatMap((r) => r.jacks));
+    const open = [...states].filter(([, s]) => s === 'open').map(([k]) => k.split(':')[0])
+      .filter((j) => !goneJacks.has(j));
     const item = 'flex items-center justify-between gap-2 py-1 text-xs text-gray-700 '
       + 'dark:text-gray-300';
     const btn = 'rounded-lg px-3 h-9 text-xs font-medium text-primary-700 border border-solid '
@@ -199,10 +203,14 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       list.innerHTML = cables.map((c) => `<li class="${item}"><span>${esc(c.from)} → `
         + `${esc(c.to)}</span><button type="button" class="${btn}" data-remove-cable=`
         + `"${esc(c.id)}">Remove</button></li>`).join('')
+        + gone.map((r) => `<li class="${item}" data-gone="${r.module}"><span>${esc(r.label)} `
+        + `removed in Studio: ${esc(r.jacks.join(', '))} open</span><button type="button" `
+        + `class="${btn}" data-restore-module="${r.module}">Restore module</button></li>`).join('')
         + open.map((j) => `<li class="${item}"><span>${esc(j)}: open, normal removed in Studio`
         + `</span><button type="button" class="${btn}" data-restore-normal="${esc(j)}">`
         + 'Restore normal</button></li>').join('')
-        + (cables.length || open.length ? '' : `<li class="${item}">No cables: every jack plays `
+        + (cables.length || open.length || gone.length ? '' : `<li class="${item}">No cables: `
+        + 'every jack plays '
         + 'its normal. Drag from one jack to another, or tap two jacks.</li>');
     }
   }
@@ -249,7 +257,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     const res = nodes();
     const tokens = panelTokens(el);
     const engines = tab() === 'engines';
-    const shown = engines ? [panel.module(engineId())] : panel.modulesOf('panel');
+    const shown = platesShown({ panel, tab: tab(), engine: engineId(), resolved: res, model: m });
     const chips = engines ? enginePicker() : shown.map((x) => `<button type="button" `
       + `data-goto="${x.id}" class="${CHIP} border-gray-300 bg-white text-gray-800 `
       + `dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200">${esc(x.label)}</button>`)

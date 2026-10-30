@@ -116,8 +116,12 @@ export function createVoiceHost({ ctx, acct, params, build }) {
     } else {
       applyAdsr(v.amp.gain, t, { a: p.attack, d: p.decay, s: p.sustain, r: p.release }, peak);
     }
-    if (!v.sources.length) cleanup(v); // every operator was above the limit: nothing sounds
-    else live.set(a.slot, v);
+    if (!v.sources.length) { // nothing to sound (every operator above the limit, every bar 0):
+      cleanup(v); // no voice either, so the census and the ceiling count only what sounds
+      pool.free(a.slot);
+    } else {
+      live.set(a.slot, v);
+    }
     return { slot: a.slot, stolen: a.steal != null && !!old, dropped: built.dropped || 0 };
   }
 

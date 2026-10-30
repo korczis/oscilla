@@ -83,8 +83,15 @@ recurrence), which `project.no-silent-feedback` v1 refuses and which needs an Au
 **One output.** The Master Output takes one cable, so the instruments share it through a chain:
 the panel's VCA feeds the first engine's **Chain** input, each engine the next one, the last the
 Output (normals `e1` to `e7`). An engine passes its Chain input through unchanged and adds its
-voices. Deleting an engine in Studio breaks the chain there; its plate says so and **Restore
-module** brings it back with its normals.
+voices. Deleting an engine in Studio breaks the chain there, which silences the panel and every
+engine before it: the patch bay lists the gone module and the jacks it leaves open with
+**Restore module** (a normal cannot come back without its module, so there is no Restore
+normal for those jacks), and the tab you are on shows the gone module's plate first, with the
+same button, which brings it back with its normals.
+
+**Voices.** A note whose voice would hold no source (every drawbar at 0, every FM operator above
+0.95 × Nyquist) takes no voice: the voice count and the 16-voice ceiling count only what
+sounds.
 
 **Levels.** A voice peaks at Level / 4 of digital full scale times (velocity / 127)²; several
 voices can pass 0 dB rel, where the output ceiling limits them.

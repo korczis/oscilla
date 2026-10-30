@@ -4,9 +4,19 @@
 //
 //   plateHtml({ panel, module, node, model, tokens, reasons }) -> markup string
 //   controlState(panel, module, node, model, control) -> { value, disabled, reason }
+//   platesShown({ panel, tab, engine, resolved, model }) -> [module]   the plates of a tab: its
+//     modules (on Engines, the chosen one), after any module of another tab that is removed and
+//     breaks a normal (an engine gone from the shared chain silences what is before it)
 
 import { knobModel, knobSvg } from './knob.js';
-import { amountEdges, amountReason } from '../normals.js';
+import { amountEdges, amountReason, brokenByRemoval } from '../normals.js';
+
+export function platesShown({ panel, tab, engine, resolved, model }) {
+  const own = tab === 'engines' ? [panel.module(engine)].filter(Boolean) : panel.modulesOf(tab);
+  const gone = brokenByRemoval(model, panel).map((r) => panel.module(r.module))
+    .filter((m) => !own.includes(m) && !resolved.get(m.id));
+  return [...gone, ...own];
+}
 
 export const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;',
   '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -120,10 +130,13 @@ export function plateHtml({ panel, module: m, node, model, tokens }) {
     + `<stop offset="1" stop-color="${tokens.plateLo}"/></linearGradient></defs>`
     + `<rect width="100%" height="100%" fill="url(#pg-${m.id})"/></svg>`;
   if (!node) {
+    const row = model ? brokenByRemoval(model, panel).find((r) => r.module === m.id) : null;
     return `<section class="relative overflow-hidden bg-white rounded-lg shadow dark:bg-gray-800" `
       + `aria-labelledby="${hid}" data-module="${m.id}">${bg}${head}`
       + '<p class="relative px-3 pb-3 text-sm text-gray-600 dark:text-gray-300">This module was '
-      + 'removed in Studio. <button type="button" class="font-medium text-primary-600 underline '
+      + 'removed in Studio'
+      + (row ? `, so its normals no longer reach ${esc(row.jacks.join(', '))}` : '')
+      + '. <button type="button" class="font-medium text-primary-600 underline '
       + `dark:text-primary-400" data-restore-module="${m.id}">Restore module</button></p>`
       + '</section>';
   }

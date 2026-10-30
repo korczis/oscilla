@@ -78,6 +78,28 @@ export function jackState(model, panel, jack) {
   return rows.some((n) => normals.has(n.id)) ? 'normalled' : 'open';
 }
 
+/**
+ * Modules removed in Studio and the input jacks left open because of them: one row per gone
+ * module, [{ module, label, jacks: ['module.port'] }] in declaration order, a jack listed when
+ * a normal into it starts or ends at the gone module and no cable patches it. Restore module
+ * (not Restore normal) is the fix for these: a normal cannot come back without its module.
+ */
+export function brokenByRemoval(model, panel) {
+  const res = panel.resolve(model);
+  const rows = [];
+  for (const m of panel.modules) {
+    if (res.get(m.id)) continue;
+    const jacks = [];
+    for (const n of panel.normals) {
+      const ends = [splitJack(n.from).module, splitJack(n.to).module];
+      if (!ends.includes(m.id) || jacks.includes(n.to)) continue;
+      if (jackState(model, panel, n.to) !== 'patched') jacks.push(n.to);
+    }
+    if (jacks.length) rows.push({ module: m.id, label: m.label, jacks });
+  }
+  return rows;
+}
+
 export const STATE_TEXT = Object.freeze({
   normalled: 'normalled', patched: 'patched', free: 'free',
   open: 'open: normal removed in Studio',

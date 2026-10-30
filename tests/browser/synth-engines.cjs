@@ -23,6 +23,10 @@
 //               0.38 s+ for those 40 dB (its 0.5 s decay)
 //   e-poly      16 held notes: voice census 16; a 17th: still 16 and the oldest note's line gone;
 //               all off: the runtime node census back to its count before the notes
+//   e-nosource  every drawbar at 0: a held note sounds nothing and holds no voice (census 0)
+//   e-removed   the Additive engine removed in Studio: the panel's held note is silent (the
+//               chain into the Output is broken), the bay names ADDITIVE with Restore module and
+//               the Panel tab shows its plate; Restore module there brings the panel back
 //   e-route     the Panel tab's keys play the panel (130.8 Hz from VCO 1 at 16'), the Engines tab's
 //               the chosen engine (no 130.8 Hz); a tab switch releases held notes; a blocked
 //               engine says why and plays nothing
@@ -339,6 +343,39 @@ function defineChecks() {
       return { ok: sixteen === 16 && still === 16, sixteen, still, base,
         line: +lineDb(p, 783.99).toFixed(1) };
     });
+
+  def('e-nosource', engines('additive', Array.from({ length: 12 }, (_, i) => `additive.h${i + 1}:0`)
+    .join(',')), async ({ page }) => {
+    await sink(page, 'noteOn', 60, 100);
+    await until(async () => (await dbg(page)).armed, { ms: 10000, what: 'the keys arm' });
+    const p = await silent(page, 'a note with every drawbar at 0 sounds nothing');
+    const held = (await dbg(page)).voices;
+    await sink(page, 'noteOff', 60);
+    return { ok: held === 0, voices: held, rmsDb: +p.rmsDb.toFixed(1) };
+  });
+
+  def('e-removed', '#m=synth', async ({ page }) => {
+    await hold(page, 'KeyA');
+    await sound(page, (q) => peakAt(q, C4 / 2), 'the panel sounds through the chain');
+    const id = (await dbg(page)).nodes.additive;
+    const r = await page.evaluate((nid) => window.OSCILLA.studio.store.dispatch({
+      type: 'NODE_REMOVE', nodeId: nid }), id);
+    const gone = await silent(page, 'the chain is broken at ADDITIVE: the panel is silent');
+    await page.keyboard.up('KeyA');
+    await until(() => page.locator('[data-gone="additive"]').count().then((n) => n === 1),
+      { ms: 10000, what: 'the bay names the removed engine' });
+    const row = (await page.locator('[data-gone="additive"]').textContent()).trim();
+    const plate = page.locator('[data-osc="synth.modules"] [data-restore-module="additive"]');
+    const onPanel = await plate.count();
+    await plate.click();
+    await hold(page, 'KeyA');
+    await sound(page, (q) => peakAt(q, C4 / 2), 'Restore module brings the panel back');
+    await page.keyboard.up('KeyA');
+    const back = (await dbg(page)).nodes.additive;
+    return { ok: r.ok && onPanel === 1 && /ADDITIVE removed in Studio/.test(row) && !!back,
+      // timing-allow: 80 characters of the bay row's text, not frames
+      gone: +gone.rmsDb.toFixed(1), row: row.slice(0, 80), onPanel };
+  });
 
   def('e-route', '#m=synth', async ({ page }) => {
     await hold(page, 'KeyA');
