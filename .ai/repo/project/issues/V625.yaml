@@ -1,0 +1,47 @@
+id: V625
+milestone: M081
+serves:
+- "studio-box-system#cable-probe"
+title: "Listen here: an ephemeral audition of one box's output"
+slug: listen-here-an-ephemeral-audition-of-one-box-s-output
+priority: p2
+profile: implementation
+objective: "P04 slice E (compile and playback). Lands as feat(studio), as Q032 decides. 'Listen here' on a box or cable routes that output through the probe tap (V616) to the output chain in place of the Master's input, inside the engine's accounting and under the output ceiling, as an explicit ephemeral live preview (§80): a Pro alert banner names what is heard, Escape, Stop, any model edit or leaving the Studio ends it; nothing enters the model, history, studioHash, provenance or an export."
+why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings S1-S14 measured on origin/main b67d1e58)."
+scope:
+- src/js/studio/probe.js
+- src/js/studio/runtime.js
+- src/js/ui/studio/listen.js
+- src/index.html
+- tests/unit/studio-listen.test.mjs
+- tests/browser/studio-boxes.cjs
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- V616
+- F008
+- Q032
+acceptance_criteria:
+- "Before: VERIFIED: no audition exists."
+- "After: Listen here plays one output through the probe tap, ephemerally."
+- "Negative cases: any edit, Stop, Escape or leaving the Studio ends it; the model, history, hash and provenance never change; the output ceiling holds."
+- "Rollback: revert the merge commit. Nothing changes the schema, a studioHash or a stored record, so documents saved while it was live load unchanged after the revert."
+- "tests/unit/studio-listen.test.mjs, failing on the merge base: the audition leaves the model, history, revision and hash unchanged, ends on each listed event, keeps the output ceiling and returns the engine node count to its value after it ends."
+- "Definition of done, extends: the probe tap of V616."
+- "Definition of done, cross-links: the banner's 'Show' selects the auditioned box in the graph. The link is a row of tests/browser/integration-map.json once that map (synth line K075) is on main."
+- "Definition of done, dynamics: the auditioned box's face level and the Master meter show what is heard."
+- "Definition of done, docs and routes: docs/v31/user-guide.md and .ai/repo/features/studio-signal-graph.md say what changed; tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: A check 'listen-here' in tests/browser/studio-boxes.cjs starts Listen here on the Oscillator by pointer, by keyboard (box menu) and by touch, waits with until() (deadline 'audition audible', 5 s) for the output analyser's spectrum to lose the Filter's roll-off, presses Escape and waits for the banner gone and the filtered spectrum back; on the merge base the item does not exist. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit and the completed evidence the release that carried it; E030's judge passes on the pull request once E030 is on main."
+- "The pull request carries a reviewer's verdict (it touches a guarded path; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+- "Wave 2: its chrome is Flowbite Pro markup adapted from the matching Pro component, lands after F002, adds no osc-* class token or legacy selector, and studio.css, studio-timeline.css, charts.css and tokens.css gain no selector or declaration; the domain drawing stays OSCILLA's own inside Pro cards (project.ui-uses-flowbite-pro, project.visual-identity-lock v2; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "scripts/size-report.mjs shows at most 1.5 KB gzip added, with the base and head figures in the pull request body, within the owner's dist budget of 1 200 000 B gzip (decision of 2026-10-29, about 355 KB of headroom at origin/main b67d1e58); the ceiling of this line is 35 KB gzip in all (Studio boxes 35 KB, signal generator 25 KB), stated in the milestone (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/studio-listen.test.mjs
+- node tests/browser/studio-boxes.cjs --only listen-here
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

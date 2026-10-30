@@ -1,0 +1,51 @@
+id: G015
+milestone: M087
+serves:
+- "component-system#in-app-explain"
+title: "What is this: one panel says what a component does, where else it is used and opens its related views"
+slug: what-is-this-one-panel-says-what-a-component-does-where-else
+priority: p2
+profile: implementation
+objective: "Lands as feat(ui). A Pro drawer, src/js/ui/catalog/explain.js, reads the bundled registry: the component's label and one-sentence docs, its unit, range and default, who owns its value and where it is kept (sources.js: 'This Filter Lab setting is saved in a configuration file only'), the other places it appears (each a component address, G007), and its related views (each a link: its lab, its Studio node, its Learn topic); with ?debug=1 also its source module, tests and plan ids. It opens from the context menu of any catalogued control (and the knob and box menus of the synth and Studio lines), from Help > What is this? (the next activation explains instead of acting; Escape leaves), and by a key chosen under ADR 0050 and listed in the Keyboard shortcuts dialog. Before: VERIFIED no such surface; help is per workspace text. After: every component explains itself from the same declaration the docs come from. Negative cases: a component without related views (the panel says so, never an empty list), What is this? on a disabled control (it states the reason), an open dialog (the drawer stacks above with focus trapped and returned). Rollback: revert; no state."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: \"the embedded Studio is ugly as hell\"; components in general must be generic, linkable, traceable, composable, unified, documented, dynamic, generated and interlinked; \"everything must be interlinked with everything\"; improve the main page and the first experience, deploy often. The owner's evolution prompt pack (MASTER, P02, P04, P06) binds it: the dark technical cockpit is locked, shared primitives only where duplication is proven, no new framework, generated docs only where deterministic, no decorative wires. Findings: the UI component inventory of 2026-10-29 (D1-D14 duplication, U1-U15 on the embedded Studio, measured on origin/main b67d1e58, v3.13.0); design: the component-system design of 2026-10-29 (scratchpad components/design.md)."
+scope:
+- src/js/ui/catalog/explain.js
+- src/js/ui/catalog/registry.js
+- src/index.html
+- src/js/ui/app.js
+- src/js/ui/shortcuts.js
+- src/styles
+- tests/unit/ui-catalog-explain.test.mjs
+- tests/browser/ui-catalog-explain.cjs
+- package.json
+- tests/browser/ui-flowbite-pro.cjs
+- tests/visual
+- tests/unit/ui-flowbite-pro-baseline.json
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- G014
+- G007
+- F002
+- Q037
+acceptance_criteria:
+- "tests/unit/ui-catalog-explain.test.mjs fails on the merge base: the panel's view model for a fixture declaration lists its docs, owner, persistence, instances and related links, and states each negative case."
+- "The runtime registry bundles only id, kind, label, state, links and the one-sentence docs; trace fields and long docs stay in the docs-only part (measured by size-report)."
+- "Definition of done, extends: the registry (G001), the addresses (G007) and the generated catalogue (G014)."
+- "Definition of done, interlinks: the panel is the hub of 'interlinked': every related view is one activation away."
+- "Definition of done, interactivity: the panel follows focus: it updates when another component is explained."
+- "Definition of done, docs, menus and routes: the Help menu gains What is this?; the shortcuts dialog its key; docs/ui-catalog.md says how to open it. tests/README.md has a row for each new test; the component's catalogue declaration (G001) names its docs, links and tests; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: tests/browser/ui-catalog-explain.cjs (wired into npm run test:browser) opens the panel on the Filter Lab cutoff, the cockpit Play and a Studio node card by context menu, by the key and by a hasTouch long-press, waits with until() (deadline 'explain panel', 2 s) for its text to equal the declaration, follows one related link and checks focus on the target. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit, and the release that carried it is recorded when the milestone is verified."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "On Pro (after F002): its chrome is markup adapted from the matching Flowbite Pro block (the template names its flowbite-pro reference.md section), recorded as migrated, never pending; it adds no osc-* class token, no legacy vocabulary use and no selector, removes the legacy ones it replaces, and the domain views' stylesheets gain nothing (compact density is Tailwind utilities on the domain view's own elements); the record's debt falls (project.ui-uses-flowbite-pro, project.visual-identity-lock v2, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "scripts/size-report.mjs shows at most 3 KB gzip added, with the base and head figures in the pull request body, inside the cap Q037 records (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/ui-catalog-explain.test.mjs
+- node tests/browser/ui-catalog-explain.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

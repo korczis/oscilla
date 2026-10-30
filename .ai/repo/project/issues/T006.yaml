@@ -1,0 +1,32 @@
+id: T006
+milestone: M073
+serves:
+  - "v3-measure#readout-in-effect"
+title: "\"Max: Nyquist\" follows the sample rate once audio starts"
+slug: max-nyquist-follows-the-sample-rate-once-audio-starts
+priority: p2
+profile: implementation
+objective: "Truth-table rows SPC-04 (scratchpad p05/truth-table.md). main.js calls labs.analysis.update() from the existing effect that reads cmp.sampleRate (around main.js:585), or the controller re-checks rate() itself; until a rate is known the select says Nyquist is pending."
+why: "P05 audit of origin/main b67d1e58 (v3.13.0): Choosing Max: Nyquist before an AudioContext exists leaves the spectrum axis at 20 kHz; after a 48 kHz context starts it stays at 20 kHz (uplot scales.x.max 20000) until the select is toggled. The controller update() that re-applies Max on a rate change is never called by main.js."
+scope:
+  - "src/js/main.js"
+  - "src/js/labs/analysis.js"
+  - "tests/browser/labs.cjs"
+  - "tests/unit/readout-in-effect-nyquist-axis.test.mjs"
+  - "tests/README.md"
+  - "dist"
+acceptance_criteria:
+  - "Fail-first fixture: Browser check in tests/browser/labs.cjs: select nyquist before audio, start audio, poll with a named deadline until uplot.scales.x.max === sampleRate / 2. Fails on the merge base (stays 20000). tests/unit/readout-in-effect-nyquist-axis.test.mjs asserts on the controller that a rate change from null to 48000 sets maxHz 24000."
+  - "Negative cases, each asserted: 20 kHz and 2 kHz selections are unchanged before and after audio; at 44.1 kHz Nyquist → 22050; the log/linear tick tests in charts.test.mjs still pass."
+  - "Revertible on its own: Revert: one call in the composition root."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named deadline (project.suite-harness, project.bounded-test-timing)."
+  - "tests/README.md has a row for each new test; this issue does not edit docs/CLAIMS.yaml or the intent (T027 does)."
+validation:
+  - "npm test"
+  - "npm run verify"
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

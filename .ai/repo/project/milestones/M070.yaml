@@ -1,0 +1,18 @@
+id: M070
+title: "Owner decisions of the connected-instrument line"
+slug: owner-decisions-of-the-connected-instrument-line
+order: 995
+priority: p2
+problem: "The instrument line has decisions only the owner can take: the knob decision already taken (Q018, to record), the instruments' place in the navigation, knobs beyond the Synth workspace, polyphony inside engine nodes, bounded recurrences inside a node, the line's gzip cap, and input monitoring of a live input (Q024)."
+current_state: "Opened on 2026-10-29 with Q018-Q024. Like M063, it is named by no intent: its questions serve no criterion of their own, and the slices that wait on them name them in depends_on. It sorts after every live milestone except M063, M053, M052 and M005 (order 995); that order and the owner field are conventions."
+outcome: "Every owner decision the line waits on is answered and recorded, and the slices that waited are built from the answer or cancelled."
+acceptance_criteria:
+  - "Every Q issue of this milestone carries owner_decision evidence with its date and source, either quoting the owner or attributed to the session that decided under a quoted owner delegation, or is cancelled with the reason."
+validation:
+  - "manual"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "Nobody asks the owner: majordomus plan list --milestone M070 lists the questions, and the coordinator raises them; the plan cannot."
+created_at: 2026-10-29
+updated_at: 2026-10-29

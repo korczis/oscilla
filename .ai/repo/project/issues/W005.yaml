@@ -1,0 +1,49 @@
+id: W005
+milestone: M101
+serves:
+- "instrument-kinds#patching"
+title: "Patch jack and cable kinds: glyph and stroke from PORT_VISUALS, compatibility only from canConnect, first on the Studio graph's port rows"
+slug: patch-jack-and-cable-kinds-glyph-and-stroke-from-port-visual
+priority: p2
+profile: implementation
+objective: "Lands as feat(ui). src/js/ui/kinds/jack.js and cable.js: a jack's type and role come from the registry, its glyph from PORT_VISUALS (studio/ports.js:55), its name from portAccessibleLabel (ports.js:154), its verdicts from canConnect only; a cable's stroke from G004's one edge-style table. Events: drag (preview with sag), drop (EDGE_ADD, or the batch with the normal it breaks once K061 lands), remove (EDGE_REMOVE), depth (EDGE_UPDATE), menu (the connection list of graph-picker.js). The Studio graph's port rows and cables render through the kinds; G010, K063 and V611 then mount them. Before: VERIFIED ports and cables drawn per editor (graph-view.js, compact.js). After: one jack and one cable kind. Negative cases: an incompatible drop (the sentence, nothing added); a feedback cable (no-silent-feedback sentence); an unknown port type (fails the test, never drawn as AUDIO); ten inputs on one node. Rollback: revert; presentation only."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs, knowledge and interlinking, and add more; add p5.js, WebGL and interactivity, and deploy; a full DAW, a full sequencer and a full piano, everything interlinked, clickable, parameterized and joined; knobs, sliders and control panels done one generic way, integrated with Majordomus; the landing easy to use, easy to extend and open to hack; mobile first. The architecture still binds: one AudioEngine, the Studio model canonical, typed ports, one offline file under the 1.2 MB gzip budget, the cockpit identity, no fake science, Flowbite Pro (ADR 0061). Design: the instrument-kinds design of 2026-10-29 (scratchpad components-followup/components-new.md), on the component-system design (G001-G019) and the synth and studio-siggen drafts of the same day, facts checked against origin/main cdda563c."
+scope:
+- src/js/ui/kinds/jack.js
+- src/js/ui/kinds/cable.js
+- src/js/ui/catalog/kinds
+- src/js/ui/studio/graph-view.js
+- src/js/ui/studio/graph-geometry.js
+- tests/unit/ui-kind-jack.test.mjs
+- tests/browser/v31-studio-graph.cjs
+- tests/unit/ui-flowbite-pro-baseline.json
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- W001
+- G004
+- F001
+acceptance_criteria:
+- "tests/unit/ui-kind-jack.test.mjs fails on the merge base: every port type renders its PORT_VISUALS glyph and pattern; no type-pair literal (a compatibility table) exists under src/js/ui/kinds; each event builds its action; accessible names equal portAccessibleLabel."
+- "Negative cases, each asserted by a test that fails on the merge base: the four of the objective."
+- "Definition of done, tested: tests/browser/v31-studio-graph.cjs connects and removes a cable by pointer drag, by Enter on a jack and the list, and by hasTouch tap-connect, waiting with until() (deadline 'cable in model', 2 s) for the edge in the model and the runtime; the jacks are buttons and the cables options of a listbox in the accessibility tree. The check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, runs at 1536x1024 and 390x844, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, extends: ports.js, graph-geometry.js and G004; interlinks: a jack's menu jumps to the connected node."
+- "Definition of done, interactivity: pointer, keyboard and touch wiring with 44 px hit areas on a coarse pointer."
+- "Every Studio edit it builds is one plain action the owning surface dispatches through the one Studio store; a continuous gesture is one history entry and undo and redo restore the exact serialized model; a refusal leaves model, history and runtime unchanged and the kind states the store's sentence once in the polite live region (project.studio-model-is-canonical, project.typed-ports)."
+- "Definition of done, docs, menus and routes: the kind's declaration names its docs, links and tests; docs/ui-catalog.md (G014) lists it; the Keyboard shortcuts dialog lists its keys; tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Its trace entry in scripts/ui-catalog/trace/kinds.mjs names the intent criterion, this issue, its rules, ADRs and tests, each resolved by the trace check, for the Majordomus knowledge projection."
+- "The kind's modules pass W001's static scan: no import of src/js/studio/actions.js, a store, sources.js or a lab module; no dispatch or owner writer called; no AudioContext, AudioNode or worklet created (project.audio-engine-discipline v2: one AudioEngine); no requestAnimationFrame, setInterval or setTimeout outside src/js/charts/frame-loop.js; no allocation in a frame callback (1000 ticks keep the same typed arrays) and frameSubscriberCount() returns to its value after destroy()."
+- "Its chrome (buttons, button groups, popovers, dropdowns, inputs) is markup adapted from the matching Flowbite Pro block and names its flowbite-pro reference.md section; its instrument surface is a domain view under ADR 0061 decision 3 as J001's ADR 0061 resolution note records it: inline SVG or canvas and Tailwind utilities inside a Pro card, no stylesheet, no selector, no osc-* class token, no el.style write or style attribute; no osc-* name in the ratchet record rises and the domain views' stylesheets gain nothing (project.ui-uses-flowbite-pro, project.visual-identity-lock v2, ADR 0061; node scripts/ui-flowbite-pro-record.mjs --check and node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "No input path of the build gains a components, widgets, ui-kit or design-system segment (the COMPONENT_LIBRARY check of scripts/ui-flowbite-pro-measure.mjs): declarations live in src/js/ui/catalog/kinds, views in src/js/ui/kinds."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat change it carries a unit test that fails on the merge base (project.fail-first)."
+- "scripts/size-report.mjs shows at most 2 KB gzip added, compiled CSS included, with the base and head figures in the pull request body, inside the component line's cap Q037 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+- node --test tests/unit/ui-kind-jack.test.mjs
+- node tests/browser/v31-studio-graph.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

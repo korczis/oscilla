@@ -1,0 +1,45 @@
+id: J003
+milestone: M118
+serves:
+- "component-system#majordomus-served"
+title: "Majordomus serves every component: a generated knowledge projection, its source class and its context document"
+slug: majordomus-serves-every-component-a-generated-knowledge-proj
+priority: p1
+profile: implementation
+objective: "Lands as feat(docs). scripts/ui-catalog.mjs imports the registry (pure modules: the catalogue of G001, NODE_REGISTRY, the kinds of W001) and the traces of J002, and writes .ai/repo/knowledge/components/: one knowledge/v1 record per kind (component-kind-<kind>), per panel (component-panel-<panel>) and per Studio node type (component-node-<type>), each class fact, epistemics observed, status verified, provenance.origin extracted, derived_from the declaration and trace files, date the newest since of its entries, relations the union of its effective ids (relates_to issue:, intent:, rule:, adr:, feature:, claim:, moment:; documents implementation:<source>; relates_to test:; depends_on knowledge:component-kind-<kind>), and a body with one table row per component and parameter (id, label, unit and range, state owner, own and inherited ids). A kind record lists no instances, so a change to one declaration rewrites one record. It also writes the directory's README.md, a context/v1 document (scope subtree, composition extend) whose tracks are the sorted source modules the declarations name. sources.yaml gains the class component (kind knowledge, pathspec ':(glob).ai/repo/knowledge/components/*.md'); .ai/repo/knowledge/README.md gains the paragraph that makes this directory the one tracked generated product, and why (discovery reads tracked files only). npm run kb:components writes it; --check fails when it is stale. Byte-stable: sorted, LF, no clock, no absolute path; ids are the slug of the declaration id and two that collide are refused. Before: majordomus knowledge search cutoff finds nothing and context resolve src/js/labs/filter-lab.js returns only .ai/README.md. After: both reach the component. Negative cases: a stale record; a hand edit inside a record; two declarations slugging to one id; a source module renamed without a regenerate. Rollback: revert; the class, the directory and the paragraph go together, and nothing under src/ depends on them. Merged plan of the component follow-up (2026-10-30): The projection is a --kb output of G014's one generator (scripts/ui-catalog.mjs), with the catalogue, the controls section and the traceability chain, under one --check in npm test. It reads declarations and trace files only: plan ids, never issue titles or statuses, so a plan-only pull request leaves every record byte-identical."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs and knowledge base, interlink them and add more; knobs, sliders and control panels in one generic way, Majordomus integrated: each component and parameter declaration carries its intent, issue and rule ids, a deterministic generator projects the registry into .ai/repo/knowledge so that Majordomus serves it (context resolve, why, traceability), and a check fails when a component has no plan or knowledge link. Design: components-followup/majordomus-kb-adr.md of this plan change, measured with Majordomus 1.0.0-alpha.1 (the CI pin) and 1.0.0-alpha.8 on a throwaway copy of origin/main cdda563c."
+scope:
+- scripts/ui-catalog.mjs
+- .ai/repo/knowledge/components
+- .ai/repo/knowledge/sources.yaml
+- .ai/repo/knowledge/README.md
+- package.json
+- tests/unit/component-kb.test.mjs
+- tests/README.md
+depends_on:
+- J002
+- G014
+- Q068
+acceptance_criteria:
+- "tests/unit/component-kb.test.mjs fails on the merge base: the generated directory equals the committed one byte for byte; two runs give identical bytes; a fixture declaration change makes --check fail; every record satisfies knowledge/v1 as the test checks it (the required keys, the enums of class, status, epistemics and relation type, id equal to the file name, a real calendar date, provenance present), because majordomus knowledge check reads only curated/ and candidates/ (measured 2026-10-29)."
+- "Under the pinned Majordomus (MJ_VERSION of .github/workflows/ci.yml) and the launcher's: majordomus knowledge validate reports no finding whose source is under .ai/repo/knowledge/components/; majordomus knowledge related rule:project.typed-ports lists the records that name it; majordomus knowledge search cutoff lists the Filter Lab record; majordomus context resolve src/js/labs/filter-lab.js lists ai.repo.knowledge.components; the resource majordomus://knowledge/component-panel-filter-lab returns the record. The pull request body carries each command and its output."
+- "majordomus doctor reports no new FAIL and no new WARN, and majordomus context validate passes (the README is a context document the context class discovers too, as curated/README.md is)."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no review verdict is needed unless its scope widens to one; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "It adds no class token, selector, markup surface or inline style, so tests/unit/ui-flowbite-pro-baseline.json stays equal (node scripts/ui-flowbite-pro-record.mjs --check and node --test tests/unit/ui-flowbite-pro.test.mjs pass) (project.ui-uses-flowbite-pro, ADR 0061)."
+- "scripts/size-report.mjs shows 0 B gzip added: nothing it adds is under src/ or bundled (project.single-file-deliverable)."
+- tests/README.md has a row for each new test.
+- "Definition of done, extends: the registry and the trace become nodes and edges of the Majordomus knowledge graph."
+- "Definition of done, interlinks: every record relates to its issues, intents, rules, ADRs, features, claims, moments, source and tests, and to its kind record; majordomus_trace_issue reaches the commits from each issue id."
+- "Definition of done, interactivity: the Majordomus Cockpit route /cockpit/objects/knowledge and majordomus://knowledge/<id> serve every record; nothing in the app changes (stated)."
+- "Definition of done, docs, menus and routes: package.json gains kb:components; the knowledge README says what the directory is; docs/ui-catalog.md (G014) links each family's record."
+- "Definition of done, tested: the unit test and the Majordomus commands above (no browser surface; stated)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+- node --test tests/unit/component-kb.test.mjs
+- node scripts/ui-catalog.mjs --check
+- majordomus knowledge validate
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-30'

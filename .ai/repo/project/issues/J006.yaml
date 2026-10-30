@@ -1,0 +1,38 @@
+id: J006
+milestone: M118
+serves:
+- "component-system#majordomus-served"
+title: "Seed the trace of every existing node type and component from the plan's history, and empty the allowances"
+slug: seed-the-trace-of-every-existing-node-type-and-component-fro
+priority: p2
+profile: implementation
+objective: "Lands as feat(docs). For every NODE_REGISTRY type and parameter on main and every declaration G018 and G019 add, writes its trace entry from evidence, never from a guess: the issue whose merged branch introduced it (majordomus_trace_issue and git log -S on its type id), the ADRs and rules its module names, the tests that name it. Where no issue introduced it (V1-era code), the entry names the milestone's closing issue or the intent's issue that now owns it, and says so in its row. Empties tests/unit/ui-catalog-allowance.json and tests/unit/ui-catalog-allowance.json, and regenerates .ai/repo/knowledge/components/. Lands per family in train rounds when the diff is large. Before: the allowances list the untraced declarations. After: both are empty and every component is served. Negative cases: an entry that names an issue whose branch did not touch the module (the test does not catch it: a reviewer checks a sample of ten, stated in the body). Rollback: revert; traces and records only. Merged plan of the component follow-up (2026-10-30): Seeding from the plan's history (majordomus_trace_issue, git log -S) is a one-time authoring aid: its output is committed trace data that a reviewer reads, and no generator or test reads git history (CI clones are shallow)."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs and knowledge base, interlink them and add more; knobs, sliders and control panels in one generic way, Majordomus integrated: each component and parameter declaration carries its intent, issue and rule ids, a deterministic generator projects the registry into .ai/repo/knowledge so that Majordomus serves it (context resolve, why, traceability), and a check fails when a component has no plan or knowledge link. Design: components-followup/majordomus-kb-adr.md of this plan change, measured with Majordomus 1.0.0-alpha.1 (the CI pin) and 1.0.0-alpha.8 on a throwaway copy of origin/main cdda563c."
+scope:
+- scripts/ui-catalog/trace
+- tests/unit/ui-catalog-allowance.json
+- .ai/repo/knowledge/components
+depends_on:
+- J004
+- G018
+- G019
+acceptance_criteria:
+- "Both allowance files are empty arrays, and tests/unit/component-trace.test.mjs and tests/unit/component-links.test.mjs pass."
+- "The pull request body lists, per family, how each entry's issue was found (the trace_issue or git command and its output line), and the ten entries the reviewer sampled."
+- majordomus knowledge validate reports no finding under .ai/repo/knowledge/components/.
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no review verdict is needed unless its scope widens to one; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first). The fail-first test is the allowance-length check: it fails on the merge base because the committed allowance there is longer."
+- "It adds no class token, selector, markup surface or inline style, so tests/unit/ui-flowbite-pro-baseline.json stays equal (node scripts/ui-flowbite-pro-record.mjs --check and node --test tests/unit/ui-flowbite-pro.test.mjs pass) (project.ui-uses-flowbite-pro, ADR 0061)."
+- "scripts/size-report.mjs shows 0 B gzip added: nothing it adds is under src/ or bundled (project.single-file-deliverable)."
+- "Definition of done, extends: every existing component joins the contract."
+- "Definition of done, interlinks: every node type and component relates to the issues that made it."
+- "Definition of done, interactivity: none (stated)."
+- "Definition of done, docs, menus and routes: docs/ui-catalog.md and docs/ui-traceability.md regenerate with no gap rows."
+- "Definition of done, tested: the unit tests (no browser surface; stated)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+- node --test tests/unit/component-trace.test.mjs tests/unit/component-links.test.mjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-30'
