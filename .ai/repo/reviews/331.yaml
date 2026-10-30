@@ -1,0 +1,42 @@
+# Review verdict for pull request #331, C021: user-journey and control-census suites; a blocked
+# MEASURE step, a lab field and the Add block menu say what applies
+# (branch test/c021-journeys-control-census).
+# Re-reviewed head 3ba4c78e against merge base origin/main d9db6bdf, as the delta from this
+# reviewer's changes-requested verdict at bea4cea8: fix commits 96cbc9b3 and 6f5dee56 and two
+# merges of origin/main. Another session built it (oscilla-b0); this reviewer built none of it.
+#
+# The digest is the base branch's scripts/review-verdict.mjs (from git archive origin/main scripts),
+# run --content over the 3 guarded paths it names: .github/workflows/ci.yml,
+# src/js/measurement/views/measure-flow.js and src/js/ui/measure.js.
+#
+# How it was re-reviewed: three lenses in a detached worktree at the head (the census rows, with
+# mutant builds; the unit fixes, with fail-first against bea4cea8's src; the PR-own delta, npm test
+# and the digest), and a skeptic per P0-P2 finding (none was raised).
+# - Census rows device.safetyLimit.pointer, studio.frameAll.pointer, studio.graph.frameAll.pointer
+#   and studio.graph.frameSelection.pointer (control-census.cjs --only): webkit 4/4 PASS in each of
+#   4 runs, chromium 4/4, firefox 4/4. Mutants caught: an inert setSafetyLimit, a no-op Frame All,
+#   a no-op Frame Selection. No new fixed sleep or frame count; both waits are until() with ROW_MS.
+# - labs-field-commit and measure-flow-blocked-reason: the new cases pass at the head and fail on
+#   bea4cea8's src. Related suites 88/88. npm test: 3318 pass, 0 fail, 1 skipped.
+# - node scripts/build.mjs --check: dist up to date. node scripts/ci-workflow-rules.mjs: exit 0.
+#
+# Verdict: merge. R1-R6 are closed; R7 and N1-N6 are P3 and open for a later slice.
+schema: review-verdict/v1
+pr: 331
+verdict: merge
+reviewer: oscilla-af (claude-code 901211e2)
+content: da992e41de56c96b38d4344f3aeb7e77602f0492d2108500204234bb8399fea3
+findings:
+  - { id: R1, severity: P1, status: closed, title: "device.safetyLimit.pointer now holds PLAY (mouse.down after scrolling it into view) and judges one limited voice that ends while held (control-census.cjs:324-341); passes in webkit 4/4" }
+  - { id: R2, severity: P1, status: closed, title: "the Frame All / Frame Selection setup ends with until() on the live zoom and model.view.graph.zoom both past z0 (control-census.cjs:885-902); no-op mutants fail the rows" }
+  - { id: R3, severity: P2, status: closed, title: "the safety-limit expectation needs safetyLimit === 0.5, len <= 0.55 and a stop by limit + release + 20 ms; an inert select fails it" }
+  - { id: R4, severity: P2, status: closed, title: "labs/dom.js clears the editing state on a capture-phase focusout; new labs-field-commit case, fail-first against bea4cea8" }
+  - { id: R5, severity: P3, status: closed, title: "the census job's timeout-minutes (65) covers its step limits (15 + 13 + 35)" }
+  - { id: R6, severity: P3, status: closed, title: "the preflight report carries the recipe it checked; a changed setup drops its Stimulus reasons and reads '(changed since the setup check)'; new measure-flow-blocked-reason case, fail-first" }
+  - { id: R7, severity: P3, status: open, title: "package.json test:release includes the census suite; the local release gate grows considerably - state it in tests/README.md or keep census CI-only (left as asked)" }
+  - { id: N1, severity: P3, status: open, title: "control-census.cjs:312-341 the safety-limit row judges the engine's scheduled end and its 'ended' timer (audio-engine.js:572-582), not the sound: a tone kept at full gain 3 s past the limit still passes; engine-v1port.cjs:568-572 judges the audible end, so P3" }
+  - { id: N2, severity: P3, status: open, title: "labs/dom.js:51-52 and labs-field-commit.test.mjs: the stated reason for R4 (no 'change' when a field is typed back to its text) did not reproduce in the three engines; the fix is harmless, the comment and test name overstate it" }
+  - { id: N3, severity: P3, status: open, title: "measure-flow.js:207,293 a change to an analysis-only field (aggregation, noiseCheckS, pre/post roll, gap, phase) is reported as a change to the Stimulus step" }
+  - { id: N4, severity: P3, status: open, title: "measure-flow.js:208-213 a stale report hides every Stimulus-step reason, including ones the edit did not touch" }
+  - { id: N5, severity: P3, status: open, title: "measure-flow.js:355,374-375 READY with an edited setup reports ready:false while the primary action still reads Start measurement (unreachable today: a recipe edit resets READY to IDLE)" }
+  - { id: N6, severity: P3, status: open, title: "labs/dom.js:55-58 focusout also fires when the window loses focus, so a field being typed in stops counting as edited and may follow its slider" }

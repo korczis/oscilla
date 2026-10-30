@@ -141,7 +141,9 @@ changed.
   durations.
 - **Filter Lab:** biquad filters with a response chart drawn from the browser's own filter
   response. Cutoff and Q can be dragged on the chart.
-- **ADSR:** an attack/decay/sustain/release envelope with a draggable graph.
+- **ADSR:** an attack/decay/sustain/release envelope with a draggable graph. A lab field
+  answers a committed entry with the value that applies: one past its limit reads as the limit
+  (Attack 5000 ms reads 2 s), and text that does not parse gives way to the value in use.
 - **Additive synthesis:** a harmonic editor. The bars you see are the same coefficients that
   build the waveform you hear.
 - **Phase, Lissajous and stereo:** A/B phase views, a Lissajous figure, a correlation meter and
@@ -172,6 +174,8 @@ is in the [algorithm notes](docs/v3/algorithms.md).
   ABORTED or ERROR). The preset CHARACTERIZE PLAYBACK CHAIN runs a noise check and then a
   20 Hz-20 kHz log sweep, three times, at the LOW digital level. Expert settings add the sweep
   range and duration, the number of runs (1-10), mean or median aggregation, timing and phase.
+  A step the setup check blocks says why: a sweep it refuses shows the reason on the Stimulus
+  step (for example `f1 must be ≥ 1 Hz` for a start frequency of -1 Hz).
 - **Setup check.** Before anything plays, OSCILLA checks the microphone permission, the input
   device, the sample rate, the input level and the background noise. It requests echo
   cancellation, noise suppression and automatic gain control off, and reads back what the
@@ -695,7 +699,7 @@ from the background, or hold-to-play by touch. The owner declined real-device ch
 | --- | --- | --- |
 | Unit | `tests/unit/` | Pure modules (DSP, analysis, sequencer, charts), the packer, the artifact rules and the release tooling, all under `node --test` |
 | V1 freeze | `tests/freeze/` | Golden vectors that pin V1 behaviour ([ADR 0014](.ai/repo/adrs/0014-v1-behaviour-frozen-by-golden-vectors.md)) |
-| Browser | `npm run test:browser`, `test:engine`, `test:dsp`, `test:labs`, `test:sequencer` | Playwright suites on the built page: the app gate (`tests/browser/app.cjs`), layout (`tests/browser/layout.cjs`), the V2 final-QA regressions (`tests/browser/qa-regressions.cjs`), navigation history and unsaved work (`tests/browser/navigation.cjs`), the MIDI support state (`tests/browser/midi.cjs`), the V1 engine port (`tests/browser/engine-v1port.cjs`), DSP (`tests/browser/dsp.cjs`), labs (`tests/browser/labs.cjs`) and the sequencer (`tests/browser/sequencer.cjs`) |
+| Browser | `npm run test:browser`, `test:census`, `test:engine`, `test:dsp`, `test:labs`, `test:sequencer` | Playwright suites on the built page: the app gate (`tests/browser/app.cjs`), layout (`tests/browser/layout.cjs`), the V2 final-QA regressions (`tests/browser/qa-regressions.cjs`), navigation history and unsaved work (`tests/browser/navigation.cjs`), the MIDI support state (`tests/browser/midi.cjs`), the six user journeys (`tests/browser/journeys.cjs`), the control census (`tests/browser/control-census.cjs`, `npm run test:census`), the V1 engine port (`tests/browser/engine-v1port.cjs`), DSP (`tests/browser/dsp.cjs`), labs (`tests/browser/labs.cjs`) and the sequencer (`tests/browser/sequencer.cjs`) |
 | Visual | `scripts/visual-gate.mjs`, `tests/visual/` | The 1536x1024 reference and named regions, compared region by region with thresholds measured from run-to-run variance ([ADR 0029](.ai/repo/adrs/0029-visual-regression-in-the-release-gate.md)) |
 | V3 unit | `tests/unit/v3-*.test.mjs` | Measurement core, transfer and impulse response on synthetic systems with known answers, RTA and aggregation, calibration, quality, experiments (schema, round trip, corrupt imports, store), goldens per algorithm ID, the engine on a fake io and the view models, all in `npm test` |
 | V3 browser | `npm run test:measure` | `tests/browser/v3-measure.cjs`: the measurement engine on real Web Audio, a recovered digital loopback response, limiter transparency, 0 nodes after finish and abort. `tests/browser/analysis-worker.cjs`: the offline analysis in its Worker against the inline run, identical results, no inline fallback, abort. `tests/browser/v3-ui.cjs`: Measure and Experiments of the built page, guided flow, abort at every stage, calibration, experiment import, compare and export, and no "SPL" without a level calibration. All run in Chromium, Firefox and WebKit, from `file://` and `/oscilla/` |
@@ -714,6 +718,18 @@ checks and `labs-basic`), each judged where it acts (the live filter stage and t
 level, the next note's envelope, the dual voice, the stereo router) and in a view that shows
 it; the Sequencer panel's Tempo (BPM), Loop, timeline, block fields, Move, Add, Delete and
 transport are driven in `tests/browser/sequencer.cjs`.
+
+The control census (`tests/browser/control-census.cjs`) holds a row for every control of every
+workspace: it discovers the controls from the page, fails on one without a row, drives each by
+pointer and keyboard and reads back its effect (the engine voice or node parameter, the lab
+stage and the tone's level, the sequencer model, the Studio store, a readout or a view, a
+download), or names the suite that does, or the debt record that lists it. The user journeys
+(`tests/browser/journeys.cjs`) set parameters and start, change them while sounding, compare
+every affected view with the engine, stop and restart ten times with a node census, save and
+restore through the config link, presets, the config file, Studio projects and experiments, and
+check that invalid input is refused with a message that names the field or the reason. Where a
+confirmed defect has an open fix, the check is an expected failure that names the finding and
+the pull request, and fails once the defect stops reproducing.
 
 `npm run release-gate` is the authority on what the gate runs and in what order; the table
 names every suite and visual script its `test:release` runs (`tests/unit/docs-derived.test.mjs`

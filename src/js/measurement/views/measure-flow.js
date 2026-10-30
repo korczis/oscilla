@@ -3,7 +3,9 @@
 //
 //   measureFlow(ctx) -> { steps: [Step], current, primaryAction, secondaryActions, canBypass,
 //     ready, blockers, warnings, runText }
-//     ctx = { state (MEASUREMENT_STATES), preflight (engine preflight report | null), recipe,
+//     ctx = { state (MEASUREMENT_STATES), preflight (engine preflight report | null; its
+//             `recipe`, when given, is the one it checked: a setup changed since then drops
+//             the report's Stimulus reasons), recipe,
 //             calibration: { frequency, level } | null, result (engine result | null),
 //             progress (engine.progress() | last progress event | null), saved = false,
 //             expert = false, noise (engine 'noise' event | result.noise | null),
@@ -178,6 +180,13 @@ function reasonsFor(list, step) {
     .map((r) => ({ code: r.code, text: r.text, severity: r.severity || null }));
 }
 
+/** The recipe as text with its keys in order, so two equal recipes compare equal. */
+function recipeKey(recipe) {
+  const order = (v) => (Array.isArray(v) ? v.map(order) : v && typeof v === 'object'
+    ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, order(v[k])])) : v);
+  return JSON.stringify(order(recipe));
+}
+
 function levelName(level) {
   if (typeof level === 'string') return level.toUpperCase();
   const c = OUTPUT_LEVEL_CHOICES.find((x) => x.value === level);
@@ -194,8 +203,14 @@ export function measureFlow(ctx = {}) {
     progress = null, saved = false, expert = false, error = null, levelChecked = true,
   } = ctx;
   const noise = ctx.noise || (result && result.noise) || null;
-  const blockers = preflight && Array.isArray(preflight.blockers) ? preflight.blockers : [];
-  const warnings = preflight && Array.isArray(preflight.warnings) ? preflight.warnings : [];
+  // A report whose `recipe` (the one it checked) is not the setup's any more says nothing of
+  // the Stimulus step: its stimulus reasons are about a sweep the user has since corrected.
+  const stale = !!(preflight && preflight.recipe && recipe)
+    && recipeKey(preflight.recipe) !== recipeKey(recipe);
+  const notStale = (list) => (Array.isArray(list) ? list : [])
+    .filter((r) => !(stale && r && REASON_STEP[r.code] === 'stimulus'));
+  const blockers = preflight ? notStale(preflight.blockers) : [];
+  const warnings = preflight ? notStale(preflight.warnings) : [];
   const preflightDone = !!(preflight && preflight.ready);
   const active = isActiveState(state);
   const st = recipe && recipe.stimulus ? recipe.stimulus : null;
@@ -269,11 +284,15 @@ export function measureFlow(ctx = {}) {
   {
     const b = reasonsFor(blockers, 'stimulus');
     const w = reasonsFor(warnings, 'stimulus');
-    set('stimulus', { complete: (!!preflight && !b.length) || measured, blocked: b.length > 0,
-      warn: w.length > 0, reasons: [...b, ...w],
-      detail: st ? `${describeStimulus({ ...st, kind: st.kind || 'log-sweep' })}, `
-        + `${levelName(st.level)} output, ${repeats} run${repeats === 1 ? '' : 's'}`
-        : 'No stimulus chosen' });
+    // A blocked step says why, as the input and calibration steps do (C021): the description
+    // of the sweep the check refused is not the reason it refused it.
+    let detail = st ? `${describeStimulus({ ...st, kind: st.kind || 'log-sweep' })}, `
+      + `${levelName(st.level)} output, ${repeats} run${repeats === 1 ? '' : 's'}`
+      : 'No stimulus chosen';
+    if (b.length) detail = b[0].text;
+    else if (stale) detail += ' (changed since the setup check)';
+    set('stimulus', { complete: (!!preflight && !stale && !b.length) || measured,
+      blocked: b.length > 0, warn: w.length > 0, reasons: [...b, ...w], detail });
   }
   // 5 measure
   {
@@ -333,7 +352,7 @@ export function measureFlow(ctx = {}) {
     primaryAction: primaryAction({ state, preflight, blockers, saved, expert, quality }),
     secondaryActions: secondaryActions({ state, active }),
     canBypass: !!expert,
-    ready: preflightDone && blockers.length === 0,
+    ready: preflightDone && !stale && blockers.length === 0,
     blockers,
     warnings,
     runText,
@@ -358,8 +377,8 @@ function primaryAction({ state, preflight, blockers, saved, expert, quality }) {
       return saved ? a('repeat', 'Measure again')
         : a('save', 'Save experiment', quality !== 'INVALID');
     case S.INVALID:
-      return blockers.length && preflight && !preflight.ready
-        ? a('preflight', 'Check setup again', true, blockers[0].text)
+      return preflight && !preflight.ready
+        ? a('preflight', 'Check setup again', true, blockers.length ? blockers[0].text : null)
         : a('preflight', 'Measure again');
     case S.ABORTED:
       return a('preflight', 'Check setup');
