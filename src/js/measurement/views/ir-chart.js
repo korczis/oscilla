@@ -6,9 +6,22 @@
 //                window = null | [fromMs, toMs]   relative to the direct peak (view only),
 //                range = null | 'full' | [fromMs, toMs]  x-axis range; null = [first sample,
 //                                                 200 ms], 'full' = first to last sample,
-//                maxPoints = 4000                 plot columns (min/max decimation) }
+//                maxPoints = 4000                 plot columns (min/max decimation),
+//                stimulusFrames = null            the stimulus length in samples, so the note
+//                                                 can name the noise-tail window }
 //   IrView = { x: Float64Array (ms re direct peak), axes, series: [descriptor], origin,
 //     windowRegion|null, decimation, badges, notes, summary }
+//
+// Noise tail (T019): a 'full-overlap-tail' floor is the mean power of the last 10 % of the
+// full-overlap lags, which end about one post-roll after the peak. A decay still running there
+// is counted as noise, so the level is an upper bound on the noise only on average: one run's
+// estimate scatters about it (review of #343: sd 1.44 dB over 30 noise seeds), and no spread
+// is computed from the window (its samples are correlated). The summary therefore states the
+// estimate ("tail level estimate ≤ X dB re peak (noise or unfinished decay)", X rounded up, so
+// it holds of the level read) and the note says the noise lies at or below it within the
+// estimate's own scatter, naming the window it was read over (impulse-response.js
+// irNoiseFloorWindow; described in words without stimulusFrames). v1 results (no
+// noiseFloorMethod) and a missing floor keep their wording.
 //
 // Time (§214): x is milliseconds relative to the detected direct peak (0 ms = the peak); the
 // absolute position is kept in `origin` (capture offset + peak time, in s and ms) and in the
@@ -24,7 +37,9 @@
 // sample instead of from a handful of whole-IR columns. A changed span needs a new view (the
 // caller rebuilds on every span change). The summary never lists points (§150).
 
-import { irWindow, normalizeIr } from '../impulse-response.js';
+import {
+  IR_TAIL_FRACTION, irNoiseFloorWindow, irWindow, normalizeIr,
+} from '../impulse-response.js';
 import { ZERO_POWER_DB } from '../transfer.js';
 import {
   QUANTITY_KINDS as K, LINE_STYLES, fixedText, msText, extent,
@@ -82,7 +97,7 @@ export function buildIrView(ir, options = {}) {
   if (!validIr(ir)) return null;
   const {
     scale = 'linear', normalize = false, window = null, range = null,
-    maxPoints = IR_MAX_POINTS,
+    maxPoints = IR_MAX_POINTS, stimulusFrames = null,
   } = options;
   if (scale !== 'linear' && scale !== 'db') throw new RangeError(`unknown IR scale '${scale}'`);
   const sr = ir.sampleRate;
@@ -191,7 +206,10 @@ export function buildIrView(ir, options = {}) {
 
   const badges = [normalize ? 'NORMALIZED' : 'ORIGINAL SCALE', scale === 'db' ? 'dB' : 'LINEAR'];
   const notes = [origin.label + '.', `Method: ${ir.method || 'spectral'} (${ir.algorithm}).`];
+  // T019: a full-overlap tail still holding the decay estimates an upper bound on the noise.
+  const tailBound = Number.isFinite(ir.noiseFloorDb) && ir.noiseFloorMethod === 'full-overlap-tail';
   if (!Number.isFinite(ir.noiseFloorDb)) notes.push('Noise tail: not available.');
+  else if (tailBound) notes.push(tailBoundNote(ir, stimulusFrames, msPerSample));
   else if (typeof ir.noiseFloorMethod === 'string' && ir.noiseFloorMethod) {
     notes.push(`Noise tail estimate: ${ir.noiseFloorMethod}.`);
   }
@@ -204,10 +222,13 @@ export function buildIrView(ir, options = {}) {
   const summary = 'Impulse response: direct peak '
     + `${msText(absolutePeakS * 1000, msPerSample)} after the capture start (shown at 0 ms), `
     + `peak amplitude ${amp === null ? '—' : fixedText(amp, decimalsOf(amp))} (relative, `
-    + `${amp !== null && amp < 0 ? 'inverted polarity, ' : ''}original scale), noise tail `
-    // IR v2 may report no noise floor (noiseFloorDb null): say so, never print a number.
-    + `${Number.isFinite(ir.noiseFloorDb) ? `${fixedText(ir.noiseFloorDb, 0)} dB re peak`
-      : 'not available'}, `
+    + `${amp !== null && amp < 0 ? 'inverted polarity, ' : ''}original scale), `
+    // IR v2 may report no noise floor (noiseFloorDb null): say so, never print a number. The
+    // figure is rounded up, so the whole dB stated is never below the estimate read; the
+    // estimate itself scatters run to run (the note says so).
+    + `${tailBound ? `tail level estimate ≤ ${fixedText(Math.ceil(ir.noiseFloorDb) || 0, 0)} `
+      + 'dB re peak (noise or unfinished decay)' : `noise tail ${Number.isFinite(ir.noiseFloorDb)
+      ? `${fixedText(ir.noiseFloorDb, 0)} dB re peak` : 'not available'}`}, `
     + `length ${msText(n * msPerSample, Math.max(1, msPerSample))}`
     + `${normalize ? '; display NORMALIZED' : ''}.`;
 
@@ -227,6 +248,19 @@ export function buildIrView(ir, options = {}) {
     notes,
     summary,
   };
+}
+
+/** The note of a 'full-overlap-tail' floor: the window it was read over and what it bounds. */
+function tailBoundNote(ir, stimulusFrames, msPerSample) {
+  const w = irNoiseFloorWindow(ir, stimulusFrames);
+  const where = w
+    ? `the mean power ${msText(w[0] * 1000, msPerSample)} to ${msText(w[1] * 1000, msPerSample)} `
+      + 'after the peak'
+    : `the mean power of the last ${Math.round(IR_TAIL_FRACTION * 100)} % of the lags at which `
+      + 'the whole stimulus lies inside the capture (about one post-roll after the peak)';
+  return `Noise tail estimate: full-overlap-tail, ${where}. A decay still running there counts `
+    + 'as noise, so the noise lies at or below this level, within the estimate\'s own scatter; '
+    + 'lengthen the post-roll to read past the decay.';
 }
 
 function decimalsOf(v) {
