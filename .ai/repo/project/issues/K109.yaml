@@ -1,0 +1,47 @@
+id: K109
+milestone: M072
+serves:
+  - "connected-instrument#daw-tracks"
+title: "Audio tracks and audio clips from recordings and files"
+slug: audio-tracks-and-audio-clips-from-recordings-and-files
+priority: p2
+profile: implementation
+objective: "Lands as feat(studio). Size: big; it is split further into landable pull requests when started, each with its own fail-first test. Track kind audio and clip kind audio (enum options, D2): a clip references a buffer of the K074 sample store by id and hash (the model stays plain data), plays through an AudioBufferSourceNode on the transport into the track's channel, with offset, gain and fades; recording arms the track (arm is view state, never hashed) and writes the capture worklet's frames into a new buffer and clip while the transport plays, the recording's latency compensation stated. Before: there is no audio track or recorded take. After: audio tracks and clips from recordings and files. User-value tier 3 of 4 (synth-design.md section 17). Rollback: revert the pull request; a document with a audio clip is then refused by the import pipeline with its sentence, so after a release the clip kind stays and the editor is removed instead."
+why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
+scope:
+  - "src/js/studio/schema.js"
+  - "src/js/studio/timeline.js"
+  - "src/js/studio/timeline-compiler.js"
+  - "src/js/studio/transport.js"
+  - "src/js/studio/clip-targets.js"
+  - "src/js/studio/offline.js"
+  - "src/js/measurement/capture.js"
+  - "src/js/core/storage.js"
+  - "src/js/ui/studio"
+  - "tests/unit/v4-clip-target-policy.test.mjs"
+  - "tests/unit/audio-track.test.mjs"
+  - "tests/browser/arrange.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K074"
+  - "K107"
+acceptance_criteria:
+  - "tests/unit/audio-track.test.mjs, failing on the merge base: an audio clip plays its buffer from its offset at its frame offline; a fade-in reaches unity at its end; a recorded take is a clip whose buffer hash is stored once; a document whose buffer is missing states 'sample not in this browser'."
+  - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: a missing buffer (stated, silent); recording without microphone permission (stated)."
+  - "A browser check in tests/browser/arrange.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: a recorded take appears as a clip in the arrangement and in the Studio timeline. Real-time: a take recorded from the TEST CONTEXT digital source plays back at the next pass, each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: arm, record and clip editing work by pointer, keyboard and touch. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Every edit is one undoable dispatch through the one Studio store (a continuous gesture is one history entry, undo and redo restore the exact serialized model) and the model holds plain data only (project.studio-model-is-canonical); every connection goes through canConnect and full-model validation, and a refusal shows the validator's sentence and leaves model, history and runtime unchanged (project.typed-ports, project.no-silent-feedback)."
+  - "Every node it plays is built by an engine adapter with track()/source() accounting, all timing is on the audio clock (no timer or rAF times audio), envelopes are click-free, frequencies stay below 0.95 x Nyquist of the running context, the peak stays at or below the output ceiling and the engine node census is 0 after stop (project.audio-engine-discipline v2)."
+  - "Every pinned template studioHash is unchanged: it adds node types, ports, capabilities, enum options or clip kinds only, never a parameter on an existing node type (D2, K022)."
+  - "Every string it adds passes tests/unit/instrument-wording.test.mjs (added by K059): no product, brand or model name, no analog-modelling or vintage claim, and every approximation it makes labelled where it is shown (project.no-fake-science)."
+  - "The pull request carries a reviewer's verdict (src/js/studio and src/js/measurement and src/js/core/storage is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "scripts/size-report.mjs shows at most 4 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of the line's figures stays within the cap Q023 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/audio-track.test.mjs"
+  - "node tests/browser/arrange.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

@@ -1,0 +1,35 @@
+id: E030
+milestone: M083
+serves:
+- "definition-of-done#done-judged"
+title: "The owner's definition of done is judged on every pull request by the base branch's script"
+slug: the-owner-s-definition-of-done-is-judged-on-every-pull-reque
+priority: p1
+profile: implementation
+objective: "Lands as feat(ci). Rule project.definition-of-done v1 under .ai/repo/rules/project/, with an x-majordomus block naming its tests, and scripts/definition-of-done.mjs, which the CI job runs from the base branch's copy (as scripts/review-verdict.mjs and scripts/fail-first.mjs are), so a pull request cannot weaken its own judge. When a pull request changes a path under src/, the judge requires: (1) a 'Definition of done' section in the body with the six items extends, cross-links, dynamics, docs and routes, tested, deployed, each with a path or a plan id; (2) an added or changed tests/browser/*.cjs, or a line 'dod-browser: n/a <reason>' in the body's prose; (3) a changed file under docs/, README.md or .ai/repo/features/, or 'dod-docs: n/a <reason>'; (4) a tests/README.md row for every test file the pull request adds; (5) a changed tests/unit/url-state*.test.mjs or tests/browser/navigation.cjs when src/js/core/url-state*.js gains a key; (6) one row of tests/browser/integration-map.json for every new link producer (a data-osc-link attribute, an openIn or sendTo call of src/js) once the base branch holds that map (synth line K075; until then the clause reports 'integration map not on the base' and passes). 'Deployed' is not judged by the pull request; the release cadence (scripts/release-cadence.mjs, project.deploy-often) holds it after merge. A merge train is judged by its members, as project.review-verdict does. It reads the same pull-request metadata that R022 (#255) reads when that lands, and shares its parser rather than carrying a second one."
+why: "Owner definition of done of 2026-10-29, relayed in Czech by the coordinator: every update extends something, cross-links, adds charts, dynamics or interactivity, updates markdown, docs, menus, pages and routes as needed, is fully tested and functional, and is deployed."
+scope:
+- .ai/repo/rules/project/definition-of-done.v1.md
+- .ai/repo/rules/project/README.md
+- scripts/definition-of-done.mjs
+- tests/unit/definition-of-done.test.mjs
+- tests/unit/fixtures/definition-of-done
+- .github/workflows/ci.yml
+- .github/pull_request_template.md
+- CLAUDE.md
+- AGENTS.md
+- tests/README.md
+acceptance_criteria:
+- "tests/unit/definition-of-done.test.mjs, failing on the merge base, proves each clause on fixture diffs and bodies: a src/ change without the section, without a browser test or its waiver, without a doc or its waiver, with an added test missing its tests/README.md row, with a new url-state key and no route test, and with a new link producer and no map row (map present on the base) is each refused with a message that starts 'project.definition-of-done:'; a change outside src/, a waiver with a real reason, and a train judged by its members pass; a waiver without a reason fails."
+- "The CI job runs the base branch's scripts/definition-of-done.mjs against the head (the pattern of project.review-verdict), bounded, pinned and retried as project.ci-bounded requires, and the gate aggregates it."
+- "The rule names its enforcement (project.rules-name-their-enforcement): the test file and the CI step exist and run, and tests/unit/knowledge-integrity.test.mjs passes."
+- .github/pull_request_template.md carries the six items; CLAUDE.md and AGENTS.md name the rule beside the other ways a change reaches main (their generated regions are edited through .ai/repo/policy.yaml and majordomus update).
+- "The pull request carries a reviewer's verdict (.github and the judge are guarded; project.review-verdict) and, as a feat change, the unit test above fails on the merge base (project.fail-first)."
+- "Definition of done, applied to itself: it extends project.review-verdict's base-copy judging; it cross-links the plan record, the rule and the template; its docs are the rule and the template; it is tested by the mutation fixtures; it is deployed with the next release."
+validation:
+- node --test tests/unit/definition-of-done.test.mjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

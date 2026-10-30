@@ -1,0 +1,54 @@
+id: Y002
+milestone: M096
+serves:
+- "gl-live-views#backend-honest"
+- "gl-live-views#gl-cost"
+- "gl-live-views#hackable"
+title: "GL core: capability probe, WebGL 2 or 1 or Canvas 2D per view, a context budget, loss fallback and the GL test harness"
+slug: gl-core-capability-probe-webgl-2-or-1-or-canvas-2d-per-view
+priority: p2
+profile: implementation
+objective: "Lands as feat(charts). New modules under src/js/charts/gl/ (never a components, widgets, ui-kit or design-system path): caps.js probes once, lazily on the first GL host, WebGL 2 then WebGL 1 with failIfMajorPerformanceCaveat true, premultipliedAlpha and preserveDrawingBuffer false, and returns a frozen capability record (version, R8 or LUMINANCE level textures, vertex texture units, a float or half-float colour buffer, element_index_uint, MAX_TEXTURE_SIZE); choose.js is pure: from a view's declared needs, the record, the ?gl= override (auto, 2, 1, 0; 'sw' accepts a major performance caveat, for CI legs Y001 found on a software rasteriser only) and the stored renderer preference it returns { backend, reason } with the reason as a sentence ('WebGL 2', 'WebGL 1: no float colour buffer, persistence quantized', 'Canvas 2D: WebGL unavailable', 'Canvas 2D: ?gl=0'); pool.js holds at most the context budget Y001 measured (default 4, under every observed browser limit), hands a context to the views in host order and gives the rest Canvas 2D with the reason 'Canvas 2D: GL context budget in use'; program.js compiles and links a shader pair from string literals with the info log in the error; view.js is the one renderer contract, createLiveView(host, { kind, needs, axes, gl, fallback }), whose gl and fallback objects expose mount, resize, frame(now), drawOnce and destroy, so every GL view has a Canvas 2D twin that draws the same data. A webglcontextlost event is preventDefault-ed, the view switches to its 2D twin within one frame keeping its CPU-held data, and webglcontextrestored re-uploads once and switches back. Resize follows the host's ResizeObserver at devicePixelRatio capped at 2. Every GL view is a frame-loop subscriber with its host (K036) and allocates nothing per tick: typed arrays, uniform locations and matrices are made at mount, no getParameter, getError or readPixels runs per frame, and WebGL 1 uploads from a preallocated column buffer instead of subarray(). axes.js defines axesOf(source), the frozen descriptor every GL view draws its axes from (sampleRate, fftSize, binHz, minHz, maxHz, scale, minDb, maxDb, column period, level unit), read from the analysis objects and never from constants. window.OSCILLA gains the observe member charts.renderers(), one { host, kind, backend, reason } per mounted view (ADR 0052, observe kind), registered from src/js/charts/wire.js (K028) so src/js/main.js gains no byte. Tests: tests/unit/gl-caps.test.mjs (the choose() decision table, the override parser, the pool, the loss state machine with a fake context), tests/browser/lib/gl.cjs (forces a backend, counts live contexts, spies drawArrays, drawElements and texSubImage2D, loses and restores a context through WEBGL_lose_context, reads pixels) and tests/browser/gl-renderers.cjs over a fixture view; chart-cost.cjs gets its GL section. It writes the ADR 'Live views draw on WebGL where it pays; Canvas 2D is the reference and the fallback' (status proposed, number assigned at landing) and docs/renderers.md, the renderer contract and the 'add a live view' guide."
+why: "Owner orders of 2026-10-29 (session oscilla-b0, in Czech): add p5.js, WebGL and interactivity and deploy; plan WebGL renderers for the scrolling spectrogram (with a 3D option), a phosphor XY scope and a live spectrum, falling back to canvas/p5 when WebGL is unavailable, one frame loop with no per-frame allocation, the single file and its gzip budget, axes and units from the analysis (no-fake-science). Built on the M062 charts plan (#269, merged as cdda563c): the frame loop K036, the interaction kit K053, the shared zoom K052, the level history K033 and the chart-cost check of K036 are reused, never duplicated (components-followup/render-gl.md)."
+scope:
+- src/js/charts/gl
+- src/js/charts/wire.js
+- tests/unit/gl-caps.test.mjs
+- tests/unit/gl-view-contract.test.mjs
+- tests/browser/lib/gl.cjs
+- tests/browser/gl-renderers.cjs
+- tests/browser/chart-cost.cjs
+- tests/browser/chart-cost-baseline.json
+- tests/unit/source-size-baseline.json
+- .ai/repo/adrs
+- docs/renderers.md
+- package.json
+- README.md
+- tests/README.md
+- dist
+depends_on:
+- Y001
+- Q050
+- Q037
+- K028
+- K036
+acceptance_criteria:
+- "As a feat change it carries tests/unit/gl-caps.test.mjs: WebGL 2 is chosen when present, WebGL 1 when only it is, Canvas 2D when neither is or a major performance caveat is reported without ?gl=sw; a view needing vertex textures gets Canvas 2D with that reason on a WebGL 1 record with none; ?gl=0, 1, 2 and sw parse and an unknown value is refused and named; the pool gives Canvas 2D beyond its budget; a lost context switches to the twin and a restored one switches back; and tests/unit/gl-view-contract.test.mjs: a fixture view written from docs/renderers.md mounts on both backends and its 2D twin draws the same data, which fails on the merge base (project.fail-first)."
+- "tests/browser/gl-renderers.cjs: OSCILLA.charts.renderers() names the backend and reason of the fixture view; WEBGL_lose_context.loseContext() switches it to Canvas 2D within a named deadline with its data kept and restoreContext() returns it to GL; the live context count never exceeds the budget with more GL views mounted than the budget; ?gl=0 mounts no GL context at all. Every GL check states per gate browser and OS whether it drew on WebGL 2, WebGL 1 or was skipped, with the reason Y001 recorded for that leg (no leg claims a GL path it did not draw), and the same check runs with ?gl=0 on every leg and passes on the Canvas 2D path. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline and assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac); tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+- "tests/browser/chart-cost.cjs gains the GL core rows: its GL subscriber is a frame-loop subscriber with its host (K036) and allocates nothing per tick (Chromium CDP heap sampling over a polled window, the per-tick ceiling of tests/browser/chart-cost-baseline.json not raised); its draw calls per frame are counted by the gl.cjs spy and stay at the stated figure; its main-thread time per frame (median and p95 of performance.now() around the subscriber) is recorded for the GL and the Canvas 2D path in tests/browser/chart-cost-baseline.json, with both figures in the pull request; the GL path is the automatic choice only where its median is not above the 2D path's, otherwise the 2D path stays automatic and the baseline says why; nothing is drawn while the host is hidden or Pause animation is on."
+- "Shaders are string literals in the bundle: no fetch, no module script, no worker or worklet from a path, no new vendor library; npm run verify-dist passes and the page opens from file:// and the Pages sub-path with zero console errors on the Canvas 2D and the GL path (project.single-file-deliverable, ADR 0012)."
+- "The view reads existing AnalyserNodes or the CPU-held analysis data on the main thread only, creates no audio node, adds no work to the audio path and writes no DOM per frame (project.audio-engine-discipline v2)."
+- "It adds no markup, class name or stylesheet rule, so the Flowbite Pro ratchet is unchanged (node --test tests/unit/ui-flowbite-pro.test.mjs and node scripts/ui-flowbite-pro-record.mjs --check pass with the record untouched), and no new string or module name carries an osc- prefix (ADR 0061)."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no review verdict is needed. It adds the observe member only and no drive or inject member (ADR 0052)."
+- "The ADR names its related rules (single-file-deliverable, audio-engine-discipline, no-fake-science, visual-identity-lock) and ADRs 0012, 0013, 0016, 0052 and 0061, and passes majordomus adr check; docs/renderers.md is linked from README.md and from docs/EXTENDING.md where that guide exists."
+- "scripts/size-report.mjs shows at most 3 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of the Y line's figures stays within the component line's cap Q037 records, under the gzip budget of scripts/build-config.mjs (1 000 000 B on main at b67d1e58, 1 200 000 B once #279 lands; project.single-file-deliverable)."
+- "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+- node --test tests/unit/gl-caps.test.mjs tests/unit/gl-view-contract.test.mjs
+- node tests/browser/gl-renderers.cjs
+- node tests/browser/chart-cost.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-30'

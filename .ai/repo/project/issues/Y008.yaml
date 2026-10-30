@@ -1,0 +1,52 @@
+id: Y008
+milestone: M096
+serves:
+- "gl-live-views#hackable"
+- "gl-live-views#backend-honest"
+title: "Renderer setting, routes and the hackable surface: a Settings choice, deep links to each GL view, the guide and the Learn links"
+slug: renderer-setting-routes-and-the-hackable-surface-a-settings
+priority: p2
+profile: implementation
+objective: "Lands as feat(ui). Settings gains a Pro select 'Live view renderer: Automatic | Canvas 2D only' (stored as oscilla.v2.renderer in localStorage, like the theme; an unreadable store means Automatic), and each GL host's summary line names its backend and reason from OSCILLA.charts.renderers() ('Drawn with WebGL 2'; 'Canvas 2D: WebGL unavailable'). Routes, through the one hash dispatcher (ADR 0045): the analysis spectrogram in 3D and the Phase & Stereo XY view each have a deep link, refused and removed when the backend cannot draw them, with the sentence. docs/renderers.md gains a worked example that adds a small GL view in under a hundred lines against the contract, the ?gl= values, the context budget and how to test both backends; README's feature list and Testing table name the GL views and suites; the Learn spectrogram and phase topics link to the views. Where the integration map exists (the session's K075 draft), each new link is a row of it."
+why: "Owner orders of 2026-10-29 (session oscilla-b0, in Czech): add p5.js, WebGL and interactivity and deploy; plan WebGL renderers for the scrolling spectrogram (with a 3D option), a phosphor XY scope and a live spectrum, falling back to canvas/p5 when WebGL is unavailable, one frame loop with no per-frame allocation, the single file and its gzip budget, axes and units from the analysis (no-fake-science). Built on the M062 charts plan (#269, merged as cdda563c): the frame loop K036, the interaction kit K053, the shared zoom K052, the level history K033 and the chart-cost check of K036 are reused, never duplicated (components-followup/render-gl.md)."
+scope:
+- src/js/charts/gl
+- src/js/ui/navigation.js
+- src/js/ui/app.js
+- src/index.html
+- src/partials
+- src/js/data
+- tests/unit/gl-renderer-setting.test.mjs
+- tests/browser/gl-renderers.cjs
+- tests/browser/navigation.cjs
+- tests/unit/ui-flowbite-pro-baseline.json
+- docs/renderers.md
+- README.md
+- tests/README.md
+- dist
+depends_on:
+- Y003
+- Y004
+- Y005
+- Y006
+- F002
+acceptance_criteria:
+- "As a feat change it carries tests/unit/gl-renderer-setting.test.mjs: the stored value parses to Automatic or Canvas 2D only, an unreadable or unknown value is Automatic, ?gl= overrides the stored value for one load and is not stored; the deep-link parser refuses a GL view the record cannot draw with its sentence, which fails on the merge base (project.fail-first)."
+- "tests/browser/gl-renderers.cjs: choosing Canvas 2D only in Settings remounts every GL host on its twin with no context left; the summary line names the backend; each deep link opens its view or is refused with the sentence when ?gl=0; tests/browser/navigation.cjs walks the new links. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline and assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac); tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+- "Chart chrome (toolbar, toggle, badge, tooltip, readout row, marker table) is Flowbite Pro markup adapted from the matching Pro component and lands after F002 turned on preflight and the form base styles and after the card issue of its workspace placed the card; no osc-* class token or legacy selector is added, no name of the new modules or strings carries an osc- prefix, and src/styles/tokens.css, charts.css, measure.css, studio.css and studio-timeline.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs and node scripts/ui-flowbite-pro-record.mjs --check). The GL canvas is a domain view inside the card."
+- "Levels say dB relative (dBFS-like) unless a valid LevelCalibration applies; every axis, tick, unit and caption comes from the analysis descriptor axesOf() and never from a constant (the static scan of tests/unit/gl-views-wording.test.mjs finds no sample-rate, Nyquist or dB-range literal under src/js/charts/gl); no data value is tweened or eased; every string it adds is registered in its chart's wording table and passes tests/unit/charts-readout-wording.test.mjs; the word waterfall is never displayed (D7; it stays a search alias only) (project.no-fake-science)."
+- A route or setting that cannot act is refused or disabled with its sentence (project.no-inert-surfaces).
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no review verdict is needed."
+- "The owner's definition of done, one item each: extends Settings, the hash routes and the guide; interlinks Learn topics to views, views to the guide, every link a row of the integration map where it exists; interactive: the renderer choice and the deep links; docs, menus and routes: Settings dialog, README, docs/renderers.md, Learn; tested with pointer, keyboard and touch; deployed by merge commit under project.deploy-often (Pages deploys on the merge)."
+- "Designed at 390x844 first: every check runs at 390x844 and at 1536x1024, touch targets are at least 44 px, and each gesture has a pointer, a keyboard and a touch path."
+- "scripts/size-report.mjs shows at most 1 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of the Y line's figures stays within the component line's cap Q037 records, under the gzip budget of scripts/build-config.mjs (1 000 000 B on main at b67d1e58, 1 200 000 B once #279 lands; project.single-file-deliverable)."
+- "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+- node --test tests/unit/gl-renderer-setting.test.mjs
+- node tests/browser/gl-renderers.cjs
+- node tests/browser/navigation.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

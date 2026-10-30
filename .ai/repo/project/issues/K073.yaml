@@ -1,0 +1,52 @@
+id: K073
+milestone: M066
+serves:
+  - "connected-instrument#drum-machine"
+  - "connected-instrument#one-transport"
+  - "connected-instrument#patch-cables"
+title: "Drum kit panel and step grid on the same transport, with accents, flam, choke and per-voice outs"
+slug: drum-kit-panel-and-step-grid-on-the-same-transport-with-acce
+priority: p1
+profile: implementation
+objective: "Lands as feat(synth). The Drums sub-view (sv=drums, its place decided by Q019): New drum kit inserts the six voices and a mixer normalled to Output (K061's normalling); each voice's AUDIO out is a jack of the patch bay, so a drum out can be patched into the synth's Mixer, the Follower or any audio input; a grid row per voice is a steps clip on that voice (gate, velocity, accent, ratchet, probability, and flam as a second hit 10-40 ms early at reduced velocity), the same grid component as K069; the kit plays on the one Studio transport with the synth's patterns; the piano maps keys to voices when the kit is picked (K066). Before: drum voices are separate nodes. After: a kit with a grid on the same transport, per-voice outs in the patch bay. User-value tier 1 of 4 (synth-design.md section 17). Rollback: revert the pull request; no saved state depends on it."
+why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
+scope:
+  - "src/js/ui/synth"
+  - "src/js/synth"
+  - "src/js/studio/timeline-compiler.js"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/browser/integration-map.json"
+  - "tests/browser/instrument-dsp.cjs"
+  - "tests/unit/drum-kit.test.mjs"
+  - "tests/browser/drums.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K071"
+  - "K072"
+  - "K068"
+  - "K069"
+  - "K063"
+  - "K103"
+  - "Q019"
+acceptance_criteria:
+  - "tests/unit/drum-kit.test.mjs, failing on the merge base, asserts on StudioFakeContext (tests/unit/sequencer-fake-audio.mjs) the scheduled calls, times, ramps and node census; tests/browser/instrument-dsp.cjs, rendering a real OfflineAudioContext in Chromium, Firefox and WebKit at each context's own rate (in the style of tests/browser/dsp.cjs) and failing on the merge base, checks the figures: a kick on every fourth step and a synth pattern on the same transport have their onsets on the same frames at 120 BPM; a flam step gives two onsets the stated time apart; a choke group in the grid releases the open hat; a drum out patched into the synth's Mixer breaks that input's normal and is audible at the synth's output."
+  - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: a flam at the first step of a pass; a choke group of one voice."
+  - "A browser check in tests/browser/drums.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: the kit's nodes and clips appear in the Studio graph and timeline at the same revision, and Open in Studio selects them; reload keeps the sub-view. Real-time: while playing, a step toggled in the drum grid sounds on its next pass and the piano key mapped to that voice lights, each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: the grid works by pointer, keyboard and touch like K069's, and the sub-view tab is role=tab with aria-selected. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Every edit is one undoable dispatch through the one Studio store (a continuous gesture is one history entry, undo and redo restore the exact serialized model) and the model holds plain data only (project.studio-model-is-canonical); every connection goes through canConnect and full-model validation, and a refusal shows the validator's sentence and leaves model, history and runtime unchanged (project.typed-ports, project.no-silent-feedback)."
+  - "Every node it plays is built by an engine adapter with track()/source() accounting, all timing is on the audio clock (no timer or rAF times audio), envelopes are click-free, frequencies stay below 0.95 x Nyquist of the running context, the peak stays at or below the output ceiling and the engine node census is 0 after stop (project.audio-engine-discipline v2)."
+  - "Every link it adds (open in, send to, a modulation route, a probe or a jump between views) is a row of tests/browser/integration-map.json, and tests/browser/integration-map.cjs walks it: the control works by pointer and by keyboard, the target shows the same Studio revision, focus lands on the target heading, and Back, Forward and reload keep the state."
+  - "Every string it adds passes tests/unit/instrument-wording.test.mjs (added by K059): no product, brand or model name, no analog-modelling or vintage claim, and every approximation it makes labelled where it is shown (project.no-fake-science)."
+  - "Its chrome uses the Flowbite Pro component where Pro has one (card, button, button group, input, dropdown, tabs, tooltip, popover), adapted from that block, lands after F002, is recorded as migrated (never pending) and lowers or keeps the ratchet; the instrument visuals Pro has no component for (the knob arc, the cable layer, the piano keys, the pad surface) are inline SVG and Tailwind utilities inside Pro cards, as the ADR 0061 resolution note of K058 records; it adds no osc-* class token, no legacy selector, no inline style and no stylesheet (project.ui-uses-flowbite-pro, project.visual-identity-lock v2, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs); every continuous instrument parameter it shows is the knob of K058 (D11)."
+  - "The pull request carries a reviewer's verdict (src/js/studio and src/js/synth is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "scripts/size-report.mjs shows at most 4 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; it does not wait on Q023, and its figure joins the line's sum once Q023 records the cap, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/drum-kit.test.mjs"
+  - "node tests/browser/drums.cjs"
+  - "node tests/browser/instrument-dsp.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

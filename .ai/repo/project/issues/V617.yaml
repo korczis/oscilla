@@ -1,0 +1,44 @@
+id: V617
+milestone: M080
+serves:
+- "studio-box-system#first-patch-and-previews"
+title: "A First patch template whose timeline markers are the steps, linked from Learn and the empty Studio"
+slug: a-first-patch-template-whose-timeline-markers-are-the-steps
+priority: p2
+profile: implementation
+objective: "P04 slice F (visual, keyboard and responsive). Lands as feat(studio). A seventh template, 'First patch' (src/js/studio/templates/first-patch.js), starts as Oscillator to Master and carries five timeline markers whose names are the steps: '1 Press Play', '2 Add a Filter between them (drop it on the cable)', '3 Move the Filter cutoff', '4 Add a Spectrum from the Filter output (drag a cable into empty canvas)', '5 Save it as a patch'; its notes say the same. [ and ] move between markers (existing keys), so the steps are reachable by keyboard. The Learn concept card 'Signal path' gains 'Open the First patch in Studio' (#m=studio&st=first-patch), and the empty Studio's note names it. It is a template with notes, not a guided path (Q004 chose no guided path for the first screen). The template carries a pinned studioHash and renders non-silent offline."
+why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings S1-S14 measured on origin/main b67d1e58)."
+scope:
+- src/js/studio/templates/first-patch.js
+- src/js/studio/templates/index.js
+- src/js/data/learn.js
+- src/js/ui/studio/workspace.js
+- tests/unit/v31-studio-templates.test.mjs
+- tests/browser/v31-studio-links.cjs
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+acceptance_criteria:
+- "Before: VERIFIED (S9): six templates, no first-patch template."
+- "After: a First patch template with five step markers, linked from Learn."
+- "Negative cases: the template's pinned studioHash and every other template's are checked; the step texts pass the no-fake-science and no-inert-surfaces scans."
+- "Rollback: revert the merge commit. Nothing changes the schema, a studioHash or a stored record, so documents saved while it was live load unchanged after the revert."
+- "tests/unit/v31-studio-templates.test.mjs, failing on the merge base: first-patch validates, has five markers in order whose names start 1-5, a pinned studioHash, renders non-silent offline with peak at or below the output ceiling, and every other template's pinned hash is unchanged."
+- The step texts pass tests/unit/no-fake-science.test.mjs and tests/unit/no-inert-surfaces.test.mjs.
+- "Definition of done, extends: the template set of V425 and the Learn concept cards."
+- "Definition of done, cross-links: Learn's 'Signal path' card opens #m=studio&st=first-patch; the empty Studio names the template; the template appears in the Templates dialog. The link is a row of tests/browser/integration-map.json once that map (synth line K075) is on main."
+- "Definition of done, dynamics: playing the template draws the spectrum once step 4 is done; the markers show on the timeline ruler."
+- "Definition of done, docs and routes: docs/v31/user-guide.md gains a 'First patch' section; .ai/repo/features/studio.md lists the template; the deep link is in the route table of README.md. tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: A check 'first-patch' in tests/browser/v31-studio-links.cjs clicks the Learn card's link by pointer and waits with until() (deadline 'First patch open from Learn', 5 s) for templateId first-patch, five markers and focus on the Studio heading; presses ] by keyboard and waits for the playhead at marker 2; follows the link by touch in a hasTouch context; Back returns to Learn; on the merge base the link does not exist and the check fails. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit and the completed evidence the release that carried it; E030's judge passes on the pull request once E030 is on main."
+- "The pull request carries a reviewer's verdict (it touches a guarded path; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+- "Wave 1: it adds no class token, selector, markup surface or inline style, so the Flowbite Pro record does not change: node scripts/ui-flowbite-pro-record.mjs --check passes with no rewrite and node --test tests/unit/ui-flowbite-pro.test.mjs passes (project.ui-uses-flowbite-pro); live drawing is on a canvas, a domain view."
+- "scripts/size-report.mjs shows at most 1 KB gzip added, with the base and head figures in the pull request body, within the owner's dist budget of 1 200 000 B gzip (decision of 2026-10-29, about 355 KB of headroom at origin/main b67d1e58); the ceiling of this line is 35 KB gzip in all (Studio boxes 35 KB, signal generator 25 KB), stated in the milestone (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/v31-studio-templates.test.mjs
+- node tests/browser/v31-studio-links.cjs --only first-patch
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'
