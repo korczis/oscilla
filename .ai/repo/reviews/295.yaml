@@ -1,0 +1,79 @@
+# Review verdict for pull request #295, plan item C003 (M090, PACK 03 'One Instrument, One
+# Coherent State'): the V2 pattern sequencer plays through the engine's counted Filter stage, and
+# the Envelope and Additive labs say they shape the instrument only (branch
+# fix/c003-sequencer-filter-stage). Reviewed head a8e4908d6afb (== origin and ls-remote at fetch;
+# merge base origin/main cdda563c1982). Built by the builder's session; reviewed by dev-68 in two
+# passes (a first review, then an independent re-check that tried to refute each finding against
+# the code and re-ran the decisive mutations and probes in its own copy).
+#
+# The digest: scripts/review-verdict.mjs --content --list --base origin/main, run in the PR
+# worktree. The branch's scripts/ is byte-identical to origin/main's (git diff origin/main HEAD --
+# scripts is empty), so the base branch's copy gives the same value: ca675152...0e2f over
+# src/js/audio/audio-engine.js and src/js/audio/stage-chain.js, which matches the PR body.
+#
+# Lenses: (a) reach: every control path that should shape the sequence (Filter type, cutoff, Q,
+# gain, enable, chart drag, project load) and every stop path; (b) click-free: no sounding param
+# stepped, no stage cut under a live signal; (c) fail-first and mutation; (d) PR body and docs vs
+# code and C003.yaml's acceptance criteria; (e) the unit, build and browser runs.
+#
+# Runs (the PR worktree was used read-only for code: its only occupant was a majordomus-cli
+# 'serve --repo <worktree>' daemon, pid 58088, not a Claude session; git status clean before and
+# after, apart from this file; every test and mutation ran in git-archive copies in the
+# session scratchpad with the worktree's node_modules symlinked; nothing was installed):
+# - Fail-first: tests/unit/sequencer-stage-chain.test.mjs on an archive of origin/main fails 8/8
+#   by assertion; on the head archive it passes 8/8.
+# - Mutations (head copy, one at a time). Killed: M1 pass into getDest instead of chain.input,
+#   M2 closeChain never disposes, M3 a chain per pass, M4 offline render ignores inserts, M5
+#   stageChain does not add to engine.nodes, M6 _discardContext keeps chains, M10 track/source
+#   hooks dropped. Survived (re-run in the re-check, 8/8 pass each): M7 closeChain ignores fading
+#   voices (R-1), M8 no per-pass untrack (R-2), M9 main.js gives the live sequence no filter
+#   (R-4). Redundant but harmless: M11/M12 (dispose/stop without closeChain; _voiceEnded closes).
+# - Fake-context probes: head, right after stop() the chain is open (disposed false, 3 passes,
+#   21 nodes fading) and disposed with census 0 one second later; under M7 the chain is disposed
+#   at stop() while the 3 passes still fade (census 0 at once: their nodes disconnected under a
+#   live signal). A 20 s loop holds census 21,21,21,21,21 on head and 49,81,113,145,177 under M8.
+#   30 restarts reuse one chain at a steady census.
+# - Unit: the engine, freeze, sequencer and v31 studio-sequence suites 1300/1300. Full
+#   node --test tests/unit: 3286 tests, 3266 pass, 10 skipped, 10 fail: 9 are git ls-files in a
+#   non-git archive (plan-yaml-strict, repo-hygiene, version-authority pass 26/26 read-only in the
+#   worktree), 1 is the load-dependent v31-studio-performance budget the PR body also reports.
+#   npm run build:check: dist/index.html up to date.
+# - Browser (cached Playwright Chromium, OSC_LOAD_MAX=200): tests/browser/sequencer.cjs on head
+#   39/39; seq-filter-reaches-sequence measured live -52.5 dB, cutoff 12 kHz -2.3 dB / 200 Hz
+#   -51.0 dB, engine nodes 17 and sources 2 while sounding, census 0 after Stop and Escape, WAV
+#   -24.9 -> -77.4 dBFS. The same leg with --dist on origin/main's build: 34/39, the 5 failures
+#   the PR body reports. Firefox and WebKit were not run here.
+#
+# Checked and found correct: one counted chain per session, opened by the first pass and
+# disposed only after the last pass's fade (natural end, Stop, Escape, dispose, closed context);
+# a restart during a fade reuses it, so the biquad state never resets at a loop boundary; the
+# Filter Lab's set() is the only writer of the stage config and updates every tracked stage
+# (instrument and sequence) through createInsert, project load goes through update -> set, and
+# engine.updateInserts is not used by the filter; every node compileSequence creates goes through
+# the track/source hooks; stage-chain.js adds no automation and the filter stage starts from
+# setValueAtTime(t0), so no sounding param is stepped; the offline export builds the same chain
+# from filter.config on the offline context; the Signal Path animates only for the instrument's
+# voice (st.live.voice) and reads 'idle' while only the sequence plays, so it does not claim the
+# Envelope or Additive lab for the sequence; Studio pattern clips compile their own graph
+# (transport.js:642), outside the Filter Lab by design.
+#
+# Open: R-1 (P2) and R-2 to R-9 (P3). R-1 is kept at P2: the guard it names is what keeps every
+# sequencer Stop click-free (project.audio-engine-discipline: never clicks), the claim
+# sequencer-through-filter-stage is marked guaranteed on this unit test, and nothing in the unit
+# or browser gates fails when the guard goes. The behaviour at this head is correct; the fix is
+# a test, not code.
+schema: review-verdict/v1
+pr: 295
+verdict: changes-requested
+reviewer: "dev-68 (Claude Opus 5.5 session 4f90795d); did not build, merge or edit this change; wrote only this file"
+content: ca675152ccaa1c92664894358be087d108db21f05fcc594722ceeed571b30e2f
+findings:
+  - { id: R-1, severity: P2, status: open, title: "Nothing tests that Stop keeps the stage chain open until the fading passes have ended. closeChain's guard `if (priv.voices.size) return;` (src/js/sequencer/editor.js:115) is correct at this head, but deleting it (M7) makes stop() (editor.js:475) dispose the chain at once while 3 passes still fade: chain.dispose() disconnects the filter stage and every pass node under a live signal, a hard cut on every Stop, and tests/unit/sequencer-stage-chain.test.mjs stays 8/8 (test 2 reads `disposed` only after advance(0.5); the browser leg's click checks use the fixture, not this chain). Fix: after ed.stop(), assert !opened[0].disposed while ed.stats().voices > 0 and the census is above 0, then disposed and census 0 after the fade." }
+  - { id: R-2, severity: P3, status: open, title: "Nothing tests the per-pass untrack (release() in the pass onEnded hook, src/js/sequencer/editor.js:367). Without it (M8) the engine census grows by 32 per pass for the whole loop (21 steady on head; 49,81,113,145,177 over 20 s) and 8/8 still pass, because test 3 runs 4 passes and asserts only activeNodeCount > 0, and stop or natural end releases everything through chain.dispose(). Fix: assert activeNodeCount after N loop passes equals it after one." }
+  - { id: R-3, severity: P3, status: open, title: "C003.yaml acceptance criterion 3 asks for a unit test of the offline sequence render that attenuates the 4 kHz block by more than 20 dB; tests/unit/sequencer-stage-chain.test.mjs:153 checks only that the carrier reaches the destination through a 200 Hz low-pass biquad (the fake context does no DSP). The dB figure is measured only by the browser leg (WAV -24.9 -> -77.4 dBFS); docs/CLAIMS.yaml's note says so, the PR body does not list it as a deviation. Fix: state the deviation in the body (or measure the offline render with a DSP-capable context)." }
+  - { id: R-4, severity: P3, status: open, title: "No unit test covers main.js's wiring of the Filter Lab into the sequence (openSequencerStage / sequenceInserts, src/js/main.js:121,194): with `if (live) return [];` (M9) the live sequence gets no filter and 8/8 pass, because the unit test injects its own createFilterStage factory instead of labs.filter.createInsert. The browser leg does catch it (34/39 on origin/main's dist), so the gap is unit-level only." }
+  - { id: R-5, severity: P3, status: open, title: "The 'instrument only' notes (src/index.html:965,1025) sit in panels whose data-osc-modes is 'synthesis', so at 1536 and 390 px they are not displayed in the Sequencer workspace at all (only the 768-1279 px layout shows every panel); they show while the sequence plays in the Synthesis workspace. Nothing misleads, but criterion 4 and the PR body's 'in the Sequencer workspace' hold only at tablet width. Their title attributes span two source lines, so the tooltip carries a literal newline and indentation, and both <h2> lines are 110 and 113 characters." }
+  - { id: R-6, severity: P3, status: open, title: "Pre-existing, limits the PR body's 'so the exported WAV is what plays' to the filter: the live sequence plays model.waveform (and the new status bar names it), while renderWav passes waveform: cmp.waveform (src/js/main.js:297), which compileSequence uses to override it. The Alpine effect (main.js:683-686) copies cmp.waveform into the editor only when cmp.waveform changes, so a loaded sequence with another waveform plays one waveform and exports another." }
+  - { id: R-7, severity: P3, status: open, title: "If opening the stage chain throws, play() leaves playing true with no error text: sessionChain() runs at the top of _schedulePass outside its try, after play() set this.playing = true (src/js/sequencer/editor.js:450), and the panel's click handler (sequencer-panel.js:484) does not catch. The new try/catch around compileSequence only cleans up and rethrows, so a compile throw also leaves playing true (that part predates the PR). Unlikely with createFilterStage. Fix: reset playing and set error in play() on a throw." }
+  - { id: R-8, severity: P3, status: open, title: "Informational, pre-existing, C002/C001: openSequencerStage (src/js/main.js:121) does not check app.measureOwnsOutput() as the engine.play wrapper does (main.js:219-226), and Escape and stopPlayback stop the sequencer only when the cmp.seqPlaying mirror is set (main.js:235, 552). C003 depends on C002, which has not landed; neither path is changed or regressed here." }
+  - { id: R-9, severity: P3, status: open, title: "Re-check, lens (a), pre-existing: the stage chain is now engine-owned and counted, but the engine's own stop paths do not reach it: engine.stopAll() (Escape), revokeContinuous() and _releaseAll iterate this.voices only (src/js/audio/audio-engine.js:645-668). Every stop of the sequence goes through main.js's stopSequencer, gated on cmp.seqPlaying, which a 150 ms interval mirrors from editor.playing (main.js:479-485); the pagehide/visibilitychange hide() (main.js:567-575) has the same gate as Escape. So for up to 150 ms after Play, Escape or hiding the tab leaves a looping sequence sounding. Belongs with C001 (stop paths read live state): read labs.sequencer.editor.playing, or let stopAll close open stage chains' sessions." }
