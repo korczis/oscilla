@@ -1107,6 +1107,11 @@ const ADR_NOT_A_CAPABILITY = new Map([
   ['0061', 'the UI system (Flowbite Pro on Tailwind, built and inlined): rule'
     + ' project.ui-uses-flowbite-pro and tests/unit/ui-flowbite-pro.test.mjs hold it; it adds'
     + ' no capability of the page'],
+  ['0063', 'a proposed decision (G1 coherence contract): one output owner, value classes and'
+    + ' save-path scopes; nothing implements it yet, and the claims of C001-C003 (#280), T026'
+    + ' and H002 will cite it when they land; it adds no capability of the page today'],
+  ['0080', 'a dependency decision (Q070): Cytoscape.js is admitted for one explorer not built yet;'
+    + ' P010\'s claim cites it when the explorer ships, and this entry then fails as stale'],
 ]);
 
 /** ADR numbers (from 0011 on) that `corpus` never cites, and exemptions it does cite. */

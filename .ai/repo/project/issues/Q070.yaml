@@ -1,0 +1,31 @@
+id: Q070
+milestone: M098
+serves:
+  - "public-discoverability#libraries-decided"
+title: "Owner decision: which named visualization libraries, if any, enter dist"
+slug: owner-decision-which-named-visualization-libraries-if-any-enter-dist
+priority: p3
+profile: routine
+owner: "repository owner"
+objective: "From P009's measurements and recommendation, decide for Mermaid (as a runtime), Chart.js, Cytoscape.js and Apache ECharts whether each enters dist, and for which consumer; a library adopted gets an ADR before its integration issue is planned."
+why: "The owner named the libraries in the prompt pack (2026-10-29); the budget, ADR 0012 and ADR 0013 and the deferral of a p5 replacement make adoption the owner's decision."
+current_state: "Answered by the owner on 2026-10-30: Cytoscape only (see evidence); ADR 0080 records it and P010 carries the explorer. P009's measurements, 2026-10-30, a minified IIFE bundle per library made with esbuild 0.28.2 (the repository's version) in a scratch directory outside the tree, gzip level 9 as scripts/size-report.mjs measures; dist/index.html at origin/main cdda563c is 823 309 B gzip, leaving 176 691 B under the 1 000 000 B budget (376 691 B under E027's proposed 1 200 000 B). Incumbents: uPlot 1.6.32 MIT 23 037 B gzip; p5 1.11.3 LGPL-2.1 265 556 B. (1) Mermaid 11.4.1 MIT as a runtime: 742 486 B gzip, above the whole headroom under either budget; recommendation decline, keep Mermaid as GitHub-native README diagrams only. (2) Chart.js 4.4.7 MIT, tree-shaken line chart with log scale, tooltip and legend: 56 403 B; fits, but duplicates uPlot, which M062's chart kit already plans on; recommendation decline unless an M062 chart needs what uPlot cannot draw. (3) Apache ECharts 5.5.1 Apache-2.0, tree-shaken line chart with grid, tooltip, legend, data zoom and aria on canvas: 178 711 B (full build 345 795 B); above the 1 MB headroom, half of the 1.2 MB headroom; recommendation decline. (4) Cytoscape.js 3.30.4 MIT: 121 232 B; fits only under 1.2 MB and only for a read-only relationship explorer, which no planned issue needs yet (U006 links workspaces without a graph); recommendation decline now, revisit with a concrete explorer issue. Not measured: frame and offscreen cost and accessibility adapters, since no library is recommended for adoption. Commands: npm i the named versions in a scratch directory; esbuild <entry> --bundle --minify --format=iife --platform=browser --target=es2020; wc -c and gzip -9c | wc -c on each output."
+scope:
+  - ".ai/repo/project/issues/Q070.yaml"
+depends_on:
+  - "P009"
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision), in the owner's words with date and source; a worker never answers it."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-10-30
+updated_at: 2026-10-30
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "AskUserQuestion in Claude Code session oscilla-af, 2026-10-30, after P009's measurements (recorded in current_state)"
+    result: "Owner chose 'Cytoscape only': allow Cytoscape.js (+121 232 B gzip) for one read-only relationship explorer, under an ADR, built after the budget is raised to 1.2 MB (E027); Mermaid stays GitHub-native in README, Chart.js and Apache ECharts do not enter dist. The options were None (recommended), Cytoscape only, Chart.js only, Decide later."
+    commit: cdda563c1982a0736ee7441f905ee2dfe2050b81
+    recorded_at: 2026-10-30T00:10:00Z

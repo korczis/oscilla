@@ -1,0 +1,32 @@
+id: T026
+milestone: M073
+serves:
+  - "v3-measure#readout-provenance"
+title: "Every readout in the interface has a truth-table row, and a readout without one fails a test"
+slug: every-readout-in-the-interface-has-a-truth-table-row-and-a-r
+priority: p1
+profile: implementation
+objective: "Truth-table rows all (P06 idea) (scratchpad p05/truth-table.md). docs/v3/readout-truth.yaml is the canonical table (one row per readout key: the data-osc id of a markup readout, or a declared chart id), seeded from this audit; scripts/readout-truth.mjs generates docs/v3/readout-truth.md and checks it in npm run verify. tests/unit/readout-provenance.test.mjs enumerates readouts from src/index.html and src/partials (data-osc elements bound with x-text, :aria-valuetext, role=meter, role=img or aria-live) and the declared chart ids, and requires a complete row for each, with the label in VERIFIED, DERIVED, INFERRED, PROPOSED, UNKNOWN, BLOCKED, existing source and test paths, and an open defect naming a plan issue. Keys not yet described sit in tests/unit/readout-provenance-baseline.json, which may only shrink."
+why: "P05 audit of origin/main b67d1e58 (v3.13.0): The provenance of the 126 readouts in this audit exists only in an audit file; a new readout can ship without stating its quantity, unit, source, algorithm, resolution, calibration, limitations, tests and label, and nothing fails."
+scope:
+  - "docs/v3/readout-truth.yaml"
+  - "docs/v3/readout-truth.md"
+  - "scripts/readout-truth.mjs"
+  - "package.json"
+  - "tests/unit/readout-provenance.test.mjs"
+  - "tests/unit/readout-provenance-baseline.json"
+  - "tests/README.md"
+  - ".ai/repo/rules/project"
+acceptance_criteria:
+  - "Fail-first fixture: tests/unit/readout-provenance.test.mjs with mutation cases: a copy of the markup with an added <span data-osc=\"fake.readout\" x-text=\"x\"> fails; deleting a row whose readout exists fails; a row whose readout no longer exists fails; label \"CONFIDENT\" fails; a missing source path fails; a grown baseline fails. Fails on the merge base (no table, no test)."
+  - "Negative cases, each asserted: Controls without a displayed value (buttons, plain inputs) are not readouts; the generated markdown is byte-stable across runs; the check runs in well under the unit-suite budget."
+  - "Revertible on its own: Revert: test, table, generator and baseline; no product code changes."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "tests/README.md has a row for each new test; this issue does not edit docs/CLAIMS.yaml or the intent (T027 does)."
+validation:
+  - "npm test"
+  - "npm run verify"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

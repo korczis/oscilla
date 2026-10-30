@@ -1,0 +1,20 @@
+id: M064
+title: "Instrument wave 1a: the integration map, the knob and the semi-modular Synth panel with patch cables"
+slug: instrument-wave-1a-the-integration-map-the-knob-and-the-semi
+order: 64
+priority: p1
+problem: "There is no instrument front panel: the Studio has generic nodes only, no note source, no normalled default path, no knob, and links between workspaces are not checked as a whole."
+outcome: "A Synth workspace on the one Studio store whose semi-modular voice sounds with no cables, whose knobs always show value and unit, whose cables are typed Studio edges dragged from jacks with highlight, refusal, fan-out and normalling, with a hover mini-scope; every link is a row of a walked integration map."
+acceptance_criteria:
+  - "K075, K058, K059, K060, K103, K104, K061, K062, K063, K064 are done with their evidence; npm run release-gate passes at the last one; npm run test:synth and node tests/browser/integration-map.cjs pass."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "K058 and K059-K064 add src/js/ui/controls, src/js/synth and src/js/ui/synth; K059, K060, K061 and K064 change src/js/studio and need a reviewer's verdict; K060 adds src/js/synth to GUARDED."
+  - "src/js/main.js is near its 40 KB cap: K062 adds at most 300 B or waits on K028's wiring."
+  - "K061's metadata.panel is presentation state; when V601 groups land, panel and group become one notion by a stated migration (design R3)."
+  - "K059, K060 and K071 wait on K005 (#267); K061 on K008 (#268); K058 and K062 on F002 (#251)."
+created_at: 2026-10-29
+updated_at: 2026-10-29

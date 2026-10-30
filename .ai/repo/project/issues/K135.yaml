@@ -1,0 +1,44 @@
+id: K135
+milestone: M082
+serves:
+- "signal-generator-lab#bursts-and-sweeps"
+title: "Cycle-counted windowed bursts, and one sweep editor with units in every label"
+slug: cycle-counted-windowed-bursts-and-one-sweep-editor-with-unit
+priority: p2
+profile: implementation
+objective: "Lands as feat(audio). A pattern 'Tone burst' (Rhythmic): N cycles on and M cycles off at the set frequency, rectangular or Hann window, repeated K times, its length shown in cycles and ms; scheduled on the audio clock with click-free edges for the rectangular window's release as the engine requires. The Pattern view's sweep fields show their units in their visible labels (today 'Duration' 10000 without 'ms', while sweep mode says 'Duration (s)'), and a log sweep states its rate in octaves per second. The labels are data in patterns.js, so no markup changes."
+why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings G1-G14 measured on origin/main b67d1e58)."
+scope:
+- src/js/audio/patterns.js
+- src/js/audio/audio-engine.js
+- src/js/ui/workbench.js
+- tests/unit/generator-burst.test.mjs
+- tests/browser/generator.cjs
+- tests/README.md
+- dist
+- docs/v3/readout-truth.yaml
+acceptance_criteria:
+- "Before: VERIFIED (G8, G9): bursts in ms only; the Sweep up form shows 'Duration' 10000 without its unit."
+- "After and negative cases: as the objective and the criteria below state; the setpoint (what was requested) and the observation (what the analyser measured on the digital output, or the microphone on the room) are separate readouts with separate labels, and no readout claims the acoustic output."
+- "Rollback: revert the merge commit. Nothing changes the schema, a studioHash, URL key meaning or stored preset, so documents saved while it was live load unchanged after the revert."
+- "Scientific-truth rows (Quantity | Unit | Source | Algorithm | Resolution | Calibration | Limitations | Tests | UI label) are added to T026's canonical readout table docs/v3/readout-truth.yaml and checked by T026's tests/unit/readout-provenance.test.mjs, which this issue extends so that each UI label's text is in the source, each Tests path exists, and a setpoint row never shares its label with an observed row: Burst length (setpoint) | cycles, ms | plan | N / f | one sample | not applicable | programmed, not observed | tests/unit/generator-burst.test.mjs | 10 cycles = 10.0 ms (programmed) || Log sweep rate (setpoint) | octaves per second | plan | log2(f_end / f_start) / duration | exact | not applicable | programmed | tests/unit/generator-burst.test.mjs | 0.99 oct/s (programmed)"
+- "tests/unit/generator-burst.test.mjs, failing on the merge base: a 10-cycle 1 kHz burst renders 10.0 ms on within one sample at 44.1 and 48 kHz, the Hann window's envelope within 1 %, the largest sample step at the rectangular edges within the engine's click bound; every visible sweep label carries its unit; the log-sweep rate equals log2(end/start)/duration."
+- "Definition of done, extends: the Pulse and Burst patterns and the sweep editors of S033."
+- "Definition of done, cross-links: a burst setting survives the URL round trip and opens in the Studio as V605 maps it once V605 lands (K140 adds the mapping). The link is a row of tests/browser/integration-map.json once that map (synth line K075) is on main."
+- "Definition of done, dynamics: the scope shows the burst envelope live."
+- "Definition of done, docs and routes: README.md's Playground feature list and docs/GLOSSARY.md where a term is new; .ai/repo/features/playground.md (or the feature record of the Playground) says what changed; tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: A check 'burst' in tests/browser/generator.cjs selects Tone burst by keyboard, sets 10 cycles by typing, triggers it by pointer and waits with until() (deadline 'burst envelope on the scope', 5 s) for a scope frame with 10 cycles between silences; taps Trigger in a hasTouch context; reads the Sweep up form and finds 'ms' in the duration label; on the merge base the pattern does not exist. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit and the completed evidence the release that carried it; E030's judge passes on the pull request once E030 is on main."
+- "The pull request carries a reviewer's verdict (it touches a guarded path; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+- "Wave 1: it adds no class token, selector, markup surface or inline style, so the Flowbite Pro record does not change: node scripts/ui-flowbite-pro-record.mjs --check passes with no rewrite and node --test tests/unit/ui-flowbite-pro.test.mjs passes (project.ui-uses-flowbite-pro); live drawing is on a canvas, a domain view."
+- "scripts/size-report.mjs shows at most 1 KB gzip added, with the base and head figures in the pull request body, within the owner's dist budget of 1 200 000 B gzip (decision of 2026-10-29, about 355 KB of headroom at origin/main b67d1e58); the ceiling of this line is 25 KB gzip in all (Studio boxes 35 KB, signal generator 25 KB), stated in the milestone (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/generator-burst.test.mjs
+- node tests/browser/generator.cjs --only burst
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'
+depends_on:
+- T026

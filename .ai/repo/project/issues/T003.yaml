@@ -1,0 +1,35 @@
+id: T003
+milestone: M073
+serves:
+  - "v3-measure#readout-states"
+title: "The sweep fields show their own errors where the value is typed, and name a provisional limit as provisional"
+slug: the-sweep-fields-show-their-own-errors-where-the-value-is-ty
+priority: p2
+profile: implementation
+objective: "Truth-table rows GEN-04 (scratchpad p05/truth-table.md). Each sweep field has a role=alert error element with aria-invalid and aria-describedby, as the generic pattern parameters (index.html:409-414) already do. setSweepFreq appends \"(provisional until audio starts)\" while the rate is provisional, matching presetDisabledReason."
+why: "P05 audit of origin/main b67d1e58 (v3.13.0): Typing 30000 into End frequency silently becomes 20.95 kHz; paramErrors holds \"Limited to the digital limit 20.95 kHz.\" but only the Settings dialog renders it. Parse errors and the duration clamp are just as silent. V1 (v1.0.0 index.html:408-419) showed them inline. 20.95 kHz comes from the provisional 44.1 kHz rate but reads as the device limit."
+scope:
+  - "src/index.html"
+  - "src/js/core/instrument.js"
+  - "tests/unit/readout-states-sweep.test.mjs"
+  - "tests/browser/app.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "T002"
+acceptance_criteria:
+  - "Fail-first fixture: tests/unit/readout-states-sweep.test.mjs: setSweepField(end, \"30000\") with no sample rate stores a message that contains \"20.95 kHz\" and \"provisional\"; a markup test asserts every SWEEP_FORM field has a bound error element. Fails on the merge base. Browser check in tests/browser/app.cjs: typing 30000 shows a visible alert inside #osc-pattern-params."
+  - "Negative cases, each asserted: 10000 Hz shows no error; with a 48 kHz context, 30000 → 22.8 kHz without \"provisional\"; \"abc\" shows the parse error; a valid duration shows nothing."
+  - "Revertible on its own: Revert: markup and message text only."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named deadline (project.suite-harness, project.bounded-test-timing)."
+  - "Any new visible element follows the Flowbite Pro components and the locked tokens (project.ui-uses-flowbite-pro, project.visual-identity-lock); npm run visual passes or the baseline change is declared."
+  - "tests/README.md has a row for each new test; this issue does not edit docs/CLAIMS.yaml or the intent (T027 does)."
+validation:
+  - "npm test"
+  - "npm run verify"
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

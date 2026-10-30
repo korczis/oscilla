@@ -1,0 +1,36 @@
+id: P008
+milestone: M099
+serves:
+  - "public-discoverability#in-app-entry"
+  - "public-discoverability#live-and-accessible"
+title: "The parts Q004 placed on the first screen lead to their full workspaces"
+slug: the-parts-q004-placed-on-the-first-screen-lead-to-their-full-workspaces
+priority: p3
+profile: deep-work
+objective: "Add no new band, preview or copy to the first screen: Q004 already places the positioning sentence as its heading, Signal analysis, a full-width Guided measurement row and the compact Studio, and the owner declined a guided path there ('No, not now'). Make the Guided measurement row and the compact Studio each carry one visible, labelled way into their full workspace (Measure, Studio) through the hash dispatcher, its target read from the entry-path inventory P002 commits rather than a new hand-written list, starting no audio and asking for no microphone until pressed; and add tests/browser/public-entry.cjs, which proves those ways and, with --live, the README's landing deep links on the deployed site."
+why: "The owner's prompt pack (2026-10-29) asks for an entry from GitHub into real workspaces; Q004 keeps the Playground as root, so the entry is the parts the owner already chose, made to lead somewhere."
+scope:
+  - "src"
+  - "dist/index.html"
+  - "tests/browser/public-entry.cjs"
+  - "tests/browser/live-smoke.cjs"
+  - "tests/visual"
+  - "tests/unit"
+  - "tests/README.md"
+  - "docs/CLAIMS.yaml"
+  - "site/og-image.png"
+  - ".ai/repo/project/issues/P008.yaml"
+depends_on:
+  - "P002"
+acceptance_criteria:
+  - "A unit test that fails on the merge base and passes on the head proves each of the two parts names a route of the entry-path inventory and that the route opens its workspace (project.fail-first)."
+  - "tests/browser/public-entry.cjs passes in Chromium, Firefox and WebKit, from file:// and the sub-path, at 1536x1024 and 390x844, dark and light: each way is reachable by keyboard with visible focus, opens its workspace, and no AudioContext starts and no getUserMedia call is made before a press; with --live it opens every README landing deep link on the deployed site."
+  - "tests/unit/ui-flowbite-pro.test.mjs's ratchet does not grow; live-smoke still passes; the visual references change only for the first screen, with a reviewer-written verdict for every guarded path the change touches (project.review-verdict); a claim in docs/CLAIMS.yaml names the new suite."
+  - "The gzip delta is measured and at most 10 000 B, counted against the headroom Q014 divides; npm run social regenerates site/og-image.png if the first screen's pixels changed."
+  - "No new route, no second HTML file, no microphone prompt on entry, and Q004's layout unchanged."
+validation:
+  - "node tests/browser/public-entry.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-30
+updated_at: 2026-10-30

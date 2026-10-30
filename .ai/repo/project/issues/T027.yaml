@@ -1,0 +1,59 @@
+id: T027
+milestone: M073
+serves:
+  - "v3-measure#readout-states"
+  - "v3-measure#readout-labels"
+  - "v3-measure#readout-in-effect"
+  - "v3-measure#readout-provenance"
+title: "Register the measurement-truth claims and point the v3-measure readout criteria at them"
+slug: register-the-measurement-truth-claims-and-point-the-v3-measu
+priority: p2
+profile: implementation
+objective: "The closing issue of M073 (the convention of E015, V399, V606, L006): once T001-T026 have landed, add docs/CLAIMS.yaml entries for the readout states, labels, in-effect values and provenance, each naming its tests; reword the claims the milestone changed (dual-oscillator-beats, generator-mic-compare, phase-and-lissajous-model, stereo-correlation-meter, additive-coefficients-play, spectrogram-mapping); and point the four v3-measure readout criteria at the registered claims. Remove the ratchet entries T026 left for readouts this milestone described."
+why: "docs/CLAIMS.yaml and an intent file are changed by one closing issue per milestone so the other issues can run in parallel (.ai/repo/project/README.md)."
+scope:
+  - "docs/CLAIMS.yaml"
+  - ".ai/repo/project/intents/v3-measure.yaml"
+  - "docs/v3/readout-truth.yaml"
+  - "docs/v3/readout-truth.md"
+  - "tests/unit/readout-provenance-baseline.json"
+  - "tests/unit"
+  - "tests/README.md"
+depends_on:
+  - "T001"
+  - "T002"
+  - "T003"
+  - "T004"
+  - "T005"
+  - "T006"
+  - "T007"
+  - "T008"
+  - "T009"
+  - "T010"
+  - "T011"
+  - "T012"
+  - "T013"
+  - "T014"
+  - "T015"
+  - "T016"
+  - "T017"
+  - "T018"
+  - "T019"
+  - "T020"
+  - "T021"
+  - "T022"
+  - "T023"
+  - "T024"
+  - "T025"
+  - "T026"
+acceptance_criteria:
+  - "Every new or reworded claim names a test that exists and passes; tests/unit/knowledge-integrity.test.mjs passes."
+  - "The four criteria readout-states, readout-labels, readout-in-effect and readout-provenance of intent v3-measure have evidence claim with a registered ref; majordomus intent validate reports 0 FAIL."
+  - "npm run release-gate passes at this issue."
+validation:
+  - "majordomus intent validate"
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29
