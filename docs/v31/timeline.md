@@ -265,9 +265,9 @@ SCHEDULE_LEAD_S)`: nothing closer to now than the engine's scheduling lead is ch
 | Parameter change (`NODE_PARAM_SET`) | live | applied now through the click-free parameter path (§80) |
 | Item starting at or after `h`, compiled identically by the new model | `keep` | nothing: an edit elsewhere (a parameter, another clip) leaves it scheduled, so a pending measurement hand-off and the envelope contour stay as they are |
 | Item starting at or after `h`, anything else | `cancel` + `schedule` | dispose the old voice, play the rebuilt item |
-| Item sounding across `h`, unchanged | `keep` | nothing |
+| Item sounding across `h`, unchanged | `keep` | nothing; a pattern voice whose node or pattern bus the runtime replaced continues on the new node (`continue`, reason `node-replaced`, below) |
 | …clip removed or retargeted | `release` at `h` | `voice.stop(h)` / gate off (faded, `STOP_RAMP_S`) |
-| …only shortened, new end after `h` | `retime-end` | `voice.stop(newEnd)` / gate off moved (compatible live edit) |
+| …only shortened, new end after `h` | `retime-end` | `voice.stop(newEnd)` / gate off moved (compatible live edit); decided again on every later edit, and a pattern voice on a replaced node continues to `newEnd` |
 | …event / measurement clip lengthened | `retime-end` | gate off moved later |
 | …anything else (payload, start, a longer pattern clip) | `keep-until-end` | the current event stays; the edited clip plays from its next trigger (next loop pass or next play) |
 | Clip now covering `h` that never started | `next-trigger` | waits for its next trigger |
@@ -416,7 +416,20 @@ through `runtime.apply` first; then:
 - a node rebuilt by the runtime (`node-replace`): its lane continues on the new AudioParam from
   the horizon with the exact value there (`rebind`); a pattern-played oscillator is claimed
   again (built silent, so at once); voices sounding into the old node fade with the runtime's
-  crossfade (recorded as `release`, reason `node-replaced`) and the future ones are rebuilt on
+  crossfade (recorded as `release`, reason `node-replaced`) and continue on the new node from a
+  render quantum at or after the horizon (H001; `continue`, reason `node-replaced`): the same
+  compiled sequence from the offset it has reached (`compileSequence` `offset`; each siren, AM
+  or FM modulator on the phase it has reached there, a phased PeriodicWave), with the node's
+  waveform now, to the clip's end or the end a retime gave it, through a gain on the new node's
+  accounting. The voice rises linearly from 0 over `STUDIO_XFADE_S` through that gain times the
+  new routes: when it starts at the runtime's crossfade time the routes' own 0 -> 1 ramp fades
+  it in (the gain holds 1, complementary to the old routes), and a later start, after a
+  main-thread delay, divides the routes' ramp out (`fadeCurve`). So an Inspector waveform edit
+  is heard at once instead of silencing the clip until its next trigger. A voice that has ended
+  or is released is not continued, nor one whose clip ends within `STUDIO_XFADE_S` of the
+  continuation. The old voice's routes fade from the runtime's crossfade time, so a main-thread
+  stall of more than `STUDIO_XFADE_S` between `runtime.apply` and the continuation leaves a gap
+  of that stall less the crossfade; the future ones are rebuilt on
   the new node: a waveform change compiles a new sequence (`cancel` + `schedule`), and a kept
   future voice whose node or pattern bus was replaced is discarded unheard and played again
   (`cancel`, reason `node-replaced`);
