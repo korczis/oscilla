@@ -12,7 +12,9 @@
 //     sendBeacon or localhost,
 //   - carries a source map reference,
 //   - embeds a vendor script that is not byte-identical to the pinned package file,
-//   - lacks the third-party notice for every vendor,
+//   - lacks the third-party notice for every vendor and every build-time package
+//     (BUILD_TIME_ASSETS: the Lucide icons, and tailwindcss and flowbite, whose compiled CSS is
+//     in the <style>, ADR 0061),
 //   - exceeds the raw or gzip size budget,
 //   - (provenance, verifyProvenance) lacks the top-of-file banner or the ONE metadata region,
 //     or the region does not parse, is not a build-time "source" record, or names a version or
@@ -25,7 +27,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import { guardRawText } from './pack-single-file.mjs';
-import { BUDGET, DIST_HTML, VENDOR_SCRIPTS } from './build-config.mjs';
+import { BUDGET, BUILD_TIME_ASSETS, DIST_HTML, VENDOR_SCRIPTS } from './build-config.mjs';
 import {
   computeSourceDigest, findRegion, readBanner, readVersion, validateRecord,
 } from './release-metadata.mjs';
@@ -85,12 +87,97 @@ function isInert(url, { nav = false } = {}) {
   return nav && /^(https?:|mailto:|tel:)/i.test(v);
 }
 
+// A url() in either quote style (the other quote may occur inside: mini-svg-data-uri's SVGs
+// carry xmlns='…' inside url("…")), or unquoted; each quote style is matched on its own.
+const CSS_URL = /url\(\s*(?:"([^"]*)"|'([^']*)'|([^\s'"()]*))\s*\)/gi;
+const CSS_STRING = /"([^"]*)"|'([^']*)'/g;
+
+// Characters the reference scan reads as syntax. Escaped, the browser takes them as part of a
+// name or a string (\( never opens a function, \" never ends a string), so the decoded copy
+// writes them percent-encoded and keeps the scan's view of the structure the browser's.
+const CSS_SYNTAX = /["'()\\@\s]/u;
+
+/**
+ * A copy of a stylesheet with its CSS escapes decoded (CSS Syntax 3, "consume an escaped code
+ * point"): `\` and 1-6 hex digits with one optional whitespace after, `\` and any other
+ * character, and `\` before a newline (a line continuation, dropped). A decoded character the
+ * scan treats as syntax is written as %XX instead, so `\75 rl(` reads as `url(`, `@\69mport` as
+ * `@import` and `\69mage-set(` as `image-set(`, as the browser reads them, while an escaped
+ * quote or parenthesis cannot end a string or open a function. Code point 0, surrogates and
+ * values past U+10FFFF become U+FFFD. The copy is only scanned, never emitted.
+ * @param {string} css
+ */
+export function decodeCssEscapes(css) {
+  const pct = (ch) => [...Buffer.from(ch, 'utf8')]
+    .map((b) => `%${b.toString(16).toUpperCase().padStart(2, '0')}`).join('');
+  return css.replace(/\\(?:([0-9a-fA-F]{1,6})(?:\r\n|[ \t\n\r\f])?|(\r\n|[\n\r\f])|([\s\S]))/g,
+    (_, hex, newline, other) => {
+      if (newline !== undefined) return '';
+      let ch = other;
+      if (hex !== undefined) {
+        const cp = parseInt(hex, 16);
+        ch = cp === 0 || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)
+          ? '\ufffd' : String.fromCodePoint(cp);
+      }
+      return CSS_SYNTAX.test(ch) ? pct(ch) : ch;
+    });
+}
+
+/**
+ * Every reference a stylesheet makes: the target of each url(), the bare strings inside each
+ * image-set() / -webkit-image-set() (which takes them as well as url()), and the number of
+ * url( openings the scan could not parse, so nothing is skipped in silence. It scans the
+ * stylesheet with its escapes decoded (decodeCssEscapes), so an escape does not hide one.
+ * @param {string} source
+ * @returns {{urls: string[], imageSet: string[], unparsed: number}}
+ */
+export function cssReferences(source) {
+  const css = decodeCssEscapes(source);
+  const urls = [];
+  for (const m of css.matchAll(CSS_URL)) urls.push(m[1] ?? m[2] ?? m[3]);
+  const unparsed = (css.match(/url\(/gi) || []).length - urls.length;
+  const imageSet = [];
+  for (const m of css.matchAll(/image-set\(/gi)) {
+    // The argument list up to its closing parenthesis, skipping strings and nested url().
+    let depth = 1;
+    let i = m.index + m[0].length;
+    let args = '';
+    while (i < css.length && depth > 0) {
+      const c = css[i];
+      if (c === '"' || c === "'") {
+        const end = css.indexOf(c, i + 1);
+        const stop = end < 0 ? css.length : end + 1;
+        args += css.slice(i, stop);
+        i = stop;
+        continue;
+      }
+      if (c === '(') depth += 1;
+      else if (c === ')') depth -= 1;
+      if (depth > 0) args += c;
+      i += 1;
+    }
+    const bare = args.replace(CSS_URL, '');
+    for (const s of bare.matchAll(CSS_STRING)) imageSet.push(s[1] ?? s[2]);
+  }
+  return { urls, imageSet, unparsed };
+}
+
+// CSS may reference data: URLs (and #fragments) only (isInert). The flowbite plugin emits data:
+// SVGs only (mini-svg-data-uri, forms: true included), so ADR 0061 adds no allowance; every
+// url() and image-set() string is examined, whichever quote it uses and whatever CSS escape
+// spells it (review #253, R-7). Entity-encoded style attributes, SVG presentation attributes
+// that take url() and data:text/css stylesheets are not scanned here (R-9, a follow-up).
 function cssProblems(css, where) {
   const out = [];
-  if (/@import\b/i.test(css)) out.push(`${where}: CSS @import (must be bundled)`);
-  for (const m of css.matchAll(/url\(\s*(['"]?)([^'")]*)\1\s*\)/gi)) {
-    if (!isInert(m[2])) out.push(`${where}: CSS url(${m[2].slice(0, 60)}) is not a data: URL`);
+  if (/@import\b/i.test(decodeCssEscapes(css))) out.push(`${where}: CSS @import (must be bundled)`);
+  const { urls, imageSet, unparsed } = cssReferences(css);
+  for (const u of urls) {
+    if (!isInert(u)) out.push(`${where}: CSS url(${u.slice(0, 60)}) is not a data: URL`);
   }
+  for (const u of imageSet) {
+    if (!isInert(u)) out.push(`${where}: CSS image-set("${u.slice(0, 60)}") is not a data: URL`);
+  }
+  if (unparsed > 0) out.push(`${where}: ${unparsed} CSS url( the scan cannot parse`);
   return out;
 }
 
@@ -100,8 +187,9 @@ function cssProblems(css, where) {
  * @param {object} [opts]
  * @param {Map<string, string>} [opts.vendors]  vendor id ("p5@1.11.3") -> expected verbatim code
  * @param {{rawBytes: number, gzipBytes: number}} [opts.budget]
+ * @param {string[]} [opts.notices]  "pkg@version" of the build-time packages the notice must name
  */
-export function verifyHtml(html, { vendors = new Map(), budget = BUDGET } = {}) {
+export function verifyHtml(html, { vendors = new Map(), budget = BUDGET, notices = [] } = {}) {
   const problems = [];
   const seenVendors = new Set();
   let appScripts = 0;
@@ -183,14 +271,13 @@ export function verifyHtml(html, { vendors = new Map(), budget = BUDGET } = {}) 
   }
   if (appScripts === 0) problems.push('no first-party script found');
 
+  const htmlTag = html.search(/<html[\s>]/i);
+  const head = htmlTag < 0 ? html.slice(0, html.indexOf('-->') + 3) : html.slice(0, htmlTag);
   for (const id of vendors.keys()) {
     if (!seenVendors.has(id)) problems.push(`vendor script ${id} missing`);
-    const [pkg, version] = [id.slice(0, id.lastIndexOf('@')), id.slice(id.lastIndexOf('@') + 1)];
-    const htmlTag = html.search(/<html[\s>]/i);
-    const head = htmlTag < 0 ? html.slice(0, html.indexOf('-->') + 3) : html.slice(0, htmlTag);
-    if (!head.includes(`== ${pkg}@${version} - `)) {
-      problems.push(`third-party notice for ${id} missing`);
-    }
+  }
+  for (const id of [...vendors.keys(), ...notices]) {
+    if (!head.includes(`== ${id} - `)) problems.push(`third-party notice for ${id} missing`);
   }
 
   const raw = Buffer.byteLength(html);
@@ -233,6 +320,12 @@ export function verifyProvenance(html, { version, sourceDigest, allowStamped = f
   return problems;
 }
 
+/** "pkg@version" of every BUILD_TIME_ASSETS package, at its installed (pinned) version. */
+export function buildTimeNotices(resolve = require.resolve) {
+  return BUILD_TIME_ASSETS.map((pkg) => (
+    `${pkg}@${JSON.parse(readFileSync(resolve(`${pkg}/package.json`), 'utf8')).version}`));
+}
+
 export function pinnedVendors(resolve = require.resolve) {
   return new Map(VENDOR_SCRIPTS.map(({ pkg, file }) => {
     const version = JSON.parse(readFileSync(resolve(`${pkg}/package.json`), 'utf8')).version;
@@ -254,7 +347,7 @@ function main() {
     }
   }
   const html = readFileSync(file, 'utf8');
-  const result = verifyHtml(html, { vendors: pinnedVendors() });
+  const result = verifyHtml(html, { vendors: pinnedVendors(), notices: buildTimeNotices() });
   problems.push(...result.problems);
   const version = readVersion(root);
   const sourceDigest = computeSourceDigest(root);

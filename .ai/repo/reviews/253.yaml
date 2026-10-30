@@ -1,0 +1,75 @@
+# Review verdict for pull request #253, plan item F001: Tailwind 3.4.19 and the free MIT
+# flowbite 2.5.2 are compiled into the single-file dist (branch feat/f001-tailwind-build).
+# Reviewed head ef722987e1ab (delta 8999419..ef722987 over the first review at 64f9e41b);
+# merge base origin/main 9de0108. Built by oscilla-b0's agents; reviewed by dev-68.
+#
+# The digest: the base branch's scripts/review-verdict.mjs (git archive origin/main scripts),
+# `--repo . --head origin/feat/f001-tailwind-build --content --list --base-branch origin/main`,
+# over scripts/build-config.mjs, build.mjs, pack-single-file.mjs, release-metadata.mjs and
+# verify-dist.mjs: a30eb719...836b2, which matches the builder's.
+#
+# First review (64f9e41b): three lenses (build and pack, kit and licence, tests and gates),
+# every finding adversarially re-checked; verdict changes for R-1 (P1).
+#
+# Delta review (ef722987), two lenses:
+# - R-1: content is src plus exactly './node_modules/flowbite/lib/esm/components/
+#   {drawer,dropdown,collapse,tooltip,tabs}/index.js'; the v1 bg-opacity safelist is gone and a
+#   test forbids it. The new test derives each component's Default class strings and classList
+#   literals from the installed source. Independently, 37 run-time classes read by hand from
+#   flowbite 2.5.2 are all defined in the Tailwind part of dist (12249 B, 87 classes; the 30
+#   added are exactly component classes; no modal or datepicker class leaked).
+# - R-7: decodeCssEscapes follows CSS Syntax 3 (1-6 hex digits, one whitespace terminator,
+#   U+FFFD for 0, surrogates and > U+10FFFF) and runs before the url/@import/image-set scan;
+#   its fixtures fail on the parent of the fix.
+# - Runs: node --test tests/unit/ui-flowbite-pro-build.test.mjs 15/15 and
+#   tests/unit/verify-dist.test.mjs 10/10; build.mjs --check exit 0 (2888466 B); verify-dist
+#   PASS; gzip 832249 B (+14244 B over the base).
+# - Licence: 0 exact and 0 normalised matches of the delta files and dist against the owner's
+#   1788 Pro fingerprints; 0 whole-file and 0 400-byte-window substring hits of 1627 Pro text
+#   files in dist and every changed file except package-lock.json, whose hits are public npm
+#   registry metadata in OSCILLA's own lock entries (glob-parent, queue-microtask,
+#   run-parallel); no Pro marker, path or package name.
+#
+# Delta review at 18370627 (2026-10-29, range ef722987..18370627): a merge of main cdda563c
+# (f52eb0ed) and 18370627 (F001 item (8), one owner per element; dist rebuilt on main).
+# - Merge: the only guarded change in the range is the BUDGET comment in
+#   scripts/build-config.mjs, restated against main cdda563 (2 839 952 B / 823 309 B before,
+#   2 902 810 B / about 837 740 B after); the budget itself is unchanged at 3 500 000 B raw,
+#   1 000 000 B gzip (#279's raise to 1.2 MB is open, not on main). src/js/main.js keeps main's
+#   imports and adds only the import and call of startFlowbiteAfterAlpine before Alpine.start().
+#   dist is rebuilt: build.mjs --check up to date (2 902 810 B, source 557af187f7f5);
+#   verify-dist PASS, gzip 818.1 KiB of 976.6 KiB (837 734 B), provenance recomputed.
+# - Clause (e) (tests/unit/ui-flowbite-pro.test.mjs): read and judged correct and not
+#   over-broad: a flowbite data-<component>-(toggle|target|show|hide) attribute and an Alpine
+#   driver (x-show, x-model, x-transition*, a binding or a listener) on one element, or Alpine
+#   x-show/x-transition*/bound class or style on the element it names; HTML comments removed.
+#   The fixture's six violations and one clean case hold; three mutants of the checker fail it
+#   (comment stripping broken, bindings and listeners dropped from the driver set, the target
+#   check removed). Today src/index.html carries no flowbite data attribute, so the clause is
+#   vacuous on the tree and guards the F-line slices that add them (R-12).
+# - Licence: licence-check.sh against origin/main, 17 changed files, 0 Pro source matches;
+#   unit test ui-flowbite-pro 31/31.
+# The digest is main's scripts/review-verdict.mjs (git archive origin/main scripts) over the
+# same five guarded paths: 9647bddc...3273, which matches the builder's.
+#
+# Open: R-3 (F002 prerequisite), R-4 and R-9 (follow-ups), R-10 and R-11 (P3, verify-dist
+# hardening). No P0 or P1 is open.
+schema: review-verdict/v1
+pr: 253
+verdict: merge
+reviewer: "dev-68 (Claude Opus 5.5 session 4f90795d, orchestrating independent review subagents); did not build, merge or edit this change; wrote only this file. Mesh request r-cedb1b3ca853"
+content: 9647bddc89c0a93ced933a2a1d758534030de68ff762058e3bc2f5a3d6aa3273
+findings:
+  - { id: R-1, severity: P1, status: closed, title: "[fixed in 12a119d (test ab6ff8c): content scans exactly the five components; every run-time class verified compiled (37/37 by hand, 87 Tailwind classes, no modal/datepicker leakage)] Content globs leave out flowbite's component JS, so the classes the bundled components add at runtime are purged (tailwind.config.cjs:35). Fix: Add exactly the five bundled component files to content, e.g. './node_modules/flowbite/lib/esm/components/{drawer,dropdown,collapse,tooltip,tabs}/index.js'. Keep it that narrow so modal/datepicker classes stay out. package-lock already pins these files, so the source digest stays sound. Drop or correct the v1 `bg-opacity-*` safelist entries. Add a test that reads each component's Default class strings (backdropClasses, activeClasses, inactiveClasses, the placement classes, opacity-0/100, overflow-hidden) and asserts every one is a class in the Tai..." }
+  - { id: R-2, severity: P2, status: closed, title: "[the order on #250 is stated in the PR banner and in the code] Nothing stops #253 from landing before #250; main would then contradict accepted ADR 0012 and cite an ADR and a rule that do not exist (src/js/ui/flowbite.js:1). Fix: Hold the PR, as draft or with an explicit 'blocked on #250' in the body, until #250 is on main, then merge main and re-run. Align the body with F001 ('lands only after #250') instead of 'whichever lands second'." }
+  - { id: R-3, severity: P3, status: open, title: "With preflight off, border utilities set only a width and draw nothing (tailwind.config.cjs:39). Fix: Restore the border part of preflight only, scoped so legacy elements keep their native borders. One option: an addBase plugin in tailwind.config.cjs that sets `border-width:0;border-style:solid;border-color:theme('borderColor.DEFAULT')` under the Pro shell's root selector (or on `[class*=\"border\"]`). Back it with a test that the compiled CSS gives `.border` elements a solid style. Alternatively, record this explicitly as an F002 prerequisite next to the forms: false note." }
+  - { id: R-4, severity: P3, status: open, title: "tailwind.config.cjs is executable build code but is not a guarded path (scripts/review-verdict.mjs:72). Fix: In a follow-up PR (the base branch's list applies), add 'tailwind.config.cjs' to GUARDED and to the review-verdict rule's list, since it is build code like scripts/build-config.mjs." }
+  - { id: R-5, severity: P3, status: closed, title: "[fixed] The 'never both' constraint is attributed to a rule that does not state it, and nothing checks it (src/js/ui/flowbite.js:11). Fix: Cite 'issue F001 item (4)' and say that the single-owner check arrives with item (8), or add the clause to the rule in #250." }
+  - { id: R-6, severity: P3, status: closed, title: "[fixed] The PR's scope statement leaves out F001 item (11) (tests/README.md:579). Fix: List item (11) under 'Not in this PR (waits for #250 on main)'." }
+  - { id: R-7, severity: P3, status: closed, title: "[fixed in c57cf77 (test 2718604): decodeCssEscapes() per CSS Syntax 3 runs before the scan] CSS escapes get past the url(), @import and image-set() checks, so the 'every url() is examined' claim is not quite true (scripts/verify-dist.mjs:105). Fix: Before scanning, decode CSS escapes in the text the scanner looks for: hex `\\[0-9a-f]{1,6}\\s?` and `\\<char>`. One option is to normalize a copy of the CSS and use it only for the url(/image-set(/@import matching. The other is to report any backslash escape inside an ident followed by `(`, or inside an at-keyword, as a problem. Add verify-dist.test cases for `\\75 rl(`, `@\\69mport` and `\\69mage-set(`. Or state the limit in tests/README.md and the comment, saying the gate relies on esbuild's normalization." }
+  - { id: R-8, severity: P3, status: closed, title: "[fixed] The unparsable-url( case uses an assertion that a different failure would also satisfy (tests/unit/verify-dist.test.mjs:93). Fix: Match the specific message, e.g. /CSS url\\( the scan cannot parse/. Also assert that cssReferences(...).unparsed === 1 for that input." }
+  - { id: R-9, severity: P3, status: open, title: "Older gaps outside the CSS scanner, not introduced by this PR: entity-encoded style attributes, SVG presentation url() attributes, and data: stylesheets (scripts/verify-dist.mjs:224). Fix: Decode entities in attribute values before checking them. Run cssProblems on SVG presentation attributes that take url(). For a data:text/css link href, decode the payload and scan it with cssProblems, or reject it. These can go in a separate issue, since the PR does not touch these paths." }
+  - { id: R-10, severity: P3, status: open, title: "new with this PR, R-7 class: a quote inside a CSS comment hides an image-set() string from scripts/verify-dist.mjs:140-160, e.g. image-set(/*'#*/\"https://evil.example/x.png\" 1x/*'*/) reports 0 problems though a browser drops the comments and fetches the URL; the real dist is unaffected (esbuild strips comments). Fix: drop comments outside strings before the image-set walk and count an unterminated string as unparsed, or narrow the claim to comment-free CSS" }
+  - { id: R-11, severity: P3, status: open, title: "pre-existing (also on origin/main): isInert (scripts/verify-dist.mjs:85) trims with String.prototype.trim, which strips U+FEFF/U+00A0/U+3000 that the URL parser keeps, so url(\"\\ufeffdata:,x\") passes but resolves as a relative path. Fix: trim only C0 control or space; join the R-9 follow-up" }
+  - { id: R-12, severity: P3, status: open, title: "new at 18370627: clause (e) reads src/index.html only and the tree carries no flowbite data attribute yet, so it passes vacuously today; markup a script builds at run time (template literals, innerHTML) is not read. Fine as a guard for the F-line slices that add the attribute API; note the scope in the rule's What no check decides." }
+  - { id: R-13, severity: P3, status: open, title: "coupling: #279 (open) raises BUDGET in scripts/build-config.mjs and restates the same comment block this head restated against main cdda563; whichever lands second resolves that block by hand and re-derives the measured figures, and a changed comment moves the source digest dist carries." }

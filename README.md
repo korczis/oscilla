@@ -912,6 +912,8 @@ An HTML comment at the top of `dist/index.html` carries the name, version, licen
 licence text of every bundled third-party package:
 
 - Alpine.js (including its `@vue/reactivity` and `@vue/shared`) and uPlot: MIT.
+- flowbite (including its `@popperjs/core`) and tailwindcss, compiled into the page at build
+  time: MIT.
 - lucide-static (icons): ISC.
 - p5.js: LGPL-2.1. It is shipped unmodified as a separately identifiable script block, and any
   compatible p5.js build can replace it.
