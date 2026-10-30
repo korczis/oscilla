@@ -21,7 +21,7 @@ series, high-pass then low-pass, into an envelope-driven amplifier:
 | EG 1, EG 2 | `envelope` | Attack, Decay, Sustain, Release |
 | VCA | `gain` | Initial gain (EG 2 opens it) |
 | MG / LFO | `lfo` (triangle, square) | Shape, Rate |
-| S&H | `random`, clocked by the gate | Rate, Seed, Smooth |
+| S&H | `random`, clocked by the gate | Rate, Seed, Smooth (Rate and Smooth apply without a clock: disabled, saying why, while Clock is patched) |
 | OUTPUT | `master` (the Studio's one) | Level |
 
 The whole panel is one declaration, `src/js/synth/panels/semi-mono.js`: every knob, switch and
@@ -33,7 +33,9 @@ panel may only fix, relabel, narrow or set initial values, so adding a module is
 Every input is **normalled**: with no cable the panel sounds (keyboard pitch to both VCOs, the
 gate to both envelopes and the S&H, VCOs and noise into the mixer, the filters in series, EG 2
 into the VCA and the cutoffs). A cable into a jack replaces its normals in one history entry;
-removing the last cable restores them with their own ids. A normal removed in the Studio graph
+removing the last cable restores them with their own ids. A normal is its own edge id
+(`semi-mono-1-n21`), so a cable between the same two jacks (MG into LPF cutoff) is still a
+cable: drawn, listed, removable and in the link. A normal removed in the Studio graph
 stays removed ("open: normal removed in Studio") until **Restore normal**: the panel never
 repairs the document behind the user. A cable that would close a loop is refused with the
 `project.no-silent-feedback` sentence and nothing changes.
@@ -59,7 +61,9 @@ workspace disarm; a measurement that owns the output refuses the arm. Space star
 Five presets (`src/js/synth/presets.js`): Init, Bass, Lead, Sweep and Ring bell. A preset sets
 every knob and amount as one history entry; cables stay. **Copy link** writes
 `#m=synth&yp=<preset>&yv=<values that differ>&yc=<cables>`; the keys are the Synth's own, so a
-Synth link never opens Studio, and a link with one unknown item is refused whole.
+Synth link never opens Studio, and a link with one unknown item is refused whole. A cable in
+the link takes the depth of the amount knob that covers it (`src/js/synth/link.js`), so the
+link reopens the same patch.
 
 ## Honest limits (`project.no-fake-science`)
 

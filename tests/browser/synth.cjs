@@ -23,11 +23,15 @@
 //   s-midi     through tests/browser/lib/midi-stub.cjs: Note On 60 sounds, Note Off silences
 //   s-link     #m=synth&yp=bass&yv=lpf.frequency:300 sets the knob and sounds; a malformed link is
 //              refused and its keys leave the address
+//   s-relink   MG patched into LPF cutoff (the jacks of a normal) is a cable: listed, in the
+//              copied link; the link reopens the cable at the same depth and the MG sweeps the
+//              cutoff on both pages (the 1-3 kHz band swings 10 dB+)
 //   s-studio   Open in Studio: #m=studio, the panel's nodes selected, the same revision
 //   s-escape   Escape releases a held note; leaving the workspace disarms: runtime census 0
 //   s-preset   the Ring bell preset is one undo entry and moves the spectrum
 //   s-mobile   390 x 844 with touch: no horizontal page scroll, every knob and jack box 44 px+,
-//              the docked keys are visible and a tap on them sounds
+//              a section chip lands its plate's heading below the sticky chip bar, the docked
+//              keys are visible and a tap on them sounds
 'use strict';
 
 const fs = require('node:fs');
@@ -281,6 +285,50 @@ function defineChecks() {
     return { ok: text.trim() === '300 Hz', knob: text, rmsDb: p.rmsDb };
   });
 
+  /** The 1-3 kHz band swings by `db` while a note sounds (an LFO sweeping the cutoff). */
+  async function swings(page, db, what) {
+    let lo = Infinity;
+    let hi = -Infinity;
+    await hold(page, 'KeyA');
+    await sound(page, (q) => q.rmsDb > -45, 'the note sounds');
+    await sound(page, (q) => {
+      if (q.rmsDb <= -45) return false;
+      const b = bandDb(q, 1000, 3000);
+      lo = Math.min(lo, b);
+      hi = Math.max(hi, b);
+      return hi - lo >= db;
+    }, what);
+    await page.keyboard.up('KeyA');
+    return +(hi - lo).toFixed(1);
+  }
+
+  def('s-relink', async ({ page, context, base }) => {
+    await tapJack(page, 'mg.control:out');
+    await tapJack(page, 'lpf.frequency:in');
+    await typeKnob(page, 'lpf.lpf-mg', '3');
+    await typeKnob(page, 'mg.rate', '4');
+    await typeKnob(page, 'lpf.frequency', '300');
+    const d = await dbg(page);
+    if (d.cables.length !== 1 || d.cables[0].to !== 'lpf.frequency') {
+      return { ok: false, detail: 'MG into LPF cutoff is not listed as a cable', cables: d.cables };
+    }
+    const depth = (pg) => pg.evaluate(() => {
+      const ids = window.OSCILLA.app.synthDebug().nodes;
+      return window.OSCILLA.studio.model.graph.edges.filter((e) => e.to.node === ids.lpf
+        && e.to.port === 'frequency').map((e) => e.props.depth);
+    });
+    const here = await swings(page, 10, 'the MG sweeps the cutoff through the cable');
+    const hash = await page.evaluate(() => window.OSCILLA.app.synthCopyLink());
+    const again = await openSynth(context, base, `#${hash}`);
+    const d2 = await dbg(again);
+    const there = await swings(again, 10, 'the reopened link sweeps the cutoff the same way');
+    const [a, b] = [await depth(page), await depth(again)];
+    await again.close();
+    return { ok: /yc=/.test(hash) && JSON.stringify(d2.cables.map((c) => [c.from, c.to]))
+      === JSON.stringify([['mg.control', 'lpf.frequency']]) && JSON.stringify(a) === '[3]'
+      && JSON.stringify(b) === '[3]', hash, here, there, depths: [a, b] };
+  });
+
   def('s-studio', async ({ page }) => {
     await hold(page, 'KeyA');
     await sound(page, (q) => q.rmsDb > -40, 'the panel sounds before Studio opens');
@@ -335,6 +383,17 @@ function defineChecks() {
       return { scroll: document.documentElement.scrollWidth, inner: window.innerWidth,
         small, kb: { top: kb.top, bottom: kb.bottom, h: window.innerHeight } };
     });
+    await page.locator('[data-goto="lpf"]').tap();
+    const chip = await page.evaluate(() => {
+      const h = document.querySelector('#synth-m-lpf').getBoundingClientRect();
+      const bar = document.querySelector('nav[aria-label="Synth sections"]')
+        .getBoundingClientRect();
+      const hit = document.elementFromPoint(h.left + 4, h.top + h.height / 2);
+      return { top: Math.round(h.top), bar: Math.round(bar.bottom),
+        visible: !!hit && hit.closest('[data-module]') !== null
+          && hit.closest('[data-module]').getAttribute('data-module') === 'lpf' };
+    });
+    if (!chip.visible) return { ok: false, detail: 'the LPF chip hides its heading', chip };
     const box = await page.locator('[data-osc="keyboard.keys"]').boundingBox();
     await page.mouse.move(box.x + box.width * 0.05, box.y + box.height * 0.85);
     await page.mouse.down();
@@ -342,7 +401,7 @@ function defineChecks() {
     await page.mouse.up();
     await silent(page, 'releasing the key silences it');
     return { ok: m.scroll <= m.inner && m.small.length === 0 && m.kb.bottom <= m.kb.h
-      && m.kb.top > 0, ...m, rmsDb: p.rmsDb };
+      && m.kb.top > 0, ...m, chip, rmsDb: p.rmsDb };
   });
   return checks;
 }

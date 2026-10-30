@@ -11,6 +11,14 @@ import { amountEdges, amountReason } from '../normals.js';
 export const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;',
   '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
+/** Random (S&H) controls a patched Clock overrides (nodes/modulation.js random help). */
+const SH_CLOCKED = Object.freeze({
+  rate: 'Rate applies without a clock; Clock is patched (normalled to the keyboard gate), so '
+    + 'each gate steps the value.',
+  smooth: 'Smooth applies without a clock; Clock is patched, so each value is held until the '
+    + 'next gate.',
+});
+
 /** Why a control on this face does nothing now, or null (project.no-inert-surfaces (b)). */
 export function controlReason(module, node, control, model, panel) {
   if (control.kind === 'amount') return amountReason(model, panel, control.amount);
@@ -19,6 +27,10 @@ export function controlReason(module, node, control, model, panel) {
   }
   if (module.node === 'ring' && control.key === 'depth' && node.params.mode !== 'am') {
     return 'Depth applies to AM; ring modulation is the full product.';
+  }
+  if (module.node === 'random' && SH_CLOCKED[control.key]
+    && model.graph.edges.some((e) => e.to.node === node.id && e.to.port === 'trigger')) {
+    return SH_CLOCKED[control.key];
   }
   return null;
 }
@@ -33,20 +45,24 @@ const LABEL = 'text-[11px] font-semibold uppercase tracking-wide text-gray-500 '
   + 'dark:text-gray-400';
 const VALUE = 'font-mono text-xs tabular-nums text-gray-900 dark:text-white';
 
+/** The accessible name of a control: its module heading, then its own label ("LPF Cutoff"). */
+const named = (cid) => `aria-labelledby="synth-m-${cid.split('.')[0]} ${cid}-label"`;
+const why = (cid, reason) => (reason ? `<span class="sr-only" id="${cid}-why">${esc(reason)}</span>`
+  : '');
+
 function knobHtml(cid, c, value, reason, tokens) {
   const m = knobModel(c.param);
   const dis = reason ? ` aria-disabled="true" aria-describedby="${cid}-why"` : '';
   return `<div class="flex w-20 flex-col items-center gap-1" data-control="${cid}">`
     + `<span class="${LABEL} text-center leading-tight" id="${cid}-label">${esc(c.label)}</span>`
-    + `<div role="slider" tabindex="0" data-knob="${cid}" aria-labelledby="${cid}-label" `
+    + `<div role="slider" tabindex="0" data-knob="${cid}" ${named(cid)} `
     + `aria-valuemin="${c.param.min}" aria-valuemax="${c.param.max}" aria-valuenow="${value}" `
     + `aria-valuetext="${esc(m.text(value))}" aria-orientation="vertical"${dis} `
     + 'class="h-16 w-16 cursor-ns-resize touch-none select-none rounded-full outline-none '
     + 'focus-visible:ring-2 focus-visible:ring-primary-500">'
     + `${knobSvg({ uid: cid, value, param: c.param, tokens, disabled: !!reason })}</div>`
     + `<output class="${VALUE}" data-value="${cid}">${esc(m.format(value))}</output>`
-    + (reason ? `<span class="sr-only" id="${cid}-why">${esc(reason)}</span>` : '')
-    + '</div>';
+    + `${why(cid, reason)}</div>`;
 }
 
 const SEG = 'h-11 min-w-[2.75rem] px-2 text-xs font-medium border border-solid '
@@ -62,16 +78,17 @@ function switchHtml(cid, c, value) {
     + `class="${SEG} ${v === value ? SEG_ON : SEG_OFF}">${esc(label)}</button>`).join('');
   return `<div class="flex flex-col gap-1" data-control="${cid}">`
     + `<span class="${LABEL}" id="${cid}-label">${esc(c.label)}</span>`
-    + `<div role="radiogroup" aria-labelledby="${cid}-label" class="flex flex-wrap">${opts}</div>`
+    + `<div role="radiogroup" ${named(cid)} class="flex flex-wrap">${opts}</div>`
     + '</div>';
 }
 
-function toggleHtml(cid, c, value) {
+function toggleHtml(cid, c, value, reason) {
+  const dis = reason ? ` aria-disabled="true" aria-describedby="${cid}-why"` : '';
   return `<div class="flex flex-col gap-1" data-control="${cid}">`
     + `<span class="${LABEL}" id="${cid}-label">${esc(c.label)}</span>`
     + `<button type="button" aria-pressed="${!!value}" data-toggle="${cid}" `
-    + `aria-labelledby="${cid}-label" class="${SEG} rounded-lg ${value ? SEG_ON : SEG_OFF}">`
-    + `${value ? 'On' : 'Off'}</button></div>`;
+    + `${named(cid)}${dis} class="${SEG} rounded-lg ${value ? SEG_ON : SEG_OFF}">`
+    + `${value ? 'On' : 'Off'}</button>${why(cid, reason)}</div>`;
 }
 
 /** The plate of one module: header, face controls, locked values and the module's note. */
@@ -99,11 +116,12 @@ export function plateHtml({ panel, module: m, node, model, tokens }) {
     const cid = `${m.id}.${c.key}`;
     const value = controlValue(c, node, model, panel);
     if (c.kind === 'switch') return switchHtml(cid, c, value);
-    if (c.kind === 'toggle') return toggleHtml(cid, c, value);
+    const reason = controlReason(m, node, c, model, panel);
+    if (c.kind === 'toggle') return toggleHtml(cid, c, value, reason);
     if (c.kind === 'list') {
       return `<p class="${VALUE}">${esc(c.label)}: ${value.length} values (edit in Studio)</p>`;
     }
-    return knobHtml(cid, c, value, controlReason(m, node, c, model, panel), tokens);
+    return knobHtml(cid, c, value, reason, tokens);
   }).join('');
   const fixed = panel.fixedOf(m.id).map((f) => {
     const p = m.params.find((x) => x.key === f.key);

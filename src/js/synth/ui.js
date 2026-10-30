@@ -16,8 +16,9 @@
 import SEMI_MONO from './panels/semi-mono.js';
 import { PRESETS, presetAction, presetOf, presetValues } from './presets.js';
 import {
-  amountEdges, jackState, panelEdges, patchCable, restoreNormals, setAmount, unpatch,
+  amountEdges, jackState, panelCables, patchCable, restoreNormals, setAmount, unpatch,
 } from './normals.js';
+import { linkAction, linkOf } from './link.js';
 import { splitJack } from './panel.js';
 import { esc, plateHtml } from './view/face.js';
 import { knobModel, knobSvg, stepOption } from './view/knob.js';
@@ -150,14 +151,10 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   }
 
   function userCables() {
-    const m = model();
-    const byNode = new Map([...nodes()].filter(([, n]) => n).map(([mid, n]) => [n.id, mid]));
-    return panelEdges(m, panel).cables.map((e) => {
-      const fm = byNode.get(e.from.node);
-      const tm = byNode.get(e.to.node);
-      const port = registry.port(panel.module(fm).node, e.from.port, 'out');
-      return { id: e.id, from: `${fm}.${e.from.port}`, to: `${tm}.${e.to.port}`, fromModule: fm,
-        type: port ? port.type : 'AUDIO' };
+    return panelCables(model(), panel).map((c) => {
+      const { port } = splitJack(c.from);
+      const p = registry.port(panel.module(c.fromModule).node, port, 'out');
+      return { ...c, type: p ? p.type : 'AUDIO' };
     });
   }
 
@@ -359,10 +356,12 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       if (o) setControl(d.option, o[0]);
     } else if (d.toggle) {
       const x = controlOf(d.toggle);
-      if (x) setControl(d.toggle, !valueOf(x));
+      if (t.getAttribute('aria-disabled') === 'true') {
+        const why = document.getElementById(`${d.toggle}-why`);
+        say(why ? why.textContent : 'This control is disabled.');
+      } else if (x) setControl(d.toggle, !valueOf(x));
     } else if (d.goto) {
-      const target = host().querySelector(`[data-module="${d.goto}"]`);
-      if (target) target.scrollIntoView({ block: 'start', behavior: 'auto' });
+      gotoSection(d.goto);
     } else if (d.cable) {
       selected = selected === d.cable ? null : d.cable;
       say(selected ? 'Cable selected: Delete removes it.' : 'Cable deselected.');
@@ -380,6 +379,27 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     } else if ('insertPanel' in d) {
       ensurePanel();
     }
+  }
+
+  /**
+   * A section chip: the module's plate scrolled to the top of the view and then down past the
+   * sticky chip bar, so its heading is not under the bar; focus moves to the plate.
+   */
+  function gotoSection(mid) {
+    const el = host();
+    const target = el && el.querySelector(`[data-module="${mid}"]`);
+    if (!target) return;
+    target.scrollIntoView({ block: 'start', behavior: 'auto' });
+    const bar = el.querySelector('nav[aria-label="Synth sections"]');
+    const r = bar ? bar.getBoundingClientRect() : null;
+    const over = r && r.height ? r.bottom + 8 - target.getBoundingClientRect().top : 0;
+    let s = target.parentElement;
+    while (s && s !== document.body && !/(auto|scroll)/.test(getComputedStyle(s).overflowY)) {
+      s = s.parentElement;
+    }
+    if (over > 0) (s && s !== document.body ? s : window).scrollBy(0, -over);
+    if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');
+    target.focus({ preventScroll: true });
   }
 
   function restoreModule(mid) {
@@ -531,45 +551,12 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   // ------------------------------------------------------------------ links
 
   function linkNow() {
-    const m = model();
-    const res = nodes();
-    const base = presetValues(panel, presetOf(cmp.synth.preset) || presetOf('init'));
-    const values = [];
-    for (const mod of panel.modules) {
-      const n = res.get(mod.id);
-      if (!n || mod.def.maxInstances === 1) continue;
-      for (const c of panel.faceOf(mod.id)) {
-        if (c.kind === 'amount') {
-          const e = amountEdges(m, panel, c.amount)[0];
-          const want = (presetOf(cmp.synth.preset) || presetOf('init')).amounts[c.key] ?? 0;
-          if (e && e.props.depth !== want) values.push([`${mod.id}.${c.key}`, e.props.depth]);
-        } else if (n.params[c.key] !== base[mod.id][c.key]) {
-          values.push([`${mod.id}.${c.key}`, n.params[c.key]]);
-        }
-      }
-    }
-    const cables = userCables().map((c) => [c.from, c.to]);
-    return encodeSynthLink({ preset: cmp.synth.preset, values, cables });
+    return encodeSynthLink(linkOf(model(), panel, cmp.synth.preset));
   }
 
   function applyLink(link) {
     if (!ensurePanel()) return false;
-    const pr = presetAction(model(), panel, link.preset || 'init');
-    const steps = [...pr.action.steps];
-    for (const [k, v] of link.values) {
-      const x = controlOf(k);
-      if (!x || !x.node) continue;
-      if (x.c.kind === 'amount') {
-        for (const e of amountEdges(model(), panel, x.c.amount)) {
-          steps.push({ type: 'EDGE_UPDATE', edgeId: e.id, props: { depth: v } });
-        }
-      } else steps.push({ type: 'NODE_PARAM_SET', nodeId: x.node.id, key: x.key, value: v });
-    }
-    for (const [a, b] of link.cables) {
-      const r = patchCable(model(), panel, a, b, { registry });
-      if (r.action) steps.push(...r.action.steps);
-    }
-    const r = dispatch({ type: 'BATCH', label: 'Apply link to Synth panel', steps });
+    const r = dispatch(linkAction(model(), panel, link, { registry }));
     if (r.ok && link.preset) cmp.synth.preset = link.preset;
     return r.ok;
   }

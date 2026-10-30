@@ -4,6 +4,7 @@
 // it, and every change is one BATCH (one history entry, one commit-gate call).
 //
 //   panelEdges(model, panel) -> { normals: Map<normal id, edge>, cables: [edge] }
+//   panelCables(model, panel) -> [{ id, from, to, fromModule }]   the cables as jack ids
 //   jackState(model, panel, jackId) -> 'normalled' | 'patched' | 'open' | 'free'
 //   patchCable(model, panel, fromJack, toJack) -> { action } | { reason }
 //   unpatch(model, panel, edgeId) -> { action } | { reason }
@@ -20,15 +21,19 @@ const nodeIds = (model, panel) => {
 const endsAt = (e, node, port) => e.to.node === node && e.to.port === port;
 const startsAt = (e, node, port) => e.from.node === node && e.from.port === port;
 
-/** The edge that is normal `n` (same endpoints), if present. */
+/**
+ * The edge that is normal `n`, if present: its own id (`panel-instance-nX`, the id instantiate,
+ * unpatch and restore give it) on the normal's endpoints. A cable the user patches between the
+ * same jacks has another id, so it stays a cable: it is drawn, listed, removable and linked.
+ */
 function normalEdge(model, n, id) {
   const a = splitJack(n.from);
   const b = splitJack(n.to);
   const from = id(a.module);
   const to = id(b.module);
   if (!from || !to) return null;
-  return model.graph.edges.find((e) => startsAt(e, from, a.port) && endsAt(e, to, b.port))
-    || null;
+  return model.graph.edges.find((e) => e.id === n.edgeId && startsAt(e, from, a.port)
+    && endsAt(e, to, b.port)) || null;
 }
 
 export function panelEdges(model, panel) {
@@ -43,6 +48,17 @@ export function panelEdges(model, panel) {
   const cables = model.graph.edges.filter((e) => !taken.has(e.id) && mine.has(e.from.node)
     && mine.has(e.to.node));
   return { normals, cables };
+}
+
+/** The user's cables as jacks: [{ id, from: 'module.port', to: 'module.port', fromModule }]. */
+export function panelCables(model, panel) {
+  const byNode = new Map([...panel.resolve(model)].filter(([, n]) => n)
+    .map(([mid, n]) => [n.id, mid]));
+  return panelEdges(model, panel).cables.map((e) => {
+    const fm = byNode.get(e.from.node);
+    return { id: e.id, from: `${fm}.${e.from.port}`, to: `${byNode.get(e.to.node)}.${e.to.port}`,
+      fromModule: fm };
+  });
 }
 
 /** Cables (non-normal edges) into input jack `jack`. */
