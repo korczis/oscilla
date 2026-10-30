@@ -744,7 +744,23 @@ export function createInstrument(deps = {}) {
       const r = parseFrequency(raw);
       if (!r.ok) { this.setParamError(`sweep-${key}`, r.error); return; }
       this.sweep[key] = round(clamp(r.value, MIN_FREQUENCY, this.safeMax), 3);
-      this.setParamError(`sweep-${key}`, r.value > this.safeMax ? `Limited to the digital limit ${formatFrequency(this.safeMax)}.` : '');
+      // Before audio starts the limit comes from the assumed 44.1 kHz rate: say so (T003).
+      const provisional = this.provisional ? ' (provisional until audio starts)' : '';
+      let msg = '';
+      if (r.value > this.safeMax) {
+        msg = `Limited to the digital limit ${formatFrequency(this.safeMax)}${provisional}.`;
+      } else if (r.value < MIN_FREQUENCY) {
+        msg = `Raised to the minimum ${formatFrequency(MIN_FREQUENCY)}.`;
+      }
+      this.setParamError(`sweep-${key}`, msg);
+    },
+    /** A sweep value a preset, link or file set replaces what was typed there: its error goes. */
+    dropSupersededSweepErrors(before) {
+      for (const [key, id] of [['start', 'sweep-start'], ['end', 'sweep-end'],
+        ['durationMs', 'sweep-duration']]) {
+        if ((this.sweep || {})[key] === before[key]) continue;
+        this.setParamError(id, '');
+      }
     },
     sweepSlider(key) { return Math.round(frequencyToNormalized(this.sweep[key], 10, this.safeMax) * 1000); },
     setSweepSlider(key, v) { this.sweep[key] = round(normalizedToFrequency(Number(v) / 1000, 10, this.safeMax), 2); },
@@ -975,7 +991,9 @@ export function createInstrument(deps = {}) {
      * Returns the number of rejected values; valid values are applied, invalid ones skipped.
      */
     applyConfig(cfg, origin) {
+      const before = { ...this.sweep };
       const r = applyConfigTo(this, cfg, origin, env(this));
+      this.dropSupersededSweepErrors(before);
       for (const n of r.notices) this.notify(n.level, n.title, n.message);
       return r.issues;
     },

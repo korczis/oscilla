@@ -499,6 +499,12 @@ Not yet built:
   anything. The [measurement guide](docs/v3/measurement-guide.md) has the details.
 - **Speaker output is unknown.** Generating a frequency digitally does not mean your hardware
   reproduces it accurately, or at all.
+- **The digital limit is provisional until audio starts.** Generated frequencies stop at 95 %
+  of Nyquist. Until the first key press or tap starts audio, the browser has not reported its
+  sample rate, so the limit comes from an assumed 44.1 kHz (20.95 kHz); a sweep frequency
+  limited then says "provisional until audio starts", and at 48 kHz the limit is 22.80 kHz.
+  Each sweep field (start, end, duration) shows under itself why a typed value was limited,
+  raised to the 1 Hz floor, adjusted or not understood, until a preset or link replaces it.
 - **Hearing ranges are approximate.** They depend on the threshold criterion and on the
   individual. Each entry cites its source (for example Heffner & Heffner 2007) and lists
   differing published values.
