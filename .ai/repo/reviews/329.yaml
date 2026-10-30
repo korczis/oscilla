@@ -1,0 +1,40 @@
+# Review verdict for pull request #329, PR A of the Synth order: an MS-20-style semi-modular panel
+# on the one engine (branch feat/synth-panel, base int/synth-base). Reviewed heads 29c55b0b and
+# 36cae18a. Another builder wrote it (oscilla-b0).
+#
+# The digest: the base branch's scripts/review-verdict.mjs, run from `git archive origin/main
+# scripts` with --repo on this worktree and --base-branch origin/int/synth-base: f6ff60d9...c7ec5
+# over the 10 guarded paths it names.
+#
+# How it was reviewed: round 1 (29c55b0b) by three lenses (engine and normalling, the panel UI and
+# the visual-identity-lock v3 rule, tests with mutants), 27 agents with a skeptic per finding above
+# P3, 6 P1s verified; round 2 (36cae18a) re-ran every round-1 repro in Chromium and in node.
+#
+# What holds at 36cae18a: an EG cabled into the VCA rests at -109.6 dB, as without the cable; a
+# Keys pitch cable tracks 1 octave per octave (128.9 / 263.7 Hz); the bay has no dead jack (140 of
+# 15 x 29 pairs accepted, every refusal named); Copy link round-trips every patchable pair; a preset
+# that changes nothing fails its test; Master is no longer cut from a user's document without
+# asking; PLAY while armed reaches the whole document; deleting Keys lets the panel re-insert; the
+# 6 templates hash identically to the base; build:check passes; npm test 3426 (1 failure inherited
+# from the base); synth.cjs desktop 17/17 and phone 4/4. The v3 rule restates v2 and narrows the
+# Synth surface with the owner's words, with an ADR 0061 note.
+#
+# Verdict: merge. No open P0 or P1. Open P2s are listed for a follow-up.
+schema: review-verdict/v1
+pr: 329
+verdict: merge
+reviewer: prismatic-majordomus-f3 (claude-code 1f47a36e)
+content: f6ff60d9183e5ff396642c831d1a82a9f77745b7dc43cc9093bd80338c2c7ec5
+findings:
+  - { id: R1, severity: P1, status: closed, title: "round 1: a cable took the Studio's default edge props (EG into VCA droned at -35.7 dB; Keys pitch tracked 1/6 oct/oct); fixed, cables inherit the normal they replace" }
+  - { id: R2, severity: P1, status: closed, title: "round 1: HPF/LPF Q jacks dead; Copy link refused cables from hpf/lpf/vca audio; preset test vacuous; fixed" }
+  - { id: R3, severity: P1, status: closed, title: "round 1: visual-identity-lock v3 dropped v2 guarantees silently; fixed by restating v2 and narrowing the Synth surface" }
+  - { id: R4, severity: P2, status: open, title: "normals.js:241 on a 'mixed' jack (Studio edge plus normal), adding then removing a panel cable drops the normals while the UI says 'the normal is restored'" }
+  - { id: R5, severity: P2, status: open, title: "normals.js:120 amount memory goes stale when a preset or link is applied while all of the amount's edges are broken: the restored normal ignores the preset" }
+  - { id: R6, severity: P2, status: open, title: "ui.js:756 Escape leaves the connection list open with inert Patch buttons and the source jack drawn as pending" }
+  - { id: R7, severity: P2, status: open, title: "visual-identity-lock.v3.md:74 v3 also narrows v2's 'a migrated view gets a reference' for Synth while saying nothing else is narrowed" }
+  - { id: R8, severity: P3, status: open, title: "v3.md:48 the Interface clause's surface qualifier also lifts the glassmorphism, marketing-gradient and soft-styling bans on the panel; v3.md:31 the 'verbatim' owner quote is not verbatim nor from a committed record" }
+  - { id: R9, severity: P3, status: open, title: "normals.js:113,157,166 S&H Rate refused while Clock is muted; Keys pitch into VCO Tune tracks 1/72 oct/oct; a bipolar cable into VCA gain opens it with no key" }
+  - { id: R10, severity: P3, status: open, title: "link.js:21 a link over Studio edges or open normals does not reopen the sound; url-state-synth.js:93 two cables into one jack accepted then refused; normals.js:141 an open normal returns on unpatch; ui.js:555 restoreModule bypasses plan()" }
+  - { id: R11, severity: P3, status: open, title: "tests: s-look leak probe covers jack children 1 and 4 only; s-look measures control labels only; the named-colour regex's paint alternative is dead (\\b in a template literal); s-look's theme wait hardcodes jackRing" }
+  - { id: R12, severity: P3, status: open, title: "face.js:46 plate text uses Tailwind palette, not tokens; face.js:119 a removed card keeps aria-expanded and a dangling aria-controls; knob track and cap 1.0-1.4:1; nav tab clones osc-tab with arbitrary values; ADR 0061 related list names only v2" }
