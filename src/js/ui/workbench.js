@@ -25,7 +25,9 @@ import { formatHz } from '../charts/axes.js';
 import { rovingKeydown } from './app.js';
 import { parseConfigImport, parseLabSections, exportFileName } from './config-file.js';
 import { LABS_INCLUDED_TEXT, SEQUENCE_NOT_INCLUDED_TEXT, labSectionsText } from './lab-state.js';
-import { LAB_HASH_KEY, decodeLabParam, encodeLabParam } from '../core/url-state-labs.js';
+import {
+  LAB_HASH_KEY, LAB_PARAM_MAX, decodeLabParam, encodeLabParam,
+} from '../core/url-state-labs.js';
 import { downloadBlob, readFileText } from './exporters.js';
 import { focusSafely, isFocusable } from './dialogs.js';
 import { sessionStore } from '../core/storage.js';
@@ -416,13 +418,24 @@ export function createWorkbench(svc) {
     },
     configLinkNote() {
       if (!this.labSnapshot()) return 'The link restores these settings; it never starts playback.';
+      if (!this.labLinkParam()) {
+        return 'The link restores the instrument; the lab settings are not in the link (longer '
+          + `than the ${LAB_PARAM_MAX} characters a link may carry): save a config file to keep `
+          + 'them. It never starts playback.';
+      }
       return `The link restores ${LABS_INCLUDED_TEXT}; ${SEQUENCE_NOT_INCLUDED_TEXT}. `
         + 'It never starts playback.';
     },
-    /** The `lab=` value of the config link (ui/navigation.js configLinkHash), or null. */
+    /**
+     * The `lab=` value of the config link (ui/navigation.js configLinkHash), or null: none
+     * mounted, or longer than a link may carry (a config-file import can leave up to 256
+     * Additive partials), which the page opening it would refuse (#314 review R-6).
+     */
     labLinkParam() {
       const s = this.labSnapshot();
-      return s ? encodeLabParam(s) : null;
+      if (!s) return null;
+      const p = encodeLabParam(s);
+      return p.length <= LAB_PARAM_MAX ? p : null;
     },
     /**
      * The labs hash domain (ADR 0045 dispatcher): null without a `lab=` key, false when the

@@ -21,8 +21,9 @@ import {
   buildConfigExport, parseConfigImport, parseLabSections,
 } from '../../src/js/ui/config-file.js';
 import {
-  LAB_HASH_KEY, decodeLabParam, encodeLabParam, withoutLabParam,
+  LAB_HASH_KEY, LAB_PARAM_MAX, decodeLabParam, encodeLabParam, withoutLabParam,
 } from '../../src/js/core/url-state-labs.js';
+import { createWorkbench } from '../../src/js/ui/workbench.js';
 import {
   HASH_DOMAINS, configLinkHash, hashAfterRefusal, hashForWorkspace,
 } from '../../src/js/ui/navigation.js';
@@ -245,4 +246,92 @@ test('the config link carries `lab=` beside the V1 keys; it opens and is refused
   assert.ok(HASH_DOMAINS.indexOf('labs') === HASH_DOMAINS.indexOf('instrument') + 1,
     'the labs domain is dispatched right after the instrument');
   assert.ok(out.length < 1500, `a compact link (${out.length} characters)`);
+});
+
+/**
+ * workbench.js's own lab members (#314 review R-4) over main.js's services: labSnapshot is
+ * snapshotLabs, applyLabSnapshot is applyLabRecord with the component's dual oscillator, and
+ * labsMounted says whether mountLabs has run. Only notify() is a stand-in.
+ */
+function workbenchWithLabs(labs, state = { mounted: true }) {
+  const wb = createWorkbench({
+    labSnapshot: () => snapshotLabs(state.mounted ? labs : {}),
+    applyLabSnapshot: (cmp, record) => applyLabRecord(labs, record, cmp.dual),
+    labsMounted: () => state.mounted,
+  });
+  const cmp = { alerts: [], dual: null,
+    notify(level, title, message) { this.alerts.push({ level, title, message }); } };
+  Object.defineProperties(cmp, Object.getOwnPropertyDescriptors(wb));
+  return cmp;
+}
+
+test('a `lab=` link at load waits for the labs to mount, then labsApplyPending applies it once',
+  () => {
+    const source = fakeLabs();
+    setSaved(source);
+    const hash = `#v=1&f=440&${LAB_HASH_KEY}=${encodeLabParam(snapshotLabs(source))}`;
+    const labs = fakeLabs();
+    setOther(labs);
+    const state = { mounted: false };
+    const app = workbenchWithLabs(labs, state);
+    assert.equal(app.labsApplyLinkHash(hash), true, 'accepted and kept for later');
+    assert.notDeepEqual(labView(labs), SAVED, 'nothing applied before the labs exist');
+    assert.equal(app.alerts.length, 0);
+    state.mounted = true;
+    app.labsApplyPending();
+    assert.deepEqual(labView(labs), SAVED, 'the kept link is applied once the labs mount');
+    assert.equal(app.alerts.at(-1).title, 'Lab settings restored from link');
+    assert.match(app.alerts.at(-1).message, /Filter, Envelope, Additive and Phase & Stereo/);
+    setOther(labs);
+    app.labsApplyPending();
+    assert.notDeepEqual(labView(labs), SAVED, 'a second call applies nothing again');
+    // Mounted already (a link opened later): applied at once.
+    assert.equal(app.labsApplyLinkHash(hash), true);
+    assert.deepEqual(labView(labs), SAVED);
+  });
+
+test('a refused `lab=` value is named in a warning and leaves the labs as they were', () => {
+  const labs = fakeLabs();
+  setSaved(labs);
+  const app = workbenchWithLabs(labs);
+  assert.equal(app.labsApplyLinkHash('#v=1&f=440'), null, 'no key: not this domain');
+  const enc = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  for (const bad of ['%%%', enc([1]), enc({ filter: { type: 'nope', frequency: 1, Q: 1 } }),
+    enc({ sequencer: { steps: [] } })]) {
+    app.alerts = [];
+    assert.equal(app.labsApplyLinkHash(`#${LAB_HASH_KEY}=${bad}`), false, bad);
+    assert.equal(app.alerts.length, 1, bad);
+    assert.equal(app.alerts[0].level, 'warning');
+    assert.equal(app.alerts[0].title, 'Lab settings in the link not restored');
+    assert.match(app.alerts[0].message, /`lab` value was refused \(.+\)/);
+    assert.deepEqual(labView(labs), SAVED, `${bad}: the labs are untouched`);
+  }
+});
+
+test('labLinkParam and configLinkNote: the note names what the link restores, and a lab state '
+  + 'too long for a link is left out and said so (#314 review R-6)', () => {
+  const labs = fakeLabs();
+  setSaved(labs);
+  const app = workbenchWithLabs(labs);
+  const param = app.labLinkParam();
+  assert.equal(typeof param, 'string');
+  assert.ok(param.length <= LAB_PARAM_MAX);
+  assert.deepEqual(parseLabSections(decodeLabParam(`#lab=${param}`).sections),
+    parseLabSections(snapshotLabs(labs)), 'the param is the snapshot');
+  assert.match(app.configLinkNote(), new RegExp('restores the instrument and the Filter, '
+    + 'Envelope, Additive and Phase & Stereo settings; the sequence is not included'));
+  // A config-file import may leave up to 256 partials in the Additive lab.
+  labs.additive.update({ partials: Array.from({ length: 120 },
+    (_, i) => ({ n: i + 1, gain: 1 / (i + 1), phase: 0.25 })) });
+  assert.ok(encodeLabParam(snapshotLabs(labs)).length > LAB_PARAM_MAX, 'precondition');
+  assert.ok(app.labLinkParam() === null, 'never a lab= value the page would refuse');
+  const note = app.configLinkNote();
+  assert.doesNotMatch(note, /restores the instrument and the Filter/);
+  assert.match(note, /lab settings are not in the link/);
+  assert.match(note, /config file/);
+  // Nothing mounted: the V1 note.
+  const bare = workbenchWithLabs(labs, { mounted: false });
+  assert.equal(bare.labLinkParam(), null);
+  assert.equal(bare.configLinkNote(),
+    'The link restores these settings; it never starts playback.');
 });

@@ -31,8 +31,11 @@
 //                     `m=learn` link and a switch to Playground it writes `m=playground`
 //   lab-state-round-trip  (C018) a custom preset, a History recall and the copied config link
 //                     opened in a fresh page each restore the Filter, Envelope, Additive and pan
-//                     settings after they were changed; the link toast (or the copy dialog)
-//                     names what it restores and that the sequence is not included
+//                     settings after they were changed, the Pan slider and the phase-offset
+//                     field included (a slider touch after the link keeps the restored pan;
+//                     the link also at 390x844);
+//                     the link toast (or the copy dialog) names what it restores and that
+//                     the sequence is not included
 //   guard-saved-metadata  after a save, a name typed and not stored, a failed "Update name and
 //                     notes" and a rename being typed in Experiments each arm the guard
 //   guard-memory-store    with IndexedDB refused, a saved experiment and a saved Studio project
@@ -510,29 +513,47 @@ function defineChecks() {
     // On the merge base all three stored the V1 instrument only.
     const labsOf = (pg) => pg.evaluate(() => {
       const L = window.OSCILLA.labs;
+      // R-3 of the #314 review: the restore reaches the controls as well as the lab state.
+      const panEl = document.getElementById('osc-stereo-pan');
+      const offEl = document.querySelector('[data-osc="phase.offset"]');
       return { filter: { enabled: L.filter.config.enabled,
         frequency: Math.round(L.filter.config.frequency), Q: +L.filter.config.Q.toFixed(2) },
       envelope: { enabled: L.envelope.enabled, a: L.envelope.adsr.a },
-      additive: L.additive.enabled, pan: L.phase.config.pan };
+      additive: L.additive.enabled, pan: L.phase.config.pan, phaseDeg: L.phase.config.phaseDeg,
+      controls: { pan: panEl.value, panFill: panEl.style.getPropertyValue('--osc-fill'),
+        offset: offEl.value } };
     });
     const SAVED = { filter: { enabled: true, frequency: 300, Q: 4 },
-      envelope: { enabled: true, a: 0.5 }, additive: true, pan: 0.5 };
+      envelope: { enabled: true, a: 0.5 }, additive: true, pan: 0.5, phaseDeg: 90,
+      controls: { pan: '0.5', panFill: '75.00%', offset: '90' } };
     const same = (v) => JSON.stringify(v) === JSON.stringify(SAVED);
-    const change = (pg) => pg.evaluate(() => {
-      const L = window.OSCILLA.labs;
-      L.filter.update({ enabled: false, frequency: 5000, Q: 0.707 });
-      L.envelope.update({ enabled: false, adsr: { a: 0.01, d: 0.1, s: 0.7, r: 0.3 } });
-      L.additive.update({ enabled: false });
-      L.phase.update({ pan: 0 });
-    });
+    // Pan and the phase offset are set through their controls, as a user sets them, so a
+    // restore that leaves a control stale shows as the value set before it.
+    const setControls = (pg, pan, offset) => pg.evaluate(([p, o]) => {
+      const panEl = document.getElementById('osc-stereo-pan');
+      panEl.value = String(p);
+      panEl.dispatchEvent(new Event('input', { bubbles: true }));
+      const offEl = document.querySelector('[data-osc="phase.offset"]');
+      offEl.value = String(o);
+      offEl.dispatchEvent(new Event('change', { bubbles: true }));
+    }, [pan, offset]);
+    const change = async (pg) => {
+      await pg.evaluate(() => {
+        const L = window.OSCILLA.labs;
+        L.filter.update({ enabled: false, frequency: 5000, Q: 0.707 });
+        L.envelope.update({ enabled: false, adsr: { a: 0.01, d: 0.1, s: 0.7, r: 0.3 } });
+        L.additive.update({ enabled: false });
+      });
+      await setControls(pg, 0, 45);
+    };
     const page = await H.open(ctx, ctx.baseUrl);
+    await setControls(page, 0.5, 90);
     await page.evaluate(() => {
       const L = window.OSCILLA.labs;
       const a = window.OSCILLA.app;
       L.filter.update({ enabled: true, frequency: 300, Q: 4 });
       L.envelope.update({ enabled: true, adsr: { a: 0.5, d: 0.1, s: 0.5, r: 0.3 } });
       L.additive.update({ enabled: true });
-      L.phase.update({ pan: 0.5 });
       a.saveName = 'lab state round trip';
       a.savePreset();
       // History entries are written when a plan plays (instrument.js addHistory).
@@ -586,8 +607,32 @@ function defineChecks() {
       return same(v) ? v : null;
     }, { ms: 8000, what: 'lab-state-round-trip: the copied link restores the labs' })
       .catch(() => labsOf(fresh));
+    // The next touch of the Pan slider starts from the restored pan, not the stale control.
+    const panAfterTouch = await fresh.evaluate(() => {
+      const el = document.getElementById('osc-stereo-pan');
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      return window.OSCILLA.labs.phase.config.pan;
+    });
     const linkHash = H.params(new URL(url).hash);
     await fresh.close();
+    // The same link at phone width (390x844): the controls sit in the narrow layout there.
+    const phoneCtx = await ctx.browser.newContext({ viewport: { width: 390, height: 844 },
+      reducedMotion: 'reduce' });
+    let afterPhone = null;
+    try {
+      const phone = await phoneCtx.newPage();
+      phone.setDefaultTimeout(15000);
+      phone.on('pageerror', (e) => ctx.errors.push(`pageerror (390x844): ${e.message}`));
+      await phone.goto(url, { waitUntil: 'load' });
+      await H.ready(phone);
+      afterPhone = await until(async () => {
+        const v = await labsOf(phone);
+        return same(v) ? v : null;
+      }, { ms: 8000, what: 'lab-state-round-trip: the copied link restores the labs at 390x844' })
+        .catch(() => labsOf(phone));
+    } finally {
+      await phoneCtx.close();
+    }
     return { ...H.verdict({
       savedAsSet: same(saved),
       changedFirst: !same(changed),
@@ -595,12 +640,14 @@ function defineChecks() {
       presetToastNamesLabs: /Filter, Envelope, Additive and Phase & Stereo/.test(presetToast || ''),
       history: same(afterHistory),
       link: same(afterLink),
+      touchKeepsPan: panAfterTouch === SAVED.pan,
+      linkAtPhoneWidth: same(afterPhone),
       linkHasLabKey: typeof linkHash.lab === 'string' && linkHash.lab.length > 0
         && linkHash.v === '1',
       noteNamesLabs: /Filter, Envelope, Additive and Phase & Stereo/.test(note),
       noteSaysNoSequence: /sequence is not included/.test(note),
-    }), saved, changed, afterPreset, afterHistory, afterLink, note, presetToast,
-    linkLength: url.length };
+    }), saved, changed, afterPreset, afterHistory, afterLink, panAfterTouch, afterPhone, note,
+    presetToast, linkLength: url.length };
   });
 
   def('guard-saved-metadata', async (ctx) => {

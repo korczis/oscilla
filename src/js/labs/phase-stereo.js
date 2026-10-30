@@ -27,7 +27,7 @@ import { createCorrelationMeter, correlationDisplay } from '../analysis/correlat
 export { correlationDisplay };
 import { parseNumber, clamp } from '../charts/axes.js';
 import { onFrame } from '../charts/frame-loop.js';
-import { on, onUi, setText, setAttr, activeValue } from './dom.js';
+import { on, onUi, setText, setAttr, setSlider, setField, activeValue } from './dom.js';
 
 export const PHASE_DEFAULTS = Object.freeze({
   freqA: 440,
@@ -167,10 +167,12 @@ export function mount(rootEl, adapter) {
     cfg.freqA = clamp(cfg.freqA, 1, 100000);
     cfg.freqB = clamp(cfg.freqB, 1, 100000);
     cfg.pan = clamp(cfg.pan, -1, 1);
-    if (el.pan) {
-      setAttr(el.pan, 'aria-valuetext', cfg.pan === 0 ? 'Centre'
-        : `${Math.round(Math.abs(cfg.pan) * 100)}% ${cfg.pan < 0 ? 'left' : 'right'}`);
-    }
+    // The controls show what the lab holds, whoever set it: a restore (preset, History, `lab=`
+    // link, config file) goes through here too, and a stale slider would hand its old value
+    // back on the next touch (#314 review R-3).
+    setSlider(el.pan, cfg.pan, cfg.pan === 0 ? 'Centre'
+      : `${Math.round(Math.abs(cfg.pan) * 100)}% ${cfg.pan < 0 ? 'left' : 'right'}`);
+    setField(el.offset, Math.round(cfg.phaseDeg * 100) / 100);
     emit();
   }
 
