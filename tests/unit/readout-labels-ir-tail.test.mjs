@@ -7,14 +7,18 @@
 // post-roll. At 8 kHz (not the audit's 48 kHz) so the direct convolution stays quick.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { inverseSweep, renderStimulus, stimulusFrames } from '../../src/js/measurement/stimulus.js';
-import {
-  IR_ALGORITHMS, IR_ALGORITHMS_V1, computeImpulseResponse, irNoiseFloorWindow,
-} from '../../src/js/measurement/impulse-response.js';
+// Namespace imports: on the merge base (no irNoiseFloorWindow, no stimulusFrames) the file
+// loads and the wording assertions fail, rather than the import.
+import * as STIM from '../../src/js/measurement/stimulus.js';
+import * as IRM from '../../src/js/measurement/impulse-response.js';
 import { capIrLength } from '../../src/js/measurement/analysis-task.js';
 import { buildIrView } from '../../src/js/measurement/views/ir-chart.js';
 import { resultsFromMeasurement } from '../../src/js/experiments/schema.js';
 import { fixedText, msText } from '../../src/js/measurement/views/common.js';
+
+const { inverseSweep, renderStimulus } = STIM;
+const { IR_ALGORITHMS, IR_ALGORITHMS_V1, computeImpulseResponse } = IRM;
+const irNoiseFloorWindow = (ir, frames) => IRM.irNoiseFloorWindow(ir, frames);
 
 const SR = 8000;
 const PRE_S = 0.25;
@@ -49,7 +53,7 @@ const F4 = (() => {
 const ARGS = { stimulus: X, captured: F4.captured, sampleRate: SR, f1: 20, f2: 3000,
   lagSamples: F4.lagSamples };
 const IR = computeImpulseResponse(ARGS);
-const FRAMES = stimulusFrames(SWEEP.spec);
+const FRAMES = X.length; // the stimulus length, as rendered
 // The window as the note prints it: 450.125 ms (the first averaged sample) to 500 ms.
 const WINDOW_TEXT = `${msText(450.125, 1000 / SR)} to ${msText(500, 1000 / SR)} after the peak`;
 
@@ -65,18 +69,6 @@ function meanPowerDb(ir, [fromS, toS]) {
 
 test('T019 F4: the tail level is stated as an upper bound, with the window it was read in', () => {
   assert.equal(IR.noiseFloorMethod, 'full-overlap-tail');
-  assert.equal(FRAMES, X.length);
-  const w = irNoiseFloorWindow(IR, FRAMES);
-  // The full-overlap lags end one post-roll after the peak; the tail is their last 10 %.
-  assert.ok(Math.abs(w[1] - POST_S) < 2 / SR, `window end ${w[1]}`);
-  assert.ok(Math.abs(w[0] - 0.9 * POST_S) < 2 / SR, `window start ${w[0]}`);
-  assert.equal(WINDOW_TEXT, '450.1 ms to 500.0 ms after the peak');
-  // The window stated is the one averaged: its mean power is noiseFloorDb.
-  assert.ok(Math.abs(meanPowerDb(IR, w) - IR.noiseFloorDb) < 1e-6,
-    `${meanPowerDb(IR, w)} vs ${IR.noiseFloorDb}`);
-  // The decay is still running there: the level is the decay's, far above any noise (none).
-  assert.ok(IR.noiseFloorDb > -70, `${IR.noiseFloorDb}`);
-
   const v = buildIrView(IR, { scale: 'db', stimulusFrames: FRAMES });
   const level = fixedText(IR.noiseFloorDb, 0);
   assert.ok(v.summary.includes(`tail level ≤ ${level} dB re peak (noise or unfinished decay), `),
@@ -88,6 +80,18 @@ test('T019 F4: the tail level is stated as an upper bound, with the window it wa
   assert.match(note, /A decay still running there counts as noise/);
   assert.match(note, /lengthen the post-roll/);
   assert.match(note, /upper bound/);
+
+  assert.equal(STIM.stimulusFrames(SWEEP.spec), X.length, 'the frame count without rendering');
+  const w = irNoiseFloorWindow(IR, FRAMES);
+  // The full-overlap lags end one post-roll after the peak; the tail is their last 10 %.
+  assert.ok(Math.abs(w[1] - POST_S) < 2 / SR, `window end ${w[1]}`);
+  assert.ok(Math.abs(w[0] - 0.9 * POST_S) < 2 / SR, `window start ${w[0]}`);
+  assert.equal(WINDOW_TEXT, '450.1 ms to 500.0 ms after the peak');
+  // The window stated is the one averaged: its mean power is noiseFloorDb.
+  assert.ok(Math.abs(meanPowerDb(IR, w) - IR.noiseFloorDb) < 1e-6,
+    `${meanPowerDb(IR, w)} vs ${IR.noiseFloorDb}`);
+  // The decay is still running there: the level is the decay's, far above any noise (none).
+  assert.ok(IR.noiseFloorDb > -70, `${IR.noiseFloorDb}`);
 });
 
 test('T019: without the stimulus length the window is described, not invented', () => {
