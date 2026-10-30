@@ -1,0 +1,45 @@
+id: C003
+milestone: M090
+serves:
+  - "coherent-state#sequencer-through-engine"
+title: "The sequencer plays through the engine's Filter stage and is counted; the labs that do not apply say so"
+slug: the-sequencer-plays-through-the-engine-s-filter-stage-and-is
+priority: p1
+profile: implementation
+objective: "Lands as fix(sequencer). Findings dead-controls-7, control-census-2 and engine-sync-5. editor._schedulePass compiles every pass straight into engine.master with no lab insert and no track/source hooks: a 200 Hz low-pass with the Filter on attenuates a held 4 kHz instrument tone by 52.4 dB and the looping 4 kHz sequence by 0.0007 dB, and engine.activeNodeCount is 0 while the sequence sounds, although project.audio-engine-discipline v2 names compileSequence among the builders that receive { track, source } and README:24-25 says sequences are shaped with filters, an ADSR and additive harmonics. Add one AudioEngine-owned, counted stage chain for non-voice graphs (for example engine.stageChain(insertFactories) -> { input, dispose }) built with labs.filter.createInsert, opened once per playback session in editor.play and disposed after the last pass and on stop and Escape (one filter per pass would reset the biquad state at loop boundaries). compileSequence gets the engine's track and source. renderSequenceToWav builds the same chain offline, so the exported WAV is what plays. The ADSR and additive labs are not stacked on the compiler's per-block envelopes (ADR 0003, ADR 0015): in the Sequencer workspace their panels say they apply to the instrument only, the Signal Path and the status bar do not claim them for the sequence, and README:24-25 says what applies. If K001 (plan pull request #265, implementation #266) has landed, build on its AudioEngine.stageAccounting() rather than a second accounting path and record the census criterion as met by it."
+why: "Owner brief OSCILLA PACK 03, 'One Instrument, One Coherent State' (2026-10-29): every control must provably reach its subsystem and every view that reflects it, and be covered by a test (owner: 'filters, sequencer, bpm and many other interactive knobs / sliders / control elements are not reflected / working / tested'). The findings named here were reproduced by an independent skeptic on a fresh export of origin/main b67d1e58 (v3.13.0)."
+scope:
+  - "src/js/audio/audio-engine.js"
+  - "src/js/sequencer/editor.js"
+  - "src/js/sequencer/compiler.js"
+  - "src/js/labs/sequencer-panel.js"
+  - "src/js/ui/exporters.js"
+  - "src/js/main.js"
+  - "src/index.html"
+  - "README.md"
+  - "tests/unit/sequencer-editor.test.mjs"
+  - "tests/unit/sequencer-fake-audio.mjs"
+  - "tests/unit"
+  - "tests/browser/sequencer.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "C002"
+acceptance_criteria:
+  - "A unit test on the fake context: with the Filter enabled a sequencer pass reaches engine.master through a BiquadFilterNode, the engine's node count is above 0 while it sounds and 0 after stop; it fails on the merge base."
+  - "Browser check `seq-filter-reaches-sequence` in tests/browser/sequencer.cjs: a looping 4 kHz Tone block drops by more than 20 dB once a 200 Hz low-pass is set through #osc-filter-cutoff-value, a cutoff edit during playback applies to the next reading, and the node count is 0 after stop and after Escape."
+  - "A unit test of the offline sequence render with the Filter enabled attenuates the 4 kHz block by more than 20 dB, matching the live chain."
+  - "The Envelope and Synthesis panels show their instrument-only note in the Sequencer workspace, and a unit test reads that note and README:24-25 so that they agree."
+  - "fail-first holds: the unit test or browser check named above fails on the merge base (project.fail-first)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named wall-clock deadline; tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "engine.activeNodeCount returns to 0 after every stop in the new checks, in Chromium, Firefox and WebKit (project.audio-engine-discipline v2)."
+  - "The pull request carries a reviewer-written .ai/repo/reviews/<pr>.yaml because it changes src/js/audio/audio-engine.js (project.review-verdict); the builder never writes it."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/sequencer-editor.test.mjs"
+  - "node tests/browser/sequencer.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

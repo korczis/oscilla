@@ -57,6 +57,7 @@ K0xx-K1xx   playable instrument (M057-M059, M061), audio-band signal lab (M060),
             connected instrument (M064-M069, M071-M072) and signal generator lab (M082)
 L0xx        Learn lessons (M049)
 P0xx        product: first run (M050), positioning, product path, public story (M051)
+C0xx        one instrument, one coherent state: controls, engine, views and saved state agree (M090)
 U0xx        the whole interface shows the current product (M054)
 F0xx        the whole interface on Flowbite Pro (M055)
 T0xx        measurement truth in the interface: readout states, labels, values in effect and
