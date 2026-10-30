@@ -18,14 +18,13 @@ scope:
   - "tests/unit/sequencer-fake-audio.mjs"
   - "tests/unit"
   - "tests/browser/app.cjs"
-  - "tests/browser/v3-measure.cjs"
   - "tests/README.md"
   - "dist"
 depends_on:
   - "C001"
 acceptance_criteria:
   - "A unit test in tests/unit/sequencer-editor.test.mjs with a fake engine whose claimOutput returns false: play() returns false, playing stays false and no source is created on the fake context; it fails on the merge base."
-  - "Browser check `seq-refused-during-measure` in tests/browser/v3-measure.cjs: with ?measure=loopback and the Studio measurement-sweep template playing, poll until measureOwnsOutput(), click #osc-seq-play: editor.playing stays false and the 'Measurement in progress' notice is shown."
+  - "Browser check `seq-refused-during-measure` in tests/browser/app.cjs, on a page of its own: with ?measure=loopback and the Studio measurement-sweep template playing, poll until measureOwnsOutput(), click #osc-seq-play: editor.playing stays false and the 'Measurement in progress' notice is shown."
   - "Browser check `one-output-owner` in tests/browser/app.cjs: instrument then sequencer, and sequencer then instrument, each end with exactly one of app.playing and editor.playing true; sequencer Play followed in the same task by Studio PLAY ends with the Studio playing and the sequencer stopped, and the reverse order the other way round, read in the same evaluate without waiting on the poll."
   - "fail-first holds: the unit test or browser check named above fails on the merge base (project.fail-first)."
   - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named wall-clock deadline; tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
@@ -35,9 +34,8 @@ acceptance_criteria:
 validation:
   - "node --test tests/unit/sequencer-editor.test.mjs"
   - "node tests/browser/app.cjs"
-  - "node tests/browser/v3-measure.cjs"
   - "npm test"
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-10-30
