@@ -1,0 +1,42 @@
+id: J002
+milestone: M118
+serves:
+- "component-system#majordomus-served"
+title: "Every declaration names its plan, criteria, rules and ADRs: the trace contract widened to kinds, node types and parameters"
+slug: every-declaration-names-its-plan-criteria-rules-and-adrs-the
+priority: p1
+profile: implementation
+objective: "Lands as feat(docs). Widens the docs-only trace of G001 and G017 (scripts/ui-catalog/trace/<family>.mjs, outside src/, imported by no module under src/) to one schema for every declaration: a kind (W001), a catalogue component (G001), a Studio node type (NODE_REGISTRY) and a parameter (N001's paramSpec id, studio.param:<type>.<key> or the component's own id). Each entry may name plan (issue ids), serves (<intent>#<criterion>, the grammar of an issue's serves; it replaces G017's intents), rules (project rules in force), adrs, tests, claims, features, moments, and since (YYYY-MM-DD, the day an author last changed the entry). scripts/ui-catalog/trace-schema.mjs validates an entry and computes the effective trace: a parameter inherits its component's entry, a component its family's defaults, and each row says which ids are its own. scripts/ui-catalog/resolve-refs.mjs resolves every id in Node from the tree: an issue file under .ai/repo/project/issues; an intent file and a satisfaction id inside it; a rule listed as in force in .ai/repo/rules/project/README.md (or a vendored rule); an ADR file; a test file that npm test or a package.json script runs and that names the declaration's id in a string literal with comments removed (NAMED, never VERIFIED); a claim id of docs/CLAIMS.yaml; a feature file; a moment file. Majordomus does not resolve issue: references or intent criteria (measured 2026-10-29), so this module is the check. Before: G017 checks source, plan, intents, ADRs and tests of catalogue components only. After: every declaration of every kind carries a checked trace. Negative cases: an issue id with no file; intent#criterion where the criterion does not exist; a deprecated rule (project.visual-identity-lock v1); a test that does not name the id; since '2026-13-99'. Rollback: revert; scripts and tests only. Merged plan of the component follow-up (2026-10-30): The resolver is G017's, moved to scripts/ui-catalog/resolve-refs.mjs and widened here; nothing holds a second one. The untraced allowance is the trace section of G001's one allowance file."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs and knowledge base, interlink them and add more; knobs, sliders and control panels in one generic way, Majordomus integrated: each component and parameter declaration carries its intent, issue and rule ids, a deterministic generator projects the registry into .ai/repo/knowledge so that Majordomus serves it (context resolve, why, traceability), and a check fails when a component has no plan or knowledge link. Design: components-followup/majordomus-kb-adr.md of this plan change, measured with Majordomus 1.0.0-alpha.1 (the CI pin) and 1.0.0-alpha.8 on a throwaway copy of origin/main cdda563c."
+scope:
+- scripts/ui-catalog/trace
+- scripts/ui-catalog/trace-schema.mjs
+- scripts/ui-catalog/resolve-refs.mjs
+- tests/unit/component-trace.test.mjs
+- tests/unit/ui-catalog-allowance.json
+- tests/README.md
+depends_on:
+- J001
+- G017
+- N001
+acceptance_criteria:
+- "tests/unit/component-trace.test.mjs fails on the merge base: a fixture entry per negative case above is refused with a sentence naming the entry, the field and the id; a valid fixture's effective trace equals a table written in the test, with own and inherited ids apart; every NODE_REGISTRY type and parameter, every catalogue declaration and every kind has an entry or is in tests/unit/ui-catalog-allowance.json, whose length only falls (checked against the base branch's copy)."
+- "No module under src/ imports scripts/ui-catalog/ (a static scan in the test), and the single file is byte-identical before and after."
+- since is a real calendar date (the Majordomus index accepts 2026-13-99; measured).
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no review verdict is needed unless its scope widens to one; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "It adds no class token, selector, markup surface or inline style, so tests/unit/ui-flowbite-pro-baseline.json stays equal (node scripts/ui-flowbite-pro-record.mjs --check and node --test tests/unit/ui-flowbite-pro.test.mjs pass) (project.ui-uses-flowbite-pro, ADR 0061)."
+- "scripts/size-report.mjs shows 0 B gzip added: nothing it adds is under src/ or bundled (project.single-file-deliverable)."
+- tests/README.md has a row for each new test.
+- "Definition of done, extends: G017's trace check now covers kinds, node types and parameters with the same contract."
+- "Definition of done, interlinks: every entry names its issues, criteria, rules and ADRs, each resolved."
+- "Definition of done, interactivity: none: a check (stated)."
+- "Definition of done, docs, menus and routes: docs/ui-traceability.md (G017) gains the serves and rules columns from the same entries; no route changes."
+- "Definition of done, tested: the unit test only (no browser surface; stated)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+- node --test tests/unit/component-trace.test.mjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-30'
