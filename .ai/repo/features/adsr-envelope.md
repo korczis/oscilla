@@ -23,9 +23,12 @@ tags: [audio, synthesis, v2]
 `src/js/audio/envelope.js` schedules a linear attack, an exponential decay to the sustain
 level and an exponential release on the voice's envelope gain, using
 `cancelAndHoldAtTime` where the browser has it and an emulation with the same result where
-it does not. It shapes every note: an open tone through the voice envelope, and a note of
-known length (a finite tone, each step of a steps pattern, a ramps pass or sweep segment)
-through `scheduleAdsrStep`, which shrinks the attack, decay and release to fit the step.
+it does not. It shapes every note of the instrument: an open tone and a continuous
+ping-pong sweep through the voice envelope, and a note of known length (a finite tone, each
+step of a steps pattern, a ramps pass or sweep segment) through `scheduleAdsrStep`, which
+shrinks the attack, decay and release to fit the step. An edit reaches the sounding note
+(`engine.setAdsr`): a release change in place while the note is held, anything else by a
+click-free restart of the note. The Pattern sequencer and Studio keep their own envelopes.
 
 ## What it does not do
 

@@ -1811,6 +1811,96 @@ function defineChecks() {
     return { ok, ...res };
   });
 
+  // #296 R-2: the Envelope lab has a live path. With no pattern change or new note, a held
+  // tone follows the panel: Sustain typed in its field (a click-free restart at the new level),
+  // Release alone (in place, the same voice), and the power switch (off: level 1, on: back).
+  // R-1: with the Envelope on, a continuous ping-pong sweep holds at the sustain too.
+  // Run at the desktop size and at 390x844, where the panel's controls are reached by scrolling.
+  const envelopeFollowsHeld = async (page) => {
+    await H.continuous(page, true);
+    await H.workspace(page, 'synthesis'); // the Envelope panel is on this workspace
+    const res = {};
+    // the voice's envelope level and the analyser's peak, once the note is past a + d
+    const held = (old, what, want) => until(() => page.evaluate(([prev, w]) => {
+      const O = window.OSCILLA;
+      const e = O.engine;
+      const v = e.voice;
+      if (!v || v.ended || v.releasing || (prev != null && v.id === prev)) return null;
+      if (e.ctx.currentTime - v.t0 < 0.4) return null;
+      const env = e._valueAt(v.env, e.ctx.currentTime);
+      if (w != null && Math.abs(env - w) > 0.01) return null;
+      const d = new Float32Array(e.analyser.fftSize);
+      e.analyser.getFloatTimeDomainData(d);
+      let pk = 0;
+      for (let i = 0; i < d.length; i++) pk = Math.max(pk, Math.abs(d[i]));
+      return { id: v.id, adsr: v.adsr, release: v.release, env, peak: pk,
+        viz: O.viz.labInputs(v.plan).adsr, lab: O.labs.envelope.enabled };
+    }, [old, want]), { ms: 10000, what });
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.setWaveform('sine'); a.setPattern('tone'); a.setFrequency(440);
+      window.OSCILLA.labs.envelope.update({ adsr: { a: 0.01, d: 0.1, s: 0.6, r: 0.3 },
+        enabled: true });
+      a.holding = true; a.play('hold');
+    });
+    res.start = await held(null, 'envelope-follows-held: held tone at sustain 0.6', 0.6);
+    await page.fill('#osc-env-sustain-value', '0.1');
+    await page.dispatchEvent('#osc-env-sustain-value', 'change');
+    res.sustain = await held(res.start.id, 'envelope-follows-held: Sustain 0.1 reaches it', 0.1);
+    res.ratio = res.start.peak > 0 ? res.sustain.peak / res.start.peak : null;
+    await page.fill('#osc-env-release-value', '50');
+    await page.dispatchEvent('#osc-env-release-value', 'change');
+    res.release = await until(() => page.evaluate(() => {
+      const v = window.OSCILLA.engine.voice;
+      return v && Math.abs(v.release - 0.05) < 1e-9 ? { id: v.id, r: v.adsr.r } : null;
+    }), { ms: 5000, what: 'envelope-follows-held: Release 50 ms reaches the held voice' });
+    await page.click('#osc-env-enable'); // off while it sounds
+    res.off = await held(res.sustain.id, 'envelope-follows-held: Envelope off reaches it', 1);
+    await page.click('#osc-env-enable'); // on again
+    res.on = await held(res.off.id, 'envelope-follows-held: Envelope on reaches it', 0.1);
+    await page.evaluate(() => window.OSCILLA.app.stopNow());
+    await quiet(page, 'envelope-follows-held: quiet after the held tone');
+    const was = await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      const keep = { source: a.source, sweep: JSON.parse(JSON.stringify(a.sweep)) };
+      a.source = 'sweep';
+      Object.assign(a.sweep, { start: 200, end: 2000, durationMs: 1000, direction: 'pingpong' });
+      a.setSweepRepeat('continuous');
+      a.holding = true; a.play('hold');
+      return keep;
+    });
+    res.sweep = await held(res.on.id, 'envelope-follows-held: ping-pong sweep at sustain', 0.1);
+    res.sweepPlan = await page.evaluate(() => {
+      const p = window.OSCILLA.engine.voice.plan;
+      return { kind: p.kind, envelope: p.envelope };
+    });
+    await page.evaluate((keep) => {
+      const a = window.OSCILLA.app;
+      a.stopNow(); a.source = keep.source; Object.assign(a.sweep, keep.sweep);
+      window.OSCILLA.labs.envelope.update({ adsr: { a: 0.01, d: 0.1, s: 0.6, r: 0.3 },
+        enabled: false });
+    }, was);
+    await quiet(page, 'envelope-follows-held: quiet at the end');
+    await H.workspace(page, 'playground');
+    const ok = res.start.adsr.s === 0.6 && res.sustain.adsr.s === 0.1
+      && res.sustain.viz.s === 0.1 && res.ratio > 0.1 && res.ratio < 0.25
+      && res.release.id === res.sustain.id && res.release.r === 0.05
+      && res.off.adsr === null && res.off.viz === null && !res.off.lab && res.off.release > 0
+      && res.on.adsr && res.on.adsr.s === 0.1 && res.on.lab
+      && res.sweepPlan.kind === 'continuous' && res.sweepPlan.envelope === 'whole'
+      && res.sweep.adsr && res.sweep.adsr.s === 0.1;
+    return { ok, ...res };
+  };
+  def('envelope-follows-held', async ({ page }) => {
+    const res = {};
+    for (const [width, height] of [[1536, 1024], [390, 844]]) {
+      await page.setViewportSize({ width, height });
+      res[`${width}x${height}`] = await envelopeFollowsHeld(page);
+    }
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    return { ok: Object.values(res).every((r) => r.ok), ...res };
+  });
+
   // ---- accessibility residuals of the final V1 probe (WCAG 2.4.11, focus loss, overlap)
   def('a11y-alerts-never-cover-focus', async ({ page, browserName, run }) => {
     const res = {};

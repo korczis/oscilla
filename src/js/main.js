@@ -35,7 +35,9 @@ import { applyAdsr, releaseAt } from './audio/envelope.js';
 import { createStereoRouter } from './audio/stereo.js';
 import { createFilterStage } from './audio/filters.js';
 import { buildPeriodicWave } from './audio/additive.js';
-import { labPlayOptions } from './audio/lab-play-options.js';
+import {
+  followEnvelopeLab, labPlayOptions, withLabOptions,
+} from './audio/lab-play-options.js';
 import { encodeWav, parseWav } from './audio/wav.js';
 import { buildPlan, planFreqAt, PATTERNS } from './audio/patterns.js';
 import { createVisualizationBridge } from './visualization/visualization-bridge.js';
@@ -204,17 +206,14 @@ function labVizInputs(plan) {
 }
 bridge.labInputs = labVizInputs;
 
-const basePlay = engine.play.bind(engine);
-engine.play = (plan, o = {}) => {
+withLabOptions(engine, (plan) => v2PlayOptions(plan, engine.ctx, true), () => {
   // Playground and Measure share one output (spec §74): no instrument voice while a measurement
   // owns it. The measurement itself never calls play (capture.js schedules its own source).
-  if (app && app.measureOwnsOutput()) {
-    app.notify('info', 'Measurement in progress', 'The output belongs to the measurement: stop '
-      + 'it (Esc) before playing.');
-    return null;
-  }
-  return basePlay(plan, { ...o, ...v2PlayOptions(plan, engine.ctx, true) });
-};
+  if (!app || !app.measureOwnsOutput()) return false;
+  app.notify('info', 'Measurement in progress', 'The output belongs to the measurement: stop '
+    + 'it (Esc) before playing.');
+  return true;
+});
 
 /**
  * Measure (and Studio PLAY) take the output: stop the instrument and the sequencer (their
@@ -447,7 +446,10 @@ function mountLabs(root) {
     });
   }
   const labChanged = () => { syncLabFlags(); vizLabsChanged(); };
-  if (labs.envelope) labs.envelope.onChange(labChanged);
+  if (labs.envelope) {
+    // The live path (C007 R-2): an edit reaches the sounding voice, which the views show.
+    labs.envelope.onChange(() => { labChanged(); followEnvelopeLab(engine, labs.envelope); });
+  }
   if (labs.filter) labs.filter.onChange(labChanged);
   if (labs.phase) {
     let lastPhaseDeg = labs.phase.config.phaseDeg;

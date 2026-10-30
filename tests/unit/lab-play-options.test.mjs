@@ -23,6 +23,11 @@ import {
   LAB_PLAY_KEYS, adsrStepEnvelope, labPlayOptions,
 } from '../../src/js/audio/lab-play-options.js';
 import * as envelopeJs from '../../src/js/audio/envelope.js';
+// The exports added by review round 1 through the namespace, so a missing one fails its own
+// tests and not the whole file.
+import * as labOpts from '../../src/js/audio/lab-play-options.js';
+import { makeAdsrEnvelope } from '../../src/js/audio/voice.js';
+import { renderPlanToWav } from '../../src/js/ui/exporters.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const FREEZE_DIR = path.resolve(process.env.OSCILLA_FREEZE_DIR || path.join(here, '../freeze'));
@@ -259,3 +264,195 @@ test('adsrStepEnvelope keeps the attack and release the engine hands over (chirp
   assert.deepStrictEqual(calls[1], ['linear', 1, 0.003], 'the shortened chirp attack');
   assert.ok(Math.abs(calls[2][2] - 0.053) < 1e-12 && calls[2][1] === 0.5, 'decay to sustain');
 });
+
+// ---- review round 1 of #296 (dev-68, .ai/repo/reviews/296.yaml)
+
+/**
+ * The engine as main.js sets it up: the DSP ADSR installed as the open-pattern envelope.
+ * advance(s) here moves the mock clock s seconds FORWARD (setup's advance sets it absolutely).
+ */
+function setupApp() {
+  const s = setup();
+  s.eng.setEnvelope(makeAdsrEnvelope({ applyAdsr: envelopeJs.applyAdsr,
+    releaseAt: envelopeJs.releaseAt }));
+  return { ...s, advance: (t) => s.eng.ctx.advance(s.eng.ctx.currentTime + t) };
+}
+
+const sweep = (o) => plan({ source: 'sweep', sweep: { ...defaultInstrumentState().sweep,
+  start: 100, end: 1000, durationMs: 1000, curve: 'log', ...o } });
+const LOW_SUSTAIN = { a: 0.01, d: 0.1, s: 0.1, r: 0.3 };
+
+test('R-1: Envelope on, a continuous ping-pong sweep holds at the sustain like every sweep',
+  { skip }, () => {
+    const { eng, advance } = setupApp();
+    const labs = makeLabs();
+    labs.envelope.enabled = true;
+    labs.envelope.adsr = { ...LOW_SUSTAIN };
+    wrap(eng, labs);
+    const cases = [
+      ['ping-pong, continuous', sweep({ direction: 'pingpong', repeat: 'continuous' }), 'whole'],
+      ['ping-pong, once', sweep({ direction: 'pingpong', repeat: 'once' }), 'whole'],
+      ['up, continuous', sweep({ direction: 'up', repeat: 'continuous' }), 'segment'],
+    ];
+    for (const [name, p, envelope] of cases) {
+      assert.strictEqual(p.envelope, envelope, name);
+      eng.play(p, opt());
+      const v = eng.voice;
+      assert.deepStrictEqual(v.adsr, LOW_SUSTAIN, `${name}: the voice carries the ADSR`);
+      const level = valueAt(v.env, v.t0 + 0.5);
+      assert.ok(Math.abs(level - 0.1) < 0.005, `${name}: level ${level} at t0 + 0.5 s`);
+      eng.stopAll();
+      advance(3);
+    }
+    assert.strictEqual(eng.activeNodeCount, 0);
+  });
+
+test('R-1: Envelope off, the continuous ping-pong sweep keeps V1\'s attack and hold at 1',
+  { skip }, () => {
+    const { eng, advance } = setupApp();
+    const labs = makeLabs();
+    wrap(eng, labs);
+    eng.play(sweep({ direction: 'pingpong', repeat: 'continuous' }), opt());
+    const v = eng.voice;
+    assert.strictEqual(v.adsr, null);
+    assert.ok(Math.abs(valueAt(v.env, v.t0 + 0.5) - 1) < 1e-9);
+    assert.ok(valueAt(v.env, v.t0 + 0.005) < 1, 'still attacking at 5 ms (a 10 ms attack)');
+    eng.stopAll();
+    advance(3);
+    assert.strictEqual(eng.activeNodeCount, 0);
+  });
+
+test('R-1: the WAV render of a continuous ping-pong sweep holds at the sustain', { skip },
+  async () => {
+    const audio = makeMockAudio({});
+    let ctxMade = null;
+    function OfflineAudioContext() {
+      const ctx = new audio.AudioContext();
+      ctxMade = ctx;
+      ctx.startRendering = async () => ({
+        numberOfChannels: 2, sampleRate: SR, length: 4, duration: 4 / SR,
+        getChannelData: () => new Float32Array(4),
+      });
+      return ctx;
+    }
+    const labs = makeLabs();
+    labs.envelope.enabled = true;
+    labs.envelope.adsr = { ...LOW_SUSTAIN };
+    const p = sweep({ direction: 'pingpong', repeat: 'continuous' });
+    let offline = null;
+    await renderPlanToWav({
+      plan: p, gain: 0.5, sampleRate: SR, OfflineAudioContext,
+      playOptions: opt({ durationS: 2 }),
+      extraOptions: (ctx) => labPlayOptions(p, ctx, labs),
+      decorate: (e) => {
+        offline = e;
+        e.setEnvelope(makeAdsrEnvelope({ applyAdsr: envelopeJs.applyAdsr,
+          releaseAt: envelopeJs.releaseAt }));
+      },
+    });
+    assert.ok(ctxMade && offline && offline.voice, 'rendered through an engine voice');
+    const v = offline.voice;
+    const level = valueAt(v.env, v.t0 + 0.5);
+    assert.ok(Math.abs(level - 0.1) < 0.005, `rendered level ${level} at t0 + 0.5 s`);
+  });
+
+test('R-2: Envelope edits reach a held voice on the engine', { skip }, () => {
+  const { eng, advance } = setupApp();
+  const labs = makeLabs();
+  labs.envelope.enabled = true;
+  labs.envelope.adsr = { a: 0.01, d: 0.1, s: 0.6, r: 0.3 };
+  const seen = [];
+  labOpts.withLabOptions(eng, (p) => {
+    const o = labPlayOptions(p, eng.ctx, labs);
+    seen.push(o);
+    return o;
+  });
+  const tone = plan({ pattern: 'tone', frequency: 440 });
+  eng.play(tone, opt());
+  const v1 = eng.voice;
+  advance(1);
+
+  // Release only: the release is read at note-off, so the same voice takes it in place.
+  labs.envelope.adsr = { ...labs.envelope.adsr, r: 0.05 };
+  assert.strictEqual(labOpts.followEnvelopeLab(eng, labs.envelope), 'live');
+  assert.strictEqual(eng.voice, v1, 'no restart for a release change');
+  assert.strictEqual(v1.release, 0.05);
+  assert.strictEqual(v1.adsr.r, 0.05);
+  assert.strictEqual(v1.opts.adsr.r, 0.05, 'a later restart keeps it');
+  assert.strictEqual(labOpts.followEnvelopeLab(eng, labs.envelope), 'same');
+
+  // Sustain: the scheduled shape changes, so the voice is replaced click-free (same plan).
+  labs.envelope.adsr = { ...labs.envelope.adsr, s: 0.1 };
+  assert.strictEqual(labOpts.followEnvelopeLab(eng, labs.envelope), 'restarted');
+  const v2 = eng.voice;
+  assert.notStrictEqual(v2, v1);
+  assert.strictEqual(v2.plan, v1.plan);
+  assert.strictEqual(v2.adsr.s, 0.1);
+  assert.ok(Math.abs(valueAt(v2.env, v2.t0 + 0.5) - 0.1) < 0.005, 'sounds at the new sustain');
+  assert.strictEqual(v2.endTime, Infinity, 'still held');
+  advance(1);
+
+  // Off: the held voice loses the ADSR at once, without a pattern change or a new note.
+  labs.envelope.enabled = false;
+  assert.strictEqual(labOpts.followEnvelopeLab(eng, labs.envelope), 'restarted');
+  const v3 = eng.voice;
+  assert.notStrictEqual(v3, v2);
+  assert.strictEqual(v3.adsr, null);
+  assert.strictEqual(v3.opts.stepEnvelope, null);
+  assert.strictEqual(v3.release, 0.03, 'the instrument release again');
+  assert.ok(Math.abs(valueAt(v3.env, v3.t0 + 0.5) - 1) < 1e-9, 'level 1 with the lab off');
+  assert.strictEqual(seen[seen.length - 1].adsr, null, 'the restart went through the wrapper');
+  advance(1);
+
+  // On again: the ADSR comes back to the held voice.
+  labs.envelope.enabled = true;
+  assert.strictEqual(labOpts.followEnvelopeLab(eng, labs.envelope), 'restarted');
+  assert.strictEqual(eng.voice.adsr.s, 0.1);
+  eng.stopAll();
+  advance(3);
+  assert.strictEqual(eng.activeNodeCount, 0);
+  assert.strictEqual(labOpts.followEnvelopeLab(eng, labs.envelope), false, 'nothing sounds');
+});
+
+test('R-2: on the engine alone, setAdsr updates the voice options a restart copies', { skip },
+  () => {
+    const { eng, advance } = setupApp();
+    const adsr = { a: 0.01, d: 0.1, s: 0.6, r: 0.3 };
+    eng.play(plan({ pattern: 'tone', frequency: 440 }), opt({ adsr,
+      stepEnvelope: adsrStepEnvelope }));
+    advance(0.5);
+    assert.strictEqual(eng.setAdsr(null, null), 'restarted');
+    assert.strictEqual(eng.voice.adsr, null);
+    assert.strictEqual(eng.voice.opts.stepEnvelope, null, 'no step hook without an ADSR');
+    assert.strictEqual(eng.voice.release, 0.03);
+    // a programmed note has its release scheduled: a release change restarts it
+    eng.play(plan({ pattern: 'finite', frequency: 440 }), opt({ mode: 'trigger', adsr,
+      stepEnvelope: adsrStepEnvelope }));
+    const v = eng.voice;
+    advance(0.2);
+    assert.strictEqual(eng.setAdsr({ ...adsr, r: 0.05 }, adsrStepEnvelope), 'restarted');
+    assert.notStrictEqual(eng.voice, v);
+    assert.strictEqual(eng.voice.release, 0.05);
+    eng.stopAll();
+    advance(3);
+    assert.strictEqual(eng.setAdsr(adsr, adsrStepEnvelope), false, 'no voice');
+    assert.strictEqual(eng.activeNodeCount, 0);
+  });
+
+test('R-3: withLabOptions spreads the labs over the caller\'s options, a restart included',
+  { skip }, () => {
+    const { eng, advance } = setupApp();
+    const labs = makeLabs();
+    labs.additive.enabled = true;
+    labOpts.withLabOptions(eng, (p) => labPlayOptions(p, eng.ctx, labs));
+    // a stale wave in the caller's options (what _restart copies) loses to the lab's current one
+    eng.play(plan({ pattern: 'tone', frequency: 440 }), opt({ periodicWave: { id: 'stale' } }));
+    assert.deepStrictEqual(eng.voice.periodicWave, { id: 'additive' });
+    labs.additive.enabled = false;
+    assert.strictEqual(eng.updateLive(plan({ pattern: 'finite', frequency: 440 })), 'restarted');
+    assert.strictEqual(eng.voice.periodicWave, null, 'the copied wave is overwritten');
+    assert.strictEqual(eng.voice.opts.attackS, 0.01, 'the caller\'s own options are kept');
+    eng.stopAll();
+    advance(3);
+    assert.strictEqual(eng.activeNodeCount, 0);
+  });

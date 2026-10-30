@@ -59,3 +59,33 @@ export function labPlayOptions(plan, ctx, labs = {}) {
     dualPhaseDeg: dual && labs.phaseDeg != null && Number.isFinite(phase) ? phase : null,
   };
 }
+
+/**
+ * withLabOptions(engine, labOptions) installs the play wrapper on the engine instance (main.js):
+ * every play, a replacement voice of _restart included, takes the caller's options with
+ * labOptions(plan) spread OVER them, so the labs' current values (or null) win over what a
+ * restarted voice copied from its predecessor. guard(plan, o), when given, is asked first and
+ * a truthy answer refuses the play (null), as a measurement owning the output does. Returns
+ * the engine's own play, bound.
+ */
+export function withLabOptions(engine, labOptions, guard = null) {
+  const base = engine.play.bind(engine);
+  engine.play = (plan, o = {}) => {
+    if (guard && guard(plan, o)) return null;
+    return base(plan, { ...o, ...labOptions(plan) });
+  };
+  return base;
+}
+
+/**
+ * followEnvelopeLab(engine, envelope) -> what engine.setAdsr answered, or false when nothing
+ * sounds. The Envelope lab's live path (C007 R-2): its onChange hands the lab's current ADSR
+ * (or null while it is off) and the step hook that goes with it to the sounding voice, built
+ * by labPlayOptions like every other play option.
+ */
+export function followEnvelopeLab(engine, envelope) {
+  const v = engine && engine.voice;
+  if (!v || v.ended || typeof engine.setAdsr !== 'function') return false;
+  const o = labPlayOptions(v.plan, null, { envelope });
+  return engine.setAdsr(o.adsr, o.stepEnvelope);
+}

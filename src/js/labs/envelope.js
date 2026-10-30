@@ -1,7 +1,7 @@
 // Envelope (ADSR) controller: owns the ADSR state (seconds, sustain 0…1), binds the shell's
 // Attack/Decay/Sustain/Release fields and sliders, the power toggle and the draggable graph
-// (charts/envelope-graph.js). The engine reads lab.adsr when it schedules a voice
-// (audio/envelope.js applyAdsr) and subscribes with lab.onChange to follow edits.
+// (charts/envelope-graph.js). main.js hands lab.adsr to every play (audio/lab-play-options.js)
+// and, through lab.onChange, to the sounding voice (followEnvelopeLab -> engine.setAdsr).
 
 import { createEnvelopeGraph } from '../charts/envelope-graph.js';
 import { ADSR_LIMITS, clampAdsr } from '../charts/drag-math.js';

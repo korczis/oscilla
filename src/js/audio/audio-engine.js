@@ -41,7 +41,11 @@
 //     o.adsr         { a, d, s, r } (seconds, sustain 0..1): attack/release times come from it
 //                    and it is handed to the envelope function (see voice.js v1OpenEnvelope);
 //                    the default envelope uses only a and r. Install the DSP ADSR with
-//                    engine.setEnvelope(makeAdsrEnvelope(envelopeModule)).
+//                    engine.setEnvelope(makeAdsrEnvelope(envelopeModule)). It shapes the
+//                    open envelope, a continuous ping-pong sweep's whole envelope included.
+//                    engine.setAdsr(adsr, stepEnvelope) applies a change to the sounding
+//                    voice: a release in place while held, anything else by a click-free
+//                    restart.
 //     o.envelope     per-play envelope function (overrides engine.setEnvelope).
 //     o.stepEnvelope (eg, t, dur, a, r, adsr) => void, replaces the V1 step envelope of
 //                    programmed patterns (must schedule through eg).
@@ -868,6 +872,38 @@ export class AudioEngine {
     const want = normalizePhaseDeg(deg);
     if (Math.abs(normalizePhaseDeg(v.opts.dualPhaseDeg) - want) < 1e-9) return 'same';
     v.opts = { ...v.opts, dualPhaseDeg: want };
+    return this._restart(v, v.plan);
+  }
+
+  /**
+   * The Envelope lab changed while a voice sounds (C007 R-2; main.js through lab-play-options.js
+   * followEnvelopeLab). adsr { a, d, s, r } or null (the lab off); stepEnvelope the step hook
+   * that goes with it, or null. The voice's options take both, so a later restart keeps them.
+   * A change of the release alone, on a voice whose release is not scheduled yet (held: no end,
+   * no per-segment envelope), applies in place: the release is read at note-off and nothing
+   * sounding is edited. Any other change alters the scheduled shape, and a sounding envelope is
+   * never re-automated (V249), so the voice is replaced click-free with the same plan, options
+   * and deadline, as setDualPhase does. Returns 'same' | 'live' | 'restarted' | false (no voice,
+   * releasing, or about to end).
+   */
+  setAdsr(adsr, stepEnvelope = null) {
+    const v = this.voice;
+    if (!v || v.ended || v.releasing || !v.plan) return false;
+    const next = adsr ? { ...adsr } : null;
+    const hook = next && typeof stepEnvelope === 'function' ? stepEnvelope : null;
+    const prev = v.adsr;
+    const keep = (k) => !!prev && !!next && prev[k] === next[k];
+    const shapeKept = (!prev && !next) || (keep('a') && keep('d') && keep('s'));
+    const sameHook = (v.opts.stepEnvelope || null) === hook;
+    v.opts = { ...v.opts, adsr: next, stepEnvelope: hook };
+    if (shapeKept && sameHook && (!next || keep('r'))) return 'same';
+    const held = !Number.isFinite(v.endTime)
+      && !(v.plan.kind === 'continuous' && v.plan.envelope === 'segment');
+    if (shapeKept && sameHook && next && held) {
+      v.adsr = next;
+      v.release = Math.max(0.005, next.r);
+      return 'live';
+    }
     return this._restart(v, v.plan);
   }
 
