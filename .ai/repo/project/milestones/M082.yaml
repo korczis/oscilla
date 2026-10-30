@@ -1,0 +1,20 @@
+id: M082
+title: "A lab-grade signal generator: pitch entry, noise, test signals, bursts, honest level, pulse, presets, hand-offs"
+slug: a-lab-grade-signal-generator-pitch-entry-noise-test-signals
+order: 82
+priority: p2
+problem: "The generator has no typed frequency or note entry (G3, G4), no noise (G5), no pulse, polarity or channel (G6), no two-tone or multi-tone (G7), no cycle-counted burst (G8), a sweep form without units (G9), a level not stated as dBFS with its peak and RMS (G10), and no way out to Studio, the Analyzer or MEASURE (G11, G12)."
+outcome: "A Generator workspace of its own (Q033), sharing one instrument state with the Playground's Source panel, is a lab-grade generator whose every signal is visible on the scope and spectrum, stated honestly as setpoint or observation, and handed to the workspaces that use it."
+acceptance_criteria:
+- "K132, K133, K134, K135, K136, K137, K138, K139, K140, K141, K142 and K143 are done with their evidence; npm run release-gate passes at the last one."
+validation:
+- npm run release-gate
+evidence_required:
+- milestone_verified
+risks:
+- "K132-K136 change no markup (wave 1) and reach the Playground's pattern form; K138 adds the Generator workspace on F002's shell, and K137, K139-K143 live in it."
+- K137 shares the band-limited pulse builder with synth K059 (src/js/audio/pulse.js).
+- "src/js/audio and src/js/analysis are guarded: those slices carry a reviewer's verdict."
+- "Ceiling of the line: 25 KB gzip in all, inside the owner's 1 200 000 B budget of 2026-10-29."
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

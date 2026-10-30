@@ -1,0 +1,21 @@
+id: Q030
+milestone: M084
+title: "Owner decision: the gzip cap of the Studio boxes and signal generator lines"
+slug: owner-decision-the-gzip-cap-of-the-studio-boxes-and-signal-g
+priority: p2
+profile: routine
+owner: repository owner
+objective: "The build is 820 005 B gzip of the 1 000 000 B budget (origin/main b67d1e58), and the charts line (Q014) and the synth line (Q023) also draw on the 180 KB left. (a) 40 KB in all for these two lines (Studio boxes 25 KB, generator 15 KB), measured per pull request by scripts/size-report.mjs and re-measured before wave 2; (b) another figure. The plan recommends (a)."
+why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings S1-S14 measured on origin/main b67d1e58)."
+current_state: "Superseded by the owner's 1.2 MB budget decision of 2026-10-29: the dist budget is 1 200 000 B gzip, about 355 KB of headroom at origin/main b67d1e58. Its question (a cap for these two lines inside 1 000 000 B) no longer arises; the per-line ceilings (Studio boxes 35 KB, signal generator 25 KB gzip) are stated in M081 and M082 and in each slice's size criterion, and no slice waits on this issue. Evidence must name a commit of main, so the plan change that adds this record does not record it: after that lands, a follow-up chore(plan) pull request records it as owner_decision evidence from a worktree whose HEAD is origin/main."
+scope:
+- .ai/repo/project/issues/Q030.yaml
+acceptance_criteria:
+- "The decision is recorded as evidence on this issue (covers owner_decision), either in the owner's words with date and source, or as a decision of a coordinating session under an owner delegation it quotes with its date, stating its reasoning and that the owner may override it; a worker without such a delegation never answers it."
+- The answer names (a) or a figure of (b).
+validation:
+- manual
+evidence_required:
+- owner_decision
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

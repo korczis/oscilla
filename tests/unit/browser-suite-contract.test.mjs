@@ -621,3 +621,15 @@ test('page.evaluate of every harness page is bounded and names its function', as
   await assert.rejects(popup.evaluate(() => window.x), /page\.evaluate\(\(\) => window\.x\)/);
   assert.ok(suite.DEFAULT_EVALUATE_MS >= 60000, 'the default bound ends a stall, not a slow page');
 });
+
+test('E042: tests/README.md states the load gate\'s defaults as suite.cjs has them', () => {
+  const text = README.replace(/\s+/g, ' ');
+  assert.equal(suite.LOAD_MAX_PER_CORE, 2, 'the per-core factor the 18-core case above pins');
+  assert.ok(text.includes(`\`OSC_LOAD_MAX\` (default ${suite.LOAD_MAX_PER_CORE} x cores)`),
+    'tests/README.md names OSC_LOAD_MAX\'s default as LOAD_MAX_PER_CORE x cores');
+  assert.ok(text.includes(`\`OSC_LOAD_WAIT_MS\` (default ${suite.DEFAULT_LOAD_WAIT_MS})`),
+    'tests/README.md names OSC_LOAD_WAIT_MS\'s default as DEFAULT_LOAD_WAIT_MS');
+  const mutated = text.replace(`(default ${suite.LOAD_MAX_PER_CORE} x cores)`, '(default 3 x cores)');
+  assert.ok(!mutated.includes(`\`OSC_LOAD_MAX\` (default ${suite.LOAD_MAX_PER_CORE} x cores)`),
+    'mutation: a README that drifts is refused');
+});
