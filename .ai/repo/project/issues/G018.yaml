@@ -1,0 +1,40 @@
+id: G018
+milestone: M087
+serves:
+- "component-system#contract-and-registry"
+title: Declare every Playground-family and Studio component; their allowance entries leave
+slug: declare-every-playground-family-and-studio-component-their-a
+priority: p2
+profile: implementation
+objective: "Lands as feat(ui). The bulk of the catalogue: the hooks of the Playground, Analyzer, Filter Lab, Compare, Synthesis, Sequencer, Presets and Studio workspaces (most of the 576, the 260 that no test names among them: osc-untested.txt) get declarations with docs, state paths, links and tests; a hook that no test names gets a test that does, or a declaration that says which suite covers it generically and why. The allowance falls by every hook declared. Before: VERIFIED 260 hooks named by no test. After: every hook of these workspaces is declared and tested by name. Negative cases: as G001. Rollback: revert; data and tests only."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: \"the embedded Studio is ugly as hell\"; components in general must be generic, linkable, traceable, composable, unified, documented, dynamic, generated and interlinked; \"everything must be interlinked with everything\"; improve the main page and the first experience, deploy often. The owner's evolution prompt pack (MASTER, P02, P04, P06) binds it: the dark technical cockpit is locked, shared primitives only where duplication is proven, no new framework, generated docs only where deterministic, no decorative wires. Findings: the UI component inventory of 2026-10-29 (D1-D14 duplication, U1-U15 on the embedded Studio, measured on origin/main b67d1e58, v3.13.0); design: the component-system design of 2026-10-29 (scratchpad components/design.md)."
+scope:
+- src/js/ui/catalog/decl
+- scripts/ui-catalog
+- tests/unit/ui-catalog-allowance.json
+- tests/unit/ui-catalog.test.mjs
+- tests/browser/qa-regressions.cjs
+- tests/browser/labs.cjs
+- docs/ui-catalog.md
+- tests/README.md
+depends_on:
+- G001
+acceptance_criteria:
+- tests/unit/ui-catalog.test.mjs passes with the allowance holding no hook of these workspaces; the pull request lists the count before and after.
+- "Definition of done, extends: the declarations of G001."
+- "Definition of done, interlinks: each declaration's related views feed the link graph (G016)."
+- "Definition of done, interactivity: none beyond the existing controls (stated)."
+- "Definition of done, docs, menus and routes: docs/ui-catalog.md regenerated. tests/README.md has a row for each new test; the component's catalogue declaration (G001) names its docs, links and tests; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: the hooks no test named get a check in tests/browser/qa-regressions.cjs that activates each by pointer, keyboard and a hasTouch tap and waits with until() (deadline 'hook effect', 2 s) for its declared state path to change. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit, and the release that carried it is recorded when the milestone is verified."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "Before Pro (it may land before F001): it adds no class token, selector, markup surface or inline style and only removes legacy ones, so tests/unit/ui-flowbite-pro-baseline.json stays equal or falls (node scripts/ui-flowbite-pro-record.mjs --check passes, rewritten only where a count fell) and node --test tests/unit/ui-flowbite-pro.test.mjs passes; studio.css, studio-timeline.css, charts.css and tokens.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock v2)."
+- "scripts/size-report.mjs shows at most 0 KB gzip added, with the base and head figures in the pull request body, inside the cap Q037 records (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/ui-catalog.test.mjs
+- node tests/browser/qa-regressions.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

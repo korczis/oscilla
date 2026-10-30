@@ -65,8 +65,8 @@ export function buildLargeStudio(store) {
 const FRAME_MS = 1000 / 60;
 
 /**
- * Budgets of the §145 target (ms, medians), the one copy that the unit test
- * (v31-studio-performance.test.mjs), the browser suite (v31-studio-workflows.cjs) and
+ * Budgets of the §145 target (ms), the one copy that the unit tests (the fastest repeat of the
+ * main thread's CPU time, cpuMs below), the browser suite (v31-studio-workflows.cjs) and
  * docs/v31/performance.md (checked by v31-studio-docs.test.mjs) use. One 60 Hz frame for what
  * a single gesture commits, a few frames for whole-document work; see docs/v31/performance.md.
  */
@@ -88,3 +88,55 @@ export const PERF_BUDGETS = Object.freeze({
 
 /** Browser budgets: opening the fixture file and its first render; one edit or Frame All. */
 export const BROWSER_BUDGETS = Object.freeze({ importMs: 3000, editMs: 50 });
+
+/**
+ * The build's machine-relative bound: its CPU time may be at most this many times that of
+ * referenceWork() measured the same way in the same process. docs/v31/performance.md records
+ * the ratios measured and why this, not the 1000 ms, is what fails a build twice as slow.
+ */
+export const BUILD_REFERENCE_RATIO = 9;
+
+/**
+ * The CPU time the calling thread has spent, in ms: process.threadCpuUsage(), the main
+ * thread's own user + system time, so the time the scheduler gives other processes does not
+ * count; process.cpuUsage() (every thread of the process, never less) on a Node without it.
+ */
+export const CPU_CLOCK = typeof process !== 'undefined'
+  && typeof process.threadCpuUsage === 'function' ? 'process.threadCpuUsage' : 'process.cpuUsage';
+export function cpuMs() {
+  const u = CPU_CLOCK === 'process.threadCpuUsage' ? process.threadCpuUsage() : process.cpuUsage();
+  return (u.user + u.system) / 1000;
+}
+
+/**
+ * A fixed workload of no product code, the yardstick of BUILD_REFERENCE_RATIO, in the build's
+ * shape: 300 steps grow a 100-node / 200-edge graph of plain objects, and after each step the
+ * whole graph is copied and checked (JSON round trip, an id map, endpoint lookups, a sort, a
+ * walk of every parameter). Deterministic; returns a checksum so that nothing is elided.
+ */
+export function referenceWork() {
+  const nodes = [];
+  const edges = [];
+  let sum = 0;
+  for (let s = 0; s < LARGE_NODES + LARGE_EDGES; s++) {
+    if (s < LARGE_NODES) {
+      nodes.push({ id: `n-${s}`, type: `t${s % 7}`, position: { x: s * 8, y: s * 3 },
+        params: { frequency: 440 + s, level: 0.5, gain: s / 300, name: `node ${s}` } });
+    } else {
+      edges.push({ id: `e-${s}`, from: { node: `n-${s % LARGE_NODES}`, port: 'out' },
+        to: { node: `n-${(s * 7) % LARGE_NODES}`, port: `in${s % 4}` } });
+    }
+    const copy = JSON.parse(JSON.stringify({ nodes, edges }));
+    const byId = new Map(copy.nodes.map((n) => [n.id, n]));
+    const keys = [];
+    for (const e of copy.edges) {
+      if (byId.has(e.from.node) && byId.has(e.to.node)) keys.push(`${e.to.node}:${e.to.port}`);
+    }
+    keys.sort();
+    sum += keys.length;
+    for (const n of copy.nodes) {
+      for (const [k, v] of Object.entries(n.params)) sum += typeof v === 'number' ? 1 : k.length;
+    }
+  }
+  return sum;
+}

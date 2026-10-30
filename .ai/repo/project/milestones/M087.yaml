@@ -1,0 +1,18 @@
+id: M087
+title: "Component system, wave 2: generated catalogue, What is this, the link graph and traceability"
+slug: component-system-wave-2-generated-catalogue-what-is-this-the
+order: 87
+priority: p2
+problem: "No catalogue lists the components; nothing in the app says what a control is, where else it appears or what it relates to; links are checked suite by suite and six are one-way; 5 of 77 UI modules name their tests."
+outcome: docs/ui-catalog.md and docs/ui-traceability.md are generated and checked; every component explains itself in the app and opens its related views; every related view is at most two in-content steps away or exempt with a reason; every hook is declared.
+acceptance_criteria:
+- G014-G019 are done with their evidence; npm run release-gate passes at the last one.
+validation:
+- npm run release-gate
+evidence_required:
+- milestone_verified
+risks:
+- "The declarations of G018 and G019 touch many tests by name: they land per workspace family in their own train rounds."
+- "The link graph's exemption list must only shrink; an exemption added to pass is a review rejection."
+created_at: '2026-10-29'
+updated_at: '2026-10-29'
