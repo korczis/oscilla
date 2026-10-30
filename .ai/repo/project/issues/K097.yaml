@@ -6,7 +6,7 @@ title: "XY performance pad: pitch in a scale on one axis, timbre on the other, p
 slug: xy-performance-pad-pitch-in-a-scale-on-one-axis-timbre-on-th
 priority: p3
 profile: implementation
-objective: "Lands as feat(synth). An xy-pad node type (x and y CONTROL 0..1, a scale-quantised pitch CONTROL in octaves, a gate TRIGGER while touched) and the XY sub-view: a pad whose x axis is pitch in the chosen scale and key (degree steps shown) and y axis drives a chosen timbre parameter through a CONTROL edge; presets are a panel patch plus a scale. A generic name, no product's name, branding or layout. Before: no XY pad. After: an XY pad in a scale. User-value tier 4 of 4 (synth-design.md section 17). Rollback: revert the pull request; a document saved with the new node type is then refused by the import pipeline with its unknown-type sentence, never dropped silently, so a revert after a release ships it keeps the registry entry and removes only the UI."
+objective: "Lands as feat(synth). An xy-pad node type (x and y CONTROL 0..1, a scale-quantised pitch CONTROL in octaves, a gate TRIGGER while touched) and the XY sub-view: a pad whose x axis is pitch in the chosen scale and key (degree steps shown) and y axis drives a chosen timbre parameter through a CONTROL edge; presets are a panel patch plus a scale. A generic name, no product's name, branding or layout. Before: no XY pad. After: an XY pad in a scale. User-value tier 4 of 4 (synth-design.md section 17). Rollback: revert the pull request; a document saved with the new node type is then refused by the import pipeline with its unknown-type sentence, never dropped silently, so a revert after a release ships it keeps the registry entry and removes only the UI. Merged plan of the component follow-up (2026-10-30): The pad surface is W010's XY kind."
 why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
 scope:
   - "src/js/studio/nodes"
@@ -25,6 +25,7 @@ depends_on:
   - "K104"
   - "Q019"
   - "Q023"
+  - "W010"
 acceptance_criteria:
   - "tests/unit/xy-pad.test.mjs, failing on the merge base: x maps to the scale degrees of each mode exactly, y maps to the target's range through the edge, the gate opens on touch and closes on release, blur, hide and Escape."
   - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: touch released by blur, hide or Escape."
@@ -45,4 +46,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-10-30

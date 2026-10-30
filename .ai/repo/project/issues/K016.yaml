@@ -6,7 +6,7 @@ title: "Live views of the Scope, Spectrum, Spectrogram, Meter and RTA nodes"
 slug: live-views-of-the-scope-spectrum-spectrogram-meter-and-rta-n
 priority: p1
 profile: implementation
-objective: "Lands as feat(studio-ui). Wave 2, first: the largest inert surface. Each analysis node paints live from its adapter's info.reader into an Inspector Pro card and a mini canvas on its node card, as one subscriber of src/js/charts/frame-loop.js over visible nodes only, and says \"No signal\" and \"Live only\" where that is the truth. It waits on F002 and F008 of #251 (intent ui-flowbite-pro; F002 needs F001), on E004, which splits the inspector, on K053 of M062, the chart interaction kit whose census, keyboard cursor and readouts its views use, and on K036 of M062, whose frame loop takes a host and an essential flag; the plan change that added M062 named these edges. Through K053 and K028 it also waits on the charts owner decisions Q014 (the gzip cap) and Q016 (the home of M062) of M063. Its loop is a subscriber of src/js/charts/frame-loop.js registered with its views' hosts, not a rAF chain of its own (playable-instrument#chart-cost)."
+objective: "Lands as feat(studio-ui). Wave 2, first: the largest inert surface. Each analysis node paints live from its adapter's info.reader into an Inspector Pro card and a mini canvas on its node card, as one subscriber of src/js/charts/frame-loop.js over visible nodes only, and says \"No signal\" and \"Live only\" where that is the truth. It waits on F002 and F008 of #251 (intent ui-flowbite-pro; F002 needs F001), on E004, which splits the inspector, on K053 of M062, the chart interaction kit whose census, keyboard cursor and readouts its views use, and on K036 of M062, whose frame loop takes a host and an essential flag; the plan change that added M062 named these edges. Through K053 and K028 it also waits on the charts owner decisions Q014 (the gzip cap) and Q016 (the home of M062) of M063. Its loop is a subscriber of src/js/charts/frame-loop.js registered with its views' hosts, not a rAF chain of its own (playable-instrument#chart-cost). Merged plan of the component follow-up (2026-10-30): The Meter node's mini view is W003's face density and the Scope node's mini is W004's kind."
 why: "Owner direction of 2026-10-29 (session oscilla-b0): OSCILLA becomes a playable, patchable instrument and an audio-band signal lab; the plan checked every fact it relies on against main at 8b5792cd, and the sizes it quotes are unchanged at e2720e07."
 scope:
   - "src/js/ui/studio"
@@ -26,6 +26,8 @@ depends_on:
   - "F008"
   - "K053"
   - "K036"
+  - "W003"
+  - "W004"
 acceptance_criteria:
   - "A unit test, failing on the merge base, shows the live views painting as one subscriber of src/js/charts/frame-loop.js registered with the hosts of all its views (K036's hosts option): only visible analysis nodes paint, no rAF of its own is requested, and it unsubscribes when none is visible."
   - "A browser check shows each of the five node kinds painting during play and stating \"No signal\" when stopped. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline and assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac) (project.suite-harness, project.bounded-test-timing)."
@@ -45,4 +47,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-10-30

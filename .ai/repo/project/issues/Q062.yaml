@@ -1,0 +1,21 @@
+id: Q062
+milestone: M104
+title: "Owner decision: ADR 0058's scope under the full-DAW order (notes clips and a piano roll, several instrument tracks, a session grid, later MIDI output)"
+slug: owner-decision-adr-0058-s-scope-under-the-full-daw-order-not
+priority: p2
+profile: routine
+owner: repository owner
+objective: "ADR 0058 (proposed) decision 5 puts MIDI output, MIDI clock and multiple tracks outside the first version, and rejects turning the block sequencer into a MIDI sequencer; it names no piano roll. The owner's order of 2026-10-29 asks for a full DAW. (a) A resolution note on ADR 0058, or a short ADR amending its decision 5 only, puts notes clips with a piano-roll editor, several instrument tracks, a session grid and later MIDI output in scope on the Studio timeline, decisions 1-4 unchanged and the block sequencer still a sound-pattern editor; (b) decision 5 stays and W011, W012 and W015 are cancelled. The plan recommends (a)."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs, knowledge and interlinking, and add more; add p5.js, WebGL and interactivity, and deploy; a full DAW, a full sequencer and a full piano, everything interlinked, clickable, parameterized and joined; knobs, sliders and control panels done one generic way, integrated with Majordomus; the landing easy to use, easy to extend and open to hack; mobile first. The architecture still binds: one AudioEngine, the Studio model canonical, typed ports, one offline file under the 1.2 MB gzip budget, the cockpit identity, no fake science, Flowbite Pro (ADR 0061). Design: the instrument-kinds design of 2026-10-29 (scratchpad components-followup/components-new.md), on the component-system design (G001-G019) and the synth and studio-siggen drafts of the same day, facts checked against origin/main cdda563c."
+current_state: "Open on 2026-10-29. W011, W012 and W015 name this issue in depends_on."
+scope:
+- .ai/repo/project/issues/Q062.yaml
+acceptance_criteria:
+- "The decision is recorded as evidence on this issue (covers owner_decision), either in the owner's words with date and source, or as a decision of a coordinating session under an owner delegation it quotes with its date, stating its reasoning and that the owner may override it; a worker without such a delegation never answers it."
+- The answer names an option for each part.
+validation:
+- manual
+evidence_required:
+- owner_decision
+created_at: '2026-10-29'
+updated_at: '2026-10-30'

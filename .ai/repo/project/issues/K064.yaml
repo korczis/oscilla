@@ -7,7 +7,7 @@ title: "Cable hover mini-scope and a pinned probe card"
 slug: cable-hover-mini-scope-and-a-pinned-probe-card
 priority: p1
 profile: implementation
-objective: "Lands as feat(synth). Hovering or focusing a cable for 300 ms opens a Pro popover with a mini-scope: AUDIO and CONTROL cables are read from one engine-owned probe AnalyserNode (created by the runtime with track() accounting, connected to that edge's GainNode as a tap that never alters the path, disconnected when the popover closes); TRIGGER cables show the recent trigger times, because a TRIGGER edge is a logical binding with no audio. Pin keeps it as a probe card on the panel. The trace is drawn by a subscriber of src/js/charts/frame-loop.js into a preallocated Float32Array with no per-frame allocation and no DOM write per frame; a hidden or closed card unsubscribes. Levels say relative. Before: a cable shows nothing of its signal. After: hovering a cable shows its signal, and a probe card can be pinned. User-value tier 2 of 4 (synth-design.md section 17). Rollback: revert the pull request; no saved state depends on it."
+objective: "Lands as feat(synth). Hovering or focusing a cable for 300 ms opens a Pro popover with a mini-scope: AUDIO and CONTROL cables are read from one engine-owned probe AnalyserNode (created by the runtime with track() accounting, connected to that edge's GainNode as a tap that never alters the path, disconnected when the popover closes); TRIGGER cables show the recent trigger times, because a TRIGGER edge is a logical binding with no audio. Pin keeps it as a probe card on the panel. The trace is drawn by a subscriber of src/js/charts/frame-loop.js into a preallocated Float32Array with no per-frame allocation and no DOM write per frame; a hidden or closed card unsubscribes. Levels say relative. Before: a cable shows nothing of its signal. After: hovering a cable shows its signal, and a probe card can be pinned. User-value tier 2 of 4 (synth-design.md section 17). Rollback: revert the pull request; no saved state depends on it. Merged plan of the component follow-up (2026-10-30): Its cable hover scope is W004's mini-scope kind on Canvas 2D."
 why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
 scope:
   - "src/js/ui/synth"
@@ -20,6 +20,7 @@ scope:
   - "dist"
 depends_on:
   - "K063"
+  - "W004"
 acceptance_criteria:
   - "tests/unit/synth-probe.test.mjs, failing on the merge base: the probe connects to exactly one edge at a time and disconnects on close (node census back to its value before), the subscriber reuses the same Float32Array across ticks and unsubscribes when hidden, and a TRIGGER cable's readout lists the scheduled trigger times."
   - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: a TRIGGER cable (times, no trace); a hidden card (unsubscribed); two probes at once (one analyser, one edge)."
@@ -37,4 +38,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-10-30

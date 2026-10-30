@@ -6,7 +6,7 @@ title: "Notes clips and a piano-roll editor: draw, velocity lane, quantise, lega
 slug: notes-clips-and-a-piano-roll-editor-draw-velocity-lane-quant
 priority: p2
 profile: implementation
-objective: "Lands as feat(studio). Size: big; it is split further into landable pull requests when started, each with its own fail-first test. A notes clip kind ({ notes: [{ t, dur, note, vel }] }, strict limits, targets with the notes capability) played by the transport like steps, and a piano-roll editor in the Synth workspace's Session sub-view: draw and erase, a velocity lane, quantise to a grid, legato, transpose, select and move; the playable-instrument Wave 3 'note clips after V505' item, built on V505's recorded event track. Before: notes exist only as steps. After: notes clips and a piano roll. User-value tier 3 of 4 (synth-design.md section 17). Rollback: revert the pull request; a document with a notes clip is then refused by the import pipeline with its sentence, so after a release the clip kind stays and the editor is removed instead."
+objective: "Lands as feat(studio). Size: big; it is split further into landable pull requests when started, each with its own fail-first test. A notes clip kind ({ notes: [{ t, dur, note, vel }] }, strict limits, targets with the notes capability) played by the transport like steps, and a piano-roll editor in the Synth workspace's Session sub-view: draw and erase, a velocity lane, quantise to a grid, legato, transpose, select and move; the playable-instrument Wave 3 'note clips after V505' item, built on V505's recorded event track. Before: notes exist only as steps. After: notes clips and a piano roll. User-value tier 3 of 4 (synth-design.md section 17). Rollback: revert the pull request; a document with a notes clip is then refused by the import pipeline with its sentence, so after a release the clip kind stays and the editor is removed instead. Merged plan of the component follow-up (2026-10-30): The editor is W011's piano-roll kind; this slice keeps the notes clip data and its placement."
 why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
 scope:
   - "src/js/studio/schema.js"
@@ -28,6 +28,7 @@ depends_on:
   - "V505"
   - "Q019"
   - "Q023"
+  - "W011"
 acceptance_criteria:
   - "tests/unit/studio-notes-clip.test.mjs, failing on the merge base: notes play at their frames offline, quantise moves onsets to the grid, legato extends each note to the next, and the clip round-trips through the import pipeline with every pinned hash unchanged."
   - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: overlapping notes on a monophonic target (last-note priority, stated)."
@@ -47,4 +48,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-10-30

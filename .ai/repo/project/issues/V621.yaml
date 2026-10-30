@@ -6,7 +6,7 @@ title: "Live mini views on box faces: level, waveform, response curve, spectrum"
 slug: live-mini-views-on-box-faces-level-waveform-response-curve-s
 priority: p2
 profile: implementation
-objective: "P04 slice E (compile and playback). Lands as feat(studio-ui). Each face draws its declared view (V619 face.view) on one canvas: an output level bar for every sounding box, a waveform for sources, the response curve for Filter (the biquad response math K043 and K048 use, captioned as Q011 decides while stopped), and K016's live views for the analysis boxes. One frame-loop subscriber (K036) draws only boxes in the viewport (V618's culling), reads through the visualization bridge and engine.snapshot(), allocates nothing per frame, and says 'No signal' or 'Live only' where that is the truth. Levels are relative (dBFS-like)."
+objective: "P04 slice E (compile and playback). Lands as feat(studio-ui). Each face draws its declared view (V619 face.view) on one canvas: an output level bar for every sounding box, a waveform for sources, the response curve for Filter (the biquad response math K043 and K048 use, captioned as Q011 decides while stopped), and K016's live views for the analysis boxes. One frame-loop subscriber (K036) draws only boxes in the viewport (V618's culling), reads through the visualization bridge and engine.snapshot(), allocates nothing per frame, and says 'No signal' or 'Live only' where that is the truth. Levels are relative (dBFS-like). Merged plan of the component follow-up (2026-10-30): The face minis are W003 and W004 instances at face density."
 why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings S1-S14 measured on origin/main b67d1e58)."
 scope:
 - src/js/ui/studio/graph-face.js
@@ -21,10 +21,12 @@ scope:
 - dist
 - docs/v3/readout-truth.yaml
 depends_on:
-- V620
-- K016
-- K036
-- T026
+- "V620"
+- "K016"
+- "K036"
+- "T026"
+- "W003"
+- "W004"
 acceptance_criteria:
 - "Before: VERIFIED (S6, S7): faces draw nothing live."
 - "After: each face draws its declared live view from runtime reads while visible."
@@ -49,4 +51,4 @@ validation:
 evidence_required:
 - verified
 created_at: '2026-10-29'
-updated_at: '2026-10-29'
+updated_at: 2026-10-30

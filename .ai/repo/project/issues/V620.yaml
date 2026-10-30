@@ -6,13 +6,13 @@ title: "Every parameter on the box face, with the synth knob and modulation ring
 slug: every-parameter-on-the-box-face-with-the-synth-knob-and-modu
 priority: p2
 profile: implementation
-objective: "P04 slice F (visual, keyboard and responsive). Each box's expanded face shows every parameter of its node type (owner decision Q031 of 2026-10-29), in the sections V619 declares: continuous parameters as the synth line's knob (src/js/ui/controls/knob.js, K058: value and unit always shown, vertical drag with Shift for fine, arrow keys, PageUp and PageDown, Home and End, double-click resets to the registry default, Enter types a value, the ContextMenu key opens the knob menu), enums as a Pro button group, booleans as a Pro toggle; every control is bound to one parameter of synth K105's contract. A drag is one NODE_PARAM_SET history entry with the live preview of §80; the face control and the Inspector field are two projections of one parameter. A knob with incoming CONTROL edges draws the band its depth sweeps and, while playing, a dot at the modulated value read from the runtime (hidden under prefers-reduced-motion). Folding is V622's, which lands first."
+objective: "P04 slice F (visual, keyboard and responsive). Each box's expanded face shows every parameter of its node type (owner decision Q031 of 2026-10-29), in the sections V619 declares: continuous parameters as the synth line's knob (src/js/ui/kinds/param/knob.js, K058: value and unit always shown, vertical drag with Shift for fine, arrow keys, PageUp and PageDown, Home and End, double-click resets to the registry default, Enter types a value, the ContextMenu key opens the knob menu), enums as a Pro button group, booleans as a Pro toggle; every control is bound to one parameter of synth K105's contract. A drag is one NODE_PARAM_SET history entry with the live preview of §80; the face control and the Inspector field are two projections of one parameter. A knob with incoming CONTROL edges draws the band its depth sweeps and, while playing, N006's dot from a measured tap, never AudioParam.value (which excludes modulation in all three engines) (hidden under prefers-reduced-motion). Folding is V622's, which lands first. Merged plan of the component follow-up (2026-10-30): The face is N008's panel with N005's computed band; the measured dot comes with N006 on every control. It no longer waits on K105 (M071), whose declaration half moved to N001."
 why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings S1-S14 measured on origin/main b67d1e58)."
 scope:
 - src/js/ui/studio/graph-face.js
 - src/js/ui/studio/graph-editor.js
 - src/js/ui/studio/graph-view.js
-- src/js/ui/controls
+- src/js/ui/kinds/param
 - src/index.html
 - tests/unit/studio-graph-face.test.mjs
 - tests/browser/studio-boxes.cjs
@@ -21,12 +21,13 @@ scope:
 - tests/README.md
 - dist
 depends_on:
-- V619
-- V622
-- F008
-- Q031
-- K058
-- K105
+- "V619"
+- "V622"
+- "F008"
+- "Q031"
+- "K058"
+- "N008"
+- "N005"
 acceptance_criteria:
 - "Before: VERIFIED (S6): faces carry no control."
 - "After: every parameter of a box is on its face (owner decision Q031), grouped by the sections V619 declares: continuous parameters as the synth line's knob (K058), enums as a Pro button group, booleans as a toggle; modulated knobs show their modulation ring."
@@ -50,4 +51,4 @@ validation:
 evidence_required:
 - verified
 created_at: '2026-10-29'
-updated_at: '2026-10-29'
+updated_at: 2026-10-30

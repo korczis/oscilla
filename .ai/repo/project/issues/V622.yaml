@@ -6,7 +6,7 @@ title: "Collapse and expand are first-class: per box, selection and graph, and a
 slug: collapse-and-expand-are-first-class-per-box-selection-and-gr
 priority: p2
 profile: implementation
-objective: "P04 slice D (editing and undo invariants). Every parameter is on the face (owner decision Q031 of 2026-10-29), so folding is first-class: a box collapses to its title, ports, primary parameters (V619) and live view, or expands to every section; commands collapse and expand the focused box, the selection and the whole graph (keys listed in STUDIO_SHORTCUTS, toolbar and box chrome by Pro buttons with aria-expanded); the state is presentation (node metadata), saved, undoable, never hashed. The face carries V614's box mute as a toggle. V620 adds the knobs inside the expanded sections and lands after this slice; bypass (K022) is a box-menu item of V623."
+objective: "P04 slice D (editing and undo invariants). Every parameter is on the face (owner decision Q031 of 2026-10-29), so folding is first-class: a box collapses to its title, ports, primary parameters (V619) and live view, or expands to every section; commands collapse and expand the focused box, the selection and the whole graph (keys listed in STUDIO_SHORTCUTS, toolbar and box chrome by Pro buttons with aria-expanded); the state is presentation (node metadata), saved, undoable, never hashed. The face carries V614's box mute as a toggle. V620 adds the knobs inside the expanded sections and lands after this slice; bypass (K022) is a box-menu item of V623. Merged plan of the component follow-up (2026-10-30): The folding owner is stated, not unified (params-controls.md section 7.1): a Synth-workspace card's folding is view state (K062: persisted per view, never in history or the hash), a Studio box's folding is node presentation state (V622: saved, undoable, never hashed), and the two projections of one node fold independently."
 why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings S1-S14 measured on origin/main b67d1e58)."
 scope:
 - src/js/studio/schema.js
@@ -20,10 +20,10 @@ scope:
 - src/js/ui/studio/graph-keys.js
 - tests/unit/v31-studio-performance.test.mjs
 depends_on:
-- V619
-- V614
-- V618
-- F008
+- "V619"
+- "V614"
+- "V618"
+- "F008"
 acceptance_criteria:
 - "Before: VERIFIED (S6): every box has one size and shows a summary line; nothing collapses."
 - "After: collapse and expand are first-class (owner decision Q031 of 2026-10-29: every parameter is on the face, so a box must fold): per box, for the selection and for the whole graph, by pointer, key and touch, saved as presentation state and never hashed; the box mute of V614 is a face toggle."
@@ -47,4 +47,4 @@ validation:
 evidence_required:
 - verified
 created_at: '2026-10-29'
-updated_at: '2026-10-29'
+updated_at: 2026-10-30

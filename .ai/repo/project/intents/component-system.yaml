@@ -13,6 +13,7 @@ milestones:
 - M085
 - M086
 - M087
+- M118
 satisfaction:
 - id: contract-and-registry
   criterion: "Every data-osc hook is covered by one declaration with docs, a resolvable state path, resolvable links and a test that names it, and the allowance of undeclared hooks is empty"
@@ -46,7 +47,13 @@ satisfaction:
   criterion: "Every component names its source, plan, tests and ADRs, each checked, and the capability to source to test to ADR chain is generated and current"
   evidence: command
   ref: "node --test tests/unit/ui-catalog-trace.test.mjs && node scripts/ui-catalog.mjs --trace --check"
+- id: majordomus-served
+  criterion: "Every declared kind, component, node type and parameter names its plan and its rule or ADR ids in its trace and every id resolves; Majordomus serves each from a current generated knowledge record (knowledge validate reports nothing under .ai/repo/knowledge/components/, context resolve on its source module returns the component contract); and the allowance of untraced declarations is empty"
+  evidence: command
+  ref: "node --test tests/unit/component-trace.test.mjs tests/unit/component-links.test.mjs tests/unit/component-kb.test.mjs && node scripts/ui-catalog.mjs --check"
 governance:
+- "rule:project.rules-name-their-enforcement"
+- "rule:project.majordomus-layer-current"
 - "rule:project.ui-uses-flowbite-pro"
 - "rule:project.visual-identity-lock"
 - "rule:project.studio-model-is-canonical"

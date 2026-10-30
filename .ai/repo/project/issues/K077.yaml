@@ -6,7 +6,7 @@ title: "MIDI CC as a modulation source"
 slug: midi-cc-as-a-modulation-source
 priority: p2
 profile: implementation
-objective: "Lands as feat(midi). A midi-cc node type (controller number, channel, smoothing; CONTROL output from a ConstantSource set on the audio clock from MIDI events) fed by the V501 input, with MIDI learn from the knob menu; MIDI states follow ADR 0058's support-state table and nothing changes without MIDI. Before: a MIDI controller cannot move a parameter. After: a CC moves any knob through a midi-cc node. User-value tier 3 of 4 (synth-design.md section 17). Rollback: revert the pull request; a document saved with the new node type is then refused by the import pipeline with its unknown-type sentence, never dropped silently, so a revert after a release ships it keeps the registry entry and removes only the UI."
+objective: "Lands as feat(midi). A midi-cc node type (controller number, channel, smoothing; CONTROL output from a ConstantSource set on the audio clock from MIDI events) fed by the V501 input, with MIDI learn from the knob menu; MIDI states follow ADR 0058's support-state table and nothing changes without MIDI. Before: a MIDI controller cannot move a parameter. After: a CC moves any knob through a midi-cc node. User-value tier 3 of 4 (synth-design.md section 17). Rollback: revert the pull request; a document saved with the new node type is then refused by the import pipeline with its unknown-type sentence, never dropped silently, so a revert after a release ships it keeps the registry entry and removes only the UI. Merged plan of the component follow-up (2026-10-30): 'Learn MIDI controller' is an item of N004's menu, bound by J001's ADR 0058 note: the controller is a midi-cc node on a typed CONTROL edge, never a write of the stored value."
 why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
 scope:
   - "src/js/midi"
@@ -22,6 +22,8 @@ scope:
 depends_on:
   - "V502"
   - "K076"
+  - "N004"
+  - "J001"
 acceptance_criteria:
   - "tests/unit/midi-cc-source.test.mjs, failing on the merge base: a CC value 0-127 maps to the CONTROL range 0..1 at the event's time with the stated smoothing, learn binds the next CC, and without Web MIDI the node compiles to a stated unavailable status."
   - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: no Web MIDI (stated status); a CC on another channel."
@@ -41,4 +43,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-10-30

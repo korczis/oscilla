@@ -7,7 +7,7 @@ title: "Session grid: tracks by scenes, clip launch quantised to the bar"
 slug: session-grid-tracks-by-scenes-clip-launch-quantised-to-the-b
 priority: p2
 profile: implementation
-objective: "Lands as feat(studio). Size: big; it is split further into landable pull requests when started, each with its own fail-first test. timeline.session = { scenes, slots } under the schema version V601 introduces (a stated migration from it), clip launch and scene launch quantised to the next bar on the audio clock, a launched clip looping on the one transport, and the arrangement timeline as the other view; follow actions later. Before: clips play only on the timeline. After: a session grid launched on the bar. User-value tier 3 of 4 (synth-design.md section 17). Rollback: revert the pull request together with its migration; documents saved under its schema are refused by older builds with the schema sentence."
+objective: "Lands as feat(studio). Size: big; it is split further into landable pull requests when started, each with its own fail-first test. timeline.session = { scenes, slots } under the schema version V601 introduces (a stated migration from it), clip launch and scene launch quantised to the next bar on the audio clock, a launched clip looping on the one transport, and the arrangement timeline as the other view; follow actions later. Before: clips play only on the timeline. After: a session grid launched on the bar. User-value tier 3 of 4 (synth-design.md section 17). Rollback: revert the pull request together with its migration; documents saved under its schema are refused by older builds with the schema sentence. Merged plan of the component follow-up (2026-10-30): Slots and scenes are W012's kinds."
 why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
 scope:
   - "src/js/studio/schema.js"
@@ -24,6 +24,7 @@ depends_on:
   - "K099"
   - "V601"
   - "Q019"
+  - "W012"
 acceptance_criteria:
   - "tests/unit/studio-session.test.mjs, failing on the merge base: a launch requested mid-bar starts at the next bar's frame; a scene launch starts every slot of the scene on the same frame; a document of the previous schema migrates with its timeline unchanged and states the migration."
   - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: a launch requested in the last frame of a bar (next bar)."
@@ -42,4 +43,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-10-30

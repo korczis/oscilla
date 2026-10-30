@@ -6,7 +6,7 @@ title: "Studio Inspector parameters on the knob"
 slug: studio-inspector-parameters-on-the-knob
 priority: p2
 profile: implementation
-objective: "Lands as feat(studio-ui). Under Q020's answer, the Studio Inspector's continuous node parameters use the K058 knob (one control for one parameter definition); enum and list parameters keep their Pro controls. Before: the Inspector uses sliders. After: Inspector knobs, under Q020. User-value tier 3 of 4 (synth-design.md section 17). Rollback: revert the pull request; no saved state depends on it."
+objective: "Lands as feat(studio-ui). Under Q020's answer, the Studio Inspector's continuous node parameters use the K058 knob (one control for one parameter definition); enum and list parameters keep their Pro controls. Before: the Inspector uses sliders. After: Inspector knobs, under Q020. User-value tier 3 of 4 (synth-design.md section 17). Rollback: revert the pull request; no saved state depends on it. Merged plan of the component follow-up (2026-10-30): The Inspector's parameters are N008's panel; under Q020's answer this slice passes surface 'instrument' to viewFor, one argument, so it waits on neither E004 nor F008; moving the Inspector's chrome to Pro stays F008's."
 why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
 scope:
   - "src/js/ui/studio"
@@ -18,8 +18,7 @@ scope:
 depends_on:
   - "Q020"
   - "K058"
-  - "E004"
-  - "F008"
+  - "N008"
 acceptance_criteria:
   - "tests/unit/inspector-knobs.test.mjs, failing on the merge base: every continuous parameter of every registry type renders as a knob with the registry's unit and range."
   - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: an enum parameter (stays a select)."
@@ -37,4 +36,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-10-30

@@ -6,13 +6,13 @@ title: "Component contract: every parameter declared, automatable, modulatable a
 slug: component-contract-every-parameter-declared-automatable-modu
 priority: p1
 profile: implementation
-objective: "Lands as test(studio). A contract over every registry parameter and every instrument control: each declares key, label, unit, range, default, mapping, automatable, modulatable and its deep-link address (#m=studio&node=<id>&param=<key>); every continuous control on a Synth, mixer or engine card is bound to exactly one declared parameter or edge property; a parameter that is neither automatable nor modulatable states why in its definition. A new control without a declared parameter, or a declared parameter with no control on its box face (every parameter is shown, owner decision of 2026-10-29), fails. Before: parameters are declared per node type without a contract over every control. After: every parameter is declared, shown, automatable or modulatable or says why, and linkable. User-value tier 2 of 4 (synth-design.md section 17). Rollback: revert the pull request; no saved state depends on it."
+objective: "Lands as test(studio). A contract over every registry parameter and every instrument control: each declares key, label, unit, range, default, mapping, automatable, modulatable and its deep-link address (#m=studio&node=<id>&param=<key>); every continuous control on a Synth, mixer or engine card is bound to exactly one declared parameter or edge property; a parameter that is neither automatable nor modulatable states why in its definition. A new control without a declared parameter, or a declared parameter with no control on its box face (every parameter is shown, owner decision of 2026-10-29), fails. Before: parameters are declared per node type without a contract over every control. After: every parameter is declared, shown, automatable or modulatable or says why, and linkable. User-value tier 2 of 4 (synth-design.md section 17). Rollback: revert the pull request; no saved state depends on it. Merged plan of the component follow-up (2026-10-30): Its declaration half (the fields and staticReason) is N001's; this slice keeps the check that every synth-card control is bound to one spec and every spec is shown on its card."
 why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
 scope:
   - "src/js/studio/registry.js"
   - "src/js/studio/nodes"
   - "src/js/ui/synth"
-  - "src/js/ui/controls"
+  - "src/js/ui/kinds/param"
   - "docs/v31/studio-model.md"
   - "tests/unit/parameter-contract.test.mjs"
   - "tests/browser/synth-panel.cjs"
@@ -20,6 +20,7 @@ scope:
   - "dist"
 depends_on:
   - "K062"
+  - "N001"
 acceptance_criteria:
   - "tests/unit/parameter-contract.test.mjs, failing on the merge base: every registry parameter declares the fields above; a fixture control bound to no parameter fails; a fixture parameter with no control on its card fails; a fixture parameter marked neither automatable nor modulatable without a reason fails."
   - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: a control bound to no parameter; a parameter with no control; a parameter neither automatable nor modulatable without a reason."
@@ -37,4 +38,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-10-30

@@ -6,11 +6,10 @@ title: "Knob: a flat rotary control that always shows its value and unit"
 slug: knob-a-flat-rotary-control-that-always-shows-its-value-and-u
 priority: p1
 profile: implementation
-objective: "Lands as feat(ui). First a resolution note on ADR 0061: Flowbite Pro has no rotary control, piano keyboard, patch-cable layer or XY surface, so these instrument visuals are inline SVG and Tailwind utilities inside Pro cards, with no new stylesheet, no change of the ratchet's measure and no osc-* class (the domain-view exemption of project.ui-uses-flowbite-pro is not widened); the knob's control is a Pro range input (role=slider and keyboard natively) under its SVG arc. D11 (owner, AskUserQuestion, 2026-10-29, recorded by Q018): src/js/ui/controls/knob.js holds a pure value model (value to angle, drag delta to value, step and fine step, log mapping for log parameters, parse and format with units from the registry formatters) and a view: a flat 270-degree SVG arc with label and always-visible value and unit in tabular numerals. Vertical drag (200 px full range, Shift x 0.1), no wheel unless focused with Ctrl or Cmd; ArrowUp/Right and ArrowDown/Left one step, Shift a tenth, PageUp/PageDown 10 % of the range, Home/End the bounds; Enter or a long-press opens a typed entry that accepts unit forms and refuses an out-of-range value with validateParamValue's reason; double-click or double-tap resets to the registry default; the ContextMenu key opens the knob menu. role=slider with aria-valuemin, max, now, aria-valuetext with value and unit, aria-label naming module and parameter, aria-describedby for modulation and disabled reasons; at least 44 px on a coarse pointer; values never tween and the modulation dot hides under prefers-reduced-motion. Its first user is a demonstration-free host: the Studio Inspector is untouched (Q020); the knob reaches the page through K062. Before: no rotary control exists; D5 bans one. After: a flat knob that always shows value and unit, by drag, keys, touch and typed entry. User-value tier 1 of 4 (synth-design.md section 17). Rollback: revert the pull request; no saved state depends on it."
+objective: "Lands as feat(ui). The ADR 0061 resolution note for the instrument visuals is J001's (one note for every instrument kind; the domain-view exemption of project.ui-uses-flowbite-pro is not widened); the knob's control is a Pro range input (role=slider and keyboard natively) under its SVG arc. D11 (owner, AskUserQuestion, 2026-10-29, recorded by Q018): src/js/ui/kinds/param/knob.js holds only value-to-angle and the view, over G003's parameter model (parse, format, log mapping) and N002's interaction model (step, fine step, drag, reset), as a view of N003's control interface whose browser contract it runs: a flat 270-degree SVG arc with label and always-visible value and unit in tabular numerals. Vertical drag (200 px full range, Shift x 0.1), no wheel unless focused with Ctrl or Cmd; ArrowUp/Right and ArrowDown/Left one step, Shift a tenth, PageUp/PageDown 10 % of the range, Home/End the bounds; Enter or a long-press opens a typed entry that accepts unit forms and refuses an out-of-range value with validateParamValue's reason; double-click or double-tap resets to the registry default; the ContextMenu key opens the knob menu. role=slider with aria-valuenow as the position 0..1000 (N003), aria-valuetext with value and unit, aria-label naming module and parameter, aria-describedby for modulation and disabled reasons; at least 44 px on a coarse pointer; values never tween and the modulation dot hides under prefers-reduced-motion. Its first user is the Studio Inspector's panel (N008) through K096 when Q020 is answered (a); otherwise it reaches the page through K062. Before: no rotary control exists; D5 bans one. After: a flat knob that always shows value and unit, by drag, keys, touch and typed entry. User-value tier 1 of 4 (synth-design.md section 17). Rollback: revert the pull request; no saved state depends on it. Merged plan of the component follow-up (2026-10-30): Wave 1: it needs F001, not F002 (the arc is inline SVG with literal Tailwind utilities; the range input under it is visually hidden, so F002's form base styles do not change it). The modulation dot is N006's (measured), never read from AudioParam.value; the band is N005's."
 why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
 scope:
-  - "src/js/ui/controls"
-  - ".ai/repo/adrs"
+  - "src/js/ui/kinds/param"
   - "tests/unit/ui-flowbite-pro-baseline.json"
   - "tests/unit/knob.test.mjs"
   - "tests/browser/knob.cjs"
@@ -18,10 +17,13 @@ scope:
   - "dist"
 depends_on:
   - "Q018"
-  - "F002"
   - "K075"
+  - "F001"
+  - "J001"
+  - "N002"
+  - "N003"
 acceptance_criteria:
-  - "The ADR 0061 resolution note is recorded before any code of this slice lands, and tests/unit/ui-flowbite-pro.test.mjs passes with the knob added (no new stylesheet, selector or class name outside Tailwind and Pro)."
+  - "J001's ADR 0061 resolution note is on main before any code of this slice lands, and tests/unit/ui-flowbite-pro.test.mjs passes with the knob added (no new stylesheet, selector or class name outside Tailwind and Pro)."
   - "tests/unit/knob.test.mjs, failing on the merge base: the value model round-trips value, angle and drag for linear and log parameters (a 1 px drag on a 20 Hz-20 kHz cutoff moves it by the same ratio anywhere on the range), Shift divides the step by 10, PageUp moves 10 %, Home and End reach the bounds, a typed '1.2k' on a Hz parameter is 1200 and '30k' is refused with the registry's reason, and formatting states the unit for every unit the registry uses today (none, cents, dB, Hz, logical gain, s, samples) and for each unit an instrument slice adds (semitones, octaves, %, ms), which that slice registers here."
   - "A drag is one gesture: the knob emits one commit per pointer-up and only live previews in between; a key press or a typed commit is one commit; nothing commits while a typed entry is open and Escape there cancels the typing only, never the page's Escape meaning beyond it."
   - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: an out-of-range typed value; a wheel event without focus and modifier; Escape in the typed entry; a value tween."
@@ -38,4 +40,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-10-30

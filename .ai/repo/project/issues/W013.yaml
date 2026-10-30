@@ -1,0 +1,49 @@
+id: W013
+milestone: M103
+serves:
+- "instrument-kinds#daw-surfaces"
+title: "Channel strip kind: fader, pan, mute, solo, sends, inserts and the shared meter, first on the Studio's Master strip"
+slug: channel-strip-kind-fader-pan-mute-solo-sends-inserts-and-the
+priority: p2
+profile: implementation
+objective: "Lands as feat(studio-ui). src/js/ui/kinds/channel-strip.js: a role=group per node (channel, bus or master) with the vertical slider and the knob of the params-controls part (one descriptor model, G003), mute and solo aria-pressed, send knobs, an ordered insert list, and its W003 meter at strip density; a control the node lacks is absent, not disabled; the master strip states the ceiling (wording per p05 T001); 88 px strips, four at 390 px, scrolling inside the mixer card. Events build NODE_PARAM_SET (gain, pan, mute, solo, sends) and one batch for an insert move (K108). First consumer: the Master node's strip in the Studio (its level parameter and the output meter); K108 then renders every channel and bus through it. Before: VERIFIED levels are set per node in the Inspector, with no strip and no meter. After: one strip kind. Negative cases: a control the node lacks (absent); a fader value beyond the parameter's range (refused); an insert move closing a cycle (refused with the no-silent-feedback sentence). Rollback: revert. Merged plan of the component follow-up (2026-10-30): Its pan is the K058 knob and its fader N003's slider view; mute and solo are buttons (no M or S key). K108 depends on W013."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs, knowledge and interlinking, and add more; add p5.js, WebGL and interactivity, and deploy; a full DAW, a full sequencer and a full piano, everything interlinked, clickable, parameterized and joined; knobs, sliders and control panels done one generic way, integrated with Majordomus; the landing easy to use, easy to extend and open to hack; mobile first. The architecture still binds: one AudioEngine, the Studio model canonical, typed ports, one offline file under the 1.2 MB gzip budget, the cockpit identity, no fake science, Flowbite Pro (ADR 0061). Design: the instrument-kinds design of 2026-10-29 (scratchpad components-followup/components-new.md), on the component-system design (G001-G019) and the synth and studio-siggen drafts of the same day, facts checked against origin/main cdda563c."
+scope:
+- src/js/ui/kinds/channel-strip.js
+- src/js/ui/catalog/kinds/channel-strip.js
+- src/js/ui/studio/inspector.js
+- tests/unit/ui-kind-channel-strip.test.mjs
+- tests/browser/ui-kinds.cjs
+- tests/unit/ui-flowbite-pro-baseline.json
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- W003
+- G003
+- N003
+- K058
+- F001
+acceptance_criteria:
+- "tests/unit/ui-kind-channel-strip.test.mjs fails on the merge base: each control builds one NODE_PARAM_SET on its key; a control the node lacks is absent; the fader's dB mapping round-trips; the meter is W003's kind (no second meter)."
+- "Negative cases, each asserted by a test that fails on the merge base: the three of the objective."
+- "Definition of done, tested: tests/browser/ui-kinds.cjs moves the Master fader by pointer drag, by arrows and by a hasTouch drag, waits with until() (deadline 'master level in model', 2 s) for the node's level and the strip's valuetext, then plays and waits for the strip meter to rise (deadline 'master strip meter live', 3 s). The check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, runs at 1536x1024 and 390x844, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, extends: W003, G003 and N003's control interface (the pan knob and the fader are N003 views of channel parameter specs; the strip declares no knob or slider of its own); interlinks: the strip opens its Studio node and, after K111, its track header."
+- "Definition of done, interactivity: every control by pointer, keyboard and touch."
+- "Every Studio edit it builds is one plain action the owning surface dispatches through the one Studio store; a continuous gesture is one history entry and undo and redo restore the exact serialized model; a refusal leaves model, history and runtime unchanged and the kind states the store's sentence once in the polite live region (project.studio-model-is-canonical, project.typed-ports)."
+- "Definition of done, docs, menus and routes: the kind's declaration names its docs, links and tests; docs/ui-catalog.md (G014) lists it; the Keyboard shortcuts dialog lists its keys; tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Its trace entry in scripts/ui-catalog/trace/kinds.mjs names the intent criterion, this issue, its rules, ADRs and tests, each resolved by the trace check, for the Majordomus knowledge projection."
+- "The kind's modules pass W001's static scan: no import of src/js/studio/actions.js, a store, sources.js or a lab module; no dispatch or owner writer called; no AudioContext, AudioNode or worklet created (project.audio-engine-discipline v2: one AudioEngine); no requestAnimationFrame, setInterval or setTimeout outside src/js/charts/frame-loop.js; no allocation in a frame callback (1000 ticks keep the same typed arrays) and frameSubscriberCount() returns to its value after destroy()."
+- "Its chrome (buttons, button groups, popovers, dropdowns, inputs) is markup adapted from the matching Flowbite Pro block and names its flowbite-pro reference.md section; its instrument surface is a domain view under ADR 0061 decision 3 as J001's ADR 0061 resolution note records it: inline SVG or canvas and Tailwind utilities inside a Pro card, no stylesheet, no selector, no osc-* class token, no el.style write or style attribute; no osc-* name in the ratchet record rises and the domain views' stylesheets gain nothing (project.ui-uses-flowbite-pro, project.visual-identity-lock v2, ADR 0061; node scripts/ui-flowbite-pro-record.mjs --check and node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "No input path of the build gains a components, widgets, ui-kit or design-system segment (the COMPONENT_LIBRARY check of scripts/ui-flowbite-pro-measure.mjs): declarations live in src/js/ui/catalog/kinds, views in src/js/ui/kinds."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat change it carries a unit test that fails on the merge base (project.fail-first)."
+- "scripts/size-report.mjs shows at most 3 KB gzip added, compiled CSS included, with the base and head figures in the pull request body, inside the component line's cap Q037 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+- node --test tests/unit/ui-kind-channel-strip.test.mjs
+- node tests/browser/ui-kinds.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-30'
