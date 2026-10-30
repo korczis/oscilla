@@ -31,7 +31,7 @@ deletes nothing; `src/js/studio/library.js`), exported as `.oscilla-studio.json`
 back. Opening a project replaces the document; inserting a patch adds it with new ids as one
 undo step; nothing saved is overwritten silently, and a malformed, hostile or newer-schema
 file is refused with the reason. Dirty state follows semantic content only. Six templates
-(Basic Tone, Subtractive Synth, Sweep Sequence, Filter Automation, Stereo Beat, Measurement
+(Basic Tone, Subtractive Synth, Sweep Sequence, Stereo Beat, Filter Automation, Measurement
 Sweep) start a document, each pinned by its hash.
 
 Proven by `npm test` (`tests/unit/v31-studio-patches.test.mjs`,

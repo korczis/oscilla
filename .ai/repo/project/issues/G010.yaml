@@ -1,0 +1,57 @@
+id: G010
+milestone: M086
+serves:
+- "component-system#embedded-cockpit"
+title: "The embedded Studio draws with the full Studio's renderer at a readable compact density"
+slug: the-embedded-studio-draws-with-the-full-studio-s-renderer-at
+priority: p2
+profile: implementation
+objective: "Lands as feat(studio-ui). D7, U2-U6 and U15, and the identity P04 slice B asks for: the embedded Studio has its own renderer, its chips are 10 px uppercase cut at 14 characters ('TRANSFER ANAL...' in a shipped template), all one grey (osc-sc-node--<category> has no rule), with no state. createGraphEditor gains svc.density ('full' | 'compact') and svc.layout (a pure layout provider): the embedded Studio mounts the same editor on the same store with density compact and the existing compactLayout (the Signal Path's left to right order; its top-to-bottom form below 640 px is new, a transposition option of compactLayout in graph-layout.js, because the function has no orientation today), so the same nodeCard and edgeView projections draw a 120 x 40 px card (title in mixed case at 12 px; one line at 11 px with the category label as text, as on the full card, and the summary (spec sections 32 and 167: text, never colour alone; no new category colour); the status flags of nodeCard: unconnected, error, offline, bypassed, selected) and the typed ports of project.typed-ports on its edges, with G004's edge table. Measured in Node on the six shipped templates: compactLayout needs at most 4 columns x 2 rows, 552 x 88 px at 120 x 40 cards with 24 px gaps; once F002's sidebar (w-64, open at 1536 px) and P002's two-column bottom row are in place, the half-width card's inner width is about 584 px, so the graph spans the card and the level and scope sit in the toolbar row (G011): a meter column beside the graph would leave about 392 px and 4 of the 6 templates would not fit (the design's compact-fit-shell measurement in Node, 2026-10-29). In compact density the editor's projection reads layout positions that are never written: it dispatches SELECTION_CHANGE, and NODE_PARAM_SET only for the face parameters Q035 allows, and never NODE_MOVE, VIEW_SET, EDGE_ADD, EDGE_UPDATE, EDGE_REMOVE, NODE_ADD, NODE_REMOVE or NODE_RENAME (spec section 150: an automatic layout never moves a user graph, and the full Studio's stored view.graph is not the embedded view's); drag, rubber-band selection, cable drawing, quick-add, wheel pan and zoom are off there, and a gesture that would need one says 'Open in Studio to edit the graph'. compact.js's chip renderer and its osc-sc-* node and link selectors are deleted; compact density is Tailwind utilities on the editor's own elements, because studio.css may not gain a rule. When V619's face declarations are on main, the card's summary leads with the first face parameter. Before: VERIFIED (inventory 3.2, 3.4). After: one renderer, a readable card with category and state. Negative cases: a 40-node graph (the card shows an overview with the count and Open in Studio, never overlapping cards), a 60-character name (ellipsis with the whole name in the accessible name), an unknown node type (drawn as unknown, stated). Rollback: revert the merge commit; the model is untouched."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: \"the embedded Studio is ugly as hell\"; components in general must be generic, linkable, traceable, composable, unified, documented, dynamic, generated and interlinked; \"everything must be interlinked with everything\"; improve the main page and the first experience, deploy often. The owner's evolution prompt pack (MASTER, P02, P04, P06) binds it: the dark technical cockpit is locked, shared primitives only where duplication is proven, no new framework, generated docs only where deterministic, no decorative wires. Findings: the UI component inventory of 2026-10-29 (D1-D14 duplication, U1-U15 on the embedded Studio, measured on origin/main b67d1e58, v3.13.0); design: the component-system design of 2026-10-29 (scratchpad components/design.md)."
+scope:
+- src/js/ui/studio/graph-editor.js
+- src/js/ui/studio/graph-view.js
+- src/js/ui/studio/graph-layout.js
+- src/js/ui/studio/compact.js
+- src/js/ui/studio/workspace.js
+- src/styles/studio.css
+- tests/unit/studio-compact-density.test.mjs
+- tests/unit/v4-one-studio-store.test.mjs
+- tests/browser/v31-studio-graph.cjs
+- tests/browser/studio-cockpit.cjs
+- tests/browser/live-smoke.cjs
+- tests/visual/studio
+- tests/unit/ui-flowbite-pro-baseline.json
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- G004
+- G006
+- F002
+- Q035
+- Q037
+- V619
+- V632
+acceptance_criteria:
+- "tests/unit/studio-compact-density.test.mjs fails on the merge base: compact.js defines no node or cable renderer; the embedded view is createGraphEditor with density compact; for each shipped template the laid-out cards do not overlap and fit 576 x 136 px (the half-width card at 1536 px with F002's sidebar open, less a margin) and 342 x 260 px (phone, transposed); a card's text is at least 11 px."
+- "With density compact, a fixture store records every dispatched action through a drag on a card, a drag on the canvas, a wheel turn, a drag from a port and Delete: only SELECTION_CHANGE (and NODE_PARAM_SET from a face parameter if Q035 allows it) is dispatched, the model's node positions and view.graph are unchanged, and each refused gesture states 'Open in Studio to edit the graph'."
+- "tests/browser/live-smoke.cjs keeps finding the embedded Studio after the change; the change to what it reads is guarded and carries a reviewer's verdict."
+- "Definition of done, extends: graph-editor.js, graph-view.js nodeCard and edgeView, and compactLayout, which exist; no second renderer remains."
+- "Definition of done, interlinks: a card's double-click or Enter opens the node in the full Studio (G012); the card's category links to its node reference once V619 generates it."
+- "Definition of done, interactivity: category, state and selection are drawn from the model and the runtime truth, live."
+- "Definition of done, docs, menus and routes: docs/v31/user-guide.md and docs/ui-audit.md describe the embedded Studio as it is; the V632 text names Playground and Sequencer as its hosts. tests/README.md has a row for each new test; the component's catalogue declaration (G001) names its docs, links and tests; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: tests/browser/studio-cockpit.cjs (new, wired into npm run test:studio) opens every shipped template by link, measures every card's text size, overlap and clipping inside the card as rendered (its width read from the page, never assumed) at 1536x1024 and 390x844 in both themes, selects a card by pointer, keyboard and a hasTouch tap, and waits with until() (deadline 'compact card selected', 2 s) for the same selection in the full Studio's store. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit, and the release that carried it is recorded when the milestone is verified."
+- "The pull request carries a reviewer's verdict for the guarded paths it touches (project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+- "On Pro (after F002): its chrome is markup adapted from the matching Flowbite Pro block (the template names its flowbite-pro reference.md section), recorded as migrated, never pending; it adds no osc-* class token, no legacy vocabulary use and no selector, removes the legacy ones it replaces, and the domain views' stylesheets gain nothing (compact density is Tailwind utilities on the domain view's own elements); the record's debt falls (project.ui-uses-flowbite-pro, project.visual-identity-lock v2, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "scripts/size-report.mjs shows at most 3 KB gzip added, with the base and head figures in the pull request body, inside the cap Q037 records (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/studio-compact-density.test.mjs tests/unit/v4-one-studio-store.test.mjs
+- node tests/browser/studio-cockpit.cjs
+- node tests/browser/v31-studio-graph.cjs --only compact-sync
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

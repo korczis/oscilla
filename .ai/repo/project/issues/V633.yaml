@@ -1,0 +1,38 @@
+id: V633
+milestone: M080
+serves:
+- "studio-box-system#compile-and-playback"
+title: Every new graph gesture patches the running graph to what a fresh compile builds
+slug: every-new-graph-gesture-patches-the-running-graph-to-what-a
+priority: p2
+profile: implementation
+objective: "P04 slice E (compile and playback). Lands as test(studio) with any fix it forces as fix(studio). For each gesture V611-V614 add (capture connect, insert, fan-out, duplicate, box mute) applied while the transport plays, tests/unit/studio-gesture-runtime.test.mjs checks on the recording mock context that the incremental patcher (V415) leaves the same runtime nodes and connections as a fresh compile of the resulting model, and tests/browser/v31-studio-runtime.cjs checks the audible effect offline: inserting a Gain of 0.5 lowers the render by 6.02 dB within 0.1 dB, fan-out to two Spectrum nodes feeds both, a muted box contributes nothing, and the engine node census is 0 after stop."
+why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings S1-S14 measured on origin/main b67d1e58)."
+scope:
+- tests/unit/studio-gesture-runtime.test.mjs
+- tests/browser/v31-studio-runtime.cjs
+- src/js/studio/runtime.js
+- src/js/studio/compiler.js
+- tests/README.md
+- dist
+depends_on:
+- V612
+- V613
+- V614
+acceptance_criteria:
+- "Before: VERIFIED: v31-studio-compiler.test.mjs proves refusal before Web Audio and that a failed transaction leaks nothing; INFERRED: the incremental patcher (V415) has not been checked against the gestures V612-V614 add, because they do not exist yet."
+- "After: after each new gesture while playing, the patched runtime graph equals a fresh compile of the same model, and the offline render shows the intended audio effect."
+- "Negative cases: a gesture refused by validation leaves the runtime revision and node set unchanged; a muted box contributes nothing to the render; the engine node census is 0 after stop following every gesture."
+- "Rollback: revert the merge commit. Nothing changes the schema, a studioHash or a stored record, so documents saved while it was live load unchanged after the revert."
+- A refused gesture leaves the runtime revision and node set unchanged; a gesture whose patch fails keeps the last valid graph and leaks nothing (the V415 contract).
+- "src/js/studio is guarded: a fix carries a reviewer's verdict and a unit test that fails on the merge base."
+- "Definition of done: extends tests/unit/v31-studio-compiler.test.mjs; cross-links the graph gestures to the runtime and the offline render; dynamics: the probe (V616) reads the expected level after each gesture; docs: docs/v31/compiler.md lists the gestures the patcher is proven for; tested: the browser check drives each gesture by pointer, keyboard and touch while playing and waits with until() (deadline 'runtime revision after <gesture>', 5 s); deployed with the next release."
+- "Wave 1: it adds no class token, selector, markup surface or inline style, so the Flowbite Pro record does not change: node scripts/ui-flowbite-pro-record.mjs --check passes with no rewrite and node --test tests/unit/ui-flowbite-pro.test.mjs passes (project.ui-uses-flowbite-pro); live drawing is on a canvas, a domain view."
+validation:
+- node --test tests/unit/studio-gesture-runtime.test.mjs
+- node tests/browser/v31-studio-runtime.cjs --only gestures
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

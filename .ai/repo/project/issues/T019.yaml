@@ -1,0 +1,30 @@
+id: T019
+milestone: M073
+serves:
+  - "v3-measure#readout-labels"
+title: "The impulse-response noise tail is stated as an upper bound"
+slug: the-impulse-response-noise-tail-is-stated-as-an-upper-bound
+priority: p3
+profile: implementation
+objective: "Truth-table rows MSR-26 (scratchpad p05/truth-table.md). For full-overlap-tail the summary reads \"tail level ≤ X dB re peak (noise or unfinished decay)\" and the note gives the window it used (T1 to T2 ms after the peak) and says a decay still running there counts as noise, so lengthen the post-roll. No decay detector and no confidence figure."
+why: "P05 audit of origin/main b67d1e58 (v3.13.0): For a noise-free system whose decay outlasts the post-roll (T60 2 s, 0.5 s post-roll) the summary says \"noise tail −52 dB re peak\" and the note only \"Noise tail estimate: full-overlap-tail.\" The upper-bound caveat lives in impulse-response.js:53-55 and docs/v3/algorithms.md:800-802."
+scope:
+  - "src/js/measurement/views/ir-chart.js"
+  - "src/js/measurement/impulse-response.js"
+  - "tests/unit/readout-labels-ir-tail.test.mjs"
+  - "tests/README.md"
+  - "dist"
+acceptance_criteria:
+  - "Fail-first fixture: tests/unit/readout-labels-ir-tail.test.mjs: fixture F4 summary or notes carry the upper-bound wording and the window; fails on the merge base."
+  - "Negative cases, each asserted: A null floor still reads \"not available\"; the farina-inverse method label unchanged; stored IR results unchanged."
+  - "Revertible on its own: Revert: copy and one exposed field."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "The pull request touches a guarded path and carries a reviewer-written .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+  - "tests/README.md has a row for each new test; this issue does not edit docs/CLAIMS.yaml or the intent (T027 does)."
+validation:
+  - "npm test"
+  - "npm run verify"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

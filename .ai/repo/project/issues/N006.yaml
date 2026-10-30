@@ -1,0 +1,43 @@
+id: N006
+milestone: M113
+serves:
+- "parameter-controls#honest-modulation-automation"
+title: "Live modulated value: a dot drawn only from a measured tap of the modulation signal, never from AudioParam.value"
+slug: live-modulated-value-a-dot-drawn-only-from-a-measured-tap-of-t
+priority: p2
+profile: implementation
+objective: "Lands as feat(studio). Measured on 2026-10-29 in Chromium, Firefox and WebKit (Playwright builds): AudioParam.value returns the intrinsic value without connected inputs (0.25 for a gain whose ConstantSource input makes the output 0.75), so a dot read from it would show the unmodulated value as modulated (project.no-fake-science). The dot instead comes from one AnalyserNode that sums the CONTROL edges into the parameter, created and disposed inside the engine's accounting (project.audio-engine-discipline v2) through the probe module of V616 and K064 (src/js/studio/probe.js), only for a focused or hovered control and at most four visible modulated controls (a stated cap), only while the transport plays; it is read once per frame through K036's frame loop as a non-essential subscriber into a preallocated Float32Array(128) (no allocation per frame), and drawn at intrinsic + mean of the last block (intrinsic: laneValueAt under a lane, else the base), labelled 'measured from the modulation signal', hidden under prefers-reduced-motion. No tap (cap reached, transport stopped, context closed): no dot and no claim; the band of N005 stays. Before: K058, V620 and K076 describe a dot 'read from the runtime' that has no source. After: a measured dot or none. Negative cases: a fifth modulated control (no tap, no dot), transport stopped, the census 0 after stop, the dot never equal to the intrinsic value while modulation is non-zero. Rollback: revert; no saved state depends on it."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs, KB and interlinking; full DAW, full sequencer, full piano, everything interlinked, clickable, parameterized and joined; knobs, sliders and control panels in one generic way, integrated with Majordomus; every element tweakable; mobile first; the landing easy to use, easy to extend and open to hack. Owner decisions: knobs that always show value and unit (D11, Q018, the ADR 0058 note of 2026-10-29), every parameter on the box face (Q031), the generator in its own workspace (Q033). Design: the params-controls part of the component follow-up of 2026-10-29 (scratchpad components-followup/params-controls.md), checked against origin/main b67d1e58 and the head of plan pull request #285 (c0a631b2)."
+scope:
+- src/js/studio/probe.js
+- src/js/studio/runtime.js
+- src/js/audio
+- src/js/ui/kinds/param
+- tests/unit/modulation-tap.test.mjs
+- tests/browser/v31-studio-graph.cjs
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- N005
+- V616
+- K036
+acceptance_criteria:
+- "tests/unit/modulation-tap.test.mjs fails on the merge base: the tap planner opens at most four taps, closes each on blur, stop and context close, and computes intrinsic + mean from a supplied block; the frame subscriber allocates nothing per call (a counted-allocation fake)."
+- "Definition of done, tested: tests/browser/v31-studio-graph.cjs builds a fixture (a Constant source at 0.5 routed to a gain at 0.25), plays, focuses the gain, and waits with until() (deadline 'modulated dot measured', 3 s) for the dot's described value to read 0.75 within 1 % in every gate browser; it fails if it reads 0.25; after stop the engine's node census returns to 0. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), runs at 390x844 and at 1536x1024, adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, extends: V616's probe tap and K036's frame loop, used for one more reader."
+- "Definition of done, interlinks: the dot's description names the measured route sum and opens the probe view of V616."
+- "Definition of done, interactivity: the dot moves with the sound while playing, by any input that changes the routes."
+- "Definition of done, docs, menus and routes: docs/v31/user-guide.md states that the dot is measured, its cap of four and when it is absent. tests/README.md has a row for each new test; the parameter's or view's catalogue entry names its docs, links and tests (G001 trace part); dist is rebuilt and npm run build:check passes."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit, and the release that carried it is recorded when the milestone is verified."
+- "Its scope includes guarded paths (src/js/studio, src/js/audio; scripts/review-verdict.mjs GUARDED), so the pull request carries a reviewer's .ai/repo/reviews/<pr>.yaml written by a session that did not build it (project.review-verdict); as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "On Pro (after F002): its chrome is markup adapted from the matching Flowbite Pro block (named by its flowbite-pro reference.md section) with Tailwind class lists only; the knob arc and the band are inline SVG with Tailwind utilities under the ADR 0061 resolution note of K058; it adds no osc-* class token, no legacy vocabulary use and no selector, and the domain views' stylesheets gain nothing; the record's debt does not rise (project.ui-uses-flowbite-pro, project.visual-identity-lock v2, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "scripts/size-report.mjs shows at most 0.8 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the line's sum stays within its row of the cap Q037 records, under the 1.2 MB gzip budget of scripts/build-config.mjs (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/modulation-tap.test.mjs
+- node tests/browser/v31-studio-graph.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

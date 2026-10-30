@@ -64,6 +64,8 @@ accepted` lists them. The rest stay `proposed`, each for a stated reason:
 - 0059: new on 2026-10-18 (pull request #197) and `extracted`; it amends 0028.
 - 0060: new on 2026-10-18 (issue P004); a decision taken under the owner's delegation
   (Q003), which the owner may override, so its acceptance is the owner's.
+- 0063: new on 2026-10-29 (the G1 coherence contract); proposed, with two open questions
+  for the owner, and nothing implements it yet.
 
 On 2026-10-28 the owner ordered Flowbite Pro for the UI of every project; ADR 0061 records
 that order as an accepted decision (its acceptance note quotes it) and supersedes the bullet of

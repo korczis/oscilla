@@ -1,0 +1,32 @@
+id: T018
+milestone: M073
+serves:
+  - "v3-measure#readout-labels"
+  - "v3-measure#readout-states"
+title: "The response cursor names its spread statistic and shows the SNR floor as a floor"
+slug: the-response-cursor-names-its-spread-statistic-and-shows-the
+priority: p2
+profile: implementation
+objective: "Truth-table rows MSR-19, MSR-21, MSR-12 (scratchpad p05/truth-table.md). The cursor says \"±x dB (1 SD, N runs)\" for mean aggregation and \"MAD x dB (unscaled), p10-p90 lo…hi dB\" for median, the limits taken from the drawn envelope; a floored point reads \"SNR ≤ −60 dB (not above the noise estimate)\"; the spread uses the table's round-up rule. Stored values keep the -60 encoding (ADR 0024)."
+why: "P05 audit of origin/main b67d1e58 (v3.13.0): With median aggregation the cursor prints the unscaled MAD as \"Run spread ±0.3 dB (5 runs)\" beside a drawn p10-p90 envelope of -0.84/+0.98 dB. Where band power does not exceed the noise estimate the per-point SNR is stored as the -60 dB floor and printed as \"SNR −60 dB\" (58 of 479 points in fixture F2). The same data reads \"±0.0 dB\" at the cursor and 0.1 dB in the table."
+scope:
+  - "src/js/measurement/views/response-chart.js"
+  - "tests/unit/readout-labels-response-cursor.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "T017"
+acceptance_criteria:
+  - "Fail-first fixture: tests/unit/readout-labels-response-cursor.test.mjs: fixture F5 (5 runs offset 0, +0.2, −0.3, +1.5, −1.2 dB, median) names the statistic and its limits equal the envelope at that index; fixture F2 floored point has no bare \"SNR −60 dB\". Fails on the merge base."
+  - "Negative cases, each asserted: Mean aggregation keeps a ± value equal to the SD; points above the floor print their number; experiment JSON and CSV byte-identical."
+  - "Revertible on its own: Revert: readout text."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "The pull request touches a guarded path and carries a reviewer-written .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+  - "tests/README.md has a row for each new test; this issue does not edit docs/CLAIMS.yaml or the intent (T027 does)."
+validation:
+  - "npm test"
+  - "npm run verify"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

@@ -1,0 +1,51 @@
+id: W010
+milestone: M102
+serves:
+- "instrument-kinds#sequencer-surfaces"
+title: "XY pad kind: two declared parameters on one surface, with two sliders for keyboard and screen readers, first on the Filter Lab and ADSR handles"
+slug: xy-pad-kind-two-declared-parameters-on-one-surface-with-two
+priority: p2
+profile: implementation
+objective: "Lands as feat(charts). src/js/ui/kinds/xy-pad.js over charts/drag-math.js (one implementation): x and y each bound to a section 79 parameter (unit, bounds, log or linear), a live preview during a drag (the explicit ephemeral case of section 80) and one commit per gesture; role=group holding two sliders with aria-valuetext in each unit; keys Left and Right on x, Up and Down on y, Shift fine, PageUp and PageDown coarse, Home and End, Enter for typed entry of both, reset by double-click, double-tap or the menu (N002); touch-action none on the pad only. First consumers: the Filter Lab response handle (cutoff by Q, after K043) and the ADSR handles (after K045), whose canvas is aria-hidden today (VERIFIED envelope-graph.js:22); K097 then mounts it. Before: two pointer-only 2D handles. After: one XY kind reachable by keyboard and touch. Negative cases: a typed value out of range (refused with its sentence); a drag beyond the plot (clamped); a two-finger gesture (left to the page). Rollback: revert. Merged plan of the component follow-up (2026-10-30): K097 depends on W010."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs, knowledge and interlinking, and add more; add p5.js, WebGL and interactivity, and deploy; a full DAW, a full sequencer and a full piano, everything interlinked, clickable, parameterized and joined; knobs, sliders and control panels done one generic way, integrated with Majordomus; the landing easy to use, easy to extend and open to hack; mobile first. The architecture still binds: one AudioEngine, the Studio model canonical, typed ports, one offline file under the 1.2 MB gzip budget, the cockpit identity, no fake science, Flowbite Pro (ADR 0061). Design: the instrument-kinds design of 2026-10-29 (scratchpad components-followup/components-new.md), on the component-system design (G001-G019) and the synth and studio-siggen drafts of the same day, facts checked against origin/main cdda563c."
+scope:
+- src/js/ui/kinds/xy-pad.js
+- src/js/ui/catalog/kinds/xy-pad.js
+- src/js/charts/drag-math.js
+- src/js/charts/filter-chart.js
+- src/js/charts/envelope-graph.js
+- src/js/labs/filter-lab.js
+- src/js/labs/envelope.js
+- tests/unit/ui-kind-xy-pad.test.mjs
+- tests/browser/labs.cjs
+- tests/unit/ui-flowbite-pro-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- W001
+- G003
+- N003
+- K043
+- K045
+acceptance_criteria:
+- "tests/unit/ui-kind-xy-pad.test.mjs fails on the merge base: log and linear axes round-trip; drag-math's existing tests pass through the kind; one drag is one commit of both parameters; the sliders' values equal the handle's."
+- "Negative cases, each asserted by a test that fails on the merge base: the three of the objective."
+- "Definition of done, tested: tests/browser/labs.cjs moves the Filter Lab handle by pointer drag, by arrows on each slider and by a hasTouch drag, waiting with until() (deadline 'filter xy applied', 2 s) for the lab state, the readouts and both aria-valuetexts to agree. The check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, runs at 1536x1024 and 390x844, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, extends: drag-math.js, K043, K045 and N003 (the two keyboard sliders are N003 slider views of the two parameter specs, not a second slider); interlinks: the pad's parameters open their Studio node parameters where a node is bound (G016 relation rules)."
+- "Definition of done, interactivity: pointer, keyboard and touch."
+- "Definition of done, docs, menus and routes: the kind's declaration names its docs, links and tests; docs/ui-catalog.md (G014) lists it; the Keyboard shortcuts dialog lists its keys; tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Its trace entry in scripts/ui-catalog/trace/kinds.mjs names the intent criterion, this issue, its rules, ADRs and tests, each resolved by the trace check, for the Majordomus knowledge projection."
+- "The kind's modules pass W001's static scan: no import of src/js/studio/actions.js, a store, sources.js or a lab module; no dispatch or owner writer called; no AudioContext, AudioNode or worklet created (project.audio-engine-discipline v2: one AudioEngine); no requestAnimationFrame, setInterval or setTimeout outside src/js/charts/frame-loop.js; no allocation in a frame callback (1000 ticks keep the same typed arrays) and frameSubscriberCount() returns to its value after destroy()."
+- "Its chrome (buttons, button groups, popovers, dropdowns, inputs) is markup adapted from the matching Flowbite Pro block and names its flowbite-pro reference.md section; its instrument surface is a domain view under ADR 0061 decision 3 as J001's ADR 0061 resolution note records it: inline SVG or canvas and Tailwind utilities inside a Pro card, no stylesheet, no selector, no osc-* class token, no el.style write or style attribute; no osc-* name in the ratchet record rises and the domain views' stylesheets gain nothing (project.ui-uses-flowbite-pro, project.visual-identity-lock v2, ADR 0061; node scripts/ui-flowbite-pro-record.mjs --check and node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "No input path of the build gains a components, widgets, ui-kit or design-system segment (the COMPONENT_LIBRARY check of scripts/ui-flowbite-pro-measure.mjs): declarations live in src/js/ui/catalog/kinds, views in src/js/ui/kinds."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat change it carries a unit test that fails on the merge base (project.fail-first)."
+- "scripts/size-report.mjs shows at most 2 KB gzip added, compiled CSS included, with the base and head figures in the pull request body, inside the component line's cap Q037 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+- node --test tests/unit/ui-kind-xy-pad.test.mjs
+- node tests/browser/labs.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-30'

@@ -1,0 +1,49 @@
+id: V623
+milestone: M081
+serves:
+- "studio-box-system#box-faces"
+title: "The box menu: presets, open lab, probe, measure from here, listen, duplicate, group, help"
+slug: the-box-menu-presets-open-lab-probe-measure-from-here-listen
+priority: p2
+profile: implementation
+objective: "P04 slice D (editing and undo invariants). Lands as feat(studio-ui). Right-click, long-press or the ContextMenu key on a box opens a Pro dropdown: Presets (K020), Open lab (the Filter lab for Filter, the Envelope lab for Envelope, the Additive lab for an Oscillator with an additive table), Probe output (V616), Measure from here (adds a Transfer Analyzer wired to the box through one batch, the MEASURE integration of V418), Bypass (K022's generic bypass), Listen here (V625 when it lands), Duplicate, Group (V601 when it lands; absent until then, never a disabled item without a reason), Help (the registry help, as the node reference shows it), Delete. Every item is a real command of the one command table."
+why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings S1-S14 measured on origin/main b67d1e58)."
+scope:
+- src/js/ui/studio/box-menu.js
+- src/js/ui/studio/graph-commands.js
+- src/js/ui/studio/graph-editor.js
+- src/index.html
+- tests/unit/studio-box-menu.test.mjs
+- tests/browser/studio-boxes.cjs
+- tests/browser/qa-regressions.cjs
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- V622
+- F010
+- K020
+- K022
+acceptance_criteria:
+- "Before: VERIFIED: no box menu; commands live in the toolbar, keys and Inspector."
+- "After: one menu per box with every command of the command table that applies."
+- "Negative cases: an item that does not apply to the type is absent, never disabled without a reason; Group is absent until V601."
+- "Rollback: revert the merge commit. Nothing changes the schema, a studioHash or a stored record, so documents saved while it was live load unchanged after the revert."
+- "tests/unit/studio-box-menu.test.mjs, failing on the merge base: the items of each node type, each resolving to a command of the command table; 'Measure from here' adds a validated Transfer Analyzer batch; no item is disabled without a reason (project.no-inert-surfaces)."
+- "Definition of done, extends: the node commands of V427 and K020's node presets."
+- "Definition of done, cross-links: Open lab moves to the lab with the box's parameters (Filter type, cutoff, Q) and Back returns to the Studio with the box selected; Measure from here opens the measurement run of the Studio. The link is a row of tests/browser/integration-map.json once that map (synth line K075) is on main."
+- "Definition of done, dynamics: the menu opens at the pointer or the box; Help shows the box's live parameters beside the text."
+- "Definition of done, docs and routes: docs/v31/user-guide.md and .ai/repo/features/studio-signal-graph.md say what changed; the shortcut list gains the ContextMenu key. tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: A check 'box-menu' in tests/browser/studio-boxes.cjs opens the Filter box's menu by right-click, by the ContextMenu key and by long-press in a hasTouch context, picks Open lab and waits with until() (deadline 'filter lab shows the box cutoff', 5 s) for the lab's cutoff equal to the box's, presses Back and waits for the box selected in the Studio; picks Measure from here and waits for the analyzer node and edge; on the merge base no menu opens. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit and the completed evidence the release that carried it; E030's judge passes on the pull request once E030 is on main."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "Wave 2: its chrome is Flowbite Pro markup adapted from the matching Pro component, lands after F002, adds no osc-* class token or legacy selector, and studio.css, studio-timeline.css, charts.css and tokens.css gain no selector or declaration; the domain drawing stays OSCILLA's own inside Pro cards (project.ui-uses-flowbite-pro, project.visual-identity-lock v2; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "scripts/size-report.mjs shows at most 3 KB gzip added, with the base and head figures in the pull request body, within the owner's dist budget of 1 200 000 B gzip (decision of 2026-10-29, about 355 KB of headroom at origin/main b67d1e58); the ceiling of this line is 35 KB gzip in all (Studio boxes 35 KB, signal generator 25 KB), stated in the milestone (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/studio-box-menu.test.mjs
+- node tests/browser/studio-boxes.cjs --only box-menu
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

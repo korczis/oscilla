@@ -1,0 +1,66 @@
+id: parameter-controls
+title: "Every parameter of OSCILLA is declared once, and every knob, slider, field, menu and panel is a projection of that declaration that behaves, explains itself and is tested the same way everywhere"
+statement: "On 2026-10-29 the owner asked, in Czech, for knobs, sliders and control panels in one generic way, every element tweakable and parameterized, everything clickable and joined, a full DAW, sequencer and piano, mobile first, and a product easy to use, extend and hack, integrated with Majordomus. On main (b67d1e58) a parameter is described by the section 79 descriptor, by the Inspector's fieldOf, by seven hand-built lab fields, and in drafts by the knob of K058 and the contract of K105; arrows step linearly through log mappings, nothing resets to a default, modulation and automation are Inspector text, and a modulation dot 'read from the runtime' would read AudioParam.value, which excludes connected inputs (measured in the three gate browsers). This intent extends what exists: one declaration (the descriptor plus id, state path, links, docs and a stated reason), one pure interaction model, one control interface whose views the knob, slider, field, toggle, choice, menu and panel are, an honest modulation band and dot, the automation hook on every control, every parameter on the expanded face, a census and a generated reference."
+invariants:
+- "A control never owns state: it shows the value its owner passes and calls the owner's commit; the StudioModel stays the only Studio state, a drag is one history entry, and folding is stored by the owner, never by the panel (project.studio-model-is-canonical)"
+- "Nothing shown claims more than is known: a modulation range is computed and says so, a moving value is measured or absent, and an automated control says its lane overrides it (project.no-fake-science)"
+- "Every control has a pointer, keyboard and touch path at 390x844 and on the desktop, 44 px targets on a coarse pointer, and a disabled control states why (project.no-inert-surfaces)"
+- "Views are adapted Flowbite Pro markup and inline SVG with Tailwind utilities; nothing adds an osc-* name, a selector or a components, widgets, ui-kit or design-system path (project.ui-uses-flowbite-pro, ADR 0061)"
+- "One AudioEngine: a modulation tap is created and disposed inside the engine's accounting, capped, and only while playing (project.audio-engine-discipline)"
+- "The single file opens from file:// and the sub-path with nothing fetched, inside the gzip budget (project.single-file-deliverable)"
+milestones:
+- M111
+- M112
+- M113
+satisfaction:
+- id: one-declaration
+  criterion: "Every parameter, in the Studio registry, the labs, the instrument, the sequencer and MEASURE, is declared once with id, unit, range, step, scale, default, state path, automatable, modulatable, links and docs, and a continuous parameter that is neither automatable nor modulatable says why"
+  evidence: command
+  ref: node --test tests/unit/param-spec.test.mjs
+- id: one-interaction-model
+  criterion: "Every continuous control steps, drags, adjusts finely, jumps, resets and accepts typed values through one pure model, logarithmically where the parameter is"
+  evidence: command
+  ref: node --test tests/unit/param-input.test.mjs
+- id: generated-views
+  criterion: "Knob, slider, field, toggle, choice, panel and menu are views of one interface that a surface mounts from a declaration with its own value and commit function"
+  evidence: command
+  ref: node --test tests/unit/control-contract.test.mjs tests/unit/control-menu.test.mjs tests/unit/control-panel.test.mjs
+- id: accessible-contract
+  criterion: "Every control passes one contract in every gate browser at 390x844 and desktop: role, name, valuetext with unit, keys, pointer, touch, reset, typed entry with a stated refusal, 44 px on a coarse pointer, and a stated reason when disabled"
+  evidence: command
+  ref: "node tests/browser/v31-studio-graph.cjs && node tests/browser/ui-kinds.cjs"
+- id: honest-modulation-automation
+  criterion: "A modulated control shows the range its routes can sweep, computed and labelled as such, and a dot only where the modulation signal is measured; an automated control says its lane overrides it, shows the lane's scheduled value and opens the lane"
+  evidence: command
+  ref: node --test tests/unit/modulation-band.test.mjs tests/unit/modulation-tap.test.mjs tests/unit/automation-hook.test.mjs
+- id: every-parameter-shown
+  criterion: "Every parameter of every node is on its expanded face and panel, the collapsed face shows the primary ones, and every continuous control on every workspace is declared"
+  evidence: command
+  ref: node --test tests/unit/control-panel.test.mjs tests/unit/param-census.test.mjs
+- id: documented-extensible
+  criterion: "The control reference is generated and current, and the extending guide says how to add a parameter and a view"
+  evidence: command
+  ref: node scripts/ui-catalog.mjs --check
+governance:
+- "rule:project.studio-model-is-canonical"
+- "rule:project.no-fake-science"
+- "rule:project.no-inert-surfaces"
+- "rule:project.ui-uses-flowbite-pro"
+- "rule:project.visual-identity-lock"
+- "rule:project.audio-engine-discipline"
+- "rule:project.single-file-deliverable"
+- "rule:project.typed-ports"
+- "rule:project.suite-harness"
+- "rule:project.bounded-test-timing"
+- "rule:project.review-verdict"
+- "rule:project.fail-first"
+- "adr:adr-0050"
+- "adr:adr-0058"
+- "adr:adr-0061"
+non_goals:
+- "A UI framework or binding layer: the controls hold no value, resolve no state path, subscribe to no store and evaluate no condition"
+- "Knobs in labs, MEASURE or settings forms: D11 keeps them on Pro range and number inputs; the Inspector follows Q020"
+- "A second census beside PACK 03's, or a second declaration beside the catalogue's"
+- Reading a modulated value from AudioParam.value
+created_at: '2026-10-29'
+updated_at: '2026-10-30'
