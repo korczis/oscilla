@@ -6,7 +6,7 @@ title: "Unwrapped phase and group delay of a single run"
 slug: unwrapped-phase-and-group-delay-from-the-transfer-function
 priority: p2
 profile: implementation
-objective: "Wrapped phase and its masking reasons exist (src/js/measurement/transfer.js: NOT_REQUESTED, NO_ALIGNMENT, ALIGNMENT_NOT_ROBUST, AGGREGATED), and a measurement of repeated runs has no phase at its aggregate centre by design (aggregate.js; specification section 27). Add the unwrapped phase and the group delay of a single run, relative to the removed alignment lag (so a pure delay shows 0 ms after alignment, and its delay is the alignment lag), shown only where the reliability mask is valid and the alignment is robust and masked elsewhere with the reason; for the aggregate of repeated runs, refuse group delay with the reason AGGREGATED and show it per run; versioned algorithm ID. It follows V394 because both extend the stored result schema and the result views."
+objective: "Wrapped phase and its masking reasons exist (src/js/measurement/transfer.js: NOT_REQUESTED, NO_ALIGNMENT, ALIGNMENT_NOT_ROBUST, AGGREGATED), and a measurement of repeated runs has no phase at its aggregate centre by design (aggregate.js; specification section 27). Add the unwrapped phase and the group delay of a single run, relative to the removed alignment lag (so a pure delay shows 0 ms after alignment, and its delay is the alignment lag), shown only where the reliability mask is valid and the alignment is robust and masked elsewhere with the reason; for the aggregate of repeated runs, refuse group delay with the reason AGGREGATED and show it per run; versioned algorithm ID. It follows V394 because both extend the stored result schema and the result views. It also follows K039 (M062), which stops the wrapped-phase path drawing a line across each wrap, so the unwrapped series lands on the fixed path; through K039 it follows F004 of #251, which rebuilds the same result views."
 why: "V3 MEASURE specification sections 4 and 90-92 (docs/specs/oscilla-v3-measure.md); conversation 6abec18d, 2026-10-02T03:15:06Z. Phase already exists and the aggregate has none (critique measurement-extensions, phase-exists-and-aggregate-has-none)."
 scope:
   - "src/js/measurement"
@@ -27,6 +27,7 @@ scope:
   - "dist"
 depends_on:
   - "V394"
+  - "K039"
 acceptance_criteria:
   - "tests/unit/phase-group-delay.test.mjs: with the alignment not removed, a pure delay of 100 samples at 48 kHz gives a group delay of 2.083 ms within 1 %, and with it removed 0 ms within 0.01 ms; a second-order all-pass gives its analytic group delay within 1 % in the valid band; it fails on the merge base."
   - "Outside the valid band nothing is drawn and the reason is shown; an aggregated measurement shows per-run group delay and refuses the aggregate's with AGGREGATED."
@@ -39,4 +40,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-10-29

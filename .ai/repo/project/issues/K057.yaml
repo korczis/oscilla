@@ -1,0 +1,37 @@
+id: K057
+milestone: M062
+serves:
+  - "playable-instrument#chart-cost"
+title: "The Studio transport tick runs on the shared frame loop as an essential subscriber"
+slug: the-studio-transport-tick-runs-on-the-shared-frame-loop-as-a
+priority: p2
+profile: implementation
+objective: "Lands as perf(studio-ui), after E003, which splits src/js/ui/studio/workspace.js into modules under src/js/ui/studio/workspace/ (the precedent of E024: the change is made in whichever module the split leaves the transport in). The tick at workspace.js:661-681 on main re-arms its own requestAnimationFrame for as long as the transport plays; it becomes an essential frame-loop subscriber (K036) registered with both hosts that show the position, the Studio pane and the compact widget, so it runs while either is rendered and the transport plays, so Pause animation never freezes studio.time or the compact playhead while audio plays, and at most one rAF chain is armed while the Studio plays. It removes the Studio tick's pending entry from tests/browser/chart-cost-baseline.json. It adds no markup and changes no behaviour a user sees."
+why: "Owner order of 2026-10-29: \"make the charts really sexy, modern, interactive\", for all charts; reviewer f3 scoped it to every surface that draws data. Revised after f3's review of the plan (CHANGES-REQUESTED, 2026-10-29): owner decisions are Q issues under M063, Pro chrome waits on F002 and on the card issue of its workspace, every chart that claims chart-interaction delivers the keyboard cursor and the announced readout, chart keys never take Escape or Space; revision 3 answers f3's delta review. Facts checked against origin/main at e2720e07 and the branches of #251, #253, #263 and #265 (charts-plan.md, charts-plan-changes.md)."
+scope:
+  - "src/js/ui/studio/workspace.js"
+  - "src/js/ui/studio/workspace"
+  - "tests/unit/studio-transport-tick.test.mjs"
+  - "tests/browser/chart-cost.cjs"
+  - "tests/browser/chart-cost-baseline.json"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K036"
+  - "E003"
+acceptance_criteria:
+  - "tests/unit/studio-transport-tick.test.mjs: the tick subscribes as essential while the transport plays and unsubscribes on stop; with frames paused it still advances the time readout; it requests no rAF of its own."
+  - "tests/browser/chart-cost.cjs: while the Studio transport plays, with and without Pause animation, at most one rAF chain is armed and studio.time advances; the Studio tick check passes and is no longer pending. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline and assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac); tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Its paths are not guarded (scripts/review-verdict.mjs GUARDED); as a perf change it is outside project.fail-first and still adds the tests above."
+  - "Every file stays under its cap in tests/unit/source-size-baseline.json."
+  - "No visual reference moves."
+  - "scripts/size-report.mjs shows at most 0.5 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of M062's figures stays within the cap Q014 records, under the 1 000 000 B gzip budget (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/studio-transport-tick.test.mjs"
+  - "node tests/browser/chart-cost.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

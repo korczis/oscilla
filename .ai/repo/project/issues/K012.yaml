@@ -1,0 +1,43 @@
+id: K012
+milestone: M058
+serves:
+  - "playable-instrument#voice-nodes"
+title: "Drive node: tanh WaveShaper with 4x oversampling and trim at most 1"
+slug: drive-node-tanh-waveshaper-with-4x-oversampling-and-trim-at
+priority: p2
+profile: implementation
+objective: "Lands as feat(studio). A new Drive node type in src/js/studio/nodes/processing.js with an adapter (in its K005 file) and a builder under src/js/audio: a tanh WaveShaper with oversample 4x and an output trim of at most 1. A new type leaves every pinned hash unchanged."
+why: "Owner direction of 2026-10-29 (session oscilla-b0): OSCILLA becomes a playable, patchable instrument and an audio-band signal lab; the plan checked every fact it relies on against main at 8b5792cd, and the sizes it quotes are unchanged at e2720e07."
+scope:
+  - "src/js/studio/nodes/processing.js"
+  - "src/js/studio/adapters"
+  - "src/js/studio/registry.js"
+  - "src/js/audio"
+  - "tests/unit/k010-k013-studio-voice-nodes.test.mjs"
+  - "tests/unit/v31-studio-model.test.mjs"
+  - "tests/unit/studio-automation-transforms.test.mjs"
+  - "tests/browser/v31-studio-offline.cjs"
+  - "tests/browser/fixtures/v31-studio-offline-entry.js"
+  - "docs/v31/compiler.md"
+  - "docs/v31/studio-model.md"
+  - "docs/v31/studio-report.md"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K005"
+  - "K011"
+acceptance_criteria:
+  - "The output peak stays at or below the output ceiling at drive 100 %, in a unit test that fails on the merge base."
+  - "The node census is 0 after stop."
+  - "Help text, aliases and the picker entry are present (registry test)."
+  - "No hash changes."
+  - "The pull request carries a reviewer's verdict (src/js/audio and src/js/studio is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first). It adds no markup, osc-* class token or stylesheet selector, so the Flowbite Pro ratchet stays flat (node --test tests/unit/ui-flowbite-pro.test.mjs). A capped file it grows past its cap is split first or its raise is declared in tests/unit/source-size-baseline.json's raises ledger."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/k010-k013-studio-voice-nodes.test.mjs"
+  - "node tests/browser/v31-studio-offline.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29
