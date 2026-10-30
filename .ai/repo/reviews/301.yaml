@@ -1,0 +1,57 @@
+# Review verdict for pull request #301, finding group C009 (engine-sync-9, dead-controls-8): a
+# release time edited while a note is held is the one letting go uses (branch
+# fix/c009-release-edit-while-held). Reviewed head 6ccd81fd7beb (== origin at fetch; merge base
+# cdda563c1982; origin/main has moved to fde49bd1, docs only, E042 #284). Built by the builder's
+# session; reviewed by dev-68, which re-checked an earlier dev-68 review pass finding by finding
+# against the code.
+#
+# The digest: `node scripts/review-verdict.mjs --content --list --base origin/main` in the PR
+# worktree, with the branch's copy of the script, which is identical to origin/main's (git diff
+# origin/main HEAD -- scripts/review-verdict.mjs is empty). One guarded path,
+# src/js/audio/audio-engine.js: ff4bf913...2c4f, which matches the PR body.
+#
+# Lenses: (a) every control path that sets or uses the release (Settings field, Envelope lab R,
+# restart, retrigger, Trigger, latch, blur/pagehide, Studio, sequencer, MIDI); (b) click-free
+# under audio-engine-discipline v2 and V249; (c) fail-first; (d) docs and PR body vs code;
+# (e) tests and mutation. The owner flagged this PACK03 group: controls that do not reach the
+# sound. Every finding below survived an attempt to refute it from the code.
+#
+# Runs:
+# - The PR worktree was not modified apart from this file (no other session has its cwd there;
+#   only the majordomus-cli serve daemon). Mutations and probes ran in git-archive copies of
+#   6ccd81fd and cdda563c (src, tests) in the scratchpad, using the V1 freeze mock AudioContext.
+# - Probe, app defaults (continuous off, limit 2 s, Settings release 30 ms), hold a tone, edit
+#   30 ms -> 1 s at t=0.5, let go at t=1.2. Head: release() false, fade/cut empty, envelope
+#   [set 1 @1.99, exp 1e-4 @2.02]: about 0.8 s at full level after letting go. Base: release()
+#   true, fade 1.221 -> 1.251. Control, 1 s set before the note: refused on both, but the
+#   envelope already fades from 1.02.
+# - Probe, held sweep (repeat once, 3 s) with continuous ON, edit 30 ms -> 2 s at 0.2, let go at
+#   1.5: head release() false, the sweep runs to 3.03 at full level; base fades 1.52 -> 1.55
+#   (F7). The browser check's continuous-on escape does not cover a programmed pattern.
+# - Earlier pass (same session, copies since removed): fail-first 34 pass / 3 fail on the base
+#   tree with the head's tests (setNoteOffRelease is not a function), 37/37 on the head; 7
+#   engine mutations all killed; 1146/1146 relevant unit tests; merged-with-main subset 83/83.
+# - Browser gate not run locally (load ~100-170 on 18 cores, above OSC_LOAD_MAX; not overridden).
+#   CI Browser gate is green on chromium, firefox and webkit.
+#
+# Checked and found correct: setNoteOffRelease writes no AudioParam (V249; mutation M7 caught);
+# v.release keeps its play-time value for the step-envelope top-ups; v.opts takes a copied adsr,
+# so a _restart keeps the edit and the caller's adsr is untouched; the Alpine effect tracks
+# release, playing and labRev, and labRev is bumped by every Envelope lab edit and power toggle;
+# the only engine.play caller is the instrument (through the main.js wrapper); Studio, the
+# sequencer and MIDI build their own voices and never read the Settings release.
+#
+# Open: F1 (P1), F7, F2, F3 (P2), F4, F5, F6 (P3). The verdict is changes-requested.
+schema: review-verdict/v1
+pr: 301
+verdict: changes-requested
+reviewer: "dev-68 (Claude Opus 5.5 session 4f90795d); did not build, merge or edit this change; wrote only this file"
+content: ff4bf9134c6860d0d66ccb81db23fef51dec1cf3bd34ff082d51995919ae2c4f
+findings:
+  - { id: F1, severity: P1, status: open, title: "In the app default (continuous off, 2 s hard limit) a release edited upward while a note is held makes letting go do nothing: release() (audio-engine.js:650) passes v.noteOff to _releaseVoice, which refuses any fade with stopAt >= v.endTime (:615), so the note stays at full level until the limit and ends with the old play-time tail; the UI stays at PLAYING (no release event). Base fades over 30 ms. With the 2000 ms edit of dead-controls-8 no let-go can fit a 2 s limit. The same refusal hits releaseHold on window blur and pagehide. tests/unit/engine.test.mjs:976-990 asserts the refusal as intended. Fix: when the noteOff fade does not fit, clamp it to end by v.endTime (e.g. min(noteOff, v.endTime - t - 0.011)) or fall back to v.release, so letting go always starts a fade; flip the unit test." }
+  - { id: F7, severity: P2, status: open, title: "The same refusal reaches past the hard limit: any voice with a finite endTime, i.e. a held or latched programmed pattern (sweep repeat once, steps, ramps: up to 30 s), refuses the let-go or latch-off stop whenever the edited release does not fit before its own end, with continuous ON too. Probe: held 3 s sweep, edit 30 ms -> 2 s, let go at 1.5 -> refused, plays to 3.03 at full level (base fades at 1.52). The browser check escapes the limit with continuous on and a tone, which never has a finite end. The F1 fix (clamp to v.endTime) covers this; add a unit case for a programmed pattern." }
+  - { id: F2, severity: P2, status: open, title: "The PR body's evidence skips the default path: tests/browser/app.cjs:1172 turns continuous on 'an unlimited hold: no hard-limit end to refuse the fade', and the body lists '_releaseVoice still refuses a fade past a limited voice's endTime' as preserved safety without saying that in the app's default configuration the user's let-go is then ignored (F1). Fix: state the limited and programmed-end cases and measure them once F1 is fixed." }
+  - { id: F3, severity: P2, status: open, title: "The Settings help text (src/index.html:2976-2979) says release 'also applies to a held note', but a held note that reaches the hard limit, a programmed pattern's own end and a Trigger note's natural end still fade over the play-time release (scheduled at play by v1OpenEnvelope / makeAdsrEnvelope; setNoteOffRelease writes no param by design), and with F1 the edited release is not used at all when it does not fit. Fix: scope the text to 'when you let go' and correct it together with F1." }
+  - { id: F4, severity: P3, status: open, title: "The main.js wiring that carries the edit to the sound, syncNoteOffRelease (main.js:379-385) and its Alpine.effect (:582-583), has no unit test; only engine.test.mjs calls setNoteOffRelease. Removing the effect, or passing the Settings value while the Envelope lab is on, passes every unit test and is caught only by tests/browser/app.cjs release-edit-while-held." }
+  - { id: F5, severity: P3, status: open, title: "The PR body explains the npm test failure (v31-studio-performance 145-147, Studio build over budget at load 90-148) as load-related without a re-run and without labelling it 'explained but not re-run' with head SHA and load, as shared-machine-discipline rule 3 asks. CI's unit job is green; this is about the record only." }
+  - { id: F6, severity: P3, status: open, title: "Informational: CI review-verdict and gate fail until a merge verdict with this content is recorded, and mergeStateStatus is BEHIND (origin/main fde49bd1, docs only). git merge-tree with origin/main is clean, and main's docs-derived, browser-suite-contract and engine tests pass on the merged tree (83/83)." }
