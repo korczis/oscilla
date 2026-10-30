@@ -1,0 +1,60 @@
+# Review verdict for pull request #310, plan item C008 (PACK03, controls that do not reach the
+# sound): the Envelope Lab's Sustain and power switch reach a held note, and the Signal Path shows
+# the sounding envelope (branch fix/c008-envelope-held-note). Reviewed head 94cfe255594a (== origin
+# at fetch; merge base cdda563c; origin/main fde49bd1, one PR (#284) ahead, merges cleanly).
+# Built by the builder's session; reviewed by dev-68, in two passes (a first review, then an
+# independent re-check of every finding against the code).
+#
+# Worktree: the builder's worktree had a `majordomus serve` process (pid 65279) with its cwd
+# there, so the review ran in a fresh detached worktree of origin/fix/c008-envelope-held-note in
+# the scratchpad (node_modules symlinked read-only, nothing installed). The PR code was not
+# modified; mutations ran in git-archive copies, deleted afterwards.
+#
+# The digest: scripts/ on the branch is identical to origin/main's (git diff HEAD origin/main --
+# scripts is empty), so the branch's scripts/review-verdict.mjs, `--content --list --base
+# origin/main`: 98c8a984...c15fcb, matching the PR body, over 5 guarded paths: audio-engine.js,
+# envelope.js, voice.js, studio/playground-voice.js, studio/signal-path-projection.js.
+#
+# Runs (first pass): fail-first on origin/main sources: tests/unit/envelope-held-note.test.mjs
+# 12/12 fail (11 TypeError, 1 assertion); on the head 12/12 pass; 11 touched unit files
+# 1331/1331; build.mjs --check up to date; 11 unit mutations, 10 killed (m5 survives); the
+# main.js wiring mutation is killed only by the browser check env-sustain-held-note; chromium/file
+# env-sustain-held-note and signal-path-sounding-envelope PASS on the head dist and FAIL on main's.
+# Not run: firefox, webkit, the full app.cjs, test:engine click checks, test:studio (disk, load).
+#
+# Re-check (this pass), on the mock AudioContext of tests/freeze/extract.cjs:
+# - R-1 reproduced: a decay ending at 0.13 s, edit at currentTime 0.12 s -> 'applied', with
+#   setValueAtTime@0.1413 and an exp ramp@0.1613 added while the decay renders. A Sustain drag
+#   (an edit every 16 ms in the sustain phase) applies every other edit while the previous 20 ms
+#   glide still renders (currentTime 0.532 / 0.564 / 0.596 against glide ends 0.54 / 0.5747 /
+#   0.6067), so this is the common path of a slider drag, not only a rare race.
+# - R-2 reproduced (finite note at s 0, raised to 0.5 -> 'next-note'); R-8 found: on a finite
+#   (default) note, Sustain dragged down to 0 applies, and every later raise returns 'next-note'
+#   with the level stuck at the floor; an open note recovers ('applied').
+# - m5 re-run: removing the log truncation in cancelParamFrom, 12/12 still pass (R-5).
+# - Lab off then on on a held note: off glides to 1, on returns 'next-note' (README:90-92 and
+#   docs/v31/signal-path.md say so: not a finding).
+# - F3 (C009 #301) lowered from P2 to P3: both PRs change src/js/audio/audio-engine.js, so the
+#   one that lands second has a stale verdict and is re-reviewed on the merged content anyway;
+#   neither PR is wrong alone. F4-F7 confirmed at P3.
+#
+# Checked and found correct: a held open ADSR voice glides (exp, SUSTAIN_GLIDE_S, never above 1)
+# in sustain, decay and attack; a finite note's scheduled release is kept and starts from the new
+# level; stop/start safety (v.releasing, v.ended, this.voice !== v; the timer sits in v.timers);
+# AM, FM, LFO, sweep and dual voices share v.eg; programmed step patterns report 'next-note'.
+#
+# Open: R-1 (P1), R-2 and R-8 (P2), R-3 to R-7 (P3). Verdict: changes.
+schema: review-verdict/v1
+pr: 310
+verdict: changes
+reviewer: "dev-68 (Claude Opus 5.5 session 4f90795d); did not build, merge or edit this change; wrote only this file"
+content: 98c8a98489ecd96089ccf9819bb0e24d2e215b2afc0f1f86876995a8f4c15fcb
+findings:
+  - { id: R-1, severity: P1, status: open, title: "The deferral guard compares the ramp end to the scheduling time, not the rendered clock, so a held note's sounding ramp is edited (V249). _retargetSustain (src/js/audio/audio-engine.js:907-913) sets t = this._soon(ctx) (rendered + SCHEDULE_LEAD_S, on a quantum) and defers only when t < steady; when steady falls in (rendered, t] the setValueAtTime and the glide go onto the param while the attack, decay or previous glide still renders. The engine's own V249 note (audio-engine.js:597-603) says any edit of a ramping param in Chromium, even a no-op event ahead, can freeze one quantum: a step. Measured: an edit 10 ms before the decay end applies at once; a Sustain drag at 16 ms per event applies every other edit while the previous 20 ms glide renders. It also makes the PR body's 'a sounding ramp is never edited (V249)' and the doc comment at :885-886 untrue. Unit test 8 (envelope-held-note.test.mjs:268) edits only mid-decay. Fix: defer until steady <= the rendered lower bound (clock.js renderedTimeAtLeast, as _soon uses), and add unit cases for an edit in the last SCHEDULE_LEAD_S of the decay and for two edits 16 ms apart." }
+  - { id: R-2, severity: P2, status: open, title: "On a finite note with sustain 0, raising Sustain does not reach the sound, and finite is the default HOLD path (instrument.js:130-131: continuousAllowed false, safetyLimit 2 s). releaseAt (src/js/audio/envelope.js:222) adds the release ramp only when the held value is above the floor; at s 0 it is the floor, so scheduledRelease (envelope.js:236-241) returns false, sustainSteadyFrom gives NaN and _retargetSustain returns 'next-note' (probe: s 0 raised to 0.5 -> 'next-note', voice.adsr.s stays 0; the same on an open note -> 'applied', level 0.5). The Signal Path labels it 'next note', but README:89-90 says a Sustain change on a held tone takes effect. Fix: let scheduledRelease recognise a release whose held value is the floor (the hold at deadline - rel with no exp), and re-release from the new level; add a finite s 0 unit case." }
+  - { id: R-8, severity: P2, status: open, title: "A default (finite) held note whose Sustain is dragged down to 0 is then stuck at the floor: the PR's own path drives it into the R-2 state. retargetEvents re-releases with releaseEvents (envelope.js:303), which omits the exp ramp when the new level is the floor (envelope.js:124), so the schedule no longer ends with a release at v.deadline and every later edit returns 'next-note'. Probe (continuous false, limitS 2, s 0.6): s -> 0 'applied', s -> 0.5 'next-note', level 0.0001 and voice.adsr.s 0; with continuous true it recovers. The slider's range is 0..1 (drag-math.js ADSR_LIMITS), so sweeping it to 0 and back, the obvious gesture, loses the control for the rest of the note. Same fix as R-2; add a down-to-0-then-up case for a finite note." }
+  - { id: R-3, severity: P3, status: open, title: "Conflicts in meaning with open PR #301 (C009, origin/fix/c009-release-edit-while-held): C008 says release belongs to the note and applies from the next note (audio-engine.js:44-46, labs/envelope.js:3-6, docs/v31/signal-path.md:123-124), and soundingEnvelope (playground-voice.js) marks a lab R edit as 'next note'; C009's engine.setNoteOffRelease makes the lab's R apply when the held note is let go (v.noteOff). Whichever lands second leaves the path saying 'next note: R x' while the let-go uses R x, and C008's `v.opts = { ...v.opts, adsr: want.adsr }` (audio-engine.js:932) overwrites C009's v.opts.adsr.r. Lowered from P2: both change src/js/audio/audio-engine.js, so the second to land is re-reviewed on merged content regardless. Fix in the second PR: feed v.noteOff into soundingEnvelope, drop release from the next-note list, and build v.opts from v.opts.adsr." }
+  - { id: R-4, severity: P3, status: open, title: "For programmed patterns (pulse, steps, ramps) the Signal Path draws the ADSR A-D-S-R for the sounding voice although v.stepEnv is V1's stepEnv (only a and r, sustain 1): v2PlayOptions (main.js:166-167) hands o.adsr to every plan and voice.adsr is set. Pre-existing; C007 (#296 scheduleAdsrStep) makes the sound match. Until then the PR's 'the Signal Path shows the envelope that sounds' does not hold for these patterns." }
+  - { id: R-5, severity: P3, status: open, title: "The PR body's fail-first line '12 of 12 tests, kind assertion' is the tool's per-file label (scripts/fail-first.mjs:153): on merge-base code 11 of 12 fail with TypeError (API missing), 1 on an assertion. And 'voice.js cancelParamFrom keeps the engine's own log exact' is untested: removing `if (i >= 0) pt.ev.length = i;` (voice.js:105) leaves all 12 tests passing (re-run). Fix: word the body as measured and add an assertion that v.env.ev matches the real schedule after a finite-note retarget." }
+  - { id: R-6, severity: P3, status: open, title: "Studio's Envelope node still treats Sustain as next-gate on an open gate (src/js/studio/adapters/nodes.js:424-427: update() stores the ADSR and reports 'next-gate' for every key), while the Playground's Sustain now glides a held note. Reported, not silent, but the two Sustain controls now behave differently; one sentence in docs/v31/signal-path.md or a follow-up plan item." }
+  - { id: R-7, severity: P3, status: open, title: "While an edit is deferred (attack or decay still running), the path shows 'next note: S new' and the footer 'envelope change applies from the next note' for a change that will apply to this note: labChanged re-syncs at once (main.js:453-460) but voice.adsr changes only on the deferred 'envelope' event (main.js:543-549). Lasts at most a + d. Fix: expose v.sustainWant to envelopeVizInputs and label it 'pending' rather than 'next note'." }
