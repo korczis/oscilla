@@ -41,13 +41,26 @@
 # Verdict: merge. No P0 or P1. F1 (P2) should be fixed before landing: the head's description of the
 # chain is the wrong way round in four places, in a change whose subject is exactly that chain's
 # truth. The builder's uncommitted edits appear to fix it; they need a review once committed.
+#
+# Re-review of the fix delta (head 65b373f8, one commit on a6b2fb19; digest 23b0de69...28d0, the
+# same 2 guarded paths, computed with the base branch's script): output-ceiling.js is unchanged;
+# audio-engine.js changes one comment only (the envelope, additive normalisation and inserts act
+# before `master`, the limiter and ceiling after it), which matches the chain at :277-282 and
+# :500. The gain title, README.md:493-495 and ADR 0002:84-85 now say the same, and no text of the
+# head places the gain before the filter (git grep). The unit test pins the new title, refuses the
+# old wording and adds a single-sample case; readout-states-ceiling and no-fake-science pass 14/14
+# on a `git archive 65b373f8` copy. F1 is fixed. Note: 65b373f8 also carried this file, staged by
+# the reviewer and swept into the builder's commit while the reviewer's commit hook ran; this
+# revision is the reviewer's own commit.
+#
+# Verdict: merge. No P0 or P1, and no P2 open. F2-F4 (P3) stand, for follow-up.
 schema: review-verdict/v1
 pr: 321
 verdict: merge
 reviewer: prismatic-majordomus-1d (claude-code 1423ad2b)
-content: b62b2be84532138b697f88791beb1158a95a11fc04a974c9b763ab16e05fc7db
+content: 23b0de69b1bc38cb461cbf633e4166ad0a63f58d3208fa7bd2cacb3c923d28d0
 findings:
-  - { id: F1, severity: P2, status: open, title: "the head says the filter and envelope come after the gain, while every voice's filter, envelope and cutNode feed master (audio-engine.js:500): audio-engine.js:254-255 ('a filter boost, the envelope, additive normalisation, the limiter and the ceiling all act after it'), the gain title workbench.js:100 ('set before the filter, envelope, limiter'), README.md:494 and ADR 0002:84; only the limiter and ceiling are after master" }
+  - { id: F1, severity: P2, status: closed, title: "fixed in 65b373f8; the head of a6b2fb19 said the filter and envelope come after the gain, while every voice's filter, envelope and cutNode feed master (audio-engine.js:500): audio-engine.js:254-255 ('a filter boost, the envelope, additive normalisation, the limiter and the ceiling all act after it'), the gain title workbench.js:100 ('set before the filter, envelope, limiter'), README.md:494 and ADR 0002:84; only the limiter and ceiling are after master" }
   - { id: F2, severity: P3, status: open, title: "workbench.js:96 shows the state only while the workbench sounds (playing or seqPlaying), but Studio (engine-hooks masterInput) and MEASURE capture (capture.js:891) feed the same master chain; a Studio or MEASURE signal the ceiling flattens is still reported nowhere. Outside T001's acceptance; worth a follow-up issue" }
   - { id: F3, severity: P3, status: open, title: "output-ceiling.js:19 the tap window (0.12 s) covers the reads only when they come every 100 ms as asked; a main-thread stall or a throttled tab longer than the window leaves a gap in which a short clip is not reported. State it as a bound of the indicator (comment or ADR note) rather than 'leaves no gap'" }
   - { id: F4, severity: P3, status: open, title: "main.js:642 announces only the onset, with the same string each time (a polite live region may not repeat it), and never the clearing; a screen-reader user is not told when the ceiling stops acting" }
