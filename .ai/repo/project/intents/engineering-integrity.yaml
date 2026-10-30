@@ -100,6 +100,10 @@ satisfaction:
     criterion: "After release:publish tags a release, Pages is redeployed so the release commit's live page names its tag"
     evidence: "command"
     ref: "node --test tests/unit/release-publish.test.mjs"
+  - id: "dialog-focus-not-taken-back"
+    criterion: "A dialog's deferred initial focus never takes focus back from a control the user moved to after it opened, and a dialog closed before it fires takes none, so a keyboard confirmation presses the button chosen on any host load"
+    evidence: "command"
+    ref: "node --test tests/unit/dialog-initial-focus.test.mjs"
 governance:
   - "rule:project.single-file-deliverable"
   - "rule:project.rules-name-their-enforcement"
