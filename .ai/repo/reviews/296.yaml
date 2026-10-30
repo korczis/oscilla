@@ -1,85 +1,90 @@
 # Review verdict for pull request #296, PACK 03 fix group C007 ("One Instrument, One Coherent
 # State"): the labs' V2 play options are built in one place and the current lab state always
-# wins (branch fix/c007-lab-play-options). Round 3, a delta re-review of the fixes for round 2
-# (verdict ce74aeda, reviewed head aeec969a, changes-requested on R-7). Reviewed head
-# 51ff526ade80 (== origin/fix/c007-lab-play-options at fetch, == the PR head): one fix commit,
-# 51ff526a (R-7, R-8), on top of the round-2 verdict commit ce74aeda. Built by the builder's
-# session; reviewed by dev-68 in a fresh detached worktree in its scratchpad; no builder
-# worktree was touched.
+# wins (branch fix/c007-lab-play-options). Round 4, a delta re-review of the fixes for round 3
+# (verdict a658a0db, reviewed head 51ff526a, changes-requested on R-9). Reviewed head
+# dcf7ded9fc51 (== origin/fix/c007-lab-play-options at fetch, == the PR head): the merge of
+# origin/main 27ce813e (ec0bb952) and one fix commit, dcf7ded9 (R-9, R-10), on top of the
+# round-3 verdict commit a658a0db. Built by the builder's session; reviewed by dev-68 in a fresh
+# detached worktree in its scratchpad; no builder worktree was touched.
 #
-# Main: the delta has no merge; the merge base is still fde49bd1. origin/main has moved to
-# 27ce813e (63 commits) and changes none of the PR's guarded paths (git diff fde49bd1
-# origin/main -- src/js/audio/ is empty); it does change dist/index.html, README.md,
-# tests/README.md and tests/browser/app.cjs, which the PR also changes, and the branch no
-# longer merges clean (git merge-tree: conflicts in dist/index.html and tests/README.md).
-# GitHub reports the PR CONFLICTING, so CI has not run at 51ff526a (last run 40987266936 at
-# aeec969a). Merging main is needed before the gate; the verdict stands if the four guarded
-# files come out as reviewed.
+# Main: the merge base is now 27ce813e. Main changed no guarded file the PR changes (git diff
+# fde49bd1 27ce813e -- src/js/audio/ is empty) and the delta a658a0db..dcf7ded9 changes no
+# guarded path at all (git diff -- src/js/audio/ is empty; src/ changes only labs/envelope.js,
+# plus index.html and about.css from main), so the four guarded files are as reviewed. Main's
+# non-guarded overlap (dist/index.html rebuilt, tests/README.md both rows kept) was checked:
+# build --check is clean. GitHub reports the PR MERGEABLE; CI at dcf7ded9 is queued.
 #
 # The digest: the branch's scripts/review-verdict.mjs, identical to origin/main's (git diff
 # origin/main HEAD -- scripts/review-verdict.mjs is empty), `--content --list --base
-# origin/main` in the fresh worktree over the four guarded paths the PR changes
-# (src/js/audio/audio-engine.js, envelope.js, lab-play-options.js, scheduler.js):
-# 34f59ccd...0956, which matches the builder's claim. The PR body still names 728bcf14 (R-11).
+# origin/main` in the fresh worktree over src/js/audio/audio-engine.js, envelope.js,
+# lab-play-options.js, scheduler.js: 34f59ccd...0956, unchanged, which matches the builder's
+# claim and the PR body.
 #
-# Lenses: (a) try to refute the R-7 fix: the drag probe again, the commit restart's clicks,
-# whether the coalescing can drop the final value (pointerup in and outside the canvas, the
-# slider's change, a real mouse drag, keyboard arrows pressed and held, typed fields, the
-# power switch, update()); (b) audio-engine discipline of the delta: no automation call added
-# (no setTargetAtTime, ramp, setValueAtTime or cancel in the src delta), 'pending' edits no
-# param, no rendering ramp is edited (V249), no step on a sounding param, no ramp to 0, the
-# commit restart is play()'s FAST_RELEASE_S (15 ms) crossfade, nodes tracked
-# (activeNodeCount 0 after every unit case); (c) mutation of the fixes; (d) docs vs code.
+# Lenses: (a) try to refute the R-9 fix (labs/envelope.js bindSlider): a key held then the
+# pointer used and the reverse, the keyup landing on another element, Tab away mid-hold,
+# PageUp/PageDown/Home/End, presses spaced around the 250 ms window, assistive-technology
+# style increments (input + change with no keydown), a pending commit raced by a graph drag,
+# whether the final value always commits and what the panel shows while pending; (b)
+# audio-engine discipline of the delta: no automation call is added (no setTargetAtTime, ramp,
+# setValueAtTime, cancel or .value write in the src delta), so no Gecko t=0 default, no edit
+# of a rendering ramp (V249), no step on a sounding param, no ramp to 0; every commit is the
+# reviewed setAdsr -> _restart FAST_RELEASE_S crossfade; nodes tracked (activeNodeCount 0 at
+# the end of the R-9 and R-10 cases); (c) mutation of the fix; (d) the merge side effect on
+# additive-skips-dual; (e) docs and PR body vs code.
 #
-# Runs (head 51ff526a unless noted):
-# - node --test lab-play-options, engine, audio-envelope, freeze: 1206/1206 pass (17 in
-#   lab-play-options, 3 new: R-8, R-7 engine, R-7 lab). The two R-7 cases fail on ce74aeda's
-#   src by assertion; the R-8 case passes there (the code was right, R-8 was coverage).
-#   Full unit suite (node_modules symlinked read-only): 3268 tests, 3264 pass, 1 skipped; the
-#   3 fails are the reviewer's environment: version-authority (2, EISDIR from the symlink,
-#   12/12 without it) and about.test 'release line 3.14' (the fetched tag v3.14.0 comes from
-#   main, which the branch has not merged).
-# - node scripts/build.mjs --check: dist/index.html is up to date (v3.13.0, e6ac25db1440).
-# - tests/browser/app.cjs --origins file --only envelope-drag-one-restart,
-#   envelope-follows-held, restart-follows-labs, adsr-reaches-programmed (git-archive copy of
-#   the head): PASS 5/5 in chromium, firefox and webkit.
-# - Probe (scratchpad mut296e/probe/drag.mjs, freeze mock, the head's src): held tone at s 0.6,
-#   Sustain to 0.1 in 20 settling events then one commit: answers 'pending' x 20, then
-#   'restarted'; 1 voice during the drag (output held at 0.600, no local maxima), 2 after the
-#   commit; at 16, 50 and 100 ms per event alike. Commit: largest step of the summed output
-#   0.0021 per 1/48000 s (a ramp, no click), one re-attack to 1.000 that decays to 0.100, the
-#   same as a typed field edit. No commit: the voice stays at 0.6 (nothing is lost while
-#   settling; the commit decides).
-# - Browser probe (a reviewer-only check in the copy's app.cjs, not in the PR), all three
-#   engines: a real mouse drag of the Sustain slider, 20 moves: 0 restarts and 1 audible voice
-#   during it, 1 restart at release, the voice at the slider's final value; a graph S drag
-#   released 60 px above the canvas: 0 restarts during, 1 at release, the voice at the final
-#   value. Keyboard: 20 ArrowLeft presses fire 20 input + 20 change and give 20 restarts (up
-#   to 4-8 audible voices at Playwright's press rate); ArrowLeft held (20 repeats, 33 ms
-#   apart) gives 20 restarts (R-9). The final value is reached on every path.
-# - Mutation (git-archive copy of the head, node --test of the four unit files): N4, N8 and
-#   the round-2 survivors N9 decay not compared, N10 attack not compared, N14 setAdsr on a
-#   releasing voice: killed (R-8 case; N10, N14 also by R-7). New, of the R-7 fix: P1 settling
-#   ignored, P2 followEnvelopeLab drops meta, P3 always settling, P4 'pending' adopts the shape
-#   (the final value dropped), P5 time slider input commits, P6 its change removed, P7 its
-#   change settles, P8 sustain input commits, P9 sustain change removed, P14 stepHook never
-#   recorded, P17 'pending' ahead of the in-place release: killed. Unit survivors, then run
-#   against envelope-drag-one-restart and envelope-follows-held in chromium on a rebuilt dist:
-#   P10 graph move commits, P11 graph pointerup not wired, P12 graphDone settles (killed by
-#   envelope-drag-one-restart), P15 power switch settles (killed by envelope-follows-held,
-#   "Envelope off reaches it: not reached"). Survived: P16 update()'s switch notification
-#   settles (R-10); P13 sameHook from v.opts (equivalent: v.opts.stepEnvelope differs from
-#   v.stepHook only after a non-restarting call, and the hook is adsrStepEnvelope exactly when
-#   adsr is set, so both compare alike in every reachable state).
+# Runs (head dcf7ded9 unless noted):
+# - node --test lab-play-options, engine, audio-envelope, freeze: 1208/1208 pass (19 in
+#   lab-play-options, 2 new: R-9, R-10); freeze-guard 2/2. Full unit suite (node_modules
+#   symlinked read-only): 3330 tests, 3327 pass, 1 skipped, 2 fail = version-authority, the
+#   reviewer's EISDIR from the symlink (12/12 without it). The R-9 case fails on a658a0db's
+#   labs/envelope.js by assertion (fail-first confirmed; R-10 passes there, it is coverage).
+# - node scripts/build.mjs --check: dist/index.html is up to date (v3.14.0, 732091b95291).
+# - tests/browser/app.cjs --origins file --only ui-dual-phase-stereo-controls,
+#   additive-skips-dual, envelope-keys-one-restart, envelope-drag-one-restart,
+#   envelope-follows-held, restart-follows-labs, adsr-reaches-programmed: PASS 8/8 in
+#   chromium, firefox and webkit.
+# - Browser probe (a reviewer-only check in a git-archive copy's app.cjs, not in the PR), on
+#   the Sustain slider of a held tone, all three engines: PageDown press, Home held (5),
+#   End press, PageUp held (4): 0 restarts while down, 1 at keyup + 257-288 ms, the voice at
+#   the final value (0.5, 0, 1, 0.4). Tab with ArrowLeft held (10 steps): the blur commits at
+#   once (30-171 ms), voice at 0.3; the ArrowLeft keyup lands on the next field and nothing
+#   more restarts. Key held then a mouse drag of the slider, keyup last: chromium and firefox
+#   0 restarts until the keyup, 1 at keyup + 250 at the drag's value; webkit's mousedown on a
+#   range moves focus to main, so the blur commits the keys and the drag's change commits once
+#   more (2 edits, 2 restarts 30 ms apart, 3 voices audible briefly). A mouse drag with Shift
+#   tapped mid-drag: 1 restart at the release. Presses (40 ms down) with keyup-to-keydown gaps
+#   of 200 and 240 ms: 0 restarts (one run); 260 and 300 ms: 6 restarts, one per press about
+#   every 305-350 ms, at most 2 audible voices: the window is a trailing debounce, not a train.
+#   Five input + change events without a keydown, 150 ms apart (how a screen reader's
+#   increment arrives): 5 restarts (R-12). A key press then a pointerdown on the graph: the
+#   slider blurs and commits at once in all three, so no pending commit can land mid graph
+#   drag. While pending (10 ArrowDown held, and 100 ms after the keyup) the panel, slider and
+#   field show 0.25 and the voice plays 0.35 until the commit (the R-7 trade-off); after every
+#   path the lab, slider, field and voice agree: the final value always commits.
+# - additive-skips-dual: run without the builder's two-line wave reset after
+#   ui-dual-phase-stereo-controls, it fails only its literal 'sine,sine' compare: before and
+#   live are square,triangle, no periodic wave, setPeriodicWave refused, in all three engines.
+#   The behaviour holds with non-sine waves too, so the reset restores the check's
+#   precondition and masks no regression (a 'custom' oscillator would still fail it).
+# - Mutation (git-archive copy of the head, node --test of the four unit files): P16 (round
+#   3's survivor, update()'s switch notification settling) killed by the R-10 case. Of the R-9
+#   fix: Q1 keydown does not arm keying (the round-3 code), Q2 keyup commits at once, Q3
+#   keydown does not cancel the pending commit, Q4 blur not wired, Q6 edits never dirty (the
+#   final value dropped), Q7 change commits while keying, Q8 commit keeps keying, Q11 window
+#   5000 ms, Q12 window 0 ms, Q13 the commit settles, Q14 disarm does not clear the timer, Q15
+#   Sustain not bound, Q16 time sliders not bound: killed. Survived, equivalent or harmless:
+#   Q5 commit ignores dirty and Q9 commit keeps dirty (an extra commit of the same shape;
+#   setAdsr answers unchanged and nothing restarts), Q10 keyup without the keying guard (the
+#   commit finds nothing dirty), Q17 dispose leaves the timer (a commit to a lab with no
+#   listeners); P13 as in round 3 (equivalent).
 # - No PR code was modified; this file is the only change.
 #
-# Closed: R-1 to R-5 (still closed: the delta does not touch scheduler.js or envelope.js, and
-# R-2's path passes its unit cases, N4/N8 and envelope-follows-held), R-7 for pointer drags,
-# R-8. Open: R-9 is P2 (new: the keyboard path keeps R-7's train of re-attacks; not scoped as
-# a follow-up), so the verdict is changes-requested. R-6, R-10 and R-11 are P3.
+# Closed: R-1 to R-5, R-7, R-8 (still closed: no guarded file in the delta, their unit cases
+# and envelope-follows-held/-drag-one-restart pass), R-9, R-10, R-11. Open: R-6 and R-12, both
+# P3. No open P1 or P2, so the verdict is merge.
 schema: review-verdict/v1
 pr: 296
-verdict: changes-requested
+verdict: merge
 reviewer: >-
   dev-68 (Claude Opus 5.5 session 4f90795d); did not build, merge or edit this change; wrote
   only this file
@@ -89,47 +94,44 @@ findings:
     severity: P2
     status: closed
     title: >-
-      Closed at aeec969a, unchanged at 51ff526a (scheduler.js not in the delta).
-      scheduler.js:89: a continuous sweep with envelope 'whole' (ping-pong) runs the voice's
-      open envelope with no end, (o.envelope || this._envelope)(eg, t0, Infinity, a, r,
-      v.adsr), so the ADSR's decay and sustain reach it as they reach a held tone; with the
-      Envelope off v1OpenEnvelope(len Infinity) is exactly the old floor and linear attack
-      (freeze golden unchanged). Verified again: the R-1 unit cases pass and
-      envelope-follows-held's ping-pong step passes in chromium, firefox and webkit.
+      Closed at aeec969a, unchanged at dcf7ded9 (scheduler.js not in the delta, not changed by
+      main). A continuous sweep with envelope 'whole' (ping-pong) runs the voice's open
+      envelope with no end, so the ADSR's decay and sustain reach it as they reach a held tone;
+      with the Envelope off V1's floor and linear attack are kept (freeze golden unchanged).
+      Verified again: the R-1 unit cases pass at the head.
   - id: R-2
     severity: P2
     status: closed
     title: >-
-      Closed at aeec969a, still closed at 51ff526a. main.js calls followEnvelopeLab(engine,
+      Closed at aeec969a, still closed at dcf7ded9. main.js calls followEnvelopeLab(engine,
       labs.envelope, meta) on every Envelope change and engine.setAdsr applies it: a
-      release-only change on a held voice in place, any other change by a restart through
-      _restart (now once per drag, R-7), a releasing or ended voice left alone. No sounding
-      param is edited (V249). Verified at the head: R-2 unit cases, N4 and N8 killed,
-      envelope-follows-held (field edits, power switch) in three engines.
+      release-only change on a held voice in place, any other change by one click-free restart
+      per edit, a releasing or ended voice left alone. No sounding param is edited (V249).
+      Verified at the head: R-2 unit cases, envelope-follows-held in three engines.
   - id: R-3
     severity: P3
     status: closed
     title: >-
       Closed at aeec969a, unchanged. withLabOptions (lab-play-options.js) is the wrapper
-      main.js uses, tested directly; the measurement guard moved into it unchanged in meaning.
+      main.js uses, tested directly.
   - id: R-4
     severity: P3
     status: closed
     title: >-
       Closed at aeec969a. The PR body's Fail-first section says module-not-found alone does
-      not show the behaviour fails on main and records which round-2 tests fail by assertion.
+      not show the behaviour fails on main and records which tests fail by assertion; round 3's
+      fail-first is recorded too.
   - id: R-5
     severity: P3
     status: closed
     title: >-
       Closed at aeec969a, in the docs: README.md and .ai/repo/features/adsr-envelope.md say
-      "every note of the instrument" and that the Pattern sequencer and Studio keep their own
-      envelopes; the delta adds the once-per-drag sentence to both.
+      "every note of the instrument"; the delta adds the keyboard sentence to both.
   - id: R-6
     severity: P3
     status: open
     title: >-
-      Unchanged (_restart is not in the delta). _restart (audio-engine.js:778) still copies the
+      Unchanged (_restart is not in the delta). _restart (audio-engine.js) still copies the
       first play's attackS, releaseS and durationS, and setAdsr's restart reaches the same
       mechanism: switching the Envelope off during a held tone gives the restarted voice the
       first play's releaseS, whatever the instrument's Release field says now. Pre-existing;
@@ -138,58 +140,54 @@ findings:
     severity: P2
     status: closed
     title: >-
-      Closed at 51ff526a for pointer drags. The lab marks a slider's 'input' and a graph
-      pointermove settling and the slider's 'change', the graph's pointerup/pointercancel
-      (on the host, which the captured canvas's events bubble to), typed fields, the switch,
-      set() and update() committed; setAdsr answers 'pending' while settling (only v.opts
-      takes the edit) and at the commit compares the scheduled v.adsr and v.stepHook, so it
-      restarts once. Verified: probe 20 settling events -> 0 restarts and 1 voice, the commit
-      -> 1 restart, largest output step 0.0021 per sample (click-free, the FAST_RELEASE_S
-      crossfade), level 0.100 after; a real mouse drag of the slider and a graph drag released
-      outside the canvas restart once at the final value in chromium, firefox and webkit;
-      envelope-drag-one-restart passes there; P1-P12 and P17 killed. Accepted trade-off:
-      during a drag of a, d or s the sound keeps the scheduled shape while the panel and
-      graph show the dragged value, and it catches up once at release (no sounding ramp may be
-      edited, V249); a release drag stays in place on every event. The keyboard path is R-9.
+      Closed at 51ff526a for pointer drags, still closed at dcf7ded9: bindSlider keeps a
+      slider's 'input' settling and its 'change' committing when no key is down; the R-7 unit
+      cases, envelope-drag-one-restart and the mouse-drag part of envelope-keys-one-restart pass
+      in three engines; Q15/Q16 (a slider left unbound) are killed by the R-7 lab case.
   - id: R-8
     severity: P3
     status: closed
     title: >-
-      Closed at 51ff526a. The R-8 unit case edits attack and then decay on a held voice
-      (restart each, the new voice carrying the value) and calls setAdsr on a releasing voice
-      (false, no new voice, the same voice); N9, N10 and N14 are killed by it.
+      Closed at 51ff526a, unchanged. The R-8 unit case passes at the head.
   - id: R-9
     severity: P2
-    status: open
+    status: closed
     title: >-
-      New, the R-7 train survives on the keyboard path. A range input fires 'input' and
-      'change' for every keyboard step, and 'change' now commits, so each arrow press or
-      auto-repeat restarts the held voice. Measured in chromium, firefox and webkit: ArrowLeft
-      held on the Sustain slider for 20 repeats 33 ms apart gives 20 restarts; 20 quick presses
-      give 20 restarts with up to 4-8 audible voices; on the freeze mock, one commit per 33 ms
-      gives 20 re-attacks to 1.000 with dips to 0.0001 over 0.66 s, the R-7 sound. The sliders
-      and fields are the panel's keyboard alternative to the graph (envelope-graph.js:4-6),
-      so a keyboard user's way to sweep Sustain is the defect R-7 closed for the pointer. No
-      check presses a key on these sliders. The final value is reached (0.4 after 20 steps).
-      Fix: treat keyboard steps as settling until keyup (a keydown on the slider marks the
-      next input/change settling, keyup commits once), or a short trailing debounce of the
-      commit; or scope it in the PR body as an explicit follow-up.
+      Closed at dcf7ded9. While a key is down on an Envelope slider its input and change
+      settle; the keyup commits once KEY_COMMIT_MS (250 ms) later unless another keydown comes
+      first, and a blur commits at once. Verified in chromium, firefox and webkit: held arrows,
+      20 presses (envelope-keys-one-restart), PageUp/PageDown/Home/End, Tab mid-hold (the
+      blur commits, the stray keyup elsewhere does nothing), a key held across a mouse drag:
+      one restart per run at the final value, 1-2 audible voices (the crossfade), no train;
+      the final value commits on every path. Presses spaced more than the window apart
+      restart once each (about every 305 ms at 260 ms gaps): a trailing debounce, the fix
+      round 3 named as acceptable. In webkit a mousedown on the range blurs it, so keys then a
+      drag are two edits and two restarts. While pending the panel shows the new value and the
+      voice keeps the old shape (the R-7 trade-off, V249). The fix adds no automation call.
+      Unit case R-9 fails on a658a0db's lab by assertion; Q1-Q4, Q6-Q8, Q11-Q14 killed.
   - id: R-10
     severity: P3
-    status: open
+    status: closed
     title: >-
-      New, coverage of the commit flag. Mutant P16 (update()'s switch notification sent with
-      settling true, labs/envelope.js:123) survives the unit files and the envelope browser
-      checks: a config import that switches the Envelope during a held tone would leave the
-      voice 'pending' on its old shape. The head's code is right (settling false); add an
-      update({ enabled }) with a voice sounding to the R-7 lab case. The keyboard path (R-9)
-      has no case either.
+      Closed at dcf7ded9. The R-10 unit case switches the Envelope off and on by
+      update({ enabled }) during a held tone (a commit, 'restarted' each time, no notification
+      without a switch); mutant P16 is killed by it.
   - id: R-11
+    severity: P3
+    status: closed
+    title: >-
+      Closed. The PR body records content 34f59ccd, no longer names 728bcf14, has sections for
+      rounds 2 and 3 (R-7 to R-11, the new checks and their fail-first, the mutants), and says
+      main 27ce813e is merged and why additive-skips-dual changed.
+  - id: R-12
     severity: P3
     status: open
     title: >-
-      New, the PR body is stale for round 2: it still records content 728bcf14 at aeec969a,
-      has no section for R-7 and R-8 (the coalescing, the 'pending' answer, the new
-      envelope-drag-one-restart check and its fail-first), and does not say that the branch
-      conflicts with origin/main (dist/index.html, tests/README.md), so CI has not run at
-      51ff526a. Update it with the 34f59ccd digest and the round-2 changes.
+      New, a 'change' without a key still commits at once. An assistive technology's increment
+      (for example a touch screen reader's swipe on the slider) can reach a range as input +
+      change with no keydown, so each step restarts the held voice: five such synthetic steps
+      150 ms apart gave five restarts in three engines (at most 2 audible voices,
+      gesture-paced, not R-9's 33 ms train; no real screen reader was driven). The docs
+      promise one restart per run of arrow keys, which holds; they say nothing of increments
+      without keys. Follow-up: debounce a change that no pointerdown
+      opened (as the keyboard's window does), or say so in adsr-envelope.md.
