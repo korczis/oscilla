@@ -382,7 +382,8 @@ export function createInstrument(deps = {}) {
       // A new context starts at the requested level: init() builds master.gain from it. Only
       // then: main.js calls ensureAudio on every pointerdown and keydown, and a write on a
       // running context would replace the level the Studio's Master Output set while it plays
-      // (C012, engine-sync-2). The gainLevel $watch in main.js keeps a running engine in step.
+      // (C012, engine-sync-2). The gainLevel $watch in main.js keeps a running engine in step,
+      // and claimMasterLevel gives the Playground its level when it starts a voice.
       if (first) engine.setMasterGain(this.gainLevel);
       if (!engine.init()) { this.status = 'ERROR'; return false; }
       this.sampleRate = engine.sampleRate;
@@ -436,6 +437,7 @@ export function createInstrument(deps = {}) {
         this.notify('error', 'Cannot play this configuration', res.error);
         return false;
       }
+      this.claimMasterLevel();
       const info = engine.play(res.plan, {
         mode, continuous: this.continuousAllowed, limitS: this.safetyLimit, durationS: this.duration / 1000,
         attackS: this.attack / 1000, releaseS: this.release / 1000,
@@ -443,6 +445,20 @@ export function createInstrument(deps = {}) {
       if (!info) return false;
       this.addHistory(res.plan);
       return true;
+    },
+
+    /**
+     * The Playground takes the master stage: the instrument or the Pattern Sequencer starts a
+     * voice (play, the sequencer's start through the labs adapter), or Reset instrument restores
+     * the gain. The Playground gain is the level in effect from now, so a voice started over a
+     * playing Studio sounds at its own level from its onset, not at the Studio's Master Output
+     * until the Studio's held restore (C012 F1); the Studio keeps this newer level at its STOP
+     * (PR #119 D2), and the status bar stops showing its Master level. The unlock listener's
+     * ensureAudio claims nothing: a click or a key press elsewhere leaves the level alone.
+     */
+    claimMasterLevel() {
+      engine.setMasterGain(this.gainLevel);
+      if (this.studio && Number.isFinite(this.studio.masterLevel)) this.studio.masterLevel = null;
     },
 
     holdStart(e) {
@@ -901,6 +917,7 @@ export function createInstrument(deps = {}) {
       this.persistPresets();
     },
     resetDefaults() {
+      const gain = this.gainLevel;
       this.stopNow();
       Object.assign(this, defaultInstrumentState());
       this.continuousAllowed = false;
@@ -909,7 +926,10 @@ export function createInstrument(deps = {}) {
       this.loadedLabel = '';
       this.paramErrors = {};
       this.setFrequency(440);
-      engine.setMasterGain(this.gainLevel);
+      // One writer (C012 F2): a changed gain reaches the engine through the gainLevel $watch
+      // (main.js), which also ends the status bar's Studio readout; an unchanged one fires no
+      // watch, so it is claimed here. Either way the output plays the restored Playground gain.
+      if (this.gainLevel === gain) this.claimMasterLevel();
       this.notify('success', 'Defaults restored', 'All instrument parameters are back to their defaults. Custom presets are kept.');
     },
 

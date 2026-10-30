@@ -19,7 +19,9 @@ import { createIdGenerator, createStudioStore } from '../../src/js/studio/action
 import { createStudioRuntime } from '../../src/js/studio/runtime.js';
 import { REFERENCE_TEMPLATE_ID, templateModel } from '../../src/js/studio/templates/index.js';
 import { createWorkbench } from '../../src/js/ui/workbench.js';
-import { createFakeAudioEnv } from './sequencer-fake-audio.mjs';
+import { createSequencerEditor } from '../../src/js/sequencer/editor.js';
+import * as sequencerPanel from '../../src/js/labs/sequencer-panel.js';
+import { createFakeAudioEnv, FakeContext, fakeTimers } from './sequencer-fake-audio.mjs';
 
 /** An engine stand-in that counts every write of the master level. */
 function countingEngine() {
@@ -107,6 +109,7 @@ test('dup-stale-4: a level set elsewhere while the Studio played is released too
   assert.ok(a.runtime.apply(a.store.getModel(), { revision: a.store.getRevision() }).ok);
   assert.ok(a.runtime.start().ok);
   const held = a.events.at(-1);
+  assert.ok(held && held.level === STUDIO_LEVEL, `PLAY reported the Studio level: ${held}`);
   a.engine.setMasterGain(0.1); // the Playground's gain watcher (main.js)
   assert.notEqual(a.engine.masterWrites, held.writes, 'the write count moved past the Studio');
   const done = a.runtime.stop();
@@ -165,4 +168,95 @@ test('dup-stale-4: the status bar never writes the Studio level into the Playgro
   void cmp.statusGainText;
   void cmp.statusLabel;
   assert.equal(cmp.gainLevel, 0.08);
+});
+
+// ---------------------------------------------------------------- review 76e93875 (F1, F2)
+//
+// F1: with ensureAudio no longer writing on a running context, a voice the Playground or the
+// Pattern Sequencer started over a playing Studio sounded at the Studio's Master Output level
+// until the Studio's held restore (about S + 50 ms). Starting a voice now claims the Playground
+// gain (claimMasterLevel), and the Studio keeps that newer level at its STOP.
+// F2: resetDefaults wrote the level unconditionally: a second writer beside the gainLevel
+// $watch, and with the gain already at its default nothing reactive changed, so the status bar
+// went on showing the Studio's Master level after the Playground gain had replaced it.
+
+test('F1: a Playground voice started over a playing Studio has the Playground gain at once',
+  async () => {
+    const a = studioAudio();
+    const app = createInstrument({ engine: a.engine, env: {}, timers: TIMERS });
+    app.gainLevel = ENGINE_LEVEL; // the gainLevel $watch keeps the engine in step (main.js)
+    assert.ok(a.runtime.apply(a.store.getModel(), { revision: a.store.getRevision() }).ok);
+    assert.ok(a.runtime.start().ok);
+    assert.equal(a.engine.gainLevel, STUDIO_LEVEL, 'the Studio holds the master stage');
+    // The voice itself is the engine's (freeze, engine-v1port); this is the level it starts at.
+    a.engine.play = () => ({});
+    assert.equal(app.play('trigger'), true);
+    assert.equal(a.engine.gainLevel, ENGINE_LEVEL,
+      'the onset plays the Playground gain, not the Studio Master Output level');
+    // The playing $watch then stops the Studio (workspace.js): the newer level is kept, at once.
+    const done = a.runtime.stop();
+    a.fx.advance(0.3);
+    await done;
+    assert.equal(a.engine.gainLevel, ENGINE_LEVEL);
+    assert.equal(a.engine._masterHeldUntil, null,
+      'no restore held until after the Studio fade: the level was the Playground\'s already');
+    const last = a.events.at(-1);
+    assert.ok(last && last.level === null, `the Studio no longer holds the level: ${last}`);
+  });
+
+test('F1: the Pattern Sequencer claims the Playground gain when, and only when, it starts', () => {
+  assert.equal(typeof sequencerPanel.sequencerEngine, 'function',
+    'labs/sequencer-panel.js exports the editor engine adapter it mounts');
+  const ctx = new FakeContext({ sampleRate: 48000, currentTime: 5 });
+  let claims = 0;
+  const engine = sequencerPanel.sequencerEngine({ getContext: () => ctx,
+    getDestination: () => ctx.destination, claimOutput: () => { claims += 1; } });
+  const ed = createSequencerEditor({ engine, timers: fakeTimers() });
+  assert.equal(ed.play(), true, ed.error);
+  assert.equal(claims, 1, 'a started sequence claims the output level');
+  ed.stop();
+  ed.clear();
+  assert.equal(ed.model.blocks.length, 0);
+  assert.equal(ed.play(), false, 'an empty sequence does not start');
+  assert.equal(claims, 1, 'a refused PLAY leaves the level alone (the Studio may still play)');
+});
+
+function resetRig() {
+  const engine = countingEngine();
+  const app = createInstrument({ engine, env: {}, timers: TIMERS });
+  const wb = createWorkbench({ engine });
+  for (const k of ['studioPlaying', 'studioMasterLevel', 'statusGainText', 'gainDb',
+    'gainDbText']) {
+    const d = Object.getOwnPropertyDescriptor(wb, k);
+    assert.ok(d, `the status bar has ${k}`);
+    Object.defineProperty(app, k, d);
+  }
+  assert.equal(app.ensureAudio(), true);
+  app.studio = { playing: true, masterLevel: STUDIO_LEVEL, masterWrites: null };
+  return { engine, app };
+}
+
+test('F2: Reset instrument with the gain already at its default gives the output that gain and '
+  + 'ends the Studio readout', () => {
+  const { engine, app } = resetRig();
+  const gain = app.gainLevel;
+  assert.equal(app.statusGainText, 'Master -26.0 dB', 'the Studio holds the level');
+  const before = engine.writes.length;
+  app.resetDefaults();
+  assert.equal(app.gainLevel, gain, 'the default gain is unchanged: no gainLevel $watch fires');
+  assert.deepEqual(engine.writes.slice(before), [gain], 'one write, of the restored gain');
+  assert.equal(app.studio.masterLevel, null,
+    'the reactive Studio level is cleared, so the status bar is re-read');
+  assert.equal(app.statusGainText, 'Gain -21.9 dB');
+});
+
+test('F2: Reset instrument with a changed gain leaves the write to the gainLevel $watch', () => {
+  const { engine, app } = resetRig();
+  app.gainLevel = 0.03;
+  const before = engine.writes.length;
+  app.resetDefaults();
+  assert.notEqual(app.gainLevel, 0.03, 'the gain changed back to its default');
+  assert.equal(engine.writes.length, before,
+    `resetDefaults wrote the level itself (${engine.writes.slice(before)}): the gainLevel $watch `
+      + 'in main.js is its one writer');
 });

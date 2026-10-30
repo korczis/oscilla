@@ -72,6 +72,18 @@ const STALL_MS = Number(arg('stall-ms', '0'));
 const ENTRY = path.join(__dirname, 'fixtures', 'v31-studio-transport-entry.js');
 const DIST = path.resolve(__dirname, '..', '..', 'dist', 'index.html');
 const APP_ONLY = argv.includes('--app-only');
+// The app checks' viewport, `--viewport 390x844` for a phone (default 1536 x 1024).
+const VIEWPORT = (() => {
+  const m = /^(\d+)x(\d+)$/.exec(arg('viewport', '1536x1024'));
+  if (!m) {
+    console.error('--viewport takes WIDTHxHEIGHT, e.g. 390x844');
+    process.exit(2);
+  }
+  return { width: Number(m[1]), height: Number(m[2]) };
+})();
+// src/styles/responsive.css hides the status bar's extras (.osc-sb-extra, the gain readout
+// among them) below 1280 px: there the readout's text is judged and its being hidden expected.
+const SB_EXTRAS_SHOWN = VIEWPORT.width >= 1280;
 
 // Timing semantics (§212, docs/v31/timeline.md "Clip start"): a clip starts at the frame where
 // its voice envelope leaves GAIN_FLOOR — baseTime + position, as the V2 sequencer's block start
@@ -355,8 +367,10 @@ async function statusBarStudio(key, page) {
   const bar = on || await statusBar(page);
   check(key, 'status-bar-studio: the visible state says PLAYING with the playing dot',
     bar.labelShown && bar.label === 'PLAYING' && bar.dot, JSON.stringify(bar));
-  check(key, `status-bar-studio: the visible readout is the level in effect (${want})`,
-    bar.gainShown && bar.gain === want && near(bar.engine, STUDIO, 1e-9), JSON.stringify(bar));
+  check(key, `status-bar-studio: the readout is the level in effect (${want}), `
+    + (SB_EXTRAS_SHOWN ? 'shown' : 'hidden at this width by the responsive layout'),
+  bar.gainShown === SB_EXTRAS_SHOWN && bar.gain === want && near(bar.engine, STUDIO, 1e-9),
+  JSON.stringify(bar));
   check(key, 'status-bar-studio: the pattern readout names the Studio', bar.pattern === 'Studio',
     bar.pattern);
   check(key, 'status-bar-studio: the status Play button stays the instrument\'s (ADR 0050)',
@@ -380,23 +394,87 @@ async function statusBarStudio(key, page) {
   await page.evaluate((g) => { window.OSCILLA.app.gainLevel = g; }, playground);
 }
 
+/**
+ * Start a Playground or Pattern Sequencer voice over the playing Studio from its own control
+ * and read, in the same task (before any $watch or the sequencer's 150 ms poll ran), the level
+ * the engine requests: the Playground gain from the voice's onset (C012 F1).
+ */
+async function claimOverStudio(key, page, what, selector) {
+  const STUDIO = 0.02;
+  const { playground } = await loadStudio(page, 'subtractive-synth', STUDIO);
+  await playStudio(page, STUDIO, `${what}: PLAY at the Master level`);
+  const at = await page.evaluate((sel) => {
+    const e = window.OSCILLA.engine;
+    const writes = e.masterWrites;
+    document.querySelector(sel).click();
+    return { gainLevel: e.gainLevel, writes: e.masterWrites - writes,
+      studio: window.OSCILLA.studio.transport.playing };
+  }, selector);
+  check(key, `${what}: the voice starts at the Playground gain, not the Studio's Master`,
+    near(at.gainLevel, playground, 1e-9) && at.writes >= 1,
+    `engine ${at.gainLevel}, Playground ${playground}, Studio ${STUDIO}, ${at.writes} write(s)`);
+  // The playing / seqPlaying $watch stops the Studio, which keeps the newer level at once.
+  const after = await until(() => page.evaluate(() => {
+    const e = window.OSCILLA.engine;
+    return window.OSCILLA.studio.transport.playing ? null
+      : { gainLevel: e.gainLevel, held: e._masterHeldUntil,
+        masterLevel: window.OSCILLA.app.studio.masterLevel };
+  }), { ms: 10000, what: `${what}: the Studio stops for the new voice` }).catch(() => null);
+  check(key, `${what}: the Studio stops and keeps the Playground level, with no held restore`,
+    !!after && near(after.gainLevel, playground, 1e-9) && after.held === null
+      && after.masterLevel === null, JSON.stringify(after));
+  await page.evaluate(() => {
+    const seq = window.OSCILLA.labs.sequencer;
+    if (seq && seq.editor.playing) seq.editor.stop();
+    window.OSCILLA.app.stopNow();
+  });
+  await until(() => page.evaluate(() => !window.OSCILLA.app.playing
+    && !window.OSCILLA.labs.sequencer.editor.playing),
+  { ms: 10000, what: `${what}: the voice stops` });
+}
+
+const playgroundOverStudio = (key, page) => claimOverStudio(key, page,
+  'playground-over-studio (status-bar Play)', '[data-osc="status.play"]');
+const sequencerOverStudio = (key, page) => claimOverStudio(key, page,
+  'sequencer-over-studio (Pattern Sequencer PLAY)', '[data-osc="seq.play"]');
+
+/** Reset instrument with the Playground gain already at its default (C012 F2). */
+async function resetOverStudio(key, page) {
+  const STUDIO = 0.02;
+  const { playground } = await loadStudio(page, 'subtractive-synth', STUDIO);
+  await playStudio(page, STUDIO, 'reset-over-studio: PLAY at the Master level');
+  const master = `Master ${dbText(STUDIO)}`;
+  await until(() => statusBar(page).then((v) => v.gain === master),
+    { ms: 5000, what: 'reset-over-studio: the status bar shows the Studio Master' });
+  await page.evaluate(() => document.querySelector('[data-osc="settings.reset"]').click());
+  const want = `Gain ${dbText(playground)}`;
+  const bar = await until(() => statusBar(page).then((v) => (v.gain === want ? v : null)),
+    { ms: 5000, what: 'reset-over-studio: the readout after Reset instrument' })
+    .catch(() => null);
+  const b = bar || await statusBar(page);
+  check(key, `reset-over-studio: after Reset the readout is the level in effect (${want})`,
+    !!bar && near(b.engine, playground, 1e-9) && near(b.app, playground, 1e-9),
+    JSON.stringify(b));
+}
+
 async function runApp(browserName) {
   const key = browserName;
   const browser = await playwright[browserName].launch(LAUNCH[browserName]);
-  const context = await browser.newContext({ viewport: { width: 1536, height: 1024 } });
+  const context = await browser.newContext({ viewport: VIEWPORT });
   const page = await context.newPage();
   page.setDefaultTimeout(15000);
   const errors = [];
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(`console: ${m.text()}`); });
-  console.log(`\n${key} app (dist/index.html)`);
+  console.log(`\n${key} app (dist/index.html, ${VIEWPORT.width} x ${VIEWPORT.height})`);
   try {
     await page.goto(pathToFileURL(DIST).href, { waitUntil: 'load' });
     await page.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
     await page.mouse.click(5, 300); // a user gesture so the audio context may start
     await page.evaluate(() => { const a = window.OSCILLA.app; a.alerts = [];
       if (!a.safetyCollapsed) a.collapseSafety(); });
-    for (const fn of [studioLevelSurvivesGesture, statusBarStudio]) {
+    for (const fn of [studioLevelSurvivesGesture, statusBarStudio, playgroundOverStudio,
+      sequencerOverStudio, resetOverStudio]) {
       try {
         await fn(key, page);
       } catch (err) {

@@ -117,6 +117,8 @@ const adapter = {
     return () => adapterListeners.delete(fn);
   },
   getDestination: () => engine.master,
+  // The Pattern Sequencer started: the Playground gain is the level in effect (C012 F1).
+  claimOutput: () => { if (app) app.claimMasterLevel(); },
   getStereoRouter: () => (liveRouter ? liveRouter.router : null),
   // The mic lab's nodes are built and accounted by the engine (audio-engine-discipline).
   attachMicrophone: (stream, opts) => engine.attachMicrophone(stream, opts),
