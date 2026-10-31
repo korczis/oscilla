@@ -1,0 +1,40 @@
+id: U023
+milestone: M054
+serves:
+  - "ui-current#ui-audited"
+title: "The Studio Inspector's disclosures are 44 px tap targets on a touch screen"
+slug: the-studio-inspector-s-disclosures-are-44-px-tap-targets-on-a
+priority: p3
+profile: implementation
+objective: "Lands as fix(ui). The 'Runtime details' disclosure of the Studio Inspector (#osc-st-inspector, section[data-osc=studio.inspector.runtime]: the summary of the details.osc-si-help built at src/js/ui/studio/inspector.js:1248) is 14 px tall on a coarse pointer (350x14 px at 390x844 in the Inspector subview, 248x14 px at 768x1024). It is the only Studio control measured under 24 px, while the app's own coarse-pointer rule is 44 px (src/styles/responsive.css:444ff and src/styles/integration.css:767ff, which do not list it). Before: a 14 px tap target. After: on a coarse pointer the summary is at least 44 px tall across its row, the four corners of a 44 px square centred on it land on it, it toggles the disclosure, and the runtime dl it reveals is unchanged. The same details.osc-si-help disclosure is built for 'About <node type>' (inspector.js:1001) and for each trace entry (inspector.js:1316); they get the same target. The S074 probe did not measure them, so this issue makes no claim about their present size; the check below measures them. The fix rides on F008's Pro card for the Inspector: the summary carries Tailwind utilities with a coarse-pointer minimum height. It adds no osc-* class token, no selector to a legacy or domain-view stylesheet and no inline style (project.ui-uses-flowbite-pro). The gap that let it through: measureTouch in tests/browser/layout.cjs queries no summary element, so V429's touch-target evidence never saw it. Widening that selector to every summary of the app is out of scope here (src/index.html, patches-panel.js and graph-picker.js summaries are unmeasured). Negative cases: on a fine pointer the summary keeps its present height (no desktop layout change); a summary in a hidden subview or a closed dialog is not counted; Enter and Space still toggle it with focus visible. Rollback: revert the commit; only the disclosure's height returns to 14 px, and no stored record or URL state is touched. Not this: V429 (recorded MET, its check misses summaries), S048, S071, F008 (moves the Inspector into a Pro card, names no target size), N008, K096 (parameter sections), G008, W016, N003 (declared controls and kinds), C021 (#331, a census of other surfaces)."
+why: "Found by the S074 quality-bar review of 2026-10-30 at origin/main d9db6bdf, section 74 symptom 'The \"Runtime details\" disclosure in the Studio Inspector is a 14 px tall tap target on touch.', reproduced by an independent verifier; evidence: screenshot /private/tmp/claude-501/-Users-korczis-dev-oscilla/901211e2-501d-4cb8-8333-88e1a6fcf519/scratchpad/s074/out/probe-studio-inspector.png (the 'Runtime details' row), the coarse-pointer measurement at 390x844 and 768x1024 in the S074 items record; serves ui-current#ui-audited, an INFERRED fit."
+scope:
+  - "src/js/ui/studio/inspector.js"
+  - "tests/unit/studio-inspector-touch.test.mjs"
+  - "tests/browser/v31-studio-runtime.cjs"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "F008"
+acceptance_criteria:
+  - "Fail-first: tests/unit/studio-inspector-touch.test.mjs reads src/js/ui/studio/inspector.js and fails on the merge base: every h('summary', ...) the Inspector builds carries a Tailwind coarse-pointer minimum-height utility of at least 44 px, and none carries an osc-* class token or a style attribute."
+  - "A check in tests/browser/v31-studio-runtime.cjs, in a hasTouch context at 390x844 (Inspector subview) and at 768x1024, in chromium, firefox and webkit from file://, selects a node, measures the 'Runtime details', 'About <node type>' and every trace-entry summary at least 44 px tall with the 44 px corner probe of layout.cjs's measureTouch, taps 'Runtime details' and asserts the details open and the runtime dl it reveals is the one a keyboard toggle shows; in a fine-pointer context at 1536x1024 the summary's height is unchanged from the merge base."
+  - "dist/index.html defines the coarse-pointer utility the summaries carry (the compiled Tailwind of F001), so the class is not inert (project.no-inert-surfaces)."
+  - "It adds no class token, selector, markup surface or inline style and only removes legacy ones, so tests/unit/ui-flowbite-pro-baseline.json stays equal or falls (node scripts/ui-flowbite-pro-record.mjs --check passes, rewritten only where a count fell) and node --test tests/unit/ui-flowbite-pro.test.mjs passes (project.ui-uses-flowbite-pro, project.visual-identity-lock v2)."
+  - "As a fix change it carries a unit test that fails on the merge base and passes on the head (project.fail-first); the Studio path is guarded, so the pull request carries a reviewer's .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named deadline (project.suite-harness, project.bounded-test-timing)."
+  - "Definition of done, extends: the Inspector's disclosures join the 44 px coarse-pointer targets the rest of the Studio already meets."
+  - "Definition of done, interlinks: the issue names V429, F008 and S074; the browser check's header cites U023 and V429."
+  - "Definition of done, interactivity: a tap on the disclosure toggles it on a phone and a tablet (the browser check above)."
+  - "Definition of done, docs, menus and routes: tests/README.md's row for browser/v31-studio-runtime.cjs and a row for the new unit test say what they prove; no menu or route changes (stated)."
+  - "Definition of done, tested: node --test tests/unit/studio-inspector-touch.test.mjs, node tests/browser/v31-studio-runtime.cjs and npm test pass; dist is rebuilt and npm run build:check passes."
+  - "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+  - "node --test tests/unit/studio-inspector-touch.test.mjs"
+  - "node tests/browser/v31-studio-runtime.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-10-30'
+updated_at: '2026-10-30'
