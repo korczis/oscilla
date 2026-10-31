@@ -13,8 +13,13 @@
 //   compiledEdgeStatus(plan) -> Map edgeId -> { status, reason }
 //   nodeWarnings(model, registry) -> Map nodeId -> [message]      (validator warnings, §77)
 //   probeConnection(model, from, to, registry) -> { allowed, reason, signalType }
-//   connectionTargets(model, from, registry) -> [{ node, port, nodeName, portLabel, type,
-//     allowed, reason, label }]                     every input of every other node (§65, §139)
+//   probeRewire(model, from, to, { detach, registry }) -> { allowed, reason, signalType, remove,
+//     replaces, same }        a cable drop (K008): `detach` (the edge a drag picked up at its
+//     input end) is judged as gone, and an occupied single input as replaced
+//   connectionTargets(model, from, registry, { rewire, detach }) -> [{ node, port, nodeName,
+//     portLabel, type, allowed, reason, label, replaces, same }]   every input of every other
+//     node (§65, §139); `rewire` judges each by probeRewire (a cable drag), else by
+//     probeConnection (tap-connect, the Connect dialog)
 //   connectableTypes(model, from, registry) -> [type]   node types with an input that accepts
 //     the source port type and role (create-node-from-cable, §66)
 //   firstCompatibleInput(def, sourcePort) -> port | null
@@ -338,11 +343,41 @@ export function probeConnection(model, from, to, registry = NODE_REGISTRY) {
 }
 
 /**
+ * Would a cable drag that ends on `to` be accepted (K008)? `detach` is the edge the drag picked
+ * up at its input end, or null for a new cable from an output: it is judged as removed, and a
+ * drop back on its own input is `same` (nothing to do). An input that takes one connection and
+ * has one from another output is judged as replaced (`replaces`: its edge ids); one from the same
+ * output stays, so the validator names the duplicate. `remove` is what the drop removes before
+ * EDGE_ADD. The verdict is probeConnection's on the model without the removed edges. Never throws.
+ */
+export function probeRewire(model, from, to, { detach = null, registry = NODE_REGISTRY } = {}) {
+  const none = { remove: [], replaces: [], same: false };
+  const old = detach ? model.graph.edges.find((e) => e.id === detach) || null : null;
+  if (old && to && old.to.node === to.node && old.to.port === to.port
+    && from && old.from.node === from.node && old.from.port === from.port) {
+    return { allowed: true, reason: null, signalType: null, ...none, same: true };
+  }
+  const b = to ? nodeById(model, to.node) : null;
+  const tgt = b ? registry.port(b.type, to.port, 'in') : null;
+  const replaces = tgt && !tgt.multiple ? model.graph.edges.filter((e) => e !== old
+    && e.to.node === to.node && e.to.port === to.port
+    && !(from && e.from.node === from.node && e.from.port === from.port)).map((e) => e.id) : [];
+  const remove = [...(old ? [old.id] : []), ...replaces];
+  const gone = new Set(remove);
+  const trial = gone.size ? { ...model, graph: { ...model.graph,
+    edges: model.graph.edges.filter((e) => !gone.has(e.id)) } } : model;
+  const v = probeConnection(trial, from, to, registry);
+  return v.allowed ? { ...v, remove, replaces, same: false } : { ...v, ...none };
+}
+
+/**
  * Every input port of every other node with the verdict of connecting `from` { node, port } to
  * it, in model order then port order (§65 live feedback, §139 accessible list). Inputs whose
- * type differs are judged by canConnect alone (cheap); type-compatible ones by probeConnection.
+ * type differs are judged by canConnect alone (cheap); type-compatible ones by probeConnection,
+ * or by probeRewire when `rewire` (a cable drag, with the picked-up edge `detach`).
  */
-export function connectionTargets(model, from, registry = NODE_REGISTRY) {
+export function connectionTargets(model, from, registry = NODE_REGISTRY,
+  { rewire = false, detach = null } = {}) {
   const a = from ? nodeById(model, from.node) : null;
   const src = a ? registry.port(a.type, from.port, 'out') : null;
   if (!src) return [];
@@ -353,8 +388,11 @@ export function connectionTargets(model, from, registry = NODE_REGISTRY) {
     if (!def) continue;
     for (const p of def.inputs) {
       const quick = canConnect(src, p, { sourceNodeId: a.id, targetNodeId: n.id });
-      const verdict = quick.allowed ? probeConnection(model, from, { node: n.id, port: p.id },
-        registry) : { allowed: false, reason: `Connection rejected: ${quick.reason}` };
+      const to = { node: n.id, port: p.id };
+      const verdict = !quick.allowed
+        ? { allowed: false, reason: `Connection rejected: ${quick.reason}` }
+        : rewire ? probeRewire(model, from, to, { detach, registry })
+          : probeConnection(model, from, to, registry);
       out.push({
         node: n.id,
         port: p.id,
@@ -366,6 +404,8 @@ export function connectionTargets(model, from, registry = NODE_REGISTRY) {
         reason: verdict.reason,
         label: `${n.metadata.name} / ${p.role === 'PARAMETER' ? `${p.label} control`
           : `${p.label} input`}`,
+        replaces: verdict.replaces || [],
+        same: !!verdict.same,
       });
     }
   }

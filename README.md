@@ -553,10 +553,8 @@ Studio output and Playground output are exclusive: starting one stops the other,
 measurement stops the Studio.
 
 Not yet built:
-- a minimap
 - node groups
 - dragging several clips at once
-- pinch zoom on the timeline
 
 ## Safety and measurement limits
 
