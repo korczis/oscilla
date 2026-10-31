@@ -9,6 +9,13 @@
 //
 //   applyConfig(state, cfg, { sampleRate, continuousAllowed, origin })   pure, returns a copy
 //   applyConfigTo(s, cfg, origin, env)                                   mutates s in place
+//
+// Both return what the restore did not apply as saved (H002, ADR 0063 decision 3): `dropped`
+// lists the saved values that were not restored at all (continuous repeat without the
+// session's permission, ADR 0004/0005; binaural mode without the headphone confirmation) and
+// `limited` the values lowered to a limit (a frequency above the safe maximum). A drop is also
+// a notice, so the person sees it on every restore path; the permission itself is never
+// restored (project.no-fake-science).
 
 import {
   DEFAULT_GAIN, MAX_OUTPUT_GAIN, MAX_PROGRAMMED_S, MIN_FREQUENCY, RANGE_MODES, WAVEFORMS,
@@ -121,18 +128,49 @@ export function fitRangeOn(s, lo, hi, env = {}) {
 // ---------------------------------------------------------------- applyConfig
 
 /**
+ * The notice of a continuous repeat restored as once (H002); never the permission itself. It
+ * says only what brings the repeat back: allowing continuous playback changes the permission,
+ * not the repeat (setContinuous), and no control chooses the repeat, so the way back is to
+ * restore the same record again with the permission given. A link carries no permission and
+ * opens in a new page view, so its notice (`linkMessage`) promises no re-load.
+ */
+export const CONTINUOUS_REPEAT_DROPPED = Object.freeze({
+  level: 'info',
+  title: 'Continuous repeat not restored',
+  message: 'Continuous repeat saved; it plays once. To repeat it continuously, allow continuous '
+    + 'playback in Playback safety, then load it again.',
+  linkMessage: 'Continuous repeat saved; it plays once. A link never carries the permission to '
+    + 'play continuously.',
+});
+
+/** One sentence naming the dropped values, for a restore summary ('' when none). */
+export function droppedSentence(dropped) {
+  const names = (dropped || []).map((d) => d.label);
+  return names.length ? `Not restored: ${names.join(', ')}.` : '';
+}
+
+/**
  * The single validated path for presets, links, history and Learn demos, applied to s in place.
  * origin: 'preset' | 'hash' | 'history' | 'learn'. env: { sampleRate, continuousAllowed }.
- * Returns { issues, notices }: the number of rejected values (valid values are applied, invalid
- * ones skipped) and the notifications V1 showed, in order (appended to `notices` when given).
+ * Returns { issues, notices, dropped, limited }: the number of rejected values (valid values are
+ * applied, invalid ones skipped), the notifications, in order (appended to `notices` when
+ * given), the saved values not restored ({ key, label, saved, applied }) and the values lowered
+ * to a limit ({ key, saved, applied }).
  */
 export function applyConfigTo(s, cfg, origin, env = {}, notices = []) {
   // V1: oscillaApp.applyConfig (index.html@a7b7a23); this -> s, this.safeMax -> safeMax,
   // this.continuousAllowed -> env.continuousAllowed, this.notify -> notices.
   const notify = (level, title, message) => notices.push({ level, title, message });
   const { safeMax } = limitsFor(env.sampleRate);
-  if (!cfg || typeof cfg !== 'object') return { issues: 1, notices };
+  const dropped = [];
+  const limited = [];
+  if (!cfg || typeof cfg !== 'object') return { issues: 1, notices, dropped, limited };
   let issues = 0;
+  const cap = round(safeMax, 2);
+  const limitFreq = (key, v) => {
+    if (v > cap) limited.push({ key, saved: v, applied: cap });
+    return Math.min(v, cap);
+  };
   const num = (v, lo, hi) => (isNum(v) && v >= lo && v <= hi ? v : null);
   if (cfg.source !== undefined) {
     if (['single', 'sweep', 'dual'].includes(cfg.source)) s.source = cfg.source; else issues++;
@@ -197,8 +235,8 @@ export function applyConfigTo(s, cfg, origin, env = {}, notices = []) {
     const sw = cfg.sweep;
     for (const key of ['start', 'end']) {
       if (sw[key] === undefined) continue;
-      if (sw[key] === 'max') s.sweep[key] = round(safeMax, 2);
-      else if (isNum(sw[key]) && sw[key] >= MIN_FREQUENCY) s.sweep[key] = Math.min(sw[key], round(safeMax, 2));
+      if (sw[key] === 'max') s.sweep[key] = cap;
+      else if (isNum(sw[key]) && sw[key] >= MIN_FREQUENCY) s.sweep[key] = limitFreq(`sweep.${key}`, sw[key]);
       else issues++;
     }
     if (sw.durationMs !== undefined) { const v = num(sw.durationMs, 20, MAX_PROGRAMMED_S * 1000); if (v == null) issues++; else s.sweep.durationMs = v; }
@@ -206,8 +244,15 @@ export function applyConfigTo(s, cfg, origin, env = {}, notices = []) {
     if (sw.direction !== undefined) { if (['up', 'down', 'pingpong'].includes(sw.direction)) s.sweep.direction = sw.direction; else issues++; }
     if (sw.repeat !== undefined) {
       if (['once', 'n'].includes(sw.repeat)) s.sweep.repeat = sw.repeat;
-      else if (sw.repeat === 'continuous') s.sweep.repeat = env.continuousAllowed ? 'continuous' : 'once';
-      else issues++;
+      else if (sw.repeat === 'continuous' && env.continuousAllowed) s.sweep.repeat = 'continuous';
+      else if (sw.repeat === 'continuous') {
+        // The permission is per page view and never restored (ADR 0004, 0005): name the drop.
+        s.sweep.repeat = 'once';
+        dropped.push({ key: 'sweep.repeat', label: 'continuous repeat', saved: 'continuous',
+          applied: 'once' });
+        const n = CONTINUOUS_REPEAT_DROPPED;
+        notify(n.level, n.title, origin === 'hash' ? n.linkMessage : n.message);
+      } else issues++;
     }
     if (sw.repeatCount !== undefined) { const v = num(sw.repeatCount, 1, 1000); if (v == null) issues++; else s.sweep.repeatCount = Math.round(v); }
   }
@@ -217,7 +262,7 @@ export function applyConfigTo(s, cfg, origin, env = {}, notices = []) {
       const o = d[side];
       if (o === undefined) continue;
       if (!o || typeof o !== 'object') { issues++; continue; }
-      if (o.freq !== undefined) { if (isNum(o.freq) && o.freq >= MIN_FREQUENCY) s.dual[side].freq = Math.min(o.freq, round(safeMax, 2)); else issues++; }
+      if (o.freq !== undefined) { if (isNum(o.freq) && o.freq >= MIN_FREQUENCY) s.dual[side].freq = limitFreq(`dual.${side}.freq`, o.freq); else issues++; }
       if (o.wave !== undefined) { if (WAVEFORMS.includes(o.wave)) s.dual[side].wave = o.wave; else issues++; }
       if (o.gain !== undefined) { const v = num(o.gain, 0, 100); if (v == null) issues++; else s.dual[side].gain = v; }
       if (o.detune !== undefined) { const v = num(o.detune, -1200, 1200); if (v == null) issues++; else s.dual[side].detune = v; }
@@ -231,33 +276,36 @@ export function applyConfigTo(s, cfg, origin, env = {}, notices = []) {
     // Binaural mode needs an explicit headphone confirmation in this page view.
     s.dual.binaural = false;
     if (d.binaural && origin !== 'preset') {
+      // A preset asks for the confirmation before it applies (applyPreset), so it is not a drop.
+      dropped.push({ key: 'dual.binaural', label: 'binaural mode', saved: true, applied: false });
       notify('info', 'Binaural mode not restored', 'Confirm headphone use in DUAL OSC to enable the binaural demo.');
     }
   }
   if (cfg.frequency !== undefined) {
     if (isNum(cfg.frequency) && cfg.frequency > 0) {
       const f = Math.min(cfg.frequency, safeMax);
+      if (cfg.frequency > safeMax) limited.push({ key: 'frequency', saved: cfg.frequency, applied: f });
       if (origin !== 'hash' || !(cfg.range && cfg.range.mode)) fitRangeOn(s, f, f, env);
       setFrequencyOn(s, f, { silent: origin !== 'hash' }, env);
     } else {
       issues++;
     }
   }
-  return { issues, notices };
+  return { issues, notices, dropped, limited };
 }
 
 /**
  * Pure applyConfig: config + sample rate -> normalised state.
  * state: a state-like object (instrument fields + editor fields; defaults when omitted).
  * opts: { sampleRate (null = provisional), continuousAllowed (false), origin ('preset') }.
- * Returns { state, issues, notices }; the input state is not modified.
+ * Returns { state, issues, notices, dropped, limited }; the input state is not modified.
  */
 export function applyConfig(state, cfg, opts = {}) {
   const s = pickInstrumentState(state || { ...defaultInstrumentState(), ...defaultEditorFields() });
-  const { issues, notices } = applyConfigTo(s, cfg, opts.origin || 'preset', {
+  const r = applyConfigTo(s, cfg, opts.origin || 'preset', {
     sampleRate: opts.sampleRate, continuousAllowed: !!opts.continuousAllowed,
   });
-  return { state: s, issues, notices };
+  return { state: s, ...r };
 }
 
 // ---------------------------------------------------------------- gain mapping
