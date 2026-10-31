@@ -237,8 +237,9 @@ export function createSequencerEditor(options = {}) {
      * history: false applies it without one (the waveform mirrored from the instrument).
      */
     _apply(model, issues = [], { history = true } = {}) {
-      if (history && model !== this.model && sameSequence(model, this.model)) model = this.model;
-      if (history && model !== this.model) {
+      // An edit that leaves the serialized sequence as it was records no step (K003), but the
+      // model is still replaced and onChange still told (C004: every change, load included).
+      if (history && model !== this.model && !sameSequence(model, this.model)) {
         priv.undo.push({ model: copyOf(this.model), selectedId: this.selectedId });
         if (priv.undo.length > HISTORY_LIMIT) priv.undo.shift();
         priv.redo = [];
