@@ -120,6 +120,10 @@ satisfaction:
     criterion: "docs/EXTENDING.md shows a contributor how to add a Studio node, a template, a lab or workspace, a chart and a browser check, every file, export, rule, link and npm script it names exists, its example node compiles through the real registry and compiler, and README's landing deep links route where they say and point to the guide"
     evidence: claim
     ref: "extending-guide-checked"
+  - id: "dialog-focus-not-taken-back"
+    criterion: "A dialog's deferred initial focus never takes focus back from a control the user moved to after it opened, and a dialog closed before it fires takes none, so a keyboard confirmation presses the button chosen on any host load"
+    evidence: "command"
+    ref: "node --test tests/unit/dialog-initial-focus.test.mjs"
 governance:
   - "rule:project.single-file-deliverable"
   - "rule:project.rules-name-their-enforcement"
