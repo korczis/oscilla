@@ -10,10 +10,12 @@ objective: "Lands as docs(adr). Files the decision drafted in components-followu
 why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs and knowledge base, interlink them and add more; knobs, sliders and control panels in one generic way, Majordomus integrated: each component and parameter declaration carries its intent, issue and rule ids, a deterministic generator projects the registry into .ai/repo/knowledge so that Majordomus serves it (context resolve, why, traceability), and a check fails when a component has no plan or knowledge link. Design: components-followup/majordomus-kb-adr.md of this plan change, measured with Majordomus 1.0.0-alpha.1 (the CI pin) and 1.0.0-alpha.8 on a throwaway copy of origin/main cdda563c."
 scope:
 - .ai/repo/adrs
+- tests/unit/knowledge-integrity.test.mjs
 depends_on: []
 acceptance_criteria:
 - "majordomus adr check reports every identity unique, every status known and every reference resolving, under the pinned Majordomus and the launcher's (measured on a throwaway copy on 2026-10-29: 62 decisions, 0 problems, with the draft numbered 0063 and the 0058 note appended)."
 - "The new decision's status is proposed and the 0058 note leaves every section above '## Resolution notes' and the status unchanged; the note names the planned work it binds (K058, K077, N001, N004, N005, N006, Q062) by plan id only, never a rule id that is not in force (project.rules-name-their-enforcement)."
+- "J001 is recorded done only when ADR 0061 carries the resolution note for the instrument visuals on main, from J001's own docs pull request or from #329 if it lands the same note first, the evidence naming that commit; 4368b592 (ADR 0081 and the ADR 0058 note, merged through 08795f1f) is the first part only. The ADR_NOT_A_CAPABILITY entry 4368b592 added to tests/unit/knowledge-integrity.test.mjs is in scope."
 - "npm test passes, including tests/unit/knowledge-integrity.test.mjs (every path the records name exists), and majordomus knowledge validate reports no new finding."
 - "Definition of done, extends: ADR 0058 gains its knob note; the decision record set gains the component contract that G001, N001, N003, K105, V619, W001 and Y001 build on."
 - "Definition of done, interlinks: The new decision names rules project.ui-uses-flowbite-pro, project.studio-model-is-canonical, project.typed-ports, project.single-file-deliverable and project.no-inert-surfaces and ADRs 0030, 0032 and 0061; majordomus knowledge related rule:project.typed-ports lists it."
@@ -28,4 +30,4 @@ validation:
 evidence_required:
 - verified
 created_at: '2026-10-29'
-updated_at: '2026-10-30'
+updated_at: '2026-11-01'

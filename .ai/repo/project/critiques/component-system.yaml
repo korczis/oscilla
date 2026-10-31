@@ -1,6 +1,6 @@
 intent: component-system
 reviewed_at: "f887066f3e869735cbb62cd4226459e9b6db498a"
-reviewed_by: "claude-opus-5.5 (critic, oscilla-af63 session)"
+reviewed_by: "claude-opus-5.5 (critic, oscilla-af63 session); the findings are the critic's, the resolutions were written by the plan builder of the intent (oscilla-b0, 2026-11-01)"
 findings:
   - id: units-grammar-breaks-the-v1-freeze
     class: regression_risk
@@ -8,109 +8,141 @@ findings:
     finding: "G002 makes src/js/core/frequency.js the one grammar that 'accepts what either parser accepted (a comma decimal, a k suffix, a unit)' and 'refuses zero, negatives and non-finite values with one sentence'. That module's behaviour is frozen. tests/freeze/vectors.cjs:148-153 feeds parseFrequency '1,5k', '0', '-5', 'abc', '1e3' and more, and tests/freeze/golden-a7b7a23.json records '1,5k' as refused ('“1,5k” is not a frequency. Try 440, 440 Hz, 1k or 15.5 kHz.'). It also records two different refusal sentences for '0' ('Frequency must be greater than 0 Hz.') and '-5'. vectors.cjs:163-165 freezes formatFrequency, formatFrequencyShort and formatMs. tests/unit/freeze.test.mjs runs under npm test, and the rules index names it as the enforcement of project.audio-engine-discipline. Measured on f887066f: core parseFrequency('2,5k') returns ok:false, while charts/axes.js parseFrequency('2,5k') returns 2500. Executed as written, G002 fails npm test, or its builder rewrites the V1 golden outside its scope. G002's scope names neither tests/freeze nor freeze.test.mjs. Three guarded modules also import core/frequency.js (src/js/audio/patterns.js, src/js/studio/nodes/common.js, src/js/studio/signal-path-projection.js), so a format change alters their output with no verdict, because no guarded path changes."
     blocking: true
     resolution:
-      state: open
+      state: planned
+      issue: "G002"
+      because: "G002's one grammar is the frozen V1 parseFrequency of core/frequency.js, unchanged: the charts/axes.js parser (Filter Lab's only) is deleted, so Filter Lab refuses '2,5k' and '1e3' with the golden's sentence, a behaviour change the pull request lists; the formatters keep the golden outputs, tests/freeze is byte-identical and freeze.test.mjs is in G002's validation, so the three guarded importers see no change (2026-11-01)."
   - id: contract-demands-a-state-path-of-stateless-hooks
     class: unproven_assumption
     subject: "component-system#contract-and-registry"
     finding: "Under the criterion and G001's contract, every declaration must have 'a state path sources.js resolves', and G018 proves each untested hook by waiting 'for its declared state path to change'. Most hooks own no state. Measured on f887066f: 584 distinct data-osc values (472 in src/index.html, 144 literal in src/js, 12 non-literal sites). In the HTML, 231 hooks sit on <button>, 58 on <p>, 31 on <span>, 21 on <a> and 16 on <section>: actions such as action.copyUrl, action.exportAudio, action.screenshot, config.export and def.run, plus text, links and containers. sources.js offers a catch-all family ui.<key>. If has('ui.<anything>') is true, the check is vacuous. If it is a fixed list, an honest declaration of an action cannot pass. Either way the 'resolvable state path' of the criterion does not distinguish a real canonical path from an invented one. G018's browser proof cannot work for an action, a link or a readout either: Copy URL, Export audio and a dialog's Close change no state path. G001 is the first slice and has no dependency, so the contract would land with this flaw. The contract should allow 'state: none' with a stated reason for the action, open, readout, panel and workspace kinds, and G018 should assert the declared effect (a route, a dialog, a download, a command) for those."
     blocking: true
     resolution:
-      state: open
+      state: planned
+      issue: "G001"
+      because: "G001's contract lets the action, open, readout, panel and workspace kinds declare state none with a reason and, for actions and links, an effect (route, dialog, download, command, focus); sources.js is a closed table with no catch-all ui.<key>, so has() refuses an invented path; the criterion says so, and G018's browser proof asserts the declared state change or the declared effect (2026-11-01)."
   - id: owner-decided-node-addresses-are-unplanned
     class: missed_requirement
     subject: "G007"
     finding: "Q036 is answered (evidence recorded 2026-10-30T09:56:47Z): (1a) c=<id>, and (2a) a Studio node is addressable only as st=<template>&c=studio.node:<node id>, inside an unmodified shipped template. G007 has not changed since a2ff0412. It still says 'adds the key the owner chooses on Q036 (recommended: c)' and 'Studio node addressing waits on Q036's second part', and no issue file other than Q036 contains 'studio.node:'. G015 ('its Studio node') and G016 ('a Studio node type to its lab', P7) both link to Studio nodes, so the decided address has no builder. It also needs design that G007 does not state. The c applier must run after the studio domain's st applier (HASH_DOMAINS in src/js/ui/navigation.js:63 is ['instrument', 'measure', 'studio', 'records']; G007 adds c as a fifth domain). 'Unmodified' needs a definition: a document dirtied after st opened it must refuse studio.node with a stated sentence. And the codec must accept the studio.node:<id> form, which is not a declared catalogue id, without weakening the refusal of unknown ids."
     blocking: true
     resolution:
-      state: open
+      state: planned
+      issue: "G007"
+      because: "Q036 was answered on 2026-10-30 ((1a) c=<id>, (2a) st=<template>&c=studio.node:<node id> inside an unmodified shipped template, evidence on Q036); G007 now builds both: c is the fifth hash domain applied after studio, the node form is decoded against the shipped template's node ids so unknown ids stay refused, and a node link whose document is no longer the unmodified template is refused with a stated sentence (2026-11-01)."
   - id: interactive-miniature-loses-touch-size-and-selection
     class: regression_risk
     subject: "G006"
     finding: "G006 deletes the embedded strip's clips and their osc-sc-* selectors and makes the compact-timeline.js miniature interactive: focusable clips with aria-current, drag and arrow keys, and data-osc studio.compact.clip. The strip's clips are buttons (compact.js:249). They are 24 px tall, and 44 px under @media (pointer: coarse) (studio.css:1342-1356, 1479 and 1512-1515), with an aria-current style (studio.css:1363-1366), touch-action: pan-y and cursor: grab. The miniature's clips are 12 px tall with min-width 2 px and have no selected or focus rule (studio-timeline.css:777-786). G006's 'Before Pro' clause forbids any new selector or declaration in studio.css and studio-timeline.css. Tailwind is not in the build: package.json has no tailwindcss, and F001 and F002 carry no completion. Nothing allowed is left to restore a 44 px target or a visible selection. tests/browser/layout.cjs:107-109 measures every button at 44 px on a coarse pointer, and KNOWN_SMALL_TARGETS is empty (layout.cjs:52), so test:browser fails in CI. Making the clips non-buttons to avoid the check would break the intent's invariant 'Every control has a pointer, keyboard and touch path' (project.no-inert-surfaces). G006's own validation runs neither layout.cjs nor a coarse-pointer check. G006 must either wait for F002 and use Tailwind utilities, or carry the existing osc-sc-clip rules over to the interactive clips (moved, not added), and add a coarse-pointer measurement to its compact-transport check."
     blocking: true
     resolution:
-      state: open
+      state: planned
+      issue: "G006"
+      because: "The interactive miniature's lanes and clips carry the strip's existing osc-sc-lane and osc-sc-clip names, moved and not added, so studio.css's 24 px, 44 px coarse-pointer, aria-current, touch-action and cursor rules keep applying and no selector is added; the clips stay buttons, compact-transport measures every clip at 44 px or more on a coarse pointer, and tests/browser/layout.cjs is in G006's validation with KNOWN_SMALL_TARGETS empty (2026-11-01)."
   - id: compact-density-has-no-port-anchor-design
     class: insufficient_work
     subject: "G010"
     finding: "The criterion asks for 'port-anchored typed cables'. The full renderer anchors each cable at the measured DOM position of its port row (graph-editor.js:274-287 reads pe.offsetTop and the glyph's offset). Each port row is a div in the card's osc-sg-ports column (graph-editor.js:227-235 and 264-267). G010's compact card is 120 x 40 px with a 12 px title and one 11 px line, which leaves no room for port rows: the Filter alone has four inputs (audio:AUDIO, frequency, Q and gain:CONTROL, read from NODE_REGISTRY). With port rows hidden, offsetTop reads 0 and every cable meets the card's top edge, which is the U5 defect G004 fixes. G004's geometric portAnchor lives in compact.js, which G010 deletes. G010 does not say that graph-editor gains a geometric anchor for density compact, or that the card grows with its port count. The plan's figure is also off: two rows of 40 px cards with 24 px gaps measure 104 px, not 88 (Subtractive Synth and Measurement Sweep, 4 x 2, 552 x 104, measured with compactLayout on the six shipped templates). That still fits the 576 x 136 acceptance. Only shipped templates are measured, though. A user document is shown too, and nothing states the column count at which the card switches to the overview: 40 nodes is the only case named."
     blocking: false
     resolution:
-      state: open
+      state: planned
+      issue: "G010"
+      because: "In compact density the editor anchors cables through G004's pure portAnchor of graph-geometry.js instead of port rows it does not render, the card grows with its port count (max(40, 8 x (ports + 1)) px), the 88 px figure is corrected to 104 px, and the overview replaces the cards whenever the layout does not fit the card's measured box, for a user's document as for a template (2026-11-01)."
   - id: slice-ceilings-exceed-the-line-cap
     class: unproven_assumption
     subject: "G018"
     finding: "Q037 (a) caps the line at 14 KB gzip, 6 KB of it for the catalogue runtime. The slices' own ceilings add up to 25 KB: G001 2, G002-G007 1 each, G008 3, G009 2, G010 3, G011 3, G012 1, G013 2 and G015 3. G018 and G019 each claim 'at most 0 KB gzip added', which cannot hold. registry.js collects the declarations by static import 'so the build bundles it into the single file once a runtime module imports it' (G001), and G007 (addresses) and G015 (explain panel) import it at run time. G015 states that the runtime registry bundles id, kind, label, state, links and the one-sentence docs, and G001 requires each docs sentence to be unique. That shape is roughly 150-250 B minified per declaration, so about 90-145 KB raw for 584 hooks. Even at 4:1, that is more than 20 KB gzip from G018 and G019 alone, which exceeds the entire cap (an estimate; nothing in the plan measures it). Today dist is 825 462 B gzip against the 1 200 000 B budget (scripts/build-config.mjs:48-51), so the budget holds, but the cap the owner is asked to approve does not. G001 should measure its first declarations per entry, and Q037 should be re-asked with the per-declaration cost before the owner answers."
     blocking: false
     resolution:
-      state: open
+      state: planned
+      issue: "G001"
+      because: "G001 measures the bundled gzip bytes per declaration in its pull request; Q037 is re-asked with that figure and the 25 KB sum of the slices' ceilings before the owner answers, and G007, the first slice that bundles the registry, now depends on Q037; G018 and G019 state their ceiling as declarations added times the measured figure instead of 0 KB (2026-11-01)."
   - id: filter-lab-clamps-rather-than-reverts
     class: unproven_assumption
     subject: "G003"
     finding: "G003's 'Before' says Filter Lab reverts an invalid entry silently (filter-lab.js:140-151). Its browser proof types '30k' and expects a stated refusal while the readout keeps its value. On f887066f, '30k' parses to 30000, which is greater than 0, so set() takes it. set() then clamps it to min(FILTER_DRAG.maxHz = 20000, sampleRate * 0.475) (filter-lab.js:121-125, charts/drag-math.js:7-11). The readout moves to 20 kHz, so this is a silent clamp, not a revert. Under the descriptor G001 prescribes, frequencyParam has min 1 and max FREQUENCY_MAX_HZ = 182 400 Hz (studio/nodes/common.js:22 and 94-99), and validateParamValue accepts 30000, so no refusal happens unless the declaration overrides max to 20000. The lab's second bound, sampleRate * 0.475, depends on run time, and a static descriptor cannot carry it. G003 should name the declared bounds of every lab field, list each clamp that becomes a refusal as a behaviour change in the pull request, and say which code keeps the sample-rate bound."
     blocking: false
     resolution:
-      state: open
+      state: planned
+      issue: "G003"
+      because: "G003 names the declared bounds of every lab field (the cutoff 20 Hz to 20 kHz from FILTER_DRAG, never FREQUENCY_MAX_HZ), so '30k' is refused against the declared maximum; the sample-rate bound stays a runtime clamp in filter-lab.js set() that now states itself, proven on a fixture rate; the pull request lists every clamp that becomes a refusal or a stated clamp (2026-11-01)."
   - id: imported-sequence-is-not-the-stated-pipeline
     class: unproven_assumption
     subject: "G013"
     finding: "G013 says the cockpit then shows 'that pipeline (sequence track, voice, filter, master, analysis)'. It also requires 'No file under src/js/studio changes'. importSequence (src/js/studio/sequence-import.js:107-125) builds exactly two nodes, sequence and master, joined by one AUDIO edge, with no voice, filter or analysis node. Since C003 (dcbff520, merged 2026-10-31), the live sequencer plays through the engine's Filter Lab stage. With the Filter Lab on, an opened copy therefore sounds different from the sequencer it came from. The acceptance checks only 'same block times and frequencies', so it passes while the user hears a different sound. Either the pipeline wording goes and the issue states that the copy omits the lab inserts, or the import maps the Filter Lab state into a filter node. sequence-import.js is guarded, so the second path needs a reviewer's verdict and a widened scope."
     blocking: false
     resolution:
-      state: open
+      state: planned
+      issue: "G013"
+      because: "The pipeline wording goes: the cockpit shows the two-node copy importSequence builds, and while the Filter Lab is on its origin line states that the copy omits the insert the Sequencer plays through since C003; mapping the lab into a filter node would touch the guarded sequence-import.js and is not planned (2026-11-01)."
   - id: merged-plan-sentences-contradict-the-bodies
     class: unnecessary_work
     subject: "M086"
     finding: "The follow-up of 2026-10-30 appended 'Merged plan' sentences without reconciling the bodies. G008's body still builds src/js/ui/catalog/render.js with mountControl(host, decl, { value, commit }) and its own templates, tested by tests/unit/ui-catalog-render.test.mjs, which the proven-duplicates criterion runs. Its appended sentence says the param views are N003's and that 'this slice ... builds no second control'. N003 defines mountControl(host, spec, { view, surface, value, commit, menu, density }) in src/js/ui/kinds/param/control.js. That is two definitions of one function in two paths. G011's body builds src/js/ui/studio/cockpit-meter.js on charts/frame-loop.js, labelled 'Output, relative level (dBFS)'. Its appended sentence says the meter and scope are W003 and W004 instances, and W003 labels the same quantity 'Output, dB rel (dBFS-like), sample peak, not true peak'. Two labels for one measured quantity is a project.no-fake-science consistency defect. A builder following either body writes code that the sentence below it forbids. The bodies, scopes and acceptance tests of G008 and G011 should be rewritten to the merged plan."
     blocking: false
     resolution:
-      state: open
+      state: planned
+      issue: "G008"
+      because: "G008's body is rewritten to the merged plan: no render.js, no templates and no second mountControl; it mounts N003's mountControl from the declarations and its test proves one definition; G011's body builds no cockpit-meter.js, it mounts W003's meter and W004's scope and uses W003's one label, 'Output, dB rel (dBFS-like), sample peak, not true peak' (2026-11-01)."
   - id: one-allowance-file-three-owners
     class: regression_risk
     subject: "J006"
     finding: "tests/unit/ui-catalog-allowance.json has three owners with incompatible rules. G001 holds undeclared hooks ('an entry may never rise or return'). G019 empties it, and then 'the test refuses any entry'. J002 makes 'the untraced allowance ... the trace section of G001's one allowance file', and J004 lists every declaration that exists before it lands in the same file. J004 depends on J003, J002, G017 and N001. G019 depends only on G018. If G019 lands first, J002 and J004 cannot add their sections. If they land first, G019's 'empty' and 'refuses any entry' contradict them. J006 'Empties tests/unit/ui-catalog-allowance.json and tests/unit/ui-catalog-allowance.json' (the same path twice) and accepts 'Both allowance files are empty arrays', while J002 has made the allowance one file with sections. The file's shape (sections, keys, the monotonic rule per section) and the order of G019 against J002 and J004 should be stated once."
     blocking: false
     resolution:
-      state: open
+      state: planned
+      issue: "G001"
+      because: "G001 states the one file's shape once: an object of sections (undeclared from G001, untraced from J002, unlinked from J004), each judged on its own against the base branch's copy, so the slices land in any order; G019 empties and closes undeclared only, J002 and J004 open their sections, and J006 empties untraced and unlinked, its doubled path corrected (2026-11-01)."
   - id: criterion-refs-omit-the-proving-tests
     class: delivery_verification
     subject: "component-system#embedded-cockpit"
     finding: "The criterion asks for 'the Studio's transport strip and timeline miniature, port-anchored typed cables', but its ref runs only studio-compact-density.test.mjs, studio-cockpit.test.mjs and tests/browser/studio-cockpit.cjs. The tests that prove the strip and miniature (tests/unit/studio-compact-mount.test.mjs and the compact-transport check, G006) and the port anchors (tests/unit/studio-edge-style.test.mjs and compact-cables, G004) live in v31-studio-graph.cjs and are not in the ref. The same gap exists in proven-duplicates: 'empty states and open-versus-fullscreen each have one implementation' is G009's, proven in tests/unit/ui-catalog.test.mjs and qa-regressions empty-actions, and neither is in that criterion's ref. Re-running the satisfaction commands therefore cannot catch a regression of those parts. Each ref should name the tests of every clause it asserts."
     blocking: false
     resolution:
-      state: open
+      state: planned
+      issue: "G006"
+      because: "The embedded-cockpit ref now also runs studio-compact-mount and studio-edge-style and the compact-transport, compact-cables and compact-sync checks of G006 and G004, and the proven-duplicates ref runs ui-catalog.test.mjs and qa-regressions empty-actions of G009 and the V1 freeze test G002 must keep (2026-11-01)."
   - id: explain-is-proven-on-three-components
     class: delivery_verification
     subject: "component-system#in-app-explain"
     finding: "The criterion says 'Every catalogued component explains itself in the app and opens its related views'. Its only evidence, tests/browser/ui-catalog-explain.cjs (G015), opens the panel on three components: the Filter Lab cutoff, the cockpit Play and one Studio node card. G015's unit test checks the view model of a fixture declaration. Neither iterates the registry, so a declaration whose related link does not resolve to an address, or whose control has no context-menu path, passes. A unit test should build the panel's view model for every declaration and assert that each related link is an address G007 decodes. The browser check can stay a sample if it says it is one."
     blocking: false
     resolution:
-      state: open
+      state: planned
+      issue: "G015"
+      because: "tests/unit/ui-catalog-explain.test.mjs builds the panel's view model for every declaration of the registry and asserts that each related link decodes through G007 and each control has a context-menu path; the browser check stays a sample of three and says so (2026-11-01)."
   - id: browser-step-has-no-room-for-the-walks
     class: regression_risk
     subject: "M087"
     finding: "G015 and G016 wire their suites into npm run test:browser and state 'no workflow file changes'. G018 and G019 add a check to tests/browser/qa-regressions.cjs, which test:browser runs. That check activates every hook no test named (260 by the inventory) by pointer, keyboard and a hasTouch tap, each with a 2 s deadline. G016 walks every link-graph edge in three modes from file:// and the sub-path, with Back and Forward. In CI, test:browser runs in one step bounded by timeout-minutes: 15 per browser (.github/workflows/ci.yml:280-282). The deadline sum of G018 alone, 260 x 3 x 2 s, is 26 minutes per origin. No issue estimates the added run time, samples the walk, or plans its own CI step. Adding one needs a .github change and a verdict, which those issues rule out."
     blocking: false
     resolution:
-      state: open
+      state: planned
+      issue: "G018"
+      because: "G018 and G016 state the measured wall time their walks add per browser and origin; if test:browser would pass 10 of its 15 CI minutes per browser, the walk becomes its own npm script and CI step, the scope widens to .github/workflows/ci.yml and a reviewer's verdict is required; G019 is tested as G018 (2026-11-01)."
   - id: j001-delivered-without-the-0061-note
     class: delivery_verification
     subject: "J001"
     finding: "J001 landed as 4368b592 (merged into main through 08795f1f). It filed ADR 0081 (proposed) and the ADR 0058 note: 60 and 226 lines added, none removed. majordomus adr check passes (64 decisions, every reference resolves), majordomus knowledge related rule:project.typed-ports lists adr-0081, and knowledge validate shows only the pre-existing visual-identity-lock duplicate_id. Two of its claims do not hold. First, J001's merged-plan clause says 'J001 also lands the ADR 0061 resolution note for the instrument visuals', and K058's acceptance requires 'J001's ADR 0061 resolution note is on main before any code of this slice lands'. The commit says the note 'is written by #329', which is open and unmerged (feat/synth-panel), and ADR 0061's resolution notes on main end at the 2026-10-29 domain-view note. Second, the commit changes tests/unit/knowledge-integrity.test.mjs (+3, an ADR_NOT_A_CAPABILITY entry for 0081), which lies outside J001's scope ['.ai/repo/adrs']. J001 carries no evidence, and M118 reads 0/8. Before J001 is recorded as done, either the 0061 note lands or J001 and K058 are amended to make #329's note the dependency, and the scope names the test it needed."
     blocking: false
     resolution:
-      state: open
+      state: planned
+      issue: "J001"
+      because: "J001 is not recorded done until ADR 0061's resolution note for the instrument visuals is on main, by J001's own docs pull request or by #329 if that lands it first, and J001's scope now names tests/unit/knowledge-integrity.test.mjs, which 4368b592 changed; K058's acceptance already waits on that note (2026-11-01)."
   - id: majordomus-gap-measurements-predate-the-pin
     class: unproven_assumption
     subject: "J002"
     finding: "J002 builds its own resolver because 'Majordomus does not resolve issue: references or intent criteria (measured 2026-10-29)'. J003 checks the knowledge/v1 schema itself because 'majordomus knowledge check reads only curated/ and candidates/'. M118's risk says the pinned Majordomus is 1.0.0-alpha.1 and the launcher 1.0.0-alpha.8. CI now pins 1.0.0-alpha.9 (.github/workflows/ci.yml:340, R027 e872c444), and the launcher here is alpha.9 too. Under alpha.9, majordomus knowledge related issue:G001 returns its part_of milestone:M085 edge and four depends_on edges, so issues are knowledge nodes now. J008 retires a workaround only after the pin moves, which it already has. The gaps should be measured again under alpha.9 before J002 and J003 build workarounds that may no longer be needed, and M118's risk line should be brought current."
     blocking: false
     resolution:
-      state: open
+      state: planned
+      issue: "J002"
+      because: "J002 and J003 first measure each gap again under the pin, 1.0.0-alpha.9, and the launcher (knowledge related issue:G001 already returns its part_of and depends_on edges) and build a workaround only for a gap that remains; M118's risk line names alpha.9 (2026-11-01)."
   - id: open-in-studio-href-opens-an-empty-studio
     class: unproven_assumption
     subject: "G011"
     finding: "G011 makes 'Open in Studio' 'an href to #m=studio, so it opens in a new tab too', and G009 justifies the open kind the same way. The Studio's working document lives only in the page's store. src/js/ui/studio/workspace.js has no localStorage, sessionStorage or draft write, and V604, the draft store, carries no completion. A new tab therefore opens a different Studio document, without the cockpit's graph or selection. That contradicts the criterion's 'Open in Studio and Back that keep the selection', and G012 tests only the same-tab path. The issue should say that a new tab opens the Studio without the document, or make the link same-tab only until V604 lands."
     blocking: false
     resolution:
-      state: open
+      state: planned
+      issue: "G011"
+      because: "Open in Studio is a same-tab control with no href until V604's draft store is done, because a new tab would open a Studio without the cockpit's document; G011 states it and tests it, and G012's same-tab path stays the proof of keeping the selection (2026-11-01)."
