@@ -1360,7 +1360,10 @@
   margin-top: 6px;
 }
 
-.osc-bio-source-list a {
+/* Text links: the citation links, and the cross-links between workspaces (U010) in panel
+   headers, button rows, empty states, Learn and the notices; underlined in the text's colour. */
+:is(.osc-bio-source-list, .osc-panel-header, .osc-m-btnrow, .osc-x-empty, .osc-preset-empty,
+  .osc-learn-actions, .osc-toast-text) a:not([class]) {
   color: inherit;
   overflow-wrap: anywhere;
 }

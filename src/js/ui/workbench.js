@@ -25,6 +25,7 @@ import { parseConfigImport, exportFileName } from './config-file.js';
 import { downloadBlob, readFileText } from './exporters.js';
 import { focusSafely, isFocusable } from './dialogs.js';
 import { sessionStore } from '../core/storage.js';
+import { learnReturnAction, learnToolOf } from './cross-links.js';
 
 const GROUP = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 const GROUP2 = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -464,7 +465,8 @@ export function createWorkbench(svc) {
     runLearnDemo(topic) {
       if (topic.demo.href) { window.location.hash = topic.demo.href; return; } // V3 topics
       const fromKeyboard = document.activeElement && document.activeElement.closest('#osc-view-learn');
-      this.runDemo(topic);
+      // The notice carries the way back to the lesson (links.md, one-way link 2).
+      this.runDemo(topic, { action: learnReturnAction(topic) });
       const tab = LEARN_VIZ_TARGETS[topic.demo.viz];
       this.setWorkspace(this.source === 'dual' ? 'synthesis' : 'playground');
       if (tab === 'phase') this.setTab('phase', 'phase');
@@ -474,6 +476,24 @@ export function createWorkbench(svc) {
       }
       // The Learn view is now hidden: focus the transport, where the demo is played.
       if (fromKeyboard) this.$nextTick(() => focusSafely(document.getElementById('osc-hold-play')));
+    },
+    /**
+     * A Learn topic's tool link was followed (its href opens the workspace through the router):
+     * the topic becomes the current lesson and the notice offers the way back to it.
+     */
+    learnToolFollowed(topic, e) {
+      if (e && (e.button > 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)) return;
+      const tool = learnToolOf(topic.id);
+      if (!tool) return;
+      this.learnTopic = topic.id;
+      this.notify('info', `Opened ${tool.text.replace(/^Open /, '')} from the lesson`,
+        `${topic.title}: the lesson stays where you left it.`,
+        { action: learnReturnAction(topic) });
+    },
+    /** Follow a notice's link: the notice goes, the router opens the address. */
+    alertActionFollowed(id) {
+      // After the click: the link is still in the document when the browser follows it.
+      setTimeout(() => { this.alerts = this.alerts.filter((a) => a.id !== id); }, 0);
     },
     loadPresetFromView(p) {
       this.loadPreset(p);

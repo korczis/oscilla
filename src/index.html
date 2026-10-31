@@ -175,7 +175,8 @@
         <svg class="osc-ico" aria-hidden="true"><use href="#i-sun"/></svg>
       </button>
       <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-header-icon" id="osc-help"
-        data-osc="header.help" aria-label="Keyboard shortcuts" aria-haspopup="dialog" @click="openDialog('help')">
+        data-osc="header.help" aria-label="Keyboard shortcuts" title="Keyboard shortcuts"
+        aria-haspopup="dialog" @click="openDialog('help')">
         <svg class="osc-ico" aria-hidden="true"><use href="#i-help"/></svg>
       </button>
       <div class="osc-menu-anchor">
@@ -224,6 +225,10 @@
         <div class="osc-toast-text">
           <strong x-text="a.title"></strong>
           <span x-text="a.message"></span>
+          <template x-if="a.action">
+            <a :href="a.action.href" data-osc="alert.action" @click="alertActionFollowed(a.id)"
+              x-text="a.action.text"></a>
+          </template>
         </div>
         <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm"
           @click="dismissAlertFocus(a.id, $event)" aria-label="Dismiss notification">
@@ -776,6 +781,10 @@
                 <svg aria-hidden="true"><use href="#s-loop"/></svg>
               </button>
             </div>
+            <a href="#m=studio&amp;st=sweep-sequence" data-osc="seq.toStudioTemplate" hidden
+              :hidden="workspace !== 'sequencer'">Open Sweep Sequence in Studio</a>
+            <a href="#m=studio" data-osc="seq.toStudio" hidden :hidden="workspace !== 'sequencer'"
+              @click="studioOpenSequence($event)">Open this pattern in Studio</a>
             <span class="osc-spacer"></span>
             <label class="osc-label osc-seq-tempo-label" for="osc-seq-tempo">Tempo</label>
             <div class="osc-select osc-seq-tempo">
@@ -913,10 +922,13 @@
             <span class="osc-toggle-track" aria-hidden="true"></span>
           </button>
           <span class="osc-spacer"></span>
+          <a href="#m=studio&amp;st=filter-automation" data-osc="filter.toStudio" hidden
+            :hidden="workspace !== 'filter'">Open Filter Automation in Studio</a>
           <button type="button" class="osc-icon-btn osc-icon-btn--sm osc-panel-fs" id="osc-filter-fullscreen"
-            data-osc="filter.fullscreen" aria-label="Open Filter Lab page"
-            @click="setWorkspace(workspace === 'filter' ? 'playground' : 'filter')">
-            <svg aria-hidden="true"><use href="#i-expand"/></svg>
+            data-osc="filter.fullscreen" aria-label="Open the Filter Lab page"
+            title="Open the Filter Lab page" :aria-label="filterLabToggle().label"
+            :title="filterLabToggle().label" @click="setWorkspace(filterLabToggle().to)">
+            <svg aria-hidden="true"><use href="#i-expand" :href="filterLabToggle().icon"/></svg>
           </button>
         </div>
         <div class="osc-tabs osc-filter-types" role="radiogroup" aria-label="Filter type">
@@ -974,6 +986,8 @@
             data-osc="envelope.scope" hidden :hidden="workspace !== 'sequencer' && !seqPlaying"
             title="The sequence keeps its blocks' envelopes and waveform; the Filter Lab shapes it."
             > · instrument only</span></h2>
+          <a href="#m=studio&amp;st=subtractive-synth" data-osc="envelope.toStudio" hidden
+            :hidden="workspace !== 'synthesis'">Open Subtractive Synth in Studio</a>
           <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm osc-env-power"
             id="osc-env-enable" data-osc="envelope.enable" aria-pressed="false"
             aria-label="Envelope enabled">
@@ -1214,6 +1228,8 @@
         data-osc="dual-panel" data-osc-modes="synthesis" aria-labelledby="osc-dual-title">
         <div class="osc-panel-header">
           <h2 class="osc-panel-title" id="osc-dual-title">Dual Oscillator</h2>
+          <a href="#m=studio&amp;st=stereo-beat" data-osc="dual.toStudio" hidden
+            :hidden="workspace !== 'synthesis'">Open Stereo Beat in Studio</a>
           <span class="osc-spacer"></span>
           <output class="osc-dual-beat osc-num osc-muted" id="osc-dual-beat"
             data-osc="dual.beat" aria-label="Difference frequency" x-text="beatText">Δ —</output>
@@ -1850,7 +1866,8 @@
             <button type="button" class="osc-btn osc-btn-secondary" data-osc="measure.repeat"
               :disabled="meas.state !== 'COMPLETE'" @click="measureRepeat()">Repeat (new experiment)</button>
             <button type="button" class="osc-btn osc-btn-secondary" data-osc="measure.toExperiments"
-              @click="setWorkspace('experiments')">Experiments</button>
+              @click="setWorkspace('experiments', { focusHeading: true })">Open Experiments</button>
+            <a href="#m=studio&amp;st=measurement-sweep" data-osc="measure.toStudio">Open Measurement Sweep in Studio</a>
           </div>
           <div class="osc-m-defnote" data-osc="measure.definition" x-show="meas.definition" style="display: none">
             <p class="osc-m-hint"><strong>Definition:</strong> <span x-text="meas.definition ? meas.definition.text : ''"></span><span
@@ -1924,7 +1941,7 @@
                 </details>
               </li>
             </template>
-            <li class="osc-x-empty" x-show="exps.loaded && !exps.defs.length">No definitions yet. A definition fixes what to measure and how; every experiment started from it records its version.</li>
+            <li class="osc-x-empty" x-show="exps.loaded && !exps.defs.length">No definitions yet. A definition fixes what to measure and how; every experiment started from it records its version. <a href="#m=measure" data-osc="def.toMeasure">Set up a measurement in Measure</a></li>
           </ul>
         </section>
         <section class="osc-panel osc-x-list" id="osc-exp-list" aria-labelledby="osc-x-list-title">
@@ -1962,7 +1979,8 @@
                   :aria-label="'Open ' + r.name" @click="experimentsOpen(r.id)">Open</button>
               </li>
             </template>
-            <li class="osc-x-empty" x-show="exps.loaded && !exps.rows.length" x-text="exps.empty"></li>
+            <li class="osc-x-empty" x-show="exps.loaded && !exps.rows.length"><span x-text="exps.empty"></span>
+              <a href="#m=measure" data-osc="exp.toMeasure">Open Measure</a></li>
           </ul>
         </section>
         <!-- FINDINGS (ADR 0046): interpretations linked to the experiments they rest on; never an experiment. -->
@@ -2040,7 +2058,7 @@
                 </div>
               </li>
             </template>
-            <li class="osc-x-empty" x-show="fnd.loaded && !fnd.rows.length">No findings yet. Record one from an experiment's detail or from a comparison.</li>
+            <li class="osc-x-empty" x-show="fnd.loaded && !fnd.rows.length">No findings yet. Record one from an experiment's detail or from a comparison. <a href="#osc-exp-list" data-osc="fnd.toExperiments">Go to Saved experiments</a></li>
           </ul>
         </section>
         </div>
@@ -2277,6 +2295,10 @@
                   @click="learnTopic = t.id" :aria-pressed="String(learnTopic === t.id)">Relate to current settings</button>
                 <button type="button" class="osc-btn osc-btn-primary" data-osc="learn.demo"
                   @click="learnTopic = t.id; runLearnDemo(t)" x-text="'Demo: ' + t.demo.label"></button>
+                <template x-if="learnToolOf(t.id)">
+                  <a :href="learnToolOf(t.id).href" data-osc="learn.tool"
+                    @click="learnToolFollowed(t, $event)" x-text="learnToolOf(t.id).text"></a>
+                </template>
               </div>
             </li>
           </template>
@@ -2340,7 +2362,7 @@
                   </div>
                 </li>
               </template>
-              <li class="osc-preset-empty" x-show="!history.length">Nothing played in this page view yet.</li>
+              <li class="osc-preset-empty" x-show="!history.length">Nothing played in this page view yet. <a href="#m=playground" data-osc="presets.toPlayground">Play something in the Playground</a></li>
             </ul>
           </template>
         </div>
@@ -2413,8 +2435,10 @@
         <header class="osc-panel osc-st-bar" role="group" aria-label="Studio toolbar">
           <div class="osc-st-row">
             <button type="button" class="osc-btn osc-btn-secondary osc-st-back" data-osc="studio.back"
-              @click="studioBack()" aria-label="Back to the Playground" title="Back to the Playground">
-              <svg aria-hidden="true"><use href="#s-back"/></svg><span class="osc-st-lbl">Playground</span>
+              @click="studioBack()" aria-label="Back to the Playground" title="Back to the Playground"
+              :aria-label="studioBackText()" :title="studioBackText()">
+              <svg aria-hidden="true"><use href="#s-back"/></svg><span class="osc-st-lbl"
+                x-text="studioBackLabel()">Playground</span>
             </button>
             <div class="osc-st-docbox">
               <span class="osc-st-doc" data-osc="studio.title" x-text="studio.title"></span>

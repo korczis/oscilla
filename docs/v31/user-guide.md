@@ -23,6 +23,17 @@ pressure.
    reader the button is always "Play the Studio", a toggle that reads as pressed while the
    Studio plays.
 
+4. From a lab: Filter Lab, Synthesis (Subtractive Synth, Stereo Beat), the Sequencer and
+   Measure each link to the shipped template that does their job ("Open Filter Automation in
+   Studio"). The template is a separate document; the lab's own settings stay in the lab.
+5. **Open this pattern in Studio** in the Sequencer opens a copy of the Sequencer's current
+   pattern as a new document (one Sequence node, one clip per block), the same pipeline as
+   importing a sequence file. With unsaved Studio changes nothing is replaced and the notice
+   says so.
+6. The toolbar's **Back** button returns to the workspace Studio was opened from and names it
+   ("Back to the Sequencer"); when Studio is the first workspace the page opens, it is the
+   Playground.
+
 Below 768 px the workspace shows one of **Graph**, **Timeline** and **Inspector** at a time
 (tabs and their panels). On a touch screen, **Frame all** and **Frame selection** do not zoom
 out so far that a port is smaller than 24 px: a large graph is centred, and you pan to the
@@ -261,8 +272,9 @@ Tab onto a node selects it; to select several by keyboard, Tab to the next one a
 it joins the nodes selected before. Tab onto a node that is already part of the selection
 keeps the selection, and **T** on a selected node takes it out.
 The same table is the Studio part of the one **Keyboard shortcuts** dialog. The keyboard button
-in the toolbar, Help (**?**) and the menu all open that dialog, and it lists the keys of the
-workspace in view and the keys that work everywhere (ADR 0050).
+in the toolbar, the header's **?** (named Keyboard shortcuts) and the menu all open that
+dialog, and it lists the keys of the workspace in view and the keys that work everywhere
+(ADR 0050).
 
 Space has one owner in each workspace, the same at every window width. In the workspaces that
 play, load or analyse the instrument's signal it is the instrument's Hold to Play, whether or
