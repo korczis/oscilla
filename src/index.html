@@ -474,9 +474,11 @@
                 :aria-valuetext="gainDbText + ' (logical gain ' + gainLevel.toFixed(3) + ', ' + gainLabel + ')'"
                 @input="setGainPct($event.target.value)">
               <output class="osc-gain-value osc-num" id="osc-gain-value" for="osc-gain"
-                data-osc="source.gainValue" x-text="gainDbText"
-                :title="'Logical gain ' + gainLevel.toFixed(3) + ' re full scale (relative, not SPL)'">-21.9 dB</output>
+                data-osc="source.gainValue" x-text="gainDbText" :title="gainTitle">-21.9 dB</output>
             </div>
+            <p data-osc="source.ceiling" x-show="ceilingActing" x-cloak
+              :title="gainTitle"><span aria-hidden="true">&#x26A0;&#xFE0E;</span> <span
+              x-text="ceilingText">OUTPUT AT CEILING (clipped)</span></p>
 
             <div class="osc-play-row">
               <button type="button" class="osc-btn osc-btn-primary osc-btn-lg osc-hold" id="osc-hold-play"
@@ -2936,9 +2938,14 @@
       data-osc="status.announce" x-text="announceText"></p>
     <div class="osc-sb-state">
       <span class="osc-status" id="osc-status" data-osc="status.state"
-        :class="{ 'is-playing': isSounding, 'is-error': status === 'ERROR' }">
+        :class="{ 'is-playing': isSounding && !ceilingActing,
+          'is-error': status === 'ERROR' || ceilingActing }">
         <span class="osc-status-dot" aria-hidden="true"></span>
-        <span class="osc-status-label" data-osc="status.label" x-text="statusLabel">READY</span>
+        <span class="osc-status-label" data-osc="status.label" x-text="statusLabel"
+          x-show="!ceilingActing">READY</span>
+        <span data-osc="status.ceiling" x-show="ceilingActing" x-cloak :title="gainTitle"><span
+          aria-hidden="true">&#x26A0;&#xFE0E;</span> <span x-text="ceilingText">OUTPUT AT
+          CEILING (clipped)</span></span>
       </span>
       <span class="osc-sb-readout osc-num" data-osc="status.readout">
         <span data-osc="status.frequency" x-text="statusFreqText">440 Hz</span>
@@ -2949,7 +2956,8 @@
         <span class="osc-sb-dot osc-sb-extra" aria-hidden="true">•</span>
         <span class="osc-sb-extra" data-osc="status.duration" x-text="statusDurationText">≤ 2 s</span>
         <span class="osc-sb-dot osc-sb-extra" aria-hidden="true">•</span>
-        <span class="osc-sb-extra" data-osc="status.gain" x-text="statusGainText">Gain -21.9 dB</span>
+        <span class="osc-sb-extra" data-osc="status.gain" x-text="statusGainText"
+          :title="gainTitle">Gain -21.9 dB</span>
       </span>
     </div>
 

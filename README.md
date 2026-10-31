@@ -667,6 +667,13 @@ lands.
   and labelled as uncalibrated. A browser knows sample values, not sound pressure. The only
   exception is the Measure workspace with a valid absolute level calibration that you supply
   from an external reference.
+- **The gain is a setpoint; the output says when its ceiling acts.** The Gain readout is the
+  master level you set, not the output level: it leaves out the envelope and the filter before
+  it, and the limiter and the output ceiling at -12.0 dBFS (a safety backstop, ADR 0002) after
+  it. A filter boost can push a voice past that ceiling,
+  which then flattens it: while it does, the source panel and the status bar show "OUTPUT AT
+  CEILING (clipped)" with a warning sign and the status dot turns red. The state is read from
+  the signal just before the ceiling, and is never shown while nothing sounds.
 - **The microphone is not calibrated.** Its response, the input processing and the room are
   unknown, so readings are only comparisons. In Measure, a frequency-response profile corrects
   the microphone only inside the profile's range. Detected frequencies are never shown with more

@@ -15,6 +15,7 @@ import {
 import { isNum, sig } from '../core/math.js';
 import { formatFrequency, formatMs, formatPeriod, formatWavelength } from '../core/frequency.js';
 import { planFreqAt } from '../audio/patterns.js';
+import { ceilingState } from '../audio/output-ceiling.js';
 import { additiveHarmonicTable, harmonicTable } from './harmonics.js';
 import { assertOutputOwner } from './output-owner.js';
 import { playgroundVoiceModel } from '../studio/playground-voice.js';
@@ -71,6 +72,10 @@ export class VisualizationBridge {
     this._snap = {};
     this._p5s = new Set();
     this._paletteWarning = '';
+    // T001: the last judgement of the pre-ceiling tap (ceilingState, filled in place) and the
+    // callback told when `acting` changes (main.js sets the UI flag; never per frame).
+    this.ceiling = ceilingState({});
+    this.onCeiling = null;
     // V1: viz fields and state (index.html@a7b7a23)
     Object.assign(this, {
     p5: null,
@@ -102,7 +107,7 @@ export class VisualizationBridge {
       // these and the analyser buffers, never the engine object graph.
       live: {
         hasCtx: false, analyser: false, mic: false, sampleRate: 0, voice: false, plan: null,
-        elapsed: 0, inst: NaN, refFreq: 440, timeData: null,
+        elapsed: 0, inst: NaN, refFreq: 440, timeData: null, ceiling: false,
       },
       labels: {
         freq: '440 Hz', period: '2.27 ms', wavelength: '0.78 m', note: 'A4', attack: '10 ms', release: '30 ms', gain: '0.080',
@@ -186,6 +191,19 @@ export class VisualizationBridge {
     L.inst = f == null ? NaN : f;
     if (L.analyser) S.analyser.getFloatTimeDomainData(S.timeData);
     L.timeData = L.analyser ? S.timeData : null;
+    this.pullCeiling(S);
+  }
+
+  /** T001: judge the signal before the output ceiling; report a change of `acting` only. A
+   *  context that is not running holds stale samples and reports nothing. */
+  pullCeiling(S) {
+    const C = this.ceiling;
+    const tap = S.running && S.preCeiling && S.preCeilingData ? S.preCeiling : null;
+    if (tap) tap.getFloatTimeDomainData(S.preCeilingData);
+    const was = C.acting;
+    ceilingState(tap ? { pre: S.preCeilingData, cap: S.ceilingCap } : {}, C);
+    this.state.live.ceiling = C.acting;
+    if (C.acting !== was && this.onCeiling) this.onCeiling(C.acting, C);
   }
 
   /** Fill and return the preallocated output spectrum buffer (null before audio starts). */
@@ -398,7 +416,8 @@ export class VisualizationBridge {
 const NO_ENGINE = Object.freeze({
   hasCtx: false, state: 'not started', time: 0, sampleRate: 0, voice: false, voiceId: 0, t0: 0,
   plan: null, kind: null, playing: false, releasing: false, endTime: Infinity, limited: false,
-  analyser: null, timeData: null, freqData: null, mic: false, micAnalyser: null,
+  analyser: null, timeData: null, freqData: null, preCeiling: null, preCeilingData: null,
+  ceilingCap: 0, mic: false, micAnalyser: null,
   micFreqData: null, activeNodes: 0, activeSources: 0, voices: 0,
 });
 

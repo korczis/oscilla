@@ -3608,6 +3608,115 @@ function defineChecks() {
     return { ok: Object.values(res).every((r) => r.ok), ...res };
   });
 
+  // T001 (truth-table row GEN-01, ADR 0002): the output says when the safety ceiling acts. The
+  // audit probe's path (continuous, 1 kHz, latch, Filter Lab peaking 1 kHz Q 1 +24 dB at the
+  // default gain) shows the state in the source panel and in the status bar, unclipped by the
+  // bar, at 1536x1024 and 390x844; it clears within a named deadline once the boost is removed;
+  // the same path without the boost, idle, and sine, square and sawtooth at 100 % gain with no
+  // insert show nothing. The pure judgement is tests/unit/readout-states-ceiling.test.mjs.
+  def('output-ceiling-indicator', async ({ page }) => {
+    const res = { sizes: {}, plain: {} };
+    const view = () => page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      const bar = document.querySelector('[data-osc="status.state"]').parentElement;
+      const box = (sel) => {
+        const el = document.querySelector(sel);
+        const b = el.getBoundingClientRect();
+        const p = bar.getBoundingClientRect();
+        return { shown: getComputedStyle(el).display !== 'none' && b.width > 0,
+          inBar: b.left >= p.left - 0.5 && b.right <= p.right + 0.5,
+          inView: b.left >= -0.5 && b.right <= window.innerWidth + 0.5,
+          text: el.textContent.replace(/\s+/g, ' ').trim() };
+      };
+      const ctx = window.OSCILLA.engine.ctx;
+      return { flag: a.outputAtCeiling, acting: a.ceilingActing, playing: a.playing,
+        source: box('[data-osc="source.ceiling"]'), status: box('[data-osc="status.ceiling"]'),
+        label: box('[data-osc="status.label"]'), title: document.querySelector('#osc-gain-value').title,
+        fraction: window.OSCILLA.viz.ceiling.fraction, time: ctx ? ctx.currentTime : 0,
+        width: window.innerWidth, scroll: document.documentElement.scrollWidth };
+    });
+    const none = (v) => !v.flag && !v.acting && !v.source.shown && !v.status.shown;
+    // Sound on, without the indicator, for 0.6 s of audio time: every poll is recorded.
+    const holdQuiet = async (what) => {
+      const seen = [];
+      const t0 = (await view()).time;
+      await until(async () => {
+        const v = await view();
+        seen.push(v);
+        return v.playing && v.time >= t0 + 0.6;
+      }, { ms: 5000, what });
+      return { polls: seen.length, flagged: seen.filter((v) => !none(v)).length };
+    };
+    const filterBefore = await page.evaluate(() => ({ ...window.OSCILLA.labs.filter.config }));
+    await H.continuous(page, true);
+    for (const [w, h] of [[1536, 1024], [390, 844]]) {
+      await page.setViewportSize({ width: w, height: h });
+      const r = {};
+      r.idle = none(await view());
+      await page.evaluate(() => {
+        const a = window.OSCILLA.app;
+        a.setGainPct(57);
+        a.setWaveform('sine');
+        a.setFrequency(1000);
+        window.OSCILLA.labs.filter.update({ type: 'peaking', frequency: 1000, Q: 1, gain: 24,
+          enabled: true });
+        a.toggleLatch();
+      });
+      const on = await until(async () => {
+        const v = await view();
+        // The window fills over 0.17 s while the filter glides in: wait for a full one.
+        return v.acting && v.source.shown && v.status.shown && v.fraction > 0.5 ? v : null;
+      }, { ms: 5000, what: `the ceiling indicator shows under a +24 dB boost at ${w}x${h}` });
+      r.on = { status: on.status, source: on.source, labelHidden: !on.label.shown,
+        fraction: +on.fraction.toFixed(3), setpointTitle: /setpoint/.test(on.title)
+          && /OUTPUT AT CEILING \(clipped\)/.test(on.title), scroll: on.scroll <= on.width };
+      await page.evaluate(() => window.OSCILLA.labs.filter.update({ enabled: false }));
+      const off = await until(async () => {
+        const v = await view();
+        return none(v) && v.label.shown ? v : null;
+      }, { ms: 2000, what: `the ceiling indicator clears within 2 s of the boost removed (${w})` });
+      r.cleared = off.playing && !/clipped/.test(off.title);
+      r.unboosted = await holdQuiet(`the unboosted 1 kHz sine sounds 0.6 s at ${w}`);
+      await page.evaluate(() => window.OSCILLA.app.stopNow());
+      await until(async () => {
+        const v = await view();
+        return !v.playing && none(v);
+      }, { ms: 3000, what: `idle after the stop shows no ceiling state (${w})` });
+      r.idleAfter = true;
+      r.ok = r.idle && r.idleAfter && r.cleared && r.on.status.inBar && r.on.status.inView
+        && r.on.source.inView && r.on.labelHidden && r.on.setpointTitle && r.on.scroll
+        && r.on.status.text === '\u26A0\uFE0E OUTPUT AT CEILING (clipped)'
+        && r.on.source.text === r.on.status.text && r.on.fraction > 0.5
+        && r.unboosted.flagged === 0 && r.unboosted.polls > 1;
+      res.sizes[`${w}x${h}`] = r;
+    }
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    // 100 % gain, no insert: the pre-ceiling peak is at or below the cap (P05 audit: sine
+    // -12.04, square -12.45, sawtooth -12.70 dBFS).
+    for (const wave of ['sine', 'square', 'sawtooth']) {
+      await page.evaluate((wv) => {
+        const a = window.OSCILLA.app;
+        a.setGainPct(100);
+        a.setWaveform(wv);
+        a.toggleLatch();
+      }, wave);
+      res.plain[wave] = await holdQuiet(`${wave} at 100 % gain sounds 0.6 s with no insert`);
+      await page.evaluate(() => window.OSCILLA.app.stopNow());
+      await until(() => page.evaluate(() => !window.OSCILLA.app.playing
+        && window.OSCILLA.engine.activeNodeCount === 0),
+      { ms: 3000, what: `the ${wave} voice is freed` });
+    }
+    await page.evaluate((cfg) => {
+      const a = window.OSCILLA.app;
+      a.setGainPct(57);
+      a.setWaveform('sine');
+      window.OSCILLA.labs.filter.update(cfg);
+    }, filterBefore);
+    const ok = Object.values(res.sizes).every((r) => r.ok)
+      && Object.values(res.plain).every((p) => p.flagged === 0 && p.polls > 1);
+    return { ok, ...res };
+  });
+
   // ---- accessibility residuals of the final V1 probe (WCAG 2.4.11, focus loss, overlap)
   def('a11y-alerts-never-cover-focus', async ({ page, browserName, run }) => {
     const res = {};

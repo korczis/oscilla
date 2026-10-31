@@ -745,6 +745,12 @@ function integrationInit() {
   // V1 initVisualizer: the primary host reports the wave layout (V2's primary view is the scope,
   // which labels itself in the canvas; the layout is still forwarded for the V1 views).
   bridge.onWaveLayout = (l) => { cmp.waveLayout = l; };
+  // T001: the output ceiling starts or stops flattening the signal (a change, never per frame).
+  engine.enableCeilingTap();
+  bridge.onCeiling = (acting) => {
+    cmp.outputAtCeiling = acting;
+    if (acting && cmp.isSounding) cmp.announceText = cmp.ceilingText;
+  };
 
   cmp.$nextTick(() => {
     const el = document.getElementById('osc-chart-waveform');
