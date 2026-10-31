@@ -404,57 +404,35 @@
                 x-text="source === 'sweep' ? 'Sweep between two frequencies (sweep mode).' : currentPattern.desc"></p>
               <div class="osc-pattern-params" id="osc-pattern-params" data-osc="pattern-params"
                 role="group" aria-label="Pattern parameters">
-                <template x-if="source !== 'sweep'">
-                  <div class="osc-pp-grid">
-                    <template x-for="d in currentPattern.params" :key="paramId(d)">
-                      <div class="osc-pp-field" :class="{ 'osc-pp-field--wide': d.type === 'text' }">
-                        <label class="osc-label" :for="paramId(d)" x-text="d.label"></label>
-                        <template x-if="d.type === 'select'">
-                          <div class="osc-select">
-                            <select :id="paramId(d)" data-osc="pattern.param" :data-key="d.key"
-                              @change="setParam(d, $event.target.value)">
-                              <template x-for="o in d.options" :key="o[0]">
-                                <option :value="o[0]" x-text="o[1]" :selected="paramValue(d) === o[0]"></option>
-                              </template>
-                            </select>
-                          </div>
-                        </template>
-                        <template x-if="d.type !== 'select'">
-                          <input class="osc-number" type="text" :id="paramId(d)" data-osc="pattern.param"
-                            :data-key="d.key" :value="paramValue(d)" :aria-label="d.label + paramUnit(d)"
-                            :inputmode="d.type === 'text' ? 'text' : 'decimal'"
-                            :aria-invalid="paramErrors[paramId(d)] ? 'true' : 'false'"
-                            @change="setParam(d, $event.target.value)"
-                            @keydown.enter.prevent="setParam(d, $event.target.value)">
-                        </template>
-                        <p class="osc-pp-error" role="alert" x-show="paramErrors[paramId(d)]"
-                          x-text="paramErrors[paramId(d)]"></p>
-                      </div>
-                    </template>
-                  </div>
-                </template>
-                <template x-if="source === 'sweep'">
-                  <div class="osc-pp-grid">
-                    <template x-for="d in SWEEP_FORM" :key="'sw-' + d.key">
-                      <div class="osc-pp-field">
-                        <label class="osc-label" :for="'sw-' + d.key" x-text="sweepLabel(d)"></label>
-                        <template x-if="d.type === 'select'">
-                          <div class="osc-select">
-                            <select :id="'sw-' + d.key" data-osc="sweep.param" :data-key="d.key"
-                              @change="setSweepField(d, $event.target.value)">
-                              <template x-for="o in d.options" :key="o[0]">
-                                <option :value="o[0]" x-text="o[1]" :selected="sweep[d.key] === o[0]"></option>
-                              </template>
-                            </select>
-                          </div>
-                        </template>
-                        <template x-if="d.type !== 'select'">
-                          <input class="osc-number" type="text" :id="'sw-' + d.key" data-osc="sweep.param"
-                            :data-key="d.key" :value="sweepValue(d)" inputmode="decimal"
-                            @change="setSweepField(d, $event.target.value)">
-                        </template>
-                      </div>
-                    </template>
+                <div class="osc-pp-grid">
+                  <template x-for="d in ppFields" :key="ppId(d)">
+                    <div class="osc-pp-field" :class="{ 'osc-pp-field--wide': d.type === 'text' }">
+                      <label class="osc-label" :for="ppId(d)" x-text="ppLabel(d)"></label>
+                      <template x-if="d.type === 'select'">
+                        <div class="osc-select">
+                          <select :id="ppId(d)" :data-osc="ppSweep ? 'sweep.param' : 'pattern.param'"
+                            :data-key="d.key" @change="ppSet(d, $event.target.value)">
+                            <template x-for="o in d.options" :key="o[0]">
+                              <option :value="o[0]" x-text="o[1]" :selected="ppValue(d) === o[0]"></option>
+                            </template>
+                          </select>
+                        </div>
+                      </template>
+                      <template x-if="d.type !== 'select'">
+                        <input class="osc-number" type="text" :id="ppId(d)"
+                          :data-osc="ppSweep ? 'sweep.param' : 'pattern.param'"
+                          :data-key="d.key" :value="ppValue(d)" :aria-label="ppAriaLabel(d)"
+                          :inputmode="d.type === 'text' ? 'text' : 'decimal'"
+                          :aria-invalid="ppError(d) ? 'true' : 'false'"
+                          :aria-describedby="ppError(d) ? ppErrorId(d) : null"
+                          @change="ppSet(d, $event.target.value)"
+                          @keydown.enter.prevent="ppSet(d, $event.target.value)">
+                      </template>
+                      <p class="osc-pp-error" :id="ppErrorId(d)" role="alert" x-show="ppError(d)"
+                        x-text="ppError(d)"></p>
+                    </div>
+                  </template>
+                  <template x-if="ppSweep">
                     <div class="osc-pp-field">
                       <label class="osc-label" for="sw-direction">Direction</label>
                       <div class="osc-select">
@@ -466,8 +444,8 @@
                         </select>
                       </div>
                     </div>
-                  </div>
-                </template>
+                  </template>
+                </div>
                 <p class="osc-pp-error" role="alert" x-show="planError" x-text="planError"></p>
                 <p class="osc-pp-warn" x-show="planWarnings.length" x-text="planWarnings.join(' ')"></p>
               </div>
