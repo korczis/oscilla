@@ -425,6 +425,21 @@ function vizLabsChanged() {
   app.syncViz();
 }
 
+/**
+ * C009: the release letting go of a held note uses is the one on screen: the Envelope lab's
+ * Release when the lab is on, else Settings Release. The engine stores it on the sounding voice
+ * and writes no AudioParam (audio-engine.js setNoteOffRelease); attack stays next-note.
+ * Run as an effect on the instrument's release, its playing state and labRev (bumped by every
+ * Envelope lab edit and power toggle through vizLabsChanged).
+ */
+function syncNoteOffRelease(cmp) {
+  void cmp.labRev;
+  const settingsS = cmp.release / 1000;
+  if (!cmp.playing) return;
+  const env = labs.envelope;
+  engine.setNoteOffRelease(env && env.enabled ? env.adsr.r : settingsS);
+}
+
 function syncLabFlags() {
   if (!app) return;
   app.labFlags.additive = !!(labs.additive && labs.additive.enabled);
@@ -633,6 +648,8 @@ function integrationInit() {
   // C013: the views of the one output follow its owner (instrument, sequencer or Studio), handed
   // to the bridge as a plain string on every play, stop and Studio transport state change.
   Alpine.effect(() => bridge.setOutputOwner(cmp.outputOwner));
+  // ... and the release a held note will use when let go (C009), next to updateLive above
+  Alpine.effect(() => syncNoteOffRelease(cmp));
   // Calm announcements (V1 a7b7a23): only PLAYING, SUSPENDED, STOPPED and ERROR, kept until the
   // next one; RELEASING/READY and readout changes are not announced.
   Alpine.effect(() => {
