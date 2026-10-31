@@ -54,6 +54,7 @@ import {
 } from './model.js';
 import { observeClock, renderedTimeAtLeast } from '../audio/clock.js';
 import { buildStageChain } from '../audio/stage-chain.js';
+import { lfoShape } from '../audio/patterns.js';
 
 export { observeClock };
 
@@ -71,12 +72,8 @@ export const STOP_LEAD_S = 0.02;
 
 // ============================================================ V1 maths
 
-// from V1 lfoShape (index.html@95dfa81:1700)
-export function lfoShape(shape, phase) {
-  const p = phase - Math.floor(phase);
-  if (shape === 'triangle') return p < 0.25 ? 4 * p : p < 0.75 ? 2 - 4 * p : 4 * p - 4;
-  return Math.sin(2 * Math.PI * p);
-}
+// V1 lfoShape (index.html@95dfa81:1700): one owner, audio/patterns.js (E041); re-exported.
+export { lfoShape };
 
 // derived from V1 stepsFromFrequencies (index.html@95dfa81:1748): the cap is the block length
 // instead of MAX_PROGRAMMED_S, and a step never overruns it.

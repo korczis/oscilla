@@ -284,9 +284,10 @@ test('the V2 Sequencer\'s own save of a tempo-locked block opens, as the Sequenc
     // 100 ms at 20 BPM switched to beats: 0.033333 beats, which re-derive 99.999 ms.
     ['20 BPM', v2Save(20, { type: 'tone', durationMs: 100, params: { freq: 440 } }),
       [100, 0.033333], 99.999],
-    // Beats typed with more than 6 decimals.
+    // Beats typed with more than 6 decimals: 1.000001 beats are the tie 500.0005 ms, which
+    // rounds up as core/math.js rounds it (E041), so this save is a fixed point.
     ['beats typed at 120 BPM', v2Save(120, { type: 'tone', durationMs: 100 }, 1.00000103),
-      [500.001, 1.000001], 500],
+      [500.001, 1.000001], 500.001],
     ['beats typed at 30 BPM', v2Save(30, { type: 'tone', durationMs: 100 }, 0.0123456789),
       [24.691, 0.012346], 24.692],
     // At a bound: the rounded beats re-derive past it, and the sequencer clamps them back.
@@ -324,7 +325,7 @@ test('a tempo-locked durationMs outside the rounding of its beats is still refus
     [at(120, 500.001, 1), 'Block 1: durationMs is 500.001 in the file but would open as 500'],
     // 1.000001 beats at 120 BPM can be 500 or 500.001 ms, not 500.002.
     [at(120, 500.002, 1.000001),
-      'Block 1: durationMs is 500.002 in the file but would open as 500'],
+      'Block 1: durationMs is 500.002 in the file but would open as 500.001'],
     // 0.033333 beats at 20 BPM span 99.998 to 100.001 ms.
     [at(20, 100.002, 0.033333),
       'Block 1: durationMs is 100.002 in the file but would open as 99.999'],
