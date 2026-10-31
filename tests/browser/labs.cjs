@@ -537,6 +537,35 @@ async function runEngine(engine, base) {
     ph.source === 'model' && ph.corr === '1.00' && ph.basis === 'mono' && ph.canvas,
     JSON.stringify(ph));
 
+  // (9b) C010: a programmatic update (what a configuration import calls: applyImport ->
+  // labs.phase.update) moves the controls with the configuration: the Pan slider's value, its
+  // filled track and its spoken value, and the Δφ B field; an offset outside 0-359 reads
+  // normalised, as it plays.
+  const syncRead = () => page.evaluate(() => {
+    const pan = document.querySelector('#osc-stereo-pan');
+    const off = document.querySelector('#osc-phase-offset');
+    const cfg = window.__labs.labs.phase.config;
+    return { cfgPan: cfg.pan, cfgDeg: cfg.phaseDeg, value: pan.value,
+      fill: pan.style.getPropertyValue('--osc-fill'), text: pan.getAttribute('aria-valuetext'),
+      offset: off.value };
+  });
+  await page.evaluate(() => {
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    window.__labs.labs.phase.update({ phaseDeg: 90, pan: 0.5 });
+  });
+  const imp = await syncRead();
+  await page.evaluate(() => window.__labs.labs.phase.update({ phaseDeg: 400, pan: -0.25 }));
+  const imp2 = await syncRead();
+  await page.evaluate(() => window.__labs.labs.phase.update({ phaseDeg: 45, pan: 0 }));
+  const imp3 = await syncRead();
+  check('phase-stereo-import-sync: Pan slider, its fill and text, and Δφ B follow the config',
+    imp.cfgPan === 0.5 && imp.value === '0.5' && imp.fill === '75.00%' && imp.text === '50% right'
+      && imp.cfgDeg === 90 && imp.offset === '90'
+      && imp2.cfgDeg === 40 && imp2.offset === '40' && imp2.value === '-0.25'
+      && imp2.fill === '37.50%' && imp2.text === '25% left'
+      && imp3.value === '0' && imp3.text === 'Centre' && imp3.offset === '45',
+    JSON.stringify({ imp, imp2, imp3 }));
+
   // (10) Microphone with the fake capture device.
   const micBefore = await page.evaluate(() =>
     document.querySelector('#osc-mic-detected').textContent);

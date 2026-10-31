@@ -591,6 +591,29 @@ test('V249: a release is anchored after the audio already rendered (stale curren
   assert.strictEqual(v1.eng.voice.nodes[2].gain.events[0][2], Math.ceil(0.52 / q) * q);
 });
 
+test('C010 F2: a fresh voice starts after the audio already rendered (stale currentTime)',
+  { skip }, () => {
+  // The same stale clock as above, for a voice with no predecessor: started at currentTime +
+  // START_OFFSET_S, its t0 (and B's start delay after it, the dual voice's Δφ) can already be
+  // rendered when the audio thread sees the graph, so A and B start together. A clock reading
+  // advanced by the real time since keeps t0 START_OFFSET_S ahead of what has been rendered.
+  let perf = 1000;
+  const { eng, advance } = setup({}, { performance: { now: () => perf } });
+  assert.ok(eng.init());
+  advance(0.5);
+  eng.snapshot({}); // the per-frame read: a reading (0.5 s, 1000 ms)
+  perf += 30; // 30 ms of main-thread work; the mock's currentTime stays at 0.5 s
+  assert.ok(eng.play(plan({ pattern: 'tone', frequency: 440 }), opt()));
+  const t0 = eng.voice.t0;
+  assert.ok(Math.abs(t0 - (0.5 + 0.03 + 0.02)) < 1e-9, `t0 ${t0}, expected 0.55`);
+  // without a performance clock in the environment: V1's currentTime + START_OFFSET_S, exactly
+  const v1 = setup();
+  assert.ok(v1.eng.init());
+  v1.advance(0.5);
+  assert.ok(v1.eng.play(plan({ pattern: 'tone', frequency: 440 }), opt()));
+  assert.strictEqual(v1.eng.voice.t0, 0.5 + 0.02);
+});
+
 test('V249: clock readings are dropped when the context changes state', { skip }, () => {
   let perf = 1000;
   const { eng, advance } = setup({}, { performance: { now: () => perf } });
