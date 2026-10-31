@@ -144,7 +144,9 @@ changed.
   FM, random, alternating, octave-stepping and user-defined step sequences, plus a dual
   oscillator.
 - **Analyzer:** a live spectrum on log or linear frequency axes, with the requested frequency
-  marked.
+  marked: the instrument's, or while only the sequencer plays the sequence's (hidden in its
+  silences). The waveform scope traces the output analyser whenever the instrument, the
+  sequencer or the Studio plays, and names which one.
 - **Spectrogram:** a scrolling time-frequency view, with level shown as colour.
 - **Microphone analyzer and compare:** your microphone's spectrum and spectrogram, the detected
   frequency with its uncertainty, and a generator-versus-microphone comparison with freeze,
