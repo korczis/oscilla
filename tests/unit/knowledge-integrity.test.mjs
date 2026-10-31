@@ -1112,6 +1112,9 @@ const ADR_NOT_A_CAPABILITY = new Map([
     + ' and H002 will cite it when they land; it adds no capability of the page today'],
   ['0080', 'a dependency decision (Q070): Cytoscape.js is admitted for one explorer not built yet;'
     + ' P010\'s claim cites it when the explorer ships, and this entry then fails as stale'],
+  ['0081', 'a proposed decision (J001): the component contract and its Majordomus projection;'
+    + ' nothing implements it yet, and G001\'s claim cites it when the catalogue ships, and this'
+    + ' entry then fails as stale'],
 ]);
 
 /** ADR numbers (from 0011 on) that `corpus` never cites, and exemptions it does cite. */

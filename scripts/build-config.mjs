@@ -41,7 +41,11 @@ export const BUILD_TIME_ASSETS = ['lucide-static'];
 // ~245 KB of the gzip, while the views call only about 28 of its 2D drawing functions; replacing
 // it is the deferred alternative. Raw follows gzip at the measured ratio (3.47), so gzip stays
 // the binding limit.
+// On 2026-10-29 the owner raised the gzip budget from 1 000 000 to 1 200 000, replacing the #114
+// stopgap (plan issue E027; ADR 0012 note): main at b67d1e5 measured 2 839 952 B raw / 820 005 B
+// gzip. Raw follows in proportion, from 3 500 000 to 4 200 000 (measured ratio 3.46), so gzip
+// stays the binding limit. Replacing p5 stays the deferred alternative (ADR 0013).
 export const BUDGET = {
-  rawBytes: 3_500_000,
-  gzipBytes: 1_000_000,
+  rawBytes: 4_200_000,
+  gzipBytes: 1_200_000,
 };

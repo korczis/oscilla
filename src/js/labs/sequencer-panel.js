@@ -144,6 +144,8 @@ export function sequencerEngine(adapter) {
       if (ctx && ctx.state === 'suspended') return ctx.resume();
       return null;
     },
+    // C003: the engine's counted stage chain (the Filter Lab) the passes play through.
+    openStage: adapter.openSequencerStage ? () => adapter.openSequencerStage() : undefined,
     // A started sequence takes the output at the Playground gain, also over a playing Studio
     // (C012 F1); the editor calls it only once a pass is scheduled, so a refused PLAY claims
     // nothing.

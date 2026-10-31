@@ -1,0 +1,166 @@
+# Checks of main after a merge (E044). Branch protection requires `gate` without "up to date"
+# (owner decision 2026-10-30, session abd8bbe3), so two pull requests that each passed `gate`
+# on their own merge with an older main can combine into a main nobody tested. ci.yml cannot
+# run here: project.ci-bounded (`triggers`) starts a workflow with a gate job on pull_request
+# only, because its fail-first and review-verdict jobs judge a pull request. This workflow has
+# no gate job and requires nothing; a failure is a red check on the merge commit, and `report`
+# names the failed jobs in the run's summary.
+#
+# The jobs are ci.yml's `unit`, `knowledge` and `browser` jobs, the same definitions:
+# tests/unit/main-checks.test.mjs fails when one differs from its ci.yml job, so a change to a
+# job of ci.yml (a step, a budget, the Majordomus pin) is made here in the same pull request.
+# The one difference is the unit job's size report, which compares with the merge base of a
+# pull request and has none on a push; the test names it.
+#
+# Cost, on an account whose CI minutes are scarce: one unit run, one doctor run and the
+# browser gate in chromium, firefox and webkit per merge, about the critical path of ci.yml's
+# browser leg. Left to the pull request gate: the V1 engine, DSP/labs/sequencer, MEASURE,
+# Studio and visual jobs, whose modules a combination reaches through the browser gate's pages
+# and the unit suites, and which every later pull request and the release gate run on main.
+#
+# No concurrency group: every merge commit gets its own verdict, so a red main names the merge
+# that turned it red, and a later push never cancels the run of an earlier one.
+name: Main checks
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# `shell: bash` runs with -eo pipefail, so a suite piped through tee still fails its step.
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  unit:
+    # Full history and tags: tests/unit/about.test.mjs checks the About timeline's commit times
+    # against git and every published v*.*.0 tag against its station, and fails rather than
+    # skips under CI without them (a full checkout measured 4 s against 2 s shallow, in the
+    # knowledge job).
+    name: unit, build, artifact rules
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Unit and freeze suites
+        run: npm test
+      - name: One product version (package.json) everywhere, no hard-coded copies
+        run: npm run version:check
+      - name: Committed dist/index.html matches a clean rebuild
+        run: npm run build:check
+      - name: Artifact rules (single file, no runtime fetch, licence notices, budget)
+        run: npm run verify-dist
+
+  knowledge:
+    # ci.yml's knowledge job: the pinned `majordomus doctor`, same version and digest.
+    name: .ai layer (majordomus doctor 1.0.0-alpha.9)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      MJ_VERSION: 1.0.0-alpha.9
+      MJ_TARGET: x86_64-unknown-linux-gnu
+      MJ_SHA256: a73710f2e52b3712017c850739d8bebc95764ba51333fddfb369df49eeeb8063
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Install Majordomus ${{ env.MJ_VERSION }} (pinned version and digest)
+        timeout-minutes: 5
+        run: |
+          a="majordomus-v${MJ_VERSION}-${MJ_TARGET}.tar.gz"
+          curl -fsSL --proto '=https' --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 \
+            -o "$RUNNER_TEMP/$a" \
+            "https://github.com/korczis/prismatic-majordomus/releases/download/v${MJ_VERSION}/$a"
+          echo "${MJ_SHA256}  $RUNNER_TEMP/$a" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/mj" && tar -xzf "$RUNNER_TEMP/$a" -C "$RUNNER_TEMP/mj"
+          echo "$RUNNER_TEMP/mj/majordomus-v${MJ_VERSION}-${MJ_TARGET}/bin" >> "$GITHUB_PATH"
+      - name: The installed version is the pinned one
+        run: test "$(majordomus version)" = "majordomus ${MJ_VERSION}"
+      - name: majordomus doctor (git-hook wiring excepted)
+        run: |
+          set +e; majordomus doctor --json > doctor.jsonl; code=$?; set -e
+          jq -r 'select(.level == "FAIL" or .level == "WARN")
+            | "\(.level) \(.category) \(.subject): \(.message)"' doctor.jsonl
+          case "$code" in 0|10) ;; *) echo "::error::majordomus doctor exited $code"; exit 1 ;; esac
+          jq -e -s -f .github/doctor-verdict.jq doctor.jsonl > /dev/null \
+            || { echo "::error::majordomus doctor: a failure (listed above), or no OK layout"; exit 1; }
+
+  browser:
+    name: Browser gate (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    env:
+      OSC_BROWSERS: ${{ matrix.browser }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install ${{ matrix.browser }}
+        run: .github/scripts/ci-install.sh browser ${{ matrix.browser }}
+        timeout-minutes: 15
+      - name: Audio sink for headless Firefox (no sound server on the runner)
+        if: matrix.browser == 'firefox'
+        timeout-minutes: 13
+        run: |
+          .github/scripts/ci-install.sh apt pulseaudio
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=ci_null
+          pactl set-default-sink ci_null
+      - name: dist from file:// and the /oscilla/ sub-path; layout, touch targets, stop
+        run: mkdir -p logs && npm run test:browser 2>&1 | tee logs/browser-${{ matrix.browser }}.log
+        timeout-minutes: 15
+      - name: Upload the log on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: logs-browser-${{ matrix.browser }}
+          path: logs/
+          retention-days: 14
+
+  report:
+    # Not `gate`: nothing requires this workflow, and a gate job would bind it to pull_request
+    # (project.ci-bounded). It turns the job results into one line per job in the summary and
+    # one error annotation on the commit, so a red main says which merge and which jobs.
+    name: main is green (unit, knowledge, browser gate)
+    if: always()
+    needs: [unit, knowledge, browser]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every main check passed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          {
+            echo "### Main checks at ${GITHUB_SHA:0:12}"
+            echo
+            echo "| job | result |"
+            echo "|---|---|"
+            echo "$RESULTS" | jq -r 'to_entries[] | "| \(.key) | \(.value.result) |"'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          failed="$(echo "$RESULTS" | jq -r '[to_entries[] | select(.value.result != "success")
+            | .key] | join(", ")')"
+          if [ -n "$failed" ]; then
+            at="${GITHUB_SHA:0:12}"
+            printf '\n**main is red at %s: %s**\n' "$at" "$failed" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::main is red at ${at} (${failed}); fix it before the next merge"
+            exit 1
+          fi
