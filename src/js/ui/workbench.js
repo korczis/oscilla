@@ -19,6 +19,7 @@ import { SWEEP_PARAMS } from '../audio/patterns.js';
 import { LEARN_VIZ_TARGETS } from '../data/learn.js';
 import { additiveHarmonicTable, harmonicTable } from '../visualization/harmonics.js';
 import { totalDurationMs } from '../sequencer/model.js';
+import { sequenceDigest } from '../sequencer/editor.js';
 import { scopeWindow } from './p5-views.js';
 import { OUTPUT_OWNER_NAMES, outputOwnerOf } from '../visualization/output-owner.js';
 import { OSCILLA_VERSION } from './version.js';
@@ -64,6 +65,10 @@ export function createWorkbench(svc) {
     timeWindowMs: 5,
     announceText: '',
     seqPlaying: false,
+    // The sequence's digest now and at its last load, import or export (C019): main.js updates
+    // seqDigest from the editor's onChange, markSequenceSaved() sets both.
+    seqDigest: '',
+    seqSavedDigest: '',
     exportBusy: false,
     importErrors: [],
     lastPattern: null,
@@ -430,6 +435,23 @@ export function createWorkbench(svc) {
     closeDialog(id) { this.closeModal(id); },
 
     // ------------------------------------------------------------------ export / import
+    /** The sequence differs from the one last loaded, imported or exported (C019). */
+    get seqUnsaved() { return this.seqDigest !== this.seqSavedDigest; },
+    /**
+     * Unsaved work (ADR 0045): an edited sequence is kept only by Export configuration; the
+     * default sequence and a lab or instrument setting are not work.
+     */
+    sequencerWhatWouldBeLost() {
+      return this.seqUnsaved ? [{ domain: 'sequencer', label: 'Unsaved sequence' }] : [];
+    },
+    /** The sequence as it is now is saved: at boot, after an import and after an export. */
+    markSequenceSaved() {
+      const seq = svc.labs && svc.labs.sequencer;
+      if (!seq) return;
+      const digest = sequenceDigest(seq.editor.model);
+      this.seqDigest = digest;
+      this.seqSavedDigest = digest;
+    },
     async copyConfigUrl() { await this.copyConfigLink(); },
     async exportConfig() {
       try {
@@ -437,6 +459,7 @@ export function createWorkbench(svc) {
         const text = `${JSON.stringify(doc, null, 2)}\n`;
         downloadBlob(new Blob([text], { type: 'application/json' }),
           exportFileName('config', 'json'));
+        this.markSequenceSaved(); // the file holds the sequence (C019)
         this.notify('success', 'Config exported', 'The JSON file restores these settings.');
         return doc;
       } catch (e) {

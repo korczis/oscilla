@@ -60,6 +60,7 @@ import { createWorkbench, followSequenceEdits } from './ui/workbench.js';
 import { createOutputOwner } from './ui/output-owner.js';
 import { createNavigation, v1ModeFor } from './ui/navigation.js';
 import { createUnsavedGuard } from './ui/unsaved.js';
+import { sequenceDigest } from './sequencer/editor.js';
 import { createMeasureUi } from './ui/measure.js';
 import { createExperimentsUi } from './ui/experiments.js';
 import { createFindingsUi } from './ui/findings.js';
@@ -319,6 +320,7 @@ function applyImport(cmp, parsed) {
         + `${fileWave.slice(0, 40)} was not applied.`);
     }
     labs.sequencer.render();
+    cmp.markSequenceSaved(); // the sequence now is the file's (C019)
   }
   cmp.sourceKind = cmp.source === 'single' && cmp.pattern === 'tone' ? 'oscillator' : 'pattern';
   syncLabFlags();
@@ -544,6 +546,7 @@ const unsavedGuard = createUnsavedGuard({ sources: [
   () => (app ? app.measureWhatWouldBeLost() : []),
   () => (app ? app.experimentsWhatWouldBeLost() : []),
   () => (app ? app.findingsWhatWouldBeLost() : []),
+  () => (app ? app.sequencerWhatWouldBeLost() : []),
 ] });
 
 function compose(...parts) {
@@ -730,6 +733,10 @@ function integrationInit() {
       });
     }
     if (labs.sequencer) {
+      // An unsaved sequence arms the unsaved-work guard (C019): every change recomputes the
+      // reactive digest the guard compares; the sequence the page opens with is not work.
+      labs.sequencer.editor.onChange((m) => { cmp.seqDigest = sequenceDigest(m); });
+      cmp.markSequenceSaved();
       Alpine.effect(() => {
         const w = cmp.waveform;
         try { labs.sequencer.editor.setWaveform(w); } catch (e) { /* unknown waveform */ }
