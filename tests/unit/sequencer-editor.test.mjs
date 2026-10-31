@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createSequencerEditor } from '../../src/js/sequencer/editor.js';
+import { AudioEngine } from '../../src/js/audio/audio-engine.js';
 import { STOP_RAMP_S, STOP_PAD_S, STOP_LEAD_S } from '../../src/js/sequencer/compiler.js';
 import { FakeContext, fakeTimers } from './sequencer-fake-audio.mjs';
 
@@ -268,4 +269,260 @@ test('dispose releases everything', () => {
   assert.equal(ed.playing, false);
   assert.deepEqual(ed.stats(), { voices: 0, activeSourceCount: 0, activeNodeCount: 0 });
   assert.ok(ctx.created.every((n) => n.kind === 'destination' || n.disconnected));
+});
+
+// ---------------------------------------------------------------- K001: engine accounting
+
+/** An editor whose engine adapter counts into a real AudioEngine (as main.js wires it). */
+function counted() {
+  const ctx = new FakeContext({ sampleRate: 48000, currentTime: 5 });
+  const timers = fakeTimers();
+  const engine = new AudioEngine({ env: { setTimeout, clearTimeout } });
+  assert.equal(typeof engine.stageAccounting, 'function', 'the engine owns the stage accounting');
+  const accounting = engine.stageAccounting();
+  const ed = createSequencerEditor({
+    engine: { getContext: () => ctx, getDestination: () => ctx.destination, accounting },
+    timers,
+  });
+  return { ctx, timers, engine, ed, accounting };
+}
+
+test('K001: AudioEngine.stageAccounting counts a stage in the engine census', () => {
+  const engine = new AudioEngine({ env: { setTimeout, clearTimeout } });
+  const a = engine.stageAccounting();
+  const node = {};
+  const osc = {};
+  assert.equal(a.track(node), node);
+  assert.equal(a.source(osc), osc);
+  assert.equal(engine.activeNodeCount, 2);
+  assert.equal(engine.activeSourceCount, 1);
+  assert.equal(a.held, 2);
+  a.untrack(osc);
+  assert.equal(engine.activeNodeCount, 1);
+  assert.equal(engine.activeSourceCount, 0);
+  a.source({});
+  a.release();
+  assert.equal(engine.activeNodeCount, 0, 'release() untracks whatever the stage still holds');
+  assert.equal(engine.activeSourceCount, 0);
+  assert.equal(a.held, 0);
+});
+
+test('K001: a pass whose build throws part-way leaves nothing counted', () => {
+  const ctx = new FakeContext({ sampleRate: 48000, currentTime: 5 });
+  const engine = new AudioEngine({ env: { setTimeout, clearTimeout } });
+  const inner = engine.stageAccounting();
+  let calls = 0;
+  // The first scheduled source is counted, then the build throws.
+  const failing = { track: inner.track, untrack: inner.untrack, source: (n) => {
+    inner.source(n);
+    calls++;
+    throw new Error('build failed');
+  } };
+  const ed = createSequencerEditor({
+    engine: { getContext: () => ctx, getDestination: () => ctx.destination, accounting: failing },
+    timers: fakeTimers(),
+  });
+  assert.throws(() => ed.play(), /build failed/);
+  assert.ok(calls >= 1, 'the build reached the accounting');
+  assert.equal(engine.activeNodeCount, 0, 'engine nodes after a failed build');
+  assert.equal(engine.activeSourceCount, 0);
+});
+
+test('K001: V2 playback is counted by the engine and leaves 0 nodes after stop()', () => {
+  const { ctx, engine, ed } = counted();
+  assert.equal(engine.activeNodeCount, 0);
+  assert.equal(ed.play(), true);
+  assert.ok(engine.activeNodeCount > 0, `engine nodes during play: ${engine.activeNodeCount}`);
+  assert.equal(engine.activeNodeCount, ed.stats().activeNodeCount, 'every voice node is counted');
+  assert.equal(engine.activeSourceCount, ed.stats().activeSourceCount);
+  ctx.currentTime += 0.6;
+  assert.equal(ed.stop(), true);
+  assert.ok(engine.activeNodeCount > 0, 'the fading voice is still counted');
+  const fade = STOP_LEAD_S + 128 / 48000 + STOP_RAMP_S + STOP_PAD_S;
+  ctx.advance(ctx.currentTime + fade + 1e-6);
+  assert.equal(engine.activeNodeCount, 0, 'engine nodes after stop');
+  assert.equal(engine.activeSourceCount, 0, 'engine sources after stop');
+});
+
+test('K001: natural end, looped passes, restarts and dispose all return the engine to 0', () => {
+  let { ctx, engine, ed } = counted();
+  ed.play();
+  const { t0, duration } = ed.currentPassTiming();
+  ctx.advance(t0 + duration + STOP_PAD_S);
+  assert.equal(ed.playing, false);
+  assert.equal(engine.activeNodeCount, 0, 'natural end');
+  const loop = counted();
+  loop.ed.setLoop(true);
+  loop.ed.play();
+  const first = loop.ed.currentPassTiming();
+  loop.ctx.currentTime = first.t0 + 1.5;
+  loop.timers.runUntil(1500);
+  assert.equal(loop.ed.stats().voices, 2);
+  assert.equal(loop.engine.activeNodeCount, loop.ed.stats().activeNodeCount, 'queued pass counted');
+  loop.ed.stop();
+  loop.ctx.advance(loop.ctx.currentTime + 0.1);
+  assert.equal(loop.engine.activeNodeCount, 0, 'looped run stopped');
+  ({ ctx, engine, ed } = counted());
+  for (let i = 0; i < 20; i++) {
+    ed.restart();
+    ctx.advance(ctx.currentTime + 0.1);
+  }
+  assert.equal(engine.activeNodeCount, ed.stats().activeNodeCount, 'no growth over restarts');
+  ed.dispose();
+  assert.equal(engine.activeNodeCount, 0, 'dispose');
+  assert.equal(engine.activeSourceCount, 0);
+});
+
+test('K001: without accounting hooks the editor still plays (lab fixtures)', () => {
+  const { ed } = setup();
+  assert.equal(ed.play(), true);
+  ed.dispose();
+  assert.deepEqual(ed.stats(), { voices: 0, activeSourceCount: 0, activeNodeCount: 0 });
+});
+
+// ---------------------------------------------------------------- K003: Space, undo, copy
+
+const ctrl = (k, mods = {}) => key(k, { ctrlKey: true, ...mods });
+const snap = (ed) => JSON.stringify(ed.serialize());
+
+test('K003: Space on the timeline plays and stops; repeats and modifiers do not', () => {
+  const { ctx, ed } = setup();
+  let e = key(' ', { code: 'Space' });
+  assert.equal(ed.onKeydown(e), true);
+  assert.equal(e.prevented, true, 'the timeline claims Space');
+  assert.equal(ed.playing, true);
+  e = key(' ', { code: 'Space', repeat: true });
+  assert.equal(ed.onKeydown(e), true, 'an auto-repeat is claimed');
+  assert.equal(ed.playing, true, 'and does not toggle');
+  assert.equal(ed.onKeydown(key('Spacebar')), true, 'the legacy key name');
+  assert.equal(ed.playing, false);
+  ctx.advance(ctx.currentTime + 0.1);
+  assert.deepEqual(ed.stats(), { voices: 0, activeSourceCount: 0, activeNodeCount: 0 });
+  assert.equal(ed.onKeydown(key(' ', { code: 'Space', shiftKey: true })), false, 'Shift+Space');
+  assert.equal(ed.onKeydown(ctrl(' ')), false, 'Ctrl+Space');
+  assert.equal(ed.onKeydown(key(' ', { target: { tagName: 'INPUT' } })), false, 'a field keeps it');
+  assert.equal(ed.playing, false);
+});
+
+test('K003: Ctrl+Z restores the exact serialized model of every edit; Shift+Ctrl+Z redoes', () => {
+  const { ed } = setup();
+  const states = [snap(ed)];
+  const edits = [
+    () => ed.addBlock('fm'),
+    () => ed.updateParam('freq', 523.25),
+    () => ed.onKeydown(key('ArrowLeft', { altKey: true })),
+    () => ed.onKeydown(ctrl('d')),
+    () => ed.setTempo(90),
+    () => ed.setLoop(true),
+    () => {
+      ed.dragStart(0);
+      ed.drop(4);
+    },
+    () => ed.onKeydown(key('Delete')),
+    () => ed.setDurationUnit('ms'),
+    () => ed.clear(),
+  ];
+  for (const edit of edits) {
+    edit();
+    states.push(snap(ed));
+    assert.notEqual(states.at(-1), states.at(-2), `edit ${states.length - 1} changed the model`);
+  }
+  assert.equal(ed.canUndo, true);
+  for (let i = states.length - 2; i >= 0; i--) {
+    const e = ctrl('z');
+    assert.equal(ed.onKeydown(e), true);
+    assert.equal(e.prevented, true);
+    assert.equal(snap(ed), states[i], `undo to state ${i}`);
+  }
+  assert.equal(ed.canUndo, false);
+  assert.equal(ed.onKeydown(ctrl('z')), false, 'nothing to undo: the key is not claimed');
+  assert.equal(ed.selectedId, 'b1', 'the selection comes back with the model');
+  for (let i = 1; i < states.length; i++) {
+    assert.equal(ed.onKeydown(ctrl('Z', { shiftKey: true })), true);
+    assert.equal(snap(ed), states[i], `redo to state ${i}`);
+  }
+  assert.equal(ed.onKeydown(ctrl('z', { shiftKey: true })), false, 'nothing to redo');
+  // Cmd on macOS; a new edit drops the redo branch.
+  ed.onKeydown(key('z', { metaKey: true }));
+  assert.equal(snap(ed), states.at(-2));
+  ed.addBlock('tone');
+  assert.equal(ed.canRedo, false);
+  // An edit that changes nothing is no step; loading a sequence starts a new history.
+  const depth = ed.historyDepth;
+  ed.setTempo(ed.model.tempoBpm);
+  ed.moveBlockTo(0, 0);
+  assert.equal(ed.historyDepth, depth);
+  ed.load(ed.serialize());
+  assert.equal(ed.canUndo, false);
+});
+
+test('K003: a field committed with its current value is no undo step', () => {
+  const { ed } = setup();
+  ed.selectBlock('b1');
+  const b = ed.selectedBlock;
+  const [k, v] = Object.entries(b.params)[0];
+  ed.updateParam(k, v);
+  ed.updateSelected({ params: { ...b.params } });
+  assert.equal(ed.canUndo, false, 'an unchanged field records nothing');
+  ed.updateParam(k, typeof v === 'number' ? v + 1 : v);
+  assert.equal(ed.canUndo, typeof v === 'number', 'a changed one does');
+});
+
+test('K003: the waveform mirrored from the instrument is no undo step and survives undo', () => {
+  const { ed } = setup();
+  const w0 = ed.model.waveform;
+  const w1 = w0 === 'square' ? 'triangle' : 'square';
+  ed.setWaveform(w1);
+  assert.equal(ed.model.waveform, w1);
+  assert.equal(ed.canUndo, false, 'the mirror records no step');
+  ed.setWaveform(w0);
+  ed.setTempo(60); // the step before it holds w0
+  ed.setWaveform(w1);
+  assert.equal(ed.historyDepth, 1);
+  ed.undo();
+  assert.equal(ed.model.tempoBpm, 120);
+  assert.equal(ed.model.waveform, w1, 'an undo never brings back an older waveform');
+  ed.setWaveform(w0); // the redo step holds w1
+  assert.equal(ed.canRedo, true, 'the mirror keeps the redo branch');
+  ed.redo();
+  assert.equal(ed.model.tempoBpm, 60);
+  assert.equal(ed.model.waveform, w0, 'nor does a redo');
+});
+
+test('K003: Ctrl+C copies the selected block; Ctrl+V pastes it after the selection', () => {
+  const { ed } = setup();
+  ed.selectBlock('b2');
+  const before = snap(ed);
+  assert.equal(ed.onKeydown(ctrl('c')), true);
+  assert.equal(snap(ed), before, 'copy does not change the model');
+  assert.equal(ed.canUndo, false, 'copy is not an edit');
+  ed.selectBlock('b4');
+  const e = ctrl('v');
+  assert.equal(ed.onKeydown(e), true);
+  assert.equal(e.prevented, true);
+  assert.deepEqual(ids(ed), ['b1', 'b2', 'b3', 'b4', 'b6', 'b5']);
+  assert.equal(ed.selectedId, 'b6', 'the pasted block is selected');
+  const src = ed.model.blocks[1];
+  const pasted = ed.selectedBlock;
+  assert.deepEqual({ ...pasted, id: src.id }, src, 'an exact copy but its id');
+  ed.onKeydown(ctrl('v', { metaKey: true, ctrlKey: false }));
+  assert.equal(ed.model.blocks.length, 7, 'pastes again');
+  ed.onKeydown(ctrl('z'));
+  ed.onKeydown(ctrl('z'));
+  assert.equal(snap(ed), before, 'each paste is one undo step');
+  // A tempo-locked block pasted after a tempo change takes the current tempo.
+  ed.setTempo(60);
+  ed.onKeydown(ctrl('v'));
+  assert.equal(ed.selectedBlock.beats, 1);
+  assert.equal(ed.selectedBlock.durationMs, 1000);
+  // Nothing selected: copy is not claimed; a full sequence refuses the paste with a reason.
+  ed.selectBlock(null);
+  assert.equal(ed.onKeydown(ctrl('c')), false);
+  const empty = setup().ed;
+  assert.equal(empty.onKeydown(ctrl('v')), false, 'empty clipboard: not claimed');
+  for (let i = ed.model.blocks.length; i < 64; i++) ed.addBlock('tone');
+  const full = snap(ed);
+  assert.equal(ed.onKeydown(ctrl('v')), true);
+  assert.equal(snap(ed), full);
+  assert.match(ed.error, /full/);
 });

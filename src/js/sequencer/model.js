@@ -504,31 +504,37 @@ export function createSequence(init = {}, opts = {}) {
 
 /**
  * The reference sequence shown in the V2 design: Tone 440 Hz 500 ms, Sweep 440 → 880 Hz log
- * 500 ms, Silence 250 ms, Pulse 1.2 kHz 500 ms, Chirp 1 → 8 kHz 500 ms, at 120 BPM.
+ * 500 ms, Silence 250 ms, Pulse 1.2 kHz 500 ms, Chirp 1 → 8 kHz 500 ms, at 120 BPM. Its blocks
+ * are tempo-locked (1, 1, 1/2, 1 and 1 beat; K002, gap G1), so the tempo control changes what
+ * it plays; at 120 BPM the durations are exactly the design's. A sequence stored in
+ * milliseconds (beats null) keeps its durations whatever the tempo.
  */
 export function referenceSequence(opts = {}) {
   return createSequence(
     {
       tempoBpm: 120,
       blocks: [
-        { id: 'b1', type: 'tone', durationMs: 500, params: { freq: 440 } },
+        { id: 'b1', type: 'tone', durationMs: 500, beats: 1, params: { freq: 440 } },
         {
           id: 'b2',
           type: 'sweep',
           durationMs: 500,
+          beats: 1,
           params: { start: 440, end: 880, curve: 'log' },
         },
-        { id: 'b3', type: 'silence', durationMs: 250, params: {} },
+        { id: 'b3', type: 'silence', durationMs: 250, beats: 0.5, params: {} },
         {
           id: 'b4',
           type: 'pulse',
           durationMs: 500,
+          beats: 1,
           params: { freq: 1200, pulseMs: 100, pauseMs: 100 },
         },
         {
           id: 'b5',
           type: 'chirp',
           durationMs: 500,
+          beats: 1,
           params: { start: 1000, end: 8000, ramp: 'exponential' },
         },
       ],
@@ -614,8 +620,19 @@ function seedFor(model, id) {
 }
 
 /**
+ * Beats of a type's default length at the reference tempo (DEFAULT_TEMPO_BPM): Tone 1,
+ * Silence 1/2, Burst 2. A block added without a duration is tempo-locked to this (K002).
+ */
+export function defaultBeats(type) {
+  const s = BLOCK_SCHEMA[type];
+  return s ? s.durationMs.default / msPerBeat(DEFAULT_TEMPO_BPM) : null;
+}
+
+/**
  * Add a block. opts: { index (insert position, default end), params, durationMs, beats,
- * sampleRate }. Returns the same model when it is full or the type is unknown.
+ * sampleRate }. Without durationMs or beats the block is tempo-locked to defaultBeats(type);
+ * an explicit durationMs (without beats) is milliseconds, as before. Returns the same model
+ * when it is full or the type is unknown.
  */
 export function addBlock(model, type, opts = {}) {
   if (!BLOCK_SCHEMA[type] || model.blocks.length >= MAX_BLOCKS) return model;
@@ -629,13 +646,30 @@ export function addBlock(model, type, opts = {}) {
       type,
       params,
       durationMs: opts.durationMs ?? BLOCK_SCHEMA[type].durationMs.default,
-      beats: opts.beats ?? null,
+      beats: opts.beats ?? (opts.durationMs === undefined ? defaultBeats(type) : null),
     },
     { sampleRate: opts.sampleRate, tempoBpm: model.tempoBpm, index: model.blocks.length },
   );
   const index = toInt(opts.index, model.blocks.length, 0, model.blocks.length);
   const blocks = model.blocks.slice();
   blocks.splice(index, 0, block);
+  return withBlocks(model, blocks);
+}
+
+/**
+ * Insert a copy of `block` (a pasted block) at `index` (default end) with a fresh id,
+ * validated against this model's tempo: a tempo-locked block takes the current tempo.
+ * opts: { index, sampleRate }. Returns the same model when it is full.
+ */
+export function insertBlock(model, block, opts = {}) {
+  if (!block || model.blocks.length >= MAX_BLOCKS) return model;
+  const { block: b } = normalizeBlock(
+    { ...deepCopy(block), id: nextBlockId(model.blocks) },
+    { sampleRate: opts.sampleRate, tempoBpm: model.tempoBpm, index: model.blocks.length },
+  );
+  const index = toInt(opts.index, model.blocks.length, 0, model.blocks.length);
+  const blocks = model.blocks.slice();
+  blocks.splice(index, 0, b);
   return withBlocks(model, blocks);
 }
 

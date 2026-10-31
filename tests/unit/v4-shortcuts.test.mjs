@@ -97,6 +97,18 @@ test('a workspace lists only its own shortcuts, plus the global ones', () => {
     }
   }
   assert.ok(shortcutHelp('sequencer').rows.some((r) => r.id === 'sequencer-timeline'));
+  // K003: the focused Sequencer timeline (a listbox, which keeps Space from the instrument)
+  // plays and stops the sequence, undoes and redoes, copies and pastes blocks.
+  const seq = Object.fromEntries(shortcutHelp('sequencer').rows.map((r) => [r.id, r]));
+  assert.deepEqual(seq['sequencer-space'], { id: 'sequencer-space', keys: 'Space',
+    where: 'on the Sequencer timeline', text: 'Play / stop the sequence' });
+  assert.equal(seq['sequencer-history'].keys, 'Ctrl/⌘ Z, Shift + Ctrl/⌘ Z');
+  assert.equal(seq['sequencer-clipboard'].keys, 'Ctrl/⌘ C, Ctrl/⌘ V');
+  assert.equal(shortcutHelp('sequencer').space, SPACE_MEANING.instrument,
+    'with nothing focused Space is still the instrument\'s (ADR 0050)');
+  for (const ws of WORKSPACES.filter((w) => w !== 'sequencer')) {
+    assert.ok(!shortcutHelp(ws).rows.some((r) => r.id.startsWith('sequencer-')), ws);
+  }
   assert.ok(!shortcutHelp('playground').rows.some((r) => r.id === 'sequencer-timeline'));
   assert.ok(shortcutHelp('measure').rows.some((r) => r.id === 'measure-abort'));
 });

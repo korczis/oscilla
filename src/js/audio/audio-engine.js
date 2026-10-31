@@ -58,6 +58,8 @@
 //                  the voices (C003: the V2 sequencer, which compiles its passes into `input`
 //                  through `track`/`source`); its nodes count in activeNodeCount while it is
 //                  open, and dispose() (or a closed context) releases every one.
+//   stageAccounting(): { track, source, untrack, release } for a builder that plays outside
+//   the voices (the V2 sequencer): its nodes count in activeNodeCount while they live.
 //   A replacement voice (_restart) is started through this.play with the voice's own options,
 //   so a wrapper installed on the instance (main.js) re-applies the V2 options.
 //   snapshot(out?)   plain read-only engine state for the visualization (risk 3).
@@ -1063,6 +1065,30 @@ export class AudioEngine {
     });
     chains.add(chain);
     return chain;
+  }
+
+  /**
+   * Accounting for a graph builder that plays outside the engine's voices (the V2 sequencer's
+   * passes, K001; rule audio-engine-discipline): track(n) adds a node to `nodes`, source(n)
+   * also to `sources`, untrack(n) removes it, so activeNodeCount and activeSourceCount include
+   * the stage while it sounds. The builder stops and disconnects its own nodes (its dispose(),
+   * the end of its fade) and untracks each one then; release() untracks whatever this
+   * accounting still holds, e.g. after a build that threw part-way.
+   */
+  stageAccounting() {
+    const held = new Set();
+    const untrack = (n) => {
+      held.delete(n);
+      this.nodes.delete(n);
+      this.sources.delete(n);
+    };
+    return Object.freeze({
+      track: (n) => { held.add(n); this.nodes.add(n); return n; },
+      source: (n) => { held.add(n); this.nodes.add(n); this.sources.add(n); return n; },
+      untrack,
+      release: () => { for (const n of [...held]) untrack(n); },
+      get held() { return held.size; },
+    });
   }
 
   /** Update the sounding voice's insert stages: cfgs[i] goes to inserts[i].update (if given). */

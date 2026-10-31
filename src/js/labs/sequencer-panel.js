@@ -5,7 +5,9 @@
 //
 // Interaction: click selects; drag reorders (insertion marker); the focused timeline takes the
 // editor's keyboard model (arrows select, Alt+arrows move, Delete removes, Ctrl/Cmd+D
-// duplicates, Escape cancels a drag); the move/delete buttons and the "Add block" menu edit;
+// duplicates, Escape cancels a drag, Space plays or stops, Ctrl/Cmd+Z and Shift+Ctrl/Cmd+Z undo
+// and redo, Ctrl/Cmd+C and Ctrl/Cmd+V copy and paste a block); the move/delete buttons and
+// the "Add block" menu edit;
 // play/stop/loop and "play from the start" use the adapter's context and destination. The
 // audio clock (ctx.currentTime) drives the playhead; no timer ever times audio.
 //
@@ -160,6 +162,8 @@ export function mount(rootEl, adapter) {
       },
       // C003: the engine's counted stage chain (the Filter Lab) the passes play through.
       openStage: adapter.openSequencerStage ? () => adapter.openSequencerStage() : undefined,
+      // K001: the engine counts every node of V2 playback (adapter.sequencerAccounting).
+      accounting: adapter.sequencerAccounting || null,
     },
   });
 
@@ -332,6 +336,19 @@ export function mount(rootEl, adapter) {
     setAttr(loopBtn, 'aria-pressed', editor.model.loop ? 'true' : 'false');
     if (playBtn) setAttr(playBtn, 'title', editor.error || 'Play sequence');
     setText(msgEl, editor.error || (editor.warnings || []).join(' '));
+    syncTempo();
+  }
+
+  /**
+   * The Tempo select shows the sequence's tempo: an undo or redo can change it (K003). A tempo
+   * no option names selects none, so choosing any option is a change again.
+   */
+  function syncTempo() {
+    if (!tempoSel) return;
+    const v = String(editor.model.tempoBpm);
+    if (tempoSel.value === v) return;
+    const i = Array.from(tempoSel.options).findIndex((o) => o.value === v);
+    tempoSel.selectedIndex = i;
   }
 
   function renderScrollbar() {

@@ -15,6 +15,9 @@
 // dialog keeps Space first: dialogs.js keyGuard for the instrument, Studio's own control check.
 // A focused Studio timeline item (clip, marker, point, loop handle) is not such a control: its
 // activation is Enter and Space plays or stops Studio there (transport-view.js KEY_HELP).
+// The focused Sequencer timeline is a listbox, so it keeps Space from the instrument too; there
+// Space plays or stops the sequence (K003; sequencer/editor.js onKeydown), as Studio's timeline
+// plays Studio. With nothing focused, Space in the Sequencer is still the instrument's.
 // The compact Studio panel of the Playground and the Sequencer has no Space of its own: every
 // focus target in it is a button. Its Play button is its control.
 
@@ -87,8 +90,13 @@ const INSTRUMENT_ROWS = Object.freeze([
   row('octave', 'PgUp / PgDn', 'One octave up / down', 'on the frequency slider, where shown'),
 ]);
 const SEQUENCER_ROWS = Object.freeze([
+  row('sequencer-space', 'Space', 'Play / stop the sequence', 'on the Sequencer timeline'),
   row('sequencer-timeline', 'Arrows, Alt + arrows, Del, Ctrl/⌘ D',
     'Select, move, delete, duplicate blocks', 'on the Sequencer timeline'),
+  row('sequencer-history', 'Ctrl/⌘ Z, Shift + Ctrl/⌘ Z', 'Undo, redo',
+    'on the Sequencer timeline'),
+  row('sequencer-clipboard', 'Ctrl/⌘ C, Ctrl/⌘ V', 'Copy the selected block, paste it after the '
+    + 'selection', 'on the Sequencer timeline'),
 ]);
 // The keyboard (K026, src/js/midi/keyboard.js) in the views it is armed in, by physical key
 // (the same places on QWERTZ and AZERTY). It never takes Space, nor a key with Ctrl, Meta or
