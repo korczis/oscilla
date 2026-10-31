@@ -4,7 +4,8 @@
 // hosts live in `svc` (a closure), never in reactive state.
 //
 // svc: { engine, bridge, labs, exportConfigDoc(cmp), applyImport(cmp, parsed),
-//        renderWav(cmp, kind), screenshot(cmp), relayout() }
+//        renderWav(cmp, kind), screenshot(cmp), relayout(), stopPlayback(cmp),
+//        sequencerPlaying() }
 
 import { STORAGE_KEYS, WAVEFORM_LABELS } from '../core/constants.js';
 import { clamp, round } from '../core/math.js';
@@ -282,10 +283,16 @@ export function createWorkbench(svc) {
     sweepLabel(d) { return d.key === 'durationMs' ? 'Duration (s)' : d.label; },
 
     // ------------------------------------------------------------------ transport extras
-    /** Status-bar play key: stop when sounding, else latch (continuous allowed) or trigger. */
+    /**
+     * Status-bar play key: stop when sounding, else latch (continuous allowed) or trigger.
+     * Sounding is what the key shows (isSounding) or the sequencer's live state (C001: the
+     * `seqPlaying` copy lags by one poll); a stop goes through stopPlayback and starts nothing.
+     */
     statusPlay() {
-      if (this.seqPlaying && svc.labs.sequencer) svc.labs.sequencer.editor.stop();
-      if (this.playing) { this.stopNow(); return; }
+      if (this.isSounding || svc.sequencerPlaying()) {
+        svc.stopPlayback(this);
+        return;
+      }
       if (this.continuousAllowed && !this.isProgrammed) this.toggleLatch();
       else this.trigger();
     },
