@@ -10,9 +10,10 @@
 // focused control) and by touch (a tap), it opens its workspace with the state it names, focus
 // lands on that workspace's heading (never on <body>), Back returns to where it was followed
 // from and Forward opens it again. Checks (asserted):
-//   labels          (B6, B7, B8) the skip link says "Skip to main content"; the "?" button is
+//   labels          (B6, B7, B8) the skip link says "Skip to main content: Playground" (H004
+//                   names the workspace shown); the "?" button is
 //                   named "Keyboard shortcuts" and opens that dialog; the logo keeps the
-//                   product's name, its title says "Home: the Playground", and it goes to the
+//                   product's name, its title says "Open the Playground" (H004), and it goes to the
 //                   Playground from another workspace, Back returns
 //   filter-toggle   (B1) the Filter Lab ⤢ button is named "Open the Filter Lab page" on the
 //                   Playground and opens Filter Lab; there it is named "Back to the Playground"
@@ -214,10 +215,10 @@ async function runLeg(name, origin) {
       const help = await H.name(page, '[data-osc="header.help"]');
       const brand = await H.name(page, '.osc-brand');
       check(leg, 'the skip link, the "?" button and the logo say what they do',
-        skip && skip.text === 'Skip to main content'
+        skip && skip.text === 'Skip to main content: Playground'
         && help && help.label === 'Keyboard shortcuts' && help.title === 'Keyboard shortcuts'
         && brand && brand.href === '#m=playground' && /OSCILLA/.test(brand.label)
-        && brand.title === 'Home: the Playground',
+        && brand.title === 'Open the Playground',
         JSON.stringify({ skip, help, brand }));
       const wrong = [];
       for (const input of INPUTS) {
