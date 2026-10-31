@@ -1,0 +1,53 @@
+id: U012
+milestone: M054
+serves:
+  - "ui-current#ui-audited"
+title: "In the Studio, the status-bar Play and Export Audio act on the Studio on screen"
+slug: in-the-studio-the-status-bar-play-and-export-audio-act-on-the
+priority: p2
+profile: implementation
+objective: "Lands as fix(ui), with a resolution note to ADR 0050. Defect: in #m=studio the shell's audio controls act on the hidden Playground instrument while the Studio's own Play and Render WAV sit beside them and do something else. The footer [data-osc=\"action.exportAudio\"] (src/index.html:2821) calls exportAudio() (src/js/ui/workbench.js:395-397), which picks 'pattern' unless the workspace is the sequencer, so it downloads oscilla-pattern-*.wav of the Playground tone; the mobile footer [data-osc=\"status.play\"] (src/index.html:2776, statusPlay() at src/js/ui/workbench.js:253) triggers the instrument (engine.activeSourceCount 0 -> 1, status PLAYING) while window.OSCILLA.studio.transport.playing stays false and the Studio banner still says 'Nothing plays until you press Play'. Before: two Play keys and two audio exports in one view with divergent effects. After: both footer controls follow the workspace's Space owner (src/js/ui/shortcuts.js SPACE_OWNER, ADR 0050), read through one exported function of shortcuts.js beside spaceOwner(); where the owner is 'studio', status.play stops anything the instrument or sequencer is sounding (stop is global and starts nothing, as C001 keeps it) and otherwise toggles the Studio transport through studioTogglePlay() (src/js/ui/studio/workspace.js:1228), its aria-label and aria-pressed read the Studio transport ('Play Studio' / 'Stop Studio'); action.exportAudio opens the Studio's own render dialog through studioOpenRender() (workspace.js:1270), the one offline render path studio.renderWav uses, carries the same blocked reason and aria-disabled while studio.task.active, and its accessible name says it exports the Studio. The notice states the duration, sample rate and peak of the buffer actually rendered, never the instrument's (project.no-fake-science). Negative cases: every workspace whose owner is 'instrument' keeps today's meaning (pattern export, sequence export in the Sequencer, latch or trigger on status.play); Measure, Experiments, Learn and About are unchanged; no second render path and no new control. The change rides on the Pro footer bar F010 builds (Pro buttons and badges, no new osc-* class, no inline style; project.ui-uses-flowbite-pro), and no control is left inert (project.no-inert-surfaces). It revisits the recorded decision that the status Play key keeps its instrument meaning in the Studio: ADR 0050 gains a resolution note, and the criteria of C012 ('the hidden status Play key keeps its instrument meaning') and C001 ('with only the Studio playing it still starts the instrument') are superseded for the Studio only, their checks updated here. Not this: C012 and C001 (status label, gain readout, stop paths), C002 (one output owner), C013 (scope follows the output owner), F010 and F002 (restyle the status bar and footer without changing their meaning), C004 (the sequencer WAV). Rollback: revert the merge commit; the ADR note and the test changes leave with it."
+why: "Found by the S074 quality-bar review of 2026-10-30 at origin/main d9db6bdf, section 74 symptom \"In the Studio view, the shell's audio controls act on the hidden Playground instrument, not on the Studio on screen. They sit next to the Studio's own Play and Render WAV, which do different things.\", reproduced by an independent verifier: desktop probe s074/targeted.cjs (footer Export Audio in #m=studio downloaded oscilla-pattern-20261030-183303.wav, notice 'Audio exported 0.67 s · 48000 Hz · 16-bit WAV · peak -21.9 dBFS', the Playground 440 Hz tone) and mobile probe s074/mobile2.cjs at 390x844 with screenshots s074/m-studio.png and s074/m-studio-footplay.png (status.play, label 'Trigger', set PLAYING and activeSourceCount 1 while the Studio transport stayed stopped). A duplicate control with a divergent effect, judged by the rule that every visible control does something real in the view it is in."
+scope:
+  - "src/index.html"
+  - "src/js/ui/workbench.js"
+  - "src/js/ui/shortcuts.js"
+  - "src/js/ui/studio/workspace.js"
+  - ".ai/repo/adrs/0050-space-is-the-play-key-of-the-workspace-in-view-one-shortcut-.md"
+  - "docs/v31/user-guide.md"
+  - "tests/unit/v4-shortcuts.test.mjs"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/browser/v31-studio-transport.cjs"
+  - "tests/browser/navigation.cjs"
+  - "tests/browser/qa-regressions.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "F002"
+  - "F010"
+acceptance_criteria:
+  - "Fail-first: tests/unit/v4-shortcuts.test.mjs fails on the merge base and passes on the head: the exported footer-target function of src/js/ui/shortcuts.js returns 'studio' for studio and 'instrument' for every workspace SPACE_OWNER gives to the instrument, for every key of app.js WORKSPACES; and statusPlay() and exportAudio() of src/js/ui/workbench.js read it rather than a workspace literal (a source assertion that fails on the 'sequencer' ternary of today)."
+  - "A check in tests/browser/v31-studio-transport.cjs, at 390x844 in #m=studio with nothing sounding: activating [data-osc=\"status.play\"] makes window.OSCILLA.studio.transport.playing true and leaves engine.activeSourceCount at 0; activating it again stops the Studio; its aria-label reads 'Play Studio' then 'Stop Studio' and aria-pressed follows the transport."
+  - "The same suite at 1536x1024 in #m=studio: activating [data-osc=\"action.exportAudio\"] opens osc-dlg-studio-render (the dialog studio.renderWav opens), no oscilla-pattern-*.wav download starts, and while studio.task.active the control is aria-disabled with the reason studioRenderBlocked() gives; a completed render's notice states the rendered buffer's own duration, sample rate and peak."
+  - "Negative cases in tests/browser/navigation.cjs and qa-regressions.cjs: in the Playground status.play still latches or triggers and Export Audio still downloads the pattern; in the Sequencer Export Audio still exports the sequence; with the instrument sounding in the Studio, status.play stops it and starts nothing (C001's stop semantics hold)."
+  - "ADR 0050 gains a dated note under a new closing '## Resolution notes' section that names this issue and the superseded clauses of C001 and C012; every existing section and its status stay unchanged; majordomus adr check reports no problem."
+  - "It adds no class token, selector, markup surface or inline style and only removes legacy ones, so tests/unit/ui-flowbite-pro-baseline.json stays equal or falls (node scripts/ui-flowbite-pro-record.mjs --check passes, rewritten only where a count fell) and node --test tests/unit/ui-flowbite-pro.test.mjs passes (project.ui-uses-flowbite-pro, project.visual-identity-lock v2)."
+  - "As a fix change it carries a unit test that fails on the merge base and passes on the head (project.fail-first); it touches no path project.review-verdict guards (src/js/studio/ stays unchanged), or it carries a reviewer's verdict for the one it does."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named deadline (project.suite-harness, project.bounded-test-timing)."
+  - "Definition of done, extends: the footer controls gain the Studio meaning ADR 0050 already gives Space there."
+  - "Definition of done, interlinks: the footer Export Audio and studio.renderWav share one dialog and one render path; ADR 0050, C001 and C012 cross-reference this issue."
+  - "Definition of done, interactivity: status.play toggles the Studio transport and Export Audio opens the Studio render dialog in the Studio (the browser checks above)."
+  - "Definition of done, docs, menus and routes: docs/v31/user-guide.md says what the footer Play and Export Audio do in the Studio; no route changes."
+  - "Definition of done, tested: tests/README.md has a row for each new check; dist is rebuilt and npm run build:check passes."
+  - "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+  - "node --test tests/unit/v4-shortcuts.test.mjs"
+  - "node tests/browser/v31-studio-transport.cjs"
+  - "node tests/browser/navigation.cjs"
+  - "node tests/browser/qa-regressions.cjs"
+  - "majordomus adr check"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-10-30'
+updated_at: '2026-10-30'
