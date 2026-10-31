@@ -387,6 +387,10 @@ function applyVizPause(paused) {
   const chart = labs.analysis && labs.analysis.chart;
   if (chart && typeof chart.setFreeze === 'function') chart.setFreeze(!!paused);
   if (analysisSpg && typeof analysisSpg.setFreeze === 'function') analysisSpg.setFreeze(!!paused);
+  // The Analyzer spectrogram has its own Freeze switch, so Pause goes through setPaused and
+  // leaves that switch's state alone (C014).
+  const spgView = labs.spectrogram && labs.spectrogram.view;
+  if (spgView && typeof spgView.setPaused === 'function') spgView.setPaused(!!paused);
 }
 
 // ------------------------------------------------------------------------------ analysis tabs

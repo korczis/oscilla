@@ -149,7 +149,9 @@ changed.
   marked: the instrument's, or while only the sequencer plays the sequence's (hidden in its
   silences). The waveform scope traces the output analyser whenever the instrument, the
   sequencer or the Studio plays, and names which one.
-- **Spectrogram:** a scrolling time-frequency view, with level shown as colour.
+- **Spectrogram:** a scrolling time-frequency view, with level shown as colour. Freeze,
+  Pause animation and a hidden page pause its time axis: the paused interval is left unwritten,
+  never filled with the first spectrum read afterwards.
 - **Microphone analyzer and compare:** your microphone's spectrum and spectrogram, the detected
   frequency with its uncertainty, and a generator-versus-microphone comparison with freeze,
   averaging and peak hold. If the browser closes the audio context, the microphone stops and
