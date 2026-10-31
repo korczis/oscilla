@@ -51,6 +51,7 @@ import {
   WAVEFORMS,
 } from './model.js';
 import { observeClock, renderedTimeAtLeast } from '../audio/clock.js';
+import { buildStageChain } from '../audio/stage-chain.js';
 
 export { observeClock };
 
@@ -883,9 +884,12 @@ function createLookupFromTimeline(tl) {
 /**
  * Render a sequence offline (for WAV export and tests).
  *   renderSequenceOffline(model, OfflineCtor, { sampleRate, numberOfChannels = 1, tailS = 0.05,
- *     level = 1, waveform }) -> Promise<{ buffer, voice }>
+ *     level = 1, waveform, inserts }) -> Promise<{ buffer, voice }>
  * OfflineCtor is passed in (window.OfflineAudioContext) so this module never reaches for a
  * global context. `level` is the output gain (e.g. the UI master gain); it must be > 0.
+ * `inserts` are the insert factories the live sequence plays through (C003: the Filter Lab's
+ * stage, built on the offline context), chained by the same audio/stage-chain.js builder as
+ * AudioEngine.stageChain, so the file is shaped as the sequence sounds.
  */
 export async function renderSequenceOffline(model, OfflineCtor, opts = {}) {
   const sr = opts.sampleRate;
@@ -903,9 +907,14 @@ export async function renderSequenceOffline(model, OfflineCtor, opts = {}) {
   const gain = ctx.createGain();
   gain.gain.setValueAtTime(toNumber(opts.level, 1, GAIN_FLOOR, 1), 0);
   gain.connect(ctx.destination);
-  const voice = compileSequence(model, ctx, gain, 0, { waveform: opts.waveform, timers: null });
+  const chain = buildStageChain(ctx, opts.inserts || [], gain);
+  const voice = compileSequence(model, ctx, chain.input, 0, {
+    waveform: opts.waveform,
+    timers: null,
+  });
   const buffer = await ctx.startRendering();
   voice.dispose();
+  chain.dispose();
   try {
     gain.disconnect();
   } catch (e) {
