@@ -165,13 +165,19 @@ changed.
   and the next length.
 - **Filter Lab:** biquad filters with a response chart drawn from the browser's own filter
   response. Cutoff and Q can be dragged on the chart.
-- **ADSR:** an attack/decay/sustain/release envelope with a draggable graph. Attack applies
-  from the next note; a release edited while a note is held (here, or Settings Release with
-  the envelope off) is the one letting go of that note uses, shortened to end by the hard
-  limit or a pattern's own end. A note that reaches either, or a Trigger note's end, fades
-  over the release it started with.
+- **ADSR:** an attack/decay/sustain/release envelope with a draggable graph. It shapes every
+  note of the instrument: a held tone, a continuous sweep, a finite tone and each step of the
+  instrument's programmed patterns, where it shrinks to fit a short step. An edit reaches the
+  note that sounds: a new release in place, anything else by a click-free restart of the
+  note, once per slider or graph drag, when the drag ends, and once per run of arrow keys on
+  a slider, a quarter of a second after the last key is let go (at once when the focus
+  leaves it). A release edited while a note is held (here, or Settings Release with the
+  envelope off) is the one letting go of that note uses, shortened to end by the hard limit
+  or a pattern's own end; a note that reaches either, or a Trigger note's end, fades over the
+  release it started with. The Pattern sequencer and Studio keep their own envelopes.
 - **Additive synthesis:** a harmonic editor. The bars you see are the same coefficients that
-  build the waveform you hear.
+  build the waveform you hear. It applies to single-oscillator sources, not to the dual
+  oscillator.
 - **Phase, Lissajous and stereo:** A/B phase views, a Lissajous figure, a correlation meter and
   stereo routing (split, panned or mono).
 - **Bioacoustics:** approximate hearing ranges and call examples for humans and several animal
