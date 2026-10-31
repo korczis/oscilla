@@ -117,7 +117,7 @@ const adapter = {
     return () => adapterListeners.delete(fn);
   },
   getDestination: () => engine.master,
-  // The Pattern Sequencer started: the Playground gain is the level in effect (C012 F1).
+  // C012 F1: a started sequence takes the output at the Playground gain.
   claimOutput: () => { if (app) app.claimMasterLevel(); },
   // C003: the sequencer plays through the engine's counted stage chain (the Filter Lab).
   openSequencerStage: () => engine.stageChain(sequenceInserts(true)),
@@ -607,8 +607,7 @@ function integrationInit() {
   });
   cmp.$watch('gainLevel', (g) => {
     engine.setMasterGain(g);
-    // The Playground gain now holds the master stage: the status bar stops showing the Studio's
-    // Master Output level (C012; the Studio keeps this newer level at STOP, PR #119 D2).
+    // The newer level: the status bar drops the Studio's Master (C012; kept at STOP, #119 D2).
     if (cmp.studio && cmp.studio.masterLevel !== null) cmp.studio.masterLevel = null;
   });
   cmp.$watch('theme', () => {
