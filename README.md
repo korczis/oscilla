@@ -227,9 +227,12 @@ is in the [algorithm notes](docs/v3/algorithms.md).
   anything; it never carries results, calibration or a device, and an altered link is refused
   as a whole.
 - **During the run.** A quality bar reports INPUT, NOISE, CLIPPING, SIGNAL and CAPTURE, and a
-  screen reader hears one announcement per stage. While a measurement owns the output,
-  neither the instrument nor the sequencer can play: both are refused with the same notice. Escape, STOP, hiding the page or leaving the workspace aborts the
-  measurement, and no audio node, capture or input track is left running.
+  screen reader hears one announcement per stage. CLIPPING NONE means no sample of any run so
+  far reached 0.98 of digital full scale; a peak that reached it without a flat top reads AT
+  RAIL (brief clipping is not excluded), and a run whose peak is unknown reads NOT CHECKED.
+  While a measurement owns the output, neither the instrument nor the sequencer can play: both
+  are refused with the same notice. Escape, STOP, hiding the page or leaving the workspace
+  aborts the measurement, and no audio node, capture or input track is left running.
 - **Capture.** Mono PCM is recorded by an AudioWorklet loaded from a `data:` URL, so it also
   works from `file://`. When AudioWorklet is unavailable, a ScriptProcessor fallback records
   instead. The stimulus passes through the same master safety chain as every other sound, and
