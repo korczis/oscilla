@@ -3,7 +3,7 @@
 //
 //   NODE_PATH=<checkout>/tests/node_modules node tests/browser/sequencer.cjs
 //   node tests/browser/sequencer.cjs --browser firefox     # chromium | firefox | webkit (default: all)
-//   node tests/browser/sequencer.cjs --dist <path/to/index.html>   # the app of check (e)
+//   node tests/browser/sequencer.cjs --dist <path/to/index.html>   # the app of (e), (f), C005, C006
 //   (stop and teardown checks poll against a deadline; no fixed sleep precedes an assertion)
 //
 // The fixture (tests/browser/fixtures/sequencer-fixture.js) is bundled in memory with esbuild
@@ -32,6 +32,10 @@
 //       and dismissed, the point under the centre of every Add block menu item is that item and
 //       a real mouse click there adds a block of that type (the upward grid menu was clipped
 //       by the scrolling .osc-main, so Tone and Silence could not be clicked).
+//   seq-playhead-after-edit (C006) on the built dist/index.html (file://): Duration 3000 ms
+//       typed into the first block while pass 1 plays; while the Pulse 1.2 kHz sounds the
+//       playhead is over the Pulse block, which is marked, the pass was not restarted, the
+//       message says the changes apply from the next pass and the status bar shows both lengths.
 // Exit code 0 only when every check passes in every browser.
 'use strict';
 
@@ -767,6 +771,107 @@ async function checkAddMenuPointer(engine, browser) {
 
 // ---------------------------------------------------------------- run
 
+// ---------------------------------------------------------------- seq-playhead-after-edit
+
+/**
+ * C006 (finding vis-divergence-3). Edits during playback apply from the next pass; the lane
+ * shows the edited model. Before the fix the sounding pass's clock was drawn linearly on the
+ * edited lane, so after the first Tone was lengthened the playhead sat in another block while
+ * the Pulse sounded. Setup (before Play): Silence 3000 ms and Pulse 2000 ms, so the typed edit
+ * lands inside pass 1 (Pulse from 4.0 s) on a loaded host and the Pulse has many 1.2 kHz
+ * windows. The pass is never looped, so pass 1 is the only pass.
+ */
+async function checkPlayheadAfterEdit(engine, browser) {
+  const name = 'seq-playhead-after-edit';
+  const context = await browser.newContext({ viewport: { width: 1536, height: 1024 } });
+  const errors = [];
+  try {
+    const page = await context.newPage();
+    page.setDefaultTimeout(15000);
+    page.on('pageerror', (e) => errors.push(String(e)));
+    await page.goto(pathToFileURL(DIST).href, { waitUntil: 'load' });
+    await until(() => page.evaluate(() => document.documentElement.dataset.ready === 'true'),
+      { ms: 30000, what: `${name}: the app is ready` });
+    await page.mouse.click(5, 5); // the first gesture creates the AudioContext
+    const group = await page.evaluate(() => {
+      const el = document.querySelector('[data-osc="nav.sequencer"]');
+      const g = el && el.closest('[data-osc-nav-group]');
+      return g && el.offsetParent === null ? g.dataset.oscNavGroup : null;
+    });
+    if (group) await page.click(`[data-osc="nav-group.${group}"]`);
+    await page.click('[data-osc="nav.sequencer"]');
+    await until(() => page.evaluate(() => window.OSCILLA.app.workspace === 'sequencer'
+      && !!window.OSCILLA.engine.ctx), { ms: 10000, what: `${name}: the Sequencer is shown` });
+    await page.evaluate(() => {
+      const lab = window.OSCILLA.labs.sequencer;
+      lab.editor.selectBlock('b3');
+      lab.editor.updateParam('durationMs', 3000);
+      lab.editor.selectBlock('b4');
+      lab.editor.updateParam('durationMs', 2000);
+      lab.editor.setLoop(false);
+      lab.render();
+    });
+    const PULSE_START_S = 0.5 + 0.5 + 3; // Tone, Sweep, Silence of the sounding pass
+    await page.click('#osc-seq-block-b1'); // Tone 440 Hz, 500 ms
+    await page.click('#osc-seq-play');
+    const start = await until(() => page.evaluate(() => {
+      const ed = window.OSCILLA.labs.sequencer.editor;
+      const t = ed.playing && ed.currentPassTiming();
+      return t && window.OSCILLA.engine.ctx.state === 'running' ? t : null;
+    }), { ms: 10000, what: `${name}: the sequence plays after Play` });
+    await page.fill('#osc-seq-duration', '3000'); // edit while pass 1 plays
+    await page.press('#osc-seq-duration', 'Tab'); // change -> editor.updateParam
+    const edit = await page.evaluate(() => {
+      const ed = window.OSCILLA.labs.sequencer.editor;
+      return { durationMs: ed.model.blocks[0].durationMs, at: ed.playheadTime() };
+    });
+    check(engine, `${name}: the edit landed in pass 1 before the Pulse`,
+      edit.durationMs === 3000 && edit.at !== null && edit.at < PULSE_START_S,
+      `block 1 ${edit.durationMs} ms, typed at ${edit.at === null ? 'stopped' : edit.at.toFixed(3)} s`);
+    // The condition the assertions judge: the Pulse requests 1.2 kHz, at least 150 ms into it
+    // (several frames, so the lane has drawn the head for this pass time).
+    const snap = await until(() => page.evaluate((pulseStart) => {
+      const ed = window.OSCILLA.labs.sequencer.editor;
+      const t = ed.playheadTime();
+      if (ed.currentFrequency() !== 1200 || !(t >= pulseStart + 0.15)) return null;
+      const lane = document.getElementById('osc-seq-timeline');
+      const ph = [...lane.children].find((c) => !c.dataset.blockId && c.style.zIndex === '2');
+      const m = /translateX\((-?\d+)px\)/.exec((ph && ph.style.transform) || '');
+      const x = m ? Number(m[1]) : null;
+      const blocks = [...lane.querySelectorAll('[data-block-id]')].map((b) => ({
+        id: b.dataset.blockId, x0: parseFloat(b.style.left),
+        x1: parseFloat(b.style.left) + parseFloat(b.style.width),
+        current: b.getAttribute('aria-current') === 'true' }));
+      const under = blocks.find((b) => x !== null && x >= b.x0 && x < b.x1);
+      const status = document.querySelector('[data-osc="status.duration"]');
+      const msg = document.querySelector('[data-osc="seq.message"]');
+      return { t, x, visible: !!ph && !ph.hidden, ghost: !!ph && ph.dataset.ghost === 'true',
+        under: under ? under.id : null, sounding: ed.model.blocks[ed.activeBlockIndex()].id,
+        marked: blocks.filter((b) => b.current).map((b) => b.id),
+        passT0: ed.currentPassTiming().t0, status: status ? status.textContent : null,
+        msg: msg ? msg.textContent : null };
+    }, PULSE_START_S), { ms: 10000, what: `${name}: the Pulse 1.2 kHz sounds in pass 1` });
+    check(engine, `${name}: the playhead is over the block that sounds`,
+      snap.visible && !snap.ghost && snap.sounding === 'b4' && snap.under === 'b4',
+      `pass ${snap.t.toFixed(3)} s, 1200 Hz, sounding ${snap.sounding}, playhead x ${snap.x} `
+        + `over ${snap.under}${snap.ghost ? ' (ghost)' : ''}`);
+    check(engine, `${name}: the sounding block is marked`,
+      snap.marked.length === 1 && snap.marked[0] === 'b4', `aria-current: ${snap.marked}`);
+    check(engine, `${name}: the pass was not restarted`, snap.passT0 === start.t0,
+      `pass t0 ${start.t0} -> ${snap.passT0}`);
+    check(engine, `${name}: the message and the status bar describe what sounds`,
+      /Changes apply from the next pass\./.test(snap.msg || '')
+        && snap.status === '6.5 s now, next 9 s',
+      `message "${snap.msg}", status "${snap.status}"`);
+    await page.click('#osc-seq-stop');
+    await until(() => page.evaluate(() => !window.OSCILLA.labs.sequencer.editor.playing),
+      { ms: 5000, what: `${name}: Stop ends the sequence` });
+    check(engine, `${name}: no page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  } finally {
+    await context.close();
+  }
+}
+
 async function runEngine(engine, bundle) {
   console.log(`\n${engine}`);
   const launch = {
@@ -912,6 +1017,11 @@ async function runEngine(engine, bundle) {
       check(engine, 'seq-filter-reaches-sequence: run', false, String(e && e.stack ? e.stack : e));
     }
     await checkAddMenuPointer(engine, browser);
+    try {
+      await checkPlayheadAfterEdit(engine, browser);
+    } catch (e) {
+      check(engine, 'seq-playhead-after-edit', false, String(e && e.message ? e.message : e));
+    }
   } finally {
     await browser.close();
   }

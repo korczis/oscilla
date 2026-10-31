@@ -157,8 +157,14 @@ export function createWorkbench(svc) {
         const seq = svc.labs && svc.labs.sequencer;
         const model = seq && seq.editor && seq.editor.model;
         if (model) {
-          const ms = totalDurationMs(model);
-          return model.loop ? `${formatMs(ms)} (loop)` : formatMs(ms);
+          const loop = model.loop ? ' (loop)' : '';
+          // Edits during playback apply from the next pass: while the sounding pass is longer
+          // or shorter than the edited sequence, both lengths (sequencer-panel passStatus).
+          const pass = typeof seq.passStatus === 'function' ? seq.passStatus() : null;
+          const now = pass ? formatMs(pass.soundingS * 1000) : '';
+          const next = formatMs(totalDurationMs(model));
+          if (pass && now !== next) return `${now} now, next ${next}${loop}`;
+          return `${next}${loop}`;
         }
       }
       const p = this.planSummary;

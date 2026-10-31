@@ -156,7 +156,10 @@ changed.
 - **Sequencer:** a timeline of tone, silence, sweep, pulse, chirp, burst, siren, AM, FM and
   random blocks, with drag-and-drop editing, keyboard control, looping and tempo-locked
   durations. Escape, hiding the page and the status bar's stop key stop a playing sequence
-  from the moment it starts; that stop key never starts the instrument in the same press.
+  from the moment it starts; that stop key never starts the instrument in the same press. An
+  edit made while the sequence plays applies from the next pass; until then the playhead stays
+  on the block that sounds (outlined), the panel says so and the status bar shows the sounding
+  and the next length.
 - **Filter Lab:** biquad filters with a response chart drawn from the browser's own filter
   response. Cutoff and Q can be dragged on the chart.
 - **ADSR:** an attack/decay/sustain/release envelope with a draggable graph.

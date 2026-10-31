@@ -496,6 +496,8 @@ function mountLabs(root) {
     });
   }
   if (labs.sequencer) syncSequencerIcon(root);
+  // The status bar's sequence length follows the sounding pass and the edited sequence (C006).
+  if (labs.sequencer) labs.sequencer.onPassChange(() => { if (app) app.labRev += 1; });
   if (labs.sequencer) {
     // MIDI notes and a sequence never sound together (V502): the sequence plays into the
     // master outside the engine's voices, so its start stops every note first (they fade within
