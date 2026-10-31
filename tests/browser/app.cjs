@@ -2982,11 +2982,28 @@ function defineChecks() {
           .filter((t) => !text.includes(t)),
         source: link('about.source'), majordomus: link('about.majordomus'), email: link('about.email'),
         traceHidden: q('.osc-about-trace').getAttribute('aria-hidden') === 'true',
+        // U002: the headline is the release line, the workspaces of the navigation are listed
+        // in its order, and What comes next renders the bundled roadmap.
+        headline: q('#osc-about-line-title').textContent.replace(/\s+/g, ' ').trim(),
+        navIds: [...document.querySelectorAll('#osc-nav a[data-osc^="nav."]')]
+          .map((a) => a.dataset.osc.slice('nav.'.length)),
+        workspaceIds: [...view.querySelectorAll('[data-osc="about.workspaces"] > li')]
+          .filter(shown).map((li) => li.dataset.osc.slice('about.workspace.'.length)),
+        next: [...view.querySelectorAll('[data-osc="about.next"] > li')].filter(shown)
+          .map((li) => ({ id: li.dataset.milestone,
+            text: li.textContent.replace(/\s+/g, ' ').trim() })),
         othersHidden: ['#osc-view-learn', '#osc-view-presets', '#osc-panel-source', '#osc-panel-analysis']
           .every((s) => !shown(q(s))),
       };
     });
     const v = res.view;
+    const roadmap = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'data',
+      'roadmap.json'), 'utf8')).milestones;
+    res.roadmapOk = roadmap.length > 0 && v.next.length === roadmap.length
+      && roadmap.every((m, i) => v.next[i].id === m.id && v.next[i].text.includes(m.title)
+        && v.next[i].text.includes(`${m.done} of ${m.required} done`));
+    res.workspacesOk = v.navIds.length > 0 && v.workspaceIds.join() === v.navIds.join();
+    res.headlineOk = !!v.headline && !/\bone night\b|\bthrowaway\b/i.test(v.headline);
     // Reduced motion: the one-shot trace draw collapses to (near) zero duration.
     await page.emulateMedia({ reducedMotion: 'reduce' });
     res.reducedMotionS = await page.evaluate(() => parseFloat(getComputedStyle(document.querySelector('.osc-about-trace')).animationDuration));
@@ -3057,7 +3074,8 @@ function defineChecks() {
       && v.email && v.email.href === 'mailto:korczis@gmail.com'
       && res.reducedMotionS < 0.01
       && Object.values(res.widths).every((b) => !b.length)
-      && res.menuMode === 'about' && !/About/.test(res.baseTitle);
+      && res.menuMode === 'about' && !/About/.test(res.baseTitle)
+      && res.roadmapOk && res.workspacesOk && res.headlineOk;
     return { ok, ...res };
   });
 
