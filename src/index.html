@@ -689,6 +689,11 @@
                 <output class="osc-num" id="osc-mic-detected" data-osc="mic.detected">UNAVAILABLE (microphone off)</output></p>
               <p class="osc-mic-note">Not a calibrated measurement. Microphone frequency response varies.</p>
             </div>
+            <p data-osc="mic.counterparts" hidden :hidden="!counterpartsShown()">For a calibrated measurement:
+              <a href="#m=measure" data-osc="counterpart.measure-rta"
+                x-bind="counterpartLink('measure-rta')">RTA in Measure</a> ·
+              <a href="#m=experiments" data-osc="counterpart.experiments"
+                x-bind="counterpartLink('experiments')">Compare saved experiments</a></p>
           </section>
 
           <!-- ---------- Device & Limits ---------- -->

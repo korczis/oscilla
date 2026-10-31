@@ -962,7 +962,8 @@ function defineChecks() {
       a.customPresets = [{ version: 1, id: 'gate', name: 'gate', created: 0,
         cfg: a.serializeConfig() }];
     });
-    for (const ws of ['synthesis', 'learn', 'presets']) {
+    // Compare shows the microphone analyzer's counterpart links (U005), as the Analyzer does.
+    for (const ws of ['synthesis', 'compare', 'learn', 'presets']) {
       await H.workspace(page, ws);
       await collect();
     }
