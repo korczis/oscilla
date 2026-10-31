@@ -1,0 +1,177 @@
+# Review verdict for pull request #295, plan item C003 (M090, PACK 03 'One Instrument, One
+# Coherent State'): the V2 pattern sequencer plays through the engine's counted Filter stage, and
+# the Envelope and Additive labs say they shape the instrument only (branch
+# fix/c003-sequencer-filter-stage). Delta re-review of the builder's fixes for the
+# changes-requested verdict at 9dc4a0b8 (which reviewed a8e4908d6afb). Reviewed head
+# 5f4f081d15d0 (== origin at fetch); merge base with origin/main fde49bd15ed6 (the branch merged
+# main at 6adc9878); origin/main is now 88b936cb. Reviewed by dev-68, who did not build, merge or
+# edit this change and wrote only this file.
+#
+# Delta: 6adc9878 merges origin/main fde49bd1 (E042 docs facts, suite.cjs; no guarded path;
+# of the PR's files only tests/README.md, merged without conflict); 5f4f081d changes
+# src/js/sequencer/editor.js (play() catches a throw from _schedulePass), src/index.html (the
+# two notes' tooltips and source lines), tests/unit/sequencer-stage-chain.test.mjs (3 new
+# tests, 1 new assertion), tests/README.md and dist/index.html. No guarded path changed since
+# a8e4908d (git diff a8e4908d HEAD -- src/js/audio is empty), and origin/main changed nothing
+# under src/js/audio, src/js/sequencer, src/js/labs or src/js/main.js since fde49bd1.
+#
+# The digest: scripts/review-verdict.mjs is byte-identical on the branch and origin/main (git
+# diff origin/main HEAD -- scripts/review-verdict.mjs is empty), so the branch copy was run in
+# this worktree: --content --list --base origin/main gives ca675152...0e2f over
+# src/js/audio/audio-engine.js and src/js/audio/stage-chain.js, the builder's claim and the
+# value reviewed at a8e4908d.
+#
+# Lenses: (a) refute each claimed fix by re-applying the surviving mutants; (b) re-run the probes
+# that decided R-1 and R-2; (c) new code under the audio-engine discipline; (d) PR body vs code;
+# (e) unit, build and browser runs; (f) mergeability with the current origin/main.
+#
+# Runs (every test and mutation in git-archive copies of the head in the session scratchpad,
+# node_modules symlinked read-only from the primary checkout; nothing installed; the detached
+# review worktree was used only for the git-dependent suites and this file):
+# - Mutations, one at a time, tests/unit/sequencer-stage-chain.test.mjs (head 11/11). M7
+#   (closeChain without `if (priv.voices.size) return;`): killed, 10/11, test 'Stop keeps the
+#   stage chain open while the passes fade' fails by assertion (disposed: expected false, actual
+#   true). M8 (no release() in the pass onEnded hook): killed, 10/11, census 25 -> 33,41,...,89.
+#   M7b (the R-7 try/catch in play() removed): killed, 10/11, play() throws 'stage refused'.
+#   a8e4908d's src/index.html under the head test: 10/11, 'tooltip is one line' fails. M9
+#   (main.js `if (live) return [];`): survives, 11/11 (R-4 stays open).
+# - Probes (the a8e4908d probe script, unchanged): head, right after stop() the chain is open
+#   (disposed false, 3 voices, 12 nodes) and disposed with census 0 one second later; a 20 s
+#   loop holds 21,21,21,21,21; 30 restarts reuse one chain at 29. Under M7 the chain is disposed
+#   at stop() and a play inside the fade opens a second chain; under M8 21,53,85,117,149.
+#   R-7 probe (a source hook that throws mid-compile): at Play, play() returns false, playing
+#   false, error 'compile boom', census 0, chain disposed, no oscillator left connected; on a
+#   restart, the earlier passes fade and the census reaches 0; inside a loop pass (_pump on the
+#   timer) the throw escapes the timer (R-11).
+# - Audio discipline: the delta adds no automation, no node and no stop path; the catch adds
+#   only state. stage-chain.js and audio-engine.js are as reviewed.
+# - Unit: engine, freeze, freeze-guard, sequencer-*, v3-engine, v31-studio-sequence-file:
+#   1303/1303. Full node --test tests/unit/**: 3295 tests, 3276 pass, 10 skipped, 9 fail, all
+#   git ls-files in a non-git archive (plan-yaml-strict, repo-hygiene, version-authority pass
+#   26/26 in the worktree). node scripts/build.mjs --check: dist/index.html is up to date.
+# - Browser (Playwright Chromium, OSC_LOAD_MAX=200, load 24-41): tests/browser/sequencer.cjs
+#   39/39; seq-filter-reaches-sequence -30.2 dB live (-52.5 dB at a8e4908d: the margin over
+#   the 20 dB bound varies with the analyser window), cutoff 12 kHz -1.9 dB / 200 Hz -25.1 dB,
+#   nodes 17 and sources 2 while sounding, 0 after Stop and Escape, WAV -24.9 -> -77.4 dBFS.
+#   Firefox and WebKit were not run here.
+#
+# Closed: R-1 (P2), R-2, R-3, R-5, R-7. Open, none blocking: R-4, R-6, R-8, R-9, and the new
+# R-10 to R-12 (P3). R-12: the branch does not merge cleanly into origin/main 88b936cb
+# (tests/browser/sequencer.cjs and tests/README.md conflict); neither is guarded, so this
+# verdict stands after a merge that leaves the two guarded files as reviewed.
+schema: review-verdict/v1
+pr: 295
+verdict: merge
+reviewer: >-
+  dev-68 (Claude Opus 5.5 session 4f90795d); did not build, merge or edit this change; wrote
+  only this file
+content: ca675152ccaa1c92664894358be087d108db21f05fcc594722ceeed571b30e2f
+findings:
+  - id: R-1
+    severity: P2
+    status: closed
+    title: >-
+      Closed at 5f4f081d. Was: nothing tested that Stop keeps the stage chain open until the
+      fading passes have ended (closeChain's guard, src/js/sequencer/editor.js:115). The new
+      test 'Stop keeps the stage chain open while the passes fade, then frees it' asserts,
+      right after ed.stop(), voices > 0, the chain not disposed, the 200 Hz biquad connected
+      and the census above 0, then disposed and census 0 after the fade. M7 now fails it by
+      assertion; the head probe is unchanged.
+  - id: R-2
+    severity: P3
+    status: closed
+    title: >-
+      Closed at 5f4f081d. Was: nothing tested the per-pass untrack (release() in the pass
+      onEnded hook, editor.js:367). The new test 'a looping sequence holds a steady census'
+      reads the census at the same pass phase after one pass and once a second for 8 s and
+      requires every reading equal; M8 fails it (25 -> 33,41,...,89).
+  - id: R-3
+    severity: P3
+    status: closed
+    title: >-
+      Closed: the PR body now states the deviation from C003 criterion 3 (the unit test proves
+      the offline routing only, the fake context does no DSP; the >20 dB figure is the browser
+      leg's WAV, -24.9 -> -77.4 dBFS, re-measured here).
+  - id: R-4
+    severity: P3
+    status: open
+    title: >-
+      No unit test covers main.js's wiring of the Filter Lab into the live sequence
+      (openSequencerStage / sequenceInserts, src/js/main.js:121,194): M9 (`if (live) return
+      [];`) still passes 11/11, because the unit test injects its own filter factory. The
+      browser leg catches it (34/39 on origin/main's dist at a8e4908d). The PR body lists it as
+      left open.
+  - id: R-5
+    severity: P3
+    status: closed
+    title: >-
+      Closed at 5f4f081d: both notes' tooltips are one line ('The sequence keeps its blocks'
+      envelopes and waveform; the Filter Lab shapes it.'), the <h2> source lines are split
+      (at most 100 characters), and the panel test refuses a newline or a run of whitespace in
+      the tooltip (it fails on a8e4908d's src/index.html). The visibility limit (the panels are
+      synthesis-mode, so the notes show in the Sequencer workspace only at 768-1279 px) is
+      stated in the PR body's review section; the Change section still says otherwise (R-10).
+  - id: R-6
+    severity: P3
+    status: open
+    title: >-
+      Pre-existing, unchanged: the live sequence plays model.waveform while renderWav passes
+      waveform: cmp.waveform (src/js/main.js:297), which compileSequence uses to override it;
+      the Alpine effect (main.js:683-686) copies cmp.waveform into the editor only when it
+      changes, so a loaded sequence with another waveform plays one waveform and exports
+      another. Limits the PR body's 'the exported WAV is what plays' to the filter.
+  - id: R-7
+    severity: P3
+    status: closed
+    title: >-
+      Closed at 5f4f081d for play(): a throw from _schedulePass (opening the stage chain or
+      compiling the pass) now leaves playing false, sets error and returns false; the new test
+      'a stage chain that throws leaves the editor stopped and says why' kills M7b, and a
+      probe with a mid-compile throw gives playing false, error set, census 0, chain disposed.
+      The loop-pass path is R-11.
+  - id: R-8
+    severity: P3
+    status: open
+    title: >-
+      Informational, pre-existing, C002/C001: openSequencerStage (src/js/main.js:121) does not
+      check app.measureOwnsOutput() as the engine.play wrapper does (main.js:219-226), and
+      Escape and stopPlayback stop the sequencer only when the cmp.seqPlaying mirror is set
+      (main.js:235, 552). Not changed or regressed by this PR.
+  - id: R-9
+    severity: P3
+    status: open
+    title: >-
+      Pre-existing, belongs with C001: engine.stopAll() (Escape), revokeContinuous() and
+      _releaseAll iterate this.voices only (src/js/audio/audio-engine.js:645-668), so every stop
+      of the sequence goes through main.js's stopSequencer, gated on cmp.seqPlaying, which a
+      150 ms interval mirrors from editor.playing (main.js:479-485); for up to 150 ms after
+      Play, Escape or hiding the tab leaves a looping sequence sounding.
+  - id: R-10
+    severity: P3
+    status: open
+    title: >-
+      The PR body is stale after 5f4f081d: Tests says sequencer-stage-chain.test.mjs has 8
+      tests (it has 11), the Change section still says the notes show 'in the Sequencer
+      workspace' without the 768-1279 px limit its own review section states, and the
+      per-engine table is from a8e4908d. Fix: update the body when main is merged.
+  - id: R-11
+    severity: P3
+    status: open
+    title: >-
+      Residual of R-7, outside its stated scope: a throw while _pump schedules a loop pass
+      (editor.js _pump, called from the loop timer) is not caught, so it escapes the timer
+      callback, error stays '' and playing stays true until the passes already scheduled end;
+      then _voiceEnded resets playing, disposes the chain and the census reads 0 (probe). It
+      self-heals within a pass and needs a compile bug to happen. Fix: catch in _pump, stop
+      and set error.
+  - id: R-12
+    severity: P3
+    status: open
+    title: >-
+      The head does not merge cleanly into origin/main 88b936cb (git merge-tree):
+      tests/browser/sequencer.cjs conflicts with C020's control-drive ratchet (#324), which
+      adds its own '(e)' leg and imports only `until`, while this branch adds the C003 '(e)'
+      leg, WaitTimeout and --dist; tests/README.md conflicts on the same row. Neither is
+      guarded, so the digest and this verdict stand if the guarded files come out as reviewed,
+      but the resolution must keep both legs (relabel one) and sequencer.cjs must be re-run
+      (39 + the C020 checks) and dist rebuilt before merging.
