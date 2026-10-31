@@ -60,6 +60,9 @@
 // at position p sounds at baseTime + p on whole frames. When the clock has already reached that
 // time at the first window (a starved PLAY), the scheduler re-anchors at the first schedulable
 // time instead of skipping the first clips (decision 'reanchor'; start() returns that baseTime).
+// A pattern voice compiled after the clock passed its start (the main thread late between that
+// check and the compile) keeps its grid (compileSequence keepGrid): it joins at the next safe
+// render quantum, its boundaries unmoved (decision 'joined-late' { from, to }).
 //
 // What plays where (docs/v31/timeline.md "Transport integration"):
 //   pattern clip on a Sequence   compileSequence(item.sequence, ctx, handle.info.destination,
@@ -652,8 +655,12 @@ export function createStudioTransport({
     }
     const acct = h.acct;
     const own = [];
+    // keepGrid: a voice compiled after the clock passed its start (the main thread was late
+    // between the window's lateness check and here) keeps its clip boundaries on the grid and
+    // joins it click-free, instead of moving late as a whole into the next clip.
     const voice = compileSequence(it.sequence, hooks.ctx, dest, it.startTime, {
       timers: hooks.timers,
+      keepGrid: true,
       track: (node) => {
         own.push(node);
         return acct.track(node);
@@ -666,6 +673,10 @@ export function createStudioTransport({
       },
     });
     voices.set(it.key, { key: it.key, item: it, voice, nodeId: it.target, handle: h, dest });
+    if (voice.joinAt !== null) {
+      record({ key: it.key, clipId: it.clipId, decision: 'joined-late', from: it.startTime,
+        to: voice.joinAt, at: hooks.ctx.currentTime });
+    }
     unplayed.delete(it.clipId);
     for (const env of triggerEnvelopes(model, it.target)) {
       addGate(`${it.key}>${env}`, it, env, it.startTime, it.endTime);
