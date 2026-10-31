@@ -364,6 +364,7 @@ test('E042 mutation: a document that drifts from a timing constant is named', ()
 const LICENCE_NAMES = {
   alpinejs: 'Alpine.js', uplot: 'uPlot', p5: 'p5.js', 'lucide-static': 'lucide-static',
   '@vue/reactivity': '@vue/reactivity', '@vue/shared': '@vue/shared',
+  '@popperjs/core': '@popperjs/core', flowbite: 'Flowbite', tailwindcss: 'Tailwind CSS',
 };
 
 /** The '== <pkg>@<version> - <licence>' headers of the notice comment build.mjs writes. */

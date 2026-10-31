@@ -16,8 +16,8 @@ pressure.
 1. Choose **Studio** in the navigation (after Experiments). The Playground's compact Studio
    panel has **EXPAND STUDIO**, which opens the same document.
 2. **Templates** lists the shipped documents: Basic Tone, Subtractive Synth, Sweep Sequence,
-   Stereo Beat, Filter Automation and Measurement Sweep. **Open** replaces the current Studio;
-   if it has unsaved changes the dialog says so first.
+   Stereo Beat, Filter Automation, Measurement Sweep and Demo song: Lantern in the Slag Yard.
+   **Open** replaces the current Studio; if it has unsaved changes the dialog says so first.
 3. **Play** (Space) plays the graph and the timeline; **Stop** (Esc) releases every node. The
    Playground voice, the Sequencer and Studio are exclusive: starting one stops the others. For a screen
    reader the button is always "Play the Studio", a toggle that reads as pressed while the

@@ -1065,6 +1065,8 @@ licence text of every bundled third-party package:
 
 - Alpine.js (including its `@vue/reactivity` and `@vue/shared`) and uPlot: MIT.
 - lucide-static (icons): ISC.
+- Flowbite (its components, with @popperjs/core) and Tailwind CSS (compiled at build time):
+  MIT.
 - p5.js: LGPL-2.1. It is shipped unmodified as a separately identifiable script block, and any
   compatible p5.js build can replace it.
 
