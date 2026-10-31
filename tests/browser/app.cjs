@@ -1638,6 +1638,50 @@ function defineChecks() {
     return { ok, missing, file: path.basename(dl.suggestedFilename()), after, rejectsBadVersion: !bad };
   });
 
+  // C017 (finding persist-4): the parser accepts filter Q 50 and attack 10 s, the labs clamp
+  // them. The import names each limited value instead of "All settings were restored.", and
+  // keeps them apart from the invalid ones. The filter's top (20 kHz here) holds at 44.1 and
+  // 48 kHz alike: min(20000, sampleRate * 0.475).
+  def('import-names-limits', async ({ page }) => {
+    const got = await page.evaluate(() => {
+      const O = window.OSCILLA;
+      const a = O.app;
+      const before = { filter: O.labs.filter.config, adsr: O.labs.envelope.adsr,
+        envEnabled: O.labs.envelope.enabled };
+      a.alerts = [];
+      const doc = { version: 1,
+        filter: { enabled: before.filter.enabled, type: before.filter.type, frequency: 21000,
+          Q: 50, gain: 0 },
+        envelope: { adsr: { enabled: before.envEnabled, a: 10, d: 0.1, s: 0.5, r: 20 } } };
+      const applied = a.importConfigText(JSON.stringify(doc));
+      const after = { filter: O.labs.filter.config, adsr: O.labs.envelope.adsr };
+      const toast = a.alerts.find((t) => t.title === 'Config imported') || null;
+      // sane values back, then the previous state, so the next check starts where it was
+      a.alerts = [];
+      const clean = a.importConfigText(JSON.stringify({ version: 1,
+        filter: { enabled: before.filter.enabled, type: before.filter.type, frequency: 1000,
+          Q: 1, gain: 0 },
+        envelope: { adsr: { enabled: before.envEnabled, a: 0.01, d: 0.1, s: 0.5, r: 0.2 } } }));
+      const cleanToast = a.alerts.find((t) => t.title === 'Config imported') || null;
+      O.labs.filter.update(before.filter);
+      O.labs.envelope.update({ adsr: before.adsr });
+      a.alerts = [];
+      return { applied, after, toast, clean, cleanToast };
+    });
+    const msg = (got.toast && got.toast.message) || '';
+    const named = ['filter frequency limited to 20000 Hz (file: 21000 Hz)',
+      'filter Q limited to 30 (file: 50)', 'envelope attack limited to 2 s (file: 10 s)',
+      'envelope release limited to 5 s (file: 20 s)'];
+    const missing = named.filter((n) => !msg.includes(n));
+    const ok = got.applied === true && got.toast && got.toast.level === 'warning'
+      && !missing.length && !/invalid/.test(msg) && !/All settings were restored/.test(msg)
+      && got.after.filter.Q === 30 && got.after.filter.frequency === 20000
+      && got.after.adsr.a === 2 && got.after.adsr.r === 5
+      && got.clean === true && got.cleanToast && got.cleanToast.level === 'success'
+      && got.cleanToast.message === 'All settings were restored.';
+    return { ok, missing, toast: got.toast, after: got.after, cleanToast: got.cleanToast };
+  });
+
   def('wav-export-valid', async ({ page }) => {
     await page.evaluate(() => {
       const a = window.OSCILLA.app;

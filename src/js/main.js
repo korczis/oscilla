@@ -68,7 +68,9 @@ import { createStudioUi } from './ui/studio/workspace.js';
 import { startFlowbiteAfterAlpine } from './ui/flowbite.js';
 import { createMidiUi } from './midi/ui.js';
 import { createScopeView, createHarmonicBarsView } from './ui/p5-views.js';
-import { buildConfigExport, parseConfigImport, CONFIG_FILE_VERSION } from './ui/config-file.js';
+import {
+  buildConfigExport, parseConfigImport, CONFIG_FILE_VERSION, limitedValues,
+} from './ui/config-file.js';
 import { renderPlanToWav, renderSequenceToWav, screenshotCanvases } from './ui/exporters.js';
 import { BUILD } from './core/build-info.js';
 import { aboutPart } from './ui/about.js';
@@ -273,14 +275,27 @@ function exportConfigDoc(cmp) {
   });
 }
 
-/** Apply a parsed config document. Returns { issues (count), notes (sentences to say) }. */
+/**
+ * Apply a parsed config file. Returns { issues, notes, limited }: the count of values rejected
+ * and kept, the sentences to say (C004: a sequence waveform that was not applied), and the lab
+ * values clamped on the way in (config-file.js limitedValues). The labs' limits depend on the
+ * running sample rate, so they are read back after applying.
+ */
 function applyImport(cmp, parsed) {
   let issues = cmp.applyConfig(parsed.instrument, 'import');
   const notes = [];
+  const requested = {};
+  const applied = {};
   if (parsed.envelope && labs.envelope) {
     labs.envelope.update({ adsr: parsed.envelope.adsr, enabled: parsed.envelope.enabled });
+    requested.envelope = parsed.envelope.adsr;
+    applied.envelope = labs.envelope.adsr;
   }
-  if (parsed.filter && labs.filter) labs.filter.update(parsed.filter);
+  if (parsed.filter && labs.filter) {
+    labs.filter.update(parsed.filter);
+    requested.filter = parsed.filter;
+    applied.filter = labs.filter.config;
+  }
   if (parsed.additive && labs.additive) {
     labs.additive.update({ partials: parsed.additive.partials, enabled: parsed.additive.enabled });
   }
@@ -289,6 +304,8 @@ function applyImport(cmp, parsed) {
     const { phaseDeg, pan } = parsed.phaseStereo;
     labs.phase.update({ phaseDeg, pan, freqA: cmp.dual.a.freq, freqB: cmp.dual.b.freq,
       route: cmp.dual.stereo ? 'stereo' : 'mono' });
+    requested.phaseStereo = { pan };
+    applied.phaseStereo = labs.phase.config;
   }
   if (parsed.sequencer && labs.sequencer) {
     const seqIssues = labs.sequencer.editor.load(parsed.sequencer) || [];
@@ -305,7 +322,7 @@ function applyImport(cmp, parsed) {
   }
   cmp.sourceKind = cmp.source === 'single' && cmp.pattern === 'tone' ? 'oscillator' : 'pattern';
   syncLabFlags();
-  return { issues, notes };
+  return { issues, notes, limited: limitedValues(requested, applied) };
 }
 
 async function renderWav(cmp, what) {

@@ -171,9 +171,10 @@ changed.
   species, every value cited.
 - **Export:** WAV of the current tone, pattern or sequence, rendered offline through the same
   signal chain as live playback; a PNG of the graphs; the configuration as JSON (export and
-  import); a shareable configuration URL. The sequence plays and exports in the instrument's
-  waveform; importing a file whose sequence names another waveform says so instead of
-  reporting it restored.
+  import; an import names every value it had to limit to the supported range, such as a
+  filter Q above 30, apart from the values it rejected); a shareable configuration URL. The
+  sequence plays and exports in the instrument's waveform; importing a file whose sequence
+  names another waveform says so instead of reporting it restored.
 - **About:** the last workspace tells OSCILLA as it stands: the release line up to the current
   release, every workspace and what it is for, and what comes next (the plan's open milestones
   with their progress, from `src/data/roadmap.json`, which `scripts/roadmap.mjs` writes and

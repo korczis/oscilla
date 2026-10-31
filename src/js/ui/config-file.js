@@ -82,7 +82,8 @@ export function buildConfigExport(input) {
  *   envelope, filter, sequencer, additive, phaseStereo, mode }.
  * Structural problems are errors (nothing is applied); out-of-range values inside a valid
  * structure are left to the per-field validators (instrument.applyConfig, the labs, the
- * sequencer's parseSequence), which skip or clamp them and report it.
+ * sequencer's parseSequence), which skip or clamp them; the caller reports what the labs
+ * clamped by comparing the applied values with the file's (limitedValues, importNotice).
  */
 export function parseConfigImport(input) {
   const errors = [];
@@ -192,6 +193,62 @@ export function parseConfigImport(input) {
       sequencer: null, additive: null, phaseStereo: null, mode: null,
     };
   }
+}
+
+/**
+ * Lab values an import compares after applying them. The labs clamp to limits the parser
+ * cannot know in advance (the filter's upper frequency is min(20000, sampleRate * 0.475)), so
+ * applyImport reads each value back and reports the ones that changed (finding persist-4).
+ */
+export const IMPORT_LIMIT_FIELDS = Object.freeze([
+  { section: 'filter', key: 'frequency', label: 'filter frequency', unit: 'Hz' },
+  { section: 'filter', key: 'Q', label: 'filter Q', unit: '' },
+  { section: 'filter', key: 'gain', label: 'filter gain', unit: 'dB' },
+  { section: 'envelope', key: 'a', label: 'envelope attack', unit: 's' },
+  { section: 'envelope', key: 'd', label: 'envelope decay', unit: 's' },
+  { section: 'envelope', key: 's', label: 'envelope sustain', unit: '' },
+  { section: 'envelope', key: 'r', label: 'envelope release', unit: 's' },
+  { section: 'phaseStereo', key: 'pan', label: 'phase pan', unit: '' },
+].map(Object.freeze));
+
+/**
+ * Compare the values a file asked for with the values the labs hold after applying them.
+ * requested, applied: { filter?, envelope?, phaseStereo? } of plain numbers; a section absent
+ * from either side was not applied and is not compared. Returns
+ * [{ field: 'filter.Q', label, unit, requested, applied }] in IMPORT_LIMIT_FIELDS order.
+ */
+export function limitedValues(requested, applied, fields = IMPORT_LIMIT_FIELDS) {
+  const out = [];
+  for (const f of fields) {
+    const want = isObj(requested && requested[f.section]) ? requested[f.section][f.key] : undefined;
+    const got = isObj(applied && applied[f.section]) ? applied[f.section][f.key] : undefined;
+    if (!isNum(want) || !isNum(got)) continue;
+    if (Math.abs(want - got) <= 1e-9 * Math.max(1, Math.abs(want))) continue;
+    out.push({ field: `${f.section}.${f.key}`, label: f.label, unit: f.unit, requested: want,
+      applied: got });
+  }
+  return out;
+}
+
+const showValue = (v, unit) => `${Number(v.toPrecision(6))}${unit ? ` ${unit}` : ''}`;
+
+/**
+ * The import notification. invalid: the count of values rejected and kept at their previous
+ * setting; limited: limitedValues(). "All settings were restored." only when both are empty.
+ */
+export function importNotice({ invalid = 0, limited = [] } = {}) {
+  if (!invalid && !limited.length) {
+    return { level: 'success', message: 'All settings were restored.' };
+  }
+  const parts = [];
+  if (invalid) parts.push(`${invalid} value(s) were invalid and kept at their previous setting.`);
+  if (limited.length) {
+    const named = limited.map((l) => `${l.label} limited to ${showValue(l.applied, l.unit)} `
+      + `(file: ${showValue(l.requested, l.unit)})`);
+    parts.push(`${limited.length} value(s) were outside the supported range: `
+      + `${named.join('; ')}.`);
+  }
+  return { level: 'warning', message: parts.join(' ') };
 }
 
 /** File name for an export: oscilla-<what>-<YYYYMMDD-HHMMSS>.<ext> (local time). */
