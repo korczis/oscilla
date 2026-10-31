@@ -2,7 +2,9 @@
 // and the app bundle. Pure string work: no timestamps, no paths, no randomness.
 //
 // Template markers (each exactly once; icons any number of times):
-//   <!-- @inline-css -->    -> <style>…</style>
+//   <!-- @inline-css -->    -> <style>…</style>: the legacy CSS, then TAILWIND_BOUNDARY and the
+//                              compiled Tailwind (o.tailwind, ADR 0061) when given, in that one
+//                              element; splitStyle() reads the two parts back
 //   <!-- @inline-js -->     -> vendor <script>s in order, the analysis library <script
 //                              data-analysis> when given (o.analysis), then the app <script>
 //   <!-- @icon:<name> -->   -> inline SVG from lucide-static/icons/<name>.svg
@@ -22,6 +24,28 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 
 export const sha256 = (s) => createHash('sha256').update(s).digest('hex');
+
+/**
+ * The boundary pack() writes between the legacy CSS and the compiled Tailwind in the one
+ * <style>: a line break and a CSS comment, so the split never depends on what either part's
+ * minification keeps (an unminified --debug build keeps line breaks).
+ */
+export const TAILWIND_BOUNDARY = '\n/* tailwind, ADR 0061 */';
+
+/**
+ * The legacy CSS and the compiled Tailwind of a <style> that pack() wrote. A <style> without
+ * the boundary is all legacy; a second boundary is an error, never a guess.
+ * @param {string} style  the text of the <style> element
+ * @returns {{legacy: string, tailwind: string}}
+ */
+export function splitStyle(style) {
+  const at = style.indexOf(TAILWIND_BOUNDARY);
+  if (at < 0) return { legacy: style, tailwind: '' };
+  if (style.indexOf(TAILWIND_BOUNDARY, at + 1) >= 0) {
+    throw new Error('the <style> holds the Tailwind boundary more than once');
+  }
+  return { legacy: style.slice(0, at), tailwind: style.slice(at + TAILWIND_BOUNDARY.length) };
+}
 
 // Text inside <script>/<style> must not end the element early, and "<!--" inside a script can
 // switch the HTML tokenizer into the "script data escaped" state.
@@ -177,6 +201,9 @@ function replaceOnce(html, marker, replacement) {
  * @param {object} o
  * @param {string} o.template  source HTML containing the markers
  * @param {string} o.css       compiled, minified CSS
+ * @param {string} [o.tailwind]  the compiled Tailwind (src/styles/tailwind.css with the flowbite
+ *   plugin, scripts/build.mjs), emitted after o.css and TAILWIND_BOUNDARY in the same <style> so
+ *   a utility follows the legacy rules in the cascade
  * @param {string} o.js        app bundle (IIFE)
  * @param {string} [o.analysis]  the analysis library (scripts/build-analysis-worker.mjs), placed
  *   before the app, whose bundle imports it through its global; its element text is also the
@@ -189,8 +216,8 @@ function replaceOnce(html, marker, replacement) {
  * @returns {string} the complete HTML document
  */
 export function pack({
-  template, css, js, analysis = '', vendors = [], notice = '', banner = '', buildInfo = '',
-  icon = inlineIcon,
+  template, css, tailwind = '', js, analysis = '', vendors = [], notice = '', banner = '',
+  buildInfo = '', icon = inlineIcon,
 }) {
   if (!/^<!doctype html>/i.test(template)) throw new Error('template must start with a doctype');
   let html = compactMarkup(template)
@@ -198,7 +225,12 @@ export function pack({
     .replace(/<!-- @icon:([a-z0-9-]+) -->/g, (_, name) => icon(name));
   if (html.includes('<!-- @icon:')) throw new Error('malformed icon marker');
 
-  const style = `<style>${guardRawText(css, 'style', 'css')}</style>`;
+  for (const [label, text] of [['css', css], ['tailwind', tailwind]]) {
+    if (text.includes(TAILWIND_BOUNDARY)) throw new Error(`${label} holds the Tailwind boundary`);
+  }
+  const style = `<style>${guardRawText(css, 'style', 'css')}`
+    + `${tailwind ? `${TAILWIND_BOUNDARY}${guardRawText(tailwind, 'style', 'tailwind')}` : ''}`
+    + '</style>';
   html = replaceOnce(html, '<!-- @inline-css -->', style);
 
   const scripts = vendors.map(({ id, code }) => (

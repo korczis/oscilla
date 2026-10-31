@@ -137,10 +137,12 @@ export function readVersion(root = ROOT) {
 // The build inputs: everything that can change dist/index.html. Directories are walked
 // recursively; names starting with "." (.DS_Store, editor swap files) are skipped so a local
 // checkout and CI hash the same set. node_modules content is pinned by package-lock.json.
+// tailwind.config.cjs is an input (ADR 0061): it decides the compiled Tailwind of the <style>,
+// whose entry, src/styles/tailwind.css, is under src like every file its content globs read.
 export const SOURCE_DIRS = ['src', 'licenses'];
 export const SOURCE_FILES = [
   'LICENSE', 'package.json', 'package-lock.json', 'scripts/pack-single-file.mjs',
-  'scripts/release-metadata.mjs',
+  'scripts/release-metadata.mjs', 'tailwind.config.cjs',
 ];
 export const SOURCE_SCRIPT_PATTERN = /^build[^/]*\.mjs$/; // scripts/build*.mjs
 

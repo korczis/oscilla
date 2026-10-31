@@ -62,6 +62,7 @@ import { createExperimentsUi } from './ui/experiments.js';
 import { createFindingsUi } from './ui/findings.js';
 import { createConnectionsUi } from './ui/connections.js';
 import { createStudioUi } from './ui/studio/workspace.js';
+import { startFlowbiteAfterAlpine } from './ui/flowbite.js';
 import { createMidiUi } from './midi/ui.js';
 import { createScopeView, createHarmonicBarsView } from './ui/p5-views.js';
 import { buildConfigExport, parseConfigImport, CONFIG_FILE_VERSION } from './ui/config-file.js';
@@ -229,13 +230,18 @@ engine.play = (plan, o = {}) => {
 
 /**
  * Measure (and Studio PLAY) take the output: stop the instrument and the sequencer (their
- * voices fade), and a playing Studio (V3.1; it is not playing while it claims the output).
+ * voices fade), a playing Studio (V3.1; it is not playing while it claims the output) and the
+ * MIDI notes.
  */
 function stopPlayback(cmp) {
   if (cmp.seqPlaying && labs.sequencer) labs.sequencer.editor.stop();
   if (cmp.playing) cmp.stopNow();
   if (typeof cmp.studioOwnsOutput === 'function' && cmp.studioOwnsOutput()) cmp.studioStop();
+  if (typeof cmp.midiAllOff === 'function') cmp.midiAllOff(); // MIDI notes too (V502)
 }
+
+/** The sequencer is playing now (its editor, not the 150 ms `seqPlaying` copy; V502). */
+const sequencerPlaying = () => !!(labs.sequencer && labs.sequencer.editor.playing);
 
 /** Revert the sounding voice from a PeriodicWave to its oscillator type (additive off). */
 function clearPeriodicWave() {
@@ -476,6 +482,15 @@ function mountLabs(root) {
   }
   if (labs.sequencer) syncSequencerIcon(root);
   if (labs.sequencer) {
+    // MIDI notes and a sequence never sound together (V502): the sequence plays into the
+    // master outside the engine's voices, so its start stops every note first (they fade within
+    // ESCAPE_RELEASE_S) and the MIDI part refuses notes while it plays (sequencerPlaying).
+    const editor = labs.sequencer.editor;
+    const playSequence = editor.play;
+    editor.play = function playAfterMidi(...args) {
+      if (app && typeof app.midiAllOff === 'function') app.midiAllOff();
+      return playSequence.apply(this, args);
+    };
     // UI bookkeeping only (the sequencer schedules on the audio clock itself).
     setInterval(() => {
       const on = !!labs.sequencer.editor.playing;
@@ -757,7 +772,8 @@ function createOscillaComponent(ui) {
   const connections = createConnectionsUi();
   const studio = createStudioUi({ engine, stopPlayback });
   const navigation = createNavigation();
-  const midi = createMidiUi(); // optional input (ADR 0058): reads support at load, never requests
+  // Optional input (ADR 0058): reads support at load, never requests; notes sound through engine.
+  const midi = createMidiUi({ engine, sequencerPlaying });
   const cmp = compose(instrument, ui, workbench, measure, experiments, findings, connections,
     studio, navigation, midi, provenancePart(), TEMPLATE_HELPERS);
   cmp.dismissAlert = focusSafeDismiss(cmp.dismissAlert);
@@ -902,4 +918,5 @@ Object.defineProperties(window.OSCILLA, {
 registerOscillaUi(Alpine, { compose: createOscillaComponent });
 for (const [name, fn] of Object.entries(TEMPLATE_HELPERS)) Alpine.magic(name, () => fn);
 window.Alpine = Alpine;
+startFlowbiteAfterAlpine();
 Alpine.start();

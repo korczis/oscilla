@@ -30,9 +30,10 @@
 //
 // Studio schema 1 has no field for two Playground facts, returned as `annotations` keyed by node
 // id (see signal-path-projection.js): an additive oscillator's partial count and the dual B
-// side's start phase. Values outside a Studio parameter range (an AM or FM modulator above the
-// LFO's 100 Hz) are kept as they are, so the derived model shows what sounds; such a model does
-// not pass validateStudioModel and is never compiled, saved or entered into provenance.
+// side's start phase. Values outside a Studio parameter range are kept as they are, so the
+// derived model shows what sounds; such a model does not pass validateStudioModel and is never
+// compiled, saved or entered into provenance. Since K010 the LFO reaches audio rate, so the AM
+// and FM modulators of every Playground plan (up to 500 Hz and 2 kHz) are inside its range.
 
 import { WAVEFORMS } from '../core/constants.js';
 import { createStudioModel } from './schema.js';

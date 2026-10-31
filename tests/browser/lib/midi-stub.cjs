@@ -34,7 +34,8 @@ const STUB_MANUFACTURER = 'OSCILLA test';
 const PAGE_READS = Object.freeze({
   access: Object.freeze(['inputs', 'addEventListener', 'removeEventListener']),
   inputs: Object.freeze(['forEach']),
-  port: Object.freeze(['name', 'state', 'type']),
+  port: Object.freeze(['name', 'state', 'type', 'addEventListener', 'removeEventListener',
+    'open']),
 });
 
 // Runs in the page (serialised by addInitScript / evaluate): self-contained. With

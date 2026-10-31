@@ -85,6 +85,14 @@ it computes the response of the whole playback and capture chain, rates the qual
 measurement and keeps it as a reproducible experiment. The app is a single HTML file. It needs no server, no account and no network once loaded, and it works
 when opened straight from disk.
 
+It is also playable. **Arm keys** under the Playground's panels (or open `#m=playground&kbd=1`)
+and the computer keyboard plays notes the way music software does: A W S E D F T G Y H U J K
+from C to the next C, black keys on W E T Y U, Z / X for the octave and C / V for the velocity,
+by physical key, so a QWERTZ or AZERTY keyboard works too. Space stays the play key. The
+on-screen keys under them play with a pointer and light up whatever plays them, a MIDI keyboard
+included. The Studio has its own switch (`#m=studio&kbd=1`). The details are in
+[docs/midi.md](docs/midi.md) and in the Keyboard shortcuts dialog (**?**).
+
 The words OSCILLA uses for its objects (project, Studio, runtime, measurement, run, experiment,
 definition, calibration, trace) are defined in the [glossary](docs/GLOSSARY.md).
 
@@ -542,6 +550,9 @@ Not yet built:
 - **Start quietly, especially on headphones.** Loudness is a poor guide to acoustic output,
   above all at very low and very high frequencies. Open-ended patterns stop at a hard time
   limit unless you allow continuous playback for the session, and a limiter caps the output.
+  A note held on the keyboard or a MIDI key sounds while it is held, under the same cap, and
+  stops on release, Escape or when the page loses the focus
+  ([ADR 0062](.ai/repo/adrs/0062-a-held-key-or-midi-note-is-exempt-from-the-playback-limit-while-held.md)).
 - **Levels are relative, not SPL.** Every level is relative to digital full scale (dBFS-like)
   and labelled as uncalibrated. A browser knows sample values, not sound pressure. The only
   exception is the Measure workspace with a valid absolute level calibration that you supply
@@ -699,7 +710,7 @@ from the background, or hold-to-play by touch. The owner declined real-device ch
 | --- | --- | --- |
 | Unit | `tests/unit/` | Pure modules (DSP, analysis, sequencer, charts), the packer, the artifact rules and the release tooling, all under `node --test` |
 | V1 freeze | `tests/freeze/` | Golden vectors that pin V1 behaviour ([ADR 0014](.ai/repo/adrs/0014-v1-behaviour-frozen-by-golden-vectors.md)) |
-| Browser | `npm run test:browser`, `test:engine`, `test:dsp`, `test:labs`, `test:sequencer` | Playwright suites on the built page: the app gate (`tests/browser/app.cjs`), layout (`tests/browser/layout.cjs`), the V2 final-QA regressions (`tests/browser/qa-regressions.cjs`), navigation history and unsaved work (`tests/browser/navigation.cjs`), the MIDI support state (`tests/browser/midi.cjs`), the V1 engine port (`tests/browser/engine-v1port.cjs`), DSP (`tests/browser/dsp.cjs`), labs (`tests/browser/labs.cjs`) and the sequencer (`tests/browser/sequencer.cjs`) |
+| Browser | `npm run test:browser`, `test:engine`, `test:dsp`, `test:labs`, `test:sequencer` | Playwright suites on the built page: the app gate (`tests/browser/app.cjs`), layout (`tests/browser/layout.cjs`), the V2 final-QA regressions (`tests/browser/qa-regressions.cjs`), navigation history and unsaved work (`tests/browser/navigation.cjs`), the MIDI support state, MIDI notes and the keyboard (`tests/browser/midi.cjs`), the V1 engine port (`tests/browser/engine-v1port.cjs`), DSP (`tests/browser/dsp.cjs`), labs (`tests/browser/labs.cjs`) and the sequencer (`tests/browser/sequencer.cjs`) |
 | Visual | `scripts/visual-gate.mjs`, `tests/visual/` | The 1536x1024 reference and named regions, compared region by region with thresholds measured from run-to-run variance ([ADR 0029](.ai/repo/adrs/0029-visual-regression-in-the-release-gate.md)) |
 | V3 unit | `tests/unit/v3-*.test.mjs` | Measurement core, transfer and impulse response on synthetic systems with known answers, RTA and aggregation, calibration, quality, experiments (schema, round trip, corrupt imports, store), goldens per algorithm ID, the engine on a fake io and the view models, all in `npm test` |
 | V3 browser | `npm run test:measure` | `tests/browser/v3-measure.cjs`: the measurement engine on real Web Audio, a recovered digital loopback response, limiter transparency, 0 nodes after finish and abort. `tests/browser/analysis-worker.cjs`: the offline analysis in its Worker against the inline run, identical results, no inline fallback, abort. `tests/browser/v3-ui.cjs`: Measure and Experiments of the built page, guided flow, abort at every stage, calibration, experiment import, compare and export, and no "SPL" without a level calibration. All run in Chromium, Firefox and WebKit, from `file://` and `/oscilla/` |
