@@ -94,6 +94,19 @@ export function freezeParam(pt, t) {
   return value;
 }
 
+/**
+ * Cancel a recorded param's events at and after t (its cancelScheduledValues) and drop them
+ * from the log, so valueAt keeps following the real schedule. Only for events that have not
+ * started: an in-progress ramp is re-ended before t first (envelope.js retargetSustain).
+ */
+export function cancelParamFrom(pt, t) {
+  pt.param.cancelScheduledValues(t);
+  const i = pt.ev.findIndex((e) => e.time >= t);
+  if (i >= 0) pt.ev.length = i;
+  if (pt.ev.length) latestTime.set(pt.param, pt.ev[pt.ev.length - 1].time);
+  else latestTime.delete(pt.param);
+}
+
 /** Forget events no longer needed to compute values at or after t. */
 export function pruneParam(pt, t) {
   let i = 0;

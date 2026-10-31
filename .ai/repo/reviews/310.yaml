@@ -1,0 +1,194 @@
+# Review verdict for pull request #310, plan item C008 (PACK03, controls that do not reach the
+# sound): the Envelope Lab's Sustain and power switch reach a held note, and the Signal Path
+# shows the sounding envelope (branch fix/c008-envelope-held-note). Delta re-review of the
+# builder's round for verdict 78ee88c7 (changes, on 8aee2edb17807). Reviewed head 0fcf6024
+# (== origin at fetch; merge base 27ce813e, v3.14.0 #333, == origin/main). Built by the
+# builder's session; reviewed by dev-68, which did not build, merge or edit this change.
+#
+# Worktree: a fresh detached worktree of 0fcf6024 in the scratchpad (node_modules symlinked
+# read-only from the primary checkout, nothing installed). Mutations and probes ran in
+# git-archive copies, deleted afterwards. The builder worktrees were not touched.
+#
+# The digest: scripts/review-verdict.mjs on the branch is identical to origin/main's (git diff
+# origin/main HEAD -- scripts/review-verdict.mjs is empty), so `node scripts/review-verdict.mjs
+# --content --list --base origin/main`: a8956057...b4a1 over the same 5 guarded paths
+# (audio-engine.js, envelope.js, voice.js, studio/playground-voice.js,
+# studio/signal-path-projection.js). Equal to the builder's claim in the PR body. 78ee88c7's
+# 81c65cac...f524 is stale: the fix commit changed audio-engine.js.
+#
+# Delta: a4942908 merges origin/main 27ce813e (v3.14.0: package.json, the lock, src/index.html,
+# about.css, app.cjs, about.test, the Flowbite baseline, dist rebuilt), then the fix commit
+# 0fcf6024 (audio-engine.js, docs/v31/signal-path.md, tests/README.md, the unit file, dist).
+# Main noise: git diff 88b936cb 27ce813e -- src/js is empty and git diff 78ee88c7 a4942908 on
+# the 5 guarded paths is empty, so main changed no guarded file the PR changes; the guarded
+# content moved by 0fcf6024 only. Its src hunk is one line inside _retargetSustain (the guard
+# reads ctx.currentTime instead of renderedTimeAtLeast) plus that method's doc comment.
+#
+# Release path (#301 owns it): git diff origin/main...HEAD has hunks in audio-engine.js only at
+# the o.adsr header comment (43), the imports (68), the voice fields (451) and
+# setEnvelopeSustain / _retargetSustain (874); voice.js adds only cancelParamFrom. No hunk
+# touches _releaseVoice, release(), the fade or cut stages, noteOff or syncNoteOffRelease.
+#
+# Lenses: (a) each previous finding re-tested against the new code, mutants re-applied, the
+# R-9 probe re-run; (b) audio-engine discipline on the delta: no setTargetAtTime, no new ramp,
+# step or node; the guard only decides when, the scheduling is 18dec055's (setValueAtTime of
+# the value at t on a steady param, glide to the sustain, floor not 0, timer in v.timers and
+# re-checked against v.ended / v.releasing / this.voice); (c) starvation of the deferral;
+# (d) the merge with #301 and with origin/main; (e) docs and PR body vs code.
+#
+# Runs:
+# - tests/unit/envelope-held-note.test.mjs at the head: 23/23. Full unit suite (npm test glob):
+#   3333 tests, 3330 pass, 2 fail, 1 skipped; both fails are version-authority on the review's
+#   node_modules symlink (EISDIR; 12/12 without it). about.test now passes (main merged).
+# - node scripts/build.mjs --check: dist/index.html is up to date (v3.14.0, source d9c67442).
+# - node scripts/fail-first.mjs --base origin/main: proven by 1 of 1 file, kind assertion, as
+#   the PR body says.
+# - HEAD merged with #301 d2ff5dd5 (merge-tree d43a58b1, the two comment conflicts resolved by
+#   keeping both sides): envelope-held-note, engine, freeze, audio-envelope, v3-engine
+#   1241/1241.
+# - Mutants (envelope-held-note.test.mjs): killed the R-9 guard back to renderedTimeAtLeast
+#   (15, 16), sustainSteadyFrom slicing 2 (22; R-11a), ready = steady without the quantum
+#   round-up (23; R-11b), `rendered < ready` -> `<=` (15, 23), the deferral timer not
+#   re-calling _retargetSustain (8, 13-16, 22, 23). Survived: none.
+# - Probe, a Chromium-like clock (currentTime = the rendered position in device-callback
+#   bursts, rAF clock readings every 16 ms, timers fired at their due wall time; a Sustain
+#   drag of 351 edits every 16 ms, 13 phases). Applied edits early, i.e. while currentTime was
+#   before the end of the render quantum holding the ramp they follow: head 0/133 at 128-frame
+#   bursts, 0/125 at 256, 0/118 at 512, 0/89 at 1024; the head with the old guard 0/133,
+#   132/133, 132/133, 132/133 (worst 2.7, 8, 8 ms).
+# - Starvation probe (a drag that never lets a glide finish): 3000 edits 1 ms apart and 1000
+#   edits 4 ms apart on a finite note, 128 and 1024-frame bursts: 0 early; edits coalesce (the
+#   latest wins) and one lands every lead + glide + burst, longest gap between applied edits
+#   43-64 ms; the final value lands 0-50 ms after the last edit in every run. A suspended
+#   context polls every 250 ms and applies once it runs (nothing renders meanwhile). The voice's
+#   timer list keeps every fired deferral id (R-13).
+# Not run: tests/browser (app.cjs env-sustain-held-note and signal-path-sounding-envelope),
+# firefox, webkit, test:engine.
+#
+# Merge with #301 (git merge-tree --write-tree HEAD origin/fix/c009-release-edit-while-held,
+# d2ff5dd5, unchanged since 78ee88c7): conflicts in README.md, dist/index.html,
+# src/js/audio/audio-engine.js, src/js/labs/envelope.js and tests/README.md, all prose or
+# generated: audio-engine.js is the o.adsr header comment (both add after
+# 'engine.setEnvelope(...)': C008's held-note sustain sentences, C009's setNoteOffRelease);
+# labs/envelope.js its header (C009: 'attack, decay and sustain apply from the next note',
+# false once C008 lands); README.md the ADSR bullet (C009: 'Attack applies from the next note'
+# and the held release, C008: the held Sustain and the next-note list); tests/README.md the
+# app.cjs row. Code merges cleanly (R-12).
+#
+# Closed: R-1 (P1), R-2, R-8, R-9 (P2), R-3, R-5, R-11 (P3). Open: R-4, R-6, R-7, R-10, R-12,
+# R-13 (P3). Verdict: merge (no open P1 or P2).
+schema: review-verdict/v1
+pr: 310
+verdict: merge
+reviewer: "dev-68 (Claude Opus 5.5 session 4f90795d); did not build, merge or edit this change"
+content: a89560575cdd18d260839676a789d739424de6a5bbdfced69fc418fbdb74b4a1
+findings:
+  - id: R-1
+    severity: P1
+    status: closed
+    title: >-
+      Closed on 18dec055, the guard's clock fixed under R-9 on 0fcf6024. _retargetSustain
+      defers until the render quantum holding the last attack, decay or glide end has rendered
+      and schedules at _soon only then. Tests 13 and 14 still pass and still kill the old
+      `_soon < steady` guard.
+  - id: R-2
+    severity: P2
+    status: closed
+    title: >-
+      Closed on 18dec055, unchanged by 0fcf6024 (envelope.js not touched). A finite note's
+      release held at the floor is recognised (tail 1); tests 16-18 (now 17-19) pass.
+  - id: R-8
+    severity: P2
+    status: closed
+    title: >-
+      Closed on 18dec055, unchanged by 0fcf6024: a finite note dragged to s 0 and back to 0.5
+      follows both edits and keeps its deadline and release end.
+  - id: R-3
+    severity: P3
+    status: closed
+    title: >-
+      Closed on 18dec055 under the ownership split (#301 C009 owns the release path, #310 the
+      sustain and power switch); 0fcf6024 touches no release code (see the header). What the
+      path draws for the release is R-10; the textual merge with #301 is R-12.
+  - id: R-9
+    severity: P2
+    status: closed
+    title: >-
+      Closed on 0fcf6024. The guard compares the render quantum holding the ramp end with
+      ctx.currentTime, a lower bound of what has rendered (Chromium's rendered position in
+      bursts; Firefox's stale value only delays). dev-68's burst-clock probe, Sustain drag of
+      351 edits: 0 early edits at 128, 256, 512 and 1024-frame bursts (the old guard on the same
+      code: 132 of 133 at 256 and above, up to 8 ms). It cannot starve the edit: the latest
+      wins, one lands every 43-64 ms during a 1 ms-apart drag, the final value 0-50 ms after
+      the last edit. Test 15 is flipped and test 16 (bursty clock, 128/512/1024, final value
+      asserted) is new; reverting the guard fails both. Test 16's early count uses the guard's
+      own comparison, so it proves the guard reads currentTime; that currentTime bounds the
+      rendering is the browsers' contract, which the doc comment states.
+  - id: R-4
+    severity: P3
+    status: open
+    title: >-
+      Unchanged. For programmed patterns the Signal Path draws the ADSR for the sounding voice
+      although v.stepEnv is V1's stepEnv (a and r, sustain 1); C007 (#296) makes the sound
+      match.
+  - id: R-5
+    severity: P3
+    status: closed
+    title: >-
+      Closed. The PR body now names digest a8956057...b4a1 (equal to dev-68's), quotes
+      fail-first as the tool prints it at 0fcf6024 (1 of 1 file, kind assertion; re-run here),
+      and lists the release as #301's, not among the next-note edits. cancelParamFrom's log
+      truncation is tested (18dec055).
+  - id: R-6
+    severity: P3
+    status: open
+    title: >-
+      Unchanged. Studio's Envelope node still reports 'next-gate' for a Sustain edit on an open
+      gate (src/js/studio/adapters/nodes.js update()), while the Playground's Sustain glides a
+      held note; one sentence in docs/v31/signal-path.md or a follow-up item.
+  - id: R-7
+    severity: P3
+    status: open
+    title: >-
+      Unchanged. While an edit is deferred, the path shows 'next note: S new' and the footer
+      'applies from the next note' for a change that will apply to this note (voice.adsr moves
+      only on the deferred 'envelope' event). Lasts at most a + d (or a glide, 43-64 ms during
+      a drag). Fix: expose v.sustainWant and label it 'pending'.
+  - id: R-10
+    severity: P3
+    status: open
+    title: >-
+      Unchanged. A release edited on a held note is shown nowhere: soundingEnvelope leaves r out
+      of the next-note compare and draws the voice's play-time r; with #301 landed, letting go
+      uses v.noteOff while the stage still draws the old R. Fix with or after #301: feed
+      v.noteOff into soundingEnvelope as the drawn release.
+  - id: R-11
+    severity: P3
+    status: closed
+    title: >-
+      Closed on 0fcf6024. (a) Test 22, a finite note at sustain 0 edited mid-decay, defers and
+      kills sustainSteadyFrom slicing 2. (b) Test 23, the clock between the decay end and the
+      end of its render quantum, defers and kills ready = steady without the round-up (and the
+      `<=` boundary mutant). No mutant survived this round.
+  - id: R-12
+    severity: P3
+    status: open
+    title: >-
+      Narrowed. The conflict with origin/main is gone (main merged, dist rebuilt, GitHub
+      MERGEABLE, about.test passes). #310 and #301 d2ff5dd5 still conflict in README.md,
+      dist/index.html, src/js/audio/audio-engine.js (the o.adsr header comment),
+      src/js/labs/envelope.js (header) and tests/README.md (the app.cjs row); the code merges
+      cleanly and keeping both sides passes 1241/1241 engine and held-note unit tests. Whoever
+      lands second must drop C009's 'attack, decay and sustain apply from the next note'
+      (labs/envelope.js) and 'Attack applies from the next note' wording in favour of C008's
+      held Sustain sentence, and rebuild dist.
+  - id: R-13
+    severity: P3
+    status: open
+    title: >-
+      New. Every deferral pushes its timer id into v.timers and a fired one is never removed:
+      a held note under a long drag keeps one id per deferral (264 after a 5.6 s drag at
+      1024-frame bursts, about 47 a second), all cleared only when the voice ends. Harmless
+      memory, but the list grows without bound on a note held and dragged for minutes. Fix:
+      drop v.sustainTimer's id from v.timers when it fires, or keep it out of the list and
+      clear it in the voice cleanup.

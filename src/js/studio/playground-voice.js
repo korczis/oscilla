@@ -6,8 +6,10 @@
 //     input: { plan (audio/patterns.js buildPlan, null when invalid), waveform, frequency (Hz),
 //              gain (logical master gain), attackMs, releaseMs,
 //              lab: main.js labVizInputs() or null — { additive (bar coefficients) | null,
-//                   adsr { a, d, s, r } | null, filter (enabled config) | null,
-//                   router (stereo router config) | null, phaseDeg } }
+//                   adsr { a, d, s, r } | null, envelope { attack, release } (seconds) | null,
+//                   nextNote { adsr | null, attack?, release? } | null,
+//                   filter (enabled config) | null, router (stereo router config) | null,
+//                   phaseDeg } }
 //
 // The graph is the voice the AudioEngine builds for that plan with those V2 options
 // (audio-engine.js play, modulation.js, scheduler.js), node for node where Studio has the node:
@@ -25,12 +27,16 @@
 //            Split (the V2 stereo router) → Envelope → ...
 // The Oscillator's frequency parameter is the Playground's frequency control (what V1 shows on
 // the OSCILLATOR stage); lanes and edge offsets carry what a pattern does to it.
-// The envelope is the V1 attack/release envelope (sustain 1) or the Envelope Lab's ADSR.
+// The envelope is the V1 attack/release envelope (sustain 1) or the Envelope Lab's ADSR. It is
+// the note's (C008): while a voice sounds, main.js passes that voice's (lab.adsr, or lab.envelope
+// for its attack and release without the ADSR; attackMs and releaseMs otherwise) and, in
+// lab.nextNote, a different setting the next note will get.
 // Node names are the Signal Path's stage titles (presentation state, §163).
 //
-// Studio schema 1 has no field for two Playground facts, returned as `annotations` keyed by node
-// id (see signal-path-projection.js): an additive oscillator's partial count and the dual B
-// side's start phase. Values outside a Studio parameter range (an AM or FM modulator above the
+// Studio schema 1 has no field for three Playground facts, returned as `annotations` keyed by
+// node id (see signal-path-projection.js): an additive oscillator's partial count, the dual B
+// side's start phase and the envelope the next note gets (nextNote, in envelope params; see
+// soundingEnvelope). Values outside a Studio parameter range (an AM or FM modulator above the
 // LFO's 100 Hz) are kept as they are, so the derived model shows what sounds; such a model does
 // not pass validateStudioModel and is never compiled, saved or entered into provenance.
 
@@ -47,6 +53,39 @@ export const PLAYGROUND_VOICE_IDS = Object.freeze({
 });
 
 const finite = (v, fallback) => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
+const envelopeParams = (adsr) => ({ attack: adsr.a, decay: adsr.d, sustain: adsr.s,
+  release: adsr.r });
+
+const sameTime = (x, y) => Math.abs(Number(x) - Number(y)) < 1e-9;
+// The release is left out: the release a held note uses when let go is #301 C009's, not this.
+const sameAdsr = (x, y) => (!x || !y ? x === y
+  : ['a', 'd', 's'].every((k) => sameTime(x[k], y[k])));
+
+/**
+ * soundingEnvelope(input) -> { adsr, envelope, nextNote } for labVizInputs (C008), plain values.
+ *   input: { voice: the sounding voice's { adsr | null, attack, release } (seconds) or null,
+ *            labAdsr: the Envelope Lab's ADSR when it is on, else null,
+ *            attackS, releaseS: the Playground's attack and release (the V1 envelope) }
+ * The envelope belongs to the note: a held note keeps its attack and decay, and only its
+ * sustain level and the power switch reach it (engine.setEnvelopeSustain). While a voice
+ * sounds, `adsr` / `envelope` are the voice's, and `nextNote` is what the next note gets
+ * ({ adsr } or { adsr: null, attack, release }, the engine's floors applied) when its attack,
+ * decay, sustain or envelope kind differs. A release edit alone is no next-note change: the
+ * release a held note uses when let go is #301 C009's (review #310 F3).
+ * Idle, `adsr` is the lab's and nothing is pending.
+ */
+export function soundingEnvelope({ voice = null, labAdsr = null, attackS = 0.01,
+  releaseS = 0.03 } = {}) {
+  const next = labAdsr ? { adsr: { ...labAdsr } } : { adsr: null,
+    attack: Math.max(0.001, finite(attackS, 0.01)),
+    release: Math.max(0.005, finite(releaseS, 0.03)) };
+  if (!voice) return { adsr: next.adsr, envelope: null, nextNote: null };
+  const adsr = voice.adsr ? { ...voice.adsr } : null;
+  const differs = adsr ? !sameAdsr(adsr, next.adsr) : !!next.adsr
+    || !sameTime(voice.attack, next.attack);
+  return { adsr, envelope: adsr ? null : { attack: voice.attack, release: voice.release },
+    nextNote: differs ? next : null };
+}
 
 /** The Playground voice as { model, annotations } (see the header). */
 export function playgroundVoiceModel(input = {}) {
@@ -144,10 +183,18 @@ export function playgroundVoiceModel(input = {}) {
 
   x += 200;
   const adsr = lab && lab.adsr;
+  const times = lab && lab.envelope;
   node(ID.envelope, 'envelope', adsr ? 'ADSR Envelope' : 'Envelope', adsr
-    ? { attack: adsr.a, decay: adsr.d, sustain: adsr.s, release: adsr.r }
-    : { attack: finite(input.attackMs, 10) / 1000, sustain: 1,
-      release: finite(input.releaseMs, 30) / 1000 }, x);
+    ? envelopeParams(adsr)
+    : times ? { attack: finite(times.attack, 0.01), sustain: 1,
+      release: finite(times.release, 0.03) }
+      : { attack: finite(input.attackMs, 10) / 1000, sustain: 1,
+        release: finite(input.releaseMs, 30) / 1000 }, x);
+  const next = lab && lab.nextNote;
+  if (next) {
+    annotations[ID.envelope] = { nextNote: next.adsr ? envelopeParams(next.adsr)
+      : { attack: finite(next.attack, 0.01), sustain: 1, release: finite(next.release, 0.03) } };
+  }
   connect(tail, 'audio', ID.envelope, 'audio');
   tail = ID.envelope;
   const f = lab && lab.filter;
