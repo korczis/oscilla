@@ -34,7 +34,7 @@ const MODES = [
 const WORKSPACE_TITLES = Object.freeze({
   measure: 'Measure', experiments: 'Experiments', analyzer: 'Analyzer', filter: 'Filter Lab',
   compare: 'Compare', synthesis: 'Synthesis', sequencer: 'Sequencer', presets: 'Presets',
-  learn: 'Learn', studio: 'Studio', about: 'About',
+  learn: 'Learn', studio: 'Studio', synth: 'Synth', about: 'About',
 });
 const ROVING_ROLES = ['tab', 'radio'];
 /** The phone width of src/styles/responsive.css (single column below 768 px). */
