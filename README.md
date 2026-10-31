@@ -77,8 +77,9 @@ captured by `npm run social` from `dist/index.html`:
 
 OSCILLA generates signals with the native Web Audio API and measures them while they play. It
 shows them as a waveform, a live spectrum and a spectrogram, and it compares them with what your
-microphone picks up. You can arrange signals into block sequences, shape them with filters, an
-ADSR envelope and additive harmonics, explore phase and stereo, and export the result. In the
+microphone picks up. You can arrange signals into block sequences that play through the Filter
+Lab, while the ADSR envelope and additive harmonics shape the instrument; you can explore phase
+and stereo, and export the result. In the
 Measure workspace it records a sweep through your speaker and microphone. From that recording
 it computes the response of the whole playback and capture chain, rates the quality of the
 measurement and keeps it as a reproducible experiment. The app is a single HTML file. It needs no server, no account and no network once loaded, and it works
