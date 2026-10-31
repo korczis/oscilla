@@ -1,0 +1,47 @@
+id: V614
+milestone: M080
+serves:
+- "studio-box-system#find-and-layout"
+title: "Align, distribute and tidy the selection, and mute a box"
+slug: align-distribute-and-tidy-the-selection-and-mute-a-box
+priority: p2
+profile: implementation
+objective: "P04 slice D (editing and undo invariants). Lands as feat(studio-ui). A pure src/js/ui/studio/graph-layout.js computes align (left, right, top, bottom, horizontal and vertical centre) and distribute (horizontal, vertical) of the selected nodes on the 8-unit grid, and K009's tidy (L) applied to the selection only (Shift+L) in left-to-right topological columns; each is one NODE_MOVE batch and one history entry. The multi-selection Inspector offers the same commands through its existing action-button helper, and keys Alt+Shift+arrows align. M on a selected node mutes every outgoing edge of it in one EDGE_UPDATE batch (and unmutes when all are muted), using the edge mute the model already has: no schema change and no studioHash change for an unmuted document."
+why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings S1-S14 measured on origin/main b67d1e58)."
+scope:
+- src/js/ui/studio/graph-layout.js
+- src/js/ui/studio/graph-commands.js
+- src/js/ui/studio/graph-keys.js
+- src/js/ui/studio/inspector.js
+- tests/unit/studio-graph-layout.test.mjs
+- tests/browser/v31-studio-graph.cjs
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- V631
+- K009
+acceptance_criteria:
+- "Before: VERIFIED (S5): the multi-selection offers Duplicate, Save as patch and Delete only; edge mute exists per edge (K009 adds M on edges)."
+- "After: align, distribute and tidy-selection are one entry each; M on a node mutes its outgoing edges in one batch."
+- "Negative cases: align on one node does nothing and adds no history entry; box mute on a node without outgoing edges adds none and says so; undo of a box mute restores each edge's own previous state, including edges that were already muted."
+- "Rollback: revert the merge commit. Nothing changes the schema, a studioHash or a stored record, so documents saved while it was live load unchanged after the revert."
+- "tests/unit/studio-graph-layout.test.mjs, failing on the merge base: each align and distribute result on a fixture selection, idempotence, grid snapping, tidy-selection keeps unselected nodes in place, box mute of a node with three outgoing edges is one batch and its undo restores each edge's previous muted value."
+- "inspector.js grows by at most 600 B (a hook into graph-layout.js), declared in tests/unit/source-size-baseline.json; it rebases over E004 when E004 lands first."
+- "Definition of done, extends: K009's tidy and edge mute, and the multi-selection Inspector of V427."
+- "Definition of done, cross-links: a muted box is reported muted in the edge Inspector of each of its cables and is silent in the offline render (round trip through the store, the compiler and src/js/studio/offline.js). The link is a row of tests/browser/integration-map.json once that map (synth line K075) is on main."
+- "Definition of done, dynamics: nodes move to their aligned positions in one frame; the muted box's cables take the existing muted-edge drawing."
+- "Definition of done, docs and routes: docs/v31/user-guide.md and .ai/repo/features/studio-signal-graph.md say what changed; STUDIO_SHORTCUTS and the shortcut dialog list Alt+Shift+arrows, Shift+L and M on a node. tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: A check 'align-mute' in tests/browser/v31-studio-graph.cjs selects three nodes by Ctrl+A and Shift+click, presses Alt+Shift+ArrowLeft and waits with until() (deadline 'nodes aligned left', 3 s) for equal x in the store and one history entry; clicks Distribute horizontally in the Inspector; presses M on a node and waits for every outgoing edge muted, then renders offline and waits for the muted branch's absence in the render's spectrum; repeats align by touch (tap Align left in the Inspector) in a hasTouch context; on the merge base the keys do nothing and the check fails. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit and the completed evidence the release that carried it; E030's judge passes on the pull request once E030 is on main."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "Wave 1: it adds no class token, selector, markup surface or inline style, so the Flowbite Pro record does not change: node scripts/ui-flowbite-pro-record.mjs --check passes with no rewrite and node --test tests/unit/ui-flowbite-pro.test.mjs passes (project.ui-uses-flowbite-pro); live drawing is on a canvas, a domain view."
+- "scripts/size-report.mjs shows at most 1 KB gzip added, with the base and head figures in the pull request body, within the owner's dist budget of 1 200 000 B gzip (decision of 2026-10-29, about 355 KB of headroom at origin/main b67d1e58); the ceiling of this line is 35 KB gzip in all (Studio boxes 35 KB, signal generator 25 KB), stated in the milestone (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/studio-graph-layout.test.mjs
+- node tests/browser/v31-studio-graph.cjs --only align-mute
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

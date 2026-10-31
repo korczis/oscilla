@@ -109,6 +109,15 @@ claims:
     status: guaranteed
     responsibility: product
 
+  - id: sequencer-through-filter-stage
+    claim: The pattern sequencer plays through the Filter Lab's stage on an engine-owned stage chain that the AudioEngine counts while it sounds and releases after the last pass, live and in the sequence's WAV export, while the Envelope and Additive labs say they shape the instrument only
+    source: .ai/repo/rules/project/audio-engine-discipline.v2.md
+    implementation: src/js/audio/stage-chain.js
+    test: tests/unit/sequencer-stage-chain.test.mjs
+    status: guaranteed
+    responsibility: product
+    note: C003. The attenuation itself (more than 20 dB on a 4 kHz sequence under a 200 Hz low-pass, live and exported) is measured by the seq-filter-reaches-sequence leg of tests/browser/sequencer.cjs in Chromium, Firefox and WebKit.
+
   - id: lowpass-attenuates
     claim: An enabled 500 Hz low-pass attenuates a 5 kHz tone below a fifth of its level, and bypassing it restores the level
     source: .ai/repo/adrs/0015-native-web-audio-engine-extended-in-place.md
@@ -290,6 +299,24 @@ claims:
     status: guaranteed
     responsibility: product
     note: Intent product-direction, criterion public-story-sourced (P005). Q005 was decided on 2026-10-18 by the coordinating Claude session under the owner's delegation of that date; the owner may override it, and the test then follows the owner's decision. The history behind it is in the knowledge records oscilla-origin-in-the-transcripts and built-in-one-night-is-wall-clock; whether a sentence the test does not anticipate invents part of the story stays with the reviewer.
+
+  - id: readme-landing-links-route
+    claim: 'Each deep link of the README landing opens what its text names: the Playground, the Measure workspace with a recipe of two 3-second log sweeps that the decoder accepts whole, and the Studio on the Subtractive Synth template''s graph; each claim id the landing cites is a guaranteed claim of this file, and the landing links the extending guide'
+    source: .ai/repo/adrs/0045-workspace-in-history-one-hash-dispatcher-unsaved-guard.md
+    implementation: src/js/ui/navigation.js
+    test: tests/unit/extending-guide.test.mjs
+    status: guaranteed
+    responsibility: product
+    note: 'Plan issue E028. The links are decoded by the shipped routeOfHash, decodeRecipeLink and decodeStudioLink. That a page opened at such a link lands there in a browser is checked for the Studio keys by tests/browser/v31-studio-links.cjs and for m by the open-every-workspace check of tests/browser/navigation.cjs, not for this recipe value; that applying a link starts nothing is the claim of those suites. Whether the landing prose overstates what a workspace does stays with the reviewer (project.no-fake-science).'
+
+  - id: extending-guide-checked
+    claim: 'Every file, module export, link target and npm script that docs/EXTENDING.md names exists, every import of its code examples resolves to an export, and its example Studio node type validates in createNodeRegistry and compiles through compileStudio to a ready node whose adapter flips the polarity, and the guide''s unit test of that node passes as printed in its own process'
+    source: docs/EXTENDING.md
+    implementation: src/js/studio/registry.js
+    test: tests/unit/extending-guide.test.mjs
+    status: guaranteed
+    responsibility: product
+    note: 'Plan issue E028. Exports are read statically from the source (export declarations and export lists, module.exports for .cjs), so a name made at run time is not seen. The test proves the names and the example only; whether the prose describes behaviour correctly stays with the reviewer. A path with a <placeholder> is checked up to its directory.'
 
   # ---- V3 MEASURE (milestones M012-M020), on feature/v3. `npm test` runs tests/unit/v3-*.test.mjs;
   # `npm run test:measure` runs tests/browser/v3-measure.cjs and tests/browser/v3-ui.cjs; both

@@ -1,0 +1,23 @@
+id: Q040
+milestone: M073
+serves:
+  - "v3-measure#readout-labels"
+title: "Owner decision: precision policy of the microphone autocorrelation readout"
+slug: owner-decision-precision-policy-of-the-microphone-autocorrel
+priority: p2
+profile: routine
+owner: "repository owner"
+objective: "Decide how the microphone readout shows a frequency found by autocorrelation below 1 kHz: (a) never finer than the analysis resolution (the FFT bin half-width), with the autocorrelation figure only as a labelled extra; or (b) keep the lag-grid digits, name the method and call the figure a lag step, not an uncertainty. The audit measured, on a stationary tone at 20 dB SNR, 24 of 30 readings at 100 Hz and 30 of 30 at 55 Hz outside the displayed \"±\" (worst 1.16 Hz against ± 0.2 Hz); the second audit pass held that the finer precision is intended and only the copy is wrong. T007 implements the answer and records it in an ADR."
+why: "Two audit passes disagree; changing what the readout claims is a product decision, and spec section 69 (\"no precision beyond resolution\") is written for MEASURE, so whether it binds the V2 microphone lab is UNKNOWN."
+current_state: "Answered by the owner on 2026-10-29 (relayed by the coordinating session): option (b), keep the lag-grid digits, name the method and relabel the ± figure as \"lag step\", not an uncertainty. Not yet recorded as evidence: the owner_decision evidence names a commit of main and lands in a later chore(plan) pull request from main, so the issue stays open until then."
+scope:
+  - ".ai/repo/project/issues/Q040.yaml"
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision), either in the owner's words with date and source, or as a decision of a coordinating session under an owner delegation it quotes with its date, stating its reasoning and that the owner may override it; a worker without such a delegation never answers it."
+  - "The answer is specific enough for the implementing issue to state one fail-first fixture."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-10-29
+updated_at: 2026-10-29

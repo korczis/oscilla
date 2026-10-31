@@ -22,6 +22,7 @@ scope:
   - "dist"
 depends_on:
   - "E003"
+  - "K010"
   - "V604"
 acceptance_criteria:
   - "tests/unit/playground-voice-in-studio.test.mjs lists the covered configurations and, for each, the opened project's offline render matches the Playground voice's with a residual RMS at least 60 dB below the Playground render's RMS; each unsupported configuration is refused with its reason; it fails on the merge base."
@@ -35,4 +36,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-10-29

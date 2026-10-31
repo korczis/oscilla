@@ -1,0 +1,23 @@
+id: P007
+milestone: M098
+serves:
+  - "public-discoverability#github-shell-consistent"
+title: "GitHub's shell matches the README: About, homepage, topics and a custom social preview"
+slug: githubs-shell-matches-the-readme-about-homepage-topics-and-a-custom-social-preview
+priority: p3
+profile: routine
+objective: "Read the repository's About description, homepage, topics and social preview with gh; keep the description the Q002 sentence and the homepage the Pages site; list each topic with the code that justifies it; and, after P002 has changed the first screen and npm run social has regenerated site/og-image.png from it, ask the owner to upload that image as the custom social preview. The upload is the only owner action: gh cannot set it."
+why: "A link to the repository shares GitHub's default card today (usesCustomOpenGraphImage false, 2026-10-29); the pack asks for a genuine share card."
+scope:
+  - ".ai/repo/project/issues/P007.yaml"
+depends_on:
+  - "P002"
+acceptance_criteria:
+  - "The intent's github-shell-consistent command exits 0, and its output with the topic list and the code each topic names is recorded as evidence."
+  - "Any change made in the repository settings is named in the evidence with who made it; nothing is claimed from a local file."
+validation:
+  - "gh repo view korczis/oscilla --json description,homepageUrl,usesCustomOpenGraphImage -q 'select(.usesCustomOpenGraphImage and .homepageUrl == \"https://korczis.github.io/oscilla/\") | .description' | grep -qF 'A zero-install, scientifically honest acoustic laboratory'"
+evidence_required:
+  - "verified"
+created_at: 2026-10-30
+updated_at: 2026-10-30

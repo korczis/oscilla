@@ -1,0 +1,56 @@
+id: K033
+milestone: M062
+serves:
+  - "playable-instrument#chart-interaction"
+  - "playable-instrument#chart-states-honest"
+title: "Spectrogram history as levels, keyboard readout, generated colour keys and theme recolour"
+slug: spectrogram-history-as-levels-keyboard-readout-generated-col
+priority: p2
+profile: implementation
+objective: "Lands as feat(analysis). The renderer stores a Uint8 level index per device pixel over a fixed -150 to +10 dB range (about 0.63 dB per step) and applies colour at compose time through the LUT of K027, monotonic in L* in both themes. A theme change recolours the history instead of clearing it, which retires the theme case of K015 F1; floor and ceiling become a LUT window set by a Pro range slider with a number input (the form base styles F002 turns on) or by dragging the colour key, recoloured in one LUT pass at the event. The readout works on any column with its age (\"-3.2 s\") and says \"quantized +-0.3 dB\" for history columns; a level outside the stored range reads \"<= -150 dB rel\" or \">= +10 dB rel\", never the end value; the newest column keeps K015's exact float. K015 F5: the kit's keyboard row and column cursor with the announced readout. All three spectrogram hosts (analysis panel, analysis tab, mic) get a canvas colour key whose ticks come from minDb and maxDb, replacing the static tick markup in src/index.html, and the analysis-tab spectrogram is wired to theme events through src/js/charts/wire.js; each spectrogram view subscribes to the frame loop with its host. Orientation is a compose-time choice that follows the time-down view K025 lands first (K025 no longer waits on this slice). Memory is W x H bytes, 0.17-0.66 MB per instance, stated in the pull request. The plain spectrogram does not zoom in frequency (OD11 resolved as out of scope)."
+why: "Owner order of 2026-10-29: \"make the charts really sexy, modern, interactive\", for all charts; reviewer f3 scoped it to every surface that draws data. Revised after f3's review of the plan (CHANGES-REQUESTED, 2026-10-29): owner decisions are Q issues under M063, Pro chrome waits on F002 and on the card issue of its workspace, every chart that claims chart-interaction delivers the keyboard cursor and the announced readout, chart keys never take Escape or Space; revision 3 answers f3's delta review. Facts checked against origin/main at e2720e07 and the branches of #251, #253, #263 and #265 (charts-plan.md, charts-plan-changes.md)."
+scope:
+  - "src/js/charts/spectrogram-view.js"
+  - "src/js/charts/spectrogram-panel.js"
+  - "src/js/analysis/spectrogram.js"
+  - "src/js/charts/wire.js"
+  - "src/index.html"
+  - "src/partials"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "src/styles/charts.css"
+  - "src/styles/instrument.css"
+  - "src/styles/components.css"
+  - "src/styles/integration.css"
+  - "tests/unit/analysis-spectrogram.test.mjs"
+  - "tests/unit/chart-host-census.json"
+  - "tests/browser/labs.cjs"
+  - "tests/browser/charts-interaction.cjs"
+  - "tests/visual"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K029"
+  - "K053"
+  - "K027"
+  - "K025"
+  - "F006"
+acceptance_criteria:
+  - "Unit tests that fail on the merge base: the index to dB round trip within half a step; out-of-range levels read as bounds; a theme change keeps the history; a range change recolours without clearing; the history readout states its age and quantization."
+  - "tests/browser/labs.cjs: a tone row survives a theme toggle (polled getImageData on the ring row) and a range change recolours it; the colour-key ticks equal minDb and maxDb after a range change. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline and assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac); tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Its chart hosts (analysis-panel spectrogram, analysis-tab spectrogram, mic spectrogram) move from pending to done in tests/unit/chart-host-census.json, each carrying data-osc-chart, and the table-driven pass of tests/browser/charts-interaction.cjs holds for each: the host is role=group holding the aria-describedby summary and the snapshot data table, and its focusable plot surface is role=application with aria-roledescription \"interactive chart\" (never role=img), both asserted in the accessibility tree, with a visible focus ring; ArrowRight moves the cursor one step and the one polite live region announces the readout once after the keys settle; Escape clears the cursor and still reaches the page's stop (a playing tone stops); Space keeps its workspace meaning (SPACE_MEANING of src/js/ui/shortcuts.js) and is never taken (ADR 0050); on a touch pointer a tap pins the cursor and it stays after the finger lifts. ArrowUp and ArrowDown move the row."
+  - "Levels say dB relative (dBFS-like) unless a valid LevelCalibration applies, every estimate is labelled as one, and no data value is tweened or eased; every readout, tooltip, axis title and caption string it adds is registered in its chart's wording table and passes tests/unit/charts-readout-wording.test.mjs (project.no-fake-science)."
+  - "The pull request carries a reviewer's verdict (src/js/analysis is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "Chart chrome (legend, toolbar, toggle, badge, tooltip, readout row) is Flowbite Pro markup adapted from the matching Pro component and lands after F002 turned on preflight and the form base styles (the border trap of review #253, R-3) and after F006 placed the card it sits in; no osc-* class token or legacy selector is added and src/styles/tokens.css, charts.css, measure.css, studio.css and studio-timeline.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs). The canvas colour key is a domain visual inside the card."
+  - "Every osc-* use it removes leaves the record in the same change: tests/unit/ui-flowbite-pro-baseline.json is rewritten by node scripts/ui-flowbite-pro-record.mjs (the static colour-key tick markup leaves (<ol class=\"osc-colorbar-ticks\"> at index.html:632 on main), and, if the canvas key replaces the CSS bar div at index.html:630, its osc-colorbar and osc-h-colorbar uses too), and a selector left without a producer is deleted from src/styles/instrument.css (.osc-colorbar-ticks, :867 on main), and with the bar div src/styles/components.css (.osc-colorbar, :675), src/styles/charts.css and src/styles/integration.css (.osc-h-colorbar, :29 and :612) (tests/unit/css-producers.test.mjs); the pull request states by how much the debt fell."
+  - "The visual references of the spectrogram regions of test:visual are re-accepted in darwin-arm64 and linux-x64, in each theme that has references (light ones exist once F011 lands), with the reason \"LUT recompose and generated colour keys\" in the pull request body (npm run test:visual)."
+  - "scripts/size-report.mjs shows at most 2.5 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of M062's figures stays within the cap Q014 records, under the 1 000 000 B gzip budget (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/analysis-spectrogram.test.mjs"
+  - "node tests/browser/labs.cjs"
+  - "node tests/browser/charts-interaction.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

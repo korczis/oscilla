@@ -10,7 +10,7 @@
 // mode ids (playground/sweep/dual/presets/learn) that the URL `m` key and presets still use.
 // The 'mode' event kind keeps its name (detail.value is the workspace id).
 
-import { shortcutHelp } from './shortcuts.js';
+import { WORKSPACE_LABELS, shortcutHelp } from './shortcuts.js';
 
 const THEME_KEY = 'oscilla.v2.theme';
 const ANALYSIS_TAB_KEY = 'oscilla.v2.analysisTab';
@@ -181,6 +181,25 @@ export function focusWorkspaceHeading(root, mode) {
   return document.activeElement === h;
 }
 
+/**
+ * The skip link's label (H004 B7): it targets the main region, which holds the workspace shown,
+ * and names that workspace, never "the instrument" in a workspace that is not one.
+ */
+export function skipLinkLabel(mode) {
+  const name = WORKSPACE_LABELS[mode] || WORKSPACE_LABELS.playground;
+  return `Skip to main content: ${name}`;
+}
+
+/**
+ * Re-label the skip link, the link to the main region (it sits before the component root,
+ * outside Alpine's reach).
+ */
+export function syncSkipLink(doc, mode) {
+  const main = doc.querySelector('main');
+  const el = main && main.id ? doc.querySelector(`a[href="#${main.id}"]`) : null;
+  if (el) el.textContent = skipLinkLabel(mode);
+}
+
 /** Document title for a workspace: the product title, or `OSCILLA · <page>` for a page-like one. */
 export function workspaceTitle(mode, base) {
   return WORKSPACE_TITLES[mode] ? `OSCILLA · ${WORKSPACE_TITLES[mode]}` : base;
@@ -211,6 +230,8 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
       this.theme = resolveTheme(document.documentElement.dataset.theme);
       applyMockFlag();
       syncSliderFill(this.$root);
+      this.$watch('workspace', (ws) => syncSkipLink(document, ws));
+      syncSkipLink(document, this.workspace);
       this.$root.addEventListener('input', (e) => {
         if (e.target.matches && e.target.matches('input.osc-slider')) {
           e.target.style.setProperty('--osc-fill', sliderFill(e.target));
@@ -346,6 +367,19 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
     /** What the one Keyboard shortcuts dialog lists in the workspace in view (ADR 0050). */
     keyHelp() {
       return shortcutHelp(this.workspace);
+    },
+    /**
+     * The logo goes home (H004 B6): its href is the Playground's address, and a plain click
+     * switches there through the router, as a nav item does; a modified click is the browser's.
+     */
+    homeLink() {
+      return {
+        '@click'(e) {
+          if (e.button > 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+          e.preventDefault();
+          this.setWorkspace('playground');
+        },
+      };
     },
     navItem(mode) {
       return {

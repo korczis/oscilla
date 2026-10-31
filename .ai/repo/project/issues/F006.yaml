@@ -1,0 +1,39 @@
+id: F006
+milestone: M055
+serves:
+  - "ui-flowbite-pro#no-legacy-chrome"
+title: "Analyzer, Filter Lab and Compare on Pro components"
+slug: analyzer-filter-lab-and-compare-on-pro-components
+priority: p2
+profile: implementation
+objective: "Rebuild the three Analyze workspaces from Pro components: each analysis view a Pro chart card (reference.md sections 7 and 8: header with title and actions, the chart, a footer with the range or source picker as a Pro dropdown), the readouts as Pro stat cards with tabular numerals, the filter controls (type, cutoff, Q) as Pro form controls, the layout a Pro grid (gap-4, 2xl:col-span-2 for the wide chart) that U004 and U005 extend with their before/after spectrum and their links. The charts keep their axes, units and signal palette and re-theme on the theme change as they do today (src/js/charts/chart-theme.js). Remove the legacy primitives and selectors these views no longer use, lower the ratchet baseline by the surfaces migrated and the primitive uses removed, keep every data-osc hook and id."
+why: "Owner, 2026-10-28: the whole interface on Flowbite Pro. The audit (A05 to A07) found Filter Lab and Compare a third empty; U004 and U005 lay them out on this markup."
+scope:
+  - "src/index.html"
+  - "src/styles"
+  - "src/js/labs/analysis.js"
+  - "src/js/labs/filter-lab.js"
+  - "src/js/labs/mic-analyzer.js"
+  - "src/js/charts"
+  - "src/js/ui/app.js"
+  - "tests/browser/ui-flowbite-pro.cjs"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/unit/source-size-baseline.json"
+  - "tests/visual"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "F002"
+acceptance_criteria:
+  - "ui-flowbite-pro.cjs asserts the three workspaces are Pro chart and stat cards with every surface listed as migrated by the ratchet at both sizes, in every gate browser from file:// and the sub-path, and that each chart re-themes on the theme toggle."
+  - "npm run test:labs, test:dsp and test:browser pass with no behaviour check changed."
+  - "References for the three workspaces are added or updated through the visual gate with the reason; the ratchet baseline's debt is lower (the surfaces migrated move from surfaces.pending to surfaces.migrated and the primitive uses removed leave the counts); dist's size is stated and within BUDGET."
+validation:
+  - "node tests/browser/ui-flowbite-pro.cjs"
+  - "npm run test:labs"
+  - "npm run test:visual"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-28
+updated_at: 2026-10-28

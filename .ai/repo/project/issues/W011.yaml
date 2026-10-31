@@ -1,0 +1,39 @@
+id: W011
+milestone: M102
+serves:
+- "instrument-kinds#sequencer-surfaces"
+title: "Piano roll kind: notes on a time-by-pitch grid with a vertical piano, a velocity lane, quantise and legato, and a list view of the same notes"
+slug: piano-roll-kind-notes-on-a-time-by-pitch-grid-with-a-vertica
+priority: p2
+profile: implementation
+objective: "Lands as feat(studio-ui). src/js/ui/kinds/piano-roll.js and its pure model: notes ({ t, dur, note, vel }, K099's shape) on a role=grid of time cells by pitch rows (the cursor model of W008 on two axes), each note named ('C4, bar 2 beat 3, 1 beat, velocity 0.8'), a switchable listbox of the same notes, the vertical piano of W007 to audition (opt-in), a velocity lane; keys arrows, Enter add or remove, Shift+arrows select, Alt+Left and Alt+Right resize, Alt+Up and Alt+Down velocity, Ctrl/Cmd+A, C, X, V, D, Delete, PageUp and PageDown an octave, + and - zoom; double-click or double-tap adds, drag moves, edges resize, long-press opens the note menu; rows 44 px on a coarse pointer, scrolling inside the card. Every event builds one CLIP_UPDATE. Model first: no module on main shows this kind yet, so the slice ships the model, the view model, the view and the contract test, and no runtime module imports it (esbuild leaves it out of dist, 0 B); its browser, interactivity and deployed criteria are carried by K099, which mounts it. The plan notes this on the consumer when the drafts land. Before: no piano roll. After: one piano-roll kind. Negative cases: a move past the clip's end (clamped, stated); a note outside the range (refused); quantise of an empty selection (no action). Rollback: revert. Merged plan of the component follow-up (2026-10-30): Quantise and legato are toolbar buttons and note-menu items, never bare letter keys. K099 depends on W011 and keeps the notes clip data and its placement."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs, knowledge and interlinking, and add more; add p5.js, WebGL and interactivity, and deploy; a full DAW, a full sequencer and a full piano, everything interlinked, clickable, parameterized and joined; knobs, sliders and control panels done one generic way, integrated with Majordomus; the landing easy to use, easy to extend and open to hack; mobile first. The architecture still binds: one AudioEngine, the Studio model canonical, typed ports, one offline file under the 1.2 MB gzip budget, the cockpit identity, no fake science, Flowbite Pro (ADR 0061). Design: the instrument-kinds design of 2026-10-29 (scratchpad components-followup/components-new.md), on the component-system design (G001-G019) and the synth and studio-siggen drafts of the same day, facts checked against origin/main cdda563c."
+scope:
+- src/js/ui/kinds/piano-roll.js
+- src/js/ui/kinds/piano-roll-model.js
+- src/js/ui/catalog/kinds/piano-roll.js
+- tests/unit/ui-kind-piano-roll.test.mjs
+- tests/README.md
+depends_on:
+- W007
+- W008
+- Q062
+acceptance_criteria:
+- "tests/unit/ui-kind-piano-roll.test.mjs fails on the merge base: every event builds one CLIP_UPDATE valid under K099's limits (a fixture of its payload); quantise and legato maths; the list view and the grid describe the same notes; the vertical piano is W007's kind."
+- "Negative cases, each asserted by the test: the three of the objective."
+- "Model first: no module on main shows this kind yet, so the slice ships the model, the view model, the view and the contract test, and no runtime module imports it (esbuild leaves it out of dist, 0 B); its browser, interactivity and deployed criteria are carried by K099, which mounts it. The plan notes this on the consumer when the drafts land."
+- "Definition of done, extends: W007 and W008; interlinks: a note jumps to its clip in the arrangement (declared, walked once K099 mounts it)."
+- "Definition of done, docs, menus and routes: the kind's declaration names its docs, links and tests; docs/ui-catalog.md (G014) lists it; the Keyboard shortcuts dialog lists its keys; tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Its trace entry in scripts/ui-catalog/trace/kinds.mjs names the intent criterion, this issue, its rules, ADRs and tests, each resolved by the trace check, for the Majordomus knowledge projection."
+- "The kind's modules pass W001's static scan: no import of src/js/studio/actions.js, a store, sources.js or a lab module; no dispatch or owner writer called; no AudioContext, AudioNode or worklet created (project.audio-engine-discipline v2: one AudioEngine); no requestAnimationFrame, setInterval or setTimeout outside src/js/charts/frame-loop.js; no allocation in a frame callback (1000 ticks keep the same typed arrays) and frameSubscriberCount() returns to its value after destroy()."
+- "It adds no markup, class token, selector or inline style, so it may land before F001; tests/unit/ui-flowbite-pro-baseline.json stays equal (node scripts/ui-flowbite-pro-record.mjs --check; node --test tests/unit/ui-flowbite-pro.test.mjs) (project.ui-uses-flowbite-pro)."
+- "No input path of the build gains a components, widgets, ui-kit or design-system segment (the COMPONENT_LIBRARY check of scripts/ui-flowbite-pro-measure.mjs): declarations live in src/js/ui/catalog/kinds, views in src/js/ui/kinds."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat change it carries a unit test that fails on the merge base (project.fail-first)."
+- "scripts/size-report.mjs shows at most 4 KB gzip added, compiled CSS included, with the base and head figures in the pull request body, inside the component line's cap Q037 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/ui-kind-piano-roll.test.mjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-30'

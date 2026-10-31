@@ -15,7 +15,7 @@
     "selectors": 1189,
     "domainViewSelectors": 438
   },
-  "debt": 3909,
+  "debt": 3874,
   "surfaces": {
     "pending": [
       "card#osc-exp-compare",
@@ -110,7 +110,6 @@
     "osc-about-stamp": 1,
     "osc-about-stamp-sep": 2,
     "osc-about-statement": 1,
-    "osc-about-step": 17,
     "osc-about-sub": 1,
     "osc-about-tagline": 1,
     "osc-about-timeline": 1,
@@ -333,7 +332,7 @@
     "osc-menu--grid": 1,
     "osc-menu--right": 3,
     "osc-menu-anchor": 4,
-    "osc-menu-item": 29,
+    "osc-menu-item": 28,
     "osc-meter": 3,
     "osc-meter-fill": 3,
     "osc-metric": 12,
@@ -357,7 +356,7 @@
     "osc-nav-group-btn": 2,
     "osc-nav-item": 6,
     "osc-nav-menu": 2,
-    "osc-num": 75,
+    "osc-num": 58,
     "osc-number": 60,
     "osc-p-additive": 1,
     "osc-p-analysis": 3,

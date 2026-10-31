@@ -8,7 +8,8 @@
 // engine's own analyser chain ends in the offline destination. Open patterns render as a
 // TRIGGER (trigger duration, capped by the hard safety limit unless continuous playback is
 // allowed); finite patterns render their programmed length.
-// WAV of the sequence: sequencer/compiler.js renderSequenceOffline at the same level.
+// WAV of the sequence: sequencer/compiler.js renderSequenceOffline at the same level, through
+// the same insert stages the live sequence plays through (C003: the Filter Lab).
 
 import { AudioEngine } from '../audio/audio-engine.js';
 import { render, bufferStats } from '../audio/offline-renderer.js';
@@ -148,12 +149,17 @@ export async function renderPlanToWav(opts) {
   return { buffer, wav, stats: bufferStats(buffer), seconds: len.seconds };
 }
 
-/** Render a sequencer model at `level` (the master gain) → { buffer, wav, stats }. */
-export async function renderSequenceToWav(model, { sampleRate, level, waveform, OfflineCtor }) {
+/**
+ * Render a sequencer model at `level` (the master gain) → { buffer, wav, stats }. `inserts`:
+ * the insert factories of the live sequence's stage chain, built on the offline context.
+ */
+export async function renderSequenceToWav(model, {
+  sampleRate, level, waveform, inserts, OfflineCtor,
+}) {
   const Ctor = OfflineCtor || window.OfflineAudioContext || window.webkitOfflineAudioContext;
   if (!Ctor) throw new Error('OfflineAudioContext is not available in this browser.');
   const { buffer } = await renderSequenceOffline(model, Ctor, {
-    sampleRate, numberOfChannels: 2, tailS: TAIL_S, level, waveform,
+    sampleRate, numberOfChannels: 2, tailS: TAIL_S, level, waveform, inserts,
   });
   if (buffer.duration > EXPORT_MAX_S + 1) {
     throw new Error(`The sequence lasts ${buffer.duration.toFixed(1)} s; exports are limited to `

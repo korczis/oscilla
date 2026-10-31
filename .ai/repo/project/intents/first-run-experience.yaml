@@ -4,7 +4,7 @@ statement: "The owner felt the whole first screen should be redone to reflect th
 invariants:
   - "No layout is built before the owner chooses it (Q004), and Q004 is not answered before P001's analysis exists"
   - "Every existing deep link, the file:// and /oscilla/ sub-path paths and the direct path to the instrument keep working (project.single-file-deliverable), as an inventory committed before the change proves"
-  - "The first screen uses the existing tokens and visual language (project.visual-identity-lock) and makes no claim the product cannot support (project.no-fake-science)"
+  - "The first screen is built on Flowbite Pro in the Pro shell (intent ui-flowbite-pro, owner 2026-10-28; ADR 0061 and project.visual-identity-lock v2, pull request #250) and makes no claim the product cannot support (project.no-fake-science)"
   - "The first screen describes OSCILLA in the positioning sentence Q002 records, never in words of its own"
 milestones:
   - "M050"

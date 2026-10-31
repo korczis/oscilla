@@ -1,0 +1,42 @@
+# Review verdict for pull request #279, plan item E027: the dist gzip budget is 1 200 000 B by
+# owner decision of 2026-10-29, replacing the #114 stopgap (branch chore/gzip-budget-1200k).
+# Reviewed head 98a2c659 (== origin at fetch); merge base origin/main b67d1e580e. Built by
+# oscilla-b0's session; reviewed by dev-68.
+#
+# The digest: the base branch's scripts/review-verdict.mjs (git archive origin/main scripts into
+# a temporary directory), `--content --base-branch origin/main` and again with `--repo . --head
+# HEAD --content --list`, over the one guarded path the pull request changes,
+# scripts/build-config.mjs: 9c264818...619e, which matches the builder's.
+#
+# Lenses:
+# - (a) The owner's number. The decision is the owner's own answer in oscilla-b0's session
+#   (abd8bbe3, 2026-10-29T20:38:47Z) to the question "Gzip budget: main is at 816 KB of the 1 MB
+#   cap, and the open queue adds about 28 KB, so about 155 KB is left ...": "Raise the budget to
+#   1.2 MB". The question named the gzip cap only. BUDGET.gzipBytes 1 200 000 is that answer.
+# - (b) The raw raise is not a new choice. #114 (owner decision 2026-10-05, the comment above
+#   BUDGET on main) fixed the rule: "Raw follows gzip at the measured ratio (3.47), so gzip stays
+#   the binding limit". Main at b67d1e5 measures 2 839 952 B raw / 820 005 B gzip, ratio
+#   3.4633: a 3 500 000 B raw cap would bind at 1 010 587 B gzip, so leaving raw alone would
+#   nullify the owner's raise; 4 200 000 B binds at 1 212 704 B, so gzip (1 200 000) stays the
+#   binding limit, and 4.2/1.2 keeps #114's 3.5x. Within the mandate.
+# - (c) GZIP_THRESHOLD_BYTES stays 1 % of BUDGET.gzipBytes (now 12 000 B), a review convention
+#   that never fails a build; the new test pins BUDGET and the threshold. Mutations in a scratch
+#   copy: gzipBytes 1 100 000 fails it (10 pass, 1 fail); rawBytes 4 100 000 fails it (10/1).
+# - (d) The dist change is the embedded sourceDigest only (build-config.mjs is a source input:
+#   29ce7685... on main, b98e1b90... at this head), same size 2 839 952 B.
+#
+# Runs, in a git-archive copy of the head with main's node_modules linked (nothing installed):
+# node --test tests/unit/size-report.test.mjs 11/11; node scripts/build.mjs --check: up to date
+# (source b98e1b909360); node scripts/verify-dist.mjs: raw 2773.4 KiB / 4101.6 KiB, gzip
+# 804.0 KiB / 1171.9 KiB, budget ok, provenance recomputed. The full npm test was not rerun
+# (the builder reports 3278/0); this change reaches only the size report and the budget gate.
+#
+# Open: R-1 and R-2 (P3). No P0, P1 or P2 is open.
+schema: review-verdict/v1
+pr: 279
+verdict: merge
+reviewer: "dev-68 (Claude Opus 5.5 session 4f90795d); did not build, merge or edit this change; wrote only this file"
+content: 9c264818c0f214ade841d96e0ea7865b42b4c8a3ca7f65d9b016551c34e8619e
+findings:
+  - { id: R-1, severity: P3, status: open, title: "The owner's decision lives only in a session transcript: .ai/local/state/decisions.md has no 2026-10-29 budget entry, and ADR 0012's new note cites it as 'asked and answered in a Claude session'. Record it with majordomus decision (the question and the answer 'Raise the budget to 1.2 MB') so the ADR note can name a durable record." }
+  - { id: R-2, severity: P3, status: open, title: "ADR 0012:101 and build-config.mjs:47 say raw follows gzip 'in proportion ... (measured ratio 3.46)', but 4 200 000 / 1 200 000 is 3.5, #114's budget ratio; 3.46 is main's measured size ratio, the reason gzip stays binding. Say both, e.g. 'raw keeps #114's 3.5x of gzip; at the measured 3.46 it binds at about 1.21 MB gzip, so gzip stays the binding limit'." }

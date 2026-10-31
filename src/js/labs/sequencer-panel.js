@@ -158,6 +158,8 @@ export function mount(rootEl, adapter) {
         if (ctx && ctx.state === 'suspended') return ctx.resume();
         return null;
       },
+      // C003: the engine's counted stage chain (the Filter Lab) the passes play through.
+      openStage: adapter.openSequencerStage ? () => adapter.openSequencerStage() : undefined,
     },
   });
 

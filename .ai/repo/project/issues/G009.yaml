@@ -1,0 +1,45 @@
+id: G009
+milestone: M086
+serves:
+- "component-system#proven-duplicates"
+title: "Every empty state offers its next step, and 'open in a workspace' and 'fullscreen' are two components with one look each"
+slug: every-empty-state-offers-its-next-step-and-open-in-a-workspa
+priority: p2
+profile: implementation
+objective: "Lands as feat(ui). D10 and D9: six empty-state class families with no action and two texts for the same state; one expand icon with five meanings (in-page fullscreen, browser fullscreen, navigate to a workspace, and in Filter Lab back to the Playground, B1). Two catalogue kinds: empty { text, action: a route or a command } (the Pro empty-state block) and open (a link with an href, the route of the target, so it opens in a new tab too) apart from fullscreen (a toggle button with aria-pressed). The Studio graph, the embedded Studio, the Studio library and patches lists, the Presets lists and the Playground panels use them; Experiments and Findings adopt them in F005 (their adapters are guarded). Before: VERIFIED (inventory L2, L9; links.md B1). After: every empty state leads somewhere and an icon means one thing. Negative cases: an empty action, an open link to a route the router refuses, fullscreen refused by the browser (stated, never a silent no-op). Rollback: revert."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: \"the embedded Studio is ugly as hell\"; components in general must be generic, linkable, traceable, composable, unified, documented, dynamic, generated and interlinked; \"everything must be interlinked with everything\"; improve the main page and the first experience, deploy often. The owner's evolution prompt pack (MASTER, P02, P04, P06) binds it: the dark technical cockpit is locked, shared primitives only where duplication is proven, no new framework, generated docs only where deterministic, no decorative wires. Findings: the UI component inventory of 2026-10-29 (D1-D14 duplication, U1-U15 on the embedded Studio, measured on origin/main b67d1e58, v3.13.0); design: the component-system design of 2026-10-29 (scratchpad components/design.md)."
+scope:
+- src/js/ui/catalog
+- src/index.html
+- src/js/ui/studio
+- src/js/ui/app.js
+- src/styles
+- tests/unit/ui-catalog.test.mjs
+- tests/browser/qa-regressions.cjs
+- tests/browser/ui-flowbite-pro.cjs
+- tests/visual
+- tests/unit/ui-flowbite-pro-baseline.json
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- G008
+acceptance_criteria:
+- "tests/unit/ui-catalog.test.mjs gains the kinds and fails on the merge base: an empty declaration without an action, and an open declaration without a resolvable route, are refused; no #i-expand use remains whose meaning is not fullscreen."
+- "Definition of done, extends: the Pro empty-state block and the router's existing workspace routes."
+- "Definition of done, interlinks: each empty state's action is a row of the link graph (G016)."
+- "Definition of done, interactivity: every action works by pointer, keyboard and touch."
+- "Definition of done, docs, menus and routes: the B1 label is fixed in src/index.html; docs/ui-audit.md A08 and its empty-state rows are brought current. tests/README.md has a row for each new test; the component's catalogue declaration (G001) names its docs, links and tests; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: A check 'empty-actions' in tests/browser/qa-regressions.cjs empties the Studio graph and the Presets list and follows each action by pointer, Enter and a hasTouch tap, waiting with until() (deadline 'empty action reached', 2 s) for the target. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit, and the release that carried it is recorded when the milestone is verified."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "On Pro (after F002): its chrome is markup adapted from the matching Flowbite Pro block (the template names its flowbite-pro reference.md section), recorded as migrated, never pending; it adds no osc-* class token, no legacy vocabulary use and no selector, removes the legacy ones it replaces, and the domain views' stylesheets gain nothing (compact density is Tailwind utilities on the domain view's own elements); the record's debt falls (project.ui-uses-flowbite-pro, project.visual-identity-lock v2, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "scripts/size-report.mjs shows at most 2 KB gzip added, with the base and head figures in the pull request body, inside the cap Q037 records (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/ui-catalog.test.mjs
+- node tests/browser/qa-regressions.cjs --only empty-actions
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'
