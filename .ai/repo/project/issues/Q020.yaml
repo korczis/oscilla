@@ -7,7 +7,7 @@ profile: routine
 owner: "repository owner"
 objective: "D11 makes the knob the control of every continuous instrument parameter in the Synth workspace. The Studio Inspector shows the same parameters with Pro range sliders and numbers. The plan recommends that the Inspector's continuous node parameters use the same knob (one control for one parameter definition), while labs, MEASURE and settings keep Pro range and number inputs."
 why: "Asked by the connected-instrument plan (owner direction of 2026-10-29). .ai/repo/project/README.md: work that waits on an answer names the Q issue in depends_on."
-current_state: "Open on 2026-10-29. The plan's recommendation is not an answer. K096 name this issue in depends_on, so majordomus plan next does not hand them out before it is answered."
+current_state: "Answered on 2026-10-31 by consultation the owner delegated: asked through AskUserQuestion (oscilla-26), the owner chose no option and answered 'porad se s ostatnimi isntances / llms / providers, mirim top notch' (consult the other instances, LLMs and providers; I aim for top notch). oscilla-26, oscilla-af and codex chose A, oscilla-b0 moved from B to A; gemini, ollama and chatgpt could not answer (see evidence). The Inspector keeps the Pro range + number with a small arc readout; the knob is the view on the Synth panel and the Studio node faces; both are views of one control per declaration (N001, N003, N004). The owner may override it. K096, which names this issue in depends_on, is built from that answer."
 scope:
   - ".ai/repo/project/issues/Q020.yaml"
 acceptance_criteria:
@@ -18,4 +18,15 @@ validation:
 evidence_required:
   - "owner_decision"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-10-31T22:27:28Z
+started_at: 2026-10-31T22:27:05Z
+started_event: sha256:c5d35b01fe0609287353b0fc163f7ce7faabb78a8e1929ae944f7db18592d6c0
+completed_at: 2026-10-31T22:27:28Z
+completed_event: sha256:d7a1c11b82e4e65e457e5bff04240242956946708da25a792da6f44162d22d45
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "owner delegated to consultation (AskUserQuestion 2026-10-31, oscilla-26); consultation record oscilla-b0 q020/record.md"
+    result: "Decided on 2026-10-31 by the consultation the owner asked for instead of choosing an option (owner, verbatim: 'porad se s ostatnimi isntances / llms / providers, mirim top notch'); the owner may override it. The Inspector does not move to knobs: one parameter control per declaration (N001 paramSpec, N003 mountControl, N004 control menu) with two views sharing mapping (taper, step), value text, reset, menu and MIDI learn: the knob on performance surfaces (the Synth panel and the Studio node faces), the Pro range + number in the Studio Inspector (with a small arc readout as the visual tie), labs, MEASURE and settings; fine adjustment on the knob works without a drag modifier (arrows or keys), and a switching-cost test at 390 px and on desktop (adjust on the Synth, find it in the Inspector, fine-correct, return; compare hesitation and wrong-parameter edits) is the acceptance check. Positions: oscilla-26 A, oscilla-af A, oscilla-b0 B then A, codex A ('Consistency should mean the same parameter, value, mapping, formatting, reset behavior, menu and MIDI assignment - not necessarily the same shape'; 'A better suits a narrow Inspector'; 'Fine adjustment must also be achievable without a drag modifier'); gemini failed (IneligibleTierError), ollama had no models, chatgpt had no client."
+    commit: 1f35a1d82999e2586c1f7b51e4b04a98fb3fe7e8
+    recorded_at: 2026-10-31T22:27:21Z
