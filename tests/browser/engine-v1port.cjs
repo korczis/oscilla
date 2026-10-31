@@ -1701,6 +1701,118 @@ async function runBrowser() {
   }
 
   // ------------------------------------------------------------------ V2 extension points
+  // ------------------------------------------------------------------ C011 limit-tightens-live
+  // Not part of V1's suite. Finding dead-controls-4: the Device & Limits hard limit lowered
+  // while a trigger sounds reaches that voice (instrument.setSafetyLimit -> engine.tightenLimit).
+  // A 5000 ms trigger under the 5 s limit; about 100 ms in (polled on the audio clock against a
+  // wall deadline) the limit drops to 0.5 s and is raised to 2 s again in the same task. The
+  // voice must end where a fresh note at 0.5 s ends (t0 + 0.5 s, its release inside the limit,
+  // from a render-quantum boundary; review R-1 of #303), its oscillators stop within 50 ms of
+  // t0 + 0.5 s on the audio clock, not be extended by the raise, be silent on the output tap
+  // after its release, release without a click and leave nothing behind. A second round uses
+  // the longest release (3 s) and a drop from 5 s to 2 s, which must still shorten the note.
+  section('limit-tightens-live: a lower hard limit shortens the sounding trigger (C011)');
+  {
+    const { page, problems, context } = await openPage(browser);
+    await startAudio(page);
+    const s0 = await app(page, (a, e, O, T) => {
+      a.setPattern('tone'); a.setWaveform('sine'); a.setFrequency(220);
+      a.release = 30;
+      a.duration = 5000;
+      a.setSafetyLimit('5');
+      const n0 = T.oscs.length;
+      a.trigger();
+      const v = e.voice;
+      return { n0, t0: v.t0, release: v.release, endTime: v.endTime, limit: a.safetyLimit,
+        gain: a.gainLevel, sr: e.ctx.sampleRate };
+    });
+    await until(() => app(page, (a, e, O, T, t) => e.ctx.currentTime >= t, s0.t0 + 0.1),
+      { ms: 15000, what: 'limit-tightens-live: 100 ms of the 5 s trigger rendered' });
+    const ch = await app(page, (a, e) => {
+      const v = e.voice;
+      const tReq = e.ctx.currentTime;
+      a.setSafetyLimit('0.5');
+      const lowered = v.endTime;
+      a.setSafetyLimit('2');
+      return { tReq, lowered, raised: v.endTime, limit: a.safetyLimit, ended: v.ended };
+    });
+    const done = await until(() => app(page, (a, e, O, T) => (T.liveOscs() === 0
+      && e.voices.size === 0 && e.activeNodeCount === 0 ? { now: e.ctx.currentTime } : null)),
+    { ms: 15000, what: 'limit-tightens-live: the shortened trigger torn down' })
+      .catch((err) => ({ error: err.message }));
+    const r = await app(page, async (a, e, O, T, arg) => {
+      const recs = T.oscs.slice(arg.n0).filter((x) => x.started);
+      const stops = recs.map((x) => (x.stopEff == null ? Infinity : x.stopEff - arg.t0));
+      const relEnd = arg.t0 + 0.5;
+      await T.waitRec(relEnd + 0.25);
+      const slope = (2 * Math.PI * 220 * arg.gain) / arg.sr;
+      return {
+        oscs: recs.length, stopAt: stops.length ? Math.max(...stops) : null,
+        before: T.stats(arg.t0 + 0.2, arg.t0 + 0.45).peak,
+        after: T.stats(relEnd + 0.03, relEnd + 0.25).peak,
+        clickRatio: +(T.stats(arg.t0 + 0.4, relEnd + 0.03).maxStep / slope).toFixed(2),
+        nodes: e.activeNodeCount, voices: e.voices.size, live: T.liveOscs(),
+        playing: a.playing, status: a.status,
+      };
+    }, s0);
+    const bound = 0.5 + 0.05;
+    const q = 128 / s0.sr;
+    check('limit-tightens-live: the 5 s trigger started under the 5 s limit',
+      s0.limit === 5 && s0.endTime - s0.t0 > 4.9, JSON.stringify(s0));
+    check('limit-tightens-live: lowering to 0.5 s moves the end to t0 + 0.5 s, release inside',
+      !ch.ended && ch.limit === 2 && ch.lowered <= s0.t0 + 0.51 + 1e-6
+        && ch.lowered > s0.t0 + 0.51 - q - 1e-6, JSON.stringify({ ...ch, t0: s0.t0 }));
+    check('limit-tightens-live: raising the limit again does not extend the voice',
+      ch.raised === ch.lowered, JSON.stringify(ch));
+    check('limit-tightens-live: oscillators stop within 50 ms of t0 + 0.5 s (audio clock)',
+      r.oscs >= 1 && r.stopAt > 0.49 && r.stopAt <= bound, JSON.stringify({ ...r, bound }));
+    check('limit-tightens-live: it sounded until the limit and is silent after its release',
+      r.before > 0.01 && r.after < 1e-4, JSON.stringify(r));
+    check('limit-tightens-live: the release is click-free (step ratio < 3)', r.clickRatio < 3,
+      JSON.stringify(r));
+    check('limit-tightens-live: 0 oscillators, nodes and voices afterwards, STOPPED',
+      !done.error && r.live === 0 && r.nodes === 0 && r.voices === 0 && !r.playing,
+      JSON.stringify({ done, r }));
+    check('no console problems (limit-tightens-live)', problems.length === 0, problems.join(' | '));
+    await context.close();
+  }
+  {
+    // The longest release (3 s, the UI maximum) and a drop smaller than it: 5 s -> 2 s.
+    const { page, problems, context } = await openPage(browser);
+    await startAudio(page);
+    const s0 = await app(page, (a, e) => {
+      a.setPattern('tone'); a.setWaveform('sine'); a.setFrequency(220);
+      a.release = 3000;
+      a.duration = 5000;
+      a.setSafetyLimit('5');
+      a.trigger();
+      const v = e.voice;
+      return { t0: v.t0, release: v.release, endTime: v.endTime, sr: e.ctx.sampleRate };
+    });
+    await until(() => app(page, (a, e, O, T, t) => e.ctx.currentTime >= t, s0.t0 + 0.1),
+      { ms: 15000, what: 'limit-tightens-live (3 s release): 100 ms rendered' });
+    const ch = await app(page, (a, e) => {
+      const v = e.voice;
+      a.setSafetyLimit('2');
+      return { lowered: v.endTime, ended: v.ended, limit: a.safetyLimit };
+    });
+    const q = 128 / s0.sr;
+    check('limit-tightens-live: with a 3 s release, 5 -> 2 s ends the note at t0 + 2 s',
+      s0.release === 3 && s0.endTime - s0.t0 > 4.9 && !ch.ended && ch.limit === 2
+        && ch.lowered <= s0.t0 + 2.01 + 1e-6 && ch.lowered > s0.t0 + 2.01 - q - 1e-6,
+      JSON.stringify({ s0, ch }));
+    await app(page, (a) => { a.stopNow(); });
+    const done = await until(() => app(page, (a, e, O, T) => (T.liveOscs() === 0
+      && e.voices.size === 0 && e.activeNodeCount === 0 ? true : null)),
+    { ms: 15000, what: 'limit-tightens-live (3 s release): torn down after stop' })
+      .catch((err) => ({ error: err.message }));
+    check('limit-tightens-live (3 s release): 0 oscillators, nodes and voices after stop',
+      done === true, JSON.stringify(done));
+    check('no console problems (limit-tightens-live, 3 s release)', problems.length === 0,
+      problems.join(' | '));
+    await context.close();
+  }
+
   // Not part of V1's suite: the V2 hooks on the ported engine, measured the same way (click
   // ratio from the output tap, oscillator accounting).
   section('V2 extension points on the ported engine');

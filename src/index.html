@@ -719,7 +719,7 @@
               <div class="osc-dev-limits" role="group" aria-labelledby="osc-dev-limits-title">
                 <h3 class="osc-sr-only" id="osc-dev-limits-title">Limits</h3>
                 <div class="osc-metric osc-dev-limit-row">
-                  <label for="osc-safety-limit" title="The limit is scheduled on the audio clock, so it holds even if the page stalls. It also caps the Finite tone. Other programmed patterns stop at their own end (max 30 s); a continuous sweep repeat needs “Allow continuous playback”.">Hard limit</label>
+                  <label for="osc-safety-limit" title="The limit is scheduled on the audio clock, so it holds even if the page stalls. A lower limit also ends the note that is sounding at its start plus the new limit. It also caps the Finite tone. Other programmed patterns stop at their own end (max 30 s), and a looped Pattern Sequencer sequence sounds for at most 30 s; a continuous sweep repeat or an endless sequencer loop needs “Allow continuous playback”.">Hard limit</label>
                   <div class="osc-select osc-select--xs">
                     <select id="osc-safety-limit" data-osc="safety-limit"
                       @change="setSafetyLimit($event.target.value)" :disabled="continuousAllowed"
@@ -738,9 +738,11 @@
                 </button>
               </div>
               <p class="osc-sr-only" id="osc-safety-help">The limit is scheduled on the audio
-                clock, so it holds even if the page stalls. It also caps the Finite tone. Other
-                programmed patterns stop at their own end (max 30 s); a continuous sweep repeat
-                needs “Allow continuous playback”.</p>
+                clock, so it holds even if the page stalls. A lower limit also ends the note that
+                is sounding at its start plus the new limit. It also caps the Finite tone. Other
+                programmed patterns stop at their own end (max 30 s), and a looped Pattern
+                Sequencer sequence sounds for at most 30 s; a continuous sweep repeat or an
+                endless sequencer loop needs “Allow continuous playback”.</p>
               <hr class="osc-divider osc-dev-sep">
               <p class="osc-dev-out-label">Output device</p>
               <p class="osc-dev-out" id="osc-dev-output" data-osc="device.output">Default audio output</p>
@@ -3076,8 +3078,9 @@
         transport. Elsewhere it starts nothing. A focused text field, button, link, slider or
         open dialog keeps Space. Start at a low level: OSCILLA caps the logical gain at 0.25
         and, unless continuous playback is allowed in Device &amp; Limits, stops every tone after
-        the hard limit. A note held on the keyboard or a MIDI key sounds while it is held, under
-        the same gain cap, and stops on release, Esc, or when the page loses the focus.</p>
+        the hard limit and a looped Pattern Sequencer sequence at 30 s. A note held on the
+        keyboard or a MIDI key sounds while it is held, under the same gain cap, and stops on
+        release, Esc, or when the page loses the focus.</p>
       <div class="osc-dialog-actions">
         <button type="button" class="osc-btn osc-btn-primary" @click="closeDialog('help')">Close</button>
       </div>

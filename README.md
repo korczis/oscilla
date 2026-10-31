@@ -659,6 +659,10 @@ lands.
   A note held on the keyboard or a MIDI key sounds while it is held, under the same cap, and
   stops on release, Escape or when the page loses the focus
   ([ADR 0062](.ai/repo/adrs/0062-a-held-key-or-midi-note-is-exempt-from-the-playback-limit-while-held.md)).
+  Lowering the limit also ends a hold, trigger, latched or finite note that is sounding at its
+  start plus the new limit, release included (it never lengthens one), and a looped Pattern
+  Sequencer sequence sounds for at most 30 s without the permission, a first pass longer than
+  that included (the loop setting itself is kept).
 - **Levels are relative, not SPL.** Every level is relative to digital full scale (dBFS-like)
   and labelled as uncalibrated. A browser knows sample values, not sound pressure. The only
   exception is the Measure workspace with a valid absolute level calibration that you supply

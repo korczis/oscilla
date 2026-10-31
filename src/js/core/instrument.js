@@ -86,7 +86,7 @@ function nullEngine() {
     play: () => null, release: () => false, stopAll() {}, setMasterGain() {},
     updateLive: () => false, instantaneousFrequency: () => null, on: () => () => {},
     startMic: () => Promise.reject(new Error('Audio could not start.')), stopMic() {},
-    running: false, mic: null, revokeContinuous: () => 0,
+    running: false, mic: null, revokeContinuous: () => 0, tightenLimit: () => 0,
   };
 }
 
@@ -108,6 +108,16 @@ export function createInstrument(deps = {}) {
   const setInterval = (fn, ms) => timers.setInterval(fn, ms);
   const clearInterval = (id) => timers.clearInterval(id);
   const keyGuard = deps.keyGuard || (() => false);
+  // C011: told every time the continuous permission changes, so what else plays (the sequencer's
+  // loop and its Loop control) follows it; Reset included.
+  const continuousChanged = (allowed) => {
+    if (typeof deps.onContinuousChange !== 'function') return;
+    try {
+      deps.onContinuousChange(allowed);
+    } catch (e) {
+      /* theirs */
+    }
+  };
   const AudioEngine = { isSupported: () => engine.isSupported() };
   const env = (cmp) => ({ sampleRate: cmp.sampleRate, continuousAllowed: cmp.continuousAllowed });
 
@@ -514,6 +524,7 @@ export function createInstrument(deps = {}) {
     },
     setContinuous(on) {
       this.continuousAllowed = !!on;
+      continuousChanged(this.continuousAllowed);
       if (on) return;
       // Withdrawn: every voice the permission lengthened (latched, unlimited hold, continuous
       // sweep, finite tone beyond the limit) fades out now — before the sweep repeat is reset,
@@ -521,6 +532,23 @@ export function createInstrument(deps = {}) {
       engine.revokeContinuous();
       this.latched = false;
       if (this.sweep.repeat === 'continuous') this.sweep.repeat = 'once';
+    },
+    /**
+     * The Device & Limits hard limit (one of SAFETY_LIMIT_OPTIONS). C011: a lower limit reaches
+     * what sounds now: the engine shortens every voice the limit governs (hold, trigger, latch,
+     * the finite tone) to its start plus the new limit, on the audio clock
+     * (engine.tightenLimit). A higher limit applies from the next note and never lengthens a
+     * sounding one. Returns false for a value that is not an option.
+     */
+    setSafetyLimit(raw) {
+      const v = Number(raw);
+      if (!SAFETY_LIMIT_OPTIONS.includes(v)) return false;
+      const lower = v < this.safetyLimit;
+      this.safetyLimit = v;
+      if (lower && !this.continuousAllowed && typeof engine.tightenLimit === 'function') {
+        engine.tightenLimit(v);
+      }
+      return true;
     },
 
     onEngine(type, d) {
@@ -932,6 +960,7 @@ export function createInstrument(deps = {}) {
       this.customMaxText = formatFrequency(this.customMax);
       this.rangeError = '';
       this.continuousAllowed = false;
+      continuousChanged(false); // C011: the sequencer's loop follows (a loop past its cap stops)
       this.safetyLimit = 2;
       this.noteMode = false;
       this.loadedLabel = '';
