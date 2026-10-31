@@ -115,6 +115,15 @@ recorded, partial or not recorded. It is derived from stored fields only, never 
 
 Both are kept in page memory only; an experiment records which one applied.
 
+**Relative level.** A level in dB relative to digital full scale, labelled dBFS-like and
+uncalibrated (ADR 0017); it is dB SPL only under a level calibration. Several scales carry the
+name. The live spectrum and the microphone analyser plot the Web Audio analyser scale, the dB of
+a Blackman-windowed analyser FFT, on which a full-scale sine reads near -13.6 dB
+(`20·log10(0.42 / 2)`); the detected-peak level adds that correction back so the same sine
+reads 0 dBFS (`src/js/analysis/peak-detector.js`); the Measure analysis layer has its own tone
+scale (a full-scale sine 0 dB) and mean-square scale (RTA band levels, the same sine -3.01 dB),
+defined in `docs/v3/algorithms.md`.
+
 **Trace.** The Studio operation trace (`src/js/core/trace.js`, ADR 0042): every Studio
 operation, from the intent through the compiled plan to each value the node adapters report
 they wrote, under one correlation id. It is bounded (a ring of 256 steps), in memory only,

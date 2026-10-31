@@ -1,0 +1,42 @@
+id: U020
+milestone: M054
+serves:
+  - "ui-current#ui-audited"
+title: "The Dual Oscillator header wraps at phone width, so its title and Play A + B switch stay on screen"
+slug: the-dual-oscillator-header-wraps-at-phone-width
+priority: p1
+profile: implementation
+objective: "Lands as fix(ui). Defect: in the Synthesis workspace at 390x844 (touch) the header of section#osc-panel-dual (src/index.html:1201-1210: h2#osc-dual-title, output#osc-dual-beat [data-osc=\"dual.beat\"], button#osc-dual-enable [data-osc=\"dual.enable\"]) does not wrap: the beat readout takes 335 of the header's 350 px, the title collapses to clientWidth 0 (scrollWidth 92), and the panel's primary switch 'Play A + B' spans x 379 to 464, past the panel edge (370) and the viewport, so .osc-main, the page scroller, has scrollWidth 465 against clientWidth 390 (every other workspace is 390/390). The 767 px media query of src/styles/responsive.css wraps the spectrogram, mic and sequencer headers but not this one. Before: horizontal page scroll, heading invisible, switch practically unreachable. After: at 320, 375, 390 and 768 px the header wraps onto as many rows as it needs, the title shows its full text, the beat readout and the switch lie inside the card and the viewport, the switch meets the 44 px touch minimum and toggles the dual source (setDualSource, src/js/ui/workbench.js) as before; at desktop widths the header keeps one row. The fix is made on the Pro card F003 builds for this panel, with Tailwind's flex-wrap and responsive variants and the Pro toggle (project.ui-uses-flowbite-pro): no new osc-* class, selector in src/styles or inline style; every id and data-osc hook stays. Test gap closed with it: tests/browser/layout.cjs judges horizontal overflow on document.documentElement only, while the page scroller is .osc-main (or the Pro shell's page body after F002), so this overflow passed its 320 and 375 px touch runs; the check also measures the page scroller and adds 390x844. Negative cases: no workspace at any measured width has a scroller or panel whose scrollWidth exceeds its clientWidth; the beat readout's text (T004's labelling) is unchanged; no control of the header is hidden to make room. Rollback: revert the commit; markup and test only, no stored state. Not this: F003 (rebuilds Synthesis on Pro cards but checks no 390 px geometry), F002 and its PR #330 ('nothing scrolls sideways' for the shell drawer, no rule for this header), T004 (beat readout text), C010 and its PR #293 (pan hint naming Play A + B), U007 (the general phone pass)."
+why: "Found by the S074 quality-bar review of 2026-10-30 at origin/main d9db6bdf, section 74 symptom \"Horizontal page scroll at 390 px. The Dual Oscillator panel's main on/off switch 'Play A + B' is pushed off-screen to the right, and the panel title shrinks to 0 px wide.\", reproduced by an independent verifier; evidence: geometry probe of .osc-main and #osc-panel-dual .osc-panel-header at 390x844 touch, screenshot scratchpad s074/out/probe-dual-head.png (title missing, a 1-2 px sliver of the switch at the right edge). card#osc-panel-dual is in the ratchet's surfaces.pending, but the ratchet counts tokens and selectors, not geometry, so the overflow is not recorded debt."
+scope:
+  - "src/index.html"
+  - "src/styles/responsive.css"
+  - "src/styles/components.css"
+  - "src/js/ui/workbench.js"
+  - "tests/unit/panel-header-wrap.test.mjs"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/browser/layout.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "F003"
+acceptance_criteria:
+  - "Fail-first: tests/unit/panel-header-wrap.test.mjs reads src/index.html and fails on the merge base: the header row of #osc-panel-dual is a wrapping flex row (flex-wrap at phone width), its title carries no rule that lets it shrink below its text, and #osc-dual-beat carries no grow or fixed width that takes the row (project.fail-first)."
+  - "tests/browser/layout.cjs measures the page scroller (.osc-main, or the Pro shell's page body after F002) as well as document.documentElement and runs the coarse-pointer pass at 390x844 too; on the merge base it fails in Synthesis with the scroller's 465 > 390, on the head every workspace and view reports scrollWidth <= clientWidth + 1 at 320, 375, 390 and 768 px in every gate browser."
+  - "A check in tests/browser/layout.cjs at 390x844 in Synthesis asserts h2#osc-dual-title's clientWidth equals its scrollWidth and is above 0, the bounding boxes of #osc-dual-beat and #osc-dual-enable lie inside card #osc-panel-dual and the viewport, #osc-dual-enable is at least 44x44 px and is hit at its centre, and activating it flips aria-checked and the dual source; at 1536x1024 the header's three children share one row."
+  - "It adds no class token, selector, markup surface or inline style off Pro and only removes legacy ones, so tests/unit/ui-flowbite-pro-baseline.json stays equal or falls (node scripts/ui-flowbite-pro-record.mjs --check passes, rewritten only where a count fell) and node --test tests/unit/ui-flowbite-pro.test.mjs passes (project.ui-uses-flowbite-pro, project.visual-identity-lock v2)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named deadline (project.suite-harness, project.bounded-test-timing)."
+  - "Definition of done, extends: the layout gate's overflow invariant extends from the document to the page scroller and to 390 px, which covers every workspace, not only Synthesis."
+  - "Definition of done, interlinks: the objective names F003, F002, T004, C010 and U007; the test rows in tests/README.md name U020."
+  - "Definition of done, interactivity: the Play A + B switch is reachable and operable by touch and keyboard at phone width (browser check above); no control becomes inert (project.no-inert-surfaces)."
+  - "Definition of done, docs, menus and routes: tests/README.md has a row for the new unit test and the extended layout.cjs checks; no menu or route changes (stated)."
+  - "Definition of done, tested: node --test tests/unit/panel-header-wrap.test.mjs, node tests/browser/layout.cjs and npm test pass; dist is rebuilt and npm run build:check passes."
+  - "Definition of done, deployed: it lands by merge commit with a review verdict where project.review-verdict asks one and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+  - "node --test tests/unit/panel-header-wrap.test.mjs"
+  - "node tests/browser/layout.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-10-30'
+updated_at: '2026-10-30'
