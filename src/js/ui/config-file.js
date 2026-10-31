@@ -219,9 +219,16 @@ export function parseLabSections(doc, warnings = []) {
   let phaseStereo = null;
   if (isObj(doc.phaseStereo)) {
     const p = doc.phaseStereo;
-    phaseStereo = {};
-    for (const k of ['freqA', 'freqB', 'phaseDeg', 'pan']) if (isNum(p[k])) phaseStereo[k] = p[k];
-    if (p.route === 'mono' || p.route === 'stereo') phaseStereo.route = p.route;
+    // The lab's own settings are phaseDeg and pan (the frequencies and the route belong to the
+    // dual oscillator in the instrument cfg): a section with neither restores nothing, so it is
+    // refused rather than counted as applied or as a valid link (#314 review R-7).
+    if (isNum(p.phaseDeg) || isNum(p.pan)) {
+      phaseStereo = {};
+      for (const k of ['freqA', 'freqB', 'phaseDeg', 'pan']) {
+        if (isNum(p[k])) phaseStereo[k] = p[k];
+      }
+      if (p.route === 'mono' || p.route === 'stereo') phaseStereo.route = p.route;
+    } else warnings.push('phaseStereo ignored: needs a numeric phaseDeg or pan.');
   }
   return { envelope, filter, additive, phaseStereo };
 }

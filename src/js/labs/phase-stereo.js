@@ -37,6 +37,11 @@ export const PHASE_DEFAULTS = Object.freeze({
   route: 'mono',
 });
 
+/** A phase offset in degrees, in 0 <= deg < 360 (the offset field's domain). */
+export function normalisePhaseDeg(deg) {
+  return ((deg % 360) + 360) % 360;
+}
+
 /** Stereo router config (audio/stereo.js) for the lab's Mono/Stereo output and pan. */
 export function routerConfig(cfg) {
   return cfg.route === 'stereo'
@@ -167,6 +172,10 @@ export function mount(rootEl, adapter) {
     cfg.freqA = clamp(cfg.freqA, 1, 100000);
     cfg.freqB = clamp(cfg.freqB, 1, 100000);
     cfg.pan = clamp(cfg.pan, -1, 1);
+    // A restored offset comes into the field's 0..359 domain like a typed one (#314 review
+    // R-10): 450 is 90, never a value the field calls invalid.
+    if (Number.isFinite(cfg.phaseDeg)) cfg.phaseDeg = normalisePhaseDeg(cfg.phaseDeg);
+    else cfg.phaseDeg = PHASE_DEFAULTS.phaseDeg;
     // The controls show what the lab holds, whoever set it: a restore (preset, History, `lab=`
     // link, config file) goes through here too, and a stale slider would hand its old value
     // back on the next touch (#314 review R-3).
@@ -189,7 +198,7 @@ export function mount(rootEl, adapter) {
     on(el.pan, 'input', () => setCfg({ pan: Number(el.pan.value) })),
     on(el.offset, 'change', () => {
       const v = parseNumber(el.offset.value);
-      if (v != null) setCfg({ phaseDeg: ((v % 360) + 360) % 360 });
+      if (v != null) setCfg({ phaseDeg: v });
     }),
     onUi(rootEl, (d) => {
       if (d.kind === 'tab' && d.key === 'phase') tab = d.value;

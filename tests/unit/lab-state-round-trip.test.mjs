@@ -15,7 +15,7 @@ import { STORAGE_KEYS } from '../../src/js/core/constants.js';
 import { serializeHash } from '../../src/js/core/url-state.js';
 import { defaultInstrumentState, defaultEditorFields } from '../../src/js/core/config.js';
 import {
-  applyLabRecord, applyLabSections, labSectionsText, snapshotLabs,
+  applyLabRecord, applyLabSections, snapshotLabs,
 } from '../../src/js/ui/lab-state.js';
 import {
   buildConfigExport, parseConfigImport, parseLabSections,
@@ -64,22 +64,35 @@ function memoryStore() {
 }
 
 /**
- * The V1 instrument with the V2 lab members as ui/workbench.js composes them over main.js's
- * services (labSnapshot = snapshotLabs, applyLabSnapshot = applyLabRecord): the hooks the
- * instrument calls are the ones under test, the labs are fakes.
+ * main.js's lab services for ui/workbench.js (main.js hands createWorkbench these three):
+ * labSnapshot is snapshotLabs of the mounted labs, applyLabSnapshot is applyLabRecord with the
+ * component's dual oscillator, labsMounted says whether mountLabs has run. The labs are fakes.
+ */
+function labServices(labs, state = { mounted: true }) {
+  return {
+    labSnapshot: () => snapshotLabs(state.mounted ? labs : {}),
+    applyLabSnapshot: (cmp, record) => applyLabRecord(labs, record, cmp.dual),
+    labsMounted: () => state.mounted,
+  };
+}
+
+/**
+ * The V1 instrument with workbench.js's own lab members over its hooks, as main.js composes
+ * the workbench after the instrument (#314 review R-4): labSnapshot, applyLabSnapshot,
+ * labsRestoredNote and labsSavedNote are the workbench's, not re-composed here, so the hooks
+ * the instrument calls are the ones the page runs.
  */
 function instrumentWithLabs(labs, stores) {
   const inst = createInstrument({ engine: null, localStore: stores.local,
     sessionStore: stores.session, timers: { setTimeout: () => 0, clearTimeout() {},
       setInterval: () => 0, clearInterval() {} } });
+  const wb = createWorkbench(labServices(labs));
   const cmp = {};
   Object.defineProperties(cmp, Object.getOwnPropertyDescriptors(inst));
-  Object.defineProperties(cmp, Object.getOwnPropertyDescriptors({
-    labSnapshot() { return snapshotLabs(labs); },
-    applyLabSnapshot(record) { return applyLabRecord(labs, record, this.dual); },
-    labsRestoredNote(applied) { return `${labSectionsText(applied)} settings restored too.`; },
-    labsSavedNote() { return 'It holds the lab settings.'; },
-  }));
+  for (const k of ['labSnapshot', 'applyLabSnapshot', 'labsRestoredNote', 'labsSavedNote']) {
+    assert.equal(typeof wb[k], 'function', `workbench.js defines ${k}`);
+    Object.defineProperty(cmp, k, Object.getOwnPropertyDescriptor(wb, k));
+  }
   cmp.openModal = () => {};
   cmp.closeModal = () => {};
   return cmp;
@@ -115,6 +128,9 @@ test('a custom preset saved with the labs restores them after they were changed,
   app.saveName = 'lab state';
   app.savePreset();
   assert.ok(app.customPresets[0].labs, 'the preset record carries the labs sibling');
+  assert.match(app.alerts.at(-1).message, new RegExp('It holds the instrument and the Filter, '
+    + 'Envelope, Additive and Phase & Stereo settings; the sequence is not included'),
+  'the save toast is the workbench\'s labsSavedNote');
   assert.deepEqual(Object.keys(app.customPresets[0].cfg).sort(),
     Object.keys(app.serializeConfig()).sort(), 'cfg is the V1 serializeConfig, unchanged');
   assert.equal(app.customPresets[0].version, 1, 'preset schema v1');
@@ -254,11 +270,7 @@ test('the config link carries `lab=` beside the V1 keys; it opens and is refused
  * labsMounted says whether mountLabs has run. Only notify() is a stand-in.
  */
 function workbenchWithLabs(labs, state = { mounted: true }) {
-  const wb = createWorkbench({
-    labSnapshot: () => snapshotLabs(state.mounted ? labs : {}),
-    applyLabSnapshot: (cmp, record) => applyLabRecord(labs, record, cmp.dual),
-    labsMounted: () => state.mounted,
-  });
+  const wb = createWorkbench(labServices(labs, state));
   const cmp = { alerts: [], dual: null,
     notify(level, title, message) { this.alerts.push({ level, title, message }); } };
   Object.defineProperties(cmp, Object.getOwnPropertyDescriptors(wb));
@@ -296,8 +308,13 @@ test('a refused `lab=` value is named in a warning and leaves the labs as they w
   const app = workbenchWithLabs(labs);
   assert.equal(app.labsApplyLinkHash('#v=1&f=440'), null, 'no key: not this domain');
   const enc = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const phaseBefore = { ...labs.st.phase };
+  // An empty Phase & Stereo section, or one holding only what the dual oscillator owns
+  // (frequencies, route), restores nothing and is no valid link (#314 review R-7).
   for (const bad of ['%%%', enc([1]), enc({ filter: { type: 'nope', frequency: 1, Q: 1 } }),
-    enc({ sequencer: { steps: [] } })]) {
+    enc({ sequencer: { steps: [] } }), enc({ phaseStereo: {} }),
+    enc({ phaseStereo: { phaseDeg: '90', pan: null } }),
+    enc({ phaseStereo: { freqA: 300, freqB: 303, route: 'stereo' } })]) {
     app.alerts = [];
     assert.equal(app.labsApplyLinkHash(`#${LAB_HASH_KEY}=${bad}`), false, bad);
     assert.equal(app.alerts.length, 1, bad);
@@ -305,7 +322,48 @@ test('a refused `lab=` value is named in a warning and leaves the labs as they w
     assert.equal(app.alerts[0].title, 'Lab settings in the link not restored');
     assert.match(app.alerts[0].message, /`lab` value was refused \(.+\)/);
     assert.deepEqual(labView(labs), SAVED, `${bad}: the labs are untouched`);
+    assert.deepEqual(labs.st.phase, phaseBefore, `${bad}: Phase & Stereo untouched`);
   }
+  app.alerts = [];
+  assert.equal(app.labsApplyLinkHash(`#${LAB_HASH_KEY}=${enc({ phaseStereo: {} })}`), false);
+  assert.match(app.alerts[0].message, /phaseStereo ignored: needs a numeric phaseDeg or pan/,
+    'the refusal names the empty section');
+});
+
+test('an empty Phase & Stereo section counts as neither applied nor valid; one with phaseDeg '
+  + 'or pan does (#314 review R-7)', () => {
+  for (const empty of [{}, { phaseDeg: 'x' }, { freqA: 440, route: 'mono' }]) {
+    const warnings = [];
+    assert.equal(parseLabSections({ phaseStereo: empty }, warnings).phaseStereo, null,
+      JSON.stringify(empty));
+    assert.deepEqual(warnings, ['phaseStereo ignored: needs a numeric phaseDeg or pan.']);
+    const labs = fakeLabs();
+    const before = { ...labs.st.phase };
+    const r = applyLabRecord(labs, { phaseStereo: empty }, null);
+    assert.deepEqual(r.applied, [], 'not reported as restored');
+    assert.equal(r.issues, 1, 'counted as an invalid section');
+    assert.deepEqual(labs.st.phase, before);
+  }
+  // A preset holding an empty section beside a valid one: only the valid one is named.
+  const labs = fakeLabs();
+  const r = applyLabRecord(labs, { phaseStereo: {}, filter: { enabled: true, type: 'lowpass',
+    frequency: 300, Q: 4 } }, null);
+  assert.deepEqual(r.applied, ['filter']);
+  assert.equal(r.issues, 1);
+  for (const ok of [{ pan: 0.5 }, { phaseDeg: 90 }, { phaseDeg: 0, pan: 0 }]) {
+    const fresh = fakeLabs();
+    assert.deepEqual(applyLabRecord(fresh, { phaseStereo: ok }, null).applied, ['phaseStereo'],
+      JSON.stringify(ok));
+    for (const [k, v] of Object.entries(ok)) assert.equal(fresh.st.phase[k], v);
+  }
+  // The config file reads the same parser: a file whose phaseStereo is {} warns, not applies.
+  const doc = buildConfigExport({ instrument: { source: 'single', pattern: 'tone' },
+    phaseStereo: { phaseDeg: 30, pan: 0.25 } });
+  doc.phaseStereo = {};
+  const imp = parseConfigImport(doc);
+  assert.equal(imp.ok, true);
+  assert.equal(imp.phaseStereo, null);
+  assert.ok(imp.warnings.includes('phaseStereo ignored: needs a numeric phaseDeg or pan.'));
 });
 
 test('labLinkParam and configLinkNote: the note names what the link restores, and a lab state '
