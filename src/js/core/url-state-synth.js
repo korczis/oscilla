@@ -1,6 +1,8 @@
-// The Synth deep link (plan K106 part): `#m=synth[&yt=panel][&yp=<preset>][&yv=<values>]
-// [&yc=<cables>]`. Its own keys, so a Synth link never routes to Studio (`sv` is a Studio key):
-//   yt  the tab ('panel')
+// The Synth deep link (plan K106 part): `#m=synth[&yt=<tab>][&ye=<engine>][&yp=<preset>]
+// [&yv=<values>][&yc=<cables>]`. Its own keys, so a Synth link never routes to Studio (`sv` is
+// a Studio key):
+//   yt  the tab ('panel' | 'engines')
+//   ye  the engine module the keys play on the Engines tab (panels/engines.js)
 //   yp  a preset id (synth/presets.js)
 //   yv  values that differ from the preset, 'module.param:value' joined by ','
 //   yc  user cables, 'module.port>module.port' joined by ','
@@ -13,18 +15,20 @@
 import { validateParamValue } from '../studio/registry.js';
 
 export const SYNTH_LINK_MODE = 'synth';
-export const SYNTH_LINK_KEYS = Object.freeze({ tab: 'yt', preset: 'yp', values: 'yv',
-  cables: 'yc' });
-export const SYNTH_TABS = Object.freeze(['panel']);
+export const SYNTH_LINK_KEYS = Object.freeze({ tab: 'yt', engine: 'ye', preset: 'yp',
+  values: 'yv', cables: 'yc' });
+export const SYNTH_TABS = Object.freeze(['panel', 'engines']);
 const MAX_ITEMS = 128;
 
 const strip = (h) => String(h || '').replace(/^#/, '');
 const fmt = (v) => (typeof v === 'number' ? String(Number(v.toPrecision(6))) : String(v));
 
-export function encodeSynthLink({ tab = 'panel', preset = null, values = [], cables = [] } = {}) {
+export function encodeSynthLink({ tab = 'panel', engine = null, preset = null, values = [],
+  cables = [] } = {}) {
   const q = new URLSearchParams();
   q.set('m', SYNTH_LINK_MODE);
   if (tab && tab !== 'panel') q.set(SYNTH_LINK_KEYS.tab, tab);
+  if (engine && tab === 'engines') q.set(SYNTH_LINK_KEYS.engine, engine);
   if (preset) q.set(SYNTH_LINK_KEYS.preset, preset);
   if (values.length) {
     q.set(SYNTH_LINK_KEYS.values, values.map(([k, v]) => `${k}:${fmt(v)}`).join(','));
@@ -51,6 +55,10 @@ export function decodeSynthLink(hash, panel, presets) {
   for (const k of Object.values(K)) if (q.getAll(k).length > 1) return no(`${k} appears twice.`);
   const tab = q.get(K.tab) || 'panel';
   if (!SYNTH_TABS.includes(tab)) return no(`there is no tab "${tab.slice(0, 32)}".`);
+  const engine = q.get(K.engine);
+  if (engine !== null && !(panel.module(engine) && panel.module(engine).tab === 'engines')) {
+    return no(`there is no engine "${engine.slice(0, 32)}".`);
+  }
   const preset = q.get(K.preset);
   if (preset !== null && !presets.some((p) => p.id === preset)) {
     return no(`there is no preset "${preset.slice(0, 32)}".`);
@@ -97,5 +105,6 @@ export function decodeSynthLink(hash, panel, presets) {
     cables.push([a, b]);
   }
   if (values.length + cables.length > MAX_ITEMS) return no(`more than ${MAX_ITEMS} items.`);
-  return { ok: true, link: { tab, preset, values, cables } };
+  return { ok: true, link: { tab: engine && tab === 'panel' ? 'engines' : tab, engine, preset,
+    values, cables } };
 }

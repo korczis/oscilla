@@ -58,7 +58,10 @@ export function linkAction(model0, panel, link, { registry = NODE_REGISTRY } = {
   const p = presetOf(link.preset || 'init') || presetOf('init');
   const clean = unpatched(model0, panel);
   const model = clean.model;
-  const steps = [...clean.steps, ...presetAction(model, panel, p.id).action.steps];
+  const steps = [
+    ...clean.steps,
+    ...presetAction(model, panel, p.id, { all: true }).action.steps,
+  ];
   const given = new Map(link.values);
   const nodes = panel.resolve(model);
   for (const [k, v] of link.values) {

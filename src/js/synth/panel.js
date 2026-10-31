@@ -22,6 +22,8 @@
 //                                           a module still in the model (a panel partly deleted
 //                                           in Studio) is reused, and only the normals that
 //                                           touch a module it adds are added
+//   panel.tabs -> [{ id, title, description }]   the workspace tabs a panel's modules sit on
+//   panel.modulesOf(tab) -> [module]              (module.tab, default the first tab)
 //
 // A module's node is found by metadata.panel { id: panel.instance, module } (schema.js
 // isPanelRef); a node type the Studio may hold once (Master Output) is that one node.
@@ -75,7 +77,11 @@ export function definePanel(decl, registry = NODE_REGISTRY) {
   const pid = decl.id;
   if (!/^[a-z][a-z0-9-]{0,39}$/.test(pid || '')) fail(pid, 'invalid id');
   const instance = decl.instance || `${pid}-1`;
-  const modules = decl.modules.map((m) => {
+  const tabs = Object.freeze((decl.tabs || [{ id: 'panel', title: decl.title,
+    description: decl.description || '' }]).map((t) => Object.freeze({ ...t })));
+  const modules = decl.modules.map((m0) => {
+    const m = { ...m0, tab: m0.tab || tabs[0].id };
+    if (!tabs.some((t) => t.id === m.tab)) fail(pid, `module ${m.id} names unknown tab ${m.tab}`);
     const def = registry.get(m.node);
     if (!def) fail(pid, `module ${m.id} names unknown node type ${m.node}`);
     if (!/^[a-z][a-z0-9-]{0,31}$/.test(m.id)) fail(pid, `module id ${m.id}`);
@@ -167,6 +173,8 @@ export function definePanel(decl, registry = NODE_REGISTRY) {
   const panel = {
     id: pid, instance, version: decl.version || 1, title: decl.title,
     description: decl.description || '', modules, normals, amounts, layout: decl.layout || {},
+    tabs,
+    modulesOf: (tab) => modules.filter((m) => m.tab === tab),
     module: (mid) => byId.get(mid) || null,
     fixedOf: (mid) => {
       const m = byId.get(mid);

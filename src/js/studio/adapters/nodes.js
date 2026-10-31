@@ -66,6 +66,7 @@ import * as output from './output.js';
 import * as analysis from './analysis.js';
 import * as measurement from './measurement.js';
 import * as instrument from './instrument.js';
+import * as engines from './engines.js';
 
 export { PARAM_TAU_S, inertHandle } from './common.js';
 export { MIC_ENDED_TEXT, MIC_OFF_TEXT, SWEEP_FADE_S } from './sources.js';
@@ -89,4 +90,7 @@ export const NODE_ADAPTERS = Object.freeze({
   'transfer-analyzer': dataNode('measurement/transfer.js#computeTransfer'),
   'measurement-result': dataNode('experiments/schema.js#withResults'),
   keys: instrument.keys, vco: instrument.vco, ring: instrument.ring,
+  'additive-voice': engines.additiveVoice, 'fm-voice': engines.fmVoice,
+  'am-voice': engines.amVoice, 'wavetable-voice': engines.wavetableVoice,
+  'perc-voice': engines.percVoice,
 });

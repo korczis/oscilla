@@ -92,6 +92,51 @@ export function pulseSeries(width, count = MAX_PARTIALS) {
 }
 
 /**
+ * syncedSawSeries(ratio, count) → the partials of a hard-synced saw (Synth engines, K089 part,
+ * K092): over one master period φ ∈ [0, 1) the slave is the rising saw 2·frac(r·φ + ½) − 1 at
+ * `ratio` r times the master frequency, reset to its zero crossing at every master period. The
+ * wave repeats exactly with the master period, so it is a band-limited table; ratio 1 is
+ * harmonicSeries('sawtooth') and an integer r has energy only at multiples of r. Closed form:
+ * the Fourier integral of each linear piece, summed (DC left out, as a PeriodicWave has none).
+ */
+export function syncedSawSeries(ratio, count = MAX_PARTIALS) {
+  const r = Math.max(1e-3, Number(ratio) || 1);
+  const N = clampCount(count);
+  const cuts = [0];
+  for (let k = 1; (k - 0.5) / r < 1; k++) cuts.push((k - 0.5) / r);
+  cuts.push(1);
+  const out = [];
+  for (let n = 1; n <= N; n++) {
+    const w = 2 * Math.PI * n;
+    let re = 0;
+    let im = 0;
+    for (let i = 0; i + 1 < cuts.length; i++) {
+      const [u, v] = [cuts[i], cuts[i + 1]];
+      if (!(v > u)) continue;
+      const m = Math.floor(r * ((u + v) / 2) + 0.5);
+      const a = 2 * r;
+      const b = 2 * (0.5 - m) - 1;
+      // ∫ (aφ + b) e^{−iwφ} dφ = e^{−iwφ} · ((aφ + b) · i / w + a / w²)
+      const at = (x) => {
+        const c = Math.cos(w * x);
+        const s = -Math.sin(w * x);
+        const pr = a / (w * w);
+        const pi = (a * x + b) / w;
+        return [c * pr - s * pi, c * pi + s * pr];
+      };
+      const [r1, i1] = at(v);
+      const [r0, i0] = at(u);
+      re += r1 - r0;
+      im += i1 - i0;
+    }
+    const an = 2 * re;
+    const bn = -2 * im;
+    out.push({ n, gain: Math.hypot(an, bn), phase: Math.atan2(an, bn) });
+  }
+  return out;
+}
+
+/**
  * customSeries(gainsDb, phasesDeg) → partials from per-harmonic gain (dB, ≤ OFF_DB or
  * −Infinity = off) and phase (degrees). Index i is harmonic i + 1.
  */

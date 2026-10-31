@@ -2351,7 +2351,8 @@
       aria-labelledby="osc-synth-title" tabindex="-1">
       <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <nav aria-label="Breadcrumb" class="text-xs text-gray-500 dark:text-gray-400">Synth / Panel</nav>
+          <nav aria-label="Breadcrumb" class="text-xs text-gray-500 dark:text-gray-400"
+            x-text="'Synth / ' + (synth.tab === 'engines' ? 'Engines' : 'Panel')">Synth / Panel</nav>
           <h2 id="osc-synth-title" class="text-xl font-semibold text-gray-900 dark:text-white"
             x-text="synth.title">Semi-modular mono voice</h2>
           <p class="hidden max-w-3xl text-sm text-gray-600 sm:block dark:text-gray-300"
@@ -2362,7 +2363,8 @@
           <select id="osc-synth-preset" data-osc="synth.preset" x-model="synth.preset"
             @change="synthPreset($event.target.value)"
             class="h-11 w-full max-w-full rounded-lg sm:w-auto border border-solid border-gray-300 bg-gray-50 px-3 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
-            <template x-for="p in synth.presets" :key="p.id">
+            <option value="" hidden :selected="!synth.preset">Choose a preset</option>
+            <template x-for="p in synth.presets.filter((x) => x.tab === synth.tab)" :key="p.id">
               <option :value="p.id" :selected="p.id === synth.preset" x-text="p.title"></option>
             </template>
           </select>
@@ -2375,11 +2377,22 @@
             class="h-11 rounded-lg border border-solid border-gray-300 bg-white px-4 text-sm font-medium text-gray-900 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700">Copy link</button>
         </div>
       </div>
+      <!-- Tabs (Q019): Panel, the semi-modular voice; Engines, the polyphonic engines. -->
+      <div class="mb-3 border-0 border-b border-solid border-gray-200 dark:border-gray-700">
+        <ul class="-mb-px flex text-sm font-medium" role="tablist" aria-label="Synth instrument">
+          <template x-for="t in synth.tabs" :key="t.id">
+            <li><button type="button" role="tab" :id="'osc-synth-tab-' + t.id" :data-synth-tab="t.id"
+              :aria-selected="String(synth.tab === t.id)" @click="synthTab(t.id)" x-text="t.label"
+              :class="synth.tab === t.id ? 'border-primary-600 text-primary-600 dark:border-primary-500 dark:text-primary-500' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300'"
+              class="inline-flex h-11 items-center rounded-t-lg border-0 border-b-2 border-solid bg-transparent px-4"></button></li>
+          </template>
+        </ul>
+      </div>
       <p class="mb-3 min-h-[1.25rem] text-sm text-gray-700 dark:text-gray-300" role="status"
         aria-live="polite" data-osc="synth.status" x-text="synth.status"></p>
       <p class="mb-3 break-all text-xs text-gray-500 dark:text-gray-400" x-show="synth.link"
         data-osc="synth.link" x-text="synth.link"></p>
-      <div data-osc="synth.panel"></div>
+      <div data-osc="synth.panel" role="tabpanel" :aria-labelledby="'osc-synth-tab-' + synth.tab"></div>
     </section>
 
     <!-- ================= STUDIO (V3.1): visual signal programming =================

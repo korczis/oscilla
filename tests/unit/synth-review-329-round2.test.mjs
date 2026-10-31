@@ -255,8 +255,10 @@ test('every preset writes its values and amounts, and differs from Init', () => 
   for (const p of PRESETS) {
     const st = panelStore();
     // From a panel off every preset (no preset sets Noise to 0.33), so each write shows.
-    st.dispatch({ type: 'NODE_PARAM_SET', nodeId: nodeOf(st.getModel(), 'mix').id,
-      key: 'level3', value: 0.33 });
+    // An engine preset starts from its engine at Level 3.3 (no preset sets it).
+    const [om, ok, ov] = p.engine ? [p.engine, 'level', 3.3] : ['mix', 'level3', 0.33];
+    st.dispatch({ type: 'NODE_PARAM_SET', nodeId: nodeOf(st.getModel(), om).id,
+      key: ok, value: ov });
     const before = st.debugInfo().undoDepth;
     const done = st.dispatch(presetAction(st.getModel(), PANEL, p.id).action);
     assert.equal(done.ok, true, done.reason);
@@ -264,19 +266,25 @@ test('every preset writes its values and amounts, and differs from Init', () => 
     assert.equal(st.undoLabel(), `Preset ${p.title.split(':')[0]}`);
     const m = st.getModel();
     const want = presetValues(PANEL, p);
+    // A preset sets its own tab's modules (presets.js): a Panel preset the panel, an engine
+    // preset its engine.
+    const own = (mod) => mod && mod.tab === p.tab && (!p.engine || mod.id === p.engine);
     for (const mod of PANEL.modules) {
       const n = nodeOf(m, mod.id);
-      if (mod.def.maxInstances === 1) continue;
+      if (mod.def.maxInstances === 1 || !own(mod)) continue;
       for (const [k, v] of Object.entries(want[mod.id])) {
         assert.deepEqual(n.params[k], v, `${p.id} ${mod.id}.${k}`);
       }
     }
     for (const a of PANEL.amounts) {
+      if (!own(PANEL.module(a.module))) continue;
       const depths = new Set(a.to.flatMap((t) => into(m, t))
         .filter((x) => x.startsWith(`${a.source}@`)).map((x) => Number(x.split('@')[1])));
       assert.deepEqual([...depths], [p.amounts[a.id] ?? 0], `${p.id} amount ${a.id}`);
     }
-    if (p.id !== 'init') {
+    // An engine preset also chooses the engine the keys play ('kit' is Percussion at its
+    // init values), so the three-knob rule is the Panel tab's.
+    if (p.id !== 'init' && p.tab === 'panel') {
       const diff = Object.entries(p.values).filter(([k, v]) => {
         const [mid, key] = k.split('.');
         return init[mid][key] !== v;
@@ -311,7 +319,9 @@ test('a Keys node deleted in Studio: Insert reuses the surviving modules', () =>
   const r = st.dispatch(PANEL.instantiate(st.getModel()));
   assert.equal(r.ok, true, r.reason);
   const m = st.getModel();
-  assert.equal(m.graph.nodes.filter((n) => n.metadata.panel).length, 13);
+  // Every module but the one-per-Studio Master Output is a panel node.
+  assert.equal(m.graph.nodes.filter((n) => n.metadata.panel).length,
+    PANEL.modules.filter((x) => x.def.maxInstances !== 1).length);
   assert.ok(panelEdges(m, PANEL).normals.has('n1') && panelEdges(m, PANEL).normals.has('n23'));
 });
 

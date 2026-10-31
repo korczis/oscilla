@@ -1,0 +1,59 @@
+# Review verdict for pull request #332, the synth engines (K090 and the K-line engines; branch
+# feat/synth-engines, stacked on feat/synth-panel = #329). Reviewed head 5afc08a4 against base
+# origin/feat/synth-panel. Another session built it (oscilla-b0); this reviewer built none of the
+# synth code. prismatic-majordomus-f3 reviewed the DSP lens earlier (its three P1s verified fixed by
+# measurement, and the FM-bass DC-block P2 that 5afc08a4 fixes); this review is the voices-and-tests
+# lens oscilla-b0 asked for, plus the #329 slow-arming leak.
+#
+# The digest is scripts/review-verdict.mjs (git archive origin/main scripts) run --content over
+# the 9 guarded paths it names against origin/feat/synth-panel: src/js/audio/additive.js and
+# src/js/studio/{adapters/engines,adapters/nodes,adapters/voices,live-notes,nodes/engines,offline,
+# registry,transport}.js.
+#
+# How it was reviewed, three lenses in detached worktrees at the head, a skeptic per P1-P2:
+# - Mutations, one revert per claimed fix (14 mutants, synth-engines.cjs --only rows one browser
+#   at a time with OSC_LOAD_MAX=40, and the round-2/round-3 unit files): 12 killed. Clap gate-off,
+#   plain linear FM through the stack (375.6 cents), round-2's 0.1x high-pass (123.5 cents, caught
+#   by o-pitch's drive part only), swapped phase tables, Level/4, steal before the fade, morph
+#   headroom and level factor, silent-note steal, ring without modulator, legato off and legato from
+#   the floor are all killed. Survivors: V1 and V2 below.
+# - Voice repros live in chromium at 48 kHz on the committed dist: none of f3's three reproduces.
+#   A sourceless note steals nothing (16 voices before and after, noteOn stolen:false); a retrigger
+#   on the formant pad dips 0.06 dB (was 28-33 dB); percussion allOff silences the open hat.
+#   synth-engines.cjs desktop and synth.cjs pass.
+# - The slow-arming leak: reproduced in 1 of 5 natural runs per engine (chromium, webkit) at -42 dB
+#   RMS for 107 ms, and 6 of 6 when the Arm transaction is stalled past t0 + attack, at -31 dB RMS
+#   (a held C4 sustains at -31.5 dB) for 117-128 ms. The cause is #329's transport (V4).
+#
+# Delta re-review at e42c74ef (from 59a93e1f on 5afc08a4): it merges feat/synth-panel 8b2690f1 as
+# bc57ce5d (V4's fix, judged on #329) and fixes V1-V7. Digest from the same origin/main scripts with
+# --base origin/feat/synth-panel (8b2690f1): c0a535ac...1eed.
+# - V1: synth-review-332-verdict3.test.mjs reads phi back from the shaper curves and asserts the
+#   onset (I_m) and sustain (I_m x sustain) gain of every edge into a phase operator (3-stack 3->2,
+#   4-stack 4->3 and 3->2); the 0.5/phi mutant fails it ('0.35 is not 0.7').
+# - V3: --only runs only the sizes that hold a selected check; an unknown check exits 2 before any
+#   browser. V5: a note without a voice slot is not held and returns silent:true. V6: amDcText is
+#   null at AM Depth 0. V7: the computed reason is true (recomputed: cascaded one-pole high-passes at
+#   5 and 20 Hz raise a band-limited square at E2 to 1.159 and 1.578 of its peak).
+# - synth-engines.cjs 21/21 desktop and 3/3 phone in chromium, firefox and webkit; synth.cjs 18/18
+#   and 4/4 in chromium; the unit files 36/36. npm test fails only about.test (branch predates
+#   v3.14.0) and, in the reviewer's worktree, ui-flowbite-pro-build for want of tailwindcss.
+#
+# Verdict: merge. No P0 or P1; V1 and V4 are closed, V2 stays a documented P3.
+schema: review-verdict/v1
+pr: 332
+verdict: merge
+reviewer: oscilla-af (claude-code 901211e2)
+content: c0a535ac84b98bdff7ed31b9aedfa2f00e14ffb5b80084f34dbb55ed9a421eed
+findings:
+  - { id: V1, severity: P2, status: closed, title: "adapters/engines.js:221 the index of an edge into a phase operator was untested; closed by synth-review-332-verdict3.test.mjs, which kills the 0.5/phi mutant" }
+  - { id: V2, severity: P3, status: open, title: "firefox o-pitch drive 1.64 of 5 cents is documented, not tightened; the documentation quotes the drive reading as the margin, while the printed margin (3.1 in every browser) is set by worstLine (1.9)" }
+  - { id: V3, severity: P3, status: closed, title: "--only without a phone check exited 1; closed: sizes without a selected check are skipped, an unknown name exits 2 (the --only=name equals form is still ignored, W4)" }
+  - { id: V4, severity: P2, status: closed, title: "transport.js (#329) a stalled first Arm with no key held sounded about 120 ms; closed by #329 8b2690f1 (merged here as bc57ce5d), judged in #329's verdict" }
+  - { id: V5, severity: P3, status: closed, title: "live-notes.js a note that sounds nothing entered the held list; closed: held only with a voice slot, silent:true otherwise" }
+  - { id: V6, severity: P3, status: closed, title: "amDcText claimed a DC at AM Depth 0; closed: null at Depth 0" }
+  - { id: V7, severity: P3, status: closed, title: "the reason for keeping the DC was false at most settings; closed: a computed, tested reason that recomputes true" }
+  - { id: W1, severity: P3, status: open, title: "docs/synth.md AM/ring row: the '+16 % at 5 Hz, +58 % at 20 Hz' figures depend on the filter (cascaded one-pole 1.159/1.578, RBJ Q 0.707 1.113/1.452) and the doc does not name it" }
+  - { id: W2, severity: P3, status: open, title: "nodes/engines.js:185 AM of sines at ratio 1 and Depth 0.01 states 'a mean of 0.00 of the voice's peak'; state the threshold or more digits" }
+  - { id: W3, severity: P3, status: open, title: "tests/browser/synth-engines.cjs:53-59 and the tests/README.md row: the o-pitch margin text quotes the drive reading only (same as V2)" }
+  - { id: W4, severity: P3, status: open, title: "synth-engines.cjs:81-84 and synth.cjs: --only=name (equals form) is silently ignored and runs the whole suite" }

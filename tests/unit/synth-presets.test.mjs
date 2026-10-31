@@ -9,8 +9,15 @@ import { compileStudio } from '../../src/js/studio/compiler.js';
 import { liveModel } from '../../src/js/studio/live-notes.js';
 import { panelStore } from './synth-fixture.mjs';
 
-test('five presets, every value valid for the panel narrowed parameter', () => {
-  assert.deepEqual(PRESETS.map((p) => p.id), ['init', 'bass', 'lead', 'sweep', 'ring-bell']);
+test('five panel presets and the engine presets, every value valid for its narrowed parameter',
+  () => {
+  assert.deepEqual(PRESETS.filter((p) => p.tab === 'panel').map((p) => p.id),
+    ['init', 'bass', 'lead', 'sweep', 'ring-bell']);
+  // PR B (K090-K092, K121, K123): one tab per preset; an engine preset names its engine module.
+  for (const p of PRESETS.filter((x) => x.tab === 'engines')) {
+    assert.equal(PANEL.module(p.engine).tab, 'engines', p.id);
+    for (const k of Object.keys(p.values)) assert.equal(k.split('.')[0], p.engine, `${p.id} ${k}`);
+  }
   for (const p of PRESETS) {
     const v = presetValues(PANEL, p);
     for (const m of PANEL.modules) {

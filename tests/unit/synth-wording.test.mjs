@@ -18,7 +18,10 @@ const synthMarkup = html.slice(html.indexOf('id="osc-view-synth"'),
 const learn = readFileSync(join(ROOT, 'src/js/data/learn.js'), 'utf8');
 const learnSynth = learn.slice(learn.indexOf("id: 'semi-modular-voice'"));
 const SOURCES = [...walk('src/js/synth'), 'src/js/studio/nodes/instrument.js',
-  'src/js/studio/adapters/instrument.js', 'src/js/studio/live-notes.js']
+  'src/js/studio/adapters/instrument.js', 'src/js/studio/live-notes.js',
+  // PR B: the engines' definitions, adapters and voice host (K090-K092, K121-K123).
+  'src/js/studio/nodes/engines.js', 'src/js/studio/adapters/engines.js',
+  'src/js/studio/adapters/voices.js']
   .map((p) => [p, readFileSync(join(ROOT, p), 'utf8')]);
 
 const BANNED = /\b(ms-?20|korg|arturia|moog|roland|kaoss\w*|ableton|elektron|dx-?7|tb-?303|tr-?808|minimoog|prophet|behringer)\b/i;

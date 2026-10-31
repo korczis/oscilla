@@ -1692,6 +1692,11 @@ export function createStudioTransport({
       return live.event(keysId, { ...ev, at: Number.isFinite(ev.at) ? ev.at : hooks.soon() });
     },
     get armed() { return playing && armedOnly; },
+    /** Voices an engine sounds now (adapters/voices.js), 0 for any other node. */
+    liveVoices(id) {
+      const h = playing ? ready(id) : null;
+      return h && h.info && typeof h.info.voices === 'function' ? h.info.voices() : 0;
+    },
     heldNotes: () => live.held(),
     locate,
     returnToStart: () => locate(0),
