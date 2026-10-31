@@ -53,6 +53,11 @@
 //                    engine.setDualPhase(deg) applies a change by a click-free restart.
 //   attachMicrophone(stream, opts) / detachMicrophone(): the analysis graph of a stream the
 //   caller opened (mic lab), built through the engine's mic accounting (micNodeCount).
+//   stageChain(factories) -> { input, stages, track, source, untrack, dispose(), disposed, held }
+//                  a counted chain input -> [inserts…] -> master for a graph that plays outside
+//                  the voices (C003: the V2 sequencer, which compiles its passes into `input`
+//                  through `track`/`source`); its nodes count in activeNodeCount while it is
+//                  open, and dispose() (or a closed context) releases every one.
 //   A replacement voice (_restart) is started through this.play with the voice's own options,
 //   so a wrapper installed on the instance (main.js) re-applies the V2 options.
 //   snapshot(out?)   plain read-only engine state for the visualization (risk 3).
@@ -78,6 +83,7 @@ import {
   MIC_UNAVAILABLE_TEXT, buildMicrophoneGraph, closeMicrophone, hasMicrophoneApi,
   requestMicrophoneStream, stopStreamTracks,
 } from './microphone.js';
+import { buildStageChain } from './stage-chain.js';
 import { forgetClock, observeClock, renderedTimeAtLeast } from './clock.js';
 
 export {
@@ -162,6 +168,7 @@ export class AudioEngine {
     this.mic = null;
     this.micAttachment = null;   // a caller-opened stream's analysis graph (attachMicrophone)
     this.micNodes = new Set();   // nodes of micAttachment (accounted apart from voice nodes)
+    this.stageChains = new Set(); // open stageChain()s (C003), disposed with the context
     this._listeners = new Set();
     this._seq = 0;
     this._env = options.env || defaultEnv();
@@ -294,6 +301,7 @@ export class AudioEngine {
   _discardContext() {
     const ctx = this.ctx;
     for (const v of [...this.voices]) this._cleanup(v);
+    for (const chain of [...this.stageChains]) chain.dispose();
     this.stopMic('closed');
     this.detachMicrophone('closed');
     this.ctx = null;
@@ -900,6 +908,53 @@ export class AudioEngine {
     this.micNodes.clear();
     this._emit('micAttachment', { attached: false, reason });
     return true;
+  }
+
+  /**
+   * A counted chain of insert stages for a graph that plays outside the voices (C003: the V2
+   * pattern sequencer; rule audio-engine-discipline): input -> [stages…] -> master, built by
+   * audio/stage-chain.js from the same insert factories play() takes as o.inserts (the Filter
+   * Lab's createInsert). Every node of the chain, and every node a builder registers through the
+   * returned track/source (the sequencer's passes, compiled into `input`), is in `nodes` (and
+   * `sources`) until untrack(n) or dispose(), so activeNodeCount and activeSourceCount include it
+   * while it sounds. dispose() disposes the stages, disconnects the chain and releases whatever
+   * it still holds; a closed context disposes every open chain. The caller disposes it once its
+   * last pass has ended, so the stages are never cut under a sounding signal. Null without a
+   * context.
+   */
+  stageChain(factories = []) {
+    if (!this.ctx || !this.master) return null;
+    const held = new Set();
+    const track = (n) => { held.add(n); this.nodes.add(n); return n; };
+    const source = (n) => { track(n); this.sources.add(n); return n; };
+    const untrack = (n) => { held.delete(n); this.nodes.delete(n); this.sources.delete(n); };
+    const releaseAll = () => { for (const n of [...held]) untrack(n); };
+    let built;
+    try {
+      built = buildStageChain(this.ctx, factories, this.master, { track, source });
+    } catch (e) {
+      releaseAll();
+      throw e;
+    }
+    const chains = this.stageChains;
+    const chain = Object.freeze({
+      input: built.input,
+      stages: built.stages,
+      track,
+      source,
+      untrack,
+      dispose: () => {
+        if (!chains.has(chain)) return;
+        chains.delete(chain);
+        built.dispose();
+        for (const n of held) { try { n.disconnect(); } catch (e) { /* already */ } }
+        releaseAll();
+      },
+      get disposed() { return !chains.has(chain); },
+      get held() { return held.size; },
+    });
+    chains.add(chain);
+    return chain;
   }
 
   /** Update the sounding voice's insert stages: cfgs[i] goes to inserts[i].update (if given). */

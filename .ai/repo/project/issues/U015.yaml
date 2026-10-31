@@ -1,0 +1,47 @@
+id: U015
+milestone: M054
+serves:
+  - "ui-current#ui-audited"
+title: "The Harmonics chart labels its frequency axis and the additive chart states its dB unit"
+slug: the-harmonics-chart-labels-its-frequency-axis-and-the-additive
+priority: p3
+profile: implementation
+objective: "Lands as fix(charts). Two partial charts show readings with no axis to read them against. (1) Harmonics tab ([data-osc=\"analysis.tab\"][data-value=\"harmonics\"], host #osc-chart-waveform, createHarmonicBarsView in src/js/ui/p5-views.js:248-296): the log-frequency x axis from harmonicAxis (src/js/visualization/harmonics.js:110) carries no tick label; only the Nyquist marker is labelled, so a bar's frequency cannot be read. HARMONIC_N_LABELS ('f', '2f', ...; harmonics.js:101) is defined and never drawn. After: a pure harmonicFrequencyTicks(axis, widthPx) in harmonics.js returns the 1-2-5 ticks inside [fmin, fmax] from logTicks of src/js/charts/axes.js, labelled with formatHzTick ('2 kHz', '5 kHz'), and the view draws exactly those under the plot; HARMONIC_N_LABELS and HARMONIC_DB_LABELS, which nothing reads, are removed. (2) Additive chart (#osc-chart-additive, src/js/charts/additive-chart.js:68): the y grid reads bare '0 ... -80' through formatDbTick(v, 'plain'). After: the 0 tick reads '0 dB rel' and the others stay bare numbers (the 'top' convention of the spectrum), the same 'dB rel' wording K044 uses for the bar tooltip; the level is the coefficient's gain (gainDb of audio/additive.js visualCoefficients), so no dBFS, SPL or 'audible' wording is drawn (project.no-fake-science). Negative cases: an empty table still draws 'UNAVAILABLE' and no tick; a tick nearer than 40 px to the Nyquist label or to its neighbour is dropped rather than overlapped; the dual source (harmB) widens fmax and the ticks follow; a narrow host keeps at least two ticks or none; minDb and maxDb options other than the defaults still label only the 0 tick with the unit. Canvas drawing only: no markup, class token or inline style is added (project.ui-uses-flowbite-pro), and the labels are text, not controls (project.no-inert-surfaces). Rollback: revert the commit; it changes no stored state, URL key or schema. Not this: K044 (the dB rel unit on the harmonic bars' y grid, the bar readouts and the Nyquist contrast; this slice leaves HARMONIC_DB_GRID's labels to it), T022 (its reading of K044), K046, Y004 and T002 (unit ticks on other charts)."
+why: "Found by the S074 quality-bar review of 2026-10-30 at origin/main d9db6bdf, section 74 symptom \"The Harmonics chart has no frequency labels on its log-frequency x axis; only the Nyquist marker is labelled, so a bar's frequency cannot be read. Its y grid labels are bare numbers '0, -20, -40, -60' with no unit. The Additive chart's y axis is also unitless '0 ... -80'\", reproduced by an independent verifier; evidence: scratchpad s074/live2-tab-harmonics.png (2.52 kHz sine bars on an unlabelled axis and a unitless 0/-20/-40/-60 scale). Readouts must carry units; K044 covers the harmonic y unit only, not the frequency ticks or the additive grid unit."
+scope:
+  - "src/js/ui/p5-views.js"
+  - "src/js/visualization/harmonics.js"
+  - "src/js/charts/additive-chart.js"
+  - "src/js/charts/axes.js"
+  - "tests/unit/core-visualization.test.mjs"
+  - "tests/unit/charts.test.mjs"
+  - "tests/browser/app.cjs"
+  - "tests/browser/labs.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "F003"
+  - "F006"
+acceptance_criteria:
+  - "Fail-first: tests/unit/core-visualization.test.mjs fails on the merge base: harmonicFrequencyTicks for a 2.52 kHz sine axis at 48 kHz returns at least two ticks, every tick inside [fmin, fmax], labels from formatHzTick, none within 40 px of another or of the Nyquist label, and none for an empty table; harmonics.js exports no HARMONIC_N_LABELS."
+  - "Fail-first: tests/unit/charts.test.mjs fails on the merge base: the additive chart's y tick labels for the default -80..0 range are '0 dB rel', '-20', '-40', '-60', '-80', and never contain 'dBFS', 'SPL' or 'audible'."
+  - "tests/browser/app.cjs (analysis-tabs-and-fullscreen) opens the Harmonics tab with a 2.52 kHz sine and asserts the tick labels the view drew in its last frame (a read-only record the view keeps, as the additive chart's getBars() does) are non-empty Hz or kHz labels; tests/browser/labs.cjs asserts the additive chart's drawn y labels include '0 dB rel'. Both run in chromium, firefox and webkit and assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named deadline; tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "It adds no class token, selector, markup surface or inline style, so tests/unit/ui-flowbite-pro-baseline.json stays equal (node scripts/ui-flowbite-pro-record.mjs --check passes) and node --test tests/unit/ui-flowbite-pro.test.mjs passes (project.ui-uses-flowbite-pro, project.visual-identity-lock)."
+  - "As a fix change it carries a unit test that fails on the merge base and passes on the head (project.fail-first); its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no review verdict is needed."
+  - "The visual references of the analysis and additive regions of test:visual are re-accepted with the reason \"harmonics frequency ticks; additive dB rel unit\" in the pull request body (npm run test:visual)."
+  - "Definition of done, extends: the harmonics view gains a frequency axis and the additive grid its unit, on the shared axes.js helpers."
+  - "Definition of done, interlinks: the objective names K044 and T022; the pull request names U015 and K044, and K044's text is not duplicated."
+  - "Definition of done, interactivity: none added; the labels serve the existing hover and keyboard readouts K044 plans (stated)."
+  - "Definition of done, docs, menus and routes: docs/GLOSSARY.md's 'dB rel' entry (or a new one) says what the additive and harmonic levels are relative to; no menu or route changes."
+  - "Definition of done, tested: the unit and browser checks above; tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+  - "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+  - "node --test tests/unit/core-visualization.test.mjs tests/unit/charts.test.mjs"
+  - "node tests/browser/app.cjs"
+  - "node tests/browser/labs.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-10-30'
+updated_at: '2026-10-30'

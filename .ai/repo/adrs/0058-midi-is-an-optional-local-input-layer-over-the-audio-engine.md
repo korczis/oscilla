@@ -298,3 +298,118 @@ this note (commit 9ef1585) was corrected in place before it merged:
   member kinds (see the seam above).
 - Row 1's copy advised opening the page from a file, which in Firefox's gate build leads to
   `unsupported`. Row 13 (now 9) used `{name}`, which the note did not define.
+
+### 2026-10-29: rotary knobs (D11), and an instrument system on the Studio model
+
+**Note of 2026-10-29 (intent `connected-instrument`, owner decision Q018).** Appended; the
+sections above are unchanged and the status stays `proposed`, because accepting it is the
+owner's act.
+
+**What the owner decided.** Through AskUserQuestion in the coordinating session of
+2026-10-29 (Czech, relayed in English), the owner answered two questions:
+
+1. **Controls (D11).** Continuous instrument parameters are rotary knobs that always show their
+   value with a unit. Drag up or down turns them, with fine adjustment on Shift; the arrow keys
+   and PageUp/PageDown work; double-click resets to the default; a value can be typed. This
+   replaces D5 of intent `playable-instrument` ("Pro range sliders with number inputs, no
+   custom rotary knob"), which that intent recorded together with the sentence "ADR 0058 stays
+   unchanged"; this note is the amendment that sentence ruled out at the time.
+2. **Placement.** A new workspace, Synth: a front panel with a patch bay, built on the Studio
+   model, in which every cable is a typed Studio connection and the sequencer plays it directly.
+
+The owner then widened the direction in the same session (relayed by the coordinator): a proper
+sequencer, every kind of synthesis needed, a beat machine, an XY performance pad, clip-based
+MIDI arrangement and a piano keyboard, all interlinked and connected to modulation, the labs, the
+visualizations and MEASURE.
+
+**How the decisions above read now.**
+
+- Decision 1 holds: MIDI is a control layer and the AudioEngine the rendering layer. The
+  instruments of `connected-instrument` are Studio node kinds compiled into the one engine
+  through its accounting; none is a second engine. The knob is a control, not an engine.
+- Decision 2 holds: MIDI stays optional and its thirteen-state support table above is
+  unchanged; everything works without it.
+- Decision 3 holds: every note, step and clip event is scheduled on the AudioContext clock, and
+  nothing in the event path calls a network or a model.
+- Decision 4 is answered for the new clips: a recorded take is a `steps` or `notes` clip of the
+  StudioModel (issues K067, K099, K100), never a second state.
+- Decision 5 named MIDI clock, MIDI output and multiple tracks as out of scope for the first
+  version (M045). The owner's later direction of the same day (about 22:00, relayed by the
+  coordinator: "full DAW, full sequencer, full piano, everything interlinked, everything
+  clickable, everything parameterized, joined") takes multiple tracks, MIDI output and MIDI
+  files into scope of `connected-instrument` (K067, K100, K118); MIDI output follows the same
+  support-state table and states that its timing follows the browser's MIDI clock. MIDI clock
+  and AI improvisation stay out of scope.
+- The rejected alternative "turning the block sequencer into a MIDI sequencer" stands: the V2
+  block sequencer remains a sound-pattern editor, and the step sequencer and piano roll are
+  Studio timeline clips.
+- The boundary "not another DAW or a copy of a commercial synthesizer" is superseded in scope
+  by that direction: OSCILLA builds a full DAW, but on its own architecture (one AudioEngine,
+  the canonical StudioModel, typed ports, one file offline, the cockpit identity, measurement
+  provenance travelling with patches) and never as a copy of any product's name, branding,
+  artwork, panel layout or trade dress, with no analog-modelling claim
+  (`tests/unit/instrument-wording.test.mjs`, K059).
+
+**Consequences.** Intent `playable-instrument` records D5 as superseded by D11 and hands its
+unissued Wave 3 instrument items to `connected-instrument`; issues K016-K021, K025 and K026
+state D11 where they stated D5. The knob is built in K058. The status of this ADR is unchanged.
+
+### 2026-10-29: knobs, and how a MIDI controller reaches a parameter (D11)
+
+**Note of 2026-10-29 (J001), no section above changes.** On 2026-10-29 the owner chose rotary
+knobs for the continuous parameters of the instrument surfaces (D11, answered through
+AskUserQuestion and recorded by Q018), and asked for knobs, sliders and control panels done in
+one generic way. Decision 1 says MIDI input becomes note and controller events and that voices
+sound through the existing engine. It does not say what a controller event may change. This
+note decides that for the knob and for every other view of a continuous parameter. It
+decides nothing about MIDI output, MIDI clock, multiple tracks or the full-DAW scope that
+decision 5 keeps out; Q062 asks the owner about those.
+
+1. **A knob is a view of a parameter declaration, never a target of its own.** The knob (K058),
+   the slider and the typed field render one parameter declaration (the section 79
+   descriptor that N001 extends as `paramSpec`). They share one mapping between a normalised
+   position in [0, 1] and a value: linear, or logarithmic for a log parameter. MIDI never
+   addresses a knob, a DOM element, a lab closure or a MEASURE setting. A controller reaches a
+   parameter only through that declaration.
+2. **A controller is a modulation source in the Studio model.** A Control Change becomes the
+   output of a `midi-cc` node (controller number, channel, smoothing; K077) feeding the
+   parameter's PARAMETER port through a typed CONTROL edge (ADR 0032,
+   `project.typed-ports`). It is therefore a modulation in the sense of ADR 0037. It is added
+   in the parameter's mapped domain on the audio clock. It never writes the stored value, the
+   history or the knob's base. The mapping lives in the Studio document as that node and edge:
+   it is saved, undoable and part of the hash like any other edit. It is never kept in
+   `localStorage` or in a second map (`project.studio-model-is-canonical`).
+3. **Learn is a menu item of the control, not a mode of the page.** "Learn MIDI controller" is
+   an item of the one control menu (N004), on every parameter that has a PARAMETER port. The
+   menu opens with the ContextMenu key, a right click or a long-press (K058); Space is never
+   taken (ADR 0050). Choosing it
+   waits for the next Control Change and then dispatches one action that adds the node and the
+   edge, which is one history entry. Escape cancels the wait. On a parameter without a
+   PARAMETER port (a lab setting, a form field), the item is disabled and says why: "MIDI
+   controllers move Studio parameters; open this in Studio to map one."
+4. **MEASURE settings are never mapped.** They have no PARAMETER port, and "a measurement
+   setting is fixed for the duration of a take" (N001's static reason)
+   (`project.no-fake-science`).
+5. **The 7-bit value is mapped through the declaration's own scale.** Value v in 0..127 is the
+   position v / 127, and the position becomes a value through the same mapping the knob uses.
+   The value text the knob shows is the declaration's formatted value with its unit, never
+   the raw controller number. The raw number and the controller and channel are stated in the
+   knob's description ("MIDI CC 74, channel 1: 96 of 127"). 14-bit pairs, NRPN and relative
+   encoders are out of scope until a plan issue measures a device that sends them.
+6. **No jump is hidden.** When a learned controller first moves, the parameter follows it. The
+   knob shows the modulation band and, where a tap measures it, the live value (N005, N006).
+   It is never shown as if the stored base had changed. A pickup or soft-takeover mode is not
+   decided here.
+7. **The support states are unchanged.** The thirteen states of the 2026-10-18 note hold. In
+   every state but `connected`, the Learn item is disabled with that state's exact copy, and
+   nothing else on the control changes. Checks of learning use the seam of that note (the
+   `requestMIDIAccess` stub, the `midi-seam-...` group). Only measured checks support a claim
+   about which build exposes MIDI.
+8. **Timing stays deterministic.** A controller event sets the `midi-cc` node's source on the
+   audio clock with the declared smoothing. Nothing is allocated per event in the audio path,
+   and no network call or model inference sits between the controller and the parameter
+   (decision 3).
+
+What stays decided where it was: the knob's look, keys, touch and reduced-motion behaviour are
+K058's acceptance; the control menu is N004's; the `midi-cc` node type, its default depth and
+its tests are K077's. This note binds them to one route.

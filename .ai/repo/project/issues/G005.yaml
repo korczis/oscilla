@@ -1,0 +1,42 @@
+id: G005
+milestone: M085
+serves:
+- "component-system#proven-duplicates"
+title: "One clip face, one count text and empty texts that tell the truth"
+slug: one-clip-face-one-count-text-and-empty-texts-that-tell-the-t
+priority: p2
+profile: implementation
+objective: "Lands as fix(studio-ui). D6, D11 and the text half of D10: a clip is labelled 'Tone 440 Hz' by the sequencer strip and the Studio timeline but 'Tone' by the embedded Studio (a11y.js clipLabel against timeline-view.js clipText); the counts read '1 connections' and '1 automation lanes'; the embedded Studio says 'No clips.' on Filter Automation, whose model has an automation lane. One clipFace(clip, model) -> { label, detail, kind } in src/js/studio/a11y.js serves the sequencer strip, the timeline, the embedded Studio and the screen-reader text; one studioCounts(model) with the existing plural() serves the embedded Studio, the Inspector and the graph header; the embedded Studio's empty texts say what the model holds ('1 automation lane, no clips'). Before: VERIFIED (compact-states.json). After: one text per fact. Negative cases: zero, one and many of each count; a clip whose node was deleted. Rollback: revert; text only."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: \"the embedded Studio is ugly as hell\"; components in general must be generic, linkable, traceable, composable, unified, documented, dynamic, generated and interlinked; \"everything must be interlinked with everything\"; improve the main page and the first experience, deploy often. The owner's evolution prompt pack (MASTER, P02, P04, P06) binds it: the dark technical cockpit is locked, shared primitives only where duplication is proven, no new framework, generated docs only where deterministic, no decorative wires. Findings: the UI component inventory of 2026-10-29 (D1-D14 duplication, U1-U15 on the embedded Studio, measured on origin/main b67d1e58, v3.13.0); design: the component-system design of 2026-10-29 (scratchpad components/design.md)."
+scope:
+- src/js/studio/a11y.js
+- src/js/ui/studio/compact.js
+- src/js/ui/studio/timeline-view.js
+- src/js/ui/studio/inspector.js
+- src/js/labs/sequencer-panel.js
+- tests/unit/studio-a11y-text.test.mjs
+- tests/browser/v31-studio-graph.cjs
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- G002
+acceptance_criteria:
+- "tests/unit/studio-a11y-text.test.mjs fails on the merge base: '1 connection', '2 connections', '1 automation lane', one clip text for the same clip in all four places, and the Filter Automation empty text naming its lane."
+- "Definition of done, extends: a11y.js plural() and clipLabel(), which already exist."
+- "Definition of done, interlinks: the same clip reads the same in the sequencer, the timeline and the embedded Studio."
+- "Definition of done, interactivity: the counts update with every model change (store subscription, no poll)."
+- "Definition of done, docs, menus and routes: docs/v31/user-guide.md uses the same wording. tests/README.md has a row for each new test; the component's catalogue declaration (G001) names its docs, links and tests; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: A check 'compact-text' in tests/browser/v31-studio-graph.cjs opens Basic Tone and Filter Automation by link and waits with until() (deadline 'compact counts', 2 s) for '1 connection' and the lane text, by keyboard and by a hasTouch tap on the template entry. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit, and the release that carried it is recorded when the milestone is verified."
+- "The pull request carries a reviewer's verdict for the guarded paths it touches (project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+- "Before Pro (it may land before F001): it adds no class token, selector, markup surface or inline style and only removes legacy ones, so tests/unit/ui-flowbite-pro-baseline.json stays equal or falls (node scripts/ui-flowbite-pro-record.mjs --check passes, rewritten only where a count fell) and node --test tests/unit/ui-flowbite-pro.test.mjs passes; studio.css, studio-timeline.css, charts.css and tokens.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock v2)."
+- "scripts/size-report.mjs shows at most 1 KB gzip added, with the base and head figures in the pull request body, inside the cap Q037 records (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/studio-a11y-text.test.mjs
+- node tests/browser/v31-studio-graph.cjs --only compact-text
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

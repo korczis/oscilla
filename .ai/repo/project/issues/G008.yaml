@@ -1,0 +1,57 @@
+id: G008
+milestone: M086
+serves:
+- "component-system#proven-duplicates"
+title: "Parameter fields, lab switches and single choices render from their declarations as Flowbite Pro markup, Filter Lab first"
+slug: parameter-fields-lab-switches-and-single-choices-render-from
+priority: p2
+profile: implementation
+objective: "Lands as feat(ui). D2 (view half), D4 and D8. src/js/ui/catalog/render.js renders a declaration of kind param, switch or choice from its template, markup adapted from the Pro blocks of the flowbite-pro reference (range with number input, toggle, button group), with Tailwind class lists only: label for, aria-valuetext with value and unit, aria-describedby for unit, error and disabled reason, the keyboard of each kind (roving tabindex for choice), 44 px targets on a coarse pointer, reset to the declared default (double-click, double-tap or the control menu; never a letter key, because R is a note key of the computer-keyboard piano), and the readout through G002. One entry point: mountControl(host, decl, { value, commit }) -> { set(value), setDisabled(reason | null), destroy() }, called by the surface that owns the value (the lab, the Studio through dispatch); the renderer holds no value, resolves no state path, subscribes to nothing and evaluates no condition at run time, so it is a function per kind and not a binding layer. Filter Lab, the first surface, is wired by id in JavaScript and needs no Alpine integration; if F003 later needs one for markup surfaces, its directive name carries no osc- prefix (Alpine.directive('osc-control', ...) puts the new osc-* name osc-control into the ratchet record, a rise: measured with the ratchet's measure() on 2026-10-29). Filter Lab is the first surface: its three parameter fields, its enable switch and its type choice (a radiogroup today styled as tabs, D4) render from their declarations and the panel moves to migrated in the ratchet record; F003 then builds the other Playground-family panels from the same kinds instead of hand-building them. The envelope's power button (aria-pressed) becomes the same switch as Filter and Additive (D8). Before: VERIFIED seven parameter-field variants, two switch forms, inline copies of choice() (inventory C5, C8, C9). After: one renderer per kind. Negative cases: a declaration without a template, a template with an osc-* class, a template for a kind outside param, switch and choice, a disabled control without a reason, a commit the owner refuses (the control shows the owner's value again and states the refusal); each refused by the catalogue test. Rollback: revert the merge commit; the panel returns to its legacy markup and the ratchet record to its earlier values in the same revert. Merged plan of the component follow-up (2026-10-30): Its param views are N003's (slider, field, toggle, choice); this slice mounts them in the labs from their declarations and builds no second control; reset is double-click, double-tap or the menu (N002), never a letter key."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: \"the embedded Studio is ugly as hell\"; components in general must be generic, linkable, traceable, composable, unified, documented, dynamic, generated and interlinked; \"everything must be interlinked with everything\"; improve the main page and the first experience, deploy often. The owner's evolution prompt pack (MASTER, P02, P04, P06) binds it: the dark technical cockpit is locked, shared primitives only where duplication is proven, no new framework, generated docs only where deterministic, no decorative wires. Findings: the UI component inventory of 2026-10-29 (D1-D14 duplication, U1-U15 on the embedded Studio, measured on origin/main b67d1e58, v3.13.0); design: the component-system design of 2026-10-29 (scratchpad components/design.md)."
+scope:
+- src/js/ui/catalog
+- src/js/labs/filter-lab.js
+- src/js/labs/envelope.js
+- src/js/labs/dom.js
+- src/js/ui/app.js
+- src/index.html
+- src/styles
+- tests/unit/ui-catalog.test.mjs
+- tests/unit/ui-catalog-render.test.mjs
+- tests/browser/labs.cjs
+- tests/browser/ui-flowbite-pro.cjs
+- tests/visual
+- tests/unit/ui-flowbite-pro-baseline.json
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- "G001"
+- "G003"
+- "F002"
+- "Q034"
+- "Q037"
+- "N003"
+acceptance_criteria:
+- "tests/unit/ui-catalog-render.test.mjs fails on the merge base: for every kind, the rendered markup (jsdom-free string form) carries the declaration's label, bounds, step, unit, aria and reset, no osc-* class, and a template that names its reference.md section; Filter Lab's markup in src/index.html carries no hand-built field."
+- "src/js/ui/catalog/render.js imports nothing from sources.js and no module of the catalogue calls a state owner's writer, subscribes to a store or evaluates a declaration field as a condition (a static import and call scan in the unit test)."
+- "No osc-* name in the ratchet record rises: no catalogue module, directive or template string contains osc- (node scripts/ui-flowbite-pro-record.mjs --check)."
+- "No input path of the build gains a components, widgets, ui-kit or design-system segment (the COMPONENT_LIBRARY check of scripts/ui-flowbite-pro-measure.mjs refuses it): the catalogue lives in src/js/ui/catalog."
+- "Definition of done, extends: the param model of G003 and the declarations of G001; K058's knob is a third view of the same descriptor (the synth line), and K058 depends on G003, not G008 on K058."
+- "Definition of done, interlinks: each rendered control carries its catalogue id, so the in-app panel and the link graph find it."
+- "Definition of done, interactivity: every rendered control has drag, keys, typed entry, reset and a stated refusal."
+- "Definition of done, docs, menus and routes: the Filter Lab help and docs/v31/user-guide.md describe the controls once. tests/README.md has a row for each new test; the component's catalogue declaration (G001) names its docs, links and tests; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: tests/browser/labs.cjs drives the Filter Lab cutoff by slider drag, arrow keys, PageUp, typed entry and reset, and by a hasTouch drag, and waits with until() (deadline 'filter control applied', 2 s) for the state, the readout and aria-valuetext to agree after each, in every gate browser. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit, and the release that carried it is recorded when the milestone is verified."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "On Pro (after F002): its chrome is markup adapted from the matching Flowbite Pro block (the template names its flowbite-pro reference.md section), recorded as migrated, never pending; it adds no osc-* class token, no legacy vocabulary use and no selector, removes the legacy ones it replaces, and the domain views' stylesheets gain nothing (compact density is Tailwind utilities on the domain view's own elements); the record's debt falls (project.ui-uses-flowbite-pro, project.visual-identity-lock v2, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "scripts/size-report.mjs shows at most 3 KB gzip added, with the base and head figures in the pull request body, inside the cap Q037 records (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/ui-catalog-render.test.mjs tests/unit/ui-catalog.test.mjs
+- node tests/browser/labs.cjs
+- node tests/browser/ui-flowbite-pro.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: 2026-10-30

@@ -1,0 +1,45 @@
+id: W004
+milestone: M103
+serves:
+- "instrument-kinds#honest-observation"
+title: "Mini-scope kind over the one scope readout: K016's node-card mini canvas becomes the kind, drawn on Canvas 2D and never on a GL context"
+slug: mini-scope-kind-over-the-one-scope-readout-k016-s-node-card
+priority: p2
+profile: implementation
+objective: "Lands as feat(ui). The scope kind over K032's src/js/charts/scope-readout.js and the Playground's trigger: src/js/ui/kinds/scope.js draws a time window from an owner-passed sampler into a preallocated buffer, rising-zero or free trigger, the scale stated (relative to full scale, or auto with its factor), clipped samples marked and never drawn as a plateau (p05 GEN-02). It draws on Canvas 2D only and never takes a WebGL context, because the minis are many and a page holds few live GL contexts (render-gl Trap 3, its section 3.5): min/max per pixel column from one preallocated Float32Array per reader, labelled min/max per pixel, and one frame-loop subscriber for every visible mini (K036 hosts and the IntersectionObserver flag), so a hidden or scrolled-off mini reads no analyser. K016's mini canvas on the Scope node card is converted to it, so the kind lands with two consumers. K064 (cable hover), V616 (cable inspector), G011 (cockpit) and V621 (box face) then mount it. Before: the scope drawing exists once per host. After: one mini scope. Negative cases: a TRIGGER cable (no trace, its times instead, K064); no signal; a hidden or scrolled-off host (unsubscribed, reads nothing). Rollback: revert. Merged plan of the component follow-up (2026-10-30): Its first consumer is the Studio workspace header's output mini-scope beside W003's meter; K016's node-card minis, G011's cockpit, V616, V621 and K064 then mount this kind (each of those depends on W004), so W004 no longer waits on K016 and its E004/F008 chain."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs, knowledge and interlinking, and add more; add p5.js, WebGL and interactivity, and deploy; a full DAW, a full sequencer and a full piano, everything interlinked, clickable, parameterized and joined; knobs, sliders and control panels done one generic way, integrated with Majordomus; the landing easy to use, easy to extend and open to hack; mobile first. The architecture still binds: one AudioEngine, the Studio model canonical, typed ports, one offline file under the 1.2 MB gzip budget, the cockpit identity, no fake science, Flowbite Pro (ADR 0061). Design: the instrument-kinds design of 2026-10-29 (scratchpad components-followup/components-new.md), on the component-system design (G001-G019) and the synth and studio-siggen drafts of the same day, facts checked against origin/main cdda563c."
+scope:
+- src/js/ui/kinds/scope.js
+- src/js/ui/catalog/kinds/scope.js
+- src/js/ui/studio
+- tests/unit/ui-kind-scope.test.mjs
+- tests/browser/ui-kinds.cjs
+- tests/unit/ui-flowbite-pro-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- W002
+- K032
+acceptance_criteria:
+- "tests/unit/ui-kind-scope.test.mjs fails on the merge base: a fixture sine triggers stably at 44.1 and 48 kHz; clipped samples are marked; the role=img summary reads K032's period estimate; 1000 ticks allocate nothing; the module contains no getContext call other than getContext('2d') (static scan)."
+- "tests/browser/chart-cost.cjs gains a row: with 24 Scope nodes on a fixture, scrolling half of them off stops their analyser reads, and the per-tick allocation stays at the ceiling (render-gl section 3.5)."
+- "Negative cases, each asserted by a test that fails on the merge base: the four of the objective."
+- "Definition of done, tested: tests/browser/ui-kinds.cjs plays a template with a Scope node and waits with until() (deadline 'scope node mini trace live', 3 s) for the node card's summary to name a period, then Hold by pointer, keyboard and hasTouch tap freezes it. The check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, runs at 1536x1024 and 390x844, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, extends: K032 and K016; interlinks: the mini scope opens the full Scope view of its node."
+- "Definition of done, interactivity: Hold and Open work by pointer, keyboard and touch."
+- "Definition of done, docs, menus and routes: the kind's declaration names its docs, links and tests; docs/ui-catalog.md (G014) lists it; the Keyboard shortcuts dialog lists its keys; tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Its trace entry in scripts/ui-catalog/trace/kinds.mjs names the intent criterion, this issue, its rules, ADRs and tests, each resolved by the trace check, for the Majordomus knowledge projection."
+- "The kind's modules pass W001's static scan: no import of src/js/studio/actions.js, a store, sources.js or a lab module; no dispatch or owner writer called; no AudioContext, AudioNode or worklet created (project.audio-engine-discipline v2: one AudioEngine); no requestAnimationFrame, setInterval or setTimeout outside src/js/charts/frame-loop.js; no allocation in a frame callback (1000 ticks keep the same typed arrays) and frameSubscriberCount() returns to its value after destroy()."
+- "Its chrome (buttons, button groups, popovers, dropdowns, inputs) is markup adapted from the matching Flowbite Pro block and names its flowbite-pro reference.md section; its instrument surface is a domain view under ADR 0061 decision 3 as J001's ADR 0061 resolution note records it: inline SVG or canvas and Tailwind utilities inside a Pro card, no stylesheet, no selector, no osc-* class token, no el.style write or style attribute; no osc-* name in the ratchet record rises and the domain views' stylesheets gain nothing (project.ui-uses-flowbite-pro, project.visual-identity-lock v2, ADR 0061; node scripts/ui-flowbite-pro-record.mjs --check and node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "No input path of the build gains a components, widgets, ui-kit or design-system segment (the COMPONENT_LIBRARY check of scripts/ui-flowbite-pro-measure.mjs): declarations live in src/js/ui/catalog/kinds, views in src/js/ui/kinds."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat change it carries a unit test that fails on the merge base (project.fail-first)."
+- "scripts/size-report.mjs shows at most 2 KB gzip added, compiled CSS included, with the base and head figures in the pull request body, inside the component line's cap Q037 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+- node --test tests/unit/ui-kind-scope.test.mjs
+- node tests/browser/ui-kinds.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-30'

@@ -1,0 +1,42 @@
+id: E040
+milestone: M046
+serves:
+  - "engineering-integrity#test-helpers-one-owner"
+title: "A shared unit-test helper has one owner: the in-memory IndexedDB, the YAML unquote and the shell markup reader"
+slug: a-shared-unit-test-helper-has-one-owner
+priority: p3
+profile: implementation
+objective: "DRY audit 2026-10-29 (cases clones-test-fake-indexeddb-inline, clones-test-claims-unquote, clones-test-shell-markup). tests/unit/v31-studio-patches.test.mjs kept an older inline copy of tests/unit/fixtures/fake-indexeddb.mjs (no openError or throwOnOpen switch, no quota at commit, no readonly or inactive transaction errors); tests/unit/v31-studio-self-knowledge.test.mjs a byte copy of tests/unit/claims-parse.mjs unquote; tests/unit/about-origin.test.mjs and positioning-consistency.test.mjs two copies of the shell markup reader, E005's future assembly rule. Each copy is deleted and its test imports the owner: the shared fake gains the inline copy's deleteObjectStore guard, and the shell reader moves to tests/unit/fixtures/shell-markup.mjs, which E005 replaces with the build's assembler. tests/unit/test-helpers-one-owner.test.mjs keeps a copy from coming back."
+why: "A copied test helper keeps testing the old contract: the patch store's tests ran against a weaker IndexedDB than the experiment store's, and two tests each defined how the shell is assembled before the build does."
+scope:
+  - "tests/unit/v31-studio-patches.test.mjs"
+  - "tests/unit/fixtures/fake-indexeddb.mjs"
+  - "tests/unit/v31-studio-self-knowledge.test.mjs"
+  - "tests/unit/about-origin.test.mjs"
+  - "tests/unit/positioning-consistency.test.mjs"
+  - "tests/unit/fixtures/shell-markup.mjs"
+  - "tests/unit/test-helpers-one-owner.test.mjs"
+  - "tests/README.md"
+acceptance_criteria:
+  - "The four migrated test files pass the same tests before and after the move (22, 21, 2 and 8), and none of them changes an assertion."
+  - "tests/unit/test-helpers-one-owner.test.mjs: each helper is defined by its owner and by no other file under tests/ (the unquote of plan-evidence-commits and release-validation-pins, which differ in meaning, are named as distinct); a mutation case proves the scan sees a function and an arrow redefinition."
+  - "npm test passes; no src/ or dist/ change."
+validation:
+  - "node --test tests/unit/test-helpers-one-owner.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-30T16:06:11Z
+started_at: 2026-10-30T16:05:49Z
+started_event: sha256:f38af9c58f56c404fb5855ec506bf55e049905e44eed4a1428090fb84a32bef7
+completed_at: 2026-10-30T16:06:11Z
+completed_event: sha256:56bee44a4d712870fc42f6748f2286a65b7a2f1632a1cb9225182a426f02f766
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/test-helpers-one-owner.test.mjs"
+    result: "2/2 pass at main e872c444; landed in #282 via train #316 (88b936cb)"
+    artifact: "tests/unit/test-helpers-one-owner.test.mjs"
+    commit: e872c44489bd66ecfd8a6b58a0dd868270da3cf0
+    recorded_at: 2026-10-30T16:06:04Z

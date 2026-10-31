@@ -93,3 +93,14 @@ decision stands unchanged: dependencies pinned and inlined, classic scripts only
 fetch, CDN, runtime compiler, remote font or root-relative asset, worklets and workers from
 embedded source, `scripts/verify-dist.mjs` and the size budget. The status stays `accepted`
 for those parts.
+
+### 2026-10-29: the size budget is 1 200 000 B gzip / 4 200 000 B raw
+
+By owner decision of 2026-10-29 (asked and answered in a Claude session), the gzip budget in
+`scripts/build-config.mjs` (`BUDGET`) goes from 1 000 000 B to 1 200 000 B. This replaces the
+stopgap of the 2026-10-05 note (#114, f8515f7): main at b67d1e5 measured 2 839 952 B raw /
+820 005 B gzip, 82 % of that budget. Raw follows gzip in proportion, from 3 500 000 B to
+4 200 000 B (measured ratio 3.46), so gzip stays the binding limit. Plan issue E027 records
+the change; `tests/unit/size-report.test.mjs` pins the values and `scripts/verify-dist.mjs`
+enforces them. Replacing p5 stays the deferred alternative (ADR 0013, its 2026-10-18 note
+measured about 256 KB gzip saved). The rest of this decision stands.

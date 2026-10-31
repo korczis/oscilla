@@ -118,6 +118,8 @@ const adapter = {
     return () => adapterListeners.delete(fn);
   },
   getDestination: () => engine.master,
+  // C003: the sequencer plays through the engine's counted stage chain (the Filter Lab).
+  openSequencerStage: () => engine.stageChain(sequenceInserts(true)),
   getStereoRouter: () => (liveRouter ? liveRouter.router : null),
   // The mic lab's nodes are built and accounted by the engine (audio-engine-discipline).
   attachMicrophone: (stream, opts) => engine.attachMicrophone(stream, opts),
@@ -178,6 +180,20 @@ function v2PlayOptions(plan, ctx, live) {
   if (plan.type === 'dual' && needsRouter(plan)) o.dualRouter = dualRouterFactory(live);
   if (plan.type === 'dual' && labs.phase) o.dualPhaseDeg = labs.phase.config.phaseDeg;
   return o;
+}
+
+/**
+ * C003: the lab stages the V2 sequencer plays through, live (the lab's tracked insert, so cutoff
+ * and enable edits reach the sounding sequence) or offline (the WAV export). Only the Filter
+ * Lab: the Envelope and Additive labs shape the instrument's voice, while each sequence block
+ * keeps its own click-free envelope and the sequence's waveform (ADR 0003, ADR 0015); their
+ * panels say so (index.html envelope.scope, additive.scope).
+ */
+function sequenceInserts(live) {
+  const filter = labs.filter;
+  if (!filter) return [];
+  if (live) return [filter.createInsert];
+  return [(c, track) => createFilterStage(c, filter.config, { track })];
 }
 
 /**
@@ -287,7 +303,7 @@ async function renderWav(cmp, what) {
   if (what === 'sequence') {
     if (!labs.sequencer) throw new Error('The sequencer is not available.');
     return renderSequenceToWav(labs.sequencer.editor.model, {
-      sampleRate, level: cmp.gainLevel, waveform: cmp.waveform,
+      sampleRate, level: cmp.gainLevel, waveform: cmp.waveform, inserts: sequenceInserts(false),
     });
   }
   const res = cmp.currentPlan();

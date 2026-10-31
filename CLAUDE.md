@@ -34,7 +34,7 @@ Two more bind `tests/browser/`: `project.bounded-test-timing` (a wait is a condi
 a named wall-clock deadline through `tests/browser/lib/wait.cjs`; no new fixed sleep, frame count
 or assumed sample rate, and the recorded debt in `tests/browser/timing-baseline.json` only shrinks) and `project.suite-harness` (every suite runs through
 `tests/browser/lib/suite.cjs`). Read them before adding or changing a browser check. Outside CI
-each suite waits for the 1-minute load to fall below `OSC_LOAD_MAX` (default 2 x cores) and then
+each suite waits for the 1-minute load to fall below `OSC_LOAD_MAX` and then
 fails without running, so `release-gate` and `release:prepare` need a quiet machine or a stated
 limit (`OSC_LOAD_MAX`, `OSC_LOAD_WAIT_MS`; see `tests/README.md`).
 
@@ -101,7 +101,7 @@ enumerates neither, because ranges written here go stale.
 - Build and release: `scripts/`. Tests: `tests/unit/`, `tests/browser/`, `tests/visual/`;
   `tests/README.md` says what each proves and which gate runs it.
 
-<!-- majordomus:begin 446ca2e497aa f2d9a1017395dba3 -->
+<!-- majordomus:begin 891aae631b23 f2d9a1017395dba3 -->
 # CLAUDE.md
 
 Claude Code bootstrap. The repository's provider-neutral AI context lives under
