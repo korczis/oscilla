@@ -143,6 +143,11 @@ const adapter = {
   // The mic lab's nodes are built and accounted by the engine (audio-engine-discipline).
   attachMicrophone: (stream, opts) => engine.attachMicrophone(stream, opts),
   detachMicrophone: () => engine.detachMicrophone(),
+  // The engine detaches the graph itself when it discards a closed context (C015); the lab
+  // hears of it here, because a stopped track dispatches no 'ended'.
+  onMicDetached: (fn) => engine.on((type, d) => {
+    if (type === 'micAttachment' && d && !d.attached) fn(d);
+  }),
   ensureContext: () => {
     if (app) app.ensureAudio(); else engine.init();
     return engine.resume().then(() => engine.ctx);

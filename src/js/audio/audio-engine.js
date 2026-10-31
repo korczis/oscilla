@@ -1043,14 +1043,19 @@ export class AudioEngine {
     return mic.analyser;
   }
 
-  /** Disconnect the attached microphone graph and stop its tracks (idempotent). */
+  /**
+   * Disconnect the attached microphone graph and stop its tracks (idempotent). The event names
+   * the detached analyser, so its owner (the mic lab) can tell its own graph from a replaced
+   * one: a stopped track dispatches no 'ended', so this event is the only notice it gets.
+   * reason: 'user' | 'replaced' (attachMicrophone) | 'closed' (_discardContext).
+   */
   detachMicrophone(reason = 'user') {
     const m = this.micAttachment;
     if (!m) return false;
     this.micAttachment = null;
     closeMicrophone(m);
     this.micNodes.clear();
-    this._emit('micAttachment', { attached: false, reason });
+    this._emit('micAttachment', { attached: false, reason, analyser: m.analyser });
     return true;
   }
 

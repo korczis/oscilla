@@ -17,6 +17,9 @@
 //   getStereoRouter()     → audio/stereo.js router while stereo plays (Phase & Stereo live data)
 //   ensureContext()       → Promise<AudioContext> created in the current user gesture (mic)
 //   attachMicrophone(stream) → AnalyserNode, detachMicrophone()   engine-owned mic graph
+//   onMicDetached(fn)     → unsubscribe; fn({ reason, analyser }) when the engine detaches a
+//                           mic graph ('user' | 'replaced' | 'closed': it discarded a closed
+//                           context). The mic lab stops when the analyser is its own.
 //   getA4()               → A4 tuning in Hz (octave-C markers of the spectrum; default 440)
 //   sequencerAccounting   → { track, source, untrack } of the engine (AudioEngine
 //                           stageAccounting()), so V2 playback counts in the engine's node census
