@@ -13,7 +13,7 @@ evidence_required:
 - milestone_verified
 risks:
 - "The generated directory grows with the registry (about 80 records after G018 and G019, one per synth node type after that): every declaration change rewrites its record, and an issue names it in scope or finish refuses the write."
-- The pinned Majordomus (1.0.0-alpha.1) and the launcher (1.0.0-alpha.8) differ on this machine; every Majordomus acceptance is run under both.
+- "The pinned Majordomus is 1.0.0-alpha.9 (MJ_VERSION of .github/workflows/ci.yml, R027 e872c444) and the launcher on this machine is alpha.9 too (2026-11-01); every Majordomus acceptance is run under the pin and the launcher, which can differ again after the next upgrade, and J002 and J003 measure the gaps again before building a workaround."
 - "Seeding traces (J006) is evidence work: an entry written to pass the gate is a review rejection."
 created_at: '2026-10-29'
-updated_at: '2026-10-30'
+updated_at: '2026-11-01'

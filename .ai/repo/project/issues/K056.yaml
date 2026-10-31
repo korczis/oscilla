@@ -24,4 +24,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-10-31T22:27:44Z
+started_at: 2026-10-31T22:27:29Z
+started_event: sha256:ef23a3f3a463686df213168b1b4ecaae2b0630daeaa2fb6cbdc3dd1a643b873e
+completed_at: 2026-10-31T22:27:44Z
+completed_event: sha256:ac143a9bde470571f8f284376e9d44bd0743e589d73c067c971d3de5086b8260
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/visual-gate-bound.test.mjs; node scripts/visual-gate.mjs dist"
+    result: "visual-gate.mjs --update-baseline refuses a rise beyond the stored runToRunPct + 2 pp and a changed reference.png unless --accept-rise records region, rise, reason and date; the unit test judges baseline.json against the merge base; 22/22 and the visual gate PASS on #350; landed in #350 via train #354 (f887066f)"
+    artifact: "tests/unit/visual-gate-bound.test.mjs"
+    commit: f887066f3e869735cbb62cd4226459e9b6db498a
+    recorded_at: 2026-10-31T22:25:29Z
