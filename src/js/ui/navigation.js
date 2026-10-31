@@ -59,12 +59,13 @@ import {
 } from '../core/url-state-records.js';
 import { WORKSPACES } from './app.js';
 import { KEYBOARD_LINK_KEY } from '../midi/keyboard.js';
+import { SYNTH_LINK_MODE, withoutSynthParams } from '../core/url-state-synth.js';
 
 export const ROUTE_KEY = 'm';
 export const DEFAULT_WORKSPACE = 'playground';
 /** The domains that read the hash, in the order the dispatcher applies them. */
 export const HASH_DOMAINS = Object.freeze(['instrument', 'measure', 'studio', 'keyboard',
-  'records']);
+  'synth', 'records']);
 /**
  * The domains re-applied on Back / Forward (ADR 0048): opening a stored record replaces nothing
  * the user made, so a traversal between two records opens the record its entry names.
@@ -147,8 +148,9 @@ export function hashForWorkspace(hash, workspace) {
     q.delete(STUDIO_LINK_KEYS.subview);
   }
   if (workspace !== RECORD_LINK_MODE) for (const k of Object.values(RECORD_LINK_KEYS)) q.delete(k);
-  q.set(ROUTE_KEY, workspace);
-  return q.toString();
+  const out = workspace === SYNTH_LINK_MODE ? q : new URLSearchParams(withoutSynthParams(q));
+  out.set(ROUTE_KEY, workspace);
+  return out.toString();
 }
 
 /**
@@ -174,6 +176,7 @@ export function hashAfterRefusal(hash, results, workspace) {
   if (results.studio === false) h = withoutStudioParams(h);
   if (results.measure === false) h = withRecipeParam(h, null);
   if (results.records === false) h = withoutRecordParams(h);
+  if (results.synth === false) h = withoutSynthParams(h);
   return hashForWorkspace(h, workspace);
 }
 

@@ -52,20 +52,25 @@ const adsrOf = (p) => ({ a: p.attack, d: p.decay, s: p.sustain, r: p.release });
 export const envelope = {
   compiler: 'audio/envelope.js#applyAdsr',
   structural: [],
-  create({ ctx, acct, at, params }) {
+  create({ ctx, acct, at, params, gated = false }) {
     // envelope.js on a VCA gain (the V1 `env` node) and, for the CONTROL output, on the offset
     // of a ConstantSourceNode (the contour, 0..1). Without a gate edge or timeline events the
-    // gate opens when the graph starts and stays open while it plays.
+    // gate opens when the graph starts and stays open while it plays. An envelope its owner
+    // gates (`gated`, runtime setOwnedParams) is built closed: gate off at `at`, before the
+    // attack, so nothing opens it until its owner's first gate, however late that owner runs
+    // (review of #332, V4: a stalled first Arm sounded the attack and a full release).
     let adsr = adsrOf(params);
     const vca = acct.track(ctx.createGain());
-    applyAdsr(vca.gain, at, adsr);
     let contour = null;
     if (typeof ctx.createConstantSource === 'function') {
       contour = acct.source(acct.track(ctx.createConstantSource()));
-      applyAdsr(contour.offset, at, adsr);
-      contour.start(at);
     }
     const params2 = () => (contour ? [vca.gain, contour.offset] : [vca.gain]);
+    for (const p of params2()) {
+      applyAdsr(p, at, adsr);
+      if (gated) releaseAt(p, at, adsr.r); // held at the floor from `at`: no attack, no ramp
+    }
+    if (contour) contour.start(at);
     return {
       inputs: { audio: vca },
       outputs: contour ? { audio: vca, control: contour } : { audio: vca },

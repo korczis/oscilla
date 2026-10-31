@@ -81,7 +81,9 @@
       "shell:navbar",
       "shell:sidebar"
     ],
-    "migrated": []
+    "migrated": [
+      "page#osc-view-synth"
+    ]
   },
   "classes": {
     "osc-about": 1,

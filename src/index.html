@@ -161,6 +161,9 @@
         </li>
         <li><a class="osc-tab" href="#m=learn" data-osc="nav.learn" x-bind="navItem('learn')">Learn</a></li>
         <li><a class="osc-tab" href="#m=studio" data-osc="nav.studio" x-bind="navItem('studio')">Studio</a></li>
+        <!-- Synth (K058): a Tailwind tab beside the legacy ones until the Pro shell (F002). -->
+        <li><a class="relative inline-flex items-center whitespace-nowrap px-[13px] no-underline text-[length:var(--osc-fs-nav)] text-[color:var(--osc-text-2)] hover:text-[color:var(--osc-text)] aria-[current=page]:font-semibold aria-[current=page]:text-[color:var(--osc-text)] aria-[current=page]:after:absolute aria-[current=page]:after:inset-x-[10px] aria-[current=page]:after:bottom-[10px] aria-[current=page]:after:h-1 aria-[current=page]:after:rounded-sm aria-[current=page]:after:bg-[color:var(--osc-blue-underline)]" href="#m=synth" data-osc="nav.synth"
+          x-bind="navItem('synth')">Synth</a></li>
         <li><a class="osc-tab" href="#m=about" data-osc="nav.about" x-bind="navItem('about')">About</a></li>
       </ul>
     </nav>
@@ -265,10 +268,10 @@
   </section>
 
   <!-- ================= Main grid ================= -->
-  <main class="osc-main" id="osc-main" tabindex="-1">
+  <main class="osc-main" id="osc-main" tabindex="-1" :class="workspace === 'synth' && '!block'">
     <h1 class="osc-sr-only">OSCILLA playground</h1>
 
-    <div class="osc-top">
+    <div class="osc-top" :class="workspace === 'synth' && 'hidden'">
       <div class="osc-top-left">
         <div class="osc-row1-left">
 
@@ -893,7 +896,7 @@
     </div>
 
     <!-- ================= Row 3 ================= -->
-    <div class="osc-row3">
+    <div class="osc-row3" :class="workspace === 'synth' && 'hidden'">
 
       <!-- ---------- Filter Lab ---------- -->
       <section class="osc-panel osc-p-filter" id="osc-panel-filter" data-osc-panel="filter"
@@ -1199,7 +1202,7 @@
     </div>
 
     <!-- ================= Workspace-only panels (shown by nav focus) ================= -->
-    <div class="osc-workspace">
+    <div class="osc-workspace" :class="workspace === 'synth' && 'hidden'">
 
       <!-- ---------- Dual oscillator (Synthesis workspace) ---------- -->
       <section class="osc-panel osc-p-dual" id="osc-panel-dual" data-osc-panel="dual"
@@ -1329,7 +1332,7 @@
     <!-- ---------- Compact Studio (V3.1, spec §127-§130): a projection of the ONE Studio store
          (src/js/ui/studio/compact.js renders it); EXPAND STUDIO opens the full workspace. -->
     <section class="osc-panel osc-p-studio" id="osc-panel-studio" data-osc="studio.compact"
-      data-osc-panel="studio" data-osc-modes="playground sequencer"></section>
+      data-osc-panel="studio" data-osc-modes="playground sequencer" :class="workspace === 'synth' && 'hidden'"></section>
 
     <!-- ---------- Keyboard (K026; ADR 0058, ADR 0062): the computer keyboard and the
          on-screen keys play the note voices of the AudioEngine (src/js/midi/keyboard-ui.js), in
@@ -1337,7 +1340,8 @@
          the controls are native buttons and carry no class until the keyboard moves into its
          Pro card (plan F001 to F003). -->
     <div id="osc-keyboard" data-osc="keyboard" role="group" aria-labelledby="osc-kbd-title"
-      x-show="kbdView" x-cloak>
+      x-show="kbdView" x-cloak
+      :class="kbdView === 'synth' ? 'fixed inset-x-0 bottom-[var(--osc-statusbar-h)] z-30 max-h-[45vh] overflow-y-auto border-t border-solid border-gray-200 bg-white px-4 py-2 shadow dark:border-gray-700 dark:bg-gray-800' : ''">
       <h2 id="osc-kbd-title">Keyboard</h2>
       <div role="group" aria-label="Keyboard controls" aria-describedby="osc-kbd-readout">
         <button type="button" data-osc="keyboard.arm" :aria-pressed="String(kbdArmedHere)"
@@ -1351,8 +1355,10 @@
         <button type="button" data-osc="keyboard.velocity-up" aria-keyshortcuts="V"
           @click="kbdControl('velocity-up')">Velocity +</button>
       </div>
-      <p id="osc-kbd-readout" data-osc="keyboard.readout" role="status" x-text="kbdReadout"></p>
-      <p data-osc="keyboard.held" x-text="'Holding: ' + (kbdHeld || 'nothing')"></p>
+      <p id="osc-kbd-readout" data-osc="keyboard.readout" role="status" x-text="kbdReadout"
+        :class="kbdView === 'synth' && 'sr-only sm:not-sr-only'"></p>
+      <p data-osc="keyboard.held" x-text="'Holding: ' + (kbdHeld || 'nothing')"
+        :class="kbdView === 'synth' && 'hidden sm:block'"></p>
       <canvas data-osc="keyboard.keys" role="img" :aria-label="kbdLabel" height="132"></canvas>
     </div>
 
@@ -2335,6 +2341,47 @@
         </div>
       </div>
     </section>
+    <!-- ================= SYNTH (K058-K066): the semi-modular mono voice =================
+         A projection of the ONE Studio store (src/js/synth/ui.js, composed by
+         src/js/ui/studio/workspace.js): every module plate, knob, switch and jack is generated
+         from src/js/synth/panels/semi-mono.js and the registry's node descriptors. The keyboard
+         docks at the bottom here and plays the panel. -->
+    <section class="px-4 pt-6 pb-80" id="osc-view-synth" data-osc="synth-view"
+      data-osc-modes="synth" hidden :hidden="workspace !== 'synth'"
+      aria-labelledby="osc-synth-title" tabindex="-1">
+      <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <nav aria-label="Breadcrumb" class="text-xs text-gray-500 dark:text-gray-400">Synth / Panel</nav>
+          <h2 id="osc-synth-title" class="text-xl font-semibold text-gray-900 dark:text-white"
+            x-text="synth.title">Semi-modular mono voice</h2>
+          <p class="hidden max-w-3xl text-sm text-gray-600 sm:block dark:text-gray-300"
+            x-text="synth.description"></p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2" role="group" aria-label="Synth actions">
+          <label class="sr-only" for="osc-synth-preset">Preset</label>
+          <select id="osc-synth-preset" data-osc="synth.preset" x-model="synth.preset"
+            @change="synthPreset($event.target.value)"
+            class="h-11 w-full max-w-full rounded-lg sm:w-auto border border-solid border-gray-300 bg-gray-50 px-3 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+            <template x-for="p in synth.presets" :key="p.id">
+              <option :value="p.id" :selected="p.id === synth.preset" x-text="p.title"></option>
+            </template>
+          </select>
+          <button type="button" data-osc="synth.arm" :aria-pressed="String(synth.armed)"
+            @click="synth.armed ? synthDisarm() : synthArm()" x-text="synth.armed ? 'Disarm' : 'Arm'"
+            class="h-11 rounded-lg bg-primary-600 px-4 text-sm font-medium text-white hover:bg-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300">Arm</button>
+          <button type="button" data-osc="synth.studio" @click="synthOpenStudio()"
+            class="h-11 rounded-lg border border-solid border-gray-300 bg-white px-4 text-sm font-medium text-gray-900 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700">Open in Studio</button>
+          <button type="button" data-osc="synth.copy-link" @click="synthCopyLink()"
+            class="h-11 rounded-lg border border-solid border-gray-300 bg-white px-4 text-sm font-medium text-gray-900 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700">Copy link</button>
+        </div>
+      </div>
+      <p class="mb-3 min-h-[1.25rem] text-sm text-gray-700 dark:text-gray-300" role="status"
+        aria-live="polite" data-osc="synth.status" x-text="synth.status"></p>
+      <p class="mb-3 break-all text-xs text-gray-500 dark:text-gray-400" x-show="synth.link"
+        data-osc="synth.link" x-text="synth.link"></p>
+      <div data-osc="synth.panel"></div>
+    </section>
+
     <!-- ================= STUDIO (V3.1): visual signal programming =================
          Thin bindings over src/js/ui/studio/workspace.js: toolbar and transport here; the graph
          editor, node library, Inspector and compact widget are rendered by their modules from

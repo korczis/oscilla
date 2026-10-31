@@ -14,6 +14,18 @@ timeline and the compact Studio widget on the Playground.
 
 **OSCILLA.** The app. Product text does not call it "the project".
 
+**Synth.** The workspace with the semi-modular mono voice and the docked keys (`docs/synth.md`):
+a projection of the Studio document, its modules Studio nodes and its cables Studio edges.
+
+**Normalled.** An input jack of the Synth panel that has a default connection while no cable is
+in it (`src/js/synth/normals.js`). A cable into it replaces the normal; removing the cable
+restores it. **Patch bay**: the panel's view of every jack, grouped by module, where cables are
+drawn.
+
+**CV and gate.** A control signal that sets a parameter (the Keys pitch, in octaves) and a
+trigger that opens and closes envelopes (the Keys gate). **Ring modulation**: the product of two
+audio signals, giving their sum and difference frequencies.
+
 **Project.** A saved Studio document: a StudioModel of kind `oscilla-studio`, exported as a
 `.oscilla-studio.json` file ("Export project", "Import a project, patch, V2 sequence or
 configuration file") or kept in the Studio library of this browser. A **patch** is the smaller

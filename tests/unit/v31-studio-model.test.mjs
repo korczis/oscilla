@@ -437,9 +437,13 @@ test('registry holds the §29 library and every definition validates', () => {
     'drive', 'scope',
     'spectrum', 'spectrogram', 'meter', 'rta', 'master', 'recorder', 'capture', 'calibration',
     'transfer-analyzer', 'measurement-result'];
+  // The Synth panel's types (K059, K060) join their categories (nodes/instrument.js).
+  for (const [type, after] of [['vco', 'microphone'], ['keys', 'macro'], ['ring', 'drive']]) {
+    expected.splice(expected.indexOf(after) + 1, 0, type);
+  }
   assert.deepStrictEqual(R.list().map((d) => d.type), expected);
-  assert.deepStrictEqual(R.categories().map((c) => [c.id, c.types.length]), [['SOURCES', 5],
-    ['MODULATION', 5], ['PROCESSING', 6], ['ANALYSIS', 5], ['OUTPUT', 2], ['MEASUREMENT', 4]]);
+  assert.deepStrictEqual(R.categories().map((c) => [c.id, c.types.length]), [['SOURCES', 6],
+    ['MODULATION', 6], ['PROCESSING', 7], ['ANALYSIS', 5], ['OUTPUT', 2], ['MEASUREMENT', 4]]);
   for (const def of NODE_DEFINITIONS) assert.deepStrictEqual(validateNodeDefinition(def), []);
   for (const def of R.list()) {
     for (const p of def.params) {

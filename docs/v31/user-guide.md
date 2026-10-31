@@ -262,7 +262,7 @@ anywhere else in those workspaces Space is the instrument's.
 | Workspaces | Space |
 | --- | --- |
 | Playground, Analyzer, Filter Lab, Compare, Synthesis, Sequencer, Presets | Hold to play: sounds while held, stops on release (a programmed pattern: trigger once) |
-| Measure, Experiments, Learn, About | Nothing: Space starts no sound in this workspace |
+| Measure, Experiments, Learn, Synth, About | Nothing: Space starts no sound in this workspace |
 | Studio | Play / stop the Studio transport |
 <!-- space:end -->
 

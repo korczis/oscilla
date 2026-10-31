@@ -68,12 +68,14 @@ export function parseMidiMessage(data) {
  * through the same layer, each with its own `source` in the note key.
  */
 export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () => null,
-  refused = () => {} } = {}) {
+  refused = () => {}, route = () => null } = {}) {
   let refusing = null;
   const keyOf = (source, channel, note) => `${source}:${channel}:${note}`;
 
   /** Note `note` (0-127) at `velocity` (1-127) from `source`: { ok, reason? | id, ... }. */
   function noteOn(note, velocity, source = 0, channel = 0) {
+    const sink = route(); // the Synth panel plays the note instead (K065), one path for all
+    if (sink) return sink.noteOn(note, velocity);
     if (!engine) return { ok: false, reason: 'no-audio' };
     const by = ownedBy();
     if (by) {
@@ -96,6 +98,8 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
 
   /** Release note `note` from `source` with its release time; false when it is not sounding. */
   function noteOff(note, source = 0, channel = 0) {
+    const sink = route();
+    if (sink) return sink.noteOff(note);
     return engine ? engine.noteOff(keyOf(source, channel, note)) : false;
   }
 
@@ -112,6 +116,8 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
       } else if (e.kind === 'note-off') {
         noteOff(e.note, source, e.channel);
       } else if (e.kind === 'all-sound-off' || e.kind === 'all-notes-off') {
+        const sink = route();
+        if (sink) sink.allOff();
         engine.notesOff(e.kind === 'all-sound-off');
       }
       return e;
@@ -119,7 +125,9 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
 
     /** Every note off within ESCAPE_RELEASE_S; returns how many were sounding. */
     silence() {
-      return engine ? engine.notesOff(true) : 0;
+      const sink = route();
+      const n = sink ? sink.allOff() : 0;
+      return (engine ? engine.notesOff(true) : 0) + n;
     },
   };
 }

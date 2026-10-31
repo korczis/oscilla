@@ -462,6 +462,7 @@ export function createWorkbench(svc) {
 
     // ------------------------------------------------------------------ learn / presets
     runLearnDemo(topic) {
+      if (topic.demo.href) { window.location.hash = topic.demo.href; return; } // V3 topics
       const fromKeyboard = document.activeElement && document.activeElement.closest('#osc-view-learn');
       this.runDemo(topic);
       const tab = LEARN_VIZ_TARGETS[topic.demo.viz];
