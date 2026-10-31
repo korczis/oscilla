@@ -251,7 +251,9 @@ is in the [algorithm notes](docs/v3/algorithms.md).
   Errors are reported with their line numbers. A profile is identified by the SHA-256 of its
   points and interpolated linearly in dB over log frequency. It applies only between its first
   and last frequency: outside that range the curve stays uncorrected and is marked
-  uncalibrated. The raw curve is always kept beside the CALIBRATED one. The loaded profile
+  uncalibrated. A profile that covers none of the measured points, or none of the RTA bands,
+  corrects nothing, so the response and the RTA read UNCALIBRATED and say why. The raw curve
+  is always kept beside the CALIBRATED one. The loaded profile
   exports as CSV or JSON; both files are deterministic and import back to the same profile.
 - **Absolute level calibration.** You enter an external reference (for example 94 dB SPL at
   1 kHz from a calibrator) and the relative level OSCILLA observed. This is the only way to
