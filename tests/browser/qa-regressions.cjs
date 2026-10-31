@@ -12,6 +12,8 @@
 //   harmonics-additive [6]        the Harmonics tab table is the additive coefficients
 //   scope-window-label [7]        100 ms at the running rate is shown and labelled as such
 //   status-duration-sequence [8]  the status bar shows the sequence length while it plays
+//   seq-status-duration-follows-edits [C004]  and follows the Add menu and the Loop button
+//                                 while it plays (dup-stale-6)
 //   contrast [9]                  computed contrast of the fixed fills/texts >= 4.5:1, and
 //                                 axe-core color-contrast (wcag2a/aa/21aa) when installed
 //   analysis-header-no-overlap [12]  tabs vs Pause/Time/fullscreen at 1280-1536 px
@@ -584,6 +586,52 @@ function defineChecks() {
     const ok = r.playing && r.text !== r.idle && r.text.includes(secs) && r.dom
       && (!r.loop || /loop/.test(r.text));
     return { ok, ...r, expectSeconds: secs };
+  });
+
+  // C004 (finding dup-stale-6): the readout follows the sequence while it plays. Edits through
+  // the Add menu and the Loop button change editor.model, which is not reactive; the drawn
+  // Duration must equal what the getter computes from the model now, with "(loop)" only while
+  // the model loops, and not the length it had when playback started.
+  def('seq-status-duration-follows-edits', async ({ browser }) => {
+    const { page, context, errors } = await open(browser);
+    const what = (s) => `seq-status-duration-follows-edits: ${s}`;
+    const read = () => page.evaluate(() => {
+      const O = window.OSCILLA;
+      const m = O.labs.sequencer.editor.model;
+      return { dom: document.querySelector('[data-osc="status.duration"]').textContent.trim(),
+        fresh: O.app.statusDurationText, loop: m.loop, blocks: m.blocks.length,
+        playing: O.app.seqPlaying && !O.app.playing };
+    });
+    const follows = (want) => until(async () => {
+      const s = await read();
+      return s.playing && s.dom === s.fresh && want(s) ? s : null;
+    }, { ms: 4000, what: what('the drawn duration follows the model while it plays') });
+    try {
+      await startAudio(page);
+      await navTo(page, 'sequencer');
+      await until(() => page.evaluate(() => document.querySelector('#osc-app').dataset.mode
+        === 'sequencer'), { ms: 8000, what: what('the Sequencer workspace opens') });
+      await page.evaluate(() => window.OSCILLA.app.collapseSafety()); // it covers the menu
+      if (!(await read()).loop) await page.click('#osc-seq-record');
+      await page.click('#osc-seq-play');
+      const s0 = await follows((s) => s.loop && /\(loop\)/.test(s.dom));
+      await page.click('#osc-seq-add');
+      // By keyboard: at 1536 x 1024 the menu opens upwards and its first row lies under the
+      // sticky header, which takes a pointer click there (a layout defect outside C004).
+      await page.focus('[data-osc="seq.addType"][data-value="tone"]');
+      await page.keyboard.press('Enter');
+      const s1 = await follows((s) => s.blocks === s0.blocks + 1 && s.dom !== s0.dom);
+      await page.click('#osc-seq-record'); // Loop off: the current pass still plays
+      const s2 = await follows((s) => !s.loop && !/loop/.test(s.dom));
+      await stopAll(page);
+      return { ok: !errors.length, s0, s1, s2, errors: errors.slice(0, 3) };
+    } catch (e) {
+      const last = await read().catch(() => null);
+      return { ok: false, detail: String(e.message || e).split('\n')[0], last };
+    } finally {
+      await stopAll(page).catch(() => {});
+      await context.close();
+    }
   });
 
   def('no-per-frame-dom-writes', async ({ browser }) => {

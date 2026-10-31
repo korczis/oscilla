@@ -150,16 +150,16 @@ export async function renderPlanToWav(opts) {
 }
 
 /**
- * Render a sequencer model at `level` (the master gain) → { buffer, wav, stats }. `inserts`:
- * the insert factories of the live sequence's stage chain, built on the offline context.
+ * Render a sequencer model at `level` (the master gain) → { buffer, wav, stats }. It renders the
+ * model's own waveform, the one realtime playback compiles: there is no override (C004).
+ * `inserts`: the insert factories of the live sequence's stage chain, built on the offline
+ * context (C003).
  */
-export async function renderSequenceToWav(model, {
-  sampleRate, level, waveform, inserts, OfflineCtor,
-}) {
+export async function renderSequenceToWav(model, { sampleRate, level, inserts, OfflineCtor }) {
   const Ctor = OfflineCtor || window.OfflineAudioContext || window.webkitOfflineAudioContext;
   if (!Ctor) throw new Error('OfflineAudioContext is not available in this browser.');
   const { buffer } = await renderSequenceOffline(model, Ctor, {
-    sampleRate, numberOfChannels: 2, tailS: TAIL_S, level, waveform, inserts,
+    sampleRate, numberOfChannels: 2, tailS: TAIL_S, level, inserts,
   });
   if (buffer.duration > EXPORT_MAX_S + 1) {
     throw new Error(`The sequence lasts ${buffer.duration.toFixed(1)} s; exports are limited to `

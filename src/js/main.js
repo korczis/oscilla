@@ -56,7 +56,7 @@ import { serializeSequence } from './sequencer/model.js';
 import { registerOscillaUi, workspaceTitle } from './ui/app.js';
 import { keyGuard, openModal, closeModal, watchDialogs, focusSafely } from './ui/dialogs.js';
 import { instrumentTakesSpace, isSpace } from './ui/shortcuts.js';
-import { createWorkbench } from './ui/workbench.js';
+import { createWorkbench, followSequenceEdits } from './ui/workbench.js';
 import { createNavigation, v1ModeFor } from './ui/navigation.js';
 import { createUnsavedGuard } from './ui/unsaved.js';
 import { createMeasureUi } from './ui/measure.js';
@@ -296,8 +296,10 @@ function exportConfigDoc(cmp) {
   });
 }
 
+/** Apply a parsed config document. Returns { issues (count), notes (sentences to say) }. */
 function applyImport(cmp, parsed) {
   let issues = cmp.applyConfig(parsed.instrument, 'import');
+  const notes = [];
   if (parsed.envelope && labs.envelope) {
     labs.envelope.update({ adsr: parsed.envelope.adsr, enabled: parsed.envelope.enabled });
   }
@@ -314,19 +316,29 @@ function applyImport(cmp, parsed) {
   if (parsed.sequencer && labs.sequencer) {
     const seqIssues = labs.sequencer.editor.load(parsed.sequencer) || [];
     issues += seqIssues.length;
+    // The instrument owns the sequence waveform (C004): re-apply it now (no undo step), and
+    // say so when the file's differs instead of reporting it as restored.
+    labs.sequencer.editor.setWaveform(cmp.waveform);
+    const fileWave = parsed.sequencer.waveform;
+    if (typeof fileWave === 'string' && fileWave !== cmp.waveform) {
+      notes.push(`The sequence follows the instrument waveform (${cmp.waveform}); the file's `
+        + `${fileWave.slice(0, 40)} was not applied.`);
+    }
     labs.sequencer.render();
   }
   cmp.sourceKind = cmp.source === 'single' && cmp.pattern === 'tone' ? 'oscillator' : 'pattern';
   syncLabFlags();
-  return issues;
+  return { issues, notes };
 }
 
 async function renderWav(cmp, what) {
   const sampleRate = engine.sampleRate || 48000;
   if (what === 'sequence') {
     if (!labs.sequencer) throw new Error('The sequencer is not available.');
+    // What plays is what renders: the model's waveform, the one realtime playback compiles,
+    // through the live sequence's stage chain (C003).
     return renderSequenceToWav(labs.sequencer.editor.model, {
-      sampleRate, level: cmp.gainLevel, waveform: cmp.waveform, inserts: sequenceInserts(false),
+      sampleRate, level: cmp.gainLevel, inserts: sequenceInserts(false),
     });
   }
   const res = cmp.currentPlan();
@@ -726,6 +738,8 @@ function integrationInit() {
         const w = cmp.waveform;
         try { labs.sequencer.editor.setWaveform(w); } catch (e) { /* unknown waveform */ }
       });
+      // Every sequence change bumps cmp.seqRev, which its readouts read (C004).
+      followSequenceEdits(cmp, labs.sequencer.editor);
     }
     setAnalysisTab(cmp.tabs.analysis);
     if (cmp.debug) setInterval(() => cmp.refreshDebug(), 250);

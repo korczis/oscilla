@@ -79,6 +79,44 @@ function parseWavHeader(buf) {
     riffSize: buf.readUInt32LE(4), fileSize: buf.length };
 }
 
+/**
+ * Harmonics of a steady tone of `f0` Hz in a 16-bit PCM WAV (first channel): Goertzel with a
+ * Hann window over the middle half of the span where the signal exceeds half its peak, at the
+ * file's own rate. Returns { h2, h3 } in dB relative to the fundamental.
+ */
+function toneHarmonicsDb(buf, f0) {
+  const h = parseWavHeader(buf);
+  let off = 12;
+  while (buf.toString('ascii', off, off + 4) !== 'data') off += 8 + buf.readUInt32LE(off + 4);
+  const step = h.channels * 2;
+  const x = new Float64Array(h.frames);
+  for (let i = 0; i < h.frames; i++) x[i] = buf.readInt16LE(off + 8 + i * step) / 32768;
+  let first = -1;
+  let last = -1;
+  for (let i = 0; i < x.length; i++) {
+    if (Math.abs(x[i]) > h.peak / 2) { if (first < 0) first = i; last = i; }
+  }
+  const span = last - first;
+  const a = first + Math.floor(span / 4);
+  const n = Math.floor(span / 2);
+  const power = (f) => {
+    const w = (2 * Math.PI * f) / h.sampleRate;
+    const c = 2 * Math.cos(w);
+    let s1 = 0;
+    let s2 = 0;
+    for (let i = 0; i < n; i++) {
+      const win = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (n - 1));
+      const s0 = x[a + i] * win + c * s1 - s2;
+      s2 = s1;
+      s1 = s0;
+    }
+    return s1 * s1 + s2 * s2 - c * s1 * s2;
+  };
+  const p1 = power(f0);
+  const db = (p) => 10 * Math.log10(Math.max(p, 1e-30) / p1);
+  return { h2: +db(power(2 * f0)).toFixed(1), h3: +db(power(3 * f0)).toFixed(1), frames: n };
+}
+
 // ------------------------------------------------------------------------------ page helpers
 const H = {
   ready: (page) => page.waitForSelector('html[data-ready="true"]', { timeout: 15000 }),
@@ -1625,6 +1663,96 @@ function defineChecks() {
       && Math.abs(wav.peak - gain) < 0.01 && wav.riffSize === wav.fileSize - 8
       && seq.ok && seq.seconds > 2 && seq.peak > 0.01;
     return { ok, tone: wav, sequence: seq, names: [dl.suggestedFilename(), dl2.suggestedFilename()] };
+  });
+
+  // C004 (findings dup-stale-3, persist-6): the instrument owns the sequence waveform. A file
+  // whose instrument waveform is the current one (sine) and whose sequencer.waveform is square
+  // fires no instrument change, yet every answer must still be sine: the realtime sequence's
+  // oscillators, the sequence WAV (Goertzel h2 and h3 below -60 dB of the fundamental), the
+  // status readout and the derived waveform the sequence writes back. The import says that the
+  // file's square was not applied instead of "All settings were restored."
+  def('seq-waveform-one-owner', async ({ page }) => {
+    const what = (s) => `seq-waveform-one-owner: ${s}`;
+    await page.mouse.click(2, 2); // a gesture builds and resumes the context (WebKit)
+    await page.evaluate(() => {
+      window.OSCILLA.app.ensureAudio();
+      return window.OSCILLA.engine.resume();
+    });
+    await until(() => page.evaluate(() => window.OSCILLA.engine.state === 'running'),
+      { ms: 10000, what: what('the AudioContext runs') });
+    const saved = await page.evaluate(() => {
+      const O = window.OSCILLA;
+      O.app.setWaveform('sine');
+      // Record every OscillatorNode type the page sets, realtime and offline.
+      const d = Object.getOwnPropertyDescriptor(OscillatorNode.prototype, 'type');
+      window.__c004 = { d, types: [] };
+      Object.defineProperty(OscillatorNode.prototype, 'type', {
+        configurable: true,
+        get() { return d.get.call(this); },
+        set(v) {
+          const offline = typeof this.context.startRendering === 'function';
+          window.__c004.types.push({ v, offline });
+          d.set.call(this, v);
+        },
+      });
+      return O.labs.sequencer.editor.serialize();
+    });
+    try {
+      await until(() => page.evaluate(() => window.OSCILLA.labs.sequencer.editor.model.waveform
+        === 'sine'), { ms: 5000, what: what('the sequence follows the instrument (sine)') });
+      const doc = await page.evaluate(() => window.OSCILLA.app.exportConfig());
+      doc.waveform = 'sine';
+      doc.sequencer = { ...doc.sequencer, waveform: 'square', loop: false,
+        blocks: [{ id: 'b1', type: 'tone', durationMs: 600, params: { freq: 440 } }] };
+      await page.setInputFiles('#osc-import-file', { name: 'cfg.json',
+        mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(doc)) });
+      const message = await until(() => page.evaluate(() => {
+        const a = window.OSCILLA.app.alerts.find((x) => x.title === 'Config imported');
+        return a ? a.message : '';
+      }), { ms: 8000, what: what('the import is reported') });
+      await H.navTo(page, 'sequencer');
+      await until(() => page.evaluate(() => document.querySelector('#osc-app').dataset.mode
+        === 'sequencer'), { ms: 8000, what: what('the Sequencer workspace opens') });
+      await page.evaluate(() => { window.__c004.types.length = 0; });
+      await page.click('#osc-seq-play');
+      const live = await until(() => page.evaluate(() => {
+        const O = window.OSCILLA;
+        const realtime = window.__c004.types.filter((t) => !t.offline).map((t) => t.v);
+        if (!O.app.seqPlaying || !realtime.length) return null;
+        return { realtime, status: document.querySelector('[data-osc="status.waveform"]')
+          .textContent.trim(), model: O.labs.sequencer.editor.model.waveform,
+        written: O.labs.sequencer.editor.serialize().waveform };
+      }), { ms: 8000, what: what('the sequence plays') });
+      await page.click('#osc-seq-stop');
+      await until(() => page.evaluate(() => !window.OSCILLA.labs.sequencer.editor.playing),
+        { ms: 8000, what: what('the sequence stops') });
+      await page.evaluate(() => { window.__c004.types.length = 0; });
+      await page.click('#osc-export');
+      const [dl] = await Promise.all([
+        page.waitForEvent('download', { timeout: 20000 }),
+        page.click('[data-osc="export.seqWav"]'),
+      ]);
+      const buf = fs.readFileSync(await dl.path());
+      const offline = await page.evaluate(() => window.__c004.types.filter((t) => t.offline)
+        .map((t) => t.v));
+      const wav = parseWavHeader(buf);
+      const harm = wav.ok ? toneHarmonicsDb(buf, 440) : null;
+      const ok = live.realtime.every((v) => v === 'sine') && live.status === 'Sine'
+        && live.model === 'sine' && live.written === 'sine'
+        && offline.length > 0 && offline.every((v) => v === 'sine')
+        && !!harm && harm.h2 < -60 && harm.h3 < -60
+        && /follows the instrument waveform \(sine\); the file's square was not applied/
+          .test(message);
+      return { ok, message, live: { ...live, realtime: [...new Set(live.realtime)] },
+        offline: [...new Set(offline)], harm };
+    } finally {
+      await page.evaluate((seq) => {
+        const w = window.__c004;
+        if (w) Object.defineProperty(OscillatorNode.prototype, 'type', w.d);
+        delete window.__c004;
+        window.OSCILLA.labs.sequencer.update({ sequence: seq });
+      }, saved);
+    }
   });
 
   def('nav-workspaces-switch', async ({ page }) => {

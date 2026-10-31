@@ -529,3 +529,43 @@ test('K003: Ctrl+C copies the selected block; Ctrl+V pastes it after the selecti
   assert.equal(snap(ed), full);
   assert.match(ed.error, /full/);
 });
+
+// C004 (findings dup-stale-3, persist-6): the instrument owns the sequence waveform (main.js
+// mirrors it in with setWaveform). A load or a clear keeps the mirrored value, so a file whose
+// sequencer.waveform differs from the instrument's can never leave playback on a stale one.
+test('C004: load and clear keep the instrument waveform the editor follows', () => {
+  const { ctx, ed } = setup();
+  ed.setWaveform('sine'); // the instrument's, mirrored in
+  const file = { ...ed.serialize(), waveform: 'square' };
+  assert.deepEqual(ed.load(file), []);
+  assert.equal(ed.model.waveform, 'sine', 'a load keeps the instrument waveform');
+  assert.equal(ed.play(), true);
+  const types = ctx.oscillators.map((o) => o.type);
+  assert.ok(types.length > 0 && types.every((t) => t === 'sine'), `played ${types}`);
+  ed.stop();
+  ed.setWaveform('triangle');
+  ed.clear();
+  assert.equal(ed.model.waveform, 'triangle', 'a clear keeps the instrument waveform');
+  assert.equal(ed.serialize().waveform, 'triangle', 'the file writes the derived value');
+});
+
+// C004 (finding dup-stale-6): the editor notifies every change of its model, so a view that
+// reads the non-reactive model (the status bar Duration) can be invalidated by a counter.
+test('C004: onChange fires for every edit and load, and unsubscribes', () => {
+  const { ed } = setup();
+  const seen = [];
+  const off = ed.onChange((model) => seen.push(model));
+  ed.setLoop(true);
+  ed.addBlock('tone');
+  ed.setTempo(90);
+  ed.load(ed.serialize());
+  ed.clear();
+  assert.equal(seen.length, 5);
+  assert.equal(seen[1].blocks.length, 6);
+  assert.ok(seen.every((m, i) => i === seen.length - 1 || m !== seen[i + 1]));
+  assert.equal(seen[seen.length - 1], ed.model);
+  off();
+  ed.setLoop(false);
+  assert.equal(seen.length, 5, 'no call after unsubscribing');
+  assert.throws(() => ed.onChange('x'), TypeError);
+});

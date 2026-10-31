@@ -3,8 +3,8 @@
 // component by main.js (Object.defineProperties, never spread). Audio objects, labs and p5
 // hosts live in `svc` (a closure), never in reactive state.
 //
-// svc: { engine, bridge, labs, exportConfigDoc(cmp), applyImport(cmp, parsed),
-//        renderWav(cmp, kind), screenshot(cmp), relayout(), stopPlayback(cmp),
+// svc: { engine, bridge, labs, exportConfigDoc(cmp), applyImport(cmp, parsed) -> { issues,
+//        notes[] }, renderWav(cmp, kind), screenshot(cmp), relayout(), stopPlayback(cmp),
 //        sequencerPlaying() }
 
 import { STORAGE_KEYS, WAVEFORM_LABELS } from '../core/constants.js';
@@ -46,6 +46,15 @@ export { v1ModeFor, workspaceForV1Mode } from './navigation.js';
 
 export const SWEEP_FORM = SWEEP_PARAMS;
 
+/**
+ * Bump app.seqRev after every change of the sequence (C004). The editor's model stays outside
+ * Alpine; the readouts that derive from it (statusDurationText) read the counter instead.
+ * Returns the unsubscribe function.
+ */
+export function followSequenceEdits(app, editor) {
+  return editor.onChange(() => { app.seqRev += 1; });
+}
+
 export function createWorkbench(svc) {
   return {
     OSCILLA_VERSION,
@@ -61,6 +70,8 @@ export function createWorkbench(svc) {
     learnOpen: 'frequency',
     // Bumped by main.js when a lab changes (getters below that read lab state depend on it).
     labRev: 0,
+    // Bumped on every change of the sequence (followSequenceEdits; its model is not reactive).
+    seqRev: 0,
 
     // ------------------------------------------------------------------ readouts
     get freqMain() { return groupedHz(this.frequency); },
@@ -142,7 +153,7 @@ export function createWorkbench(svc) {
     get statusDurationText() {
       if (this.seqPlaying && !this.playing) {
         // The sequence plays, not the instrument plan: its own length (loops repeat it).
-        void this.labRev;
+        void this.seqRev;
         const seq = svc.labs && svc.labs.sequencer;
         const model = seq && seq.editor && seq.editor.model;
         if (model) {
@@ -425,11 +436,14 @@ export function createWorkbench(svc) {
         this.notify('error', 'Config not imported', parsed.errors.slice(0, 3).join(' '));
         return false;
       }
-      const issues = svc.applyImport(this, parsed);
+      const { issues, notes = [] } = svc.applyImport(this, parsed);
       const warn = parsed.warnings.length + issues;
-      this.notify(warn ? 'warning' : 'success', 'Config imported', warn
-        ? `${warn} value(s) were invalid and kept at their previous setting.`
-        : 'All settings were restored.');
+      // A value the file holds that was not applied is said, never reported as restored (C004).
+      const said = [];
+      if (warn) said.push(`${warn} value(s) were invalid and kept at their previous setting.`);
+      said.push(...notes);
+      this.notify(said.length ? 'warning' : 'success', 'Config imported', said.length
+        ? said.join(' ') : 'All settings were restored.');
       return true;
     },
     async exportAudio(kind) {
