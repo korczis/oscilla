@@ -146,6 +146,7 @@ const PARTS = [measureStatePart, measureDerivedPart, measureLifecyclePart, measu
 /**
  * createMeasureUi(svc) → the MEASURE part of the component.
  * svc: { engine (AudioEngine), stopPlayback(cmp) (instrument, sequencer, voices),
+ *        outputBusy(cmp) (optional: any owner stopPlayback stops is sounding),
  *        loopback: boolean (TEST CONTEXT at load, from the URL) }
  */
 export function createMeasureUi(svc) {

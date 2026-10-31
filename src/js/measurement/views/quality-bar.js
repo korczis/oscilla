@@ -138,8 +138,14 @@ export function reduceQualityBar(state, event) {
       const lvl = facts.inputLevel;
       if (lvl && Number.isFinite(lvl.rmsDb)) {
         const high = lvl.rmsDb > PREFLIGHT_THRESHOLDS.noisyRmsDb;
-        s.noise = item(high ? 'warn' : 'pending', high ? 'HIGH' : 'PRE-CHECK',
-          `Preflight background ${formatDb(lvl.rmsDb)}; the noise check measures it.`);
+        // C016 review R-1: with the app's own output in the reading it is not the background.
+        const out = facts.output || null;
+        const own = !!out && (out.otherAudio === true || out.audibleVoices > 0);
+        s.noise = item(high ? 'warn' : 'pending', high ? 'HIGH' : 'PRE-CHECK', own
+          ? `Preflight input ${formatDb(lvl.rmsDb)} includes the app's own output, which is `
+            + 'playing, so it is not the background level; the noise check measures that '
+            + 'after Measure stops it.'
+          : `Preflight background ${formatDb(lvl.rmsDb)}; the noise check measures it.`);
       }
       const clip = first(event.warnings, CLIP_CODES);
       if (clip) s.clipping = item('warn', 'AT INPUT', clip.text);

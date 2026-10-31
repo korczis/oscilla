@@ -15,7 +15,12 @@
 //   io = {
 //     sampleRate,                     the running context's rate (null before it exists)
 //     now(),                          the AUDIO clock in seconds (AudioContext.currentTime)
-//     preflight() → PreflightFacts,   opens/validates the context, permission, input, worklet
+//     preflight({ otherAudio }) → PreflightFacts, opens/validates the context, permission,
+//                                     input, worklet; otherAudio: the caller's fact that the
+//                                     app's own output sounds, a boolean or a probe
+//                                     () => boolean (reported back as output.otherAudio,
+//                                     OR-ed with the engine voices, both read at the input
+//                                     level reading)
 //     captureNoise(seconds, { notBefore, onScheduled, onChunk }) → Capture
 //     runStimulus(stimulus, { preRollS, postRollS, notBefore, onScheduled, onChunk }) → Capture
 //     cancel(reason),                 stop everything in flight and release session resources
@@ -28,8 +33,8 @@
 //   }
 //   PreflightFacts = { audioContext: { available, state }, sampleRate, permission:
 //     'granted'|'denied'|'prompt'|'unknown'|'not-required', input: { ok, device, constraints,
-//     error? }, inputLevel: { peak, rmsDb }|null, output: { gain, maxGain, audibleVoices },
-//     worklet: { supported, mode, error? }, testContext?, chainNotes? }
+//     error? }, inputLevel: { peak, rmsDb }|null, output: { gain, maxGain, audibleVoices,
+//     otherAudio? }, worklet: { supported, mode, error? }, testContext?, chainNotes? }
 //   chainNotes (optional): pure data about the playback chain that the platform layer has
 //     MEASURED or knows from a measured probe, e.g. { limiterDeviationAboveHz: 18000 } when the
 //     master limiter of this browser is not transparent above 18 kHz (the spike's Firefox 155
@@ -849,12 +854,15 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
   const samePrepared = (recipe, calibration) => !!prepared && prepared.key !== null
     && prepared.key === recipeKey(recipe) && prepared.calibration === (calibration ?? null);
 
-  async function runPreflight(s, recipe, calibration) {
+  // otherAudio: false on the measure() path, whose caller stops every output owner first.
+  async function runPreflight(s, recipe, calibration, otherAudio = false) {
     const warnings = [];
     const blockers = [];
     const facts = await guard(s, (async () => {
-      try { return await io.preflight(); }
-      catch (e) {
+      try {
+        return await io.preflight({ otherAudio: typeof otherAudio === 'function' ? otherAudio
+          : otherAudio === true });
+      } catch (e) {
         if (s.dead) throw e;
         const me = mapError(e);
         if (me.code === 'ABORTED') throw me;
@@ -919,13 +927,25 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
     const applied = input && input.constraints ? input.constraints.applied : null;
     if (input && input.ok && !facts.testContext && inputProcessingMayApply(applied))
       warnings.push(reason('INPUT_PROCESSING', INPUT_PROCESSING_NOTE));
+    // The app's own output sounding while the input level is read (C016): an owner the caller
+    // reports (the sequencer, the Studio transport) or an engine voice. The reading then is not
+    // the background, and the reasons say so instead of blaming the room or the input gain.
+    const out = facts.output || null;
+    const ownOutput = !!out && (out.otherAudio === true || out.audibleVoices > 0);
+    const OWN = 'the reading includes the app\'s own output, which is playing';
     const lvl = facts.inputLevel;
     if (lvl && isNum(lvl.peak) && lvl.peak >= PREFLIGHT_THRESHOLDS.clipPeak)
-      warnings.push(reason('INPUT_CLIPPING', 'The input reaches full scale before the '
-        + 'measurement: lower ' + INPUT_GAIN_WHERE + '.', { value: lvl.peak, unit: 'peak' }));
+      warnings.push(reason('INPUT_CLIPPING', ownOutput
+        ? `The input reaches full scale before the measurement, but ${OWN}: stop it and check `
+          + `again, then lower ${INPUT_GAIN_WHERE} if it still clips.`
+        : 'The input reaches full scale before the measurement: lower ' + INPUT_GAIN_WHERE
+          + '.', { value: lvl.peak, unit: 'peak' }));
     if (lvl && isNum(lvl.rmsDb) && lvl.rmsDb > PREFLIGHT_THRESHOLDS.noisyRmsDb)
-      warnings.push(reason('NOISE_HIGH', `Background level ${lvl.rmsDb.toFixed(1)} dB relative `
-        + '(dBFS-like) is high; expect a low signal-to-noise ratio.',
+      warnings.push(reason('NOISE_HIGH', ownOutput
+        ? `Input level ${lvl.rmsDb.toFixed(1)} dB relative (dBFS-like) is high, but ${OWN}, so `
+          + 'it is not the background level: stop it and check again.'
+        : `Background level ${lvl.rmsDb.toFixed(1)} dB relative `
+          + '(dBFS-like) is high; expect a low signal-to-noise ratio.',
       { value: lvl.rmsDb, unit: 'dB relative' }));
 
     let chainNotes = null;
@@ -948,7 +968,6 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
       warnings.push(reason('WORKLET_FALLBACK', 'AudioWorklet is unavailable; capturing with the '
         + 'deprecated ScriptProcessor (frame timing is less exact).'));
 
-    const out = facts.output || null;
     if (out && plan) {
       const eff = plan.stimulusSpec.level * (isNum(out.gain) ? out.gain : 0);
       if (!(eff > 0))
@@ -960,8 +979,10 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
         warnings.push(reason('LIMITER_RANGE', 'At this output level the safety limiter can '
           + 'compress high frequencies in some browsers; the measured response then includes '
           + 'it. Lower the level or the master volume.', { value: eff, unit: 'digital peak' }));
-      if (out.audibleVoices > 0)
-        warnings.push(reason('OTHER_AUDIO', 'Other sounds are playing; they will be stopped.'));
+      if (ownOutput)
+        warnings.push(reason('OTHER_AUDIO', 'Other sounds are playing into the output: this '
+          + 'check leaves them playing and its input reading includes them; Measure stops them '
+          + 'before the run.'));
     }
     if (!cal.frequency)
       warnings.push(reason('UNCALIBRATED', 'No frequency calibration profile: the response '
@@ -1407,7 +1428,9 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
     get limits() { return lim; },
 
     /**
-     * preflight(recipe, { calibration }) → { ready, warnings, blockers, facts, sampleRate }
+     * preflight(recipe, { calibration, otherAudio }) → { ready, warnings, blockers, facts,
+     * sampleRate }. otherAudio: true, or a probe () => boolean the io reads at the input level
+     * reading, while an output owner of the app sounds (OTHER_AUDIO; the check stops nothing).
      * IDLE → PREFLIGHT → READY (ready) or INVALID (blockers). Warnings never block (§30). A
      * following measure() with the same recipe and calibration starts from READY.
      */
@@ -1416,7 +1439,7 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
       s.startedAtMs = clk.wall();
       try {
         go(s, S.PREFLIGHT, { recipe: true });
-        const report = await runPreflight(s, recipe, opts.calibration);
+        const report = await runPreflight(s, recipe, opts.calibration, opts.otherAudio);
         emit(s, { type: 'preflight', ...publicReport(report) });
         if (report.ready) {
           go(s, S.READY, null);

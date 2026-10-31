@@ -1,0 +1,152 @@
+# Review verdict for pull request #297, plan record C016 (PACK 03, finding coupling-5): MEASURE's
+# setup check counts every output owner as other audio (branch fix/c016-preflight-other-audio).
+# Delta re-review of round 1 (verdict 9b69711b, changes-requested at c11cea228bdd).
+# Reviewed head 184f7127227e (== origin after git fetch; merge base cdda563c1982). The fix is
+# one commit, 184f7127, over 9b69711b; the branch has not merged main since round 1.
+# origin/main 88b936cb (merge train #316) changed none of the five guarded files of this PR;
+# a trial merge (git merge-tree) conflicts only in tests/README.md (not guarded), see R-9.
+# Built by the builder's session; reviewed by dev-68, which did not build this change.
+#
+# The digest: scripts/review-verdict.mjs on the branch is identical to origin/main's (git diff
+# origin/main HEAD -- scripts/review-verdict.mjs is empty), so the branch's copy was used:
+# `node scripts/review-verdict.mjs --content --list --base origin/main` gives
+# e2dd5267...fe40 over src/js/audio/audio-engine.js, src/js/measurement/capture.js,
+# src/js/measurement/engine.js, src/js/measurement/views/quality-bar.js, src/js/ui/measure.js
+# (audio-engine.js and quality-bar.js are new to the list). Same digest as the PR body states.
+#
+# Lenses: (a) each round-1 finding refuted or confirmed on the new code; (b) audio discipline
+# (no param write, no setTargetAtTime, no ramp edit, no step, nodes tracked); (c) test strength
+# by mutation; (d) the PR body.
+#
+# Runs (detached worktree at the head; node_modules symlinked read-only, nothing installed):
+# - Fail-first: head tests/ on c11cea22's src (git-archive copy): preflight-own-output +
+#   output-owners 9 of 16 fail, as the PR body says; 16 of 16 pass on the head.
+# - Unit at the head: the three C016 files 44/44 pass. Full `node --test tests/unit/**`: 3296
+#   tests, 3293 pass, 1 skip, 2 fail; both failures (version-authority) are EISDIR on the
+#   untracked node_modules symlink of this worktree, and that file passes 12/12 without it.
+# - node scripts/build.mjs --check: dist/index.html is up to date.
+# - 15 mutants in git-archive copies of the head, against 11 unit files (1301 tests):
+#   M1 (drop the caller's fact from the OR) and M4 (otherAudioNow returns false), the round-1
+#   survivors, are now KILLED by preflight-own-output (R-3 caller-fact, R-5, R-3 probe cases).
+#   Killed too: M11 (window-start sample read at the current time), M12 (sample before the
+#   awaits, the round-1 behaviour), M14 (a probe is never called), M15 (audibleVoiceCountAt
+#   ignores t), M16/M17 (quality bar ignores audibleVoices / the output facts), M18
+#   (statusPlay on seqPlaying), M19 (stopSequencer on seqPlaying), M20 (pagehide does not stop
+#   the sequencer), M21 (measure() preflight defaults otherAudio to true).
+#   Survive the whole unit suite: M13 (the sample after the window dropped), M22 (max of the
+#   samples replaced by the last), M23 (a throwing probe propagates): R-8.
+# - Timing probe for R-2 (code reading, audio-engine.js _soon/_releaseVoice, clock.js):
+#   stopAll ends the counted fade at _soon + 0.008, _soon = ceil(rendered + 0.02) on a quantum,
+#   rendered <= currentTime + 0.2 and tracking the audio clock; the window starts at
+#   ceilFrame(currentTime + 0.1) after freshClock's nextTask. Both are audio times, so the
+#   comparison is right even when the audio clock lags: a voice is counted exactly when its
+#   fade overlaps the window start. Under a running clock the margin is about 70 ms.
+# - Probe of statusPlay (workbench.js, fake cmp): with only the sequencer playing (label "Stop
+#   playback") the key logs [sequencer.stop, trigger], or [sequencer.stop, toggleLatch] with
+#   continuous allowed: R-10.
+#
+# Audio discipline: audibleVoiceCountAt is read-only; capture.js adds no node and no param
+# write (openWindow is the existing reader, now awaited one statement later); the quality bar,
+# main.js and workbench.js changes are text and state reads; stopSequencer calls the existing
+# click-free editor.stop() (_stopVoices, a short fade). No setTargetAtTime, no ramp edit, no
+# step, no ramp to 0 added. facts.output is set by done() on every return path.
+#
+# Not re-opened: Measure with a reusable READY report keeps that check's report (possibly with
+# OTHER_AUDIO taken while the owner played); its texts describe the check and say Measure stops
+# the sources, so the record is honest about when the reading was taken.
+#
+# Closed: R-1 to R-6. Open: R-7 to R-10 (P3). No open P1 or P2: the verdict is merge.
+# The reviewer statement: dev-68 (Claude Opus 5.5 session 4f90795d) did not build, merge or
+# edit this change and wrote only this file.
+schema: review-verdict/v1
+pr: 297
+verdict: merge
+reviewer: dev-68
+content: e2dd5267c2c0e23da144a4dfdfc398b0f39d1ed224803ab04e2a220dfd84fe40
+findings:
+  - id: R-1
+    severity: P2
+    status: closed
+    title: >-
+      The quality bar's Noise item called a reading with the app's own output the background. Fixed:
+      reduceQualityBar (quality-bar.js:141-148) reads facts.output and, with otherAudio or
+      audibleVoices > 0, says 'Preflight input ... includes the app's own output ... not the
+      background level'. Confirmed by the R-1 views case; mutants M16 and M17 are killed.
+  - id: R-2
+    severity: P2
+    status: closed
+    title: >-
+      On the Measure path the stopped voice, still fading, raised OTHER_AUDIO and blamed the room's
+      NOISE_HIGH on the app. Fixed: the io samples AudioEngine#audibleVoiceCountAt(start / sr) at
+      the level window's start (capture.js:857) and again after it, and runPreflight on the
+      measure() path passes false. The fade ends at most about 0.03 s after _soon, the window opens
+      0.1 s after a fresh currentTime, both in audio time. Confirmed by the real-engine case, the io
+      case and the report case; M11, M12, M15, M21 are killed.
+  - id: R-3
+    severity: P3
+    status: closed
+    title: >-
+      The io OR and the measure.js wiring were checked by source regex only (M1, M4 survived the
+      unit tests). Fixed: tests/unit/preflight-own-output.test.mjs drives a capture io on a fake
+      context with AudioEngine's own accounting and createMeasureUi with a fake svc.outputBusy; the
+      capture.js regex is gone. Re-applied on the head, M1 and M4 are killed by the unit tests.
+  - id: R-4
+    severity: P3
+    status: closed
+    title: >-
+      Escape, pagehide and the status-bar play key read the 150 ms seqPlaying copy. Fixed: main.js
+      stopSequencer(cmp) goes through the sequencer's OUTPUT_OWNERS row (read live), Escape and
+      pagehide call it, and statusPlay reads editor.playing. M18, M19 and M20 are killed.
+  - id: R-5
+    severity: P3
+    status: closed
+    title: >-
+      otherAudio was sampled once before the awaits. Fixed: the caller's fact may be a probe, read
+      with the voices when the level window is scheduled and after it; MEASURE passes () =>
+      otherAudioNow(cmp). The R-5 case (a source that ends or starts while the input opens) kills
+      M12 and M14. The sample after the window is untested: R-8.
+  - id: R-6
+    severity: P3
+    status: closed
+    title: >-
+      The PR body overstated the merge base's contamination and named 2 of 3 tests that did not
+      pass. Fixed in the body: it now says the sequencer gated on the 150 ms copy kept playing into
+      the run, and '3282 of 3285 pass, 1 skipped, 2 failed'. Its round-2 claims (fail-first 9 of 16,
+      M1/M4 killed, digest e2dd5267) reproduce.
+  - id: R-7
+    severity: P3
+    status: open
+    title: >-
+      Unchanged hardening note: OUTPUT_OWNERS covers stop and busy but not refusal; the sequencer's
+      editor.play() (sequencer-panel.js) has no measureOwnsOutput check. Not reachable through the
+      UI at this head. Add a claim/refuse column when C002's claimOutput lands (the builder left it
+      open on purpose).
+  - id: R-8
+    severity: P3
+    status: open
+    title: >-
+      The second half of the R-5 fix is untested: dropping the sample after the window
+      (capture.js:859, M13), keeping the last sample instead of the maximum (M22), or letting a
+      throwing probe fail the check (M23) passes the whole unit suite. So 'a source started during
+      the reading is counted' and 'the caller's probe never fails the check' hold by reading only.
+      Fix: an io case whose probe or voice turns on during the window (onaudioprocess), one whose
+      voice ends during it, and one whose probe throws.
+  - id: R-9
+    severity: P3
+    status: open
+    title: >-
+      The branch does not merge cleanly with origin/main 88b936cb: GitHub reports CONFLICTING and
+      git merge-tree conflicts in tests/README.md (both sides edit the unit table). Main changed
+      none of the five guarded files, so a merge of main that resolves only tests/README.md (and
+      rebuilds dist) leaves the digest and this verdict standing; any other change in that merge
+      needs a new look.
+  - id: R-10
+    severity: P3
+    status: open
+    title: >-
+      Pre-existing since V2, in the function the R-4 fix edits: with only the sequencer playing, the
+      status-bar key is labelled 'Stop playback' (isSounding), but statusPlay (workbench.js:253-260)
+      stops the sequencer and then, since the instrument is not playing, calls trigger(), or
+      toggleLatch() with continuous allowed, so a Stop key starts a tone. The new R-4 test asserts
+      only log[0]. Fix in a follow-up: return after stopping the sequencer, and assert the whole
+      log.

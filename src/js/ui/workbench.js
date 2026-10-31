@@ -257,7 +257,9 @@ export function createWorkbench(svc) {
     // ------------------------------------------------------------------ transport extras
     /** Status-bar play key: stop when sounding, else latch (continuous allowed) or trigger. */
     statusPlay() {
-      if (this.seqPlaying && svc.labs.sequencer) svc.labs.sequencer.editor.stop();
+      // The sequencer read live (C016 review R-4): seqPlaying follows it 150 ms late.
+      const seq = svc.labs.sequencer;
+      if (seq && seq.editor.playing) seq.editor.stop();
       if (this.playing) { this.stopNow(); return; }
       if (this.continuousAllowed && !this.isProgrammed) this.toggleLatch();
       else this.trigger();

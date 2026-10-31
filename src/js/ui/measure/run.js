@@ -30,6 +30,14 @@ export function createRun(ctx, svc, ops) {
   }
 
   // ---------------------------------------------------------------- actions
+  /**
+   * The app's own output sounds (the sequencer, the instrument, the Studio transport: the
+   * owners stopPlayback stops). The setup check reports it (OTHER_AUDIO) and leaves it playing.
+   */
+  function otherAudioNow(cmp) {
+    return typeof svc.outputBusy === 'function' && !!svc.outputBusy(cmp);
+  }
+
   async function runPreflight(cmp) {
     ops.stopLive(); // exclusive input: the live RTA never runs beside a capture
     const me = ops.ensureEngine();
@@ -41,7 +49,9 @@ export function createRun(ctx, svc, ops) {
     cmp.meas.savedId = null;
     ops.rebuildAll();
     try {
-      ctx.pending = me.preflight(ops.recipeNow(), { calibration: ops.calibrationInput() });
+      // A probe, read by the io where it reads the input level (C016 review R-5).
+      ctx.pending = me.preflight(ops.recipeNow(), { calibration: ops.calibrationInput(),
+        otherAudio: () => otherAudioNow(cmp) });
       await ctx.pending;
     } catch (e) {
       if (!(e && e.code === 'ABORTED')) {
