@@ -4,7 +4,7 @@ version: 1
 kind: rule
 title: Risky changes merge only with a recorded review verdict for the reviewed content
 description: A pull request that changes a guarded path merges only with a committed verdict file that says merge, names the reviewer, records the digest of the guarded content the pull request changes and lists no open P0 or P1 finding.
-statement: A pull request touching src/js/audio, src/js/analysis, src/js/experiments, src/js/studio, src/js/measurement, src/js/calibration, src/js/core/storage*, src/js/core/safety*, src/js/ui/measure.js, src/js/ui/experiments.js, src/js/ui/findings.js, scripts/release-*, the build, pack, stamp and deploy-verification scripts (scripts/build*, scripts/pack-single-file.mjs, scripts/stamp-build.mjs, scripts/verify-deploy.mjs, scripts/verify-dist.mjs), the release rules' tests (tests/unit/release-*, tests/unit/version-authority.test.mjs, tests/browser/live-smoke.cjs), anything under .github/, or the programs and tests that enforce the process rules (scripts/review-verdict.mjs, scripts/fail-first.mjs, scripts/ci-workflow-rules.mjs, scripts/yaml-subset.mjs, their tests under tests/unit/ and tests/unit/fixtures/git-repo.mjs) merges only with .ai/repo/reviews/<pr>.yaml carrying `verdict: merge`, the reviewer session, a `content` equal to the SHA-256 of the guarded paths the pull request changes against its merge base (mode, blob and name of each, as merged with the base branch for the run), and no finding of severity P0 or P1 with status open; the guarded list that applies is the base branch's, the verdict is written by a reviewer who did not build the change, and a pull request is bound from the first CI run of a head that contains this rule's job.
+statement: A pull request touching src/js/audio, src/js/analysis, src/js/experiments, src/js/studio, src/js/measurement, src/js/calibration, src/js/core/storage*, src/js/core/safety*, src/js/ui/measure.js, src/js/ui/measure/, src/js/ui/experiments.js, src/js/ui/findings.js, scripts/release-*, the build, pack, stamp and deploy-verification scripts (scripts/build*, scripts/pack-single-file.mjs, scripts/stamp-build.mjs, scripts/verify-deploy.mjs, scripts/verify-dist.mjs), the release rules' tests (tests/unit/release-*, tests/unit/version-authority.test.mjs, tests/browser/live-smoke.cjs), anything under .github/, or the programs and tests that enforce the process rules (scripts/review-verdict.mjs, scripts/fail-first.mjs, scripts/ci-workflow-rules.mjs, scripts/yaml-subset.mjs, their tests under tests/unit/ and tests/unit/fixtures/git-repo.mjs) merges only with .ai/repo/reviews/<pr>.yaml carrying `verdict: merge`, the reviewer session, a `content` equal to the SHA-256 of the guarded paths the pull request changes against its merge base (mode, blob and name of each, as merged with the base branch for the run), and no finding of severity P0 or P1 with status open; the guarded list that applies is the base branch's, the verdict is written by a reviewer who did not build the change, and a pull request is bound from the first CI run of a head that contains this rule's job.
 status: active
 class: blocking
 depends_on: []
@@ -32,8 +32,9 @@ never reviewed.
   code (`src/js/analysis/`), experiments (`src/js/experiments/`), Studio (`src/js/studio/`),
   the MEASURE engine (`src/js/measurement/`), calibration (`src/js/calibration/`), storage
   (`src/js/core/storage*`), the output safety stage (`src/js/core/safety*`), the MEASURE,
-  Experiments and Findings adapters (`src/js/ui/measure.js`, `src/js/ui/experiments.js`,
-  `src/js/ui/findings.js`: where #139 and #149 put their defects); what proves a build, a
+  Experiments and Findings adapters (`src/js/ui/measure.js` with the modules it is composed
+  of under `src/js/ui/measure/`, `src/js/ui/experiments.js`, `src/js/ui/findings.js`: where
+  #139 and #149 put their defects); what proves a build, a
   deployment and a release: the release scripts (`scripts/release-*`), the build and pack
   scripts (`scripts/build*`, `scripts/pack-single-file.mjs`), the deploy stamp and its
   verifiers (`scripts/stamp-build.mjs`, `scripts/verify-deploy.mjs`,

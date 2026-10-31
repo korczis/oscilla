@@ -108,6 +108,13 @@ The derived graph is the voice that `AudioEngine.play` builds for the plan with 
 The microphone is analysis only and can never reach Master Output (`live-input-to-output`). It
 is not part of the voice and never was a stage. The Playground has no noise source.
 
+The Signal Path shows the instrument's voice. The pattern sequencer is not that voice: its passes
+play through the engine's stage chain (`AudioEngine.stageChain`, C003), which carries the Filter
+Lab's stage and nothing else. Each sequence block keeps its own envelope and the sequence's
+waveform, so the Envelope and Additive labs, which shape the instrument, say "instrument only"
+in the Sequencer workspace and while the sequence plays, and the status bar names the sequence's
+waveform rather than "Additive".
+
 ## Where schema 1 falls short (recorded, not hidden)
 
 - **Annotations.** Studio schema 1 has no field for two facts: an additive oscillator's partial
