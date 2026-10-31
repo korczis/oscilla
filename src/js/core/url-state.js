@@ -85,8 +85,9 @@ export function decodeHash(hash) {
 
 /**
  * Restore a hash onto state s in place. env: { sampleRate, continuousAllowed }.
- * Returns { handled, issues, notices, pendingHashConfig, mode }:
+ * Returns { handled, issues, notices, pendingHashConfig, mode, malformed? }:
  *   handled            false when the hash carries no configuration (nothing happened)
+ *   malformed          true when the configuration could not be read at all (defaults kept)
  *   pendingHashConfig  cfg to re-apply once the real sample rate is known (values above the
  *                      provisional safe maximum), else null
  *   mode               the V1 mode id from `m` when valid, else null
@@ -115,6 +116,7 @@ export function restoreFromHashOn(s, hash, env = {}) {
     else notify('info', 'Configuration restored from link', 'Nothing plays until you press HOLD TO PLAY or TRIGGER.');
   } catch (e) {
     out.handled = true;
+    out.malformed = true;
     notify('warning', 'Link could not be read', 'The configuration in this link is malformed; defaults are used.');
   }
   return out;

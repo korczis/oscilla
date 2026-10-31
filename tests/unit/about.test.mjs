@@ -74,11 +74,14 @@ test('decorative visuals are hidden from assistive technology', () => {
   assert.match(aboutView, /<svg class="osc-about-trace"[^>]*aria-hidden="true"/);
 });
 
-test('the document title follows page-like workspaces only', () => {
+test('every workspace has a document title of its own (link audit B9)', () => {
   assert.equal(workspaceTitle('about', 'BASE'), 'OSCILLA · About');
-  for (const ws of WORKSPACES.filter((w) => w !== 'about')) {
-    assert.equal(workspaceTitle(ws, 'BASE'), 'BASE');
-  }
+  assert.equal(workspaceTitle('measure', 'BASE'), 'OSCILLA · Measure');
+  assert.equal(workspaceTitle('filter', 'BASE'), 'OSCILLA · Filter Lab');
+  // The Playground keeps the product title (the page's own <title>).
+  assert.equal(workspaceTitle('playground', 'BASE'), 'BASE');
+  const titles = WORKSPACES.map((ws) => workspaceTitle(ws, 'BASE'));
+  assert.equal(new Set(titles).size, WORKSPACES.length, `titles repeat: ${titles.join(' | ')}`);
 });
 
 // The first night is one dated station (U002, the owner's override of Q005's headline): the
