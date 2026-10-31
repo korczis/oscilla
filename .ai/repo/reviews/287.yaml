@@ -1,0 +1,49 @@
+# Review verdict for pull request #287, K144: the demo-song vertical slice (branch
+# feat/demo-song-vertical-slice). Reviewed head 550adc38, merge base origin/main cdda563c.
+# Another builder wrote it (oscilla-b0).
+#
+# The digest: the base branch's scripts/review-verdict.mjs, run from `git archive origin/main
+# scripts` with --repo on this worktree: 63028bce...bfc2 over the 4 guarded paths it names.
+#
+# How it was reviewed: two independent lenses (the journey suite and its expected failures; the
+# template and the guarded source), each in its own copy, with a skeptic per finding above P3
+# (12 agents). Both P1s were reproduced and downgraded to P2; none refuted.
+#
+# What holds:
+# - dist/index.html is built from source (build:check up to date); the unit tests pass (42/42,
+#   55/55 with the browser-suite contract).
+# - The journey passes in all three engines: 14 PASS and 8 XFAIL in chromium (34 s), firefox (65 s)
+#   and webkit (154 s, the WAV render 130 s of its 300 s bound).
+# - Every XFAIL is printed and counted, none is skipped, each fails today for its stated reason, and
+#   every owner record exists and is open; midi-notes-sound and drive-knob would flip with V502 and
+#   K012.
+# - midi-riff, play and save-reload assert effects (messages delivered, revision applied, RMS above
+#   the floor, the stored model byte-equal to the reopened one); no fixed sleeps.
+# - The signal-path-projection change only reorders a junction stage's sources; stage titles and
+#   subs are unchanged.
+#
+# Verdict: merge. No P0 or P1. Eight P2s are open, most of them expected failures that would not
+# turn XPASS when their owner lands, so the ratchet they promise is weaker than it reads:
+schema: review-verdict/v1
+pr: 287
+verdict: merge
+reviewer: prismatic-majordomus-f3 (claude-code 1f47a36e)
+content: 63028bce119b26b9eb969620ae71f3313e090decd2117745f2267ea79570bfc2
+findings:
+  - { id: R1, severity: P2, status: open, title: "demo-song.cjs:329 midi-records reads its baseline after the riff, right before the comparison, so it cannot turn XPASS when V505 lands; take the baseline before step 2" }
+  - { id: R2, severity: P2, status: open, title: "demo-song.cjs:526 keyboard-view counts [data-osc^=keyboard.] anywhere, hidden included; #299 (K026) adds that markup statically, so it XPASSes without the notes the playhead plays" }
+  - { id: R3, severity: P2, status: open, title: "demo-song.cjs:111 expected() takes every exception as the expected failure, so a regression or broken selector inside an XFAIL step reads as XFAIL" }
+  - { id: R4, severity: P2, status: open, title: "demo-song.cjs:592 restore-last never accepts the draft V604 offers back, so it will not flip when V604 lands" }
+  - { id: R5, severity: P2, status: open, title: "demo-song.cjs:494 node-views-draw checks that a canvas exists, not that it draws what plays" }
+  - { id: R6, severity: P2, status: open, title: "demo-song.cjs:596 on the declared save-reload skip path nothing reopens the song after the reload, so the wav step renders the wrong model" }
+  - { id: R7, severity: P2, status: open, title: "package.json:26 demo-song joins test:browser, whose WebKit step already uses 500-633 s of its 900 s bound" }
+  - { id: R8, severity: P2, status: open, title: "demo-song.js:21 the open hat plays like the closed hat: the hat envelope's sustain is 0, so a longer gate changes nothing" }
+  - { id: R9, severity: P3, status: open, title: "demo-song.cjs:114 removing a mark from EXPECTED does not do what the header says; expected() never reads whether its id is marked" }
+  - { id: R10, severity: P3, status: open, title: "signal-path-projection.js:188 the reorder also changes the Playground dual-stereo (V1 panners) voice's sources" }
+  - { id: R11, severity: P3, status: open, title: "demo-song.cjs:624 the WAV step does not check that it rendered the edited song; any 110 s non-silent model passes" }
+  - { id: R12, severity: P3, status: open, title: "demo-song.cjs:397 drum-accents XFAIL depends on this PR's own template omission, not only on gap G4" }
+  - { id: R13, severity: P3, status: open, title: "demo-song.cjs:552 thin thresholds in views: 16-17 lit pixels, a 6 dB margin over WebKit's idle floor" }
+  - { id: R14, severity: P3, status: open, title: "README.md:489,543 the PR body and README still name K058; two gaps have no plan issue and one is not an XFAIL" }
+  - { id: R15, severity: P3, status: open, title: "demo-song.test.mjs:156 the test named for the deep link only round-trips the hash codec" }
+  - { id: R16, severity: P3, status: open, title: "demo-song.js:21 tempos 289-300 BPM, which the transport allows, are refused on the demo song" }
+  - { id: R17, severity: P3, status: open, title: "qa-regressions.cjs:367 the no-inert-controls clip dedup also drops coverage of existing templates" }
