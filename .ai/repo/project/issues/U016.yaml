@@ -1,0 +1,37 @@
+id: U016
+milestone: M054
+serves:
+  - "ui-current#ui-audited"
+title: "Play from the start shows a glyph that points back to the start, the same one the Studio uses"
+slug: play-from-the-start-shows-a-glyph-that-points-back-to-the-start
+priority: p2
+profile: implementation
+objective: "Lands as fix(ui). The Pattern Sequencer lane's button#osc-seq-start [data-osc=seq.start] (src/index.html:792-795, aria-label 'Play from the start', handler src/js/labs/sequencer-panel.js:486 calling editor.play(), which restarts from the first block) draws #i-skip (src/index.html:52, path 'M3.5 6v12l8-6zM12.5 6v12l8-6z'): two right-pointing triangles, a fast-forward glyph that points away from the action. The Studio's 'Return to start' [data-osc=studio.return] (src/index.html:2338-2340) draws #s-return (src/index.html:92, @icon:skip-back from lucide-static, pointing left). Before: two different glyphs for 'go to start', one pointing the wrong way. After: seq.start uses <use href=\"#s-return\"/>, the one 'go to start' symbol in the document; #i-skip has no remaining user and is removed from the sprite. The button keeps its id, data-osc hook, aria-label, classes and handler; no new symbol, class token, osc-* selector or inline style is added (project.ui-uses-flowbite-pro), and the control stays live (project.no-inert-surfaces). Negative cases: no fast-forward glyph remains on any 'start' or 'return' control; the Sequencer's play, stop and loop controls keep their glyphs. F003 rebuilds the Sequencer on Pro components and keeps every hook, so it inherits the symbol; this issue does not wait for it. Rollback: revert the one-line <use> change and the symbol removal. Not this: C005 (swaps #osc-seq-record to #s-loop), K017 (sequencer chrome, adds a loop icon), K047 (frequency glyphs on the lane), W005 and V411 (Studio port and cable glyphs), G009, F008 and F009 (Pro chrome)."
+why: "Found by the S074 quality-bar review of 2026-10-30 at origin/main d9db6bdf, section 74 symptom 'random icon usage: \"Play from the start\" uses a fast-forward glyph', reproduced by an independent verifier; evidence: the S074 scratchpad screenshots s074/d-sequencer.png (glyph at x=541 y=247) and s074/d-playground.png (x=1000 y=598), with the #i-skip path read from src/index.html:52. Serves ui-current#ui-audited, an INFERRED fit."
+scope:
+  - "src/index.html"
+  - "tests/unit/transport-glyphs.test.mjs"
+  - "tests/browser/sequencer.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/transport-glyphs.test.mjs reads src/index.html and fails on the merge base: the element with data-osc=seq.start and the element with data-osc=studio.return reference the same symbol id; that symbol is the one whose marker is @icon:skip-back; no <use> in the document references i-skip and no symbol with id i-skip exists."
+  - "A check in tests/browser/sequencer.cjs opens the Sequencer, reads the href of the <use> inside [data-osc=seq.start], asserts it equals the one inside [data-osc=studio.return] and that the referenced symbol renders a non-empty path, then clicks the button and asserts playback starts from the first block (the existing play-from-start assertion keeps passing)."
+  - "It adds no class token, selector, markup surface or inline style and only removes legacy ones, so tests/unit/ui-flowbite-pro-baseline.json stays equal or falls (node scripts/ui-flowbite-pro-record.mjs --check passes) and node --test tests/unit/ui-flowbite-pro.test.mjs passes (project.ui-uses-flowbite-pro, project.visual-identity-lock v2)."
+  - "As a fix change it carries a unit test that fails on the merge base and passes on the head (project.fail-first)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named deadline (project.suite-harness, project.bounded-test-timing)."
+  - "Definition of done, extends: the Sequencer's start control gains the same 'go to start' glyph the Studio transport already has; the icon set loses one duplicate symbol."
+  - "Definition of done, interlinks: the objective names C005, K017, K047, W005, V411, G009, F003, F008 and F009 as the neighbouring icon and chrome work; the review verdict and the PR name U016."
+  - "Definition of done, interactivity: the button keeps its click handler and keyboard activation; the browser check above clicks it."
+  - "Definition of done, docs, menus and routes: no menu or route changes (stated); tests/README.md has a row for the new unit test and the extended browser check."
+  - "Definition of done, tested: node --test tests/unit/transport-glyphs.test.mjs, node tests/browser/sequencer.cjs and npm test pass; dist is rebuilt and npm run build:check passes."
+  - "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+  - "node --test tests/unit/transport-glyphs.test.mjs"
+  - "node tests/browser/sequencer.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-10-30'
+updated_at: '2026-10-30'
