@@ -16,7 +16,17 @@
 //   onStart?({ t0, duration }),    playback started (status bar)
 //   onEnded?({ stopped }),         playback fully ended (natural end or after a stop fade)
 //   onRecord?(sequenceJson),       the record-style button: hand the sequence to the WAV export
+//   openStage?() -> { input, track(node), source(node), untrack(node), dispose(), disposed }
+//                                  the engine's counted stage chain (AudioEngine.stageChain, C003):
+//                                  the passes play into its input (through the Filter Lab) and
+//                                  register every node through track/source, so the engine's
+//                                  census counts them; null or absent: straight into destination
 // }
+//
+// Stage chain (C003): one chain per playback session, opened by the first pass and disposed
+// once the last pass has ended (natural end, stop, Escape, dispose), never per pass: a new
+// filter per loop pass would reset the biquad state at every loop boundary. A restart while
+// earlier passes fade keeps the session's chain, so the fading pass is never cut.
 //
 // Looping: each pass is compiled as its own voice that starts exactly at the previous pass's
 // end time on the audio clock. A timer only decides *when* to compile the next pass (LOOKAHEAD_S
@@ -84,6 +94,7 @@ export function createSequencerEditor(options = {}) {
     lastEnd: null,
     loopTimer: null,
     self: null,
+    chain: null, // the session's stage chain (engine.openStage), or null
   };
   const resolve = (key, getter) => {
     if (!engine) return null;
@@ -92,6 +103,20 @@ export function createSequencerEditor(options = {}) {
   };
   const getCtx = () => resolve('ctx', 'getContext');
   const getDest = () => resolve('destination', 'getDestination');
+  /** The session's stage chain, opened on first use; null when the engine gives none. */
+  const sessionChain = () => {
+    if (priv.chain && !priv.chain.disposed) return priv.chain;
+    priv.chain = null;
+    if (engine && typeof engine.openStage === 'function') priv.chain = engine.openStage() || null;
+    return priv.chain;
+  };
+  /** Dispose the session's chain once no pass is left to sound through it. */
+  const closeChain = () => {
+    if (priv.voices.size) return;
+    const chain = priv.chain;
+    priv.chain = null;
+    if (chain && !chain.disposed) chain.dispose();
+  };
   const clearLoopTimer = () => {
     if (priv.loopTimer !== null && timers) timers.clearTimeout(priv.loopTimer);
     priv.loopTimer = null;
@@ -314,11 +339,45 @@ export function createSequencerEditor(options = {}) {
     // ---------------------------------------------------------------- transport
     _schedulePass(ctx, t0) {
       const self = priv.self;
-      const voice = compileSequence(self.model, ctx, getDest(), t0, {
-        timers,
-        onEnded: (info) => self._voiceEnded(voice, info),
-      });
-      if (voice.ended) return null; // empty sequence
+      const chain = sessionChain();
+      // The pass's nodes count as the engine's while they live (rule audio-engine-discipline).
+      const owned = new Set();
+      const release = () => {
+        if (chain) for (const n of owned) chain.untrack(n);
+        owned.clear();
+      };
+      const hooks = chain
+        ? {
+            track: (n) => {
+              owned.add(n);
+              return chain.track(n);
+            },
+            source: (n) => {
+              owned.add(n);
+              return chain.source(n);
+            },
+          }
+        : {};
+      let voice;
+      try {
+        voice = compileSequence(self.model, ctx, chain ? chain.input : getDest(), t0, {
+          timers,
+          ...hooks,
+          onEnded: (info) => {
+            release();
+            self._voiceEnded(voice, info);
+          },
+        });
+      } catch (e) {
+        release(); // a build that threw part-way leaves nothing counted
+        closeChain();
+        throw e;
+      }
+      if (voice.ended) {
+        release();
+        closeChain();
+        return null; // empty sequence
+      }
       priv.voices.add(voice);
       priv.passes.push({ voice, t0: voice.t0, end: voice.endTime });
       priv.lastEnd = voice.endTime;
@@ -329,6 +388,7 @@ export function createSequencerEditor(options = {}) {
       priv.voices.delete(voice);
       priv.passes = priv.passes.filter((p) => p.voice !== voice);
       if (priv.voices.size === 0 && priv.loopTimer === null) {
+        closeChain(); // the last pass has ended: nothing sounds through the stages any more
         const self = priv.self || this;
         self.playing = false;
         if (engine && typeof engine.onEnded === 'function') {
@@ -388,7 +448,15 @@ export function createSequencerEditor(options = {}) {
       }
       this.error = '';
       this.playing = true;
-      const voice = this._schedulePass(ctx, ctx.currentTime + START_OFFSET_S);
+      let voice;
+      try {
+        voice = this._schedulePass(ctx, ctx.currentTime + START_OFFSET_S);
+      } catch (e) {
+        // A stage chain or a compile that throws leaves nothing sounding and says why.
+        this.playing = false;
+        this.error = String((e && e.message) || e);
+        return false;
+      }
       if (!voice) {
         this.playing = false;
         return false;
@@ -412,6 +480,7 @@ export function createSequencerEditor(options = {}) {
       priv.self = priv.self || this;
       const wasPlaying = this.playing;
       this._stopVoices();
+      closeChain(); // at once when no pass is left; otherwise after the last pass's fade
       this.playing = false;
       return wasPlaying;
     },
@@ -491,6 +560,7 @@ export function createSequencerEditor(options = {}) {
       for (const v of [...priv.voices]) v.dispose();
       priv.voices.clear();
       priv.passes = [];
+      closeChain();
       this.playing = false;
     },
   };

@@ -1,0 +1,75 @@
+# Review verdict for pull request #262, plan item E002: src/js/ui/measure.js is split into a
+# composition root and nine modules under src/js/ui/measure/ (branch
+# refactor/e002-split-measure-adapter). Reviewed head 817f5c74d934; merge base origin/main
+# 8b5792cd; origin/main at review time e2720e07 (#252), 16 commits ahead. Reviewed by dev-68.
+#
+# Pinned to the reviewed head 817f5c74d934, because the base branch's GUARDED list does not
+# know them yet (this PR adds 'src/js/ui/measure/*' at scripts/review-verdict.mjs:69), so the
+# digest below does not cover them. Blobs at the reviewed head:
+#   src/js/ui/measure.js              07e66bc4a298
+#   src/js/ui/measure/calibration.js  d793d5c176ff
+#   src/js/ui/measure/constants.js    8220f83da4b6
+#   src/js/ui/measure/input.js        2d99c18585db
+#   src/js/ui/measure/live.js         3dcaec7e39c9
+#   src/js/ui/measure/run.js          00d8e4f53903
+#   src/js/ui/measure/saving.js       3b1c125c1e16
+#   src/js/ui/measure/session.js      4b5c64ab48ce
+#   src/js/ui/measure/test-seam.js    8ec1912516a4
+#   src/js/ui/measure/views.js        2d4b5f18aee6
+#
+# The digest: the base branch's scripts/review-verdict.mjs (git archive origin/main scripts
+# into a scratch dir), both `--content --base-branch origin/main` and `--repo . --head HEAD
+# --content --list --base-branch origin/main`, over the three paths main's list knows that
+# the PR changes: scripts/review-verdict.mjs, src/js/ui/measure.js and
+# tests/unit/review-verdict.test.mjs: 4f0cc302...e265, which matches the builder's. For
+# context only: the branch's own script gives abb85801...56fd over 12 paths (those three plus
+# the nine modules).
+#
+# Lenses:
+# - Behaviour equivalence. At runtime (old and new createMeasureUi imported in node from a
+#   scratch archive of HEAD): the 15 exports have the same names, order and deep values; the
+#   component has the same 82 members in the same order with identical descriptors; every
+#   method and getter source is identical modulo `ops.` and whitespace; the initial `meas`
+#   state is deep-equal. Statically, all 64 old closure functions occur exactly once in the
+#   new modules, textually identical modulo `ops.`, whitespace and comments. The old closure
+#   had no top-level side effect; the devicechange listener is still registered in measureInit
+#   (session.js:419). No closure function uses `this`. A normalized line-multiset diff against
+#   main's measure.js finds only header comments, re-pathed imports, the create*/ *Part
+#   wrappers and ops-table lists, `export` on 9 helpers in constants.js, the facade's
+#   FUNCTIONS/PARTS loop (measure.js:137-160) and one string rewrap (input.js:174-175). No
+#   logic line was added or removed.
+# - Import graph. The only importers (main.js:60 and 6 unit tests) use createMeasureUi and
+#   LEVEL_NEEDS_INPUT, both re-exported. No cycle; every import used and resolving to the same
+#   module as on main; the ops table has 64 keys, 64 functions, no unknown ops.X. Nine modules
+#   are now first evaluated inside the measure subtree; none has an import-time side effect.
+# - GUARDED and size. 'src/js/ui/measure/*' is guarded; the rule text and its test are updated
+#   and a new test checks every module under src/js/ui/measure/ is guarded. All files are
+#   under 40 000 bytes (largest session.js 21293); the 128000 cap entry is removed. No test
+#   expected value changed, as E002 requires.
+#
+# Runs (nothing installed; existing node_modules and cached Playwright browsers): node --test
+# on the 9 touching test files 142/142; full unit suite 3236/3236; build.mjs --check exit 0
+# (2829338 B, v3.13.0); test:measure set: v3-measure.cjs 116 checks, analysis-worker.cjs 49,
+# v3-ui.cjs 37/37 on chromium, firefox and webkit over file and http. Mutations: dropping the
+# LEVEL_NEEDS_INPUT re-export, measureTestSeamPart, createCalibration or markStored each fails
+# tests; dropping refreshInputs from input's ops list passes the unit suite but is caught by
+# v3-ui.cjs's devicechange check in CI (test:measure). In-worktree mutation restored with
+# `git checkout -- .`; the tree was left clean at 817f5c74.
+#
+# Dropped on adversarial re-check: R-1 (no test asserts the ops table is complete); its one
+# example is covered by v3-ui.cjs and the table is correct at this head. Optional hardening.
+#
+# Before landing (R-2): the branch conflicts with main in dist/index.html and must merge main
+# and rebuild. The trial merge leaves the three digest paths and the src/js/ui/measure/ tree
+# identical to HEAD; the verdict stands only after a re-check shows measure.js and the nine
+# module blobs above unchanged.
+#
+# Open: R-2, R-3 (P3). No P0, P1 or P2 is open.
+schema: review-verdict/v1
+pr: 262
+verdict: merge
+reviewer: "dev-68 (Claude Opus 5.5 session 4f90795d); did not build, merge or edit this change; wrote only this file"
+content: 4f0cc30234d0553b1f5d6ff5e6cfcd8aebdb474cd0c76325fa60c743193de265
+findings:
+  - { id: R-2, severity: P3, status: open, title: "The branch conflicts with main in dist/index.html (git merge-tree HEAD origin/main; gh: CONFLICTING, DIRTY) and must merge main and rebuild, so the head that lands is not 817f5c74. Fix: merge main, rebuild dist, and add a re-check note showing src/js/ui/measure.js and the nine src/js/ui/measure/* blobs unchanged (only dist and #252's own lines differ), as in 239.yaml." }
+  - { id: R-3, severity: P3, status: open, title: "docs/v3/architecture.md:211 is an unwrapped 172-char line, and the inserted composition-root sentence leaves the following 'They keep the measurement engine ...' reading as if it described the parts. docs/ and .ai/repo/rules/project/review-verdict.v1.md are outside E002's declared scope. Fix: rewrap at 100, say 'Both adapters keep ...', and widen E002's scope or record the deviation." }
