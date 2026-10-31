@@ -104,6 +104,12 @@ export function createWorkbench(svc) {
       return `${groupedHz(f)} Hz`;
     },
     get statusWaveText() {
+      if (this.seqPlaying && !this.playing) {
+        // C003: the sequence plays its own waveform; the Additive lab shapes the instrument only.
+        const seq = svc.labs && svc.labs.sequencer;
+        const w = seq && seq.editor && seq.editor.model ? seq.editor.model.waveform : this.waveform;
+        return WAVEFORM_LABELS[w] || 'Sine';
+      }
       if (this.source === 'dual') {
         return `${WAVEFORM_LABELS[this.dual.a.wave]} + ${WAVEFORM_LABELS[this.dual.b.wave]}`;
       }

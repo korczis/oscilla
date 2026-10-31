@@ -77,8 +77,9 @@ captured by `npm run social` from `dist/index.html`:
 
 OSCILLA generates signals with the native Web Audio API and measures them while they play. It
 shows them as a waveform, a live spectrum and a spectrogram, and it compares them with what your
-microphone picks up. You can arrange signals into block sequences, shape them with filters, an
-ADSR envelope and additive harmonics, explore phase and stereo, and export the result. In the
+microphone picks up. You can arrange signals into block sequences that play through the Filter
+Lab, while the ADSR envelope and additive harmonics shape the instrument; you can explore phase
+and stereo, and export the result. In the
 Measure workspace it records a sweep through your speaker and microphone. From that recording
 it computes the response of the whole playback and capture chain, rates the quality of the
 measurement and keeps it as a reproducible experiment. The app is a single HTML file. It needs no server, no account and no network once loaded, and it works
@@ -545,6 +546,11 @@ Not yet built:
   and labelled as uncalibrated. A browser knows sample values, not sound pressure. The only
   exception is the Measure workspace with a valid absolute level calibration that you supply
   from an external reference.
+- **The analyser scale is not 0 dB at full scale.** The live spectrum and the microphone
+  analyser plot the dB of a Blackman-windowed analyser FFT (dBFS-like, uncalibrated), on which a
+  full-scale sine reads near -13.6 dB. The detected-peak level corrects it so that sine reads
+  0 dBFS, and the Measure analysis has its own tone and mean-square (RTA) scales, defined in
+  [docs/v3/algorithms.md](docs/v3/algorithms.md).
 - **The microphone is not calibrated.** Its response, the input processing and the room are
   unknown, so readings are only comparisons. In Measure, a frequency-response profile corrects
   the microphone only inside the profile's range. Detected frequencies are never shown with more
@@ -660,7 +666,10 @@ and CI fail.
 
 The browser suites need Playwright's browsers (`npx playwright install chromium firefox
 webkit`). Work lands through small pull requests. CI runs the gate on every pull request,
-branch protection requires the `gate` check, and a merge to `main` redeploys Pages.
+branch protection requires the `gate` check, and a merge to `main` redeploys Pages. The branch
+need not be up to date with `main` (`strict: false`, the owner's decision of 2026-10-30), so a
+pull request merges on its last green run and the gate's suites never run on `main` itself:
+ADR 0009's note of that date says what still catches a stale run or a red combination.
 
 Two of the gate's jobs check the pull request rather than the product. `fail-first`: when the
 title starts with `feat` or `fix`, a unit test the pull request adds or changes must fail on

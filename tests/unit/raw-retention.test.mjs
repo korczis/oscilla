@@ -372,9 +372,10 @@ test('the product states the policy where a run is saved, in About and in the RE
 });
 
 // The engine's captures are not the only raw PCM of MEASURE: the level-calibration reference
-// capture (ui/measure.js captureReference, REFERENCE_CAPTURE_S through io.captureNoise) and the
-// setup check's level window (capture.js PREFLIGHT_LEVEL_S) record through the same io, outside
-// the engine. Both are locals reduced to a level reading; the policy has to name them.
+// capture (ui/measure/calibration.js captureReference, REFERENCE_CAPTURE_S through
+// io.captureNoise) and the setup check's level window (capture.js PREFLIGHT_LEVEL_S) record
+// through the same io, outside the engine. Both are locals reduced to a level reading; the
+// policy has to name them.
 test('the policy names every raw capture of MEASURE, the reference capture included', () => {
   const flat = (t) => t.replace(/\s+/g, ' ');
   const readme = read('README.md');
@@ -391,7 +392,7 @@ test('the policy names every raw capture of MEASURE, the reference capture inclu
   assert.match(flat(hint[1]), /discarded/);
   assert.match(flat(hint[1]), /only the level reading/);
   // The code the sentence describes: the capture is a local of captureReference.
-  const ui = read('src/js/ui/measure.js');
+  const ui = read('src/js/ui/measure/calibration.js');
   assert.match(ui, /const cap = await io\.captureNoise\(REFERENCE_CAPTURE_S, \{\}\);/);
   assert.doesNotMatch(ui, /ctx\.reference = \{[^}]*\bcap\b[,\s}]/,
     'ctx.reference keeps the reading and the input facts, not the capture');

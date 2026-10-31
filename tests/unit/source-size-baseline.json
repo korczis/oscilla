@@ -38,7 +38,6 @@
     "src/js/studio/transport.js": 80000,
     "src/js/studio/validate.js": 49000,
     "src/js/ui/experiments.js": 53000,
-    "src/js/ui/measure.js": 128000,
     "src/js/ui/studio/graph-editor.js": 54000,
     "src/js/ui/studio/inspector.js": 81000,
     "src/js/ui/studio/timeline-editor.js": 53000,

@@ -20,6 +20,19 @@
 // sample-and-hold of a real measurement. Freezing or a hidden document pauses the time axis;
 // nothing is written for the paused interval. A null spectrum (no analyser yet) or silence
 // writes the floor colour — never synthetic data.
+//
+// Feed (createSpectrogramFeed): 'unsmoothed' (the default) computes each column from the
+// analyser's time-domain samples (reader.readTime) with fft.js createSpectrumAnalyzer, the
+// AnalyserNode analysis with smoothing over time off, so a transient smears over the frames
+// whose window holds it and no further; 'analyser' reads getFloatFrequencyData, which carries
+// the node's smoothingTimeConstant (0.55 on the main output) as an exponential tail. Both are
+// the same relative scale (dB re digital full scale amplitude 1, analyser.js).
+//
+// Readout (readoutAtRow, renderer.readout): the bin a pixel row shows in the newest column
+// written (the right edge), its centre frequency and its dB: the strongest bin of a max row,
+// the nearer bin of an interpolated row. Without a written spectrum it says so (db null).
+
+import { createSpectrumAnalyzer } from './fft.js';
 
 export const DEFAULT_SPECTROGRAM_STOPS = Object.freeze([
   { at: 0.0, color: [3, 5, 16] }, // floor: near-black navy
@@ -166,6 +179,47 @@ export function fillColumn(rgba, spectrum, map, lut, minDb, maxDb) {
   return rgba;
 }
 
+/**
+ * readoutAtRow(spectrum | null, map, y) → { y, rowHz, bin, frequencyHz, binHz, db } | null
+ * The bin row y shows (max row: strongest bin; interpolated row: nearer bin) with its own dB
+ * value from spectrum; bin, frequencyHz and db are null when there is nothing to read.
+ */
+export function readoutAtRow(spectrum, map, y) {
+  if (!map || !(y >= 0) || !(y < map.rows)) return null;
+  const row = Math.floor(y);
+  const rowHz = rowFrequency(row, map.rows, map.minHz, map.maxHz, map.scale);
+  const out = { y: row, rowHz, bin: null, frequencyHz: null, binHz: map.binHz, db: null };
+  if (!spectrum) return out;
+  let bin = map.lo[row];
+  if (map.mode[row] === 1) {
+    for (let k = bin + 1, e = map.hi[row]; k <= e; k++) if (spectrum[k] > spectrum[bin]) bin = k;
+  } else if (map.frac[row] > 0.5) bin += 1;
+  out.bin = bin;
+  out.frequencyHz = bin * map.binHz;
+  out.db = spectrum[bin];
+  return out;
+}
+
+export const SPECTROGRAM_FEEDS = Object.freeze(['unsmoothed', 'analyser']);
+
+/**
+ * createSpectrogramFeed(reader, { mode = 'unsmoothed' }) → { mode, read(nowMs) → Float32Array }
+ * reader: analyser.js createAnalyserReader. 'unsmoothed' analyses reader.readTime() (one reused
+ * buffer, reallocated when the fftSize changes); 'analyser' returns reader.readFrequency().
+ */
+export function createSpectrogramFeed(reader, { mode = 'unsmoothed' } = {}) {
+  if (!SPECTROGRAM_FEEDS.includes(mode))
+    throw new TypeError(`spectrogram feed must be ${SPECTROGRAM_FEEDS.join(' or ')}, got ${mode}`);
+  let analyzer = null;
+  function read(nowMs) {
+    if (mode === 'analyser') return reader.readFrequency(nowMs);
+    const time = reader.readTime(nowMs);
+    if (!analyzer || analyzer.size !== time.length) analyzer = createSpectrumAnalyzer(time.length);
+    return analyzer.compute(time);
+  }
+  return { mode, read };
+}
+
 const defaultHidden = () => typeof document !== 'undefined' && document.hidden === true;
 
 /**
@@ -184,6 +238,7 @@ const defaultHidden = () => typeof document !== 'undefined' && document.hidden =
  *   resize()                          re-read canvas.width/height (device pixels) and clear
  *   freeze(on), frozen, clear(), dispose()
  *   rowFrequency(y), yForFrequency(f)  axis helpers for labels and cursor readouts
+ *   readout(y)                        readoutAtRow of row y in the newest column written
  *   strategy                          'ring' or 'scroll'
  * The caller owns the animation loop and passes the analyser buffer (e.g. reader.frequency).
  */
@@ -217,6 +272,7 @@ export function createSpectrogram(canvas, options = {}) {
   let frozen = false;
   let dirty = true;
   let strategy = 'scroll';
+  let shown = null; // copy of the newest column's spectrum, for readout()
 
   function floorFill(target) {
     target.fillStyle = `rgb(${lut[0]},${lut[1]},${lut[2]})`;
@@ -254,6 +310,7 @@ export function createSpectrogram(canvas, options = {}) {
   }
 
   function clear() {
+    shown = null;
     head = 0;
     acc = 0;
     lastNow = null;
@@ -279,6 +336,11 @@ export function createSpectrogram(canvas, options = {}) {
 
   function writeColumns(spectrum, n) {
     fillColumn(column.data, spectrum, map, lut, opts.minDb, opts.maxDb);
+    if (!spectrum) shown = null;
+    else {
+      if (!shown || shown.length !== spectrum.length) shown = new Float32Array(spectrum.length);
+      shown.set(spectrum);
+    }
     if (strategy === 'ring') {
       for (let i = 0; i < n; i++) {
         rctx.putImageData(column, head, 0);
@@ -359,6 +421,10 @@ export function createSpectrogram(canvas, options = {}) {
     },
     rowFrequency(y) {
       return map ? rowFrequency(y, height, map.minHz, map.maxHz, map.scale) : null;
+    },
+    /** Readout of device row y in the newest column (readoutAtRow), or null off the plot. */
+    readout(y) {
+      return readoutAtRow(shown, map, y);
     },
     yForFrequency(f) {
       if (!map || !(f > 0)) return null;
