@@ -617,6 +617,23 @@ export const MAKERS = Object.freeze({
       notes: rng.pick([undefined, 'notes', '']) });
   },
 
+  // K061 (#329): several model edits as one history entry; a nested batch or an empty one is
+  // refused, and so is a view change inside it.
+  BATCH(m, rng, mem, bad) {
+    if (bad) {
+      return rng.pick([
+        () => invalid('empty-batch', { type: 'BATCH', steps: [] }),
+        () => invalid('nested-batch', { type: 'BATCH', steps: [{ type: 'BATCH', steps: [] }] }),
+        () => invalid('view-in-batch', { type: 'BATCH', steps: [{ type: 'VIEW_SET' }] }),
+      ])();
+    }
+    return valid({ type: 'BATCH', label: 'Batch', steps: [
+      { type: 'METADATA_SET', title: rng.pick(['Session', 'Sketch', 'Test bench']) },
+      { type: 'NODE_ADD', nodeType: rng.pick(R.list().filter((d) => d.type !== 'master')).type,
+        position: position(rng) },
+    ] });
+  },
+
   PASTE(m, rng, mem, bad) {
     if (bad || !m.graph.nodes.length) {
       return invalid('bad-clipboard', { type: 'PASTE', clipboard: rng.pick([
