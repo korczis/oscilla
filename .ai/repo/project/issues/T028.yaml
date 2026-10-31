@@ -1,0 +1,30 @@
+id: T028
+milestone: M073
+serves:
+  - "v3-measure#readout-labels"
+title: "The IR noise-tail window trusts a saved stimulus length without checking its sample rate"
+slug: the-ir-noise-tail-window-trusts-a-saved-stimulus-length-without-checking-its-sample-rate
+priority: p3
+profile: implementation
+objective: "irStimulusFrames (src/js/ui/measure.js, added by T019 in #343) derives the stimulus length from a saved or imported recipe.stimulus without checking that the recipe's sample rate equals ir.sampleRate. When they differ, it returns null (the window falls back to the no-stimulus path) or rescales the length to ir.sampleRate, and the note says which. A unit test drives the saved-experiment and imported-experiment branches, including a mismatched rate."
+why: "Review of #343 (oscilla-26, R2, P3, delta verdict b848b83c): an experiment recorded at 44.1 kHz and opened where the IR is 48 kHz would place the full-overlap noise window by a frame count from the other rate, so the stated window (T1 to T2 ms) would be wrong. No test drives the recipe.stimulus branch today. The PR body mention was not a recorded follow-up."
+scope:
+  - "src/js/ui/measure.js"
+  - "src/js/measurement/stimulus.js"
+  - "tests/unit/readout-labels-ir-tail.test.mjs"
+  - "tests/README.md"
+  - "dist"
+acceptance_criteria:
+  - "Fail-first fixture: a saved experiment whose recipe.stimulus was made at 44.1 kHz, shown with a 48 kHz IR, yields a window that matches the 48 kHz length or reads not available; fails on the merge base."
+  - "Negative cases, each asserted: a live capture (src.stimulus.frames) is unchanged; equal rates give the same window as today; a recipe without a stimulus still reads not available."
+  - "Revertible on its own."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "The pull request touches a guarded path and carries a reviewer-written .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+  - "Lands after T019 (#343), which introduces irStimulusFrames."
+validation:
+  - "npm test"
+  - "npm run verify"
+evidence_required:
+  - "verified"
+created_at: 2026-10-30
+updated_at: 2026-10-30
