@@ -1,0 +1,42 @@
+id: U021
+milestone: M054
+serves:
+  - "ui-current#ui-audited"
+title: "The Output level buttons never cover the level hint below them on a touch screen"
+slug: the-output-level-buttons-never-cover-the-level-hint-below-them
+priority: p2
+profile: implementation
+objective: "Lands as fix(ui). Defect: in the Measure workspace, section#osc-measure-stimulus (src/index.html:1421), the Output level radiogroup div.osc-seg.osc-m-level (src/index.html:1430) is fixed at height: var(--osc-control-h), 28 px (src/styles/measure.css:480-482). On a coarse pointer its button[data-osc=\"measure.level\"] radios grow to the 44 px minimum (src/styles/responsive.css:444, .osc-seg-btn), and the coarse rule that sets .osc-seg to height: auto (src/styles/responsive.css:485) loses to the more specific .osc-m-level height, so the buttons overflow their container and cover the first line of p.osc-m-hint (src/index.html:1439, 'digital peak 0.125 (-18.1 dBFS digital)...'): at 390x844 they span y 929-973, the container ends at 957 and the hint starts at 962, an 11 px overlap across each 117 px button (115 px at 768x1024). Before: the LOW / MEDIUM / HIGH buttons hide part of a level and safety statement on touch. After: the level control sizes to its content at every pointer and width, the hint starts below the buttons' bottom edge, and its text is unchanged (project.no-fake-science: the stated digital peak and dBFS value stay exactly what OUTPUT_LEVEL_CHOICES says). The fix lands with the Pro rebuild of the Measure workspace (F004): the level choice is a Flowbite Pro button group with no fixed container height, and no new osc-* class, selector or inline style is added (project.ui-uses-flowbite-pro); the fixed .osc-m-level height rule is removed, never overridden by a stronger one. Every level button stays reachable and selectable and moves the selection it names (project.no-inert-surfaces). Negative cases: a fine pointer at 1536x1024 keeps its current layout and the visual reference passes; a hint that wraps to several lines is still fully below the buttons; switching LOW / MEDIUM / HIGH changes the hint text without any overlap. Rollback: revert the commit; the change is layout only and touches no stored value, URL key or measurement. Not this: G008, N003, N008 and N009 (44 px targets for declared param controls, the Filter Lab and the Studio Inspector), V252 (number-field stepper keys hidden on coarse pointers); P002 (#278) moves the .osc-seg.osc-m-level markup but not its height or the coarse rule."
+why: "Found by the S074 quality-bar review of 2026-10-30 at origin/main d9db6bdf, section 74 symptom 'The Output level LOW / MEDIUM / HIGH buttons cover the first line of the hint text below them.' (area mobile, 390x844 and 768x1024 on touch), reproduced by an independent verifier. Evidence: screenshot /private/tmp/claude-501/-Users-korczis-dev-oscilla/901211e2-501d-4cb8-8333-88e1a6fcf519/scratchpad/s074/out/probe-measure-stim.png (the LOW button covers 'digital peak 0.125'). The covered line is a level and safety statement; card#osc-measure-stimulus is recorded Flowbite debt, but this overlap is a geometry defect the ratchet does not record."
+scope:
+  - "src/index.html"
+  - "src/styles/measure.css"
+  - "src/styles/responsive.css"
+  - "tests/unit/measure-level-touch.test.mjs"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/browser/layout.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "F004"
+acceptance_criteria:
+  - "Fail-first: tests/unit/measure-level-touch.test.mjs reads src/index.html and src/styles and fails on the merge base: the container of the button[data-osc=\"measure.level\"] radios carries no fixed height (no height declaration on its selector in src/styles and no fixed-height utility on its element) that a coarse-pointer 44 px target can overflow."
+  - "A check in tests/browser/layout.cjs opens the Measure workspace with a coarse pointer (hasTouch) at 390x844 and 768x1024 and asserts, from getBoundingClientRect, that the bottom of every button[data-osc=\"measure.level\"] is at or above the top of the level hint p.osc-m-hint (or its Pro successor) and that each button is at least 44 px high; it repeats the check after selecting LOW, MEDIUM and HIGH; the same check at 1536x1024 with a fine pointer passes unchanged."
+  - "The hint text for each level is byte-identical to OUTPUT_LEVEL_CHOICES[].detail before and after the change (asserted in the browser check; project.no-fake-science)."
+  - "It adds no class token, selector, markup surface or inline style and only removes legacy ones, so tests/unit/ui-flowbite-pro-baseline.json stays equal or falls (node scripts/ui-flowbite-pro-record.mjs --check passes, rewritten only where a count fell) and node --test tests/unit/ui-flowbite-pro.test.mjs passes (project.ui-uses-flowbite-pro, project.visual-identity-lock v2)."
+  - "As a fix change it carries a unit test that fails on the merge base and passes on the head (project.fail-first); src/styles and the Measure adapter paths it touches carry a reviewer's verdict where project.review-verdict guards them."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named deadline (project.suite-harness, project.bounded-test-timing)."
+  - "Definition of done, extends: the coarse-pointer section of tests/browser/layout.cjs gains a control-over-text overlap assertion for the Measure stimulus card."
+  - "Definition of done, interlinks: the test names U021 and F004; the objective names G008, N003, N008, N009, V252 and P002 as related but distinct."
+  - "Definition of done, interactivity: the level radios stay selectable by touch and keyboard and the hint follows the selection; no new interaction (stated)."
+  - "Definition of done, docs, menus and routes: tests/README.md updates the layout.cjs row and adds a row for tests/unit/measure-level-touch.test.mjs; no menu or route changes (stated)."
+  - "Definition of done, tested: node --test tests/unit/measure-level-touch.test.mjs and node tests/browser/layout.cjs in every gate browser; dist is rebuilt and npm run build:check passes."
+  - "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+  - "node --test tests/unit/measure-level-touch.test.mjs"
+  - "node tests/browser/layout.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-10-30'
+updated_at: '2026-10-30'

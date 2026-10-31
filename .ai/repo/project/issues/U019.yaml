@@ -1,0 +1,51 @@
+id: U019
+milestone: M054
+serves:
+  - "ui-current#ui-audited"
+title: "Each count, shortcut legend and disclaimer appears once per screen, and long help sits behind a control"
+slug: each-count-shortcut-legend-and-disclaimer-appears-once-per-scree
+priority: p3
+profile: implementation
+objective: "Lands as fix(ui). Before: one viewport repeats itself. Studio: the node and connection count appears three times, in the graph header (src/js/ui/studio/workspace.js:632, 'counts'), the Inspector's Studio header (src/js/ui/studio/inspector.js:1201 and 1460) and the visible 177-character p.osc-si-summary [data-osc=studio.inspector.summary] (inspector.js:1228). The timeline's 219-character shortcut list p.osc-stl-help (src/js/ui/studio/timeline-editor.js:135, KEY_HELP of src/js/ui/studio/transport-view.js:101) is always visible inside [data-osc=studio.tl.root], although [data-osc=studio.keys] (src/index.html:2399) opens a Keyboard shortcuts dialog. Playground and Analyzer: the safety banner [data-osc=safety] (src/index.html:254-255) and the Device & Limits callout (src/index.html:744-747) both say speaker output is not guaranteed. Measure: p.osc-m-hint [data-osc=measure.retention] (src/index.html:1826) is 358 characters. Experiments: the Findings definition paragraph (src/index.html:1938) inside [data-osc=fnd.panel] is always shown. After: the graph header keeps 'N nodes · M connections'; the Inspector's Studio header keeps only clips and automation lanes; the summary text from summarizeStudio (src/js/studio/a11y.js, the §249 screen-reader summary) is unchanged but leaves the visible column and stays the graph's accessible description (Tailwind sr-only). The timeline legend stays the root's aria-describedby target with sr-only, and the shortcuts dialog lists every KEY_HELP key. The Device & Limits callout keeps the speaker-output statement. The banner's hardware sentence is md:hidden, so it is shown only below 768 px, where Device & Limits is hidden (src/index.html:281). The retention hint becomes one short sentence with the full text unchanged in a Flowbite Pro accordion. The Findings definition shows as the empty state and, once findings exist, in a Pro popover beside the heading. All of this uses Pro components and Tailwind utilities, with no new osc-* class and no inline style (project.ui-uses-flowbite-pro). Negative cases: no honesty label of section 73 and no privacy statement is removed or reworded, because each one is moved, not cut (project.no-fake-science). Every hidden text stays reachable by keyboard and assistive technology. The disclosure controls work (project.no-inert-surfaces). No CSS truncation hides text. Rollback: revert the commit (markup and text only; no stored state). Not this: S063 (V1 progressive disclosure, completed), Q004 and PR #278 (P002, which panels stay on the first Playground screen), W006 (shared transport labels and shortcuts), G015 ('What is this' panel), N008 (collapsible control panel)."
+why: "Found by the S074 quality-bar review of 2026-10-30 at origin/main d9db6bdf, section 74 symptom 'excessive explanatory text: the same disclaimers and summaries repeat on one screen, and help text is permanently visible', and reproduced by an independent verifier. Evidence: the long-text probe in the review's scratchpad s074/dom.json (probe.cjs), plus the screenshots s074/d-studio.png (y=825-930 and 915), s074/d-playground.png (banner y=83, Device callout y=380-445) and s074/d-analyzer.png (y=83 and y=862). Severity P3."
+scope:
+  - "src/index.html"
+  - "src/js/ui/studio/inspector.js"
+  - "src/js/ui/studio/workspace.js"
+  - "src/js/ui/studio/timeline-editor.js"
+  - "src/js/ui/studio/transport-view.js"
+  - "src/js/studio/a11y.js"
+  - "tests/unit/repeated-text.test.mjs"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/browser/v31-studio-timeline.cjs"
+  - "tests/browser/v3-ui.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "F003"
+  - "F004"
+  - "F005"
+  - "F006"
+  - "F008"
+acceptance_criteria:
+  - "Fail-first: tests/unit/repeated-text.test.mjs reads src/index.html and the Studio modules and fails on the merge base. It checks that the Inspector's Studio header names no node or connection count, that the timeline legend and the retention text are not rendered as always-visible paragraphs, and that the Device & Limits callout and the banner do not both carry the speaker-output sentence at md and up."
+  - "A check in tests/browser/v3-ui.cjs at 1536x1024 counts the visible occurrences of 'nodes · ' and the connection count in the Studio, the speaker-output statement in the Playground and the Analyzer, and the shortcut legend in the Studio. Each one is exactly 1, and no visible paragraph in these five workspaces is longer than 200 characters. At 390x844 the speaker-output statement is still reachable once."
+  - "tests/browser/v31-studio-timeline.cjs asserts that [data-osc=studio.tl.root]'s aria-describedby resolves to non-empty KEY_HELP text and that [data-osc=studio.keys] opens a dialog listing every KEY_HELP key. Its contrast probe of .osc-stl-help (line 725) is replaced, not dropped."
+  - "The §249 summary test in tests/unit/v31-studio-templates.test.mjs passes unchanged (the summary text is not edited), and the retention and Findings texts are byte-identical inside their disclosures."
+  - "It adds no osc-* class, selector or inline style and only removes legacy ones, so tests/unit/ui-flowbite-pro-baseline.json stays equal or falls (node scripts/ui-flowbite-pro-record.mjs --check passes) and node --test tests/unit/ui-flowbite-pro.test.mjs passes (project.ui-uses-flowbite-pro)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named deadline (project.suite-harness, project.bounded-test-timing)."
+  - "Definition of done, extends: the Keyboard shortcuts dialog gains the timeline keys and the graph gains its accessible description."
+  - "Definition of done, interlinks: the retention accordion and the Findings popover each name the workspace section they qualify, and the Device & Limits callout stays the one link target of the speaker-output statement."
+  - "Definition of done, interactivity: the accordion, the popover and the shortcuts dialog open and close by mouse and keyboard (tests/browser/v3-ui.cjs)."
+  - "Definition of done, docs, menus and routes: tests/README.md has a row for each new test; no route or menu changes (stated)."
+  - "Definition of done, tested: npm test and the two browser suites above pass; dist is rebuilt and npm run build:check passes."
+  - "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+  - "node --test tests/unit/repeated-text.test.mjs"
+  - "node tests/browser/v3-ui.cjs"
+  - "node tests/browser/v31-studio-timeline.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-10-30'
+updated_at: '2026-10-30'
