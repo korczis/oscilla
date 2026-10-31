@@ -146,11 +146,12 @@ test('formatHzStep never shows more precision than the step', () => {
 });
 
 test('input parsers', () => {
-  assert.equal(parseFrequency('2.5 kHz'), 2500);
-  assert.equal(parseFrequency('2.5k'), 2500);
-  assert.equal(parseFrequency('880 Hz'), 880);
-  assert.equal(parseFrequency('1,5 kHz'), 1500);
-  assert.equal(parseFrequency('abc'), null);
+  // core/frequency.js's grammar (G002): { ok, value } or { ok: false, error }.
+  assert.deepEqual(parseFrequency('2.5 kHz'), { ok: true, value: 2500 });
+  assert.deepEqual(parseFrequency('2.5k'), { ok: true, value: 2500 });
+  assert.deepEqual(parseFrequency('880 Hz'), { ok: true, value: 880 });
+  assert.deepEqual(parseFrequency('1,5 kHz'), { ok: true, value: 1500 });
+  assert.equal(parseFrequency('abc').ok, false);
   assert.equal(parseDurationS('10 ms'), 0.01);
   assert.equal(parseDurationS('0.3 s'), 0.3);
   assert.equal(parseDurationS('300'), 0.3);

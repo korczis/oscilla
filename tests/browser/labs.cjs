@@ -170,6 +170,52 @@ async function startContext(page) {
   if (state !== 'running') throw new Error(`fixture AudioContext ${state} after resume()`);
 }
 
+// Type `text` by keyboard into the text field `selector` of `pg` (its value selected first) and
+// commit it with Tab, which fires the change event every field here commits on.
+async function typeInto(pg, selector, text) {
+  await pg.focus(selector);
+  await pg.evaluate((sel) => document.querySelector(sel).select(), selector);
+  await pg.keyboard.type(text);
+  await pg.keyboard.press('Tab');
+}
+
+// The G002 check: '2,5k' typed into the Filter Lab cutoff (fixture page) and into the
+// Playground frequency field of the built app (/app.html, dist/index.html), then the readings
+// once both read 2.50 kHz or the 'frequency accepted' deadline (2 s) ran out.
+async function typedFrequency(context, page, base) {
+  const FILTER = '#osc-filter-cutoff-value';
+  const FIELD = '#pp-tone-global-frequency';
+  const app = await context.newPage();
+  try {
+    await app.goto(`${base}/app.html`);
+    await until(() => app.evaluate(() => document.documentElement.dataset.ready === 'true'),
+      { ms: 15000, what: 'the built app is ready (html[data-ready])' });
+    await app.click('#osc-source-pattern');
+    await until(() => app.evaluate((sel) => !!document.querySelector(sel), FIELD),
+      { ms: 5000, what: 'the Playground pattern form shows its Frequency field' });
+    await typeInto(app, FIELD, '2,5k');
+    await typeInto(page, FILTER, '2,5k');
+    const read = async () => ({
+      playground: await app.evaluate((sel) => document.querySelector(sel).value, FIELD),
+      filter: await page.evaluate((sel) => document.querySelector(sel).value, FILTER),
+      filterHz: await page.evaluate(() => window.__labs.labs.filter.config.frequency),
+    });
+    let last = null;
+    try {
+      await until(async () => {
+        last = await read();
+        return last.playground === '2.50 kHz' && last.filter === '2.50 kHz';
+      }, { ms: 2000, what: 'frequency accepted' });
+    } catch (e) {
+      if (!(e instanceof WaitTimeout)) throw e;
+      console.log(`  WAIT  ${e.message}`);
+    }
+    return last;
+  } finally {
+    await app.close();
+  }
+}
+
 async function runEngine(engine, base) {
   const results = [];
   const check = (name, ok, detail = '') => {
@@ -331,6 +377,15 @@ async function runEngine(engine, base) {
   check('cutoff and Q fields follow the drag', /kHz|Hz/.test(fields.cutoff) && fields.q !== '0.707',
     JSON.stringify(fields));
   await page.click('#osc-ftype-lowpass');
+
+  // (2b) One frequency grammar (G002): '2,5k' typed by keyboard into the Playground frequency
+  // field (the built app: the fixture has no V1 instrument) and into the Filter Lab cutoff is
+  // accepted alike, and both fields then read the one frequency text, 2.50 kHz.
+  const typed = await typedFrequency(context, page, base);
+  const typedOk = (t) => t.playground === '2.50 kHz' && t.filter === '2.50 kHz'
+    && t.filterHz === 2500;
+  check("typed '2,5k' accepted alike: Playground frequency and Filter Lab cutoff read 2.50 kHz",
+    typedOk(typed), JSON.stringify(typed));
 
   // (3) Additive bars = the coefficients handed to createPeriodicWave.
   const additive = (preset) => page.evaluate((p) => {
@@ -635,6 +690,8 @@ async function main() {
     '/labs-stereo.html': await buildFixture({ frequency: 1000, gain: 0.5, stereo: true }),
     '/labs-visual.html': await buildFixture({ frequency: 15500, gain: 0.5, warmupMs: 4500,
       referenceState: true }),
+    // The built app (dist/index.html): the Playground's own frequency field (G002 check).
+    '/app.html': fs.readFileSync(path.join(ROOT, 'dist', 'index.html'), 'utf8'),
   };
   const buildDir = opt('--build');
   if (buildDir) {

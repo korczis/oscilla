@@ -67,7 +67,32 @@ const categoryOf = (group) => CATEGORY[group] || 'component';
 // shape (and throws if the V2 fix is not there), so the rest of the case is still compared with
 // the golden file. Tested positively in tests/unit/core.test.mjs.
 const OCTAVE_TEXT = constants.OCTAVE_STEP_FREQUENCIES.join(', ');
+// G002, one frequency grammar (tests/unit/units.test.mjs): zero, a negative and a non-finite
+// value are refused with one sentence (V1 had three, and called "-1" not a frequency), and the
+// comma decimal and the exponent the Filter Lab accepted are accepted everywhere.
+const V1_NOT_FREQUENCY = (t) => `“${t}” is not a frequency. Try 440, 440 Hz, 1k or 15.5 kHz.`;
+const G002_PARSE = {
+  'parseFrequency(0)': ['refused', 'Frequency must be a positive number.'],
+  'parseFrequency(-5)': ['refused', 'Frequency must be a positive number.'],
+  'parseFrequency({"$n":"NaN"})': ['refused', 'Frequency must be a positive number.'],
+  'parseFrequency({"$n":"Infinity"})': ['refused', 'Frequency must be a positive number.'],
+  'parseFrequency("0")': ['refused', 'Frequency must be greater than 0 Hz.'],
+  'parseFrequency("0.0")': ['refused', 'Frequency must be greater than 0 Hz.'],
+  'parseFrequency("0k")': ['refused', 'Frequency must be greater than 0 Hz.'],
+  'parseFrequency("-1")': ['refused', V1_NOT_FREQUENCY('-1')],
+  'parseFrequency("-440")': ['refused', V1_NOT_FREQUENCY('-440')],
+  'parseFrequency("1e3")': [1000, V1_NOT_FREQUENCY('1e3')],
+  'parseFrequency("1,5k")': [1500, V1_NOT_FREQUENCY('1,5k')],
+};
+const g002Parse = ([v2, v1Error]) => (out) => {
+  assert.deepStrictEqual(out, v2 === 'refused'
+    ? { ok: false, error: frequency.FREQUENCY_REFUSED } : { ok: true, value: v2 },
+  'G002: one frequency grammar');
+  return { ok: false, error: v1Error };
+};
 const DEVIATIONS = {
+  ...Object.fromEntries(Object.entries(G002_PARSE)
+    .map(([id, d]) => [`frequency.parse/${id}`, g002Parse(d)])),
   // pt-octaves sets pp.octave.text (V1 leaves it out: a stale Steps field changed the preset)
   'presets.data/BUILTIN_PRESETS': (out) => out.map((p) => {
     if (p.id !== 'pt-octaves') return p;
