@@ -322,7 +322,10 @@ test('K001: a pass whose build throws part-way leaves nothing counted', () => {
     engine: { getContext: () => ctx, getDestination: () => ctx.destination, accounting: failing },
     timers: fakeTimers(),
   });
-  assert.throws(() => ed.play(), /build failed/);
+  // Play reports a build that throws instead of throwing into the click handler (C003 R-7).
+  assert.equal(ed.play(), false);
+  assert.match(ed.error, /build failed/);
+  assert.equal(ed.playing, false);
   assert.ok(calls >= 1, 'the build reached the accounting');
   assert.equal(engine.activeNodeCount, 0, 'engine nodes after a failed build');
   assert.equal(engine.activeSourceCount, 0);
