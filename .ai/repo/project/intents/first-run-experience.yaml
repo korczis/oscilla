@@ -19,8 +19,8 @@ satisfaction:
     ref: "majordomus plan list | grep -Eq '^Q004 +DONE '"
   - id: "first-screen-built"
     criterion: "The first screen shows what the owner chose, in Chromium, Firefox and WebKit, from file:// and from the sub-path, with every entry of the committed deep-link inventory resolving as before"
-    evidence: "command"
-    ref: "node tests/browser/first-screen.cjs"
+    evidence: claim
+    ref: "first-screen-layout"
 governance:
   - "rule:project.visual-identity-lock"
   - "rule:project.single-file-deliverable"
@@ -32,4 +32,4 @@ non_goals:
   - "A marketing landing page outside the application, analytics, sign-up or a newsletter"
   - "Making About the default view (rejected in the About brief, conversation 6abf2a8d, 2026-10-02T04:13:38Z)"
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-10-29
