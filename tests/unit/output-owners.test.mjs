@@ -108,9 +108,10 @@ test('C016: the sequencer is read live, not through the 150 ms seqPlaying copy',
 
 test('C016: MEASURE receives outputBusy and the setup check hands it to the preflight', () => {
   assert.match(MAIN, /createMeasureUi\(\{[^}]*\boutputBusy\b/, 'main.js passes outputBusy');
-  const measure = read('src/js/ui/measure.js');
+  // runPreflight lives in the run part of the MEASURE adapter since E002 split it.
+  const measure = read('src/js/ui/measure/run.js');
   const at = measure.indexOf('async function runPreflight(cmp)');
-  assert.ok(at >= 0, 'measure.js runPreflight');
+  assert.ok(at >= 0, 'measure/run.js runPreflight');
   const body = measure.slice(at, measure.indexOf('\n  }\n', at));
   assert.match(body, /me\.preflight\([^;]*otherAudio:\s*\(\)\s*=>\s*otherAudioNow\(cmp\)/,
     'runPreflight passes a probe of svc.outputBusy (behaviour: preflight-own-output.test.mjs)');
