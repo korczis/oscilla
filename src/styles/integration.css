@@ -816,14 +816,16 @@
 
 /* Between 1280 and 1535 px the lab keeps the reference arrangement, but panels are narrower than
    the 1536 px reference, so their text wraps taller than the reference's fixed row heights. Let
-   the rows follow the content there; from 1536 px the exact reference geometry applies. */
+   the rows follow the content there; from 1536 px the exact reference geometry applies. The
+   first row (.osc-top, P002) follows its content too, or the analysis foot and, under a coarse
+   pointer, HOLD TO PLAY would sit under the measurement row (responsive.css, Touch). */
 @media (min-width: 1280px) and (max-width: 1535.98px) {
   .osc-app[data-mode="playground"] .osc-main {
     grid-template-rows: max-content max-content;
   }
 
-  .osc-app[data-mode="playground"] :is(.osc-top-left, .osc-top-right) {
-    grid-template-rows: max-content max-content;
+  .osc-app[data-mode="playground"] .osc-top {
+    grid-template-rows: max-content;
   }
 }
 

@@ -475,6 +475,11 @@ function defineChecks() {
 
   def('correlation-states', async ({ browser }) => {
     const { page, context } = await open(browser);
+    // Phase & Stereo is read in Compare: from 1280 px the Playground leaves the panel to its
+    // workspaces (P002, Q004 option A), and the basis label is judged as shown.
+    await page.evaluate(() => window.OSCILLA.app.setWorkspace('compare'));
+    await page.waitForFunction(() => document.querySelector('#osc-app').dataset.mode === 'compare',
+      null, { timeout: 8000 });
     const read = () => page.evaluate(() => {
       const v = document.querySelector('#osc-corr-value');
       const b = document.querySelector('#osc-corr-basis');

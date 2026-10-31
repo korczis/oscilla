@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Visual regression gate: the deterministic --play scene (scripts/visual-compare.mjs) at the
 // reference viewport (1536x1024) in Playwright's Chromium, judged against the ACCEPTED values in
-// tests/visual/baseline.json. Fails closed: a missing baseline for this environment, a different
+// tests/visual/baseline.json. The scene is the first screen (the Playground of Q004 option A,
+// plan P002); its regions and their boxes are tests/visual/regions.json. Fails closed: a missing baseline for this environment, a different
 // Chromium build, a page error, a missing panel or any threshold breach exits 1.
 //
 //   node scripts/visual-gate.mjs [target] [--out <dir>]
@@ -19,8 +20,9 @@
 //   geometry   every panel's DOM box within +-geometryPx of its reference box (regions.json)
 //   chrome     mismatch with the data hosts excluded <= accepted + chromePp
 //   data       mismatch including the data hosts    <= accepted + that region's dataPp, which is
-//              the measured run-to-run pixel variance + chromePp, rounded up to 0.5 pp (the
-//              phase plot moves 3-3.5 % between runs, so it gets 4 pp)
+//              the measured run-to-run pixel variance + chromePp, rounded up to 0.5 pp (a
+//              plot that moves 3-3.5 % between runs, as the V2 reference's phase plot did,
+//              gets 4 pp)
 //   controls   every control's DOM box within +-geometryPx of its accepted box
 //   total      full frame, with and without data hosts, <= accepted + totalPp
 //
