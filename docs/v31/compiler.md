@@ -604,7 +604,11 @@ method (an engine change, out of this issue's scope):
   `transport.start()` calls the injected `onClaimOutput({ owner: 'studio', position })` before
   anything is built; the UI stops the Playground voice there (`engine.release()` /
   `stopAll()`), and a hook returning `false` refuses PLAY. When the Playground starts a voice,
-  the UI calls `transport.stop()`. `audio-engine.js` is unchanged.
+  the UI calls `transport.stop()`. `audio-engine.js` is unchanged. The V2 pattern sequencer is
+  a third owner (C002): its Play asks `claimOutput()` before it schedules a pass and again
+  before each loop pass, and `main.js` answers from the same owner table as the `engine.play`
+  wrapper. It releases the instrument and stops the Studio, and is refused while a measurement
+  owns the output; a Playground voice or Studio PLAY stops a playing sequence first.
 - **Automated parameters belong to their lane.** For a parameter with an automation lane the
   runtime does not glide its base value; the lane owns the AudioParam and modulation edges add on
   top (`automation.js` `combineAutomationAndModulation`).

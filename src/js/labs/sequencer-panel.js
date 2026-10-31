@@ -164,6 +164,8 @@ export function mount(rootEl, adapter) {
       openStage: adapter.openSequencerStage ? () => adapter.openSequencerStage() : undefined,
       // K001: the engine counts every node of V2 playback (adapter.sequencerAccounting).
       accounting: adapter.sequencerAccounting || null,
+      // One output owner at a time (C002): the app decides before anything is scheduled.
+      claimOutput: () => (adapter.claimOutput ? adapter.claimOutput() : true),
     },
   });
 

@@ -57,6 +57,7 @@ import { registerOscillaUi, workspaceTitle } from './ui/app.js';
 import { keyGuard, openModal, closeModal, watchDialogs, focusSafely } from './ui/dialogs.js';
 import { instrumentTakesSpace, isSpace } from './ui/shortcuts.js';
 import { createWorkbench, followSequenceEdits } from './ui/workbench.js';
+import { createOutputOwner } from './ui/output-owner.js';
 import { createNavigation, v1ModeFor } from './ui/navigation.js';
 import { createUnsavedGuard } from './ui/unsaved.js';
 import { createMeasureUi } from './ui/measure.js';
@@ -133,6 +134,8 @@ const adapter = {
   openSequencerStage: () => engine.stageChain(sequenceInserts(true)),
   // V2 sequencer playback is counted by the engine (K001, audio-engine-discipline).
   sequencerAccounting: engine.stageAccounting(),
+  // The sequencer takes the output through the one owner table (ui/output-owner.js, C002).
+  claimOutput: () => claimOutput('sequencer'),
   getStereoRouter: () => (liveRouter ? liveRouter.router : null),
   // The mic lab's nodes are built and accounted by the engine (audio-engine-discipline).
   attachMicrophone: (stream, opts) => engine.attachMicrophone(stream, opts),
@@ -229,45 +232,19 @@ function labVizInputs(plan) {
 }
 bridge.labInputs = labVizInputs;
 
+// One output owner at a time (C002): the instrument, the sequencer, the Studio, a measurement.
+// stopPlayback also releases the MIDI notes (V502); sequencerPlaying is the editor's own state.
+const { claimOutput, stopPlayback, stopSequence, sequencerPlaying } = createOutputOwner({
+  app: () => app,
+  sequencer: () => (labs.sequencer ? labs.sequencer.editor : null), changed: notifyAdapter });
+
 const basePlay = engine.play.bind(engine);
 engine.play = (plan, o = {}) => {
   // Playground and Measure share one output (spec §74): no instrument voice while a measurement
   // owns it. The measurement itself never calls play (capture.js schedules its own source).
-  if (app && app.measureOwnsOutput()) {
-    app.notify('info', 'Measurement in progress', 'The output belongs to the measurement: stop '
-      + 'it (Esc) before playing.');
-    return null;
-  }
+  if (claimOutput('instrument') !== true) return null;
   return basePlay(plan, { ...o, ...v2PlayOptions(plan, engine.ctx, true) });
 };
-
-/**
- * Measure (and Studio PLAY, and the status-bar stop key) take the output: stop the instrument
- * and the sequencer (their voices fade), a playing Studio (V3.1; it is not playing while it
- * claims the output) and the MIDI notes.
- */
-function stopPlayback(cmp) {
-  stopSequence(cmp);
-  if (cmp.playing) cmp.stopNow();
-  if (typeof cmp.studioOwnsOutput === 'function' && cmp.studioOwnsOutput()) cmp.studioStop();
-  if (typeof cmp.midiAllOff === 'function') cmp.midiAllOff(); // MIDI notes too (V502)
-}
-
-/** The sequencer is playing now (its editor, not the 150 ms `seqPlaying` copy; V502). */
-const sequencerPlaying = () => !!(labs.sequencer && labs.sequencer.editor.playing);
-
-/**
- * Stop a playing sequence (C001): decided by the editor, so a sequence started inside the poll
- * period is stopped too, and the `seqPlaying` copy is cleared at once rather than on the poll.
- */
-function stopSequence(cmp) {
-  if (!sequencerPlaying()) return;
-  labs.sequencer.editor.stop();
-  if (cmp.seqPlaying) {
-    cmp.seqPlaying = false;
-    notifyAdapter();
-  }
-}
 
 /** Revert the sounding voice from a PeriodicWave to its oscillator type (additive off). */
 function clearPeriodicWave() {
@@ -601,7 +578,7 @@ function integrationInit() {
   const unlock = () => { if (engine.isSupported()) cmp.ensureAudio(); };
   window.addEventListener('pointerdown', unlock, { capture: true });
   window.addEventListener('keydown', unlock, { capture: true });
-  const stopSequencer = () => stopSequence(cmp);
+  const stopSequencer = () => stopSequence(cmp); // the editor's live state (C001, C002)
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       stopSequencer();

@@ -3520,6 +3520,201 @@ function defineChecks() {
     return { ok, ...res };
   });
 
+  // C002 (findings coupling-1, -2, -3): one output owner at a time. The instrument, the
+  // sequencer and the Studio hand the output over in the action itself, read from each owner's
+  // own state in the same evaluate (not after the 150 ms seqPlaying poll), and the newer action
+  // wins. On its own page, so that the Studio document is the default one.
+  def('one-output-owner', async ({ context, baseUrl }) => {
+    const p = await context.newPage();
+    const errs = [];
+    p.on('pageerror', (e) => errs.push(e.message));
+    const res = {};
+    const inPage = (fn, arg) => p.evaluate(fn, arg);
+    /** Every owner's state now, from the owner itself. */
+    const install = () => inPage(() => {
+      window.__c002 = () => {
+        const O = window.OSCILLA;
+        const a = O.app;
+        return { instrument: !!a.playing && !a.releasing, instrumentPlaying: !!a.playing,
+          seq: !!O.labs.sequencer.editor.playing, seqFlag: !!a.seqPlaying,
+          studio: !!a.studioOwnsOutput(), t: O.engine.ctx ? O.engine.ctx.currentTime : null };
+      };
+    });
+    const silent = (label) => until(() => inPage(() => {
+      const O = window.OSCILLA;
+      const st = O.labs.sequencer.editor.stats();
+      return O.engine.activeNodeCount === 0 && st.activeSourceCount === 0 && !O.app.playing
+        && !O.app.studioOwnsOutput() ? { nodes: 0, seqSources: 0 } : null;
+    }), { ms: 8000, what: `one-output-owner: every node released after ${label}` });
+    const stopEverything = () => inPage(() => {
+      const O = window.OSCILLA;
+      O.labs.sequencer.editor.stop();
+      if (O.app.studioOwnsOutput()) O.app.studioStop();
+      O.app.stopNow();
+      O.app.alerts = [];
+    });
+    /** The audio clock has run `s` past `t0` (the 150 ms poll and Studio's watch had time). */
+    const later = (t0, s, label) => until(() => inPage((x) => {
+      const now = window.__c002();
+      return now.t !== null && now.t - x.t0 >= x.s ? now : null;
+    }, { t0, s }), { ms: 8000, what: `one-output-owner: ${label} still holds ${s} s later` });
+    try {
+      await p.goto(baseUrl, { waitUntil: 'load' });
+      await H.ready(p);
+      await inPage(() => {
+        window.OSCILLA.app.setWorkspace('sequencer');
+        window.OSCILLA.app.setContinuous(true); // the latched tone below outlives the 2 s limit
+      });
+      await until(() => inPage(() => document.querySelector('#osc-app').dataset.mode
+        === 'sequencer'), { ms: 8000, what: 'one-output-owner: the Sequencer workspace opens' });
+      await install();
+      // (a) sequencer, then the instrument: the voice takes the output, the sequence stops.
+      await p.click('#osc-seq-play');
+      await until(() => inPage(() => window.__c002().seq),
+        { ms: 5000, what: 'one-output-owner: the sequence plays' });
+      res.seqThenInstrument = await inPage(() => {
+        window.OSCILLA.app.trigger();
+        return window.__c002();
+      });
+      res.seqThenInstrumentSettled = await until(() => inPage(() => {
+        const s = window.__c002();
+        return s.instrumentPlaying ? s : null;
+      }), { ms: 5000, what: 'one-output-owner: the instrument plays after the sequence' });
+      await stopEverything();
+      res.afterA = await silent('instrument after sequencer');
+      // (b) the instrument (latched), then the sequencer: the voice is released at the click.
+      await inPage(() => window.OSCILLA.app.toggleLatch());
+      await until(() => inPage(() => window.__c002().instrument),
+        { ms: 5000, what: 'one-output-owner: the latched tone plays' });
+      res.instrumentThenSeq = await inPage(() => {
+        document.querySelector('#osc-seq-play').click();
+        return window.__c002();
+      });
+      res.instrumentThenSeqSettled = await until(() => inPage(() => {
+        const s = window.__c002();
+        return !s.instrumentPlaying ? s : null;
+      }), { ms: 5000, what: 'one-output-owner: the released tone ends while the sequence plays' });
+      await stopEverything();
+      res.afterB = await silent('sequencer after instrument');
+      // (c) the Studio plays, then sequencer Play: the Studio stops in the same click.
+      await p.click('[data-osc="studio.compact.play"]');
+      await until(() => inPage(() => window.__c002().studio),
+        { ms: 8000, what: 'one-output-owner: the Studio plays' });
+      res.studioThenSeq = await inPage(() => {
+        document.querySelector('#osc-seq-play').click();
+        return window.__c002();
+      });
+      res.studioThenSeqLater = await later(res.studioThenSeq.t, 0.5, 'sequencer over Studio');
+      await stopEverything();
+      res.afterC = await silent('sequencer after Studio');
+      // (d) sequencer Play, then Studio PLAY in the same task: the newer action (Studio) wins,
+      // and neither the poll nor Studio's seqPlaying watch takes it back.
+      res.seqThenStudio = await inPage(() => {
+        document.querySelector('#osc-seq-play').click();
+        window.OSCILLA.app.studioPlay();
+        return window.__c002();
+      });
+      res.seqThenStudioLater = await later(res.seqThenStudio.t, 0.5, 'Studio over sequencer');
+      await stopEverything();
+      res.afterD = await silent('Studio after sequencer');
+      // (e) Studio PLAY, then sequencer Play in the same task: the sequencer wins.
+      res.studioThenSeqSameTask = await inPage(() => {
+        window.OSCILLA.app.studioPlay();
+        document.querySelector('#osc-seq-play').click();
+        return window.__c002();
+      });
+      res.studioThenSeqSameTaskLater = await later(res.studioThenSeqSameTask.t, 0.5,
+        'sequencer over Studio (same task)');
+      await stopEverything();
+      res.afterE = await silent('sequencer after Studio (same task)');
+      const only = (s, owner) => ['instrument', 'seq', 'studio']
+        .every((k) => s[k] === (k === owner));
+      const v = {
+        a: !res.seqThenInstrument.seq && !res.seqThenInstrument.seqFlag
+          && only(res.seqThenInstrumentSettled, 'instrument'),
+        b: res.instrumentThenSeq.seq && res.instrumentThenSeq.seqFlag
+          && !res.instrumentThenSeq.instrument && only(res.instrumentThenSeqSettled, 'seq'),
+        c: only(res.studioThenSeq, 'seq') && only(res.studioThenSeqLater, 'seq'),
+        d: only(res.seqThenStudio, 'studio') && !res.seqThenStudio.seqFlag
+          && only(res.seqThenStudioLater, 'studio'),
+        e: only(res.studioThenSeqSameTask, 'seq') && only(res.studioThenSeqSameTaskLater, 'seq'),
+        noPageErrors: errs.length === 0,
+      };
+      const failed = Object.keys(v).filter((k) => !v[k]);
+      return { ok: failed.length === 0, failed, errs, ...res };
+    } finally {
+      await p.close({ runBeforeUnload: false }).catch(() => {});
+    }
+  });
+
+  // C002 (finding coupling-1): while a measurement owns the output the sequencer is refused
+  // exactly like the instrument, with the same notice, and the measurement goes on. The Studio
+  // template Measurement Sweep hands the output to MEASURE from the Sequencer workspace, where
+  // the sequencer's Play is on screen (TEST CONTEXT loopback, so no microphone is opened).
+  def('seq-refused-during-measure', async ({ context, baseUrl }) => {
+    const p = await context.newPage();
+    const errs = [];
+    p.on('pageerror', (e) => errs.push(e.message));
+    const inPage = (fn, arg) => p.evaluate(fn, arg);
+    const res = {};
+    try {
+      await p.goto(`${baseUrl}?measure=loopback`, { waitUntil: 'load' });
+      await H.ready(p);
+      res.opened = await inPage(() => {
+        const a = window.OSCILLA.app;
+        const ok = a.studioLoadTemplate('measurement-sweep');
+        a.setWorkspace('sequencer');
+        return ok;
+      });
+      await until(() => inPage(() => document.querySelector('#osc-app').dataset.mode
+        === 'sequencer'), { ms: 8000, what: 'seq-refused-during-measure: the Sequencer opens' });
+      await p.click('[data-osc="studio.compact.play"]');
+      res.owns = await until(() => inPage(() => window.OSCILLA.app.measureOwnsOutput()),
+        { ms: 20000, what: 'seq-refused-during-measure: the measurement owns the output' });
+      await inPage(() => { window.OSCILLA.app.alerts = []; });
+      await p.click('#osc-seq-play');
+      res.after = await inPage(() => {
+        const O = window.OSCILLA;
+        const ed = O.labs.sequencer.editor;
+        return { seqPlaying: !!ed.playing, seqFlag: !!O.app.seqPlaying, error: ed.error,
+          title: document.querySelector('#osc-seq-play').getAttribute('title'),
+          alerts: O.app.alerts.map((x) => x.title), owns: O.app.measureOwnsOutput(),
+          state: O.measure.state };
+      });
+      // Contrast: the instrument meets the same refusal.
+      res.instrument = await inPage(() => {
+        const a = window.OSCILLA.app;
+        a.trigger();
+        return { playing: !!a.playing };
+      });
+      await inPage(() => {
+        const a = window.OSCILLA.app;
+        a.measureAbort('user');
+        if (a.studioOwnsOutput()) a.studioStop();
+      });
+      res.released = await until(() => inPage(() => {
+        const O = window.OSCILLA;
+        return O.engine.activeNodeCount === 0 && !O.app.measureOwnsOutput()
+          && O.labs.sequencer.editor.stats().activeSourceCount === 0 ? true : null;
+      }), { ms: 10000, what: 'seq-refused-during-measure: every node released after the abort' });
+      const REFUSAL = /^The output belongs to the measurement/;
+      const v = {
+        opened: res.opened === true,
+        owns: res.owns === true,
+        refused: !res.after.seqPlaying && !res.after.seqFlag,
+        said: REFUSAL.test(res.after.error) && REFUSAL.test(res.after.title || '')
+          && res.after.alerts.includes('Measurement in progress'),
+        measurementGoesOn: res.after.owns === true,
+        instrumentRefused: !res.instrument.playing,
+        noPageErrors: errs.length === 0,
+      };
+      const failed = Object.keys(v).filter((k) => !v[k]);
+      return { ok: failed.length === 0, failed, errs, ...res };
+    } finally {
+      await p.close({ runBeforeUnload: false }).catch(() => {});
+    }
+  });
+
   def('no-console-errors-after-run', async ({ errors }) => ({ ok: errors.length === 0,
     errors: errors.slice(0, 8) }));
 

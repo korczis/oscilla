@@ -208,8 +208,8 @@ is in the [algorithm notes](docs/v3/algorithms.md).
   anything; it never carries results, calibration or a device, and an altered link is refused
   as a whole.
 - **During the run.** A quality bar reports INPUT, NOISE, CLIPPING, SIGNAL and CAPTURE, and a
-  screen reader hears one announcement per stage. While a measurement owns the output, the
-  instrument cannot play. Escape, STOP, hiding the page or leaving the workspace aborts the
+  screen reader hears one announcement per stage. While a measurement owns the output,
+  neither the instrument nor the sequencer can play: both are refused with the same notice. Escape, STOP, hiding the page or leaving the workspace aborts the
   measurement, and no audio node, capture or input track is left running.
 - **Capture.** Mono PCM is recorded by an AudioWorklet loaded from a `data:` URL, so it also
   works from `file://`. When AudioWorklet is unavailable, a ScriptProcessor fallback records
@@ -563,8 +563,8 @@ release and deployment are evidenced is the [final report](docs/v31/studio-repor
   unmodified. An optional **Fullscreen** button uses the browser's Fullscreen API where it
   exists; where it does not (Safari on iPhone), the button says so.
 
-Studio output and Playground output are exclusive: starting one stops the other, and a
-measurement stops the Studio.
+Studio output, the Playground voice and the Sequencer are exclusive: starting one stops the
+others in the same action, and a measurement stops the Studio.
 
 Not yet built:
 - node groups

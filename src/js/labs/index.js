@@ -12,6 +12,8 @@
 //   getDestination()      → AudioNode the sequencer plays into (default ctx.destination)
 //   openSequencerStage()  → the engine's counted stage chain the sequencer plays through
 //                           (AudioEngine.stageChain with the Filter Lab's insert, C003)
+//   claimOutput()         → true, or a reason string: the sequencer asks before it schedules
+//                           (and before each loop pass); a reason refuses (C002)
 //   getStereoRouter()     → audio/stereo.js router while stereo plays (Phase & Stereo live data)
 //   ensureContext()       → Promise<AudioContext> created in the current user gesture (mic)
 //   attachMicrophone(stream) → AnalyserNode, detachMicrophone()   engine-owned mic graph
