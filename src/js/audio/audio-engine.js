@@ -45,8 +45,10 @@
 //                    engine.setEnvelope(makeAdsrEnvelope(envelopeModule)). It shapes the
 //                    open envelope, a continuous ping-pong sweep's whole envelope included.
 //                    engine.setAdsr(adsr, stepEnvelope) applies a change to the sounding
-//                    voice: a release in place while held, anything else by a click-free
-//                    restart, once per drag (setAdsr(..., { settling }), #296 R-7).
+//                    voice: a release in place while held, a sustain (or the switch off) by a
+//                    click-free glide of the held level (C008, envelope.js retargetSustain),
+//                    anything else by a click-free restart, once per drag
+//                    (setAdsr(..., { settling }), #296 R-7).
 //                    engine.setNoteOffRelease(s) changes the release a held voice uses when
 //                    it is let go (a stored time, no param written; C009).
 //     o.envelope     per-play envelope function (overrides engine.setEnvelope).
@@ -81,9 +83,10 @@ import {
 import { clamp, toNumber } from '../core/math.js';
 import { planFreqAt } from './patterns.js';
 import {
-  freezeParam, pruneParam, recordEvent, stepEnv, trackParam, trackedParam, v1OpenEnvelope,
-  valueAt,
+  cancelParamFrom, freezeParam, pruneParam, recordEvent, stepEnv, trackParam, trackedParam,
+  v1OpenEnvelope, valueAt,
 } from './voice.js';
+import { getSchedule, retargetSustain, sustainSteadyFrom } from './envelope.js';
 import {
   ESCAPE_RELEASE_S, FAST_RELEASE_S, SCHEDULE_LEAD_S, WAVE_DIP_S, armTopUp, rampSegments,
   scheduleConst, scheduleCycles, scheduleRamps, scheduleSteps,
@@ -230,9 +233,18 @@ export class AudioEngine {
    */
   get audibleVoiceCount() {
     if (!this.ctx) return 0;
-    const now = this.ctx.currentTime;
+    return this.audibleVoiceCountAt(this.ctx.currentTime);
+  }
+
+  /**
+   * The voices that still sound at audio time t (C016): a voice released now is in its fade
+   * until endTime - 0.01, so a reading that starts later (MEASURE's input level, a scheduling
+   * lead ahead) does not contain it. Read-only; it schedules and edits nothing.
+   */
+  audibleVoiceCountAt(t) {
+    if (!this.ctx) return 0;
     let n = 0;
-    for (const v of this.voices) if (!v.ended && now < v.endTime - 0.01) n++;
+    for (const v of this.voices) if (!v.ended && t < v.endTime - 0.01) n++;
     return n;
   }
 
@@ -505,6 +517,7 @@ export class AudioEngine {
       limited: !!o.limited, extended: false, limitable: false, limitAt: null,
       noteT0: Number.isFinite(o.noteT0) ? o.noteT0 : startAt, // C011: the note's start
       inserts: [], periodicWave: o.periodicWave || null, adsr, eg: null, stepEnv: null,
+      sustainWant: null, sustainTimer: null,
       stepHook: typeof o.stepEnvelope === 'function' ? o.stepEnvelope : null,
     };
     const t0 = v.t0;
@@ -1141,21 +1154,26 @@ export class AudioEngine {
   }
 
   /**
-   * The Envelope lab changed while a voice sounds (C007 R-2; main.js through lab-play-options.js
-   * followEnvelopeLab). adsr { a, d, s, r } or null (the lab off); stepEnvelope the step hook
-   * that goes with it, or null. The voice's options take both, so a later restart keeps them.
-   * A change of the release alone, on a voice whose release is not scheduled yet (held: no end,
-   * no per-segment envelope), applies in place: the release is read at note-off and nothing
-   * sounding is edited. Any other change alters the scheduled shape, and a sounding envelope is
-   * never re-automated (V249), so the voice is replaced click-free with the same plan, options
-   * and deadline, as setDualPhase does.
+   * The Envelope lab changed while a voice sounds (C007 R-2, C008; main.js through
+   * lab-play-options.js followEnvelopeLab). adsr { a, d, s, r } or null (the lab off);
+   * stepEnvelope the step hook that goes with it, or null. The voice's options take both, so a
+   * later restart keeps them. Every edit reaches the note that sounds:
+   *  - release alone, on a voice whose release is not scheduled yet (held: no end, no
+   *    per-segment envelope): in place, read at note-off, nothing sounding is edited;
+   *  - sustain, or the power switch off, on a note whose tracked envelope holds a schedule
+   *    (a held tone, a finite one with its release ahead): a click-free glide of that envelope
+   *    to the new sustain, or to 1 when off (_retargetSustain, envelope.js retargetSustain);
+   *  - anything else (attack, decay, the switch on, a programmed pattern's steps): a sounding
+   *    envelope is never re-automated (V249), so the voice is replaced click-free with the same
+   *    plan, options and deadline, as setDualPhase does.
    * #296 R-7: a slider or graph drag is one edit made of many notifications. With
-   * { settling: true } (a slider's 'input', a graph pointermove) a shape change only reaches the
-   * voice's options and answers 'pending'; the drag's end (the slider's 'change', the graph's
-   * pointerup: settling false) compares the voice's scheduled shape (v.adsr, v.stepHook) with
-   * the edit and restarts once. A release-only change is in place either way.
-   * Returns 'same' | 'live' | 'pending' | 'restarted' | false (no voice, releasing, or about to
-   * end).
+   * { settling: true } (a slider's 'input', a graph pointermove) a restart is held back: the
+   * edit only reaches the voice's options and answers 'pending'; the drag's end (the slider's
+   * 'change', the graph's pointerup: settling false) compares the voice's scheduled shape
+   * (v.adsr, v.stepHook) with the edit and restarts once. A glide needs no such wait: each
+   * notification moves the target and the latest wins.
+   * Returns 'same' | 'live' | 'glided' | 'deferred' | 'pending' | 'restarted' | false (no
+   * voice, releasing, or about to end).
    */
   setAdsr(adsr, stepEnvelope = null, { settling = false } = {}) {
     const v = this.voice;
@@ -1167,6 +1185,7 @@ export class AudioEngine {
     const shapeKept = (!prev && !next) || (keep('a') && keep('d') && keep('s'));
     const sameHook = v.stepHook === hook;
     v.opts = { ...v.opts, adsr: next, stepEnvelope: hook };
+    v.sustainWant = null; // an earlier, deferred glide is superseded by this edit
     if (shapeKept && sameHook && (!next || keep('r'))) return 'same';
     const held = !Number.isFinite(v.endTime)
       && !(v.plan.kind === 'continuous' && v.plan.envelope === 'segment');
@@ -1175,8 +1194,66 @@ export class AudioEngine {
       v.release = Math.max(0.005, next.r);
       return 'live';
     }
+    // Sustain and power-off: glide the sounding note (the attack and decay are kept).
+    const sustainEdit = !!prev && (next ? keep('a') && keep('d') : true);
+    if (sustainEdit && (!next || held || keep('r'))) {
+      v.sustainWant = { adsr: next };
+      const answer = this._retargetSustain(v);
+      if (answer === 'applied' || answer === 'deferred') {
+        // A held note's release is read at note-off: the lab's, or the instrument's once off.
+        if (held) v.release = Math.max(0.005, next ? next.r : v.opts.releaseS);
+        return answer === 'applied' ? 'glided' : 'deferred';
+      }
+      v.sustainWant = null; // nothing to glide (a programmed pattern): restart below
+    }
     if (settling) return 'pending';
     return this._restart(v, v.plan);
+  }
+
+  /**
+   * setAdsr's sustain glide: now when the envelope holds steady, else once it does. Steady
+   * means rendered (V249): the render quantum holding the end of the last attack, decay or glide
+   * lies at or before ctx.currentTime. currentTime is a lower bound of what has rendered in every
+   * browser: Chromium's is the rendered position and moves in device-callback bursts, a stale
+   * Firefox value only delays the edit to a later timer task. clock.js renderedTimeAtLeast is
+   * not: it extrapolates readings by real time, so between bursts it runs ahead of rendering and
+   * would edit the last quanta of a ramp (review #310 R-9). Nor is the scheduling time _soon,
+   * later still by SCHEDULE_LEAD_S. The latest edit wins (v.sustainWant). The level never
+   * exceeds 1 and a finite note keeps its scheduled release, which starts from the new level.
+   * Returns 'applied' | 'deferred' | false (nothing to retarget: the schedule has no ramp or no
+   * release where the note ends).
+   */
+  _retargetSustain(v) {
+    const want = v.sustainWant;
+    if (!want || v.ended || v.releasing || !v.eg || this.voice !== v) return false;
+    const events = getSchedule(v.eg);
+    if (!v.adsr || !events.length) return false;
+    const steady = sustainSteadyFrom(events, { releaseEnd: v.deadline });
+    if (Number.isNaN(steady)) return false;
+    const ctx = v.ctx;
+    const q = RENDER_QUANTUM / ctx.sampleRate;
+    const ready = Math.ceil(steady / q - 1e-6) * q;
+    const rendered = ctx.currentTime;
+    if (rendered < ready) {
+      if (!v.sustainTimer) {
+        const { setTimeout } = this._timers;
+        const wait = ctx.state === 'running' ? Math.max(1, (ready - rendered) * 1000 + 1)
+          : 250;
+        v.sustainTimer = setTimeout(() => {
+          v.sustainTimer = null;
+          this._retargetSustain(v);
+        }, wait);
+        v.timers.push(v.sustainTimer);
+      }
+      return 'deferred';
+    }
+    v.sustainWant = null;
+    const done = retargetSustain(v.eg, this._soon(ctx), want.adsr ? want.adsr.s : 1, {
+      releaseEnd: v.deadline, cancel: (time) => cancelParamFrom(v.env, time),
+    });
+    if (!done) return false;
+    v.adsr = want.adsr;
+    return 'applied';
   }
 
   /**

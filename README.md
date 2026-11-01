@@ -170,10 +170,12 @@ changed.
 - **ADSR:** an attack/decay/sustain/release envelope with a draggable graph. It shapes every
   note of the instrument: a held tone, a continuous sweep, a finite tone and each step of the
   instrument's programmed patterns, where it shrinks to fit a short step. An edit reaches the
-  note that sounds: a new release in place, anything else by a click-free restart of the
-  note, once per slider or graph drag, when the drag ends, and once per run of arrow keys on
-  a slider, a quarter of a second after the last key is let go (at once when the focus
-  leaves it). A release edited while a note is held (here, or Settings Release with the
+  note that sounds: a new release in place, a new Sustain (or switching the Envelope off) by a
+  short glide of the held level on the same note, anything else (Attack, Decay, switching it
+  on, a programmed pattern's steps) by a click-free restart of the note, once per slider or
+  graph drag, when the drag ends, and once per run of arrow keys on a slider, a quarter of a
+  second after the last key is let go (at once when the focus leaves it). The Sequencer's
+  blocks keep their own envelopes, so the lab never reaches them. A release edited while a note is held (here, or Settings Release with the
   envelope off) is the one letting go of that note uses, shortened to end by the hard limit
   or a pattern's own end; a note that reaches either, or a Trigger note's end, fades over the
   release it started with. The Pattern sequencer and Studio keep their own envelopes.
