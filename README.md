@@ -921,7 +921,10 @@ Browser storage holds only these keys and one database, `oscilla-experiments` (v
 | IndexedDB | `oscilla-experiments`, object store `findings` | Your findings (statement, status, notes, the evidence each cites and the id and result hash of each cited experiment) |
 
 Experiments and findings are deleted only when you delete them. Permission to play continuously is never
-stored.
+stored. A preset, History entry, config file or link saved with a continuous sweep repeat
+therefore restores it as once, and a notice says so ("Continuous repeat not restored"). Allowing
+continuous playback does not bring the repeat back by itself: allow it in Playback safety, then
+load the preset, History entry or file again. A link never carries the permission.
 
 ## Licences
 

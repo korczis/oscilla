@@ -194,6 +194,24 @@ export function parseConfigImport(input) {
   }
 }
 
+/**
+ * The notice after an applied import: { level, title, message }. invalid: values kept at their
+ * previous setting; dropped: saved values not restored ({ label }, the instrument's report,
+ * H002), so "All settings were restored" is never said over a continuous repeat played once.
+ */
+export function importSummary({ invalid = 0, dropped = [] } = {}) {
+  const names = dropped.map((d) => d.label);
+  const not = names.length ? ` Not restored: ${names.join(', ')}.` : '';
+  if (invalid) {
+    return { level: 'warning', title: 'Config imported',
+      message: `${invalid} value(s) were invalid and kept at their previous setting.${not}` };
+  }
+  if (not) {
+    return { level: 'info', title: 'Config imported', message: `All other settings were restored.${not}` };
+  }
+  return { level: 'success', title: 'Config imported', message: 'All settings were restored.' };
+}
+
 /** File name for an export: oscilla-<what>-<YYYYMMDD-HHMMSS>.<ext> (local time). */
 export function exportFileName(what, ext, now = new Date()) {
   const p = (n) => String(n).padStart(2, '0');
