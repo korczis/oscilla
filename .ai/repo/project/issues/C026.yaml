@@ -1,0 +1,28 @@
+id: C026
+milestone: M090
+serves:
+  - "coherent-state#live-edits-reach-the-voice"
+title: "C011's release clamp is held by a test: a voice whose release exceeds half the lowered limit"
+slug: c011s-release-clamp-is-held-by-a-test
+priority: p2
+profile: implementation
+objective: "Lands as test(audio). C011 (#303, in the #367 train) shortens a sounding voice when the hard limit is lowered: AudioEngine.tightenLimit (src/js/audio/audio-engine.js) places the release inside the new limit with rel = Math.min(v.release, Math.max(0.005, lim * 0.5)), as voice.js v1OpenEnvelope and makeAdsrEnvelope do. tests/unit/c011-safety-limits.test.mjs does not hold that clamp: its fixture voice's release is already at most limit/2 and the test recomputes rel from v.release, so a mutant with rel = v.release passes 19/19. Add a case with a voice whose release exceeds half the lowered limit (e.g. release 0.8 s, limit lowered to 0.5 s) and assert the scheduled fade starts at the quantised end minus 0.25 s and reaches the floor at the limit, with the expected values written as constants, not recomputed from v.release. No source change unless the test finds a defect, which then becomes its own fix under this milestone."
+why: "Review of the feature train #367 (oscilla-af, verdict at 5cad3dcf, finding F1, P2): c011-safety-limits.test.mjs does not hold R-1's release clamp; a mutant using v.release passes; add a voice whose release exceeds half the lowered limit."
+scope:
+  - "tests/unit/c011-safety-limits.test.mjs"
+depends_on:
+  - "C011"
+acceptance_criteria:
+  - "The new case passes on the head; a local mutant of tightenLimit with rel = v.release fails it (the mutation and its failing output are shown in the pull request), and so does a mutant with Math.max(0.005, lim) in place of lim * 0.5."
+  - "The expected times are literal constants derived in the test's comment, not recomputed through the code under test."
+  - "No src/ or dist/ change; npm test passes."
+  - "As a test(audio) change project.fail-first does not bind it; the mutation evidence above shows the case holds the clamp."
+  - "The test file is not on a guarded path; no verdict is needed unless the scope widens to src/js/audio/* (project.review-verdict)."
+  - "Lands after the feature train #367 (C011)."
+validation:
+  - "node --test tests/unit/c011-safety-limits.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-01
+updated_at: 2026-11-01
