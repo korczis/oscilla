@@ -14,11 +14,11 @@
 import { formatClock as compactTime } from '../../core/frequency.js';
 import { NODE_REGISTRY } from '../../studio/registry.js';
 import {
-  announceAction, announceSelection, clipLabel, summarizeStudio,
+  announceAction, announceSelection, clipLabel, describeEdge, summarizeStudio,
 } from '../../studio/a11y.js';
 import { moveClipResult, nudgeClipResult } from '../../studio/timeline.js';
 import { compactLayout } from './graph-layout.js';
-import { cablePath, pastThreshold } from './graph-geometry.js';
+import { cablePath, pastThreshold, portAnchor } from './graph-geometry.js';
 import { coarsePointer, h, replaceChildren, s, setAttr, setText } from './graph-dom.js';
 import { keepInScrollerView } from '../app.js';
 
@@ -48,10 +48,11 @@ export function compactView(model, selection, opts = {}) {
   const selNodes = new Set(sel.nodes || []);
   const selClips = new Set(sel.clips || []);
   const byId = new Map(model.graph.nodes.map((n) => [n.id, n]));
+  const edgeById = new Map(model.graph.edges.map((e) => [e.id, e]));
   const nodes = layout.nodes.map((p) => {
     const n = byId.get(p.id);
     const def = registry.get(n.type);
-    return { id: n.id, col: p.col, row: p.row, label: chipLabel(n.metadata.name),
+    return { id: n.id, type: n.type, col: p.col, row: p.row, label: chipLabel(n.metadata.name),
       name: n.metadata.name, category: def ? def.category.toLowerCase() : 'unknown',
       summary: registry.summarize(n), selected: selNodes.has(n.id) };
   });
@@ -78,12 +79,25 @@ export function compactView(model, selection, opts = {}) {
     title: model.metadata.title,
     counts: `${model.graph.nodes.length} nodes · ${model.graph.edges.length} connections · `
       + `${clips.length} clips`,
-    path: { columns: layout.columns, rows: layout.rows, nodes, links: layout.links },
+    // Each cable names its two ports, so it is drawn from and to them (portAnchor, G004).
+    path: { columns: layout.columns, rows: layout.rows, nodes, links: layout.links.map((l) => ({
+      ...l, fromPort: edgeById.get(l.id).from.port, toPort: edgeById.get(l.id).to.port })) },
     clips: { pxPerSecond, rows: Math.max(1, model.timeline.tracks.length),
       width: Math.max(Math.round(end * pxPerSecond) + minClipPx, 120), items, end },
     loop: model.timeline.loop,
     summary: summarizeStudio(model, { registry }),
   };
+}
+
+/**
+ * The cables into a node, each with its type (G004): "Control cable. Connection from LFO 1
+ * control to Filter 1 cutoff, ..." (a11y.js describeEdge), '' for none. Selecting a chip
+ * announces them after the selection, so the cable's type is said as well as drawn.
+ */
+export function cablesInto(model, nodeId, registry = NODE_REGISTRY) {
+  return compactLayout(model, { registry }).links.filter((l) => l.to === nodeId)
+    .map((l) => `${l.type.charAt(0)}${l.type.slice(1).toLowerCase()} cable. ${
+      describeEdge(model, l.id, { registry })}`).join('. ');
 }
 
 // ---------------------------------------------------------------- DOM
@@ -150,6 +164,8 @@ export function mountCompact(host, svc) {
   function drawLinks() {
     if (!view) return;
     const chips = new Map([...pathGrid.children].map((c) => [c.dataset.nodeId, c]));
+    const types = new Map(view.path.nodes.map((n) => [n.id, n.type]));
+    const box = (c) => ({ x: c.offsetLeft, y: c.offsetTop, w: c.offsetWidth, h: c.offsetHeight });
     const w = pathGrid.scrollWidth;
     const hh = pathGrid.scrollHeight;
     links.setAttribute('width', String(w));
@@ -159,18 +175,19 @@ export function mountCompact(host, svc) {
       const a = chips.get(l.from);
       const b = chips.get(l.to);
       if (!a || !b) return null;
-      const sx = a.offsetLeft + a.offsetWidth;
-      const sy = a.offsetTop + a.offsetHeight / 2;
-      const tx = b.offsetLeft;
-      const ty = b.offsetTop + b.offsetHeight / 2;
+      // Each end at its port: outputs on the right edge, inputs (a parameter's row) on the left.
+      const p = portAnchor(box(a), registry.get(types.get(l.from)), 'out', l.fromPort);
+      const q = portAnchor(box(b), registry.get(types.get(l.to)), 'in', l.toPort);
       return s('path', { class: `osc-sc-link is-${l.type.toLowerCase()}${l.muted ? ' is-muted' : ''}`,
-        d: cablePath(sx, sy, tx, ty) });
+        'data-edge-id': l.id, d: cablePath(p.x, p.y, q.x, q.y, 4) });
     }));
   }
 
   function selectNode(id) {
     store.dispatch({ type: 'SELECTION_CHANGE', selection: { nodes: [id] } });
-    svc.announce(announceSelection(store.getModel(), store.getSelection()));
+    const said = announceSelection(store.getModel(), store.getSelection());
+    const cables = cablesInto(store.getModel(), id, registry);
+    svc.announce(cables ? `${said}. ${cables}.` : said);
   }
 
   function moveClip(id, result) {
