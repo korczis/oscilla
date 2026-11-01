@@ -620,3 +620,68 @@ readouts:
       - tests/unit/v3-review-calibration.test.mjs
       - tests/browser/v3-ui.cjs
     label: DERIVED
+  - key: keyboard.readout
+    readout: "Keyboard readout #osc-kbd-readout (Playground, Studio, Synth)"
+    quantity: >-
+      Whether the computer keyboard is armed in the view shown, the note range the keys play
+      and the velocity they send (a state, not a measurement)
+    unit: note names; MIDI velocity 1-127
+    source: [src/js/midi/keyboard-ui.js, src/js/midi/keyboard.js]
+    algorithm: >-
+      kbdReadout from kbdArmedHere, kbdRange (noteName of the base and base + 17) and
+      kbdVelocity
+    resolution: one semitone; one velocity step
+    calibration: none; equal temperament names only
+    limitations: >-
+      Says what the keys would play, not what sounds; a refused note (measurement, Studio or
+      sequencer owns the output) is a separate notice
+    tests: [tests/browser/midi.cjs]
+    label: VERIFIED
+  - key: keyboard.held
+    readout: "Keyboard held-notes line ('Holding: ...')"
+    quantity: >-
+      The notes the keyboard layer holds, from the computer keys, a pointer or a MIDI input
+      ('(MIDI)' when only MIDI holds one)
+    unit: note names
+    source: [src/js/midi/keyboard-ui.js, src/js/midi/keyboard.js]
+    algorithm: kbdHeld, the keyboard controller's held list named by noteName
+    resolution: one semitone
+    calibration: none
+    limitations: Notes held, not notes sounding (a refused note is not held)
+    tests: [tests/unit/keyboard-held-notes.test.mjs, tests/browser/midi.cjs]
+    label: VERIFIED
+  - key: keyboard.keys
+    readout: On-screen keys canvas, role img, labelled by kbdLabel
+    quantity: The keys shown and the ones lit as held (the same list as keyboard.held)
+    unit: note names
+    source: [src/js/midi/keyboard-ui.js, src/js/midi/keyboard-view.js]
+    algorithm: drawKeys over keyLayout; the label is kbdLabel ('holding:' and kbdHeld)
+    resolution: one key
+    calibration: none
+    limitations: An image; its text alternative names the held notes only, not the range
+    tests: [tests/browser/midi.cjs]
+    label: VERIFIED
+  - key: synth.status
+    readout: Synth workspace status line (role status, aria-live polite)
+    quantity: >-
+      The last outcome of a Synth action: arm, patch, preset, engine, link copy or the reason
+      an action was refused
+    unit: text
+    source: [src/js/synth/ui.js]
+    algorithm: say(text) sets synth.status and announces it
+    resolution: one sentence, the latest only
+    calibration: none
+    limitations: Keeps only the latest sentence; an earlier one is replaced
+    tests: [tests/browser/synth.cjs, tests/browser/synth-engines.cjs]
+    label: VERIFIED
+  - key: synth.link
+    readout: Synth link line below the actions
+    quantity: The link Copy link made for the current Synth patch
+    unit: URL
+    source: [src/js/synth/ui.js, src/js/synth/link.js]
+    algorithm: synthCopyLink writes the page address with the hash linkNow() encodes
+    resolution: the whole patch the link carries (synth/link.js)
+    calibration: none
+    limitations: Shown after Copy link only; it does not follow later edits until copied again
+    tests: [tests/browser/synth.cjs, tests/unit/synth-link.test.mjs]
+    label: VERIFIED
