@@ -3164,7 +3164,10 @@ function defineChecks() {
     } finally {
       await seqDone(page);
     }
-    const ok = Object.values(res).every((r) => r.played && r.at.editor && !r.at.mirror
+    // Since C002 (#305) the sequencer's claim sets the seqPlaying mirror in the play itself, so
+    // the 150 ms lag C001 probed may be gone (r.at.mirror true); what C001 requires stays: every
+    // stop path stops the playing editor and leaves the mirror off.
+    const ok = Object.values(res).every((r) => r.played && r.at.editor
       && !r.after.editor && !r.after.mirror && !!r.drained);
     return { ok, ...res };
   });
@@ -3215,9 +3218,9 @@ function defineChecks() {
     const pressed = (r) => r.before.label === 'Stop playback' && !r.after.editor
       && !r.after.instrument && !r.after.voice && !!r.quiet;
     const pw = res.pollWindow;
+    // pw.at.mirror may already be true: C002's claim sets the mirror in the play (see above).
     const ok = pressed(res.click) && pressed(res.enter) && pw.played && pw.at.editor
-      && !pw.at.mirror && !pw.after.editor && !pw.after.instrument && !pw.after.voice
-      && !!pw.quiet;
+      && !pw.after.editor && !pw.after.instrument && !pw.after.voice && !!pw.quiet;
     return { ok, ...res };
   });
 
