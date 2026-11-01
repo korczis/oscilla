@@ -265,11 +265,7 @@ function exportConfigDoc(cmp) {
   });
 }
 
-/**
- * The one apply path of the lab settings (C018): the config import, a custom preset, a History
- * entry and a `lab=` link. A/B frequencies and the route belong to the dual oscillator, which
- * the instrument cfg has already applied. Returns the sections applied (ui/lab-state.js).
- */
+/** The one lab apply path (C018): import, preset, History, `lab=` link; dual A/B already set. */
 function applyLabState(cmp, parsed) {
   const applied = applyLabSections(labs, parsed, cmp.dual);
   syncLabFlags();
