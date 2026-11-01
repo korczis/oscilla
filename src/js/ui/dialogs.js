@@ -107,3 +107,27 @@ export function watchDialogs(root = document) {
     });
   });
 }
+
+/**
+ * Firefox and WebKit do not scroll a keyboard-focused control that is already partly inside
+ * the #osc-main scroller, so its edge (the status bar below it) can cut the control (WCAG
+ * 2.4.11). After the browser's own focus scroll, nudge #osc-main until it is fully visible.
+ */
+export function keepFocusInView(main) {
+  if (!main) return;
+  document.addEventListener('focusin', (e) => {
+    const el = e.target;
+    if (!(el instanceof Element) || el === main || !main.contains(el)) return;
+    requestAnimationFrame(() => {
+      let keyboard = true;
+      try { keyboard = el.matches(':focus-visible'); } catch (err) { /* no :focus-visible */ }
+      if (document.activeElement !== el || !keyboard) return;
+      const r = el.getBoundingClientRect();
+      if (!r.height) return;
+      const top = main.getBoundingClientRect().top + main.clientTop + 4;
+      const bottom = top + main.clientHeight - 8;
+      if (r.top < top) main.scrollTop -= top - r.top;
+      else if (r.bottom > bottom) main.scrollTop += Math.min(r.bottom - bottom, r.top - top);
+    });
+  });
+}
