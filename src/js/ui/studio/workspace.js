@@ -1054,6 +1054,7 @@ export function createStudioUi(svc = {}) {
       onAllowMicrophone: (id) => allowMicrophone(id),
       micError: (id) => ctx.micErrors.get(id) || '',
       micBusy: () => ctx.micBusy,
+      userPatches: () => library().then((l) => l.patches()),
     });
     const libHost = document.querySelector('[data-osc="studio.library"]');
     ctx.library = mountLibrary(libHost, {
