@@ -19,6 +19,9 @@
 //   same events on its own id: on -> noteOn(at, note, velocity), off -> noteOff(at, note),
 //   all-off -> allOff(at, fast); its voice pool allocates (adapters/voices.js), no note stack.
 //   A note-on that takes no voice (it sounds nothing) is not held: { silent: true }.
+//   An XY pad (nodes/instrument.js xy-pad, a handle with move) takes { kind: 'on' | 'move' |
+//   'off' | 'all-off', x, y } on its id (plan K097): on and move set X, Y and the scale step
+//   (legato while touched); on opens its gate's targets as a Keys gate does, off releases them.
 
 import { createNoteStack } from '../synth/note-stack.js';
 import { NODE_REGISTRY } from './registry.js';
@@ -49,7 +52,8 @@ export function gateTargets(model, keysId) {
 export function keysGatedEnvelopes(model) {
   const out = new Set();
   for (const n of model.graph.nodes) {
-    if (n.type === 'keys') for (const id of gateTargets(model, n.id).envelopes) out.add(id);
+    if (n.type !== 'keys' && n.type !== 'xy-pad') continue;
+    for (const id of gateTargets(model, n.id).envelopes) out.add(id);
   }
   return out;
 }
@@ -83,6 +87,7 @@ export function createLiveNotes({ getModel, handleOf }) {
   const stacks = new Map(); // keys id -> note stack
   const counts = new Map(); // clocked node id -> triggers since arm
   const poly = new Map(); // engine id -> Set of held notes (its pool holds the voices)
+  const pads = new Map(); // XY pad id -> the note sounding while it is touched
 
   const stackOf = (id) => {
     if (!stacks.has(id)) stacks.set(id, createNoteStack());
@@ -130,9 +135,25 @@ export function createLiveNotes({ getModel, handleOf }) {
     return { ok: true, held: held.size, top: null };
   }
 
+  function padEvent(id, h, { kind, x, y, at }) {
+    const down = pads.has(id);
+    if (kind === 'off' || kind === 'all-off') {
+      pads.delete(id);
+      if (down) gate(id, at, false);
+      return { ok: true, held: 0, released: down ? 1 : 0 };
+    }
+    const r = h.move(at, x, y, { legato: down });
+    if (kind === 'on' || down) pads.set(id, r.note);
+    if (kind === 'on' && !down) gate(id, at, true);
+    return { ok: true, held: pads.has(id) ? 1 : 0, top: r.note, ...r };
+  }
+
   function event(keysId, ev) {
     const { kind, note, velocity = 100, at } = ev;
     const ph = handleOf(keysId);
+    if ((ph && typeof ph.move === 'function') || (pads.has(keysId) && /off/.test(kind))) {
+      return padEvent(keysId, ph, ev);
+    }
     if (ph && typeof ph.noteOn === 'function') return polyEvent(keysId, ph, ev);
     const st = stackOf(keysId);
     if (kind === 'all-off') {
@@ -158,7 +179,7 @@ export function createLiveNotes({ getModel, handleOf }) {
     event,
     allOff(at) {
       let n = 0;
-      for (const id of [...stacks.keys(), ...poly.keys()]) {
+      for (const id of [...stacks.keys(), ...poly.keys(), ...pads.keys()]) {
         n += event(id, { kind: 'all-off', at, fast: true }).released || 0;
       }
       return n;
@@ -167,8 +188,9 @@ export function createLiveNotes({ getModel, handleOf }) {
       stacks.clear();
       counts.clear();
       poly.clear();
+      pads.clear();
     },
     held: () => [...stacks.values()].flatMap((s) => s.notes)
-      .concat([...poly.values()].flatMap((s) => [...s])),
+      .concat([...poly.values()].flatMap((s) => [...s]), [...pads.values()]),
   };
 }

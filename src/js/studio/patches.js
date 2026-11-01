@@ -7,7 +7,9 @@
 //     name, description,
 //     graph: { nodes: [{ id, type, position, params, metadata: { name } }],
 //              edges: [{ id, from, to, props }] },     only edges with both ends in the patch
-//     automation: [{ id, target: { node, param }, points }] }   lanes of patch nodes only
+//     automation: [{ id, target: { node, param }, points }],   lanes of patch nodes only
+//     category?, scale? }   optional (plan K097): a library tag ('xy' for an XY preset) and a
+//                           scale { mode, key } (core/music.js SCALE_MODES, NOTE_NAMES)
 // Positions are relative to the patch's top-left node (the smallest x and y become 0). A patch
 // never holds view state (pan, zoom, selection), runtime handles, tracks, clips or markers: a
 // patch is a graph fragment, the timeline belongs to the project it is inserted into. Node
@@ -44,6 +46,7 @@ import {
 } from './schema.js';
 import { validateStudioModel, STUDIO_IMPORT_LIMITS } from './validate.js';
 import { importStudio } from './migrate.js';
+import { NOTE_NAMES, SCALE_MODES } from '../core/music.js';
 
 export const PATCH_KIND = 'oscilla-patch';
 export const PATCH_SCHEMA_VERSION = 1;
@@ -74,7 +77,8 @@ export const patchMigrations = Object.freeze({
 });
 
 const ENVELOPE = Object.freeze({ req: ['kind', 'schemaVersion', 'studioSchemaVersion', 'name',
-  'graph'], opt: ['description', 'automation'] });
+  'graph'], opt: ['description', 'automation', 'category', 'scale'] });
+const CATEGORY_PATTERN = /^[a-z][a-z0-9-]{0,31}$/;
 
 /** A patch that cannot be created, inserted or replaced; `diagnostics` from the validator. */
 export class PatchError extends RangeError {
@@ -132,6 +136,8 @@ export function createPatch(model, nodeIds, meta = {}) {
     },
     automation: meta.includeAutomation === false ? []
       : model.timeline.automation.filter((l) => ids.has(l.target.node)).map((l) => copyPlain(l)),
+    ...(meta.category ? { category: meta.category } : {}),
+    ...(meta.scale ? { scale: { mode: meta.scale.mode, key: meta.scale.key } } : {}),
   };
   const r = importPatch(patch);
   if (!r.ok) throw new PatchError(`The selection is not a valid patch: ${r.errors[0].message}`,
@@ -226,6 +232,11 @@ export function importPatch(input, opts = {}) {
     if (p.automation !== undefined && !Array.isArray(p.automation)) {
       c.add('automation', 'must be a list');
     }
+    if (p.category !== undefined) c.str(p.category, 'category', 32, { pattern: CATEGORY_PATTERN });
+    if (p.scale !== undefined && c.keys(p.scale, 'scale', ['mode', 'key'])) {
+      if (!Object.hasOwn(SCALE_MODES, p.scale.mode)) c.add('scale.mode', 'is not a scale');
+      if (!NOTE_NAMES.includes(p.scale.key)) c.add('scale.key', 'is not a key');
+    }
   }
   if (c.errors.length) {
     return { ok: false, warnings: [], errors: c.errors.map((e) => ({
@@ -249,6 +260,8 @@ export function importPatch(input, opts = {}) {
       description: typeof p.description === 'string' ? p.description.trim() : '',
       graph: { nodes: m.graph.nodes, edges: m.graph.edges },
       automation: m.timeline.automation,
+      ...(p.category !== undefined ? { category: p.category } : {}),
+      ...(p.scale !== undefined ? { scale: { mode: p.scale.mode, key: p.scale.key } } : {}),
     },
   };
 }

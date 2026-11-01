@@ -135,7 +135,7 @@ parameters; depth and offset are octaves, |value| ≤ 10. New edges take the par
 `NODE_REGISTRY` holds frozen definitions, by category (held to `NODE_REGISTRY.list()` by
 `tests/unit/docs-derived.test.mjs`): Sources (Oscillator, Noise, Sweep, Sequence,
 Microphone, VCO, Additive engine, FM engine, AM/ring engine, Wavetable engine, Percussion
-engine), Modulation (LFO, Envelope, Random, Step Modulator, Macro, Keys), Processing
+engine), Modulation (LFO, Envelope, Random, Step Modulator, Macro, Keys, XY Pad), Processing
 (Gain, Filter, Pan, Stereo Split, Mixer, Drive, Ring), Analysis (Scope, Spectrum, Spectrogram, Meter, RTA), Output (Master Output,
 Recorder/Export), Measurement (Capture, Calibration, Transfer Analyzer, Measurement Result).
 
@@ -143,7 +143,7 @@ A definition has: `type`, `displayName`, `idPrefix`, `category`, `aliases`, `inp
 ports, then generated parameter ports), `outputs`, `params` (`key, label, type, min, max, step,
 unit, scale, options, default, automatable, modulatable, modDepth, softRange`), `summary(params)`
 (e.g. "Low-pass · 2.40 kHz · Q 0.707"), `capabilities` (`realtime, offline, measurement,
-requiresInputPermission, serializable`; Keys and the Synth engines add `notes`, a note source, and the engines `voices`, their polyphony), `help` (`what, inputs, outputs, constraints`),
+requiresInputPermission, serializable`; Keys, the XY Pad and the Synth engines add `notes`, a note source, and the engines `voices`, their polyphony), `help` (`what, inputs, outputs, constraints`),
 `clipKinds`, `maxInstances`, `sounding`, `summing`, and `compiler` plus `reuses`: string keys
 `'module.js#export'` naming the existing builder the compiler will adapt (the unit tests import
 each module and check the export exists). No definition holds an audio object.

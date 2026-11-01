@@ -13,6 +13,20 @@ scope:
   - "src/js/studio/registry.js"
   - "src/js/studio/adapters"
   - "src/js/ui/synth"
+  - "src/js/synth"
+  - "src/js/ui/kinds/xy-pad.js"
+  - "src/js/charts/drag-math.js"
+  - "src/js/core/music.js"
+  - "src/js/core/url-state-synth.js"
+  - "src/js/studio/live-notes.js"
+  - "src/js/studio/patches.js"
+  - "src/index.html"
+  - "tests/unit/v31-studio-model.test.mjs"
+  - "tests/unit/synth-engines.test.mjs"
+  - "docs/v31/studio-model.md"
+  - "docs/v31/studio-report.md"
+  - "README.md"
+  - "package.json"
   - "tests/unit/ui-flowbite-pro-baseline.json"
   - "tests/browser/integration-map.json"
   - "tests/unit/xy-pad.test.mjs"
@@ -45,5 +59,6 @@ validation:
   - "npm test"
 evidence_required:
   - "verified"
+current_state: "Built feature-first on 2026-11-01, ahead of W010 and its chain (W001, G003, N003, K043, K045), under the owner's direction relayed by the coordinator ('vse integrovano se vsim, vse reuse, vse zobecnene, vse propojene, maximalne reuse existujici kod, zapojuj, integruj ... vyuzivej stavajicich features'): the dependency order is inverted, not removed. The pad surface lands where W010 plans it, src/js/ui/kinds/xy-pad.js over charts/drag-math.js and the knob's parameter value model, so W010 later adds its other consumers (the Filter Lab and ADSR handles), its catalog declaration and its N003 slider views instead of a second pad. XY presets are ordinary patches of studio/patches.js (category 'xy' and a scale), so the one patch library of K066/K102 lists them. Not built here: the step grid's scale control the Linked criterion names (no step grid exists yet; core/music.js SCALE_MODES is the scale table it will share) and tests/browser/integration-map.json (the file does not exist yet)."
 created_at: 2026-10-29
-updated_at: 2026-10-30
+updated_at: 2026-11-01

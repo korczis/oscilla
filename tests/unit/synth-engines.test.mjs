@@ -26,7 +26,7 @@ const ENGINE_TYPES = ['additive-voice', 'fm-voice', 'am-voice', 'wavetable-voice
 test('every engine module is a 16-voice note source with a generated face', () => {
   const mods = PANEL.modulesOf('engines');
   assert.deepEqual(mods.map((m) => m.id), ENGINE_MODULES.map((m) => m.id));
-  assert.deepEqual(PANEL.tabs.map((t) => t.id), ['panel', 'engines']);
+  assert.deepEqual(PANEL.tabs.map((t) => t.id), ['panel', 'engines', 'xy'], 'XY: K097');
   for (const m of mods) {
     assert.equal(m.def.capabilities.notes, true, m.id);
     assert.equal(m.def.capabilities.voices, 16, m.id);
