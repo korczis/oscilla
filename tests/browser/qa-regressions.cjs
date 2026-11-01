@@ -32,7 +32,11 @@
 //                                 of every workspace, Studio template selection and library
 //                                 node type has a handler registered for it, or is listed in
 //                                 tests/unit/no-inert-surfaces-allowance.json; a fixture
-//                                 control without one is found
+//                                 control without one is found. The hook census (G001): every
+//                                 data-osc value those states show is declared in the UI
+//                                 catalogue (src/js/ui/catalog/registry.js) or listed in the
+//                                 undeclared section of tests/unit/ui-catalog-allowance.json;
+//                                 an injected fixture hook is flagged
 // Exit code 1 when any check fails.
 'use strict';
 
@@ -65,6 +69,8 @@ const LAUNCH = {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const INERT_ALLOWANCE = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests', 'unit',
   'no-inert-surfaces-allowance.json'), 'utf8'));
+const CATALOG_ALLOWANCE = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests', 'unit',
+  'ui-catalog-allowance.json'), 'utf8'));
 const WORKSPACES = ['playground', 'analyzer', 'sequencer', 'filter', 'synthesis', 'compare',
   'presets', 'learn'];
 
@@ -323,7 +329,24 @@ function unhandledControls() {
   return out;
 }
 
-const INERT_INIT = `(${listenerRegistry})();\nwindow.__oscUnhandled = ${unhandledControls};\n`;
+/**
+ * In the page: every distinct data-osc value of the document, once the main region shows at
+ * least one rendered data-osc element (the workspace's controls are built); null before.
+ */
+function pageHooks() {
+  const main = document.querySelector('#osc-main');
+  const shown = !!main && [...main.querySelectorAll('[data-osc]')]
+    .some((el) => el.getClientRects().length > 0);
+  return shown ? [...new Set([...document.querySelectorAll('[data-osc]')]
+    .map((el) => el.getAttribute('data-osc')))] : null;
+}
+
+const INERT_INIT = `(${listenerRegistry})();\nwindow.__oscUnhandled = ${unhandledControls};\n`
+  + `window.__oscHooks = ${pageHooks};\n`;
+
+/** The hooks the page shows now, read once its main region has built its controls. */
+const censusHooks = (page, where) => until(() => page.evaluate(() => window.__oscHooks()),
+  { ms: 5000, what: `no-inert-controls: hook census collected (${where})` });
 
 /**
  * The page in the states that build its controls: every workspace of the navigation, every
@@ -334,10 +357,15 @@ const INERT_INIT = `(${listenerRegistry})();\nwindow.__oscUnhandled = ${unhandle
  */
 async function walkControls(page) {
   const found = new Map();
+  const hooks = new Map(); // data-osc value -> the first state that showed it
   const take = (list, where) => {
     for (const { osc, tag } of list) if (!found.has(osc)) found.set(osc, `${where} <${tag}>`);
   };
+  const census = (list, where) => {
+    for (const osc of list || []) if (!hooks.has(osc)) hooks.set(osc, where);
+  };
   take(await page.evaluate(() => window.__oscUnhandled()), 'load');
+  census(await censusHooks(page, 'load'), 'load');
   const workspaces = await page.evaluate(() => [...new Set([...document.querySelectorAll(
     '[data-osc^="nav."]')].map((el) => el.dataset.osc.slice(4)))]);
   for (const ws of workspaces) {
@@ -345,6 +373,7 @@ async function walkControls(page) {
     await until(() => page.evaluate((w) => document.querySelector('#osc-app').dataset.mode === w,
       ws), { ms: 10000, what: `no-inert-controls: workspace ${ws} is shown` });
     take(await page.evaluate(() => window.__oscUnhandled()), ws);
+    census(await censusHooks(page, ws), ws);
   }
   const templates = await page.evaluate(() => window.OSCILLA.app.studio.templates.map((t) => t.id));
   const selections = [];
@@ -366,12 +395,16 @@ async function walkControls(page) {
       const out = [];
       for (const sel of sels) {
         s.store.dispatch({ type: 'SELECTION_CHANGE', selection: sel });
-        out.push({ where: JSON.stringify(sel), list: window.__oscUnhandled() });
+        out.push({ where: JSON.stringify(sel), list: window.__oscUnhandled(),
+          hooks: window.__oscHooks() });
       }
       return { n: sels.length, out };
     });
     selections.push(`${id}:${r.n}`);
-    for (const { where, list } of r.out) take(list, `${id} ${where}`);
+    for (const { where, list, hooks: shown } of r.out) {
+      take(list, `${id} ${where}`);
+      census(shown, `${id} ${where}`);
+    }
   }
   const added = await page.evaluate(() => {
     const s = window.OSCILLA.studio;
@@ -382,12 +415,16 @@ async function walkControls(page) {
       s.store.dispatch({ type: 'NODE_ADD', nodeType, position: { x: 80, y: 80 } });
       const node = s.model.graph.nodes.at(-1);
       s.store.dispatch({ type: 'SELECTION_CHANGE', selection: { nodes: [node.id] } });
-      out.push({ where: `added ${nodeType}`, list: window.__oscUnhandled() });
+      out.push({ where: `added ${nodeType}`, list: window.__oscUnhandled(),
+        hooks: window.__oscHooks() });
     }
     return { types, out };
   });
-  for (const { where, list } of added.out) take(list, where);
-  return { found, workspaces, templates: selections, types: added.types };
+  for (const { where, list, hooks: shown } of added.out) {
+    take(list, where);
+    census(shown, where);
+  }
+  return { found, hooks, workspaces, templates: selections, types: added.types };
 }
 
 /** The found controls against the allowance: unexpected ones, and allowed ones not found. */
@@ -937,12 +974,34 @@ function defineChecks() {
     });
     const withFixture = new Map([...walk.found, ...fixture.map((osc) => [osc, 'fixture'])]);
     const judged = judgeInert(withFixture, allowed).unexpected;
+    // The hook census (G001): every value shown is declared or allowed; the catalogue is the
+    // ESM registry of src/js, the same modules the build bundles.
+    const { CATALOG } = await import(pathToFileURL(path.join(ROOT, 'src', 'js', 'ui', 'catalog',
+      'registry.js')).href);
+    const { unknownHooks } = await import(pathToFileURL(path.join(ROOT, 'scripts', 'ui-catalog',
+      'check.mjs')).href);
+    const undeclared = unknownHooks([...walk.hooks.keys()], CATALOG, CATALOG_ALLOWANCE);
+    // The mutation: a hook only the running page shows is flagged.
+    const injected = await page.evaluate(() => {
+      const el = document.createElement('span');
+      el.setAttribute('data-osc', 'qa.fixture.undeclared');
+      document.querySelector('#osc-main').append(el);
+      const shown = window.__oscHooks();
+      el.remove();
+      return shown;
+    });
+    const flagged = unknownHooks([...walk.hooks.keys(), ...(injected || [])], CATALOG,
+      CATALOG_ALLOWANCE);
     await context.close();
     const ok = unexpected.length === 0 && stale.length === 0
       && JSON.stringify(fixture) === '["fixture.inert"]'
       && JSON.stringify(judged) === '["fixture.inert"]'
-      && walk.workspaces.includes('studio') && walk.templates.length > 0 && walk.types.length > 0;
+      && walk.workspaces.includes('studio') && walk.templates.length > 0 && walk.types.length > 0
+      && undeclared.length === 0 && walk.hooks.size > 0
+      && JSON.stringify(flagged) === '["qa.fixture.undeclared"]';
     return { ok, unexpected: unexpected.map((osc) => `${osc} @${walk.found.get(osc)}`), stale,
+      undeclared: undeclared.map((osc) => `${osc} @${walk.hooks.get(osc)}`),
+      hooks: walk.hooks.size, flagged,
       allowed: Object.keys(allowed).length, fixture, judged, workspaces: walk.workspaces.length,
       templates: walk.templates, types: walk.types.length };
   });

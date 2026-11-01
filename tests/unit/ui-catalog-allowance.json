@@ -1,0 +1,2116 @@
+{
+  "undeclared": [
+    {
+      "id": "about-view",
+      "reason": "The about hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "about.build",
+      "reason": "The about hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "about.channel",
+      "reason": "The about hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "about.commit",
+      "reason": "The about hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "about.digest",
+      "reason": "The about hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "about.email",
+      "reason": "The about hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "about.jobs",
+      "reason": "The about hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "about.lede",
+      "reason": "The about hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "about.majordomus",
+      "reason": "The about hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "about.privacy",
+      "reason": "The about hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "about.release",
+      "reason": "The about hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "about.source",
+      "reason": "The about hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "about.version",
+      "reason": "The about hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "action.copyUrl",
+      "reason": "The action hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "action.exportAudio",
+      "reason": "The action hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "action.savePreset",
+      "reason": "The action hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "action.screenshot",
+      "reason": "The action hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "action.settings",
+      "reason": "The action hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "additive.enable",
+      "reason": "The additive hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "additive.gain",
+      "reason": "The additive hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "additive.gainValue",
+      "reason": "The additive hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "additive.harmonic",
+      "reason": "The additive hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "additive.harmonicStep",
+      "reason": "The additive hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "additive.phase",
+      "reason": "The additive hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "additive.preset",
+      "reason": "The additive hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "additive.scope",
+      "reason": "The additive hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "alert",
+      "reason": "The alert hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "alerts",
+      "reason": "The alerts hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "analysis.freqScale",
+      "reason": "The analysis hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "analysis.fullscreen",
+      "reason": "The analysis hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "analysis.maxFreq",
+      "reason": "The analysis hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "analysis.pause",
+      "reason": "The analysis hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "analysis.tab",
+      "reason": "The analysis hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "analysis.timeWindow",
+      "reason": "The analysis hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "bio.collapse",
+      "reason": "The bio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "bio.ranges",
+      "reason": "The bio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "bio.tab",
+      "reason": "The bio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "calConv.basis",
+      "reason": "The calConv hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "calConv.choice",
+      "reason": "The calConv hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "calConv.load",
+      "reason": "The calConv hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "cnx.link",
+      "reason": "The cnx hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "cnx.toggle",
+      "reason": "The cnx hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "config.export",
+      "reason": "The config hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "config.import",
+      "reason": "The config hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "config.importFile",
+      "reason": "The config hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "continuous-toggle",
+      "reason": "The continuous hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "copy.url",
+      "reason": "The copy hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "debug.panel",
+      "reason": "The debug hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "def.conditions",
+      "reason": "The def hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "def.connections",
+      "reason": "The def hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "def.edit",
+      "reason": "The def hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "def.error",
+      "reason": "The def hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "def.minimumQuality",
+      "reason": "The def hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "def.name",
+      "reason": "The def hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "def.new",
+      "reason": "The def hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "def.notes",
+      "reason": "The def hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "def.run",
+      "reason": "The def hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "def.save",
+      "reason": "The def hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "def.useSetup",
+      "reason": "The def hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "device.collapse",
+      "reason": "The device hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "device.nyquist",
+      "reason": "The device hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "device.output",
+      "reason": "The device hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "device.safeMax",
+      "reason": "The device hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "device.sampleRate",
+      "reason": "The device hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "dual-panel",
+      "reason": "The dual hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "dual.a",
+      "reason": "The dual hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "dual.b",
+      "reason": "The dual hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "dual.beat",
+      "reason": "The dual hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "dual.binaural",
+      "reason": "The dual hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "dual.detune",
+      "reason": "The dual hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "dual.enable",
+      "reason": "The dual hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "dual.freq",
+      "reason": "The dual hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "dual.freqSlider",
+      "reason": "The dual hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "dual.gain",
+      "reason": "The dual hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "dual.levelA",
+      "reason": "The dual hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "dual.levelB",
+      "reason": "The dual hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "dual.mixer",
+      "reason": "The dual hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "dual.preset",
+      "reason": "The dual hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "dual.presets",
+      "reason": "The dual hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "dual.route",
+      "reason": "The dual hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "dual.wave",
+      "reason": "The dual hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "envelope.attack",
+      "reason": "The envelope hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "envelope.attackValue",
+      "reason": "The envelope hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "envelope.decay",
+      "reason": "The envelope hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "envelope.decayValue",
+      "reason": "The envelope hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "envelope.enable",
+      "reason": "The envelope hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "envelope.fullscreen",
+      "reason": "The envelope hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "envelope.release",
+      "reason": "The envelope hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "envelope.releaseValue",
+      "reason": "The envelope hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "envelope.scope",
+      "reason": "The envelope hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "envelope.sustain",
+      "reason": "The envelope hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "envelope.sustainValue",
+      "reason": "The envelope hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.annotation",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.backToDetail",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.baseline",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.calibrationClaim",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.changePair",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.changes",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.checklist",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.compact",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.compare",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.compareSummary",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.connections",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.csvAggregate",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.csvIr",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.csvTransfer",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.defs",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.defsNote",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.delete",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.deleteCancel",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.deleteCiting",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.deleteConfirm",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.delta",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.duplicate",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.evidence",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.evidenceDiff",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.evidenceHz",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.evidenceHzError",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.export",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.findingCompare",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.findingIssue",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.findingNew",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.findingValue",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.findings",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.findingsList",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.import",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.inspect",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.ir",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.irAxis",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.irNotes",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.lineage",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.open",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.rename",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.renameName",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.renameSave",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.repeat",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.row",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.select",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "exp.stimulusFinding",
+      "reason": "The exp hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "experiments-view",
+      "reason": "The experiments hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "export.config",
+      "reason": "The export hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "export.png",
+      "reason": "The export hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "export.seqWav",
+      "reason": "The export hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "export.url",
+      "reason": "The export hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "export.wav",
+      "reason": "The export hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.addCompare",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.addRun",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.close",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.cmpA",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.cmpB",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.compareHint",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.connections",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.delete",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.deleteCancel",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.deleteConfirm",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.discard",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.draftContinue",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.draftDiscard",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.draftNote",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.edit",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.error",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.export",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.formRef",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.formRefs",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.import",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.importErrors",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.loadStored",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.mine",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.new",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.note",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.notes",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.openRef",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.panel",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.ref",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.removeRef",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.runSelect",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.save",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.statement",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.status",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.statusHint",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.statusIssue",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "fnd.statusSelect",
+      "reason": "The fnd hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "header.about",
+      "reason": "The header hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "header.explore",
+      "reason": "The header hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "header.export",
+      "reason": "The header hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "header.help",
+      "reason": "The header hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "header.overflow",
+      "reason": "The header hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "header.settings",
+      "reason": "The header hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "header.shortcuts",
+      "reason": "The header hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "header.theme",
+      "reason": "The header hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "headphones.confirm",
+      "reason": "The headphones hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "help.global",
+      "reason": "The help hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "help.note",
+      "reason": "The help hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "help.space",
+      "reason": "The help hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "help.timeline",
+      "reason": "The help hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "help.title",
+      "reason": "The help hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "help.workspace",
+      "reason": "The help hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "hints",
+      "reason": "The hints hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "hints.close",
+      "reason": "The hints hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "learn-content",
+      "reason": "The learn hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "learn-view",
+      "reason": "The learn hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "learn.demo",
+      "reason": "The learn hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "learn.example",
+      "reason": "The learn hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "levelCal.capture",
+      "reason": "The levelCal hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "levelCal.conditions",
+      "reason": "The levelCal hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "levelCal.hz",
+      "reason": "The levelCal hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "levelCal.manual",
+      "reason": "The levelCal hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "levelCal.manualNote",
+      "reason": "The levelCal hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "levelCal.observed",
+      "reason": "The levelCal hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "levelCal.reading",
+      "reason": "The levelCal hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "levelCal.ref",
+      "reason": "The levelCal hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "levelCal.retention",
+      "reason": "The levelCal hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "levelCal.save",
+      "reason": "The levelCal hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "levelCal.scale",
+      "reason": "The levelCal hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "levelCal.stop",
+      "reason": "The levelCal hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure-view",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.alert",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.bar",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.calConvention",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.calExportCsv",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.calExportJson",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.calImport",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.calName",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.calRemove",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.calUse",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.choice",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.clearDefinition",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.definition",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.definitionDiffers",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.evidenceNotes",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.expert",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.field",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.freqIndicator",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.inputDevice",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.inputFacts",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.inputMissing",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.inputStatus",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.irNormalize",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.irScale",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.irSpan",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.irSummary",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.irWindow",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.level",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.levelCal",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.levelIndicator",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.levelRemove",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.levelState",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.levelUse",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.levelVoid",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.live",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.name",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.normalization",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.notes",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.phaseNote",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.primary",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.quality",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.quantity",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.recipeLink",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.recipeLinkDone",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.recipeLinkErrors",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.recipeLinkUrl",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.repeat",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.responseSummary",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.retention",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.rtaAveraging",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.rtaError",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.rtaFreeze",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.rtaLive",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.rtaMode",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.rtaModeChip",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.rtaPeak",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.rtaReset",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.rtaSource",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.rtaSummary",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.save",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.savedText",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.secondary",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.setupToggle",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.shown",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.smoothing",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.step",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.stimulusText",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.stop",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.switch",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.tab",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.testContext",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.toExperiments",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "measure.unsaved",
+      "reason": "The measure hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "mic.detected",
+      "reason": "The mic hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "mic.requested",
+      "reason": "The mic hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "mic.settings",
+      "reason": "The mic hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "mic.tab",
+      "reason": "The mic hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "mic.toggle",
+      "reason": "The mic hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "midi.actions",
+      "reason": "The midi hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "midi.connect",
+      "reason": "The midi hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "midi.status",
+      "reason": "The midi hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "nav.about",
+      "reason": "The nav hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "nav.analyzer",
+      "reason": "The nav hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "nav.compare",
+      "reason": "The nav hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "nav.experiments",
+      "reason": "The nav hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "nav.filter",
+      "reason": "The nav hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "nav.learn",
+      "reason": "The nav hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "nav.measure",
+      "reason": "The nav hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "nav.playground",
+      "reason": "The nav hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "nav.presets",
+      "reason": "The nav hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "nav.sequencer",
+      "reason": "The nav hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "nav.studio",
+      "reason": "The nav hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "nav.synthesis",
+      "reason": "The nav hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "pattern-desc",
+      "reason": "The pattern hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "pattern-params",
+      "reason": "The pattern hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "pattern-select",
+      "reason": "The pattern hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "pattern.param",
+      "reason": "The pattern hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "phase.collapse",
+      "reason": "The phase hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "phase.correlation",
+      "reason": "The phase hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "phase.correlationBasis",
+      "reason": "The phase hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "phase.correlationMeter",
+      "reason": "The phase hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "phase.offset",
+      "reason": "The phase hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "phase.tab",
+      "reason": "The phase hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "presets-content",
+      "reason": "The presets hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "presets-view",
+      "reason": "The presets hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "presets.clearHistory",
+      "reason": "The presets hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "presets.delete",
+      "reason": "The presets hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "presets.history",
+      "reason": "The presets hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "presets.item",
+      "reason": "The presets hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "presets.load",
+      "reason": "The presets hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "presets.reset",
+      "reason": "The presets hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "presets.save",
+      "reason": "The presets hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "presets.tab",
+      "reason": "The presets hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "safety",
+      "reason": "The safety hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "safety-limit",
+      "reason": "The safety hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "safety.dismiss",
+      "reason": "The safety hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "safety.reopen",
+      "reason": "The safety hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "safety.reopenMenu",
+      "reason": "The safety hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "save.confirm",
+      "reason": "The save hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "save.name",
+      "reason": "The save hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "seq.add",
+      "reason": "The seq hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "seq.addType",
+      "reason": "The seq hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "seq.delete",
+      "reason": "The seq hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "seq.editor",
+      "reason": "The seq hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "seq.editor.fields",
+      "reason": "The seq hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "seq.editor.icon",
+      "reason": "The seq hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "seq.editor.title",
+      "reason": "The seq hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "seq.field",
+      "reason": "The seq hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "seq.fieldStep",
+      "reason": "The seq hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "seq.message",
+      "reason": "The seq hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "seq.moveEarlier",
+      "reason": "The seq hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "seq.moveLater",
+      "reason": "The seq hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "seq.play",
+      "reason": "The seq hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "seq.record",
+      "reason": "The seq hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "seq.scroll",
+      "reason": "The seq hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "seq.start",
+      "reason": "The seq hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "seq.stop",
+      "reason": "The seq hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "seq.tempo",
+      "reason": "The seq hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "seq.timeline",
+      "reason": "The seq hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "settings.a4",
+      "reason": "The settings hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "settings.attack",
+      "reason": "The settings hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "settings.customMax",
+      "reason": "The settings hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "settings.customMin",
+      "reason": "The settings hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "settings.duration",
+      "reason": "The settings hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "settings.range",
+      "reason": "The settings hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "settings.release",
+      "reason": "The settings hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "settings.reset",
+      "reason": "The settings hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "source.freqAlt",
+      "reason": "The source hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "source.freqSlider",
+      "reason": "The source hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "source.freqUnit",
+      "reason": "The source hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "source.freqValue",
+      "reason": "The source hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "source.gain",
+      "reason": "The source hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "source.gainValue",
+      "reason": "The source hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "source.hold",
+      "reason": "The source hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "source.inputMode",
+      "reason": "The source hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "source.kind",
+      "reason": "The source hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "source.oscView",
+      "reason": "The source hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "source.patternView",
+      "reason": "The source hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "source.rangeMax",
+      "reason": "The source hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "source.rangeMin",
+      "reason": "The source hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "source.step",
+      "reason": "The source hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "source.trigger",
+      "reason": "The source hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "source.waveform",
+      "reason": "The source hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "spectrogram.colorbar",
+      "reason": "The spectrogram hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "spectrogram.colorbarTicks",
+      "reason": "The spectrogram hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "spectrogram.freeze",
+      "reason": "The spectrogram hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "spectrogram.freqScale",
+      "reason": "The spectrogram hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "spectrogram.fullscreen",
+      "reason": "The spectrogram hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "spectrogram.span",
+      "reason": "The spectrogram hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "status.actionsMenu",
+      "reason": "The status hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "status.announce",
+      "reason": "The status hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "status.duration",
+      "reason": "The status hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "status.frequency",
+      "reason": "The status hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "status.gain",
+      "reason": "The status hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "status.label",
+      "reason": "The status hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "status.pattern",
+      "reason": "The status hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "status.play",
+      "reason": "The status hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "status.readout",
+      "reason": "The status hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "status.state",
+      "reason": "The status hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "status.version",
+      "reason": "The status hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "status.waveform",
+      "reason": "The status hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "stereo.controls",
+      "reason": "The stereo hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "stereo.freqA",
+      "reason": "The stereo hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "stereo.freqB",
+      "reason": "The stereo hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "stereo.pan",
+      "reason": "The stereo hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "stereo.route",
+      "reason": "The stereo hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio-view",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.add",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.add.cancel",
+      "reason": "The studio.add hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.add.item",
+      "reason": "The studio.add hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.add.list",
+      "reason": "The studio.add hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.add.note",
+      "reason": "The studio.add hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.add.search",
+      "reason": "The studio.add hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.add.status",
+      "reason": "The studio.add hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.alert",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.back",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.connect.cancel",
+      "reason": "The studio.connect hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.connect.output",
+      "reason": "The studio.connect hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.connect.outputs",
+      "reason": "The studio.connect hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.connect.rejected",
+      "reason": "The studio.connect hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.connect.target",
+      "reason": "The studio.connect hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.connect.targets",
+      "reason": "The studio.connect hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.copyLink",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.counts",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.dirty",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.dlg.alert",
+      "reason": "The studio.dlg hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.dlg.live",
+      "reason": "The studio.dlg hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.export",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.find",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.find.cancel",
+      "reason": "The studio.find hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.find.item",
+      "reason": "The studio.find hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.find.list",
+      "reason": "The studio.find hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.find.search",
+      "reason": "The studio.find hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.find.status",
+      "reason": "The studio.find hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.frameAll",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.fullscreen",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.graph",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.graph.banner",
+      "reason": "The studio.graph hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.graph.cancelConnect",
+      "reason": "The studio.graph hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.graph.edge",
+      "reason": "The studio.graph hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.graph.empty",
+      "reason": "The studio.graph hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.graph.flag",
+      "reason": "The studio.graph hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.graph.minimap",
+      "reason": "The studio.graph hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.graph.node",
+      "reason": "The studio.graph hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.graph.nodes",
+      "reason": "The studio.graph hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.graph.summary",
+      "reason": "The studio.graph hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.graph.viewport",
+      "reason": "The studio.graph hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.graph.zoom",
+      "reason": "The studio.graph hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.import",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.importFile",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.inspector",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.inspector.automate",
+      "reason": "The studio.inspector hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.inspector.connections",
+      "reason": "The studio.inspector hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.inspector.diagnostics",
+      "reason": "The studio.inspector hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.inspector.edge",
+      "reason": "The studio.inspector hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.inspector.edgeStatus",
+      "reason": "The studio.inspector hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.inspector.laneNote",
+      "reason": "The studio.inspector hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.inspector.length",
+      "reason": "The studio.inspector hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.inspector.loop",
+      "reason": "The studio.inspector hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.inspector.mapping",
+      "reason": "The studio.inspector hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.inspector.mic",
+      "reason": "The studio.inspector hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.inspector.micError",
+      "reason": "The studio.inspector hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.inspector.mute",
+      "reason": "The studio.inspector hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.inspector.no-automate",
+      "reason": "The studio.inspector hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.inspector.notes",
+      "reason": "The studio.inspector hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.inspector.param",
+      "reason": "The studio.inspector hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.inspector.polarity",
+      "reason": "The studio.inspector hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.inspector.runtime",
+      "reason": "The studio.inspector hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.inspector.runtimeState",
+      "reason": "The studio.inspector hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.inspector.status",
+      "reason": "The studio.inspector hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.inspector.summary",
+      "reason": "The studio.inspector hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.inspector.title",
+      "reason": "The studio.inspector hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.inspector.trace",
+      "reason": "The studio.inspector hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.inspector.traceOps",
+      "reason": "The studio.inspector hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.inspector.track",
+      "reason": "The studio.inspector hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.inspector.transport",
+      "reason": "The studio.inspector hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.keys",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.library",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.library.item",
+      "reason": "The studio.library hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.library.list",
+      "reason": "The studio.library hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.library.note",
+      "reason": "The studio.library hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.library.search",
+      "reason": "The studio.library hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.linkDone",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.linkNote",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.linkUrl",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.live",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.loop",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.measureNote",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.open",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.patch.description",
+      "reason": "The studio.patch hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.patch.error",
+      "reason": "The studio.patch hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.patch.export",
+      "reason": "The studio.patch hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.patch.info",
+      "reason": "The studio.patch hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.patch.name",
+      "reason": "The studio.patch hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.patch.replace",
+      "reason": "The studio.patch hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.patch.save",
+      "reason": "The studio.patch hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.play",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.redo",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.render.cancel",
+      "reason": "The studio.render hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.render.duration",
+      "reason": "The studio.render hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.render.error",
+      "reason": "The studio.render hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.render.format",
+      "reason": "The studio.render hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.render.limits",
+      "reason": "The studio.render hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.render.note",
+      "reason": "The studio.render hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.render.start",
+      "reason": "The studio.render hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.renderWav",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.return",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.save",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.saved.close",
+      "reason": "The studio.saved hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.saved.cnxLink",
+      "reason": "The studio.saved hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.saved.connections",
+      "reason": "The studio.saved hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.saved.connectionsToggle",
+      "reason": "The studio.saved hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.saved.error",
+      "reason": "The studio.saved hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.saved.list",
+      "reason": "The studio.saved hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.saved.open",
+      "reason": "The studio.saved hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.stop",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.storeNote",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.subview",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.task",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.task.abort",
+      "reason": "The studio.task hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.task.renderWhy",
+      "reason": "The studio.task hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.task.text",
+      "reason": "The studio.task hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.template.open",
+      "reason": "The studio.template hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.templates",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.templates.dirty",
+      "reason": "The studio.templates hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.templates.linkPending",
+      "reason": "The studio.templates hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.templates.list",
+      "reason": "The studio.templates hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.time",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.timeline",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.title",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.undo",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "studio.warning",
+      "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "sweep.param",
+      "reason": "The sweep hooks are not declared yet; a later catalogue slice declares them."
+    }
+  ]
+}

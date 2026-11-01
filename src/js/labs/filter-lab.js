@@ -25,13 +25,9 @@ import { FILTER_DRAG } from '../charts/drag-math.js';
 import { on, onUi, bindSwitch, setSlider, setField, activeValue, onAdapterChange } from './dom.js';
 import { FILTER_PREVIEW_SAMPLE_RATE } from '../core/constants.js';
 
-export const FILTER_DEFAULTS = Object.freeze({
-  type: 'lowpass',
-  frequency: 2500,
-  Q: Math.SQRT1_2,
-  gain: 0,
-  enabled: true,
-});
+import { FILTER_DEFAULTS } from './lab-defaults.js';
+
+export { FILTER_DEFAULTS } from './lab-defaults.js';
 /** The chart's note while it reads the offline model: 'model @ 48 kHz'. */
 const PREVIEW_NOTE = `model @ ${FILTER_PREVIEW_SAMPLE_RATE / 1000} kHz`;
 

@@ -1,0 +1,45 @@
+// Trace of the embedded Studio (plan issue G001, ADR 0081 decision 4): for each declaration of
+// src/js/ui/catalog/decl/studio-compact.js, the module that carries its hook, the plan issues,
+// intent criteria and decisions it serves, and the tests that name its hooks (NAMED, not
+// VERIFIED). The docs-only part: it lives outside src/, so the app never imports or bundles it.
+
+const entry = (e) => ({ plan: ['G001'], intents: ['component-system#contract-and-registry'],
+  adrs: ['adr-0081', 'adr-0030'], ...e });
+
+export default {
+  'studio.compact': entry({ source: 'src/index.html',
+    tests: ['tests/unit/ui-catalog.test.mjs', 'scripts/visual-studio.mjs',
+      'tests/browser/live-smoke.cjs', 'tests/browser/navigation.cjs',
+      'tests/browser/v31-studio-graph.cjs', 'tests/browser/v31-studio-timeline.cjs'] }),
+  'studio.compact.title': entry({ source: 'src/js/ui/studio/compact.js',
+    tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/live-smoke.cjs',
+      'tests/browser/v31-studio-timeline.cjs'] }),
+  'studio.compact.counts': entry({ source: 'src/js/ui/studio/compact.js',
+    tests: ['tests/unit/ui-catalog.test.mjs'] }),
+  'studio.compact.summary': entry({ source: 'src/js/ui/studio/compact.js',
+    tests: ['tests/unit/ui-catalog.test.mjs'] }),
+  'studio.compact.play': entry({ source: 'src/js/ui/studio/compact.js',
+    tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/v31-studio-graph.cjs'] }),
+  'studio.compact.stop': entry({ source: 'src/js/ui/studio/compact.js',
+    tests: ['tests/unit/ui-catalog.test.mjs'] }),
+  'studio.compact.loop': entry({ source: 'src/js/ui/studio/compact.js',
+    tests: ['tests/unit/ui-catalog.test.mjs'] }),
+  'studio.compact.time': entry({ source: 'src/js/ui/studio/compact.js',
+    tests: ['tests/unit/ui-catalog.test.mjs'] }),
+  'studio.compact.expand': entry({ source: 'src/js/ui/studio/compact.js',
+    tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/v31-studio-graph.cjs'] }),
+  'studio.compact.path': entry({ source: 'src/js/ui/studio/compact.js',
+    tests: ['tests/unit/ui-catalog.test.mjs'] }),
+  'studio.compact.node': entry({ source: 'src/js/ui/studio/compact.js',
+    tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/live-smoke.cjs',
+      'tests/browser/v31-studio-graph.cjs'] }),
+  'studio.compact.clips': entry({ source: 'src/js/ui/studio/compact.js',
+    tests: ['tests/unit/ui-catalog.test.mjs'] }),
+  'studio.compact.clip': entry({ source: 'src/js/ui/studio/compact.js',
+    tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/live-smoke.cjs',
+      'tests/browser/v31-studio-graph.cjs', 'tests/browser/v31-studio-timeline.cjs'] }),
+  'studio.compact-timeline': entry({ source: 'src/js/ui/studio/compact-timeline.js',
+    tests: ['tests/unit/ui-catalog.test.mjs'] }),
+  'studio.compact-playhead': entry({ source: 'src/js/ui/studio/compact-timeline.js',
+    tests: ['tests/unit/ui-catalog.test.mjs'] }),
+};

@@ -29,13 +29,9 @@ import { parseNumber, clamp } from '../charts/axes.js';
 import { onFrame } from '../charts/frame-loop.js';
 import { on, onUi, setText, setAttr, activeValue } from './dom.js';
 
-export const PHASE_DEFAULTS = Object.freeze({
-  freqA: 440,
-  freqB: 442,
-  phaseDeg: 45,
-  pan: 0,
-  route: 'mono',
-});
+import { PHASE_DEFAULTS } from './lab-defaults.js';
+
+export { PHASE_DEFAULTS } from './lab-defaults.js';
 
 /** Stereo router config (audio/stereo.js) for the lab's Mono/Stereo output and pan. */
 export function routerConfig(cfg) {
