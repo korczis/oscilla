@@ -26,9 +26,10 @@
   },
   "caps": {
     "src/index.html": 281000,
-    "src/js/audio/audio-engine.js": 51000,
+    "src/js/audio/audio-engine.js": 55000,
     "src/js/core/instrument.js": 61000,
     "src/js/experiments/validate.js": 64000,
+    "src/js/main.js": 43000,
     "src/js/measurement/capture.js": 55000,
     "src/js/measurement/engine.js": 79000,
     "src/js/measurement/quality.js": 73000,
@@ -43,5 +44,18 @@
     "src/js/ui/studio/timeline-editor.js": 53000,
     "src/js/ui/studio/workspace.js": 86000
   },
-  "raises": []
+  "raises": [
+    {
+      "file": "src/js/audio/audio-engine.js",
+      "cap": 55000,
+      "pr": 370,
+      "reason": "C-line train: #310 C008 held-note envelope, #293 C010 dual router, #297 C016 preflight; the budget landed after the members' bases; split tracked as a follow-up"
+    },
+    {
+      "file": "src/js/main.js",
+      "cap": 43000,
+      "pr": 370,
+      "reason": "C-line train: #310 C008 held-note envelope, #293 C010 dual router, #297 C016 preflight; the budget landed after the members' bases; split tracked as a follow-up"
+    }
+  ]
 }
