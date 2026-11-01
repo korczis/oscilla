@@ -10,14 +10,14 @@
         "width": 1536,
         "height": 1024
       },
-      "reference": "sha256:47ccceb65ef93d9611bdf59d3a7063e1d54b6202ab61f07e579004f952985d1c",
+      "reference": "sha256:100b813abff64ef87ec029907f196786b10f76ee4b17746f9562b0709960c9d5",
       "runs": 3,
-      "total": 3.11,
-      "totalExclData": 3.32,
+      "total": 3.12,
+      "totalExclData": 3.34,
       "regions": {
         "header": {
-          "mismatch": 3.06,
-          "mismatchExclData": 3.06,
+          "mismatch": 3.11,
+          "mismatchExclData": 3.11,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
@@ -58,8 +58,8 @@
           "dataPp": 0.5
         },
         "sequencer": {
-          "mismatch": 1.56,
-          "mismatchExclData": 0.96,
+          "mismatch": 1.58,
+          "mismatchExclData": 0.99,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
@@ -70,8 +70,8 @@
           "dataPp": 0.5
         },
         "statusbar": {
-          "mismatch": 3.74,
-          "mismatchExclData": 3.74,
+          "mismatch": 3.69,
+          "mismatchExclData": 3.69,
           "runToRunPct": 0,
           "dataPp": 0.5
         }
@@ -233,7 +233,35 @@
           114.27,
           30
         ]
-      }
+      },
+      "acceptedRises": [
+        {
+          "region": "reference.png",
+          "rise": null,
+          "reason": "feature train #367: the first screen of #278 (P002, Q004 option A) adds the sentence, measure and studio regions and regenerates tests/visual/reference.png; the F001/F002 Flowbite Pro shell restyles the chrome",
+          "date": "2026-11-01",
+          "from": "sha256:47ccceb65ef93d9611bdf59d3a7063e1d54b6202ab61f07e579004f952985d1c",
+          "to": "sha256:100b813abff64ef87ec029907f196786b10f76ee4b17746f9562b0709960c9d5"
+        },
+        {
+          "region": "sentence",
+          "rise": 11.45,
+          "reason": "feature train #367: the first screen of #278 (P002, Q004 option A) adds the sentence, measure and studio regions and regenerates tests/visual/reference.png; the F001/F002 Flowbite Pro shell restyles the chrome",
+          "date": "2026-11-01"
+        },
+        {
+          "region": "measure",
+          "rise": 3.15,
+          "reason": "feature train #367: the first screen of #278 (P002, Q004 option A) adds the sentence, measure and studio regions and regenerates tests/visual/reference.png; the F001/F002 Flowbite Pro shell restyles the chrome",
+          "date": "2026-11-01"
+        },
+        {
+          "region": "studio",
+          "rise": 5.61,
+          "reason": "feature train #367: the first screen of #278 (P002, Q004 option A) adds the sentence, measure and studio regions and regenerates tests/visual/reference.png; the F001/F002 Flowbite Pro shell restyles the chrome",
+          "date": "2026-11-01"
+        }
+      ]
     },
     "linux-x64": {
       "browser": {
@@ -244,14 +272,14 @@
         "width": 1536,
         "height": 1024
       },
-      "reference": "sha256:47ccceb65ef93d9611bdf59d3a7063e1d54b6202ab61f07e579004f952985d1c",
+      "reference": "sha256:100b813abff64ef87ec029907f196786b10f76ee4b17746f9562b0709960c9d5",
       "runs": 3,
-      "total": 0,
-      "totalExclData": 0,
+      "total": 0.02,
+      "totalExclData": 0.03,
       "regions": {
         "header": {
-          "mismatch": 0,
-          "mismatchExclData": 0,
+          "mismatch": 0.16,
+          "mismatchExclData": 0.16,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
@@ -292,8 +320,8 @@
           "dataPp": 0.5
         },
         "sequencer": {
-          "mismatch": 0,
-          "mismatchExclData": 0,
+          "mismatch": 0.02,
+          "mismatchExclData": 0.03,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
@@ -304,8 +332,8 @@
           "dataPp": 0.5
         },
         "statusbar": {
-          "mismatch": 0,
-          "mismatchExclData": 0,
+          "mismatch": 0.05,
+          "mismatchExclData": 0.05,
           "runToRunPct": 0,
           "dataPp": 0.5
         }
@@ -467,7 +495,35 @@
           104.13,
           30
         ]
-      }
+      },
+      "acceptedRises": [
+        {
+          "region": "reference.png",
+          "rise": null,
+          "reason": "feature train #367: the first screen of #278 (P002, Q004 option A) adds the sentence, measure and studio regions and regenerates tests/visual/reference.png; the F001/F002 Flowbite Pro shell restyles the chrome",
+          "date": "2026-11-01",
+          "from": "sha256:47ccceb65ef93d9611bdf59d3a7063e1d54b6202ab61f07e579004f952985d1c",
+          "to": "sha256:100b813abff64ef87ec029907f196786b10f76ee4b17746f9562b0709960c9d5"
+        },
+        {
+          "region": "sentence",
+          "rise": 0,
+          "reason": "feature train #367: the first screen of #278 (P002, Q004 option A) adds the sentence, measure and studio regions and regenerates tests/visual/reference.png; the F001/F002 Flowbite Pro shell restyles the chrome",
+          "date": "2026-11-01"
+        },
+        {
+          "region": "measure",
+          "rise": 0,
+          "reason": "feature train #367: the first screen of #278 (P002, Q004 option A) adds the sentence, measure and studio regions and regenerates tests/visual/reference.png; the F001/F002 Flowbite Pro shell restyles the chrome",
+          "date": "2026-11-01"
+        },
+        {
+          "region": "studio",
+          "rise": 0,
+          "reason": "feature train #367: the first screen of #278 (P002, Q004 option A) adds the sentence, measure and studio regions and regenerates tests/visual/reference.png; the F001/F002 Flowbite Pro shell restyles the chrome",
+          "date": "2026-11-01"
+        }
+      ]
     }
   },
   "note": "Accepted visual values per environment, written only by node scripts/visual-gate.mjs --update-baseline. Percentages are pixels that differ from tests/visual/reference.png (pixelmatch threshold 0.12), whose sha256 each environment stores as reference. A re-acceptance may raise a region's mismatch by at most its stored runToRunPct + 2 pp; acceptedRises records each rise accepted beyond that, and each regeneration of the reference, with --accept-rise and its reason. See scripts/visual-gate.mjs.",
