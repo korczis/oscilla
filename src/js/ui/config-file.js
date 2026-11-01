@@ -234,10 +234,15 @@ const showValue = (v, unit) => `${Number(v.toPrecision(6))}${unit ? ` ${unit}` :
 
 /**
  * The import notification. invalid: the count of values rejected and kept at their previous
- * setting; limited: limitedValues(). "All settings were restored." only when both are empty.
+ * setting; limited: limitedValues(); dropped: saved values not restored ({ label }, the
+ * instrument's report, H002). "All settings were restored." only when all three are empty, so
+ * it is never said over a limited value or a continuous repeat played once.
  */
-export function importNotice({ invalid = 0, limited = [] } = {}) {
+export function importNotice({ invalid = 0, limited = [], dropped = [] } = {}) {
+  const names = dropped.map((d) => d.label);
+  const not = names.length ? ` Not restored: ${names.join(', ')}.` : '';
   if (!invalid && !limited.length) {
+    if (not) return { level: 'info', message: `All other settings were restored.${not}` };
     return { level: 'success', message: 'All settings were restored.' };
   }
   const parts = [];
@@ -248,7 +253,16 @@ export function importNotice({ invalid = 0, limited = [] } = {}) {
     parts.push(`${limited.length} value(s) were outside the supported range: `
       + `${named.join('; ')}.`);
   }
-  return { level: 'warning', message: parts.join(' ') };
+  return { level: 'warning', message: `${parts.join(' ')}${not}` };
+}
+
+/**
+ * The notice after an applied import: { level, title, message } (H002): importNotice without
+ * the lab limits, titled for the notification.
+ */
+export function importSummary({ invalid = 0, dropped = [] } = {}) {
+  const { level, message } = importNotice({ invalid, dropped });
+  return { level, title: 'Config imported', message };
 }
 
 /** File name for an export: oscilla-<what>-<YYYYMMDD-HHMMSS>.<ext> (local time). */

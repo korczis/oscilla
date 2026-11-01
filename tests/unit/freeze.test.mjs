@@ -90,9 +90,33 @@ const g002Parse = ([v2, v1Error]) => (out) => {
   'G002: one frequency grammar');
   return { ok: false, error: v1Error };
 };
+// H002: a link restore names what it dropped. A continuous repeat restored as once gets its own
+// notice (V1 said nothing), and the "Configuration restored from link" summary starts with
+// "Not restored: <names>." (V1: the bare "Nothing plays ..." sentence). Positive cases:
+// tests/unit/restore-notices.test.mjs.
+const LINK_SUMMARY = 'Nothing plays until you press HOLD TO PLAY or TRIGGER.';
+const h002LinkView = (names) => (out) => {
+  const q = structuredClone(out);
+  const drop = config.CONTINUOUS_REPEAT_DROPPED;
+  const dropAlert = (a) => a[1] === drop.title;
+  assert.strictEqual(q.alerts.filter(dropAlert).length, names.includes('continuous repeat') ? 1 : 0,
+    'V2 fix (H002): the continuous-repeat drop is a notice');
+  q.alerts = q.alerts.filter((a) => !dropAlert(a)).map((a) => {
+    if (a[1] !== 'Configuration restored from link') return a;
+    assert.strictEqual(a[2], `Not restored: ${names.join(', ')}. ${LINK_SUMMARY}`,
+      'V2 fix (H002): the link summary names the drop');
+    return [a[0], a[1], LINK_SUMMARY];
+  });
+  return q;
+};
 const DEVIATIONS = {
   ...Object.fromEntries(Object.entries(G002_PARSE)
     .map(([id, d]) => [`frequency.parse/${id}`, g002Parse(d)])),
+  'url.state/roundtrip:sweep-continuous-allowed': h002LinkView(['continuous repeat']),
+  'url.state/restore:continuous-repeat@null': h002LinkView(['continuous repeat']),
+  'url.state/restore:continuous-repeat@48000': h002LinkView(['continuous repeat']),
+  'url.state/restore:binaural-in-link@null': h002LinkView(['binaural mode']),
+  'url.state/restore:binaural-in-link@48000': h002LinkView(['binaural mode']),
   // pt-octaves sets pp.octave.text (V1 leaves it out: a stale Steps field changed the preset)
   'presets.data/BUILTIN_PRESETS': (out) => out.map((p) => {
     if (p.id !== 'pt-octaves') return p;

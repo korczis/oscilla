@@ -181,7 +181,9 @@ changed.
   build the waveform you hear. It applies to single-oscillator sources, not to the dual
   oscillator.
 - **Phase, Lissajous and stereo:** A/B phase views, a Lissajous figure, a correlation meter and
-  stereo routing (split, panned or mono).
+  stereo routing (split, panned or mono). Pan acts on the sounding A/B dual voice in Mono
+  output, also while it plays; for a single source and in Stereo output the slider is disabled
+  and says why.
 - **Bioacoustics:** approximate hearing ranges and call examples for humans and several animal
   species, every value cited.
 - **Export:** WAV of the current tone, pattern or sequence, rendered offline through the same
@@ -1059,7 +1061,10 @@ Browser storage holds only these keys and one database, `oscilla-experiments` (v
 | IndexedDB | `oscilla-experiments`, object store `findings` | Your findings (statement, status, notes, the evidence each cites and the id and result hash of each cited experiment) |
 
 Experiments and findings are deleted only when you delete them. Permission to play continuously is never
-stored.
+stored. A preset, History entry, config file or link saved with a continuous sweep repeat
+therefore restores it as once, and a notice says so ("Continuous repeat not restored"). Allowing
+continuous playback does not bring the repeat back by itself: allow it in Playback safety, then
+load the preset, History entry or file again. A link never carries the permission.
 
 ## Licences
 

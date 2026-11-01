@@ -27,7 +27,7 @@
   "caps": {
     "src/index.html": 281000,
     "src/js/audio/audio-engine.js": 73000,
-    "src/js/core/instrument.js": 61000,
+    "src/js/core/instrument.js": 62000,
     "src/js/experiments/validate.js": 64000,
     "src/js/main.js": 52000,
     "src/js/measurement/capture.js": 55000,
@@ -67,6 +67,12 @@
       "cap": 92000,
       "pr": 320,
       "reason": "the feature train 2026-10-31 adds the continued pattern voice on a rebuilt node (#320 H001) and the late-voice grid join (#276) to the Studio transport"
+    },
+    {
+      "file": "src/js/core/instrument.js",
+      "cap": 62000,
+      "pr": 367,
+      "reason": "merging C-line train B (#380) into the feature train 2026-10-31 (#367) adds main's restoreConfig and its whole restore report (#345 H002) to the instrument beside the train's superseded-sweep-error handling"
     }
   ]
 }

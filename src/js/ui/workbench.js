@@ -4,7 +4,7 @@
 // hosts live in `svc` (a closure), never in reactive state.
 //
 // svc: { engine, bridge, labs, exportConfigDoc(cmp),
-//        applyImport(cmp, parsed) -> { issues, notes[], limited },
+//        applyImport(cmp, parsed) -> { issues, notes[], limited, dropped },
 //        renderWav(cmp, kind), screenshot(cmp), relayout(), stopPlayback(cmp),
 //        sequencerPlaying() }
 
@@ -540,8 +540,9 @@ export function createWorkbench(svc) {
         this.notify('error', 'Config not imported', parsed.errors.slice(0, 3).join(' '));
         return false;
       }
-      const { issues, notes = [], limited } = svc.applyImport(this, parsed);
-      const notice = importNotice({ invalid: parsed.warnings.length + issues, limited });
+      const { issues, notes = [], limited, dropped = [] } = svc.applyImport(this, parsed);
+      // dropped: saved values not restored (H002), named after the invalid and limited ones.
+      const notice = importNotice({ invalid: parsed.warnings.length + issues, limited, dropped });
       // A value the file holds that was not applied is said, never reported as restored (C004).
       if (notes.length) {
         const said = notice.level === 'success' ? notes : [notice.message, ...notes];

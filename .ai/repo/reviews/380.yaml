@@ -1,0 +1,37 @@
+# Review verdict for pull request #380, C-line merge train B of 2026-11-01 (branch
+# fix/train-2026-11-01-c-line-b; builder oscilla-b0's train agent), titled as one fix change under
+# the owner's override of ADR 0055 (2026-10-31). It is #370 without #297 (C016) and #310 (C008),
+# which go to their own reconciliation PR. Reviewed head 31898164 against origin/main ca1889c0
+# (#290 C012 merged in). This reviewer built none of the members (#343 #342 #293 #339 #340 #341
+# #345) and judges what the train adds: its merge resolutions in guarded paths, the union of
+# guarded content and the train-only commits. Each member's own verdict stays the judgement of
+# that member's content (#343, #342 and #293 carry merge verdicts; the others touch no guarded path).
+#
+# The digest is scripts/review-verdict.mjs from `git archive origin/main scripts`, run --content
+# --list --base-branch origin/main in a detached worktree at the head: 767966b1...67c1 over 7 paths.
+#
+# What was checked:
+# - Guarded patch against main, per file, compared with #370's judged patch against its base
+#   60103776: impulse-response.js, stimulus.js, views/ir-chart.js, studio/compiler.js,
+#   studio/runtime.js and ui/measure/views.js are line-for-line the same. audio-engine.js is a
+#   strict subset of #370's (C008's setEnvelopeSustain and C016's audibleVoiceCountAt are gone
+#   with their members) and equals member #293's own patch (0bfbefe3) exactly.
+# - Every first-parent merge replayed with git merge-tree: the only guarded file whose resolution
+#   differs from the auto-merge is ui/measure/views.js in d0af9dbb (T019 after the #262 split),
+#   the move #370's L2 judged; content unchanged. The #290 merge ce26fd97 resolves no guarded file
+#   by hand; C012's runtime.js 'master' events are present at the head.
+# - 31898164 moves keepFocusInView from main.js to ui/dialogs.js unchanged (neither guarded);
+#   main.js 39854 B and audio-engine.js 50045 B, so no source-size cap is raised (#370's L1 raise
+#   is not part of this train).
+# - fail-first from the base copy, judged as one fix change: proven by 9 of 9 files.
+# - The builder reports npm test 3495 pass, 0 fail.
+#
+# Verdict: merge. No P0, P1 or P2.
+schema: review-verdict/v1
+pr: 380
+verdict: merge
+reviewer: oscilla-af (claude-code 901211e2)
+content: 767966b1982485dc22466b8a19440ded0e67c9d1dad5809e781749506e0067c1
+findings:
+  - { id: L2, severity: P3, status: open, title: "T019's measure.js additions live in measure/views.js after the #262 split; #343's own verdict judged them in measure.js, this verdict judges the move (content unchanged)" }
+  - { id: L3, severity: P3, status: open, title: "#297 C016 and #310 C008 leave this train; their reconciliation PR needs its own verdict, including audio-engine.js where C008 and C010 were adjacent additions in #370" }

@@ -108,7 +108,15 @@ The runtime then instantiates the plan in order and routes it:
   to fit above the frequency (a lane's peak counts as its reference), a positive one lowers the
   cap of the frequency's own edges, and the upward excursion of the detune's edges is scaled to
   what is left; a static base lowered this way is listed in `debugInfo().limitedParams`
-  (`{ node, param }`), a scaled edge in `limitedEdges`. That lowering is not an edge offset:
+  (`{ node, param }`), a scaled edge in `limitedEdges`. Each of them is also a
+  `frequency-limited` diagnostic while the graph runs (T023, below), so the Inspector says
+  what plays: the field reads "30.00 kHz, plays 22.80 kHz" (with cables, "20.00 kHz
+  (25.00 kHz with cables), plays 22.80 kHz") with a note naming the cap that applied, and the
+  Runtime section no longer says the revision "plays as edited" but how many values it lowered
+  and why. Every frequency (Hz) parameter is held at or below the lower of its own range
+  maximum and 0.95 × Nyquist (`caps`, with `bound` `range` or `nyquist`): an LFO's Rate stops
+  at 100 Hz, the top of its range, and the diagnostic says so, not 0.95 × Nyquist.
+  That lowering is not an edge offset:
   `runtime.baseOffset` leaves it out, so a detune lane, which overrides the static value, plays
   its own values within its own bound (review V272 R-1). Other parameters are not clamped at
   audio rate (an AudioParam sum cannot be); when base ± modulation can leave the range it is
@@ -266,7 +274,8 @@ runtimeSourceCount, handleCount, routedEdgeCount, pendingCleanups, engineNodeCou
 engineSourceCount, degraded, inactiveEdges, limitedEdges, limitedParams, exceeds, warnings,
 diagnostics, lastOps, lastError, applied, ownedParams }`. `degraded` and `inactiveEdges` are
 `{ id, status, code, reason }` (the live handle's or route's, else the plan's); `diagnostics`
-holds validation's warnings and the runtime's own, structured; `warnings` is their message text.
+holds validation's warnings and the runtime's own, structured, including the
+`frequency-limited` diagnostics in effect; `warnings` is their message text.
 
 ## Runtime truth (ADR 0039)
 
@@ -286,7 +295,7 @@ the transport:
 `owner` is one of `DIAGNOSTIC_OWNERS` (`validate`, `compiler`, `runtime`, `transport`).
 `code` is the machine reason that a consumer branches on, and `message` is display prose that
 nobody parses. `entity` names the node, edge, clip or lane the diagnostic is about. `details`
-is optional plain data, reserved: no producer sets it yet. Validation
+is optional plain data; `frequency-limited` is the one producer that sets it. Validation
 keeps its compatibility fields `path`, `nodeId?`, `edgeId?` and `detail?` (a cycle's node names,
 as prose). A plan node or edge, a runtime handle or route, and a transport `unplayed` entry carry
 the same `code` beside their display `reason`. `code` is `null` when there is no reason. The
@@ -303,6 +312,7 @@ status maps the views read (`compiledStatus`, `compiledEdgeStatus`, `runtimeStat
 | runtime | handle `code` | `mic-pending` (waiting for the input), `mic-error` (the input failed to open), `mic-ended` (its track ended by itself: permission withdrawn, device gone); otherwise the plan node's. A settled handle is announced as the runtime event `'handle'` |
 | runtime | route `code` | `no-output`, `no-input`, `no-mod-target` (the handles cannot make the route); otherwise the plan edge's |
 | runtime | `apply` warnings, `debugInfo().diagnostics` | `update-failed`, `parameters-failed`, `output-failed`, `engage-failed`, `stop-failed` (entity: node), `route-failed` (entity: edge): a guarded step after the commit that threw; `commit-failed` (no entity): any other throw after the commit. `engage-failed` and `commit-failed` stay in `diagnostics` while unresolved (`runtime.unresolved()`, the `degraded` verdict) |
+| runtime | `apply` / `start` warnings, `debugInfo().diagnostics` (warning) | `frequency-limited` (T023): a value the running graph plays below what the model and its cables ask, because `computeBases` holds a frequency (Hz) parameter at or below its cap, the lower of its range maximum and 0.95 × Nyquist. Entity: the node, for a base that plays lower (a frequency, an Oscillator's detune), with `details` `{ node, param, unit, stored, offset, cents, asked, played, base, target, cap, bound, safeMaximum, sampleRate }`: `offset` is the constant part its linear cables add, `cents` the constant cents its log cables ask, `asked` what that asks and `played` what sounds, for a frequency the AudioParam `base` shifted by the log cables' constant cents (30 kHz with a −1 octave log offset at 48 kHz: base 22.8 kHz, plays 11.4 kHz; 20 kHz with a +5 kHz cable offset: asks 25 kHz, plays 22.8 kHz); `target` is the parameter whose cap applied (an Oscillator's detune spends its frequency's) and `bound` `range` or `nyquist`. Or the edge, for a CONTROL edge it limited, with `stored` and `played` its depth (in the parameter's unit, octaves for a log mapping), `mapping`, `scale`, the same `target`, `cap` and `bound`, and `offsetStored` / `offsetPlayed` (octaves) when the log cables' constant offset was lowered. The text is built when read from the plan in effect, so a rename names the node as it is now. In effect while the graph runs (none while stopped); a base an automation lane owns is left out (its lane plays, bounded on its own). The audio is unchanged: these only report what `computeBases` already does (`compiler.js` `frequencyLimits`) |
 | runtime | `lastError.errors`, a refused `apply` / `start` | `prepare-failed` (entity: the node or edge whose preparation threw), `start-failed`, `nothing-compiled`, `disposed`; a validation refusal carries validation's diagnostics |
 | transport | `debugInfo().diagnostics`, the `'warning'` event | `edit-refused` (the commit gate refused a live edit), `sync-refused` (the runtime refused a synced model), both with the runtime diagnostic's entity, `automation-failed` (entity: lane), `measurement-callback-failed`, `timeline` (a timeline-compiler warning, its prose as the message). One diagnostic per code and entity (per code and message without an entity); a newer one replaces the older |
 | transport | `debugInfo().lastError` (a Diagnostic plus `phase`), `start()`'s `code` | PLAY refused: `disposed`, `claim-failed` (the output claim threw), `claim-refused`, `play-refused` (the runtime refused to apply or start the model; entity: the runtime diagnostic's); or a live edit's `edit-refused` / `sync-refused` |
