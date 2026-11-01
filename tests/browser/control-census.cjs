@@ -597,7 +597,7 @@ row({ id: 'phase.mono.pointer', ws: 'compare', control: '#osc-stereo-mono', how:
   act: D.click('#osc-stereo-mono'), expect: (s) => s.phase.route === 'mono' && !s.app.dual.stereo });
 
 // ---- Sequencer (Tempo: control-census-1, PR #266). The filter reaching it (control-census-2)
-// passes here since C003 (PR #295) landed; journeys.cjs's sequencer-filter journey keeps its mark
+// passes here since C003 (PR #295) landed, and so does journeys.cjs's sequencer-filter journey
 both({ id: 'seq.play', ws: 'sequencer', control: '#osc-seq-play',
   pointer: D.click('#osc-seq-play'), keyboard: D.keys('#osc-seq-play', 'Enter'),
   expect: (s) => s.seq.playing && s.app.seqPlaying && s.aria.seqPlay === 'true',

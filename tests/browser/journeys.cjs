@@ -485,25 +485,32 @@ function defineChecks() {
     await page.click('#osc-seq-record'); // loop, so the first block returns
     await page.click('#osc-seq-play');
     await waitSnap(page, (x) => x.seq.playing, 'the sequencer plays');
-    // the first block is a 440 Hz tone: its level with the filter open, then at 150 Hz
-    const lvl = async (what) => {
+    // the first block is a 440 Hz tone: its loudest level over two passes of the loop (one per
+    // 2.25 s), with the filter open and then at 150 Hz, the same window for both
+    const loudest = async (what) => {
       let best = -240;
+      const t0 = Date.now();
       await until(async () => { best = Math.max(best, await op.toneDb(page, 440));
-        return best > -60; }, { ms: STEP_MS, what });
+        return Date.now() - t0 > 5000; }, { ms: STEP_MS, what });
       return best;
     };
-    const open = await lvl('journey-2: the 440 Hz block with the filter open');
+    const open = await loudest('journey-2: two passes with the filter open');
     await typeField(page, '#osc-filter-cutoff-value', '150');
-    let low = -240;
-    const t0 = Date.now();
-    // the loop passes the 440 Hz block once per 2.25 s: watch two passes for its level
-    await until(async () => { low = Math.max(low, await op.toneDb(page, 440));
-      return Date.now() - t0 > 5000; }, { ms: STEP_MS, what: 'two passes of the loop heard' });
+    // the analyser's window still holds the audio from before the change: read the level once
+    // one whole window (fftSize at the context's own rate) has passed since the cutoff landed
+    const since = await until(() => page.evaluate(() => {
+      const o = window.OSCILLA;
+      return o.labs.filter.config.frequency === 150
+        && o.engine.ctx.currentTime + o.engine.analyser.fftSize / o.engine.ctx.sampleRate;
+    }), { ms: STEP_MS, what: 'journey-2: the cutoff field sets 150 Hz' });
+    await until(() => page.evaluate((t) => window.OSCILLA.engine.ctx.currentTime > t, since),
+      { ms: STEP_MS, what: 'journey-2: one analyser window after the cutoff change' });
+    const low = await loudest('journey-2: two passes with the low-pass at 150 Hz');
     await page.click('#osc-seq-stop');
     defect(open - low > 15, 'the enabled low-pass at 150 Hz attenuates the sequencer',
       { open, low });
     return { open, low };
-  }, { xfail: { finding: 'control-census-2', issue: 'C003', pr: 295 } });
+  });
 
   def('journey-2-live:studio-param', async ({ page }) => {
     await op.navTo(page, 'studio');
