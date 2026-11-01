@@ -1,0 +1,55 @@
+# Review verdict for pull request #367, the owner-approved feature train of 2026-10-31 (branch
+# feat/train-2026-10-31-features; builder oscilla-26's train agent), titled as one feat change
+# under the owner's override of ADR 0055 (2026-10-31, quoted in the body). Reviewed head ad498158
+# against origin/main 60103776. The reviewer (oscilla-af) built none of the members and none of
+# the train's own commits. It judges what the train adds: every merge resolution, the train-only
+# commits, the union of guarded content, and the member whose own verdict is not a merge (#303).
+# Every other member's own verdict stays the judgement of that member's content. oscilla-21 was
+# to judge the measurement/analysis/calibration/storage side; its section had not arrived when
+# this was written, so that side is covered here through the resolution replay below.
+#
+# The digest is scripts/review-verdict.mjs from `git archive origin/main scripts`, run --content
+# --list --base-branch origin/main in a detached worktree at the head: 57d55a28...4071 over 57
+# guarded paths. It is the same at 6cb8d179, 3a840b66, d43292f1 and ad498158: nothing after the
+# first review moved guarded content (the later commits are tests, the Flowbite fix in compact
+# focus, navTopLevel and keepInScrollerView in non-guarded ui/, the visual re-acceptances and
+# the #366 main merge, whose only conflicts were dist, tests/README.md and compact references).
+#
+# F section (oscilla-af: audio, studio, experiments, safety, build/stamp/deploy scripts, .github)
+# - Resolutions: all 40 first-parent merges replayed with git merge-tree at 6cb8d179; 36 of 37
+#   conflicted merges differ from the auto-merge only in the conflicted files, the 37th
+#   (79644477) adds midiAllOff to output-owner.js as the body declares; no resurrected deletion,
+#   no member file lost (129 member-added files present). Judged sound: 550bd89c (build-config
+#   comments; BUDGET is main's), 71e86f01 (stageChain + stageAccounting, counted once),
+#   34913ecf, 79644477, 6e06b100, 77bdfb04 (keepGrid only on the clip start), 78f87be6, 2386489d.
+# - B1 (#303 C011, verdict on record still `changes`): judged here at 3a840b66.
+#   R-1 is fixed in the code: tightenLimit (audio-engine.js:775-815) ends a voice at
+#   noteT0 + limit with rel = min(release, max(0.005, limit/2)) inside it, from a render-quantum
+#   boundary rounded down, and fades now over what is left when that release would already
+#   have begun. R-2 is fixed: play() checks the first pass (editor.js:787 cutAtCap) and a mutant
+#   that skips it fails 2 of c011-safety-limits.test.mjs (19/19 unmutated). Gap F1 below.
+# - B2: the train-only content of audio-engine.js, transport.js and build-config.mjs is the
+#   resolutions above (unchanged since 6cb8d179 per the builder; spectrogram.js is the A section).
+# - Since 6cb8d179: no guarded change (the sequencer stop fix is tests/browser/app.cjs only);
+#   non-guarded src: navTopLevel() in ui/app.js and keepInScrollerView + compact.js focusin.
+# - fail-first from the base copy, judged as one feat change: proven by 91 of 95 files at ad498158.
+# - The builder reports npm test 3933 pass, 0 fail at ad498158; visual-gate-bound 22/22 after the
+#   recorded --accept-rise (reason in the body's "Visual re-acceptance" section).
+# - Members left out by the builder: #297 C016 and #310 C008 (contradict C002 and C007), #331
+#   (changes requested), #278 and #293 until their own verdicts.
+#
+# Verdict: merge. No P0 or P1. F1 is a test gap in content that is otherwise fixed; F2-F5 are the
+# duplication follow-ups the builder has named for the next slice; F6-F7 are P3.
+schema: review-verdict/v1
+pr: 367
+verdict: merge
+reviewer: oscilla-af (claude-code 901211e2)
+content: 57d55a28f263574efe416350937231bbb6c9117ec6e2d2e4b3ef306075ab4071
+findings:
+  - { id: F1, severity: P2, status: open, title: "c011-safety-limits.test.mjs does not hold R-1's release clamp: its fixture voice's release is already <= limit/2 and the test recomputes rel from v.release, so a mutant with rel = v.release passes 19/19; add a voice whose release exceeds half the lowered limit" }
+  - { id: F2, severity: P2, status: open, title: "D1: src/js/synth/view/knob.js formats and parses StudioModel params differently from the Inspector and G002's units module (440.5 Hz reads '441 Hz' vs '440.50 Hz'); follow-up named by the builder" }
+  - { id: F3, severity: P2, status: open, title: "D2: in the Studio workspace keyboard and MIDI play the Playground engine voice, not the document's Keys/Engines (midi/ui.js routes only for 'synth'); follow-up" }
+  - { id: F4, severity: P2, status: open, title: "D3: two note-to-pitch laws, the Playground route follows A4, the Synth route ignores it; follow-up" }
+  - { id: F5, severity: P2, status: open, title: "D4: keyboard and MIDI notes reach the scope through a vizInputs override that outputOwner does not know, so the canvas description contradicts the drawing; follow-up" }
+  - { id: F6, severity: P3, status: open, title: "duplication follow-ups: inline note stealing vs the synth voice pool, two velocity laws, a second note-name table, a third hzText copy, a second kbd URL reader, Synth presets outside the Studio Library, duplicated hasConstant" }
+  - { id: F7, severity: P3, status: open, title: "T001's ceiling indicator (workbench.js:116,130) ignores MIDI/keyboard/Synth/Studio voices: ceilingActing needs the output owner, not playing || seqPlaying" }
