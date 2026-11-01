@@ -2865,8 +2865,10 @@
       <input class="osc-number osc-dialog-input" id="osc-save-name" type="text" maxlength="60"
         data-osc="save.name" x-model="saveName" autocomplete="off" autofocus>
       <p class="osc-pp-error" role="alert" x-show="saveError" x-text="saveError"></p>
-      <p class="osc-muted osc-dialog-note">Stored in this browser (localStorage, preset schema v1).
-        The continuous-playback permission is never stored.</p>
+      <p class="osc-muted osc-dialog-note">Stored in this browser (localStorage, preset schema v1)
+        with the Filter, Envelope, Additive and Phase &amp; Stereo settings. The sequence is not
+        included (it travels in the config file), and the continuous-playback permission is never
+        stored.</p>
       <div class="osc-dialog-actions">
         <button type="button" class="osc-btn osc-btn-secondary" @click="closeDialog('saveModal')">Cancel</button>
         <button type="submit" class="osc-btn osc-btn-primary" data-osc="save.confirm">Save</button>
@@ -2890,8 +2892,8 @@
   <dialog class="osc-dialog" id="osc-dlg-copy" data-oscilla-modal aria-labelledby="osc-dlg-copy-title">
     <div class="osc-dialog-body">
       <h2 class="osc-dialog-title" id="osc-dlg-copy-title">Config link</h2>
-      <p>The clipboard is not available here. Copy the link manually; opening it restores these
-        settings and never starts playback.</p>
+      <p>The clipboard is not available here. Copy the link manually.
+        <span data-osc="copy.note" x-text="copyUrl && configLinkNote()"></span></p>
       <input class="osc-number osc-dialog-input" type="text" readonly :value="copyUrl"
         data-osc="copy.url" aria-label="Config link" @focus="$event.target.select()">
       <div class="osc-dialog-actions">

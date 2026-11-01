@@ -105,7 +105,9 @@ changed.
   Studio keys win over `m`, and `m` wins over a recipe link's `mr`, so `#m=studio&mr=…` opens
   Studio and still loads the recipe into Measure
   ([ADR 0045](.ai/repo/adrs/0045-workspace-in-history-one-hash-dispatcher-unsaved-guard.md)).
-  **Copy config URL** keeps the recipe and Studio keys that are in the address. Each nav item
+  **Copy config URL** keeps the recipe and Studio keys that are in the address, and writes the
+  instrument (the V1 keys) and the Filter, Envelope, Additive and Phase & Stereo settings (one
+  `lab=` key); the sequence is not in a link, it travels in the config file. Each nav item
   links to its workspace's address, so opening it in a new tab opens that workspace. A link
   that is refused does not stay in the address or in history.
 - **The address names a stored record.** In Experiments, the experiment the detail shows is
@@ -900,10 +902,10 @@ Browser storage holds only these keys and one database, `oscilla-experiments` (v
 
 | Storage | Key | Contents |
 | --- | --- | --- |
-| localStorage | `oscilla.presets` | Your saved presets |
+| localStorage | `oscilla.presets` | Your saved presets (the instrument and the Filter, Envelope, Additive and Phase & Stereo settings; not the sequence) |
 | localStorage | `oscilla.v2.theme` | Light or dark theme |
 | localStorage | `oscilla.v2.analysisTab` | The last analysis tab |
-| sessionStorage | `oscilla.history` | Recently played configurations (this tab only) |
+| sessionStorage | `oscilla.history` | Recently played configurations with the lab settings they were played with (this tab only) |
 | sessionStorage | `oscilla.safetyNoticeCollapsed` | Whether the safety notice was collapsed |
 | IndexedDB | `oscilla-experiments`, object store `experiments` | Your saved experiments, in the exported file form |
 | IndexedDB | `oscilla-experiments`, object store `summaries` | One small row per experiment for the list (name, date, schema and product version, quality status, result hash, size, its definition version, and the repeat, duplicate and Studio hashes it stores) |

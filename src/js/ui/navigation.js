@@ -3,8 +3,10 @@
 // into the ONE OSCILLA component by main.js (Object.defineProperties, never spread), like
 // measure.js; its state lives in the closure `nav`, never in reactive state.
 //
-// The hash is shared by four codecs, each reading only its own keys: the instrument
-// (core/url-state.js: v s p w f g d a r rm x, and V1 mode ids in `m`), the MEASURE recipe
+// The hash is shared by five codecs, each reading only its own keys: the instrument
+// (core/url-state.js: v s p w f g d a r rm x, and V1 mode ids in `m`), its lab settings
+// (core/url-state-labs.js: lab, the Filter, Envelope, Additive and Phase & Stereo sections that
+// Copy config URL writes beside the V1 keys; C018), the MEASURE recipe
 // (core/url-state-measure.js: mr), the Studio link (core/url-state-studio.js: m=studio, st,
 // sv) and a stored record (core/url-state-records.js: m=experiments with exp, def or finding,
 // ADR 0048; the record keys leave the address with Experiments, like the Studio keys). `m`
@@ -44,7 +46,7 @@
 //   hashForWorkspace(hash, workspace) -> string        (m set; Studio keys out off STUDIO)
 //   hashAfterRefusal(hash, results, workspace) -> string  (a refused link's keys out)
 //   hashForRecord(hash, { kind, id } | null) -> string  (Experiments naming that record)
-//   configLinkHash(hash, instrumentHash, workspace) -> string
+//   configLinkHash(hash, instrumentHash, workspace, labParam) -> string
 //                                                      (Copy config URL: other keys kept)
 
 import { APP_MODES } from '../core/constants.js';
@@ -52,6 +54,7 @@ import {
   STUDIO_LINK_KEYS, STUDIO_LINK_MODE, withoutStudioParams,
 } from '../core/url-state-studio.js';
 import { RECIPE_HASH_KEY, withRecipeParam } from '../core/url-state-measure.js';
+import { LAB_HASH_KEY, withoutLabParam } from '../core/url-state-labs.js';
 import {
   RECORD_LINK_KEYS, RECORD_LINK_MODE, decodeRecordLink, encodeRecordLink, withoutRecordParams,
 } from '../core/url-state-records.js';
@@ -60,7 +63,8 @@ import { WORKSPACES } from './app.js';
 export const ROUTE_KEY = 'm';
 export const DEFAULT_WORKSPACE = 'playground';
 /** The domains that read the hash, in the order the dispatcher applies them. */
-export const HASH_DOMAINS = Object.freeze(['instrument', 'measure', 'studio', 'records']);
+export const HASH_DOMAINS = Object.freeze(['instrument', 'labs', 'measure', 'studio',
+  'records']);
 /**
  * The domains re-applied on Back / Forward (ADR 0048): opening a stored record replaces nothing
  * the user made, so a traversal between two records opens the record its entry names.
@@ -157,11 +161,12 @@ export function hashForRecord(hash, link) {
 /**
  * The address to keep for a link some domain refused: the refused domain's keys leave (a Studio
  * link, a recipe), `m` names the workspace the user stays in. So a refused link never comes
- * back through Back / Forward or a reload. results: { instrument, measure, studio } as the
+ * back through Back / Forward or a reload. results: { instrument, labs, measure, studio } as the
  * dispatcher collected them; false = refused.
  */
 export function hashAfterRefusal(hash, results, workspace) {
   let h = isAnchorHash(hash) ? '' : strip(hash);
+  if (results.labs === false) h = withoutLabParam(h);
   if (results.studio === false) h = withoutStudioParams(h);
   if (results.measure === false) h = withRecipeParam(h, null);
   if (results.records === false) h = withoutRecordParams(h);
@@ -172,15 +177,20 @@ const refusedAny = (results) => Object.values(results).includes(false);
 
 /**
  * Copy config URL: the instrument's keys from `instrumentHash` (url-state.js serializeHash)
- * replace the instrument keys of `hash`; every other key (mr, the Studio keys, anything else)
- * is kept, and `m` names the workspace, so the link and the address bar reopen where the user
- * is (a V1 mode id there would land MEASURE or STUDIO in the Playground).
+ * replace the instrument keys of `hash`, and `labParam` (url-state-labs.js encodeLabParam of
+ * the current lab settings, or null for none) replaces its `lab` key; every other key (mr, the
+ * Studio keys, anything else) is kept, and `m` names the workspace, so the link and the address
+ * bar reopen where the user is (a V1 mode id there would land MEASURE or STUDIO in the
+ * Playground).
  */
-export function configLinkHash(hash, instrumentHash, workspace) {
+export function configLinkHash(hash, instrumentHash, workspace, labParam = null) {
   const out = paramsOf(instrumentHash);
+  if (labParam) out.set(LAB_HASH_KEY, labParam);
   const rest = isAnchorHash(hash) ? new URLSearchParams() : paramsOf(hash);
   for (const [k, v] of rest) {
-    if (k !== ROUTE_KEY && !INSTRUMENT_HASH_KEYS.includes(k)) out.append(k, v);
+    if (k !== ROUTE_KEY && k !== LAB_HASH_KEY && !INSTRUMENT_HASH_KEYS.includes(k)) {
+      out.append(k, v);
+    }
   }
   return hashForWorkspace(out.toString(), workspace);
 }
@@ -371,7 +381,8 @@ export function createNavigation(svc = {}) {
 
     /** Copy config URL's hash (instrument.js copyConfigLink): the other domains' keys kept. */
     configLinkHash() {
-      return configLinkHash(loc().hash, this.serializeHash(), this.workspace);
+      const lab = typeof this.labLinkParam === 'function' ? this.labLinkParam() : null;
+      return configLinkHash(loc().hash, this.serializeHash(), this.workspace, lab);
     },
 
     /** Test seam (window.OSCILLA.navigation). */

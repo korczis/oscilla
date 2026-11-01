@@ -18,6 +18,35 @@ const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 const copy = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
 
 /**
+ * The four lab sections (Envelope ADSR, Filter, Additive, Phase & Stereo) in the shape of the
+ * config document: { envelope: { adsr } | null, filter, additive, phaseStereo }, each null when
+ * the lab is absent. The config file, a custom preset's and a History entry's `labs` and the
+ * `lab=` link key (core/url-state-labs.js) all hold this shape, and parseLabSections reads it.
+ * input: { envelope: { enabled, a, d, s, r } | null, filter: { enabled, type, frequency, Q,
+ *   gain } | null, additive: { enabled, partials } | null, phaseStereo: { ... } | null }
+ */
+export function buildLabSections(input) {
+  return {
+    envelope: input.envelope ? {
+      adsr: {
+        enabled: !!input.envelope.enabled,
+        a: input.envelope.a, d: input.envelope.d, s: input.envelope.s, r: input.envelope.r,
+      },
+    } : null,
+    filter: input.filter ? {
+      enabled: !!input.filter.enabled, type: input.filter.type, frequency: input.filter.frequency,
+      Q: input.filter.Q, gain: input.filter.gain,
+    } : null,
+    additive: input.additive ? {
+      enabled: !!input.additive.enabled,
+      partials: (input.additive.partials || []).map((p) => ({ n: p.n, gain: p.gain,
+        phase: p.phase })),
+    } : null,
+    phaseStereo: input.phaseStereo ? copy(input.phaseStereo) : null,
+  };
+}
+
+/**
  * Build the export document.
  * input: {
  *   oscillaVersion, sampleRate (null before audio), mode (V1 mode id), workspace,
@@ -30,6 +59,7 @@ const copy = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v))
 export function buildConfigExport(input) {
   const cfg = input.instrument || {};
   const pid = cfg.pattern;
+  const labs = buildLabSections(input);
   return {
     kind: CONFIG_FILE_KIND,
     version: CONFIG_FILE_VERSION,
@@ -40,18 +70,9 @@ export function buildConfigExport(input) {
     waveform: cfg.waveform,
     frequency: cfg.frequency,
     gain: cfg.gain,
-    envelope: {
-      attackMs: cfg.attack,
-      releaseMs: cfg.release,
-      adsr: input.envelope ? {
-        enabled: !!input.envelope.enabled,
-        a: input.envelope.a, d: input.envelope.d, s: input.envelope.s, r: input.envelope.r,
-      } : null,
-    },
-    filter: input.filter ? {
-      enabled: !!input.filter.enabled, type: input.filter.type, frequency: input.filter.frequency,
-      Q: input.filter.Q, gain: input.filter.gain,
-    } : null,
+    envelope: { attackMs: cfg.attack, releaseMs: cfg.release,
+      adsr: labs.envelope ? labs.envelope.adsr : null },
+    filter: labs.filter,
     pattern: {
       id: pid,
       durationMs: cfg.duration,
@@ -62,11 +83,8 @@ export function buildConfigExport(input) {
     },
     sequencer: input.sequencer ? copy(input.sequencer) : null,
     dualOsc: cfg.dual ? copy(cfg.dual) : null,
-    additive: input.additive ? {
-      enabled: !!input.additive.enabled,
-      partials: (input.additive.partials || []).map((p) => ({ n: p.n, gain: p.gain, phase: p.phase })),
-    } : null,
-    phaseStereo: input.phaseStereo ? copy(input.phaseStereo) : null,
+    additive: labs.additive,
+    phaseStereo: labs.phaseStereo,
     metadata: {
       app: 'OSCILLA',
       workspace: input.workspace || 'playground',
@@ -142,7 +160,39 @@ export function parseConfigImport(input) {
   if (isObj(pattern.sweep)) instrument.sweep = copy(pattern.sweep);
   if (isObj(doc.dualOsc)) instrument.dual = copy(doc.dualOsc);
 
+  const { envelope, filter, additive, phaseStereo } = parseLabSections(doc, warnings);
+  return {
+    ok: true,
+    errors,
+    warnings,
+    instrument,
+    envelope,
+    filter,
+    sequencer: isObj(doc.sequencer) ? copy(doc.sequencer) : null,
+    additive,
+    phaseStereo,
+    mode: typeof doc.mode === 'string' ? doc.mode : null,
+  };
+
+  function fail(list) {
+    return {
+      ok: false, errors: list, warnings, instrument: null, envelope: null, filter: null,
+      sequencer: null, additive: null, phaseStereo: null, mode: null,
+    };
+  }
+}
+
+/**
+ * Validate the lab sections of a config document or of a lab record (buildLabSections shape):
+ * { envelope: { enabled, adsr } | null, filter, additive, phaseStereo }. A section that is
+ * present and malformed is null and adds a warning to `warnings`; nothing is repaired. The
+ * labs themselves keep their own limits when the values are applied. The one validation path
+ * of the config file, custom presets, History entries and the `lab=` link key.
+ */
+export function parseLabSections(doc, warnings = []) {
+  if (!isObj(doc)) return { envelope: null, filter: null, additive: null, phaseStereo: null };
   let envelope = null;
+  const env = isObj(doc.envelope) ? doc.envelope : {};
   if (isObj(env.adsr)) {
     const a = env.adsr;
     if (['a', 'd', 's', 'r'].every((k) => isNum(a[k]) && a[k] >= 0) && a.s <= 1) {
@@ -169,29 +219,18 @@ export function parseConfigImport(input) {
   let phaseStereo = null;
   if (isObj(doc.phaseStereo)) {
     const p = doc.phaseStereo;
-    phaseStereo = {};
-    for (const k of ['freqA', 'freqB', 'phaseDeg', 'pan']) if (isNum(p[k])) phaseStereo[k] = p[k];
-    if (p.route === 'mono' || p.route === 'stereo') phaseStereo.route = p.route;
+    // The lab's own settings are phaseDeg and pan (the frequencies and the route belong to the
+    // dual oscillator in the instrument cfg): a section with neither restores nothing, so it is
+    // refused rather than counted as applied or as a valid link (#314 review R-7).
+    if (isNum(p.phaseDeg) || isNum(p.pan)) {
+      phaseStereo = {};
+      for (const k of ['freqA', 'freqB', 'phaseDeg', 'pan']) {
+        if (isNum(p[k])) phaseStereo[k] = p[k];
+      }
+      if (p.route === 'mono' || p.route === 'stereo') phaseStereo.route = p.route;
+    } else warnings.push('phaseStereo ignored: needs a numeric phaseDeg or pan.');
   }
-  return {
-    ok: true,
-    errors,
-    warnings,
-    instrument,
-    envelope,
-    filter,
-    sequencer: isObj(doc.sequencer) ? copy(doc.sequencer) : null,
-    additive,
-    phaseStereo,
-    mode: typeof doc.mode === 'string' ? doc.mode : null,
-  };
-
-  function fail(list) {
-    return {
-      ok: false, errors: list, warnings, instrument: null, envelope: null, filter: null,
-      sequencer: null, additive: null, phaseStereo: null, mode: null,
-    };
-  }
+  return { envelope, filter, additive, phaseStereo };
 }
 
 /** File name for an export: oscilla-<what>-<YYYYMMDD-HHMMSS>.<ext> (local time). */
