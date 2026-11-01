@@ -1858,22 +1858,33 @@
     <!-- ---------- Keyboard (K026; ADR 0058, ADR 0062): the computer keyboard and the
          on-screen keys play the note voices of the AudioEngine (src/js/midi/keyboard-ui.js), in
          the Playground and the Studio, each armed on its own. The keys are a canvas domain view;
-         the controls are native buttons and carry no class until the keyboard moves into its
-         Pro card (plan F001 to F003). -->
+         the controls are native buttons that carry only Tailwind's 44 px minimum on a coarse
+         pointer (the touch-target rule) until the keyboard moves into its Pro card (plan F001
+         to F003). -->
     <div id="osc-keyboard" data-osc="keyboard" role="group" aria-labelledby="osc-kbd-title"
       x-show="kbdView" x-cloak
       :class="kbdView === 'synth' ? 'fixed inset-x-0 bottom-[var(--osc-statusbar-h)] z-30 max-h-[45vh] overflow-y-auto border-t border-solid border-gray-200 bg-white px-4 py-2 shadow dark:border-gray-700 dark:bg-gray-800' : ''">
       <h2 id="osc-kbd-title">Keyboard</h2>
       <div role="group" aria-label="Keyboard controls" aria-describedby="osc-kbd-readout">
-        <button type="button" data-osc="keyboard.arm" :aria-pressed="String(kbdArmedHere)"
+        <button type="button"
+          class="[@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
+          data-osc="keyboard.arm" :aria-pressed="String(kbdArmedHere)"
           @click="kbdToggle()" x-text="kbdArmedHere ? 'Disarm keys' : 'Arm keys'">Arm keys</button>
-        <button type="button" data-osc="keyboard.octave-down" aria-keyshortcuts="Z"
+        <button type="button"
+          class="[@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
+          data-osc="keyboard.octave-down" aria-keyshortcuts="Z"
           @click="kbdControl('octave-down')">Octave −</button>
-        <button type="button" data-osc="keyboard.octave-up" aria-keyshortcuts="X"
+        <button type="button"
+          class="[@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
+          data-osc="keyboard.octave-up" aria-keyshortcuts="X"
           @click="kbdControl('octave-up')">Octave +</button>
-        <button type="button" data-osc="keyboard.velocity-down" aria-keyshortcuts="C"
+        <button type="button"
+          class="[@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
+          data-osc="keyboard.velocity-down" aria-keyshortcuts="C"
           @click="kbdControl('velocity-down')">Velocity −</button>
-        <button type="button" data-osc="keyboard.velocity-up" aria-keyshortcuts="V"
+        <button type="button"
+          class="[@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
+          data-osc="keyboard.velocity-up" aria-keyshortcuts="V"
           @click="kbdControl('velocity-up')">Velocity +</button>
       </div>
       <p id="osc-kbd-readout" data-osc="keyboard.readout" role="status" x-text="kbdReadout"
