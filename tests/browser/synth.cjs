@@ -38,15 +38,16 @@
 //   s-link     #m=synth&yp=bass&yv=lpf.frequency:300 sets the knob and sounds; a malformed link is
 //              refused and its keys leave the address
 //   s-relink   MG patched into LPF cutoff (the jacks of a normal) is a cable: listed, in the
-//              copied link; the link reopens the cable at the same depth and the MG sweeps the
-//              cutoff on both pages (the 1-3 kHz band swings 10 dB+)
+//              link the Copy link button writes; the link reopens the cable at the same depth
+//              and the MG sweeps the cutoff on both pages (the 1-3 kHz band swings 10 dB+)
 //   s-studio   Open in Studio: #m=studio, the panel's nodes selected, the same revision
 //   s-escape   Escape releases a held note; leaving the workspace disarms: runtime census 0
-//   s-preset   each preset is one undo entry, sets its knobs on the face and changes the sound by
-//              its own mark: Bass (LPF 180 Hz: the 1-4 kHz band 12 dB+ further below the
-//              fundamental than Init), Lead (VCO 1 at 8': no 130.8 Hz, a fifth at 392 Hz),
-//              Sweep (the MG sweeps the LPF: the 1-3 kHz band swings 8 dB+) and Ring bell (ring
-//              products of 523.3 and 327.0 Hz at 196.2 and 850.3 Hz)
+//   s-preset   each preset, chosen in the Preset menu, is one undo entry, sets its knobs on
+//              the face and changes the sound by its own mark: Bass (LPF 180 Hz: the 1-4 kHz
+//              band 12 dB+ further below the fundamental than Init), Lead (VCO 1 at 8': no
+//              130.8 Hz, a fifth at 392 Hz), Sweep (the MG sweeps the LPF: the 1-3 kHz band
+//              swings 8 dB+) and Ring bell (ring products of 523.3 and 327.0 Hz at 196.2 and
+//              850.3 Hz)
 //   s-look     the rendered panel: no legacy svg stroke on a jack or a plate, every jack ring and
 //              cable colour 3:1+ and every plate label 4.5:1+ on its background in the dark and
 //              light themes, a focused jack shows its focus ring, a card folds (aria-expanded)
@@ -141,8 +142,9 @@ async function openSynth(context, base, hash = '#m=synth') {
   await page.goto(`${base}${hash}`);
   await until(() => page.evaluate(() => !!(window.OSCILLA && window.OSCILLA.app
     && window.OSCILLA.app.synthDebug && window.OSCILLA.app.synthDebug().present
+    && !document.getElementById('osc-view-synth').hidden
     && document.querySelector('[data-osc="synth.bay.svg"]'))),
-  { ms: LOAD_MS, what: 'the Synth panel is rendered' });
+  { ms: LOAD_MS, what: 'the Synth view is shown and its panel rendered' });
   await page.locator('#osc-synth-title').click();
   return page;
 }
@@ -457,7 +459,12 @@ function defineChecks() {
         && e.to.port === 'frequency').map((e) => e.props.depth);
     });
     const here = await swings(page, 10, 'the MG sweeps the cutoff through the cable');
-    const hash = await page.evaluate(() => window.OSCILLA.app.synthCopyLink());
+    // Copy link, the button: it writes the link it copies below the actions (synth.link),
+    // whether or not the clipboard takes it.
+    await page.locator('[data-osc="synth.copy-link"]').click();
+    const link = await until(() => page.evaluate(() => window.OSCILLA.app.synth.link || null),
+      { ms: 10000, what: 'Copy link shows the link' });
+    const hash = link.slice(link.indexOf('#') + 1);
     const again = await openSynth(context, base, `#${hash}`);
     const d2 = await dbg(again);
     const there = await swings(again, 10, 'the reopened link sweeps the cutoff the same way');
@@ -515,7 +522,7 @@ function defineChecks() {
       .then((x) => x.trim());
     const choose = async (id) => {
       const before = await page.evaluate(() => window.OSCILLA.studio.store.debugInfo().undoDepth);
-      await page.locator('[data-osc="synth.preset"]').selectOption(id);
+      await page.locator('#osc-synth-preset').selectOption(id);
       await until(() => page.evaluate((b) => window.OSCILLA.studio.store.debugInfo().undoDepth
         === b + 1, before), { ms: 10000, what: `the ${id} preset is one undo entry` });
       return page.evaluate(() => window.OSCILLA.studio.store.undoLabel());
