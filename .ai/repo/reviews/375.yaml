@@ -1,0 +1,71 @@
+# Review verdict for pull request #375, K066 + K020 + K102: synth quick presets, node presets in
+# the Inspector, one patch library across instruments (branch feat/k066-k102-synth-presets-library).
+# Reviewed head 2fa630f1, base branch feat/k097-xy-performance-pad (#372) at 61c0863b, which is
+# the merge base. Another session built it; this reviewer built none of it, nor #372, #329, #332
+# or the train #367.
+#
+# The digest: the base program (`git archive origin/main scripts`), `--content --list --repo
+# <this worktree> --base-branch origin/feat/k097-xy-performance-pad`: f964a04b...b2aa over
+# src/js/studio/actions.js, library.js, live-notes.js, node-presets.js, patch-catalog.js,
+# patches.js, registry.js, schema.js and validate.js. That matches the builder's statement.
+#
+# How it was reviewed:
+# - Read the PR's diff on the nine guarded paths against 61c0863b, and the synth/ callers that
+#   reduce through them (presets.js, link.js, xy.js, picker.js, dock.js).
+# - Probed the store directly, on head and on a base worktree at 61c0863b.
+# - Mutated the guarded code 9 times and ran the new unit files with synth-*, xy-*, *patch*,
+#   *preset* and v31-studio-*. 7 mutants were killed: route not cleared on node removal,
+#   validator check dropped, normalize or structure dropping noteTarget, route ignored, type
+#   check dropped, edge props not applied. 2 survived and are equivalent: the reducer's
+#   playsNotes check is backstopped by validate.js with the same sentence, and importPatch
+#   already fills every parameter, so merge-versus-replace makes no difference.
+# - npm test on the head: 3963 tests, 3952 pass, 9 fail, 2 skipped. The same failures appear
+#   on a 61c0863b worktree: control-drive-baseline x3, surface-census x2, ui-flowbite-pro-record
+#   x2, and visual-gate-bound x1. The ninth, ui-flowbite-pro-record "(a) the tree holds exactly
+#   the record", fails only when run in parallel and passes alone, on head and on base.
+# - Fail-first: the CI job passed. Separately, the four new or changed unit files fail on the
+#   base tree (missing modules; synth-presets expects PATCH_REPLACE). They are pure, with no
+#   timer, sleep or sample-rate assumption. tests/browser/synth.cjs adds no fixed sleep, and
+#   timing-baseline.json is unchanged.
+# - Browser suites were not run locally: the 1-minute load was 13 to 30, above the limit of 12.
+# - gh pr checks 375: the gate is red. The jobs that fail on #372's head (61c0863b) fail here
+#   too. Studio UI (firefox) newly fails: s-dock and s-relink (see R2).
+#
+# What holds:
+# - PATCH_REPLACE { onto } goes through patchParams. It sets only the parameters of mapped
+#   existing nodes and the props of matching existing edges. It never adds, removes or moves a
+#   node or edge, and a patch edge without a match is reported in `skipped`.
+# - A node of another type is refused with a sentence. The result passes checked()
+#   (validateStudioModel) and the store's validateStudioCommit, and typed ports are untouched
+#   because no edge endpoint changes.
+# - It is one history entry, and undo restores the exact serialized model.
+# - PATCH_INSERT { route } is one reduce. An unknown route is refused, the routed node must play
+#   notes, undo is exact, and the whole result is validated.
+# - metadata.noteTarget is presentation state. Probes show studioHash unchanged,
+#   isSemanticallyEqual false (dirty), undo and redo exact, and serialize/import round trip
+#   exact.
+# - It is cleared by withoutNodes, which covers NODE_REMOVE and Replace graph. The validator and
+#   the import pipeline refuse a missing or non-note target, and a document without it loads as
+#   before.
+# - Only picker.js and dock.js read noteTarget. No compile path does, so keeping it outside
+#   studioHash and executionState is right.
+# - live-notes' playsNotes is unchanged in effect: Keys declares notes.
+# - patch-catalog adds no store. The diff carries no indexedDB, localStorage or objectStore
+#   line, saved patches come from library.patches() over the existing PATCH_KIND records, and
+#   storage-inventory passes.
+#
+# Verdict: merge. No P0 or P1. Two P2 and six P3, all open.
+schema: review-verdict/v1
+pr: 375
+verdict: merge
+reviewer: "oscilla-21 reviewer (claude-code af63bcf2)"
+content: f964a04b716d47099e56a4220bb6ecfa322c78d8fd744ee5de972144f1b1b2aa
+findings:
+  - { id: R1, severity: P2, status: open, title: "synth/presets.js:107 with studio/patches.js:477: a quick preset now resets an amount cable's polarity and mapping, not only its depth. The patch edge carries the normal's whole props and patchParams merges them onto the model edge. Repro on the panel fixture: EDGE_UPDATE the lpf-eg2 edge to { polarity: bipolar, mapping: linear }, then dispatch presetAction(model, PANEL, 'init'). Head gives unipolar/log; base 61c0863b (BATCH of EDGE_UPDATE { depth }) keeps bipolar/linear. The PR body says 'parameters and amount depths only'. Either put only { depth } on the preset's edges or state and test the reset." }
+  - { id: R2, severity: P2, status: open, title: "tests/browser/synth.cjs:525: the PR's own s-dock check fails in CI. Studio UI (firefox), run 41262192547 job 124717542559, reports 'Enter routes the keys to the FM engine: not reached within 5000 ms'; s-relink fails in the same job. #372's firefox job passed synth 18/18. The ArrowDown loop neither waits until focus is inside the menu (the menu focuses its first item in $nextTick) nor asserts that it reached the FM item before Enter, so it can route the keys to another item. Not reproduced locally (load 29). Poll the focus with until() and assert the item before Enter, then re-run the job." }
+  - { id: R3, severity: P3, status: open, title: "studio/patches.js:495: patchParams returns a new model object even when changed.nodes and changed.edges are empty. Re-applying the same preset therefore reports changed: true and records an empty undo entry. Repro: dispatch presetAction(model, PANEL, 'init') twice; the second adds 1 to undoDepth. Base 61c0863b gives changed: false and adds no entry. Return the input model when nothing changed." }
+  - { id: R4, severity: P3, status: open, title: "studio/validate.js:848: metadata.noteTarget is bounded by NAME_MAX_CHARS (64), but node ids may be up to 128 characters (ID_PATTERN). Repro: import a Studio with a 93-character engine id, then METADATA_SET { noteTarget: that id }. It is refused with 'A saved Studio would not load again: metadata.noteTarget longer than 64 characters'. Check it with the node-id rule (128, ID_PATTERN)." }
+  - { id: R5, severity: P3, status: open, title: "studio/registry.js:294: playsNotes accepts capabilities.hits, which no node definition declares and the registry's CAPABILITIES list does not validate. The branch is dead and untested, and the refusal sentences in actions.js and validate.js point the user to a 'hits capability' that no node has. Drop it until K073 declares it, or declare and validate it." }
+  - { id: R6, severity: P3, status: open, title: "studio/validate.js:845: metadata.noteTarget is a new key with no STUDIO_SCHEMA_VERSION bump and no migration. Builds before this one, v3.14.1 or a revert of this PR, reject unknown keys, so a saved project or Studio file that routes the keys will not open there. K066's 'Rollback: revert the pull request; no saved state depends on it' therefore does not hold. State that in K066, or make the old reader tolerant first." }
+  - { id: R7, severity: P3, status: open, title: "src/js/data/presets.js with core/constants.js:47 (localStorage oscilla.presets): the Playground/labs V1 voice presets remain a second preset store with a flat record shape. This is acceptable here as a named follow-up, not a P2. K102's scope lists the Studio-model instruments (panels, kits, engines, XY), and moving the Playground voice onto patches needs a Studio graph for it. No plan issue names it yet: file one under M069 so the duplication is tracked." }
+  - { id: R8, severity: P3, status: open, title: "studio/patches.js:463: patchParams accepts an `onto` that maps two patch nodes to one model node, and the one later in the patch silently wins. Repro: PATCH_REPLACE with presetPatch(PANEL, 'init', { all: true }) and onto { lpf: L, hpf: L } returns ok: true. The hpf entry is dropped without a word. No UI path produces this (patchTargets is injective), so refuse a non-injective map with a sentence." }
