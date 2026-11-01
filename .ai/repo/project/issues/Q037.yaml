@@ -18,16 +18,16 @@ validation:
 evidence_required:
 - owner_decision
 created_at: '2026-10-29'
-updated_at: 2026-11-01T04:24:05Z
-started_at: 2026-11-01T04:23:48Z
-started_event: sha256:0fd0a6ac0405b7d71b69ece1b136e9f71b82e3e42b3ea4f35d66e22f44299906
-completed_at: 2026-11-01T04:24:05Z
-completed_event: sha256:d9eb255c6ca64c519d2c1f86c8ce4e90733201f83cdbe4413f3df82a8add94b2
+updated_at: 2026-11-01T10:39:19Z
+started_at: 2026-11-01T10:39:05Z
+started_event: sha256:a40a203a810607f3889c901d511befcc96e4648d85222a87aa45901a49e3cccf
+completed_at: 2026-11-01T10:39:19Z
+completed_event: sha256:78cbc3a2f865140270d24c9a2fca58d5644131249dc49daf8fdb7b0b76c493ec
 evidence:
   - covers: owner_decision
     type: manual
     command: "AskUserQuestion in Claude Code session oscilla-af63 (claude-code af63bcf2), 2026-11-01 (Czech), after G001 (PR #371) measured the catalogue's cost"
     result: "Owner chose 'Bez stropu linky' (no line cap): the component-system line and its follow-up lines (N, W, Y, J) have no gzip cap of their own; only the global gzip budget of scripts/build-config.mjs (1 200 000 B, owner decision 2026-10-29) applies, as for Q023, and each slice's own stated ceiling and size-report figures stay in force. Put to the owner with G001's measurement: 63.1 B gzip per declaration, 21-37 KB projected for all 584 hooks, about 66 KB for the follow-up lines, dist 826 KB gzip. The plan's (a) (14 KB, then 80 KB) was declined. On 2026-11-01 the owner had first deferred the question until this measurement."
     artifact: "https://github.com/korczis/oscilla/pull/371"
-    commit: e0874ff825fb6f2343b38c209d84fc86bd99405e
-    recorded_at: 2026-11-01T04:23:59Z
+    commit: ca1889c00be14bfd43a9335485468df4cf074ee9
+    recorded_at: 2026-11-01T10:39:15Z
