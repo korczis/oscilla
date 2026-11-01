@@ -7,7 +7,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  GRAPH, browseView, catalogEntries, entryAction, registerPatchSource,
+  GRAPH, browseView, captureSources, catalogEntries, entryAction, registerPatchSource,
 } from '../../src/js/studio/patch-catalog.js';
 import { createPatch, importPatch } from '../../src/js/studio/patches.js';
 import { nodePresetPatch } from '../../src/js/studio/node-presets.js';
@@ -16,6 +16,8 @@ import { createStudioModel } from '../../src/js/studio/schema.js';
 import { templateModel, REFERENCE_TEMPLATE_ID } from '../../src/js/studio/templates/index.js';
 import PANEL from '../../src/js/synth/panels/semi-mono.js';
 import { panelStore } from './synth-fixture.mjs';
+import { registerSynthSources } from '../../src/js/synth/library.js';
+import { XY_CATEGORY, XY_RECIPES, xyPatchOf } from '../../src/js/synth/xy.js';
 
 const store = (m) => createStudioStore(m, { idGenerator: createIdGenerator() });
 
@@ -131,16 +133,59 @@ test('the saved patches and a registered source (the XY pad hook) join the same 
     { id: 'patch-a', patch: createPatch(m, [res.get('lpf').id], { name: 'My filter' }) },
     { id: 'patch-b', patch: createPatch(m, [res.get('vco1').id, res.get('mix').id],
       { name: 'My pair' }) }];
-  registerPatchSource({ id: 'xy', label: 'XY pad', entries: () => [{ id: 'xy-glass',
-    name: 'Glass scale', instrument: 'xy', instrumentLabel: 'XY pad', modes: ['insert'],
+  registerPatchSource({ id: 'pad-demo', label: 'Demo pad', entries: () => [{ id: 'demo-glass',
+    name: 'Glass scale', instrument: 'pad-demo', instrumentLabel: 'Demo pad', modes: ['insert'],
     patch: nodePresetPatch('vco', { id: 'g', name: 'Glass scale', values: { waveform: 'sine' } }),
   }] });
   const all = catalogEntries({ user });
   const saved = browseView(all, m, { tag: 'saved' }).items;
   assert.deepEqual(saved.map((x) => [x.name, x.source, x.modes.join()]),
     [['My filter', 'user', 'apply,insert'], ['My pair', 'user', 'insert,replace']]);
-  const xy = browseView(all, m, { instrument: 'xy' }).items;
-  assert.deepEqual(xy.map((x) => [x.name, x.tags.join()]), [['Glass scale', 'xy']]);
+  const xy = browseView(all, m, { instrument: 'pad-demo' }).items;
+  assert.deepEqual(xy.map((x) => [x.name, x.tags.join()]), [['Glass scale', 'pad-demo']]);
   assert.equal(st.dispatch(entryAction(m, xy[0], 'insert').action).ok, true);
   assert.throws(() => registerPatchSource({ id: 'Bad Id', entries: () => [] }), TypeError);
 });
+
+test('the XY pad\'s presets (K097) are a category of the same library: listed, applied, saved',
+  () => {
+    registerSynthSources();
+    const st = panelStore();
+    const m = st.getModel();
+    const pad = PANEL.resolve(m).get('xy');
+    assert.ok(pad, 'the panel holds the XY pad');
+    // The built-ins, made on this document's own panel, under instrument and tag 'xy'.
+    const all = catalogEntries({ model: m });
+    const xy = browseView(all, m, { tag: XY_CATEGORY }).items;
+    assert.deepEqual(xy.map((x) => x.name), XY_RECIPES.map((r) => r.name.split(':')[0]));
+    assert.ok(xy.every((x) => x.instrument === XY_CATEGORY && x.applicable), 'all apply here');
+    for (const x of xy) assert.equal(importPatch(x.patch).ok, true, x.id);
+    // Apply is one entry and sets the recipe's scale on the pad.
+    const depth = st.debugInfo().undoDepth;
+    const done = st.dispatch(entryAction(m, xy[1], 'apply').action);
+    assert.equal(done.ok, true, done.reason);
+    assert.equal(st.debugInfo().undoDepth, depth + 1);
+    const p = PANEL.resolve(st.getModel()).get('xy').params;
+    assert.deepEqual([p.mode, p.key], [XY_RECIPES[1].scale.mode, XY_RECIPES[1].scale.key]);
+    // A saved XY preset (xyPatchOf) is listed under 'xy' and saved, and loads the same way.
+    const mine = xyPatchOf(st.getModel(), PANEL, { name: 'My dorian pad' });
+    const user = [{ id: 'patch-my-dorian-pad', patch: mine }];
+    st.undo();
+    const listed = browseView(catalogEntries({ user, model: st.getModel() }), st.getModel(),
+      { tag: 'saved' }).items.find((x) => x.name === 'My dorian pad');
+    assert.equal(listed.instrument, XY_CATEGORY);
+    assert.ok(listed.tags.includes(XY_CATEGORY));
+    assert.equal(st.dispatch(entryAction(st.getModel(), listed, 'apply').action).ok, true);
+    assert.equal(PANEL.resolve(st.getModel()).get('xy').params.mode, XY_RECIPES[1].scale.mode);
+    // Capture: the source turns the document's pad into a patch to save, named as asked.
+    const cap = captureSources(st.getModel()).find((c) => c.id === XY_CATEGORY);
+    assert.equal(cap.label, 'XY pad');
+    const saved = cap.capture('Night drive');
+    assert.equal(saved.category, XY_CATEGORY);
+    assert.equal(saved.name, 'Night drive');
+    assert.equal(importPatch(saved).ok, true);
+    // Without the panel the built-ins are not offered (nothing to make them on).
+    const bare = templateModel(REFERENCE_TEMPLATE_ID);
+    assert.equal(catalogEntries({ model: bare }).filter((x) => x.instrument === XY_CATEGORY)
+      .length, 0);
+  });

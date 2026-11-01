@@ -72,6 +72,9 @@
 //              Studio the node is in the graph and the same library, opened from the
 //              Inspector's Presets menu (on the phone, whose Studio folds the Inspector away,
 //              through the same opener), lists FM keys as in use
+//   s-libxy    K102 with K097: the library's tag filter 'xy' lists the XY pad's four built-in
+//              presets; Enter on the first applies it in one undo entry and the pad takes its
+//              scale; a name and Save the XY pad as a preset save it, listed under 'xy' at once
 //   s-mobile   390 x 844 with touch: no horizontal page scroll, every knob and jack box 44 px+,
 //              a section chip lands its plate's heading below the sticky chip bar, the docked
 //              keys are visible and a tap on them sounds
@@ -662,6 +665,33 @@ function defineChecks() {
     await until(async () => /in use/.test(await row.textContent()), { ms: 5000,
       what: 'the Studio lists FM keys as in use' });
     return { ok: JSON.stringify(names) === '["FM bell","FM keys"]' && inGraph, names, added };
+  });
+
+  def('s-libxy', async ({ page }) => {
+    const depth = () => page.evaluate(() => window.OSCILLA.studio.store.debugInfo().undoDepth);
+    const pad = () => page.evaluate(() => window.OSCILLA.studio.model.graph.nodes
+      .find((n) => n.metadata.panel && n.metadata.panel.module === 'xy').params);
+    await page.locator('[data-osc="synth.library"]').click();
+    const list = page.locator('[data-osc="library.list"]');
+    await until(() => list.isVisible(), { ms: 10000, what: 'the patch library opens' });
+    const tag = page.locator('[data-osc="library.tag"]');
+    await until(async () => (await tag.locator('option[value="xy"]').count()) === 1,
+      { ms: 10000, what: 'the xy tag is offered' });
+    await tag.selectOption('xy');
+    const options = list.locator('[role="option"]');
+    const built = await options.count();
+    const before = await depth();
+    await list.focus();
+    await page.keyboard.press('Enter');
+    await until(async () => (await depth()) === before + 1, { ms: 5000,
+      what: 'Enter applies the first XY preset in one undo entry' });
+    const p = await pad();
+    await page.locator('[data-osc="library.saveName"]').fill('Night drive');
+    await page.locator('[data-osc="library.save.xy"]').click();
+    await until(async () => (await options.count()) === built + 1
+      && /Night drive/.test(await list.textContent()), { ms: 10000,
+      what: 'the saved XY preset is listed under xy' });
+    return { ok: built === 4 && p.mode === 'minor-pentatonic', built, mode: p.mode };
   });
 
   def('s-escape', async ({ page }) => {
