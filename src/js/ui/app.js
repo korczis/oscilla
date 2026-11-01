@@ -192,9 +192,9 @@ export function workspaceHeading(root, mode) {
   if (mode === 'playground') return root.querySelector('#osc-main > h1');
   const own = [...root.querySelectorAll('[data-osc-modes]')]
     .filter((p) => p.dataset.oscModes.split(/\s+/).includes(mode));
-  // A full-width view: an osc-view, or a Pro view keyed by its id (the Synth workspace, #329).
-  const view = own.find((p) => (p.classList.contains('osc-view') || p.id === `osc-view-${mode}`)
-    && shown(p));
+  // A full-width view: by its class, or a Pro view by its data-osc hook (the Synth view, #329).
+  const view = own.find((p) => (p.classList.contains('osc-view')
+    || p.dataset.osc === `${mode}-view`) && shown(p));
   if (view) return labelOf(view);
   const panels = own.filter((p) => p.classList.contains('osc-panel') && shown(p)
     && !p.matches('.osc-p-source, .osc-p-analysis'))
