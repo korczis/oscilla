@@ -21,7 +21,7 @@
 //                     no notification is raised, a changed instrument setting and unsaved Studio
 //                     changes survive Back / Forward, and the guard asks nothing for them; a
 //                     reload reopens the workspace the address names
-//   open-every-workspace  a fresh page at `#m=<id>` opens each of the twelve workspaces; the
+//   open-every-workspace  a fresh page at `#m=<id>` opens each of the thirteen workspaces; the
 //                     Experiments list loads, About sets its title
 //   hashchange-mode   a hash set after load moves the workspace AND the V1 mode together
 //                     (`m=learn` → Learn, `m=dual` → Synthesis/dual, `m=sweep` → Playground/sweep)
@@ -808,7 +808,8 @@ function defineChecks() {
       await p.close();
     }
     return { ...H.verdict({
-      twelve: links.length === 12,
+      // Synth (#329, owner Q019: top-level after Studio) is the thirteenth workspace.
+      thirteen: links.length === 13,
       hrefs: links.every((l) => l.href === `#m=${l.id}`),
       landed: landed.every((l) => l.workspace === l.id),
       modifiedLeftToBrowser: modified.prevented === false && modified.workspace === 'playground',
