@@ -350,6 +350,7 @@ anywhere else in those workspaces Space is the instrument's.
 
 ## Limits
 
-- Not built yet: node groups, dragging several clips at once. A link opens a shipped template only; a saved project is shared as a file.
+- Not built yet: node groups, dragging several clips at once. A link opens a shipped template
+  only; a saved project is shared as a file.
 - Studio is responsive at about 100 nodes and 200 connections ([performance](performance.md));
   it is not designed for much larger graphs.

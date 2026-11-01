@@ -105,6 +105,19 @@ The derived graph is the voice that `AudioEngine.play` builds for the plan with 
 | Phase lab, dual | annotation `phaseDeg` on `osc-2` | "… · B +90°" on the source stage |
 | gain control | Master Output level (logical gain) | MASTER GAIN "logical 0.080"; LIMITER, ANALYSER, DEVICE OUTPUT are the safe output chain the Master Output compiles to (ADR 0035) |
 
+When a dual voice has the stereo router (C010): it is built at play time in Stereo output or
+with the Phase lab's pan off centre. A mono dual voice started centred has none; the first pan
+away from centre while it sounds restarts it click-free (`engine.setDualRouter`: a
+`FAST_RELEASE_S` fade, then the same plan, options and deadline), and the voice keeps the router
+until it ends, back at centre too, so later pans glide without another restart. Engaging the
+router changes no level in Chromium, Firefox or WebKit: the StereoPanners of a dual voice without
+the router and the router itself both use the equal-power law, 0.707 (−3 dB) per channel at
+centre (measured on the output within 0.02 dB in each engine). Only in a browser without
+`StereoPannerNode`, where the unrouted mono mix reaches both channels at unity, is engaging the
+router a 3 dB step down at centre. The Pan slider is disabled, with its reason shown under the
+Stereo controls, for a single source and in Stereo output, where the router sends A left and B
+right and pan does not apply.
+
 The microphone is analysis only and can never reach Master Output (`live-input-to-output`). It
 is not part of the voice and never was a stage. The Playground has no noise source.
 

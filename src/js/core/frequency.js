@@ -100,11 +100,12 @@ export function formatFrequency(f, precise = false) {
 }
 /**
  * Compact frequency with its unit, 3 significant digits (charts, readouts, the sequencer):
- * "440 Hz", "2.5 kHz", "15.5 kHz", "120 kHz".
+ * "440 Hz", "2.5 kHz", "15.5 kHz", "120 kHz". `digits` asks for more where a value must not
+ * round (T006: the Nyquist option, 22050 Hz → "22.05 kHz" with 4).
  */
-export function formatFrequencyCompact(f) {
+export function formatFrequencyCompact(f, digits = 3) {
   if (!isNum(f)) return '—';
-  return Math.abs(f) >= 1000 ? `${sig(f / 1000, 3)} kHz` : `${sig(f, 3)} Hz`;
+  return Math.abs(f) >= 1000 ? `${sig(f / 1000, digits)} kHz` : `${sig(f, digits)} Hz`;
 }
 /** Compact axis label: 20, 500, 1k, 15.5k. */
 export function formatFrequencyShort(f) {

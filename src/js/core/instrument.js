@@ -1067,12 +1067,17 @@ export function createInstrument(deps = {}) {
      * The single validated path for presets, links, history and Learn demos.
      * Returns the number of rejected values; valid values are applied, invalid ones skipped.
      */
-    applyConfig(cfg, origin) {
+    applyConfig(cfg, origin) { return this.restoreConfig(cfg, origin).issues; },
+    /**
+     * applyConfig with its whole report: { issues, notices, dropped, limited } (H002). Every
+     * notice is shown, so a continuous repeat restored as once is named on every path.
+     */
+    restoreConfig(cfg, origin) {
       const before = { ...this.sweep };
       const r = applyConfigTo(this, cfg, origin, env(this));
       this.dropSupersededSweepErrors(before);
       for (const n of r.notices) this.notify(n.level, n.title, n.message);
-      return r.issues;
+      return r;
     },
 
     // ============================== modes, learn, explore
