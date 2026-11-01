@@ -60,6 +60,10 @@
 //              on the phone) is one entry and the Studio Inspector shows the same LPF cutoff at
 //              the same revision. Reload keeps nothing (the Synth stores nothing; the copied
 //              link, s-link, reopens a preset)
+//   s-nodepreset K020: in the Studio Inspector of the panel's LPF, the Presets menu button opens
+//              a role=menu; arrows and Enter choose Dark low-pass: one undo entry, the cutoff
+//              field reads 400, every edge kept, and the darker filter is heard (the 1-4 kHz
+//              band 4 dB+ further below the fundamental; EG 2 still opens it by its amount)
 //   s-mobile   390 x 844 with touch: no horizontal page scroll, every knob and jack box 44 px+,
 //              a section chip lands its plate's heading below the sticky chip bar, the docked
 //              keys are visible and a tap on them sounds
@@ -560,6 +564,47 @@ function defineChecks() {
       .getRevision());
     return { ok: out.items === 8 && out.expanded === 'true' && out.routeEntries === 1
       && /^Play .* from the keys$/.test(out.label) && out.sameRevision, ...out };
+  });
+
+  def('s-nodepreset', async ({ page }) => {
+    const d0 = await dbg(page);
+    await keyKnob(page, 'lpf.frequency', 'End');
+    await hold(page, 'KeyA');
+    const open = tilt(await steady(page, tilt, 'the open filter settles'));
+    await page.keyboard.up('KeyA');
+    await silent(page, 'the note releases');
+    const before = await page.evaluate(() => ({ depth: window.OSCILLA.studio.store.debugInfo()
+      .undoDepth, edges: window.OSCILLA.studio.model.graph.edges.map((e) => e.id).join() }));
+    await page.locator('[data-osc="synth.studio"]').click();
+    await until(() => page.evaluate(() => window.OSCILLA.app.workspace === 'studio'),
+      { ms: 10000, what: 'Studio opens' });
+    await page.evaluate((id) => window.OSCILLA.studio.store.dispatch({ type: 'SELECTION_CHANGE',
+      selection: { nodes: [id] } }), d0.nodes.lpf);
+    const btn = page.locator('[data-osc="studio.inspector.presets"]');
+    await until(() => btn.isVisible(), { ms: 10000, what: 'the Inspector shows Presets' });
+    await btn.focus();
+    await page.keyboard.press('Enter');
+    const menu = page.locator('[data-osc="studio.inspector.presets.menu"]');
+    await until(() => menu.isVisible(), { ms: 5000, what: 'the preset menu opens' });
+    await page.keyboard.press('ArrowDown'); // Default, then Dark low-pass
+    await until(() => page.evaluate(() => document.activeElement.dataset.preset === 'dark'),
+      { ms: 5000, what: 'the arrow reaches Dark low-pass' });
+    await page.keyboard.press('Enter');
+    const field = page.locator('[data-osc="studio.inspector.param"][data-key="frequency"]');
+    await until(async () => /^400/.test(await field.inputValue().catch(() => '')),
+      { ms: 10000, what: 'the cutoff field reads 400' });
+    const after = await page.evaluate(() => ({ depth: window.OSCILLA.studio.store.debugInfo()
+      .undoDepth, edges: window.OSCILLA.studio.model.graph.edges.map((e) => e.id).join(),
+    label: window.OSCILLA.studio.store.undoLabel() }));
+    await page.evaluate(() => window.OSCILLA.app.setWorkspace('synth'));
+    await until(() => page.evaluate(() => window.OSCILLA.app.workspace === 'synth'),
+      { ms: 10000, what: 'back in the Synth' });
+    await hold(page, 'KeyA');
+    const dark = tilt(await steady(page, tilt, 'the dark low-pass settles'));
+    await page.keyboard.up('KeyA');
+    return { ok: after.depth === before.depth + 1 && after.edges === before.edges
+      && /^Preset Dark low-pass/.test(after.label) && dark <= open - 4, label: after.label,
+    tilt: [open, dark] };
   });
 
   def('s-escape', async ({ page }) => {
