@@ -355,7 +355,9 @@ async function runLeg(name, origin) {
       for (const [kind, list] of lists) {
         for (const [hash, w, refusedKeys = [], expect = null] of list) {
           await H.setWorkspace(page, 'playground');
-          await page.evaluate((h) => { location.hash = h; }, hash);
+          // The last link's heading keeps focus (the Sequencer's is shown in the Playground too),
+          // so only a heading the link itself focuses may satisfy the focus poll below.
+          await page.evaluate((h) => { document.activeElement?.blur(); location.hash = h; }, hash);
           const s = kind === 'link' ? await H.at(page, w, `#${hash.slice(0, 40)} opens ${w}`)
             .catch(() => null) : await H.settled(page, w, refusedKeys, expect,
             `garbage #${hash.slice(0, 40)}`);
