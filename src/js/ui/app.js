@@ -192,7 +192,9 @@ export function workspaceHeading(root, mode) {
   if (mode === 'playground') return root.querySelector('#osc-main > h1');
   const own = [...root.querySelectorAll('[data-osc-modes]')]
     .filter((p) => p.dataset.oscModes.split(/\s+/).includes(mode));
-  const view = own.find((p) => p.classList.contains('osc-view') && shown(p));
+  // A full-width view: by its class, or a Pro view by its data-osc hook (the Synth view, #329).
+  const view = own.find((p) => (p.classList.contains('osc-view')
+    || p.dataset.osc === `${mode}-view`) && shown(p));
   if (view) return labelOf(view);
   const panels = own.filter((p) => p.classList.contains('osc-panel') && shown(p)
     && !p.matches('.osc-p-source, .osc-p-analysis'))
@@ -405,14 +407,15 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
     },
     /**
      * The logo goes home (H004 B6): its href is the Playground's address, and a plain click
-     * switches there through the router, as a nav item does; a modified click is the browser's.
+     * switches there through the router; a modified click is the browser's. It is a link, not a
+     * nav item, so focus moves to the Playground heading as any #m= link moves it (U010).
      */
     homeLink() {
       return {
         '@click'(e) {
           if (e.button > 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
           e.preventDefault();
-          this.setWorkspace('playground');
+          this.setWorkspace('playground', { focusHeading: true });
         },
       };
     },

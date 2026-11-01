@@ -66,7 +66,8 @@
 //                               page's probe) and the analysis views show the live output; held
 //                               keys sound past the safety limit while held; releasing them, a
 //                               window blur and Escape free every note; X / V raise the octave
-//                               and the velocity and the readout says so; Space stays Hold to
+//                               and the velocity and the readout says so, and so do the Octave
+//                               and Velocity buttons, down and up; Space stays Hold to
 //                               Play; a pointer on the on-screen C4 plays and lights it; disarmed,
 //                               the keys play nothing; the Studio is armed on its own and plays
 //
@@ -935,6 +936,20 @@ async function keyboardChecks(browser, b, origin, url) {
       && /Velocity 120/.test(k2.readout), JSON.stringify(k2));
     await page.keyboard.press('KeyZ');
     await page.keyboard.press('KeyC');
+    // The on-screen buttons do what Z, X, C and V do (one path, kbdControl).
+    await page.locator('[data-osc="keyboard.octave-up"]').click();
+    await page.locator('[data-osc="keyboard.velocity-up"]').click();
+    const kUp = await kbd();
+    check(leg, id, 'Octave + and Velocity + raise the octave and the velocity, and the readout '
+      + 'says so', kUp.base === 72 && kUp.velocity === 120 && /play C5 to F6/.test(kUp.readout)
+      && /Velocity 120/.test(kUp.readout), JSON.stringify(kUp));
+    await page.locator('[data-osc="keyboard.octave-down"]').click();
+    await page.locator('[data-osc="keyboard.velocity-down"]').click();
+    const kDown = await kbd();
+    check(leg, id, 'Octave - and Velocity - lower them back, and the readout says so',
+      kDown.base === 60 && kDown.velocity === 100 && /Velocity 100/.test(kDown.readout),
+      JSON.stringify(kDown));
+    await page.locator('[data-osc="keyboard.readout"]').click(); // focus leaves the buttons
 
     await page.keyboard.down('Space');
     let space = null;

@@ -299,18 +299,27 @@
   cursor: pointer;
 }
 
-.osc-sg-edge-line {
+/* The edge style table (G004): one rule per signal type serves the full graph and the
+   Playground's compact Studio alike, so a cable reads the same in both. AUDIO is the base
+   rule (solid); every other port type of ports.js has its own rule, and
+   tests/unit/studio-edge-style.test.mjs fails for a type without one. */
+.osc-sg-edge-line,
+.osc-sc-link {
   fill: none;
   stroke: var(--osc-blue-trace);
   stroke-width: 1.5;
   pointer-events: none;
 }
 
-.osc-sg-edge.is-control .osc-sg-edge-line { stroke: var(--osc-purple); stroke-dasharray: 6 4; }
-.osc-sg-edge.is-trigger .osc-sg-edge-line { stroke: var(--osc-orange); stroke-dasharray: 2 3; }
-.osc-sg-edge.is-analysis .osc-sg-edge-line { stroke: var(--osc-green); stroke-dasharray: 9 3 2 3; }
+.osc-sg-edge.is-control .osc-sg-edge-line,
+.osc-sc-link.is-control { stroke: var(--osc-purple); stroke-dasharray: 6 4; }
+.osc-sg-edge.is-trigger .osc-sg-edge-line,
+.osc-sc-link.is-trigger { stroke: var(--osc-orange); stroke-dasharray: 2 3; }
+.osc-sg-edge.is-analysis .osc-sg-edge-line,
+.osc-sc-link.is-analysis { stroke: var(--osc-green); stroke-dasharray: 9 3 2 3; }
 
-.osc-sg-edge.is-muted .osc-sg-edge-line {
+.osc-sg-edge.is-muted .osc-sg-edge-line,
+.osc-sc-link.is-muted {
   opacity: 0.45;
   stroke-dasharray: 1 4;
 }
@@ -1293,16 +1302,7 @@
   pointer-events: none;
 }
 
-.osc-sc-link {
-  fill: none;
-  stroke: var(--osc-blue-trace);
-  stroke-width: 1.25;
-}
-
-.osc-sc-link.is-control { stroke: var(--osc-purple); stroke-dasharray: 5 3; }
-.osc-sc-link.is-trigger { stroke: var(--osc-orange); stroke-dasharray: 2 3; }
-.osc-sc-link.is-analysis { stroke: var(--osc-green); stroke-dasharray: 8 3 2 3; }
-.osc-sc-link.is-muted { opacity: 0.45; stroke-dasharray: 1 4; }
+/* .osc-sc-link: the edge style table of the graph (above). */
 
 .osc-sc-grid {
   position: relative;

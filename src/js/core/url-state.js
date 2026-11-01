@@ -3,13 +3,14 @@
 // restoreFromHash). Format unchanged: v=1, short keys m s p w f g d a r rm, and `x` = base64url
 // JSON of the extras (pp, sweep, dual with binaural forced false, custom range, a4).
 // Never carried: the continuous-playback permission and the binaural confirmation. A link never
-// raises the gain above DEFAULT_GAIN.
+// raises the gain above DEFAULT_GAIN. A restore names what it dropped or limited (H002): a
+// continuous repeat restored as once is a notice, and the summary says what was not restored.
 
 import { APP_MODES, DEFAULT_GAIN } from './constants.js';
 import { base64UrlDecode, base64UrlEncode, deepCopy, isNum } from './math.js';
 import { limitsFor } from './frequency.js';
 import {
-  applyConfigTo, defaultEditorFields, defaultInstrumentState, pickInstrumentState,
+  applyConfigTo, defaultEditorFields, defaultInstrumentState, droppedSentence, pickInstrumentState,
 } from './config.js';
 import { presetMaxFrequency } from '../data/presets.js';
 
@@ -79,15 +80,22 @@ export function decodeHash(hash) {
   }
   // A link never raises the receiver's output level above the conservative default.
   let gainCapped = false;
-  if (isNum(cfg.gain) && cfg.gain > DEFAULT_GAIN) { cfg.gain = DEFAULT_GAIN; gainCapped = true; }
-  return { cfg, gainCapped, mode: q.get('m') };
+  let requestedGain = null;
+  if (isNum(cfg.gain) && cfg.gain > DEFAULT_GAIN) {
+    requestedGain = cfg.gain;
+    cfg.gain = DEFAULT_GAIN;
+    gainCapped = true;
+  }
+  return { cfg, gainCapped, requestedGain, mode: q.get('m') };
 }
 
 /**
  * Restore a hash onto state s in place. env: { sampleRate, continuousAllowed }.
- * Returns { handled, issues, notices, pendingHashConfig, mode, malformed? }:
+ * Returns { handled, issues, notices, dropped, limited, pendingHashConfig, mode, malformed? }:
  *   handled            false when the hash carries no configuration (nothing happened)
  *   malformed          true when the configuration could not be read at all (defaults kept)
+ *   dropped, limited   what was not restored as saved (config.js applyConfigTo; `limited` also
+ *                      names the gain a link may not raise)
  *   pendingHashConfig  cfg to re-apply once the real sample rate is known (values above the
  *                      provisional safe maximum), else null
  *   mode               the V1 mode id from `m` when valid, else null
@@ -96,7 +104,8 @@ export function decodeHash(hash) {
 export function restoreFromHashOn(s, hash, env = {}) {
   const notices = [];
   const notify = (level, title, message) => notices.push({ level, title, message });
-  const out = { handled: false, issues: 0, notices, pendingHashConfig: null, mode: null };
+  const out = { handled: false, issues: 0, notices, dropped: [], limited: [],
+    pendingHashConfig: null, mode: null };
   const h = String(hash || '').replace(/^#/, '');
   if (!h) return out;
   try {
@@ -105,15 +114,24 @@ export function restoreFromHashOn(s, hash, env = {}) {
     out.handled = true;
     const { cfg, gainCapped } = decoded;
     const { provisional, safeMax } = limitsFor(env.sampleRate);
-    const issues = applyConfigTo(s, cfg, 'hash', env, notices).issues;
+    const applied = applyConfigTo(s, cfg, 'hash', env, notices);
+    const { issues } = applied;
     out.issues = issues;
+    out.dropped = applied.dropped;
+    out.limited = applied.limited;
+    if (gainCapped) out.limited.push({ key: 'gain', saved: decoded.requestedGain, applied: DEFAULT_GAIN });
     if (gainCapped) notify('info', 'Gain kept at the default', 'The link asked for a higher gain; raise it yourself if you want it louder.');
     // Values above the provisional safe maximum are re-applied once the real rate is known.
     if (provisional && presetMaxFrequency(cfg) > safeMax) out.pendingHashConfig = cfg;
     const m = decoded.mode;
     if (APP_MODES.some((x) => x.id === m)) out.mode = m;
     if (issues) notify('warning', 'Link partly restored', `${issues} value(s) in the link were invalid and replaced by defaults.`);
-    else notify('info', 'Configuration restored from link', 'Nothing plays until you press HOLD TO PLAY or TRIGGER.');
+    else {
+      // "Restored" never stands alone over a drop: the summary names it.
+      const not = droppedSentence(out.dropped);
+      notify('info', 'Configuration restored from link',
+        `${not ? `${not} ` : ''}Nothing plays until you press HOLD TO PLAY or TRIGGER.`);
+    }
   } catch (e) {
     out.handled = true;
     out.malformed = true;

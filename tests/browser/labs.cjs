@@ -20,6 +20,7 @@ const path = require('path');
 const esbuild = require('esbuild');
 const suite = require('./lib/suite.cjs');
 const { until, WaitTimeout } = require('./lib/wait.cjs');
+const { openWorkspace: openWs } = require('./lib/navigate.cjs');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const args = process.argv.slice(2);
@@ -221,20 +222,8 @@ async function typedFrequency(context, page, base) {
  * shows each lab panel in its own workspace only, not on the lighter Playground). Waits on the
  * shell's data-mode with a named deadline.
  */
-async function openWorkspace(page, ws) {
-  const item = `[data-osc="nav.${ws}"]`;
-  if (!(await page.isVisible(item))) {
-    const group = await page.evaluate((s) => {
-      const e = document.querySelector(s);
-      const g = e && e.closest('[data-osc-nav-group]');
-      return g ? g.dataset.oscNavGroup : null;
-    }, item);
-    if (group) await page.click(`[data-osc="nav-group.${group}"]`);
-  }
-  await page.click(item);
-  await until(() => page.evaluate((w) => document.querySelector('#osc-app').dataset.mode === w, ws),
-    { ms: 5000, what: `labs: the ${ws} workspace opens from the navigation` });
-}
+
+const openWorkspace = (page, ws) => openWs(page, ws, 'labs');
 
 async function runEngine(engine, base) {
   const results = [];
@@ -340,6 +329,49 @@ async function runEngine(engine, base) {
     { ms: 5000, what: 'spectrum chart on the linear axis with Max 5 kHz' });
   check('Linear + Max 5 kHz applied; peak still at 1 kHz', linOk(lin), JSON.stringify(lin));
   await page.click('#osc-spec-log');
+  await page.selectOption('#osc-spec-max', '20000');
+
+  // T006 (SPC-04): a Max chosen before audio follows the rate once audio starts. The fake
+  // adapter's rate is set to null (engine.sampleRate before an AudioContext exists), then to a
+  // named 48 kHz and 44.1 kHz (not the context's own: these are the rates under test); each
+  // change is announced through the adapter's listeners, as main.js does when cmp.sampleRate
+  // changes. 'real' restores the context's rate for the checks after this block.
+  const setRate = (rate) => page.evaluate((r) => {
+    const L = window.__labs;
+    if (!L.realRate) L.realRate = L.adapter.getSampleRate;
+    L.adapter.getSampleRate = r === 'real' ? L.realRate : () => r && r.sampleRate;
+    L.setFrequency(L.adapter.requestedFrequency()); // notifies the adapter's listeners
+  }, rate);
+  const readMax = () => page.evaluate(() => ({
+    max: window.__labs.labs.analysis.chart.uplot.scales.x.max,
+    label: document.querySelector('#osc-spec-max option[value="nyquist"]').textContent,
+  }));
+  const maxIs = (hz, label, what) => settled(readMax,
+    (m) => m.max === hz && (label === null || m.label === label), { ms: 5000, what });
+  await setRate(null);
+  await page.selectOption('#osc-spec-max', 'nyquist');
+  const pend = await maxIs(20000, 'Max: Nyquist (pending audio)',
+    'Nyquist before audio: axis at 20 kHz, option pending');
+  check('T006: Nyquist before audio keeps 20 kHz and says it is pending',
+    pend.max === 20000 && pend.label === 'Max: Nyquist (pending audio)', JSON.stringify(pend));
+  await setRate({ sampleRate: 48000 });
+  const ny48 = await maxIs(24000, 'Max: Nyquist (24 kHz)', 'Nyquist follows a 48 kHz start');
+  check('T006: Nyquist chosen before audio follows a 48 kHz context (24 kHz)',
+    ny48.max === 24000 && ny48.label === 'Max: Nyquist (24 kHz)', JSON.stringify(ny48));
+  await setRate({ sampleRate: 44100 });
+  const ny44 = await maxIs(22050, 'Max: Nyquist (22.05 kHz)', 'Nyquist follows 44.1 kHz');
+  check('T006: at 44.1 kHz Nyquist is 22050 Hz', ny44.max === 22050
+    && ny44.label === 'Max: Nyquist (22.05 kHz)', JSON.stringify(ny44));
+  for (const hz of [20000, 2000]) {
+    await setRate(null);
+    await page.selectOption('#osc-spec-max', String(hz));
+    const before = await maxIs(hz, null, `Max ${hz} Hz before audio`);
+    await setRate({ sampleRate: 48000 });
+    const after = await maxIs(hz, null, `Max ${hz} Hz after a 48 kHz start`);
+    check(`T006: Max ${hz} Hz unchanged before and after audio`,
+      before.max === hz && after.max === hz, JSON.stringify({ before, after }));
+  }
+  await setRate('real');
   await page.selectOption('#osc-spec-max', '20000');
 
   await openWorkspace(page, 'filter');
@@ -585,12 +617,22 @@ async function runEngine(engine, base) {
 
   await openWorkspace(page, 'synthesis');
   // (7) Envelope: dragging the A handle changes attack and its field/slider.
-  const env0 = await page.evaluate(() => {
+  // The graph was hidden until Synthesis opened (#278); it re-measures on its ResizeObserver
+  // (observeSize), which runs after the workspace shows. The layout is read once the last draw
+  // matches its host as laid out (the drawn width is the host's width), so the handle
+  // and pxPerS are the ones a pointer meets (CI of #367 read the hidden-size layout).
+  const readEnv = () => page.evaluate(() => {
     const l = window.__labs.labs.envelope.graph.getLayout();
-    const c = document.querySelector('#osc-chart-envelope canvas').getBoundingClientRect();
+    const host = document.querySelector('#osc-chart-envelope');
+    const el = host.querySelector('canvas');
+    const c = el.getBoundingClientRect();
+    const drawnW = parseFloat(el.style.width) || 0; // fitCanvas: the width of the last draw
     return { a: window.__labs.labs.envelope.adsr.a, hx: c.left + l.handles.attack.x,
-      hy: c.top + l.handles.attack.y, pxPerS: l.pxPerS };
+      hy: c.top + l.handles.attack.y, pxPerS: l.pxPerS,
+      current: host.clientWidth > 10 && Math.abs(drawnW - Math.round(host.clientWidth)) < 1.5 };
   });
+  const env0 = await settled(readEnv, (r) => r.current,
+    { ms: 5000, what: 'envelope graph laid out at its shown size' });
   await page.mouse.move(env0.hx, env0.hy);
   await page.mouse.down();
   await page.mouse.move(env0.hx + 20, env0.hy, { steps: 4 });
@@ -626,6 +668,35 @@ async function runEngine(engine, base) {
   check('phase view without router: analytic model, correlation "1.00 mono"',
     ph.source === 'model' && ph.corr === '1.00' && ph.basis === 'mono' && ph.canvas,
     JSON.stringify(ph));
+
+  // (9b) C010: a programmatic update (what a configuration import calls: applyImport ->
+  // labs.phase.update) moves the controls with the configuration: the Pan slider's value, its
+  // filled track and its spoken value, and the Δφ B field; an offset outside 0-359 reads
+  // normalised, as it plays.
+  const syncRead = () => page.evaluate(() => {
+    const pan = document.querySelector('#osc-stereo-pan');
+    const off = document.querySelector('#osc-phase-offset');
+    const cfg = window.__labs.labs.phase.config;
+    return { cfgPan: cfg.pan, cfgDeg: cfg.phaseDeg, value: pan.value,
+      fill: pan.style.getPropertyValue('--osc-fill'), text: pan.getAttribute('aria-valuetext'),
+      offset: off.value };
+  });
+  await page.evaluate(() => {
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    window.__labs.labs.phase.update({ phaseDeg: 90, pan: 0.5 });
+  });
+  const imp = await syncRead();
+  await page.evaluate(() => window.__labs.labs.phase.update({ phaseDeg: 400, pan: -0.25 }));
+  const imp2 = await syncRead();
+  await page.evaluate(() => window.__labs.labs.phase.update({ phaseDeg: 45, pan: 0 }));
+  const imp3 = await syncRead();
+  check('phase-stereo-import-sync: Pan slider, its fill and text, and Δφ B follow the config',
+    imp.cfgPan === 0.5 && imp.value === '0.5' && imp.fill === '75.00%' && imp.text === '50% right'
+      && imp.cfgDeg === 90 && imp.offset === '90'
+      && imp2.cfgDeg === 40 && imp2.offset === '40' && imp2.value === '-0.25'
+      && imp2.fill === '37.50%' && imp2.text === '25% left'
+      && imp3.value === '0' && imp3.text === 'Centre' && imp3.offset === '45',
+    JSON.stringify({ imp, imp2, imp3 }));
 
   await openWorkspace(page, 'analyzer');
   // (10) Microphone with the fake capture device.

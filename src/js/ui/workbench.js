@@ -4,7 +4,7 @@
 // hosts live in `svc` (a closure), never in reactive state.
 //
 // svc: { engine, bridge, labs, exportConfigDoc(cmp),
-//        applyImport(cmp, parsed) -> { issues, notes[], limited },
+//        applyImport(cmp, parsed) -> { issues, notes[], limited, dropped },
 //        renderWav(cmp, kind), screenshot(cmp), relayout(), stopPlayback(cmp),
 //        sequencerPlaying() }
 
@@ -113,6 +113,8 @@ export function createWorkbench(svc) {
       return Number.isFinite(db) ? `${db.toFixed(1)} dB` : '-∞ dB';
     },
     get gainFill() { return `${this.gainPct}%`; },
+    // The instrument's own Play (ADR 0050): the status Play button triggers, latches or stops the
+    // instrument and the Pattern Sequencer, never the Studio, so it reflects only them.
     get isSounding() { return this.playing || this.seqPlaying; },
     /**
      * Who owns the one output now ('instrument' | 'sequencer' | 'studio' | null), for the views
@@ -136,6 +138,25 @@ export function createWorkbench(svc) {
         + 'relative, not SPL.'
         + (this.ceilingActing ? ` Now: ${CEILING_TEXT}, the ceiling flattens the output.` : '');
     },
+    /** Whether the Studio transport plays (cmp.studio, the workspace's plain view state). */
+    get studioPlaying() { return !!(this.studio && this.studio.playing); },
+    /** Anything audible from this page: the status state and its dot (C012). */
+    get anySounding() { return this.isSounding || this.studioPlaying; },
+    /**
+     * The Studio's Master Output level while it holds the engine's master level, else null.
+     * cmp.studio.masterLevel mirrors the runtime's 'master' events (a number, never an engine
+     * object); a later write by anyone else (engine.masterWrites moved: the Playground's gain,
+     * resetDefaults) supersedes it.
+     */
+    get studioMasterLevel() {
+      const s = this.studio;
+      if (!s || !s.playing || !Number.isFinite(s.masterLevel)) return null;
+      void this.gainLevel; // re-read when the Playground gain is written
+      const e = svc.engine;
+      if (e && Number.isInteger(e.masterWrites) && Number.isInteger(s.masterWrites)
+        && e.masterWrites !== s.masterWrites) return null;
+      return s.masterLevel;
+    },
     get holdLabel() {
       if (this.status === 'SUSPENDED') return 'Waiting for audio';
       if (this.playing && this.releasing) return 'Releasing';
@@ -146,11 +167,12 @@ export function createWorkbench(svc) {
       if (this.status === 'ERROR') return 'ERROR';
       if (this.status === 'SUSPENDED') return 'SUSPENDED';
       if (this.playing) return this.releasing ? 'RELEASING' : 'PLAYING';
-      if (this.seqPlaying) return 'PLAYING';
+      if (this.seqPlaying || this.studioPlaying) return 'PLAYING';
       return this.status === 'READY' ? 'READY' : 'STOPPED';
     },
     get statusFreqText() {
       if (this.seqPlaying && !this.playing) return 'sequence';
+      if (this.studioPlaying && !this.playing) return 'studio';
       if (this.source === 'dual') return `${groupedHz(this.dualFa)} / ${groupedHz(this.dualFb)} Hz`;
       const f = this.playing && this.instFreq != null ? this.instFreq : this.metricFrequencyIdle;
       return `${groupedHz(f)} Hz`;
@@ -169,6 +191,7 @@ export function createWorkbench(svc) {
     },
     get statusPatternText() {
       if (this.seqPlaying && !this.playing) return 'Sequencer';
+      if (this.studioPlaying && !this.playing) return 'Studio';
       if (this.source === 'dual') return this.dual.stereo ? 'Dual (stereo)' : 'Dual (mono)';
       if (this.source === 'sweep') return `Sweep (${this.sweep.curve})`;
       const p = this.currentPattern;
@@ -203,7 +226,15 @@ export function createWorkbench(svc) {
       if (this.continuousAllowed) return 'no limit';
       return `≤ ${this.safetyLimit} s`;
     },
-    get statusGainText() { return `Gain ${this.gainDbText}`; },
+    get statusGainText() {
+      // The level actually in effect: the Studio's Master Output while it holds the master stage
+      // (C012), otherwise the Playground gain. Never written into gainLevel: the gainLevel $watch
+      // would echo it into the engine and end the Studio's hold on it.
+      const m = this.studioMasterLevel;
+      if (m === null) return `Gain ${this.gainDbText}`;
+      const db = gainLevelDb(m);
+      return `Master ${Number.isFinite(db) ? `${db.toFixed(1)} dB` : '-∞ dB'}`;
+    },
     get vizSummaryHarm() {
       const wave = this.source === 'dual' ? this.dual.a.wave : this.waveform;
       const f = this.source === 'dual' ? this.dualFa : this.metricFrequencyIdle;
@@ -509,8 +540,9 @@ export function createWorkbench(svc) {
         this.notify('error', 'Config not imported', parsed.errors.slice(0, 3).join(' '));
         return false;
       }
-      const { issues, notes = [], limited } = svc.applyImport(this, parsed);
-      const notice = importNotice({ invalid: parsed.warnings.length + issues, limited });
+      const { issues, notes = [], limited, dropped = [] } = svc.applyImport(this, parsed);
+      // dropped: saved values not restored (H002), named after the invalid and limited ones.
+      const notice = importNotice({ invalid: parsed.warnings.length + issues, limited, dropped });
       // A value the file holds that was not applied is said, never reported as restored (C004).
       if (notes.length) {
         const said = notice.level === 'success' ? notes : [notice.message, ...notes];

@@ -30,8 +30,8 @@
 //                   reload.
 //   headings        a link to each workspace moves focus to a heading no other workspace gets
 //                   (B11: Compare got the Analyzer's).
-//   history-walk    the nav walk through all twelve workspaces is one entry each; Back x11 and
-//                   Forward x11 visit them in order.
+//   history-walk    the nav walk through every workspace is one entry each; Back and Forward,
+//                   once per step, visit them in order.
 //   exits           every workspace shows the nav (a way onward) and at least one in-content
 //                   control that leads to another workspace, except the ones in NO_EXIT_OK.
 //   actions         the cross-workspace controls (ACTIONS) land where their label says.
@@ -64,17 +64,22 @@ const READY_MS = 30000;
 const NAV_MS = 10000;
 const TRAVERSE_MS = 5000;
 
-const WORKSPACES = ['playground', 'measure', 'experiments', 'analyzer', 'filter', 'compare',
-  'synthesis', 'sequencer', 'presets', 'learn', 'studio', 'about'];
-const TEMPLATES = ['basic-tone', 'subtractive-synth', 'sweep-sequence', 'stereo-beat',
-  'filter-automation', 'measurement-sweep'];
+// The workspaces and the Studio templates are read from their sources at start (loadModel):
+// ui/app.js WORKSPACES (Synth after Studio, Q019) and studio/templates STUDIO_TEMPLATES (#287
+// added the demo song), so a list written here cannot go stale.
+const WORKSPACES = [];
+const TEMPLATES = [];
 const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
 const RECIPE = b64({ v: 1, f1: 50, f2: 12000 });
 
-// [hash, workspace]
-const ROUTES = [
+// [hash, workspace]; filled by loadModel once WORKSPACES and TEMPLATES are known.
+const ROUTES = [];
+// Opening Synth instantiates its voice into the one Studio document (#329), which then holds
+// unsaved changes, so a later Studio template link meets the unsaved-work question first; its
+// route is walked last, after the template links.
+const routesOf = () => [
   ['', 'playground'],
-  ...WORKSPACES.map((w) => [`m=${w}`, w]),
+  ...WORKSPACES.filter((w) => w !== 'synth').map((w) => [`m=${w}`, w]),
   ['m=sweep', 'playground'],
   ['m=dual', 'synthesis'],
   ...TEMPLATES.map((t) => [`m=studio&st=${t}`, 'studio']),
@@ -84,7 +89,18 @@ const ROUTES = [
   ['m=experiments&exp=not-stored-1', 'experiments'],
   ['exp=not-stored-2', 'experiments'],
   ['v=1&f=1000', 'playground'],
+  ...WORKSPACES.filter((w) => w === 'synth').map((w) => [`m=${w}`, w]),
 ];
+
+async function loadModel() {
+  const src = (...p) => pathToFileURL(path.join(__dirname, '..', '..', 'src', 'js', ...p)).href;
+  WORKSPACES.push(...(await import(src('ui', 'app.js'))).WORKSPACES);
+  TEMPLATES.push(...(await import(src('studio', 'templates', 'index.js'))).STUDIO_TEMPLATES
+    .map((t) => t.id));
+  ROUTES.push(...routesOf());
+  // A Studio template's deep link (#294, #278: "Open ... in Studio"), any shipped template.
+  ALLOWED_HREF.push(new RegExp(`^#m=studio&st=(${TEMPLATES.join('|')})$`));
+}
 // [hash, workspace (from the Playground or a fresh load), keys that must not stay in the
 //  address, the address it must end on: a hash without '#', a predicate over its parameters, or
 //  null (not judged), the warnings a fresh page at it shows: each once, no other]
@@ -116,28 +132,25 @@ const ACTIONS = [
   ['header About', 'playground', '[data-osc="header.about"]', 'about',
     '[data-osc="header.overflow"]'],
   ['Measure → Experiments', 'measure', '[data-osc="measure.toExperiments"]', 'experiments'],
-  ['Studio Back', 'studio', '[data-osc="studio.back"]', 'playground'],
+  // Studio Back returns to the workspace Studio was opened from (studio.backTo): opened by the
+  // compact Studio's Expand on the Playground, it returns there.
   ['compact Studio Expand', 'playground', '[data-osc="studio.compact.expand"]', 'studio'],
-  ['Filter Lab open', 'playground', '#osc-filter-fullscreen', 'filter'],
+  ['Studio Back', 'studio', '[data-osc="studio.back"]', 'playground'],
+  // The lighter Playground (#278) leaves the Filter Lab to its workspace, where the same
+  // control is named "Back to the Playground" (#294 U010).
+  ['Filter Lab back', 'filter', '#osc-filter-fullscreen', 'playground'],
   ['Learn demo', 'learn', '[data-osc="learn.demo"]', 'playground'],
 ];
 // Workspaces whose only way onward is the nav today (links.md, "dead ends"). Shrinks only.
-// `experiments` (B12, its empty lists name Measure without a link) is owned by the cross-links
-// pull request (P1, branch feat/cross-links-and-honest-link-labels), which removes it here.
-const NO_EXIT_OK = new Set(['analyzer', 'compare', 'synthesis', 'presets', 'about',
-  'experiments']);
+// The cross-links pull request (#294) and #273 gave Analyzer, Compare, Synthesis and
+// Experiments (B12, its empty lists now link to Measure) an in-content exit.
+const NO_EXIT_OK = new Set(['presets', 'about']);
 // Rendered links that do not yet say they open a new tab (B10: the Bioacoustics citations,
 // src/js/labs/bioacoustics.js), owned by the cross-links pull request. Each is reported as
 // KNOWN, never skipped silently; a listed href that is healed fails the run until it is removed
 // from here, so the list only shrinks.
-const NEW_TAB_HINT_DEBT = new Set([
-  'https://pubmed.ncbi.nlm.nih.gov/17203911/',
-  'https://www.researchgate.net/publication/220008865',
-  'https://doi.org/10.1016/0378-5955(85)90100-5',
-  'https://doi.org/10.1016/s0378-5955(96)00208-0',
-  'https://doi.org/10.1126/science.7367876',
-  'https://acousticstoday.org/wp-content/uploads/2015/11/Dolphin-Biosonar-Research.pdf',
-]);
+// Empty since the cross-links pull request (#294) gave the citations their hint.
+const NEW_TAB_HINT_DEBT = new Set([]);
 const ALLOWED_HREF = [
   /^#m=[a-z]+$/,
   /^#m=experiments&(exp|def|finding)=[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/,
@@ -233,7 +246,7 @@ const H = {
         : null }))),
   /** In-content controls (outside header and status bar) that name another workspace. */
   exits: (page) => page.evaluate(() => {
-    const NAV = /setWorkspace|studioExpand|studioBack|experimentsShowInMeasure|experimentsRepeat|experimentsDefRun|runLearnDemo|connectionsFollow|findingsOpenRef/;
+    const NAV = /setWorkspace|studioExpand|studioBack|experimentsShowInMeasure|experimentsRepeat|experimentsDefRun|runLearnDemo|connectionsFollow|findingsOpenRef|synthOpenStudio/;
     return [...document.querySelectorAll('main button, main a[href^="#m="]')]
       .filter((el) => el.getClientRects().length > 0)
       .filter((el) => el.tagName === 'A' || NAV.test(el.getAttribute('@click') || '')
@@ -264,6 +277,15 @@ async function runLeg(name, origin) {
       const debtHealed = new Set();
       for (const w of WORKSPACES) {
         await H.setWorkspace(page, w);
+        if (w === 'experiments') {
+          // Its empty lists lead to Measure (#294, B12) once the stored records have loaded.
+          // Loaded, and the view shows it: rows, or the empty list's Measure link.
+          await until(() => page.evaluate(() => {
+            const e = window.OSCILLA.app.exps;
+            const link = document.querySelector('[data-osc="exp.toMeasure"]');
+            return !!e.loaded && (e.rows.length > 0 || !!(link && link.getClientRects().length));
+          }), { ms: NAV_MS, what: 'exits: the Experiments lists load and are shown' });
+        }
         for (const l of await H.links(page)) {
           const known = ALLOWED_HREF.some((re) => re.test(l.href)) || l.anchorOk === true;
           const blank = l.target === '_blank';
@@ -474,7 +496,8 @@ async function runLeg(name, origin) {
       for (let i = 0; i < WORKSPACES.length - 1; i += 1) fwd.push((await H.traverse(page, 'forward')).workspace);
       check(leg, 'one history entry per workspace switch', h1 - h0 === WORKSPACES.length - 1,
         `${h1 - h0}`);
-      check(leg, 'Back x11 and Forward x11 visit the workspaces in order',
+      check(leg, `Back x${WORKSPACES.length - 1} and Forward x${WORKSPACES.length - 1} visit the `
+        + 'workspaces in order',
         JSON.stringify(back) === JSON.stringify(WORKSPACES.slice(0, -1).reverse())
         && JSON.stringify(fwd) === JSON.stringify(WORKSPACES.slice(1)),
         JSON.stringify({ back, fwd }));
@@ -507,6 +530,7 @@ async function runLeg(name, origin) {
 
 (async () => {
   await RUN.ready();
+  await loadModel();
   for (const b of RUN.browsers) {
     for (const o of RUN.origins) await runLeg(b, o);
   }
