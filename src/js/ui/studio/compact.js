@@ -136,7 +136,8 @@ export function mountCompact(host, svc) {
   // the Synth voice of #329 makes the path wider than the Playground column).
   for (const box of [path, clipsBox]) {
     box.addEventListener('focusin', (e) => {
-      const chip = e.target && e.target.closest ? e.target.closest('.osc-sc-node, .osc-sc-clip')
+      const chip = e.target && e.target.closest
+        ? e.target.closest('[data-osc="studio.compact.node"], [data-osc="studio.compact.clip"]')
         : null;
       if (chip) keepInScrollerView(chip, box);
     });
