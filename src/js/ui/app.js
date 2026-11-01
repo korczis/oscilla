@@ -94,19 +94,27 @@ export function syncSliderFill(root = document) {
 }
 
 /**
+ * Scroll `scroller` along x so `el` is fully visible (WCAG 2.4.11): browsers do not reliably
+ * scroll a box to a control reached with Tab that is only partly inside it. align 'start'
+ * puts it at the left edge; otherwise the box moves only as far as needed.
+ */
+export function keepInScrollerView(el, scroller, align = 'nearest') {
+  if (!el || !scroller || scroller.scrollWidth <= scroller.clientWidth) return;
+  const t = el.getBoundingClientRect();
+  const n = scroller.getBoundingClientRect();
+  const pad = 8;
+  if (align === 'start') {
+    if (t.left < n.left || t.right > n.right) scroller.scrollLeft += t.left - n.left - pad;
+  } else if (t.left < n.left + pad) scroller.scrollLeft -= n.left + pad - t.left;
+  else if (t.right > n.right - pad) scroller.scrollLeft += t.right - (n.right - pad);
+}
+
+/**
  * Scroll the nav strip so `tab` is fully visible. align 'start' puts it at the left edge (the
  * workspace just chosen); otherwise the strip moves only as far as needed.
  */
 export function keepNavTabInView(tab, align = 'nearest') {
-  const nav = tab.closest('.osc-nav');
-  if (!nav || nav.scrollWidth <= nav.clientWidth) return;
-  const t = tab.getBoundingClientRect();
-  const n = nav.getBoundingClientRect();
-  const pad = 8;
-  if (align === 'start') {
-    if (t.left < n.left || t.right > n.right) nav.scrollLeft += t.left - n.left - pad;
-  } else if (t.left < n.left + pad) nav.scrollLeft -= n.left + pad - t.left;
-  else if (t.right > n.right - pad) nav.scrollLeft += t.right - (n.right - pad);
+  keepInScrollerView(tab, tab.closest('.osc-nav'), align);
 }
 
 /** Arrow/Home/End navigation among sibling tabs or radios; selection follows focus. */
@@ -136,6 +144,21 @@ export { NAV_GROUPS };
 /** The navigation group holding a workspace, or null for a top-level workspace. */
 export function navGroupOf(mode) {
   return Object.keys(NAV_GROUPS).find((g) => NAV_GROUPS[g].includes(mode)) || null;
+}
+
+/**
+ * The navigation's top level in order, derived from WORKSPACES and NAV_GROUPS: a top-level
+ * workspace as `nav.<id>`, a group once, at its first workspace, as `nav-group.<group>`. Synth
+ * is top level after Studio by the owner's decision Q019.
+ */
+export function navTopLevel() {
+  const out = [];
+  for (const ws of WORKSPACES) {
+    const g = navGroupOf(ws);
+    const id = g ? `nav-group.${g}` : `nav.${ws}`;
+    if (!out.includes(id)) out.push(id);
+  }
+  return out;
 }
 
 /**

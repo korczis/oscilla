@@ -357,6 +357,11 @@ function defineChecks() {
     // The task strip of a running render (its Abort button): a long render, aborted.
     await page.evaluate(() => { window.__auditRender = window.OSCILLA.app.studioRenderWav({
       duration: 60 }); });
+    // The strip shows Abort once the render task is abortable, which can take longer than one
+    // step on a loaded runner (CI of #367): wait for it against a named deadline, then collect.
+    await until(() => page.evaluate(() => !!window.OSCILLA.app.studio.task.abortable),
+      { ms: 10000, what: 'controls-labelled: the long render shows its Abort button' })
+      .catch((e) => { if (e.name !== 'WaitTimeout') throw e; }); // the census then names it
     await step(() => Promise.resolve());
     await page.evaluate(() => { window.OSCILLA.app.studioAbortTask();
       return window.__auditRender; });
@@ -1889,12 +1894,16 @@ function defineChecks() {
     });
     const closed = await page.evaluate(() => !document.querySelector(
       '#osc-dlg-studio-templates[open]'));
+    // The library's templates in library order, read from the registry (#287 adds the seventh).
+    const { STUDIO_TEMPLATES } = await import(pathToFileURL(path.join(__dirname, '..', '..',
+      'src', 'js', 'studio', 'templates', 'index.js')).href);
+    const library = STUDIO_TEMPLATES.map((t) => t.id);
     return { ...H.verdict({
-      six: ids.length === 6,
+      library: ids.join() === library.join(),
       allRender: ids.every((id) => opened[id].nodes === opened[id].model && opened[id].nodes > 0
         && !opened[id].dirty && !opened[id].undo),
       micDegraded: mic.error && mic.flag === 'Unavailable' && !!mic.title, closed,
-    }), ids, mic };
+    }), ids, library, mic };
   });
 
   def('patches-files', async ({ page }) => {

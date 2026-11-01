@@ -32,7 +32,7 @@ test('the picker lists exactly the nodes with the notes or hits capability, then
       return c.notes || c.hits;
     }).map((n) => n.id);
     assert.deepEqual(list.slice(0, -1).map((c) => c.id), want);
-    assert.equal(want.length, 7, 'the panel Keys and its six engines');
+    assert.equal(want.length, 8, 'the panel Keys, its six engines and the XY pad');
     assert.ok(!list.some((c) => c.id === PANEL.resolve(m).get('vco1').id), 'a VCO plays no note');
     const last = list.at(-1);
     assert.equal(last.id, NEW_VOICE);
@@ -110,7 +110,7 @@ test('New Synth voice inserts the panel in one entry when the document has none'
   assert.equal(st.dispatch(routeAction(st.getModel(), PANEL, NEW_VOICE).action).ok, true);
   assert.equal(st.debugInfo().undoDepth, depth + 1);
   assert.ok(PANEL.resolve(st.getModel()).get('keys'));
-  assert.equal(noteTypes(st.getModel()).length, 7);
+  assert.equal(noteTypes(st.getModel()).length, 8);
 });
 
 test('the waveform group: each wave one NODE_PARAM_SET; Noise is the Mixer\'s noise level', () => {

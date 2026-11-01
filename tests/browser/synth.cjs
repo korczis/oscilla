@@ -53,8 +53,8 @@
 //   s-connect  Enter on a jack opens the connection list (targets, refused ones with reasons);
 //              choosing a target patches; the jack names say which can take the cable
 //   s-dock     K066, beside the piano: the instrument picker is a menu button whose role=menu
-//              lists every notes node (7) and New Synth voice; arrows and Enter route the keys
-//              to the FM engine in one undo entry (a note then takes an FM voice) and undo
+//              lists every notes node (8, the XY pad too) and New Synth voice; arrows and
+//              Enter route the keys to the FM engine in one undo entry (a note then takes an FM voice) and undo
 //              routes them back; the waveform radiogroup by arrow keys turns VCO 1's saw into a
 //              square (its 2nd harmonic 30 dB+ below the 3rd); a quick preset by pointer (tap
 //              on the phone) is one entry and the Studio Inspector shows the same LPF cutoff at
@@ -571,7 +571,7 @@ function defineChecks() {
     out.inspector = await field.inputValue();
     out.sameRevision = rev === await page.evaluate(() => window.OSCILLA.studio.store
       .getRevision());
-    return { ok: out.items === 8 && out.expanded === 'true' && out.routeEntries === 1
+    return { ok: out.items === 9 && out.expanded === 'true' && out.routeEntries === 1
       && /^Play .* from the keys$/.test(out.label) && out.sameRevision, ...out };
   });
 

@@ -37,6 +37,7 @@ import { canConnect } from '../studio/ports.js';
 import { decodeSynthLink, encodeSynthLink } from '../core/url-state-synth.js';
 import { ENGINE_BLOCKED } from './panels/engines.js';
 import { CHIP, droppedText, enginePickerHtml } from './view/engines.js';
+import { createXyTab } from './view/xy-tab.js';
 
 export const SYNTH_PANEL = SEMI_MONO;
 export { SYNTH_TEXT, insertDecision };
@@ -303,10 +304,12 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     if (!el || !cmp) return;
     const focus = document.activeElement;
     const keep = focus && el.contains(focus) ? ['data-knob', 'data-option', 'data-toggle',
-      'data-jack', 'data-collapse', 'data-fold-all'].map((a) => [a, focus.getAttribute(a),
+      'data-jack', 'data-collapse', 'data-fold-all', 'data-xy-surface', 'data-xy-axis']
+      .map((a) => [a, focus.getAttribute(a),
       focus.getAttribute('data-v')])
       .find(([, v]) => v) : null;
     if (!present()) {
+      xy.destroy();
       const cuts = panel.cutsOf(model());
       el.innerHTML = '<div class="bg-white rounded-lg shadow dark:bg-gray-800 p-6 text-sm '
         + 'text-gray-700 dark:text-gray-300"><p>This Studio document has no Synth panel.</p>'
@@ -344,6 +347,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       + '<div><div class="mb-2 flex gap-2" role="group" aria-label="Module cards">'
       + `<button type="button" class="${fold}" data-fold-all="open">Expand all</button>`
       + `<button type="button" class="${fold}" data-fold-all="closed">Collapse all</button></div>`
+      + (tab() === 'xy' ? xy.html() : '')
       + `<div class="${engines ? 'grid grid-cols-1 gap-3' : PLATE_GRID}" `
       + `data-osc="synth.modules">${plates}</div></div>`
       + '<section class="bg-white rounded-lg shadow dark:bg-gray-800 self-start p-3 '
@@ -360,6 +364,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       + 'aria-labelledby="synth-cables-title"></ul></section></div>';
     shape = shapeOf();
     renderBay();
+    xy.mount();
     const chosen = engines && el.querySelector('[data-engine][aria-checked="true"]');
     if (chosen) chosen.parentElement.parentElement.scrollLeft = chosen.offsetLeft - 16;
     if (keep) {
@@ -669,6 +674,11 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     setControl(k.dataset.knob, x.c.kind === 'amount' ? 0 : x.c.initial);
   }
 
+
+  // K097 XY tab
+  const xy = createXyTab({ panel, get, host, nodes, model, dispatch, say, jackName, tab, showTab,
+    BTN, cmp: () => cmp });
+
   // ------------------------------------------------------------------ notes
 
   function noteOn(note, velocity) {
@@ -706,7 +716,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     const t = get().transport;
     if (!t || !present() || !t.playing) return 0;
     let n = 0;
-    for (const x of new Set([...['keys', ...ENGINE_IDS].map((id) => nodes().get(id)), played()])) {
+    const all = ['keys', ...ENGINE_IDS, 'xy'].map((id) => nodes().get(id));
+    for (const x of new Set([...all, played()])) {
       if (x) n += t.live(x.id, { kind: 'all-off' }).released || 0;
     }
     return n;
@@ -762,10 +773,10 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     synth: {
       title: panel.title,
       description: panel.description,
-      tabs: panel.tabs.map((x) => ({ id: x.id, label: x.id === 'panel' ? 'Panel' : 'Engines' })),
+      tabs: panel.tabs.map((x) => ({ id: x.id, label: x.label })),
       tab: 'panel',
       engine: ENGINE_IDS[0],
-      presets: PRESETS.map((p) => ({ id: p.id, title: p.title, tab: p.tab })),
+      presets: [...PRESETS, ...xy.presets].map((p) => ({ id: p.id, title: p.title, tab: p.tab })),
       preset: 'init',
       armed: false,
       status: '',
@@ -833,6 +844,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
     synthPreset(id) {
       if (!ensurePanel()) return false;
+      if (xy.has(id)) return xy.preset(id);
       const r = presetAction(model(), panel, id);
       if (r.reason) { say(r.reason, true); return false; }
       const done = dispatch(r.action);
