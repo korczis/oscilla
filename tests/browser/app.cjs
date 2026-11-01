@@ -1648,22 +1648,27 @@ function defineChecks() {
     await H.continuous(page, true);
     await H.focusBody(page);
     await page.keyboard.down(' ');
-    await sleep(200);
-    await page.locator('#osc-freq-slider').fill('700');
-    await sleep(250);
-    const s1 = await page.evaluate(() => ({ app: window.OSCILLA.app.frequency,
-      eng: window.OSCILLA.engine.voice?.carrier?.frequency.value }));
-    await page.click('#osc-step-oct-up');
-    await sleep(250);
-    const s2 = await page.evaluate(() => ({ app: window.OSCILLA.app.frequency,
-      eng: window.OSCILLA.engine.voice?.carrier?.frequency.value }));
-    await page.click('#osc-step-10-down');
-    await page.click('#osc-step-st-up');
-    await sleep(250);
-    const s3 = await page.evaluate(() => ({ app: window.OSCILLA.app.frequency,
+    // The held Space starts the engine voice; wait for it rather than for a fixed time.
+    await U.poll(() => page.evaluate(() => !!window.OSCILLA.engine.voice?.carrier),
+      (v) => v, 'held Space starts the engine voice');
+    const read = () => page.evaluate(() => ({ app: window.OSCILLA.app.frequency,
       eng: window.OSCILLA.engine.voice?.carrier?.frequency.value,
       readout: document.querySelector('#osc-freq-value').textContent }));
-    const fft = await H.peakHz(page);
+    const sounding = (v) => Number.isFinite(v.eng) && Math.abs(v.eng - v.app) <= 0.01 * v.app;
+    await page.locator('#osc-freq-slider').fill('700');
+    const s1 = await U.poll(read, (v) => v.app !== 440 && sounding(v),
+      'slider reaches the voice');
+    await page.click('#osc-step-oct-up');
+    const s2 = await U.poll(read, (v) => v.app !== s1.app && sounding(v),
+      'octave step reaches the voice');
+    await page.click('#osc-step-10-down');
+    await page.click('#osc-step-st-up');
+    const expectS3 = (s2.app - 10) * 2 ** (1 / 12);
+    const s3 = await U.poll(read, (v) => Math.abs(v.app - expectS3) <= 0.01 * expectS3
+      && sounding(v), 'fine steps reach the voice');
+    // The analyser's peak follows the voice a few blocks later; poll it, never a fixed wait.
+    const fft = await U.poll(() => H.peakHz(page),
+      (f) => Math.abs(f.hz - s3.app) <= 0.02 * s3.app, 'the analyser peak follows the voice');
     await page.keyboard.up(' ');
     await H.waitNodes0(page);
     const expect3 = (s2.app - 10) * 2 ** (1 / 12);
