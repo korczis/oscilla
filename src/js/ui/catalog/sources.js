@@ -53,11 +53,12 @@ export const FAMILIES = Object.freeze([
   family('studio.param', nodeParams,
     'Inside the StudioModel: the IndexedDB library, project and sequence files.',
     'store.dispatch of studio/actions.js (createStudioStore)'),
-  // ui/measure.js: the run's state machine, its recipe and result, and the calibration.
+  // ui/measure/ (run.js, session.js): the run's state machine, its recipe and result, and the
+  // calibration.
   family('measure', ['run', 'recipe', 'result', 'profile', 'levelCal'],
     'A result is saved as an experiment in IndexedDB and its recipe in the URL key mr; the '
       + 'calibration lives for the page and is frozen into each experiment.',
-    'ui/measure.js and measurement/engine.js'),
+    'ui/measure/run.js, ui/measure/session.js and measurement/engine.js'),
   // ui/app.js (workspace, theme, navOpen), ui/workbench.js (labFlags, seqPlaying),
   // labs/mic-analyzer.js (micCompare), ui/studio/timeline-editor.js (timelineSnap).
   family('ui', ['workspace', 'theme', 'navOpen', 'labFlags', 'seqPlaying', 'micCompare',
