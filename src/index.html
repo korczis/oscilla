@@ -1864,6 +1864,42 @@
       x-show="kbdView" x-cloak
       :class="kbdView === 'synth' ? 'fixed inset-x-0 bottom-[var(--osc-statusbar-h)] z-30 max-h-[45vh] overflow-y-auto border-t border-solid border-gray-200 bg-white px-4 py-2 shadow dark:border-gray-700 dark:bg-gray-800' : ''">
       <h2 id="osc-kbd-title">Keyboard</h2>
+      <!-- K066, beside the piano in the Synth: a Pro dropdown of what the keys play, a Pro button
+           group of the waveform, the quick presets (src/js/synth/picker.js, presets.js). -->
+      <div class="mb-2 flex flex-wrap items-center gap-2" data-osc="synth.dock"
+        x-show="kbdView === 'synth'" role="group" aria-label="Instrument">
+        <div class="relative" @keydown.escape.stop="synth.dock.open = false; $refs.pick.focus()">
+          <button type="button" id="osc-synth-pick" x-ref="pick" data-osc="synth.pick"
+            @click.outside="synth.dock.open = false"
+            aria-haspopup="menu" aria-controls="osc-synth-pick-menu"
+            :aria-expanded="String(synth.dock.open)" @click="synth.dock.open = !synth.dock.open; synth.dock.open && $nextTick(() => $refs.menu.querySelector('[role=menuitem]').focus())"
+            class="inline-flex h-11 items-center gap-1 rounded-lg border border-solid border-gray-300 bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700"
+            x-text="'Plays: ' + synth.dock.target">Plays</button>
+          <ul id="osc-synth-pick-menu" x-ref="menu" role="menu" aria-labelledby="osc-synth-pick"
+            data-osc="synth.pick.menu" x-show="synth.dock.open" @keydown="synthDockKey($event)"
+            class="absolute bottom-full left-0 z-40 mb-1 w-72 rounded-lg bg-white py-2 text-sm shadow dark:bg-gray-700">
+            <template x-for="c in synth.dock.choices" :key="c.id">
+              <li role="none"><button type="button" role="menuitem" :data-pick="c.id"
+                :aria-disabled="String(c.disabled)" :aria-current="c.selected ? 'true' : null"
+                :title="c.reason || c.kind" @click="c.disabled ? synthSay(c.reason) : synthPick(c.id)"
+                :class="c.selected ? 'font-semibold text-primary-700 dark:text-primary-400' : 'text-gray-700 dark:text-gray-200'"
+                class="flex h-11 w-full items-center justify-between gap-2 border-0 bg-transparent px-4 text-left hover:bg-gray-100 aria-disabled:opacity-50 dark:hover:bg-gray-600"><span x-text="c.name"></span><span class="text-xs text-gray-500 dark:text-gray-400" x-text="c.kind"></span></button></li>
+            </template>
+          </ul>
+        </div>
+        <template x-for="g in [{ id: 'osc', label: 'Oscillator', items: synth.dock.oscs, on: synth.dock.osc, pick: (id) => synthOsc(id) }, { id: 'wave', label: 'Waveform', items: synth.dock.waves, on: synth.dock.wave, pick: (id) => synthWave(id) }, { id: 'preset', label: 'Quick presets', items: synth.presets.filter((x) => x.tab === synth.tab).map((x) => ({ id: x.id, label: x.title.split(':')[0] })), on: synth.preset, pick: (id) => synthPreset(id) }]" :key="g.id">
+          <div role="radiogroup" :aria-label="g.label" :data-osc="'synth.dock.' + g.id"
+            @keydown="synthDockKey($event, true)" class="inline-flex max-w-full overflow-x-auto rounded-lg shadow-sm">
+            <template x-for="(it, i) in g.items" :key="it.id">
+              <button type="button" role="radio" :data-v="it.id" :aria-checked="String(it.id === g.on)"
+                :tabindex="it.id === g.on || (i === 0 && !g.items.some((x) => x.id === g.on)) ? '0' : '-1'"
+                @click="g.pick(it.id)" x-text="it.label"
+                :class="it.id === g.on ? 'bg-primary-600 text-white dark:bg-primary-500' : 'bg-white text-gray-900 hover:bg-gray-100 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700'"
+                class="h-11 whitespace-nowrap border border-solid border-gray-200 px-3 text-sm font-medium first:rounded-s-lg last:rounded-e-lg focus:z-10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 dark:border-gray-600"></button>
+            </template>
+          </div>
+        </template>
+      </div>
       <div role="group" aria-label="Keyboard controls" aria-describedby="osc-kbd-readout">
         <button type="button" data-osc="keyboard.arm" :aria-pressed="String(kbdArmedHere)"
           @click="kbdToggle()" x-text="kbdArmedHere ? 'Disarm keys' : 'Arm keys'">Arm keys</button>

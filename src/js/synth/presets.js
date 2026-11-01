@@ -1,7 +1,11 @@
-// Synth panel presets (plan K066 part): data only. A preset is the panel's initial values with a
+// Synth panel presets (plan K066): data only. A preset is the panel's initial values with a
 // few changes (`values`, keyed 'module.param') and amount depths (`amounts`, keyed by amount
-// id). Applying one sets every knob of every module and every amount, as ONE BATCH; the cables
-// stay as they are. presetAction(model, panel, id, { all }) -> { action } | { reason }.
+// id). Each is a factory panel patch, the ONE patch shape of src/js/studio/patches.js
+// (presetPatch: a node per module, tagged with its metadata.panel, and an edge per amount with
+// its depth), applied by PATCH_REPLACE onto the panel's nodes (patches.js patchParams): every
+// knob and amount it covers in ONE history entry, no node or cable added, removed or moved.
+//   presetPatch(panel, id, { all }) -> patch | null
+//   presetAction(model, panel, id, { all }) -> { action } | { reason }
 //
 // A preset belongs to one tab (`tab`, default 'panel') and sets only that tab's modules, so a
 // panel preset leaves the engines as they are; an engine preset (`engine`: the module the keys
@@ -9,7 +13,8 @@
 // { all: true } resets every module (a link reopens the whole instrument from its preset,
 // synth/link.js).
 
-import { amountEdges } from './normals.js';
+import { PATCH_KIND, PATCH_SCHEMA_VERSION, patchTargets } from '../studio/patches.js';
+import { STUDIO_SCHEMA_VERSION } from '../studio/schema.js';
 
 export const PRESETS = Object.freeze([
   { id: 'init', title: 'Init: both filters open', values: {},
@@ -77,25 +82,48 @@ export function presetValues(panel, p) {
   return out;
 }
 
-export function presetAction(model, panel, id, { all = false } = {}) {
+const inScope = (p, m, all) => m.def.maxInstances !== 1 // Master keeps the Studio's level
+  && (all || (m.tab === p.tab && (!p.engine || m.id === p.engine)));
+const cache = new Map();
+
+/** The factory panel patch of preset `id` (cached per panel, preset and scope). */
+export function presetPatch(panel, id, { all = false } = {}) {
   const p = presetOf(id);
-  if (!p) return { reason: `There is no preset "${id}".` };
+  if (!p) return null;
+  const key = `${panel.instance}/${id}/${all}`;
+  if (cache.has(key)) return cache.get(key);
   const values = presetValues(panel, p);
-  const nodes = panel.resolve(model);
-  const steps = [];
-  for (const m of panel.modules) {
-    const node = nodes.get(m.id);
-    if (!node || m.def.maxInstances === 1) continue; // Master Output keeps the Studio's level
-    if (!all && (m.tab !== p.tab || (p.engine && m.id !== p.engine))) continue;
-    steps.push({ type: 'NODE_PARAM_SET', nodeId: node.id, params: values[m.id] });
-  }
+  const mods = panel.modules.filter((m) => inScope(p, m, all));
+  const ids = new Set(mods.map((m) => m.id));
+  const edges = [];
   for (const a of panel.amounts) {
-    const owner = panel.module(a.module) || {};
-    if (!all && (owner.tab !== p.tab || (p.engine && owner.id !== p.engine))) continue;
-    const depth = p.amounts[a.id] ?? 0;
-    for (const e of amountEdges(model, panel, a)) {
-      steps.push({ type: 'EDGE_UPDATE', edgeId: e.id, props: { depth } });
+    for (const t of a.to) {
+      const from = a.source.split('.');
+      const to = t.split('.');
+      if (!ids.has(from[0]) || !ids.has(to[0])) continue;
+      const n = panel.normals.find((x) => x.from === a.source && x.to === t);
+      edges.push({ id: `${a.key}-${to[0]}`, from: { node: from[0], port: from[1] },
+        to: { node: to[0], port: to[1] },
+        props: { ...(n ? n.props : {}), depth: p.amounts[a.id] ?? 0 } });
     }
   }
-  return { action: { type: 'BATCH', label: `Preset ${p.title.split(':')[0]}`, steps } };
+  const patch = Object.freeze({ kind: PATCH_KIND, schemaVersion: PATCH_SCHEMA_VERSION,
+    studioSchemaVersion: STUDIO_SCHEMA_VERSION, name: p.title.split(':')[0], description: p.title,
+    graph: { nodes: mods.map((m, i) => ({ id: m.id, type: m.node,
+      position: { x: (i % 8) * 220, y: Math.floor(i / 8) * 200 }, params: values[m.id],
+      metadata: { name: m.label.slice(0, 64), panel: { id: panel.instance, module: m.id } } })),
+    edges },
+    automation: [] });
+  cache.set(key, patch);
+  return patch;
+}
+
+export function presetAction(model, panel, id, { all = false } = {}) {
+  const patch = presetPatch(panel, id, { all });
+  if (!patch) return { reason: `There is no preset "${id}".` };
+  const { onto } = patchTargets(model, patch);
+  if (!Object.keys(onto).length) {
+    return { reason: `The ${panel.title} is not in this Studio document: insert it first.` };
+  }
+  return { action: { type: 'PATCH_REPLACE', patch, onto, label: `Preset ${patch.name}` } };
 }

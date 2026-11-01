@@ -20,8 +20,11 @@
 // (K061: one entry, one gate call; NODE_ADD and EDGE_ADD may name an unused id, NODE_ADD a
 // metadata.panel { id, module }, which PASTE, DUPLICATE and PATCH_INSERT drop); timeline additions
 // (V416-V420): CLIP_UPDATE, CLIP_SET_TIME_BASE, MARKER_MOVE; patch additions (V426, patches.js):
-// PATCH_INSERT { patch, at? } ("Insert <name>") and PATCH_REPLACE { patch, at? } ("Replace
-// graph with <name>"), the explicit insert-or-replace intent of §114.
+// PATCH_INSERT { patch, at?, route? } ("Insert <name>") and PATCH_REPLACE { patch, at? } ("Replace
+// graph with <name>"), the explicit insert-or-replace intent of §114; PATCH_REPLACE { patch,
+// onto, label? } replaces the parameters of the nodes `onto` maps (patches.js patchParams: a
+// preset, K020 and K066), keeping every node and edge; `route` names the patch node the keys
+// then play (metadata.noteTarget, K066), which METADATA_SET { noteTarget } also sets.
 // Tempo-linked clips (§90-§91, `clip.musical`): CLIP_ADD with timeBase 'tempo' (or startBeats /
 // durationBeats) creates one; CLIP_MOVE / CLIP_RESIZE keep it linked and re-derive its beats from
 // the new seconds; TRANSPORT_SET with a new tempo rescales every tempo-linked clip (absolute
@@ -66,7 +69,7 @@
 import { ID_PATTERN } from '../experiments/schema.js';
 import { clipTarget } from './clip-targets.js';
 import { canConnect, validateEdgeProps } from './ports.js';
-import { NODE_REGISTRY, projectParams, validateParamValue } from './registry.js';
+import { NODE_REGISTRY, playsNotes, projectParams, validateParamValue } from './registry.js';
 import {
   CLIP_KINDS, CLIP_TIME_BASES, MARKER_KINDS, NAME_MAX_CHARS, PANEL_REF_MESSAGE, POSITION_MESSAGE,
   StudioSchemaError, TRACK_CLIP_KINDS, VIEW_LIMITS, isPanelRef,
@@ -75,7 +78,7 @@ import {
 } from './schema.js';
 import { validateStudioCommit } from './validate.js';
 import { createHistory, STUDIO_HISTORY_LIMIT } from './history.js';
-import { PatchError, insertPatch, replaceWithPatch } from './patches.js';
+import { PatchError, insertPatch, patchParams, replaceWithPatch } from './patches.js';
 import { NO_TRACE } from '../core/trace.js';
 
 export { STUDIO_HISTORY_LIMIT };
@@ -701,11 +704,23 @@ const REDUCERS = {
       : 'Change transport' };
   },
 
-  METADATA_SET(model, a) {
+  METADATA_SET(model, a, ctx) {
     const cur = model.metadata;
-    const metadata = { title: a.title ?? cur.title, notes: a.notes ?? cur.notes };
-    if (metadata.title === cur.title && metadata.notes === cur.notes) return { model, label: '' };
-    return { model: { ...model, metadata }, label: 'Change Studio details' };
+    const { noteTarget: was, ...rest } = cur;
+    const target = a.noteTarget === undefined ? was : a.noteTarget || undefined;
+    const metadata = { ...rest, title: a.title ?? cur.title, notes: a.notes ?? cur.notes,
+      ...(target ? { noteTarget: target } : {}) };
+    if (metadata.title === cur.title && metadata.notes === cur.notes && target === was) {
+      return { model, label: '' };
+    }
+    if (target === was) return { model: { ...model, metadata }, label: 'Change Studio details' };
+    const n = target ? requireNode(model, target) : null;
+    if (n && !playsNotes(n.type, ctx.registry)) {
+      reject(`${n.metadata.name} does not play notes: the keys play a node with the notes or `
+        + 'hits capability.');
+    }
+    return { model: { ...model, metadata },
+      label: n ? `Play ${n.metadata.name} from the keys` : 'Play the Synth panel from the keys' };
   },
 
   PASTE(model, a, ctx) {
@@ -759,7 +774,12 @@ const REDUCERS = {
       if (err instanceof PatchError) reject(err.message);
       throw err;
     }
-    return { model: r.model, label: `Insert ${a.patch.name}`, created: r.created,
+    let m = r.model;
+    if (a.route != null) {
+      if (!r.idMap[a.route]) reject(`The patch "${a.patch.name}" has no node "${a.route}".`);
+      m = REDUCERS.METADATA_SET(m, { noteTarget: r.idMap[a.route] }, ctx).model;
+    }
+    return { model: m, label: `Insert ${a.patch.name}`, created: r.created,
       skipped: r.skipped,
       select: { nodes: r.created.nodes, edges: r.created.edges } };
   },
@@ -788,6 +808,16 @@ const REDUCERS = {
 
   PATCH_REPLACE(model, a, ctx) {
     let r;
+    if (a.onto != null) {
+      try {
+        r = patchParams(model, a.patch, a.onto, { registry: ctx.registry });
+      } catch (err) {
+        if (err instanceof PatchError) reject(err.message);
+        throw err;
+      }
+      return { model: r.model, label: typeof a.label === 'string' && a.label.trim()
+        ? checkName(a.label) : `Apply ${a.patch.name}`, skipped: r.skipped };
+    }
     try {
       r = replaceWithPatch(model, a.patch, { newId: ctx.newId, registry: ctx.registry,
         at: a.at || { x: 0, y: 0 } });
