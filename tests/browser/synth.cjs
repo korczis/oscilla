@@ -447,7 +447,10 @@ function defineChecks() {
     await tapJack(page, 'mg.control:out');
     await tapJack(page, 'lpf.frequency:in');
     await typeKnob(page, 'lpf.lpf-mg', '3');
-    await typeKnob(page, 'mg.rate', '4');
+    // 1 Hz, not 4: the analyser's window must stay short against the MG period, or a slow
+    // runner (CI, 44.1 kHz, software GL) smears the sweep below 10 dB; measured in the
+    // playwright container: 4 Hz passed 1 of 3, 1 Hz 10 of 10, no-modulation noise 2-4.5 dB.
+    await typeKnob(page, 'mg.rate', '1');
     await typeKnob(page, 'lpf.frequency', '300');
     const d = await dbg(page);
     if (d.cables.length !== 1 || d.cables[0].to !== 'lpf.frequency') {

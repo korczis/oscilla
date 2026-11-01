@@ -47,6 +47,7 @@ const { pathToFileURL } = require('url');
 const esbuild = require('esbuild');
 const suite = require('./lib/suite.cjs');
 const { until, WaitTimeout } = require('./lib/wait.cjs');
+const { openWorkspace } = require('./lib/navigate.cjs');
 
 const args = process.argv.slice(2);
 const only = args.includes('--browser') ? args[args.indexOf('--browser') + 1] : null;
@@ -591,6 +592,9 @@ async function runApp(engine, browser) {
         `${C}: the cutoff field sets ${hz} Hz`);
     };
 
+    // #278: the Filter Lab and the Sequencer each show only in their own workspace.
+    const ws = (name) => openWorkspace(page, name, C);
+    await ws('filter');
     await page.click('#osc-ftype-lowpass');
     await setFilter(false);
     const cut = await setCutoff(200);
@@ -600,6 +604,7 @@ async function runApp(engine, browser) {
     // Filter off: the reference level of the sounding sequence.
     // The reading is taken once two successive analyser windows agree within 0.5 dB, so the
     // reference is the steady tone and not a window that still holds the start.
+    await ws('sequencer');
     await page.click('#osc-seq-play');
     let prev = 0;
     const off = await settle(state, (s) => {
@@ -614,6 +619,7 @@ async function runApp(engine, browser) {
     const ref = off.value ? off.value.rms : 0;
 
     // Filter on while it plays: more than 20 dB down.
+    await ws('filter');
     await setFilter(true);
     const on = await settle(state, (s) => dB(s.rms) < dB(ref) - FILTER_DROP_DB, 4000,
       `${C}: the 200 Hz low-pass attenuates the sequence`);
@@ -635,6 +641,7 @@ async function runApp(engine, browser) {
         + `200 Hz ${(dB(shut.value.rms) - dB(ref)).toFixed(1)} dB`);
 
     // Stop: the census returns to zero.
+    await ws('sequencer');
     await page.click('#osc-seq-stop');
     const stopped = await settle(state, (s) => !s.playing && s.nodes === 0 && s.sources === 0,
       4000, `${C}: engine census 0 after Stop`);
@@ -655,6 +662,7 @@ async function runApp(engine, browser) {
         + `sources ${escaped.value.sources}`);
 
     // The exported WAV of the sequence goes through the same Filter stage (offline).
+    await ws('filter');
     const wavRms = async (enabled) => {
       await setFilter(enabled);
       return page.evaluate(async () => {

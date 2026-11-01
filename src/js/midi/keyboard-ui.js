@@ -252,7 +252,20 @@ function mountKeys(win, doc, kb) {
   canvas.style.display = 'block';
   canvas.style.touchAction = 'none';
   if (typeof win.ResizeObserver === 'function') {
-    new win.ResizeObserver(() => view.resize()).observe(canvas);
+    // resize() sets the canvas's own height, which the observer reports again: the resize runs
+    // in the next frame and only when the observed width differs from the width last drawn, so
+    // the observer never loops ("ResizeObserver loop completed", WebKit).
+    let frame = 0;
+    const raf = typeof win.requestAnimationFrame === 'function'
+      ? (fn) => win.requestAnimationFrame(fn) : (fn) => win.setTimeout(fn, 16);
+    new win.ResizeObserver((entries) => {
+      const seen = entries.length ? Math.floor(entries[entries.length - 1].contentRect.width) : 0;
+      if (!seen || seen === width || frame) return;
+      frame = raf(() => {
+        frame = 0;
+        view.resize();
+      });
+    }).observe(canvas);
   }
   // The layout the browser knows names the keys as printed (Z on QWERTZ is KeyY): best effort.
   const kbd = win.navigator && win.navigator.keyboard;
