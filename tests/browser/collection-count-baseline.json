@@ -1,0 +1,21 @@
+{
+  "note": "Hard-coded collection counts in browser checks that predate tests/unit/browser-collection-counts.test.mjs (rule project.suite-harness), as a file and a stable key (the check, then the comparison). A finding not listed here fails npm test; an entry may be removed and never added.",
+  "entries": [
+    {
+      "file": "tests/browser/navigation.cjs",
+      "key": "def:nav-links :: twelve: links.length === 12"
+    },
+    {
+      "file": "tests/browser/v31-studio-graph.cjs",
+      "key": "def:templates :: six: ids.length === 6"
+    },
+    {
+      "file": "tests/browser/v31-studio-graph.cjs",
+      "key": "def:mobile-tap-connect :: tabs: tabs.length === 3"
+    },
+    {
+      "file": "tests/browser/v31-studio-graph.cjs",
+      "key": "def:review-open-ui :: tabPanels: tabs.length === 3"
+    }
+  ]
+}
