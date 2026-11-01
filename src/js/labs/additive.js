@@ -22,7 +22,9 @@ import { createAdditiveChart } from '../charts/additive-chart.js';
 import { parseNumber, clamp } from '../charts/axes.js';
 import { on, onUi, bindSwitch, setSlider, setField } from './dom.js';
 
-export const HARMONIC_COUNT = 10;
+import { HARMONIC_COUNT } from './lab-defaults.js';
+
+export { HARMONIC_COUNT } from './lab-defaults.js';
 const PRESET_SHAPES = { sine: 'sine', square: 'square', saw: 'sawtooth', triangle: 'triangle' };
 const GAIN_MIN_DB = -60;
 
