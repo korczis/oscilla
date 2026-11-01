@@ -3231,6 +3231,8 @@ function defineChecks() {
   // engine-sync-1: a pattern change restarts the voice with a copy of its options; a lab
   // switched off while it sounded must stay off on the restarted voice.
   def('restart-follows-labs', async ({ page }) => {
+    // The Additive lab is the Synthesis workspace's (#278: the lighter Playground shows no lab).
+    await H.workspace(page, 'synthesis');
     await H.continuous(page, true);
     const res = {};
     await page.evaluate(() => {
@@ -3279,12 +3281,15 @@ function defineChecks() {
       && res.afterAdditive.carrier === 'sine' && !!res.withEnvelope && !res.afterEnvelope.lab
       && res.afterEnvelope.adsr === null && res.afterEnvelope.stepEnvelope !== 'function'
       && res.afterEnvelope.viz === null;
+    await H.workspace(page, 'playground');
     return { ok, ...res };
   });
 
   // engine-sync-6: Additive does not apply to a dual plan, live included: switching it on while
   // a dual voice sounds leaves both oscillators as a fresh dual voice has them.
   def('additive-skips-dual', async ({ page }) => {
+    // The Additive lab is the Synthesis workspace's (#278: the lighter Playground shows no lab).
+    await H.workspace(page, 'synthesis');
     await H.continuous(page, true);
     const res = {};
     await page.evaluate(() => {
@@ -3317,6 +3322,7 @@ function defineChecks() {
     await page.evaluate(() => { window.OSCILLA.app.source = 'single'; });
     const ok = res.before.join() === 'sine,sine' && res.live.types.join() === 'sine,sine'
       && !res.live.pw && res.live.viz === null && res.live.refused;
+    await H.workspace(page, 'playground');
     return { ok, ...res };
   });
 
