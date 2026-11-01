@@ -2,8 +2,14 @@
 // overlay canvas for the axes (log or linear frequency on y, elapsed time on x). The colour LUT
 // comes from the design tokens (theme.js lutStops). Data: an AnalyserNode reader; without an
 // analyser nothing is drawn (the canvas stays at the floor colour) — no noise is ever invented.
+// Feed: 'analyser' (default; getFloatFrequencyData with the node's smoothing) or 'unsmoothed'
+// (from readTime, analysis/spectrogram.js createSpectrogramFeed), which sits beside it until a
+// UI choice between them exists (K015). Hover: a cursor line and the readout of the newest
+// column at that row (bin, frequency, dB relative), drawn on the axes canvas; the level is never
+// calibrated here, so it is always RELATIVE_UNIT. The axes canvas is sized in layout() only:
+// the frame and pointer paths redraw it from the cached size and never touch the DOM.
 
-import { createSpectrogram } from '../analysis/spectrogram.js';
+import { createSpectrogram, createSpectrogramFeed } from '../analysis/spectrogram.js';
 import { createAnalyserReader } from '../analysis/analyser.js';
 import {
   frequencyTicks,
@@ -14,6 +20,7 @@ import {
 } from './axes.js';
 import { chartTheme, canvasFont, fitCanvas, observeSize, pixelRatio } from './chart-theme.js';
 import { onFrame } from './frame-loop.js';
+import { formatDb, formatFrequencyWithResolution } from '../measurement/format.js';
 
 const DEFAULTS = {
   minHz: 20,
@@ -26,7 +33,21 @@ const DEFAULTS = {
   timeLabelGap: 10,
   tickFont: 10.5,
   autoFrame: true,
+  feed: 'analyser',
 };
+
+/**
+ * readoutLines(readout) → [frequency line, level line] for a renderer.readout() result: the
+ * bin read, its centre frequency at bin resolution and "newest column", then its dB relative
+ * (formatDb); without data, the row's frequency and "No analyser data".
+ */
+export function readoutLines(r) {
+  if (r.bin == null || r.db == null) {
+    return [`${formatFrequencyWithResolution(r.rowHz, r.binHz)} (row)`, 'No analyser data'];
+  }
+  const f = formatFrequencyWithResolution(r.frequencyHz, r.binHz);
+  return [`${f} \u00b7 bin ${r.bin} \u00b7 newest column`, formatDb(r.db)];
+}
 
 /** theme.lutStops [{ pos, rgb }] → createSpectrogram stops [{ at, color }]. */
 export function lutStopsFromTheme(theme) {
@@ -52,8 +73,11 @@ export function createSpectrogramView(host, options = {}) {
   let spg = null;
   let node = null;
   let reader = null;
+  let feed = null;
+  let cursorY = null; // CSS px from the plot top while the pointer is over the plot
   let frozen = false;
   let rect = { x: 0, y: 0, w: 1, h: 1 };
+  let box = { w: 1, h: 1, dpr: 1 }; // the axes canvas size (CSS px), set by layout() only
   let sampleRate = 0;
 
   function effectiveMaxHz() {
@@ -82,12 +106,14 @@ export function createSpectrogramView(host, options = {}) {
     plot.width = Math.round(rect.w * dpr);
     plot.height = Math.round(rect.h * dpr);
     if (spg) spg.resize();
+    box = fitCanvas(axes, w, h);
     drawAxes();
   }
 
   function drawAxes() {
-    const { w, h } = fitCanvas(axes, host.clientWidth, host.clientHeight);
+    const { w, h, dpr } = box;
     const ctx = axes.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
     ctx.font = canvasFont(theme, o.tickFont);
     ctx.fillStyle = theme.textMuted;
@@ -123,12 +149,59 @@ export function createSpectrogramView(host, options = {}) {
       ctx.textAlign = i === 0 ? 'left' : i === n ? 'right' : 'center';
       ctx.fillText(formatSecondsTick(t), i === 0 ? x - 1 : x, rect.y + rect.h + o.timeLabelGap);
     }
+    drawReadout(ctx);
+  }
+
+  function cursorRow() {
+    return Math.floor((cursorY * plot.height) / rect.h);
+  }
+
+  function drawReadout(ctx) {
+    const r = cursorY == null || !spg ? null : spg.readout(cursorRow());
+    if (!r) return;
+    const y = Math.round(rect.y + cursorY) + 0.5;
+    ctx.save();
+    ctx.strokeStyle = theme.text;
+    ctx.globalAlpha = 0.7;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(rect.x, y);
+    ctx.lineTo(rect.x + rect.w, y);
+    ctx.stroke();
+    ctx.restore();
+    const lines = readoutLines(r);
+    const lh = o.tickFont + 4;
+    const tw = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 8;
+    const bh = lines.length * lh + 2;
+    const bx = Math.max(rect.x, rect.x + rect.w - tw - 2);
+    const by = cursorY > bh + 2 ? y - bh - 2 : y + 2;
+    ctx.save();
+    ctx.fillStyle = theme.surface3 || theme.bg || '#000';
+    ctx.globalAlpha = 0.85;
+    ctx.fillRect(bx, by, tw, bh);
+    ctx.restore();
+    ctx.fillStyle = theme.text;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    lines.forEach((l, i) => ctx.fillText(l, bx + 4, by + 2 + i * lh));
+  }
+
+  function onPointer(e) {
+    const b = host.getBoundingClientRect();
+    const py = e.clientY - b.top - rect.y;
+    const px = e.clientX - b.left - rect.x;
+    const inside = e.type !== 'pointerleave' && px >= 0 && px < rect.w && py >= 0 && py < rect.h;
+    const next = inside ? py : null;
+    if (next === cursorY) return;
+    cursorY = next;
+    drawAxes();
   }
 
   function ensureRenderer(an) {
     if (an === node && spg) return;
     node = an || null;
     reader = node ? createAnalyserReader(node) : null;
+    feed = reader ? createSpectrogramFeed(reader, { mode: o.feed }) : null;
     sampleRate = node ? node.context.sampleRate : 0;
     const cfg = {
       sampleRate: sampleRate || 0,
@@ -157,8 +230,13 @@ export function createSpectrogramView(host, options = {}) {
         reader.sync();
         spg.configure({ fftSize: node.fftSize });
       }
-      reader.readFrequency(nowMs);
-      spg.frame(reader.frequency, nowMs);
+      // Frozen: push writes nothing, so the unsmoothed feed skips its JS FFT; the analyser feed
+      // keeps reading (native, cheap) so the node's smoothing is current after an unfreeze.
+      const skip = frozen && feed.mode === 'unsmoothed';
+      if (spg.push(skip ? null : feed.read(nowMs), nowMs) > 0) {
+        spg.draw();
+        if (cursorY != null) drawAxes();
+      }
     }
   }
 
@@ -177,6 +255,8 @@ export function createSpectrogramView(host, options = {}) {
 
   const stopFrames = o.autoFrame ? onFrame(frame) : () => {};
   const stopObserve = observeSize(host, layout);
+  host.addEventListener('pointermove', onPointer);
+  host.addEventListener('pointerleave', onPointer);
   layout();
   ensureRenderer(o.getAnalyser ? o.getAnalyser() : null);
 
@@ -192,6 +272,10 @@ export function createSpectrogramView(host, options = {}) {
     },
     get options() {
       return { ...o, frozen, maxHzEffective: effectiveMaxHz() };
+    },
+    /** Readout under the hover cursor (renderer.readout), or null without a cursor. */
+    get readout() {
+      return cursorY == null || !spg ? null : spg.readout(cursorRow());
     },
     frame,
     setFreeze(on) {
@@ -224,6 +308,8 @@ export function createSpectrogramView(host, options = {}) {
     dispose() {
       stopFrames();
       stopObserve();
+      host.removeEventListener('pointermove', onPointer);
+      host.removeEventListener('pointerleave', onPointer);
       if (spg) spg.dispose();
       spg = null;
       plot.remove();

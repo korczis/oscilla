@@ -50,7 +50,9 @@ import { CONTIGUITY_TOLERANCE_S, clipEnd } from './timeline.js';
 export const IMPORT_IDS = Object.freeze({ node: 'seq-1', master: 'master-1', edge: 'edge-1',
   track: 'track-1' });
 const CLIP_PREFIX = 'clip-';
-const CLIP_ID_MAX = 128; // ID_PATTERN's length
+// ID_PATTERN's length, which the refusal quotes less the prefix (the F9 test in
+// tests/unit/v31-studio-sequence-file pins it); the refusal's character list is written by hand.
+const CLIP_ID_MAX = 128;
 
 /** Clip id of a block (`clip-<blockId>`), or a positional one when that is not a valid id. */
 export function clipIdForBlock(blockId, index) {
@@ -252,18 +254,43 @@ const kHz = (rate) => `${String(Number((rate / 1000).toFixed(3)))} kHz`;
 const BEATS_DIGITS = 6;
 const MS_DIGITS = 3;
 
+const F64 = new Float64Array(1);
+const BITS = new BigInt64Array(F64.buffer);
+const bitsOf = (x) => { F64[0] = x; return BITS[0]; };
+const fromBits = (b) => { BITS[0] = b; return F64[0]; };
+
+/**
+ * The least (dir -1) or greatest (dir +1) double u with round(u, BEATS_DIGITS) === beats, for a
+ * canonical beats above one step (10 ** -BEATS_DIGITS, which derivableMs guards), so both
+ * neighbouring steps are positive. round adds Number.EPSILON before rounding half up, so the
+ * preimage is not beats +/- half a step; it is found exactly by bisecting the doubles between
+ * beats (inside) and the neighbouring step (outside): round is monotone, and positive doubles
+ * order as their bit patterns.
+ */
+function beatsPreimageEnd(beats, dir) {
+  let inside = bitsOf(beats);
+  let outside = bitsOf(Math.max(0, beats + dir * 10 ** -BEATS_DIGITS));
+  while (inside - outside > 1n || outside - inside > 1n) {
+    const mid = (inside + outside) / 2n;
+    if (round(fromBits(mid), BEATS_DIGITS) === beats) inside = mid;
+    else outside = mid;
+  }
+  return fromBits(inside);
+}
+
 /**
  * True when the sequencer can have saved `ms` for a tempo-locked block of `beats` (already its
- * canonical value): some unrounded beats value that rounds to `beats` derives `ms` (clamped to
- * the type's bounds, rounded to 3 decimals) at `tempoBpm`.
+ * canonical value): some unrounded beats value u that rounds to `beats` derives `ms` as
+ * normalizeBlock does (u * ms per beat, clamped to the type's bounds, rounded to 3 decimals) at
+ * `tempoBpm`. That derivation is monotone in u, so the milliseconds the preimage's two ends
+ * derive bound every save, both ends included.
  */
 function derivableMs(ms, beats, tempoBpm, { min, max }) {
   if (!isNum(ms) || round(ms, MS_DIGITS) !== ms) return false;
-  const half = 0.5 * 10 ** -BEATS_DIGITS;
+  if (!(beats > 10 ** -BEATS_DIGITS) || round(beats, BEATS_DIGITS) !== beats) return false;
   const msPerBeat = 60000 / tempoBpm;
-  const lo = round(clamp((beats - half) * msPerBeat, min, max), MS_DIGITS);
-  const hi = round(clamp((beats + half) * msPerBeat, min, max), MS_DIGITS);
-  return ms >= lo && ms <= hi;
+  const derive = (u) => round(clamp(u * msPerBeat, min, max), MS_DIGITS);
+  return ms >= derive(beatsPreimageEnd(beats, -1)) && ms <= derive(beatsPreimageEnd(beats, 1));
 }
 
 /** Block `i` refused before the sequencer reads it: { path, message } or null. */
@@ -271,9 +298,9 @@ function blockShape(raw, i) {
   const path = `blocks[${i}]`;
   const where = `Block ${i + 1}`;
   if (!isPlain(raw)) return { path, message: `${where} is not an object` };
-  // An own key only: BLOCK_SCHEMA.toString is a function, which normalizeBlock would take for a
-  // schema and throw on.
-  if (!Object.hasOwn(BLOCK_SCHEMA, raw.type)) {
+  // A string own key only: BLOCK_SCHEMA.toString is a function, which normalizeBlock would take
+  // for a schema and throw on, and a list such as ["tone"] would coerce to the key "tone".
+  if (typeof raw.type !== 'string' || !Object.hasOwn(BLOCK_SCHEMA, raw.type)) {
     return Object.hasOwn(raw, 'type') ? { path: `${path}.type`,
       message: `${where}: ${shown(raw.type)} is not a V2 block type` }
       : { path: `${path}.type`, message: `${where}: type is missing` };
