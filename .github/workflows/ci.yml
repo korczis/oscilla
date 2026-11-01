@@ -279,7 +279,9 @@ jobs:
           pactl set-default-sink ci_null
       - name: dist from file:// and the /oscilla/ sub-path; layout, touch targets, stop
         run: mkdir -p logs && npm run test:browser 2>&1 | tee logs/browser-${{ matrix.browser }}.log
-        timeout-minutes: 15
+        # The train's browser suites (cross-links, first-screen, surface-census) take the chain
+        # past 15 min on a hosted runner (~20 min measured, run 41333897971); the job bounds 45.
+        timeout-minutes: 30
       - name: Upload the log on failure
         if: failure()
         uses: actions/upload-artifact@v7
