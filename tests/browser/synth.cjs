@@ -64,6 +64,14 @@
 //              a role=menu; arrows and Enter choose Dark low-pass: one undo entry, the cutoff
 //              field reads 400, every edge kept, and the darker filter is heard (the 1-4 kHz
 //              band 4 dB+ further below the fundamental; EG 2 still opens it by its amount)
+//   s-library  K102, the one patch library, inside the dialog osc-dlg-studio-library (desktop
+//              and phone): the Synth's Library button (a tap
+//              on the phone) opens the dialog; the instrument filter keeps the FM engine's two
+//              patches in a role=listbox; arrows reach FM keys and Insert adds it in one undo
+//              entry, the keys play it at once (a note takes a voice of the new node); in the
+//              Studio the node is in the graph and the same library, opened from the
+//              Inspector's Presets menu (on the phone, whose Studio folds the Inspector away,
+//              through the same opener), lists FM keys as in use
 //   s-mobile   390 x 844 with touch: no horizontal page scroll, every knob and jack box 44 px+,
 //              a section chip lands its plate's heading below the sticky chip bar, the docked
 //              keys are visible and a tap on them sounds
@@ -95,7 +103,8 @@ const LAUNCH = {
   webkit: {},
 };
 const SIZES = { desktop: { width: 1536, height: 1024 }, phone: { width: 390, height: 844 } };
-const PHONE_CHECKS = new Set(['s-sound', 's-cable', 's-mobile', 's-look', 's-dock']);
+const PHONE_CHECKS = new Set(['s-sound', 's-cable', 's-mobile', 's-look', 's-dock',
+  's-library']);
 const LOAD_MS = 60000;
 const SOUND_MS = 8000; // a note's attack, a knob change's glide and the analyser's smoothing
 const CHECK_MS = 120000;
@@ -502,7 +511,7 @@ function defineChecks() {
     // The picker: a menu button; the keyboard walks its role=menu items, Enter routes.
     const d0 = await dbg(page);
     const fm = d0.nodes.fm;
-    const pick = page.locator('[data-osc="synth.pick"]');
+    const pick = page.locator('#osc-synth-pick');
     await pick.focus();
     await page.keyboard.press('Enter');
     const menu = page.locator('[data-osc="synth.pick.menu"]');
@@ -605,6 +614,54 @@ function defineChecks() {
     return { ok: after.depth === before.depth + 1 && after.edges === before.edges
       && /^Preset Dark low-pass/.test(after.label) && dark <= open - 4, label: after.label,
     tilt: [open, dark] };
+  });
+
+  def('s-library', async ({ page, size }) => {
+    const press = (loc) => (size === 'phone' ? loc.tap() : loc.click());
+    const depth = () => page.evaluate(() => window.OSCILLA.studio.store.debugInfo().undoDepth);
+    const dlg = page.locator('[data-osc="library"]');
+    const libraryButton = page.locator('[data-osc="synth.library"]');
+    if (size === 'phone') await libraryButton.tap(); else await libraryButton.click();
+    await until(() => dlg.isVisible(), { ms: 10000, what: 'the patch library opens' });
+    await page.locator('[data-osc="library.instrument"]').selectOption('fm-voice');
+    const list = page.locator('[data-osc="library.list"]');
+    const names = await list.locator('[role="option"] span:first-child').allTextContents();
+    await list.focus();
+    await page.keyboard.press('ArrowDown');
+    await until(async () => (await page.locator('[data-osc="library.name"]').textContent())
+      === 'FM keys', { ms: 5000, what: 'the arrow reaches FM keys' });
+    const before = await depth();
+    await press(page.locator('[data-osc="library.insert"]'));
+    await until(async () => (await depth()) === before + 1, { ms: 5000,
+      what: 'Insert is one undo entry' });
+    const added = await page.evaluate(() => window.OSCILLA.studio.model.metadata.noteTarget);
+    await press(page.locator('[data-osc="studio.saved.close"]'));
+    await until(async () => !(await dlg.isVisible()), { ms: 5000, what: 'the library closes' });
+    await hold(page, 'KeyA');
+    await until(async () => { const d = await dbg(page); return d.played === added
+      && d.voices >= 1; }, { ms: SOUND_MS, what: 'a note takes a voice of the inserted engine' });
+    await page.keyboard.up('KeyA');
+    await page.locator('[data-osc="synth.studio"]').click();
+    await until(() => page.evaluate(() => window.OSCILLA.app.workspace === 'studio'),
+      { ms: 10000, what: 'Studio opens' });
+    const inGraph = await page.evaluate((id) => window.OSCILLA.studio.model.graph.nodes
+      .some((n) => n.id === id), added);
+    await page.evaluate((id) => window.OSCILLA.studio.store.dispatch({ type: 'SELECTION_CHANGE',
+      selection: { nodes: [id] } }), added);
+    if (size === 'phone') { // the phone's Studio folds its Inspector away: the same opener
+      await page.evaluate(() => window.OSCILLA.app.patchLibraryOpen());
+    } else {
+      const btn = page.locator('[data-osc="studio.inspector.presets"]');
+      await until(() => btn.isVisible(), { ms: 10000, what: 'the Inspector shows Presets' });
+      await btn.click();
+      await page.locator('[data-osc="studio.inspector.presets.library"]').click();
+    }
+    await until(() => dlg.isVisible(), { ms: 10000, what: 'the library opens from the Studio' });
+    await page.locator('[data-osc="library.instrument"]').selectOption('fm-voice');
+    const row = list.locator('[role="option"]', { hasText: 'FM keys' });
+    await until(async () => /in use/.test(await row.textContent()), { ms: 5000,
+      what: 'the Studio lists FM keys as in use' });
+    return { ok: JSON.stringify(names) === '["FM bell","FM keys"]' && inGraph, names, added };
   });
 
   def('s-escape', async ({ page }) => {
