@@ -20,6 +20,7 @@ import { moveClipResult, nudgeClipResult } from '../../studio/timeline.js';
 import { compactLayout } from './graph-layout.js';
 import { cablePath, pastThreshold } from './graph-geometry.js';
 import { coarsePointer, h, replaceChildren, s, setAttr, setText } from './graph-dom.js';
+import { keepInScrollerView } from '../app.js';
 
 /** Short chip label: "Oscillator 1" → "OSCILLATOR 1"; names above 14 characters are cut. */
 export function chipLabel(name) {
@@ -130,6 +131,16 @@ export function mountCompact(host, svc) {
     summary,
   ]);
   host.setAttribute('aria-labelledby', 'osc-sc-title');
+  // A chip reached with Tab is brought fully into its scrolling box, as the nav strip's tabs are
+  // (keepNavTabInView): a box partly showing a chip is not scrolled by the browser (WCAG 2.4.11;
+  // the Synth voice of #329 makes the path wider than the Playground column).
+  for (const box of [path, clipsBox]) {
+    box.addEventListener('focusin', (e) => {
+      const chip = e.target && e.target.closest ? e.target.closest('.osc-sc-node, .osc-sc-clip')
+        : null;
+      if (chip) keepInScrollerView(chip, box);
+    });
+  }
 
   let view = null;
   let pxPerSecond = 48;
