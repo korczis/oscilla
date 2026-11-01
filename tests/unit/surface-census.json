@@ -1669,6 +1669,25 @@
       "plan": []
     },
     {
+      "id": "labs",
+      "kind": "route",
+      "reachedFrom": [
+        "synthesis",
+        "compare",
+        "filter"
+      ],
+      "purpose": "The Envelope, Filter, Additive and Phase & Stereo lab settings in the address (lab=), restored without starting playback",
+      "state": "src/js/core/url-state-labs.js",
+      "evidence": "none",
+      "deepLink": "#m=synthesis&lab=eyJwaGFzZVN0ZXJlbyI6eyJwaGFzZURlZyI6OTAsInBhbiI6MC41fX0",
+      "tests": [
+        "tests/unit/lab-state-round-trip.test.mjs"
+      ],
+      "plan": [
+        "C018"
+      ]
+    },
+    {
       "id": "measure",
       "kind": "route",
       "reachedFrom": [

@@ -46,6 +46,7 @@ import {
 } from '../../src/js/core/url-state-studio.js';
 import { RECIPE_HASH_KEY } from '../../src/js/core/url-state-measure.js';
 import { RECORD_LINK_KEYS } from '../../src/js/core/url-state-records.js';
+import { LAB_HASH_KEY } from '../../src/js/core/url-state-labs.js';
 import { STUDIO_TEMPLATES } from '../../src/js/studio/templates/index.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -76,6 +77,7 @@ export const VIEW_SWITCHES = Object.freeze(['exps.panel']);
 /** The keys each hash domain reads (navigation.js header). */
 const DOMAIN_KEYS = Object.freeze({
   instrument: INSTRUMENT_HASH_KEYS,
+  labs: [LAB_HASH_KEY],
   measure: [RECIPE_HASH_KEY],
   studio: [STUDIO_LINK_KEYS.template, STUDIO_LINK_KEYS.subview],
   records: Object.values(RECORD_LINK_KEYS),
