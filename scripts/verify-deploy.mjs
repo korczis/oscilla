@@ -30,12 +30,15 @@
 // the expected commit is $GITHUB_SHA, then the checkout's HEAD. The bytes, version and digest
 // checks compare with this checkout, so run it in a checkout of the expected commit. The
 // release check reads the history and the tags (it fails on a shallow clone).
+// Each request is bounded (FETCH_TIMEOUT_MS of scripts/release-bounded.mjs, body included) and
+// a failed one fails its attempt; --attempts is the retry.
 // Each request carries a unique query string (?oscilla-verify=<commit>.<attempt>) so a stale
 // CDN edge cannot satisfy or fail the check; --no-cache-bust fetches the exact URL instead.
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseFlags } from './release-analyze.mjs';
+import { boundedFetch } from './release-bounded.mjs';
 import {
   PUBLIC_URL, ROOT, commitDate, computeSourceDigest, findRegion, gitRunner, isFullSha,
   normalizeStamped, readVersion, releaseLabel, releaseState, sha256, validateRecord,
@@ -173,13 +176,10 @@ function parseArgs(argv) {
   return o;
 }
 
-async function get(url) {
-  const res = await fetch(url, { cache: 'no-store', redirect: 'follow' });
-  return {
-    status: res.status, contentType: res.headers.get('content-type'),
-    body: Buffer.from(await res.arrayBuffer()),
-  };
-}
+// One request, bounded (FETCH_TIMEOUT_MS, body included). It is tried once: --attempts is the
+// retry of this script, and a failed request fails its attempt, naming the URL and why.
+const get = (url) => boundedFetch(url, { attempts: 1,
+  init: { cache: 'no-store', redirect: 'follow' } });
 
 const sleep = (s) => new Promise((r) => { setTimeout(r, s * 1000); });
 

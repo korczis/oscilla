@@ -781,6 +781,15 @@ run it alone.
      and whether that commit precedes `HEAD`, and so does a run list it cannot read; a run
      GitHub still calls `queued` while its deploy job has run is slow, not stuck, and is
      waited for. It never watches a run of which no job has started. It prints the `majordomus finish` line that verifies the published commit.
+     Run it from a checkout on branch `main` at `origin/main`, normally the primary checkout
+     (`git switch main && git merge --ff-only origin/main`): a linked worktree on a detached
+     `HEAD` is refused with that instruction. A publish interrupted after its tag was pushed is
+     finished by re-running it there; it resumes after the tag (R021). Every `gh` call and
+     every `git ls-remote`/`push` it makes is bounded (60 s a call, `--pages-timeout` for
+     `gh run watch`) and retried at most twice on a transient failure (a timeout,
+     `ECONNRESET`, `can't assign requested address`, an HTTP 5xx); a call out of attempts is
+     named in the refusal with its reason (`scripts/release-bounded.mjs`, shared with
+     `release:record`, `release:verify-deploy` and `release-cadence.mjs`).
   4. `npm run release:record -- --version X.Y.Z` writes the release record
      `.ai/repo/releases/vX.Y.Z.yaml` (Majordomus `release/v1`): the tag and its commit, the
      channel, when the GitHub Release was published, its notes, and the attached file's

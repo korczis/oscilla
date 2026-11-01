@@ -36,11 +36,11 @@
 // project.release-flow-complete; the same check the unit test runs, for a workflow on main).
 //
 // Version and provenance logic comes from release-metadata.mjs; nothing is recomputed here.
-import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { boundedRunner, failure } from './release-bounded.mjs';
 import {
   REPO_URL, ROOT, compareSemver, gitRunner, isFullSha, parseSemver, readBanner, sha256,
 } from './release-metadata.mjs';
@@ -456,26 +456,17 @@ export function recordDifferences(a, b) {
 }
 
 // ------------------------------------------------------------------------------- gather
-export function defaultIo(root = ROOT) {
-  const run = (cmd, args, { binary = false } = {}) => {
-    const r = spawnSync(cmd, args, {
-      cwd: root, encoding: binary ? 'buffer' : 'utf8', maxBuffer: 1 << 28,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    const missing = Boolean(r.error && r.error.code === 'ENOENT');
-    return {
-      status: r.error ? 127 : r.status, missing,
-      stdout: binary ? r.stdout : String(r.stdout || '').trim(),
-      stderr: String(r.stderr || (r.error ? r.error.message : '')).trim(),
-    };
-  };
+// Every gh call is bounded and retried on a transient failure (scripts/release-bounded.mjs);
+// `o` reaches boundedRunner.
+export function defaultIo(root = ROOT, o = {}) {
+  const run = boundedRunner({ cwd: root, ...o });
   const download = (tag, name) => {
     const dir = mkdtempSync(path.join(os.tmpdir(), 'oscilla-record-'));
     try {
       const file = path.join(dir, name);
-      const r = run('gh', ['release', 'download', tag, '-R', REPO, '--pattern', name,
-        '--output', file]);
-      if (r.status !== 0) throw new Error(`gh release download ${tag} ${name}: ${r.stderr}`);
+      const args = ['release', 'download', tag, '-R', REPO, '--pattern', name, '--output', file];
+      const r = run('gh', args);
+      if (r.status !== 0) throw new Error(failure('gh', args, r));
       return readFileSync(file);
     } finally {
       rmSync(dir, { recursive: true, force: true });
