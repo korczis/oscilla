@@ -29,4 +29,16 @@ validation:
 evidence_required:
 - verified
 created_at: '2026-10-29'
-updated_at: '2026-11-01'
+updated_at: 2026-11-01T03:55:17Z
+started_at: 2026-11-01T03:55:01Z
+started_event: sha256:72b98a61ab1c0563cb38c28f3aebf563e2db54949bb66bf368c7b9fc7bff813d
+completed_at: 2026-11-01T03:55:17Z
+completed_event: sha256:eaf3aa2177ca69d509c58d06c8ab7eb9f42c9bda7cc79da88252b7dd23197883
+evidence:
+  - covers: verified
+    type: artifact
+    command: "majordomus knowledge search webgl; majordomus adr check"
+    result: "ADR 0016 carries the 2026-10-30 note 'where WebGL pays' and the curated record webgl-in-the-gate-browsers holds what each CI leg draws, from spike d39c6cad (never merged); landed in #353 via train #354 (f887066f); the gl-live-views critique and its resolutions landed in #365"
+    artifact: ".ai/repo/knowledge/curated/webgl-in-the-gate-browsers.md"
+    commit: 601037765762decdf19392fce84055bc7fa35434
+    recorded_at: 2026-11-01T03:53:49Z

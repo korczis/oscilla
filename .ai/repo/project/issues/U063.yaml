@@ -31,4 +31,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-01T00:09:23Z
+started_at: 2026-11-01T00:08:57Z
+started_event: sha256:fe39dd583eb5f093df67067d483460cb4d5e9cb26f41c5ceac893fc0798b6710
+completed_at: 2026-11-01T00:09:23Z
+completed_event: sha256:f2651d3d42c5e3beeeaa8759f0bd2ef0a24a920328cadd167afe3261ae9d0963
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/surface-census.test.mjs; node tests/browser/surface-census.cjs (CI run 41254129460)"
+    result: "unit 8/8 pass at main ba263bc1; landed in #317 (ba263bc1); the browser census and npm test green in #317's CI run 41254129460 on head e7ec6b8b; census debt ratchet 47"
+    artifact: "tests/unit/surface-census.json"
+    commit: ba263bc197798650284d659b18e387cc60274952
+    recorded_at: 2026-11-01T00:09:13Z
