@@ -1,31 +1,40 @@
 # Review verdict for pull request #331, C021: user-journey and control-census suites; a blocked
 # MEASURE step, a lab field and the Add block menu say what applies
 # (branch test/c021-journeys-control-census).
-# Re-reviewed head 3ba4c78e against merge base origin/main d9db6bdf, as the delta from this
-# reviewer's changes-requested verdict at bea4cea8: fix commits 96cbc9b3 and 6f5dee56 and two
-# merges of origin/main. Another session built it (oscilla-b0); this reviewer built none of it.
+# Delta re-review of head a34caa87, the merge of origin/main ba263bc1 into 3ba4c78e, which
+# oscilla-af judged merge at content da992e41. Main's #262 split src/js/ui/measure.js into
+# src/js/ui/measure/{run,session,...}.js, so #331's measure hunks moved there. Another session
+# built #331 (oscilla-b0), and oscilla-b0 also did the merge. This reviewer built none of it and
+# did not write the earlier verdict.
 #
-# The digest is the base branch's scripts/review-verdict.mjs (from git archive origin/main scripts),
-# run --content over the 3 guarded paths it names: .github/workflows/ci.yml,
-# src/js/measurement/views/measure-flow.js and src/js/ui/measure.js.
+# The digest: the base branch's scripts/review-verdict.mjs, from git archive origin/main scripts,
+# run with --repo on this worktree, --content --list --base-branch origin/main:
+# 70470665...8db0 over .github/workflows/ci.yml, .github/workflows/main-checks.yml,
+# src/js/measurement/views/measure-flow.js, src/js/ui/measure/run.js and
+# src/js/ui/measure/session.js.
 #
-# How it was re-reviewed: three lenses in a detached worktree at the head (the census rows, with
-# mutant builds; the unit fixes, with fail-first against bea4cea8's src; the PR-own delta, npm test
-# and the digest), and a skeptic per P0-P2 finding (none was raised).
-# - Census rows device.safetyLimit.pointer, studio.frameAll.pointer, studio.graph.frameAll.pointer
-#   and studio.graph.frameSelection.pointer (control-census.cjs --only): webkit 4/4 PASS in each of
-#   4 runs, chromium 4/4, firefox 4/4. Mutants caught: an inert setSafetyLimit, a no-op Frame All,
-#   a no-op Frame Selection. No new fixed sleep or frame count; both waits are until() with ROW_MS.
-# - labs-field-commit and measure-flow-blocked-reason: the new cases pass at the head and fail on
-#   bea4cea8's src. Related suites 88/88. npm test: 3318 pass, 0 fail, 1 skipped.
-# - node scripts/build.mjs --check: dist up to date. node scripts/ci-workflow-rules.mjs: exit 0.
+# How the delta was reviewed: the PR's own diff on the guarded paths against its new merge base,
+# compared line by line with its own diff at 3ba4c78e against d9db6bdf.
+# - ci.yml: identical. The census job, the gate's needs, and the browser job's 50 and 20 minute
+#   limits are the same values 3ba4c78e had; main did not change them since. main-checks.yml is
+#   unchanged by the PR. ci-workflow-rules.mjs exits 0.
+# - measure-flow.js: identical. The stale-report filter by recipeKey, a blocked Stimulus step
+#   stating its reason, ready false while stale, and INVALID's "Check setup again".
+# - measure.js -> run.js and session.js: the only differences are the split's API.
+#   recipeNow() and calibrationInput() become ops.recipeNow() and ops.calibrationInput(), as every
+#   other call in run.js reads them. ctx.checking is declared in createMeasureContext
+#   (session.js). run.js sets it before the setup check, and for a measurement run to the setup's
+#   recipe, or null for a Studio-given recipe. The preflight event handler (session.js) records it
+#   as the report's recipe. That is R6's fix as af judged it, with no new behaviour.
+# - Unit: the measure, journey, census and ci-* test files, 113 pass, 0 fail. b0 reports npm test
+#   3413/0 and build:check current at this head. The browser suites run in this head's CI.
 #
-# Verdict: merge. R1-R6 are closed; R7 and N1-N6 are P3 and open for a later slice.
+# Verdict: merge. The delta adds no finding. af's findings carry over unchanged.
 schema: review-verdict/v1
 pr: 331
 verdict: merge
-reviewer: oscilla-af (claude-code 901211e2)
-content: da992e41de56c96b38d4344f3aeb7e77602f0492d2108500204234bb8399fea3
+reviewer: oscilla-21 reviewer (claude-code af63bcf2)
+content: 7047066567bff16f07e21b5bf0f5d6f52d47cb3d1d6d4ac6de305d98e1d18db0
 findings:
   - { id: R1, severity: P1, status: closed, title: "device.safetyLimit.pointer now holds PLAY (mouse.down after scrolling it into view) and judges one limited voice that ends while held (control-census.cjs:324-341); passes in webkit 4/4" }
   - { id: R2, severity: P1, status: closed, title: "the Frame All / Frame Selection setup ends with until() on the live zoom and model.view.graph.zoom both past z0 (control-census.cjs:885-902); no-op mutants fail the rows" }
