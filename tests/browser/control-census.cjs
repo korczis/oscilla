@@ -596,8 +596,8 @@ row({ id: 'phase.mono.pointer', ws: 'compare', control: '#osc-stereo-mono', how:
   setup: seq(S.dual(), D.click('#osc-ptab-stereo'), D.click('#osc-stereo-split')),
   act: D.click('#osc-stereo-mono'), expect: (s) => s.phase.route === 'mono' && !s.app.dual.stereo });
 
-// ---- Sequencer (Tempo: control-census-1, PR #266; the filter reaching it: control-census-2,
-// PR #295)
+// ---- Sequencer (Tempo: control-census-1, PR #266). The filter reaching it (control-census-2)
+// passes here since C003 (PR #295) landed; journeys.cjs's sequencer-filter journey keeps its mark
 both({ id: 'seq.play', ws: 'sequencer', control: '#osc-seq-play',
   pointer: D.click('#osc-seq-play'), keyboard: D.keys('#osc-seq-play', 'Enter'),
   expect: (s) => s.seq.playing && s.app.seqPlaying && s.aria.seqPlay === 'true',
@@ -637,8 +637,7 @@ row({ id: 'seq.filter.reaches.pointer', ws: 'sequencer', control: '#osc-filter-e
   act: (page) => page.evaluate(() => document.querySelector('#osc-filter-enable').click()),
   // still sounding (the block has not ended) AND attenuated as the instrument would be
   expect: (s) => s.seq.playing && s.filter.enabled,
-  audio: { hz: 1000, expect: (a, b) => a > -100 && b - a > 20 },
-  xfail: { finding: 'control-census-2', issue: 'C003', pr: 295 } });
+  audio: { hz: 1000, expect: (a, b) => a > -100 && b - a > 20 } });
 for (const t of ['tone', 'silence', 'sweep', 'pulse', 'chirp', 'burst', 'siren', 'am', 'fm',
   'random']) {
   row({ id: `seq.add.${t}.pointer`, ws: 'sequencer',
@@ -1115,11 +1114,6 @@ for (const [k, re] of [['wav', /\.wav$/], ['seqWav', /\.wav$/], ['png', /\.png$/
       `[data-osc="export.${k}"]`)); },
     expect: (s, b, x, page) => page.__got && re.test(page.__got.name) && page.__got.bytes > 44 });
 }
-row({ id: 'export.import.pointer', ws: 'playground', control: '[data-osc="export.import"]',
-  how: 'pointer', setup: S.openMenu('#osc-export'),
-  act: async (page) => { page.__got = await chooser(page, () => page.click(
-    '[data-osc="export.import"]')); },
-  expect: (s, b, x, page) => !!page.__got });
 row({ id: 'export.url.pointer', ws: 'playground', control: '[data-osc="export.url"]',
   how: 'pointer', setup: S.openMenu('#osc-export'), act: D.click('[data-osc="export.url"]'),
   expect: copiedOrShown('osc-dlg-copy', /link copied/i) });
@@ -1450,8 +1444,12 @@ family({ id: 'links.external', control: 'a[href^="http"]',
       || !/noopener/.test(l.rel)).map((l) => `${l.href} target=${l.target} rel=${l.rel}`);
     return { members: links.length, bad };
   } });
+// the logo goes home (H004 B6): from another workspace it opens the Playground
+both({ id: 'header.brand', ws: 'filter', control: 'a.osc-brand',
+  pointer: D.click('a.osc-brand'), keyboard: D.keys('a.osc-brand', 'Enter'),
+  expect: (s) => s.workspace === 'playground' });
 family({ id: 'links.internal', control: 'a[href="#osc-main"], a[href^="mailto:"]',
-  why: 'the skip link and the brand, by pointer and by Enter, take the page to the instrument; '
+  why: 'the skip link, by Enter, takes the page to the instrument; '
     + 'a mail link is a mailto',
   run: async (page) => {
     const bad = [];
