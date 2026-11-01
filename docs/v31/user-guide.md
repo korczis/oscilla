@@ -84,6 +84,23 @@ rest.
   trigger input, or a loop that would feed audio back into itself without a delay. Nothing is
   changed silently.
 
+Cables keep one look per signal type, the same in the Studio graph and in the Playground's
+compact Studio (one edge style table, `src/styles/studio.css`):
+
+| Signal type | Cable |
+| --- | --- |
+| Audio | blue, solid |
+| Control | purple, dashed (6 on, 4 off) |
+| Trigger | orange, pulse: short dashes (2 on, 3 off) |
+| Analysis | green, dash-dot (9 on, 3 off, 2 on, 3 off) |
+| Muted (any type) | faint, dotted (1 on, 4 off) |
+
+In the Studio graph a cable that carries nothing has a sparse dash and a cross at its middle.
+In the compact Studio every cable ends at its port: inputs on a chip's left edge, outputs on
+its right, in the node's port order, so a modulation cable reaches the parameter it moves
+(the LFO's cable into the Filter's cutoff) below the audio cable into the same Filter.
+Selecting a chip there tells a screen reader which cables come in and their types.
+
 ## Edit parameters
 
 Select a node: the **Inspector** shows its parameters with their units and ranges. Type a value

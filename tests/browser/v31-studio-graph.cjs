@@ -83,6 +83,9 @@
 //   compact-sync         the Playground compact widget is the same store: a clip moved there
 //                        (keyboard) is the clip the full Studio shows; a Filter added in the
 //                        full Studio appears in the compact signal path; EXPAND opens Studio
+//   compact-cables       G004 at 1536x1024 and 390x844: the compact cables end at their ports
+//                        (the Filter's CONTROL and AUDIO ends differ) and wear the full graph's
+//                        edge style (one style table)
 //   templates            the gallery opens each template; Measurement Sweep shows the
 //                        Microphone as unavailable/degraded with a reason (§171)
 //   patches-files        save project locally, Open dialog lists it; export .oscilla-studio.json
@@ -1681,6 +1684,64 @@ function defineChecks() {
       sharedSelection: sel.nodes.length === 1 && sel.nodes[0] === 'lfo-1',
       oneStore: same,
     }), compact, clip, inspStart, chips2 };
+  });
+
+  def('compact-cables', async ({ page }) => {
+    // G004: the compact Studio's cables end at their ports and wear the full graph's edge
+    // style. In Subtractive Synth the Envelope's AUDIO cable (edge-2) and the LFO's CONTROL
+    // cable into the cutoff (edge-4) both enter the Filter chip, at different points.
+    const read = () => page.evaluate(() => {
+      const host = document.querySelector('[data-osc="studio.compact"]');
+      const end = (id) => {
+        const p = host && host.querySelector(`path.osc-sc-link[data-edge-id="${id}"]`);
+        const n = p ? (p.getAttribute('d') || '').match(/-?\d+(?:\.\d+)?/g) : null;
+        if (!n || n.length < 2) return null;
+        const cs = getComputedStyle(p);
+        return { x: Number(n[n.length - 2]), y: Number(n[n.length - 1]),
+          cls: p.getAttribute('class'), dash: cs.strokeDasharray, width: cs.strokeWidth };
+      };
+      const chip = host && host.querySelector('[data-node-id="filter-1"]');
+      return { audio: end('edge-2'), control: end('edge-4'), filter: chip ? { x: chip.offsetLeft,
+        y: chip.offsetTop, h: chip.offsetHeight } : null };
+    });
+    const sizes = {};
+    try {
+      for (const [w, hh] of [[1536, 1024], [390, 844]]) {
+        await page.setViewportSize({ width: w, height: hh });
+        await H.fresh(page);
+        const full = await page.evaluate(() => {
+          const st = (id) => {
+            const l = document.querySelector(
+              `.osc-sg-edge[data-edge-id="${id}"] .osc-sg-edge-line`);
+            return l ? getComputedStyle(l).strokeDasharray : null;
+          };
+          return { audio: st('edge-2'), control: st('edge-4') };
+        });
+        await page.evaluate(() => window.OSCILLA.app.setWorkspace('playground'));
+        const ends = await until(async () => {
+          const v = await read();
+          return v.audio && v.control && v.filter
+            && (v.audio.x !== v.control.x || v.audio.y !== v.control.y)
+            ? v : null;
+        }, { ms: 2000, what: 'compact cables drawn' });
+        sizes[`${w}x${hh}`] = { ends, full };
+      }
+    } finally {
+      await page.setViewportSize({ width: 1536, height: 1024 });
+      await page.evaluate(() => window.OSCILLA.app.setWorkspace('studio'));
+    }
+    const ok = (k) => {
+      const { ends: { audio, control, filter: f }, full } = sizes[k];
+      const inside = (y) => y > f.y && y < f.y + f.h;
+      return { [`${k} ends differ`]: audio.y !== control.y,
+        [`${k} on the Filter's left edge`]: audio.x === f.x && control.x === f.x,
+        [`${k} inside the Filter chip, cutoff below audio`]: inside(audio.y) && inside(control.y)
+          && control.y > audio.y,
+        [`${k} typed`]: /\bis-audio\b/.test(audio.cls) && /\bis-control\b/.test(control.cls),
+        [`${k} one style`]: control.dash === full.control && audio.dash === full.audio
+          && control.dash !== audio.dash && audio.width === '1.5px' };
+    };
+    return { ...H.verdict({ ...ok('1536x1024'), ...ok('390x844') }), sizes };
   });
 
   def('templates', async ({ page }) => {
