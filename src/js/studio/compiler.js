@@ -626,7 +626,8 @@ export function limitValueText(v, unit) {
 /**
  * The bound a `frequency-limited` value is held at or below (T023 review R1): "22.80 kHz, 0.95
  * × Nyquist at 48 kHz", or "100 Hz, the top of its range" when the parameter's own maximum is
- * the lower of the two (an LFO's Rate). details = { cap, bound, sampleRate }.
+ * the lower of the two (a Random's or a Step Modulator's Rate). details = { cap, bound,
+ * sampleRate }.
  */
 export function limitBoundText({ cap, bound, sampleRate }) {
   return bound === 'nyquist' ? `${formatFrequency(cap)}, ${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist `

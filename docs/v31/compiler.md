@@ -114,8 +114,9 @@ The runtime then instantiates the plan in order and routes it:
   (25.00 kHz with cables), plays 22.80 kHz") with a note naming the cap that applied, and the
   Runtime section no longer says the revision "plays as edited" but how many values it lowered
   and why. Every frequency (Hz) parameter is held at or below the lower of its own range
-  maximum and 0.95 × Nyquist (`caps`, with `bound` `range` or `nyquist`): an LFO's Rate stops
-  at 100 Hz, the top of its range, and the diagnostic says so, not 0.95 × Nyquist.
+  maximum and 0.95 × Nyquist (`caps`, with `bound` `range` or `nyquist`): a Random's or a Step
+  Modulator's Rate stops at 100 Hz, the top of its range, and the diagnostic says so, not
+  0.95 × Nyquist (an LFO's Rate reaches audio rate since K010, so its cap is 0.95 × Nyquist).
   That lowering is not an edge offset:
   `runtime.baseOffset` leaves it out, so a detune lane, which overrides the static value, plays
   its own values within its own bound (review V272 R-1). Other parameters are not clamped at
