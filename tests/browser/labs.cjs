@@ -585,12 +585,22 @@ async function runEngine(engine, base) {
 
   await openWorkspace(page, 'synthesis');
   // (7) Envelope: dragging the A handle changes attack and its field/slider.
-  const env0 = await page.evaluate(() => {
+  // The graph was hidden until Synthesis opened (#278); it re-measures on its ResizeObserver
+  // (observeSize), which runs after the workspace shows. The layout is read once the last draw
+  // matches its host as laid out (the drawn width is the host's width), so the handle
+  // and pxPerS are the ones a pointer meets (CI of #367 read the hidden-size layout).
+  const readEnv = () => page.evaluate(() => {
     const l = window.__labs.labs.envelope.graph.getLayout();
-    const c = document.querySelector('#osc-chart-envelope canvas').getBoundingClientRect();
+    const host = document.querySelector('#osc-chart-envelope');
+    const el = host.querySelector('canvas');
+    const c = el.getBoundingClientRect();
+    const drawnW = parseFloat(el.style.width) || 0; // fitCanvas: the width of the last draw
     return { a: window.__labs.labs.envelope.adsr.a, hx: c.left + l.handles.attack.x,
-      hy: c.top + l.handles.attack.y, pxPerS: l.pxPerS };
+      hy: c.top + l.handles.attack.y, pxPerS: l.pxPerS,
+      current: host.clientWidth > 10 && Math.abs(drawnW - Math.round(host.clientWidth)) < 1.5 };
   });
+  const env0 = await settled(readEnv, (r) => r.current,
+    { ms: 5000, what: 'envelope graph laid out at its shown size' });
   await page.mouse.move(env0.hx, env0.hy);
   await page.mouse.down();
   await page.mouse.move(env0.hx + 20, env0.hy, { steps: 4 });
