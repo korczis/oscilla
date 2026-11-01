@@ -588,7 +588,10 @@ release and deployment are evidenced is the [final report](docs/v31/studio-repor
   exists; where it does not (Safari on iPhone), the button says so.
 
 Studio output, the Playground voice and the Sequencer are exclusive: starting one stops the
-others in the same action, and a measurement stops the Studio.
+others in the same action, and a measurement stops the Studio. While the Studio plays, its Master
+Output level is the engine's output level and a click or key press elsewhere leaves it alone; the
+status bar says PLAYING and shows `Master <dB>`, or `Gain <dB>` once the Playground gain is set
+again. The status bar's Play button stays the Playground's.
 
 Not yet built:
 - node groups

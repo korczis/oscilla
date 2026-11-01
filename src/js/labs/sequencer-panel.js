@@ -142,6 +142,36 @@ function buildField(d, value, safeMax) {
   return wrap;
 }
 
+/** The sequencer editor's engine adapter (sequencer/editor.js) over the labs adapter. */
+export function sequencerEngine(adapter) {
+  const getCtx = () => (adapter.getContext ? adapter.getContext() : null);
+  return {
+    getContext: getCtx,
+    getDestination: () => {
+      const d = adapter.getDestination ? adapter.getDestination() : null;
+      const ctx = getCtx();
+      return d || (ctx ? ctx.destination : null);
+    },
+    resume: () => {
+      const ctx = getCtx();
+      if (ctx && ctx.state === 'suspended') return ctx.resume();
+      return null;
+    },
+    // C003: the engine's counted stage chain (the Filter Lab) the passes play through.
+    openStage: adapter.openSequencerStage ? () => adapter.openSequencerStage() : undefined,
+    // K001: the engine counts every node of V2 playback (adapter.sequencerAccounting).
+    accounting: adapter.sequencerAccounting || null,
+    // One output owner at a time (C002): the app decides before anything is scheduled.
+    claimOutput: () => (adapter.claimSequencerOutput ? adapter.claimSequencerOutput() : true),
+    // C011: read-only; without it the loop keeps to the cap (LOOP_CAP_S).
+    continuousAllowed: () => !!(adapter.continuousAllowed && adapter.continuousAllowed()),
+    // A started sequence takes the output at the Playground gain, also over a playing Studio
+    // (C012 F1); the editor calls it only once a pass is scheduled, so a refused PLAY claims
+    // nothing.
+    onStart: () => { if (adapter.claimOutput) adapter.claimOutput(); },
+  };
+}
+
 /** mount(rootEl, adapter) → lab { editor, render(), update(state), dispose() } */
 export function mount(rootEl, adapter) {
   const q = (sel) => rootEl.querySelector(sel);
@@ -159,27 +189,7 @@ export function mount(rootEl, adapter) {
   const getCtx = () => (adapter.getContext ? adapter.getContext() : null);
   const editor = createSequencerEditor({
     sampleRate: adapter.getSampleRate ? adapter.getSampleRate() || undefined : undefined,
-    engine: {
-      getContext: getCtx,
-      getDestination: () => {
-        const d = adapter.getDestination ? adapter.getDestination() : null;
-        const ctx = getCtx();
-        return d || (ctx ? ctx.destination : null);
-      },
-      resume: () => {
-        const ctx = getCtx();
-        if (ctx && ctx.state === 'suspended') return ctx.resume();
-        return null;
-      },
-      // C003: the engine's counted stage chain (the Filter Lab) the passes play through.
-      openStage: adapter.openSequencerStage ? () => adapter.openSequencerStage() : undefined,
-      // K001: the engine counts every node of V2 playback (adapter.sequencerAccounting).
-      accounting: adapter.sequencerAccounting || null,
-      // One output owner at a time (C002): the app decides before anything is scheduled.
-      claimOutput: () => (adapter.claimOutput ? adapter.claimOutput() : true),
-      // C011: read-only; without it the loop keeps to the cap (LOOP_CAP_S).
-      continuousAllowed: () => !!(adapter.continuousAllowed && adapter.continuousAllowed()),
-    },
+    engine: sequencerEngine(adapter),
   });
   /** The Loop control's title: the cap while it applies, and why a loop ended at it. */
   function loopTitle() {

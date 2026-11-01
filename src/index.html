@@ -2954,7 +2954,7 @@
       data-osc="status.announce" x-text="announceText"></p>
     <div class="osc-sb-state">
       <span class="osc-status" id="osc-status" data-osc="status.state"
-        :class="{ 'is-playing': isSounding && !ceilingActing,
+        :class="{ 'is-playing': anySounding && !ceilingActing,
           'is-error': status === 'ERROR' || ceilingActing }">
         <span class="osc-status-dot" aria-hidden="true"></span>
         <span class="osc-status-label" data-osc="status.label" x-text="statusLabel"
