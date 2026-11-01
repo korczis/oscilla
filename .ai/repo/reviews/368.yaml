@@ -1,0 +1,39 @@
+# Review verdict for pull request #368, V610: one ranking of every Studio search (rankSearch in
+# registry.js), fuzzy letters-in-order matching, and honest short aliases (Filter lp/hp/bp,
+# Envelope "vca envelope" so a bare "vca" ranks Gain first) (branch feat/v610-studio-fuzzy-search).
+# Reviewed head 64e36573, merge base b9dc5e67; main is at ba263bc1, which did not touch the
+# guarded paths. Another session built it (oscilla-af); this reviewer built none of it.
+#
+# The digest: the base branch's scripts/review-verdict.mjs, run from `git archive origin/main
+# scripts` with --repo on this worktree, `--content --list --base-branch origin/main`:
+# ce3c02a0...7041 over src/js/studio/nodes/modulation.js, src/js/studio/nodes/processing.js and
+# src/js/studio/registry.js.
+#
+# How it was reviewed: read the diff of the three guarded files and of the three ui/studio
+# callers (graph-search.js, graph-picker.js, library-panel.js); tokenScore has no remaining
+# reference anywhere in src, tests or scripts. An independent probe ran 25 queries through
+# searchNodeTypes on the merge base's src and on the head (osc, lp, hp, bp, vca, env, eq, gain,
+# delay, flt, filtr, out, processing, sine, noise, mic, meter, scope, lfo, adsr, an accented
+# term, the empty query, two multi-word names, and a miss). The empty query keeps library order,
+# misses stay empty, and exact names and existing aliases rank as before. The changes are exactly
+# the intended ones: lp and bp now find Filter, flt and filtr find Filter by letters in order,
+# and vca ranks Gain before Envelope. Unit: tests/unit/studio*.test.mjs and v31*.test.mjs
+# 525 pass, 0 fail. CI on the head is green, including fail-first (studio-graph-search.test.mjs
+# fails on the merge base: no rankSearch export) and app.cjs controls-reachable-labelled in
+# every gate browser.
+#
+# What holds: one ranking function serves the library, the quick add and the find dialog; every
+# term must match (AND), so the result set never grows beyond a term's matches; ties keep category
+# order, which is the library order the old list index gave; the node type and category label
+# moved into the alias list keep their old reach; the aliases name the node honestly.
+#
+# Verdict: merge. No P0, P1 or P2. Two P3s, both about the letters-in-order tier's reach on short
+# queries; it ranks below every name and alias match, so neither displaces a right answer.
+schema: review-verdict/v1
+pr: 368
+verdict: merge
+reviewer: oscilla-21 reviewer (claude-code af63bcf2)
+content: ce3c02a00d277887ee08fabfafc01e727334ac8004d218817a20dc3ff83d7041
+findings:
+  - { id: V1, severity: P3, status: open, title: "registry.js inOrder: two- and three-letter queries pick up subsequence noise at the lowest tier: 'lp' also lists Envelope (e-n-v-e-l-o-p-e) and 'out' lists Step Modulator (mod-u-la-t-or); consider requiring the first letter to start a word, or a minimum query length of 4 for the letters-in-order tier" }
+  - { id: V2, severity: P3, status: open, title: "registry.js norm no longer keeps '/', '(' and ')' (the old fold kept them), so a query like 'recorder/export' is two terms; it still finds Recorder/Export, so this is a note for the rule's comment, not a defect" }
