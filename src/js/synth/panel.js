@@ -51,6 +51,8 @@ export const SOURCE_RANGES = Object.freeze({
   keys: { pitch: { range: KEYS_PITCH_RANGE, unit: 'oct' }, velocity: { range: [0, 1] } },
   envelope: { control: { range: [0, 1] } },
   macro: { control: { range: [0, 1] } },
+  'xy-pad': { x: { range: [0, 1] }, y: { range: [0, 1] }, pitch: { range: KEYS_PITCH_RANGE,
+    unit: 'oct' } },
 });
 const DEFAULT_SOURCE = Object.freeze({ range: Object.freeze([-1, 1]), unit: null });
 

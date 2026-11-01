@@ -89,7 +89,7 @@ export const NODE_ADAPTERS = Object.freeze({
   calibration: dataNode('calibration/interpolate.js#applyFrequencyCorrection'),
   'transfer-analyzer': dataNode('measurement/transfer.js#computeTransfer'),
   'measurement-result': dataNode('experiments/schema.js#withResults'),
-  keys: instrument.keys, vco: instrument.vco, ring: instrument.ring,
+  keys: instrument.keys, vco: instrument.vco, ring: instrument.ring, 'xy-pad': instrument.xyPad,
   'additive-voice': engines.additiveVoice, 'fm-voice': engines.fmVoice,
   'am-voice': engines.amVoice, 'wavetable-voice': engines.wavetableVoice,
   'perc-voice': engines.percVoice,
