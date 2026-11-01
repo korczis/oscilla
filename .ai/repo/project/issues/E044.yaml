@@ -26,4 +26,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-30
-updated_at: 2026-10-30
+updated_at: 2026-10-31T23:01:33Z
+started_at: 2026-10-31T23:01:10Z
+started_event: sha256:4079875bec2a591d3677b95d85b449669669628dee23fcfe26f81ae42554ca98
+completed_at: 2026-10-31T23:01:33Z
+completed_event: sha256:bc0e4c093ac8306e333f0f2beaeec81134043c5a4de2e68e7855b0d133d3a6a8
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/main-checks.test.mjs tests/unit/ci-workflows.test.mjs tests/unit/ci-gates-model.test.mjs"
+    result: "47/47 pass at main d8268b02; landed in #337 (3980cc61), gate green on head f3e5ce3a (CI run 41053951866); review verdict .ai/repo/reviews/337.yaml (merge)"
+    artifact: ".github/workflows/main-checks.yml"
+    commit: d8268b026ecde328eb0356212649be81541f17ce
+    recorded_at: 2026-10-31T23:01:26Z
