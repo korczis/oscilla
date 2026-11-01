@@ -8,6 +8,7 @@ priority: p2
 profile: implementation
 objective: "Lands as feat(studio). Each node type offers factory presets and the person's single-node patches in a Pro dropdown; applying one sets parameters only (one undo entry) and keeps every edge. Preset names name sounds, never products (D1). It waits on F001, F002 and F008 of plan pull request #251 (intent ui-flowbite-pro), which are not on main yet; depends_on names them in the plan change after #251 lands. It also waits on E004."
 why: "Owner direction of 2026-10-29 (session oscilla-b0): OSCILLA becomes a playable, patchable instrument and an audio-band signal lab; the plan checked every fact it relies on against main at 8b5792cd, and the sizes it quotes are unchanged at e2720e07."
+current_state: "Built on 2026-11-01 ahead of its dependencies E004 and K014 and of F002 and F008 named in its objective (BLOCKED), the order inverted by the owner's direction ('dotahuj presety a synth library taky, paralelne'): the Presets dropdown is a Flowbite Pro component placed in the Inspector as it is today (src/js/ui/studio/node-preset-menu.js) and moves with E004's split. Factory presets are one-node patches (studio/node-presets.js; the Synth's engine presets reused), saved single-node patches come from studio/library.js patches(), and applying one is PATCH_REPLACE { onto }."
 scope:
   - "src/js/studio"
   - "src/js/ui/studio"
@@ -29,4 +30,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-01
