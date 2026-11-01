@@ -27,11 +27,30 @@ import { createCorrelationMeter, correlationDisplay } from '../analysis/correlat
 export { correlationDisplay };
 import { parseNumber, clamp } from '../charts/axes.js';
 import { onFrame } from '../charts/frame-loop.js';
-import { on, onUi, setText, setAttr, activeValue } from './dom.js';
+import { on, onUi, setText, setAttr, setSlider, setField, activeValue } from './dom.js';
 
 import { PHASE_DEFAULTS } from './lab-defaults.js';
 
 export { PHASE_DEFAULTS } from './lab-defaults.js';
+
+/** What the pan slider announces: 'Centre', or '<n>% left' / '<n>% right'. */
+export function panText(pan) {
+  return pan === 0 ? 'Centre'
+    : `${Math.round(Math.abs(pan) * 100)}% ${pan < 0 ? 'left' : 'right'}`;
+}
+
+/** A phase offset in degrees, normalised to [0, 360); null when it is not a number. */
+export function normalizeOffset(deg) {
+  if (deg == null || deg === '') return null;
+  const v = Number(deg);
+  if (!Number.isFinite(v)) return null;
+  return ((v % 360) + 360) % 360;
+}
+
+/** The offset field's text for a phase (degrees, at most two decimals). */
+export function offsetText(deg) {
+  return String(Math.round(deg * 100) / 100);
+}
 
 /** Stereo router config (audio/stereo.js) for the lab's Mono/Stereo output and pan. */
 export function routerConfig(cfg) {
@@ -158,15 +177,23 @@ export function mount(rootEl, adapter) {
     for (const fn of listeners) fn({ ...cfg });
   }
 
+  // The controls show the configuration whoever changed it (a config import, the dual
+  // oscillator). setField leaves a field the user is editing as it is; setSlider writes only a
+  // value that differs, so a drag, whose input already holds the value it set, is not moved.
+  function syncControls() {
+    setSlider(el.pan, cfg.pan, panText(cfg.pan));
+    setField(el.offset, offsetText(cfg.phaseDeg));
+  }
+
   function setCfg(patch) {
+    const prevDeg = cfg.phaseDeg;
     Object.assign(cfg, patch);
     cfg.freqA = clamp(cfg.freqA, 1, 100000);
     cfg.freqB = clamp(cfg.freqB, 1, 100000);
-    cfg.pan = clamp(cfg.pan, -1, 1);
-    if (el.pan) {
-      setAttr(el.pan, 'aria-valuetext', cfg.pan === 0 ? 'Centre'
-        : `${Math.round(Math.abs(cfg.pan) * 100)}% ${cfg.pan < 0 ? 'left' : 'right'}`);
-    }
+    cfg.pan = clamp(Number(cfg.pan) || 0, -1, 1);
+    const deg = normalizeOffset(cfg.phaseDeg);
+    cfg.phaseDeg = deg == null ? prevDeg : deg;
+    syncControls();
     emit();
   }
 
@@ -182,8 +209,12 @@ export function mount(rootEl, adapter) {
     }),
     on(el.pan, 'input', () => setCfg({ pan: Number(el.pan.value) })),
     on(el.offset, 'change', () => {
-      const v = parseNumber(el.offset.value);
-      if (v != null) setCfg({ phaseDeg: ((v % 360) + 360) % 360 });
+      const v = normalizeOffset(parseNumber(el.offset.value));
+      if (v != null) setCfg({ phaseDeg: v });
+      // A committed entry shows what plays: 400 reads 40, and an entry that is not a number
+      // returns to the offset in use.
+      const text = offsetText(cfg.phaseDeg);
+      if (el.offset.value !== text) el.offset.value = text;
     }),
     onUi(rootEl, (d) => {
       if (d.kind === 'tab' && d.key === 'phase') tab = d.value;

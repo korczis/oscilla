@@ -1411,6 +1411,131 @@ function defineChecks() {
     return { ok, missing, file: path.basename(dl.suggestedFilename()), after, rejectsBadVersion: !bad };
   });
 
+  // H002: a continuous sweep saved as a preset, a History entry, a config file and a link
+  // restores as once (the permission is never restored, ADR 0005), and every one of the four
+  // restore paths says so in a notice, at desktop and at 390x844. The link's "Configuration
+  // restored from link" names the drop, and the import never says "All settings were restored".
+  def('continuous-repeat-restore-named', async ({ page, context, baseUrl }) => {
+    const DROP = 'Continuous repeat not restored';
+    const inPage = (fn, arg) => page.evaluate(fn, arg);
+    /** The notices the page shows, as "title: message", read from the DOM. */
+    const shown = (p) => p.evaluate(() => [...document.querySelectorAll('[data-osc="alert"]')]
+      .filter((el) => el.getClientRects().length > 0)
+      .map((el) => `${el.querySelector('strong').textContent}: `
+        + `${el.querySelector('span').textContent}`.replace(/\s+/g, ' ').trim()));
+    /** Waits for the drop notice on p; resolves to the notices and the restored state. */
+    const told = (p, what) => until(async () => {
+      const notices = await shown(p);
+      if (!notices.some((t) => t.startsWith(`${DROP}: Continuous repeat saved; it plays once`))) {
+        return null;
+      }
+      const st = await p.evaluate(() => ({ repeat: window.OSCILLA.app.sweep.repeat,
+        allowed: window.OSCILLA.app.continuousAllowed }));
+      return { notices, ...st };
+    }, { ms: 8000, what });
+    const clearAlerts = (repeat) => inPage((r) => {
+      const a = window.OSCILLA.app;
+      a.alerts = [];
+      if (r) a.sweep.repeat = r; // so the restore, not an earlier one, sets it back to once
+    }, repeat);
+    const legs = {};
+    try {
+      for (const [w, h] of [[1536, 1024], [390, 844]]) {
+        await page.setViewportSize({ width: w, height: h });
+        const leg = {};
+        legs[w] = leg;
+        // Save one continuous sweep four ways.
+        await inPage(() => {
+          const a = window.OSCILLA.app;
+          a.customPresets = a.customPresets.filter((p) => p.name !== 'H002 sweep');
+          a.clearHistory(); // the one History entry is this leg's
+          a.setMode('sweep');
+          a.setContinuous(true);
+          a.setSweepRepeat('continuous');
+          a.alerts = [];
+        });
+        await H.workspace(page, 'presets');
+        await page.click('[data-osc="presets.save"]');
+        await page.waitForSelector('#osc-dlg-save[open]', { timeout: 8000 });
+        await page.fill('#osc-save-name', 'H002 sweep');
+        await page.click('[data-osc="save.confirm"]');
+        leg.saved = await until(() => inPage(() => {
+          const a = window.OSCILLA.app;
+          const p = a.customPresets.find((x) => x.name === 'H002 sweep');
+          if (!p) return null;
+          a.addHistory(a.currentPlan().plan);
+          return { preset: p.cfg.sweep.repeat, history: a.history[0].cfg.sweep.repeat };
+        }), { ms: 8000, what: `the continuous sweep is saved as a preset at ${w}px` });
+        await page.click('#osc-export');
+        const [dl] = await Promise.all([
+          page.waitForEvent('download', { timeout: 10000 }),
+          page.click('[data-osc="export.config"]'),
+        ]);
+        const file = fs.readFileSync(await dl.path(), 'utf8');
+        leg.saved.file = JSON.parse(file).pattern.sweep.repeat;
+        const hash = await inPage(() => window.OSCILLA.app.configLinkHash());
+        const url = `${baseUrl.split('#')[0]}#${hash}`;
+        // A new page view has no permission; withdraw it here too.
+        await inPage(() => window.OSCILLA.app.setContinuous(false));
+        await clearAlerts();
+        // 1. Preset
+        await page.click('[data-osc="presets.tab"][data-value="custom"]');
+        await page.locator('[data-osc="presets.item"]', { hasText: 'H002 sweep' }).first()
+          .locator('[data-osc="presets.load"]').click();
+        leg.preset = await told(page, `preset restore names the drop at ${w}px`);
+        // 2. History
+        await clearAlerts('n');
+        await page.click('[data-osc="presets.tab"][data-value="history"]');
+        await page.locator('[data-osc="presets.history"]').first()
+          .locator('button', { hasText: 'Recall' }).click();
+        leg.history = await told(page, `History recall names the drop at ${w}px`);
+        // 3. Config import, through the real file input
+        await clearAlerts('n');
+        await page.setInputFiles('#osc-import-file', { name: 'h002.json',
+          mimeType: 'application/json', buffer: Buffer.from(file) });
+        leg.import = await told(page, `config import names the drop at ${w}px`);
+        leg.import.summary = await until(async () => (await shown(page))
+          .find((t) => t.startsWith('Config imported:')),
+        { ms: 8000, what: `config import summary at ${w}px` });
+        // 4. Link, in a new page view
+        const p2 = await context.newPage();
+        try {
+          await p2.setViewportSize({ width: w, height: h });
+          await p2.goto(url);
+          await H.ready(p2);
+          leg.link = await told(p2, `link restore names the drop at ${w}px`);
+          leg.link.summary = leg.link.notices.find((t) => t.startsWith('Configuration restored'));
+        } finally {
+          await p2.close();
+        }
+        // Clean up this leg's preset and History entry.
+        await inPage(() => {
+          const a = window.OSCILLA.app;
+          a.customPresets = a.customPresets.filter((p) => p.name !== 'H002 sweep');
+          a.persistPresets();
+          a.clearHistory();
+          a.alerts = [];
+        });
+        await H.workspace(page, 'playground');
+        await inPage(() => window.OSCILLA.app.setMode('playground'));
+        leg.done = true;
+      }
+    } catch (e) {
+      return { ok: false, detail: String(e.message || e).split('\n')[0], legs };
+    } finally {
+      await page.setViewportSize({ width: 1536, height: 1024 });
+    }
+    const legOk = (l) => l.done && l.saved.preset === 'continuous' && l.saved.history === 'continuous'
+      && l.saved.file === 'continuous'
+      && ['preset', 'history', 'import', 'link'].every((k) => l[k] && l[k].repeat === 'once'
+        && l[k].allowed === false)
+      && !/All settings were restored/.test(l.import.summary)
+      && /Not restored: continuous repeat/.test(l.import.summary)
+      && /Not restored: continuous repeat/.test(l.link.summary || '');
+    const ok = Object.keys(legs).length === 2 && Object.values(legs).every(legOk);
+    return { ok, legs };
+  });
+
   def('wav-export-valid', async ({ page }) => {
     await page.evaluate(() => {
       const a = window.OSCILLA.app;
@@ -2319,6 +2444,155 @@ function defineChecks() {
     await page.keyboard.press('Escape');
     await page.click('#osc-mode-freq');
     return { ok: true, ...out };
+  });
+
+  // C010: the Phase & Stereo pan reaches the sounding dual voice. A mono dual voice started
+  // centred has no stereo router; moving #osc-stereo-pan while it sounds restarts it once,
+  // click-free, with one (L/R balance from the router's own analysers), and the router stays:
+  // back at centre the voice is not restarted again and its level is the centred level it had
+  // without the router (the StereoPanners it replaced use the same equal-power law). Where pan
+  // does not apply (a single source, Stereo output) the slider is disabled with its visible
+  // reason. Every wait is a condition poll with a named deadline.
+  def('pan-live-dual', async ({ page }) => {
+    const inPage = (fn, arg) => page.evaluate(fn, arg);
+    const res = {};
+    const setPan = (v) => inPage((p) => {
+      const el = document.getElementById('osc-stereo-pan');
+      el.value = String(p);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      return window.OSCILLA.labs.phase.config.pan;
+    }, v);
+    // RMS of the engine's output analyser (dB) and the router's L/R balance (dB, L over R).
+    const read = () => inPage(() => {
+      const e = window.OSCILLA.engine;
+      const rms = (b) => { let s = 0; for (const x of b) s += x * x; return Math.sqrt(s / b.length); };
+      const out = new Float32Array(e.analyser.fftSize);
+      e.analyser.getFloatTimeDomainData(out);
+      const v = e.voice;
+      const router = window.OSCILLA.adapter.getStereoRouter();
+      let balanceDb = null;
+      if (router) {
+        const { left, right } = router.readTimeDomain();
+        balanceDb = 20 * Math.log10((rms(left) + 1e-12) / (rms(right) + 1e-12));
+      }
+      return { id: v ? v.id : null, sounding: !!(v && e.ctx.currentTime > v.t0 + 0.25),
+        levelDb: 20 * Math.log10(rms(out) + 1e-12), router: !!router, balanceDb,
+        vizRouter: !!(v && (window.OSCILLA.viz.labInputs(v.plan) || {}).router) };
+    });
+    const panState = () => inPage(() => {
+      const el = document.getElementById('osc-stereo-pan');
+      const why = document.getElementById('osc-stereo-pan-why');
+      return { disabled: el.disabled, describedBy: el.getAttribute('aria-describedby'),
+        why: why && why.offsetParent !== null ? why.textContent.trim() : '' };
+    });
+    const mode = (ws) => until(() => inPage((w) => document.querySelector('#osc-app').dataset
+      .mode === w, ws), { ms: 8000, what: `pan-live-dual: the ${ws} workspace is shown` });
+    try {
+      await H.continuous(page, true);
+      await H.navTo(page, 'synthesis');
+      await mode('synthesis');
+      await page.click('#osc-ptab-stereo');
+      // A single source: pan does not apply, and the slider says why.
+      await inPage(() => window.OSCILLA.app.setDualSource(false));
+      res.single = await until(async () => {
+        const s = await panState();
+        return s.disabled && s.why ? s : null;
+      }, { ms: 5000, what: 'pan-live-dual: the pan is disabled with its reason for one source' });
+      // Equal A and B frequencies: no beat, so the RMS of the output is steady. Δφ 0: with
+      // A = B the level is 20 log10 |cos(Δφ/2)| of a single-tone pair, so the default 45° makes
+      // it depend on whether B's start delay reached the sound (0.69 dB, review F1); at 0° the
+      // two voices compared (fresh and restarted) have the same level whatever their start.
+      // The offset is set before B's frequency: the lab learns the dual's frequencies in an
+      // Alpine effect (later), and a lab change emitted before that would write its stale B back.
+      res.setup = await inPage(() => {
+        const a = window.OSCILLA.app;
+        const lab = window.OSCILLA.labs.phase;
+        a.setDualSource(true);
+        a.setStereo(false);
+        const deg = lab.config.phaseDeg;
+        lab.set({ phaseDeg: 0 });
+        const fb = a.dual.b.freq;
+        a.setDualFreq('b', String(a.dual.a.freq));
+        return { fb, deg, deg0: lab.config.phaseDeg };
+      });
+      res.mono = await until(async () => {
+        const s = await panState();
+        const ab = await inPage(() => {
+          const { app: a, labs } = window.OSCILLA;
+          return a.dual.b.freq === a.dual.a.freq && labs.phase.config.freqB === a.dual.a.freq;
+        });
+        return !s.disabled && !s.why && ab ? { ...s, ab } : null;
+      }, { ms: 5000, what: 'pan-live-dual: the pan is enabled for the dual voice in Mono, A = B' });
+      res.pan0 = await setPan(0);
+      await H.spaceDown(page);
+      // The reference level is the steady one: three reads in a row of the same voice within
+      // 0.1 dB. Under load the analyser's window can still hold the attack (or silence before
+      // it) after currentTime passed t0 + 0.25 s, and an early read was up to 16 dB low.
+      const steady = [];
+      res.centred = await until(async () => {
+        const r = await read();
+        if (!(r.sounding && r.levelDb > -60)) return null;
+        steady.push(r);
+        const s = steady.slice(-3);
+        return s.length === 3 && s.every((x) => x.id === r.id
+          && Math.abs(x.levelDb - r.levelDb) < 0.1) ? r : null;
+      }, { ms: 15000, what: 'pan-live-dual: the centred mono dual voice sounds at a steady level' });
+      res.panLeft = await setPan(-1);
+      res.left = await until(async () => {
+        const r = await read();
+        return r.router && r.sounding && r.balanceDb > 6 ? r : null;
+      }, { ms: 15000, what: 'pan-live-dual: the live pan to the left reaches the L/R balance' });
+      res.panBack = await setPan(0);
+      let lastBack = null;
+      res.back = await until(async () => {
+        const r = await read();
+        lastBack = r;
+        return r.router && r.sounding && Math.abs(r.balanceDb) < 0.5
+          && Math.abs(r.levelDb - res.centred.levelDb) < 0.5 ? r : null;
+      }, { ms: 15000, what: 'pan-live-dual: back at centre, balanced, at the centred level' })
+        .catch((e) => {
+          e.message = `${String(e.message).split('\n')[0]} (centred ${JSON.stringify(res.centred)}`
+            + `, last ${JSON.stringify(lastBack)})`;
+          throw e;
+        });
+      await page.keyboard.up(' ');
+      res.quiet = await until(() => inPage(() => window.OSCILLA.engine.activeNodeCount === 0),
+        { ms: 10000, what: 'pan-live-dual: 0 engine nodes after the release' });
+      // Stereo output: A left and B right, pan does not apply.
+      await page.click('#osc-dual-stereo');
+      res.stereo = await until(async () => {
+        const s = await panState();
+        return s.disabled && /Stereo output/.test(s.why) ? s : null;
+      }, { ms: 5000, what: 'pan-live-dual: the pan is disabled with its reason in Stereo' });
+    } finally {
+      await page.keyboard.up(' ');
+      await inPage(({ fb, deg }) => {
+        const a = window.OSCILLA.app;
+        a.stopNow();
+        a.setStereo(false);
+        // the offset first, as in the setup: the lab's change would write its B back
+        if (deg != null) window.OSCILLA.labs.phase.set({ phaseDeg: deg });
+        if (fb != null) a.setDualFreq('b', String(fb));
+        a.setDualSource(false);
+        a.alerts = [];
+      }, res.setup || {});
+      await setPan(0);
+      await page.click('#osc-ptab-phase');
+      await H.continuous(page, false);
+    }
+    const v = {
+      single: res.single.describedBy === 'osc-stereo-pan-why' && /dual voice/.test(res.single.why),
+      mono: !res.mono.disabled && res.mono.ab,
+      phase0: res.setup.deg0 === 0,
+      centredNoRouter: res.pan0 === 0 && !res.centred.router,
+      panReachesVoice: res.panLeft === -1 && res.left.balanceDb > 6 && res.left.vizRouter
+        && res.left.id !== res.centred.id,
+      routerKept: res.panBack === 0 && res.back.id === res.left.id && res.back.vizRouter,
+      levelKept: Math.abs(res.back.levelDb - res.centred.levelDb) < 0.5,
+      quiet: res.quiet === true,
+      stereo: res.stereo.disabled && res.stereo.describedBy === 'osc-stereo-pan-why',
+    };
+    return { ok: Object.values(v).every(Boolean), v, ...res };
   });
 
   // ---- accessibility residuals of the final V1 probe (WCAG 2.4.11, focus loss, overlap)

@@ -758,6 +758,15 @@ export function createStudioUi(svc = {}) {
     // A pending handle settled (a Microphone opened, failed or ended): show its status, and
     // keep why an input is not open on that node (the stopped status shows it too).
     ctx.runtime.on((type, d) => {
+      if (type === 'master') {
+        // The level the Studio wrote into the engine's master stage, or null once it gave it
+        // up: plain numbers for the status bar (C012), never the engine or one of its nodes.
+        if (ctx.cmp) {
+          ctx.cmp.studio.masterLevel = d.level;
+          ctx.cmp.studio.masterWrites = d.writes;
+        }
+        return;
+      }
       if (type !== 'handle') return;
       const h = ctx.runtime.nodes.get(d.id);
       if (h && h.type === 'microphone') {
@@ -1107,6 +1116,10 @@ export function createStudioUi(svc = {}) {
       memoryHeld: 0, // Studio projects and patches held by the memory fallback store
       storeNote: '',
       playing: false,
+      // The Studio's Master Output level while it holds the engine's master stage (runtime
+      // 'master' events) and engine.masterWrites after that write; null otherwise (C012).
+      masterLevel: null,
+      masterWrites: null,
       loop: false,
       canUndo: false,
       canRedo: false,

@@ -65,4 +65,11 @@ export default [
     state: { none: 'the permission belongs to the browser, not to OSCILLA' },
     effect: { command: 'request microphone permission from the browser' },
   }),
+  defineComponent({
+    id: 'studio.inspector.limitNote',
+    kind: 'readout',
+    label: 'Played value limit',
+    docs: 'Says which cap the Studio applies to a parameter it plays below the stored value.',
+    state: 'studio.model',
+  }),
 ];

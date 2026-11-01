@@ -20,4 +20,6 @@ export default {
     tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/v31-studio-graph.cjs'] }),
   'studio.inspector.permission': entry({ source: 'src/js/ui/studio/inspector.js',
     tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/v31-studio-workflows.cjs'] }),
+  'studio.inspector.limitNote': entry({ source: 'src/js/ui/studio/inspector.js',
+    plan: ['G001', 'C012'], tests: ['tests/unit/ui-catalog.test.mjs'] }),
 };

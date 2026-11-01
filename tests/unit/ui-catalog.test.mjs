@@ -111,6 +111,7 @@ const CONTRACT = [
   ['studio.inspector.selectTo', 'action', 'button'],
   ['studio.inspector.connect', 'open', 'button'], ['studio.inspector.savePatch', 'open', 'button'],
   ['studio.inspector.allowMic', 'action', 'button'],
+  ['studio.inspector.limitNote', 'readout', 'p'],
 ];
 
 /** The tags of the elements that carry `hook` in the source (see the header). */
