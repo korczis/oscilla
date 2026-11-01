@@ -12,8 +12,8 @@
 //                       states `connected` with the stub's self-naming input
 //   midi-riff           the first two bars of the bass riff as Note On / Note Off through the
 //                       stub: the stub input delivers all 24 messages in the page, the page
-//                       reports no error and the MIDI state stays connected (nothing on this
-//                       tree consumes them yet: midi-notes-sound is the expected failure)
+//                       reports no error and the MIDI state stays connected (midi-notes-sound
+//                       then checks the engine sounds them, V502)
 //   song-open           Templates, Open "Demo song: Lantern in the Slag Yard": 19 nodes, 20
 //                       edges, 744 tempo-linked clips on six tracks, 7 section markers, 96 BPM,
 //                       clean
@@ -103,14 +103,11 @@ const LAUNCH = {
 const SONG_TITLE = 'Demo song: Lantern in the Slag Yard';
 // The step marks: the work each expected failure waits for. Remove a mark when it lands.
 const EXPECTED = Object.freeze({
-  'midi-notes-sound': 'V502 (pull request #261): MIDI notes sound through the AudioEngine',
   'midi-records': 'V505: a MIDI performance records into an editable track; a MIDI note '
     + 'playing a Studio voice has no plan yet (K144 gap G2)',
   'drum-accents': 'K144 gap G4 (no plan yet): a Studio clip has no level, so velocity is lost',
-  'drive-knob': 'K012 (pull request #267): the Drive node',
   'resonance-lane': 'K144 gap G10 (no plan yet): the Studio does not automate a filter Q',
   'node-views-draw': 'K016: the Scope, Spectrum, Spectrogram and Meter node cards paint live',
-  'keyboard-view': 'K026 and V504: a keyboard view whose key lights and sounds when played',
   'restore-last': 'V604: after the page is closed the Studio offers back the last working draft',
 });
 
@@ -174,6 +171,19 @@ async function expected(leg, id, name, fn) {
     console.log(`  XFAIL [${leg}] ${id}: ${name} — expected until ${why}`
       + `${r.detail ? `; ${r.detail}` : ''}`);
   }
+}
+
+// A step whose owner has landed: the same body an expected failure ran, now a check(). Unmet
+// (the effect is missing) is a FAIL with its detail; any other throw propagates as a broken step.
+async function landed(leg, id, name, fn) {
+  let r;
+  try {
+    r = await fn();
+  } catch (err) {
+    if (!(err instanceof Unmet)) throw err;
+    r = { ok: false, detail: err.message.slice(0, 300) };
+  }
+  return check(leg, id, name, !!r.ok, r.detail || '');
 }
 
 // ------------------------------------------------------------------------------ page helpers
@@ -447,7 +457,7 @@ async function journey(browser, leg) {
     }, midiStub.STUB_NAME);
     await page.evaluate(([n, v, name]) => window.__oscMidiSeam.message(name, [0x90, n, v]),
       [bars[0][0], bars[0][1], midiStub.STUB_NAME]);
-    await expected(leg, 'midi-notes-sound', 'a MIDI Note On sounds through the AudioEngine',
+    await landed(leg, 'midi-notes-sound', 'a MIDI Note On sounds through the AudioEngine',
       async () => {
         const n = await untilUnmet(() => page.evaluate((b) => {
           const c = window.OSCILLA.engine.activeNodeCount;
@@ -567,7 +577,7 @@ async function journey(browser, leg) {
     }, { ms: STEP_MS, what: `${leg}: the waveform and Q edits reach the model` });
     check(leg, 'tone', 'Lead voice sawtooth and Lead filter Q 6 through the Inspector',
       !!toned, `${param(toned, 'lead-osc', 'waveform')}, Q ${param(toned, 'lead-filter', 'Q')}`);
-    await expected(leg, 'drive-knob', 'a Drive node can be added for the driven tone',
+    await landed(leg, 'drive-knob', 'a Drive node can be added for the driven tone',
       async () => {
         // The Add list not opening is a broken step (FAIL); only a list without drive is Unmet.
         await page.locator('[data-osc="studio.add"]').first().click();
@@ -752,7 +762,7 @@ async function journey(browser, leg) {
       !!q1 && !!p2 && !!q2, `${p2.runtimeNodes} runtime nodes on the second PLAY`);
 
     // The keyboard view, with the Studio stopped (a held key does not play over the Studio).
-    await expected(leg, 'keyboard-view', 'a key pressed on the keyboard view lights on its '
+    await landed(leg, 'keyboard-view', 'a key pressed on the keyboard view lights on its '
       + 'canvas and sounds', async () => {
       // The effect, not the markup: a keyboard canvas whose key lights when the computer key
       // is held, while the engine counts the note and the main output carries it.
