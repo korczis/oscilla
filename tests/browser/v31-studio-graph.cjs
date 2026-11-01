@@ -357,17 +357,33 @@ function defineChecks() {
       await step(() => page.click(`[data-osc="${open}"]`));
       await close();
     }
-    // The task strip of a running render (its Abort button): a long render, aborted.
-    await page.evaluate(() => { window.__auditRender = window.OSCILLA.app.studioRenderWav({
-      duration: 60 }); });
-    // The strip shows Abort once the render task is abortable, which can take longer than one
-    // step on a loaded runner (CI of #367): wait for it against a named deadline, then collect.
-    await until(() => page.evaluate(() => !!window.OSCILLA.app.studio.task.abortable),
-      { ms: 10000, what: 'controls-labelled: the long render shows its Abort button' })
-      .catch((e) => { if (e.name !== 'WaitTimeout') throw e; }); // the census then names it
+    // The task strip of a running render (its Abort button): a render held running by
+    // construction. The offline context's startRendering waits for the test, so the task is
+    // abortable however fast the runner renders (CI WebKit finished a 60 s render before the
+    // strip was read, #367); Abort is then taken by the test itself.
+    await page.evaluate(() => {
+      const C = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+      const real = C.prototype.startRendering;
+      window.__auditHold = new Promise((r) => { window.__auditRelease = r; });
+      C.prototype.startRendering = function heldForAudit(...args) {
+        C.prototype.startRendering = real;
+        return window.__auditHold.then(() => real.apply(this, args));
+      };
+      window.__auditRender = window.OSCILLA.app.studioRenderWav({ duration: 60 });
+    });
+    await until(() => page.evaluate(() => {
+      const b = document.querySelector('[data-osc="studio.task.abort"]');
+      return !!(window.OSCILLA.app.studio.task.abortable && b && !b.hidden
+        && b.getClientRects().length);
+    }), { ms: 10000, what: 'controls-labelled: the held render shows its Abort button' });
     await step(() => Promise.resolve());
-    await page.evaluate(() => { window.OSCILLA.app.studioAbortTask();
-      return window.__auditRender; });
+    const aborted = await page.evaluate(async () => {
+      window.OSCILLA.app.studioAbortTask();
+      window.__auditRelease();
+      const r = await window.__auditRender;
+      return !!(r && r.aborted);
+    });
+    if (!aborted) throw new Error('controls-labelled: Abort did not abort the held render');
     await page.click(H.nodeTitle('filter-1'));
     await step(() => page.click('[data-osc="studio.inspector.connect"]'));
     await close();
