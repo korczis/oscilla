@@ -77,8 +77,9 @@ captured by `npm run social` from `dist/index.html`:
 
 OSCILLA generates signals with the native Web Audio API and measures them while they play. It
 shows them as a waveform, a live spectrum and a spectrogram, and it compares them with what your
-microphone picks up. You can arrange signals into block sequences, shape them with filters, an
-ADSR envelope and additive harmonics, explore phase and stereo, and export the result. In the
+microphone picks up. You can arrange signals into block sequences that play through the Filter
+Lab, while the ADSR envelope and additive harmonics shape the instrument; you can explore phase
+and stereo, and export the result. In the
 Measure workspace it records a sweep through your speaker and microphone. From that recording
 it computes the response of the whole playback and capture chain, rates the quality of the
 measurement and keeps it as a reproducible experiment. The app is a single HTML file. It needs no server, no account and no network once loaded, and it works
@@ -549,6 +550,11 @@ Not yet built:
   and labelled as uncalibrated. A browser knows sample values, not sound pressure. The only
   exception is the Measure workspace with a valid absolute level calibration that you supply
   from an external reference.
+- **The analyser scale is not 0 dB at full scale.** The live spectrum and the microphone
+  analyser plot the dB of a Blackman-windowed analyser FFT (dBFS-like, uncalibrated), on which a
+  full-scale sine reads near -13.6 dB. The detected-peak level corrects it so that sine reads
+  0 dBFS, and the Measure analysis has its own tone and mean-square (RTA) scales, defined in
+  [docs/v3/algorithms.md](docs/v3/algorithms.md).
 - **The microphone is not calibrated.** Its response, the input processing and the room are
   unknown, so readings are only comparisons. In Measure, a frequency-response profile corrects
   the microphone only inside the profile's range. Detected frequencies are never shown with more
@@ -664,7 +670,10 @@ and CI fail.
 
 The browser suites need Playwright's browsers (`npx playwright install chromium firefox
 webkit`). Work lands through small pull requests. CI runs the gate on every pull request,
-branch protection requires the `gate` check, and a merge to `main` redeploys Pages.
+branch protection requires the `gate` check, and a merge to `main` redeploys Pages. The branch
+need not be up to date with `main` (`strict: false`, the owner's decision of 2026-10-30), so a
+pull request merges on its last green run and the gate's suites never run on `main` itself:
+ADR 0009's note of that date says what still catches a stale run or a red combination.
 
 Two of the gate's jobs check the pull request rather than the product. `fail-first`: when the
 title starts with `feat` or `fix`, a unit test the pull request adds or changes must fail on
@@ -699,7 +708,7 @@ from the background, or hold-to-play by touch. The owner declined real-device ch
 | --- | --- | --- |
 | Unit | `tests/unit/` | Pure modules (DSP, analysis, sequencer, charts), the packer, the artifact rules and the release tooling, all under `node --test` |
 | V1 freeze | `tests/freeze/` | Golden vectors that pin V1 behaviour ([ADR 0014](.ai/repo/adrs/0014-v1-behaviour-frozen-by-golden-vectors.md)) |
-| Browser | `npm run test:browser`, `test:census`, `test:engine`, `test:dsp`, `test:labs`, `test:sequencer` | Playwright suites on the built page: the app gate (`tests/browser/app.cjs`), layout (`tests/browser/layout.cjs`), the V2 final-QA regressions (`tests/browser/qa-regressions.cjs`), navigation history and unsaved work (`tests/browser/navigation.cjs`), the MIDI support state (`tests/browser/midi.cjs`), the six user journeys (`tests/browser/journeys.cjs`), the control census (`tests/browser/control-census.cjs`, `npm run test:census`), the V1 engine port (`tests/browser/engine-v1port.cjs`), DSP (`tests/browser/dsp.cjs`), labs (`tests/browser/labs.cjs`) and the sequencer (`tests/browser/sequencer.cjs`) |
+| Browser | `npm run test:browser`, `test:census`, `test:engine`, `test:dsp`, `test:labs`, `test:sequencer` | Playwright suites on the built page: the app gate (`tests/browser/app.cjs`), layout (`tests/browser/layout.cjs`), the V2 final-QA regressions (`tests/browser/qa-regressions.cjs`), navigation history and unsaved work (`tests/browser/navigation.cjs`), the MIDI support state (`tests/browser/midi.cjs`), the navigable-surface census against its contract (`tests/browser/surface-census.cjs`, held statically by `tests/unit/surface-census.test.mjs`), the six user journeys (`tests/browser/journeys.cjs`), the control census (`tests/browser/control-census.cjs`, `npm run test:census`), the V1 engine port (`tests/browser/engine-v1port.cjs`), DSP (`tests/browser/dsp.cjs`), labs (`tests/browser/labs.cjs`) and the sequencer (`tests/browser/sequencer.cjs`) |
 | Visual | `scripts/visual-gate.mjs`, `tests/visual/` | The 1536x1024 reference and named regions, compared region by region with thresholds measured from run-to-run variance ([ADR 0029](.ai/repo/adrs/0029-visual-regression-in-the-release-gate.md)) |
 | V3 unit | `tests/unit/v3-*.test.mjs` | Measurement core, transfer and impulse response on synthetic systems with known answers, RTA and aggregation, calibration, quality, experiments (schema, round trip, corrupt imports, store), goldens per algorithm ID, the engine on a fake io and the view models, all in `npm test` |
 | V3 browser | `npm run test:measure` | `tests/browser/v3-measure.cjs`: the measurement engine on real Web Audio, a recovered digital loopback response, limiter transparency, 0 nodes after finish and abort. `tests/browser/analysis-worker.cjs`: the offline analysis in its Worker against the inline run, identical results, no inline fallback, abort. `tests/browser/v3-ui.cjs`: Measure and Experiments of the built page, guided flow, abort at every stage, calibration, experiment import, compare and export, and no "SPL" without a level calibration. All run in Chromium, Firefox and WebKit, from `file://` and `/oscilla/` |

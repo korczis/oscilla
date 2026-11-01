@@ -1,6 +1,6 @@
 {
   "name": "oscilla",
-  "version": "3.14.0",
+  "version": "3.14.1",
   "private": true,
   "description": "A zero-install, scientifically honest acoustic laboratory in your browser: generate, measure and reproduce sound experiments, and know how far each result can be trusted.",
   "license": "MIT",
@@ -22,7 +22,7 @@
     "release:stamp": "node scripts/stamp-build.mjs",
     "release:verify-deploy": "node scripts/verify-deploy.mjs",
     "test": "node --test \"tests/unit/**/*.test.mjs\"",
-    "test:browser": "node tests/browser/app.cjs && node tests/browser/layout.cjs && node tests/browser/qa-regressions.cjs && node tests/browser/navigation.cjs && node tests/browser/midi.cjs && node tests/browser/journeys.cjs",
+    "test:browser": "node tests/browser/app.cjs && node tests/browser/layout.cjs && node tests/browser/qa-regressions.cjs && node tests/browser/navigation.cjs && node tests/browser/midi.cjs && node tests/browser/surface-census.cjs && node tests/browser/journeys.cjs",
     "test:census": "node tests/browser/control-census.cjs",
     "test:dsp": "node tests/browser/dsp.cjs",
     "test:labs": "node tests/browser/labs.cjs",

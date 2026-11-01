@@ -22,8 +22,11 @@
 #     the jobs it `needs`, so a failing one leaves it blocked rather than queued.
 #
 # Not modelled: .github/workflows/pages.yml (a push to main deploys and verifies Pages, after
-# the change has landed; no gate of a task measures it) and cadence.yml (the release lag of
-# main, rule project.deploy-often). No gate is `at-finish` or `on-demand`.
+# the change has landed; no gate of a task measures it), main-checks.yml (a push to main runs
+# the unit, knowledge and browser jobs of ci.yml again on the merge commit, E044; it gates no
+# task and its jobs are ci.yml's, held equal by tests/unit/main-checks.test.mjs) and
+# cadence.yml (the release lag of main, rule project.deploy-often). No gate is `at-finish` or
+# `on-demand`.
 #
 # Patterns: `**` crosses directories, `*` does not, a pattern without a wildcard names one
 # path. Paths are repository-relative, as `git diff --name-only` prints them.
