@@ -4,7 +4,7 @@ version: 1
 kind: rule
 title: Risky changes merge only with a recorded review verdict for the reviewed content
 description: A pull request that changes a guarded path merges only with a committed verdict file that says merge, names the reviewer, records the digest of the guarded content the pull request changes and lists no open P0 or P1 finding.
-statement: A pull request touching src/js/audio, src/js/analysis, src/js/experiments, src/js/studio, src/js/measurement, src/js/calibration, src/js/core/storage*, src/js/core/safety*, src/js/ui/measure.js, src/js/ui/measure/, src/js/ui/experiments.js, src/js/ui/findings.js, scripts/release-*, the build, pack, stamp and deploy-verification scripts (scripts/build*, scripts/pack-single-file.mjs, scripts/stamp-build.mjs, scripts/verify-deploy.mjs, scripts/verify-dist.mjs), the release rules' tests (tests/unit/release-*, tests/unit/version-authority.test.mjs, tests/browser/live-smoke.cjs), anything under .github/, or the programs and tests that enforce the process rules (scripts/review-verdict.mjs, scripts/fail-first.mjs, scripts/ci-workflow-rules.mjs, scripts/yaml-subset.mjs, their tests under tests/unit/ and tests/unit/fixtures/git-repo.mjs) merges only with .ai/repo/reviews/<pr>.yaml carrying `verdict: merge`, the reviewer session, a `content` equal to the SHA-256 of the guarded paths the pull request changes against its merge base (mode, blob and name of each, as merged with the base branch for the run), and no finding of severity P0 or P1 with status open; the guarded list that applies is the base branch's, the verdict is written by a reviewer who did not build the change, and a pull request is bound from the first CI run of a head that contains this rule's job.
+statement: A pull request touching src/js/audio, src/js/analysis, src/js/experiments, src/js/studio, src/js/measurement, src/js/calibration, src/js/core/storage*, src/js/core/safety*, src/js/ui/measure.js, src/js/ui/measure/, src/js/ui/experiments.js, src/js/ui/findings.js, scripts/release-*, the build, pack, stamp and deploy-verification scripts (scripts/build*, scripts/pack-single-file.mjs, scripts/stamp-build.mjs, scripts/verify-deploy.mjs, scripts/verify-dist.mjs), the release rules' tests (tests/unit/release-*, tests/unit/version-authority.test.mjs, tests/browser/live-smoke.cjs), anything under .github/, or the programs and tests that enforce the process rules (scripts/review-verdict.mjs, scripts/fail-first.mjs, scripts/ci-workflow-rules.mjs, scripts/yaml-subset.mjs, their tests under tests/unit/ and tests/unit/fixtures/git-repo.mjs) merges only with .ai/repo/reviews/<pr>.yaml carrying `verdict: merge`, the reviewer session, a `content` equal to the SHA-256 of the guarded paths the pull request changes against its merge base (mode, blob and name of each, as merged with the base branch for the run), and no finding of severity P0 or P1 with status open; a train (a train/ branch or title, or a body with a member table) merges only when each member's own verdict at its head, where one exists, says merge, or the train's verdict judges that member by name under `members`; the guarded list that applies is the base branch's, the verdict is written by a reviewer who did not build the change, and a pull request is bound from the first CI run of a head that contains this rule's job.
 status: active
 class: blocking
 depends_on: []
@@ -82,6 +82,17 @@ never reviewed.
   builder who writes its own verdict passes the check and breaks the rule.
 - A pull request that touches no guarded path needs no verdict, and a verdict file does it
   no harm.
+- A train (skill `merge-train`, ADR 0055) is judged by its members' own verdicts as well as
+  its own. It is known as `project.fail-first` knows it, by a `train/...` head branch or a
+  train title, and also by a `| member | what |` table in its body: a feature train titled as
+  one `feat` (#367). Its members are the table's `#<n>` rows. Each member's
+  `.ai/repo/reviews/<n>.yaml` at the train's head, where one exists, says `verdict: merge`;
+  a member with none changed no guarded path of its own. A member whose verdict says
+  anything else refuses the train unless the train's own verdict names it and judges its
+  content: `members: [{ pr: <n>, verdict: merge, reason: <what was judged, at which head> }]`.
+  #303 rode #367 with its own verdict at `changes` and an open P1, and only the train's
+  reviewer reading the body caught it. A train with no guarded path of its own needs a
+  verdict only to judge such a member.
 
 # Enforcement
 
@@ -91,6 +102,13 @@ path changed, it reads `.ai/repo/reviews/<n>.yaml` from that commit and refuses 
 schema, the pull request number, `verdict: merge`, a non-empty `reviewer`, a `content` equal
 to the digest it computes and a findings list with no open P0 or P1 are all there. An unknown
 severity or status refuses, and so does a 40-character tree hash in place of the digest.
+Given the pull request's title, body and head branch (`--pr-json <file>`, or the file the
+environment variable `PR_JSON` names), it also reads each train member's verdict at the head
+and refuses a member that is not on merge and not judged under the train verdict's
+`members`; a `members` entry without a pull request number, a verdict or a reason refuses.
+The job reads the pull request with `gh pr view --json title,body,headRefName` into the file
+`PR_JSON` names, so the base branch's copy keeps the same command line;
+`tests/unit/ci-workflows.test.mjs` holds the variable, the fields and the redirect.
 
 The `review-verdict` job of `.github/workflows/ci.yml` runs it on every pull request, on the
 `HEAD` of its checkout: the pull request as GitHub merged it with the base branch for that
@@ -127,7 +145,11 @@ quoted name is seen; a docs-only pull request passes without one; every `src/js/
 changed, and the deploy and release proof (`verify-deploy.mjs`, `stamp-build.mjs`, the build
 and pack scripts, `safety.js`, `capture.js`, the release rules' tests) is guarded ("V272 D5"); `changes-requested`,
 another pull request's number, a missing reviewer, a missing findings list, an unknown
-severity or status and invalid YAML are refused; a deleted guarded file needs a verdict; a
+severity or status and invalid YAML are refused; a train whose member's own verdict is
+`changes` is refused, and accepted once the train's verdict judges that member under `members`
+(not with another verdict, no reason or another member's number); a member with no verdict
+file, and members all on merge, pass; a feature train is known by its member table; a
+deleted guarded file needs a verdict; a
 change to each kind of enforcement file (the programs, `ci-install.sh`, a composite action,
 `doctor-verdict.jq`, a test, the fixture) with no verdict is refused; every guarded file
 that is not a pattern exists.

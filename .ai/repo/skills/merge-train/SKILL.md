@@ -1,7 +1,7 @@
 ---
 schema: skill/v1
 id: merge-train
-version: 2
+version: 3
 title: Build and land a merge train
 description: Land several ready non-feat/fix pull requests together through one train/<date> integration branch, one dist rebuild and one merge commit (ADR 0055).
 status: draft
@@ -46,8 +46,12 @@ This skill is the one procedure for a train; `project.fail-first` judges what it
   `feat` through; the `fail-first` job now refuses a train whose member table lists one, and
   a waiver in the train's body does not excuse a member.
 - A member that changes a guarded path (`GUARDED` in `scripts/review-verdict.mjs`) rides only
-  when the train gets its own reviewer-written verdict (step 8). If that wait is what the
+  when the train gets its own reviewer-written verdict (step 10). If that wait is what the
   train is avoiding, land the member on its own instead.
+- A member whose own verdict (`.ai/repo/reviews/<n>.yaml`) is not `merge` rides only when the
+  train's reviewer judges its content by name (step 3). #303 rode #367 at `changes` with an
+  open P1; the `review-verdict` job now refuses that.
+- No two members that change the same behaviour differently (step 2).
 - No plan evidence recorded on a member branch: the `V272 D4` test of
   `tests/unit/plan-evidence-commits.test.mjs` refuses, on the pull request, an evidence commit
   that is not on `main` (`project.shared-machine-discipline`, item 12).
@@ -63,7 +67,40 @@ This skill is the one procedure for a train; `project.fail-first` judges what it
    gh pr list --state open --search "chore(release) in:title" --json number,title
    ```
 
-2. Create the train in its own worktree and start the task there
+2. Before building, list each member's plan issue and the behaviour it changes; flag pairs
+   that change the same behaviour (two envelope-edit policies, two owner tables) and leave one
+   of each pair out, to be reconciled separately. In #367, C007 against C008 and C002 against
+   C016 each set one behaviour two ways; the second of each had to be aborted mid-build, and
+   the contradiction blocked a parallel train.
+
+   ```bash
+   gh pr view <n> --json title,body -q '.title, .body' | grep -E '^plan:|serves'
+   gh pr diff <n> --name-only
+   ```
+
+   Two members touching one module is not yet a conflict; two that each say how one thing
+   behaves (who owns the output, what an edit during playback does) are, even when git merges
+   them cleanly.
+
+3. Check every member's verdict is `merge`, or have the train reviewer judge it explicitly.
+   For each member with a verdict file:
+
+   ```bash
+   git show origin/<branch>:.ai/repo/reviews/<n>.yaml | grep -E '^(verdict|content):'
+   ```
+
+   A member on `changes` (or with an open P0 or P1) leaves the train, or the train's reviewer
+   judges its content in the train and records it in the train's verdict (step 10):
+
+   ```yaml
+   members:
+     - { pr: 303, verdict: merge, reason: "R-1 and R-2 fixed in the train at 3a840b66" }
+   ```
+
+   The `review-verdict` job reads the member table, each member's verdict at the train head
+   and this block, and refuses the train otherwise (rule `project.review-verdict`).
+
+4. Create the train in its own worktree and start the task there
    ([task lifecycle](../../workflows/task-lifecycle.md)). The branch must be `train/...`:
    the `fail-first` job recognises a train by it, as well as by its title.
 
@@ -76,10 +113,10 @@ This skill is the one procedure for a train; `project.fail-first` judges what it
 
    `gh pr diff <n> --name-only` lists a pull request's paths.
 
-3. Choose the order. A tooling migration (a Majordomus layer or pin change) goes first,
+5. Choose the order. A tooling migration (a Majordomus layer or pin change) goes first,
    because with the new tool installed every later commit on the old layer fails the hook.
 
-4. Merge each branch, one command at a time, so the pre-commit hook judges every merge
+6. Merge each branch, one command at a time, so the pre-commit hook judges every merge
    commit (a clean `git merge` would commit without it):
 
    ```bash
@@ -103,7 +140,7 @@ This skill is the one procedure for a train; `project.fail-first` judges what it
 
    Never put the merge and the commit in one command line.
 
-5. After the last merge, rebuild once, commit, and verify the train head:
+7. After the last merge, rebuild once, commit, and verify the train head:
 
    ```bash
    npm run build
@@ -115,7 +152,7 @@ This skill is the one procedure for a train; `project.fail-first` judges what it
    A unit test an included pull request added needs its `tests/README.md` row; the
    inventory check of `tests/unit/knowledge-integrity.test.mjs` names a missing one.
 
-6. Push and open the pull request to main. The body carries, in its own prose (not in a code
+8. Push and open the pull request to main. The body carries, in its own prose (not in a code
    block or a quotation), a member table with one row per included pull request, its number
    and its pull request title as `gh pr view <n> --json title` prints it; below it, the
    conflicts and how each was resolved and the verification:
@@ -138,31 +175,38 @@ This skill is the one procedure for a train; `project.fail-first` judges what it
    gh pr create --base main --title "Merge train <yyyy-mm-dd>: #<a>, #<b>, ..." --body-file <file>
    ```
 
-7. Fold follow-ups in before the review. A late change is opened against the train,
-   `gh pr create --base train/<yyyy-mm-dd>`, and merged into it with step 4, then step 5
-   again, and gets its row in the member table. Its pull request shows merged once its head
-   is in the pushed train.
+9. Fold follow-ups in before the review. A late change is opened against the train,
+   `gh pr create --base train/<yyyy-mm-dd>`, and merged into it with step 6, then step 7
+   again, and gets its row in the member table; its own verdict is checked as in step 3. Its
+   pull request shows merged once its head is in the pushed train.
 
-8. Review. `node scripts/review-verdict.mjs --content --list` lists the guarded paths the
-   train changes against main; when it lists any, a session that built none of it writes
-   `.ai/repo/reviews/<train-pr>.yaml` (skill `review-a-guarded-pr`). A fold-in after the
-   verdict that touches a guarded path makes the verdict stale. The reviewer also checks
-   that each member row's title is its member's and that every merged member is listed,
-   which the `fail-first` job cannot see.
+10. Review. `node scripts/review-verdict.mjs --content --list` lists the guarded paths the
+    train changes against main; when it lists any, or a member's own verdict is not `merge`,
+    a session that built none of it writes `.ai/repo/reviews/<train-pr>.yaml` (skill
+    `review-a-guarded-pr`), with the `members` block of step 3 for each member it judges. A
+    fold-in after the verdict that touches a guarded path makes the verdict stale. The
+    reviewer also checks that each member row's title is its member's and that every merged
+    member is listed, which neither job can see. Check the whole train as CI will:
 
-9. Land by a merge commit, never squash, so every included head reaches main, its pull
-   request is marked merged and its commits stay in the history:
+    ```bash
+    gh pr view <train-pr> --json title,body,headRefName > pr.json
+    node scripts/review-verdict.mjs --pr <train-pr> --pr-json pr.json
+    ```
 
-   ```bash
-   gh pr merge <train-pr> --auto --merge
-   ```
+11. Land by a merge commit, never squash, so every included head reaches main, its pull
+    request is marked merged and its commits stay in the history:
+
+    ```bash
+    gh pr merge <train-pr> --auto --merge
+    ```
 
 # Output
 
 - `train/<yyyy-mm-dd>` on origin: one `--no-ff` merge commit per included pull request,
   each made through the pre-commit hook, one `build(dist)` rebuild after the last merge.
-- One pull request to main with the member table (no `feat` or `fix` member), the conflict
-  resolutions and the `npm run verify` result, armed with `--auto --merge`, and its review
-  verdict when guarded paths changed.
+- One pull request to main with the member table (no `feat` or `fix` member, no two members
+  setting one behaviour two ways), the conflict resolutions and the `npm run verify` result,
+  armed with `--auto --merge`, and its review verdict when guarded paths changed or a
+  member's own verdict is not `merge`.
 - The task closed with
   `majordomus finish --outcome completed --verify-command "npm run verify" --note <file>`.

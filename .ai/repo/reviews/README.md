@@ -69,8 +69,24 @@ merge whatever `verdict` says; anything the program cannot read (another severit
 status, no list) refuses too. A finding is closed by the change that fixes it and the reviewer
 confirming it on the new content, not by editing the word.
 
+## Trains
+
+A train's members are judged by their own verdicts (rule `project.review-verdict`). Each
+member's `<n>.yaml` at the train's head, where one exists, must say `verdict: merge`. A member
+whose verdict says anything else rides only when the train's reviewer judges its content and
+names it in the train's verdict:
+
+```yaml
+members:                         # optional; only for members whose own verdict is not merge
+  - { pr: 303, verdict: merge, reason: "R-1 and R-2 fixed in the train at 3a840b66" }
+```
+
+Adding `members` does not change `content`: the verdict file is not a guarded path.
+
 ## Checking one locally
 
 ```bash
 node scripts/review-verdict.mjs --pr <number>     # the committed head against origin/main
+gh pr view <number> --json title,body,headRefName > pr.json
+node scripts/review-verdict.mjs --pr <number> --pr-json pr.json   # a train, with its members
 ```
