@@ -8,12 +8,17 @@
 // Sources, in this order: the Synth's panel and engine presets (synth/presets.js), the curated
 // node presets (node-presets.js), the synthesis templates as whole-graph patches
 // (templates/index.js), every source registered through registerPatchSource (the XY pad's
-// presets, K097, register here), then the person's saved patches (library.js patches()).
+// presets, K097: synth/library.js), then the person's saved patches (library.js patches()); a
+// saved patch whose `category` names a registered source is listed and loaded as that source's.
 //
-//   registerPatchSource({ id, label, entries: () => [entry] })   a category of its own
-//   catalogEntries({ user }) -> [entry]
+//   registerPatchSource({ id, label, entries(model) -> [entry], load?(model, patch, mode) ->
+//     { action } | { reason }, capture?(model, name) -> patch })   a category of its own: its
+//     entries and its saved patches load through `load`; `capture` saves the document's state
+//   catalogEntries({ user, model }) -> [entry]
 //     entry = { id, name, instrument, instrumentLabel, tags: [tag], source: 'factory' | 'user',
-//               modes: ['apply' | 'insert' | 'replace'], patch }
+//               modes: ['apply' | 'insert' | 'replace'], patch, load? }
+//   captureSources(model) -> [{ id, label, capture(name) -> patch }]   the sources that can
+//     save the document's state now
 //   browseView(entries, model, { instrument, tag, query, target }) -> { instruments: [{ id,
 //     label, count }], tags: [{ id, count }], items: [entry + { inUse, applicable, reason }] }
 //     filters are exact (instrument id, tag id); `query` matches the name, case-insensitive
@@ -78,10 +83,18 @@ function factoryEntries() {
   return out;
 }
 
-export function catalogEntries({ user = [] } = {}) {
-  const extra = SOURCES.flatMap((s) => s.entries().map((e) => ({ source: 'factory',
-    tags: [s.id], ...e })));
+const loader = (s) => (s.load ? (model, patch, mode) => s.load(model, patch, mode) : null);
+
+export function catalogEntries({ user = [], model = null } = {}) {
+  const extra = SOURCES.flatMap((s) => s.entries(model).map((e) => ({ source: 'factory',
+    tags: [s.id], instrument: s.id, instrumentLabel: s.label, load: loader(s), ...e })));
   const mine = user.map((u) => {
+    const s = SOURCES.find((x) => x.id === u.patch.category);
+    if (s) {
+      return { id: `user-${u.id}`, name: u.patch.name, source: 'user', instrument: s.id,
+        instrumentLabel: s.label, tags: [s.id, 'saved'], modes: ['apply'], patch: u.patch,
+        load: loader(s) };
+    }
     const type = singleNodeType(u.patch);
     return { id: `user-${u.id}`, name: u.patch.name, source: 'user',
       instrument: type || GRAPH, instrumentLabel: type ? typeLabel(type) : 'Whole graph',
@@ -97,8 +110,20 @@ const same = (a, b) => canonicalJson(a) === canonicalJson(b);
 const inUse = (model, entry) => entry.patch.graph.nodes.every((src) => model.graph.nodes
   .some((n) => n.type === src.type && same({ ...n.params, ...src.params }, n.params)));
 
+export function captureSources(model) {
+  return SOURCES.filter((s) => s.capture).flatMap((s) => {
+    try {
+      s.capture(model, 'probe');
+    } catch (e) {
+      return []; // nothing to save now (the document lacks the instrument)
+    }
+    return [{ id: s.id, label: s.label, capture: (name) => s.capture(model, name) }];
+  });
+}
+
 function applyReason(model, entry, target) {
   if (!entry.modes.includes('apply')) return null;
+  if (entry.load) return entry.load(model, entry.patch, 'apply').reason || null;
   const { onto } = patchTargets(model, entry.patch, { target });
   if (Object.keys(onto).length) return null;
   if (entry.instrument === SEMI_MONO.id) {
@@ -134,6 +159,7 @@ export function browseView(entries, model, { instrument = '', tag = '', query = 
 
 export function entryAction(model, entry, mode, { target = null } = {}) {
   if (!entry.modes.includes(mode)) return { reason: `${entry.name} cannot be loaded that way.` };
+  if (entry.load) return entry.load(model, entry.patch, mode);
   if (mode === 'apply') {
     const reason = applyReason(model, entry, target);
     if (reason) return { reason };

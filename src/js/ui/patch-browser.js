@@ -10,9 +10,14 @@
 //   mountPatchBrowser(host, svc) -> { open({ instrument, from }), refresh() }
 //     svc: { store, userPatches() -> Promise<[{ id, patch }]>, target() -> node id | null,
 //            announce(text, { assertive }), show() -> Promise (opens the dialog holding host),
+//            savePatch(patch) -> Promise (the library's save, no silent overwrite),
 //            applied(result, entry, mode, from) }
+//   A source that can capture the document (the XY pad, K097) gets a name field and a Save
+//   button: its preset is saved as an ordinary patch of its category and listed at once.
 
-import { browseView, catalogEntries, entryAction } from '../studio/patch-catalog.js';
+import {
+  browseView, captureSources, catalogEntries, entryAction,
+} from '../studio/patch-catalog.js';
 import { announceAction } from '../studio/a11y.js';
 import { h, replaceChildren } from './studio/graph-dom.js';
 
@@ -46,6 +51,8 @@ export function mountPatchBrowser(host, svc) {
       + 'border-gray-200 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 '
       + 'dark:border-gray-700' });
   const detail = h('div', { 'data-osc': 'library.detail', class: 'flex flex-col gap-2' });
+  const saveBox = h('div', { class: 'flex flex-wrap items-center gap-2', role: 'group',
+    'aria-label': 'Save a preset', 'data-osc': 'library.save' });
   replaceChildren(host, h('section', { class: 'mt-4 flex flex-col gap-3 border-0 border-t '
     + 'border-solid border-gray-200 pt-4 dark:border-gray-700', 'data-osc': 'library',
   'aria-labelledby': 'osc-patch-library-title' }, [
@@ -58,9 +65,10 @@ export function mountPatchBrowser(host, svc) {
       [search, inst, tag]),
     h('div', { class: 'grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_16rem]' },
       [list, detail]),
-    status]));
+    saveBox, status]));
 
-  const view = () => browseView(entries || (entries = catalogEntries()), svc.store.getModel(),
+  const view = () => browseView(entries || (entries = catalogEntries({ model: svc.store
+    .getModel() })), svc.store.getModel(),
     { ...f, target: svc.target() });
   const options = (sel, all, items, value) => replaceChildren(sel, [h('option', { value: '',
     text: all }), ...items.map((x) => h('option', { value: x.id, text: `${x.label || x.id} (${
@@ -143,10 +151,30 @@ export function mountPatchBrowser(host, svc) {
     }
   });
 
+  function renderSave() {
+    const name = h('input', { type: 'text', class: `${FIELD} w-full sm:w-56`, maxlength: '64',
+      'aria-label': 'Preset name', placeholder: 'Preset name', 'data-osc': 'library.saveName' });
+    replaceChildren(saveBox, captureSources(svc.store.getModel()).map((c) => [name,
+      h('button', { type: 'button', class: SECONDARY, text: `Save the ${c.label} as a preset`,
+        'data-osc': `library.save.${c.id}`, onClick: async () => {
+          try {
+            const patch = c.capture(name.value.trim());
+            await svc.savePatch(patch);
+            status.textContent = `Saved ${patch.name}.`;
+            svc.announce(status.textContent);
+            await refresh();
+          } catch (e) {
+            status.textContent = (e && e.message) || String(e);
+            svc.announce(status.textContent, { assertive: true });
+          }
+        } })]).flat());
+  }
+
   async function refresh() {
     const user = await svc.userPatches().catch(() => []);
-    entries = catalogEntries({ user });
+    entries = catalogEntries({ user, model: svc.store.getModel() });
     render();
+    renderSave();
   }
 
   return {

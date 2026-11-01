@@ -99,6 +99,7 @@ import { mountLibrary } from './library-panel.js';
 import { compactTime, mountCompact } from './compact.js';
 import { STUDIO_STORE_FALLBACK_TEXT, mountPatches, recordId } from './patches-panel.js';
 import { mountPatchBrowser } from '../patch-browser.js';
+import { registerSynthSources } from '../../synth/library.js';
 import { mountStudioTimeline } from './timeline-editor.js';
 import { studioBackTarget, workspacePhrase } from '../cross-links.js';
 import { WORKSPACE_LABELS } from '../shortcuts.js';
@@ -1107,8 +1108,11 @@ export function createStudioUi(svc = {}) {
     const libBody = document.querySelector('#osc-dlg-studio-library > div');
     const browserHost = libBody ? libBody.insertBefore(document.createElement('div'),
       libBody.lastElementChild) : null;
+    registerSynthSources();
     ctx.browser = browserHost ? mountPatchBrowser(browserHost, { store: ctx.handle, announce,
       userPatches: () => library().then((l) => l.patches()),
+      savePatch: (p) => library().then(async (l) => l.savePatch(p, { now: new Date(),
+        id: recordId('patch', p.name, (await l.list()).map((r) => r.id)) })),
       show: () => ctx.patches.openLibrary(),
       target: () => (cmp.workspace === 'studio' ? ctx.handle.getSelection().nodes[0] : null) })
       : null;
