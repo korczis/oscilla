@@ -139,6 +139,21 @@ export function navGroupOf(mode) {
 }
 
 /**
+ * The navigation's top level in order, derived from WORKSPACES and NAV_GROUPS: a top-level
+ * workspace as `nav.<id>`, a group once, at its first workspace, as `nav-group.<group>`. Synth
+ * is top level after Studio by the owner's decision Q019.
+ */
+export function navTopLevel() {
+  const out = [];
+  for (const ws of WORKSPACES) {
+    const g = navGroupOf(ws);
+    const id = g ? `nav-group.${g}` : `nav.${ws}`;
+    if (!out.includes(id)) out.push(id);
+  }
+  return out;
+}
+
+/**
  * Place a group's dropdown under its button. The panel is position: fixed because the nav strip
  * scrolls (overflow-x), which would clip an absolutely positioned child; it stays in the viewport.
  */
