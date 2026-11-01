@@ -21,4 +21,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-01
-updated_at: 2026-10-30
+updated_at: 2026-10-31T22:28:14Z
+started_at: 2026-10-31T22:27:59Z
+started_event: sha256:4397c2628d07ede497fd60afb6777d76eb6e69a543f1ba14ee337669f0ea6469
+completed_at: 2026-10-31T22:28:14Z
+completed_event: sha256:8bc0d809f894281a30679fc353e29a5740dc198664cf81e2a9311ca79ee84c8f
+evidence:
+  - covers: verified
+    type: artifact
+    command: "majordomus plan show S074; majordomus plan validate"
+    result: "an independent review of origin/main d9db6bdf against section 74 found 21 verified findings: 6 owned by K002/#266, C005/#292, C012/#290, G008, F003/U007; 15 filed as U011-U025 under M054; S074 current_state records the mapping; landed in #352 via train #354 (f887066f)"
+    artifact: ".ai/repo/project/issues/S074.yaml"
+    commit: f887066f3e869735cbb62cd4226459e9b6db498a
+    recorded_at: 2026-10-31T22:25:37Z
