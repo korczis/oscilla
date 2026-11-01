@@ -113,6 +113,23 @@ and the part in view; press or drag on it to move there.
   trigger input, or a loop that would feed audio back into itself without a delay. Nothing is
   changed silently.
 
+Cables keep one look per signal type, the same in the Studio graph and in the Playground's
+compact Studio (one edge style table, `src/styles/studio.css`):
+
+| Signal type | Cable |
+| --- | --- |
+| Audio | blue, solid |
+| Control | purple, dashed (6 on, 4 off) |
+| Trigger | orange, pulse: short dashes (2 on, 3 off) |
+| Analysis | green, dash-dot (9 on, 3 off, 2 on, 3 off) |
+| Muted (any type) | faint, dotted (1 on, 4 off) |
+
+In the Studio graph a cable that carries nothing has a sparse dash and a cross at its middle.
+In the compact Studio every cable ends at its port: inputs on a chip's left edge, outputs on
+its right, in the node's port order, so a modulation cable reaches the parameter it moves
+(the LFO's cable into the Filter's cutoff) below the audio cable into the same Filter.
+Selecting a chip there tells a screen reader which cables come in and their types.
+
 ## Edit parameters
 
 Select a node: the **Inspector** shows its parameters with their units and ranges. Type a value
@@ -147,6 +164,13 @@ title, the **Transport** (time in seconds or bars and beats, tempo in BPM, beats
 beat unit, the loop switch with its start and end, and the timeline's length) and notes. These
 are document settings: each change is an undoable edit, and tempo changes move tempo-linked
 clips. The timeline's transport strip shows the same tempo.
+
+While the Studio plays, the status bar at the bottom of the page says **PLAYING**, names the
+**Studio** and shows the level actually in effect: **Master** and the Master Output level in dB.
+Clicking or typing anywhere on the page does not change that level. If you set the Playground
+gain while the Studio plays, that newer level takes over the output, and the status bar shows it
+as **Gain**. The status bar's own Play button still plays the instrument (the Playground); use
+the Studio's Play and Stop for the Studio.
 
 ## Is what plays what you see? (Runtime)
 
@@ -326,6 +350,7 @@ anywhere else in those workspaces Space is the instrument's.
 
 ## Limits
 
-- Not built yet: node groups, dragging several clips at once. A link opens a shipped template only; a saved project is shared as a file.
+- Not built yet: node groups, dragging several clips at once. A link opens a shipped template
+  only; a saved project is shared as a file.
 - Studio is responsive at about 100 nodes and 200 connections ([performance](performance.md));
   it is not designed for much larger graphs.

@@ -1658,7 +1658,8 @@
               <label class="osc-label" for="osc-stereo-pan">Pan</label>
               <input class="osc-slider osc-slider--sm" id="osc-stereo-pan" type="range" min="-1"
                 max="1" step="0.01" value="0" style="--osc-fill: 50%" data-osc="stereo.pan"
-                aria-valuetext="Centre">
+                aria-valuetext="Centre" :disabled="source !== 'dual' || dual.stereo"
+                aria-describedby="osc-stereo-pan-why">
               <span class="osc-label" id="osc-stereo-route-label">Output</span>
               <div class="osc-seg osc-stereo-route" role="radiogroup"
                 aria-labelledby="osc-stereo-route-label">
@@ -1671,6 +1672,12 @@
               </div>
             </div>
           </div>
+          <p id="osc-stereo-pan-why" hidden
+            :hidden="!(tabs.phase === 'stereo' && (source !== 'dual' || dual.stereo))"
+            x-text="source !== 'dual'
+              ? 'Pan applies to the A/B dual voice: switch on Play A + B (Dual Oscillator).'
+              : 'Pan applies in Mono output; Stereo output sends A left and B right.'">Pan applies
+            to the A/B dual voice in Mono output; Stereo output sends A left and B right.</p>
           <div class="osc-phase-corr">
             <span class="osc-label" id="osc-corr-label">Correlation</span>
             <div class="osc-meter osc-corr-meter" id="osc-corr-meter" data-osc="phase.correlationMeter"
@@ -1858,8 +1865,9 @@
     <!-- ---------- Keyboard (K026; ADR 0058, ADR 0062): the computer keyboard and the
          on-screen keys play the note voices of the AudioEngine (src/js/midi/keyboard-ui.js), in
          the Playground and the Studio, each armed on its own. The keys are a canvas domain view;
-         the controls are native buttons and carry no class until the keyboard moves into its
-         Pro card (plan F001 to F003). -->
+         the controls are native buttons that carry only Tailwind's 44 px minimum on a coarse
+         pointer (the touch-target rule) until the keyboard moves into its Pro card (plan F001
+         to F003). -->
     <div id="osc-keyboard" data-osc="keyboard" role="group" aria-labelledby="osc-kbd-title"
       x-show="kbdView" x-cloak
       :class="kbdView === 'synth' ? 'fixed inset-x-0 bottom-[var(--osc-statusbar-h)] z-30 max-h-[45vh] overflow-y-auto border-t border-solid border-gray-200 bg-white px-4 py-2 shadow dark:border-gray-700 dark:bg-gray-800' : ''">
@@ -1903,15 +1911,25 @@
         </div>
       </div>
       <div role="group" aria-label="Keyboard controls" aria-describedby="osc-kbd-readout">
-        <button type="button" data-osc="keyboard.arm" :aria-pressed="String(kbdArmedHere)"
+        <button type="button"
+          class="[@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
+          data-osc="keyboard.arm" :aria-pressed="String(kbdArmedHere)"
           @click="kbdToggle()" x-text="kbdArmedHere ? 'Disarm keys' : 'Arm keys'">Arm keys</button>
-        <button type="button" data-osc="keyboard.octave-down" aria-keyshortcuts="Z"
+        <button type="button"
+          class="[@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
+          data-osc="keyboard.octave-down" aria-keyshortcuts="Z"
           @click="kbdControl('octave-down')">Octave −</button>
-        <button type="button" data-osc="keyboard.octave-up" aria-keyshortcuts="X"
+        <button type="button"
+          class="[@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
+          data-osc="keyboard.octave-up" aria-keyshortcuts="X"
           @click="kbdControl('octave-up')">Octave +</button>
-        <button type="button" data-osc="keyboard.velocity-down" aria-keyshortcuts="C"
+        <button type="button"
+          class="[@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
+          data-osc="keyboard.velocity-down" aria-keyshortcuts="C"
           @click="kbdControl('velocity-down')">Velocity −</button>
-        <button type="button" data-osc="keyboard.velocity-up" aria-keyshortcuts="V"
+        <button type="button"
+          class="[@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
+          data-osc="keyboard.velocity-up" aria-keyshortcuts="V"
           @click="kbdControl('velocity-up')">Velocity +</button>
       </div>
       <p id="osc-kbd-readout" data-osc="keyboard.readout" role="status" x-text="kbdReadout"
@@ -2453,7 +2471,8 @@
       <div class="mb-3 border-0 border-b border-solid border-gray-200 dark:border-gray-700">
         <ul class="-mb-px flex text-sm font-medium" role="tablist" aria-label="Synth instrument">
           <template x-for="t in synth.tabs" :key="t.id">
-            <li><button type="button" role="tab" :id="'osc-synth-tab-' + t.id" :data-synth-tab="t.id"
+            <li><button type="button" role="tab" :id="'osc-synth-tab-' + t.id" data-osc="synth.tab"
+              :data-value="t.id" :data-synth-tab="t.id"
               :aria-selected="String(synth.tab === t.id)" @click="synthTab(t.id)" x-text="t.label"
               :class="synth.tab === t.id ? 'border-primary-600 text-primary-600 dark:border-primary-500 dark:text-primary-500' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300'"
               class="inline-flex h-11 items-center rounded-t-lg border-0 border-b-2 border-solid bg-transparent px-4"></button></li>
@@ -2983,7 +3002,7 @@
       data-osc="status.announce" x-text="announceText"></p>
     <div class="osc-sb-state">
       <span class="osc-status" id="osc-status" data-osc="status.state"
-        :class="{ 'is-playing': isSounding && !ceilingActing,
+        :class="{ 'is-playing': anySounding && !ceilingActing,
           'is-error': status === 'ERROR' || ceilingActing }">
         <span class="osc-status-dot" aria-hidden="true"></span>
         <span class="osc-status-label" data-osc="status.label" x-text="statusLabel"

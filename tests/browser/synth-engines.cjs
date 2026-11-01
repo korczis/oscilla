@@ -30,7 +30,7 @@
 //               the Panel tab shows its plate; Restore module there brings the panel back
 //   e-route     the Panel tab's keys play the panel (130.8 Hz from VCO 1 at 16'), the Engines tab's
 //               the chosen engine (no 130.8 Hz); a tab switch releases held notes; a blocked
-//               engine says why and plays nothing
+//               engine says why and plays nothing; back on the Panel tab the keys play the panel
 //   e-midi      through tests/browser/lib/midi-stub.cjs on the FM engine: Note On sounds,
 //               Note Off silences
 //   e-link      #m=synth&yt=engines&ye=fm&yp=fm-bell opens the FM engine with the bell's ratio
@@ -436,7 +436,7 @@ function defineChecks() {
   def('e-route', '#m=synth', async ({ page }) => {
     await hold(page, 'KeyA');
     await sound(page, (q) => peakAt(q, C4 / 2), 'the Panel tab plays the panel');
-    await page.locator('[data-synth-tab="engines"]').click();
+    await page.locator('[data-osc="synth.tab"][data-value="engines"]').click();
     const released = await silent(page, 'a tab switch releases the held note');
     await page.keyboard.up('KeyA');
     await page.locator('[data-engine="additive"]').click();
@@ -448,9 +448,17 @@ function defineChecks() {
     await page.locator('[data-blocked="pluck"]').dispatchEvent('click'); // aria-disabled
     const status = await page.locator('[data-osc="synth.status"]').textContent();
     const d = await dbg(page);
-    return { ok: /no-silent-feedback/.test(status) && d.engine === 'additive',
+    // Back on the Panel tab, the keys play the panel again.
+    await page.locator('[data-osc="synth.tab"][data-value="panel"]').click();
+    await hold(page, 'KeyA');
+    const back = await sound(page, (q) => peakAt(q, C4 / 2), 'the Panel tab plays the panel again');
+    await page.keyboard.up('KeyA');
+    await silent(page, 'released on the Panel tab');
+    const d2 = await dbg(page);
+    return { ok: /no-silent-feedback/.test(status) && d.engine === 'additive' && d2.tab === 'panel',
       // timing-allow: 80 characters of the status text, not frames
-      released: released.rmsDb, engine: lineDb(eng, C4), status: status.slice(0, 80) };
+      released: released.rmsDb, engine: lineDb(eng, C4), status: status.slice(0, 80),
+      panel: lineDb(back, C4 / 2) };
   });
 
   def('e-midi', null, async ({ context, base }) => {

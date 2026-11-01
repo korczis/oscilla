@@ -150,7 +150,15 @@ export function createKeyboardUi({ win = window } = {}) {
           const r = routeOfHash(hash);
           const v = r ? r.workspace : 'playground';
           if (!KEYBOARD_VIEWS.includes(v)) return null;
-          cmp.kbdArmed[v] = q.get(KEYBOARD_LINK_KEY) !== '0';
+          const armed = q.get(KEYBOARD_LINK_KEY) !== '0';
+          cmp.kbdArmed[v] = armed;
+          // The domain answers, as every link does (surface-census routes).
+          if (typeof cmp.notify === 'function') {
+            const where = v === 'studio' ? 'Studio' : 'Playground';
+            cmp.notify('info', `Keyboard ${armed ? 'armed' : 'disarmed'} from the link`, armed
+              ? `The computer keys play the ${where}. Nothing plays until you press a key.`
+              : `The computer keys no longer play the ${where}.`);
+          }
           return true;
         });
       }
@@ -252,7 +260,20 @@ function mountKeys(win, doc, kb) {
   canvas.style.display = 'block';
   canvas.style.touchAction = 'none';
   if (typeof win.ResizeObserver === 'function') {
-    new win.ResizeObserver(() => view.resize()).observe(canvas);
+    // resize() sets the canvas's own height, which the observer reports again: the resize runs
+    // in the next frame and only when the observed width differs from the width last drawn, so
+    // the observer never loops ("ResizeObserver loop completed", WebKit).
+    let frame = 0;
+    const raf = typeof win.requestAnimationFrame === 'function'
+      ? (fn) => win.requestAnimationFrame(fn) : (fn) => win.setTimeout(fn, 16);
+    new win.ResizeObserver((entries) => {
+      const seen = entries.length ? Math.floor(entries[entries.length - 1].contentRect.width) : 0;
+      if (!seen || seen === width || frame) return;
+      frame = raf(() => {
+        frame = 0;
+        view.resize();
+      });
+    }).observe(canvas);
   }
   // The layout the browser knows names the keys as printed (Z on QWERTZ is KeyY): best effort.
   const kbd = win.navigator && win.navigator.keyboard;

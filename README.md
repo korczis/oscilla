@@ -181,7 +181,9 @@ changed.
   build the waveform you hear. It applies to single-oscillator sources, not to the dual
   oscillator.
 - **Phase, Lissajous and stereo:** A/B phase views, a Lissajous figure, a correlation meter and
-  stereo routing (split, panned or mono).
+  stereo routing (split, panned or mono). Pan acts on the sounding A/B dual voice in Mono
+  output, also while it plays; for a single source and in Stereo output the slider is disabled
+  and says why.
 - **Bioacoustics:** approximate hearing ranges and call examples for humans and several animal
   species, every value cited.
 - **Export:** WAV of the current tone, pattern or sequence, rendered offline through the same
@@ -588,7 +590,10 @@ release and deployment are evidenced is the [final report](docs/v31/studio-repor
   exists; where it does not (Safari on iPhone), the button says so.
 
 Studio output, the Playground voice and the Sequencer are exclusive: starting one stops the
-others in the same action, and a measurement stops the Studio.
+others in the same action, and a measurement stops the Studio. While the Studio plays, its Master
+Output level is the engine's output level and a click or key press elsewhere leaves it alone; the
+status bar says PLAYING and shows `Master <dB>`, or `Gain <dB>` once the Playground gain is set
+again. The status bar's Play button stays the Playground's.
 
 Not yet built:
 - node groups
@@ -622,19 +627,19 @@ today, to show where the parts meet and where they do not yet.
 
 What it does not do yet, each named with the work that would fill it:
 
-- MIDI notes do not sound (V502, pull request #261).
 - A MIDI performance cannot be recorded into the song (V505).
-- Velocity is not represented, so the drums have no accents: a Studio clip has no level.
-- There is no Drive node for a driven tone (K012, pull request #267).
-- A filter's Q cannot be automated, so the build's rising resonance is in the score only.
+- Velocity is not represented, so the drums have no accents: a Studio clip has no level (K144
+  gap G4).
+- A filter's Q cannot be automated, so the build's rising resonance is in the score only (K144
+  gap G10).
 - The Studio's view nodes draw nothing (K016).
-- There is no keyboard or note view (K026, V504).
 - After a reload the Studio opens the default template, not the last project (V604).
 - No MEASURE or Experiments step is part of the slice: the Studio's measurement clips measure
   the speaker or loopback path a sound plays through, not the song.
 
-The score keeps the velocities, the Q lane and a drive lane, so each can join the template
-once the Studio can play it.
+The score keeps the velocities and the Q lane, so each can join the template once the Studio
+can play it, and a drive lane, which the template does not use yet although the Drive node
+exists.
 
 `tests/unit/demo-song.test.mjs` checks the song as data: one clip per note of the score, the
 pinned hash, an offline render plan of the whole song with no limitation, and that the six
@@ -656,7 +661,9 @@ through the user's whole journey in Chromium, Firefox and WebKit:
 
 Each gap above is an expected failure of that suite, named by its plan issue. It runs every
 time, and it fails the suite once it starts passing, so its mark is removed when the work
-lands.
+lands. MIDI notes sounding through the engine (V502), a Drive node for the driven tone (K012)
+and a keyboard view whose key lights and sounds (K026, V504) have landed: the suite checks
+them as steps of the journey.
 
 ## Safety and measurement limits
 
@@ -1056,7 +1063,10 @@ Browser storage holds only these keys and one database, `oscilla-experiments` (v
 | IndexedDB | `oscilla-experiments`, object store `findings` | Your findings (statement, status, notes, the evidence each cites and the id and result hash of each cited experiment) |
 
 Experiments and findings are deleted only when you delete them. Permission to play continuously is never
-stored.
+stored. A preset, History entry, config file or link saved with a continuous sweep repeat
+therefore restores it as once, and a notice says so ("Continuous repeat not restored"). Allowing
+continuous playback does not bring the repeat back by itself: allow it in Playback safety, then
+load the preset, History entry or file again. A link never carries the permission.
 
 ## Licences
 
