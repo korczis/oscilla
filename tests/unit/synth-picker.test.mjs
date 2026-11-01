@@ -194,3 +194,39 @@ test('negative: a preset that would add edges adds none; the edge is reported sk
   assert.equal(wrong.ok, false);
   assert.match(wrong.reason, /VCO 1 is a VCO; the patch sets a Filter/);
 });
+
+test('review R1: a preset sets an amount depth, keeping the cable\'s polarity and mapping', () => {
+  const st = panelStore();
+  const m = st.getModel();
+  const eg2 = PANEL.resolve(m).get('eg2').id;
+  const lpf = PANEL.resolve(m).get('lpf').id;
+  const edge = m.graph.edges.find((e) => e.from.node === eg2 && e.to.node === lpf
+    && e.to.port === 'frequency');
+  assert.equal(st.dispatch({ type: 'EDGE_UPDATE', edgeId: edge.id,
+    props: { polarity: 'bipolar', mapping: 'linear' } }).ok, true);
+  assert.equal(st.dispatch(presetAction(st.getModel(), PANEL, 'init').action).ok, true);
+  const after = st.getModel().graph.edges.find((e) => e.id === edge.id).props;
+  assert.equal(after.depth, 2, 'the preset owns the depth');
+  assert.equal(after.polarity, 'bipolar', 'polarity kept');
+  assert.equal(after.mapping, 'linear', 'mapping kept');
+});
+
+test('review R3: applying the preset that is already in place adds no undo entry', () => {
+  const st = panelStore();
+  st.dispatch(presetAction(st.getModel(), PANEL, 'bass').action);
+  const depth = st.debugInfo().undoDepth;
+  const again = st.dispatch(presetAction(st.getModel(), PANEL, 'bass').action);
+  assert.equal(again.ok, true);
+  assert.equal(st.debugInfo().undoDepth, depth);
+});
+
+test('review R4: a route may name any valid node id, up to the id limit', () => {
+  const st = panelStore();
+  const id = `keys-${'k'.repeat(100)}`;
+  assert.equal(st.dispatch({ type: 'NODE_ADD', id, nodeType: 'keys',
+    position: { x: 0, y: 0 } }).ok, true);
+  assert.equal(st.dispatch({ type: 'METADATA_SET', noteTarget: id }).ok, true);
+  const back = importStudio(JSON.parse(serializeStudio(st.getModel())));
+  assert.equal(back.ok, true, back.ok || back.errors[0].message);
+  assert.equal(back.model.metadata.noteTarget, id);
+});

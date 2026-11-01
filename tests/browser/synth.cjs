@@ -522,11 +522,21 @@ function defineChecks() {
     out.items = await menu.locator('[role="menuitem"]').count();
     out.expanded = await pick.getAttribute('aria-expanded');
     const before = await depth();
-    for (let i = 0; i < out.items; i++) {
-      if (await page.evaluate((id) => document.activeElement
-        && document.activeElement.dataset.pick === id, fm)) break;
+    const focused = () => page.evaluate(() => (document.activeElement
+      && document.activeElement.getAttribute('role') === 'menuitem'
+      ? document.activeElement.dataset.pick : null));
+    await until(async () => (await focused()) !== null, { ms: 5000,
+      what: 'focus enters the instrument menu' });
+    // Step down one item at a time, each step confirmed, until FM has the focus (bounded by
+    // the item count), then choose it.
+    for (let i = 0; i < out.items && (await focused()) !== fm; i++) {
+      const at = await focused();
       await page.keyboard.press('ArrowDown');
+      await until(async () => (await focused()) !== at, { ms: 5000,
+        what: 'ArrowDown moves the focus to the next item' });
     }
+    await until(async () => (await focused()) === fm, { ms: 5000,
+      what: 'the focus reaches the FM engine' });
     await page.keyboard.press('Enter');
     await until(async () => (await dbg(page)).played === fm, { ms: 5000,
       what: 'Enter routes the keys to the FM engine' });
