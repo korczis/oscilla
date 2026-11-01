@@ -2793,7 +2793,7 @@
       data-osc="status.announce" x-text="announceText"></p>
     <div class="osc-sb-state">
       <span class="osc-status" id="osc-status" data-osc="status.state"
-        :class="{ 'is-playing': isSounding, 'is-error': status === 'ERROR' }">
+        :class="{ 'is-playing': anySounding, 'is-error': status === 'ERROR' }">
         <span class="osc-status-dot" aria-hidden="true"></span>
         <span class="osc-status-label" data-osc="status.label" x-text="statusLabel">READY</span>
       </span>

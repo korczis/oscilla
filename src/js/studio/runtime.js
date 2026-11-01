@@ -43,8 +43,14 @@
 //                                  threw (entity)
 //   studioDivergence({ model, revision }, runtime) -> verdict   divergence as data (below)
 //   runtime.on(fn) -> off          fn(type, detail): 'applied' | 'error' | 'state' | 'handle'
+//                                  | 'master'
 //                                  ('handle': { id, status, code }, a pending handle settled:
-//                                  a Microphone opened or failed after its permission prompt)
+//                                  a Microphone opened or failed after its permission prompt;
+//                                  'master': { level, writes }, the Studio wrote the engine's
+//                                  master level (level: what the engine now requests, writes:
+//                                  engine.masterWrites after it) or no longer holds it
+//                                  (level: null), see "Global side effects"; plain numbers, so a
+//                                  view can mirror them, C012)
 //   runtime.setOwnedParams([{ node, param, peak?, initial? }], { releaseAt? }) -> list
 //                                  parameters another
 //                                  owner drives (the transport: automation lanes, pattern-played
@@ -101,6 +107,9 @@
 // else wrote the level since the Studio's last write (engine.masterWrites; PR #119 D2): a level
 // the user set elsewhere while the Studio played (the Playground's gain) is newer and is kept,
 // and a write during STOP's fade cancels the held restore (engine.holdMasterGain).
+// Each write is reported as a 'master' event with the level and engine.masterWrites after it,
+// and every way out (restored or kept) as 'master' with level null: the status bar mirrors the
+// number (cmp.studio.masterLevel) and never writes it into the Playground gain (C012).
 //
 // Commit atomicity (F4). Once step 3 has swapped the maps and the plan, the transaction is
 // committed: everything after it (parameter bases, ramps, fades, stops, `engage`) is guarded, and
@@ -345,6 +354,7 @@ export function createStudioRuntime({
       if (savedMasterLevel === null || other) savedMasterLevel = hooks.masterLevel;
       hooks.setMasterLevel(g);
       ownWrite = { count: hooks.masterWrites, level: hooks.masterLevel };
+      emit('master', { level: hooks.masterLevel, writes: hooks.masterWrites });
       return true;
     },
   });
@@ -361,9 +371,11 @@ export function createStudioRuntime({
     if (level === null) return;
     const ours = !own || (own.count !== null ? hooks.masterWrites === own.count
       : hooks.masterLevel === own.level);
-    if (!ours) return;
-    if (at === null) hooks.setMasterLevel(level);
-    else hooks.restoreMasterLevel(level, at);
+    if (ours) {
+      if (at === null) hooks.setMasterLevel(level);
+      else hooks.restoreMasterLevel(level, at);
+    }
+    emit('master', { level: null, writes: hooks.masterWrites });
   }
 
   /**
