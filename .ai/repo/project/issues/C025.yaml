@@ -7,7 +7,7 @@ slug: visiting-the-synth-workspace-does-not-by-itself-make-the-studio-document-u
 priority: p2
 profile: implementation
 objective: "Lands as fix(synth). Opening the Synth workspace inserts its semi-modular voice (19 nodes, src/js/synth/ui.js ensurePanel -> panel.instantiate) into the one Studio document and marks it dirty, so a reload asks about unsaved changes after the user only visited Synth. Before: open the app, open Synth, reload: the unsaved-work guard asks. After: either the voice is created without marking the document dirty until the user edits it (a knob, a cable, a note recorded, a preset), or an untouched default voice is recognised as the default and does not count as unsaved work; any edit to it, or to anything else, still arms the guard, and an explicit Insert from the cuts notice counts as an edit. The pull request names which of the two it takes and why. The unsaved-work guard keeps its other triggers (C019's unsaved sequence, Studio edits). Rollback: revert; no saved state changes shape."
-why: "Combination of #329 (Synth workspace) with the unsaved-work guard in the #367 train, raised in oscilla-af's review of the train: a guard that fires after a visit teaches the user to dismiss it, which defeats it when there is real work to lose."
+why: "Found by oscilla-26, the builder of the #367 train, while fixing link-integrity on #367 at dcee5cec: the combination of #329 (Synth workspace) with the unsaved-work guard means opening Synth inserts its 19-node voice and marks the Studio document dirty, so a later template link meets the unsaved-work question. A guard that fires after a visit teaches the user to dismiss it, which defeats it when there is real work to lose."
 scope:
   - "src/js/synth/ui.js"
   - "src/js/studio/history.js"
