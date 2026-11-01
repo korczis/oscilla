@@ -280,7 +280,7 @@ test('a path filter or a job condition in ci.yml is a disagreement, and so is a 
 
 test('the aggregate gate requires exactly what ci.yml gate needs', () => {
   const needs = 'needs: [unit, knowledge, fail-first, review-verdict, engine, suites, measure, '
-    + 'studio, browser, visual]';
+    + 'studio, browser, census, visual]';
   const fewer = mutate(CI, needs, needs.replace(', visual', ''));
   assert.ok(has(compare(fewer, MODEL), 'aggregate: gate requires'));
   const dropped = MODEL.replace(/\n {6}- visual(?=\n)/, '');

@@ -252,7 +252,7 @@ jobs:
   browser:
     name: Browser gate (${{ matrix.browser }})
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 50
     strategy:
       fail-fast: false
       matrix:
@@ -277,14 +277,54 @@ jobs:
           pulseaudio --start --exit-idle-time=-1
           pactl load-module module-null-sink sink_name=ci_null
           pactl set-default-sink ci_null
-      - name: dist from file:// and the /oscilla/ sub-path; layout, touch targets, stop
+      - name: dist from file:// and the /oscilla/ sub-path; layout, touch targets, stop, journeys
         run: mkdir -p logs && npm run test:browser 2>&1 | tee logs/browser-${{ matrix.browser }}.log
-        timeout-minutes: 15
+        timeout-minutes: 20
       - name: Upload the log on failure
         if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: logs-browser-${{ matrix.browser }}
+          path: logs/
+          retention-days: 14
+
+  census:
+    name: Control census (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    # the sum of the step limits (15 + 13 + 35), rounded up (project.ci-bounded)
+    timeout-minutes: 65
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    env:
+      OSC_BROWSERS: ${{ matrix.browser }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install ${{ matrix.browser }}
+        run: .github/scripts/ci-install.sh browser ${{ matrix.browser }}
+        timeout-minutes: 15
+      - name: Audio sink for headless Firefox (no sound server on the runner)
+        if: matrix.browser == 'firefox'
+        timeout-minutes: 13
+        run: |
+          .github/scripts/ci-install.sh apt pulseaudio
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=ci_null
+          pactl set-default-sink ci_null
+      - name: Every control of every workspace has a row, and every row round-trips (C021)
+        run: mkdir -p logs && npm run test:census 2>&1 | tee logs/census-${{ matrix.browser }}.log
+        timeout-minutes: 35
+      - name: Upload the log on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: logs-census-${{ matrix.browser }}
           path: logs/
           retention-days: 14
 
@@ -443,7 +483,7 @@ jobs:
   gate:
     name: gate
     if: always()
-    needs: [unit, knowledge, fail-first, review-verdict, engine, suites, measure, studio, browser, visual]
+    needs: [unit, knowledge, fail-first, review-verdict, engine, suites, measure, studio, browser, census, visual]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

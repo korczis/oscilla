@@ -41,7 +41,8 @@ export function createRun(ctx, svc, ops) {
     cmp.meas.savedId = null;
     ops.rebuildAll();
     try {
-      ctx.pending = me.preflight(ops.recipeNow(), { calibration: ops.calibrationInput() });
+      ctx.checking = ops.recipeNow();
+      ctx.pending = me.preflight(ctx.checking, { calibration: ops.calibrationInput() });
       await ctx.pending;
     } catch (e) {
       if (!(e && e.code === 'ABORTED')) {
@@ -81,6 +82,7 @@ export function createRun(ctx, svc, ops) {
     const repeatOfAtStart = ctx.repeatOf;
     const recipe = given || ops.recipeNow();
     ctx.lastRecipe = recipe;
+    ctx.checking = given ? null : recipe; // a Studio run's recipe is not the setup's
     ctx.runDefinition = !given && ops.setupIsDefinition(recipe) ? ctx.definition : null;
     const definitionAtStart = ctx.runDefinition;
     if (!given && ctx.definition && !ctx.runDefinition) {

@@ -115,19 +115,37 @@ gates:
     job: browser
     always: true
     runs: OSC_BROWSERS=chromium npm run test:browser
-    summary: dist from file:// and the /oscilla/ sub-path; layout, touch targets and stop, in Chromium
+    summary: dist from file:// and the /oscilla/ sub-path; layout, touch targets, stop and the user journeys, in Chromium
 
   - id: browser-firefox
     job: browser
     always: true
     runs: OSC_BROWSERS=firefox npm run test:browser
-    summary: dist from file:// and the /oscilla/ sub-path; layout, touch targets and stop, in Firefox
+    summary: dist from file:// and the /oscilla/ sub-path; layout, touch targets, stop and the user journeys, in Firefox
 
   - id: browser-webkit
     job: browser
     always: true
     runs: OSC_BROWSERS=webkit npm run test:browser
-    summary: dist from file:// and the /oscilla/ sub-path; layout, touch targets and stop, in WebKit
+    summary: dist from file:// and the /oscilla/ sub-path; layout, touch targets, stop and the user journeys, in WebKit
+
+  - id: census-chromium
+    job: census
+    always: true
+    runs: OSC_BROWSERS=chromium npm run test:census
+    summary: every control of every workspace has a row of the control census and every row round-trips, in Chromium
+
+  - id: census-firefox
+    job: census
+    always: true
+    runs: OSC_BROWSERS=firefox npm run test:census
+    summary: every control of every workspace has a row of the control census and every row round-trips, in Firefox
+
+  - id: census-webkit
+    job: census
+    always: true
+    runs: OSC_BROWSERS=webkit npm run test:census
+    summary: every control of every workspace has a row of the control census and every row round-trips, in WebKit
 
   # The accepted linux-x64 values in tests/visual/baseline.json were measured in the job's
   # container image (mcr.microsoft.com/playwright, the lockfile's Playwright version); a run
@@ -182,6 +200,9 @@ gates:
       - browser-chromium
       - browser-firefox
       - browser-webkit
+      - census-chromium
+      - census-firefox
+      - census-webkit
       - visual
     runs: echo "$RESULTS" | jq -e 'to_entries | all(.value.result == "success")'
     summary: the required check of branch protection; every job it needs succeeded

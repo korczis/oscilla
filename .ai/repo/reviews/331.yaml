@@ -1,0 +1,51 @@
+# Review verdict for pull request #331, C021: user-journey and control-census suites; a blocked
+# MEASURE step, a lab field and the Add block menu say what applies
+# (branch test/c021-journeys-control-census).
+# Delta re-review of head a34caa87, the merge of origin/main ba263bc1 into 3ba4c78e, which
+# oscilla-af judged merge at content da992e41. Main's #262 split src/js/ui/measure.js into
+# src/js/ui/measure/{run,session,...}.js, so #331's measure hunks moved there. Another session
+# built #331 (oscilla-b0), and oscilla-b0 also did the merge. This reviewer built none of it and
+# did not write the earlier verdict.
+#
+# The digest: the base branch's scripts/review-verdict.mjs, from git archive origin/main scripts,
+# run with --repo on this worktree, --content --list --base-branch origin/main:
+# 70470665...8db0 over .github/workflows/ci.yml, .github/workflows/main-checks.yml,
+# src/js/measurement/views/measure-flow.js, src/js/ui/measure/run.js and
+# src/js/ui/measure/session.js.
+#
+# How the delta was reviewed: the PR's own diff on the guarded paths against its new merge base,
+# compared line by line with its own diff at 3ba4c78e against d9db6bdf.
+# - ci.yml: identical. The census job, the gate's needs, and the browser job's 50 and 20 minute
+#   limits are the same values 3ba4c78e had; main did not change them since. main-checks.yml is
+#   unchanged by the PR. ci-workflow-rules.mjs exits 0.
+# - measure-flow.js: identical. The stale-report filter by recipeKey, a blocked Stimulus step
+#   stating its reason, ready false while stale, and INVALID's "Check setup again".
+# - measure.js -> run.js and session.js: the only differences are the split's API.
+#   recipeNow() and calibrationInput() become ops.recipeNow() and ops.calibrationInput(), as every
+#   other call in run.js reads them. ctx.checking is declared in createMeasureContext
+#   (session.js). run.js sets it before the setup check, and for a measurement run to the setup's
+#   recipe, or null for a Studio-given recipe. The preflight event handler (session.js) records it
+#   as the report's recipe. That is R6's fix as af judged it, with no new behaviour.
+# - Unit: the measure, journey, census and ci-* test files, 113 pass, 0 fail. b0 reports npm test
+#   3413/0 and build:check current at this head. The browser suites run in this head's CI.
+#
+# Verdict: merge. The delta adds no finding. af's findings carry over unchanged.
+schema: review-verdict/v1
+pr: 331
+verdict: merge
+reviewer: oscilla-21 reviewer (claude-code af63bcf2)
+content: 7047066567bff16f07e21b5bf0f5d6f52d47cb3d1d6d4ac6de305d98e1d18db0
+findings:
+  - { id: R1, severity: P1, status: closed, title: "device.safetyLimit.pointer now holds PLAY (mouse.down after scrolling it into view) and judges one limited voice that ends while held (control-census.cjs:324-341); passes in webkit 4/4" }
+  - { id: R2, severity: P1, status: closed, title: "the Frame All / Frame Selection setup ends with until() on the live zoom and model.view.graph.zoom both past z0 (control-census.cjs:885-902); no-op mutants fail the rows" }
+  - { id: R3, severity: P2, status: closed, title: "the safety-limit expectation needs safetyLimit === 0.5, len <= 0.55 and a stop by limit + release + 20 ms; an inert select fails it" }
+  - { id: R4, severity: P2, status: closed, title: "labs/dom.js clears the editing state on a capture-phase focusout; new labs-field-commit case, fail-first against bea4cea8" }
+  - { id: R5, severity: P3, status: closed, title: "the census job's timeout-minutes (65) covers its step limits (15 + 13 + 35)" }
+  - { id: R6, severity: P3, status: closed, title: "the preflight report carries the recipe it checked; a changed setup drops its Stimulus reasons and reads '(changed since the setup check)'; new measure-flow-blocked-reason case, fail-first" }
+  - { id: R7, severity: P3, status: open, title: "package.json test:release includes the census suite; the local release gate grows considerably - state it in tests/README.md or keep census CI-only (left as asked)" }
+  - { id: N1, severity: P3, status: open, title: "control-census.cjs:312-341 the safety-limit row judges the engine's scheduled end and its 'ended' timer (audio-engine.js:572-582), not the sound: a tone kept at full gain 3 s past the limit still passes; engine-v1port.cjs:568-572 judges the audible end, so P3" }
+  - { id: N2, severity: P3, status: open, title: "labs/dom.js:51-52 and labs-field-commit.test.mjs: the stated reason for R4 (no 'change' when a field is typed back to its text) did not reproduce in the three engines; the fix is harmless, the comment and test name overstate it" }
+  - { id: N3, severity: P3, status: open, title: "measure-flow.js:207,293 a change to an analysis-only field (aggregation, noiseCheckS, pre/post roll, gap, phase) is reported as a change to the Stimulus step" }
+  - { id: N4, severity: P3, status: open, title: "measure-flow.js:208-213 a stale report hides every Stimulus-step reason, including ones the edit did not touch" }
+  - { id: N5, severity: P3, status: open, title: "measure-flow.js:355,374-375 READY with an edited setup reports ready:false while the primary action still reads Start measurement (unreachable today: a recipe edit resets READY to IDLE)" }
+  - { id: N6, severity: P3, status: open, title: "labs/dom.js:55-58 focusout also fires when the window loses focus, so a field being typed in stops counting as edited and may follow its slider" }

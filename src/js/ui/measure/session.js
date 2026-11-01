@@ -66,6 +66,7 @@ export function createMeasureContext(svc) {
     liveToken: 0,
     pending: null,         // the running measure()/preflight() promise
     lastRecipe: null,
+    checking: null,        // the recipe the setup check in flight was given (R6)
     onStateHook: null,     // test seam only (onceInState)
     // The input named last { device, constraints, sampleRate } and whether TEST CONTEXT named
     // it. Written by nameInput(); whatever decides a binding, an indicator or a displayed
@@ -214,8 +215,10 @@ export function createSession(ctx, svc, ops) {
     if (a.message) announce(a.message);
     switch (e.type) {
       case 'preflight':
+        // `recipe`: the one this report checked, so the flow can tell a refusal of a sweep
+        // the user has corrected since from one of the setup as it is (review of #331, R6).
         ctx.preflight = { ready: e.ready, warnings: e.warnings, blockers: e.blockers,
-          facts: e.facts, sampleRate: e.sampleRate };
+          facts: e.facts, sampleRate: e.sampleRate, recipe: ctx.checking || null };
         if (e.facts && e.facts.input && e.facts.input.ok) {
           nameInput({ device: e.facts.input.device, constraints: e.facts.input.constraints,
             sampleRate: e.sampleRate }, kind === 'loopback');

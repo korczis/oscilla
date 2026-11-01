@@ -43,9 +43,28 @@ export function setSlider(input, value, valueText) {
   if (valueText != null) setAttr(input, 'aria-valuetext', valueText);
 }
 
-/** Set a text/number input unless the user is editing it right now. */
+// A field is being edited from the user's first keystroke ('input') until the edit is
+// committed ('change') or the field loses the focus ('focusout'). All three are heard in the
+// capture phase, so a field's own change handler already sees its edit as committed and may
+// write back the value that applies (C021: the typed "5000" of a field whose limit is 2 s
+// read "5000" while 2 s played, because the field still had the focus when the lab wrote
+// "2 s" into it). A field typed back to the text it had gets 'input' but no 'change', so
+// leaving it ends the edit too; otherwise it would stop following its lab for good.
+const editing = new WeakSet();
+if (typeof document !== 'undefined' && document.addEventListener) {
+  const done = (e) => { if (e.target) editing.delete(e.target); };
+  document.addEventListener('input', (e) => { if (e.target) editing.add(e.target); }, true);
+  document.addEventListener('change', done, true);
+  document.addEventListener('focusout', done, true);
+}
+
+/**
+ * Set a text/number input unless the user is editing it right now (typed, not yet committed).
+ * A committed edit is written back as the value that applies: limited, reformatted, or the
+ * value in use for text that does not parse.
+ */
 export function setField(input, text) {
-  if (!input || document.activeElement === input) return;
+  if (!input || editing.has(input)) return;
   const s = String(text);
   if (input.value !== s) input.value = s;
 }

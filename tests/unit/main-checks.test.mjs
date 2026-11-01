@@ -174,9 +174,9 @@ test('mutation: a copied step drifts, here or in ci.yml', () => {
   assert.match(onlyProblem(CI, here, 'mirror: unit step'), /step 4/);
   const there = mutate(CI,
     'npm run test:browser 2>&1 | tee logs/browser-${{ matrix.browser }}.log\n'
-    + '        timeout-minutes: 15\n',
+    + '        timeout-minutes: 20\n',
     'npm run test:browser 2>&1 | tee logs/browser-${{ matrix.browser }}.log\n'
-    + '        timeout-minutes: 20\n');
+    + '        timeout-minutes: 25\n');
   onlyProblem(there, MAIN, 'mirror: browser step 6');
   const dropped = mutate(MAIN, '      - name: Committed dist/index.html matches a clean rebuild\n'
     + '        run: npm run build:check\n', '');
