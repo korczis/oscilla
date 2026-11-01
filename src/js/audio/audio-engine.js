@@ -21,8 +21,9 @@
 // INVARIANTS (inventory K4/K5, risks 4/5):
 //   - every node of a voice goes through track() (sources through source()), so
 //     activeNodeCount/activeSourceCount stay exact and stop/cleanup leaves zero nodes;
-//   - the output chain (master, limiter and its zero feed, trim, ceiling, analyser) belongs to
-//     the context, not to a voice, and is outside that accounting (see feedLimiter);
+//   - the output chain (master, limiter and its zero feed, trim, ceiling, analyser, and the
+//     read-only pre-ceiling tap) belongs to the context, not to a voice, and is outside that
+//     accounting (see feedLimiter);
 //   - every automation of the envelope, dip and fade gains goes through the recorded params
 //     (v.env / v.rel / v.fade / v.cut, envelope functions through the `eg` wrapper), so their
 //     scheduled value is known at any time in every browser (_freeze holds rel for a dip);
@@ -35,12 +36,19 @@
 //                    create nodes through track/source. engine.updateInserts(cfgs) updates the
 //                    sounding voice; dispose() runs at voice cleanup.
 //     o.periodicWave a PeriodicWave for the carrier of const/steps/ramps/lfo/am/fm plans
-//                    (additive synthesis); engine.setPeriodicWave(wave) changes it live and
-//                    engine.clearPeriodicWave() returns to plan.wave with a click-free dip.
+//                    (additive synthesis; never dual); engine.setPeriodicWave(wave) changes it
+//                    live (refused for a dual voice) and engine.clearPeriodicWave() returns to
+//                    plan.wave with a click-free dip.
 //     o.adsr         { a, d, s, r } (seconds, sustain 0..1): attack/release times come from it
 //                    and it is handed to the envelope function (see voice.js v1OpenEnvelope);
 //                    the default envelope uses only a and r. Install the DSP ADSR with
-//                    engine.setEnvelope(makeAdsrEnvelope(envelopeModule)).
+//                    engine.setEnvelope(makeAdsrEnvelope(envelopeModule)). It shapes the
+//                    open envelope, a continuous ping-pong sweep's whole envelope included.
+//                    engine.setAdsr(adsr, stepEnvelope) applies a change to the sounding
+//                    voice: a release in place while held, anything else by a click-free
+//                    restart, once per drag (setAdsr(..., { settling }), #296 R-7).
+//                    engine.setNoteOffRelease(s) changes the release a held voice uses when
+//                    it is let go (a stored time, no param written; C009).
 //     o.envelope     per-play envelope function (overrides engine.setEnvelope).
 //     o.stepEnvelope (eg, t, dur, a, r, adsr) => void, replaces the V1 step envelope of
 //                    programmed patterns (must schedule through eg).
@@ -60,8 +68,12 @@
 //                  the voices (C003: the V2 sequencer, which compiles its passes into `input`
 //                  through `track`/`source`); its nodes count in activeNodeCount while it is
 //                  open, and dispose() (or a closed context) releases every one.
+//   stageAccounting(): { track, source, untrack, release } for a builder that plays outside
+//   the voices (the V2 sequencer): its nodes count in activeNodeCount while they live.
 //   A replacement voice (_restart) is started through this.play with the voice's own options,
-//   so a wrapper installed on the instance (main.js) re-applies the V2 options.
+//   so a wrapper installed on the instance (main.js) re-applies the V2 options. That wrapper
+//   spreads audio/lab-play-options.js over them, which names every V2 key (value or null): a
+//   lab switched off while the voice sounded stays off on the replacement (C007).
 //   snapshot(out?)   plain read-only engine state for the visualization (risk 3).
 
 import {
@@ -86,7 +98,8 @@ import {
   requestMicrophoneStream, stopStreamTracks,
 } from './microphone.js';
 import { buildStageChain } from './stage-chain.js';
-import { forgetClock, observeClock, renderedTimeAtLeast } from './clock.js';
+import { forgetClock, glideStart, observeClock, renderedTimeAtLeast } from './clock.js';
+import { ceilingTapSize } from './output-ceiling.js';
 
 export {
   ESCAPE_RELEASE_S, FAST_RELEASE_S, SCHEDULE_AHEAD_S, SCHEDULE_LEAD_S, TOP_UP_EVERY_MS,
@@ -137,6 +150,12 @@ export function ceilingCurve(cap) {
   return curve;
 }
 
+/**
+ * The most note voices (noteOn) that sound at once. Each is scaled by 1 / NOTE_POLYPHONY, so
+ * their sum never exceeds one full voice: the master level stays the cap (ADR 0058, V502 note).
+ */
+export const NOTE_POLYPHONY = 8;
+
 export class AudioEngine {
   /**
    * options.env: the window-like object that provides AudioContext/webkitAudioContext,
@@ -153,6 +172,9 @@ export class AudioEngine {
     this.analyser = null;
     this.timeData = null;
     this.freqData = null;
+    this.preCeiling = null;      // read-only tap before the ceiling (T001, enableCeilingTap)
+    this.preCeilingData = null;
+    this._ceilingTapWanted = false;
     this.gainLevel = DEFAULT_GAIN; // requested master level, applied when a context is built
     // Every write of the master level counts (setMasterGain, holdMasterGain): a client that
     // borrowed the level (the Studio) gives it back only if nobody wrote it since (PR #119 D2).
@@ -166,6 +188,7 @@ export class AudioEngine {
     this.voices = new Set();
     this.nodes = new Set();      // every node owned by a voice
     this.sources = new Set();    // every scheduled source owned by a voice
+    this.notes = new Map();      // note key -> its latest note voice (noteOn, V502)
     this.lastError = null;
     this.mic = null;
     this.micAttachment = null;   // a caller-opened stream's analysis graph (attachMicrophone)
@@ -253,8 +276,12 @@ export class AudioEngine {
       this.master = ctx.createGain();
       this.master.gain.value = this.gainLevel; // the requested level from the first sample
       // Conservative limiter. DynamicsCompressorNode applies automatic makeup gain
-      // ((1 / fullRangeGain) ^ 0.6 per the Web Audio spec); `trim` removes it so the
-      // logical gain shown in the UI is the level that reaches the output.
+      // ((1 / fullRangeGain) ^ 0.6 per the Web Audio spec); `trim` removes it, so a single
+      // unprocessed voice leaves at the logical gain. The UI gain is a setpoint, not the
+      // emitted level: the envelope, additive normalisation and a filter boost (inserts) act
+      // before `master`, the limiter and the ceiling after it, and an insert can push one
+      // voice past the cap.
+      // enableCeilingTap() reports when the ceiling then flattens it (T001, ADR 0002 note).
       this.limiter = ctx.createDynamicsCompressor();
       this.limiter.threshold.value = LIMITER_THRESHOLD_DB;
       this.limiter.knee.value = 0;
@@ -283,6 +310,7 @@ export class AudioEngine {
       this.analyser.connect(ctx.destination);
       this.timeData = new Float32Array(this.analyser.fftSize);
       this.freqData = new Float32Array(this.analyser.frequencyBinCount);
+      if (this._ceilingTapWanted) this._buildCeilingTap(ctx);
       this.ctx = ctx;
       ctx.onstatechange = () => {
         forgetClock(ctx); // readings taken before a suspension or a start would run ahead
@@ -296,6 +324,26 @@ export class AudioEngine {
       this.ctx = null;
       return this._fail(e, 'init');
     }
+  }
+
+  /**
+   * T001: keep a read-only tap of the signal before the ceiling (an AnalyserNode on `trim`;
+   * nothing is connected from it and it changes no sample), on this context and on every one
+   * built later. snapshot() exposes it as preCeiling / preCeilingData / ceilingCap and the
+   * visualization bridge judges it (output-ceiling.js) to say when the ceiling acts. Opt-in
+   * (main.js), so the V1 output chain of the freeze vectors stays as recorded.
+   */
+  enableCeilingTap() {
+    this._ceilingTapWanted = true;
+    if (this.ctx && this.trim && !this.preCeiling) this._buildCeilingTap(this.ctx);
+  }
+
+  _buildCeilingTap(ctx) {
+    const tap = ctx.createAnalyser();
+    tap.fftSize = ceilingTapSize(ctx.sampleRate);
+    this.trim.connect(tap);
+    this.preCeiling = tap;
+    this.preCeilingData = new Float32Array(tap.fftSize);
   }
 
   // V1: AudioEngine._discardContext (index.html@a7b7a23)
@@ -312,7 +360,9 @@ export class AudioEngine {
       try { this.limiterFeed.disconnect(); } catch (e) { /* gone */ }
     }
     this.limiterFeed = null;
+    if (this.preCeiling) { try { this.preCeiling.disconnect(); } catch (e) { /* gone */ } }
     this.master = this.limiter = this.trim = this.ceiling = this.analyser = null;
+    this.preCeiling = this.preCeilingData = null;
     if (ctx) {
       ctx.onstatechange = null;
       if (ctx.state !== 'closed') { try { ctx.close(); } catch (e) { /* ignore */ } }
@@ -342,7 +392,7 @@ export class AudioEngine {
       this.master.gain.cancelScheduledValues(now);
     }
     this._masterHeldUntil = null;
-    this.master.gain.setTargetAtTime(this.gainLevel, now, 0.02);
+    this.master.gain.setTargetAtTime(this.gainLevel, glideStart(this.ctx), 0.02); // V502
   }
 
   /**
@@ -464,8 +514,10 @@ export class AudioEngine {
       fade: null, cut: null, lanes: null, laneNext: 0,
       endTime: Infinity, deadline: Infinity, releasing: false, ended: false, timers: [], dipping: false,
       attack: Math.max(0.001, adsr ? adsr.a : o.attackS), release: Math.max(0.005, adsr ? adsr.r : o.releaseS),
-      limited: !!o.limited, extended: false,
+      limited: !!o.limited, extended: false, limitable: false, limitAt: null,
+      noteT0: Number.isFinite(o.noteT0) ? o.noteT0 : startAt, // C011: the note's start
       inserts: [], periodicWave: o.periodicWave || null, adsr, eg: null, stepEnv: null,
+      stepHook: typeof o.stepEnvelope === 'function' ? o.stepEnvelope : null,
     };
     const t0 = v.t0;
     const track = (n) => { v.nodes.push(n); this.nodes.add(n); return n; };
@@ -525,6 +577,9 @@ export class AudioEngine {
       }
 
       let end = Infinity;
+      // C011: the voices the hard limit governs (tightenLimit): the open patterns and the
+      // finite tone; other programmed patterns keep their own end (ADR 0005).
+      v.limitable = programmedEnd == null || !!plan.limitable;
       if (programmedEnd != null) {
         end = programmedEnd;
       } else {
@@ -622,15 +677,22 @@ export class AudioEngine {
    * is always one of the fast fades (stop now, Escape, a retrigger, the continuous permission
    * withdrawn: FAST_RELEASE_S or less), so a voice whose `cut` is fading already ends within
    * FAST_RELEASE_S plus the stop margin; a third request is declined (returns false).
+   *
+   * `fit` (C009, a let-go with a note-off release edited while held): a fade that would end
+   * after the voice's own end (the hard limit, a programmed pattern's end) is shortened to end
+   * before it rather than refused, so letting go always starts a fade and the voice never ends
+   * later than it would have. Without `fit` such a fade is refused (V1).
    */
-  _releaseVoice(v, releaseS, silent = false) {
+  _releaseVoice(v, releaseS, silent = false, fit = false) {
     if (!v || v.ended) return false;
     const ctx = v.ctx;
     if (ctx.state === 'closed') { this._cleanup(v); return true; }
     const t = this._soon(ctx);
-    const rel = Math.max(0.005, releaseS);
+    let rel = Math.max(0.005, releaseS);
+    if (fit && t + rel + 0.01 >= v.endTime) rel = Math.max(0.005, v.endTime - t - 0.012);
     const stopAt = Math.max(t + rel + 0.01, v.t0 + 0.005);
     if (t >= v.endTime - 0.002 || stopAt >= v.endTime) return false; // ends sooner on its own
+    this._dropPendingLimit(v, t);
     const stage = !v.fade.ev.length ? v.fade : !v.cut.ev.length ? v.cut : null;
     if (!stage) return false; // already in its second, fast fade
     v.releasing = true;
@@ -658,11 +720,37 @@ export class AudioEngine {
     for (const v of [...this.voices]) this._releaseVoice(v, releaseS, silent);
   }
 
-  /** Graceful stop of the current voice with its own release time (or a fast one). */
+  /**
+   * Graceful stop of the current voice with its note-off release (setNoteOffRelease), else its
+   * own play-time release, or a fast one. A note-off release longer than the time the voice has
+   * left before its own end is shortened to end before it (C009 review F1, F7).
+   */
   release(fast = false) {
     const v = this.voice;
     if (!v) return false;
-    return this._releaseVoice(v, fast ? 0.008 : v.release);
+    if (fast) return this._releaseVoice(v, 0.008);
+    if (v.noteOff == null) return this._releaseVoice(v, v.release);
+    return this._releaseVoice(v, v.noteOff, false, true);
+  }
+
+  /**
+   * C009: the release a held note uses when it is let go, edited while it sounds (the Settings
+   * Release field, or the Envelope lab's R). Applies only to the current voice while it is not
+   * releasing and has not ended (a fade that started keeps its time; returns false otherwise).
+   * It is a stored number: no AudioParam is written while the note is held (V249), and
+   * v.release keeps its play-time value for the step envelopes the scheduler tops up and the
+   * RELEASING notice. v.opts takes it too (a copied adsr), so a _restart keeps it. When it
+   * does not fit before a voice's own end (the hard limit, a programmed pattern's end),
+   * release() shortens the fade to end before it: letting go always fades, never past that end.
+   */
+  setNoteOffRelease(s) {
+    const v = this.voice;
+    if (!v || v.ended || v.releasing || !(Number.isFinite(s) && s > 0)) return false;
+    v.noteOff = Math.max(0.005, s);
+    const o = { ...v.opts, releaseS: s };
+    if (o.adsr) o.adsr = { ...o.adsr, r: s };
+    v.opts = o;
+    return true;
   }
 
   /** Escape: ramp everything down within a few milliseconds, long releases included. */
@@ -677,6 +765,81 @@ export class AudioEngine {
       if (v.extended && this._releaseVoice(v, FAST_RELEASE_S)) n++;
     }
     return n;
+  }
+
+  /**
+   * C011: the hard safety limit was lowered while voices sound (mirrors revokeContinuous).
+   * Every live voice the limit governs (the open patterns in hold, trigger or latch, and the
+   * finite tone; not the other programmed patterns, which keep their own end, and not a voice
+   * the continuous permission lengthened) ends where a fresh note at the new limit ends: at
+   * noteT0 + limitS, with its release inside the limit (voice.js v1OpenEnvelope and
+   * makeAdsrEnvelope: rel = min(release, max(0.005, limit / 2))), when that is earlier than its
+   * own end. noteT0 is the note's start, carried through a live restart (_restart). The release
+   * is scheduled on the audio clock from a render-quantum boundary (rounded down, so it never
+   * ends past the limit; ADR 0001) on the output-stage gain `fade`, which is still exactly 1, and
+   * the sources stop after it; the envelope (env/eg) is never edited (V249). When that release
+   * would already have begun, or `fade` is taken by an earlier limit release that has begun,
+   * the voice fades from _soon (_releaseVoice) over what is left of the limit (at least
+   * FAST_RELEASE_S; FAST_RELEASE_S on `cut`, which stays a fast fade for Escape). It only ever
+   * shortens: a higher limit changes nothing that sounds. v.opts.limitS and v.deadline are
+   * lowered too, so a restart inherits the cap. Returns the number of voices shortened.
+   */
+  tightenLimit(limitS) {
+    const lim = Number(limitS);
+    if (!(lim > 0)) return 0;
+    let n = 0;
+    for (const v of [...this.voices]) {
+      if (v.ended || v.releasing || v.extended || !v.limitable || v.ctx.state === 'closed') continue;
+      const ctx = v.ctx;
+      const end = (Number.isFinite(v.noteT0) ? v.noteT0 : v.t0) + lim;
+      if (!(end + 0.01 < v.endTime - 0.002)) continue; // ends sooner on its own: never extended
+      const rel = Math.min(v.release, Math.max(0.005, lim * 0.5));
+      const q = RENDER_QUANTUM / ctx.sampleRate;
+      const at = Math.floor((end - rel) / q + 1e-9) * q;
+      const stopAt = at + rel + 0.01;
+      v.opts = { ...v.opts, limitS: Math.min(lim, toNumber(v.opts.limitS, lim)) };
+      v.deadline = Math.min(v.deadline, at + rel);
+      v.limited = true;
+      const t = this._soon(ctx);
+      this._dropPendingLimit(v, t);
+      if (at <= t || v.fade.ev.length) {
+        const left = v.fade.ev.length ? FAST_RELEASE_S : Math.max(FAST_RELEASE_S, at + rel - t);
+        if (this._releaseVoice(v, left)) n++;
+        continue;
+      }
+      try {
+        this._ev(v.fade, 'setValueAtTime', 1, at);
+        this._ev(v.fade, 'linearRampToValueAtTime', GAIN_FLOOR, at + rel);
+        for (const s of v.sources) {
+          try { s.stop(stopAt); } catch (e) { /* already stopped */ }
+        }
+        v.endTime = stopAt;
+        v.limitAt = at;
+      } catch (e) {
+        this._fail(e, 'limit');
+        this._cleanup(v);
+        continue;
+      }
+      for (const id of v.timers) this._timers.clearTimeout(id);
+      v.timers.length = 0;
+      this._armTimers(v);
+      n++;
+    }
+    return n;
+  }
+
+  /**
+   * C011: a limit release that tightenLimit scheduled on `fade` and that has not begun by t
+   * leaves `fade` exactly 1 until then, so it is withdrawn (nothing sounding is edited) and the
+   * release asked for now takes `fade` as on any voice.
+   */
+  _dropPendingLimit(v, t) {
+    if (v.limitAt == null) return;
+    if (v.limitAt > t && v.fade.ev.length) {
+      v.fade.param.cancelScheduledValues(v.limitAt);
+      v.fade.ev.length = 0;
+    }
+    v.limitAt = null;
   }
 
   // V1: AudioEngine: _cleanup (index.html@a7b7a23), plus disposal of the V2 insert stages
@@ -712,6 +875,7 @@ export class AudioEngine {
     v.eg = null;
     v.lanes = null;
     this.voices.delete(v);
+    if (v.note !== undefined && this.notes.get(v.note) === v) this.notes.delete(v.note);
     if (this.voice === v) {
       this.voice = null;
       this._emit('ended', { id: v.id });
@@ -788,7 +952,7 @@ export class AudioEngine {
   // V1: AudioEngine._restart (index.html@a7b7a23)
   /** Replace the current voice with a new plan, keeping its play options and deadline. */
   _restart(v, np) {
-    const o = { ...v.opts, limited: v.limited };
+    const o = { ...v.opts, limited: v.limited, noteT0: v.noteT0 };
     delete o.until;
     if (Number.isFinite(v.deadline)) {
       if (v.deadline - v.ctx.currentTime < 0.03) return false; // about to end anyway
@@ -872,6 +1036,106 @@ export class AudioEngine {
     this._emit('mic', { active: false, reason });
   }
 
+  // ---------------------------------------------------------------- V502: note voices
+  // ADR 0058 (V502 note): MIDI notes are voices of this engine in `voices` (never `voice`), so
+  // stopAll, revokeContinuous, play() and a closed context free them like any other. A note and
+  // the play() voice never sound together (each start fades the other out first, ADR 0002), and
+  // each note peaks at level / NOTE_POLYPHONY, so the notes sum to at most one voice's level.
+
+  /** Note voices sounding or scheduled to sound. */
+  get noteCount() {
+    const now = this.ctx ? this.ctx.currentTime : Infinity;
+    return [...this.voices].filter((v) => v.note !== undefined && now < v.endTime - 0.01).length;
+  }
+
+  /**
+   * Start note `key` (the MIDI layer's input, channel and note). o: freq (Hz), level (0..1),
+   * wave, attackS, releaseS, limitS, continuous (as play()), held (ADR 0062). Refused at
+   * or above safeMaximum. The same key fades out (FAST_RELEASE_S) under the new note; past
+   * NOTE_POLYPHONY the oldest note fades out first and the new one starts after that fade, as
+   * after fading out the play() voice. Returns { ok, reason? | id, start, end, limited, stolen }.
+   */
+  noteOn(key, o = {}) {
+    if (!this.init()) return { ok: false, reason: 'no-audio' };
+    const ctx = this.ctx;
+    const freq = toNumber(o.freq, 0);
+    if (!(freq > 0 && freq < this.safeMaximum)) return { ok: false, reason: 'frequency' };
+    this._observeClock(ctx);
+    let t0 = ctx.currentTime + START_OFFSET_S;
+    const fadeOut = (v) => {
+      this._releaseVoice(v, FAST_RELEASE_S, v.note !== undefined);
+      if (!v.ended) t0 = Math.max(t0, v.endTime);
+    };
+    for (const v of [...this.voices]) if (v.note === undefined) fadeOut(v);
+    if (this.notes.has(key)) this._releaseVoice(this.notes.get(key), FAST_RELEASE_S, true);
+    const held = () => [...this.voices].filter((v) => v.note !== undefined && v.endTime > t0);
+    let stolen = 0;
+    for (let h = held(); h.length >= NOTE_POLYPHONY; h = held(), stolen++) {
+      fadeOut(h.find((v) => v.releasing) || h[0]); // the oldest fading one, else the oldest
+    }
+    const peak = Math.max(GAIN_FLOOR, clamp(toNumber(o.level, 1), 0, 1) / NOTE_POLYPHONY);
+    const v = {
+      id: ++this._seq, ctx, plan: null, opts: o, note: key, t0, nodes: [], sources: [],
+      freqParams: [], live: {}, inserts: [], timers: [], endTime: Infinity, deadline: Infinity,
+      attack: Math.max(0.005, toNumber(o.attackS, 0)), release: Math.max(0.005,
+        toNumber(o.releaseS, 0)), releasing: false, ended: false, limited: false, extended: false,
+    };
+    const track = (n) => { v.nodes.push(n); this.nodes.add(n); return n; };
+    try {
+      // osc -> env (attack, a limit's release) -> fade -> cut (the releases, V249) -> master
+      const [env, fade, cut] = [0, 1, 2].map(() => track(ctx.createGain()));
+      [v.env, v.fade, v.cut] = [env, fade, cut].map((n) => this._track(n.gain, 1));
+      env.connect(fade);
+      fade.connect(cut);
+      cut.connect(this.master);
+      const osc = track(this._osc(o.wave || 'sine', freq, t0));
+      v.sources.push(osc);
+      this.sources.add(osc);
+      osc.connect(env);
+      // Held: no end until released (ADR 0062); else HOLD's limit unless continuous.
+      v.held = !!o.held;
+      const len = v.held || o.continuous ? Infinity : Math.max(0.05, toNumber(o.limitS, 2));
+      v.extended = !v.held && !!o.continuous;
+      v.limited = Number.isFinite(len);
+      const atk = Math.min(v.attack, len * 0.4);
+      this._ev(v.env, 'setValueAtTime', GAIN_FLOOR, ctx.currentTime);
+      this._ev(v.env, 'setValueAtTime', GAIN_FLOOR, t0);
+      this._ev(v.env, 'linearRampToValueAtTime', peak, t0 + atk);
+      if (Number.isFinite(len)) {
+        const rel = Math.min(v.release, len * 0.5);
+        this._ev(v.env, 'setValueAtTime', peak, t0 + len - rel);
+        this._ev(v.env, 'linearRampToValueAtTime', GAIN_FLOOR, t0 + len);
+        v.deadline = t0 + len;
+        v.endTime = v.deadline + 0.01;
+        osc.stop(v.endTime);
+      }
+      osc.onended = () => this._cleanup(v);
+      this.voices.add(v);
+      this.notes.set(key, v);
+      if (Number.isFinite(v.endTime)) this._armFallback(v);
+      return { ok: true, id: v.id, start: t0, end: v.endTime, limited: v.limited, stolen };
+    } catch (e) {
+      this._cleanup(v);
+      this._fail(e, 'note');
+      return { ok: false, reason: 'error' };
+    }
+  }
+
+  /** Release note `key` with its own release time; false when it is not sounding. */
+  noteOff(key) {
+    const v = this.notes.get(key);
+    this.notes.delete(key);
+    return !!v && this._releaseVoice(v, v.release, true);
+  }
+
+  /** Release every note, within ESCAPE_RELEASE_S when `fast`; returns how many were held. */
+  notesOff(fast = true) {
+    const all = [...this.voices].filter((v) => v.note !== undefined);
+    for (const v of all) this._releaseVoice(v, fast ? ESCAPE_RELEASE_S : v.release, true);
+    this.notes.clear();
+    return all.length;
+  }
+
   // ---------------------------------------------------------------- V2 additions
 
   /**
@@ -885,6 +1149,45 @@ export class AudioEngine {
     const want = normalizePhaseDeg(deg);
     if (Math.abs(normalizePhaseDeg(v.opts.dualPhaseDeg) - want) < 1e-9) return 'same';
     v.opts = { ...v.opts, dualPhaseDeg: want };
+    return this._restart(v, v.plan);
+  }
+
+  /**
+   * The Envelope lab changed while a voice sounds (C007 R-2; main.js through lab-play-options.js
+   * followEnvelopeLab). adsr { a, d, s, r } or null (the lab off); stepEnvelope the step hook
+   * that goes with it, or null. The voice's options take both, so a later restart keeps them.
+   * A change of the release alone, on a voice whose release is not scheduled yet (held: no end,
+   * no per-segment envelope), applies in place: the release is read at note-off and nothing
+   * sounding is edited. Any other change alters the scheduled shape, and a sounding envelope is
+   * never re-automated (V249), so the voice is replaced click-free with the same plan, options
+   * and deadline, as setDualPhase does.
+   * #296 R-7: a slider or graph drag is one edit made of many notifications. With
+   * { settling: true } (a slider's 'input', a graph pointermove) a shape change only reaches the
+   * voice's options and answers 'pending'; the drag's end (the slider's 'change', the graph's
+   * pointerup: settling false) compares the voice's scheduled shape (v.adsr, v.stepHook) with
+   * the edit and restarts once. A release-only change is in place either way.
+   * Returns 'same' | 'live' | 'pending' | 'restarted' | false (no voice, releasing, or about to
+   * end).
+   */
+  setAdsr(adsr, stepEnvelope = null, { settling = false } = {}) {
+    const v = this.voice;
+    if (!v || v.ended || v.releasing || !v.plan) return false;
+    const next = adsr ? { ...adsr } : null;
+    const hook = next && typeof stepEnvelope === 'function' ? stepEnvelope : null;
+    const prev = v.adsr;
+    const keep = (k) => !!prev && !!next && prev[k] === next[k];
+    const shapeKept = (!prev && !next) || (keep('a') && keep('d') && keep('s'));
+    const sameHook = v.stepHook === hook;
+    v.opts = { ...v.opts, adsr: next, stepEnvelope: hook };
+    if (shapeKept && sameHook && (!next || keep('r'))) return 'same';
+    const held = !Number.isFinite(v.endTime)
+      && !(v.plan.kind === 'continuous' && v.plan.envelope === 'segment');
+    if (shapeKept && sameHook && next && held) {
+      v.adsr = next;
+      v.release = Math.max(0.005, next.r);
+      return 'live';
+    }
+    if (settling) return 'pending';
     return this._restart(v, v.plan);
   }
 
@@ -937,14 +1240,19 @@ export class AudioEngine {
     return mic.analyser;
   }
 
-  /** Disconnect the attached microphone graph and stop its tracks (idempotent). */
+  /**
+   * Disconnect the attached microphone graph and stop its tracks (idempotent). The event names
+   * the detached analyser, so its owner (the mic lab) can tell its own graph from a replaced
+   * one: a stopped track dispatches no 'ended', so this event is the only notice it gets.
+   * reason: 'user' | 'replaced' (attachMicrophone) | 'closed' (_discardContext).
+   */
   detachMicrophone(reason = 'user') {
     const m = this.micAttachment;
     if (!m) return false;
     this.micAttachment = null;
     closeMicrophone(m);
     this.micNodes.clear();
-    this._emit('micAttachment', { attached: false, reason });
+    this._emit('micAttachment', { attached: false, reason, analyser: m.analyser });
     return true;
   }
 
@@ -995,6 +1303,30 @@ export class AudioEngine {
     return chain;
   }
 
+  /**
+   * Accounting for a graph builder that plays outside the engine's voices (the V2 sequencer's
+   * passes, K001; rule audio-engine-discipline): track(n) adds a node to `nodes`, source(n)
+   * also to `sources`, untrack(n) removes it, so activeNodeCount and activeSourceCount include
+   * the stage while it sounds. The builder stops and disconnects its own nodes (its dispose(),
+   * the end of its fade) and untracks each one then; release() untracks whatever this
+   * accounting still holds, e.g. after a build that threw part-way.
+   */
+  stageAccounting() {
+    const held = new Set();
+    const untrack = (n) => {
+      held.delete(n);
+      this.nodes.delete(n);
+      this.sources.delete(n);
+    };
+    return Object.freeze({
+      track: (n) => { held.add(n); this.nodes.add(n); return n; },
+      source: (n) => { held.add(n); this.nodes.add(n); this.sources.add(n); return n; },
+      untrack,
+      release: () => { for (const n of [...held]) untrack(n); },
+      get held() { return held.size; },
+    });
+  }
+
   /** Update the sounding voice's insert stages: cfgs[i] goes to inserts[i].update (if given). */
   updateInserts(cfgs) {
     const v = this.voice;
@@ -1006,10 +1338,14 @@ export class AudioEngine {
     return true;
   }
 
-  /** Swap the carrier's PeriodicWave of the sounding voice (additive synthesis, live). */
+  /**
+   * Swap the carrier's PeriodicWave of the sounding voice (additive synthesis, live). A dual
+   * voice is refused (false): additive does not apply to dual plans (main.js labPlayOptions), and
+   * its carrier is oscillator A only, so a wave there would change A and leave B (C007).
+   */
   setPeriodicWave(wave) {
     const v = this.voice;
-    if (!v || v.ended || !v.carrier || !wave) return false;
+    if (!v || v.ended || !v.carrier || !wave || (v.plan && v.plan.type === 'dual')) return false;
     v.periodicWave = wave;
     v.carrier.setPeriodicWave(wave);
     return true;
@@ -1033,8 +1369,10 @@ export class AudioEngine {
    * frame); without, returns a new frozen object. The analyser and buffers are references:
    * read them, never reconnect or resize them.
    *   { hasCtx, state, running, time, sampleRate, voice, voiceId, t0, plan, kind, playing,
-   *     releasing, endTime, limited, extended, analyser, timeData, freqData, mic, micAnalyser,
-   *     micFreqData, activeNodes, activeSources, voices, audibleVoices }
+   *     releasing, endTime, limited, extended, analyser, timeData, freqData, preCeiling,
+   *     preCeilingData, ceilingCap, mic, micAnalyser, micFreqData, activeNodes, activeSources,
+   *     voices, audibleVoices }
+   * preCeiling is the read-only tap before the output ceiling (ceilingCap, linear full scale).
    * voices counts every voice not freed yet (silent released ones included); audibleVoices
    * only those sounding or scheduled to sound — show that one in the UI.
    */
@@ -1062,6 +1400,9 @@ export class AudioEngine {
     o.analyser = this.analyser;
     o.timeData = this.timeData;
     o.freqData = this.freqData;
+    o.preCeiling = this.preCeiling;
+    o.preCeilingData = this.preCeilingData;
+    o.ceilingCap = MAX_OUTPUT_GAIN;
     o.mic = !!this.mic;
     o.micAnalyser = this.mic ? this.mic.analyser : null;
     o.micFreqData = this.mic ? this.mic.freqData : null;

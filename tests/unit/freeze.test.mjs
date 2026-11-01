@@ -31,6 +31,7 @@ import * as constants from '../../src/js/core/constants.js';
 import * as math from '../../src/js/core/math.js';
 import * as frequency from '../../src/js/core/frequency.js';
 import * as music from '../../src/js/core/music.js';
+import { LEARN_INSTRUMENT_TOPICS } from '../../src/js/data/learn.js';
 import * as config from '../../src/js/core/config.js';
 import * as storage from '../../src/js/core/storage.js';
 import { createInstrument } from '../../src/js/core/instrument.js';
@@ -66,6 +67,29 @@ const categoryOf = (group) => CATEGORY[group] || 'component';
 // shape (and throws if the V2 fix is not there), so the rest of the case is still compared with
 // the golden file. Tested positively in tests/unit/core.test.mjs.
 const OCTAVE_TEXT = constants.OCTAVE_STEP_FREQUENCIES.join(', ');
+// G002, one frequency grammar (tests/unit/units.test.mjs): zero, a negative and a non-finite
+// value are refused with one sentence (V1 had three, and called "-1" not a frequency), and the
+// comma decimal and the exponent the Filter Lab accepted are accepted everywhere.
+const V1_NOT_FREQUENCY = (t) => `“${t}” is not a frequency. Try 440, 440 Hz, 1k or 15.5 kHz.`;
+const G002_PARSE = {
+  'parseFrequency(0)': ['refused', 'Frequency must be a positive number.'],
+  'parseFrequency(-5)': ['refused', 'Frequency must be a positive number.'],
+  'parseFrequency({"$n":"NaN"})': ['refused', 'Frequency must be a positive number.'],
+  'parseFrequency({"$n":"Infinity"})': ['refused', 'Frequency must be a positive number.'],
+  'parseFrequency("0")': ['refused', 'Frequency must be greater than 0 Hz.'],
+  'parseFrequency("0.0")': ['refused', 'Frequency must be greater than 0 Hz.'],
+  'parseFrequency("0k")': ['refused', 'Frequency must be greater than 0 Hz.'],
+  'parseFrequency("-1")': ['refused', V1_NOT_FREQUENCY('-1')],
+  'parseFrequency("-440")': ['refused', V1_NOT_FREQUENCY('-440')],
+  'parseFrequency("1e3")': [1000, V1_NOT_FREQUENCY('1e3')],
+  'parseFrequency("1,5k")': [1500, V1_NOT_FREQUENCY('1,5k')],
+};
+const g002Parse = ([v2, v1Error]) => (out) => {
+  assert.deepStrictEqual(out, v2 === 'refused'
+    ? { ok: false, error: frequency.FREQUENCY_REFUSED } : { ok: true, value: v2 },
+  'G002: one frequency grammar');
+  return { ok: false, error: v1Error };
+};
 // H002: a link restore names what it dropped. A continuous repeat restored as once gets its own
 // notice (V1 said nothing), and the "Configuration restored from link" summary starts with
 // "Not restored: <names>." (V1: the bare "Nothing plays ..." sentence). Positive cases:
@@ -86,6 +110,8 @@ const h002LinkView = (names) => (out) => {
   return q;
 };
 const DEVIATIONS = {
+  ...Object.fromEntries(Object.entries(G002_PARSE)
+    .map(([id, d]) => [`frequency.parse/${id}`, g002Parse(d)])),
   'url.state/roundtrip:sweep-continuous-allowed': h002LinkView(['continuous repeat']),
   'url.state/restore:continuous-repeat@null': h002LinkView(['continuous repeat']),
   'url.state/restore:continuous-repeat@48000': h002LinkView(['continuous repeat']),
@@ -101,7 +127,15 @@ const DEVIATIONS = {
   }),
   // the 'hearing' demo sets pp.octave (V1's cfg has no pp); the 'samplerate' body names the
   // Filter Lab's model rate (V1 had no Filter Lab), appended after V1's sentence
-  'presets.data/LEARN_TOPICS': (out) => out.map((t) => {
+  // the V3 topic's demo opens an address (runLearnDemo), so V1's demo runner has no case for it
+  'presets.apply/learn-demos@48000': (out) => {
+    const q = { ...out };
+    for (const t of LEARN_INSTRUMENT_TOPICS) delete q[t.id];
+    return q;
+  },
+  // V3 adds topics after the V1 ones (data/learn.js LEARN_INSTRUMENT_TOPICS, K058): a demo with
+  // an href opens an address instead of configuring the Playground; V1 has none of them.
+  'presets.data/LEARN_TOPICS': (all) => all.filter((t) => !t.demo.href).map((t) => {
     if (t.id === 'samplerate') {
       const q = structuredClone(t);
       const added = '; the Filter Lab models its response at 48 kHz and labels it.';
@@ -116,6 +150,23 @@ const DEVIATIONS = {
     delete q.demo.cfg.pp;
     return q;
   }),
+  // V502: on a context that has rendered nothing (currentTime 0) setMasterGain's glide starts at
+  // the end of the first render quantum (clock.js glideStart), where V1 starts it at 0, which
+  // Gecko starts from gain 1 (tests/unit/engine.test.mjs); the mock context runs at 48 kHz
+  'engine.stop/setMasterGain-clamped': (out) => {
+    const q = constants.RENDER_QUANTUM / 48000;
+    const v1 = (events) => events.map((e) => {
+      assert.ok(e[0] === 'target' && Math.abs(e[2] - q) < 1e-9 && e[3] === 0.02,
+        `V502 fix: the glide starts after the first render quantum: ${JSON.stringify(e)}`);
+      return ['target', e[1], 0, 0.02];
+    });
+    const v = structuredClone(out);
+    v.master = v1(v.master);
+    const limiter = v.graph.find((n) => n.kind === 'compressor');
+    const master = v.graph.find((n) => n.kind === 'gain' && n.out.includes(`node:${limiter.id}`));
+    master.params.gain.events = v1(master.params.gain.events);
+    return v;
+  },
 };
 
 // ------------------------------------------------- V249: releases on the output stage

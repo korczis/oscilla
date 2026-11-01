@@ -20,6 +20,7 @@ const path = require('path');
 const esbuild = require('esbuild');
 const suite = require('./lib/suite.cjs');
 const { until, WaitTimeout } = require('./lib/wait.cjs');
+const { openWorkspace: openWs } = require('./lib/navigate.cjs');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const args = process.argv.slice(2);
@@ -170,6 +171,60 @@ async function startContext(page) {
   if (state !== 'running') throw new Error(`fixture AudioContext ${state} after resume()`);
 }
 
+// Type `text` by keyboard into the text field `selector` of `pg` (its value selected first) and
+// commit it with Tab, which fires the change event every field here commits on.
+async function typeInto(pg, selector, text) {
+  await pg.focus(selector);
+  await pg.evaluate((sel) => document.querySelector(sel).select(), selector);
+  await pg.keyboard.type(text);
+  await pg.keyboard.press('Tab');
+}
+
+// The G002 check: '2,5k' typed into the Filter Lab cutoff (fixture page) and into the
+// Playground frequency field of the built app (/app.html, dist/index.html), then the readings
+// once both read 2.50 kHz or the 'frequency accepted' deadline (2 s) ran out.
+async function typedFrequency(context, page, base) {
+  const FILTER = '#osc-filter-cutoff-value';
+  const FIELD = '#pp-tone-global-frequency';
+  const app = await context.newPage();
+  try {
+    await app.goto(`${base}/app.html`);
+    await until(() => app.evaluate(() => document.documentElement.dataset.ready === 'true'),
+      { ms: 15000, what: 'the built app is ready (html[data-ready])' });
+    await app.click('#osc-source-pattern');
+    await until(() => app.evaluate((sel) => !!document.querySelector(sel), FIELD),
+      { ms: 5000, what: 'the Playground pattern form shows its Frequency field' });
+    await typeInto(app, FIELD, '2,5k');
+    await typeInto(page, FILTER, '2,5k');
+    const read = async () => ({
+      playground: await app.evaluate((sel) => document.querySelector(sel).value, FIELD),
+      filter: await page.evaluate((sel) => document.querySelector(sel).value, FILTER),
+      filterHz: await page.evaluate(() => window.__labs.labs.filter.config.frequency),
+    });
+    let last = null;
+    try {
+      await until(async () => {
+        last = await read();
+        return last.playground === '2.50 kHz' && last.filter === '2.50 kHz';
+      }, { ms: 2000, what: 'frequency accepted' });
+    } catch (e) {
+      if (!(e instanceof WaitTimeout)) throw e;
+      console.log(`  WAIT  ${e.message}`);
+    }
+    return last;
+  } finally {
+    await app.close();
+  }
+}
+
+/**
+ * Open a workspace through the navigation, as a user does: the item, or first its group (#278
+ * shows each lab panel in its own workspace only, not on the lighter Playground). Waits on the
+ * shell's data-mode with a named deadline.
+ */
+
+const openWorkspace = (page, ws) => openWs(page, ws, 'labs');
+
 async function runEngine(engine, base) {
   const results = [];
   const check = (name, ok, detail = '') => {
@@ -319,6 +374,7 @@ async function runEngine(engine, base) {
   await setRate('real');
   await page.selectOption('#osc-spec-max', '20000');
 
+  await openWorkspace(page, 'filter');
   // (2) Filter curve = getFrequencyResponse of an independent BiquadFilterNode.
   const filterCompare = () => page.evaluate(() => {
     const { labs, ctx } = window.__labs;
@@ -375,6 +431,16 @@ async function runEngine(engine, base) {
     JSON.stringify(fields));
   await page.click('#osc-ftype-lowpass');
 
+  // (2b) One frequency grammar (G002): '2,5k' typed by keyboard into the Playground frequency
+  // field (the built app: the fixture has no V1 instrument) and into the Filter Lab cutoff is
+  // accepted alike, and both fields then read the one frequency text, 2.50 kHz.
+  const typed = await typedFrequency(context, page, base);
+  const typedOk = (t) => t.playground === '2.50 kHz' && t.filter === '2.50 kHz'
+    && t.filterHz === 2500;
+  check("typed '2,5k' accepted alike: Playground frequency and Filter Lab cutoff read 2.50 kHz",
+    typedOk(typed), JSON.stringify(typed));
+
+  await openWorkspace(page, 'synthesis');
   // (3) Additive bars = the coefficients handed to createPeriodicWave.
   const additive = (preset) => page.evaluate((p) => {
     const { labs, modules } = window.__labs;
@@ -416,8 +482,11 @@ async function runEngine(engine, base) {
   check('click a bar selects that harmonic', sel.selected === 3 && sel.field === '3',
     JSON.stringify(sel));
 
+  await openWorkspace(page, 'analyzer');
   // (4) Spectrogram: non-floor pixels on the tone row, floor elsewhere.
-  const spg = await page.evaluate(() => {
+  // The panel was hidden until its workspace opened (#278), and a hidden view writes no column
+  // (C014): the reading is polled until the columns written since cover the probed edge.
+  const readSpg = () => page.evaluate(() => {
     const { labs, floorColour } = window.__labs;
     const view = labs.spectrogram.view;
     const c = view.plotCanvas;
@@ -433,6 +502,9 @@ async function runEngine(engine, base) {
     return { tone, far, floor, toneDist: dist(tone), farDist: dist(far),
       strategy: view.spectrogram.strategy };
   });
+  const spgOk = (r) => r.toneDist > 60 && r.farDist <= 3;
+  const spg = await settled(readSpg, spgOk,
+    { ms: 5000, what: 'spectrogram columns at the tone row once the Analyzer shows it' });
   check('spectrogram draws non-floor pixels at the tone row', spg.toneDist > 60 && spg.farDist <= 3,
     `tone ${spg.tone} vs floor ${spg.floor} (Δ${spg.toneDist}), `
       + `100 Hz row Δ${spg.farDist}, ${spg.strategy}`);
@@ -441,6 +513,7 @@ async function runEngine(engine, base) {
   await page.click('#osc-spg-freeze');
   check('spectrogram Freeze switch freezes the renderer', frozen === true);
 
+  await openWorkspace(page, 'sequencer');
   // (5) Sequencer: add / move / delete / play / stop → 0 live sources.
   const seqState = () => page.evaluate(() => {
     const { labs, sources } = window.__labs;
@@ -528,6 +601,7 @@ async function runEngine(engine, base) {
   check('stop leaves 0 live sources (and 0 editor voices)', stoppedOk(stopped),
     `started ${stopped.started}, live ${stopped.live}, ${JSON.stringify(stopped.stats)}`);
 
+  await openWorkspace(page, 'analyzer');
   // (6) Device panel: real sample rate.
   const dev = await page.evaluate(() => ({
     sr: document.querySelector('#osc-dev-sr').textContent,
@@ -541,13 +615,24 @@ async function runEngine(engine, base) {
     dev.sr === fmt(dev.real) && dev.ny === fmt(dev.real / 2) && dev.safe === fmt(dev.real * 0.475),
     `${dev.sr} / ${dev.ny} / ${dev.safe}; output "${dev.out}"`);
 
+  await openWorkspace(page, 'synthesis');
   // (7) Envelope: dragging the A handle changes attack and its field/slider.
-  const env0 = await page.evaluate(() => {
+  // The graph was hidden until Synthesis opened (#278); it re-measures on its ResizeObserver
+  // (observeSize), which runs after the workspace shows. The layout is read once the last draw
+  // matches its host as laid out (the drawn width is the host's width), so the handle
+  // and pxPerS are the ones a pointer meets (CI of #367 read the hidden-size layout).
+  const readEnv = () => page.evaluate(() => {
     const l = window.__labs.labs.envelope.graph.getLayout();
-    const c = document.querySelector('#osc-chart-envelope canvas').getBoundingClientRect();
+    const host = document.querySelector('#osc-chart-envelope');
+    const el = host.querySelector('canvas');
+    const c = el.getBoundingClientRect();
+    const drawnW = parseFloat(el.style.width) || 0; // fitCanvas: the width of the last draw
     return { a: window.__labs.labs.envelope.adsr.a, hx: c.left + l.handles.attack.x,
-      hy: c.top + l.handles.attack.y, pxPerS: l.pxPerS };
+      hy: c.top + l.handles.attack.y, pxPerS: l.pxPerS,
+      current: host.clientWidth > 10 && Math.abs(drawnW - Math.round(host.clientWidth)) < 1.5 };
   });
+  const env0 = await settled(readEnv, (r) => r.current,
+    { ms: 5000, what: 'envelope graph laid out at its shown size' });
   await page.mouse.move(env0.hx, env0.hy);
   await page.mouse.down();
   await page.mouse.move(env0.hx + 20, env0.hy, { steps: 4 });
@@ -560,8 +645,11 @@ async function runEngine(engine, base) {
     `${(env0.a * 1000).toFixed(1)} → ${(env1.a * 1000).toFixed(1)} ms `
       + `(expect ${(expectA * 1000).toFixed(1)}), field ${env1.field}`);
 
+  await openWorkspace(page, 'compare');
   // (8) Bioacoustics: rows from the cited data; click → onSelectRange with sourced values.
-  const bio = await page.evaluate(() => window.__labs.labs.bio.chart.getRows());
+  // Its chart lays out its rows once Compare shows it (#278): polled until every row is there.
+  const bio = await settled(() => page.evaluate(() => window.__labs.labs.bio.chart.getRows()),
+    (rows) => rows.length >= 5, { ms: 5000, what: 'bio chart rows once Compare shows it' });
   const bioBox = await (await page.$('#osc-chart-bio canvas')).boundingBox();
   await page.mouse.click(bioBox.x + bioBox.width * 0.8, bioBox.y + 21 * 1.5);
   const range = await page.evaluate(() => window.__lastRange);
@@ -570,6 +658,7 @@ async function runEngine(engine, base) {
       && range.min === 67 && range.max === 45000,
     `${bio.map((r) => `${r.label} ${r.range}`).join('; ')} | click → ${JSON.stringify(range)}`);
 
+  await openWorkspace(page, 'synthesis');
   // (9) Phase & Stereo without a stereo router: model plot; the fixture's tone plays mono, so
   // the correlation says "1.00 mono" (identical channels by construction), not "nothing playing".
   const ph = await page.evaluate(() => ({ source: window.__labs.labs.phase.source,
@@ -609,6 +698,7 @@ async function runEngine(engine, base) {
       && imp3.value === '0' && imp3.text === 'Centre' && imp3.offset === '45',
     JSON.stringify({ imp, imp2, imp3 }));
 
+  await openWorkspace(page, 'analyzer');
   // (10) Microphone with the fake capture device.
   const micBefore = await page.evaluate(() =>
     document.querySelector('#osc-mic-detected').textContent);
@@ -707,6 +797,8 @@ async function main() {
     '/labs-stereo.html': await buildFixture({ frequency: 1000, gain: 0.5, stereo: true }),
     '/labs-visual.html': await buildFixture({ frequency: 15500, gain: 0.5, warmupMs: 4500,
       referenceState: true }),
+    // The built app (dist/index.html): the Playground's own frequency field (G002 check).
+    '/app.html': fs.readFileSync(path.join(ROOT, 'dist', 'index.html'), 'utf8'),
   };
   const buildDir = opt('--build');
   if (buildDir) {

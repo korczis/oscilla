@@ -15,7 +15,9 @@ import {
 import { isNum, sig } from '../core/math.js';
 import { formatFrequency, formatMs, formatPeriod, formatWavelength } from '../core/frequency.js';
 import { planFreqAt } from '../audio/patterns.js';
+import { ceilingState } from '../audio/output-ceiling.js';
 import { additiveHarmonicTable, harmonicTable } from './harmonics.js';
+import { assertOutputOwner } from './output-owner.js';
 import { playgroundVoiceModel } from '../studio/playground-voice.js';
 import { projectSignalPath } from '../studio/signal-path-projection.js';
 
@@ -70,6 +72,10 @@ export class VisualizationBridge {
     this._snap = {};
     this._p5s = new Set();
     this._paletteWarning = '';
+    // T001: the last judgement of the pre-ceiling tap (ceilingState, filled in place) and the
+    // callback told when `acting` changes (main.js sets the UI flag; never per frame).
+    this.ceiling = ceilingState({});
+    this.onCeiling = null;
     // V1: viz fields and state (index.html@a7b7a23)
     Object.assign(this, {
     p5: null,
@@ -93,13 +99,15 @@ export class VisualizationBridge {
       vizMode: 'wave', frequency: 440, waveform: 'sine', gain: DEFAULT_GAIN, rangeMin: 20, rangeMax: 20000,
       nyquist: PROVISIONAL_SAMPLE_RATE / 2, safeMax: (PROVISIONAL_SAMPLE_RATE / 2) * SAFE_NYQUIST_FACTOR,
       provisional: true, spectrumScale: 'log', overlays: { regions: true, notes: false, thirds: false },
-      plan: null, playing: false, status: 'READY', a4: 440, source: 'single', reducedMotion: false, mic: false, paused: false,
+      // outputOwner: what sounds through the output analyser ('instrument' | 'sequencer' |
+      // 'studio' | null), set by the composition root through setOutputOwner (C013).
+      plan: null, playing: false, outputOwner: null, status: 'READY', a4: 440, source: 'single', reducedMotion: false, mic: false, paused: false,
       dual: { fa: 440, fb: 442, la: 0.8, lb: 0.8, stereo: false, waveA: 'sine', waveB: 'sine' },
       // Engine scalars copied by viz.pull() once per frame without allocating: the sketch reads
       // these and the analyser buffers, never the engine object graph.
       live: {
         hasCtx: false, analyser: false, mic: false, sampleRate: 0, voice: false, plan: null,
-        elapsed: 0, inst: NaN, refFreq: 440, timeData: null,
+        elapsed: 0, inst: NaN, refFreq: 440, timeData: null, ceiling: false,
       },
       labels: {
         freq: '440 Hz', period: '2.27 ms', wavelength: '0.78 m', note: 'A4', attack: '10 ms', release: '30 ms', gain: '0.080',
@@ -183,6 +191,19 @@ export class VisualizationBridge {
     L.inst = f == null ? NaN : f;
     if (L.analyser) S.analyser.getFloatTimeDomainData(S.timeData);
     L.timeData = L.analyser ? S.timeData : null;
+    this.pullCeiling(S);
+  }
+
+  /** T001: judge the signal before the output ceiling; report a change of `acting` only. A
+   *  context that is not running holds stale samples and reports nothing. */
+  pullCeiling(S) {
+    const C = this.ceiling;
+    const tap = S.running && S.preCeiling && S.preCeilingData ? S.preCeiling : null;
+    if (tap) tap.getFloatTimeDomainData(S.preCeilingData);
+    const was = C.acting;
+    ceilingState(tap ? { pre: S.preCeilingData, cap: S.ceilingCap } : {}, C);
+    this.state.live.ceiling = C.acting;
+    if (C.acting !== was && this.onCeiling) this.onCeiling(C.acting, C);
   }
 
   /** Fill and return the preallocated output spectrum buffer (null before audio starts). */
@@ -256,7 +277,8 @@ export class VisualizationBridge {
     const s = this.state;
     // the visible pause toggle and reduced motion (when idle) both stop the loop; a stopped loop
     // still redraws once per state change and on resize
-    const want = !this.hidden && !s.paused && !(s.reducedMotion && !s.playing && !s.mic);
+    const sounding = s.playing || !!s.outputOwner;
+    const want = !this.hidden && !s.paused && !(s.reducedMotion && !sounding && !s.mic);
     if (want !== this.looping) {
       this.looping = want;
       for (const p of ps) { if (want) p.loop(); else p.noLoop(); }
@@ -264,6 +286,20 @@ export class VisualizationBridge {
     this.sketchState = this.hidden ? 'paused (tab hidden)' : want ? 'running'
       : s.paused ? 'paused (animation toggle: redraw on change)' : 'idle (reduced motion: redraw on change)';
     this.requestRedraw();
+  }
+
+  /**
+   * Which source owns the output analyser now: 'instrument' | 'sequencer' | 'studio' | null
+   * (visualization/output-owner.js). A plain string from the composition root, never an engine,
+   * store or transport object. The scope draws the live trace while there is an owner, and the
+   * loop keeps running under reduced motion while one sounds. Anything else throws a TypeError
+   * and changes nothing.
+   */
+  setOutputOwner(owner) {
+    const o = assertOutputOwner(owner);
+    if (o === this.state.outputOwner) return;
+    this.state.outputOwner = o;
+    this.updateLoop(); // redraws once when the loop stays stopped
   }
 
   /** The wave view's layout for the current canvas size; notifies onWaveLayout on a change. */
@@ -380,7 +416,8 @@ export class VisualizationBridge {
 const NO_ENGINE = Object.freeze({
   hasCtx: false, state: 'not started', time: 0, sampleRate: 0, voice: false, voiceId: 0, t0: 0,
   plan: null, kind: null, playing: false, releasing: false, endTime: Infinity, limited: false,
-  analyser: null, timeData: null, freqData: null, mic: false, micAnalyser: null,
+  analyser: null, timeData: null, freqData: null, preCeiling: null, preCeilingData: null,
+  ceilingCap: 0, mic: false, micAnalyser: null,
   micFreqData: null, activeNodes: 0, activeSources: 0, voices: 0,
 });
 

@@ -5,9 +5,18 @@
 //
 // Interaction: click selects; drag reorders (insertion marker); the focused timeline takes the
 // editor's keyboard model (arrows select, Alt+arrows move, Delete removes, Ctrl/Cmd+D
-// duplicates, Escape cancels a drag); the move/delete buttons and the "Add block" menu edit;
+// duplicates, Escape cancels a drag, Space plays or stops, Ctrl/Cmd+Z and Shift+Ctrl/Cmd+Z undo
+// and redo, Ctrl/Cmd+C and Ctrl/Cmd+V copy and paste a block); the move/delete buttons and
+// the "Add block" menu edit;
 // play/stop/loop and "play from the start" use the adapter's context and destination. The
 // audio clock (ctx.currentTime) drives the playhead; no timer ever times audio.
+//
+// Edits during playback apply from the next pass (sequencer/editor.js). The lane always shows
+// the edited model; while the sounding pass was compiled from another layout, the playhead is
+// placed on the block that sounds by its id (timeline.passPlayheadX), that block is marked
+// (aria-current, dashed outline), the message line says the changes apply from the next pass
+// and the status bar shows the sounding and the next length. A block deleted while it sounds
+// has no place in the lane: the playhead is ghosted. The pass is never restarted by an edit.
 //
 // Scrolling: the lane shows at least minSpanS (the reference's ~4 s axis) and never packs a
 // long sequence tighter than minPxPerS; beyond that the timeline scrolls horizontally. The bar
@@ -15,7 +24,7 @@
 // track click, horizontal or Shift+wheel on the lane); keyboard selection, added blocks and
 // the playhead are kept in view, so the keyboard needs no separate scroll control.
 
-import { createSequencerEditor } from '../sequencer/editor.js';
+import { createSequencerEditor, LOOP_CAP_S } from '../sequencer/editor.js';
 import { BLOCK_SCHEMA, totalDuration } from '../sequencer/model.js';
 import {
   createTimeScale,
@@ -23,6 +32,7 @@ import {
   generateTicks,
   layoutBlocks,
   playheadPosition,
+  passPlayheadX,
   dropIndexAt,
   insertionMarkerX,
 } from '../sequencer/timeline.js';
@@ -47,6 +57,9 @@ export function timelineWindow({ durationS, laneW, minSpanS = TIMELINE_OPTIONS.m
   return { spanS, contentPx, maxScrollPx: Math.max(0, contentPx - w) };
 }
 const DRAG_THRESHOLD_PX = 4;
+/** Message line while an edit waits for the next pass (sequencer/editor.js next-pass rule). */
+export const NEXT_PASS_NOTE = 'Changes apply from the next pass.';
+const SOUNDING_OUTLINE = '2px dashed var(--osc-text)';
 
 /** Ids kept from the shell markup for the Sweep fields (status/visual-idmap.tsv). */
 const FIELD_IDS = {
@@ -146,6 +159,12 @@ export function sequencerEngine(adapter) {
     },
     // C003: the engine's counted stage chain (the Filter Lab) the passes play through.
     openStage: adapter.openSequencerStage ? () => adapter.openSequencerStage() : undefined,
+    // K001: the engine counts every node of V2 playback (adapter.sequencerAccounting).
+    accounting: adapter.sequencerAccounting || null,
+    // One output owner at a time (C002): the app decides before anything is scheduled.
+    claimOutput: () => (adapter.claimSequencerOutput ? adapter.claimSequencerOutput() : true),
+    // C011: read-only; without it the loop keeps to the cap (LOOP_CAP_S).
+    continuousAllowed: () => !!(adapter.continuousAllowed && adapter.continuousAllowed()),
     // A started sequence takes the output at the Playground gain, also over a playing Studio
     // (C012 F1); the editor calls it only once a pass is scheduled, so a refused PLAY claims
     // nothing.
@@ -172,6 +191,14 @@ export function mount(rootEl, adapter) {
     sampleRate: adapter.getSampleRate ? adapter.getSampleRate() || undefined : undefined,
     engine: sequencerEngine(adapter),
   });
+  /** The Loop control's title: the cap while it applies, and why a loop ended at it. */
+  function loopTitle() {
+    if (editor.loopNotice) return editor.loopNotice;
+    if (editor.loopSchedule().capped) {
+      return `Loop sequence: stops at ${LOOP_CAP_S} s unless continuous playback is allowed`;
+    }
+    return 'Loop sequence until stopped (continuous playback allowed)';
+  }
 
   const blockEls = new Map();
   const marker = document.createElement('div');
@@ -202,6 +229,11 @@ export function mount(rootEl, adapter) {
   let fieldsFor = '';
   let rulerKey = '';
   let drag = null;
+  // The sounding pass as last drawn: its block id, whether the lane's layout differs from it
+  // (stale) and whether an edit waits for the next pass (pending).
+  let sounding = { id: null, stale: false, pending: false };
+  let passKey = '';
+  const passListeners = new Set();
 
   function safeMax() {
     return editor.sampleRate() * 0.475;
@@ -246,6 +278,7 @@ export function mount(rootEl, adapter) {
       setText(b.children[0], r.label);
       setText(b.children[1], r.detail);
       setAttr(b, 'aria-selected', r.id === editor.selectedId ? 'true' : 'false');
+      paintSounding(b, r.id);
       setAttr(b, 'aria-label', `${r.label} ${r.detail}, ${(r.endS - r.startS).toFixed(2)} s`);
       // A narrow block truncates its text with an ellipsis; the tooltip keeps all of it.
       setAttr(b, 'title', `${r.label} ${r.detail} · ${(r.endS - r.startS).toFixed(2)} s`);
@@ -264,6 +297,42 @@ export function mount(rootEl, adapter) {
       setAttr(timeline, 'aria-activedescendant', `osc-seq-block-${editor.selectedId}`);
     }
     else timeline.removeAttribute('aria-activedescendant');
+  }
+
+  /** aria-current on the block that sounds; a dashed outline while the lane is not its pass. */
+  function paintSounding(b, id) {
+    const want = id !== sounding.id ? '' : sounding.stale ? 'stale' : 'current';
+    if ((b.dataset.sounding || '') === want) return;
+    if (want) {
+      b.dataset.sounding = want;
+      b.setAttribute('aria-current', 'true');
+    } else {
+      delete b.dataset.sounding;
+      b.removeAttribute('aria-current');
+    }
+    b.style.outline = want === 'stale' ? SOUNDING_OUTLINE : '';
+    b.style.outlineOffset = want === 'stale' ? '-4px' : '';
+  }
+
+  /** { soundingS, nextS, current, layoutCurrent } while a pass sounds, else null. */
+  function passStatus() {
+    const ps = editor.playing ? editor.currentPassState() : null;
+    return ps ? { soundingS: ps.durationS, nextS: ps.nextDurationS, current: ps.current,
+      layoutCurrent: ps.layoutCurrent } : null;
+  }
+
+  function notifyPass() {
+    const st = passStatus();
+    const key = st ? `${st.soundingS}:${st.nextS}:${st.current}:${st.layoutCurrent}` : '';
+    if (key === passKey) return;
+    passKey = key;
+    for (const fn of passListeners) {
+      try {
+        fn(st);
+      } catch (e) {
+        /* theirs */
+      }
+    }
   }
 
   function renderRuler() {
@@ -340,8 +409,23 @@ export function mount(rootEl, adapter) {
   function renderTransport() {
     setAttr(playBtn, 'aria-pressed', editor.playing ? 'true' : 'false');
     setAttr(loopBtn, 'aria-pressed', editor.model.loop ? 'true' : 'false');
+    setAttr(loopBtn, 'title', loopTitle());
     if (playBtn) setAttr(playBtn, 'title', editor.error || 'Play sequence');
-    setText(msgEl, editor.error || (editor.warnings || []).join(' '));
+    const said = editor.error || editor.loopNotice || (editor.warnings || []).join(' ');
+    setText(msgEl, [said, sounding.pending ? NEXT_PASS_NOTE : ''].filter(Boolean).join(' '));
+    syncTempo();
+  }
+
+  /**
+   * The Tempo select shows the sequence's tempo: an undo or redo can change it (K003). A tempo
+   * no option names selects none, so choosing any option is a change again.
+   */
+  function syncTempo() {
+    if (!tempoSel) return;
+    const v = String(editor.model.tempoBpm);
+    if (tempoSel.value === v) return;
+    const i = Array.from(tempoSel.options).findIndex((o) => o.value === v);
+    tempoSel.selectedIndex = i;
   }
 
   function renderScrollbar() {
@@ -360,6 +444,7 @@ export function mount(rootEl, adapter) {
     renderScrollbar();
     renderEditor();
     renderTransport();
+    notifyPass();
   }
 
   /** Scroll the lane to px (clamped); true when the position changed. */
@@ -538,30 +623,67 @@ export function mount(rootEl, adapter) {
   const firstSweep = editor.model.blocks.find((b) => b.type === 'sweep');
   if (firstSweep) editor.selectBlock(firstSweep.id);
 
-  let wasPlaying = false;
-  offs.push(onFrame(() => {
+  /**
+   * Playhead from the audio clock: { visible, x, t, ghost }. While the lane shows the sounding
+   * pass's layout, the pass time maps linearly onto it; otherwise the head goes onto the block
+   * that sounds, found by id, and is a ghost when that block was deleted.
+   */
+  function playheadNow(timing, pb, ps) {
     const ctx = getCtx();
+    if (!timing || !ctx || !scale) return { visible: false };
+    if (!pb || !ps || ps.layoutCurrent) {
+      return playheadPosition({ ctxTime: ctx.currentTime, t0: timing.t0,
+        durationS: timing.duration, loop: editor.model.loop, scale });
+    }
+    if (ctx.currentTime - timing.t0 > timing.duration) return { visible: false };
+    const x = passPlayheadX(rects, pb);
+    if (x === null) {
+      return { visible: true, ghost: true, t: pb.t,
+        x: scale.secToPx(Math.min(pb.t, totalDuration(editor.model))) };
+    }
+    return { visible: true, ghost: false, t: pb.t, x };
+  }
+
+  let wasPlaying = false;
+  let lastNotice = '';
+  offs.push(onFrame(() => {
     const timing = editor.playing ? editor.currentPassTiming() : null;
-    const ph = timing && ctx && scale
-      ? playheadPosition({ ctxTime: ctx.currentTime, t0: timing.t0, durationS: timing.duration,
-        loop: editor.model.loop, scale })
-      : { visible: false };
+    const pb = timing ? editor.currentPassBlock() : null;
+    const ps = pb ? editor.currentPassState() : null;
+    const next = { id: pb ? pb.id : null, stale: !!(ps && !ps.layoutCurrent),
+      pending: !!(ps && !ps.current) };
+    if (next.id !== sounding.id || next.stale !== sounding.stale
+      || next.pending !== sounding.pending) {
+      const notePending = next.pending !== sounding.pending;
+      sounding = next;
+      for (const [id, b] of blockEls) paintSounding(b, id);
+      if (notePending) renderTransport();
+      notifyPass();
+    }
+    let ph = playheadNow(timing, pb, ps);
     if (ph.visible && win.maxScrollPx > 0 && !scrollDrag && timeline) {
       // Page the window so the playhead stays visible while the sequence plays.
       const w = timeline.clientWidth || 400;
       if (ph.x < 0 || ph.x > w - 4) {
         scrollTo(scrollPx + ph.x - 16);
-        ph.x = scale.secToPx(ph.t);
+        ph = playheadNow(timing, pb, ps);
       }
     }
     if (playhead.hidden !== !ph.visible) playhead.hidden = !ph.visible;
     if (ph.visible) {
       const tf = `translateX(${Math.round(ph.x)}px)`;
       if (playhead.style.transform !== tf) playhead.style.transform = tf;
+      const ghost = ph.ghost ? 'true' : 'false';
+      if (playhead.dataset.ghost !== ghost) {
+        playhead.dataset.ghost = ghost;
+        playhead.style.opacity = ph.ghost ? '0.35' : '';
+      }
     }
-    if (editor.playing !== wasPlaying) {
+    if (editor.playing !== wasPlaying || editor.loopNotice !== lastNotice) {
       wasPlaying = editor.playing;
+      lastNotice = editor.loopNotice;
       renderTransport();
+      notifyPass();
     }
   }));
   offs.push(observeSize(timeline || rootEl, () => {
@@ -581,6 +703,13 @@ export function mount(rootEl, adapter) {
       return { scrollPx, ...win };
     },
     scrollTo,
+    /** The sounding pass against the edited model (status bar), or null when stopped. */
+    passStatus,
+    /** fn(passStatus()) whenever the sounding pass, its length or the edited length changes. */
+    onPassChange(fn) {
+      passListeners.add(fn);
+      return () => passListeners.delete(fn);
+    },
     update(state = {}) {
       if (state.sequence) editor.load(state.sequence);
       if (state.tempoBpm) editor.setTempo(state.tempoBpm);
@@ -588,6 +717,7 @@ export function mount(rootEl, adapter) {
     },
     dispose() {
       offs.forEach((f) => f());
+      passListeners.clear();
       editor.dispose();
       for (const b of blockEls.values()) b.remove();
       blockEls.clear();

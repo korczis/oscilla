@@ -1273,9 +1273,12 @@
   height: 30px;
 }
 
+/* The signal path and the clips side by side where both fit, the clips under the path where
+   they do not (the 548 px column of the Playground's third row, P002), so the path is never
+   clipped: 424 px holds the default document's path (412 px) and its border. */
 .osc-sc-body {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 424px), 1fr));
   gap: 12px;
   min-width: 0;
 }
@@ -1468,10 +1471,11 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  /* The compact widget stays in the phone Playground, after the analysis panel. */
+  /* The compact widget stays in the phone Playground, after the measurement row (order 5,
+     instrument.css; the same order and the document order put the measurement first). */
   .osc-app[data-mode="playground"] .osc-panel.osc-p-studio {
     display: flex;
-    order: 3;
+    order: 5;
   }
 }
 

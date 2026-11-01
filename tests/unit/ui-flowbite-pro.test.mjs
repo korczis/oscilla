@@ -99,6 +99,16 @@
 //       is in tests/unit/flowbite-pro-fingerprints.json (scripts/flowbite-pro-fingerprints.mjs),
 //       and no file carrying a marker of the Pro packages (PRO_MARKERS: their licence URL and
 //       repository names). OSCILLA is a public repository and a public Pages site.
+//   (e) one owner per element (issue F001, item (8); src/js/ui/flowbite.js): an element of
+//       src/index.html (HTML comments removed) is driven either by Alpine state or by
+//       flowbite's data attribute API, never both. A flowbite attribute is
+//       data-<component>-(toggle|target|show|hide) for drawer, dropdown, collapse, tooltip,
+//       tabs, modal, popover, accordion, dial and dismiss. An element that carries one may not
+//       carry x-show, x-model, x-transition*, a binding (:name, x-bind:name) or a listener
+//       (@event, x-on:event). The element a flowbite attribute names (its value, a leading #
+//       dropped, as an id) is driven by flowbite too, so it may not carry x-show,
+//       x-transition*, or a bound class or style (:class, x-bind:class, :style,
+//       x-bind:style).
 // What no check here decides (the rule's "What no check decides" lists it for the reviewer):
 // a non-osc class reached in JavaScript through a variable, a helper argument or a ternary
 // branch that is not a literal of a class position; an osc-* name assembled from parts none of
@@ -127,9 +137,9 @@ import {
   ADR_REL, ALLOWED_CSS_PACKAGES, BASELINE_REL, DOMAIN_VIEW_STYLESHEETS, FINGERPRINTS_REL,
   MEASURE, NO_BUILD, PRO_MARKERS, PRO_PACKAGE_NAME, PRO_STRUCTURE, ROOT, RULE_REL,
   TAILWIND_ENTRY, baselineHistory, buildCompilesFlowbite, bundledInputs, definedClasses,
-  fingerprint, historyGate, historyProblems, kitProblems, measure, proSourceProblems, read,
-  readBaseline, recordProblems, resolveRelative, sum, tailwindFiles, tracked, treeInputs,
-  treeMeasure,
+  fingerprint, historyGate, historyProblems, kitProblems, measure, openingTags,
+  proSourceProblems, read, readBaseline, recordProblems, resolveRelative, sum, tailwindFiles,
+  tracked, treeInputs, treeMeasure,
 } from '../../scripts/ui-flowbite-pro-measure.mjs';
 
 test('the rule and the ADR exist, name this test and state what no check decides', () => {
@@ -216,6 +226,69 @@ test('(d) no licensed Flowbite Pro source file is tracked', () => {
   assert.ok(files.length > 500, `tracked files read (${files.length})`);
   const problems = proSourceProblems(files, new Set(record.fingerprints));
   assert.deepEqual(problems, [], problems.join('\n'));
+});
+
+// Clause (e): one owner per element.
+const FLOWBITE_ATTR = new RegExp(String.raw`^data-(drawer|dropdown|collapse|tooltip|tabs|modal|`
+  + String.raw`popover|accordion|dial|dismiss)-(toggle|target|show|hide)$`);
+const ALPINE_DRIVES = /^(x-show|x-model(\..*)?|x-transition.*|:.+|x-bind:.+|@.+|x-on:.+)$/;
+const ALPINE_STYLES = /^(x-show|x-transition.*|:class|x-bind:class|:style|x-bind:style)$/;
+
+/** Every element of `html` that both Alpine and flowbite drive, as one line each. */
+function ownerProblems(html) {
+  const tags = openingTags(html.replace(/<!--[\s\S]*?-->/g, ''));
+  const label = ({ tag, attrs }) => (attrs.id ? `<${tag} id="${attrs.id}">` : `<${tag}>`);
+  const byId = new Map(tags.filter((t) => t.attrs.id).map((t) => [t.attrs.id, t]));
+  const problems = [];
+  for (const el of tags) {
+    const fb = Object.keys(el.attrs).filter((a) => FLOWBITE_ATTR.test(a));
+    if (!fb.length) continue;
+    const alpine = Object.keys(el.attrs).filter((a) => ALPINE_DRIVES.test(a));
+    if (alpine.length) {
+      problems.push(`${label(el)}: ${fb.join(', ')} and Alpine ${alpine.join(', ')}`);
+    }
+    for (const a of fb) {
+      const target = byId.get(el.attrs[a].replace(/^#/, ''));
+      const styled = target ? Object.keys(target.attrs).filter((x) => ALPINE_STYLES.test(x)) : [];
+      if (styled.length) {
+        problems.push(`${label(target)}: named by ${a} of ${label(el)} and Alpine `
+          + `${styled.join(', ')}`);
+      }
+    }
+  }
+  return problems;
+}
+
+test('(e) no element of src/index.html is driven by both Alpine and flowbite', () => {
+  const problems = ownerProblems(read('src/index.html'));
+  assert.deepEqual(problems, [], problems.join('\n'));
+});
+
+test('mutation (e): an element with both Alpine state and a flowbite attribute fails', () => {
+  const ok = `<button data-drawer-target="osc-drawer" data-drawer-toggle="osc-drawer"
+      aria-controls="osc-drawer">Menu</button>
+    <aside id="osc-drawer" aria-label="Sidebar"></aside>
+    <button @click="open = !open" :aria-expanded="open">Alpine</button>
+    <div x-show="open" id="osc-alpine"></div>
+    <!-- <button data-dropdown-toggle="osc-alpine" @click="x">commented</button> -->`;
+  assert.deepEqual(ownerProblems(ok), [], 'one owner each: Alpine or flowbite');
+  assert.deepEqual(ownerProblems(`
+    <button data-dropdown-toggle="osc-menu" @click="open = !open">a</button>
+    <div id="osc-menu"></div>
+    <button data-collapse-toggle="osc-group" x-bind:aria-expanded="open">b</button>
+    <ul id="osc-group" x-show="open"></ul>
+    <button data-tabs-target="#osc-tab-a" :class="{ on: tab === 'a' }">c</button>
+    <div id="osc-tab-a"></div>
+    <span data-tooltip-target="osc-tip">d</span>
+    <div id="osc-tip" :class="tip ? 'visible' : 'invisible'"></div>
+    <aside x-show="drawer" data-drawer-hide="osc-drawer">e</aside>`), [
+    '<button>: data-dropdown-toggle and Alpine @click',
+    '<button>: data-collapse-toggle and Alpine x-bind:aria-expanded',
+    '<ul id="osc-group">: named by data-collapse-toggle of <button> and Alpine x-show',
+    '<button>: data-tabs-target and Alpine :class',
+    '<div id="osc-tip">: named by data-tooltip-target of <span> and Alpine :class',
+    '<aside>: data-drawer-hide and Alpine x-show',
+  ]);
 });
 
 // ---------------------------------------------------------------- mutations (fixtures)

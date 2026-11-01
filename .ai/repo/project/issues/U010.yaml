@@ -1,0 +1,40 @@
+id: U010
+milestone: M054
+serves:
+  - "ui-current#no-isolated-workspace"
+  - "ui-current#empty-states-lead-somewhere"
+title: "Honest link labels and the first cross-links between workspaces"
+slug: honest-link-labels-and-the-first-cross-links-between-workspaces
+priority: p2
+profile: implementation
+objective: "Resolves the link audit of 2026-10-29 (B1, B2, B6, B7, B8, B10, B12, one-way links 1 and 2, P1, P3, P4, P5, P8). The Filter Lab expand button is named for where it goes (Back to the Playground inside Filter Lab); Measure's Open Experiments lands focus on the Experiments heading; the logo goes home, the skip link says Skip to main content and the '?' button is named Keyboard shortcuts; the Bioacoustics citation links name their source and say they open a new tab; the empty Experiments, Definitions, Findings and Presets history lists lead to the next step; Filter Lab, Synthesis, the Sequencer and Measure link to the shipped Studio template that does their job (#m=studio&st=<id>); the Sequencer opens its own pattern in Studio through importSequence, never over unsaved changes; Studio's Back returns to the workspace it was opened from and names it; Learn topics link to the workspace that is their real tool, and a Learn demo or tool notice leads back to the lesson. Every link uses a route the router already has; the table is src/js/ui/cross-links.js. P2 (Analyzer to Measure) is U005's counterpart line (#273); U006 can absorb the table into its Related affordance."
+why: "The link audit of 2026-10-29 found labels that say something other than what the control does, one switch that drops focus to the page, a new user's Experiments page with no way onward, and links that lead into Studio or the Playground with no way back."
+scope:
+  - "src/index.html"
+  - "src/js/ui"
+  - "src/js/core/instrument.js"
+  - "src/js/labs/bioacoustics.js"
+  - "src/js/main.js"
+  - "src/styles"
+  - "tests/unit/cross-links.test.mjs"
+  - "tests/unit/bioacoustics.test.mjs"
+  - "tests/browser/cross-links.cjs"
+  - "tests/README.md"
+  - "README.md"
+  - "docs/v31/user-guide.md"
+  - "package.json"
+  - "dist"
+depends_on:
+  - "U001"
+acceptance_criteria:
+  - "tests/unit/cross-links.test.mjs fails when a lab's Studio link names a template that is not shipped, an address the router does not open to Studio, or text other than the template's title, and when a Learn tool names a topic or workspace that does not exist."
+  - "tests/browser/cross-links.cjs, in chromium, firefox and webkit from file:// and /oscilla/, follows every new link by pointer, keyboard and touch: it opens its workspace with the state it names, focus lands on the workspace heading, Back returns and Forward reopens; it fails on the merge base."
+  - "With unsaved Studio changes, neither a lab's template link nor the Sequencer's pattern link replaces the document."
+  - "No new class name, no inline style and no Flowbite Pro debt growth (tests/unit/ui-flowbite-pro.test.mjs)."
+validation:
+  - "npm test"
+  - "node tests/browser/cross-links.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

@@ -88,6 +88,10 @@ satisfaction:
     criterion: "The ADR index names every accepted ADR and marks each accepted one whose decision text still opens with 'Proposed'"
     evidence: "command"
     ref: "node --test tests/unit/adr-accepted-list.test.mjs"
+  - id: "sequencer-helpers-one-owner"
+    criterion: "The sequencer keeps no copy of a core numeric helper, the log frequency mapping, formatMs or lfoShape: sequencer/model.js and compiler.js re-export the core/math.js, core/frequency.js and audio/patterns.js functions, so a sequencer block and a Studio clip round a decimal tie as core does"
+    evidence: "command"
+    ref: "node --test tests/unit/sequencer-core-helpers.test.mjs"
   - id: "release-cli-consistent"
     criterion: "Every release script parses its flags with one parser, reads ADR front matter as YAML and leaves no test fixture behind"
     evidence: "command"
@@ -116,6 +120,10 @@ satisfaction:
     criterion: "docs/EXTENDING.md shows a contributor how to add a Studio node, a template, a lab or workspace, a chart and a browser check, every file, export, rule, link and npm script it names exists, its example node compiles through the real registry and compiler, and README's landing deep links route where they say and point to the guide"
     evidence: claim
     ref: "extending-guide-checked"
+  - id: "dialog-focus-not-taken-back"
+    criterion: "A dialog's deferred initial focus never takes focus back from a control the user moved to after it opened, and a dialog closed before it fires takes none, so a keyboard confirmation presses the button chosen on any host load"
+    evidence: "command"
+    ref: "node --test tests/unit/dialog-initial-focus.test.mjs"
 governance:
   - "rule:project.single-file-deliverable"
   - "rule:project.rules-name-their-enforcement"

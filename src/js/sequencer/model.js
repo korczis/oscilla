@@ -21,6 +21,15 @@
 // 44.1 kHz one.
 
 import { PROVISIONAL_SAMPLE_RATE, SAFE_NYQUIST_FACTOR, WAVEFORMS } from '../core/constants.js';
+import {
+  clamp, deepCopy, isNum, mulberry32, pick, round, sig, toInt, toNumber,
+} from '../core/math.js';
+import {
+  formatFrequencyCompact as formatCompactFrequency,
+  formatMs,
+  frequencyToNormalized,
+  normalizedToFrequency as coreNormalizedToFrequency,
+} from '../core/frequency.js';
 
 // ============================================================ constants
 
@@ -56,58 +65,14 @@ export const BLOCK_TYPES = [
 
 // ============================================================ helpers
 
-// from V1 clamp (index.html@95dfa81:1172)
-export const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-// from V1 isNum (index.html@95dfa81:1173)
-export const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
+// V1 clamp, isNum, toNumber, toInt, pick, round, sig and mulberry32 (index.html@95dfa81:1172-1240)
+// and frequencyToNormalized (:1366): one owner, core/math.js and core/frequency.js (E041);
+// re-exported for the sequencer's importers. round is core's, with the S079 tie fix.
+export { clamp, isNum, toNumber, toInt, pick, round, sig, mulberry32, frequencyToNormalized };
 
-// from V1 toNumber (index.html@95dfa81:1177)
-/** Coerce to a finite number inside [lo, hi]; anything else becomes the fallback. */
-export function toNumber(v, fallback, lo = -Infinity, hi = Infinity) {
-  const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : v;
-  return isNum(n) ? clamp(n, lo, hi) : fallback;
-}
-// from V1 toInt (index.html@95dfa81:1181)
-export function toInt(v, fallback, lo, hi) {
-  return Math.round(toNumber(v, fallback, lo, hi));
-}
-// from V1 pick (index.html@95dfa81:1184)
-export function pick(v, allowed, fallback) {
-  return allowed.includes(v) ? v : fallback;
-}
-// from V1 round (index.html@95dfa81:1187)
-export function round(v, digits) {
-  const m = 10 ** digits;
-  return Math.round((v + Number.EPSILON) * m) / m;
-}
-// from V1 sig (index.html@95dfa81:1192)
-/** Significant-digit formatting without trailing zeros: 2.2727 -> "2.27", 50.0 -> "50". */
-export function sig(v, digits = 3) {
-  return String(Number(v.toPrecision(digits)));
-}
-
-// from V1 mulberry32 (index.html@95dfa81:1240)
-/** Deterministic PRNG so a random block's preview equals what plays and what is exported. */
-export function mulberry32(seed) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-// from V1 frequencyToNormalized (index.html@95dfa81:1366)
-export function frequencyToNormalized(freq, min, max) {
-  if (!(freq > 0 && min > 0 && max > min)) return 0;
-  return clamp(Math.log(freq / min) / Math.log(max / min), 0, 1);
-}
-// from V1 normalizedToFrequency (index.html@95dfa81:1370), floor changed to SEQ_MIN_FREQUENCY
+/** core/frequency.js normalizedToFrequency, with the sequencer floor for an invalid range. */
 export function normalizedToFrequency(value, min, max) {
-  if (!(min > 0 && max > min) || !isNum(value)) return min > 0 ? min : SEQ_MIN_FREQUENCY;
-  return min * Math.pow(max / min, clamp(value, 0, 1));
+  return min > 0 ? coreNormalizedToFrequency(value, min, max) : SEQ_MIN_FREQUENCY;
 }
 
 /** The running context's safe maximum: 0.95 x Nyquist. Invalid rates fall back to 44.1 kHz. */
@@ -116,11 +81,12 @@ export function safeMaximum(sampleRate) {
   return (sr / 2) * SAFE_NYQUIST_FACTOR;
 }
 
-/** Compact frequency label as in the reference timeline: 440 Hz, 1.2 kHz, 15.5 kHz. */
-export function formatCompactFrequency(f) {
-  if (!isNum(f)) return '—';
-  return f >= 1000 ? `${sig(f / 1000, 3)} kHz` : `${sig(f, 3)} Hz`;
-}
+/**
+ * Compact frequency label as in the reference timeline: 440 Hz, 1.2 kHz, 15.5 kHz; and the
+ * duration label (from V1 formatMs, index.html@95dfa81:1437). Both are core/frequency.js's
+ * (G002, the one units module), here under the sequencer's names.
+ */
+export { formatCompactFrequency, formatMs };
 
 /** Frequency range label: "440 → 880 Hz", "1 → 8 kHz", "440 Hz → 8 kHz". */
 export function formatFrequencyRange(a, b, sep = ' → ') {
@@ -130,13 +96,6 @@ export function formatFrequencyRange(a, b, sep = ' → ') {
   return `${formatCompactFrequency(a)}${sep}${formatCompactFrequency(b)}`;
 }
 
-// from V1 formatMs (index.html@95dfa81:1437)
-export function formatMs(ms) {
-  if (!isNum(ms)) return '—';
-  return ms >= 1000 ? `${sig(ms / 1000, 3)} s` : `${sig(ms, 3)} ms`;
-}
-
-const deepCopy = (o) => JSON.parse(JSON.stringify(o)); // from V1 deepCopy (index.html@95dfa81:1174)
 
 // ============================================================ block schema
 
@@ -504,31 +463,37 @@ export function createSequence(init = {}, opts = {}) {
 
 /**
  * The reference sequence shown in the V2 design: Tone 440 Hz 500 ms, Sweep 440 → 880 Hz log
- * 500 ms, Silence 250 ms, Pulse 1.2 kHz 500 ms, Chirp 1 → 8 kHz 500 ms, at 120 BPM.
+ * 500 ms, Silence 250 ms, Pulse 1.2 kHz 500 ms, Chirp 1 → 8 kHz 500 ms, at 120 BPM. Its blocks
+ * are tempo-locked (1, 1, 1/2, 1 and 1 beat; K002, gap G1), so the tempo control changes what
+ * it plays; at 120 BPM the durations are exactly the design's. A sequence stored in
+ * milliseconds (beats null) keeps its durations whatever the tempo.
  */
 export function referenceSequence(opts = {}) {
   return createSequence(
     {
       tempoBpm: 120,
       blocks: [
-        { id: 'b1', type: 'tone', durationMs: 500, params: { freq: 440 } },
+        { id: 'b1', type: 'tone', durationMs: 500, beats: 1, params: { freq: 440 } },
         {
           id: 'b2',
           type: 'sweep',
           durationMs: 500,
+          beats: 1,
           params: { start: 440, end: 880, curve: 'log' },
         },
-        { id: 'b3', type: 'silence', durationMs: 250, params: {} },
+        { id: 'b3', type: 'silence', durationMs: 250, beats: 0.5, params: {} },
         {
           id: 'b4',
           type: 'pulse',
           durationMs: 500,
+          beats: 1,
           params: { freq: 1200, pulseMs: 100, pauseMs: 100 },
         },
         {
           id: 'b5',
           type: 'chirp',
           durationMs: 500,
+          beats: 1,
           params: { start: 1000, end: 8000, ramp: 'exponential' },
         },
       ],
@@ -614,8 +579,19 @@ function seedFor(model, id) {
 }
 
 /**
+ * Beats of a type's default length at the reference tempo (DEFAULT_TEMPO_BPM): Tone 1,
+ * Silence 1/2, Burst 2. A block added without a duration is tempo-locked to this (K002).
+ */
+export function defaultBeats(type) {
+  const s = BLOCK_SCHEMA[type];
+  return s ? s.durationMs.default / msPerBeat(DEFAULT_TEMPO_BPM) : null;
+}
+
+/**
  * Add a block. opts: { index (insert position, default end), params, durationMs, beats,
- * sampleRate }. Returns the same model when it is full or the type is unknown.
+ * sampleRate }. Without durationMs or beats the block is tempo-locked to defaultBeats(type);
+ * an explicit durationMs (without beats) is milliseconds, as before. Returns the same model
+ * when it is full or the type is unknown.
  */
 export function addBlock(model, type, opts = {}) {
   if (!BLOCK_SCHEMA[type] || model.blocks.length >= MAX_BLOCKS) return model;
@@ -629,13 +605,30 @@ export function addBlock(model, type, opts = {}) {
       type,
       params,
       durationMs: opts.durationMs ?? BLOCK_SCHEMA[type].durationMs.default,
-      beats: opts.beats ?? null,
+      beats: opts.beats ?? (opts.durationMs === undefined ? defaultBeats(type) : null),
     },
     { sampleRate: opts.sampleRate, tempoBpm: model.tempoBpm, index: model.blocks.length },
   );
   const index = toInt(opts.index, model.blocks.length, 0, model.blocks.length);
   const blocks = model.blocks.slice();
   blocks.splice(index, 0, block);
+  return withBlocks(model, blocks);
+}
+
+/**
+ * Insert a copy of `block` (a pasted block) at `index` (default end) with a fresh id,
+ * validated against this model's tempo: a tempo-locked block takes the current tempo.
+ * opts: { index, sampleRate }. Returns the same model when it is full.
+ */
+export function insertBlock(model, block, opts = {}) {
+  if (!block || model.blocks.length >= MAX_BLOCKS) return model;
+  const { block: b } = normalizeBlock(
+    { ...deepCopy(block), id: nextBlockId(model.blocks) },
+    { sampleRate: opts.sampleRate, tempoBpm: model.tempoBpm, index: model.blocks.length },
+  );
+  const index = toInt(opts.index, model.blocks.length, 0, model.blocks.length);
+  const blocks = model.blocks.slice();
+  blocks.splice(index, 0, b);
   return withBlocks(model, blocks);
 }
 

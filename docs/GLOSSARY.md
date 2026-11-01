@@ -14,6 +14,26 @@ timeline and the compact Studio widget on the Playground.
 
 **OSCILLA.** The app. Product text does not call it "the project".
 
+**Synth.** The workspace with the semi-modular mono voice and the docked keys (`docs/synth.md`):
+a projection of the Studio document, its modules Studio nodes and its cables Studio edges.
+
+**Normalled.** An input jack of the Synth panel that has a default connection while no cable is
+in it (`src/js/synth/normals.js`). A cable into it replaces the normal; removing the cable
+restores it. **Patch bay**: the panel's view of every jack, grouped by module, where cables are
+drawn.
+
+**Engine.** A polyphonic note source of the Synth's Engines tab (`docs/synth.md`): additive,
+FM, AM / ring, wavetable, hard sync or percussion, up to 16 **voices**; a 17th note takes the
+voice released first, else the oldest (**voice stealing**). **FM index**: how far a modulator
+moves its target's frequency, Δf = I x f_mod Hz. **Morph**: the wavetable position, a
+level-continuous crossfade of two neighbouring tables. **Hard sync**: a wave reset at every period of
+the note, here at set ratios. **Chain**: an engine's input that passes audio to its output
+unchanged, so every instrument reaches the one Master Output.
+
+**CV and gate.** A control signal that sets a parameter (the Keys pitch, in octaves) and a
+trigger that opens and closes envelopes (the Keys gate). **Ring modulation**: the product of two
+audio signals, giving their sum and difference frequencies.
+
 **Project.** A saved Studio document: a StudioModel of kind `oscilla-studio`, exported as a
 `.oscilla-studio.json` file ("Export project", "Import a project, patch, V2 sequence or
 configuration file") or kept in the Studio library of this browser. A **patch** is the smaller
@@ -143,6 +163,31 @@ by"). In Studio, "connection" means a graph edge between two ports, so record te
 the bare word. Not to be confused with the two words beside it: the *lineage* of evidence (ADR
 0044) traces one value within one experiment, and the Studio operation *trace* (ADR 0042)
 follows one Studio operation in memory.
+
+**Analytic signal.** The analytic signal of the audio buffer: the buffer as its real part and
+its Hilbert transform as its imaginary part, computed by FFT with the inverse by conjugation
+(`src/js/analysis/analytic.js`, K024). Its magnitude is the *envelope*, its angle the
+*instantaneous phase* and its phase step per sample the *instantaneous frequency*, each within
+the error bounds the module states (`ANALYTIC_BOUNDS`) on the interior of the buffer and inside
+its `trustedBand()`. It is computed from a digital signal generated in this page or captured
+from the microphone; OSCILLA's "I/Q" means this pair, never device I/Q, and no radio is
+received.
+
+**Frequency entry.** What every frequency text field accepts (the Playground's frequency,
+pattern, sweep and dual oscillator fields, the Filter Lab cutoff, the Studio Inspector; the
+number fields of the sequencer and of Phase & Stereo take a plain number in Hz): one grammar,
+`parseFrequency` in `src/js/core/frequency.js`, the one units module (G002). A number with a
+point or a comma as the decimal mark and an optional exponent (`440`, `15.5`, `2,5`, `.5`,
+`1e3`), then an optional unit, matched without case or spaces: `Hz` or `hertz`, `k`, `kHz` or
+`kilohertz` (times 1000). So `2,5k`, `2.5 kHz`, `2500` and `2500 Hz` are the same 2.50 kHz.
+The comma is never a thousands separator (`2,500` is 2.5 Hz); in a list of frequencies (a user
+sequence) the comma separates the values, so there the decimal mark is the point. Zero, a
+negative and a non-finite value (`0`, `-5`, `1e309`) are refused with one sentence, "Frequency
+must be a finite number greater than 0 Hz."; any other text (`abc`) is not a frequency. The same
+module gives the one text of each quantity: a frequency in a control or readout ("440 Hz",
+"2.50 kHz"), a compact one in charts and the sequencer ("2.5 kHz"), a duration in
+milliseconds ("250 ms", "1.5 s"), in seconds ("1.250 s") and the clock ("01:04.210", which
+floors, so it never shows a time not yet reached).
 
 ## Repository
 

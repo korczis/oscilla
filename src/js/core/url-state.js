@@ -91,8 +91,9 @@ export function decodeHash(hash) {
 
 /**
  * Restore a hash onto state s in place. env: { sampleRate, continuousAllowed }.
- * Returns { handled, issues, notices, dropped, limited, pendingHashConfig, mode }:
+ * Returns { handled, issues, notices, dropped, limited, pendingHashConfig, mode, malformed? }:
  *   handled            false when the hash carries no configuration (nothing happened)
+ *   malformed          true when the configuration could not be read at all (defaults kept)
  *   dropped, limited   what was not restored as saved (config.js applyConfigTo; `limited` also
  *                      names the gain a link may not raise)
  *   pendingHashConfig  cfg to re-apply once the real sample rate is known (values above the
@@ -133,6 +134,7 @@ export function restoreFromHashOn(s, hash, env = {}) {
     }
   } catch (e) {
     out.handled = true;
+    out.malformed = true;
     notify('warning', 'Link could not be read', 'The configuration in this link is malformed; defaults are used.');
   }
   return out;

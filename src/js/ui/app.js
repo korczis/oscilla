@@ -11,6 +11,7 @@
 // The 'mode' event kind keeps its name (detail.value is the workspace id).
 
 import { WORKSPACE_LABELS, shortcutHelp } from './shortcuts.js';
+import { counterpartOf, showsCounterparts } from './counterparts.js';
 
 const THEME_KEY = 'oscilla.v2.theme';
 const ANALYSIS_TAB_KEY = 'oscilla.v2.analysisTab';
@@ -25,10 +26,19 @@ const NAV_GROUPS = Object.freeze({
 });
 const MODES = [
   'playground', 'measure', 'experiments', ...NAV_GROUPS.analyze, ...NAV_GROUPS.synthesis,
-  'learn', 'studio', 'about',
+  'learn', 'studio', 'synth', 'about',
 ];
-const WORKSPACE_TITLES = { about: 'About' };
+// The document title of each workspace but the Playground, which keeps the product title (the
+// page's own <title>): every history entry, tab and screen-reader page title names its page.
+// The names are the nav items' labels.
+const WORKSPACE_TITLES = Object.freeze({
+  measure: 'Measure', experiments: 'Experiments', analyzer: 'Analyzer', filter: 'Filter Lab',
+  compare: 'Compare', synthesis: 'Synthesis', sequencer: 'Sequencer', presets: 'Presets',
+  learn: 'Learn', studio: 'Studio', synth: 'Synth', about: 'About',
+});
 const ROVING_ROLES = ['tab', 'radio'];
+/** The phone width of src/styles/responsive.css (single column below 768 px). */
+export const PHONE_QUERY = '(max-width: 767.98px)';
 
 /** localStorage can be missing or throw (private mode, file:// policies, quota). */
 function storageGet(key) {
@@ -84,19 +94,27 @@ export function syncSliderFill(root = document) {
 }
 
 /**
+ * Scroll `scroller` along x so `el` is fully visible (WCAG 2.4.11): browsers do not reliably
+ * scroll a box to a control reached with Tab that is only partly inside it. align 'start'
+ * puts it at the left edge; otherwise the box moves only as far as needed.
+ */
+export function keepInScrollerView(el, scroller, align = 'nearest') {
+  if (!el || !scroller || scroller.scrollWidth <= scroller.clientWidth) return;
+  const t = el.getBoundingClientRect();
+  const n = scroller.getBoundingClientRect();
+  const pad = 8;
+  if (align === 'start') {
+    if (t.left < n.left || t.right > n.right) scroller.scrollLeft += t.left - n.left - pad;
+  } else if (t.left < n.left + pad) scroller.scrollLeft -= n.left + pad - t.left;
+  else if (t.right > n.right - pad) scroller.scrollLeft += t.right - (n.right - pad);
+}
+
+/**
  * Scroll the nav strip so `tab` is fully visible. align 'start' puts it at the left edge (the
  * workspace just chosen); otherwise the strip moves only as far as needed.
  */
 export function keepNavTabInView(tab, align = 'nearest') {
-  const nav = tab.closest('.osc-nav');
-  if (!nav || nav.scrollWidth <= nav.clientWidth) return;
-  const t = tab.getBoundingClientRect();
-  const n = nav.getBoundingClientRect();
-  const pad = 8;
-  if (align === 'start') {
-    if (t.left < n.left || t.right > n.right) nav.scrollLeft += t.left - n.left - pad;
-  } else if (t.left < n.left + pad) nav.scrollLeft -= n.left + pad - t.left;
-  else if (t.right > n.right - pad) nav.scrollLeft += t.right - (n.right - pad);
+  keepInScrollerView(tab, tab.closest('.osc-nav'), align);
 }
 
 /** Arrow/Home/End navigation among sibling tabs or radios; selection follows focus. */
@@ -129,6 +147,21 @@ export function navGroupOf(mode) {
 }
 
 /**
+ * The navigation's top level in order, derived from WORKSPACES and NAV_GROUPS: a top-level
+ * workspace as `nav.<id>`, a group once, at its first workspace, as `nav-group.<group>`. Synth
+ * is top level after Studio by the owner's decision Q019.
+ */
+export function navTopLevel() {
+  const out = [];
+  for (const ws of WORKSPACES) {
+    const g = navGroupOf(ws);
+    const id = g ? `nav-group.${g}` : `nav.${ws}`;
+    if (!out.includes(id)) out.push(id);
+  }
+  return out;
+}
+
+/**
  * Place a group's dropdown under its button. The panel is position: fixed because the nav strip
  * scrolls (overflow-x), which would clip an absolutely positioned child; it stays in the viewport.
  */
@@ -144,7 +177,10 @@ export function placeNavPanel(button, panel, win = window) {
 /**
  * The heading of a workspace: the heading its own view is labelled by (MEASURE, STUDIO, …), the
  * title of the visually first of its panels on the Playground grid (Analyzer, Filter Lab, …),
- * or the page heading for the Playground. null when none is shown.
+ * or the page heading for the Playground. A panel a workspace lists first in data-osc-modes is
+ * its own and is preferred over one it shares with the workspace listed before it (Compare's
+ * Phase panel before the Analyzer's microphone panel, which Compare also shows). null when none
+ * is shown.
  */
 export function workspaceHeading(root, mode) {
   const shown = (el) => !!el && el.getClientRects().length > 0;
@@ -156,13 +192,16 @@ export function workspaceHeading(root, mode) {
   if (mode === 'playground') return root.querySelector('#osc-main > h1');
   const own = [...root.querySelectorAll('[data-osc-modes]')]
     .filter((p) => p.dataset.oscModes.split(/\s+/).includes(mode));
-  const view = own.find((p) => p.classList.contains('osc-view') && shown(p));
+  // A full-width view: by its class, or a Pro view by its data-osc hook (the Synth view, #329).
+  const view = own.find((p) => (p.classList.contains('osc-view')
+    || p.dataset.osc === `${mode}-view`) && shown(p));
   if (view) return labelOf(view);
-  const panel = own.filter((p) => p.classList.contains('osc-panel') && shown(p)
+  const panels = own.filter((p) => p.classList.contains('osc-panel') && shown(p)
     && !p.matches('.osc-p-source, .osc-p-analysis'))
     .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top
-      || a.getBoundingClientRect().left - b.getBoundingClientRect().left)[0];
-  return labelOf(panel);
+      || a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+  const home = panels.find((p) => p.dataset.oscModes.split(/\s+/)[0] === mode);
+  return labelOf(home || panels[0]);
 }
 
 /**
@@ -198,7 +237,7 @@ export function syncSkipLink(doc, mode) {
   if (el) el.textContent = skipLinkLabel(mode);
 }
 
-/** Document title for a workspace: the product title, or `OSCILLA · <page>` for a page-like one. */
+/** Document title for a workspace: `OSCILLA · <page>`, or the product title for the Playground. */
 export function workspaceTitle(mode, base) {
   return WORKSPACE_TITLES[mode] ? `OSCILLA · ${WORKSPACE_TITLES[mode]}` : base;
 }
@@ -349,20 +388,34 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
         .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)[0];
       if (target) target.scrollIntoView({ block: tablet ? 'start' : 'nearest', behavior });
     },
+    /**
+     * A disclosure of Source & Pattern (the six frequency steps, Mode) folds on a phone and is
+     * open from 768 px, where its summary is not shown (P002, Q004 option A); it follows the
+     * width. Without matchMedia it stays as the markup has it (open).
+     */
+    foldOnPhone(el) {
+      const mq = typeof window !== 'undefined' && window.matchMedia
+        ? window.matchMedia(PHONE_QUERY) : null;
+      if (!mq) return;
+      const sync = () => { el.open = !mq.matches; };
+      sync();
+      if (mq.addEventListener) mq.addEventListener('change', sync);
+    },
     /** What the one Keyboard shortcuts dialog lists in the workspace in view (ADR 0050). */
     keyHelp() {
       return shortcutHelp(this.workspace);
     },
     /**
      * The logo goes home (H004 B6): its href is the Playground's address, and a plain click
-     * switches there through the router, as a nav item does; a modified click is the browser's.
+     * switches there through the router; a modified click is the browser's. It is a link, not a
+     * nav item, so focus moves to the Playground heading as any #m= link moves it (U010).
      */
     homeLink() {
       return {
         '@click'(e) {
           if (e.button > 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
           e.preventDefault();
-          this.setWorkspace('playground');
+          this.setWorkspace('playground', { focusHeading: true });
         },
       };
     },
@@ -381,6 +434,27 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
           if (group && this.navOpen === group) this.closeNavGroup(true);
         },
       };
+    },
+
+    /**
+     * A counterpart link (ui/counterparts.js): its href, written in src/index.html, is the
+     * workspace's address (counterpartHref); a plain click opens the workspace, selects its
+     * MEASURE result tab and moves focus to the workspace heading.
+     */
+    counterpartLink(id) {
+      const c = counterpartOf(id);
+      return {
+        '@click'(e) {
+          if (!c || e.button > 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+          e.preventDefault();
+          this.setWorkspace(c.workspace, { focusHeading: true });
+          if (c.measureTab) this.measureSetTab(c.measureTab);
+        },
+      };
+    },
+    /** True when the workspace in view shows the counterpart links. */
+    counterpartsShown() {
+      return showsCounterparts(this.workspace);
     },
 
     // ---- navigation groups (disclosure: a button with aria-expanded and a list of links) ----

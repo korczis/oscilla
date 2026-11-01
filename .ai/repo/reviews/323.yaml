@@ -1,0 +1,31 @@
+# Review verdict for pull request #323, K144 follow-up: the demo-song expected failures assert
+# effects and fail only on their gap (branch test/demo-song-xfail-honest, stacked on #287's
+# feat/demo-song-vertical-slice). Reviewed heads e8b3b818 and 5e2782c3. Another builder wrote it
+# (oscilla-b0).
+#
+# The digest: the base branch's scripts/review-verdict.mjs, run from `git archive origin/main
+# scripts` with --repo on this worktree and --base-branch origin/feat/demo-song-vertical-slice:
+# fd8e4618...ec2e over the 1 guarded path it names.
+#
+# How it was reviewed: round 1 (e8b3b818) checked every #287 finding R1-R11 by mutation, with a
+# skeptic per finding above P3; round 2 (5e2782c3) re-ran each round-1 repro.
+#
+# What holds at 5e2782c3: R1, R2, R5, R6, R7, R9 and R11 of #287 hold by mutation (round 1). The
+# open hat has its own envelope: all 156 closed hats ring 12.2 ms with #287's envelope energy (0 of
+# 156 differ; band-passed 45 s render: closed-hat energy ratio 1.000), the 4 open hats ring 161.5
+# ms. A renamed card selector now FAILs node-views-draw as 'broke'. restore-last waits 5 s, so a
+# debounced V604 draft flips it to XPASS. views passes 10/10 with #299 and V502 merged. The other
+# six templates hash as in #287.
+#
+# Verdict: merge. No open P0 or P1.
+schema: review-verdict/v1
+pr: 323
+verdict: merge
+reviewer: prismatic-majordomus-f3 (claude-code 1f47a36e)
+content: fd8e46180565bc0588c46a6173ee334b8131d7d3d1dcaf6c7bf4e6254e08ec2e
+findings:
+  - { id: R1, severity: P1, status: closed, title: "round 1: the open-hat sustain lengthened and boosted all 156 closed hats (shared hat-env); fixed by an open-hat envelope of its own" }
+  - { id: R2, severity: P1, status: closed, title: "round 1: node-views-draw read a renamed card selector as XFAIL; fixed by asserting the four cards first" }
+  - { id: R3, severity: P2, status: closed, title: "round 1: restore-last closed the page 426 ms after the edit; views flaked with V502 merged; both fixed" }
+  - { id: R4, severity: P3, status: open, title: "demo-song.cjs:94 RENDER_S 12 s: no browser render reaches the lead, the hats or the open hat this PR changes; only the unit test models them" }
+  - { id: R5, severity: P3, status: open, title: "demo-song.cjs:860 the draft wait ends on any other studio-store record, not only a draft; filter on the draft kind when V604 names it" }

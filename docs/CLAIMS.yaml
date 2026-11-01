@@ -282,6 +282,15 @@ claims:
     responsibility: product
     note: Intent product-direction, criterion positioning-consistent (P003). The other surfaces are README.md, package.json and DESCRIPTION in scripts/social-assets.mjs; the Open Graph and Twitter tags are read from the dist head. Exempt with their reasons in the test are site/og-image.png and site/apple-touch-icon.png (no copy), CLAUDE.md, AGENTS.md and GEMINI.md (operating contracts for workers) and the GitHub repository description, which lies outside the tree and is set by gh repo edit (recorded on P003). Whether the copy around the sentence implies an unsupported effect stays with the reviewer (project.no-fake-science).
 
+  - id: first-screen-layout
+    claim: "The first screen is the Playground Q004 chose (option A): its h1 is the positioning sentence Q002 chose, above every panel; at 1536x1024 Source & Pattern, Signal analysis, Microphone Analyzer and Device & Limits stand in one row, MEASURE's own Guided measurement panel (seven steps, Check setup, Frequency and Level UNCALIBRATED) spans the next row inside the first viewport, and the Pattern Sequencer with the compact Studio beside it follows, the compact Studio starting in that viewport with its whole signal path shown; at 390x844 the sentence, Source & Pattern, Signal analysis, the measurement row and the compact Studio run top to bottom (the Microphone Analyzer, Device & Limits and the Pattern Sequencer stay in their workspaces on a phone, as before) with the six frequency steps and Mode folded behind Source & Pattern's own disclosures and the measurement steps folded to the current one; no guided path is shown; Check setup, and Repeat after a result, pressed there open MEASURE and run in it; and every entry path of the committed inventory lands as before"
+    source: .ai/repo/project/issues/Q004.yaml
+    implementation: src/index.html
+    test: tests/browser/first-screen.cjs
+    status: guaranteed
+    responsibility: product
+    note: 'Plan P002, intent first-run-experience (criterion first-screen-built). tests/browser/first-screen.cjs checks the layout (checks layout desktop, phone, primary, others) and the entry-path inventory P002 committed before the change, in Chromium, Firefox and WebKit from file:// and the /oscilla/ sub-path; tests/unit/first-screen-layout.test.mjs holds the shell and adapter half (the h1 is DESCRIPTION, one Guided measurement panel shown on the Playground, document order, the primary action opens MEASURE, foldOnPhone). The layout is src/styles/instrument.css (Main grid); the Spectrogram panel, Filter Lab, Envelope, Additive Synthesis, Phase & Stereo and Bioacoustics leave the Playground from 1280 px and stay in their workspaces, and from 768 to 1279 px the Playground keeps every panel, the measurement row after Device & Limits. The visual gate''s Playground reference (tests/visual/reference.png, regions.json, baseline.json) and the compact Studio reference are this layout; live-smoke checks its panels after every deployment. Not decided by a check: whether the copy around the sentence reads as OSCILLA (the reviewer, project.visual-identity-lock), and the 320 px phone, where HOLD TO PLAY sits below the first viewport while the safety notice is shown.'
+
   - id: about-origin-sourced
     claim: "About's Origin tells the start Q005 decided against the record, an anti-bark ad promising 'ultrasound through any phone's speaker' and the reply 'this can be knocked together in one HTML5', keeping the browser-laboratory question only as the framing the project grew into; 'Built in one night' keeps its 5 h 51 min qualified as wall-clock time with several AI workers in parallel; and About names no company behind the ad, no vendor frequency, no personal motive and no figure the knowledge records do not measure"
     source: .ai/repo/project/issues/Q005.yaml
@@ -801,12 +810,22 @@ claims:
     note: 'Issue V501. Which gate browsers and origins expose Web MIDI is to be measured, not assumed.'
 
   - id: midi-notes-sound
-    claim: 'Note On and Note Off from a MIDI input will sound through the AudioEngine, with velocity under the safety level cap, bounded polyphony and click-free starts and stops.'
+    claim: 'Note On and Note Off from a MIDI input sound through the AudioEngine, with velocity under the safety level cap, bounded polyphony and click-free starts and stops.'
     source: .ai/repo/adrs/0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md
-    implementation: '-'
-    test: '-'
-    status: planned
-    note: 'Issue V502.'
+    implementation: src/js/midi/notes.js
+    test: tests/unit/midi/notes.test.mjs
+    status: guaranteed
+    responsibility: product
+    note: 'Issue V502; the decisions are the ADR''s V502 note (NOTE_POLYPHONY 8, each note at level / NOTE_POLYPHONY, velocity amplitude (v / 127)^2, the session safety limit, refusal at or above 0.95 x Nyquist). The note voices are src/js/audio/audio-engine.js noteOn / noteOff / notesOff, proven on the fake audio context. tests/browser/midi.cjs (midi-seam-notes) plays synthetic MIDI events from the stub in Chromium, Firefox and WebKit, from file:// and the /oscilla/ sub-path, with an independent oscillator count. No check plays a real MIDI device; latency is not measured.'
+
+  - id: keyboard-held-notes
+    claim: 'A note held on the computer keyboard, the on-screen keyboard or a MIDI key sounds past the playback limit only while it is held, under the output ceiling, and is released on blur, page hide and Escape.'
+    source: .ai/repo/adrs/0062-a-held-key-or-midi-note-is-exempt-from-the-playback-limit-while-held.md
+    implementation: src/js/midi/keyboard-ui.js
+    test: tests/unit/keyboard-held-notes.test.mjs
+    status: guaranteed
+    responsibility: product
+    note: 'Issue K026 (owner decision D3, amending ADR 0005). The engine side is src/js/audio/audio-engine.js noteOn({ held: true }); the MIDI layer (src/js/midi/notes.js) and the keyboard pass it. tests/browser/midi.cjs (midi-seam-notes, keyboard-qwerty) holds MIDI and computer-keyboard notes past the limit and releases them by blur and Escape in Chromium, Firefox and WebKit from file:// and the /oscilla/ sub-path; visibilitychange and pagehide are proven on the fake context only.'
 
   - id: midi-response-deterministic
     claim: 'A MIDI response mode will produce the same output events for the same input events, scheduled on the audio clock, with no network call or model inference in the path.'

@@ -1,0 +1,60 @@
+{
+  "schema": "oscilla-roadmap/v1",
+  "note": "The open milestones of the plan (.ai/repo/project) in its derived order, each with how many of its required issues are done, as `majordomus plan roadmap --json` gave them. Written by scripts/roadmap.mjs, which release:prepare runs before its build; About renders it from the bundle. Do not edit by hand.",
+  "milestones": [
+    {
+      "id": "M011",
+      "title": "Release engineering, provenance and product graph",
+      "done": 17,
+      "required": 18
+    },
+    {
+      "id": "M045",
+      "title": "MIDI jam companion: first usable version",
+      "done": 2,
+      "required": 6
+    },
+    {
+      "id": "M046",
+      "title": "Engineering integrity: orchestration split, structural checks, measured costs",
+      "done": 15,
+      "required": 25
+    },
+    {
+      "id": "M047",
+      "title": "Measurement extensions: room decay, clarity, distortion, chain delay, phase, run consistency",
+      "done": 0,
+      "required": 9
+    },
+    {
+      "id": "M048",
+      "title": "Studio completion: groups, minimap, pinch zoom, draft recovery, voice in Studio",
+      "done": 2,
+      "required": 6
+    },
+    {
+      "id": "M049",
+      "title": "Learn: three perception lessons of the adopted V1 specification",
+      "done": 0,
+      "required": 4
+    },
+    {
+      "id": "M050",
+      "title": "First-run experience chosen by the owner and built",
+      "done": 2,
+      "required": 3
+    },
+    {
+      "id": "M054",
+      "title": "The whole interface shows the current product",
+      "done": 1,
+      "required": 8
+    },
+    {
+      "id": "M005",
+      "title": "Specification tail",
+      "done": 4,
+      "required": 13
+    }
+  ]
+}

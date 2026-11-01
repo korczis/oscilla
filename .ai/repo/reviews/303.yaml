@@ -1,0 +1,66 @@
+# Review verdict for pull request #303, plan item C011: safety limits reach what sounds
+# (branch fix/c011-safety-limits-reach-what-sounds; findings dead-controls-4 and coupling-4 of
+# OSCILLA PACK 03, the group of controls that do not reach the sound). Reviewed head c6017580a9db
+# (== origin at fetch; merge base origin/main cdda563c1982). Built by the builder's session;
+# reviewed by dev-68, which re-checked a first review of the same head finding by finding.
+#
+# Worktree: /Users/korczis/dev/oscilla-wt/fix/c011-safety-limits-reach-what-sounds has a live
+# majordomus process (pid 35655, `majordomus-cli serve`) with its cwd there, so a fresh detached
+# worktree of origin/fix/c011-safety-limits-reach-what-sounds in the scratchpad was used. The PR
+# code was not modified. Mutations and probes ran in a git-archive copy in the scratchpad.
+#
+# The digest: the branch's scripts/review-verdict.mjs is byte-identical to origin/main's
+# (git diff --quiet origin/main HEAD -- scripts/review-verdict.mjs), so the branch copy was run:
+# `node scripts/review-verdict.mjs --content --list --base origin/main` gives 1bffe215...35f8ad
+# over the one guarded path the PR changes, src/js/audio/audio-engine.js.
+#
+# Lenses: (a) the control reaches the sound: every path that lowers the limit or withdraws the
+# permission, and every voice and loop pass they should govern; (b) click-freeness and the
+# output-stage rules (V249, ADR 0001); (c) tests and mutation; (d) copy and PR body vs code.
+#
+# Runs (dev-68, this head):
+# - Mock-clock probe (tests/freeze mock AudioContext), a hold at limit 5 lowered at t0 + 0.1 s,
+#   live voice end vs a fresh voice at the new limit, from t0: release 0.03 s L 0.5: 0.540 vs
+#   0.510; release 0.3 s L 0.5: 0.810 vs 0.510; release 3 s L 0.5: 3.510 vs 0.510; release 3 s
+#   L 2: tightenLimit returns 0, 5.010 vs 2.010; release 3 s L 3: returns 0, 5.010 vs 3.010 (R-1).
+# - Sequencer FakeContext probe: a looped sequence of two 30 s tone blocks (one 60 s pass), no
+#   permission: play() schedules the whole 60 s pass, loopSchedule() reports endsAt t0 + 60, the
+#   last source stops 60.01 s after t0, then loopNotice says 'Loop stopped at 30 s' (R-2).
+# - tests/unit/c011-safety-limits.test.mjs in the archive copy: 9/9 pass. Mutations, one at a
+#   time and restored: M8 (`if (at <= t)` -> `if (false)`) 9/9 pass, the release is then
+#   scheduled in the past (hard cut); with the code as written the due-now path fades on `fade`
+#   from _soon (set 1 at 1.24, linear to the floor at 1.255 with currentTime 1.22). M11
+#   (_armTimers not re-armed) 9/9, M17 (followPermission's drop of queued passes) 9/9, M20
+#   (playT0 kept across play()) 9/9 pass; M14 (passFits always true) is killed (3 fail).
+# - Read: tests/browser/sequencer.cjs seq-loop-cap and its fixture (loopCapStart reads the
+#   schedule right after play(), before any pump), resetDefaults, _restart, revokeContinuous,
+#   scheduleConst, v1OpenEnvelope / makeAdsrEnvelope, the copy in src/index.html and README.md,
+#   timeline-compiler.js anchorEndTime. Browser suites were not rerun: the disk is at the floor
+#   and nothing was installed. The first review's browser and CI evidence was not contradicted
+#   by anything read here.
+#
+# Re-check of the first review: F1 holds at P1 (R-1). F2 and F3 hold as facts but are lowered to
+# P3 (R-4, R-5): the cap is shown by the gated fake-clock unit test (M14 killed), and the
+# due-now path is correct as written; both are missing or mislabelled evidence, not defects in
+# what sounds. F4-F7 and F9 hold at P3 (R-3, R-6 to R-8, R-10); F8 holds at P3 (R-9). Checked
+# and found correct: no step or default-anchored automation on a sounding param (env/eg
+# untouched; _dropPendingLimit cancels `fade` only while it is 1, only for events after _soon). New on lens (a): R-2 (the first pass is never
+# checked against the loop cap) and R-3 (the copy now promises what R-1 and R-2 break).
+#
+# Open: R-1 (P1), R-2 (P2), R-3 to R-10 (P3). Verdict: changes.
+schema: review-verdict/v1
+pr: 303
+verdict: changes
+reviewer: "dev-68 (Claude Opus 5.5 session 4f90795d); did not build, merge or edit this change; wrote only this file"
+content: 1bffe2150c355bf940bfef5f598baafe3b313c1c0a6fac2b120cbe89a235f8ad
+findings:
+  - { id: R-1, severity: P1, status: open, title: "A lowered hard limit lets the sounding note run past it by the voice's whole release, and with a release longer than the drop it does nothing. tightenLimit (src/js/audio/audio-engine.js:685-688) starts the fade at t0 + lim and runs it for v.release, so the voice ends at t0 + L + release, and skips the voice whenever that is not earlier than its current end. A fresh voice fits the release inside the limit (voice.js v1OpenEnvelope / makeAdsrEnvelope: rel = min(r, max(0.005, L/2)), end t0 + L). Measured: release 0.3 s, 5 -> 0.5 s ends at 0.81 s (fresh 0.51); release 3 s (the UI maximum, config.js:147) ends at 3.51 s, and 5 -> 2 or 5 -> 3 changes nothing (returns 0; 5.01 s vs 2.01 / 3.01 s). This is the PACK03 class itself: the Hard-limit control does not reach the note, against the new copy 'A lower limit also shortens the note that is sounding'. The unit test (end + rel + 0.01) and limit-tightens-live (0.5 + release + 0.05) lock the overrun in. Fix: rel = min(v.release, max(0.005, lim * 0.5)), fade from t0 + lim - rel, deadline t0 + lim, skip only when t0 + lim + 0.01 is not earlier than endTime; add a long-release case to both tests." }
+  - { id: R-2, severity: P2, status: open, title: "The loop cap never checks the first pass: play() schedules it with playT0 still null (src/js/sequencer/editor.js:491), so passFits is not consulted, and a sequence may be up to MAX_BLOCKS 64 x MAX_BLOCK_MS 30 s long. A looped 60 s sequence without the permission plays its full 60 s, loopSchedule() reports endsAt t0 + 60, and the notice then says 'Loop stopped at 30 s', which is false. This breaks the editor's own stated rule (editor.js:27-29: no pass ending more than LOOP_CAP_S after play() started the first one) and the copy 'a looped sequence stops at 30 s'. The repeat itself is stopped (coupling-4 holds for passes 2+). Fix: when model.loop is on and the permission is off, either refuse or cut the first pass at the cap (a click-free stop at t0 + 30 s) and state it, or word the notice and copy as 'after the pass that ends past 30 s'; add a unit case with a pass longer than 30 s." }
+  - { id: R-3, severity: P3, status: open, title: "The new safety copy promises more than the code does: 'A lower limit also shortens the note that is sounding' (README.md:489, src/index.html:719, :738) is false for releases longer than the drop (R-1), and 'stops every tone after the hard limit and a looped sequence at 30 s' (index.html:2924), README.md:490 and workbench.js:270-272 carry no 'sequencer' qualifier while the Studio transport loop is uncapped (timeline-compiler.js:231 anchorEndTime is Infinity while a loop is active; transport.js is C011 non-scope, disclosed in the PR body as an owner question) and a first pass past 30 s is not capped (R-2). Fix the copy with R-1/R-2, and say 'a looped sequencer sequence' until the owner answers the Studio question." }
+  - { id: R-4, severity: P3, status: open, title: "Browser check seq-loop-cap (tests/browser/sequencer.cjs:498) does not observe the scheduler: loopCapStart reads loopSchedule() right after play(), when only the first 12 s pass exists, so lastScheduledEnd <= t0 + 30 always holds, and endsAt is loopSchedule()'s own forecast (editor.js:455-463, floor(room / passS)) that never consults passFits. Per the first review, M14 (cap removed) passes it 35/35. The cap is shown by the gated fake-clock unit test (#5, #7 kill M14 here too), so this is evidence mislabelled in the PR body ('the loop ends at or before t0 + 30 s'), not a gap in behaviour. Fix: drive the pump (advance the clock past the second pass's lookahead) and assert no third pass is compiled, or rename the check." }
+  - { id: R-5, severity: P3, status: open, title: "No test shows the 'new end already due' path is click-free: mutation M8 (`if (at <= t)` -> `if (false)`, audio-engine.js:693) survives all 9 unit tests, although it schedules the release and the stop in the past (a hard cut); the check at c011-safety-limits.test.mjs:126 still holds because the stop also lands in the past, and limit-tightens-live only lowers the limit about 100 ms in. The code as written is correct (_releaseVoice with FAST_RELEASE_S from _soon, measured). With the R-1 fix this path becomes the common one (lim - rel already elapsed), so add a unit assertion that the fade starts at or after _soon, and an output-tap click check for a limit lowered below the time already sounded." }
+  - { id: R-6, severity: P3, status: open, title: "Three more surviving mutations (re-run here): M11, `this._armTimers(v)` removed after tightenLimit (audio-engine.js:715), leaves no RELEASING notice and no cleanup fallback; M17, `for (const p of over) p.voice.stop();` removed (editor.js:438), the branch where a queued, not yet started pass would end past the cap; M20, playT0 kept across play() (editor.js:491/497), which the test comment claims is checked ('the cap counts from the new start') but nothing asserts. Fix: one assertion each." }
+  - { id: R-7, severity: P3, status: open, title: "Two writers skip the new paths. resetDefaults (src/js/core/instrument.js:916-920) sets continuousAllowed = false after stopNow(), which calls engine.stopAll and does not reach the sequencer, so a loop past the cap is not stopped at once as onContinuousToggle -> followPermission does; the next _pump ends it after the current pass (at most one pass). And tightenLimit counts from v.t0, which for a voice replaced by _restart (audio-engine.js:843, a live pattern-type change) is the restart time, so a note restarted at 3 s and lowered to 0.5 s at 3.2 s fades at about 3.53 s instead of now; bounded by the inherited deadline. Fix: call followPermission from resetDefaults (or route it through setContinuous), and carry the original note start through _restart." }
+  - { id: R-8, severity: P3, status: open, title: "PR body overstates parts of its evidence: 'All 9 tests in the file fail on the merge base' is true, but 7 of 9 fail on TypeError (tightenLimit / setSafetyLimit / followPermission missing) or on the new loopNotice field; only #5 and #7 fail on the coupling-4 behaviour, and no unit test fails on dead-controls-4 behaviour on the base (scripts/fail-first.mjs:153 labels the file 'assertion' if any AssertionError appears). The seq-loop-cap claim is R-4, the click-free claim covers only a release scheduled in the future (R-5), and the dead-controls-4.cjs repro is not in the repo. Fix: state which tests show which finding." }
+  - { id: R-9, severity: P3, status: open, title: "The limit release start, at = v.t0 + lim (audio-engine.js:686), is not rounded up to a render quantum, unlike _soon (audio-engine.js:365-373, ADR 0001: Firefox anchors a ramp that starts mid-quantum at the quantum's edge). The first review's Firefox probe gave click ratio 1.00 at frac 0 and frac 64 (fade is exactly 1 at the anchor), so no audible defect today; limit-tightens-live's 0.5 s case at 48 kHz is the one boundary-aligned case. Fix: round at up to a quantum boundary, or note why it is exempt." }
+  - { id: R-10, severity: P3, status: open, title: "CI run 40963452717 'V3 measurement and UI' on WebKit failed only webkit/http/v3-ui 'definitions' (page.waitForFunction timeout 45 s) while webkit/file/v3-ui passed the same check, v3-measure 36/36 and analysis-worker 17/17; the same check failed on a plan-only branch before (run 40697778991). The PR changes no measurement code and _dropPendingLimit returns at once when limitAt is null. A flake, not this change: rerun the job." }

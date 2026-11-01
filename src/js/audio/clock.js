@@ -5,6 +5,8 @@
 // readings per context. `now` (a performance.now() reading) is a parameter so a caller can
 // take it from its own environment; null means "no clock": the estimate is ctx.currentTime.
 
+import { RENDER_QUANTUM } from '../core/constants.js';
+
 // Bounds for the rendered-time estimate (renderedTimeAtLeast): how far it may run ahead of
 // ctx.currentTime in all, how far beyond the real time since the newest clock reading, and how
 // long and how many readings are kept.
@@ -84,4 +86,21 @@ export function renderedTimeAtLeast(ctx, now = perfNow(), { outputTimestamp = tr
   const newest = list.length ? list[list.length - 1].perf : now;
   const bound = Math.min(MAX_CLOCK_LAG_S, Math.max(0, now - newest) / 1000 + CLOCK_LAG_SLACK_S);
   return Math.min(t, ct + bound);
+}
+
+/**
+ * When a setTargetAtTime glide (AudioEngine.setMasterGain) starts: ctx.currentTime, or, on a
+ * context that has rendered nothing yet (currentTime 0), the end of its first render quantum
+ * (V502). Gecko starts a setTargetAtTime at time 0, on a gain whose input is still silent, from
+ * the param's default 1 instead of its value (a setValueAtTime at 0 before it changes nothing),
+ * so the first sound of a page came out at up to 12.5 x the default master level (the ceiling
+ * the only bound), settling over about 100 ms. Measured with the Playwright 1.63 Firefox on
+ * darwin arm64 and linux amd64: value 0.08 and setTargetAtTime(0.08, 0, 0.02) read 0.418 at
+ * 20 ms (0.08 + 0.92 e^-1), started one quantum later 0.08, as Chromium and WebKit read both;
+ * tests/browser/midi.cjs "velocity 127 peaks under the master level" caught it on the CI
+ * runners. A voice starts START_OFFSET_S (20 ms) after currentTime at the earliest, after a
+ * quantum's end at any rate above 6.4 kHz, so nothing sounds before the glide starts.
+ */
+export function glideStart(ctx) {
+  return ctx.currentTime > 0 ? ctx.currentTime : RENDER_QUANTUM / ctx.sampleRate;
 }

@@ -21,7 +21,10 @@ import { additiveHarmonicTable, harmonicTable } from '../../src/js/visualization
 import { playgroundVoiceModel } from '../../src/js/studio/playground-voice.js';
 import { projectSignalPath } from '../../src/js/studio/signal-path-projection.js';
 import { scopeWindow } from '../../src/js/ui/p5-views.js';
+import * as workbenchModule from '../../src/js/ui/workbench.js';
 import { createWorkbench } from '../../src/js/ui/workbench.js';
+import { createSequencerEditor } from '../../src/js/sequencer/editor.js';
+import { FakeContext, fakeTimers } from './sequencer-fake-audio.mjs';
 import { correlationDisplay } from '../../src/js/analysis/correlation.js';
 import { micUnavailableText, MIC_UNAVAILABLE } from '../../src/js/labs/mic-analyzer.js';
 import { gainForPlayedLevel } from '../../src/js/labs/additive.js';
@@ -312,3 +315,90 @@ test('status bar duration while the sequencer plays is the sequence length', () 
   cmp.seqPlaying = false;
   assert.equal(cmp.statusDurationText, '≤ 2 s');
 });
+
+// C004 (finding dup-stale-6): the readout is computed once and cached by Alpine until one of the
+// reactive fields it read is written. editor.model is not reactive, so the getter must read a
+// counter that every sequence edit bumps. `memo` models that cache: it records the fields the
+// getter reads through `this` and recomputes only after one of them was written.
+function memo(target, key) {
+  let deps = null;
+  let watched = new Set();
+  let dirty = true;
+  let cached;
+  const proxy = new Proxy(target, {
+    get(t, k, r) {
+      if (deps) deps.add(k);
+      return Reflect.get(t, k, r);
+    },
+    set(t, k, v, r) {
+      if (watched.has(k)) dirty = true;
+      return Reflect.set(t, k, v, r);
+    },
+  });
+  const read = () => {
+    if (dirty) {
+      deps = new Set();
+      cached = proxy[key];
+      watched = deps;
+      deps = null;
+      dirty = false;
+    }
+    return cached;
+  };
+  return { proxy, read };
+}
+
+test('C004: status bar duration follows sequence edits made while it plays', () => {
+  const ctx = new FakeContext({ sampleRate: SR, currentTime: 1 });
+  const editor = createSequencerEditor({
+    engine: { getContext: () => ctx, getDestination: () => ctx.destination },
+    timers: fakeTimers(),
+  });
+  editor.setLoop(true);
+  const wb = createWorkbench({ labs: { sequencer: { editor } } });
+  const cmp = {};
+  Object.defineProperties(cmp, Object.getOwnPropertyDescriptors(wb));
+  Object.assign(cmp, { seqPlaying: false, playing: false, planSummary: { kind: 'open' },
+    continuousAllowed: false, safetyLimit: 2, source: 'single', pattern: 'tone' });
+  const { proxy, read } = memo(cmp, 'statusDurationText');
+  const follow = workbenchModule.followSequenceEdits;
+  assert.equal(typeof follow, 'function', 'workbench exports followSequenceEdits');
+  follow(proxy, editor); // what main.js wires
+  const want = () => {
+    const ms = totalDurationMs(editor.model);
+    return editor.model.loop ? `${formatMs(ms)} (loop)` : formatMs(ms);
+  };
+  assert.equal(editor.play(), true);
+  proxy.seqPlaying = true;
+  assert.equal(read(), want());
+  assert.match(read(), /\(loop\)/);
+  editor.setLoop(false);
+  assert.equal(read(), want(), 'Loop off while playing');
+  assert.doesNotMatch(read(), /loop/);
+  const before = read();
+  editor.addBlock('tone');
+  assert.equal(read(), want(), 'a block added while playing');
+  assert.notEqual(read(), before);
+  editor.stop();
+});
+
+test('C006: while a stale pass sounds, the status bar shows the sounding and the next length',
+  () => {
+    let model = referenceSequence();
+    let pass = { soundingS: 2.25, nextS: 2.25, current: true, layoutCurrent: true };
+    const seq = { editor: { get model() { return model; } }, passStatus: () => pass };
+    const wb = createWorkbench({ labs: { sequencer: seq } });
+    const cmp = {};
+    Object.defineProperties(cmp, Object.getOwnPropertyDescriptors(wb));
+    Object.assign(cmp, { seqPlaying: true, playing: false, planSummary: { kind: 'open' },
+      continuousAllowed: false, safetyLimit: 2, source: 'single', pattern: 'tone' });
+    assert.equal(cmp.statusDurationText, '2.25 s');
+    // Block 1 lengthened to 3000 ms while pass 1 sounds: 2.25 s plays, 4.75 s comes next.
+    model = { ...model, blocks: model.blocks.map((b, i) => (i ? b : { ...b, durationMs: 3000 })) };
+    pass = { soundingS: 2.25, nextS: 4.75, current: false, layoutCurrent: false };
+    assert.equal(cmp.statusDurationText, '2.25 s now, next 4.75 s');
+    model = { ...model, loop: true };
+    assert.equal(cmp.statusDurationText, '2.25 s now, next 4.75 s (loop)');
+    pass = null; // stopped between frames: the edited length alone
+    assert.equal(cmp.statusDurationText, '4.75 s (loop)');
+  });

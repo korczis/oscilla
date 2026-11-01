@@ -13,6 +13,10 @@
 //   ctx | getContext(),            the running AudioContext (the engine creates it in the gesture)
 //   destination | getDestination(), the node the sequence plays into (e.g. engine master input)
 //   resume?(),                     resume a suspended context
+//   claimOutput?(),                take the shared output before anything is scheduled (C002):
+//                                  true grants it; false or a reason string refuses, and the
+//                                  editor then schedules nothing and sets `error` to the reason.
+//                                  Asked by play() and again before every loop pass.
 //   onStart?({ t0, duration }),    playback started (status bar)
 //   onEnded?({ stopped }),         playback fully ended (natural end or after a stop fade)
 //   onRecord?(sequenceJson),       the record-style button: hand the sequence to the WAV export
@@ -21,6 +25,13 @@
 //                                  the passes play into its input (through the Filter Lab) and
 //                                  register every node through track/source, so the engine's
 //                                  census counts them; null or absent: straight into destination
+//   accounting?: { track(node), source(node), untrack(node) }   the engine's node accounting
+//                                  (AudioEngine.stageAccounting()): every node of every pass
+//                                  counts as the engine's while it lives and is removed when the
+//                                  pass ends, or when building it threw part-way; used only
+//                                  when openStage gives no chain (the chain counts them then)
+//   continuousAllowed?(),          read-only: the session's "Allow continuous playback" (absent:
+//                                  not allowed)
 // }
 //
 // Stage chain (C003): one chain per playback session, opened by the first pass and disposed
@@ -28,9 +39,34 @@
 // filter per loop pass would reset the biquad state at every loop boundary. A restart while
 // earlier passes fade keeps the session's chain, so the fading pass is never cut.
 //
+// History (K003): every edit of the sequence is one undo step; an edit that leaves the
+// serialized sequence as it was is none. The waveform is not the sequence's own control: it
+// follows the instrument's (main.js mirrors it in), so setWaveform never records a step and
+// undo/redo keep the current waveform instead of restoring an older one.
+//
+// One sequence state (C004): the waveform is not the sequence's own control, it follows the
+// instrument's (main.js mirrors it in with setWaveform). load() and clear() keep the mirrored
+// value, so a file whose sequencer.waveform differs never leaves playback on a stale waveform;
+// the serialized waveform is derived. onChange(fn) is called with the new model after every
+// change of it (edits, load, clear, the mirrored waveform), so a view that reads the model,
+// which is not reactive, can be invalidated by a counter (main.js: app.seqRev).
+//
 // Looping: each pass is compiled as its own voice that starts exactly at the previous pass's
 // end time on the audio clock. A timer only decides *when* to compile the next pass (LOOKAHEAD_S
-// ahead); it never times audio. Edits made during playback apply from the next pass.
+// ahead); it never times audio. Edits made during playback apply from the next pass: each pass
+// record keeps the model it compiled and that model's block layout (block ids and their bounds
+// on the compiled timeline), so the views can tell the sounding pass from the edited model
+// (currentPassBlock, currentPassState) instead of drawing one pass's clock on the other's layout.
+//
+// C011, the loop cap (ADR 0005: a sequence keeps its programmed end, at most MAX_PROGRAMMED_S):
+// without the continuous permission a looped sequence sounds no later than LOOP_CAP_S after
+// play() started its first pass. No further pass is scheduled that would end past the cap, so
+// the loop ends with its last pass that fits (its own click-free end); a first pass that is
+// itself longer than the cap is cut at it with the voice's click-free stop fade, which ends at
+// the cap. `loopNotice` states why. Withdrawing the permission (followPermission) drops a queued
+// pass that would end past the cap, cuts a sounding one at the cap, and stops a loop that
+// already runs past it now. The model's loop flag is never rewritten, so an imported loop:true
+// sequence is capped the same way and round-trips unchanged.
 
 import {
   BLOCK_TYPES,
@@ -39,6 +75,7 @@ import {
   MAX_BLOCKS,
   isNum,
   addBlock,
+  insertBlock,
   deleteBlock,
   duplicateBlock,
   moveBlock,
@@ -61,11 +98,25 @@ import {
   createSequence,
   describeBlock,
 } from './model.js';
-import { compileSequence, observeClock, START_OFFSET_S } from './compiler.js';
+import { compileSequence, observeClock, START_OFFSET_S, STOP_RAMP_S } from './compiler.js';
 import { reorderTarget } from './timeline.js';
+import { MAX_PROGRAMMED_S, RENDER_QUANTUM } from '../core/constants.js';
 
 export const LOOKAHEAD_S = 1.0; // compile the next loop pass this far ahead of its start
+/** C011: how long a loop may play without the continuous permission (ADR 0005). */
+export const LOOP_CAP_S = MAX_PROGRAMMED_S;
+export const LOOP_CAP_REASON = `Loop capped at ${LOOP_CAP_S} s: allow continuous playback to `
+  + 'loop until stopped.';
+const CAP_EPS_S = 1e-6;
 const MAX_QUEUED_PASSES = 16; // guard for very short looped sequences
+export const HISTORY_LIMIT = 100; // undo steps kept (K003)
+
+const copyOf = (o) => JSON.parse(JSON.stringify(o));
+/** Two models that serialize alike are the same sequence (a no-op edit is no undo step). */
+const sameSequence = (a, b) =>
+  JSON.stringify(serializeSequence(a)) === JSON.stringify(serializeSequence(b));
+/** Space by character (' ', legacy 'Spacebar') or by physical key. */
+const isSpaceKey = (e) => e.key === ' ' || e.key === 'Spacebar' || e.code === 'Space';
 
 function isEditableTarget(el) {
   if (!el) return false;
@@ -81,6 +132,28 @@ function defaultTimers() {
   };
 }
 
+/** JSON with every object's keys in sorted order: equal content gives equal text. */
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().filter((k) => value[k] !== undefined)
+      .map((k) => `${JSON.stringify(k)}:${canonicalJson(value[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+/**
+ * The content of a sequence as a comparable string (C019): what serializeSequence writes for a
+ * model, in canonical key order, without the waveform. The waveform follows the instrument
+ * (main.js mirrors it in) and is configuration, not sequence work. The unsaved-work guard
+ * compares the digest now with the one at the last load, import or export (ui/workbench.js).
+ */
+export function sequenceDigest(model) {
+  const doc = serializeSequence(model);
+  delete doc.waveform;
+  return canonicalJson(doc);
+}
+
 /**
  * options: { model (default: the reference sequence), engine (adapter, see above),
  *            sampleRate (fallback before a context exists), timers }
@@ -90,11 +163,17 @@ export function createSequencerEditor(options = {}) {
   const timers = options.timers === undefined ? defaultTimers() : options.timers;
   const priv = {
     voices: new Set(),
-    passes: [], // [{ voice, t0, end }] in start order
+    passes: [], // [{ voice, t0, end, model, layout }] in start order
+    sameCache: { a: null, b: null, same: false, layout: false },
     lastEnd: null,
     loopTimer: null,
     self: null,
     chain: null, // the session's stage chain (engine.openStage), or null
+    undo: [], // [{ model, selectedId }] before each edit, oldest first (K003)
+    redo: [],
+    clipboard: null, // a copied block (plain data)
+    listeners: new Set(), // onChange subscribers (C004)
+    playT0: null, // audio-clock start of the first pass since play(): the loop cap counts from it
   };
   const resolve = (key, getter) => {
     if (!engine) return null;
@@ -102,6 +181,30 @@ export function createSequencerEditor(options = {}) {
     return engine[key] || null;
   };
   const getCtx = () => resolve('ctx', 'getContext');
+  const continuousAllowed = () => {
+    if (!engine || typeof engine.continuousAllowed !== 'function') return false;
+    try {
+      return !!engine.continuousAllowed();
+    } catch (e) {
+      return false;
+    }
+  };
+  /** Whether a pass ending at `end` may still be scheduled (the cap, C011). */
+  const passFits = (end) =>
+    continuousAllowed() || priv.playT0 === null || end - priv.playT0 <= LOOP_CAP_S + CAP_EPS_S;
+  /**
+   * Where a pass that would sound past the cap starts its stop fade: on a render-quantum
+   * boundary (rounded down) STOP_RAMP_S before the cap, so the fade ends at or before it.
+   */
+  const capFadeAt = (ctx) => {
+    const q = RENDER_QUANTUM / ctx.sampleRate;
+    return Math.floor((priv.playT0 + LOOP_CAP_S - STOP_RAMP_S) / q + 1e-9) * q;
+  };
+  /** Cut a scheduled pass at the cap (its click-free stop fade); keeps its recorded end. */
+  const cutAtCap = (ctx, p) => {
+    p.voice.stop(capFadeAt(ctx), { provisional: true }); // Stop and Escape still end it sooner
+    p.end = Math.min(p.end, p.voice.endTime);
+  };
   const getDest = () => resolve('destination', 'getDestination');
   /** The session's stage chain, opened on first use; null when the engine gives none. */
   const sessionChain = () => {
@@ -127,6 +230,25 @@ export function createSequencerEditor(options = {}) {
     return found || priv.passes[0] || null;
   };
 
+  // The block layout a pass was compiled with: [{ id, index, startS, endS }], seconds into the
+  // pass on the compiled (frame-rounded) timeline. Frozen: the pass record never changes.
+  const passLayout = (voice) => Object.freeze(voice.timeline.blocks.map((b) => Object.freeze({
+    id: b.id, index: b.index, startS: b.start, endS: b.end })));
+  // What the sounding pass plays against the edited model. `same`: no edit is waiting for the
+  // next pass (the loop flag only decides whether a next pass comes). `layout`: the same blocks,
+  // in the same order, with the same durations, so the edited timeline places them where they
+  // sound. Cached per pair, because the frame loop asks every frame and models are immutable.
+  const compare = (a, b) => {
+    const c = priv.sameCache;
+    if (c.a === a && c.b === b) return c;
+    const blocksKey = (m) => JSON.stringify(m.blocks.map((x) => [x.id, x.durationMs]));
+    const soundKey = (m) => JSON.stringify([m.tempoBpm, m.waveform, m.seed, m.blocks]);
+    const layout = a === b || blocksKey(a) === blocksKey(b);
+    const same = a === b || (layout && soundKey(a) === soundKey(b));
+    priv.sameCache = { a, b, same, layout };
+    return priv.sameCache;
+  };
+
   const initial = options.model
     ? parseSequence(options.model, { sampleRate: options.sampleRate }).model
     : referenceSequence({ sampleRate: options.sampleRate });
@@ -138,6 +260,7 @@ export function createSequencerEditor(options = {}) {
     playing: false,
     error: '',
     warnings: [],
+    loopNotice: '', // C011: why a loop ended at the cap ('' while it may go on)
     dragFromIndex: -1,
     dragInsertIndex: -1,
     recordAvailable: !!(engine && typeof engine.onRecord === 'function'),
@@ -159,6 +282,15 @@ export function createSequencerEditor(options = {}) {
     },
     get canAdd() {
       return this.model.blocks.length < MAX_BLOCKS;
+    },
+    get canUndo() {
+      return priv.undo.length > 0;
+    },
+    get canRedo() {
+      return priv.redo.length > 0;
+    },
+    get historyDepth() {
+      return priv.undo.length;
     },
     sampleRate() {
       const ctx = getCtx();
@@ -193,11 +325,29 @@ export function createSequencerEditor(options = {}) {
     },
 
     // ---------------------------------------------------------------- editing
-    _apply(model, issues = []) {
+    /**
+     * Every edit goes through here: a change of the serialized sequence is one undo step (K003);
+     * history: false applies it without one (the waveform mirrored from the instrument).
+     */
+    _apply(model, issues = [], { history = true } = {}) {
+      // An edit that leaves the serialized sequence as it was records no step (K003), but the
+      // model is still replaced and onChange still told (C004: every change, load included).
+      if (history && model !== this.model && !sameSequence(model, this.model)) {
+        priv.undo.push({ model: copyOf(this.model), selectedId: this.selectedId });
+        if (priv.undo.length > HISTORY_LIMIT) priv.undo.shift();
+        priv.redo = [];
+      }
       this.model = model;
       this.warnings = issues;
       if (this.selectedId !== null && indexOfBlock(model, this.selectedId) < 0)
         this.selectedId = null;
+      for (const fn of [...priv.listeners]) fn(model);
+    },
+    /** Call fn(model) after every change of the model. Returns the unsubscribe function. */
+    onChange(fn) {
+      if (typeof fn !== 'function') throw new TypeError('onChange needs a function.');
+      priv.listeners.add(fn);
+      return () => priv.listeners.delete(fn);
     },
     /** Add a block after the selection (or at the end) and select it. Returns the id or null. */
     addBlock(type) {
@@ -280,12 +430,58 @@ export function createSequencerEditor(options = {}) {
       this._apply(setLoop(this.model, on));
       if (this.playing && this.model.loop) this._pump();
     },
+    /** The instrument's waveform, mirrored in (main.js): not an edit, so no undo step. */
     setWaveform(w) {
-      this._apply(setWaveform(this.model, w));
+      this._apply(setWaveform(this.model, w), this.warnings, { history: false });
     },
     clear() {
-      this._apply(createSequence({ tempoBpm: this.model.tempoBpm }));
+      // The waveform follows the instrument (C004): an empty sequence keeps it.
+      this._apply(createSequence({ tempoBpm: this.model.tempoBpm, waveform: this.model.waveform }));
       this.selectedId = null;
+    },
+
+    // ---------------------------------------------------------------- history and clipboard
+    _restore(from, to) {
+      if (!from.length) return false;
+      to.push({ model: copyOf(this.model), selectedId: this.selectedId });
+      const s = from.pop();
+      // The waveform follows the instrument: an undo never brings back an older one.
+      this.model = setWaveform(copyOf(s.model), this.model.waveform);
+      this.warnings = [];
+      this.error = '';
+      this.selectedId = selectBlock(this.model, s.selectedId);
+      if (this.playing && this.model.loop) this._pump();
+      return true;
+    },
+    /** Restore the model (and selection) before the last edit. False when there is none. */
+    undo() {
+      return this._restore(priv.undo, priv.redo);
+    },
+    redo() {
+      return this._restore(priv.redo, priv.undo);
+    },
+    /** Copy the selected block to the editor's clipboard. False when nothing is selected. */
+    copySelected() {
+      const b = this.selectedBlock;
+      if (!b) return false;
+      priv.clipboard = copyOf(b);
+      return true;
+    },
+    /** Paste the copied block after the selection (or at the end) and select it. */
+    paste() {
+      if (!priv.clipboard) return null;
+      if (!this.canAdd) {
+        this.error = `The sequence is full (${MAX_BLOCKS} blocks).`;
+        return null;
+      }
+      const i = this.selectedIndex;
+      const index = i >= 0 ? i + 1 : this.model.blocks.length;
+      const sampleRate = this.sampleRate();
+      const model = insertBlock(this.model, priv.clipboard, { index, sampleRate });
+      this.error = '';
+      this._apply(model);
+      this.selectedId = model.blocks[index].id;
+      return this.selectedId;
     },
 
     // ---------------------------------------------------------------- drag and drop
@@ -314,14 +510,29 @@ export function createSequencerEditor(options = {}) {
     // ---------------------------------------------------------------- keyboard
     /**
      * Timeline keyboard model: Arrow keys / Home / End select, Alt+Arrow moves the selected
-     * block, Delete or Backspace removes it, Ctrl/Cmd+D duplicates, Escape cancels a drag.
+     * block, Delete or Backspace removes it, Ctrl/Cmd+D duplicates, Escape cancels a drag;
+     * K003: Space plays or stops the sequence (the focused timeline is a listbox, which keeps
+     * Space from the instrument's Hold to Play, ADR 0050; an auto-repeat is claimed and
+     * ignored), Ctrl/Cmd+Z undoes, Shift+Ctrl/Cmd+Z redoes, Ctrl/Cmd+C copies the selected
+     * block and Ctrl/Cmd+V pastes it after the selection.
      * Returns true (and calls preventDefault) when the key was handled.
      */
     onKeydown(e) {
       if (!e || isEditableTarget(e.target)) return false;
       const k = e.key;
+      const lower = typeof k === 'string' ? k.toLowerCase() : '';
+      const mod = e.ctrlKey || e.metaKey;
       let handled = true;
-      if (e.altKey && (k === 'ArrowLeft' || k === 'ArrowUp')) this.moveSelected(-1);
+      if (isSpaceKey(e)) {
+        if (e.altKey || mod || e.shiftKey) handled = false;
+        else if (!e.repeat) this.togglePlay();
+      } else if (mod && !e.altKey && lower === 'z') {
+        handled = e.shiftKey ? this.redo() : this.undo();
+      } else if (mod && !e.altKey && !e.shiftKey && lower === 'c') handled = this.copySelected();
+      else if (mod && !e.altKey && !e.shiftKey && lower === 'v') {
+        handled = !!priv.clipboard;
+        this.paste();
+      } else if (e.altKey && (k === 'ArrowLeft' || k === 'ArrowUp')) this.moveSelected(-1);
       else if (e.altKey && (k === 'ArrowRight' || k === 'ArrowDown')) this.moveSelected(1);
       else if ((e.ctrlKey || e.metaKey) && (k === 'd' || k === 'D')) this.duplicateSelected();
       else if (e.altKey || e.ctrlKey || e.metaKey) handled = false;
@@ -340,21 +551,26 @@ export function createSequencerEditor(options = {}) {
     _schedulePass(ctx, t0) {
       const self = priv.self;
       const chain = sessionChain();
-      // The pass's nodes count as the engine's while they live (rule audio-engine-discipline).
-      const owned = new Set();
+      // The pass's nodes count as the engine's while they live (rule audio-engine-discipline):
+      // through the session's stage chain (C003) when there is one, else through the engine's
+      // stage accounting (K001, engine.accounting), else not at all (lab fixtures).
+      const acct = chain || (engine && engine.accounting) || null;
+      const owned = new Set(); // what this pass registered with the engine
       const release = () => {
-        if (chain) for (const n of owned) chain.untrack(n);
+        if (acct) for (const n of owned) acct.untrack(n);
         owned.clear();
       };
-      const hooks = chain
+      const hooks = acct
         ? {
             track: (n) => {
               owned.add(n);
-              return chain.track(n);
+              acct.track(n);
+              return n;
             },
             source: (n) => {
               owned.add(n);
-              return chain.source(n);
+              acct.source(n);
+              return n;
             },
           }
         : {};
@@ -379,7 +595,8 @@ export function createSequencerEditor(options = {}) {
         return null; // empty sequence
       }
       priv.voices.add(voice);
-      priv.passes.push({ voice, t0: voice.t0, end: voice.endTime });
+      priv.passes.push({ voice, t0: voice.t0, end: voice.endTime, model: self.model,
+        layout: passLayout(voice) });
       priv.lastEnd = voice.endTime;
       if (voice.warnings.length) self.warnings = voice.warnings;
       return voice;
@@ -412,7 +629,17 @@ export function createSequencerEditor(options = {}) {
         priv.lastEnd - ctx.currentTime < LOOKAHEAD_S &&
         queued < MAX_QUEUED_PASSES
       ) {
-        const v = self._schedulePass(ctx, Math.max(priv.lastEnd, ctx.currentTime + START_OFFSET_S));
+        const start = Math.max(priv.lastEnd, ctx.currentTime + START_OFFSET_S);
+        if (!passFits(start + totalDuration(self.model))) {
+          self._endLoopAtCap();
+          return;
+        }
+        // A loop never schedules into an output another owner took meanwhile (C002).
+        if (!self._claimOutput()) {
+          self.stop();
+          return;
+        }
+        const v = self._schedulePass(ctx, start);
         if (!v) {
           self.stop();
           return;
@@ -424,6 +651,96 @@ export function createSequencerEditor(options = {}) {
         priv.loopTimer = null;
         self._pump();
       }, wait);
+    },
+    /**
+     * Ask the adapter for the output (claimOutput, C002). True when granted or when the adapter
+     * has no claim; on a refusal `error` holds the reason and false is returned.
+     */
+    _claimOutput() {
+      if (!engine || typeof engine.claimOutput !== 'function') return true;
+      let answer;
+      try {
+        answer = engine.claimOutput();
+      } catch (e) {
+        answer = String((e && e.message) || e);
+      }
+      if (answer === true) return true;
+      const self = priv.self || this;
+      self.error = typeof answer === 'string' && answer
+        ? answer : 'The output belongs to another source: stop it first.';
+      return false;
+    },
+    /**
+     * C011: the next pass would end past the cap. Schedule nothing more; the passes already
+     * scheduled play to their own end, and the reason is stated.
+     */
+    _endLoopAtCap() {
+      const self = priv.self || this;
+      clearLoopTimer();
+      self.loopNotice = LOOP_CAP_REASON;
+      if (priv.voices.size === 0 && self.playing) {
+        self.playing = false;
+        if (engine && typeof engine.onEnded === 'function') {
+          try {
+            engine.onEnded({ stopped: false });
+          } catch (e) {
+            /* theirs */
+          }
+        }
+      }
+    },
+    /**
+     * C011: follow the continuous permission after it changed. Withdrawn: a pass scheduled to
+     * end past the cap is dropped when it has not started, and cut at the cap when it sounds;
+     * when the cap's fade time has already passed, the loop stops now (click-free). The reason
+     * is stated. Returns true when it stopped, cut or dropped something.
+     */
+    followPermission() {
+      const self = priv.self || this;
+      const ctx = getCtx();
+      if (!ctx || !self.playing || !self.model.loop || continuousAllowed() || priv.playT0 === null) {
+        return false;
+      }
+      const capEnd = priv.playT0 + LOOP_CAP_S + CAP_EPS_S;
+      const over = priv.passes.filter((p) => p.end > capEnd && !p.voice.stopping);
+      if (!over.length) return false;
+      const soon = ctx.currentTime + START_OFFSET_S;
+      self.loopNotice = LOOP_CAP_REASON;
+      if (capFadeAt(ctx) <= soon) {
+        self.stop();
+        return true;
+      }
+      for (const p of over) {
+        if (p.t0 <= soon) cutAtCap(ctx, p);
+        else p.voice.stop();
+      }
+      const kept = priv.passes.filter((p) => !p.voice.stopping || p.t0 <= soon);
+      priv.lastEnd = kept.length ? Math.max(...kept.map((p) => p.end)) : null;
+      self._pump();
+      return true;
+    },
+    /**
+     * C011, read-only: the loop's schedule against the cap. { capped (the cap applies now),
+     * capS, t0 (start of the first pass), lastScheduledEnd (end of the last pass compiled),
+     * endsAt (when the loop's last pass that fits ends, from what is scheduled and the current
+     * sequence length; null while it may go on, or when stopped) }.
+     */
+    loopSchedule() {
+      const self = priv.self || this;
+      const capped = !continuousAllowed();
+      const t0 = priv.playT0;
+      const lastScheduledEnd = priv.lastEnd;
+      let endsAt = null;
+      if (self.playing && t0 !== null && lastScheduledEnd !== null) {
+        if (!self.model.loop || self.loopNotice) endsAt = lastScheduledEnd;
+        else if (capped) {
+          const passS = totalDuration(self.model);
+          const room = t0 + LOOP_CAP_S + CAP_EPS_S - lastScheduledEnd;
+          const more = passS > 0 ? Math.max(0, Math.floor(room / passS)) : 0;
+          endsAt = lastScheduledEnd + more * passS;
+        }
+      }
+      return { capped, capS: LOOP_CAP_S, t0, lastScheduledEnd, endsAt };
     },
     /** Start (or restart) playback from the first block. Returns true when audio was scheduled. */
     play() {
@@ -438,6 +755,7 @@ export function createSequencerEditor(options = {}) {
         this.error = 'Add a block first.';
         return false;
       }
+      if (!this._claimOutput()) return false; // nothing resumed or scheduled (C002)
       this._stopVoices();
       if (typeof engine.resume === 'function') {
         try {
@@ -447,7 +765,9 @@ export function createSequencerEditor(options = {}) {
         }
       }
       this.error = '';
+      this.loopNotice = '';
       this.playing = true;
+      priv.playT0 = null;
       let voice;
       try {
         voice = this._schedulePass(ctx, ctx.currentTime + START_OFFSET_S);
@@ -460,6 +780,14 @@ export function createSequencerEditor(options = {}) {
       if (!voice) {
         this.playing = false;
         return false;
+      }
+      priv.playT0 = voice.t0;
+      // C011: a looped first pass longer than the cap is cut at it without the permission.
+      const first = priv.passes[priv.passes.length - 1];
+      if (this.model.loop && !passFits(first.end)) {
+        cutAtCap(ctx, first);
+        priv.lastEnd = first.end;
+        this.loopNotice = LOOP_CAP_REASON;
       }
       if (typeof engine.onStart === 'function') {
         try {
@@ -521,6 +849,39 @@ export function createSequencerEditor(options = {}) {
       const p = currentPass(ctx.currentTime);
       return p ? { t0: p.t0, duration: p.end - p.t0 } : null;
     },
+    /**
+     * The block the pass under the audio clock sounds, from that pass's own layout:
+     * { id, index, startS, endS, t } with startS, endS and t in seconds into the pass, or null
+     * when stopped. After an edit during playback the id names the block in the edited model
+     * (timeline.passPlayheadX maps it by id); the index is its place in the sounding pass.
+     */
+    currentPassBlock() {
+      const ctx = getCtx();
+      if (!ctx || !this.playing || !priv.passes.length) return null;
+      observeClock(ctx);
+      const p = currentPass(ctx.currentTime);
+      if (!p) return null;
+      const t = Math.max(0, Math.min(p.end - p.t0, ctx.currentTime - p.t0));
+      const index = p.voice.blockIndexAt(p.t0 + t);
+      const b = p.layout[index];
+      return b ? { id: b.id, index, startS: b.startS, endS: b.endS, t } : null;
+    },
+    /**
+     * The sounding pass against the edited model, or null when stopped:
+     * { durationS, nextDurationS, current, layoutCurrent }. durationS is the sounding pass's
+     * length and nextDurationS the edited model's (what the next pass or the next Play plays);
+     * current is false while an edit waits for the next pass; layoutCurrent is false while the
+     * edited timeline places the blocks elsewhere than the sounding pass does.
+     */
+    currentPassState() {
+      const ctx = getCtx();
+      if (!ctx || !this.playing || !priv.passes.length) return null;
+      const p = currentPass(ctx.currentTime);
+      if (!p) return null;
+      const c = compare(p.model, this.model);
+      return { durationS: p.end - p.t0, nextDurationS: totalDuration(this.model),
+        current: c.same, layoutCurrent: c.layout };
+    },
     activeBlockIndex() {
       const ctx = getCtx();
       if (!ctx || !this.playing) return -1;
@@ -548,11 +909,16 @@ export function createSequencerEditor(options = {}) {
     serialize() {
       return serializeSequence(this.model);
     },
-    /** Load JSON (object or string). Returns the list of issues found while validating. */
+    /**
+     * Load JSON (object or string). Returns the list of issues found while validating. The
+     * waveform the editor follows (the instrument's, mirrored in) is kept: the file's is derived.
+     */
     load(json) {
       const { model, issues } = parseSequence(json, { sampleRate: this.sampleRate() });
-      this._apply(model, issues);
+      this._apply(setWaveform(model, this.model.waveform), issues);
       this.selectedId = model.blocks.length ? model.blocks[0].id : null;
+      priv.undo = []; // a loaded sequence starts a new history
+      priv.redo = [];
       return issues;
     },
     dispose() {

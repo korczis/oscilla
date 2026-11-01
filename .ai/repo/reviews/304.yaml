@@ -1,0 +1,25 @@
+# Review verdict for pull request #304, T017: a frequency profile that covers none of the measured
+# points never reads CALIBRATED (branch fix/t017-profile-covers-no-point-uncalibrated). Reviewed head
+# 0023d2fc against origin/main. Another builder wrote it (oscilla-b0, P05 wave 1).
+#
+# The digest: the base branch's scripts/review-verdict.mjs, run from `git archive origin/main
+# scripts` with --repo on the author's worktree: 39143d42...bdf8d over the 2 guarded paths it names.
+#
+# How it was reviewed: two independent lenses (correctness across zero, partial and full coverage,
+# edge frequencies, per-band and global labels, RTA and response views; tests with mutants), each in
+# its own detached copy, a skeptic per finding above P3. One finding was refuted: the duplicate
+# #322 is closed unmerged ("Duplicate of #304"), so only this branch can land.
+#
+# Verdict: merge. No P0 or P1. One P2 leaves part of the issue's claim unmet on another surface:
+schema: review-verdict/v1
+pr: 304
+verdict: merge
+reviewer: prismatic-majordomus-f3 (claude-code 1f47a36e)
+content: 39143d42f7411c83b1124df3cef71efd6089bb4120896b4acf1e9434181bdf8d
+findings:
+  - { id: R1, severity: P2, status: open, title: "measure.js:1608 the guided flow's header 'Frequency' indicator still reads CALIBRATED for a profile that covers no measured point or band; the charts are fixed, this indicator is not" }
+  - { id: R2, severity: P3, status: open, title: "response-chart.js:554 the no-coverage note says 'covers none of the measured range' for a profile that lies inside that range" }
+  - { id: R3, severity: P3, status: open, title: "response-chart.js:284 a missing or wrong-length coverage mask now reports that a full-range profile covers nothing" }
+  - { id: R4, severity: P3, status: open, title: "readout-labels-calibration-coverage.test.mjs:145 the note's profile-span and measured-range text are not asserted; :95 the experiment fixture is a record its own validator flags as contradicted" }
+  - { id: R5, severity: P3, status: open, title: "tests/README.md:132 says the whole file failed before the fix; 3 of its 6 tests pass on main" }
+  - { id: R6, severity: P3, status: open, title: "experiments.js:198 (out of scope) the CSV export labels raw values as 'frequency-profile corrected' for the same uncovered profile" }

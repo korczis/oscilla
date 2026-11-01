@@ -14,7 +14,7 @@
 import './v31-studio-audio-entry.js';
 import { adsrEvents, valueAtTime } from '../../../src/js/audio/envelope.js';
 import { nodeQ } from '../../../src/js/audio/filters.js';
-import { automationValueAt } from '../../../src/js/sequencer/compiler.js';
+import { EDGE_S, automationValueAt } from '../../../src/js/sequencer/compiler.js';
 import { createIdGenerator, createStudioStore } from '../../../src/js/studio/actions.js';
 import { ROUTE_FLOOR, STUDIO_XFADE_S } from '../../../src/js/studio/compiler.js';
 import { compileTimeline } from '../../../src/js/studio/timeline-compiler.js';
@@ -185,9 +185,12 @@ function detect(get, b, g = b) {
  * rises like t^6 from baseTime (four ramps × the attack × the edge): the first window above
  * −40 dB starts 6 ms after baseTime at 48 kHz although nothing sounds before baseTime. After a
  * re-anchor (lead ≥ STUDIO_XFADE_S, startLeadTime) the ramps are complete at baseTime and only
- * the voice edge, scaled by the envelope where it then is, remains.
+ * the voice edge, scaled by the envelope where it then is, remains. A Tone voice compiled after
+ * the clock passed its start (decision 'joined-late', compileSequence keepGrid) stays on its
+ * grid and its out gain joins it at `join` seconds after baseTime, a linear EDGE_S edge from the
+ * floor: that edge multiplies too (join null: on time).
  */
-function predictedOnset(model, cutoff, Q, sr, lead = 0) {
+function predictedOnset(model, cutoff, Q, sr, lead = 0, join = null) {
   const nodeOf = (id) => model.graph.nodes.find((n) => n.id === id);
   const walk = (id, n) => { // audio routes from the oscillator to the Master
     if (nodeOf(id).type === 'master') return n;
@@ -205,8 +208,9 @@ function predictedOnset(model, cutoff, Q, sr, lead = 0) {
   const tl = compileTimeline(model, { sampleRate: sr, baseTime: 0 });
   const voiceEnv = tl.items[0].events.filter((e) => e.kind === 'gain')
     .map((e) => ({ t: e.time, value: e.value, ramp: e.ramp }));
+  const joinGain = (t) => (join === null ? 1 : Math.min(1, Math.max(0, (t - join) / EDGE_S)));
   const gainAt = (t) => (t < 0 ? 0 : Math.min(1, (t + lead) / STUDIO_XFADE_S) ** ramps
-    * valueAtTime(adsr, t + lead) * automationValueAt(voiceEnv, t, 0));
+    * valueAtTime(adsr, t + lead) * automationValueAt(voiceEnv, t, 0) * joinGain(t));
   // Filtered sawtooth RMS at cutoff c (common factors cancel against the reference).
   const K = Math.floor((0.5 * sr) / 220);
   const harmonics = Float32Array.from({ length: K }, (_, i) => 220 * (i + 1));
@@ -227,16 +231,16 @@ function predictedOnset(model, cutoff, Q, sr, lead = 0) {
     refSq += (gainAt(t) * sawRms(cutoff(t))) ** 2;
   }
   const thr = Math.sqrt(refSq / n) * 10 ** (DETECT_DB / 20);
-  for (let t = DETECT_FROM_S; t < 0.05; t += DETECT_STEP_S) {
+  for (let t = DETECT_FROM_S; t < 0.05 + Math.max(0, join || 0); t += DETECT_STEP_S) {
     const f0 = Math.round(t * sr);
     const f1 = Math.round((t + DETECT_STEP_S) * sr);
     let sq = 0;
     for (let f = f0; f < f1; f++) sq += gainAt(f / sr) ** 2;
     if (Math.sqrt(sq / (f1 - f0)) * sawRms(cutoff(Math.max(0, t))) > thr) {
-      return { onset: t, routes, ramps, lead };
+      return { onset: t, routes, ramps, lead, join };
     }
   }
-  return { onset: null, routes, ramps, lead };
+  return { onset: null, routes, ramps, lead, join };
 }
 
 async function settle(transport) {
@@ -302,7 +306,11 @@ T.basicSynth = async ({ stallMs = 0 } = {}) => {
   const automated = (t) => 500 * 16 ** (t / 3);
   const lfo = (t) => 2 ** Math.sin(Math.PI * (t + lead));
   const cutoff = (t) => automated(t) * lfo(t);
-  const predicted = predictedOnset(model, cutoff, Q, sr, lead);
+  // The Tone voice compiled after the clock passed its start joins its grid late (transport
+  // decision 'joined-late', compileSequence keepGrid): the onset follows that join.
+  const joined = transport.debugInfo().decisions.find((d) => d.decision === 'joined-late'
+    && d.clipId === 'clip-1' && Math.abs(d.from - b) < 1e-6) || null;
+  const predicted = predictedOnset(model, cutoff, Q, sr, lead, joined ? joined.to - b : null);
   const ratioAt = (t) => {
     const w = window_(b + t - 0.025, b + t + 0.025);
     return db(amplitudeAt(w, 8 * 220, sr) / amplitudeAt(w, 220, sr));
@@ -333,8 +341,9 @@ T.basicSynth = async ({ stallMs = 0 } = {}) => {
     cycles.push({ peak: p, after: await settle(transport) });
   }
   const strip = ({ ref: _ref, ...d }) => d;
-  return { b, graphStart: g, reanchor, floorBoundDb: db(ROUTE_FLOOR) + FLOOR_MARGIN_DB, claims,
-    peak, skippedLate, studio: strip(studio), out: strip(out), predicted,
+  return { b, graphStart: g, reanchor, joined,
+    floorBoundDb: db(ROUTE_FLOOR) + FLOOR_MARGIN_DB, claims, peak, skippedLate,
+    studio: strip(studio), out: strip(out), predicted,
     detectStepS: DETECT_STEP_S, fineStepS: FINE_STEP_S, tailDb: db(tail / ref), sweepAt,
     spectrum, counts, stopped, cycles, debug: transport.debugInfo().unplayed };
 };

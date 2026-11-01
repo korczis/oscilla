@@ -16,17 +16,35 @@ pressure.
 1. Choose **Studio** in the navigation (after Experiments). The Playground's compact Studio
    panel has **EXPAND STUDIO**, which opens the same document.
 2. **Templates** lists the shipped documents: Basic Tone, Subtractive Synth, Sweep Sequence,
-   Stereo Beat, Filter Automation and Measurement Sweep. **Open** replaces the current Studio;
-   if it has unsaved changes the dialog says so first.
+   Stereo Beat, Filter Automation, Measurement Sweep and Demo song: Lantern in the Slag Yard.
+   **Open** replaces the current Studio; if it has unsaved changes the dialog says so first.
 3. **Play** (Space) plays the graph and the timeline; **Stop** (Esc) releases every node. The
-   Playground voice and Studio are exclusive: starting one stops the other. For a screen
+   Playground voice, the Sequencer and Studio are exclusive: starting one stops the others. For a screen
    reader the button is always "Play the Studio", a toggle that reads as pressed while the
    Studio plays.
+
+4. From a lab: Filter Lab, Synthesis (Subtractive Synth, Stereo Beat), the Sequencer and
+   Measure each link to the shipped template that does their job ("Open Filter Automation in
+   Studio"). The template is a separate document; the lab's own settings stay in the lab.
+5. **Open this pattern in Studio** in the Sequencer opens a copy of the Sequencer's current
+   pattern as a new document (one Sequence node, one clip per block), the same pipeline as
+   importing a sequence file. With unsaved Studio changes nothing is replaced and the notice
+   says so.
+6. The toolbar's **Back** button returns to the workspace Studio was opened from and names it
+   ("Back to the Sequencer"); when Studio is the first workspace the page opens, it is the
+   Playground.
 
 Below 768 px the workspace shows one of **Graph**, **Timeline** and **Inspector** at a time
 (tabs and their panels). On a touch screen, **Frame all** and **Frame selection** do not zoom
 out so far that a port is smaller than 24 px: a large graph is centred, and you pan to the
 rest.
+
+On the graph, drag empty canvas, turn the wheel or scroll with two fingers to pan (Shift turns
+a vertical wheel sideways). Ctrl/⌘ + wheel, a trackpad pinch and a two-finger touch pinch zoom
+at the pointer, as do **+** and **−**. Chromium and Firefox report a trackpad pinch as a Ctrl
+wheel and Safari as its own gesture events; both are handled, but the browser checks send
+these events rather than a real trackpad pinch. **Minimap** in the graph controls shows the whole graph
+and the part in view; press or drag on it to move there.
 
 ## Links and fullscreen
 
@@ -77,6 +95,17 @@ rest.
   list of inputs that can take its output; Enter connects. On a touch screen, tap an output,
   then tap a highlighted input.
 - Drop a cable on empty canvas to add a node that accepts it, already connected.
+- Drop a cable on a single input that already has one: the new cable replaces it (a parameter
+  input takes several cables, so the new one is added beside them). Dropped on a node's body, a
+  cable takes a free input first. Drag a cable off its input to move it to another input, or
+  drop it on empty canvas to delete it; a muted cable stays muted, and its depth and mapping
+  carry over only to the same parameter. On a parameter input with several cables, click the
+  cable you want first. Each is one undo step, and a move the types or a feedback loop forbid
+  is refused with the reason.
+- **Shift+Delete** deletes the selected node and connects what fed its signal input (not a
+  modulator of its own parameters) to what it fed, where the types allow, muted if either
+  cable was (otherwise it deletes the node and says why; a source left out is named). **L** lays the graph out in signal
+  order as one undo step; **M** mutes or unmutes the selected connections.
 - With a screen reader, a node reads its name, kind, settings and how many input and output
   connections it has; the Inspector's Connections list and the Connect dialog name each port
   and what it is connected to.
@@ -267,8 +296,9 @@ Tab onto a node selects it; to select several by keyboard, Tab to the next one a
 it joins the nodes selected before. Tab onto a node that is already part of the selection
 keeps the selection, and **T** on a selected node takes it out.
 The same table is the Studio part of the one **Keyboard shortcuts** dialog. The keyboard button
-in the toolbar, Help (**?**) and the menu all open that dialog, and it lists the keys of the
-workspace in view and the keys that work everywhere (ADR 0050).
+in the toolbar, the header's **?** (named Keyboard shortcuts) and the menu all open that
+dialog, and it lists the keys of the workspace in view and the keys that work everywhere
+(ADR 0050).
 
 Space has one owner in each workspace, the same at every window width. In the workspaces that
 play, load or analyse the instrument's signal it is the instrument's Hold to Play, whether or
@@ -286,7 +316,7 @@ anywhere else in those workspaces Space is the instrument's.
 | Workspaces | Space |
 | --- | --- |
 | Playground, Analyzer, Filter Lab, Compare, Synthesis, Sequencer, Presets | Hold to play: sounds while held, stops on release (a programmed pattern: trigger once) |
-| Measure, Experiments, Learn, About | Nothing: Space starts no sound in this workspace |
+| Measure, Experiments, Learn, Synth, About | Nothing: Space starts no sound in this workspace |
 | Studio | Play / stop the Studio transport |
 <!-- space:end -->
 
@@ -296,6 +326,7 @@ anywhere else in those workspaces Space is the instrument's.
 | Space | Play / stop the Studio transport |
 | Esc | Cancel a drag or connection, close a picker, else stop |
 | Delete / Backspace | Delete the selected nodes or connection |
+| Shift Delete / Backspace | Delete the selected node and connect its input to its outputs where the types allow |
 | Ctrl/⌘ C | Copy the selected nodes |
 | Ctrl/⌘ X | Cut the selected nodes |
 | Ctrl/⌘ V | Paste (new ids, small offset) |
@@ -309,6 +340,8 @@ anywhere else in those workspaces Space is the instrument's.
 | C | Connect the selected node (list of compatible inputs) |
 | F | Frame the selection |
 | A | Frame the whole graph |
+| L | Tidy the graph: lay the nodes out in signal order |
+| M | Mute or unmute the selected connections |
 | + | Zoom in |
 | − | Zoom out |
 | Arrows (Shift: ×4) | Move the selected nodes by the grid |

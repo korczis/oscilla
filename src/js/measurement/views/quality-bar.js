@@ -6,7 +6,9 @@
 // event (`event.capture`). Today capture.js chunks are { frames, framesTotal }; a chunk that
 // also carries live checks { peak, rmsDb, clipped } (linear peak, dB re full scale, count or
 // boolean) is used for CLIPPING and SIGNAL. Without them those items say what is known
-// (NOT CHECKED YET / level not reported) rather than guessing "NONE" or "ACTIVE".
+// (NOT CHECKED YET / level not reported) rather than guessing "NONE" or "ACTIVE". The 'run'
+// event carries the run's linear peak: CLIPPING is AT RAIL (warn) when it reached
+// CLIP_THRESHOLD without a clip region, NOT CHECKED when it is unknown, NONE only below it.
 //
 //   initialQualityBar() -> state
 //   reduceQualityBar(state, event) -> state      (never mutates `state`)
@@ -22,7 +24,7 @@
 // Status always comes with its reasons (§66); no unexplained score.
 
 import { MEASUREMENT_STATES as S } from '../state-machine.js';
-import { CLIP_THRESHOLD } from '../capture-checks.js';
+import { CLIP_THRESHOLD, CLIP_MIN_RUN } from '../capture-checks.js';
 import { PREFLIGHT_THRESHOLDS } from '../engine.js';
 import { REASON_CODES, QUALITY_RULESETS, summarizeQuality } from '../quality.js';
 import { formatDb, formatFrequencyWithResolution } from '../format.js';
@@ -69,6 +71,8 @@ export function initialQualityBar() {
     run: null,
     runs: null,
     clipSeen: false,
+    railSeen: false,
+    peakUnchecked: false,
   });
 }
 
@@ -190,8 +194,7 @@ export function reduceQualityBar(state, event) {
         s.clipping = item('fail', 'DETECTED', clip.text);
         s.clipSeen = true;
       } else if (!s.clipSeen && s.clipping.status !== 'fail') {
-        s.clipping = item('ok', 'NONE', `Run ${s.run + 1}: no sample at digital full scale `
-          + `(${ANALOG_CLIP_NOTE}).`);
+        runClipping(s, Number.isFinite(event.peak) ? event.peak : null);
       }
       if (empty) s.signal = item('fail', 'NONE', empty.text);
       else if (!event.invalid && s.signal.status !== 'ok')
@@ -207,6 +210,37 @@ export function reduceQualityBar(state, event) {
     }
     default:
       return state;
+  }
+}
+
+/**
+ * CLIPPING after a run without a clip region (MSR-07): AT RAIL (warn) when the peak reached
+ * CLIP_THRESHOLD, the judgement quality.js makes as CLIPPING_NOT_EXCLUDED, kept for the rest
+ * of the measurement; NOT CHECKED when a run's peak is unknown; NONE only while every run's
+ * peak stayed below the threshold. Severity never drops within a measurement.
+ */
+function runClipping(s, peak) {
+  const run = `Run ${s.run + 1}`;
+  if (peak !== null && peak >= CLIP_THRESHOLD) {
+    if (!s.railSeen) {
+      s.clipping = item('warn', 'AT RAIL', `${run}: peak ${fixedText(peak, 3)} reaches the rail `
+        + `(≥ ${CLIP_THRESHOLD}) without a ${CLIP_MIN_RUN}-sample flat top: brief clipping `
+        + `is not excluded (${ANALOG_CLIP_NOTE}).`);
+    }
+    s.railSeen = true;
+  } else if (s.railSeen) {
+    // A later clean run does not clear the warning.
+  } else if (peak === null) {
+    s.clipping = item('unknown', 'NOT CHECKED', `${run}: the capture peak was not reported, `
+      + 'so clipping was not checked.');
+    s.peakUnchecked = true;
+  } else if (!s.peakUnchecked) {
+    // A peak just below the threshold (0.97996) is truncated, never rounded up to "0.980".
+    const rounded = fixedText(peak, 3);
+    const shown = Number(rounded) < CLIP_THRESHOLD ? rounded
+      : fixedText(Math.floor(peak * 1000) / 1000, 3);
+    s.clipping = item('ok', 'NONE', `${run}: peak ${shown}, no sample at or above `
+      + `${CLIP_THRESHOLD} of digital full scale (${ANALOG_CLIP_NOTE}).`);
   }
 }
 
@@ -230,7 +264,9 @@ function liveChunk(s, c, phase) {
   if (clipped) {
     s.clipping = item('fail', 'DETECTED', 'The live input reached full scale.');
     s.clipSeen = true;
-  } else if (Number.isFinite(c.peak) && !s.clipSeen && s.clipping.status !== 'fail') {
+  } else if (Number.isFinite(c.peak) && !s.clipSeen && !s.railSeen && !s.peakUnchecked
+    && s.clipping.status !== 'fail') {
+    // A live chunk never clears an earlier run's AT RAIL or NOT CHECKED (T016).
     s.clipping = item('ok', 'NONE', `Live peak ${fixedText(c.peak, 3)} of digital full scale so `
       + `far (${ANALOG_CLIP_NOTE}).`);
   }

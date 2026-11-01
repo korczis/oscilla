@@ -164,7 +164,8 @@ test('renderer: columns follow wall time, freeze and hidden pause, null writes f
   assert.equal(sg.push(spec, 10), 1, '100 px per 1000 ms → 1 column per 10 ms');
   assert.equal(sg.push(spec, 15), 0);
   assert.equal(sg.push(spec, 55), 4);
-  assert.equal(sg.push(spec, 10000), 100, 'capped at the width');
+  assert.equal(sg.push(spec, 255), 20, 'dropped frames within the gap bound repeat the snapshot');
+  assert.equal(sg.push(spec, 10000), 1, 'a gap over the bound restarts the axis: no backfill');
   sg.freeze(true);
   assert.equal(sg.push(spec, 10010), 0);
   sg.freeze(false);
@@ -578,4 +579,30 @@ test('K015 view: the unsmoothed feed is opt-in and skips its FFT while frozen', 
     assert.equal(timeReads, 2);
     view.dispose();
   });
+});
+
+// C014 (finding vis-divergence-2): a paused or hidden interval is never painted with the first
+// spectrum read after it. The frame loop stops calling push() while it is paused or the page is
+// hidden, so push() itself must not turn the gap into columns of one snapshot.
+test('renderer: a gap between pushes writes at most one column, never the gap (C014)', () => {
+  const cv = mockCanvas(400, 50);
+  const sg = createSpectrogram(cv, { sampleRate: SR, fftSize: FFT, timeSpanS: 10,
+    isHidden: () => false });
+  const spec = new Float32Array(FFT / 2).fill(-30);
+  assert.equal(sg.push(spec, 1000), 1);
+  for (let t = 1016; t <= 1160; t += 16) sg.push(spec, t);
+  // 4 s with no push at all (a paused frame loop or a hidden page): 160 columns would be due.
+  const n = sg.push(spec, 5160);
+  assert.ok(n <= 1, `push after a 4 s gap wrote ${n} columns; at most 1 can be real`);
+  assert.equal(sg.push(spec, 5176), 0, 'the axis runs on from the resume, not from before it');
+  assert.equal(sg.push(spec, 5260), 4, '10 s across 400 px: 100 ms is 4 columns');
+});
+
+test('renderer: dropped frames below the gap bound still fill, capped at the width', () => {
+  const cv = mockCanvas(100, 50);
+  const sg = createSpectrogram(cv, { sampleRate: SR, fftSize: FFT, timeSpanS: 0.1,
+    isHidden: () => false });
+  const spec = new Float32Array(FFT / 2).fill(-140);
+  assert.equal(sg.push(spec, 0), 1);
+  assert.equal(sg.push(spec, 200), 100, '200 ms at 1 column per ms is capped at the width');
 });

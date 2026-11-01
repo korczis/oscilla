@@ -2,9 +2,10 @@
 
 MIDI is an optional input layer over the audio engine (ADR 0058,
 `.ai/repo/adrs/0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md`). This page
-describes what the first piece of it (plan issue V501) does: OSCILLA detects Web MIDI and its
-permission at runtime, lists the connected inputs and states one support state. Notes do not
-sound yet; that is V502. When MIDI is missing, nothing outside the MIDI surface changes.
+describes what its first two pieces do. V501: OSCILLA detects Web MIDI and its permission at
+runtime, lists the connected inputs and states one support state. V502: the notes of the
+connected inputs sound through the audio engine (see "Playing notes" below). When MIDI is
+missing, nothing outside the MIDI surface changes.
 
 ## Where it is
 
@@ -80,6 +81,80 @@ is then skipped, because there is no access to withdraw; on darwin the same outc
 `insecure` is reached only over plain http on a non-local address, which no gate origin is, and
 `connected`, `disconnected` and the other states without a real device are proved with the test
 seam below.
+
+## Playing notes
+
+Once Connect MIDI has connected an input, its notes sound through the one audio engine, with the
+Playground's waveform, attack, release and A4 tuning. The Labs stages a Playground tone passes
+through (the filter, the ADSR envelope and additive synthesis) do not apply to MIDI notes. There
+is no second synthesizer; the decisions are the V502 note of ADR 0058.
+
+- **Polyphony.** Up to 8 notes (`NOTE_POLYPHONY`) sound at once. Each is scaled to one eighth of
+  a full voice, so a full chord never exceeds the level of one Playground tone at the same
+  output level; one note is therefore 18 dB quieter than a Playground tone. A ninth note fades
+  out the oldest note (one already releasing first) and starts when that fade has ended.
+- **Velocity.** Amplitude `(velocity / 127)^2`: velocity 127 is full level, 64 about -12 dB,
+  32 about -24 dB. The engine never sets a note below its gain floor (-80 dB), so velocities 1
+  to 3 all sound at that floor, louder than the law gives; from velocity 4 the law holds.
+- **Messages.** Every channel is heard. Note On with velocity 0 is a Note Off. Playing a key that
+  is still sounding restarts it. CC 120 (All Sound Off) stops every note at once; CC 123 (All
+  Notes Off) releases them. Sustain (CC 64) and every other message are ignored for now.
+- **Safety.** A note that would sound at or above 95 % of the context's Nyquist frequency is not
+  played. A held note is exempt from the safety limit while its key is down (ADR 0062, amending
+  ADR 0005): it sounds until its Note Off, under the same output ceiling, and never louder for
+  being held.
+- **Stopping.** Every note stops within a few milliseconds when any connected input is
+  unplugged (every note, not only that input's), when the MIDI access is withdrawn or Connect
+  MIDI is chosen again, when the window loses the focus (a Note Off may never arrive while
+  another window has it; ADR 0062), when the page is hidden, on Escape, when a measurement or the
+  Studio takes the output, and when the sequencer starts.
+- **The output.** A note and a Playground tone never sound together: whichever starts fades the
+  other out first. A note and the sequencer do not sound together either: starting a sequence
+  stops the notes, which fade within 8 ms as the sequence begins, and while it plays notes are
+  refused. While a measurement runs, a level reference is being captured or the Studio is
+  playing, notes are refused too. OSCILLA says so once per run of refused notes, with one of
+  these sentences:
+  - "MIDI notes do not play while the measurement owns the output: stop it (Esc) first."
+  - "MIDI notes do not play while the level reference is being captured."
+  - "MIDI notes do not play while the Studio is playing: stop it first."
+  - "MIDI notes do not play while the sequencer is playing: stop it (Esc) first."
+
+`tests/unit/midi/notes.test.mjs` proves this on a fake audio context; `tests/browser/midi.cjs`
+check `midi-seam-notes` plays synthetic MIDI events from the test seam into the built page in
+the three gate builds and counts the oscillators independently. No check plays a real device,
+and latency is not measured.
+
+## The computer and on-screen keyboard
+
+The Playground and the Studio each have a keyboard (plan issue K026). It plays the same note
+voices as a MIDI input, through the same engine and with the same Playground settings, limits
+and refusals; a refusal says "Keyboard notes do not play while …" instead of "MIDI notes".
+
+- **Arm it.** **Arm keys** under the Playground's panels (and under the Studio) arms the
+  computer keyboard in that view only; a link with `kbd=1` (`#m=playground&kbd=1`,
+  `#m=studio&kbd=1`) arms the view it opens. The key leaves the address with the next workspace
+  change. Elsewhere the computer keyboard plays nothing.
+- **The keys**, by physical position (`KeyboardEvent.code`), so QWERTZ and AZERTY keyboards play
+  from the same places: A W S E D F T G Y H U J K play C up to the next C (black keys on W E T
+  Y U), O L P ; ' go on to F. Z and X move the octave down and up (C0 to C8), C and V the
+  velocity (steps of 20, 1 to 127). The readout says the range and the velocity; the
+  on-screen keys show which letter plays which key (the printed letter where the browser tells
+  the layout).
+- **Never in the way.** Space is never a keyboard key: it stays the workspace's play key (ADR
+  0050). A key typed in a text field, a select or an open dialog is left alone, and so is any
+  key with Ctrl, Meta or Alt. Armed in the Studio, A, C, F and T play notes instead of their
+  Studio meanings; Studio's Ctrl / ⌘ shortcuts are unchanged.
+- **Held.** A note sounds while its key or pointer is down, past the safety limit, and stops on
+  release, Escape, a window blur, a hidden page, or when the view is left or disarmed.
+- **On screen.** Two or three octaves (by width) that follow the octave. A pointer plays the key
+  under it and a drag glides from key to key. A key lights up while it sounds, whoever plays it:
+  the computer keyboard or a pointer in the accent colour, a MIDI input in green. While a note
+  sounds the analysis views show the live output.
+
+`tests/unit/keyboard-held-notes.test.mjs` and `tests/unit/midi/keyboard.test.mjs` prove this
+without a browser; `tests/browser/midi.cjs` check `keyboard-qwerty` plays the keys and the
+on-screen keys in the three gate builds, and `tests/browser/navigation.cjs` check
+`keyboard-link` follows the link key.
 
 ## How it is tested without hardware
 

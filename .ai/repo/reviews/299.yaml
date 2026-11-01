@@ -1,0 +1,58 @@
+# Review verdict for pull request #299, plan item K026: an on-screen and a QWERTY keyboard on the
+# V502 note voices (branch feat/k026-qwerty-piano, stacked on #261). Reviewed head 9647fa73
+# (== origin at fetch); base origin/feat/v502-midi-notes-sound. Built by oscilla-b0's agents;
+# reviewed by dev-68.
+#
+# The digest: main's scripts/review-verdict.mjs (git archive origin/main scripts into a
+# scratchpad), `--repo . --head HEAD --content --list --base-branch
+# origin/feat/v502-midi-notes-sound` (the stacked base, not main), over the one guarded path the
+# pull request changes, src/js/audio/audio-engine.js: f87602f6...ff11, which matches the
+# builder's.
+#
+# Lenses:
+# - The held note (audio-engine.js:919-923). `held` makes len Infinity, so the note is neither
+#   limited nor extended; revokeContinuous (only `extended`) leaves it, as ADR 0062 D1 says. The
+#   peak is still level / NOTE_POLYPHONY through the same master, limiter and ceiling (D2).
+#   Voice stealing (endTime > t0) still finds Infinity voices and fades the oldest, so a ninth
+#   key steals rather than stacking. Every held note is released on: its own key up or pointer
+#   up (keyboard.js:163; keyboard-ui.js:291, unconditional, not gated on armed); window blur,
+#   pagehide and visibilitychange to hidden, and Escape (keyboard-ui.js:122, 136-139 for the
+#   keys; midi/ui.js:97-102 for every note, which also releases the keys); a workspace change;
+#   the sequencer starting and Measure or Studio taking the output (the V502 paths through
+#   notes.silence / engine.notesOff); a lost input. The keyboard's notes pass the same ownedBy
+#   refusals as MIDI (notes.js noteOn). No path leaves a voice sounding once nothing holds it.
+# - ADR 0062 amends ADR 0005 D3 honestly: the exemption is only while held, the ceiling and gain
+#   law are kept, forced release replaces V502's "blur does not stop MIDI notes" on the safe
+#   side, and every other signal keeps ADR 0005. It also covers hardware MIDI notes, which now
+#   always pass held: true (notes.js); a controller with a stuck key is stopped by blur, hide
+#   or Escape, which the ADR names as the remedy.
+# - Input guards: no Ctrl/Meta/Alt, never Space (keyboard.js:75-77, ADR 0050); not in a text
+#   field, select, contenteditable, ARIA text role or open dialog (keyboard-ui.js:34-48, 124);
+#   event.repeat never retriggers (keyboard.js:155). isComposing is not checked, but IME
+#   composition only happens in a text target, which takesText already refuses.
+# - Chrome: the controls are unclassed native buttons and the keys a canvas, so the Flowbite
+#   ratchet is kept (tests/unit/ui-flowbite-pro.test.mjs 29/29), the interim the repo's F-line
+#   uses while F001 has not landed. keyboard-ui.js:217-218 sets the box's grid order and
+#   column from JS: layout placement, not component styling, outside what the class ratchet
+#   sees; acceptable as the stated interim (R-6).
+#
+# Runs: node --test keyboard-held-notes, tests/unit/midi/*, navigation, v4-shortcuts,
+# v4-connections: 119/119. Mutations in a scratch copy (git archive, node_modules linked):
+# the engine ignoring held (v.held = false) fails 5; notes.js passing held: false fails 4; blur
+# release removed from both keyboard-ui.js and midi/ui.js fails 2. Each restored; the PR
+# worktree untouched. Browser checks not run (disk near the floor, nothing installed).
+#
+# Open: P3 only. No P0, P1 or P2 is open.
+schema: review-verdict/v1
+pr: 299
+verdict: merge
+reviewer: "dev-68 (Claude Opus 5.5 session 4f90795d); did not build, merge or edit this change; wrote only this file"
+content: f87602f6533d21fb2e2b5f0e679952418729625b8f41bf0aa040f175d2b8ff11
+findings:
+  - { id: R-1, severity: P3, status: open, title: "The plan record disagrees with what lands. .ai/repo/project/issues/K026.yaml (main) says the on-screen keyboard is a Pro card in the Playground that waits on F001-F003, and that 'the Studio gets no keyboard here'. This pull request ships the keys now as a canvas with unclassed controls, in the Playground and the Studio (armed on its own), on the owner's direction as the PR body quotes it. Nothing in the branch amends K026.yaml or records that direction as a decision. Fix (follow-up, a chore(plan) on main before K026 is marked done): amend K026's objective and acceptance to the shipped scope, citing the owner's direction, or record it with majordomus decision." }
+  - { id: R-2, severity: P3, status: open, title: "More than 8 keys held: every key stays lit while only 8 sound (the 9th steals the oldest voice, keyboard.js light/start do not learn of the steal); releasing a stolen key calls noteOff on a voice already fading (returns false). Cosmetic, never a stuck or extra sound." }
+  - { id: R-3, severity: P3, status: open, title: "kbd=0 in a link disarms the view (keyboard-ui.js:153) without releasing held notes. Not a stuck note: keyUp and pointerup release unconditionally (keyboard.js:163, keyboard-ui.js:291), and the workspace watcher releases on a view change. Call kbdRelease() there for symmetry with kbdToggle (keyboard-ui.js:179)." }
+  - { id: R-4, severity: P3, status: open, title: "Blur, pagehide, visibilitychange and Escape release the keyboard twice: keyboard-ui.js:122, 136-139 and midi/ui.js:97-102 (whose silence() also calls kbdReleaseAll). Idempotent and harmless; removing either set alone survives the suite, so only both together are pinned." }
+  - { id: R-5, severity: P3, status: open, title: "Style: src/js/ui/shortcuts.js:150 is 106 characters, and its `if (KEYBOARD_VIEWS...) rows.push(...); else if (workspace === 'measure')` puts two branches on one line; src/js/midi/keyboard-view.js:25 is 103. The repo's limit is 100." }
+  - { id: R-6, severity: P3, status: open, title: "keyboard-ui.js:217-218 sets box.style.order = '14' and gridColumn from JS: interim layout until the keyboard moves into its Pro card (F001-F003). A follow-up should replace it with the Pro card's own grid placement and drop the inline styles." }
+  - { id: R-7, severity: P3, status: open, title: "Velocity steps of 20 from 100 clamp at 127 and 1 (100, 120, 127, 107, 87 ...), so the default 100 is not reachable again without a reload. Clamp to the step grid or add a reset." }

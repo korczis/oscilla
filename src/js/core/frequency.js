@@ -1,7 +1,16 @@
 // Frequency maths: log mapping, parsing, formatting, region mapping and the digital limits.
 // Extracted from V1 (index.html@a7b7a23, sections 1 and 3, plus the numeric parts of the
 // component getters provisional/effectiveSampleRate/nyquist/safeMax/rangeMin/rangeMax and the
-// frequency map geometry). Moved bodies are unchanged.
+// frequency map geometry). Moved bodies are unchanged, except parseFrequency (G002, below).
+//
+// The one units module (G002): the frequency grammar (parseFrequency) and the texts of a
+// frequency (formatFrequency, formatFrequencyCompact, formatFrequencyShort), a duration in
+// milliseconds (formatMs), in seconds (formatSeconds) and the clock (formatClock). Every
+// control, readout and chart imports them from here: charts/axes.js parseFrequency and formatHz,
+// sequencer/model.js formatCompactFrequency and formatMs, the compact Studio's compactTime and
+// the timeline view's formatClock and formatSecondsText are these functions under their old
+// names (tests/unit/units.test.mjs). Method-specific texts stay with their method: the
+// measurement smoothing labels, the experiment record texts and the chart ticks and steps.
 
 import {
   MIN_FREQUENCY, PROVISIONAL_SAMPLE_RATE, SAFE_NYQUIST_FACTOR, SPEED_OF_SOUND,
@@ -37,25 +46,36 @@ export function normalizedToFrequency(value, min, max) {
   return min * Math.pow(max / min, clamp(value, 0, 1));
 }
 
+/** The one sentence that refuses zero, a negative and a non-finite frequency. */
+export const FREQUENCY_REFUSED = 'Frequency must be a finite number greater than 0 Hz.';
+
+// A decimal number (a point or a comma as the decimal mark, an optional exponent and sign), then
+// an optional unit: k, kHz or kilohertz (x 1000), Hz or hertz. Matched without case or spaces.
+const FREQUENCY_GRAMMAR =
+  /^([+-]?)(\d+(?:[.,]\d+)?|[.,]\d+)(e[+-]?\d+)?(k|khz|kilohertz|hz|hertz)?$/;
+
 /**
- * Parse human-friendly frequency text: 440, 440hz, 1k, 1khz, 15.5k, 15500, 20 kHz.
- * Returns { ok: true, value } in Hz or { ok: false, error } — never NaN.
+ * Parse human-friendly frequency text: 440, 440hz, 1k, 1khz, 15.5k, 2,5k, 1e3, 15500, 20 kHz.
+ * Returns { ok: true, value } in Hz or { ok: false, error } — never NaN. Zero, a negative and a
+ * non-finite value (1e309) are refused with FREQUENCY_REFUSED. In a list (parseFrequencyList)
+ * the comma separates values, so there the decimal mark is the point.
  */
 export function parseFrequency(input) {
   if (typeof input === 'number') {
-    return isNum(input) && input > 0 ? { ok: true, value: input } : { ok: false, error: 'Frequency must be a positive number.' };
+    return isNum(input) && input > 0 ? { ok: true, value: input }
+      : { ok: false, error: FREQUENCY_REFUSED };
   }
   if (typeof input !== 'string') return { ok: false, error: 'Enter a frequency, e.g. 440, 1k or 15.5 kHz.' };
   const s = input.trim().toLowerCase().replace(/\s+/g, '');
   if (!s) return { ok: false, error: 'Enter a frequency, e.g. 440, 1k or 15.5 kHz.' };
-  const m = s.match(/^(\d+(?:\.\d+)?|\.\d+)(k|khz|kilohertz|hz|hertz)?$/);
+  const m = s.match(FREQUENCY_GRAMMAR);
   if (!m) {
     const shown = input.trim().slice(0, 24);
     return { ok: false, error: `“${shown}” is not a frequency. Try 440, 440 Hz, 1k or 15.5 kHz.` };
   }
-  let value = parseFloat(m[1]);
-  if (m[2] && m[2][0] === 'k') value *= 1000;
-  if (!isNum(value) || value <= 0) return { ok: false, error: 'Frequency must be greater than 0 Hz.' };
+  let value = Number(`${m[1]}${m[2].replace(',', '.')}${m[3] || ''}`);
+  if (m[4] && m[4][0] === 'k') value *= 1000;
+  if (!isNum(value) || value <= 0) return { ok: false, error: FREQUENCY_REFUSED };
   return { ok: true, value };
 }
 
@@ -77,6 +97,15 @@ export function formatFrequency(f, precise = false) {
   if (r >= 1000) return `${round(f / 1000, 2).toFixed(2)} kHz`;
   if (precise || !Number.isInteger(r)) return `${r.toFixed(2)} Hz`;
   return `${r} Hz`;
+}
+/**
+ * Compact frequency with its unit, 3 significant digits (charts, readouts, the sequencer):
+ * "440 Hz", "2.5 kHz", "15.5 kHz", "120 kHz". `digits` asks for more where a value must not
+ * round (T006: the Nyquist option, 22050 Hz → "22.05 kHz" with 4).
+ */
+export function formatFrequencyCompact(f, digits = 3) {
+  if (!isNum(f)) return '—';
+  return Math.abs(f) >= 1000 ? `${sig(f / 1000, digits)} kHz` : `${sig(f, digits)} Hz`;
 }
 /** Compact axis label: 20, 500, 1k, 15.5k. */
 export function formatFrequencyShort(f) {
@@ -102,6 +131,23 @@ export function formatWavelength(f) {
 export function formatMs(ms) {
   if (!isNum(ms)) return '—';
   return ms >= 1000 ? `${sig(ms / 1000, 3)} s` : `${sig(ms, 3)} ms`;
+}
+/** "1.250 s": seconds at millisecond resolution, for fields and announcements (NaN: 0). */
+export function formatSeconds(seconds) {
+  return `${(isNum(seconds) ? seconds : 0).toFixed(3)} s`;
+}
+/**
+ * "01:04.210": minutes, seconds and milliseconds (the transport clocks). It floors, so it never
+ * shows a time not yet reached and never reads "00:60.000"; negative and NaN read 00:00.000.
+ */
+export function formatClock(seconds) {
+  const s = Math.max(0, isNum(seconds) ? seconds : 0);
+  const ms = Math.floor(s * 1000 + 1e-6);
+  const m = Math.floor(ms / 60000);
+  const rest = ms - m * 60000;
+  const sec = Math.floor(rest / 1000);
+  return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}.`
+    + `${String(rest % 1000).padStart(3, '0')}`;
 }
 export function regionFor(f) {
   // Nominal ultrasound begins *above* about 20 kHz, so 20 kHz itself is still upper hearing range.

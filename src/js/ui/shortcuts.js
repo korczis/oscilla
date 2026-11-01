@@ -15,11 +15,15 @@
 // dialog keeps Space first: dialogs.js keyGuard for the instrument, Studio's own control check.
 // A focused Studio timeline item (clip, marker, point, loop handle) is not such a control: its
 // activation is Enter and Space plays or stops Studio there (transport-view.js KEY_HELP).
+// The focused Sequencer timeline is a listbox, so it keeps Space from the instrument too; there
+// Space plays or stops the sequence (K003; sequencer/editor.js onKeydown), as Studio's timeline
+// plays Studio. With nothing focused, Space in the Sequencer is still the instrument's.
 // The compact Studio panel of the Playground and the Sequencer has no Space of its own: every
 // focus target in it is a button. Its Play button is its control.
 
 import { STUDIO_SHORTCUTS } from './studio/graph-keys.js';
 import { KEY_HELP } from './studio/transport-view.js';
+import { KEYBOARD_VIEWS } from '../midi/keyboard.js';
 
 /** Who owns Space in each workspace (the keys are exactly app.js WORKSPACES). */
 export const SPACE_OWNER = Object.freeze({
@@ -34,6 +38,7 @@ export const SPACE_OWNER = Object.freeze({
   presets: 'instrument',
   learn: null,
   studio: 'studio',
+  synth: null, // the Synth plays from its keys; Space starts nothing there (ADR 0050)
   about: null,
 });
 
@@ -50,6 +55,7 @@ export const WORKSPACE_LABELS = Object.freeze({
   presets: 'Presets',
   learn: 'Learn',
   studio: 'Studio',
+  synth: 'Synth',
   about: 'About',
 });
 
@@ -84,8 +90,23 @@ const INSTRUMENT_ROWS = Object.freeze([
   row('octave', 'PgUp / PgDn', 'One octave up / down', 'on the frequency slider, where shown'),
 ]);
 const SEQUENCER_ROWS = Object.freeze([
+  row('sequencer-space', 'Space', 'Play / stop the sequence', 'on the Sequencer timeline'),
   row('sequencer-timeline', 'Arrows, Alt + arrows, Del, Ctrl/⌘ D',
     'Select, move, delete, duplicate blocks', 'on the Sequencer timeline'),
+  row('sequencer-history', 'Ctrl/⌘ Z, Shift + Ctrl/⌘ Z', 'Undo, redo',
+    'on the Sequencer timeline'),
+  row('sequencer-clipboard', 'Ctrl/⌘ C, Ctrl/⌘ V', 'Copy the selected block, paste it after the '
+    + 'selection', 'on the Sequencer timeline'),
+]);
+// The keyboard (K026, src/js/midi/keyboard.js) in the views it is armed in, by physical key
+// (the same places on QWERTZ and AZERTY). It never takes Space, nor a key with Ctrl, Meta or
+// Alt. Armed in Studio, these letters play instead of Studio's A, C, F and T.
+const KEYBOARD_WHERE = 'with the keyboard armed (Arm keys, or a link with kbd=1)';
+const KEYBOARD_ROWS = Object.freeze([
+  row('keyboard-notes', 'A W S E D F T G Y H U J K O L P ; \'',
+    'Play notes, C to the next F: a note sounds while its key is held', KEYBOARD_WHERE),
+  row('keyboard-octave', 'Z / X', 'Octave down / up', KEYBOARD_WHERE),
+  row('keyboard-velocity', 'C / V', 'Velocity down / up (steps of 20)', KEYBOARD_WHERE),
 ]);
 // Measure's Esc is the global one and more: it replaces that row instead of repeating the key.
 const MEASURE_ROWS = Object.freeze([
@@ -135,7 +156,8 @@ export function shortcutHelp(workspace) {
     if (workspace === 'sequencer') rows.push(...SEQUENCER_ROWS);
   } else if (owner === 'studio') {
     rows = [...STUDIO_ROWS];
-  } else if (workspace === 'measure') {
+  }
+  if (KEYBOARD_VIEWS.includes(workspace)) rows.push(...KEYBOARD_ROWS); else if (workspace === 'measure') {
     rows = [...MEASURE_ROWS];
   }
   const own = new Set(rows.map(shown));

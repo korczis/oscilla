@@ -50,9 +50,9 @@ no audio node; the compiler builds each one with the existing engine's builders 
 <!-- node-types:begin -->
 | Category | Count | Node types |
 | --- | --- | --- |
-| Sources | 5 | Oscillator `oscillator`, Noise `noise`, Sweep `sweep`, Sequence `sequence`, Microphone `microphone` |
-| Modulation | 4 | LFO `lfo`, Envelope `envelope`, Random `random`, Step Modulator `step-modulator` |
-| Processing | 5 | Gain `gain`, Filter `filter`, Pan `pan`, Stereo Split `stereo-split`, Mixer `mixer` |
+| Sources | 11 | Oscillator `oscillator`, Noise `noise`, Sweep `sweep`, Sequence `sequence`, Microphone `microphone`, VCO `vco`, Additive engine `additive-voice`, FM engine `fm-voice`, AM/ring engine `am-voice`, Wavetable engine `wavetable-voice`, Percussion engine `perc-voice` |
+| Modulation | 6 | LFO `lfo`, Envelope `envelope`, Random `random`, Step Modulator `step-modulator`, Macro `macro`, Keys `keys` |
+| Processing | 7 | Gain `gain`, Filter `filter`, Pan `pan`, Stereo Split `stereo-split`, Mixer `mixer`, Drive `drive`, Ring `ring` |
 | Analysis | 5 | Scope `scope`, Spectrum `spectrum`, Spectrogram `spectrogram`, Meter `meter`, RTA `rta` |
 | Output | 2 | Master Output `master`, Recorder/Export `recorder` |
 | Measurement | 4 | Capture `capture`, Calibration `calibration`, Transfer Analyzer `transfer-analyzer`, Measurement Result `measurement-result` |
@@ -86,7 +86,7 @@ restore earlier snapshots (`src/js/studio/actions.js`, `src/js/studio/history.js
 `SELECTION_CHANGE` and `VIEW_SET` change view state only and are neither undoable nor dirtying.
 
 <!-- actions:begin -->
-`NODE_ADD`, `NODE_REMOVE`, `NODE_MOVE`, `NODE_PARAM_SET`, `NODE_RENAME`, `EDGE_ADD`, `EDGE_REMOVE`, `EDGE_UPDATE`, `TRACK_ADD`, `TRACK_REMOVE`, `CLIP_ADD`, `CLIP_REMOVE`, `CLIP_MOVE`, `CLIP_RESIZE`, `CLIP_UPDATE`, `CLIP_SET_TIME_BASE`, `AUTOMATION_POINT_ADD`, `AUTOMATION_POINT_MOVE`, `AUTOMATION_POINT_REMOVE`, `MARKER_ADD`, `MARKER_REMOVE`, `MARKER_MOVE`, `LOOP_SET`, `TRANSPORT_SET`, `METADATA_SET`, `PASTE`, `DUPLICATE`, `PATCH_INSERT`, `PATCH_REPLACE`, `SELECTION_CHANGE`, `VIEW_SET`
+`NODE_ADD`, `NODE_REMOVE`, `NODE_MOVE`, `NODE_PARAM_SET`, `NODE_RENAME`, `EDGE_ADD`, `EDGE_REMOVE`, `EDGE_UPDATE`, `TRACK_ADD`, `TRACK_REMOVE`, `CLIP_ADD`, `CLIP_REMOVE`, `CLIP_MOVE`, `CLIP_RESIZE`, `CLIP_UPDATE`, `CLIP_SET_TIME_BASE`, `AUTOMATION_POINT_ADD`, `AUTOMATION_POINT_MOVE`, `AUTOMATION_POINT_REMOVE`, `MARKER_ADD`, `MARKER_REMOVE`, `MARKER_MOVE`, `LOOP_SET`, `TRANSPORT_SET`, `METADATA_SET`, `PASTE`, `DUPLICATE`, `PATCH_INSERT`, `BATCH`, `PATCH_REPLACE`, `SELECTION_CHANGE`, `VIEW_SET`
 <!-- actions:end -->
 
 ## Timeline and automation
@@ -143,6 +143,7 @@ restore earlier snapshots (`src/js/studio/actions.js`, `src/js/studio/history.js
 | stereo-beat | Stereo Beat | synthesis |
 | filter-automation | Filter Automation | synthesis |
 | measurement-sweep | Measurement Sweep | measurement |
+| demo-song | Demo song: Lantern in the Slag Yard | synthesis |
 <!-- templates:end -->
 
 ## Measurement integration
@@ -186,6 +187,8 @@ Further unit tests cover the Studio outside the `v31-studio-` prefix (`v4-*`, `v
 - `tests/browser/v31-studio-workflows.cjs`
 - `tests/browser/v31-studio-links.cjs`
 - `tests/browser/v31-studio-runtime.cjs`
+- `tests/browser/synth.cjs`
+- `tests/browser/synth-engines.cjs`
 <!-- browser-suites:end -->
 
 For this report only the unit tests were run (`npm run verify`); the browser suites and the

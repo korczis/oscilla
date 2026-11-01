@@ -1,0 +1,60 @@
+# Review verdict for pull request #266, plan items K001-K003: sequencer wave 1 (K001 the
+# engine counts the sequencer's nodes, K002 tempo-locked blocks, K003 keyboard, history, copy
+# and paste; branch feat/k001-k003-sequencer-wave-1). Reviewed head a10ea0e1f38d (== origin
+# at fetch; the branch did not move); merge base origin/main e2720e07d312; origin/main at
+# review time e2720e07, the branch 7 commits ahead. Reviewed by dev-68.
+#
+# The digest: the base branch's scripts/review-verdict.mjs (git archive origin/main scripts
+# into a scratchpad), `--content --base-branch origin/main` and `--repo . --head HEAD
+# --content --list --base-branch origin/main` in the worktree at a10ea0e1, both exit 0, over
+# the one guarded path the PR changes, src/js/audio/audio-engine.js: 1524c821...a749, which
+# matches the builder's.
+#
+# Lenses:
+# - (a) Playback count. stageAccounting() (audio-engine.js:907-929) tracks/untracks over a
+#   per-accounting Set; the engine deletes only its own voice's nodes (:679-683). main.js:121
+#   makes one accounting, passed by the panel (sequencer-panel.js:164). Each _schedulePass
+#   releases its owned set on natural end, on stop after the fade, on dispose, on the
+#   closed-context and suspended-context paths, in the catch of a throwing build and on an
+#   empty pass. Double STOP is a no-op; double untrack is idempotent. Never negative or stuck.
+# - (b) Tempo. Beats to ms is 60000/bpm, clamped to 20-300 BPM and per-type bounds; a
+#   mid-loop change applies from the next pass with gap 0 (2.25 s -> 4.5 s). New blocks
+#   default to defaultBeats(type) (the default ms at 120 BPM); the reference is tempo-locked
+#   and equals the design durations at 120 BPM. Stored ms sequences round-trip byte-identically.
+# - (c) Keyboard. Bound only on the #osc-seq-timeline listbox (aria-activedescendant);
+#   INPUT/TEXTAREA/SELECT/contenteditable refused; the window instrument handler ignores Space
+#   for role=listbox (dialogs.js:13); auto-repeat ignored, modified Space not claimed. History
+#   bounded at 100 undo + redo in total; no-op edits dropped; field edits on 'change'; load()
+#   resets history. Copy/paste via JSON copies plus nextBlockId: unique ids, no aliasing.
+# - (d) Tests. Every mutated condition below is caught; the gaps are R-1 and R-4.
+#
+# Runs (nothing installed; existing node_modules with playwright-core 1.63.0 and cached
+# chromium, firefox and webkit; disk below the floor):
+# - Full unit suite: 3268 tests, 3267 pass, 0 fail, 1 skipped.
+# - scripts/build.mjs --check: dist/index.html up to date (2830303 B, v3.13.0).
+# - tests/browser/sequencer.cjs 87/87 on chromium, firefox and webkit (0 live sources after a
+#   looped stop; restart 20x without growth). tests/browser/app.cjs --only
+#   sequencer-engine-census-and-history: pass on all three browsers over file and http.
+# - Node probes against the real modules (scratchpad): tempo change mid-loop, stored-ms
+#   round trip at tempo 96, paste twice and after a custom-id import, 150 edits vs history,
+#   a throwing build (R-1), a throw after node.start/connect (R-2), a tempo excursion (R-3).
+# - Mutations, each restored with git checkout -- .: M1 onEnded release removed (2 fail), M2
+#   isEditableTarget guard removed (2 fail), M3 engine untrack keeps sources (4 fail), M4 catch
+#   path does not release (1 fail), M5 main.js sequencerAccounting wiring removed with dist
+#   rebuilt (the app.cjs census check fails on chromium file and http). The tree was left clean
+#   at a10ea0e1; build --check up to date again.
+#
+# Every finding was adversarially re-checked against the code and reproduced; all four held at
+# P3. R-3 is in code the PR does not change (setTempo), recorded as a follow-up.
+#
+# Open: R-1 to R-4, all P3. No P0, P1 or P2 is open.
+schema: review-verdict/v1
+pr: 266
+verdict: merge
+reviewer: "dev-68 (Claude Opus 5.5 session 4f90795d); did not build, merge or edit this change; wrote only this file"
+content: 1524c8214432f953657615be076eddd1952ac0d151c4274f54fe7c34910ea747
+findings:
+  - { id: R-1, severity: P3, status: open, title: "A play() whose pass build throws leaves editor.playing stuck true with no voice: play() sets this.playing = true (src/js/sequencer/editor.js:523) and calls _schedulePass (:524) with no catch; the K001 catch (:447-450) releases the count and rethrows, so the transport shows Stop and the next Space/toggle is spent on stop(). The count stays exact at 0. The test 'K001: a pass whose build throws part-way leaves nothing counted' (tests/unit/sequencer-editor.test.mjs:310) asserts only engine counts. Fix: in play(), catch around _schedulePass, reset this.playing = false and rethrow; assert ed.playing === false in the test." }
+  - { id: R-2, severity: P3, status: open, title: "The failed-build release (src/js/sequencer/editor.js:448) untracks nodes that compileSequence never disposes: a throw after addSource's node.start (src/js/sequencer/compiler.js:677) and out.connect(destination) (:825) leaves a started, connected source sounding while the engine count says 0 (reproduced on the fake context with a throwing FakeSource.stop). No realistic throw site is known at this head (values are normalized upstream). Fix: a try/catch inside compileSequence that stops started sources and disposes the graph before rethrowing, so release() is truthful." }
+  - { id: R-3, severity: P3, status: open, title: "setTempo (src/js/sequencer/model.js:768-781) clamps durationMs to the type's bounds and re-derives beats from the clamped value, so a tempo excursion to a bound loses the stored beats permanently (chirp 4 beats: 2000 ms at 120 -> 5000 ms at 20 -> 833.334 ms, 1.666667 beats back at 120). Pre-existing and unchanged by this PR; K002 (addBlock defaulting to beats, :649) widens exposure. Defaults never clamp in 20-300 BPM; undo recovers. Follow-up: keep the stored beats and clamp only the derived duration." }
+  - { id: R-4, severity: P3, status: open, title: "No test pins HISTORY_LIMIT (src/js/sequencer/editor.js:69, shift at :209); nothing under tests/ references it (the Measure and Studio limits are different constants). The composed-page census in tests/browser/app.cjs (:1680, :1704) requires only nodes > 0 and seqNodes > 0, never nodes === seqNodes, though read() (:1659-1667) has both; exact equality is proven only on the fake context. Fix: a unit test of >100 edits asserting 100 undo and 100 redo steps, and assert nodes === seqNodes in app.cjs." }
