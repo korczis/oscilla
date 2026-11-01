@@ -1,0 +1,37 @@
+# Review verdict for pull request #370, the C-line merge train of 2026-11-01 (branch
+# fix/train-2026-11-01-c-line; builder oscilla-b0's train agent), titled as one fix change under
+# the owner's override of ADR 0055 (2026-10-31, recorded in the body). Reviewed head 9a4f1919
+# against merge base origin/main ba263bc1. This reviewer built none of the members (#343 #342 #297
+# #310 #293 #339 #340 #341 #345) and judges what the train adds: its merge resolutions in guarded
+# paths, the union of guarded content and the train-only commits. Each member's own verdict stays
+# the judgement of that member's content.
+#
+# The digest is scripts/review-verdict.mjs from `git archive origin/main scripts`, run --content
+# --list --base-branch origin/main in a detached worktree at the head.
+#
+# What was checked (git show --remerge-diff on every first-parent merge):
+# - f6569769 (C010 into C008), src/js/audio/audio-engine.js: the conflict was two adjacent
+#   additions; the result keeps both, setEnvelopeSustain (#310 C008) and setDualRouter (#293 C010),
+#   with only the markers removed.
+# - d0af9dbb (T019) and 99074a1e (C016), src/js/ui/measure.js: main's #262 split moved the
+#   function bodies into src/js/ui/measure/*. T019's import of stimulusFrames and irStimulusFrames,
+#   and its call with stimulusFrames, are in measure/views.js:17,158-180; C016's otherAudioNow and
+#   the preflight probe (otherAudio: () => otherAudioNow(cmp)) are in measure/run.js:37-54, where
+#   svc.outputBusy is in scope (main.js:264 provides it). Nothing of either side is lost.
+# - e45f04bd: the output-owners test reads runPreflight from measure/run.js, where it now lives.
+# - 9a4f1919: source-size caps raised for audio-engine.js (55000) and main.js (43000), each with a
+#   raises entry and reason; the budget's own tests pass.
+# - The remaining conflicts are dist/index.html (rebuilt once, build:check up to date, 2860578 B)
+#   and tests/README.md rows.
+# - fail-first from the base copy, judged as one fix change: proven by 13 of 13 files.
+# - npm test: 3516 pass, 0 fail.
+#
+# Verdict: merge. No P0, P1 or P2.
+schema: review-verdict/v1
+pr: 370
+verdict: merge
+reviewer: oscilla-af (claude-code 901211e2)
+content: 01eccb43ff5d6d52dcf13aa45dd0735e4e110e8a73650dc971a859cc23edfab1
+findings:
+  - { id: L1, severity: P3, status: open, title: "audio-engine.js and main.js caps rise again (55000, 43000); the split each raise names as a follow-up has no plan issue yet - file it so the cap can fall" }
+  - { id: L2, severity: P3, status: open, title: "T019's and C016's measure.js additions now live in measure/views.js and measure/run.js after the #262 split; their own verdicts judged them in measure.js, this verdict judges the move (content unchanged)" }
