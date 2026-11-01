@@ -136,6 +136,13 @@ beat unit, the loop switch with its start and end, and the timeline's length) an
 are document settings: each change is an undoable edit, and tempo changes move tempo-linked
 clips. The timeline's transport strip shows the same tempo.
 
+While the Studio plays, the status bar at the bottom of the page says **PLAYING**, names the
+**Studio** and shows the level actually in effect: **Master** and the Master Output level in dB.
+Clicking or typing anywhere on the page does not change that level. If you set the Playground
+gain while the Studio plays, that newer level takes over the output, and the status bar shows it
+as **Gain**. The status bar's own Play button still plays the instrument (the Playground); use
+the Studio's Play and Stop for the Studio.
+
 ## Is what plays what you see? (Runtime)
 
 The same Studio view of the Inspector (nothing selected) starts with **Runtime**: whether the

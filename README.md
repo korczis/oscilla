@@ -541,6 +541,11 @@ starts: until it notices, both play, and a Studio started in that moment is the 
 The sequencer is not refused while a measurement owns the output. C002 (ADR 0063) gives the
 output one owner.
 
+While the Studio plays, its Master Output level is the engine's output level and a click or
+key press elsewhere leaves it alone; the status bar says PLAYING and shows `Master <dB>`, or
+`Gain <dB>` once the Playground gain is set again. The status bar's Play button stays the
+Playground's.
+
 Not yet built:
 - node groups
 - dragging several clips at once
