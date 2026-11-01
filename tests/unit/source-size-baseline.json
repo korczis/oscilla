@@ -38,6 +38,7 @@
     "src/js/studio/runtime.js": 58000,
     "src/js/studio/transport.js": 92000,
     "src/js/studio/validate.js": 49000,
+    "src/js/synth/ui.js": 45000,
     "src/js/ui/experiments.js": 53000,
     "src/js/ui/studio/inspector.js": 81000,
     "src/js/ui/studio/timeline-editor.js": 53000,
@@ -73,6 +74,12 @@
       "cap": 62000,
       "pr": 367,
       "reason": "merging C-line train B (#380) into the feature train 2026-10-31 (#367) adds main's restoreConfig and its whole restore report (#345 H002) to the instrument beside the train's superseded-sweep-error handling"
+    },
+    {
+      "file": "src/js/synth/ui.js",
+      "cap": 45000,
+      "pr": 372,
+      "reason": "the K097 XY tab's wiring (tab, presets, all-off over the xy node) meets the feature train's link notice (#367 surface-census routes) in the Synth UI, which passes 40 000 bytes for the first time"
     }
   ]
 }
