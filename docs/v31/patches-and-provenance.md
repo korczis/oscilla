@@ -45,6 +45,7 @@ A template is a frozen record:
 | `stereo-beat` | 200 Hz and 204 Hz → Stereo Split (A left, B right) → Master; Meter tap | — | stereo routing; what is physical and what arises in hearing (no-fake-science wording) |
 | `filter-automation` | white Noise → Filter (band-pass, Q 4) → Master; Spectrum tap | centre frequency 200 Hz → 4 kHz → 200 Hz | automation lanes |
 | `measurement-sweep` | Sweep (log 20 Hz-20 kHz, 5 s) → Master; Sweep reference → Transfer Analyzer; Microphone → Calibration → Transfer Analyzer → Measurement Result | noise check, pre-roll, stimulus, tail, analysis; capture window on a second track | transfer measurement routing; the §258 fixture |
+| `first-patch` | Oscillator (saw 220 Hz, level 0.5) → Master | five step markers (0, 2, 4, 6, 8 s): play, add a Filter, move its cutoff, add a Spectrum, save as a patch; the notes say each step | a first patch, step by step (V617); linked from Learn's Signal path card |
 
 Provenance (§196): `validateTemplate` normalizes the model, runs `validateStudioModel`, checks the
 Learn bounds and compares `studioHash(model)` with the pinned value. Anything that changes the

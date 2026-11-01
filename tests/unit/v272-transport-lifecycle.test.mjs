@@ -20,7 +20,7 @@ import {
   MEASUREMENT_TEMPLATE_ID, REFERENCE_TEMPLATE_ID, templateModel,
 } from '../../src/js/studio/templates/index.js';
 import { createStudioTransport } from '../../src/js/studio/transport.js';
-import { StudioFakeContext, createFakeAudioEnv } from './sequencer-fake-audio.mjs';
+import { createFakeAudioEnv, fakeOfflineCtor } from './sequencer-fake-audio.mjs';
 
 const SR = 48000;
 
@@ -331,22 +331,6 @@ test('V272 B9: overlapping gates on one Envelope release at the later end', () =
 });
 
 // ---------------------------------------------------------------- B11
-
-function fakeOfflineCtor(made) {
-  return class extends StudioFakeContext {
-    constructor({ numberOfChannels, length, sampleRate }) {
-      super({ sampleRate, state: 'suspended' });
-      this.numberOfChannels = numberOfChannels;
-      this.length = length;
-      made.push(this);
-    }
-
-    startRendering() {
-      return Promise.resolve(this.createBuffer(this.numberOfChannels, this.length,
-        this.sampleRate));
-    }
-  };
-}
 
 test('V272 B11: the default offline render keeps the end of the last clip', async () => {
   const model = templateModel(REFERENCE_TEMPLATE_ID);

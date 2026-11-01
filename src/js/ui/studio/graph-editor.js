@@ -96,7 +96,8 @@ export function createGraphEditor(host, svc) {
   // The empty canvas says how to begin (V431 U10); shown by CSS on .is-empty, also on phones,
   // where the Inspector's hint is in another subview.
   const empty = h('p', { class: 'osc-sg-empty', 'data-osc': 'studio.graph.empty',
-    text: 'Empty graph. Press N or use Add node, or open a setup from Templates.' });
+    text: 'Empty graph. Press N or use Add node, or open a setup from Templates: First Patch '
+      + 'names the first steps on its timeline.' });
   const minimap = createMinimap({ rects: () => nodeRects(), view: () => view,
     size: () => (size.w > 0 ? size : (measureSize(), size)),
     setView: (v, commit) => setView(v, commit), commit: () => commitView(true) });

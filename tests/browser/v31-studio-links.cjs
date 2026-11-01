@@ -29,6 +29,13 @@
 //                     does in this browser is printed (the browser owns it, §135)
 //   fullscreen-absent with the API removed (as on iPhone Safari) the button stays, aria-disabled,
 //                     with the reason as its title, and a press says why instead of failing
+//   first-patch       V617: Learn's Signal path card links to `#m=studio&st=first-patch`; a
+//                     pointer click opens Studio with that template (unmodified, five step
+//                     markers on the timeline ruler, focus on the Studio heading, nothing
+//                     playing); ] on the timeline moves the playhead to marker 2; Back returns
+//                     to Learn; a tap follows the same link in a touch context; the Templates
+//                     dialog, opened from the toolbar, shows the template's Open button (the
+//                     empty graph's note naming it is v31-studio-graph's review-open-ui)
 //   no-console-errors
 'use strict';
 const { serveDist } = require('./lib/serve.cjs');
@@ -37,6 +44,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
+const { until } = require('./lib/wait.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -384,6 +392,80 @@ function defineChecks() {
       saysWhy: after.alerts.some((a) => /^Fullscreen not available: This browser does not/
         .test(a)) && !after.fs && !after.flag,
     }), btn, after };
+  });
+
+  def('first-patch', async (ctx) => {
+    const LINK = '[data-osc="learn.link"][data-card="signal-path"]';
+    const TL = '[data-osc="studio.timeline"]';
+    const linkShown = (page) => until(() => page.evaluate((sel) => {
+      const a = document.querySelector(sel);
+      return a && a.offsetParent !== null ? { label: a.textContent.trim(),
+        href: a.getAttribute('href') } : null;
+    }, LINK), { ms: 5000, what: 'the Signal path card in Learn shows its link' });
+    const opened = (page, what) => until(() => page.evaluate((tl) => {
+      const a = window.OSCILLA.app;
+      const s = window.OSCILLA.studio;
+      const marks = [...document.querySelectorAll(`${tl} [data-marker]`)];
+      const ok = a.workspace === 'studio' && s.templateId === 'first-patch'
+        && s.model.timeline.markers.length === 5 && marks.length === 5;
+      return ok ? { hash: window.location.hash, dirty: s.dirty, title: a.studio.title,
+        focus: document.activeElement ? document.activeElement.id : null,
+        labels: marks.map((m) => m.textContent.trim()), playing: s.counts().playing } : null;
+    }, TL), { ms: 5000, what });
+    const page = await H.open(ctx, `${ctx.baseUrl}#m=learn`);
+    const link = await linkShown(page);
+    await page.click(LINK, { timeout: 5000 });
+    const st = await opened(page, 'First patch open from Learn');
+    const heading = await until(() => page.evaluate(() => (document.activeElement
+      && document.activeElement.id === 'osc-studio-title')), { ms: 5000,
+      what: 'focus on the Studio heading after the Learn link' });
+    // ] on the timeline (a marker has focus; the playhead is at 0, marker 1) goes to marker 2.
+    await page.focus(`${TL} [data-marker="marker-1"]`);
+    await page.keyboard.press(']');
+    const at2 = await until(() => page.evaluate(() => {
+      const p = window.OSCILLA.studio.transport.playhead().position;
+      const m2 = window.OSCILLA.studio.model.timeline.markers.find((m) => m.id === 'marker-2');
+      return Math.abs(p - m2.time) < 1e-6 ? { position: p, marker: m2.label } : null;
+    }), { ms: 5000, what: 'the playhead at marker 2 after ]' });
+    // The Templates dialog, opened as a user opens it, shows First Patch with its Open button.
+    await page.click('[data-osc="studio.templates"]', { timeout: 5000 });
+    const offered = await until(() => page.evaluate(() => {
+      const b = document.querySelector('#osc-dlg-studio-templates[open] '
+        + '[data-osc="studio.template.open"][data-template="first-patch"]');
+      const r = b ? b.getBoundingClientRect() : null;
+      return r && r.width > 0 && r.height > 0 ? { label: b.getAttribute('aria-label') } : null;
+    }), { ms: 5000, what: 'the Templates dialog shows First Patch' });
+    await page.keyboard.press('Escape');
+    await until(() => page.evaluate(() => !document.querySelector(
+      '#osc-dlg-studio-templates[open]')), { ms: 5000, what: 'the Templates dialog closes' });
+    await page.evaluate(() => window.history.back());
+    const back = await until(() => page.evaluate(() => (window.OSCILLA.app.workspace === 'learn'
+      ? { hash: window.location.hash } : null)), { ms: 5000, what: 'Back returns to Learn' });
+    await page.close();
+    // Touch: the same link followed by a tap.
+    const touch = await ctx.browser.newContext({ viewport: { width: 390, height: 844 },
+      hasTouch: true });
+    let tapped;
+    try {
+      const tctx = { ...ctx, context: touch };
+      const p2 = await H.open(tctx, `${ctx.baseUrl}#m=learn`);
+      await linkShown(p2);
+      await p2.tap(LINK, { timeout: 5000 });
+      tapped = await opened(p2, 'First patch open from Learn by touch');
+    } finally {
+      await touch.close();
+    }
+    return { ...H.verdict({
+      link: link.label === 'Open the First patch in Studio'
+        && link.href === '#m=studio&st=first-patch',
+      opened: /#m=studio&st=first-patch$/.test(st.hash) && !st.dirty && st.title === 'First Patch'
+        && st.labels.map((l) => l[0]).join('') === '12345' && st.playing === false,
+      heading,
+      marker2: at2.marker.startsWith('2 '),
+      offered: offered.label === 'Open template First Patch',
+      back: /m=learn/.test(back.hash),
+      touch: !!tapped && !tapped.dirty,
+    }), link, st, at2, offered, back, touch: tapped };
   });
 
   def('no-console-errors', async ({ errors }) => ({ ok: errors.length === 0,
