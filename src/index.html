@@ -1866,7 +1866,7 @@
       <h2 id="osc-kbd-title">Keyboard</h2>
       <!-- K066, beside the piano in the Synth: a Pro dropdown of what the keys play, a Pro button
            group of the waveform, the quick presets (src/js/synth/picker.js, presets.js). -->
-      <div class="mb-2 flex flex-wrap items-center gap-2" data-osc="synth.dock"
+      <div class="mb-2 flex items-center gap-2" data-osc="synth.dock"
         x-show="kbdView === 'synth'" role="group" aria-label="Instrument">
         <div class="relative" @keydown.escape.stop="synth.dock.open = false; $refs.pick.focus()">
           <button type="button" id="osc-synth-pick" x-ref="pick" data-osc="synth.pick"
@@ -1887,9 +1887,10 @@
             </template>
           </ul>
         </div>
+        <div class="flex min-w-0 flex-1 gap-2 overflow-x-auto sm:flex-wrap sm:overflow-visible">
         <template x-for="g in [{ id: 'osc', label: 'Oscillator', items: synth.dock.oscs, on: synth.dock.osc, pick: (id) => synthOsc(id) }, { id: 'wave', label: 'Waveform', items: synth.dock.waves, on: synth.dock.wave, pick: (id) => synthWave(id) }, { id: 'preset', label: 'Quick presets', items: synth.presets.filter((x) => x.tab === synth.tab).map((x) => ({ id: x.id, label: x.title.split(':')[0] })), on: synth.preset, pick: (id) => synthPreset(id) }]" :key="g.id">
           <div role="radiogroup" :aria-label="g.label" :data-osc="'synth.dock.' + g.id"
-            @keydown="synthDockKey($event, true)" class="inline-flex max-w-full overflow-x-auto rounded-lg shadow-sm">
+            @keydown="synthDockKey($event, true)" class="inline-flex shrink-0 rounded-lg shadow-sm">
             <template x-for="(it, i) in g.items" :key="it.id">
               <button type="button" role="radio" :data-v="it.id" :aria-checked="String(it.id === g.on)"
                 :tabindex="it.id === g.on || (i === 0 && !g.items.some((x) => x.id === g.on)) ? '0' : '-1'"
@@ -1899,6 +1900,7 @@
             </template>
           </div>
         </template>
+        </div>
       </div>
       <div role="group" aria-label="Keyboard controls" aria-describedby="osc-kbd-readout">
         <button type="button" data-osc="keyboard.arm" :aria-pressed="String(kbdArmedHere)"
