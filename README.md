@@ -627,19 +627,19 @@ today, to show where the parts meet and where they do not yet.
 
 What it does not do yet, each named with the work that would fill it:
 
-- MIDI notes do not sound (V502, pull request #261).
 - A MIDI performance cannot be recorded into the song (V505).
-- Velocity is not represented, so the drums have no accents: a Studio clip has no level.
-- There is no Drive node for a driven tone (K012, pull request #267).
-- A filter's Q cannot be automated, so the build's rising resonance is in the score only.
+- Velocity is not represented, so the drums have no accents: a Studio clip has no level (K144
+  gap G4).
+- A filter's Q cannot be automated, so the build's rising resonance is in the score only (K144
+  gap G10).
 - The Studio's view nodes draw nothing (K016).
-- There is no keyboard or note view (K026, V504).
 - After a reload the Studio opens the default template, not the last project (V604).
 - No MEASURE or Experiments step is part of the slice: the Studio's measurement clips measure
   the speaker or loopback path a sound plays through, not the song.
 
-The score keeps the velocities, the Q lane and a drive lane, so each can join the template
-once the Studio can play it.
+The score keeps the velocities and the Q lane, so each can join the template once the Studio
+can play it, and a drive lane, which the template does not use yet although the Drive node
+exists.
 
 `tests/unit/demo-song.test.mjs` checks the song as data: one clip per note of the score, the
 pinned hash, an offline render plan of the whole song with no limitation, and that the six
@@ -661,7 +661,9 @@ through the user's whole journey in Chromium, Firefox and WebKit:
 
 Each gap above is an expected failure of that suite, named by its plan issue. It runs every
 time, and it fails the suite once it starts passing, so its mark is removed when the work
-lands.
+lands. MIDI notes sounding through the engine (V502), a Drive node for the driven tone (K012)
+and a keyboard view whose key lights and sounds (K026, V504) have landed: the suite checks
+them as steps of the journey.
 
 ## Safety and measurement limits
 
