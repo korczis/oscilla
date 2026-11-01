@@ -14,7 +14,7 @@ import {
 import { midiToFrequency, nearestNote, formatCents } from '../core/music.js';
 import { gainLevelDb } from '../core/config.js';
 import { SWEEP_PARAMS } from '../audio/patterns.js';
-import { LEARN_VIZ_TARGETS } from '../data/learn.js';
+import { LEARN_CARDS, LEARN_VIZ_TARGETS } from '../data/learn.js';
 import { additiveHarmonicTable, harmonicTable } from '../visualization/harmonics.js';
 import { totalDurationMs } from '../sequencer/model.js';
 import { scopeWindow } from './p5-views.js';
@@ -47,6 +47,7 @@ export function createWorkbench(svc) {
   return {
     OSCILLA_VERSION,
     SWEEP_FORM,
+    LEARN_CARDS,
     rovingKeydown,
     timeWindowMs: 5,
     announceText: '',

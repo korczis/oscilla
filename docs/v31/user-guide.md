@@ -16,8 +16,8 @@ pressure.
 1. Choose **Studio** in the navigation (after Experiments). The Playground's compact Studio
    panel has **EXPAND STUDIO**, which opens the same document.
 2. **Templates** lists the shipped documents: Basic Tone, Subtractive Synth, Sweep Sequence,
-   Stereo Beat, Filter Automation and Measurement Sweep. **Open** replaces the current Studio;
-   if it has unsaved changes the dialog says so first.
+   Stereo Beat, Filter Automation, Measurement Sweep and First Patch. **Open** replaces the
+   current Studio; if it has unsaved changes the dialog says so first.
 3. **Play** (Space) plays the graph and the timeline; **Stop** (Esc) releases every node. The
    Playground voice and Studio are exclusive: starting one stops the other. For a screen
    reader the button is always "Play the Studio", a toggle that reads as pressed while the
@@ -27,6 +27,16 @@ Below 768 px the workspace shows one of **Graph**, **Timeline** and **Inspector*
 (tabs and their panels). On a touch screen, **Frame all** and **Frame selection** do not zoom
 out so far that a port is smaller than 24 px: a large graph is centred, and you pan to the
 rest.
+
+## First patch
+
+**First Patch** (`#m=studio&st=first-patch`; Learn's **Signal path** card links to it, and the
+empty graph names it) starts as a sawtooth Oscillator into the Master Output. Its timeline has
+five markers whose labels are the steps: 1 Press Play; 2 Add a Filter between them (Add node,
+then rewire); 3 Move the Filter cutoff; 4 Add a Spectrum from the Filter output (cable to
+empty canvas); 5 Save it as a patch. **[** and **]** on the timeline move the playhead to
+the previous or next step, and the Inspector's **Notes** (with nothing selected) say each step
+in full. It is a template with notes, not a guided path: nothing checks or locks the steps.
 
 ## Links and fullscreen
 

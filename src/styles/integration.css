@@ -761,12 +761,13 @@
   grid-column: 1 / -1;
 }
 
-/* 44 px targets on coarse pointers for the controls the integration adds. */
+/* 44 px targets on coarse pointers for the controls the integration adds (every control of a
+   Learn card, its buttons and the concept card's link alike: a flex item, so min-* apply). */
 @media (pointer: coarse) {
   .osc-pp-field .osc-number,
   .osc-pp-field select,
   .osc-dialog-actions .osc-btn,
-  .osc-learn-actions .osc-btn,
+  .osc-learn-actions > *,
   .osc-preset-actions .osc-btn,
   .osc-preset-toolbar .osc-btn,
   .osc-chip-btn,

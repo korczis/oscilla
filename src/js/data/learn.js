@@ -10,6 +10,7 @@
 import {
   FILTER_PREVIEW_SAMPLE_RATE, OCTAVE_STEP_FREQUENCIES, PROVISIONAL_SAMPLE_RATE,
 } from '../core/constants.js';
+import { encodeStudioLink } from '../core/url-state-studio.js';
 
 const kHz = (hz) => `${hz / 1000} kHz`;
 
@@ -68,3 +69,16 @@ export const LEARN_VIZ_TARGETS = Object.freeze({
   harmonics: 'harmonics',
   interference: 'phase',
 });
+
+/**
+ * V617: concept cards, shown after the V1 topics (LEARN_TOPICS stays the V1 list). A concept
+ * card has no demo; its link is an OSCILLA address (the Studio link of core/url-state-studio.js),
+ * so following it adds one history entry and Back returns to Learn.
+ */
+export const LEARN_CONCEPTS = [
+  { id: 'signal-path', title: 'Signal path', body: 'A signal path is the route a sound takes from its source through processing to the output. In the Studio each box is a node and each cable carries one signal; only what reaches the Master Output is heard.',
+    link: { label: 'Open the First patch in Studio', href: `#${encodeStudioLink({ templateId: 'first-patch' })}` } },
+];
+
+/** What the Learn view lists: the topics, then the concept cards. */
+export const LEARN_CARDS = [...LEARN_TOPICS, ...LEARN_CONCEPTS];

@@ -2231,16 +2231,23 @@
       <h2 class="osc-panel-title" id="osc-learn-title">Learn</h2>
       <div class="osc-view-body osc-learn" data-osc="learn-content">
         <ul class="osc-learn-list" role="list">
-          <template x-for="t in LEARN_TOPICS" :key="t.id">
+          <template x-for="t in LEARN_CARDS" :key="t.id">
             <li class="osc-learn-item" :class="{ 'is-current': learnTopic === t.id }">
               <h3 class="osc-learn-title" x-text="t.title"></h3>
               <p class="osc-learn-body" x-text="t.body"></p>
               <p class="osc-learn-example osc-num" x-show="learnTopic === t.id" x-text="topicExample"></p>
               <div class="osc-learn-actions">
-                <button type="button" class="osc-btn osc-btn-secondary" data-osc="learn.example"
-                  @click="learnTopic = t.id" :aria-pressed="String(learnTopic === t.id)">Relate to current settings</button>
-                <button type="button" class="osc-btn osc-btn-primary" data-osc="learn.demo"
-                  @click="learnTopic = t.id; runLearnDemo(t)" x-text="'Demo: ' + t.demo.label"></button>
+                <template x-if="t.demo">
+                  <button type="button" class="osc-btn osc-btn-secondary" data-osc="learn.example"
+                    @click="learnTopic = t.id" :aria-pressed="String(learnTopic === t.id)">Relate to current settings</button>
+                </template>
+                <template x-if="t.demo">
+                  <button type="button" class="osc-btn osc-btn-primary" data-osc="learn.demo"
+                    @click="learnTopic = t.id; runLearnDemo(t)" x-text="'Demo: ' + t.demo.label"></button>
+                </template>
+                <template x-if="t.link">
+                  <a data-osc="learn.link" :data-card="t.id" :href="t.link.href" x-text="t.link.label"></a>
+                </template>
               </div>
             </li>
           </template>

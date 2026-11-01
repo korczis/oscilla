@@ -143,6 +143,7 @@ restore earlier snapshots (`src/js/studio/actions.js`, `src/js/studio/history.js
 | stereo-beat | Stereo Beat | synthesis |
 | filter-automation | Filter Automation | synthesis |
 | measurement-sweep | Measurement Sweep | measurement |
+| first-patch | First Patch | synthesis |
 <!-- templates:end -->
 
 ## Measurement integration

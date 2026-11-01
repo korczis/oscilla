@@ -18,7 +18,7 @@ import { renderStudioOffline } from '../../src/js/studio/offline.js';
 import { createStudioRuntime } from '../../src/js/studio/runtime.js';
 import { REFERENCE_TEMPLATE_ID, templateModel } from '../../src/js/studio/templates/index.js';
 import { createStudioTransport } from '../../src/js/studio/transport.js';
-import { FakeParam, StudioFakeContext, createFakeAudioEnv } from './sequencer-fake-audio.mjs';
+import { FakeParam, createFakeAudioEnv, fakeOfflineCtor } from './sequencer-fake-audio.mjs';
 
 const SR = 48000;
 const Q = 128 / SR;
@@ -54,23 +54,6 @@ function reach(node, seen = new Set()) {
 }
 
 // ---------------------------------------------------------------- offline / live parity
-
-/** A fake OfflineAudioContext (offline-renderer.js render): suspended until startRendering. */
-function fakeOfflineCtor(made) {
-  return class extends StudioFakeContext {
-    constructor({ numberOfChannels, length, sampleRate }) {
-      super({ sampleRate, state: 'suspended' });
-      this.numberOfChannels = numberOfChannels;
-      this.length = length;
-      made.push(this);
-    }
-
-    startRendering() {
-      return Promise.resolve(this.createBuffer(this.numberOfChannels, this.length,
-        this.sampleRate));
-    }
-  };
-}
 
 /**
  * Everything the Studio scheduled on a context, from node `from` on (after the engine's or the

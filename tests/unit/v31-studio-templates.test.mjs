@@ -1,6 +1,6 @@
 // V3.1 Studio templates, accessible graph text and the offline rendering plan
 // (src/js/studio/templates/*, a11y.js, offline.js). Spec §105, §143-§144, §175-§176,
-// §194-§196, §249-§250, §256-§258. Plan issues V423, V427, V428.
+// §194-§196, §249-§250, §256-§258. Plan issues V423, V427, V428, V617 (the First Patch).
 //   node --test tests/unit/v31-studio-templates.test.mjs
 //
 // Tolerances: none. Templates, summaries and plans are plain data and text; every assertion is
@@ -27,9 +27,14 @@ import {
   STUDIO_KIND, normalizeStudio, serializeStudio, studioHash,
 } from '../../src/js/studio/schema.js';
 import { importStudio } from '../../src/js/studio/migrate.js';
-import { validateClip } from '../../src/js/studio/timeline.js';
+import { adjacentMarker, validateClip } from '../../src/js/studio/timeline.js';
 import { MIC_UNAVAILABLE_TEXT } from '../../src/js/audio/microphone.js';
 import { DEFAULT_RENDER } from '../../src/js/audio/offline-renderer.js';
+import { DEFAULT_GAIN, MAX_OUTPUT_GAIN } from '../../src/js/core/constants.js';
+import { fakeOfflineCtor } from './sequencer-fake-audio.mjs';
+import { probeConnection } from '../../src/js/ui/studio/graph-view.js';
+import { LEARN_CARDS, LEARN_CONCEPTS, LEARN_TOPICS } from '../../src/js/data/learn.js';
+import { decodeStudioLink } from '../../src/js/core/url-state-studio.js';
 
 // ---------------------------------------------------------------- fixtures
 
@@ -55,12 +60,12 @@ const e = (id, from, fromPort, to, toPort, props) => ({ id, from: { node: from, 
 
 // ---------------------------------------------------------------- templates (§195-§196)
 
-test('§195 the six templates exist, in library order, with unique ids', () => {
+test('§195 the seven templates exist, in library order, with unique ids', () => {
   assert.deepStrictEqual(STUDIO_TEMPLATES.map((t) => t.id), ['basic-tone', 'subtractive-synth',
-    'sweep-sequence', 'stereo-beat', 'filter-automation', 'measurement-sweep']);
+    'sweep-sequence', 'stereo-beat', 'filter-automation', 'measurement-sweep', 'first-patch']);
   assert.deepStrictEqual(listTemplates().map((t) => t.title), ['Basic Tone',
     'Subtractive Synth', 'Sweep Sequence', 'Stereo Beat', 'Filter Automation',
-    'Measurement Sweep']);
+    'Measurement Sweep', 'First Patch']);
   assert.strictEqual(getTemplate('nope'), null);
   assert.throws(() => templateModel('nope'), RangeError);
   assert.strictEqual(REFERENCE_TEMPLATE_ID, 'subtractive-synth');
@@ -113,6 +118,143 @@ for (const t of STUDIO_TEMPLATES) {
     }
   });
 }
+
+// The pinned hash of every template: a template added (V617) leaves the others' unchanged.
+const PINNED = {
+  'basic-tone': 'fbfe0905d6948e9e92418623fb0d53505b89706136fe0cbe3521a92d3b7edf92',
+  'subtractive-synth': '3982a31f8fe6f92f9206bca48ab19b7cfe091105fdb841143e7d1f1e892ec424',
+  'sweep-sequence': 'a4e06d13f869a5976ff7058e7b42533a6735061268c6d7e7910c5119b635b5df',
+  'stereo-beat': 'c32148891dbbad5f44ff5559a936daeaf183de8ac63bf2959945b02a2ff29c2b',
+  'filter-automation': '5c107b61379ebc01c124e73c9888679120407c3a1ad695bb519e62954e4f66c7',
+  'measurement-sweep': '6b7754b60524614f71cb4d32b3dd77e0f3da793ffb6da976f36b42242e3c9a84',
+  'first-patch': '847a4cfd83a66ea94bcdccff48fdcfbf2c72f2697aa7b0840bbb6d69d5cffa2c',
+};
+
+test('V617 every template keeps its pinned hash; the hashes are distinct', () => {
+  assert.deepStrictEqual(Object.fromEntries(STUDIO_TEMPLATES.map((t) => [t.id, t.studioHash])),
+    PINNED);
+  for (const t of STUDIO_TEMPLATES) {
+    assert.strictEqual(studioHash(templateModel(t.id)), PINNED[t.id], t.id);
+  }
+  assert.strictEqual(new Set(Object.values(PINNED)).size, STUDIO_TEMPLATES.length);
+});
+
+const FIRST_PATCH_STEPS = ['1 Press Play', '2 Add a Filter between them (Add node, then rewire)',
+  '3 Move the Filter cutoff', '4 Add a Spectrum from the Filter output (cable to empty canvas)',
+  '5 Save it as a patch'];
+
+test('V617 First Patch: Oscillator to Master, five step markers in order, notes say them', () => {
+  const t = getTemplate('first-patch');
+  assert.deepStrictEqual(validateTemplate(t).errors, []);
+  assert.strictEqual(t.category, 'synthesis');
+  const m = templateModel('first-patch');
+  assert.strictEqual(summarizeGraph(m), '2 nodes, 1 connection. Signal path: Oscillator 1 to '
+    + 'Master.');
+  assert.deepStrictEqual(m.graph.nodes.map((x) => [x.type, x.params.waveform ?? null]),
+    [['oscillator', 'sawtooth'], ['master', null]]);
+  const markers = m.timeline.markers;
+  assert.deepStrictEqual(markers.map((x) => x.label), FIRST_PATCH_STEPS);
+  assert.deepStrictEqual(markers.map((x) => x.label[0]), ['1', '2', '3', '4', '5']);
+  for (let i = 1; i < markers.length; i++) assert.ok(markers[i].time > markers[i - 1].time);
+  assert.strictEqual(markers[0].time, 0, 'step 1 is where the playhead starts');
+  // ] from the start visits every later step in order, [ comes back (timeline.js, the keys).
+  const forward = [];
+  for (let at = 0, mk = adjacentMarker(m, at, 1); mk; at = mk.time, mk = adjacentMarker(m, at, 1)) {
+    forward.push(mk.label);
+  }
+  assert.deepStrictEqual(forward, FIRST_PATCH_STEPS.slice(1));
+  assert.strictEqual(adjacentMarker(m, markers[1].time, -1).label, FIRST_PATCH_STEPS[0]);
+  // The notes say every step, in order, each from the start of a line.
+  const lines = m.metadata.notes.split('\n');
+  const heads = FIRST_PATCH_STEPS.map((s) => s.replace(/ \(.*\)$/, ''));
+  const at = heads.map((h) => lines.findIndex((l) => l.startsWith(`${h}:`)));
+  assert.ok(at.every((i) => i > 0), JSON.stringify(at));
+  assert.deepStrictEqual([...at].sort((a, b) => a - b), at);
+  // Markers and notes are presentation (§163): rewording a step keeps the hash.
+  const reworded = JSON.parse(JSON.stringify(t));
+  reworded.model.timeline.markers[1].label = '2 Add a Filter';
+  reworded.model.metadata.notes = '';
+  assert.deepStrictEqual(validateTemplate(reworded).errors, []);
+});
+
+test('V617 First Patch: steps 2 and 4, in the order the notes give, are accepted', () => {
+  const store = storeOf(templateModel('first-patch'));
+  const ok = (r) => {
+    assert.ok(r.ok, announceAction(r));
+    return r;
+  };
+  const filter = ok(store.dispatch({ type: 'NODE_ADD', nodeType: 'filter',
+    position: { x: 300, y: 160 } })).created.nodes[0];
+  const port = (node, p) => ({ node, port: p });
+  // Master takes one input: the Filter cannot reach it while the direct cable is there.
+  const early = probeConnection(store.getModel(), port(filter, 'audio'), port('master-1', 'audio'));
+  assert.strictEqual(early.allowed, false);
+  assert.match(early.reason, /Master audio input accepts one connection/);
+  // The notes' order: delete the direct cable, then Oscillator to Filter to Master.
+  const notes = templateModel('first-patch').metadata.notes;
+  const del = notes.indexOf('press Delete');
+  const connect = notes.indexOf('connect the Oscillator output');
+  assert.ok(del >= 0, 'the notes say to delete the direct cable');
+  assert.ok(connect >= 0, 'the notes say to connect the Oscillator output');
+  assert.ok(del < connect, 'the direct cable goes before the Filter is wired in');
+  ok(store.dispatch({ type: 'EDGE_REMOVE', edgeId: 'edge-1' }));
+  ok(store.dispatch({ type: 'EDGE_ADD', from: port('osc-1', 'audio'), to: port(filter, 'audio') }));
+  ok(store.dispatch({ type: 'EDGE_ADD', from: port(filter, 'audio'),
+    to: port('master-1', 'audio') }));
+  // Step 4: a Spectrum on the Filter output, beside the cable to Master.
+  const spectrum = ok(store.dispatch({ type: 'NODE_ADD', nodeType: 'spectrum',
+    position: { x: 520, y: 300 } })).created.nodes[0];
+  ok(store.dispatch({ type: 'EDGE_ADD', from: port(filter, 'audio'),
+    to: port(spectrum, 'audio') }));
+  assert.strictEqual(summarizeGraph(store.getModel()), '4 nodes, 3 connections. Signal path: '
+    + 'Oscillator 1 to Filter 1 to Master. Analysis: Spectrum 1 observes Filter 1 output.');
+});
+
+test('V617 Learn: the Signal path card links to the First Patch through the Studio link', () => {
+  const card = LEARN_CONCEPTS.find((c) => c.title === 'Signal path');
+  assert.deepStrictEqual(card.link, { label: 'Open the First patch in Studio',
+    href: '#m=studio&st=first-patch' });
+  assert.deepStrictEqual(decodeStudioLink(card.link.href), { ok: true,
+    templateId: 'first-patch', subview: null });
+  assert.strictEqual(card.demo, undefined, 'a concept card has a link, not a demo');
+  // The Learn view lists the V1 topics unchanged, then the concept cards.
+  assert.deepStrictEqual(LEARN_CARDS, [...LEARN_TOPICS, ...LEARN_CONCEPTS]);
+  assert.strictEqual(new Set(LEARN_CARDS.map((c) => c.id)).size, LEARN_CARDS.length);
+});
+
+/** A FakeParam's value at time t: the last event at or before t, else its initial value. */
+const valueAt = (param, t) => {
+  const before = param.events.filter((e) => e.t <= t);
+  return before.length ? before.at(-1).value : param.value;
+};
+
+test('V617 First Patch renders offline with a sounding path at or below the ceiling', async () => {
+  const plan = planOfflineRender(templateModel('first-patch'), { duration: 1 });
+  assert.strictEqual(plan.ok, true);
+  assert.deepStrictEqual([plan.limitations, plan.warnings], [[], []], 'not silent, not limited');
+  const made = [];
+  const r = await renderStudioOffline(templateModel('first-patch'), { duration: 1,
+    sampleRate: 48000, OfflineAudioContext: fakeOfflineCtor(made) });
+  assert.ok(r.ok, JSON.stringify(r.errors));
+  // The fake context renders no samples: what it proves is what was built and scheduled. A
+  // sawtooth starts inside the render, and its gain to the destination half-way through is
+  // the oscillator level 0.5 × the Master Output level, positive and under MAX_OUTPUT_GAIN.
+  const ctx = made[0];
+  const osc = ctx.created.find((x) => x.kind === 'oscillator');
+  assert.strictEqual(osc.type, 'sawtooth');
+  assert.strictEqual(valueAt(osc.frequency, 0.5), 220);
+  assert.ok(osc.startAt >= 0 && osc.startAt < 0.5 && osc.stopAt === null, String(osc.startAt));
+  let gain = 1;
+  let n = osc;
+  for (let hops = 0; n !== ctx.destination && hops < 16; hops++) {
+    assert.strictEqual(n.outputs.length, 1, `${n.kind} has one output`);
+    [n] = n.outputs;
+    if (n.gain) gain *= valueAt(n.gain, 0.5);
+  }
+  assert.strictEqual(n, ctx.destination, 'the oscillator reaches the destination');
+  assert.strictEqual(gain, 0.5 * DEFAULT_GAIN);
+  assert.ok(gain > 0 && gain <= MAX_OUTPUT_GAIN);
+});
 
 test('templateModel returns a fresh, independent copy each time', () => {
   const a = templateModel('basic-tone');
