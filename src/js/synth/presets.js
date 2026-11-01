@@ -101,10 +101,9 @@ export function presetPatch(panel, id, { all = false } = {}) {
       const from = a.source.split('.');
       const to = t.split('.');
       if (!ids.has(from[0]) || !ids.has(to[0])) continue;
-      const n = panel.normals.find((x) => x.from === a.source && x.to === t);
+      // The preset owns the amount's depth only: a cable's polarity and mapping stay.
       edges.push({ id: `${a.key}-${to[0]}`, from: { node: from[0], port: from[1] },
-        to: { node: to[0], port: to[1] },
-        props: { ...(n ? n.props : {}), depth: p.amounts[a.id] ?? 0 } });
+        to: { node: to[0], port: to[1] }, props: { depth: p.amounts[a.id] ?? 0 } });
     }
   }
   const patch = Object.freeze({ kind: PATCH_KIND, schemaVersion: PATCH_SCHEMA_VERSION,

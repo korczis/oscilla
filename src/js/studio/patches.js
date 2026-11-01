@@ -35,7 +35,8 @@
 //     of its type; `missing` lists the patch nodes with no such node
 //   patchParams(model, patch, onto) -> { model, changed: { nodes, edges }, skipped }
 //     parameters only: each mapped node takes its patch node's parameters, each model edge on
-//     the ports of a patch edge between two mapped nodes takes that edge's properties; no node,
+//     the ports of a patch edge between two mapped nodes takes the properties that edge
+//     declares (the rest of its properties stay); no node,
 //     edge, name or position is added, removed or moved (a patch edge with no such edge is
 //     `skipped`, never added). PATCH_REPLACE with `onto` reduces through it.
 //   applyPatch(model, patch, { mode: 'insert' | 'replace' | 'params', at, newId, onto }) — mode
@@ -474,7 +475,11 @@ export function patchParams(model, patch, onto, { registry = NODE_REGISTRY } = {
     const hits = model.graph.edges.filter((x) => x.from.node === a && x.to.node === b
       && x.from.port === e.from.port && x.to.port === e.to.port);
     if (!hits.length) skipped.edges.push(e.id);
-    for (const x of hits) props.set(x.id, e.props);
+    // Only the properties the patch declares (a preset: the depth), never the whole object.
+    const own = (((patch.graph || {}).edges || []).find((d) => d && d.id === e.id) || {}).props
+      || {};
+    const set = Object.fromEntries(Object.keys(own).map((k) => [k, e.props[k]]));
+    for (const x of hits) props.set(x.id, set);
   }
   const changed = { nodes: [], edges: [] };
   const same = (x, y) => canonicalJson(x) === canonicalJson(y);
@@ -492,6 +497,7 @@ export function patchParams(model, patch, onto, { registry = NODE_REGISTRY } = {
     changed.edges.push(e.id);
     return { ...e, props: copyPlain(next) };
   });
+  if (!changed.nodes.length && !changed.edges.length) return { model, changed, skipped };
   const next = { ...model, graph: { ...model.graph, nodes, edges } };
   return { model: checked(next, registry), changed, skipped };
 }

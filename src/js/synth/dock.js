@@ -50,6 +50,19 @@ export function createDock(ctx) {
       return !!(done && done.ok);
     },
 
+    /** Open or close the picker; an opened menu takes the focus once it is shown. */
+    synthPickToggle() {
+      const d = this.synth.dock;
+      d.open = !d.open;
+      if (!d.open) return;
+      const focusFirst = (tries) => {
+        const item = document.querySelector('#osc-synth-pick-menu [role="menuitem"]');
+        if (item && item.offsetParent !== null) item.focus();
+        else if (tries > 0) requestAnimationFrame(() => focusFirst(tries - 1));
+      };
+      this.$nextTick(() => focusFirst(10));
+    },
+
     synthOsc(id) {
       this.synth.dock.osc = id;
       sync();

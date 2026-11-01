@@ -845,7 +845,10 @@ function structure(c, doc, lim, registry) {
     && c.keys(doc.metadata, 'metadata', [], ['title', 'notes', 'noteTarget'])) {
     if (doc.metadata.title !== undefined) s(doc.metadata.title, 'metadata.title', TITLE_MAX_CHARS);
     if (doc.metadata.noteTarget !== undefined) {
-      c.str(doc.metadata.noteTarget, 'metadata.noteTarget', NAME_MAX_CHARS, { min: 1 });
+      const t = doc.metadata.noteTarget;
+      if (typeof t !== 'string' || !ID_PATTERN.test(t)) {
+        c.add('metadata.noteTarget', 'is no node id');
+      }
     }
     if (doc.metadata.notes !== undefined) {
       c.str(doc.metadata.notes, 'metadata.notes', lim.notesChars, { multiline: true });
