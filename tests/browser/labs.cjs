@@ -20,6 +20,7 @@ const path = require('path');
 const esbuild = require('esbuild');
 const suite = require('./lib/suite.cjs');
 const { until, WaitTimeout } = require('./lib/wait.cjs');
+const { openWorkspace: openWs } = require('./lib/navigate.cjs');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const args = process.argv.slice(2);
@@ -221,20 +222,8 @@ async function typedFrequency(context, page, base) {
  * shows each lab panel in its own workspace only, not on the lighter Playground). Waits on the
  * shell's data-mode with a named deadline.
  */
-async function openWorkspace(page, ws) {
-  const item = `[data-osc="nav.${ws}"]`;
-  if (!(await page.isVisible(item))) {
-    const group = await page.evaluate((s) => {
-      const e = document.querySelector(s);
-      const g = e && e.closest('[data-osc-nav-group]');
-      return g ? g.dataset.oscNavGroup : null;
-    }, item);
-    if (group) await page.click(`[data-osc="nav-group.${group}"]`);
-  }
-  await page.click(item);
-  await until(() => page.evaluate((w) => document.querySelector('#osc-app').dataset.mode === w, ws),
-    { ms: 5000, what: `labs: the ${ws} workspace opens from the navigation` });
-}
+
+const openWorkspace = (page, ws) => openWs(page, ws, 'labs');
 
 async function runEngine(engine, base) {
   const results = [];
