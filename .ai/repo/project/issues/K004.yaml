@@ -33,4 +33,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-01T03:54:14Z
+started_at: 2026-11-01T03:53:58Z
+started_event: sha256:39911ff123469db250530b2489bb10c7e84edc2380a3bc941f08baa2e0ba25f5
+completed_at: 2026-11-01T03:54:14Z
+completed_event: sha256:50599f600f5a50872277108ec68b438ec3ffd041971b108d2df078ad7c199a8d
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v31-studio-sequence-file.test.mjs"
+    result: "Studio Import opens a V2 sequence or configuration file as pattern clips on one track and a track exports as a sequence (#264); the save/reload round trip and the exact rounding of tempo-locked durations land in #355 (c77ddbc9) with a non-builder merge verdict; 16/16 with the five V1/V2 edge cases of its review"
+    artifact: "tests/unit/v31-studio-sequence-file.test.mjs"
+    commit: 601037765762decdf19392fce84055bc7fa35434
+    recorded_at: 2026-11-01T03:53:33Z
