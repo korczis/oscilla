@@ -2237,10 +2237,14 @@
               <p class="osc-learn-body" x-text="t.body"></p>
               <p class="osc-learn-example osc-num" x-show="learnTopic === t.id" x-text="topicExample"></p>
               <div class="osc-learn-actions">
-                <button type="button" class="osc-btn osc-btn-secondary" data-osc="learn.example" x-show="t.demo"
-                  @click="learnTopic = t.id" :aria-pressed="String(learnTopic === t.id)">Relate to current settings</button>
-                <button type="button" class="osc-btn osc-btn-primary" data-osc="learn.demo" x-show="t.demo"
-                  @click="learnTopic = t.id; runLearnDemo(t)" x-text="t.demo ? 'Demo: ' + t.demo.label : ''"></button>
+                <template x-if="t.demo">
+                  <button type="button" class="osc-btn osc-btn-secondary" data-osc="learn.example"
+                    @click="learnTopic = t.id" :aria-pressed="String(learnTopic === t.id)">Relate to current settings</button>
+                </template>
+                <template x-if="t.demo">
+                  <button type="button" class="osc-btn osc-btn-primary" data-osc="learn.demo"
+                    @click="learnTopic = t.id; runLearnDemo(t)" x-text="'Demo: ' + t.demo.label"></button>
+                </template>
                 <template x-if="t.link">
                   <a data-osc="learn.link" :data-card="t.id" :href="t.link.href" x-text="t.link.label"></a>
                 </template>

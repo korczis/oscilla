@@ -192,7 +192,11 @@ test('V617 First Patch: steps 2 and 4, in the order the notes give, are accepted
   assert.match(early.reason, /Master audio input accepts one connection/);
   // The notes' order: delete the direct cable, then Oscillator to Filter to Master.
   const notes = templateModel('first-patch').metadata.notes;
-  assert.ok(notes.indexOf('press Delete') < notes.indexOf('connect the Oscillator output'));
+  const del = notes.indexOf('press Delete');
+  const connect = notes.indexOf('connect the Oscillator output');
+  assert.ok(del >= 0, 'the notes say to delete the direct cable');
+  assert.ok(connect >= 0, 'the notes say to connect the Oscillator output');
+  assert.ok(del < connect, 'the direct cable goes before the Filter is wired in');
   ok(store.dispatch({ type: 'EDGE_REMOVE', edgeId: 'edge-1' }));
   ok(store.dispatch({ type: 'EDGE_ADD', from: port('osc-1', 'audio'), to: port(filter, 'audio') }));
   ok(store.dispatch({ type: 'EDGE_ADD', from: port(filter, 'audio'),
