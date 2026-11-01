@@ -1,0 +1,27 @@
+# Review verdict for pull request #377: a train is judged by its members' own verdicts
+# (project.review-verdict; branch of oscilla-26's builder). Reviewed head 2271cb3d against
+# origin/main 60103776. The reviewer (oscilla-af) built none of it. Digest: the base copy of
+# scripts/review-verdict.mjs (git archive origin/main scripts), --content --list --base-branch
+# origin/main, over the 4 guarded paths it names.
+#
+# What was checked:
+# - trainOf reuses fail-first's TRAIN, TRAIN_BRANCH and trainMembers and adds the member-table
+#   body (a feature train titled as one feat, #367). Each member's .ai/repo/reviews/<n>.yaml is
+#   read at the head; merge passes, no file passes, anything else refuses unless the train's
+#   own verdict judges that member under `members: [{ pr, verdict: merge, reason }]`.
+# - The CI step reads the PR with gh (retried 3 times, 5 min step bound, pull-requests: read)
+#   into PR_JSON and exits 1 when it cannot: fail-closed, and the base copy is called with the
+#   same command line whatever arguments it knows. ci-workflow-rules: bounded, pinned, retried.
+# - review-verdict.test.mjs 25/25. Mutants: a `members:` entry that accepts any verdict fails 1;
+#   ignoring a non-merge member fails 4; not detecting a member-table train fails 1.
+# - npm test 3420 pass, 0 fail.
+#
+# Verdict: merge. No P0, P1 or P2.
+schema: review-verdict/v1
+pr: 377
+verdict: merge
+reviewer: oscilla-af (claude-code 901211e2)
+content: a7cebb6ae2cb33184413468b4dff26875511fa58b766cf6d0e4f791741ffacb2
+findings:
+  - { id: T1, severity: P3, status: open, title: "a member with no verdict file passes with the line 'it changed no guarded path', which the program does not check (it cannot see the member's own diff); say 'has no verdict of its own; the train's verdict covers its guarded content' instead" }
+  - { id: T2, severity: P3, status: open, title: "367.yaml judges #303 in its header only; once this lands, a re-review of #367 (or any train carrying a changes-requested member) must add the members: entry this introduces" }

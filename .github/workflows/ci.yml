@@ -421,10 +421,18 @@ jobs:
     # guarded files since the review is seen here. Any other PR passes without a verdict. The
     # script needs no dependency, so nothing is installed. The program that judges, and so the
     # guarded list, is the base branch's copy (.github/scripts/base-rule.sh): a pull request
-    # that edits the list is judged by the list it found.
+    # that edits the list is judged by the list it found. A train (a train/... branch, a train
+    # title, or a body with a `| member | what |` table) is also judged by its members' own
+    # verdicts: each that exists says merge, or the train's verdict judges that member under
+    # `members:` (#303 rode #367 at `changes`). Title, body and head branch are read from the PR
+    # as it is now and handed over in PR_JSON, not as an argument, so the base branch's copy is
+    # called with the same command line whichever arguments it knows.
     name: review-verdict (guarded paths need a recorded review)
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v7
         with:
@@ -433,10 +441,18 @@ jobs:
         with:
           node-version: 22
       - name: A guarded change carries a verdict for the content it changes
+        timeout-minutes: 5
         env:
+          GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
+          PR_JSON: ${{ runner.temp }}/pr.json
         run: |
           if [ -z "$PR" ]; then echo "::error::review-verdict: no pull request to judge"; exit 1; fi
+          n=0
+          until gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body,headRefName > "$PR_JSON"; do
+            n=$((n + 1)); [ "$n" -lt 3 ] || { echo "::error::could not read PR $PR"; exit 1; }
+            sleep 10
+          done
           .github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF" scripts/review-verdict.mjs \
             --pr "$PR" --head HEAD --base-branch "origin/$GITHUB_BASE_REF"
 

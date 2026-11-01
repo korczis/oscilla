@@ -2,7 +2,7 @@
 // project.review-verdict: a PR touching a guarded path merges only with a recorded review
 // verdict for the content that was reviewed.
 //
-//   node scripts/review-verdict.mjs --pr <number>
+//   node scripts/review-verdict.mjs --pr <number> [--pr-json <file>]
 //        [--repo <dir>] [--head <ref>] [--base <ref> | --base-branch <ref>]
 //   node scripts/review-verdict.mjs --content [--list] [--head <ref>] [--base-branch <ref>]
 //        # print the digest a verdict records (and, with --list, the paths it covers)
@@ -32,13 +32,30 @@
 //     covers a path of the PR.
 // Whether the reviewer is independent of the builder is not something this program can know.
 //
+// A train (.ai/repo/skills/merge-train/SKILL.md, ADR 0055) is also judged by its members' own
+// verdicts. Given the pull request's title, body and head branch (--pr-json <file>, the JSON of
+// `gh pr view --json title,body,headRefName`, or the same file named by the environment variable
+// PR_JSON), a pull request is a train when scripts/fail-first.mjs would call it one (a train/...
+// branch, a train title) or when its body carries a `| member | what |` table: a feature train
+// titled as one feat (#367). Its members are the `#<n>` rows of that table. Each member's
+// .ai/repo/reviews/<n>.yaml at the head, where one exists, must say `verdict: merge`; a member
+// with none changed no guarded path of its own and passes. A member whose verdict is anything
+// else (#303 rode #367 at `changes` with an open P1) refuses the train unless the train's own
+// verdict, valid as above, judges that member's content by name:
+//
+//   members:                        # optional; the train's judgement of members whose own
+//     - { pr: 303, verdict: merge, reason: "R-1 and R-2 fixed in the train at 3a840b66" }
+//
+// A train with no guarded path of its own needs such a verdict only to judge a member.
+//
 // Exit 0: no guarded path changed, or a valid verdict. Exit 1: refused. Exit 2: usage.
 
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { TITLE, TRAIN, TRAIN_BRANCH, trainMembers } from './fail-first.mjs';
 import { parseYaml as parse } from './yaml-subset.mjs';
 
 export const REVIEWS_DIR = '.ai/repo/reviews';
@@ -182,30 +199,128 @@ export function verdictProblems(doc, { pr, content }) {
       }
     });
   }
+  if (doc.members !== undefined) {
+    if (!Array.isArray(doc.members)) {
+      problems.push('members must be a list of { pr, verdict, reason }: the train\'s judgement of'
+        + ' members whose own verdict is not merge');
+    } else {
+      doc.members.forEach((m, i) => {
+        const at = `members entry ${i + 1}`;
+        if (!m || typeof m !== 'object' || Array.isArray(m)) {
+          problems.push(`${at} is not a mapping`);
+          return;
+        }
+        if (!/^\d+$/.test(String(m.pr))) {
+          problems.push(`${at}: pr ${JSON.stringify(m.pr)} is not a pull request number`);
+        }
+        if (typeof m.verdict !== 'string' || !m.verdict.trim()) {
+          problems.push(`${at}: verdict (the train reviewer's, on the member's content)`
+            + ' is missing');
+        }
+        if (typeof m.reason !== 'string' || !m.reason.trim()) {
+          problems.push(`${at}: reason (what of the member was judged, at which head) is missing`);
+        }
+      });
+    }
+  }
   return problems;
+}
+
+/**
+ * The train a pull request is, or null: { by, members }, where `by` says how it is known (its
+ * head branch, its title, or the member table of its body) and `members` are the pull request
+ * numbers of the table's `#<n>` rows (a row that is not one is fail-first's to refuse).
+ */
+export function trainOf({ title = '', body = '', headBranch = '' } = {}) {
+  const t = String(title || '').trim();
+  const branch = String(headBranch || '').trim();
+  const rows = trainMembers(body);
+  let by = null;
+  if (TRAIN_BRANCH.test(branch)) by = `branch ${branch}`;
+  else if (!TITLE.test(t) && TRAIN.test(t)) by = 'title';
+  else if (rows !== null) by = 'member table';
+  if (!by) return null;
+  const members = [...new Set((rows || []).map((r) => /^#(\d+)$/.exec(r.member))
+    .filter(Boolean).map((m) => Number(m[1])))];
+  return { by, members, table: rows !== null };
+}
+
+/** A member's own verdict at the head: { n, verdict } (null verdict: no file) or { n, bad }. */
+function memberVerdict(repo, headSha, n) {
+  const show = spawnSync('git', ['-C', repo, 'show', `${headSha}:${REVIEWS_DIR}/${n}.yaml`],
+    { encoding: 'utf8' });
+  if (show.status !== 0) return { n, verdict: null };
+  try {
+    const doc = parse(show.stdout);
+    const v = doc && typeof doc === 'object' && !Array.isArray(doc) ? doc.verdict : undefined;
+    return { n, verdict: v };
+  } catch (e) {
+    return { n, bad: `its own verdict file is not valid YAML (${e.message})` };
+  }
 }
 
 /**
  * @returns {{ status: 'not-required'|'accepted'|'refused', lines: string[] }}
  */
-export function reviewVerdict({ repo, pr, head = 'HEAD', base, baseBranch = 'origin/main' }) {
+export function reviewVerdict({ repo, pr, head = 'HEAD', base, baseBranch = 'origin/main',
+  title, body, headBranch }) {
   const lines = [];
   const say = (s) => lines.push(s);
   const headSha = git(repo, ['rev-parse', '--verify', `${head}^{commit}`]);
   const baseSha = base ? git(repo, ['rev-parse', '--verify', `${base}^{commit}`])
     : git(repo, ['merge-base', baseBranch, headSha]);
   say(`review-verdict: PR ${pr}, head ${headSha.slice(0, 12)}, merge base ${baseSha.slice(0, 12)}`);
+
+  // A train's members, each by its own verdict at the head; `unmet` are those not on merge.
+  const train = trainOf({ title, body, headBranch });
+  const unmet = [];
+  if (train) {
+    const members = train.members.filter((n) => n !== Number(pr));
+    say(`review-verdict: a train (${train.by}) of ${members.length} member(s)`
+      + `${train.table ? '' : ' (its body has no `| member | what |` table)'};`
+      + ' their own verdicts at the head:');
+    for (const n of members) {
+      const m = memberVerdict(repo, headSha, n);
+      if (m.bad) {
+        say(`  member #${n}: ${m.bad}`);
+        unmet.push({ n, why: m.bad, own: m.bad });
+      } else if (m.verdict === null) {
+        say(`  member #${n}: no verdict of its own (it changed no guarded path)`);
+      } else if (m.verdict === 'merge') {
+        say(`  member #${n}: its own verdict is merge`);
+      } else {
+        const own = `its own verdict is ${JSON.stringify(m.verdict)}`;
+        say(`  member #${n}: ${own}, not merge`);
+        unmet.push({ n, why: `${own}, not merge`, own });
+      }
+    }
+  }
+
   const changed = changedPaths(repo, baseSha, headSha).map((c) => c.path);
   const guarded = changed.filter(isGuarded);
-  if (!guarded.length) {
+  if (!guarded.length && !unmet.length) {
     say(`review-verdict: none of the ${changed.length} changed path(s) is guarded;`
       + ' no verdict needed');
     return { status: 'not-required', lines };
   }
-  say(`review-verdict: ${guarded.length} guarded path(s) changed:`);
-  for (const f of guarded.slice(0, 20)) say(`  ${f}`);
-  if (guarded.length > 20) say(`  ... and ${guarded.length - 20} more`);
+  if (guarded.length) {
+    say(`review-verdict: ${guarded.length} guarded path(s) changed:`);
+    for (const f of guarded.slice(0, 20)) say(`  ${f}`);
+    if (guarded.length > 20) say(`  ... and ${guarded.length - 20} more`);
+  } else {
+    say(`review-verdict: none of the ${changed.length} changed path(s) is guarded, and`
+      + ` ${unmet.length} member(s) need the train's verdict to judge them`);
+  }
 
+  const howToJudge = (members) => {
+    say('review-verdict: a member whose own verdict is not merge rides only when the train\'s'
+      + ' reviewer judges its content and records that in the train\'s verdict:');
+    say('  members:');
+    for (const u of members) {
+      say(`    - { pr: ${u.n}, verdict: merge, reason: "<what was judged, at which head>" }`);
+    }
+    say('review-verdict: or the member leaves the train (.ai/repo/skills/merge-train/SKILL.md)');
+  };
   const { content, paths } = reviewedContent(repo, baseSha, headSha);
   const file = `${REVIEWS_DIR}/${pr}.yaml`;
   const show = spawnSync('git', ['-C', repo, 'show', `${headSha}:${file}`], { encoding: 'utf8' });
@@ -213,6 +328,8 @@ export function reviewVerdict({ repo, pr, head = 'HEAD', base, baseBranch = 'ori
     say(`review-verdict: REFUSED: ${file} is not in the head commit`);
     say(`review-verdict: an independent reviewer records it with \`content: ${content}\``
       + ` (${paths.length} guarded path(s); schema in scripts/review-verdict.mjs)`);
+    for (const u of unmet) say(`review-verdict: REFUSED: train member #${u.n}: ${u.why}`);
+    if (unmet.length) howToJudge(unmet);
     return { status: 'refused', lines, content };
   }
   let doc;
@@ -228,16 +345,34 @@ export function reviewVerdict({ repo, pr, head = 'HEAD', base, baseBranch = 'ori
     for (const p of problems) say(`  - ${p}`);
     return { status: 'refused', lines, content };
   }
+  const refused = [];
+  for (const u of unmet) {
+    const judged = (doc.members || []).find((m) => Number(m.pr) === u.n);
+    if (judged && judged.verdict === 'merge') {
+      say(`review-verdict: member #${u.n}: ${u.own}; judged merge by this train's verdict:`
+        + ` ${judged.reason.trim()}`);
+    } else {
+      say(`review-verdict: REFUSED: train member #${u.n}: ${u.why}, and ${file}`
+        + (judged ? ` judges it ${JSON.stringify(judged.verdict)}, not merge`
+          : ' does not judge it under members:'));
+      refused.push(u);
+    }
+  }
+  if (refused.length) {
+    howToJudge(refused);
+    return { status: 'refused', lines, content };
+  }
   const n = doc.findings.length;
   say(`review-verdict: accepted: verdict merge by ${doc.reviewer.trim()} for content ${content}`
-    + ` (${paths.length} guarded path(s)); ${n} finding(s), no open P0 or P1`);
+    + ` (${paths.length} guarded path(s)); ${n} finding(s), no open P0 or P1`
+    + (train ? '; every train member\'s own verdict is merge or judged here' : ''));
   return { status: 'accepted', lines, content };
 }
 
 function usage(message) {
   if (message) console.error(`review-verdict: ${message}`);
-  console.error('usage: node scripts/review-verdict.mjs (--pr <number> | --content [--list])'
-    + ' [--repo <dir>] [--head <ref>] [--base <ref> | --base-branch <ref>]');
+  console.error('usage: node scripts/review-verdict.mjs (--pr <number> [--pr-json <file>]'
+    + ' | --content [--list]) [--repo <dir>] [--head <ref>] [--base <ref> | --base-branch <ref>]');
   process.exit(2);
 }
 
@@ -264,9 +399,19 @@ if (isMain) {
     else if (a === '--head') opts.head = value(a);
     else if (a === '--base') opts.base = value(a);
     else if (a === '--base-branch') opts.baseBranch = value(a);
+    else if (a === '--pr-json') opts.prJson = value(a);
     else usage(`unknown argument ${a}`);
   }
   try {
+    // The CI step names the file in the environment, so that the base branch's copy of this
+    // program, whatever arguments it knows, is called with the same command line.
+    const prJson = opts.prJson || process.env.PR_JSON;
+    if (prJson) {
+      const prDoc = JSON.parse(readFileSync(prJson, 'utf8'));
+      opts.title = prDoc.title;
+      opts.body = prDoc.body;
+      if (typeof prDoc.headRefName === 'string') opts.headBranch = prDoc.headRefName;
+    }
     if (contentOnly) {
       const head = git(opts.repo, ['rev-parse', '--verify', `${opts.head || 'HEAD'}^{commit}`]);
       const base = opts.base ? git(opts.repo, ['rev-parse', '--verify', `${opts.base}^{commit}`])
