@@ -146,7 +146,9 @@ changed.
 - **Additive synthesis:** a harmonic editor. The bars you see are the same coefficients that
   build the waveform you hear.
 - **Phase, Lissajous and stereo:** A/B phase views, a Lissajous figure, a correlation meter and
-  stereo routing (split, panned or mono).
+  stereo routing (split, panned or mono). Pan acts on the sounding A/B dual voice in Mono
+  output, also while it plays; for a single source and in Stereo output the slider is disabled
+  and says why.
 - **Bioacoustics:** approximate hearing ranges and call examples for humans and several animal
   species, every value cited.
 - **Export:** WAV of the current tone, pattern or sequence, rendered offline through the same
