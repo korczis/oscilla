@@ -150,8 +150,9 @@ test('Studio Import opens the sequence a configuration file holds', () => {
   assert.equal(r.source, 'config');
   assert.equal(r.model.metadata.title, 'Configuration sequence');
   assertOneTrack(r.model, seq.blocks.length, 'config');
+  // Every reference block is tempo-locked since K002 (#266): 1, 1.5, 1/2, 0.75 and 1 beat.
   assert.deepEqual(r.model.timeline.clips.filter((c) => c.musical)
-    .map((c) => c.musical.durationBeats), [1.5, 0.75]);
+    .map((c) => c.musical.durationBeats), [1, 1.5, 0.5, 0.75, 1]);
   assert.deepEqual(JSON.parse(exportSequenceFile(r.model).text), seq);
 });
 
@@ -199,7 +200,8 @@ test('a malformed or oversized file is refused with a readable reason and no mod
       'blocks'],
     ['an unknown block type', withBlocks([ref.blocks[0], { ...ref.blocks[1], type: 'laser' }]),
       /^Block 2: “laser” is not a V2 block type; the file is refused\.$/, 'blocks[1].type'],
-    ['a duration out of range', withBlocks([{ ...ref.blocks[0], durationMs: 1 }]),
+    // A millisecond block (beats null): the reference's blocks are tempo-locked since K002.
+    ['a duration out of range', withBlocks([{ ...ref.blocks[0], durationMs: 1, beats: null }]),
       /^Block 1: durationMs is 1 in the file but would open as 10; the file is refused\.$/,
       'blocks[0].durationMs'],
     ['a config sequence with damage', configText({ ...ref, blocks: 'none' }),

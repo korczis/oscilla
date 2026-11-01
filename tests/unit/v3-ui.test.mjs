@@ -18,7 +18,8 @@ import { mulberry32 } from '../../src/js/audio/noise.js';
 const html = readFileSync(new URL('../../src/index.html', import.meta.url), 'utf8');
 const between = (from, to) => html.slice(html.indexOf(from), html.indexOf(to, html.indexOf(from)));
 // The MEASURE view stands between the Playground's rows (P002): it ends where row 3 begins.
-const measureView = between('id="osc-view-measure"', '<div class="osc-row3">');
+// The third row's tag carries the Synth workspace's :class binding (#329), so only its start.
+const measureView = between('id="osc-view-measure"', '<div class="osc-row3"');
 const experimentsView = between('id="osc-view-experiments"', 'id="osc-view-learn"');
 
 test('Measure and Experiments follow Playground; About stays last', () => {

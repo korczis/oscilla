@@ -375,13 +375,13 @@ function defineChecks(fixtures) {
   const def = (name, fn) => checks.push({ name, fn });
 
   def('nav-order', async ({ page }) => {
-    // §73 + §198 (V371): the top level is these eight entries; ANALYZE and SYNTHESIS group the
-    // V2 workspaces.
+    // §73 + §198 (V371): ANALYZE and SYNTHESIS group the V2 workspaces; Synth is top level after
+    // Studio (Q019). The expected order is the navigation's own source (ui/app.js navTopLevel).
+    const { navTopLevel } = await import(pathToFileURL(path.join(__dirname, '..', '..', 'src', 'js', 'ui',
+      'app.js')).href);
     const items = await page.evaluate(() => [...document.querySelectorAll('#osc-nav > li')]
       .map((li) => li.querySelector(':scope > a, :scope > button').dataset.osc));
-    const ok = JSON.stringify(items) === JSON.stringify(['nav.playground', 'nav.measure',
-      'nav.experiments', 'nav-group.analyze', 'nav-group.synthesis', 'nav.learn', 'nav.studio',
-      'nav.about']);
+    const ok = JSON.stringify(items) === JSON.stringify(navTopLevel());
     await H.workspace(page, 'measure');
     const view = await page.evaluate(() => {
       const r = document.getElementById('osc-view-measure').getBoundingClientRect();

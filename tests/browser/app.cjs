@@ -1061,6 +1061,9 @@ function defineChecks() {
       }
       await collect();
     }
+    // The Synth workspace (#329): its header controls (preset, Arm keys, Studio, copy link).
+    await H.workspace(page, 'synth');
+    await collect();
     await H.workspace(page, 'about');
     await collect();
     // MEASURE and EXPERIMENTS: every state that shows a control. A TEST CONTEXT loopback
@@ -2080,8 +2083,9 @@ function defineChecks() {
   // (page) and its group (true), Escape and a click outside close a group, focus never drops,
   // and the dropdown stays inside the viewport at desktop and phone widths.
   def('nav-groups-keyboard', async ({ page, browserName }) => {
-    const TOP = ['nav.playground', 'nav.measure', 'nav.experiments', 'nav-group.analyze',
-      'nav-group.synthesis', 'nav.learn', 'nav.studio', 'nav.about'];
+    // The navigation's own order (ui/app.js navTopLevel; Synth after Studio, Q019).
+    const TOP = (await import(pathToFileURL(path.join(__dirname, '..', '..', 'src', 'js', 'ui',
+        'app.js')).href)).navTopLevel();
     const GROUPS = { analyze: ['analyzer', 'filter', 'compare'],
       synthesis: ['synthesis', 'sequencer', 'presets'] };
     const state = () => page.evaluate(() => {
@@ -3160,7 +3164,10 @@ function defineChecks() {
     } finally {
       await seqDone(page);
     }
-    const ok = Object.values(res).every((r) => r.played && r.at.editor && !r.at.mirror
+    // Since C002 (#305) the sequencer's claim sets the seqPlaying mirror in the play itself, so
+    // the 150 ms lag C001 probed may be gone (r.at.mirror true); what C001 requires stays: every
+    // stop path stops the playing editor and leaves the mirror off.
+    const ok = Object.values(res).every((r) => r.played && r.at.editor
       && !r.after.editor && !r.after.mirror && !!r.drained);
     return { ok, ...res };
   });
@@ -3211,9 +3218,9 @@ function defineChecks() {
     const pressed = (r) => r.before.label === 'Stop playback' && !r.after.editor
       && !r.after.instrument && !r.after.voice && !!r.quiet;
     const pw = res.pollWindow;
+    // pw.at.mirror may already be true: C002's claim sets the mirror in the play (see above).
     const ok = pressed(res.click) && pressed(res.enter) && pw.played && pw.at.editor
-      && !pw.at.mirror && !pw.after.editor && !pw.after.instrument && !pw.after.voice
-      && !!pw.quiet;
+      && !pw.after.editor && !pw.after.instrument && !pw.after.voice && !!pw.quiet;
     return { ok, ...res };
   });
 
@@ -3231,6 +3238,8 @@ function defineChecks() {
   // engine-sync-1: a pattern change restarts the voice with a copy of its options; a lab
   // switched off while it sounded must stay off on the restarted voice.
   def('restart-follows-labs', async ({ page }) => {
+    // The Additive lab is the Synthesis workspace's (#278: the lighter Playground shows no lab).
+    await H.workspace(page, 'synthesis');
     await H.continuous(page, true);
     const res = {};
     await page.evaluate(() => {
@@ -3279,12 +3288,15 @@ function defineChecks() {
       && res.afterAdditive.carrier === 'sine' && !!res.withEnvelope && !res.afterEnvelope.lab
       && res.afterEnvelope.adsr === null && res.afterEnvelope.stepEnvelope !== 'function'
       && res.afterEnvelope.viz === null;
+    await H.workspace(page, 'playground');
     return { ok, ...res };
   });
 
   // engine-sync-6: Additive does not apply to a dual plan, live included: switching it on while
   // a dual voice sounds leaves both oscillators as a fresh dual voice has them.
   def('additive-skips-dual', async ({ page }) => {
+    // The Additive lab is the Synthesis workspace's (#278: the lighter Playground shows no lab).
+    await H.workspace(page, 'synthesis');
     await H.continuous(page, true);
     const res = {};
     await page.evaluate(() => {
@@ -3317,6 +3329,7 @@ function defineChecks() {
     await page.evaluate(() => { window.OSCILLA.app.source = 'single'; });
     const ok = res.before.join() === 'sine,sine' && res.live.types.join() === 'sine,sine'
       && !res.live.pw && res.live.viz === null && res.live.refused;
+    await H.workspace(page, 'playground');
     return { ok, ...res };
   });
 
@@ -4481,9 +4494,11 @@ function defineChecks() {
       const items = [...document.querySelectorAll('#osc-nav > li > a')].map((a) => a.dataset.osc);
       return { last: items.at(-1), count: items.length };
     });
-    // Tab order: Studio -> About (Safari/WebKit skips links on Tab unless the user opts in).
-    // V3.1: Studio is the last workspace before About (spec §198).
-    await page.focus('[data-osc="nav.studio"]');
+    // Tab order: the entry before About -> About (Safari/WebKit skips links on Tab unless the
+    // user opts in). V3.1 put Studio last before About (spec §198); Synth follows Studio (Q019).
+    const beforeAbout = (await import(pathToFileURL(path.join(__dirname, '..', '..', 'src', 'js',
+      'ui', 'app.js')).href)).navTopLevel().slice(-2)[0];
+    await page.focus(`[data-osc="${beforeAbout}"]`);
     await page.keyboard.press('Tab');
     res.tabbedTo = await page.evaluate(() => document.activeElement && document.activeElement.dataset.osc);
     await page.focus('[data-osc="nav.about"]');
