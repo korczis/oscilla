@@ -33,7 +33,7 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-11-01T03:54:14Z
+updated_at: 2026-11-01T05:22:54Z
 started_at: 2026-11-01T03:53:58Z
 started_event: sha256:39911ff123469db250530b2489bb10c7e84edc2380a3bc941f08baa2e0ba25f5
 completed_at: 2026-11-01T03:54:14Z
@@ -46,3 +46,10 @@ evidence:
     artifact: "tests/unit/v31-studio-sequence-file.test.mjs"
     commit: 601037765762decdf19392fce84055bc7fa35434
     recorded_at: 2026-11-01T03:53:33Z
+  - covers: verified
+    type: ci
+    command: "node scripts/review-verdict.mjs --pr 355 (base program)"
+    result: "review verdict .ai/repo/reviews/355.yaml (merge, oscilla reviewer abd8bbe3, content 3756566b...f3be) accepted for #355; landed as c77ddbc9, present at main 60103776"
+    artifact: ".ai/repo/reviews/355.yaml"
+    commit: 601037765762decdf19392fce84055bc7fa35434
+    recorded_at: 2026-11-01T05:22:54Z
