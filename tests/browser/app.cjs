@@ -2080,8 +2080,9 @@ function defineChecks() {
   // (page) and its group (true), Escape and a click outside close a group, focus never drops,
   // and the dropdown stays inside the viewport at desktop and phone widths.
   def('nav-groups-keyboard', async ({ page, browserName }) => {
-    const TOP = ['nav.playground', 'nav.measure', 'nav.experiments', 'nav-group.analyze',
-      'nav-group.synthesis', 'nav.learn', 'nav.studio', 'nav.about'];
+    // The navigation's own order (ui/app.js navTopLevel; Synth after Studio, Q019).
+    const TOP = (await import(pathToFileURL(path.join(__dirname, '..', '..', 'src', 'js', 'ui',
+        'app.js')).href)).navTopLevel();
     const GROUPS = { analyze: ['analyzer', 'filter', 'compare'],
       synthesis: ['synthesis', 'sequencer', 'presets'] };
     const state = () => page.evaluate(() => {
@@ -4487,9 +4488,11 @@ function defineChecks() {
       const items = [...document.querySelectorAll('#osc-nav > li > a')].map((a) => a.dataset.osc);
       return { last: items.at(-1), count: items.length };
     });
-    // Tab order: Studio -> About (Safari/WebKit skips links on Tab unless the user opts in).
-    // V3.1: Studio is the last workspace before About (spec §198).
-    await page.focus('[data-osc="nav.studio"]');
+    // Tab order: the entry before About -> About (Safari/WebKit skips links on Tab unless the
+    // user opts in). V3.1 put Studio last before About (spec §198); Synth follows Studio (Q019).
+    const beforeAbout = (await import(pathToFileURL(path.join(__dirname, '..', '..', 'src', 'js',
+      'ui', 'app.js')).href)).navTopLevel().slice(-2)[0];
+    await page.focus(`[data-osc="${beforeAbout}"]`);
     await page.keyboard.press('Tab');
     res.tabbedTo = await page.evaluate(() => document.activeElement && document.activeElement.dataset.osc);
     await page.focus('[data-osc="nav.about"]');
