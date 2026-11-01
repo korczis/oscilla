@@ -145,8 +145,15 @@ async function startAudio(page) {
     { timeout: 8000 });
 }
 
-/** Set up a dual voice (A, B, stereo) and the phase offset, latch it, wait for it to sound. */
-async function playDual(page, { fa = 440, fb = 440, stereo = true, phaseDeg = 0 } = {}) {
+/**
+ * Set up a dual voice (A, B, stereo) and the phase offset, latch it, and wait until the voice
+ * that sounds is the one asked for: not `prevId`, not releasing, with B's offset at `phaseDeg`.
+ * Resolves that voice's id. A phase change on a sounding voice restarts it (a FAST_RELEASE_S
+ * fade, then a new voice), so this is the restarted voice in place, not yet a steady output;
+ * tapCorrelation waits for that.
+ */
+async function playDual(page, { fa = 440, fb = 440, stereo = true, phaseDeg = 0,
+  prevId = null } = {}) {
   await page.evaluate(async ({ fa, fb, stereo }) => {
     const a = window.OSCILLA.app;
     a.setContinuous(true);
@@ -155,18 +162,43 @@ async function playDual(page, { fa = 440, fb = 440, stereo = true, phaseDeg = 0 
     a.setDualFreq('b', String(fb));
     a.setStereo(stereo);
   }, { fa, fb, stereo });
-  await sleep(60); // Alpine effects carry A/B and the route to the Phase & Stereo panel
+  // Alpine effects carry A/B and the route to the Phase & Stereo panel; a phase change made
+  // before they have would push the panel's old A/B back onto the dual oscillator.
+  const route = stereo ? 'stereo' : 'mono';
+  await until(() => page.evaluate(({ fa, fb, route }) => {
+    const c = window.OSCILLA.labs.phase.config;
+    return Math.abs(c.freqA - fa) < 1e-6 && Math.abs(c.freqB - fb) < 1e-6 && c.route === route;
+  }, { fa, fb, route }), { ms: 5000,
+    what: `playDual: the Phase & Stereo panel carries A ${fa} Hz, B ${fb} Hz, ${route}` });
   await page.evaluate(async (deg) => {
     const O = window.OSCILLA;
     O.labs.phase.set({ phaseDeg: deg });
     if (!O.app.playing) O.app.toggleLatch();
   }, phaseDeg);
-  await sleep(450);
+  return until(() => page.evaluate(({ deg, prevId }) => {
+    const v = window.OSCILLA.engine.voice;
+    return v && !v.ended && !v.releasing && v.id !== prevId && v.phaseDeg === deg ? v.id : null;
+  }, { deg: phaseDeg, prevId }), { ms: 8000,
+    what: `playDual: a dual voice other than ${prevId} sounds with B at ${phaseDeg}°` });
 }
 
-/** Pearson L/R correlation and RMS of a 2-channel tap on the engine's output analyser. */
-function tapCorrelation(page) {
-  return page.evaluate(async () => {
+// A channel carries signal above this RMS (the 440 Hz dual voice reads about 0.02 per side).
+const TAP_SIGNAL_RMS = 0.005;
+
+/**
+ * Pearson L/R correlation and RMS of a 2-channel tap on the engine's output analyser, read once
+ * the output is the steady sound of the restarted voice: voice `voiceId` or a later one (ids
+ * only grow), not releasing, with B at `deg`. A read counts only when the tap's whole window
+ * (fftSize frames at the context's rate) lies after that voice's B start and attack (B starts
+ * at most one period of B after t0; the predecessor has faded out by t0) and both channels
+ * carry signal; it is steady when it agrees within `tol` with the read of the previous,
+ * non-overlapping window of the same voice. Polled through until() against a named wall-clock
+ * deadline (project.bounded-test-timing). A fixed sleep here let a starved WebKit runner read a
+ * window that straddled the restart: CI run 41120930982 read 0.17 at 180° while the UI read
+ * -0.94. On a timeout it resolves { corr: null, stalled, last } so the row shows why.
+ */
+async function tapCorrelation(page, { voiceId, deg, tol, what }) {
+  await page.evaluate(() => {
     const e = window.OSCILLA.engine;
     const ctx = e.ctx;
     // Test probe only (not app code): a splitter and two analysers on the output.
@@ -178,43 +210,66 @@ function tapCorrelation(page) {
     e.analyser.connect(sp);
     sp.connect(L, 0);
     sp.connect(R, 1);
-    const l = new Float32Array(8192);
-    const r = new Float32Array(8192);
-    const wait = (ms) => new Promise((res) => setTimeout(res, ms));
-    const rmsOf = (a) => Math.sqrt(a.reduce((q, v) => q + v * v, 0) / a.length);
-    // Deadline-based: on a slow runner the first voice after the context starts can take a
-    // while to reach the output. Poll until both channels carry signal, then let the 8192-
-    // sample window fill with steady signal (about 170 ms at 48 kHz) before measuring.
-    const deadline = performance.now() + 3000;
-    for (;;) {
-      await wait(100);
-      L.getFloatTimeDomainData(l);
-      R.getFloatTimeDomainData(r);
-      if ((rmsOf(l) > 0.005 && rmsOf(r) > 0.005) || performance.now() > deadline) break;
-    }
-    await wait(250);
-    L.getFloatTimeDomainData(l);
-    R.getFloatTimeDomainData(r);
-    e.analyser.disconnect(sp);
-    sp.disconnect();
-    let ml = 0;
-    let mr = 0;
-    for (let i = 0; i < l.length; i++) { ml += l[i]; mr += r[i]; }
-    ml /= l.length;
-    mr /= l.length;
-    let sl = 0;
-    let sr = 0;
-    let slr = 0;
-    for (let i = 0; i < l.length; i++) {
-      const x = l[i] - ml;
-      const y = r[i] - mr;
-      sl += x * x;
-      sr += y * y;
-      slr += x * y;
-    }
-    return { corr: sl > 0 && sr > 0 ? slr / Math.sqrt(sl * sr) : null,
-      rms: Math.sqrt(sl / l.length) };
+    window.__qaTap = { sp, L, R, l: new Float32Array(8192), r: new Float32Array(8192) };
   });
+  let prev = null;
+  let last = null;
+  try {
+    return await until(async () => {
+      const r = await page.evaluate(({ minId, deg }) => {
+        const e = window.OSCILLA.engine;
+        const { L, R, l, r: rr } = window.__qaTap;
+        const v = e.voice;
+        const t = e.ctx.currentTime;
+        const windowS = L.fftSize / e.ctx.sampleRate;
+        const bSettled = v && v.plan && v.plan.b
+          ? v.t0 + 1 / Number(v.plan.b.freq) + v.attack : Infinity;
+        const placed = !!v && v.id >= minId && v.phaseDeg === deg && !v.ended && !v.releasing
+          && t - windowS >= bSettled;
+        L.getFloatTimeDomainData(l);
+        R.getFloatTimeDomainData(rr);
+        let ml = 0;
+        let mr = 0;
+        for (let i = 0; i < l.length; i++) { ml += l[i]; mr += rr[i]; }
+        ml /= l.length;
+        mr /= l.length;
+        let sl = 0;
+        let sr = 0;
+        let slr = 0;
+        for (let i = 0; i < l.length; i++) {
+          const x = l[i] - ml;
+          const y = rr[i] - mr;
+          sl += x * x;
+          sr += y * y;
+          slr += x * y;
+        }
+        return { t, windowS, placed, id: v ? v.id : null,
+          corr: sl > 0 && sr > 0 ? slr / Math.sqrt(sl * sr) : null,
+          rms: Math.sqrt(sl / l.length), rmsR: Math.sqrt(sr / l.length) };
+      }, { minId: voiceId, deg });
+      last = r;
+      const usable = r.placed && r.corr != null && r.rms > TAP_SIGNAL_RMS
+        && r.rmsR > TAP_SIGNAL_RMS;
+      if (!usable || (prev && prev.id !== r.id)) prev = null; // another voice: start over
+      if (!usable) return null;
+      if (prev && r.t - prev.t < r.windowS) return null; // overlaps the previous window
+      const before = prev;
+      prev = r;
+      return before && Math.abs(r.corr - before.corr) < tol
+        ? { corr: r.corr, rms: r.rms, prevCorr: before.corr, id: r.id } : null;
+    }, { ms: 10000, what });
+  } catch (e) {
+    if (e.name !== 'WaitTimeout') throw e;
+    return { corr: null, rms: 0, stalled: e.message.split('\n')[0], last };
+  } finally {
+    await page.evaluate(() => {
+      const tap = window.__qaTap;
+      delete window.__qaTap;
+      if (!tap) return;
+      window.OSCILLA.engine.analyser.disconnect(tap.sp);
+      tap.sp.disconnect();
+    });
+  }
 }
 
 async function stopAll(page) {
@@ -413,26 +468,30 @@ function defineChecks() {
   def('phase-offset-correlation', async ({ browser }) => {
     const { page, context, errors } = await open(browser);
     await startAudio(page);
+    // A start can only land on a sample frame: at 440 Hz one frame is 2*pi*440/sr rad of phase
+    // (3.3 degrees at 48 kHz, a correlation shift of ~0.057). Allow 1.5 frames of that, at
+    // least 0.05, so a correct offset is never failed by the sample grid.
+    const sr = await page.evaluate(() => window.OSCILLA.engine.ctx.sampleRate);
+    const tol = Math.max(0.05, 1.5 * Math.sin((2 * Math.PI * 440) / sr));
     const rows = [];
-    let voiceIds = [];
+    const voiceIds = [];
+    let prevId = null;
     for (const deg of [0, 90, 180]) {
-      await playDual(page, { fa: 440, fb: 440, stereo: true, phaseDeg: deg });
-      const t = await tapCorrelation(page);
+      // The phase change restarts the voice: wait for the new one, then for a steady tap on it.
+      prevId = await playDual(page, { fa: 440, fb: 440, stereo: true, phaseDeg: deg, prevId });
+      const t = await tapCorrelation(page, { voiceId: prevId, deg, tol,
+        what: `phase-offset-correlation: a steady L/R tap on the restarted voice at ${deg}°` });
       const info = await page.evaluate(() => ({ id: window.OSCILLA.engine.voice.id,
         phase: window.OSCILLA.engine.voice.phaseDeg,
         ui: `${document.querySelector('#osc-corr-value').textContent} ${
           document.querySelector('#osc-corr-basis').textContent}` }));
       voiceIds.push(info.id);
       rows.push({ deg, corr: t.corr, want: Math.cos((deg * Math.PI) / 180), rms: t.rms,
-        phase: info.phase, ui: info.ui });
+        phase: info.phase, ui: info.ui, ...(t.stalled ? { stalled: t.stalled, last: t.last }
+          : {}) });
     }
-    // A start can only land on a sample frame: at 440 Hz one frame is 2*pi*440/sr rad of phase
-    // (3.3 degrees at 48 kHz, a correlation shift of ~0.057). Allow 1.5 frames of that, at
-    // least 0.05, so a correct offset is never failed by the sample grid.
-    const sr = await page.evaluate(() => window.OSCILLA.engine.ctx.sampleRate);
-    const tol = Math.max(0.05, 1.5 * Math.sin((2 * Math.PI * 440) / sr));
     const live = rows.every((r) => r.corr != null && Math.abs(r.corr - r.want) < tol
-      && r.phase === r.deg && r.rms > 0.005);
+      && r.phase === r.deg && r.rms > TAP_SIGNAL_RMS);
     const restarted = new Set(voiceIds).size === voiceIds.length; // a change restarts B's start
     const nodesAfter = await stopAll(page);
     // Offline render (Export audio): L/R correlation and the largest one-sample step. B starts
@@ -493,12 +552,29 @@ function defineChecks() {
     await sleep(150);
     const idle = await read();
     await startAudio(page);
+    // The readout follows the output on its frame loop: poll for the read each assertion judges.
+    // On a timeout the last read stands, so the assertion below fails with it.
+    const readWhen = async (want, what) => {
+      let last = null;
+      try {
+        return await until(async () => {
+          last = await read();
+          return want(last) ? last : null;
+        }, { ms: 5000, what: `correlation-states: ${what}` });
+      } catch (e) {
+        if (e.name !== 'WaitTimeout') throw e;
+        return { ...last, stalled: e.message.split('\n')[0] };
+      }
+    };
     await playDual(page, { fa: 440, fb: 442, stereo: false, phaseDeg: 0 });
-    const mono = await read();
+    const mono = await readWhen((r) => r.state === 'mono' && r.text === '1.00'
+      && r.basis === 'mono' && r.basisVisible && !/nothing playing/.test(r.valuetext),
+    'the readout says 1.00 mono for the mono dual voice');
     await stopAll(page);
     await playDual(page, { fa: 440, fb: 442, stereo: true, phaseDeg: 0 });
-    await sleep(400);
-    const stereo = await read();
+    const stereo = await readWhen((r) => r.state === 'live' && r.basis === 'est.'
+      && r.basisVisible && /^-?\d\.\d\d$/.test(r.text),
+    'the readout estimates the split stereo dual voice');
     await stopAll(page);
     await context.close();
     const ok = idle.text === '—' && /nothing playing/.test(idle.valuetext)
