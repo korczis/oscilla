@@ -34,17 +34,17 @@
 # lists layout and qa-regressions but not app.cjs. A reviewer probe of Learn at 1536x1024 and at
 # 390x844 touch: no horizontal scroll, the link underlined and 44 px tall on a coarse pointer.
 #
-# Verdict: changes-requested. R1 is open as a P1: the required gate is red on the head.
+# First pass at 7d59bf11: changes-requested (R1 P1, R2 P2). Delta at 943499e7: R1 and R2 closed (reviewer re-ran app.cjs controls-reachable-labelled in chromium+firefox, and the R2 mutant now fails); verdict merge. R3-R6 stay open as P3.
 # Fixing it touches src/index.html, which is not a guarded path, so the digest does not change.
 # The verdict is rewritten by a reviewer once the browser gate passes.
 schema: review-verdict/v1
 pr: 369
-verdict: changes-requested
+verdict: merge
 reviewer: "oscilla-b0 independent reviewer subagent (claude-code abd8bbe3); did not build, merge or edit this change; wrote only this file"
 content: cbd6942526bc5c212f8a6cd2226cc232eb37c68855262f2b670dec4f63ad71ae
 findings:
-  - { id: R1, severity: P1, status: open, title: "src/index.html Learn card: the concept card (no demo) keeps a hidden <button data-osc=learn.demo> whose x-text is '', so tests/browser/app.cjs controls-reachable-labelled fails with unlabelled [learn.demo] in chromium and firefox, file and http, locally and in CI run 41256040828 (Browser gate red); it passes at the merge base. Render both demo-only buttons inside <template x-if=\"t.demo\"> so a concept card has no demo or example button" }
-  - { id: R2, severity: P2, status: open, title: "v31-studio-templates step-2 order guard is vacuous when the delete clause is gone: notes.indexOf('press Delete') is -1, so NOTES without 'select the direct Oscillator to Master cable and press Delete (Master takes one input)', or with 'press Delete' reworded, pass all 38 tests although the Studio then refuses the Filter to Master cable; assert the index is >= 0 before comparing" }
+  - { id: R1, severity: P1, status: closed, title: "Closed at 943499e7: learn.example and learn.demo each in their own <template x-if=\"t.demo\">; app.cjs controls-reachable-labelled passes in chromium and firefox (reviewer re-run). src/index.html Learn card: the concept card (no demo) keeps a hidden <button data-osc=learn.demo> whose x-text is '', so tests/browser/app.cjs controls-reachable-labelled fails with unlabelled [learn.demo] in chromium and firefox, file and http, locally and in CI run 41256040828 (Browser gate red); it passes at the merge base. Render both demo-only buttons inside <template x-if=\"t.demo\"> so a concept card has no demo or example button" }
+  - { id: R2, severity: P2, status: closed, title: "Closed at 943499e7: the step-order test asserts both phrases exist before comparing; the reworded-step mutant now fails 1 of 38. v31-studio-templates step-2 order guard is vacuous when the delete clause is gone: notes.indexOf('press Delete') is -1, so NOTES without 'select the direct Oscillator to Master cable and press Delete (Master takes one input)', or with 'press Delete' reworded, pass all 38 tests although the Studio then refuses the Filter to Master cable; assert the index is >= 0 before comparing" }
   - { id: R3, severity: P3, status: open, title: "fail-first.mjs proves the file only by module-not-found (no LEARN_CARDS); the assertion failures show only with the head's learn.js on the base (6 tests). The PR body's 'the step-order test fails against the old notes' does not describe the merge base, which has no First Patch notes" }
   - { id: R4, severity: P3, status: open, title: "the Learn link <a data-osc=learn.link> has no class, so it renders in the browser's default link colour (rgb(158,158,255) in dark) beside token-styled buttons; legible and underlined, but not a Flowbite Pro or token style" }
   - { id: R5, severity: P3, status: open, title: "the link label 'Open the First patch in Studio' and the user-guide heading 'First patch' do not match the template title 'First Patch' that the dialog and the empty-graph note use" }
