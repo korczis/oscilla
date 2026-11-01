@@ -142,8 +142,9 @@ async function openSynth(context, base, hash = '#m=synth') {
   await page.goto(`${base}${hash}`);
   await until(() => page.evaluate(() => !!(window.OSCILLA && window.OSCILLA.app
     && window.OSCILLA.app.synthDebug && window.OSCILLA.app.synthDebug().present
+    && !document.getElementById('osc-view-synth').hidden
     && document.querySelector('[data-osc="synth.bay.svg"]'))),
-  { ms: LOAD_MS, what: 'the Synth panel is rendered' });
+  { ms: LOAD_MS, what: 'the Synth view is shown and its panel rendered' });
   await page.locator('#osc-synth-title').click();
   return page;
 }
