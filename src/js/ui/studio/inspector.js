@@ -43,7 +43,8 @@
 //            onSavePatch(nodeIds), onDelete(), onDuplicate(), onShowLane(laneId, label),
 //            onAllowMicrophone(nodeId) (asks for permission, then enables Microphone nodes),
 //            micError(nodeId) -> text | '' (why that node's input is not open),
-//            micBusy() -> boolean (a permission request is in flight) }
+//            micBusy() -> boolean (a permission request is in flight), userPatches() ->
+//            Promise<[{ id, patch }]> (the saved patches: the node preset dropdown, K020) }
 //   Focus (§142; V431 U2): a rebuilt Inspector puts focus back on the control with the same
 //   data-key; when the action replaced the view (a connection link, Select source, Delete)
 //   and that control is gone, focus goes to the new view's heading, never to <body>.
@@ -56,6 +57,7 @@ import {
 import { secondsPerBar, timelineEnd } from '../../studio/timeline.js';
 import { PORT_VISUALS } from '../../studio/ports.js';
 import { describeEdge, summarizeGraph, announceAction } from '../../studio/a11y.js';
+import { presetMenu } from './node-preset-menu.js';
 import { formatFrequency, parseFrequency } from '../../core/frequency.js';
 import { sig } from '../../core/math.js';
 import { CATEGORY_LABELS, STATUS_LABELS, edgeRoute, nodeConnections } from './graph-view.js';
@@ -516,6 +518,7 @@ export function inspectorView(model, selection, opts = {}) {
       kind: 'node',
       key: `node:${node.id}:${fields.map((f) => f.key).join(',')}`,
       id: node.id,
+      type: node.type,
       title: node.metadata.name,
       name: node.metadata.name,
       typeLabel: def ? def.displayName : node.type,
@@ -954,6 +957,7 @@ export function mountInspector(host, svc) {
           'data-osc': 'studio.inspector.micError', text: view.mic.error }) : null,
       ]));
     }
+    if (typeof svc.userPatches === 'function') parts.push(presetMenu(view, svc)); // K020
     parts.push(textInput(`osc-si-${view.id}-name`, 'Name', view.name,
       (v) => dispatch({ type: 'NODE_RENAME', nodeId: view.id, name: v }),
       'studio.inspector.name'));

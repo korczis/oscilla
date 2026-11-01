@@ -24,13 +24,7 @@
 //   (legato while touched); on opens its gate's targets as a Keys gate does, off releases them.
 
 import { createNoteStack } from '../synth/note-stack.js';
-import { NODE_REGISTRY } from './registry.js';
-
-/** Whether a node type is a note source: Keys, or a type with capabilities.notes. */
-const playsNotes = (type) => {
-  const d = NODE_REGISTRY.get(type);
-  return type === 'keys' || !!(d && d.capabilities && d.capabilities.notes);
-};
+import { playsNotes } from './registry.js';
 
 const unmuted = (e) => !(e.props && e.props.muted);
 

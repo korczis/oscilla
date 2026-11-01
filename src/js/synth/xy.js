@@ -17,7 +17,7 @@
 //   xyPresetPatch(model, panel, recipe) -> patch                    a built-in preset's patch
 //   xyPatchAction(model, panel, patch) -> { action } | { reason }   load it, one BATCH
 
-import { createPatch } from '../studio/patches.js';
+import { createPatch, patchParams } from '../studio/patches.js';
 import { linkAction, linkOf } from './link.js';
 import { panelCables, patchCable, unpatch } from './normals.js';
 
@@ -94,6 +94,10 @@ function afterSteps(model, steps) {
     if (s.type === 'EDGE_UPDATE') {
       edges = edges.map((e) => (e.id === s.edgeId ? { ...e, props: { ...e.props, ...s.props } }
         : e));
+    }
+    if (s.type === 'PATCH_REPLACE' && s.onto) { // a preset (presets.js, K066): parameters only
+      ({ nodes, edges } = patchParams({ ...model, graph: { ...model.graph, nodes, edges } },
+        s.patch, s.onto).model.graph);
     }
     if (s.type === 'NODE_PARAM_SET') {
       const set = s.params || { [s.key]: s.value };

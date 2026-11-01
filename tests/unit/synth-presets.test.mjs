@@ -1,5 +1,5 @@
-// K066 (part): every Synth preset is data that validates, stays in the panel's ranges, keeps an
-// audio path to the output and applies as ONE BATCH (one history entry).
+// K066: every Synth preset is data that validates, stays in the panel's ranges, keeps an audio
+// path to the output and applies as ONE PATCH_REPLACE onto the panel's nodes (one history entry).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import PANEL from '../../src/js/synth/panels/semi-mono.js';
@@ -33,11 +33,11 @@ test('five panel presets and the engine presets, every value valid for its narro
   }
 });
 
-test('each preset is one BATCH, one undo entry, and the result still compiles', () => {
+test('each preset is one PATCH_REPLACE, one undo entry, and the result still compiles', () => {
   for (const p of PRESETS) {
     const st = panelStore();
     const r = presetAction(st.getModel(), PANEL, p.id);
-    assert.equal(r.action.type, 'BATCH');
+    assert.equal(r.action.type, 'PATCH_REPLACE');
     const done = st.dispatch(r.action);
     assert.equal(done.ok, true, `${p.id}: ${done.reason}`);
     assert.equal(compileStudio(liveModel(st.getModel())).ok, true, p.id);
