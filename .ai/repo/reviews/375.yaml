@@ -55,16 +55,33 @@
 #   storage-inventory passes.
 #
 # Verdict: merge. No P0 or P1. Two P2 and six P3, all open.
+# Delta re-review (oscilla-21 reviewer, claude-code af63bcf2) of head 124f6ece, a fast-forward
+# of the verdict commit 3a3471db by the builder's fix commit. Guarded content is now b1e6d552...ce95
+# (base program, --base-branch origin/feat/k097-xy-performance-pad), over the same nine paths.
+# - patches.js (R1, R3): patchParams takes from a matched edge only the keys that edge declares
+#   in the raw patch (validPatch's completed copy p supplies the values), merged over the model
+#   edge's own props, so a preset's {depth} no longer resets polarity or mapping; and it returns
+#   the model unchanged, with no undo entry, when nothing changed.
+# - validate.js (R4): metadata.noteTarget is checked against ID_PATTERN (the node id limit), not
+#   NAME_MAX_CHARS.
+# - Not guarded: presets declare only {depth}; synth/dock.js gives the menu focus once it is
+#   shown (a real Firefox bug the R2 fix exposed); synth.cjs s-dock waits for menu focus and
+#   confirms FM before Enter.
+# - Fail-first: synth-picker.test.mjs's R1, R3 and R4 cases fail on 3a3471db's tree (3 of 11)
+#   and pass at the head; studio, patch, preset and synth unit files 339 pass, 0 fail here.
+#   The builder reports synth.cjs 22/22 and 6/6 three times in Firefox and in Chromium.
+# R1-R4 are closed; R5-R8 stay open as P3 (R6 and R7 become plan issues after the train lands).
+#
 schema: review-verdict/v1
 pr: 375
 verdict: merge
 reviewer: "oscilla-21 reviewer (claude-code af63bcf2)"
-content: f964a04b716d47099e56a4220bb6ecfa322c78d8fd744ee5de972144f1b1b2aa
+content: b1e6d5520f2f5e84bf00d1fb0c5179c4f7783ed13fe3347a48d8f4f70ac9ce95
 findings:
-  - { id: R1, severity: P2, status: open, title: "synth/presets.js:107 with studio/patches.js:477: a quick preset now resets an amount cable's polarity and mapping, not only its depth. The patch edge carries the normal's whole props and patchParams merges them onto the model edge. Repro on the panel fixture: EDGE_UPDATE the lpf-eg2 edge to { polarity: bipolar, mapping: linear }, then dispatch presetAction(model, PANEL, 'init'). Head gives unipolar/log; base 61c0863b (BATCH of EDGE_UPDATE { depth }) keeps bipolar/linear. The PR body says 'parameters and amount depths only'. Either put only { depth } on the preset's edges or state and test the reset." }
-  - { id: R2, severity: P2, status: open, title: "tests/browser/synth.cjs:525: the PR's own s-dock check fails in CI. Studio UI (firefox), run 41262192547 job 124717542559, reports 'Enter routes the keys to the FM engine: not reached within 5000 ms'; s-relink fails in the same job. #372's firefox job passed synth 18/18. The ArrowDown loop neither waits until focus is inside the menu (the menu focuses its first item in $nextTick) nor asserts that it reached the FM item before Enter, so it can route the keys to another item. Not reproduced locally (load 29). Poll the focus with until() and assert the item before Enter, then re-run the job." }
-  - { id: R3, severity: P3, status: open, title: "studio/patches.js:495: patchParams returns a new model object even when changed.nodes and changed.edges are empty. Re-applying the same preset therefore reports changed: true and records an empty undo entry. Repro: dispatch presetAction(model, PANEL, 'init') twice; the second adds 1 to undoDepth. Base 61c0863b gives changed: false and adds no entry. Return the input model when nothing changed." }
-  - { id: R4, severity: P3, status: open, title: "studio/validate.js:848: metadata.noteTarget is bounded by NAME_MAX_CHARS (64), but node ids may be up to 128 characters (ID_PATTERN). Repro: import a Studio with a 93-character engine id, then METADATA_SET { noteTarget: that id }. It is refused with 'A saved Studio would not load again: metadata.noteTarget longer than 64 characters'. Check it with the node-id rule (128, ID_PATTERN)." }
+  - { id: R1, severity: P2, status: closed, title: "synth/presets.js:107 with studio/patches.js:477: a quick preset now resets an amount cable's polarity and mapping, not only its depth. The patch edge carries the normal's whole props and patchParams merges them onto the model edge. Repro on the panel fixture: EDGE_UPDATE the lpf-eg2 edge to { polarity: bipolar, mapping: linear }, then dispatch presetAction(model, PANEL, 'init'). Head gives unipolar/log; base 61c0863b (BATCH of EDGE_UPDATE { depth }) keeps bipolar/linear. The PR body says 'parameters and amount depths only'. Either put only { depth } on the preset's edges or state and test the reset." }
+  - { id: R2, severity: P2, status: closed, title: "tests/browser/synth.cjs:525: the PR's own s-dock check fails in CI. Studio UI (firefox), run 41262192547 job 124717542559, reports 'Enter routes the keys to the FM engine: not reached within 5000 ms'; s-relink fails in the same job. #372's firefox job passed synth 18/18. The ArrowDown loop neither waits until focus is inside the menu (the menu focuses its first item in $nextTick) nor asserts that it reached the FM item before Enter, so it can route the keys to another item. Not reproduced locally (load 29). Poll the focus with until() and assert the item before Enter, then re-run the job." }
+  - { id: R3, severity: P3, status: closed, title: "studio/patches.js:495: patchParams returns a new model object even when changed.nodes and changed.edges are empty. Re-applying the same preset therefore reports changed: true and records an empty undo entry. Repro: dispatch presetAction(model, PANEL, 'init') twice; the second adds 1 to undoDepth. Base 61c0863b gives changed: false and adds no entry. Return the input model when nothing changed." }
+  - { id: R4, severity: P3, status: closed, title: "studio/validate.js:848: metadata.noteTarget is bounded by NAME_MAX_CHARS (64), but node ids may be up to 128 characters (ID_PATTERN). Repro: import a Studio with a 93-character engine id, then METADATA_SET { noteTarget: that id }. It is refused with 'A saved Studio would not load again: metadata.noteTarget longer than 64 characters'. Check it with the node-id rule (128, ID_PATTERN)." }
   - { id: R5, severity: P3, status: open, title: "studio/registry.js:294: playsNotes accepts capabilities.hits, which no node definition declares and the registry's CAPABILITIES list does not validate. The branch is dead and untested, and the refusal sentences in actions.js and validate.js point the user to a 'hits capability' that no node has. Drop it until K073 declares it, or declare and validate it." }
   - { id: R6, severity: P3, status: open, title: "studio/validate.js:845: metadata.noteTarget is a new key with no STUDIO_SCHEMA_VERSION bump and no migration. Builds before this one, v3.14.1 or a revert of this PR, reject unknown keys, so a saved project or Studio file that routes the keys will not open there. K066's 'Rollback: revert the pull request; no saved state depends on it' therefore does not hold. State that in K066, or make the old reader tolerant first." }
   - { id: R7, severity: P3, status: open, title: "src/js/data/presets.js with core/constants.js:47 (localStorage oscilla.presets): the Playground/labs V1 voice presets remain a second preset store with a flat record shape. This is acceptable here as a named follow-up, not a P2. K102's scope lists the Studio-model instruments (panels, kits, engines, XY), and moving the Playground voice onto patches needs a Studio graph for it. No plan issue names it yet: file one under M069 so the duplication is tracked." }
