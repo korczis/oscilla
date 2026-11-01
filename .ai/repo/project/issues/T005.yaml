@@ -28,4 +28,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-10-31T22:55:46Z
+started_at: 2026-10-31T22:55:31Z
+started_event: sha256:72448e64e6856b651f0a510e8f1b38b62f75d468fd1eb2f32ef218ed4c8baa0c
+completed_at: 2026-10-31T22:55:46Z
+completed_event: sha256:14314ef875c92da61e33b28926b9c4b834c99c1ad73bfb31978567ac24f60926
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/readout-labels-analyser-scale.test.mjs tests/unit/no-fake-science.test.mjs"
+    result: "12/12 pass at main d8268b02 (fail-first proven on the merge base); landed in #335; About reads 'Relative (dBFS-like, uncalibrated)', README and docs/GLOSSARY.md state the -13.6 dB offset; #335 CI gate green"
+    artifact: "tests/unit/readout-labels-analyser-scale.test.mjs"
+    commit: d8268b026ecde328eb0356212649be81541f17ce
+    recorded_at: 2026-10-31T22:55:41Z
