@@ -1,6 +1,8 @@
 // Studio pickers in native <dialog>s (spec §64, §66, §138-§139, §142):
 //   - quick add: N or double-click on blank canvas; also create-node-from-cable, then filtered to
-//     the node types that accept the cable (§66). Search over name, aliases and category.
+//     the node types that accept the cable (§66). Search over name, aliases and category
+//     (graph-search.js rankSearch through libraryView, V610); an empty query lists the types
+//     added most recently first (rememberRecent: view state of the dialog, never saved).
 //   - accessible connection dialog: the non-drag, non-visual way to connect (keyboard and
 //     screen-reader users, §139): pick an output of the node, then one of the inputs that can
 //     take it ([Filter 1 / Audio input] [Spectrum 1 / Audio input] ...); the inputs that cannot
@@ -17,7 +19,7 @@ import { NODE_REGISTRY } from '../../studio/registry.js';
 import { announceAction } from '../../studio/a11y.js';
 import { connectableTypes, connectionTargets, nodeOutputs } from './graph-view.js';
 import { libraryView } from './library-panel.js';
-import { searchAnnouncement, searchNodes } from './graph-search.js';
+import { rememberRecent, searchAnnouncement, searchNodes } from './graph-search.js';
 import { h, replaceChildren } from './graph-dom.js';
 import { rovingKeydown } from '../app.js';
 
@@ -36,12 +38,17 @@ function listKeys(e, list, input) {
 
 /**
  * What the Add node search found (V272 C7, the dialog's status line): "3 node types match.",
- * "No node type matches “zzz”."; with no query, how many types are listed.
+ * "No node type matches “zzz”."; with no query, how many types are listed (and, when the types
+ * added most recently come first, what Enter adds).
  */
 export function quickAddStatus(view, query = '') {
   const q = String(query || '').trim();
   const n = view.count;
-  if (!q) return `${n} node type${n === 1 ? '' : 's'} listed.`;
+  const recent = view.groups && view.groups[0] && view.groups[0].id === 'recent';
+  if (!q) {
+    return `${n} node type${n === 1 ? '' : 's'} listed${recent && view.first
+      ? `, the most recently added first; Enter adds ${view.first.name}` : ''}.`;
+  }
   if (!n) return `No node type matches “${q}”.`;
   const what = `${n} node type${n === 1 ? ' matches' : 's match'}`;
   return view.first ? `${what}; Enter adds ${view.first.name}.`
@@ -66,6 +73,14 @@ export function createQuickAdd(dialog, svc) {
     list, h('div', { class: 'osc-dialog-actions' }, [cancel])]));
   dialog.setAttribute('aria-labelledby', 'osc-dlg-studio-add-title');
   let ctx = { at: null, from: null };
+  let recent = [];
+  // Every NODE_ADD through the one store counts (library, quick add, cable), whatever its route.
+  if (svc.store.subscribe) {
+    svc.store.subscribe((ev) => {
+      const a = ev && ev.reason === 'dispatch' && ev.action;
+      if (a && a.type === 'NODE_ADD') recent = rememberRecent(recent, a.nodeType);
+    });
+  }
 
   const close = () => svc.closeModal(dialog.id);
   cancel.addEventListener('click', close);
@@ -79,7 +94,7 @@ export function createQuickAdd(dialog, svc) {
   function render() {
     const model = svc.store.getModel();
     const only = ctx.from ? connectableTypes(model, ctx.from, registry) : null;
-    const view = libraryView(model, input.value, { registry, onlyTypes: only });
+    const view = libraryView(model, input.value, { registry, onlyTypes: only, recent });
     const items = view.groups.flatMap((g) => g.items);
     replaceChildren(list, items.length ? h('ul', { class: 'osc-sp-items' }, items.map((it) =>
       h('li', {}, [h('button', { type: 'button', class: 'osc-sl-item', 'data-type': it.type,
@@ -267,7 +282,7 @@ export function createFindNode(dialog, svc) {
         h('span', { class: 'osc-sl-name', text: it.name }),
         h('span', { class: 'osc-sl-what', text: `${it.typeLabel} · ${it.categoryLabel}` }),
       ])]))) : h('p', { class: 'osc-sl-empty', text: 'No node matches.' }));
-    status.textContent = searchAnnouncement(r);
+    status.textContent = searchAnnouncement(r, { target: true });
     return r;
   }
 
@@ -277,7 +292,7 @@ export function createFindNode(dialog, svc) {
       e.preventDefault();
       const r = render();
       if (r.items.length) choose(r.items[0].id);
-      else svc.announce(searchAnnouncement(r), { assertive: true });
+      else svc.announce(searchAnnouncement(r, { target: true }), { assertive: true });
     } else if (e.key === 'Escape') {
       // A search field would only clear itself: Escape closes the search, and nothing else
       // (the Studio and the instrument never see it, so no audio stops).

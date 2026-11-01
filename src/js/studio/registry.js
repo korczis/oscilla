@@ -8,7 +8,8 @@
 //   registry.categories() -> [{ id, label, types: [def] }]   (library order, §30)
 //   registry.port(type, portId, direction) -> port | null;  registry.ports(type, direction)
 //   registry.param(type, key) -> paramDef | null;  registry.defaults(type) -> params (fresh)
-//   registry.search(query) -> [def]               name, aliases, category; ranked
+//   registry.search(query) -> [def]               name, aliases, category; ranked (rankSearch)
+//   rankSearch(entries, query) -> [{ entry, rank }]   the one ranking of every Studio search
 //   registry.summarize(node) -> string            compact card text (§75)
 //   validateNodeDefinition(def) -> [error text]   authoring check, used by the unit tests
 //   validateParamValue(paramDef, value) -> null | error text
@@ -187,24 +188,62 @@ function complete(def) {
   });
 }
 
-function norm(s) {
-  return String(s).toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9&/()]+/g, ' ').trim();
+// The one ranking of every Studio search (§30, V610): the library, the quick add and the
+// find dialog (ui/studio/graph-search.js searchNodes) all rank with rankSearch. Text is folded
+// for case, accents and punctuation; letters of every script are kept.
+const norm = (v) => String(v ?? '').toLowerCase().normalize('NFKD')
+  .replace(/[\u0300-\u036f]/g, '').replace(/[^\p{L}\p{N}&]+/gu, ' ').trim();
+const CATEGORY_RANK = new Map(CATEGORY_ORDER.map((c, i) => [c.id, i]));
+// Score of a term -> its public tier: exact name, name prefix, word start, exact alias, alias
+// word start, the letters of a name in order, a part of an alias.
+const TIER = [0, 1, 2, 3, 3, 4, 4];
+
+function inOrder(term, text) {
+  let i = 0;
+  for (const ch of text) if (ch === term[i] && ++i === term.length) return true;
+  return false;
 }
 
-/** Score of one query token against a definition (0 = no match). */
-function tokenScore(def, token, categoryLabel) {
-  const name = norm(def.displayName);
-  const aliases = def.aliases.map(norm);
-  if (name === token) return 100;
-  if (name.split(' ').some((w) => w.startsWith(token))) return 80;
-  if (aliases.includes(token)) return 70;
-  if (aliases.some((a) => a.split(' ').some((w) => w.startsWith(token)))) return 60;
-  if (name.includes(token)) return 50;
-  if (aliases.some((a) => a.includes(token))) return 40;
-  if (norm(def.type).includes(token)) return 35;
-  if (norm(categoryLabel).startsWith(token)) return 30;
-  return 0;
+function termScore(t, names, aliases) {
+  if (names.includes(t)) return 0;
+  if (names.some((n) => n.startsWith(t))) return 1;
+  if (names.some((n) => n.split(' ').some((w) => w.startsWith(t)))) return 2;
+  if (aliases.includes(t)) return 3;
+  if (aliases.some((a) => a.split(' ').some((w) => w.startsWith(t)))) return 4;
+  if (names.some((n) => inOrder(t, n.replace(/ /g, '')))) return 5;
+  if (aliases.some((a) => a.includes(t))) return 6;
+  return null;
+}
+
+/**
+ * rankSearch(entries, query) -> [{ entry, rank }], best first. entries: [{ names, aliases,
+ * category }] (other fields carried through). Every term must match (AND); the weakest term
+ * ranks; rank is its tier 0-4 (0 exact name or the whole query is a name, 1 name prefix, 2 word
+ * start, 3 alias, 4 letters in order or a part of an alias; inside a tier the exact alias and the
+ * name come first). Ties by category order, then entry order. An empty query lists all, rank 0.
+ */
+export function rankSearch(entries, query) {
+  const q = norm(query);
+  const terms = q ? q.split(' ') : [];
+  const hits = [];
+  entries.forEach((entry, order) => {
+    let score = 0;
+    if (terms.length) {
+      const names = (entry.names || []).map(norm).filter(Boolean);
+      const aliases = (entry.aliases || []).map(norm).filter(Boolean);
+      if (!names.includes(q)) {
+        for (const t of terms) {
+          const s = termScore(t, names, aliases);
+          if (s === null) return;
+          score = Math.max(score, s);
+        }
+      }
+    }
+    hits.push({ entry, score, cat: terms.length ? CATEGORY_RANK.get(entry.category) ?? 99 : 0,
+      order });
+  });
+  hits.sort((a, b) => a.score - b.score || a.cat - b.cat || a.order - b.order);
+  return hits.map(({ entry, score }) => ({ entry, rank: TIER[score] }));
 }
 
 /** Build a registry; throws TypeError listing every authoring error. */
@@ -249,20 +288,9 @@ export function createNodeRegistry(definitions) {
       return def ? projectParams(def, {}) : null;
     },
     search(query) {
-      const tokens = norm(query || '').split(' ').filter(Boolean);
-      if (!tokens.length) return list;
-      const scored = [];
-      list.forEach((def, i) => {
-        let total = 0;
-        for (const t of tokens) {
-          const s = tokenScore(def, t, labels.get(def.category));
-          if (!s) return;
-          total += s;
-        }
-        scored.push({ def, total, i });
-      });
-      scored.sort((a, b) => b.total - a.total || a.i - b.i);
-      return scored.map((x) => x.def);
+      return rankSearch(list.map((def) => ({ names: [def.displayName],
+        aliases: [def.type, labels.get(def.category), ...def.aliases], category: def.category,
+        def })), query).map((x) => x.entry.def);
     },
     summarize(node) {
       const def = node ? get(node.type) : null;
@@ -279,7 +307,8 @@ export function createNodeRegistry(definitions) {
 
 export const NODE_REGISTRY = createNodeRegistry(NODE_DEFINITIONS);
 
-/** Node types matching `query` over name, aliases and category (library order on ties). */
+/** Node types matching `query` over name, aliases and category (rankSearch; category order on
+ * ties). */
 export function searchNodeTypes(query, registry = NODE_REGISTRY) {
   return registry.search(query);
 }

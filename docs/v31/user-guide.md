@@ -66,7 +66,12 @@ rest.
 - Click an item in the **Node library** to add it at the centre of the graph, or drag it onto
   the graph to place it.
 - Press **N** (or double-click empty canvas) for the searchable **Add node** picker; Enter adds
-  the first match. An empty graph says so on the canvas, with these ways to begin.
+  the first match, which the status line names as you type. The letters of a name in order are
+  enough ("fltr" finds Filter), and so is a short alias ("lp", "hp", "bp", "eq" for Filter,
+  "vco" for Oscillator, "vca" for Gain). Exact names come first, then names that start with
+  what you typed, then aliases, then the looser matches. With nothing typed, the types you added
+  most recently in this session are listed first (never saved). An empty graph says so on the
+  canvas, with these ways to begin.
 - A Studio has exactly one Master Output; the library says so instead of adding a second.
 
 ## Connect nodes
@@ -107,7 +112,9 @@ when the Studio first plays with the microphone.
 ## Find a node
 
 Press **/** (or the search button in the Signal graph header) and type part of a name, a type
-("filter"), a category ("modulation") or an alias ("vca"). Enter, or a click on a result,
+("filter"), a category ("modulation") or an alias ("vca"); the letters of a name in order are
+enough ("fltr"), ranked as in the Add node picker, and a node's own name comes before nodes that
+only share its type. The status line names the node Enter selects. Enter, or a click on a result,
 selects the node, frames it in the graph and moves focus to it. Esc closes the search and
 returns focus to where you were.
 

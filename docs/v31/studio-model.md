@@ -160,8 +160,12 @@ Master Output) and an ANALYSIS OBSERVED `capture` output; Capture turns any grap
 OBSERVED capture (digital loopback); Calibration maps OBSERVED → OBSERVED; Transfer Analyzer
 takes REFERENCE and OBSERVED on separate ports and outputs a RESULT for Measurement Result.
 
-`searchNodeTypes(query)` scores each query token against the name (exact, word prefix,
-substring), aliases, type id and category label; every token must match; ties keep library order.
+`searchNodeTypes(query)` (`registry.search`) ranks with `rankSearch`, the one ranking of every
+Studio search (the library, Add node and the find dialog, V610): every token must match, and the
+weakest decides the tier: exact name, name prefix, word start, alias (an exact alias before one
+that starts with the token; aliases include the type id and category label), then the letters of
+the name in order or a part of an alias. Ties go by category order, then library order. Text is
+folded for case, accents and punctuation; letters of every script are kept.
 
 ## Validation
 

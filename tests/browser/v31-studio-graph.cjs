@@ -62,6 +62,12 @@
 //                        then Tab keeps the selection
 //   v272-c7-add-status   V272 C7: the Add node dialog's status region says "No node type
 //                        matches" and counts the matches
+//   fuzzy-add            V610: quick add by N, "fltr" (the letters in order) lists Filter
+//                        first and the status names it; Enter adds it, selected and named in
+//                        the Inspector; by pointer (Add node, "lp" the alias, click the first
+//                        row); reopened empty, the recent Filter is listed first and named as
+//                        the Enter target; by touch (tap Add node, "eq", tap the row) in a
+//                        hasTouch page
 //   inspector-focus      V431 U2: keyboard Enter on an Inspector connection link, "Select
 //                        source" and "Duplicate" lands on the resulting view's heading or the
 //                        same action of the copy, never <body>
@@ -152,6 +158,24 @@ const H = {
     return v;
   },
   /** Open the Studio workspace on a fresh template document. */
+  /** A fresh touch page of dist (hasTouch, no mobile emulation) after the app is ready, with the
+   * safety notice collapsed; the caller closes `ctx`. */
+  touchPage: async (browser, baseUrl, viewport) => {
+    const ctx = await browser.newContext({ viewport, hasTouch: true, isMobile: false });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    try {
+      await page.goto(baseUrl);
+      await page.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
+      await page.evaluate(() => { const a = window.OSCILLA.app; a.alerts = [];
+        if (!a.safetyCollapsed) a.collapseSafety(); });
+    } catch (e) {
+      await ctx.close();
+      throw e;
+    }
+    return { ctx, page, errors };
+  },
   fresh: async (page, id = 'subtractive-synth') => {
     await page.evaluate(async (tid) => {
       const a = window.OSCILLA.app;
@@ -1357,6 +1381,94 @@ function defineChecks() {
     }), none, some };
   });
 
+  def('fuzzy-add', async ({ page, browser, baseUrl }) => {
+    // V610: one meaning-first fuzzy ranking (registry.js rankSearch) behind the quick add.
+    const ADD = '#osc-dlg-studio-add';
+    const addState = (p) => p.evaluate((sel) => {
+      const d = document.querySelector(sel);
+      const s = d.querySelector('[data-osc="studio.add.status"]');
+      const row = d.querySelector('[data-osc="studio.add.item"]');
+      return { open: d.open, status: s ? s.textContent.trim() : '',
+        first: row ? row.dataset.type : null };
+    }, ADD);
+    const added = (p, n0) => p.evaluate((count) => {
+      const st = window.OSCILLA.studio;
+      const filters = st.model.graph.nodes.filter((n) => n.type === 'filter');
+      const id = [...st.selection.nodes][0];
+      const node = st.model.graph.nodes.find((n) => n.id === id);
+      const t = document.querySelector('[data-osc="studio.inspector.title"]');
+      const title = t ? t.textContent.trim() : '';
+      return filters.length === count + 1 && node && node.type === 'filter'
+        && title.includes(node.metadata.name) ? { id, title } : null;
+    }, n0);
+    const filters = (p) => p.evaluate(() => window.OSCILLA.studio.model.graph.nodes
+      .filter((n) => n.type === 'filter').length);
+    const listed = (p, q) => until(async () => {
+      const a = await addState(p);
+      return a.open && a.first === 'filter' && /; Enter adds Filter\.$/.test(a.status) ? a : null;
+    }, { ms: 3000, what: `quick add lists Filter for ${q}` });
+    const addedOne = (p, n0, how) => until(() => added(p, n0), { ms: 3000,
+      what: `fuzzy-add (${how}): one more Filter in the store, selected, named by the Inspector` });
+
+    // Keyboard: N, "fltr", Enter.
+    await H.fresh(page);
+    let n0 = await filters(page);
+    await page.focus('.osc-sg-viewport');
+    await page.keyboard.press('n');
+    await until(async () => (await H.where(page)) === 'studio.add.search',
+      { ms: 3000, what: 'fuzzy-add: N focuses the quick add search' });
+    await page.keyboard.type('fltr');
+    const typed = await listed(page, 'fltr');
+    await page.keyboard.press('Enter');
+    const byKey = await addedOne(page, n0, 'keyboard');
+    // Pointer: the Add node button, "lp", a click on the first row.
+    n0 = await filters(page);
+    await page.click('[data-osc="studio.add"]');
+    await until(async () => (await addState(page)).open,
+      { ms: 3000, what: 'fuzzy-add: Add node opens the quick add' });
+    await page.fill('[data-osc="studio.add.search"]', 'lp');
+    const lp = await listed(page, 'lp');
+    await page.click(`${ADD} [data-osc="studio.add.item"]`);
+    const byPointer = await addedOne(page, n0, 'pointer');
+    // Empty again: the type added most recently (Filter, through the store) is listed first and
+    // the status names it as the Enter target; Cancel adds nothing.
+    await page.click('[data-osc="studio.add"]');
+    const recent = await until(async () => {
+      const a = await addState(page);
+      return a.open && a.first === 'filter'
+        && /most recently added first; Enter adds Filter\.$/.test(a.status) ? a : null;
+    }, { ms: 3000, what: 'fuzzy-add: an empty quick add lists the recent Filter first' });
+    n0 = await filters(page);
+    await page.click('[data-osc="studio.add.cancel"]');
+    await until(async () => !(await addState(page)).open,
+      { ms: 3000, what: 'fuzzy-add: Cancel closes the quick add' });
+    const cancelAddsNone = (await filters(page)) === n0;
+
+    // Touch: tap Add node, "eq", tap the first row, in a hasTouch page.
+    const { ctx, page: tp, errors } = await H.touchPage(browser, baseUrl,
+      { width: 1280, height: 800 });
+    let byTouch = null;
+    let eq = null;
+    try {
+      await H.fresh(tp);
+      n0 = await filters(tp);
+      await tp.tap('[data-osc="studio.add"]');
+      await until(async () => (await addState(tp)).open,
+        { ms: 3000, what: 'fuzzy-add: a tap on Add node opens the quick add' });
+      await tp.fill('[data-osc="studio.add.search"]', 'eq');
+      eq = await listed(tp, 'eq');
+      await tp.tap(`${ADD} [data-osc="studio.add.item"]`);
+      byTouch = await addedOne(tp, n0, 'touch');
+    } finally {
+      await ctx.close();
+    }
+    return { ...H.verdict({
+      fltrListsFilter: !!typed, enterAdds: !!byKey, lpListsFilter: !!lp, clickAdds: !!byPointer,
+      recentFirst: !!recent, cancelAddsNone, eqListsFilter: !!eq, tapAdds: !!byTouch,
+      noTouchErrors: errors.length === 0,
+    }), typed, byKey, lp, byPointer, recent, eq, byTouch, errors };
+  });
+
   /** In-page: where focus is (for the Inspector checks); `shown` when it can be seen. */
   const focusAt = (page) => page.evaluate(() => {
     const a = document.activeElement;
@@ -1408,16 +1520,9 @@ function defineChecks() {
   def('inspector-phone-focus', async ({ browser, baseUrl }) => {
     // V431 U7 (#19) and U8 (#20) at 390 x 844: the graph subview is display:none while the
     // Inspector is shown, so nothing may send focus there.
-    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true,
-      isMobile: false });
-    const page = await ctx.newPage();
-    const errors = [];
-    page.on('pageerror', (e) => errors.push(e.message));
+    const { ctx, page, errors } = await H.touchPage(browser, baseUrl,
+      { width: 390, height: 844 });
     try {
-      await page.goto(baseUrl);
-      await page.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
-      await page.evaluate(() => { const a = window.OSCILLA.app; a.alerts = [];
-        if (!a.safetyCollapsed) a.collapseSafety(); });
       const inspectorOf = async (nodeId) => {
         await H.fresh(page);
         await page.evaluate((id) => {
@@ -1790,16 +1895,9 @@ function defineChecks() {
   });
 
   def('mobile-tap-connect', async ({ browser, baseUrl }) => {
-    const ctx = await browser.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true,
-      isMobile: false });
-    const page = await ctx.newPage();
-    const errors = [];
-    page.on('pageerror', (e) => errors.push(e.message));
+    const { ctx, page, errors } = await H.touchPage(browser, baseUrl,
+      { width: 375, height: 812 });
     try {
-      await page.goto(baseUrl);
-      await page.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
-      await page.evaluate(() => { const a = window.OSCILLA.app; a.alerts = [];
-        if (!a.safetyCollapsed) a.collapseSafety(); });
       await H.fresh(page);
       const id = await page.evaluate(() => window.OSCILLA.studio.store.dispatch({ type: 'NODE_ADD',
         nodeType: 'scope', position: { x: 240, y: 340 } }).created.nodes[0]);
@@ -1985,16 +2083,9 @@ function defineChecks() {
   def('phone-port-targets', async ({ browser, baseUrl }) => {
     // V431 U9 (#21) and U10 (#26) at 390 x 844 touch: Frame all keeps every port target at
     // least 24 px tall on a coarse pointer; the empty-graph hint shows on the phone too.
-    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true,
-      isMobile: false });
-    const page = await ctx.newPage();
-    const errors = [];
-    page.on('pageerror', (e) => errors.push(e.message));
+    const { ctx, page, errors } = await H.touchPage(browser, baseUrl,
+      { width: 390, height: 844 });
     try {
-      await page.goto(baseUrl);
-      await page.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
-      await page.evaluate(() => { const a = window.OSCILLA.app; a.alerts = [];
-        if (!a.safetyCollapsed) a.collapseSafety(); });
       await H.fresh(page);
       const ports = await page.evaluate(() => ({
         coarse: window.matchMedia('(pointer: coarse)').matches,

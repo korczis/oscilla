@@ -53,7 +53,7 @@ export const envelope = defineNode({
   displayName: 'Envelope',
   idPrefix: 'env',
   category: CATEGORIES.MODULATION,
-  aliases: ['adsr', 'eg', 'contour', 'vca', 'amplitude envelope'],
+  aliases: ['adsr', 'eg', 'contour', 'vca envelope', 'amplitude envelope'],
   inputs: [
     definePort({ id: 'audio', direction: 'in', type: 'AUDIO', label: 'Audio' }),
     definePort({ id: 'gate', direction: 'in', type: 'TRIGGER', label: 'Gate' }),
