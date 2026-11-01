@@ -2438,6 +2438,8 @@
           <button type="button" data-osc="synth.arm" :aria-pressed="String(synth.armed)"
             @click="synth.armed ? synthDisarm() : synthArm()" x-text="synth.armed ? 'Disarm' : 'Arm'"
             class="h-11 rounded-lg bg-primary-600 px-4 text-sm font-medium text-white hover:bg-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300">Arm</button>
+          <button type="button" data-osc="synth.library" @click="patchLibraryOpen()"
+            class="h-11 rounded-lg border border-solid border-gray-300 bg-white px-4 text-sm font-medium text-gray-900 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700">Library</button>
           <button type="button" data-osc="synth.studio" @click="synthOpenStudio()"
             class="h-11 rounded-lg border border-solid border-gray-300 bg-white px-4 text-sm font-medium text-gray-900 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700">Open in Studio</button>
           <button type="button" data-osc="synth.copy-link" @click="synthCopyLink()"

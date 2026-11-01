@@ -28,9 +28,9 @@
 //   replaceWithPatch(model, patch, { newId, registry, at }) -> { model, created, idMap,
 //     skipped, removed }   the whole graph is replaced (explicit intent, §114)
 //   patchTargets(model, patch, { target }) -> { onto, missing }   which model node each patch
-//     node would set (K020, K066): a node of a Synth panel module is found by its
-//     metadata.panel, a one-node patch sets `target` (the selected node) or the only node of
-//     its type; `missing` lists the patch nodes with no such node
+//     node would set (K020, K066, K102): a node of a Synth panel module is found by its
+//     metadata.panel; else a one-node patch sets `target` (the selected node) or the only node
+//     of its type; `missing` lists the patch nodes with no such node
 //   patchParams(model, patch, onto) -> { model, changed: { nodes, edges }, skipped }
 //     parameters only: each mapped node takes its patch node's parameters, each model edge on
 //     the ports of a patch edge between two mapped nodes takes that edge's properties; no node,
@@ -424,9 +424,9 @@ export function patchTargets(model, patch, { target = null, registry = NODE_REGI
     const ref = src.metadata.panel;
     const same = model.graph.nodes.filter((n) => n.type === src.type);
     const one = registry.get(src.type).maxInstances === 1 ? same[0] : null;
-    const hit = ref ? model.graph.nodes.find((n) => samePanel(n.metadata.panel, ref)) || one
-      : p.graph.nodes.length !== 1 ? one
-        : same.find((n) => n.id === target) || (same.length === 1 ? same[0] : null);
+    const hit = (ref && model.graph.nodes.find((n) => samePanel(n.metadata.panel, ref)))
+      || (p.graph.nodes.length !== 1 ? one
+        : same.find((n) => n.id === target) || (same.length === 1 ? same[0] : null));
     if (hit) onto[src.id] = hit.id;
     else missing.push(src.id);
   }

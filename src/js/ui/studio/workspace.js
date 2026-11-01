@@ -98,6 +98,7 @@ import { mountInspector } from './inspector.js';
 import { mountLibrary } from './library-panel.js';
 import { compactTime, mountCompact } from './compact.js';
 import { STUDIO_STORE_FALLBACK_TEXT, mountPatches, recordId } from './patches-panel.js';
+import { mountPatchBrowser } from '../patch-browser.js';
 import { mountStudioTimeline } from './timeline-editor.js';
 import { studioBackTarget, workspacePhrase } from '../cross-links.js';
 import { WORKSPACE_LABELS } from '../shortcuts.js';
@@ -1055,6 +1056,7 @@ export function createStudioUi(svc = {}) {
       micError: (id) => ctx.micErrors.get(id) || '',
       micBusy: () => ctx.micBusy,
       userPatches: () => library().then((l) => l.patches()),
+      openLibrary: () => cmp.patchLibraryOpen(),
     });
     const libHost = document.querySelector('[data-osc="studio.library"]');
     ctx.library = mountLibrary(libHost, {
@@ -1101,6 +1103,15 @@ export function createStudioUi(svc = {}) {
       downloadFile,
       ...dialogSvc,
     });
+    // K102: the one patch library, shared by the Synth and the Studio, in the patches dialog.
+    const libBody = document.querySelector('#osc-dlg-studio-library > div');
+    const browserHost = libBody ? libBody.insertBefore(document.createElement('div'),
+      libBody.lastElementChild) : null;
+    ctx.browser = browserHost ? mountPatchBrowser(browserHost, { store: ctx.handle, announce,
+      userPatches: () => library().then((l) => l.patches()),
+      show: () => ctx.patches.openLibrary(),
+      target: () => (cmp.workspace === 'studio' ? ctx.handle.getSelection().nodes[0] : null) })
+      : null;
     // Each Studio dialog holds its live regions before anything is said in it (V272 C4).
     for (const d of document.querySelectorAll('dialog[data-osc-studio-dialog]')) dialogRegions(d);
     const tlHost = document.querySelector('[data-osc="studio.timeline"]');
@@ -1587,6 +1598,10 @@ export function createStudioUi(svc = {}) {
       return true;
     },
 
+    /** The patch library (K102), from the Synth, the Studio or the Inspector's Presets. */
+    patchLibraryOpen(opts = {}) {
+      if (ctx.browser) ctx.browser.open({ from: this.workspace, ...opts });
+    },
     studioOpenLibrary() {
       if (ctx.patches) ctx.patches.openLibrary();
     },

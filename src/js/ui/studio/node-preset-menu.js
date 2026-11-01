@@ -5,7 +5,7 @@
 // kept. Arrows move, Enter chooses, Escape closes and returns focus to the button.
 //
 //   presetMenu(view, svc) -> element    svc: { store, announce, userPatches() -> Promise<[{ id,
-//                                         patch }]> }
+//                                         patch }]>, openLibrary() (the K102 patch library) }
 
 import { nodePresetAction, nodePresets } from '../../studio/node-presets.js';
 import { announceAction } from '../../studio/a11y.js';
@@ -48,7 +48,11 @@ export function presetMenu(view, svc) {
       h('span', { text: e.name }),
       h('span', { class: 'text-xs text-gray-500 dark:text-gray-400',
         text: e.source === 'user' ? 'Saved' : 'Factory' })])]);
-    replaceChildren(menu, list.map(row));
+    const more = svc.openLibrary ? h('li', { role: 'none' }, [h('button', { type: 'button',
+      role: 'menuitem', class: ITEM, 'data-osc': 'studio.inspector.presets.library',
+      text: 'Open the patch library…', onClick: () => { close(false); svc.openLibrary(); } })])
+      : null;
+    replaceChildren(menu, [...list.map(row), more]);
   };
   button.addEventListener('click', async () => {
     if (!menu.hidden) {
