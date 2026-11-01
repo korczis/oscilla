@@ -1061,6 +1061,9 @@ function defineChecks() {
       }
       await collect();
     }
+    // The Synth workspace (#329): its header controls (preset, Arm keys, Studio, copy link).
+    await H.workspace(page, 'synth');
+    await collect();
     await H.workspace(page, 'about');
     await collect();
     // MEASURE and EXPERIMENTS: every state that shows a control. A TEST CONTEXT loopback
