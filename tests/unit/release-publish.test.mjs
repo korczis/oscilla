@@ -14,10 +14,13 @@ import {
   PUBLIC_URL, REGION_CLOSE, REGION_OPEN, gitRunner,
 } from '../../scripts/release-metadata.mjs';
 import {
-  PAGES_TIMEOUT_MIN, STUCK_AFTER_MIN, WAITING_STATUSES, diagnoseStuckRuns, finishLine,
-  jobStarted, preconditionProblems, publish, releaseCreateFlags, releaseNotes, runStarted,
-  stuckPagesRuns, taggedPageProblem,
+  FROM_MAIN, PAGES_TIMEOUT_MIN, STUCK_AFTER_MIN, WAITING_STATUSES, defaultSh, diagnoseStuckRuns,
+  finishLine, jobStarted, preconditionProblems, publish, releaseCreateFlags, releaseNotes,
+  runStarted, stuckPagesRuns, taggedPageProblem,
 } from '../../scripts/release-publish.mjs';
+import {
+  NET_ATTEMPTS, NET_CALL_TIMEOUT_MS, NET_RETRY_DELAY_MS, NET_TRANSFER_TIMEOUT_MS,
+} from '../../scripts/release-bounded.mjs';
 import {
   GATE_RUN, GATE_TREE_EXCLUDE, RECEIPT_KEYS, computeGateTree, currentFingerprint, gateTreePaths,
   receiptProblems,
@@ -868,3 +871,136 @@ test('R021: a tag made locally at HEAD whose push failed refuses and says it was
       /BLOCKED tag v40\.0\.0 already exists locally at 0a1b2c3, not HEAD/);
     assert.deepEqual(g.calls.filter(MUTATING), []);
   });
+
+// ------------------------------------- 2026-10-31 publish: bounded gh calls, publish from main
+// On 2026-10-31 one `gh run list --workflow pages.yml` of the release publish sat for 2 h 20 min
+// with no output, and later a gh call failed with "can't assign requested address" (the Mac was
+// out of local ephemeral ports), which ended the wait for the dispatched Pages run. Here the
+// publish runs on its own default runner (defaultSh) over an injected spawn that answers
+// like the fakes above, so every call it makes goes through the bound and the retry.
+const PORTS = "read tcp 192.168.1.20:61234->140.82.121.6:443: read: can't assign requested "
+  + 'address';
+function bounded(f, { fail = () => null } = {}) {
+  const spawned = [];
+  const slept = [];
+  const spawn = (cmd, args, opts) => {
+    spawned.push({ line: [cmd, ...args].join(' '), timeout: opts.timeout });
+    const why = fail(cmd, args);
+    if (why === 'hang') {
+      // what spawnSync returns for a child it killed at opts.timeout
+      return { status: null, signal: 'SIGKILL', stdout: '', stderr: '',
+        error: Object.assign(new Error('spawnSync gh ETIMEDOUT'), { code: 'ETIMEDOUT' }) };
+    }
+    if (why) return { status: 1, stdout: '', stderr: why };
+    const r = f.sh(cmd, args);
+    return { status: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '' };
+  };
+  const sh = defaultSh('/nonexistent', { spawn, sleepMs: (ms) => slept.push(ms),
+    note: () => {}, echo: () => {} });
+  return { sh, spawned, slept };
+}
+const isDispatchList = (cmd, args) => cmd === 'gh' && args[1] === 'list'
+  && args.includes('workflow_dispatch');
+
+test('2026-10-31: every gh and git network call of a publish carries a named bound',
+  async () => {
+    const f = fakes({ runs: PUSH_RUN });
+    const b = bounded(f);
+    const code = await publish({ argv: ['--yes'], run: f.run, sh: b.sh, log: f.log,
+      receipt: RECEIPT, fingerprint: FP, fetchPage: f.fetchPage, ...fakeTime() });
+    assert.equal(code, 0, f.out.join('\n'));
+    const net = b.spawned.filter(({ line }) => /^gh |^git (ls-remote|push) /.test(line));
+    assert.ok(net.length >= 8, `${net.length} network calls`);
+    for (const { line, timeout } of net) {
+      const want = line.startsWith('gh run watch') ? PAGES_TIMEOUT_MIN * 60_000
+        : line.startsWith('gh release create') ? NET_TRANSFER_TIMEOUT_MS : NET_CALL_TIMEOUT_MS;
+      assert.equal(timeout, want, line);
+    }
+    // and every other command (npm run build:check, node verify-deploy) is bounded too
+    for (const { line, timeout } of b.spawned) {
+      assert.ok(Number.isFinite(timeout) && timeout > 0, `${line} unbounded`);
+    }
+  });
+
+test('2026-10-31: a gh run list that hangs is stopped at its bound, retried, then reported',
+  async () => {
+    const f = fakes();
+    const b = bounded(f, { fail: (cmd, args) => (cmd === 'gh' && args[1] === 'list'
+      ? 'hang' : null) });
+    const code = await publish({ argv: [], run: f.run, sh: b.sh, log: f.log, receipt: RECEIPT,
+      fingerprint: FP, clock: () => NOW });
+    assert.equal(code, 1);
+    const lists = b.spawned.filter(({ line }) => line.startsWith('gh run list'));
+    assert.equal(lists.length, NET_ATTEMPTS);
+    assert.ok(lists.every(({ timeout }) => timeout === NET_CALL_TIMEOUT_MS));
+    assert.deepEqual(b.slept, [NET_RETRY_DELAY_MS, 2 * NET_RETRY_DELAY_MS]);
+    assert.match(f.out.join('\n'), new RegExp('BLOCKED could not list the pages\\.yml runs '
+      + `\\(gh run list --workflow pages\\.yml --limit 20 --json \\S+: timed out after `
+      + `${NET_CALL_TIMEOUT_MS / 1000} s \\(${NET_ATTEMPTS} attempts\\)\\)`));
+    assert.deepEqual(f.calls.filter(MUTATING), []);
+  });
+
+test("2026-10-31: can't assign requested address on the dispatched-run list is retried, "
+  + 'and the publish completes', async () => {
+  let failures = 1;
+  const f = fakes({ runs: PUSH_RUN });
+  const b = bounded(f, { fail: (cmd, args) => (isDispatchList(cmd, args) && failures-- > 0
+    ? PORTS : null) });
+  const code = await publish({ argv: ['--yes'], run: f.run, sh: b.sh, log: f.log,
+    receipt: RECEIPT, fingerprint: FP, fetchPage: f.fetchPage, ...fakeTime() });
+  assert.equal(code, 0, f.out.join('\n'));
+  assert.deepEqual(b.slept, [NET_RETRY_DELAY_MS]);
+  assert.ok(sequence(f).includes('gh workflow run pages.yml --ref main'));
+  assert.ok(f.calls.some((c) => c[0] === 'gh' && c[1] === 'release' && c[2] === 'create'));
+});
+
+test('2026-10-31: when the retries run out, the failure names the call and the reason',
+  async () => {
+  const f = fakes({ runs: PUSH_RUN });
+  const b = bounded(f, { fail: (cmd, args) => (isDispatchList(cmd, args) ? PORTS : null) });
+  const code = await publish({ argv: ['--yes'], run: f.run, sh: b.sh, log: f.log,
+    receipt: RECEIPT, fingerprint: FP, fetchPage: f.fetchPage, ...fakeTime() });
+  assert.equal(code, 1);
+  const text = f.out.join('\n');
+  assert.ok(text.includes('RELEASE:PUBLISH FAILED: could not list the dispatched pages.yml runs '
+    + `(gh run list --workflow pages.yml --event workflow_dispatch --commit ${HEAD} --limit 5 `
+    + `--json databaseId,status,conclusion,headSha,createdAt: ${PORTS} (${NET_ATTEMPTS} `
+    + 'attempts))'), text);
+  assert.match(text, /re-run npm run release:publish -- --yes, which resumes after the tag/);
+  assert.equal(b.spawned.filter(({ line }) => line.includes('workflow_dispatch')).length,
+    NET_ATTEMPTS);
+  // a step that fails names its call and the reason too, and `gh workflow run` (which acts
+  // once) is not repeated after a failure that may have reached GitHub
+  const g = fakes({ runs: PUSH_RUN });
+  const c = bounded(g, { fail: (cmd, args) => (cmd === 'gh' && args[0] === 'workflow'
+    ? 'HTTP 502: Bad Gateway' : null) });
+  assert.equal(await publish({ argv: ['--yes'], run: g.run, sh: c.sh, log: g.log,
+    receipt: RECEIPT, fingerprint: FP, fetchPage: g.fetchPage, ...fakeTime() }), 1);
+  assert.ok(g.out.join('\n').includes('RELEASE:PUBLISH FAILED: dispatching the Pages redeploy '
+    + 'failed (gh workflow run pages.yml --ref main: HTTP 502: Bad Gateway)'), g.out.join('\n'));
+  assert.equal(c.spawned.filter(({ line }) => line.startsWith('gh workflow run')).length, 1);
+});
+
+test('2026-10-31: on a detached HEAD the refusal says to publish from main at origin/main '
+  + 'and that a re-run after the tag resumes', async () => {
+  const p = preconditionProblems({ branch: 'HEAD', dirty: false, head: HEAD, originMain: HEAD,
+    tagLocal: false, tagRemote: false, receiptProblems: [], buildCheck: true, ghAuth: true,
+    tag: 'v40.0.0' });
+  assert.equal(p.length, 1);
+  assert.match(p[0], /^on branch HEAD \(a detached HEAD\), releases are cut from main: /);
+  assert.ok(p[0].endsWith(FROM_MAIN));
+  assert.match(FROM_MAIN, /from a checkout on branch main at origin\/main/);
+  assert.match(FROM_MAIN, /the primary checkout/);
+  assert.match(FROM_MAIN, /git switch main && git merge --ff-only origin\/main/);
+  assert.match(FROM_MAIN, /resumes after the tag \(R021\)/);
+  const f = fakes({ branch: 'HEAD' });
+  assert.equal(await publish({ argv: ['--yes'], run: f.run, sh: f.sh, log: f.log,
+    receipt: RECEIPT, fingerprint: FP }), 1);
+  assert.ok(f.out.includes(`  BLOCKED ${p[0]}`), f.out.join('\n'));
+  assert.deepEqual(f.calls.filter(MUTATING), []);
+  // a feature branch gets the same way out, without the detached-HEAD note
+  const [q] = preconditionProblems({ branch: 'release/x', dirty: false, head: HEAD,
+    originMain: HEAD, tagLocal: false, tagRemote: false, receiptProblems: [], buildCheck: true,
+    ghAuth: true, tag: 'v40.0.0' });
+  assert.equal(q, `on branch release/x, releases are cut from main: ${FROM_MAIN}`);
+});
