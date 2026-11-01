@@ -52,7 +52,9 @@ import { LEARN_TOPICS } from './data/learn.js';
 import { serializeSequence } from './sequencer/model.js';
 
 import { registerOscillaUi, workspaceTitle } from './ui/app.js';
-import { keyGuard, openModal, closeModal, watchDialogs, focusSafely } from './ui/dialogs.js';
+import {
+  keyGuard, openModal, closeModal, watchDialogs, focusSafely, keepFocusInView,
+} from './ui/dialogs.js';
 import { instrumentTakesSpace, isSpace } from './ui/shortcuts.js';
 import { createWorkbench } from './ui/workbench.js';
 import { createNavigation, v1ModeFor } from './ui/navigation.js';
@@ -211,7 +213,8 @@ function labVizInputs(plan) {
     additive,
     adsr: env && env.enabled ? { ...env.adsr } : null,
     filter: filter && filter.enabled ? { ...filter } : null,
-    router: dual && needsRouter(plan) ? routerConfigFor(plan) : null,
+    // A sounding voice keeps its router once built, at centre too (C010).
+    router: dual && (needsRouter(plan) || liveRouter) ? routerConfigFor(plan) : null,
     phaseDeg: dual && labs.phase ? labs.phase.config.phaseDeg : 0,
   };
 }
@@ -266,8 +269,10 @@ function exportConfigDoc(cmp) {
   });
 }
 
+/** Apply an import; { issues, dropped } (dropped: the instrument's report, H002). */
 function applyImport(cmp, parsed) {
-  let issues = cmp.applyConfig(parsed.instrument, 'import');
+  const restored = cmp.restoreConfig(parsed.instrument, 'import');
+  let issues = restored.issues;
   if (parsed.envelope && labs.envelope) {
     labs.envelope.update({ adsr: parsed.envelope.adsr, enabled: parsed.envelope.enabled });
   }
@@ -288,7 +293,7 @@ function applyImport(cmp, parsed) {
   }
   cmp.sourceKind = cmp.source === 'single' && cmp.pattern === 'tone' ? 'oscillator' : 'pattern';
   syncLabFlags();
-  return issues;
+  return { issues, dropped: restored.dropped };
 }
 
 async function renderWav(cmp, what) {
@@ -461,13 +466,24 @@ function mountLabs(root) {
   if (labs.filter) labs.filter.onChange(labChanged);
   if (labs.phase) {
     let lastPhaseDeg = labs.phase.config.phaseDeg;
+    let lastPan = labs.phase.config.pan;
     labs.phase.onChange((cfg) => {
       if (!app) return;
       if (Math.abs(app.dual.a.freq - cfg.freqA) > 1e-6) app.setDualFreq('a', String(cfg.freqA));
       if (Math.abs(app.dual.b.freq - cfg.freqB) > 1e-6) app.setDualFreq('b', String(cfg.freqB));
       const stereo = cfg.route === 'stereo';
       if (app.dual.stereo !== stereo) app.setStereo(stereo);
-      if (liveRouter) liveRouter.wrapper.refresh();
+      // Pan: a sounding dual voice with the router re-reads it (a glide). One started centred in
+      // Mono output has none, so the first pan off centre restarts it click-free with one, and
+      // it keeps it, at centre too (C010). The level does not step: the StereoPanners it
+      // replaces use the same equal-power law.
+      const v = engine.voice;
+      const want = !!(v && v.plan && v.plan.type === 'dual' && needsRouter(v.plan));
+      const routed = engine.setDualRouter(want ? dualRouterFactory(true) : null);
+      if (routed === 'restarted' || cfg.pan !== lastPan) {
+        lastPan = cfg.pan;
+        vizLabsChanged(); // the signal path shows the router and its pan
+      }
       if (cfg.phaseDeg !== lastPhaseDeg) {
         // B's phase offset is a start time: a sounding dual voice restarts click-free with it.
         lastPhaseDeg = cfg.phaseDeg;
@@ -698,30 +714,6 @@ function integrationInit() {
     // ms since navigation start, set once, together with the attribute the suites wait for.
     try { performance.mark('oscilla:ready'); } catch (e) { /* no User Timing here */ }
     document.documentElement.dataset.ready = 'true';
-  });
-}
-
-/**
- * Firefox and WebKit do not scroll a keyboard-focused control that is already partly inside
- * the #osc-main scroller, so its edge (the status bar below it) can cut the control (WCAG
- * 2.4.11). After the browser's own focus scroll, nudge #osc-main until it is fully visible.
- */
-function keepFocusInView(main) {
-  if (!main) return;
-  document.addEventListener('focusin', (e) => {
-    const el = e.target;
-    if (!(el instanceof Element) || el === main || !main.contains(el)) return;
-    requestAnimationFrame(() => {
-      let keyboard = true;
-      try { keyboard = el.matches(':focus-visible'); } catch (err) { /* no :focus-visible */ }
-      if (document.activeElement !== el || !keyboard) return;
-      const r = el.getBoundingClientRect();
-      if (!r.height) return;
-      const top = main.getBoundingClientRect().top + main.clientTop + 4;
-      const bottom = top + main.clientHeight - 8;
-      if (r.top < top) main.scrollTop -= top - r.top;
-      else if (r.bottom > bottom) main.scrollTop += Math.min(r.bottom - bottom, r.top - top);
-    });
   });
 }
 

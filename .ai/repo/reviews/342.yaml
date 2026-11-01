@@ -1,0 +1,56 @@
+# Review verdict for pull request #342, T023: the Studio says when it plays a lower frequency
+# than the one stored (branch fix/t023-studio-frequency-limited). Builder oscilla-b0; this
+# reviewer (oscilla-26-review) did not build it, and neither did the session that started it.
+#
+# Round 1, head 8849157a, merge base e872c444, digest 85536c4b...eef: changes-requested for R1
+# (P1), the cap of a parameter's own range (an LFO Rate, 100 Hz) reported as 0.95 x Nyquist, with
+# R2 (P2) and R3, R4 (P3). Verdict commit 20eebe01.
+#
+# Round 2 (delta re-review), reviewed head 5e718acc: da45169b (the fix of R1-R4) and 5e718acc
+# (origin/main 682a45e4 merged, dist rebuilt); 20eebe01 is an ancestor. Merge base 682a45e4.
+# The merge commit changes none of the pull request's files and main changed none of them.
+#
+# The digest: the base branch's scripts/review-verdict.mjs, from a fresh `git archive origin/main
+# scripts .github/scripts`, run with --repo on a detached worktree of 5e718acc: 66adf68c...69ee
+# over the 2 guarded paths it names (src/js/studio/compiler.js, src/js/studio/runtime.js).
+#
+# What was verified on 5e718acc, with the real AudioEngine over the fake AudioContext (the
+# round-1 probes re-run, plus new ones):
+# - R1: computeBases records each Hz parameter's cap and its bound (range or nyquist). An LFO Rate
+#   at 80 Hz with a +50 Hz cable reads "... plays 100 Hz: the Studio keeps LFO 1 Rate at or below
+#   100 Hz, the top of its range"; a cable into that Rate names "LFO 1 Rate" and its range; the
+#   Runtime section says "within their parameters' ranges". Nyquist cases still name 0.95 x
+#   Nyquist at 22.05, 44.1 and 48 kHz; none fires at 96 kHz, at the safe maximum or at 1 kHz.
+# - R2: played is the sounding pitch, base x 2^(cents/1200), checked against the AudioParams:
+#   30 kHz with a -1 octave log offset "plays 11.40 kHz" (22800 Hz, detune -1200) and says the
+#   log offset applies after the cap; 20 kHz with a +1 octave log offset plays 22.80 kHz
+#   (20000 Hz, detune +226.8 cents); the field reads "20.00 kHz (40.00 kHz with cables), plays
+#   22.80 kHz". A detune limited cable at 44.1 kHz (15 kHz, +300 ct, LFO depth 1200 ct) plays
+#   278.2 cents, which is exactly the headroom to 20.95 kHz.
+# - R3: the text is built when read from the plan in effect: renaming the node or a cable's
+#   source while playing renames the diagnostic; deleting the source LFO or a limited node
+#   while playing drops its diagnostics; stop clears them and a restart brings them back.
+# - R4: "-5.00 kHz"; a lowered log offset records offsetStored and offsetPlayed in octaves.
+# - Still holds: no audio value changes (base and gains as before, the compiler tests pass), no
+#   node is created, the work runs per apply and per debugInfo (read by the Inspector on render,
+#   not by the playing rAF tick), nothing enters studioHash, planHash or a saved record, and a
+#   lane-owned base is left out.
+# - Fail-first: readout-in-effect-studio-limits fails 11/11 on the merge base's tree with the
+#   head's tests/, and passes 11/11 on the head.
+# - npm test (node --test "tests/unit/**/*.test.mjs"): 3337 tests, 3336 pass, 0 fail, 1 skipped.
+#   build:check: dist/index.html is the build of the sources. Browser: v31-studio-runtime in
+#   chromium (file://) 16/16, OSC_LOAD_MAX=40 at load 23; firefox, webkit and http not run.
+#
+# Verdict: merge. R1-R4 are fixed and confirmed on the new content. One new P3 (R5) is left open:
+# one lowering can be counted as two values.
+schema: review-verdict/v1
+pr: 342
+verdict: merge
+reviewer: oscilla-26-review
+content: 66adf68cc8ea30d504bc98d5db17a994a4444541d01d7837d06f2941fd6d69ee
+findings:
+  - { id: R1, severity: P1, status: closed, title: "a value capped by its parameter range (LFO Rate, 100 Hz) was reported as 0.95 x Nyquist and an edge into Rate named 'LFO 1 Frequency'; fixed in da45169b (caps with bound range|nyquist, the target parameter named), confirmed" }
+  - { id: R2, severity: P2, status: closed, title: "'plays' left out the log cables' constant cents (30 kHz, -1 octave read 22.80 kHz, sounds 11.4 kHz) and read as a raise; fixed in da45169b (played = base x 2^(cents/1200), asked shown with cables), confirmed" }
+  - { id: R3, severity: P3, status: closed, title: "the message kept a node's old name after a rename while playing; fixed in da45169b (built when read from the plan in effect), confirmed for the node and the cable's source" }
+  - { id: R4, severity: P3, status: closed, title: "a negative offset read -5000 Hz, and a lowered log offset recorded no amount; fixed in da45169b (-5.00 kHz, offsetStored/offsetPlayed), confirmed" }
+  - { id: R5, severity: P3, status: open, title: "compiler.js:731 a log offset lowered into a frequency is one node diagnostic and one edge diagnostic, so 20 kHz with a +1 octave log cable makes the Runtime section say '2 values lowered' for one cap" }

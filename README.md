@@ -138,15 +138,19 @@ changed.
   frequency with its uncertainty, and a generator-versus-microphone comparison with freeze,
   averaging and peak hold.
 - **Sequencer:** a timeline of tone, silence, sweep, pulse, chirp, burst, siren, AM, FM and
-  random blocks, with drag-and-drop editing, keyboard control, looping and tempo-locked
-  durations.
+  random blocks, with drag-and-drop editing, keyboard control and looping. Block durations are
+  in milliseconds: the Tempo (BPM) control re-times only blocks stored in beats, which the
+  editor does not create (an imported sequence can carry them), so for a sequence made here it
+  changes nothing you hear. K002 makes tempo audible and K017 adds a beats unit.
 - **Filter Lab:** biquad filters with a response chart drawn from the browser's own filter
   response. Cutoff and Q can be dragged on the chart.
 - **ADSR:** an attack/decay/sustain/release envelope with a draggable graph.
 - **Additive synthesis:** a harmonic editor. The bars you see are the same coefficients that
   build the waveform you hear.
 - **Phase, Lissajous and stereo:** A/B phase views, a Lissajous figure, a correlation meter and
-  stereo routing (split, panned or mono).
+  stereo routing (split, panned or mono). Pan acts on the sounding A/B dual voice in Mono
+  output, also while it plays; for a single source and in Stereo output the slider is disabled
+  and says why.
 - **Bioacoustics:** approximate hearing ranges and call examples for humans and several animal
   species, every value cited.
 - **Export:** WAV of the current tone, pattern or sequence, rendered offline through the same
@@ -528,17 +532,23 @@ release and deployment are evidenced is the [final report](docs/v31/studio-repor
   unmodified. An optional **Fullscreen** button uses the browser's Fullscreen API where it
   exists; where it does not (Safari on iPhone), the button says so.
 
-Studio output and Playground output are exclusive: starting one stops the other, and a
-measurement stops the Studio. While the Studio plays, its Master Output level is the engine's
-output level and a click or key press elsewhere leaves it alone; the status bar says PLAYING and
-shows `Master <dB>`, or `Gain <dB>` once the Playground gain is set again. The status bar's Play
-button stays the Playground's.
+Studio output and the Playground take turns, with gaps. Starting the Studio stops the
+instrument and a sequence the status poll already reports as playing, and playing the
+instrument stops the Studio; a measurement stops all three and refuses a new instrument note.
+But the Playground's instrument and sequencer are not exclusive: they sum into one output. The
+sequencer and the Studio hand over only through that poll, a moment after the sequencer
+starts: until it notices, both play, and a Studio started in that moment is the one stopped.
+The sequencer is not refused while a measurement owns the output. C002 (ADR 0063) gives the
+output one owner.
+
+While the Studio plays, its Master Output level is the engine's output level and a click or
+key press elsewhere leaves it alone; the status bar says PLAYING and shows `Master <dB>`, or
+`Gain <dB>` once the Playground gain is set again. The status bar's Play button stays the
+Playground's.
 
 Not yet built:
-- a minimap
 - node groups
 - dragging several clips at once
-- pinch zoom on the timeline
 
 ## Safety and measurement limits
 
@@ -916,7 +926,10 @@ Browser storage holds only these keys and one database, `oscilla-experiments` (v
 | IndexedDB | `oscilla-experiments`, object store `findings` | Your findings (statement, status, notes, the evidence each cites and the id and result hash of each cited experiment) |
 
 Experiments and findings are deleted only when you delete them. Permission to play continuously is never
-stored.
+stored. A preset, History entry, config file or link saved with a continuous sweep repeat
+therefore restores it as once, and a notice says so ("Continuous repeat not restored"). Allowing
+continuous playback does not bring the repeat back by itself: allow it in Playback safety, then
+load the preset, History entry or file again. A link never carries the permission.
 
 ## Licences
 

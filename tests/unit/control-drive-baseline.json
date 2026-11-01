@@ -91,7 +91,6 @@
     "mic.freeze",
     "presets.clearHistory",
     "presets.reset",
-    "presets.save",
     "safety.reopenMenu",
     "seq.fieldStep",
     "studio.frameAll",

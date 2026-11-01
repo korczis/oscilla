@@ -48,6 +48,8 @@
 //                    voice's rel gain and the master (stereo/dual output stage).
 //     o.dualRouter   (ctx, track, plan, source) => { inputA, inputB, output, update(plan),
 //                    dispose() } replaces the dual plan's panners (Phase & Stereo routing).
+//                    engine.setDualRouter(factory) updates it on a sounding voice, or adds
+//                    one to a voice built without it by a click-free restart.
 //     o.dualPhaseDeg phase of the dual plan's B against A at the voice start (degrees; B starts
 //                    later by less than one period, modulation.js phaseStartDelay).
 //                    engine.setDualPhase(deg) applies a change by a click-free restart.
@@ -378,8 +380,12 @@ export class AudioEngine {
     // thread late inside one would anchor a fade in the past. Without a performance clock in the
     // environment, or without readings, this is currentTime + SCHEDULE_LEAD_S (V1).
     const q = RENDER_QUANTUM / ctx.sampleRate;
-    const rendered = renderedTimeAtLeast(ctx, this._perfNow(), { outputTimestamp: false });
-    return Math.ceil((rendered + Math.max(SCHEDULE_LEAD_S, 2 * q)) / q) * q;
+    return Math.ceil((this._rendered(ctx) + Math.max(SCHEDULE_LEAD_S, 2 * q)) / q) * q;
+  }
+
+  /** A context time the audio has rendered at least up to (currentTime without a clock). */
+  _rendered(ctx) {
+    return renderedTimeAtLeast(ctx, this._perfNow(), { outputTimestamp: false });
   }
 
   /** Frequencies are clamped once more here, against the running context. */
@@ -443,8 +449,14 @@ export class AudioEngine {
     const replacing = this.voices.size > 0;
     this._releaseAll(FAST_RELEASE_S, true);
     // A replacement starts once its predecessors have faded: no overlap, so no momentary sum
-    // above the single-voice level (the output ceiling is only a backstop).
-    const startAt = replacing ? this._soon(ctx) + FAST_RELEASE_S : ctx.currentTime + START_OFFSET_S;
+    // above the single-voice level (the output ceiling is only a backstop). A fresh voice starts
+    // START_OFFSET_S after what the audio already rendered (C010 F2): from a stale currentTime
+    // (Firefox, a main thread late within a task) its t0, and a dual voice's B start delay
+    // (the phase offset), could be rendered before the graph reaches the audio thread, and A and
+    // B would start together. Without a performance clock this is V1's currentTime + offset.
+    const startAt = replacing
+      ? this._soon(ctx) + FAST_RELEASE_S
+      : this._rendered(ctx) + START_OFFSET_S;
     const adsr = o.adsr || null;
     const v = {
       id: ++this._seq, ctx, plan, opts: o, t0: startAt, nodes: [], sources: [],
@@ -873,6 +885,32 @@ export class AudioEngine {
     const want = normalizePhaseDeg(deg);
     if (Math.abs(normalizePhaseDeg(v.opts.dualPhaseDeg) - want) < 1e-9) return 'same';
     v.opts = { ...v.opts, dualPhaseDeg: want };
+    return this._restart(v, v.plan);
+  }
+
+  /**
+   * Bring the sounding dual voice's routing up to date after its router's configuration changed
+   * (main.js: the Phase & Stereo pan). A voice that has a router re-reads it in place
+   * (router.update(plan), which glides) and keeps it, whatever `factory` is. A voice without
+   * one, given a router factory (o.dualRouter), is replaced by a click-free restart
+   * (FAST_RELEASE_S fade, then the same plan, options and deadline) that builds it; without a
+   * factory it is left as it is. Returns 'live' | 'restarted' | 'same' | false (no sounding
+   * dual voice, or a voice about to end).
+   */
+  setDualRouter(factory) {
+    const v = this.voice;
+    if (!v || v.ended || v.releasing || !v.plan || v.plan.type !== 'dual') return false;
+    if (v.live && v.live.router) {
+      try {
+        v.live.router.update(v.plan);
+      } catch (e) {
+        this._fail(e, 'router update');
+        return false;
+      }
+      return 'live';
+    }
+    if (typeof factory !== 'function') return 'same';
+    v.opts = { ...v.opts, dualRouter: factory };
     return this._restart(v, v.plan);
   }
 
