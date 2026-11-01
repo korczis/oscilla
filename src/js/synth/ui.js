@@ -894,7 +894,11 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
         say(r.reason, true);
         return false;
       }
-      return applyLink(r.link);
+      const ok = applyLink(r.link);
+      const p = ok && presetOf(r.link.preset); // a link is answered (surface-census routes)
+      if (ok && this.notify) this.notify('info', 'Synth opened from the link',
+        `${p ? p.title : this.synth.title}. Nothing plays until you play a note.`);
+      return ok;
     },
 
     /** Test and debug reads (window.OSCILLA.app.synthDebug(); not a contract). */

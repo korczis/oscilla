@@ -15,9 +15,9 @@
 //                   named "Keyboard shortcuts" and opens that dialog; the logo keeps the
 //                   product's name, its title says "Open the Playground" (H004), and it goes to the
 //                   Playground from another workspace, Back returns
-//   filter-toggle   (B1) the Filter Lab ⤢ button is named "Open the Filter Lab page" on the
-//                   Playground and opens Filter Lab; there it is named "Back to the Playground"
-//                   and returns to the Playground
+//   filter-toggle   (B1) the Filter Lab ⤢ button is not shown on the lighter Playground (#278);
+//                   in Filter Lab, opened through the navigation, it is named "Back to the
+//                   Playground" and returns to the Playground; Back reopens Filter Lab
 //   measure-to-experiments  (B2) Measure's "Open Experiments" opens Experiments with focus on
 //                   the Experiments heading; Back returns to Measure
 //   empty-states    (B12, P1) with nothing stored, Experiments' empty lists lead to Measure
@@ -55,6 +55,7 @@ const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
 const { serveDist } = require('./lib/serve.cjs');
 const { until } = require('./lib/wait.cjs');
+const { openWorkspace } = require('./lib/navigate.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -246,30 +247,37 @@ async function runLeg(name, origin) {
     }
 
     if (want('filter-toggle')) {
+      // The lighter Playground (#278) shows the Filter Lab panel in its own workspace only, so
+      // the ⤢ button is followed from there, where it is named "Back to the Playground"; the
+      // leg opens Filter Lab through the navigation, as a user does (lib/navigate.cjs).
       const page = await H.open(context, base);
       const wrong = [];
       const sel = '#osc-filter-fullscreen';
+      const onGrid = await H.name(page, sel);
+      if (!onGrid || onGrid.shown) wrong.push(`Playground shows ⤢: ${JSON.stringify(onGrid)}`);
       for (const input of INPUTS) {
-        await H.setWorkspace(page, 'playground');
-        const onGrid = await H.name(page, sel);
-        if (!onGrid || onGrid.label !== 'Open the Filter Lab page') {
-          wrong.push(`Playground: ${JSON.stringify(onGrid)}`);
-        }
-        await H.activate(page, sel, input);
-        const inLab = await H.until(page, 'filter', (s) => s.workspace === 'filter',
-          `⤢ (${input}) opens Filter Lab`);
-        if (!inLab) { wrong.push(`${input}: ⤢ did not open Filter Lab`); continue; }
+        await openWorkspace(page, 'filter', 'cross-links');
         const there = await until(async () => {
           const n = await H.name(page, sel);
-          return n && n.label === 'Back to the Playground' && n.title === n.label ? n : null;
-        }, { ms: NAV_MS, what: 'the ⤢ button is renamed in Filter Lab' }).catch(() => null);
-        if (!there) wrong.push(`Filter Lab: ${JSON.stringify(await H.name(page, sel))}`);
+          return n && n.shown && n.label === 'Back to the Playground' && n.title === n.label
+            ? n : null;
+        }, { ms: NAV_MS, what: 'the ⤢ button is named for the way back in Filter Lab' })
+          .catch(() => null);
+        if (!there) {
+          wrong.push(`Filter Lab: ${JSON.stringify(await H.name(page, sel))}`);
+          continue;
+        }
         await H.activate(page, sel, input);
         const home = await H.until(page, 'playground', (s) => s.workspace === 'playground',
           `⤢ (${input}) in Filter Lab returns to the Playground`);
-        if (!home) wrong.push(`${input}: ⤢ in Filter Lab did not return to the Playground`);
+        if (!home) {
+          wrong.push(`${input}: ⤢ in Filter Lab did not return to the Playground`);
+          continue;
+        }
         const back = await H.traverse(page, 'back', 'filter');
         if (!back) wrong.push(`${input}: Back did not return to Filter Lab`);
+        const fwd = await H.traverse(page, 'forward', 'playground');
+        if (!fwd) wrong.push(`${input}: Forward did not reopen the Playground`);
       }
       check(leg, 'the Filter Lab ⤢ button names where it goes and goes there (B1)',
         !wrong.length, wrong.join(' | '));

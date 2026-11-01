@@ -161,12 +161,13 @@ test('B6: the logo opens the Playground, and says so', () => {
   assert.equal(brand.attrs['x-bind'], 'homeLink()');
   const ui = app.createOscillaUi({ storedAnalysisTab: null });
   const calls = [];
-  const self = { setWorkspace: (m) => calls.push(m) };
+  const self = { setWorkspace: (m, opts) => calls.push([m, opts]) };
   const click = ui.homeLink()['@click'];
   let prevented = 0;
   click.call(self, { button: 0, preventDefault: () => { prevented += 1; } });
-  assert.deepEqual(calls, ['playground']);
+  // A link, not a nav item: focus moves to the Playground heading (U010, cross-links.cjs).
+  assert.deepEqual(calls, [['playground', { focusHeading: true }]]);
   assert.equal(prevented, 1, 'a plain click goes through the router');
   click.call(self, { button: 0, metaKey: true, preventDefault: () => { prevented += 1; } });
-  assert.deepEqual(calls, ['playground'], 'a modified click is left to the browser');
+  assert.equal(calls.length, 1, 'a modified click is left to the browser');
 });
