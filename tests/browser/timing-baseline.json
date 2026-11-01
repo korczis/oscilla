@@ -23,8 +23,8 @@
       "timer-sleep": 3
     },
     "tests/browser/qa-regressions.cjs": {
-      "timer-sleep": 28,
       "counted-poll": 3,
+      "timer-sleep": 24,
       "fixed-rate": 1
     },
     "tests/browser/v3-ui.cjs": {
