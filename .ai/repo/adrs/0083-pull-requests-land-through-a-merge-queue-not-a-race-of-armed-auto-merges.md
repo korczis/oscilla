@@ -111,3 +111,18 @@ Strictness is kept, by construction: what lands is exactly the tree the queue te
   nobody tested; main-checks would catch it only after the fact (owner decision 2026-10-30 kept
   that risk off).
 - Trains only: they help (one round for N members) but still race other armed pull requests.
+
+## Resolution notes
+
+### 2026-11-02: accepted by the owner; implemented by E045
+
+The owner answered in the session of oscilla-b0 (AskUserQuestion, about 22:35Z), verbatim choice
+"Yes, implement it (Recommended)", whose text read "Accept ADR 0083; 26 implements the workflow
+and script changes in a PR, af reviews, and then you switch the ruleset to require the queue".
+Plan issue E045 implements it: `.github/workflows/ci.yml` starts on `merge_group` too and never
+cancels a queue run; `.github/scripts/queued-pr.sh` names the queued pull request
+(`tests/unit/queued-pr.test.mjs`); `project.ci-bounded` v2 (`scripts/ci-workflow-rules.mjs`,
+`tests/unit/ci-workflows.test.mjs`); the release CI receipt, `project.release-receipt-binds-gate`
+v3 (`scripts/release-ci-receipt.mjs`, `tests/unit/release-ci-receipt.test.mjs`, with
+oscilla-af's five review points as its mutation cases). Requiring the queue in the ruleset of
+`main` is the owner's act after E045 lands; until then nothing in how pull requests land changes.
