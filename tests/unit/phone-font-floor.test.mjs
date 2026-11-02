@@ -188,18 +188,142 @@ function labWorkspaces() {
   return [...modes].sort();
 }
 
-test('below 1280 px a workspace but the Playground shows only the panels it lists', () => {
-  const hide = below1280.find((r) => r.decls.display === 'none' && r.selectors
-    .includes('.osc-app:not([data-mode="playground"]) .osc-panel[data-osc-modes]'));
-  assert.ok(hide, 'no rule hides the unlisted panels outside the Playground below 1280 px');
-  const shown = new Set(below1280.filter((r) => r.decls.display === 'flex')
-    .flatMap((r) => r.selectors));
-  const labs = labWorkspaces();
-  assert.ok(labs.length >= 5, labs.join());
-  for (const w of labs) {
-    assert.ok(shown.has(`.osc-app[data-mode="${w}"] .osc-panel[data-osc-modes~="${w}"]`),
-      `${w}: its panels are not shown below 1280 px`);
+test('below 1280 px a workspace but the Playground shows only its marked panels, no list', () => {
+  const hide = below1280.find((r) => r.decls.display === 'none' && r.selectors.includes(
+    '.osc-app:not([data-mode="playground"]) .osc-panel[data-osc-modes]:not(.is-focused)'));
+  assert.ok(hide, 'no rule hides the unmarked panels outside the Playground below 1280 px');
+  // No hand-kept copy of the workspace list: no rule names a lab workspace's data-osc-modes.
+  const named = [...responsive.matchAll(/data-osc-modes~="([\w-]+)"/g)].map((m) => m[1])
+    .filter((w) => w !== 'playground');
+  assert.deepEqual(named, [], 'a rule keyed on a workspace list; key it on the mark');
+  assert.ok(labWorkspaces().length >= 5, labWorkspaces().join());
+});
+
+/** A fake panel: its data-osc-modes and a class list. */
+function fakePanel(modes, classes = ['osc-panel']) {
+  const set = new Set(classes);
+  return {
+    dataset: { oscModes: modes },
+    classList: {
+      contains: (c) => set.has(c),
+      toggle: (c, on) => { if (on) set.add(c); else set.delete(c); return on; },
+    },
+    has: (c) => set.has(c),
+  };
+}
+
+test('markWorkspacePanels marks exactly the panels a workspace lists, none on the Playground',
+  async () => {
+    const { markWorkspacePanels } = await import('../../src/js/ui/app.js');
+    const source = fakePanel('playground sequencer synthesis');
+    const mic = fakePanel('analyzer compare');
+    const filter = fakePanel('filter');
+    const view = fakePanel('measure', ['osc-view']);
+    const all = [source, mic, filter, view];
+    markWorkspacePanels(all, 'compare');
+    assert.deepEqual(all.map((p) => p.has('is-focused')), [false, true, false, false]);
+    markWorkspacePanels(all, 'sequencer');
+    assert.deepEqual(all.map((p) => p.has('is-focused')), [true, false, false, false]);
+    markWorkspacePanels(all, 'measure');
+    assert.deepEqual(all.map((p) => p.has('is-focused')), [false, false, false, false],
+      'a view is never marked');
+    markWorkspacePanels(all, 'filter');
+    markWorkspacePanels(all, 'playground');
+    assert.deepEqual(all.map((p) => p.has('is-focused')), [false, false, false, false]);
+  });
+
+test('a deep link\'s load marks the panels in the step that sets the workspace', () => {
+  const nav = read('src/js/ui/navigation.js');
+  const load = /if \(origin === 'load'\) \{([\s\S]*?)\} else cmp\.setWorkspace/.exec(nav);
+  assert.ok(load, 'route() has no load branch of its own');
+  const body = load[1].replace(/\/\/.*$/gm, '');
+  assert.match(body, new RegExp(String.raw`cmp\.workspace = st\.workspace;\s*`
+    + String.raw`if \(typeof cmp\.markWorkspace === 'function'\) `
+    + String.raw`cmp\.markWorkspace\(st\.workspace\);`));
+  assert.doesNotMatch(body, /await|setTimeout|requestAnimationFrame|\$nextTick/,
+    'the mark must be synchronous with the workspace, before the first paint');
+});
+
+/** Every rule of every `@media <query>` block of `css`. */
+function mediaRules(css, query) {
+  const out = [];
+  let from = 0;
+  for (;;) {
+    const i = css.indexOf(`@media ${query} {`, from);
+    if (i < 0) return out;
+    const body = mediaBlock(css.slice(i), query);
+    out.push(...rules(body));
+    from = i + body.length;
   }
+}
+
+/** Whether a flat selector of these stylesheets applies to panel class `c` in workspace `w`. */
+function applies(selector, w, c) {
+  let rest = selector.replace(/\s+/g, ' ').trim();
+  let m = /^\.osc-app\[data-mode="([\w-]+)"\] /.exec(rest);
+  if (m) {
+    if (m[1] !== w) return false;
+    rest = rest.slice(m[0].length);
+  } else if ((m = /^\.osc-app:not\(([^)]*)\) /.exec(rest))) {
+    if ([...m[1].matchAll(/data-mode="([\w-]+)"/g)].some((x) => x[1] === w)) return false;
+    rest = rest.slice(m[0].length);
+  } else if (rest.startsWith('.osc-app')) return false;
+  const is = /^:is\(([^)]*)\)$/.exec(rest);
+  if (is) return is[1].split(',').map((x) => x.trim()).includes(`.${c}`);
+  return rest === `.${c}`;
+}
+
+test('768-1279 px: no lab workspace leaves a half-width panel alone in its row', () => {
+  const html = read('src/index.html');
+  const panels = [...html.matchAll(
+    /<section class="osc-panel (osc-p-[\w-]+)[^"]*"[^>]*?data-osc-modes="([^"]+)"/g)]
+    .map((m, i) => ({ c: m[1], modes: m[2].split(/\s+/), dom: i }));
+  const sheet = [...below1280, ...mediaRules(stripComments(read('src/styles/studio.css')),
+    '(max-width: 1279.98px)')];
+  const last = (w, c, prop) => {
+    let v;
+    for (const r of sheet) {
+      if (r.decls[prop] !== undefined && r.selectors.some((s) => applies(s, w, c))) {
+        v = r.decls[prop];
+      }
+    }
+    return v;
+  };
+  const alone = [];
+  for (const w of labWorkspaces()) {
+    const shown = panels.filter((p) => p.modes.includes(w))
+      .map((p) => ({ ...p, order: Number(last(w, p.c, 'order') || 0),
+        full: (last(w, p.c, 'grid-column') || '').replace(/\s+/g, '') === '1/-1' }))
+      .sort((a, b) => a.order - b.order || a.dom - b.dom);
+    let open = null;
+    for (const p of shown) {
+      if (p.full) {
+        if (open) alone.push(`${w}: ${open.c}`);
+        open = null;
+      } else open = open ? null : p;
+    }
+    if (open) alone.push(`${w}: ${open.c}`);
+  }
+  assert.deepEqual(alone, [], 'span the row (grid-column: 1 / -1) where it has no partner');
+});
+
+test('the safety notice reopens from the header below 1280 px, on every workspace', () => {
+  const html = read('src/index.html');
+  const header = /<header class="osc-header"[\s\S]*?<\/header>/.exec(html);
+  assert.ok(header, 'no page header');
+  const reopen = /<button\b[^>]*\bid="osc-safety-reopen-phone"[^>]*>/.exec(header[0]);
+  assert.ok(reopen, 'the header holds no reopen control (#osc-safety-reopen-phone)');
+  assert.match(reopen[0], /data-osc="safety\.reopen"/);
+  assert.match(reopen[0], /@click="reopenSafety\(\)"/);
+  assert.equal([...html.matchAll(/data-osc="safety\.reopen"/g)].length, 2,
+    'one reopen control per layout: the header\'s and Device & Limits\'');
+  const integration = stripComments(read('src/styles/integration.css'));
+  const below = mediaRules(integration, '(max-width: 1279.98px)');
+  assert.ok(below.some((r) => r.selectors.includes('.osc-safety-reopen--phone')
+    && r.decls.display === 'inline-flex'), 'the header control is not shown below 1280 px');
+  const device = /<button\b[^>]*\bid="osc-safety-reopen"[^>]*>/.exec(html);
+  assert.ok(device && /class="[^"]*\bmax-xl:hidden\b/.test(device[0]),
+    'Device & Limits\' control must hide below 1280 px, where the header carries it');
 });
 
 test('below 1280 px the Playground panels follow every workspace panel outside the Playground',

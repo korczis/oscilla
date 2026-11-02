@@ -429,8 +429,8 @@ export function createWorkbench(svc) {
     dismissSafety() {
       this.collapseSafety();
       this.$nextTick(() => {
-        // One reopen control per layout (Device & Limits header; Source header on phones):
-        // hand focus to whichever is visible.
+        // One reopen control per layout (Device & Limits header from 1280 px; the page header
+        // below, on every workspace): hand focus to whichever is visible.
         const reopen = [...document.querySelectorAll('[data-osc="safety.reopen"]')]
           .find((el) => isFocusable(el));
         focusSafely(reopen || document.getElementById('osc-overflow'));

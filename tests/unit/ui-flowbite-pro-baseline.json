@@ -15,7 +15,7 @@
     "selectors": 1189,
     "domainViewSelectors": 438
   },
-  "debt": 3843,
+  "debt": 3840,
   "surfaces": {
     "pending": [
       "card#osc-exp-compare",
@@ -907,8 +907,8 @@
       "declarations": 623
     },
     "src/styles/responsive.css": {
-      "selectors": 180,
-      "declarations": 234
+      "selectors": 177,
+      "declarations": 233
     }
   },
   "domainViews": {

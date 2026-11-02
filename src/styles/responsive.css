@@ -43,17 +43,11 @@
 
   /* A workspace shows the panels it lists (data-osc-modes) and leads with its own: the
      Playground's Source & Pattern and Signal analysis lead only the Playground (order 0, document
-     order) and follow the workspace's panels everywhere else (ui-current#phone-whole). */
-  .osc-app:not([data-mode="playground"]) .osc-panel[data-osc-modes] {
+     order) and follow the workspace's panels everywhere else (ui-current#phone-whole). The
+     listed panels are the marked ones (ui/app.js markWorkspacePanels, set with the workspace,
+     a deep link's load included), so a new workspace needs no rule here. */
+  .osc-app:not([data-mode="playground"]) .osc-panel[data-osc-modes]:not(.is-focused) {
     display: none;
-  }
-
-  .osc-app[data-mode="sequencer"] .osc-panel[data-osc-modes~="sequencer"],
-  .osc-app[data-mode="analyzer"] .osc-panel[data-osc-modes~="analyzer"],
-  .osc-app[data-mode="filter"] .osc-panel[data-osc-modes~="filter"],
-  .osc-app[data-mode="synthesis"] .osc-panel[data-osc-modes~="synthesis"],
-  .osc-app[data-mode="compare"] .osc-panel[data-osc-modes~="compare"] {
-    display: flex;
   }
 
   .osc-app:not([data-mode="playground"]) .osc-p-source { order: 14; }
@@ -63,7 +57,15 @@
   .osc-p-spectrogram { order: 5; grid-column: 1 / -1; }
   .osc-p-sequencer { order: 6; grid-column: 1 / -1; }
   .osc-p-filter { order: 7; }
-  .osc-app[data-mode="filter"] .osc-p-filter { grid-column: 1 / -1; }
+  /* Two columns: a half-width panel a workspace shows without a partner beside it spans the row
+     (no empty column): Filter Lab's one panel, Synthesis's Phase & Stereo (its odd third), and
+     Source & Pattern or Signal analysis wherever one shows without the other. */
+  .osc-app[data-mode="filter"] .osc-p-filter,
+  .osc-app[data-mode="synthesis"] .osc-p-phase,
+  .osc-app:not([data-mode="playground"], [data-mode="synthesis"]) :is(.osc-p-source,
+    .osc-p-analysis) {
+    grid-column: 1 / -1;
+  }
   .osc-p-envelope { order: 8; }
   .osc-p-additive { order: 9; }
   .osc-p-phase { order: 10; }

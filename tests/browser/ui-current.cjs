@@ -33,7 +33,10 @@
 //              of its own and every form control, by computed font size (SVG text scaled by its
 //              screen matrix; canvas text is not in the DOM and not read);
 //     target   every interactive element is at least TOUCH_MIN px, or a TOUCH_MIN px square on
-//              its centre lands on it (layout.cjs measureTouch's rule; range inputs: height).
+//              its centre lands on it (layout.cjs measureTouch's rule; range inputs: height);
+//     reopen   the listening notice's reopen control ([data-osc="safety.reopen"]) is shown and
+//              takes a tap at its centre: hiding a workspace's panels never hides the way back
+//              to the safety notice.
 //   PHONE_WHOLE_DEBT lists the workspace measures still short, each with its reason; a listed
 //   one is reported KNOWN, an unlisted failure fails, and a listed one that passes fails until
 //   it is removed, so the list only shrinks.
@@ -78,7 +81,7 @@ const FONT_MIN = 12;
 const TOUCH_MIN = 44;
 // sessionStorage key of the dismissed listening notice (src/js/core/constants.js safetySeen).
 const SAFETY_SEEN = 'oscilla.safetyNoticeCollapsed';
-const PHONE_MEASURES = ['share', 'covered', 'font', 'target'];
+const PHONE_MEASURES = ['share', 'covered', 'font', 'target', 'reopen'];
 // "<workspace>:<measure>" -> why it is still short and whose lane fixes it. Only shrinks.
 const PHONE_WHOLE_DEBT = new Map([
   ['studio:font', 'the Studio editor\'s graph, library and timeline labels are 9-10.5 px '
@@ -209,9 +212,16 @@ function phoneWhole({ ws, gap, touchMin }) {
   }
   main.scrollTop = scrollTop;
   document.scrollingElement.scrollTop = pageTop;
+  // reopen: a shown safety.reopen control that a tap at its centre reaches
+  const reopen = [...document.querySelectorAll('[data-osc="safety.reopen"]')]
+    .filter((el) => shown(el) && el.getBoundingClientRect().width >= 2)
+    .map((el) => {
+      const r = el.getBoundingClientRect();
+      return { id: el.id, hit: hits(el, r.left + r.width / 2, r.top + r.height / 2) };
+    });
   return {
     mode: app.dataset.mode, coarse: matchMedia('(pointer: coarse)').matches, vh,
-    share, lead: lead ? label(lead.el) : null, own: own.length, tested,
+    share, lead: lead ? label(lead.el) : null, own: own.length, tested, reopen,
     minFont: { px: Number.isFinite(minFont.px) ? Math.round(minFont.px * 100) / 100 : null,
       what: minFont.what },
     covered: coveredList, small,
@@ -227,6 +237,7 @@ function phoneVerdicts(m, ws) {
     covered: m.mode === ws && m.covered.length === 0,
     font: m.mode === ws && m.minFont.px !== null && m.minFont.px >= FONT_MIN - 0.01,
     target: m.mode === ws && m.small.length === 0,
+    reopen: m.mode === ws && m.reopen.some((r) => r.hit),
   };
 }
 
@@ -410,6 +421,8 @@ async function runOne(name) {
           + `(${m.own} elements, led by ${m.lead}), under ${(100 * WORK_SHARE).toFixed(1)} %`,
         covered: m && m.covered.slice(0, 6).join('; '),
         font: m && `smallest text ${m.minFont.px} px (${m.minFont.what}), under ${FONT_MIN} px`,
+        reopen: m && `no reopen control for the safety notice is shown and reachable: `
+          + `${JSON.stringify(m.reopen)}`,
         target: m && `${m.small.length} of ${m.tested} targets under ${TOUCH_MIN} px: `
           + `${m.small.slice(0, 6).join('; ')}`,
       };

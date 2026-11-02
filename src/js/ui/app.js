@@ -205,6 +205,20 @@ export function workspaceHeading(root, mode) {
 }
 
 /**
+ * Mark the panels of workspace `mode`: every panel whose data-osc-modes lists it gets the
+ * focused class, every other loses it; on the Playground none has it. Below 1280 px the class
+ * also decides which panels a workspace shows (responsive.css), so it is set in the same step
+ * as the workspace, a deep link's load included (ui/navigation.js), before the first paint.
+ * `panels` are the elements carrying data-osc-modes (views among them are never marked).
+ */
+export function markWorkspacePanels(panels, mode) {
+  for (const p of panels) {
+    const on = mode !== 'playground' && p.dataset.oscModes.split(/\s+/).includes(mode);
+    p.classList.toggle('is-focused', on && p.classList.contains('osc-panel'));
+  }
+}
+
+/**
  * Move focus to the workspace heading (a navigation the user did not make on a control: Back,
  * Forward, a link). It is focusable only by script (tabindex -1) and never steals focus from an
  * open dialog; the workspace is already scrolled into view, so the focus does not scroll.
@@ -359,6 +373,10 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
         if (focusHeading) focusWorkspaceHeading(this.$root, mode);
       });
     },
+    /** Mark the panels of `mode` (markWorkspacePanels) without moving focus or scrolling. */
+    markWorkspace(mode) {
+      markWorkspacePanels(this.$root.querySelectorAll('[data-osc-modes]'), mode);
+    },
     focusWorkspace(mode) {
       // Below 1280 px the nav scrolls in its own strip: keep the active top-level entry (the
       // workspace's tab, or its group's button) in view; it may have been chosen elsewhere,
@@ -366,10 +384,7 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
       const tab = this.$root.querySelector('.osc-nav .osc-tab.is-active');
       if (tab && tab.parentElement.offsetParent !== null) keepNavTabInView(tab, 'start');
       const panels = [...this.$root.querySelectorAll('[data-osc-modes]')];
-      panels.forEach((p) => {
-        const on = mode !== 'playground' && p.dataset.oscModes.split(/\s+/).includes(mode);
-        p.classList.toggle('is-focused', on && p.classList.contains('osc-panel'));
-      });
+      markWorkspacePanels(panels, mode);
       const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       const behavior = reduce ? 'auto' : 'smooth';
       // 768-1279 px shows a workspace's own panels first in two columns (responsive.css): the
