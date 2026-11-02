@@ -658,10 +658,12 @@ function integrationInit() {
   }
 
   // first gesture creates/resumes the context inside the gesture. A touch is a user activation
-  // only at its end (HTML: pointerup, touchend, click; a mouse and a key at their start), so a
-  // phone also unlocks there (owner report 2026-11-02: no sound on the phone).
+  // only at its end (HTML: pointerup, touchend; a mouse and a key at their start), so a phone
+  // also unlocks there (owner report 2026-11-02: no sound on the phone). A bare click, as
+  // assistive technology dispatches it, is no gesture and creates no context
+  // (surface-census no-audio).
   const unlock = () => { if (engine.isSupported()) cmp.ensureAudio(); };
-  for (const type of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) {
+  for (const type of ['pointerdown', 'pointerup', 'touchend', 'keydown']) {
     window.addEventListener(type, unlock, { capture: true });
   }
   // iOS (Safari 17+): Web Audio follows the ringer switch unless the page is a playback app.
