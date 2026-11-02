@@ -4,10 +4,15 @@
 //          ├─ filterA ─ wetA ────────────┼─ output
 //          └─ filterB ─ wetB ────────────┘
 //
+// Types: low-pass, high-pass, band-pass, notch, peaking, low-shelf, high-shelf and all-pass (the
+// Web Audio BiquadFilterNode types; the shelves and all-pass since K011).
+//
 // Q is LINEAR for every type in this module's API. The Web Audio specification defines the Q of
 // "lowpass" and "highpass" in dB (α = sin ω0 / (2·10^(Q/20))) and the Q of the other types as
 // linear, so nodeQ() converts: a lowpass with Q = 0.7071 (Butterworth) is set to the node as
-// 20·log10(0.7071) = −3.01 dB and is −3 dB at its cutoff.
+// 20·log10(0.7071) = −3.01 dB and is −3 dB at its cutoff. The shelves ignore Q (usesQ) and,
+// with peaking, are the types whose gain the node uses (usesGain); all-pass has a flat
+// magnitude and uses Q for the width of its phase transition.
 //
 // Click-free changes:
 //   - enable/bypass crossfades dry ↔ wet linearly (equal-gain: dry and filtered signals are
@@ -22,7 +27,8 @@
 
 import { SAFE_NYQUIST_FACTOR } from '../core/constants.js';
 
-export const FILTER_TYPES = Object.freeze(['lowpass', 'highpass', 'bandpass', 'notch', 'peaking']);
+export const FILTER_TYPES = Object.freeze(['lowpass', 'highpass', 'bandpass', 'notch', 'peaking',
+  'lowshelf', 'highshelf', 'allpass']);
 export const DEFAULT_FILTER = Object.freeze({
   type: 'lowpass',
   frequency: 1000,

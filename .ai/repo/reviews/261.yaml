@@ -1,0 +1,86 @@
+# Review verdict for pull request #261, plan item V502: MIDI Note On/Off play notes through the
+# audio engine (branch feat/v502-midi-notes-sound). Reviewed head c8e0b697fa47 (== origin at
+# fetch; merge base origin/main 45621450cc8f). During the review the builder merged main
+# e2720e07 as cc46ac15ab63 (now the branch tip; merge base origin/main e2720e07d312). That merge
+# changes nothing in src/js/audio, src/js/midi, src/js/main.js, src/js/sequencer,
+# tests/unit/midi, tests/browser/midi.cjs, docs/midi.md or ADR 0058 (git diff c8e0b697 cc46ac15
+# over them is empty), and the guarded content digest is the same at both heads.
+# Built by the builder's session; reviewed by dev-68.
+#
+# The digest: the base branch's scripts/review-verdict.mjs (git archive origin/main scripts into
+# a scratchpad), `--repo . --content --list --head c8e0b697 --base-branch origin/main` and again
+# with `--head HEAD` (cc46ac15), over the one guarded path the pull request changes,
+# src/js/audio/audio-engine.js: 40b4e845...d2dd at both heads, which matches the PR body.
+#
+# Lenses: (a) audio correctness: voice allocation and stealing, gain staging, envelopes, the
+# Nyquist bound, node leaks; (b) concurrency: note vs sequencer exclusion, the sequence-start
+# release on the audio clock, events during start/stop, suspended or closed context; (c) input
+# safety: velocity 0, out-of-range bytes, running status, channels; (d) docs and ADR vs code;
+# (e) tests and mutation. Every finding was adversarially re-checked against the code; R-1 was
+# lowered from P2 to P3 there (a docs-precision error and a missing timing test: about one
+# render quantum plus clock lag on top of the 8 ms fade, with the limiter and ceiling as the
+# ADR's stated bound; no level or safety property depends on the 8 ms figure).
+#
+# Runs:
+# - The PR worktree was not modified: read-only git commands and the digest only. It held the
+#   builder's in-progress merge at the start and ended clean (git status: 0 lines).
+# - git archive c8e0b697 into a scratchpad copy, existing node_modules symlinked read-only (11
+#   packages, nothing installed): node --test 'tests/unit/midi/*.test.mjs' 54/54 pass, 113 ms.
+# - 15 mutations, one at a time in that copy, each restored with git checkout -- .: gain divisor,
+#   sequencer ownedBy, the wrapper's midiAllOff, the Nyquist check, polyphony >= vs >,
+#   velocity-0 note-on, the steal wait (M7), attack ramp -> step, same-key retrigger release,
+#   noteOn fading the play() voice, visibilitychange silence, reference-capture refusal, steal
+#   order, notesOff(fast) release time, cleanup pruning the notes map. All caught (1-3 failures
+#   each) except M7, which hangs the suite (R-2).
+# - Fake-clock probe (tests/unit/sequencer-fake-audio.mjs) at 44.1/48/96 kHz: notesOff(true)
+#   then a sequence at currentTime + START_OFFSET_S; the notes' fade starts 1.3-1.4 ms and ends
+#   9.33-9.41 ms after the sequence's first sample (R-1). safeMaximum 20947.5/22800/45600 Hz.
+# - Browser gate (tests/browser/midi.cjs) not run: the disk is below the floor and nothing was
+#   installed; it was read instead. The scratchpad copy was deleted afterwards.
+#
+# Checked and found correct: per-note gain max(GAIN_FLOOR, level/8) with linear ramps only (8
+# notes sum to at most one voice's level before the master gain); 9th-note stealing (oldest
+# releasing, else oldest held, within FAST_RELEASE_S); same-key retrigger; Note Off for a stolen
+# voice; envelopes (no set-to-0, no exponential ramp to 0, no cancelScheduledValues); Nyquist
+# refusal without clamping; node cleanup and the finite-note fallback; note vs sequencer
+# exclusion (single-threaded tasks, every start path through the wrapper); input safety (status
+# and data byte ranges, short and system messages ignored, velocity 0 is Note Off, omni keying,
+# CC 120/123); docs figures (-11.9 dB at 64, -23.9 dB at 32, -18.06 dB for 1/8) and the four
+# MIDI_REFUSED sentences.
+#
+# Delta review at 24b37537 (2026-10-29), over the merge verdict b087590b on cc46ac15. The range
+# b087590b..24b37537 also carries merges of main (b1acfbd4, 438c02f0) that bring only #242 (R021)
+# and #258 (studio timeline test), both reviewed on their own; the V502 change is 24b37537 alone:
+# clock.js glideStart(ctx) (currentTime, or RENDER_QUANTUM / sampleRate while currentTime is 0),
+# setMasterGain gliding from it, an engine.test case, a freeze deviation, a clearer midi.cjs
+# message, and dist rebuilt.
+# Lenses: (a) nothing sounds or reads the gain before the glide starts: the master gain is
+# created at gainLevel from the first sample (audio-engine.js:252), a MIDI note starts at
+# currentTime + START_OFFSET_S (20 ms, audio-engine.js noteOn) with setValueAtTime and linear
+# ramps, never setTargetAtTime, and 128 / 22050 = 5.8 ms is the latest glide start at the rates
+# tested; holdMasterGain and restoreMasterLevel glide only at an `at` later than currentTime.
+# (b) the freeze deviation is one case, engine.stop/setMasterGain-clamped, that asserts each
+# master event is a target at exactly RENDER_QUANTUM / 48000 with tau 0.02 before mapping it
+# back to V1's 0: narrow and honest. (c) fail-first: with setMasterGain reverted to `now` in a
+# git-archive copy, engine.test's V502 case and the frozen engine.stop case fail (3 failures);
+# with the fix 1179/1179. (d) tests/browser/midi.cjs --browsers firefox --origins file on
+# darwin arm64: ALL PASS 51/51, first note peak 0.0099999 against 0.01 (0.08 / 8). The Gecko
+# start-from-default is pinned only by the mock start-time test and CI's linux leg (R-7).
+# (e) build.mjs --check up to date (source 1579d5fa7733); unit suite 3284 pass, 1 skip, 0 fail.
+# Content: main's scripts/review-verdict.mjs (git archive origin/main scripts) --content
+# --base-branch origin/main gives 8ac1ed56...7097b at 24b37537 (--list agrees).
+#
+# Open: R-1 to R-7, all P3. No P0, P1 or P2 is open.
+schema: review-verdict/v1
+pr: 261
+verdict: merge
+reviewer: "dev-68 (Claude Opus 5.5 session 4f90795d); did not build, merge or edit this change; wrote only this file"
+content: 8ac1ed56ea6b9caa7f588bdbd4fb5190ec563e443c02ee3c61f9c4586157097b
+findings:
+  - { id: R-1, severity: P3, status: open, title: "The sequence-start release is neither 'within 8 ms' nor at most ESCAPE_RELEASE_S: notesOff(true) anchors the fade at _soon(ctx) (SCHEDULE_LEAD_S 0.02 == START_OFFSET_S, rendered >= currentTime), so the notes stay at full level until at or after the sequence's first sample and overlap it by ESCAPE_RELEASE_S plus up to one render quantum plus clock lag (measured 9.33-9.41 ms on the fake clock). ADR 0058:327 and docs/midi.md:112 mis-state the bound; tests/browser/midi.cjs:812 accepts any endTime < currentTime + 0.5 s and the unit coverage is a wiring regex. Fix: start the sequence at t0 >= the notes' latest endTime, or state the true bound; add a fake-clock unit test of fade end minus sequence t0." }
+  - { id: R-2, severity: P3, status: open, title: "The voice-stealing loop in noteOn (src/js/audio/audio-engine.js:897) has no iteration bound; it ends only through the side effect `if (!v.ended) t0 = Math.max(t0, v.endTime)` in fadeOut (~:891) or _cleanup. It terminates as written, but removing that line (mutation M7) hangs the unit suite, and in a browser would freeze the tab on a Note On. Fix: cap the loop at voices.size (or NOTE_POLYPHONY + 1) iterations, refusing the note with reason 'polyphony' if still full." }
+  - { id: R-3, severity: P3, status: open, title: "playAfterMidi (src/js/main.js:474) calls app.midiAllOff() before editor.play's own refusals, so PLAY on an empty sequence or with audio unavailable cuts every held MIDI note although nothing starts; docs/midi.md says notes stop 'when the sequencer starts'. Safe direction. Fix: release only when the sequence will schedule (blocks and context present), or document it." }
+  - { id: R-4, severity: P3, status: open, title: "The PR body's acceptance 1 says node --test 'tests/unit/midi/*.test.mjs' 51/51; at c8e0b697 (and cc46ac15) it runs 54 tests, all passing. Fix: update the body to 54/54." }
+  - { id: R-5, severity: P3, status: open, title: "Hiding the page silences held notes (src/js/midi/ui.js:77), but ownedBy() never looks at doc.hidden, so a Note On arriving while the tab is hidden still sounds (MIDI is the only way a hidden page can start sound). Nothing leaks or sticks: finite notes stop on the audio clock and continuous ones on their Note Off. Fix: refuse notes while doc.hidden (one notice), or say in docs/midi.md that hidden pages still play." }
+  - { id: R-6, severity: P3, status: open, title: "glideStart covers setMasterGain only. Other at-now gain glides (src/js/audio/stereo.js:111, src/js/audio/noise.js:182, src/js/studio/adapters/nodes.js:87, src/js/studio/transport.js:1251) would meet the same Gecko start-from-default 1 if one were issued before the first render quantum; none is shown to be at this head (they run on a playing graph) and all sit before the limiter and ceiling. Not reproduced: a hardening note, e.g. route them through glideStart." }
+  - { id: R-7, severity: P3, status: open, title: "No browser check pins the Gecko case itself on every platform: the fix is held by the mock start-time test (tests/unit/engine.test.mjs) and by the CI linux leg of tests/browser/midi.cjs, whose first-note margin on darwin Firefox is 0.0099999 vs 0.01. A firefox check that reads a fresh context's master level 20 ms into the first sound (0.418 without the fix, 0.08 with it, per the commit) would hold it directly." }

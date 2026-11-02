@@ -57,7 +57,7 @@ import {
   AUTOMATION_CURVES, MARKER_KINDS, MIN_CLIP_S, MUSICAL_TOLERANCE_S, NAME_MAX_CHARS,
   NOTES_MAX_CHARS, POSITION_LIMIT, POSITION_MESSAGE, STUDIO_KIND, STUDIO_SCHEMA_VERSION,
   TEMPO_RANGE, TIMELINE_MAX_S, TIME_MODES, TIME_SIGNATURE_DENOMINATORS, TITLE_MAX_CHARS,
-  TRACK_KINDS, CLIP_KINDS, VIEW_LIMITS, isPosition, normalizeStudio,
+  TRACK_KINDS, CLIP_KINDS, VIEW_LIMITS, isPosition, normalizeStudio, PANEL_REF_MESSAGE, isPanelRef,
 } from './schema.js';
 
 export const AUDIO_FEEDBACK_MESSAGE = 'Connection rejected: This would create an unsupported '
@@ -704,8 +704,11 @@ function structure(c, doc, lim, registry) {
       c.num(n.position.x, `${p}.position.x`, -POSITION_LIMIT, POSITION_LIMIT);
       c.num(n.position.y, `${p}.position.y`, -POSITION_LIMIT, POSITION_LIMIT);
     }
-    if (n.metadata !== undefined && c.keys(n.metadata, `${p}.metadata`, [], ['name'])) {
+    if (n.metadata !== undefined && c.keys(n.metadata, `${p}.metadata`, [], ['name', 'panel'])) {
       if (n.metadata.name !== undefined) s(n.metadata.name, `${p}.metadata.name`, NAME_MAX_CHARS);
+      if (n.metadata.panel !== undefined && !isPanelRef(n.metadata.panel)) {
+        c.add(`${p}.metadata.panel`, PANEL_REF_MESSAGE);
+      }
     }
     const def = registry.get(n.type);
     if (!def) c.add(`${p}.type`, `unknown node type "${String(n.type).slice(0, 64)}"`);

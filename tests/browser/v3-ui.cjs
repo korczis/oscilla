@@ -18,11 +18,13 @@
 //   loopback-workflow       Check setup -> READY -> measure -> COMPLETE through the UI: the
 //                           analysis ran in ONE Worker started from a data: URL of the page's
 //                           own <script data-analysis> text (ready ... result; no silent inline
-//                           fallback), the seven steps, quality bar, quality status with reasons,
-//                           response / IR
-//                           summaries, TEST CONTEXT banner, one announcement per stage and no
-//                           progress chatter, save, repeat (new experiment, repeatOf), 0 engine
-//                           and io nodes, sources, captures and ports afterwards
+//                           fallback), the seven steps, quality bar (CLIPPING NONE from the run
+//                           event's peak, naming 0.98 of full scale, while the assessment has no
+//                           CLIPPING_NOT_EXCLUDED; every item inside 390 x 844, T016), quality
+//                           status with reasons, response / IR summaries, TEST CONTEXT banner,
+//                           one announcement per stage and no progress chatter, save, repeat
+//                           (new experiment, repeatOf), 0 engine and io nodes, sources, captures
+//                           and ports afterwards
 //   abort-stages            abort in PREFLIGHT, NOISE_CHECK, ARMED, MEASURING and ANALYZING via
 //                           Escape, STOP, page hide and leaving the workspace: ABORTED, the
 //                           stopped announcement, 0 nodes/sources/captures/ports after
@@ -323,11 +325,17 @@ const H = {
       return out;
     });
   },
-  /** Wait for MEASURE's save to finish; on a timeout, say what the page was in. */
+  /**
+   * Wait for MEASURE's save to finish; on a timeout, say what the page was in: whether it
+   * saved after all, the open dialogs and the alerts (a success alert is dismissed after 6 s,
+   * so an empty list does not mean that nothing was said).
+   */
   saved: (page) => page.waitForFunction(() => window.OSCILLA.app.meas.saved, null,
     { timeout: 10000 }).then(() => null, () => page.evaluate(() => ({
     saveTimeout: true, state: window.OSCILLA.measure.state, saving: window.OSCILLA.app.meas.saving,
-    alerts: (window.OSCILLA.app.alerts || []).map((a) => `${a.title}: ${a.text || ''}`)
+    saved: window.OSCILLA.app.meas.saved, savedId: window.OSCILLA.app.meas.savedId,
+    dialogs: [...document.querySelectorAll('dialog[open]')].map((d) => d.id),
+    alerts: (window.OSCILLA.app.alerts || []).map((a) => `${a.title}: ${a.message || ''}`)
       .slice(0, 4) }))),
   /**
    * Named conditions -> { ok, failed: [names] }, so a failing check says WHICH condition failed
@@ -367,13 +375,13 @@ function defineChecks(fixtures) {
   const def = (name, fn) => checks.push({ name, fn });
 
   def('nav-order', async ({ page }) => {
-    // §73 + §198 (V371): the top level is these eight entries; ANALYZE and SYNTHESIS group the
-    // V2 workspaces.
+    // §73 + §198 (V371): ANALYZE and SYNTHESIS group the V2 workspaces; Synth is top level after
+    // Studio (Q019). The expected order is the navigation's own source (ui/app.js navTopLevel).
+    const { navTopLevel } = await import(pathToFileURL(path.join(__dirname, '..', '..', 'src', 'js', 'ui',
+      'app.js')).href);
     const items = await page.evaluate(() => [...document.querySelectorAll('#osc-nav > li')]
       .map((li) => li.querySelector(':scope > a, :scope > button').dataset.osc));
-    const ok = JSON.stringify(items) === JSON.stringify(['nav.playground', 'nav.measure',
-      'nav.experiments', 'nav-group.analyze', 'nav-group.synthesis', 'nav.learn', 'nav.studio',
-      'nav.about']);
+    const ok = JSON.stringify(items) === JSON.stringify(navTopLevel());
     await H.workspace(page, 'measure');
     const view = await page.evaluate(() => {
       const r = document.getElementById('osc-view-measure').getBoundingClientRect();
@@ -421,8 +429,27 @@ function defineChecks(fixtures) {
         shown: text('[data-osc="measure.shown"]'),
         primary: text('#osc-measure-primary'),
         chart: !!q('#osc-measure-chart-response .uplot'),
+        // T016: CLIPPING from the run event's peak, as the page shows it, beside the codes of
+        // the assessment of the same capture.
+        clipping: [...document.querySelectorAll('[data-osc="measure.bar"] .osc-q')]
+          .map((li) => ({ text: li.textContent.replace(/\s+/g, ' ').trim(), title: li.title }))
+          .find((x) => /^CLIPPING /.test(x.text)) || null,
+        codes: window.OSCILLA.app.meas.quality.reasons.map((r) => r.code),
       };
     });
+    // T016: at 390 x 844 every bar item, CLIPPING included, lies inside the viewport unclipped.
+    await page.setViewportSize({ width: 390, height: 844 });
+    res.barPhone = await until(() => page.evaluate(() => {
+      const items = [...document.querySelectorAll('[data-osc="measure.bar"] .osc-q')];
+      const fits = items.length === 5 && items.every((li) => {
+        const r = li.getBoundingClientRect();
+        return r.width > 0 && r.left >= 0 && r.right <= window.innerWidth
+          && li.scrollWidth <= li.clientWidth + 1;
+      });
+      return window.innerWidth === 390 && fits ? { fits, n: items.length } : null;
+    }), { ms: 3000, what: 'the quality bar fits 390 px' }).catch((e) => ({ fits: false,
+      error: e.message }));
+    await page.setViewportSize({ width: 1536, height: 1024 });
     await page.click('[data-osc="measure.tab"][data-value="ir"]');
     await sleep(150);
     res.ir = await page.evaluate(() => ({
@@ -489,6 +516,10 @@ function defineChecks(fixtures) {
       history: d.state === 'COMPLETE' && d.history.includes('ANALYZING')
         && d.history.includes('ARMED'),
       bar: d.bar.length === 5 && d.bar.includes('CAPTURE COMPLETE') && d.bar.includes('INPUT OK'),
+      clippingFromPeak: !!d.clipping && d.clipping.text === 'CLIPPING NONE'
+        && /no sample at or above 0\.98 of digital full scale/.test(d.clipping.title)
+        && !d.codes.includes('CLIPPING_NOT_EXCLUDED'),
+      barPhone: res.barPhone.fits === true,
       quality: /^(GOOD|USABLE)$/.test(d.quality) && d.reasons > 0,
       response: /^Frequency response \(/.test(d.response) && /TEST CONTEXT/.test(d.shown)
         && d.primary === 'Save experiment' && d.chart,
@@ -1127,49 +1158,9 @@ function defineChecks(fixtures) {
     await H.workspace(page, 'measure');
     await H.loopback(page);
     const res = {};
-    res.importA = await page.evaluate(() => window.OSCILLA.app.measureImportCalibrationText(
-      'Hz,dB\n20,0.5\n1000,0\n15000,-1.5\n', 'mic-a.csv'));
-    res.profileA = await page.evaluate(() => window.OSCILLA.app.meas.cal.profile.id);
-    await page.fill('#osc-m-name', 'Gate evidence');
-    await page.fill('#osc-m-notes', 'start notes');
-    await page.click('#osc-measure-primary'); // Check setup
-    await H.waitState(page, ['READY', 'INVALID', 'ERROR'], 15000);
-    res.run = await H.run(page, () => page.click('#osc-measure-primary')); // Start measurement
-    if (res.run.state !== 'COMPLETE') return { ok: false, failed: ['run'], ...res };
-    const evidence = () => page.evaluate(() => {
-      const el = document.querySelector('[data-osc="measure.evidenceNotes"]');
-      return el && el.offsetParent !== null ? el.textContent.trim() : '';
-    });
-    res.before = await evidence();
-    // After COMPLETE: another profile, a level calibration made now, notes edited.
-    res.importB = await page.evaluate(() => window.OSCILLA.app.measureImportCalibrationText(
-      'Hz,dB\n20,-3\n1000,2\n15000,4\n', 'mic-b.csv'));
-    await page.click('[data-osc="measure.levelCal"]');
-    await page.click('[data-osc="levelCal.manual"]');
-    await page.fill('#osc-lc-obs', '-32.5');
-    await page.fill('#osc-lc-cond', 'gate: created after the measurement');
-    await page.click('[data-osc="levelCal.save"]');
-    await page.fill('#osc-m-notes', 'edited after');
-    await sleep(100);
-    res.level = await page.textContent('[data-osc="measure.levelIndicator"]');
-    res.after = await evidence();
-    // The stored noise-check snapshot keeps the calibration its run applied (none).
-    res.rtaY = await page.evaluate(() => {
-      const r = window.OSCILLA.app.meas.rta;
-      return r ? `${r.yLabel} ${r.badges.join(' ')}` : null;
-    });
-    await page.click('#osc-measure-save');
-    res.save = await H.saved(page);
-    if (res.save) return { ok: false, failed: ['save'], ...res };
-    res.record = await page.evaluate(async () => {
-      const id = window.OSCILLA.app.meas.savedId;
-      const e = await window.OSCILLA.experiments.store().get(id);
-      return { frequency: e.calibration.frequency, level: e.calibration.level,
-        notes: e.environment.notes, annotations: e.annotations || null,
-        levelCalibrated: e.quality.metrics.levelCalibrated,
-        corrected: e.algorithms.calibration || null };
-    });
-    await page.evaluate(() => {
+    // The cleanup runs on every way out (an early return or a throw): a level calibration left
+    // applied by a failed save made older-claim and evidence fail noSpl as well (#276, #311).
+    const clean = () => page.evaluate(() => {
       const a = window.OSCILLA.app;
       a.measureClearLevelCalibration();
       a.measureClearCalibration();
@@ -1178,22 +1169,71 @@ function defineChecks(fixtures) {
       a.meas.name = '';
       a.alerts = [];
     });
-    const r = res.record;
-    return { ...res, ...H.verdict({
-      imported: res.importA === true && res.importB === true,
-      calibratedNow: /CALIBRATED/.test(res.level) && !/UNCALIBRATED/.test(res.level),
-      rtaAsMeasured: !!res.rtaY && !/SPL/.test(res.rtaY),
-      quietBefore: res.before === '',
-      stated: res.after.startsWith('Calibration changed after this measurement; the saved '
-        + 'record keeps the calibration it was measured with (frequency profile "mic-a", levels '
-        + 'relative).') && /Notes edited after this measurement started are saved as an /
-        .test(res.after) && !/SPL/.test(res.after),
-      namesA: !!r.frequency && r.frequency.id === res.profileA && r.frequency.name === 'mic-a'
-        && !!r.corrected,
-      noLevel: r.level === null && r.levelCalibrated === false,
-      startNotes: /^start notes\b/.test(r.notes || '') && !/edited/.test(r.notes || ''),
-      annotation: !!r.annotations && r.annotations.notes === 'edited after',
-    }) };
+    const body = async () => {
+      res.importA = await page.evaluate(() => window.OSCILLA.app.measureImportCalibrationText(
+        'Hz,dB\n20,0.5\n1000,0\n15000,-1.5\n', 'mic-a.csv'));
+      res.profileA = await page.evaluate(() => window.OSCILLA.app.meas.cal.profile.id);
+      await page.fill('#osc-m-name', 'Gate evidence');
+      await page.fill('#osc-m-notes', 'start notes');
+      await page.click('#osc-measure-primary'); // Check setup
+      await H.waitState(page, ['READY', 'INVALID', 'ERROR'], 15000);
+      res.run = await H.run(page, () => page.click('#osc-measure-primary')); // Start measurement
+      if (res.run.state !== 'COMPLETE') return { ok: false, failed: ['run'], ...res };
+      const evidence = () => page.evaluate(() => {
+        const el = document.querySelector('[data-osc="measure.evidenceNotes"]');
+        return el && el.offsetParent !== null ? el.textContent.trim() : '';
+      });
+      res.before = await evidence();
+      // After COMPLETE: another profile, a level calibration made now, notes edited.
+      res.importB = await page.evaluate(() => window.OSCILLA.app.measureImportCalibrationText(
+        'Hz,dB\n20,-3\n1000,2\n15000,4\n', 'mic-b.csv'));
+      await page.click('[data-osc="measure.levelCal"]');
+      await page.click('[data-osc="levelCal.manual"]');
+      await page.fill('#osc-lc-obs', '-32.5');
+      await page.fill('#osc-lc-cond', 'gate: created after the measurement');
+      await page.click('[data-osc="levelCal.save"]');
+      await page.fill('#osc-m-notes', 'edited after');
+      await sleep(100);
+      res.level = await page.textContent('[data-osc="measure.levelIndicator"]');
+      res.after = await evidence();
+      // The stored noise-check snapshot keeps the calibration its run applied (none).
+      res.rtaY = await page.evaluate(() => {
+        const r = window.OSCILLA.app.meas.rta;
+        return r ? `${r.yLabel} ${r.badges.join(' ')}` : null;
+      });
+      await page.click('#osc-measure-save');
+      res.save = await H.saved(page);
+      if (res.save) return { ok: false, failed: ['save'], ...res };
+      res.record = await page.evaluate(async () => {
+        const id = window.OSCILLA.app.meas.savedId;
+        const e = await window.OSCILLA.experiments.store().get(id);
+        return { frequency: e.calibration.frequency, level: e.calibration.level,
+          notes: e.environment.notes, annotations: e.annotations || null,
+          levelCalibrated: e.quality.metrics.levelCalibrated,
+          corrected: e.algorithms.calibration || null };
+      });
+      const r = res.record;
+      return { ...res, ...H.verdict({
+        imported: res.importA === true && res.importB === true,
+        calibratedNow: /CALIBRATED/.test(res.level) && !/UNCALIBRATED/.test(res.level),
+        rtaAsMeasured: !!res.rtaY && !/SPL/.test(res.rtaY),
+        quietBefore: res.before === '',
+        stated: res.after.startsWith('Calibration changed after this measurement; the saved '
+          + 'record keeps the calibration it was measured with (frequency profile "mic-a", levels '
+          + 'relative).') && /Notes edited after this measurement started are saved as an /
+          .test(res.after) && !/SPL/.test(res.after),
+        namesA: !!r.frequency && r.frequency.id === res.profileA && r.frequency.name === 'mic-a'
+          && !!r.corrected,
+        noLevel: r.level === null && r.levelCalibrated === false,
+        startNotes: /^start notes\b/.test(r.notes || '') && !/edited/.test(r.notes || ''),
+        annotation: !!r.annotations && r.annotations.notes === 'edited after',
+      }) };
+    };
+    try {
+      return await body();
+    } finally {
+      await clean();
+    }
   });
 
   def('resave-after-link', async ({ page }) => {
@@ -2629,8 +2669,10 @@ function defineChecks(fixtures) {
       }), Boolean, 5000);
       await page.focus('[data-osc="fnd.row"] [data-osc="fnd.delete"]');
       await page.keyboard.press('Enter');
-      // The dialog focuses its first button on a timer after it opens: wait until that initial
-      // focus is inside the dialog, or it would land after ours and Enter would press Cancel.
+      // Wait until the dialog is open with focus inside it. Its deferred initial focus (a
+      // timer in openModal) no longer takes focus back from a control moved to before it
+      // fires (E043); before that fix it did on a loaded host, Enter pressed Cancel and the
+      // row stayed (#273, #290).
       await H.until(() => page.evaluate(() => {
         const d = document.getElementById('osc-dlg-finding-delete');
         return d.open && d.contains(document.activeElement);

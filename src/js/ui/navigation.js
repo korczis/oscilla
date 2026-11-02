@@ -3,11 +3,13 @@
 // into the ONE OSCILLA component by main.js (Object.defineProperties, never spread), like
 // measure.js; its state lives in the closure `nav`, never in reactive state.
 //
-// The hash is shared by four codecs, each reading only its own keys: the instrument
+// The hash is shared by five codecs, each reading only its own keys: the instrument
 // (core/url-state.js: v s p w f g d a r rm x, and V1 mode ids in `m`), the MEASURE recipe
 // (core/url-state-measure.js: mr), the Studio link (core/url-state-studio.js: m=studio, st,
 // sv) and a stored record (core/url-state-records.js: m=experiments with exp, def or finding,
-// ADR 0048; the record keys leave the address with Experiments, like the Studio keys). `m`
+// ADR 0048; the record keys leave the address with Experiments, like the Studio keys) and the
+// keyboard (src/js/midi/keyboard-ui.js: kbd=1 arms the keyboard of the Playground or the
+// Studio the link opens, K026; it leaves the address with the first workspace change). `m`
 // names the workspace: any workspace id (`m=measure`, `m=analyzer`, …) or, as V1 links wrote
 // it, a V1 mode id (`sweep` → Playground, `dual` → Synthesis).
 //
@@ -17,16 +19,23 @@
 //   3. exp, def or finding (a record link without m) → EXPERIMENTS (owner: records)
 //   4. mr (a recipe link without m)                  → MEASURE (owner: measure)
 //   5. none of these (an empty hash, bare `v=1&f=…`) → PLAYGROUND
-//   An in-page anchor (`#osc-main`, no `=`) is not a route: a click on one (the skip link, the
-//   brand) moves focus with no fragment navigation, so it adds no history entry. The nav items'
-//   hrefs are the workspaces' addresses (`#m=measure`): a modified click or "open in new tab"
-//   opens that workspace; a plain click goes through the router. The V1 mode follows from the
+//   An `m` that names no page, or two different pages, is refused with a notice (badRoute) and
+//   the route falls through to 3-5; without a record or recipe key the refusal changes no
+//   workspace. A repeated `m` counts once.
+//   An in-page anchor (`#osc-main`, no `=`) is not a route: a click on one (the skip link)
+//   moves focus with no fragment navigation, so it adds no history entry. The nav items' and
+//   the brand's hrefs are the workspaces' addresses (`#m=measure`; the brand is `#m=playground`,
+//   home): a modified click or "open in new tab" opens that workspace; a plain click goes
+//   through the router. The V1 mode follows from the
 //   workspace and the source (v1ModeFor), so `mode` and `workspace` cannot disagree.
 // A domain applies its own keys whatever the route: `#m=studio&mr=…` opens STUDIO and still
 // loads the recipe into the MEASURE setup (and says so). A link whose route owner refuses it
 // (an invalid Studio link, an invalid recipe link without m) changes no workspace, and a refused
 // link is not kept: the entry is replaced by hashAfterRefusal (the refused domain's keys out, m
-// the workspace the user stays in), so neither Back / Forward nor a reload brings it back.
+// the workspace the user stays in), so neither Back / Forward nor a reload brings it back. The
+// same holds for an instrument configuration that could not be read (its keys leave), and one
+// restored only in part is rewritten to the values actually restored (hashToKeep): a reload
+// never repeats a warning the user has already seen.
 //
 // Three origins reach the dispatcher:
 //   load       the page opened at a hash: every domain applies its keys, then the route.
@@ -39,10 +48,12 @@
 // A same-document traversal never fires beforeunload, so Back and Forward between workspaces
 // never meet the unsaved-work guard (ui/unsaved.js); only leaving the page does.
 //
-//   routeOfHash(hash) -> { workspace, owner } | null
+//   routeOfHash(hash) -> { workspace, owner, badRoute? } | null
 //   navigationStateOf(hash, source) -> { workspace, owner, mode } | null
 //   hashForWorkspace(hash, workspace) -> string        (m set; Studio keys out off STUDIO)
 //   hashAfterRefusal(hash, results, workspace) -> string  (a refused link's keys out)
+//   hashToKeep(hash, results, workspace, instrumentHash) -> string
+//                                                      (the address kept after load or link)
 //   hashForRecord(hash, { kind, id } | null) -> string  (Experiments naming that record)
 //   configLinkHash(hash, instrumentHash, workspace) -> string
 //                                                      (Copy config URL: other keys kept)
@@ -56,11 +67,14 @@ import {
   RECORD_LINK_KEYS, RECORD_LINK_MODE, decodeRecordLink, encodeRecordLink, withoutRecordParams,
 } from '../core/url-state-records.js';
 import { WORKSPACES } from './app.js';
+import { KEYBOARD_LINK_KEY } from '../midi/keyboard.js';
+import { SYNTH_LINK_MODE, withoutSynthParams } from '../core/url-state-synth.js';
 
 export const ROUTE_KEY = 'm';
 export const DEFAULT_WORKSPACE = 'playground';
 /** The domains that read the hash, in the order the dispatcher applies them. */
-export const HASH_DOMAINS = Object.freeze(['instrument', 'measure', 'studio', 'records']);
+export const HASH_DOMAINS = Object.freeze(['instrument', 'measure', 'studio', 'keyboard',
+  'synth', 'records']);
 /**
  * The domains re-applied on Back / Forward (ADR 0048): opening a stored record replaces nothing
  * the user made, so a traversal between two records opens the record its entry names.
@@ -102,26 +116,45 @@ export function isAnchorHash(hash) {
   return h !== '' && !h.includes('=');
 }
 
-/** The workspace a hash names and the domain that owns that choice (see the header). */
+/** True for a value of `m` that names a page: a workspace id or a V1 mode id. */
+const namesPage = (m) => WORKSPACES.includes(m) || V1_MODE_IDS.includes(m);
+
+/**
+ * The workspace a hash names and the domain that owns that choice (see the header). A value of
+ * `m` that names no page (`m=bogus`, `m=`, `m=STUDIO`) or two different pages (`m=about&m=learn`)
+ * is refused: the result carries it as `badRoute` (the distinct values), the route falls through
+ * to the keys that remain (a record, a recipe), and without one the owner is the workspace
+ * itself, so the refusal changes no workspace. A value repeated (`m=measure&m=measure`) counts
+ * once.
+ */
 export function routeOfHash(hash) {
   if (isAnchorHash(hash)) return null;
   const q = paramsOf(hash);
   const K = STUDIO_LINK_KEYS;
-  const modes = q.getAll(ROUTE_KEY);
+  const modes = [...new Set(q.getAll(ROUTE_KEY))];
   if (modes.includes(STUDIO_LINK_MODE) || q.has(K.template) || q.has(K.subview)) {
     return { workspace: 'studio', owner: 'studio' };
   }
-  if (modes.length > 1) return null; // ambiguous: no workspace is named
-  const m = modes[0];
-  if (m !== undefined && WORKSPACES.includes(m)) return { workspace: m, owner: 'workspace' };
-  if (m !== undefined && V1_MODE_IDS.includes(m)) {
-    return { workspace: workspaceForV1Mode(m), owner: 'workspace' };
+  if (modes.length === 1 && namesPage(modes[0])) {
+    const m = modes[0];
+    return { workspace: WORKSPACES.includes(m) ? m : workspaceForV1Mode(m), owner: 'workspace' };
   }
+  const bad = modes.length ? { badRoute: modes } : {};
   if (Object.values(RECORD_LINK_KEYS).some((k) => q.has(k))) {
-    return { workspace: RECORD_LINK_MODE, owner: 'records' };
+    return { workspace: RECORD_LINK_MODE, owner: 'records', ...bad };
   }
-  if (q.has(RECIPE_HASH_KEY)) return { workspace: 'measure', owner: 'measure' };
+  if (q.has(RECIPE_HASH_KEY)) return { workspace: 'measure', owner: 'measure', ...bad };
+  if (modes.length) return { workspace: DEFAULT_WORKSPACE, owner: 'workspace', ...bad };
   return { workspace: DEFAULT_WORKSPACE, owner: null };
+}
+
+/** The notice a refused `m` gets: what the link named, said plainly and short. */
+export function badRouteMessage(values) {
+  const shown = values.map((v) => (v === '' ? 'an empty name'
+    : `"${v.length > 32 ? `${v.slice(0, 32)}…` : v}"`));
+  const what = values.length > 1 ? `more than one page (${shown.join(', ')})`
+    : `no OSCILLA page (${shown[0]})`;
+  return `This link names ${what}, so it opened no page. The address now names the page shown.`;
 }
 
 /** The route of a hash with the V1 mode it gives for `source` (the instrument's, after load). */
@@ -130,16 +163,22 @@ export function navigationStateOf(hash, source) {
   return r ? { ...r, mode: v1ModeFor(r.workspace, source) } : null;
 }
 
-/** The hash (without '#') naming `workspace`; the Studio keys leave with STUDIO. */
+/**
+ * The hash (without '#') naming `workspace`; the Studio keys leave with STUDIO, and the
+ * keyboard's arming key with any change of workspace (it armed the view the link opened).
+ */
 export function hashForWorkspace(hash, workspace) {
   const q = isAnchorHash(hash) ? new URLSearchParams() : paramsOf(hash);
+  const from = routeOfHash(hash);
+  if (!from || from.workspace !== workspace) q.delete(KEYBOARD_LINK_KEY);
   if (workspace !== STUDIO_LINK_MODE) {
     q.delete(STUDIO_LINK_KEYS.template);
     q.delete(STUDIO_LINK_KEYS.subview);
   }
   if (workspace !== RECORD_LINK_MODE) for (const k of Object.values(RECORD_LINK_KEYS)) q.delete(k);
-  q.set(ROUTE_KEY, workspace);
-  return q.toString();
+  const out = workspace === SYNTH_LINK_MODE ? q : new URLSearchParams(withoutSynthParams(q));
+  out.set(ROUTE_KEY, workspace);
+  return out.toString();
 }
 
 /**
@@ -156,19 +195,52 @@ export function hashForRecord(hash, link) {
 
 /**
  * The address to keep for a link some domain refused: the refused domain's keys leave (a Studio
- * link, a recipe), `m` names the workspace the user stays in. So a refused link never comes
- * back through Back / Forward or a reload. results: { instrument, measure, studio } as the
- * dispatcher collected them; false = refused.
+ * link, a recipe, a record, an instrument configuration that could not be read), `m` names the
+ * workspace the user stays in (a refused `m` is replaced the same way). So a refused link never
+ * comes back through Back / Forward or a reload. results: { instrument, measure, studio,
+ * records, workspace } as the dispatcher collected them; false = refused.
  */
 export function hashAfterRefusal(hash, results, workspace) {
   let h = isAnchorHash(hash) ? '' : strip(hash);
   if (results.studio === false) h = withoutStudioParams(h);
   if (results.measure === false) h = withRecipeParam(h, null);
   if (results.records === false) h = withoutRecordParams(h);
+  if (results.synth === false) h = withoutSynthParams(h);
+  if (results.instrument === false) {
+    const q = paramsOf(h);
+    for (const k of INSTRUMENT_HASH_KEYS) q.delete(k);
+    h = q.toString();
+  }
   return hashForWorkspace(h, workspace);
 }
 
 const refusedAny = (results) => Object.values(results).includes(false);
+
+/**
+ * The address to keep once a link has been applied (load or link), without '#':
+ *   - a refused link's keys out and `m` the workspace shown (hashAfterRefusal);
+ *   - an instrument configuration restored only in part (`results.instrument === 'partial'`):
+ *     the instrument keys replaced by `instrumentHash`, the state actually restored, so a reload
+ *     restores the same values without warning again;
+ *   - a repeated `m` (`m=measure&m=measure`) written once;
+ *   - otherwise the hash unchanged.
+ */
+export function hashToKeep(hash, results, workspace, instrumentHash = '') {
+  const h = strip(hash);
+  if (isAnchorHash(hash)) return h;
+  const partial = results.instrument === 'partial' && !!instrumentHash;
+  if (refusedAny(results) || partial) {
+    const out = hashAfterRefusal(h, results, workspace);
+    return partial ? configLinkHash(out, instrumentHash, workspace) : out;
+  }
+  const q = paramsOf(h);
+  const modes = q.getAll(ROUTE_KEY);
+  if (modes.length > 1 && new Set(modes).size === 1) {
+    q.set(ROUTE_KEY, modes[0]);
+    return q.toString();
+  }
+  return h;
+}
 
 /**
  * Copy config URL: the instrument's keys from `instrumentHash` (url-state.js serializeHash)
@@ -200,6 +272,8 @@ export function createNavigation(svc = {}) {
     routed: { href: null, workspace: null }, // what the address names, as the router left it
     lastStateHash: '',     // the last hash that was state, not an anchor
     traversals: 0,
+    applying: false,       // a load or link is being dispatched, routed and written
+    named: undefined,      // a record named while applying (navNameRecord), written after it
   };
   const win = () => svc.win || window;
   const loc = () => win().location;
@@ -227,6 +301,14 @@ export function createNavigation(svc = {}) {
 
   function dispatch(hash, origin) {
     const results = {};
+    const st = origin === 'history' ? null : routeOfHash(hash);
+    if (st && st.badRoute) {
+      // A refused `m` (B4 of the link audit): said once, and the address is rewritten below.
+      results.workspace = false;
+      if (typeof nav.cmp.notify === 'function') {
+        nav.cmp.notify('warning', 'Page link not applied', badRouteMessage(st.badRoute));
+      }
+    }
     for (const name of origin === 'history' ? HISTORY_DOMAINS : HASH_DOMAINS) {
       const fn = nav.domains.get(name);
       if (!fn) continue;
@@ -252,6 +334,29 @@ export function createNavigation(svc = {}) {
     if (!isAnchorHash(hash)) nav.lastStateHash = strip(hash);
   }
 
+  /**
+   * Apply a load or a link: dispatch, route, then keep the address hashToKeep gives. A record a
+   * domain names while this runs (a record refused at once, before the route has opened
+   * Experiments) is named after it, so the address the user ends on is the record's.
+   */
+  function apply(hash, origin, finish) {
+    nav.applying = true;
+    nav.named = undefined;
+    try {
+      const results = isAnchorHash(hash) ? {} : dispatch(hash, origin);
+      route(isAnchorHash(hash) ? '' : hash, origin, results);
+      const partial = results.instrument === 'partial'
+        && typeof nav.cmp.serializeHash === 'function';
+      finish(hashToKeep(hash, results, nav.cmp.workspace,
+        partial ? nav.cmp.serializeHash() : ''));
+    } finally {
+      nav.applying = false;
+    }
+    const named = nav.named;
+    nav.named = undefined;
+    if (named !== undefined) nav.cmp.navNameRecord(named);
+  }
+
   function onNavigate() {
     const hash = loc().hash;
     if (isAnchorHash(hash)) {
@@ -271,11 +376,8 @@ export function createNavigation(svc = {}) {
       route(hash, 'history', dispatch(hash, 'history'));
       return;
     }
-    const results = dispatch(hash, 'link');
-    route(hash, 'link', results);
     // Stamped, a later Back / Forward to it is a traversal; a refused link is not kept.
-    write(refusedAny(results) ? hashAfterRefusal(hash, results, nav.cmp.workspace)
-      : strip(hash), 'replace');
+    apply(hash, 'link', (keep) => write(keep, 'replace'));
   }
 
   return {
@@ -295,16 +397,16 @@ export function createNavigation(svc = {}) {
       nav.cmp = this;
       const w = win();
       const hash = loc().hash;
-      const results = isAnchorHash(hash) ? {} : dispatch(hash, 'load');
-      route(isAnchorHash(hash) ? '' : hash, 'load', results);
-      if (refusedAny(results)) write(hashAfterRefusal(hash, results, this.workspace), 'replace');
-      else {
-        try {
-          w.history.replaceState(HISTORY_STAMP, '', loc().href);
-        } catch (e) { /* the entry stays unstamped: Back to it re-applies its link */ }
-      }
-      nav.routed = { href: loc().href, workspace: this.workspace };
-      // In-page anchors (the skip link, the brand) move focus without a fragment navigation, so
+      apply(hash, 'load', (keep) => {
+        if (keep !== strip(hash)) write(keep, 'replace');
+        else {
+          try {
+            w.history.replaceState(HISTORY_STAMP, '', loc().href);
+          } catch (e) { /* the entry stays unstamped: Back to it re-applies its link */ }
+        }
+        nav.routed = { href: loc().href, workspace: this.workspace };
+      });
+      // In-page anchors (the skip link) move focus without a fragment navigation, so
       // they add no history entry and the address keeps naming the workspace.
       const doc = w.document;
       if (doc) {
@@ -344,6 +446,10 @@ export function createNavigation(svc = {}) {
      * another record then makes a new entry, and Back returns to this one.
      */
     navNameRecord(link) {
+      if (nav.applying) {
+        nav.named = link;
+        return true;
+      }
       if (!nav.started || this.workspace !== RECORD_LINK_MODE) return false;
       const hash = hashForRecord(loc().hash, link);
       if (hash === strip(loc().hash)) return false;

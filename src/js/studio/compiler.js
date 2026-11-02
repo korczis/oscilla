@@ -366,7 +366,8 @@ export function instantiateNode(planNode, ctxEnv) {
     const h = planNode.adapter.create({ ctx: hooks.ctx, hooks, acct, now: ctxEnv.now,
       at: ctxEnv.at, params: planNode.params, node: planNode, def: planNode.def,
       options: ctxEnv.options || {}, global: ctxEnv.global || null,
-      settled: ctxEnv.settled || null });
+      settled: ctxEnv.settled || null,
+      gated: typeof ctxEnv.gated === 'function' && ctxEnv.gated(planNode.id) === true });
     return Object.assign(h, base, { nodes: own.nodes, sources: own.sources, acct });
   } catch (e) {
     stopAndDisconnect(own.nodes, own.sources);
@@ -625,7 +626,8 @@ export function limitValueText(v, unit) {
 /**
  * The bound a `frequency-limited` value is held at or below (T023 review R1): "22.80 kHz, 0.95
  * × Nyquist at 48 kHz", or "100 Hz, the top of its range" when the parameter's own maximum is
- * the lower of the two (an LFO's Rate). details = { cap, bound, sampleRate }.
+ * the lower of the two (a Random's or a Step Modulator's Rate). details = { cap, bound,
+ * sampleRate }.
  */
 export function limitBoundText({ cap, bound, sampleRate }) {
   return bound === 'nyquist' ? `${formatFrequency(cap)}, ${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist `

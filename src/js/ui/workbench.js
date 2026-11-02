@@ -4,10 +4,13 @@
 // hosts live in `svc` (a closure), never in reactive state.
 //
 // svc: { engine, bridge, labs, exportConfigDoc(cmp),
-//        applyImport(cmp, parsed) -> { issues, dropped }, renderWav(cmp, kind), screenshot(cmp),
-//        relayout() }
+//        applyImport(cmp, parsed) -> { issues, notes[], limited, dropped },
+//        renderWav(cmp, kind), screenshot(cmp), relayout(), stopPlayback(cmp),
+//        sequencerPlaying() }
 
-import { STORAGE_KEYS, WAVEFORM_LABELS } from '../core/constants.js';
+import {
+  MAX_OUTPUT_GAIN, MAX_PROGRAMMED_S, STORAGE_KEYS, WAVEFORM_LABELS,
+} from '../core/constants.js';
 import { clamp, round } from '../core/math.js';
 import {
   formatFrequency, formatMs, frequencyToNormalized, normalizedToFrequency,
@@ -18,14 +21,17 @@ import { SWEEP_PARAMS } from '../audio/patterns.js';
 import { LEARN_VIZ_TARGETS } from '../data/learn.js';
 import { additiveHarmonicTable, harmonicTable } from '../visualization/harmonics.js';
 import { totalDurationMs } from '../sequencer/model.js';
+import { sequenceDigest } from '../sequencer/editor.js';
 import { scopeWindow } from './p5-views.js';
+import { OUTPUT_OWNER_NAMES, outputOwnerOf } from '../visualization/output-owner.js';
 import { OSCILLA_VERSION } from './version.js';
 import { formatHz } from '../charts/axes.js';
 import { rovingKeydown } from './app.js';
-import { parseConfigImport, exportFileName, importSummary } from './config-file.js';
+import { parseConfigImport, exportFileName, importNotice } from './config-file.js';
 import { downloadBlob, readFileText } from './exporters.js';
 import { focusSafely, isFocusable } from './dialogs.js';
 import { sessionStore } from '../core/storage.js';
+import { learnReturnAction, learnToolOf } from './cross-links.js';
 
 const GROUP = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 const GROUP2 = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -44,6 +50,19 @@ export { v1ModeFor, workspaceForV1Mode } from './navigation.js';
 
 export const SWEEP_FORM = SWEEP_PARAMS;
 
+/**
+ * Bump app.seqRev after every change of the sequence (C004). The editor's model stays outside
+ * Alpine; the readouts that derive from it (statusDurationText) read the counter instead.
+ * Returns the unsubscribe function.
+ */
+export function followSequenceEdits(app, editor) {
+  return editor.onChange(() => { app.seqRev += 1; });
+}
+
+/** T001: the state shown while the output ceiling flattens the signal (ADR 0002). */
+export const CEILING_TEXT = 'OUTPUT AT CEILING (clipped)';
+const CEILING_DB_TEXT = `${gainLevelDb(MAX_OUTPUT_GAIN).toFixed(1)} dBFS`;
+
 export function createWorkbench(svc) {
   return {
     OSCILLA_VERSION,
@@ -52,13 +71,23 @@ export function createWorkbench(svc) {
     timeWindowMs: 5,
     announceText: '',
     seqPlaying: false,
+    // The sequence's digest now and at its last load, import or export (C019): main.js updates
+    // seqDigest from the editor's onChange, markSequenceSaved() sets both.
+    seqDigest: '',
+    seqSavedDigest: '',
     exportBusy: false,
     importErrors: [],
     lastPattern: null,
     fullscreen: '',
     learnOpen: 'frequency',
+    // T001: set by main.js when the bridge reports that the output ceiling starts or stops
+    // flattening the signal (the engine's pre-ceiling tap); never per frame.
+    outputAtCeiling: false,
+    ceilingText: CEILING_TEXT,
     // Bumped by main.js when a lab changes (getters below that read lab state depend on it).
     labRev: 0,
+    // Bumped on every change of the sequence (followSequenceEdits; its model is not reactive).
+    seqRev: 0,
 
     // ------------------------------------------------------------------ readouts
     get freqMain() { return groupedHz(this.frequency); },
@@ -87,6 +116,28 @@ export function createWorkbench(svc) {
     // The instrument's own Play (ADR 0050): the status Play button triggers, latches or stops the
     // instrument and the Pattern Sequencer, never the Studio, so it reflects only them.
     get isSounding() { return this.playing || this.seqPlaying; },
+    /**
+     * Who owns the one output now ('instrument' | 'sequencer' | 'studio' | null), for the views
+     * that describe it (C013). The Studio is read through its transport (studioOwnsOutput);
+     * studio.playing, the workspace's mirror of the transport's state events, only makes the
+     * getter reactive.
+     */
+    get outputOwner() {
+      const st = this.studio;
+      const studio = !!(st && st.playing) && (typeof this.studioOwnsOutput !== 'function'
+        || this.studioOwnsOutput());
+      return outputOwnerOf({ instrument: this.playing, sequencer: this.seqPlaying, studio });
+    },
+    /** The ceiling acts on what sounds now (idle shows nothing, whatever the tap read last). */
+    get ceilingActing() { return this.outputAtCeiling && this.isSounding; },
+    /** The gain readout is the master setpoint, not the level the output carries. */
+    get gainTitle() {
+      return `Gain setpoint ${this.gainDbText} (logical gain ${this.gainLevel.toFixed(3)} re `
+        + `digital full scale), not the output level: it leaves out the envelope and filter `
+        + `before it and the limiter and ${CEILING_DB_TEXT} output ceiling after it; `
+        + 'relative, not SPL.'
+        + (this.ceilingActing ? ` Now: ${CEILING_TEXT}, the ceiling flattens the output.` : '');
+    },
     /** Whether the Studio transport plays (cmp.studio, the workspace's plain view state). */
     get studioPlaying() { return !!(this.studio && this.studio.playing); },
     /** Anything audible from this page: the status state and its dot (C012). */
@@ -151,12 +202,18 @@ export function createWorkbench(svc) {
     get statusDurationText() {
       if (this.seqPlaying && !this.playing) {
         // The sequence plays, not the instrument plan: its own length (loops repeat it).
-        void this.labRev;
+        void this.seqRev;
         const seq = svc.labs && svc.labs.sequencer;
         const model = seq && seq.editor && seq.editor.model;
         if (model) {
-          const ms = totalDurationMs(model);
-          return model.loop ? `${formatMs(ms)} (loop)` : formatMs(ms);
+          const loop = model.loop ? ' (loop)' : '';
+          // Edits during playback apply from the next pass: while the sounding pass is longer
+          // or shorter than the edited sequence, both lengths (sequencer-panel passStatus).
+          const pass = typeof seq.passStatus === 'function' ? seq.passStatus() : null;
+          const now = pass ? formatMs(pass.soundingS * 1000) : '';
+          const next = formatMs(totalDurationMs(model));
+          if (pass && now !== next) return `${now} now, next ${next}${loop}`;
+          return `${next}${loop}`;
         }
       }
       const p = this.planSummary;
@@ -219,7 +276,20 @@ export function createWorkbench(svc) {
       const w = `${this.timeWindowMs} ms window`;
       const f = this.source === 'dual' ? this.dualFa : this.metricFrequency;
       const sr = this.effectiveSampleRate;
-      if (!this.playing) {
+      const owner = this.outputOwner;
+      if (owner && owner !== 'instrument') {
+        // Another source sounds through the same output analyser: its trace, at full scale.
+        const an = svc.engine && svc.engine.analyser;
+        const sw = scopeWindow({ requestedMs: this.timeWindowMs,
+          bufferLength: an ? an.fftSize : 0, sampleRate: sr, freqHz: 0 });
+        const lw = sw.limited
+          ? `${Math.round(sw.ms)} ms window (the analyser buffer limit; ${this.timeWindowMs} ms `
+            + 'requested)'
+          : w;
+        return `Live output analyser waveform (${OUTPUT_OWNER_NAMES[owner]}) over a ${lw}, `
+          + 'relative to full scale.';
+      }
+      if (owner !== 'instrument') {
         const wave = this.source === 'dual' ? this.dual.a.wave : this.waveform;
         return `Waveform, not playing: computed ${wave} at ${formatFrequency(f)} over a ${w}. `
           + 'Hold to Play shows the live output analyser trace.';
@@ -285,26 +355,55 @@ export function createWorkbench(svc) {
       else if (d.type === 'select') this.sweep[d.key] = raw;
     },
     sweepLabel(d) { return d.key === 'durationMs' ? 'Duration (s)' : d.label; },
+    /** paramErrors key of a sweep field (setSweepFreq, setSweepDuration); null for a select. */
+    sweepErrorKey(d) {
+      if (d.type === 'freq') return `sweep-${d.key}`;
+      return d.key === 'durationMs' ? 'sweep-duration' : null;
+    },
+    // One field template renders the pattern parameters and the sweep form (T003), so every
+    // field, sweep or pattern, shows its own error beside it.
+    get ppSweep() { return this.source === 'sweep'; },
+    get ppFields() { return this.ppSweep ? SWEEP_FORM : this.currentPattern.params; },
+    ppId(d) { return this.ppSweep ? `sw-${d.key}` : this.paramId(d); },
+    ppLabel(d) { return this.ppSweep ? this.sweepLabel(d) : d.label; },
+    ppAriaLabel(d) { return this.ppSweep ? null : d.label + this.paramUnit(d); },
+    ppValue(d) { return this.ppSweep ? this.sweepValue(d) : this.paramValue(d); },
+    ppSet(d, raw) {
+      if (this.ppSweep) this.setSweepField(d, raw);
+      else this.setParam(d, raw);
+    },
+    ppErrorKey(d) { return this.ppSweep ? this.sweepErrorKey(d) : this.paramId(d); },
+    ppError(d) {
+      const key = this.ppErrorKey(d);
+      return (key && this.paramErrors[key]) || '';
+    },
+    ppErrorId(d) { return `${this.ppId(d)}-error`; },
 
     // ------------------------------------------------------------------ transport extras
-    /** Status-bar play key: stop when sounding, else latch (continuous allowed) or trigger. */
+    /**
+     * Status-bar play key: stop when sounding, else latch (continuous allowed) or trigger.
+     * Sounding is what the key shows (isSounding) or the sequencer's live state (C001: the
+     * `seqPlaying` copy lags by one poll); a stop goes through stopPlayback and starts nothing.
+     */
     statusPlay() {
-      if (this.seqPlaying && svc.labs.sequencer) svc.labs.sequencer.editor.stop();
-      if (this.playing) { this.stopNow(); return; }
+      if (this.isSounding || svc.sequencerPlaying()) {
+        svc.stopPlayback(this);
+        return;
+      }
       if (this.continuousAllowed && !this.isProgrammed) this.toggleLatch();
       else this.trigger();
     },
     onContinuousToggle() {
+      // C011: setContinuous tells the sequencer (main.js onContinuousChange): its loop follows
+      // the permission and its Loop control restates the cap.
       this.setContinuous(!this.continuousAllowed);
       this.notify('info', this.continuousAllowed ? 'Continuous playback allowed'
         : 'Hard limit active', this.continuousAllowed
-        ? 'Hold and latch play until stopped. Keep the level low.'
-        : `Hold, trigger and the finite tone stop after ${this.safetyLimit} s.`);
+        ? 'Hold, latch and a looped sequencer sequence play until stopped. Keep the level low.'
+        : `Hold, trigger and the finite tone stop after ${this.safetyLimit} s; a looped `
+          + `sequencer sequence stops at ${MAX_PROGRAMMED_S} s.`);
     },
-    setSafetyLimit(raw) {
-      const v = Number(raw);
-      if (this.SAFETY_LIMIT_OPTIONS.includes(v)) this.safetyLimit = v;
-    },
+    // setSafetyLimit is the instrument's (core/instrument.js): it reaches the sounding voice.
 
     // ------------------------------------------------------------------ dual oscillator
     setDualSource(on) {
@@ -387,6 +486,23 @@ export function createWorkbench(svc) {
     closeDialog(id) { this.closeModal(id); },
 
     // ------------------------------------------------------------------ export / import
+    /** The sequence differs from the one last loaded, imported or exported (C019). */
+    get seqUnsaved() { return this.seqDigest !== this.seqSavedDigest; },
+    /**
+     * Unsaved work (ADR 0045): an edited sequence is kept only by Export configuration; the
+     * default sequence and a lab or instrument setting are not work.
+     */
+    sequencerWhatWouldBeLost() {
+      return this.seqUnsaved ? [{ domain: 'sequencer', label: 'Unsaved sequence' }] : [];
+    },
+    /** The sequence as it is now is saved: at boot, after an import and after an export. */
+    markSequenceSaved() {
+      const seq = svc.labs && svc.labs.sequencer;
+      if (!seq) return;
+      const digest = sequenceDigest(seq.editor.model);
+      this.seqDigest = digest;
+      this.seqSavedDigest = digest;
+    },
     async copyConfigUrl() { await this.copyConfigLink(); },
     async exportConfig() {
       try {
@@ -394,6 +510,7 @@ export function createWorkbench(svc) {
         const text = `${JSON.stringify(doc, null, 2)}\n`;
         downloadBlob(new Blob([text], { type: 'application/json' }),
           exportFileName('config', 'json'));
+        this.markSequenceSaved(); // the file holds the sequence (C019)
         this.notify('success', 'Config exported', 'The JSON file restores these settings.');
         return doc;
       } catch (e) {
@@ -423,9 +540,16 @@ export function createWorkbench(svc) {
         this.notify('error', 'Config not imported', parsed.errors.slice(0, 3).join(' '));
         return false;
       }
-      const { issues, dropped } = svc.applyImport(this, parsed);
-      const n = importSummary({ invalid: parsed.warnings.length + issues, dropped });
-      this.notify(n.level, n.title, n.message);
+      const { issues, notes = [], limited, dropped = [] } = svc.applyImport(this, parsed);
+      // dropped: saved values not restored (H002), named after the invalid and limited ones.
+      const notice = importNotice({ invalid: parsed.warnings.length + issues, limited, dropped });
+      // A value the file holds that was not applied is said, never reported as restored (C004).
+      if (notes.length) {
+        const said = notice.level === 'success' ? notes : [notice.message, ...notes];
+        this.notify('warning', 'Config imported', said.join(' '));
+      } else {
+        this.notify(notice.level, 'Config imported', notice.message);
+      }
       return true;
     },
     async exportAudio(kind) {
@@ -492,8 +616,10 @@ export function createWorkbench(svc) {
 
     // ------------------------------------------------------------------ learn / presets
     runLearnDemo(topic) {
+      if (topic.demo.href) { window.location.hash = topic.demo.href; return; } // V3 topics
       const fromKeyboard = document.activeElement && document.activeElement.closest('#osc-view-learn');
-      this.runDemo(topic);
+      // The notice carries the way back to the lesson (links.md, one-way link 2).
+      this.runDemo(topic, { action: learnReturnAction(topic) });
       const tab = LEARN_VIZ_TARGETS[topic.demo.viz];
       this.setWorkspace(this.source === 'dual' ? 'synthesis' : 'playground');
       if (tab === 'phase') this.setTab('phase', 'phase');
@@ -503,6 +629,24 @@ export function createWorkbench(svc) {
       }
       // The Learn view is now hidden: focus the transport, where the demo is played.
       if (fromKeyboard) this.$nextTick(() => focusSafely(document.getElementById('osc-hold-play')));
+    },
+    /**
+     * A Learn topic's tool link was followed (its href opens the workspace through the router):
+     * the topic becomes the current lesson and the notice offers the way back to it.
+     */
+    learnToolFollowed(topic, e) {
+      if (e && (e.button > 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)) return;
+      const tool = learnToolOf(topic.id);
+      if (!tool) return;
+      this.learnTopic = topic.id;
+      this.notify('info', `Opened ${tool.text.replace(/^Open /, '')} from the lesson`,
+        `${topic.title}: the lesson stays where you left it.`,
+        { action: learnReturnAction(topic) });
+    },
+    /** Follow a notice's link: the notice goes, the router opens the address. */
+    alertActionFollowed(id) {
+      // After the click: the link is still in the document when the browser follows it.
+      setTimeout(() => { this.alerts = this.alerts.filter((a) => a.id !== id); }, 0);
     },
     loadPresetFromView(p) {
       this.loadPreset(p);

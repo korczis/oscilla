@@ -10,86 +10,68 @@
         "width": 1536,
         "height": 1024
       },
-      "reference": "sha256:47ccceb65ef93d9611bdf59d3a7063e1d54b6202ab61f07e579004f952985d1c",
+      "reference": "sha256:100b813abff64ef87ec029907f196786b10f76ee4b17746f9562b0709960c9d5",
       "runs": 3,
-      "total": 15.91,
-      "totalExclData": 7.01,
+      "total": 3.12,
+      "totalExclData": 3.34,
       "regions": {
         "header": {
-          "mismatch": 5.95,
-          "mismatchExclData": 5.95,
+          "mismatch": 3.11,
+          "mismatchExclData": 3.11,
+          "runToRunPct": 0,
+          "dataPp": 0.5
+        },
+        "sentence": {
+          "mismatch": 11.45,
+          "mismatchExclData": 11.45,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "source": {
-          "mismatch": 8.02,
-          "mismatchExclData": 8.02,
+          "mismatch": 3.6,
+          "mismatchExclData": 3.6,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "analysis": {
-          "mismatch": 15.46,
-          "mismatchExclData": 4.65,
+          "mismatch": 1.91,
+          "mismatchExclData": 2.58,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "mic": {
-          "mismatch": 11.76,
-          "mismatchExclData": 10.5,
+          "mismatch": 3.34,
+          "mismatchExclData": 3.79,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "device": {
-          "mismatch": 18.37,
-          "mismatchExclData": 18.37,
+          "mismatch": 6.94,
+          "mismatchExclData": 6.94,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
-        "spectrogram": {
-          "mismatch": 46.95,
-          "mismatchExclData": 4.19,
-          "runToRunPct": 0.01,
-          "dataPp": 1
+        "measure": {
+          "mismatch": 3.15,
+          "mismatchExclData": 3.15,
+          "runToRunPct": 0,
+          "dataPp": 0.5
         },
         "sequencer": {
-          "mismatch": 14.17,
-          "mismatchExclData": 4.25,
+          "mismatch": 1.58,
+          "mismatchExclData": 0.99,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
-        "filter": {
-          "mismatch": 7.74,
-          "mismatchExclData": 7.03,
-          "runToRunPct": 0,
-          "dataPp": 0.5
-        },
-        "envelope": {
-          "mismatch": 8.89,
-          "mismatchExclData": 8.23,
-          "runToRunPct": 0,
-          "dataPp": 0.5
-        },
-        "additive": {
-          "mismatch": 11.23,
-          "mismatchExclData": 9.21,
-          "runToRunPct": 0,
-          "dataPp": 0.5
-        },
-        "phase": {
-          "mismatch": 11.05,
-          "mismatchExclData": 10.21,
-          "runToRunPct": 2.53,
-          "dataPp": 3.5
-        },
-        "bio": {
-          "mismatch": 14.89,
-          "mismatchExclData": 11.81,
+        "studio": {
+          "mismatch": 5.61,
+          "mismatchExclData": 5.61,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "statusbar": {
-          "mismatch": 6.77,
-          "mismatchExclData": 6.77,
+          "mismatch": 3.69,
+          "mismatchExclData": 3.69,
           "runToRunPct": 0,
           "dataPp": 0.5
         }
@@ -109,179 +91,177 @@
         ],
         "sourceSeg": [
           23,
-          111,
+          133.88,
           290,
           32
         ],
         "waveTiles": [
           23,
-          151,
+          173.88,
           290,
           55
         ],
         "freqSlider": [
           23,
-          276,
+          298.88,
           290,
           16
         ],
         "fineRow": [
           23,
-          321,
+          343.88,
           290,
           27
         ],
         "modeSeg": [
           98,
-          361,
+          383.88,
           215,
           29
         ],
         "playRow": [
           23,
-          431,
+          453.88,
           290,
           40
         ],
         "analysisTabs": [
           346,
-          81,
+          103.88,
           427.84,
           32
         ],
         "timeSelect": [
           821,
-          81,
+          103.88,
           93,
           32
         ],
         "waveformHost": [
           343,
-          133,
+          155.88,
           610,
           114
         ],
         "spectrumHost": [
           343,
-          258,
+          280.88,
           617,
           170
         ],
         "scaleSeg": [
           346,
-          444,
+          466.88,
           125,
           28
         ],
         "maxSelect": [
           483,
-          444,
+          466.88,
           104,
           28
         ],
         "micUse": [
           1194,
-          76,
+          98.88,
           110,
           32
         ],
         "micTabs": [
           990,
-          113,
+          135.88,
           351,
           33
         ],
         "micHost": [
           984,
-          159,
+          181.88,
           360,
           185
         ],
         "micReadout": [
           989,
-          352,
+          374.88,
           352,
           77
         ],
         "devAlert": [
           1366,
-          311.34,
+          334.22,
           154,
           95
         ],
-        "spgHost": [
-          23,
-          528,
-          867,
-          190
-        ],
-        "spgColorbar": [
-          900,
-          535,
-          15,
-          159
-        ],
         "seqTransport": [
-          1186,
-          452,
+          218,
+          680.39,
           117,
           32
         ],
         "seqTempo": [
-          1409,
-          452,
+          851,
+          680.39,
           108,
           32
         ],
         "seqAdd": [
-          1409,
-          579,
+          851,
+          807.39,
           108,
           30
         ],
         "seqEditor": [
-          988,
-          617,
-          529,
+          20,
+          845.39,
+          939,
           96
         ],
-        "filterTabs": [
+        "measureSteps": [
           23,
-          765,
-          334,
-          34
+          555.88,
+          1492,
+          60.52
         ],
-        "filterHost": [
+        "measurePrimary": [
           23,
-          807,
-          224,
-          140
+          624.39,
+          150,
+          28
         ],
-        "envHost": [
-          389,
-          770,
-          143,
-          150
-        ],
-        "addHost": [
-          704,
-          770,
-          261,
-          112
-        ],
-        "phaseTabs": [
-          997,
-          764,
-          238,
-          31
-        ],
-        "bioTabs": [
-          1261,
-          763,
-          257,
-          25
+        "studioExpand": [
+          1162.66,
+          719.39,
+          114.27,
+          30
         ]
-      }
+      },
+      "acceptedRises": [
+        {
+          "region": "reference.png",
+          "rise": null,
+          "reason": "feature train #367: the first screen of #278 (P002, Q004 option A) adds the sentence, measure and studio regions and regenerates tests/visual/reference.png; the F001/F002 Flowbite Pro shell restyles the chrome",
+          "date": "2026-11-01",
+          "from": "sha256:47ccceb65ef93d9611bdf59d3a7063e1d54b6202ab61f07e579004f952985d1c",
+          "to": "sha256:100b813abff64ef87ec029907f196786b10f76ee4b17746f9562b0709960c9d5"
+        },
+        {
+          "region": "sentence",
+          "rise": 11.45,
+          "reason": "feature train #367: the first screen of #278 (P002, Q004 option A) adds the sentence, measure and studio regions and regenerates tests/visual/reference.png; the F001/F002 Flowbite Pro shell restyles the chrome",
+          "date": "2026-11-01"
+        },
+        {
+          "region": "measure",
+          "rise": 3.15,
+          "reason": "feature train #367: the first screen of #278 (P002, Q004 option A) adds the sentence, measure and studio regions and regenerates tests/visual/reference.png; the F001/F002 Flowbite Pro shell restyles the chrome",
+          "date": "2026-11-01"
+        },
+        {
+          "region": "studio",
+          "rise": 5.61,
+          "reason": "feature train #367: the first screen of #278 (P002, Q004 option A) adds the sentence, measure and studio regions and regenerates tests/visual/reference.png; the F001/F002 Flowbite Pro shell restyles the chrome",
+          "date": "2026-11-01"
+        }
+      ]
     },
     "linux-x64": {
       "browser": {
@@ -292,86 +272,68 @@
         "width": 1536,
         "height": 1024
       },
-      "reference": "sha256:47ccceb65ef93d9611bdf59d3a7063e1d54b6202ab61f07e579004f952985d1c",
+      "reference": "sha256:100b813abff64ef87ec029907f196786b10f76ee4b17746f9562b0709960c9d5",
       "runs": 3,
-      "total": 15.91,
-      "totalExclData": 7.03,
+      "total": 0.02,
+      "totalExclData": 0.03,
       "regions": {
         "header": {
-          "mismatch": 6.98,
-          "mismatchExclData": 6.98,
+          "mismatch": 0.16,
+          "mismatchExclData": 0.16,
+          "runToRunPct": 0,
+          "dataPp": 0.5
+        },
+        "sentence": {
+          "mismatch": 0,
+          "mismatchExclData": 0,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "source": {
-          "mismatch": 8.11,
-          "mismatchExclData": 8.11,
+          "mismatch": 0,
+          "mismatchExclData": 0,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "analysis": {
-          "mismatch": 15.41,
-          "mismatchExclData": 4.65,
+          "mismatch": 0,
+          "mismatchExclData": 0,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "mic": {
-          "mismatch": 11.29,
-          "mismatchExclData": 9.82,
+          "mismatch": 0,
+          "mismatchExclData": 0,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "device": {
-          "mismatch": 17.79,
-          "mismatchExclData": 17.79,
+          "mismatch": 0,
+          "mismatchExclData": 0,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
-        "spectrogram": {
-          "mismatch": 47.11,
-          "mismatchExclData": 4.3,
-          "runToRunPct": 2.48,
-          "dataPp": 3
+        "measure": {
+          "mismatch": 0,
+          "mismatchExclData": 0,
+          "runToRunPct": 0,
+          "dataPp": 0.5
         },
         "sequencer": {
-          "mismatch": 14.29,
-          "mismatchExclData": 4.35,
+          "mismatch": 0.02,
+          "mismatchExclData": 0.03,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
-        "filter": {
-          "mismatch": 7.75,
-          "mismatchExclData": 6.99,
-          "runToRunPct": 0,
-          "dataPp": 0.5
-        },
-        "envelope": {
-          "mismatch": 8.89,
-          "mismatchExclData": 8.21,
-          "runToRunPct": 0,
-          "dataPp": 0.5
-        },
-        "additive": {
-          "mismatch": 11.12,
-          "mismatchExclData": 9.05,
-          "runToRunPct": 0,
-          "dataPp": 0.5
-        },
-        "phase": {
-          "mismatch": 11.02,
-          "mismatchExclData": 10.3,
-          "runToRunPct": 2.61,
-          "dataPp": 3.5
-        },
-        "bio": {
-          "mismatch": 14.42,
-          "mismatchExclData": 11.48,
+        "studio": {
+          "mismatch": 0,
+          "mismatchExclData": 0,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "statusbar": {
-          "mismatch": 6.74,
-          "mismatchExclData": 6.74,
+          "mismatch": 0.05,
+          "mismatchExclData": 0.05,
           "runToRunPct": 0,
           "dataPp": 0.5
         }
@@ -391,179 +353,177 @@
         ],
         "sourceSeg": [
           23,
-          111,
+          133.88,
           290,
           32
         ],
         "waveTiles": [
           23,
-          151,
+          173.88,
           290,
           55
         ],
         "freqSlider": [
           23,
-          276,
+          298.88,
           290,
           16
         ],
         "fineRow": [
           23,
-          321,
+          343.88,
           290,
           27
         ],
         "modeSeg": [
           98,
-          361,
+          383.88,
           215,
           29
         ],
         "playRow": [
           23,
-          431,
+          453.88,
           290,
           40
         ],
         "analysisTabs": [
           346,
-          81,
+          103.88,
           420.61,
           32
         ],
         "timeSelect": [
           821,
-          81,
+          103.88,
           93,
           32
         ],
         "waveformHost": [
           343,
-          133,
+          155.88,
           610,
           114
         ],
         "spectrumHost": [
           343,
-          258,
+          280.88,
           617,
           170
         ],
         "scaleSeg": [
           346,
-          444,
+          466.88,
           125,
           28
         ],
         "maxSelect": [
           483,
-          444,
+          466.88,
           104,
           28
         ],
         "micUse": [
           1194,
-          76,
+          98.88,
           110,
           32
         ],
         "micTabs": [
           990,
-          113,
+          135.88,
           351,
           33
         ],
         "micHost": [
           984,
-          159,
+          181.88,
           360,
           185
         ],
         "micReadout": [
           989,
-          352,
+          374.88,
           352,
           77
         ],
         "devAlert": [
           1366,
-          311.34,
+          334.22,
           154,
           95
         ],
-        "spgHost": [
-          23,
-          528,
-          867,
-          190
-        ],
-        "spgColorbar": [
-          900,
-          535,
-          15,
-          159
-        ],
         "seqTransport": [
-          1186,
-          452,
+          218,
+          680.39,
           117,
           32
         ],
         "seqTempo": [
-          1409,
-          452,
+          851,
+          680.39,
           108,
           32
         ],
         "seqAdd": [
-          1409,
-          579,
+          851,
+          807.39,
           108,
           30
         ],
         "seqEditor": [
-          988,
-          617,
-          529,
+          20,
+          845.39,
+          939,
           96
         ],
-        "filterTabs": [
+        "measureSteps": [
           23,
-          765,
-          334,
-          34
+          555.88,
+          1492,
+          60.52
         ],
-        "filterHost": [
+        "measurePrimary": [
           23,
-          807,
-          224,
-          140
+          624.39,
+          150,
+          28
         ],
-        "envHost": [
-          389,
-          770,
-          143,
-          150
-        ],
-        "addHost": [
-          704,
-          770,
-          261,
-          112
-        ],
-        "phaseTabs": [
-          997,
-          764,
-          238,
-          31
-        ],
-        "bioTabs": [
-          1261,
-          763,
-          257,
-          25
+        "studioExpand": [
+          991,
+          719.39,
+          104.13,
+          30
         ]
-      }
+      },
+      "acceptedRises": [
+        {
+          "region": "reference.png",
+          "rise": null,
+          "reason": "feature train #367: the first screen of #278 (P002, Q004 option A) adds the sentence, measure and studio regions and regenerates tests/visual/reference.png; the F001/F002 Flowbite Pro shell restyles the chrome",
+          "date": "2026-11-01",
+          "from": "sha256:47ccceb65ef93d9611bdf59d3a7063e1d54b6202ab61f07e579004f952985d1c",
+          "to": "sha256:100b813abff64ef87ec029907f196786b10f76ee4b17746f9562b0709960c9d5"
+        },
+        {
+          "region": "sentence",
+          "rise": 0,
+          "reason": "feature train #367: the first screen of #278 (P002, Q004 option A) adds the sentence, measure and studio regions and regenerates tests/visual/reference.png; the F001/F002 Flowbite Pro shell restyles the chrome",
+          "date": "2026-11-01"
+        },
+        {
+          "region": "measure",
+          "rise": 0,
+          "reason": "feature train #367: the first screen of #278 (P002, Q004 option A) adds the sentence, measure and studio regions and regenerates tests/visual/reference.png; the F001/F002 Flowbite Pro shell restyles the chrome",
+          "date": "2026-11-01"
+        },
+        {
+          "region": "studio",
+          "rise": 0,
+          "reason": "feature train #367: the first screen of #278 (P002, Q004 option A) adds the sentence, measure and studio regions and regenerates tests/visual/reference.png; the F001/F002 Flowbite Pro shell restyles the chrome",
+          "date": "2026-11-01"
+        }
+      ]
     }
   },
   "note": "Accepted visual values per environment, written only by node scripts/visual-gate.mjs --update-baseline. Percentages are pixels that differ from tests/visual/reference.png (pixelmatch threshold 0.12), whose sha256 each environment stores as reference. A re-acceptance may raise a region's mismatch by at most its stored runToRunPct + 2 pp; acceptedRises records each rise accepted beyond that, and each regeneration of the reference, with --accept-rise and its reason. See scripts/visual-gate.mjs.",

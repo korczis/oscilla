@@ -649,6 +649,8 @@ const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
  *             performance.now). Never used for audio timing.
  *   onEvent   (event) => void; events: { type: 'state', from, to, info } | 'preflight' |
  *             'scheduled' | 'progress' | 'noise' | 'run' | 'analysis' | 'result' | 'error'
+ *             ('run': { run, invalid, reasons, peak }: peak is the run's linear |x| peak,
+ *             null when not known)
  *   limits    tightens CONTRACT_LIMITS (maxSweepS, maxRepeats, maxCaptureS, maxNoiseS,
  *             maxRawBytes, maxAnalysisFftSize, maxAnalysisBytes)
  *   assess    optional (result, { recipe, plan, calibration, chainNotes, inputProcessing }) →
@@ -1061,6 +1063,17 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
   }
 
   /**
+   * The run's linear peak |x| over every sample, for the 'run' event (quality bar CLIPPING):
+   * null when it covers no sample or skipped non-finite ones, so nothing reads it as checked.
+   */
+  function runPeak(cap, checks) {
+    const n = cap && cap.samples ? cap.samples.length : 0;
+    if (!n || !isNum(checks.peak) || checks.reasons.some((x) => x.code === 'NON_FINITE'))
+      return null;
+    return checks.peak;
+  }
+
+  /**
    * Capture samples where the sweep's response lies for EVERY latency the analysis accepts:
    * the stimulus starts at s0 (its scheduled offset in the capture) plus an unknown latency
    * L ∈ [0, post-roll] (a larger L puts the stimulus outside the capture, which the analysis
@@ -1298,7 +1311,8 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
           raw: null,
         };
         runs.push(run);
-        emit(s, { type: 'run', run: r, invalid: checks.invalid, reasons: checks.reasons });
+        emit(s, { type: 'run', run: r, invalid: checks.invalid, reasons: checks.reasons,
+          peak: runPeak(cap, checks) });
         if (checks.invalid) {
           const why = checks.reasons.filter((x) => checks.invalidating.includes(x.code));
           go(s, S.INVALID, { run: r, reasons: why.map((x) => x.code) });
