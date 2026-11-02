@@ -574,10 +574,12 @@ function arcPath(r, a, b) {
 // Graph units, centred on the origin; the caller places the group. Every knob part stays
 // inside the 44 box: the focus ring's outer edge is r 22, and the detent, at any angle, ends at
 // r 21.75 so its butt corners do too (the scale ticks reach r 22 only at their fixed angles).
-const KNOB = Object.freeze({ arc: 19, arcW: 3, skirt: 16, edgeW: 1.5, knurlIn: 14.5,
+// The unlit arc is half the value arc's width (no token pair holds 3:1 between them), and the
+// applied arc lies on the skirt face, between the cap and the knurl.
+const KNOB = Object.freeze({ arc: 19, arcW: 3, trackW: 1.5, skirt: 16, edgeW: 1.5, knurlIn: 14.5,
   knurlOut: 16, knurls: 24, cap: 12, pointerIn: 4, pointerOut: 11, pointerW: 2.5,
   tickIn: 20.5, tickOut: 22, ticks: 11, tickZoom: 1.25, detentOut: 21.75, detentW: 1.5,
-  applied: 16.5, appliedW: 1.5, appliedMinDeg: 4, focus: 21.5, focusW: 1, shadowDy: 1,
+  applied: 13.5, appliedW: 1.5, appliedMinDeg: 5, focus: 21, focusW: 2, shadowDy: 1,
   shadowDragDy: 2 });
 /** A disabled knob's value arc: dashed, butt-ended, so the gaps stay open. */
 const DISABLED_DASH = '2 3';
@@ -664,7 +666,7 @@ function knobShapes(value, applied, p, t, st, zoom) {
   }
   // Disabled, the unlit arc takes the knurl's tone, so the dashed value arc stays apart.
   out += `<path d="${arcPath(KNOB.arc, -half, half)}" data-track="" fill="none" `
-    + `stroke="${esc(dim ? c.knurl : c.track)}" stroke-width="${KNOB.arcW}" `
+    + `stroke="${esc(dim ? c.knurl : c.track)}" stroke-width="${KNOB.trackW}" `
     + 'stroke-linecap="round"/>';
   if (Math.abs(a - origin) > 0.01) {
     out += `<path d="${arcPath(KNOB.arc, origin, a)}" data-ring="" fill="none" `
@@ -776,7 +778,7 @@ const SHAPES = Object.freeze({ knob: knobShapes, fader: faderShapes, switch: swi
  * switch = one lever position per option of an enum of up to four or a boolean, with detents
  * past two (a number, or more options, is refused: draw it as a knob). `applied`, when given
  * and elsewhere than `value`, draws a second, thin marker where the engine's applied value is
- * (the requested and applied split): on a knob an arc at r 16.5 in control.applied from the
+ * (the requested and applied split): on a knob an arc at r 13.5 in control.applied from the
  * value arc's origin, on a fader or a switch a line in control.pointer. `state` is { focus,
  * dragging, disabled, hover }. An invisible hit rect of at least
  * HIT_PX / zoom graph units, and never smaller than the box, takes the pointer, so the target

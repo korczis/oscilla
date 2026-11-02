@@ -871,7 +871,8 @@ const radials = (e) => [...attrOf(e, 'd').matchAll(/M (\S+) (\S+) L (\S+) (\S+)/
   });
 const knobAngle = (v, p = LIN) => -135 + 270 * toNorm(v, p);
 
-test('knob: the unlit arc and the value arc are r 19, width 3, over 270°; the skirt Ø32', () => {
+test('knob: the unlit arc (width 1.5) and the value arc (width 3) are r 19, over 270°; skirt Ø32',
+  () => {
   const t = TOKENS.control;
   for (const state of [{}, { dragging: true }]) {
     for (const zoom of [1, 3]) {
@@ -882,7 +883,7 @@ test('knob: the unlit arc and the value arc are r 19, width 3, over 270°; the s
       near(a.from, -135, 0.05);
       near(a.to, 135, 0.05);
       assert.equal(attrOf(track, 'stroke'), t.track);
-      assert.equal(numOf(track, 'stroke-width'), 3);
+      assert.equal(numOf(track, 'stroke-width'), 1.5);
       const ring = part(svg, 'data-ring');
       const v = arcOf(ring);
       assert.equal(v.r, 19);
@@ -969,10 +970,11 @@ test('knob: 11 scale ticks from r 20.5 to 22, only at zoom 1.25 or more', () => 
   }
 });
 
-test('knob: the focus ring is r 21.5 in control.focus, inside the 44 box', () => {
+test('knob: the focus ring is r 21, 2 wide (2 CSS px at zoom 1), inside the 44 box', () => {
   const f = part(draw('knob', { state: { focus: true } }), 'data-focus');
   assert.match(f, /^<circle /);
-  assert.equal(numOf(f, 'r'), 21.5);
+  assert.equal(numOf(f, 'r'), 21);
+  assert.ok(numOf(f, 'stroke-width') >= 2, 'at least 2 CSS px at zoom 1, and thicker zoomed in');
   assert.equal(attrOf(f, 'stroke'), TOKENS.control.focus);
   assert.ok(numOf(f, 'r') + numOf(f, 'stroke-width') / 2 <= 22);
   assert.equal(part(draw('knob'), 'data-focus'), null);
@@ -997,9 +999,17 @@ test('knob: a range across zero starts its arc at 12 o\'clock, with a detent tic
     assert.equal(attrOf(d, 'stroke'), t.track);
   }
   assert.equal(part(draw('knob'), 'data-detent'), null, 'a range from min has no detent');
+  // additive-voice.tilt [-12, 6]: zero sits at 45°, and the arc and the detent start there.
+  const tilt = { ...LIN, min: -12, max: 6, default: 0 };
+  const ts = controlSvg({ kind: 'knob', value: 6, param: tilt, tokens: TOKENS });
+  const ta = arcOf(part(ts, 'data-ring'));
+  near(ta.from, 45, 0.05);
+  near(ta.to, 135, 0.05);
+  const td = part(ts, 'data-detent');
+  near(angleAt(numOf(td, 'x2'), numOf(td, 'y2')), 45, 0.05);
 });
 
-test('knob: the applied value is an arc at r 16.5 in control.applied, from the origin', () => {
+test('knob: the applied value is an arc at r 13.5 in control.applied, from the origin', () => {
   const t = TOKENS.control;
   const ap = (value, applied, param = LIN) => part(controlSvg({ kind: 'knob', value, applied,
     param, tokens: TOKENS }), 'data-applied');
@@ -1008,7 +1018,7 @@ test('knob: the applied value is an arc at r 16.5 in control.applied, from the o
   assert.equal(attrOf(a, 'stroke'), t.applied);
   assert.ok(numOf(a, 'stroke-width') < 2.5, 'thinner than the pointer');
   const arc = arcOf(a);
-  assert.equal(arc.r, 16.5);
+  assert.equal(arc.r, 13.5);
   near(arc.from, -135, 0.05);
   near(arc.to, knobAngle(30), 0.05);
   const atOrigin = arcOf(ap(70, 0));
@@ -1021,6 +1031,55 @@ test('knob: the applied value is an arc at r 16.5 in control.applied, from the o
   near(b.to, 0, 0.05);
   assert.equal(ap(70, 70), null, 'none when the engine applies the value');
 });
+
+// The value arc (control.ring) and the unlit arc (control.track) lie on each other, and no
+// existing token pair holds 3:1 between them and the plates in both themes (cyan on text-dim is
+// 1.02:1 in the light theme), so the lit arc is told from the unlit one by width: the track is
+// at most half the value arc and lies wholly under it (review of S2, finding 1).
+test('knob: the lit arc is told from the unlit arc by width: the track is half or less', () => {
+  for (const state of [{}, { focus: true }, { dragging: true }, { hover: true }]) {
+    for (const zoom of [1, 2, 3]) {
+      for (const value of [10, 70, 100]) {
+        const svg = draw('knob', { state, zoom, value });
+        const where = `${JSON.stringify(state)} zoom ${zoom} v ${value}`;
+        const track = part(svg, 'data-track');
+        const ring = part(svg, 'data-ring');
+        const [tw, rw] = [numOf(track, 'stroke-width'), numOf(ring, 'stroke-width')];
+        assert.ok(tw * 2 <= rw, `${where}: track ${tw} is not half of the value arc ${rw}`);
+        const [tr, rr] = [arcOf(track).r, arcOf(ring).r];
+        assert.ok(tr - tw / 2 >= rr - rw / 2 && tr + tw / 2 <= rr + rw / 2,
+          `${where}: the track band lies under the value arc`);
+        assert.ok(svg.indexOf(track) < svg.indexOf(ring), `${where}: the value arc on top`);
+      }
+    }
+  }
+});
+
+// The applied arc sits on the skirt face (surface.card), between the cap's outline and the
+// knurl, so no part of it lies on the skirt edge or the knurl (review of S2, finding 2).
+test('knob: the applied arc lies on the skirt face, clear of the cap, the knurl and the edge',
+  () => {
+    for (const zoom of [1, 2, 3]) {
+      for (const [value, applied] of [[70, 30], [70, 0], [10, 100]]) {
+        const svg = controlSvg({ kind: 'knob', value, applied, param: LIN, tokens: TOKENS,
+          zoom });
+        const a = part(svg, 'data-applied');
+        const [r, w] = [arcOf(a).r, numOf(a, 'stroke-width')];
+        const cap = part(svg, 'data-cap');
+        const capOut = numOf(cap, 'r') + numOf(cap, 'stroke-width') / 2;
+        const knurlIn = Math.min(...radials(part(svg, 'data-knurl')).map(([r0]) => r0));
+        const skirt = part(svg, 'data-skirt');
+        const edgeIn = numOf(skirt, 'r') - numOf(skirt, 'stroke-width') / 2;
+        const where = `zoom ${zoom} v ${value} a ${applied}: r ${r} w ${w}`;
+        assert.ok(r - w / 2 >= capOut, `${where}: clear of the cap (${capOut})`);
+        assert.ok(r + w / 2 <= knurlIn, `${where}: clear of the knurl (${knurlIn})`);
+        assert.ok(r + w / 2 <= edgeIn, `${where}: clear of the skirt edge (${edgeIn})`);
+        assert.equal(attrOf(skirt, 'fill'), TOKENS.surface.card, 'drawn over the skirt face');
+        assert.ok(svg.indexOf(skirt) < svg.indexOf(a), `${where}: over the skirt`);
+        assert.ok(svg.indexOf(a) < svg.indexOf(cap), `${where}: under the cap`);
+      }
+    }
+  });
 
 test('knob: disabled is a dashed value arc and a dim pointer, over a faint track', () => {
   const t = TOKENS.control;
