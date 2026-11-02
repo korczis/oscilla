@@ -146,6 +146,7 @@ const CONTRACT = [
   ['about.workspace.studio', 'readout', 'li'], ['about.workspace.synth', 'readout', 'li'],
   ['about.workspace.about', 'readout', 'li'],
   ['about.next', 'readout', 'ul'], ['about.next.milestone', 'readout', 'li'],
+  ['pattern.param', 'param', 'input'], ['sweep.param', 'param', 'select'],
 ];
 
 /** The tags of the elements that carry `hook` in the source (see the header). */
@@ -280,6 +281,16 @@ test('refused: a hook built from a variable with no pattern declaration', () => 
     w.js['src/js/fx.js'] = "\n\nel.dataset.osc = `fx.${key}`;\n";
   });
   assert.match(refused(template, 'src/js/fx.js:3'), /fx\.\$\{key\}/);
+});
+
+test('a bound data-osc: a conditional of literals yields each hook, anything else a site', () => {
+  const census = scanSources({ html: { [FX_HTML]: '<input :data-osc="on ? \'fx.a\' : \'fx.b\'">'
+    + '<p x-bind:data-osc="(x) ? \'fx.c\' : (y ? \'fx.a\' : \'fx.d\')"></p>'
+    + '<p :data-osc-shortcut="k"></p>\n<b :data-osc="name"></b>' } });
+  assert.deepEqual([...census.literals.keys()].sort(), ['fx.a', 'fx.b', 'fx.c', 'fx.d']);
+  assert.deepEqual(census.sites.map((s) => [s.line, s.expr]), [[2, 'name']]);
+  const p = world((w) => { w.files[FX_HTML] += '\n<p :data-osc="on ? \'fx.play\' : osc"></p>'; });
+  assert.match(refused(p, `${FX_HTML}:2`), /built at run time and no pattern/);
 });
 
 test('refused: a hook only the running page shows', () => {

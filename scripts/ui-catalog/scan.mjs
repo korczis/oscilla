@@ -12,8 +12,11 @@
 //   stringLiteralsOf(text) -> [text]   the contents of a file's string literals, comments removed
 //
 // What counts, with comments removed:
-//   src/index.html  a static data-osc="..." attribute (a bound :data-osc is not static, and none
-//                   exists; HTML comments are removed);
+//   src/index.html  a static data-osc="..." attribute, and a bound :data-osc="<expr>" or
+//                   x-bind:data-osc="<expr>" (HTML comments are removed; data-osc-* attributes
+//                   are other attributes). A bound expression that is only quoted string
+//                   literals chosen by conditionals (`c ? 'a' : 'b'`, nested or in parentheses)
+//                   yields each literal as a literal hook; any other bound expression is a site;
 //   src/js          'data-osc': <expr> and "data-osc": <expr> (an element description),
 //                   setAttribute('data-osc', <expr>), .dataset.osc = <expr>, dataOsc: <expr>, and
 //                   data-osc="..." inside a string or template (markup, or a selector).
@@ -180,6 +183,50 @@ const JS_FORMS = [
 ];
 const IN_STRING = /data-osc\s*=\s*\\?(["'])(.*?)\\?\1/g;
 const HTML_ATTR = /(?<![\w:@.-])data-osc="([^"]*)"/g;
+const HTML_BOUND = /(?<![\w:@.-])(?:x-bind)?:data-osc="([^"]*)"/g;
+
+/**
+ * The index of the first `ch` at depth 0 of `e` from `from`, outside strings (a `:` skips the
+ * ones of nested conditionals; a closing bracket is the one that leaves depth 0); -1 if none.
+ */
+function topLevel(e, ch, from = 0) {
+  let depth = 0;
+  let nested = 0; // conditionals opened inside the one being matched
+  for (let i = from; i < e.length; i += 1) {
+    const c = e[i];
+    if (c === "'" || c === '"' || c === '`') {
+      const j = e.indexOf(c, i + 1);
+      if (j < 0) return -1;
+      i = j;
+    } else if ('([{'.includes(c)) depth += 1;
+    else if (')]}'.includes(c) && depth === 0 && c === ch) return i;
+    else if (')]}'.includes(c)) depth -= 1;
+    else if (depth === 0 && c === '?' && (e[i + 1] === '?' || e[i + 1] === '.')) i += 1;
+    else if (depth === 0 && c === ':' && ch === ':' && nested > 0) nested -= 1;
+    else if (depth === 0 && c === ch) return i;
+    else if (depth === 0 && c === '?' && ch === ':') nested += 1;
+  }
+  return -1;
+}
+
+/**
+ * The hooks of a bound expression that only chooses between string literals
+ * (`a ? 'x' : b ? 'y' : 'z'`, parentheses allowed), or null for any other expression.
+ */
+export function conditionalLiterals(expr) {
+  let e = expr.trim();
+  // Outer parentheses go when the first one closes at the end: '(a ? b : c)', not '(a) ? b : c'.
+  while (e.startsWith('(') && topLevel(e.slice(1), ')') === e.length - 2) e = e.slice(1, -1).trim();
+  const value = literalValue(e);
+  if (value !== null) return value.includes('${') ? null : [value];
+  const q = topLevel(e, '?');
+  if (q < 0) return null;
+  const colon = topLevel(e, ':', q + 1);
+  if (colon < 0) return null;
+  const yes = conditionalLiterals(e.slice(q + 1, colon));
+  const no = conditionalLiterals(e.slice(colon + 1));
+  return yes && no ? [...yes, ...no] : null;
+}
 
 /** The census of in-memory sources: { html: { file: text }, js: { file: text } }. */
 export function scanSources({ html = {}, js = {} }) {
@@ -200,6 +247,13 @@ export function scanSources({ html = {}, js = {} }) {
       const dynamic = m[1].includes('${') || m[1].includes('{{');
       if (dynamic) sites.push({ file, line: lineAt(markup, m.index), expr: m[1] });
       seen(dynamic ? null : m[1], m[1], file, m.index, 'attr');
+    }
+    for (const m of markup.matchAll(HTML_BOUND)) {
+      const hooks = conditionalLiterals(m[1]);
+      if (!hooks) {
+        sites.push({ file, line: lineAt(markup, m.index), expr: m[1] });
+        seen(null, m[1], file, m.index, 'attr');
+      } else for (const h of hooks) seen(h, m[1], file, m.index, 'attr');
     }
   }
   for (const [file, text] of Object.entries(js)) {

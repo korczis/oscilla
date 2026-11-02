@@ -2103,10 +2103,6 @@
     {
       "id": "studio.warning",
       "reason": "The studio hooks are not declared yet; a later catalogue slice declares them."
-    },
-    {
-      "id": "sweep.param",
-      "reason": "The sweep hooks are not declared yet; a later catalogue slice declares them."
     }
   ]
 }
