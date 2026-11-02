@@ -6,15 +6,14 @@ title: "A content-rights check over what dist ships: original, MIT, method recor
 slug: a-content-rights-check-over-what-dist-ships
 priority: p2
 profile: implementation
-objective: "Add scripts/content-rights.mjs (R01 design) run by npm test and verify-dist: it reads the library region of dist/index.html, recomputes each entry's fingerprint, and refuses an entry that is not original, not MIT, without a method, or carrying any audio or media payload (Q082), and any library data in dist that no entry accounts for."
+objective: "Add scripts/content-rights.mjs (R01 design), run by npm test through tests/unit/content-rights.test.mjs: it judges every entry of src/js/studio/riffs/library.js (dist is a clean rebuild of src, npm run build:check) with a fingerprint of its notes, scans dist/index.html for audio of any kind, and refuses an entry that is not original, not MIT, without a method, or carrying any audio or media payload (Q082), and any library data in dist that no entry accounts for."
 why: "The owner chose original-only, MIT, method recorded and symbolic only (Q079-Q082); a choice without a check is a convention (R01 2026-11-02)."
 scope:
   - "scripts/content-rights.mjs"
   - "tests/unit/content-rights.test.mjs"
-  - "package.json"
   - "tests/README.md"
 depends_on:
-  - "K156"
+  - "K149"
 acceptance_criteria:
   - "Before: VERIFIED (R01): no check holds a library entry's rights."
   - "After: node scripts/content-rights.mjs passes on the built dist and names the entries it judged."
