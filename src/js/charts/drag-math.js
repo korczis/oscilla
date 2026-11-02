@@ -1,4 +1,5 @@
-// Pure pointer maths for the editable charts (filter handle, ADSR handles). No DOM.
+// Pure pointer maths for the editable charts (filter handle, ADSR handles, the XY pad kind of
+// ui/kinds/xy-pad.js). No DOM.
 
 import { axisValue, axisFraction, clamp } from './axes.js';
 
@@ -126,4 +127,12 @@ export function dragAdsr(handle, start, dx, dy, layout, plotHeight) {
   } else if (handle === 'sustain') next.s = start.s + dv;
   else if (handle === 'release') next.r = start.r + dt;
   return clampAdsr(next);
+}
+
+// ------------------------------------------------------------------ XY pad (plan W010, K097)
+
+/** The pad fractions under a pointer: x from the left, y from the bottom, each 0..1 (clamped). */
+export function xyFromPoint(px, py, rect) {
+  return { x: rect.w > 0 ? clamp((px - rect.x) / rect.w, 0, 1) : 0,
+    y: rect.h > 0 ? clamp(1 - (py - rect.y) / rect.h, 0, 1) : 0 };
 }

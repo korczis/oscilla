@@ -12,6 +12,9 @@
 //       an existing patch is never silently overwritten (§155): ExperimentStoreError 'exists'
 //     loadPatch(id) -> Promise<{ patch, warnings, migratedFrom, summary } | null>
 //     list({ kind }) -> Promise<[summary]>  newest first;   remove(id) -> Promise<boolean>
+//     patches() -> Promise<[{ id, name, savedAt, patch }]>  every saved patch that loads (a
+//       corrupt record is left out), newest first: the user's half of the node presets (K020)
+//       and of the patch browser (K102)
 //     Saving validates first ('invalid', validate.js validateStudioCommit: what would not load
 //     again is not saved, V272 A1); loading runs the full untrusted pipeline (migrate.js
 //     importStudio, patches.js importPatch), so a corrupt or tampered record is 'corrupt',
@@ -133,6 +136,14 @@ export function createStudioLibrary(store) {
     },
 
     list: ({ kind } = {}) => store.listStudio({ kind }),
+    async patches() {
+      const out = [];
+      for (const s of await store.listStudio({ kind: PATCH_KIND })) {
+        const r = await this.loadPatch(s.id).catch(() => null);
+        if (r) out.push({ id: s.id, name: r.patch.name, savedAt: s.savedAt, patch: r.patch });
+      }
+      return out;
+    },
     remove: (id) => store.deleteStudio(id),
   });
 }

@@ -381,7 +381,8 @@ export function normalizeStudio(json, { registry = NODE_REGISTRY } = {}) {
         scrollX: num(vt.scrollX, 0),
       },
     },
-    metadata: { title: str(meta.title) || DEFAULT_TITLE, notes: str(meta.notes) },
+    metadata: { title: str(meta.title) || DEFAULT_TITLE, notes: str(meta.notes),
+      ...(str(meta.noteTarget) ? { noteTarget: meta.noteTarget } : {}) },
   };
 }
 
@@ -521,7 +522,8 @@ export function collectIds(model) {
 export function withoutNodes(model, ids) {
   const gone = new Set(ids);
   const t = model.timeline;
-  return { ...model,
+  const { noteTarget, ...meta } = model.metadata;
+  return { ...model, metadata: gone.has(noteTarget) ? meta : model.metadata,
     graph: { ...model.graph, nodes: model.graph.nodes.filter((n) => !gone.has(n.id)),
       edges: model.graph.edges.filter((e) => !gone.has(e.from.node) && !gone.has(e.to.node)) },
     timeline: { ...t,

@@ -51,7 +51,7 @@ no audio node; the compiler builds each one with the existing engine's builders 
 | Category | Count | Node types |
 | --- | --- | --- |
 | Sources | 11 | Oscillator `oscillator`, Noise `noise`, Sweep `sweep`, Sequence `sequence`, Microphone `microphone`, VCO `vco`, Additive engine `additive-voice`, FM engine `fm-voice`, AM/ring engine `am-voice`, Wavetable engine `wavetable-voice`, Percussion engine `perc-voice` |
-| Modulation | 6 | LFO `lfo`, Envelope `envelope`, Random `random`, Step Modulator `step-modulator`, Macro `macro`, Keys `keys` |
+| Modulation | 7 | LFO `lfo`, Envelope `envelope`, Random `random`, Step Modulator `step-modulator`, Macro `macro`, Keys `keys`, XY Pad `xy-pad` |
 | Processing | 7 | Gain `gain`, Filter `filter`, Pan `pan`, Stereo Split `stereo-split`, Mixer `mixer`, Drive `drive`, Ring `ring` |
 | Analysis | 5 | Scope `scope`, Spectrum `spectrum`, Spectrogram `spectrogram`, Meter `meter`, RTA `rta` |
 | Output | 2 | Master Output `master`, Recorder/Export `recorder` |
@@ -189,6 +189,7 @@ Further unit tests cover the Studio outside the `v31-studio-` prefix (`v4-*`, `v
 - `tests/browser/v31-studio-runtime.cjs`
 - `tests/browser/synth.cjs`
 - `tests/browser/synth-engines.cjs`
+- `tests/browser/xy-pad.cjs`
 <!-- browser-suites:end -->
 
 For this report only the unit tests were run (`npm run verify`); the browser suites and the
