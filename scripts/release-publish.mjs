@@ -275,8 +275,8 @@ export function preconditionProblems(f) {
 }
 
 function defaultSh(root) {
-  return (cmd, args, { inherit = false, env } = {}) => {
-    const r = spawnSync(cmd, args, { cwd: root, encoding: 'utf8',
+  return (cmd, args, { inherit = false, env, timeout } = {}) => {
+    const r = spawnSync(cmd, args, { cwd: root, encoding: 'utf8', timeout,
       env: env ? { ...process.env, ...env } : process.env,
       stdio: inherit ? 'inherit' : ['ignore', 'pipe', 'pipe'] });
     return { status: r.error ? 127 : r.status, stdout: (r.stdout || '').trim(),

@@ -4,6 +4,9 @@
 // visual gate, the .ai doctor) on refs/pull/<n>/merge, so its verdict is the gate's verdict on
 // exactly one tree. release:publish accepts it for main's HEAD only when
 //   - HEAD is the merge commit of a pull request (parents: base B, pull request head H);
+//   - exactly one pull request has H as its head, it is based on main and its merge commit is
+//     HEAD; the run judged ran for its head branch (review F1 of #389: CI runs for pull
+//     requests into any branch, so a second pull request from the same head must not stand in);
 //   - the tree of HEAD is the tree of H, and B is an ancestor of H: H contained every base
 //     the CI run could have merged it with (the base only moves forward), so the merge CI
 //     tested has H's tree, which is HEAD's tree;
@@ -22,6 +25,10 @@ import { parseYaml } from './yaml-subset.mjs';
 export const CI_WORKFLOW = '.github/workflows/ci.yml';
 export const REPO_SLUG = 'korczis/oscilla';
 export const ROADMAP_CHECK = ['node', ['--test', 'tests/unit/about-current.test.mjs']];
+export const TRUNK = 'main';
+/** Each GitHub read is bounded and tried twice (review F3 of #389): a hang refuses, never waits. */
+export const GH_TIMEOUT_MS = 60_000;
+export const GH_ATTEMPTS = 2;
 
 /** The job names a run of the workflow text shows, a matrix job once per value of its one key. */
 export function expectedJobs(ciText) {
@@ -58,7 +65,7 @@ export function expectedJobs(ciText) {
  * Pure judgement of the gathered facts (empty = the CI receipt verifies).
  * @param {{ head: string, parents: string[]|null, headTree: string|null, prTree: string|null,
  *   baseInPr: boolean|null, workflow: { name: string|null, jobs: string[], problems: string[] },
- *   runs: object[]|null, jobs: object[]|null, roadmap: boolean }} f
+ *   pulls: object[]|null, runs: object[]|null, jobs: object[]|null, roadmap: boolean }} f
  */
 export function ciReceiptProblems(f) {
   const problems = [...(f.workflow?.problems || [])];
@@ -81,15 +88,37 @@ export function ciReceiptProblems(f) {
       + 'older base');
   }
   if (!f.workflow?.name) problems.push(`${CI_WORKFLOW} has no workflow name to find its runs by`);
+  const pulls = Array.isArray(f.pulls) ? f.pulls.filter((p) => p?.head?.sha === pr) : null;
+  let branch = null;
+  if (!pulls) problems.push(`the pull requests of ${short(pr)} could not be read`);
+  else if (pulls.length !== 1) {
+    problems.push(`${pulls.length} pull requests have the head ${short(pr)} `
+      + `(${pulls.map((p) => `#${p.number}`).join(', ') || 'none'}): the run cannot be bound `
+      + 'to one');
+  } else {
+    const [p] = pulls;
+    branch = p.head.ref;
+    if (p.base?.ref !== TRUNK) {
+      problems.push(`#${p.number} is based on ${p.base?.ref}, not ${TRUNK}`);
+    }
+    if (p.merge_commit_sha !== f.head) {
+      problems.push(`#${p.number} merged as ${short(p.merge_commit_sha)}, not as HEAD `
+        + `${short(f.head)}`);
+    }
+  }
   if (!f.roadmap) {
     problems.push('the committed roadmap does not match the plan (OSC_ROADMAP_CHECK=1 node '
       + '--test tests/unit/about-current.test.mjs)');
   }
   if (!Array.isArray(f.runs)) return [...problems, `the CI runs of ${short(pr)} could not be read`];
   const runs = f.runs
-    .filter((r) => r.name === f.workflow?.name && r.event === 'pull_request' && r.head_sha === pr)
+    .filter((r) => r.name === f.workflow?.name && r.event === 'pull_request' && r.head_sha === pr
+      && (branch === null || r.head_branch === branch))
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || b.id - a.id);
-  if (!runs.length) return [...problems, `no ${f.workflow?.name} pull_request run on ${short(pr)}`];
+  if (!runs.length) {
+    return [...problems, `no ${f.workflow?.name} pull_request run on ${short(pr)}`
+      + (branch ? ` from ${branch}` : '')];
+  }
   const newest = runs[0];
   if (newest.status !== 'completed' || newest.conclusion !== 'success') {
     problems.push(`the newest ${f.workflow.name} run ${newest.id} on ${short(pr)} (attempt `
@@ -120,8 +149,10 @@ export function ciReceiptProblems(f) {
 /** The run judged, for the log line of a verified receipt. */
 export function judgedRun(f) {
   const pr = f.parents?.[1];
+  const pulls = (f.pulls || []).filter((p) => p?.head?.sha === pr);
+  const branch = pulls.length === 1 ? pulls[0].head.ref : null;
   return (f.runs || []).filter((r) => r.name === f.workflow?.name && r.head_sha === pr
-    && r.event === 'pull_request')
+    && r.event === 'pull_request' && (branch === null || r.head_branch === branch))
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || b.id - a.id)[0] || null;
 }
 
@@ -133,6 +164,15 @@ const json = (r) => {
     return null;
   }
 };
+
+/** A bounded GitHub read, tried GH_ATTEMPTS times; null when no attempt answered with JSON. */
+function ghJson(sh, path) {
+  for (let i = 0; i < GH_ATTEMPTS; i += 1) {
+    const v = json(sh('gh', ['api', path], { timeout: GH_TIMEOUT_MS }));
+    if (v !== null) return v;
+  }
+  return null;
+}
 
 /** Gather the facts through `sh` (cmd, args, opts) => { status, stdout }. */
 export function gatherCiReceipt({ sh, root, head }) {
@@ -147,7 +187,7 @@ export function gatherCiReceipt({ sh, root, head }) {
     ciText = readFileSync(path.join(root, CI_WORKFLOW), 'utf8');
   } catch { /* judged as no jobs */ }
   const facts = { head, parents, headTree: tree(head), prTree: null, baseInPr: null,
-    workflow: expectedJobs(ciText), runs: null, jobs: null, roadmap: false };
+    workflow: expectedJobs(ciText), pulls: null, runs: null, jobs: null, roadmap: false };
   const [cmd, args] = ROADMAP_CHECK;
   facts.roadmap = sh(cmd, args, { env: { OSC_ROADMAP_CHECK: '1' } }).status === 0;
   if (!parents || parents.length !== 2) return facts;
@@ -155,13 +195,15 @@ export function gatherCiReceipt({ sh, root, head }) {
   facts.prTree = tree(pr);
   const anc = sh('git', ['merge-base', '--is-ancestor', base, pr]).status;
   facts.baseInPr = anc === 0 ? true : anc === 1 ? false : null;
-  const runs = json(sh('gh', ['api',
-    `repos/${REPO_SLUG}/actions/runs?head_sha=${pr}&event=pull_request&per_page=100`]));
+  const pulls = ghJson(sh, `repos/${REPO_SLUG}/commits/${pr}/pulls?per_page=100`);
+  facts.pulls = Array.isArray(pulls) ? pulls : null;
+  const runs = ghJson(sh,
+    `repos/${REPO_SLUG}/actions/runs?head_sha=${pr}&event=pull_request&per_page=100`);
   facts.runs = Array.isArray(runs?.workflow_runs) ? runs.workflow_runs : null;
   const newest = judgedRun(facts);
   if (newest) {
-    const jobs = json(sh('gh', ['api',
-      `repos/${REPO_SLUG}/actions/runs/${newest.id}/jobs?filter=latest&per_page=100`]));
+    const jobs = ghJson(sh,
+      `repos/${REPO_SLUG}/actions/runs/${newest.id}/jobs?filter=latest&per_page=100`);
     facts.jobs = Array.isArray(jobs?.jobs) ? jobs.jobs : null;
   }
   return facts;

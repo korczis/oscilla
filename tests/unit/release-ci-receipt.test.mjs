@@ -6,7 +6,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  CI_WORKFLOW, ciReceiptProblems, expectedJobs, gatherCiReceipt, judgedRun,
+  CI_WORKFLOW, GH_ATTEMPTS, GH_TIMEOUT_MS, ciReceiptProblems, expectedJobs, gatherCiReceipt,
+  judgedRun,
 } from '../../scripts/release-ci-receipt.mjs';
 import { gateVerdict } from '../../scripts/release-publish.mjs';
 import * as prep from '../../scripts/release-prepare.mjs';
@@ -18,7 +19,10 @@ const BASE = 'b'.repeat(40);
 const PR = 'c'.repeat(40);
 const TREE = 'd'.repeat(40);
 
+const pull = (over = {}) => ({ number: 382, head: { sha: PR, ref: 'chore/release-v9.9.9' },
+  base: { ref: 'main' }, merge_commit_sha: HEAD, ...over });
 const run = (over = {}) => ({ id: 900, name: WORKFLOW.name, event: 'pull_request', head_sha: PR,
+  head_branch: 'chore/release-v9.9.9',
   status: 'completed', conclusion: 'success', run_attempt: 1,
   created_at: '2026-11-02T10:00:00Z', ...over });
 const jobsOf = (r) => WORKFLOW.jobs.map((name, i) => ({ id: i + 1, name, run_id: r.id,
@@ -27,7 +31,7 @@ const jobsOf = (r) => WORKFLOW.jobs.map((name, i) => ({ id: i + 1, name, run_id:
 function facts(over = {}) {
   const r = run();
   return { head: HEAD, parents: [BASE, PR], headTree: TREE, prTree: TREE, baseInPr: true,
-    workflow: WORKFLOW, runs: [r], jobs: jobsOf(r), roadmap: true, ...over };
+    workflow: WORKFLOW, pulls: [pull()], runs: [r], jobs: jobsOf(r), roadmap: true, ...over };
 }
 
 const only = (f, re) => {
@@ -36,7 +40,8 @@ const only = (f, re) => {
   assert.match(problems[0], re);
 };
 
-test('the job list is derived from ci.yml: every matrix value, the visual gate, doctor, gate', () => {
+test('the job list is derived from ci.yml: every matrix value, the visual gate, doctor, gate',
+  () => {
   assert.deepEqual(WORKFLOW.problems, []);
   assert.equal(WORKFLOW.name, 'CI');
   for (const b of ['chromium', 'firefox', 'webkit']) {
@@ -118,6 +123,34 @@ test('only the newest run counts, on its latest attempt', () => {
     []);
 });
 
+test('the run is bound to the one pull request that merged as HEAD (review F1 of #389)', () => {
+  // a second pull request from the same head (CI runs for pull requests into any branch)
+  only(facts({ pulls: [pull(), pull({ number: 383, base: { ref: 'next' } })] }),
+    /2 pull requests have the head ccccccc \(#382, #383\)/);
+  only(facts({ pulls: [] }), /0 pull requests have the head ccccccc \(none\)/);
+  only(facts({ pulls: null }), /pull requests of ccccccc could not be read/);
+  only(facts({ pulls: [pull({ base: { ref: 'next' } })] }), /#382 is based on next, not main/);
+  only(facts({ pulls: [pull({ merge_commit_sha: BASE })] }), /#382 merged as bbbbbbb, not as HEAD/);
+  // a green run of the same head from another branch never stands in
+  only(facts({ runs: [run({ head_branch: 'other' })] }),
+    /no CI pull_request run on ccccccc from chore\/release-v9\.9\.9/);
+  const mine = run({ id: 900, created_at: '2026-11-02T10:00:00Z', conclusion: 'failure' });
+  const theirs = run({ id: 950, created_at: '2026-11-02T11:00:00Z', head_branch: 'other' });
+  assert.equal(judgedRun(facts({ runs: [mine, theirs] })).id, 900);
+  assert.match(ciReceiptProblems(facts({ runs: [mine, theirs], jobs: jobsOf(mine) })).join(),
+    /run 900 .* is completed\/failure/);
+});
+
+test('a workflow that names no jobs, or no name, refuses (review F2 of #389)', () => {
+  assert.deepEqual(expectedJobs('name: X\njobs: {}\n').problems,
+    [`${CI_WORKFLOW} declares no jobs`]);
+  const unnamed = { name: null, jobs: WORKFLOW.jobs, problems: [] };
+  only(facts({ workflow: unnamed, runs: [run({ name: null })] }),
+    /has no workflow name to find its runs by/);
+  const broken = { ...WORKFLOW, problems: [`${CI_WORKFLOW} does not parse: x`] };
+  only(facts({ workflow: broken }), /does not parse/);
+});
+
 test('the roadmap check CI does not run is still required', () => {
   only(facts({ roadmap: false }), /roadmap does not match the plan/);
 });
@@ -143,6 +176,9 @@ test('gatherCiReceipt reads parents, trees, ancestry, the runs and the latest jo
     if (args[0] === 'rev-parse') return { status: 0, stdout: TREE };
     if (args[0] === 'merge-base') return { status: 0, stdout: '' };
     if (cmd === 'node') return { status: 0, stdout: '' };
+    if (args[0] === 'api' && /\/pulls\?/.test(args[1])) {
+      return { status: 0, stdout: JSON.stringify([pull()]) };
+    }
     if (args[0] === 'api' && /\/jobs\?filter=latest/.test(args[1])) {
       return { status: 0, stdout: JSON.stringify({ jobs: jobsOf(r) }) };
     }
@@ -156,10 +192,25 @@ test('gatherCiReceipt reads parents, trees, ancestry, the runs and the latest jo
     'the roadmap check runs with OSC_ROADMAP_CHECK=1');
   assert.ok(calls.some((c) => c[1] === 'api' && c[2].includes(`head_sha=${PR}`)
     && c[2].includes('event=pull_request')));
-  // an unreadable answer is never an empty one
-  const broken = gatherCiReceipt({ sh: (c, a) => (a[0] === 'api' ? { status: 1, stdout: '' }
-    : sh(c, a)), root, head: HEAD });
+  // every GitHub read is bounded (review F3 of #389)
+  const gh = calls.filter((c) => c[0] === 'gh');
+  assert.equal(gh.length, 3, 'pulls, runs, jobs');
+  // an unreadable answer is never an empty one, and each read is tried twice
+  let tries = 0;
+  const broken = gatherCiReceipt({ sh: (c, a, o) => {
+    if (a[0] !== 'api') return sh(c, a, o);
+    tries += 1;
+    assert.equal(o?.timeout, GH_TIMEOUT_MS, 'a bounded read');
+    return { status: 127, stdout: '' };
+  }, root, head: HEAD });
   assert.match(ciReceiptProblems(broken).join(), /could not be read/);
+  assert.equal(tries, 2 * GH_ATTEMPTS, 'pulls and runs, each tried twice; no run, no jobs read');
+  // a shape that is not the API's is unreadable too
+  const odd = gatherCiReceipt({ sh: (c, a, o) => (a[0] === 'api'
+    ? { status: 0, stdout: JSON.stringify({ workflow_runs: 'x', jobs: 'x' }) } : sh(c, a, o)),
+  root, head: HEAD });
+  assert.equal(odd.runs, null);
+  assert.equal(odd.pulls, null);
 });
 
 test('release:prepare defaults to the CI path and keeps the full gate behind --local-gate', () => {

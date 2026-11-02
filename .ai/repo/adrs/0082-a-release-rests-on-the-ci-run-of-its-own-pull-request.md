@@ -14,7 +14,7 @@ related:
   - rule:project.release-flow-complete
   - rule:project.deploy-often
   - rule:project.ci-bounded
-  - adr:adr-0059
+  - file:.ai/repo/adrs/0059-a-deployed-page-names-its-release-state-a-later-build-is-version-plus-distance.md
 ---
 
 # 82. A release rests on the CI run of its own pull request: the CI receipt binds the merged tree, and the local gate becomes optional
