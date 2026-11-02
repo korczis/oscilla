@@ -5,13 +5,13 @@
 // (butt caps); a refused cable is marked by a shape as well as the refuse colour. The colour is
 // the caller's palette token (tokens.cable.palette[sourceModule % 6]); every other paint is a
 // token too (project.visual-identity-lock v3), and every shape sets its own stroke. No number
-// here sets an opacity, an alpha or a shadow (v4): the sheen's intensity is the hw-sheen
-// Tailwind key (class opacity-hw-sheen), the shadow is an opaque underlay offset down, and the
-// hit path is hidden rather than transparent. Imports nothing.
+// here sets an opacity, an alpha or a shadow (v4): the sheen's and the shadow's intensities are
+// the hw-sheen and hw-shadow Tailwind keys (classes opacity-hw-sheen and opacity-hw-shadow), and
+// the hit path is hidden rather than transparent. Imports nothing.
 //
 //   CABLE_DASH                              the pattern of each signal type
-//   cableCurve(a, b, { slack })             'M … C …', a hanging cable from a to b
-//   cableSvg({ id, from, to, type, colour, state, tokens, slack, zoom, sheen })
+//   cableCurve(a, b, { slack, box })        'M … C …', a hanging cable from a to b
+//   cableSvg({ id, from, to, type, colour, state, tokens, slack, box, zoom, sheen })
 //                                           '<g data-cable="id">…</g>'
 //   plugSvg({ at, colour, tokens })         a seated plug, taking no pointer
 
@@ -23,14 +23,20 @@ export const CABLE_DASH = Object.freeze({
 export const REFUSED_DASH = '4 4';
 /** The least a cable hangs below its chord's midpoint, graph units, however short. */
 export const CABLE_MIN_SAG = 12;
+/** The most a cable hangs below its chord's midpoint, graph units, however long. */
+export const CABLE_MAX_SAG = 60;
 /** The default slack: the sag as a fraction of the distance between the ends. */
 export const CABLE_SLACK = 0.25;
-/** The hit path's width in screen px (divided by the zoom, as the control's hit area is). */
-export const CABLE_HIT_PX = 24;
+/** The hit path's width in screen px at every zoom (vector-effect="non-scaling-stroke"). */
+export const CABLE_HIT_PX = 44;
 /** A near-vertical cable's sideways bow (to +x) at its middle, as a part of min(sag, rise). */
 export const CABLE_BOW = 0.3;
 /** Half the arm of the refused cross, graph units, and its stroke width. */
 const CROSS = Object.freeze({ arm: 5, width: 2, under: 4.5 });
+/** How far back from the target end the refused cross sits, graph units: the plug's sleeve
+ *  (r 7 and half its 1.5 ring) plus the cross's reach (arm × √2 and half its underlay), so the
+ *  cross never covers the plug. */
+const CROSS_BACK = 7.75 + CROSS.arm * Math.SQRT2 + CROSS.under / 2 + 1;
 /** The sheen's offset up and left, screen px. */
 const SHEEN_PX = 0.7;
 /** The shadow underlay's drop, screen px: at rest, and lifted while the cable is dragged. */
@@ -39,6 +45,8 @@ const SHADOW_PX = Object.freeze({ rest: 1, lifted: 3 });
 const SHADOW_SPREAD = 3;
 /** The intensity class of the sheen: the hw-sheen key of tailwind.config.cjs. */
 const SHEEN_CLASS = 'opacity-hw-sheen';
+/** The intensity class of the soft shadow: the hw-shadow key of tailwind.config.cjs. */
+const SHADOW_CLASS = 'opacity-hw-shadow';
 const WIDTH = Object.freeze({ base: 4.5, hover: 6, selected: 7.5 });
 
 const finite = (p) => Boolean(p) && Number.isFinite(p.x) && Number.isFinite(p.y);
@@ -49,15 +57,43 @@ const num = (x) => {
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
   .replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+/**
+ * The most sag that keeps the curve above `bottom`. Below the chord the cubic is
+ * y(t) = a.y + dy t + 4 sag t (1 - t); while |dy| <= 4 sag its lowest point is
+ * mid + sag + dy² / (16 sag), so the largest sag with that at most bottom is
+ * (R + √(R² - dy²/4)) / 2, R = bottom - mid. With an end at or below the bottom, the sag that
+ * puts the lowest point on the lower end, |dy| / 4, so the cable never hangs below its end.
+ */
+function sagRoom(a, b, bottom) {
+  const dy = b.y - a.y;
+  const r = bottom - (a.y + b.y) / 2;
+  const half = Math.abs(dy) / 2;
+  if (r <= half) return half / 2;
+  return (r + Math.sqrt(r * r - half * half)) / 2;
+}
+
+/** The bottom edge of a viewBox { x, y, width, height }, or Infinity without one. */
+function bottomOf(box) {
+  if (box === undefined || box === null) return Infinity;
+  const ok = ['x', 'y', 'width', 'height'].every((k) => Number.isFinite(box[k]));
+  if (!ok || box.height < 0) {
+    throw new RangeError('cableCurve: box must be a viewBox { x, y, width, height } of finite '
+      + 'numbers with a height of 0 or more.');
+  }
+  return box.y + box.height;
+}
+
 /** The two control points of the hanging cubic from a to b (see cableCurve). */
-function controls(a, b, slack) {
+function controls(a, b, slack, box) {
   if (!finite(a) || !finite(b)) throw new TypeError('cableCurve: a and b need finite x and y.');
   if (!(Number.isFinite(slack) && slack >= 0)) {
     throw new RangeError(`cableCurve: slack must be a finite number of 0 or more, not ${slack}.`);
   }
+  const bottom = bottomOf(box);
   const dx = b.x - a.x;
   const dy = b.y - a.y;
-  const sag = Math.max(CABLE_MIN_SAG, slack * Math.hypot(dx, dy));
+  const want = Math.min(CABLE_MAX_SAG, Math.max(CABLE_MIN_SAG, slack * Math.hypot(dx, dy)));
+  const sag = Math.max(0, Math.min(want, sagRoom(a, b, bottom)));
   const h = (sag * 4) / 3;
   // A near-vertical cable bows sideways, always to the right (+x), so it still reads as
   // hanging; the bow fades to nothing as the cable leans to |dx| = sag. One fixed side keeps the
@@ -65,7 +101,7 @@ function controls(a, b, slack) {
   // would jump from one side to the other there, where the bow is largest), and it does not
   // depend on the order of a and b, so reversed ends draw the same curve.
   const lean = Math.abs(dx);
-  const bow = lean < sag
+  const bow = lean < sag && sag > 0
     ? CABLE_BOW * Math.min(sag, Math.abs(dy)) * (1 - lean / sag) * (4 / 3) : 0;
   return [
     { x: num((2 * a.x + b.x) / 3 + bow), y: num((2 * a.y + b.y) / 3 + h) },
@@ -77,20 +113,52 @@ function controls(a, b, slack) {
  * A hanging cable from a to b as one cubic: the ends exactly a and b, both control points a
  * third of the way along the chord and lowered by 4/3 of the sag, so the middle of the curve
  * hangs `sag` below the chord's midpoint, down the screen whichever end is higher. The sag is
- * slack × the distance, never below CABLE_MIN_SAG; a cable steeper than its sag also bows
+ * slack × the distance, never below CABLE_MIN_SAG nor above CABLE_MAX_SAG; given the drawing's
+ * viewBox (`box`), it is lessened so the curve never hangs below the box's bottom edge (the box
+ * wins over the minimum, down to a straight cable). A cable steeper than its sag also bows
  * sideways (CABLE_BOW), so a vertical one still hangs. Reversed ends draw the same curve, and
  * a == b is a finite droop.
  */
-export function cableCurve(a, b, { slack = CABLE_SLACK } = {}) {
-  const [c1, c2] = controls(a, b, slack);
+export function cableCurve(a, b, { slack = CABLE_SLACK, box } = {}) {
+  const [c1, c2] = controls(a, b, slack, box);
   return `M ${a.x} ${a.y} C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${b.x} ${b.y}`;
 }
 
-/** The cubic from a to b at t = 0.5. */
-function middle(a, b, slack) {
-  const [c1, c2] = controls(a, b, slack);
-  return { x: num((a.x + 3 * c1.x + 3 * c2.x + b.x) / 8), y: num((a.y + 3 * c1.y + 3 * c2.y
-    + b.y) / 8) };
+/**
+ * The point of the cubic from a to b that lies CROSS_BACK from b, walking back from b: the
+ * first sample (1/64 steps) that far away, refined by bisection. A cable too short to reach
+ * that far takes its point farthest from b.
+ */
+function nearTarget(a, b, slack, box) {
+  const [c1, c2] = controls(a, b, slack, box);
+  const p = (t) => {
+    const u = 1 - t;
+    const f = (k) => u * u * u * a[k] + 3 * u * u * t * c1[k] + 3 * u * t * t * c2[k]
+      + t * t * t * b[k];
+    return { x: f('x'), y: f('y') };
+  };
+  const away = (t) => {
+    const q = p(t);
+    return Math.hypot(q.x - b.x, q.y - b.y);
+  };
+  const STEPS = 64;
+  let best = 1;
+  for (let i = STEPS - 1; i >= 0; i--) {
+    const t = i / STEPS;
+    if (away(t) >= CROSS_BACK) {
+      let lo = t;
+      let hi = (i + 1) / STEPS;
+      for (let k = 0; k < 30; k++) {
+        const m = (lo + hi) / 2;
+        if (away(m) >= CROSS_BACK) lo = m; else hi = m;
+      }
+      const q = p(lo);
+      return { x: num(q.x), y: num(q.y) };
+    }
+    if (away(t) > away(best)) best = t;
+  }
+  const q = p(best);
+  return { x: num(q.x), y: num(q.y) };
 }
 
 function needTokens(tokens, who) {
@@ -100,20 +168,23 @@ function needTokens(tokens, who) {
 }
 
 /**
- * One cable as '<g data-cable="id">…</g>': a soft shadow (an opaque underlay in
- * tokens.cable.shadow, SHADOW_SPREAD wider than the stroke and SHADOW_PX.rest screen px down),
- * then the main stroke group, the only part that takes the pointer (a wide hit path of
- * CABLE_HIT_PX / zoom, visibility="hidden", which pointer-events="stroke" still hits, and the
+ * One cable as '<g data-cable="id">…</g>': a soft shadow (tokens.cable.shadow at the hw-shadow
+ * intensity, SHADOW_CLASS, SHADOW_SPREAD wider than the stroke and SHADOW_PX.rest screen px
+ * down), then the main stroke group, the only part that takes the pointer (a hit path
+ * CABLE_HIT_PX screen px wide at every zoom through vector-effect="non-scaling-stroke",
+ * visibility="hidden", which pointer-events="stroke" still hits, and the
  * visible stroke in the caller's colour, dashed by type), then an optional sheen stripe
  * (tokens.cable.sheen at the hw-sheen intensity; off by default). Hover and selection thicken
  * the stroke; a dashed stroke has butt caps, so its gaps stay open at every width (round caps
  * would close them), and a solid one round caps. Dragging lifts the shadow (SHADOW_PX.lifted
  * down). Refused paints the stroke
  * tokens.jack.refuse, dashed (a solid type takes REFUSED_DASH), marks the group data-refused and
- * draws a cross at the curve's middle (t = 0.5), so a refusal is a shape, not a colour alone.
+ * draws a cross on the curve at the target end, CROSS_BACK back from it so it never covers the
+ * plug there, so a refusal is a shape, not a colour alone. `zoom` turns the screen-px offsets
+ * (the shadow's drop, the sheen's) into graph units; `box` is cableCurve's.
  */
 export function cableSvg({ id, from, to, type, colour, state = {}, tokens, slack = CABLE_SLACK,
-  zoom = 1, sheen = false } = {}) {
+  box, zoom = 1, sheen = false } = {}) {
   needTokens(tokens, 'cableSvg');
   if (!Object.hasOwn(CABLE_DASH, type)) {
     throw new Error(`cableSvg: type must be AUDIO, CONTROL, TRIGGER or ANALYSIS, not '${type}'.`);
@@ -122,7 +193,7 @@ export function cableSvg({ id, from, to, type, colour, state = {}, tokens, slack
     throw new RangeError(`cableSvg: zoom must be a finite number above 0, not ${zoom}.`);
   }
   const st = state || {};
-  const d = cableCurve(from, to, { slack });
+  const d = cableCurve(from, to, { slack, box });
   const w = st.selected ? WIDTH.selected : (st.hover ? WIDTH.hover : WIDTH.base);
   const paint = st.refused ? tokens.jack.refuse : (colour || 'currentColor');
   const pattern = st.refused ? (CABLE_DASH[type] || REFUSED_DASH) : CABLE_DASH[type];
@@ -133,7 +204,7 @@ export function cableSvg({ id, from, to, type, colour, state = {}, tokens, slack
   const off = num(-SHEEN_PX / zoom);
   let cross = '';
   if (st.refused) {
-    const m = middle(from, to, slack);
+    const m = nearTarget(from, to, slack, box);
     const r = CROSS.arm;
     const arms = [[m.x - r, m.y - r, m.x + r, m.y + r], [m.x - r, m.y + r, m.x + r, m.y - r]]
       .map((l) => l.map(num));
@@ -146,12 +217,14 @@ export function cableSvg({ id, from, to, type, colour, state = {}, tokens, slack
   }
   return `<g data-cable="${esc(id)}"${st.refused ? ' data-refused=""' : ''} `
     + 'pointer-events="none">'
-    + `<path data-shadow="" d="${d}" fill="none" stroke="${esc(tokens.cable.shadow)}" `
+    + `<path data-shadow="" class="${SHADOW_CLASS}" d="${d}" fill="none" `
+    + `stroke="${esc(tokens.cable.shadow)}" `
     + `stroke-width="${num(w + SHADOW_SPREAD)}" stroke-linecap="round" `
     + `transform="translate(0 ${drop})"/>`
     + '<g data-main="" pointer-events="stroke">'
     + `<path data-hit="" d="${d}" fill="none" stroke="currentColor" visibility="hidden" `
-    + `stroke-width="${num(CABLE_HIT_PX / zoom)}" stroke-linecap="round"/>`
+    + `stroke-width="${CABLE_HIT_PX}" vector-effect="non-scaling-stroke" `
+    + 'stroke-linecap="round"/>'
     + `<path data-stroke="" d="${d}" fill="none" stroke="${esc(paint)}" stroke-width="${w}" `
     + `stroke-linecap="${cap}"${dash}/>`
     + '</g>'

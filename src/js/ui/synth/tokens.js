@@ -15,7 +15,7 @@
  * the hw-sheen intensity, so a theme can retune it without touching the control tokens. No
  * role is an intensity: an opacity, a texture or a glow is a hw-* Tailwind key the drawing
  * reads as a class (project.visual-identity-lock v4), and the cable shadow is an opaque token
- * drawn as an underlay, never with an alpha.
+ * drawn at the hw-shadow intensity (class opacity-hw-shadow), never with an alpha of its own.
  */
 export const SYNTH_TOKEN_NAMES = deepFreeze({
   surface: { plateHi: '--osc-surface-3', plateLo: '--osc-surface-1', card: '--osc-surface-2',
