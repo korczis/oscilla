@@ -40,5 +40,5 @@ evidence:
     command: "node --test tests/unit/keys-registry.test.mjs"
     result: "5/5 on main e8b4d8a0 (#390 merged 2026-11-02T18:07:58Z); fails 4 of 5 on the merge base"
     artifact: "e8b4d8a0"
-    commit: 538fd78fbe230c134919db95dca68ddf7ed36404
+    commit: e8b4d8a00ef58847c3014babeaee16c4326eb82e
     recorded_at: 2026-11-02T18:18:10Z
