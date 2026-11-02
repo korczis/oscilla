@@ -82,10 +82,11 @@ const clampInt = (v, lo, hi) => Math.min(hi, Math.max(lo, Math.round(v)));
 
 /**
  * The notes the on-screen keyboard shows: { first, last } (MIDI notes, both C), `octaves`
- * octaves (2 or 3) around `base`, the octave of the A key; with 3, one octave below it.
+ * octaves (1 to 3) around `base`, the octave of the A key; with 3, one octave below it. One
+ * octave is a phone's (V634): whole octaves with every white key a 44 px target.
  */
 export function visibleRange(base, octaves = 3) {
-  const n = octaves >= 3 ? 3 : 2;
+  const n = octaves >= 3 ? 3 : (octaves <= 1 ? 1 : 2);
   const first = clampInt(base - (n === 3 ? 12 : 0), 0, 127 - 12 * n);
   return { first, last: first + 12 * n };
 }
