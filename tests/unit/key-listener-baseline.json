@@ -4,7 +4,7 @@
     "src/index.html": 21,
     "src/js/charts/additive-chart.js": 1,
     "src/js/charts/bio-chart.js": 1,
-    "src/js/main.js": 3,
+    "src/js/main.js": 2,
     "src/js/midi/keyboard-ui.js": 2,
     "src/js/midi/ui.js": 1,
     "src/js/synth/ui.js": 3,
