@@ -20,7 +20,8 @@
 //   editor.selectAll(), toggleFocusedNode(), nudge(key, large), endNudge(), deleteBridge(),
 //   editor.tidy(), toggleMute()            Shift+Delete, L, M (plan K009, graph-commands.js)
 //   editor.startTapConnect(from), cancelTransient() -> bool, hasGesture(), inSelectionMode()
-//   editor.setRunning(bool), focusNode(id) -> bool, focusViewport() -> bool, isShown(),
+//   editor.setRunning(bool), focusNode(id, { keepView }) -> bool (keepView: no pan),
+//   focusViewport() -> bool, isShown(),
 //   destroy()        focusNode / focusViewport refuse (false) while the graph subview is hidden
 //                    (phones, §136): focus never goes to an element nobody can see (V431 U7)
 //
@@ -471,10 +472,11 @@ export function createGraphEditor(host, svc) {
     return viewport.isConnected && viewport.getClientRects().length > 0;
   }
 
-  function focusNode(id) {
+  function focusNode(id, { keepView = false } = {}) {
     const entry = nodeEls.get(id);
     if (!entry || !isShown()) return false;
     entry.el.focus({ preventScroll: true });
+    if (keepView) return true; // the way back to a node (lab-bridge.js): the view stays
     // Keep it visible: pan when it lies outside the viewport.
     measureSize();
     const p = graphToScreen(view, entry.pos.x, entry.pos.y);

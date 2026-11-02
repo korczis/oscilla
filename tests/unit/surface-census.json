@@ -1775,6 +1775,24 @@
       "plan": []
     },
     {
+      "id": "lab",
+      "kind": "route",
+      "reachedFrom": [
+        "filter"
+      ],
+      "purpose": "A Studio filter node opened in Filter Lab: its type, cutoff and Q applied to the lab, nothing written back to Studio",
+      "state": "src/js/core/url-state-lab.js",
+      "evidence": "none",
+      "deepLink": "#m=filter&from=studio&node=filter-1",
+      "tests": [
+        "tests/unit/lab-bridge.test.mjs",
+        "tests/browser/cross-links.cjs"
+      ],
+      "plan": [
+        "U006"
+      ]
+    },
+    {
       "id": "keyboard",
       "kind": "route",
       "reachedFrom": [

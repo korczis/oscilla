@@ -86,6 +86,7 @@ import { aboutPart } from './ui/about.js';
 
 import { mount as mountAnalysis } from './labs/analysis.js';
 import { mount as mountFilter } from './labs/filter-lab.js';
+import { createLabBridgeUi } from './ui/studio/lab-bridge.js';
 import { mount as mountEnvelope } from './labs/envelope.js';
 import { mount as mountAdditive } from './labs/additive.js';
 import { mount as mountPhase } from './labs/phase-stereo.js';
@@ -645,6 +646,10 @@ function integrationInit() {
   cmp.navRegister('measure', (hash) => cmp.measureApplyRecipeHash(hash));
   cmp.navRegister('studio', (hash) => cmp.studioApplyLinkHash(hash));
   cmp.navRegister('records', (hash) => cmp.recordsApplyHash(hash));
+  // A Studio filter node opened in Filter Lab (ui/studio/lab-bridge.js); its values reach the
+  // lab once mountLabs has run (labFlush below).
+  cmp.labBridgeInit();
+  cmp.navRegister('lab', (hash, origin) => cmp.labApplyLinkHash(hash, origin));
   cmp.navStart();
   if (cmp.source !== 'single' || cmp.pattern !== 'tone') cmp.sourceKind = 'pattern';
   engine.on((type, d) => {
@@ -793,6 +798,7 @@ function integrationInit() {
       host = null;
     }
     mountLabs(root);
+    cmp.labFlush();
     cmp.measureMountCharts(root);
     cmp.experimentsMountCharts(root);
     if (labs.phase) {
@@ -879,7 +885,8 @@ function createOscillaComponent(ui) {
   // Optional input (ADR 0058): reads support at load, never requests; notes sound through engine.
   const midi = createMidiUi({ engine, sequencerPlaying });
   const cmp = compose(instrument, ui, workbench, measure, experiments, findings, connections,
-    studio, navigation, midi, createCrossLinksUi(), provenancePart(), aboutPart(), TEMPLATE_HELPERS);
+    studio, navigation, midi, createCrossLinksUi(), provenancePart(), aboutPart(), TEMPLATE_HELPERS,
+    createLabBridgeUi({ lab: () => labs.filter }));
   cmp.dismissAlert = focusSafeDismiss(cmp.dismissAlert);
   const baseRefreshDebug = cmp.refreshDebug;
   Object.defineProperty(cmp, 'refreshDebug', {

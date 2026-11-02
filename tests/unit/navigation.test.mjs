@@ -122,7 +122,7 @@ test('Copy config URL keeps mr and the Studio keys and names the workspace', () 
 });
 
 test('the dispatcher applies the domains in one declared order', () => {
-  assert.deepEqual([...HASH_DOMAINS], ['instrument', 'measure', 'studio', 'keyboard',
+  assert.deepEqual([...HASH_DOMAINS], ['instrument', 'measure', 'studio', 'lab', 'keyboard',
     'synth', 'records']);
 });
 

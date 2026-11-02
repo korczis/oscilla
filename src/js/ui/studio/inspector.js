@@ -65,6 +65,7 @@ import { CATEGORY_LABELS, STATUS_LABELS, edgeRoute, nodeConnections } from './gr
 import { formatSecondsText } from './timeline-view.js';
 import { h, replaceChildren, setAttr, setText } from './graph-dom.js';
 import { sliderFill } from '../app.js';
+import { canOpenInLab, openInLab } from './lab-bridge.js';
 
 export const SLIDER_STEPS = 1000;
 
@@ -994,6 +995,19 @@ export function mountInspector(host, svc) {
 
   function buildNode(view) {
     const parts = [header(view.name, `${view.typeLabel} · ${view.categoryLabel}`)];
+    // A filter node opens in Filter Lab (lab-bridge.js openInLab): one row, filter nodes only.
+    if (canOpenInLab(svc.store.getModel(), view.id)) {
+      parts.push(h('div', { class: 'flex mb-2', 'data-osc': 'studio.inspector.labRow' }, [
+        h('button', { type: 'button', 'data-osc': 'studio.inspector.openInLab',
+          'data-key': 'studio.inspector.openInLab', text: 'Open in Filter Lab',
+          class: 'inline-flex items-center px-3 py-1.5 min-h-8 [@media(pointer:coarse)]:min-h-11 '
+            + 'text-sm font-medium text-gray-900 bg-white border border-gray-200 rounded-lg '
+            + 'hover:bg-gray-100 hover:text-primary-700 focus:z-10 focus:outline-none focus:ring-4 '
+            + 'focus:ring-gray-100 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 '
+            + 'dark:hover:text-white dark:hover:bg-gray-700 dark:focus:ring-gray-700',
+          onClick: () => openInLab(view.id) }),
+      ]));
+    }
     if (view.statusText) {
       parts.push(h('p', { class: `osc-si-status${view.statusError ? ' is-error' : ''}`,
         role: 'note', 'data-osc': 'studio.inspector.status', text: view.statusText }));

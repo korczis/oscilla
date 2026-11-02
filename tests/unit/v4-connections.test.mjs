@@ -105,7 +105,7 @@ test('a record link names one stored record, and is refused whole when malformed
 });
 
 test('navigation: the records domain is dispatched last; its keys leave with Experiments', () => {
-  assert.deepEqual([...HASH_DOMAINS], ['instrument', 'measure', 'studio', 'keyboard',
+  assert.deepEqual([...HASH_DOMAINS], ['instrument', 'measure', 'studio', 'lab', 'keyboard',
     'synth', 'records']);
   assert.deepEqual(routeOfHash('#exp=abc'), { workspace: 'experiments', owner: 'records' });
   assert.deepEqual(routeOfHash('#m=experiments&def=abc'), { workspace: 'experiments',

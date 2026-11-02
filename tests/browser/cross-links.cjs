@@ -52,6 +52,18 @@
 //                   with focus on its heading, Back returns to Presets
 //   learn-demo-back (one-way link 2) a Learn demo's notice carries the way back to the lesson;
 //                   left untouched it still closes on its own (the notices are in flow)
+//   studio-lab      (U006, P08) a Studio filter node opens in Filter Lab: the subtractive-synth
+//                   template's filter-1, selected, and the Inspector's "Open in Filter Lab"
+//                   (pointer, keyboard, touch) open Filter Lab with the node's type, cutoff and Q
+//                   and "From Studio node ..." at the address #m=filter&from=studio&node=..&rev=..,
+//                   starting no AudioContext beyond the first gesture's, no voice, no Studio
+//                   playback and no getUserMedia; Back (the browser's, then the context line's
+//                   link by keyboard and by touch) returns to Studio with the node selected and
+//                   focused, the graph's view and the store revision unchanged, and Forward
+//                   reopens the lab with its values; a fresh page at the lab link (a reload)
+//                   loads the values with no stale notice and no AudioContext at all; a link to
+//                   a missing node is refused in the context line, the lab keeps its own values
+//                   and the address drops the link's keys
 //   citations       (B10) every Bioacoustics citation link names its source, not the raw URL,
 //                   says "(opens in a new tab)" in its accessible name, keeps rel=noopener and
 //                   carries the URL as its title
@@ -679,6 +691,183 @@ async function runLeg(name, origin) {
       }
       check(leg, 'Load in Presets says what plays the preset there and its notice opens the '
         + 'Playground (A1)', !wrong.length, wrong.join(' | '));
+    }
+
+    if (want('studio-lab')) {
+      // Its own context: the probe counts what could start sound or the microphone, installed
+      // before the app loads (as link-integrity's related-census does).
+      const audited = await browser.newContext({ viewport: { width: 1536, height: 1024 },
+        hasTouch: true });
+      audited.on('page', (p) => {
+        p.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+        p.on('console', (m) => { if (m.type() === 'error') errors.push(`console: ${m.text()}`); });
+      });
+      await audited.addInitScript(() => {
+        window.__oscAudit = { ctx: 0, gum: 0 };
+        for (const name of ['AudioContext', 'webkitAudioContext']) {
+          const C = window[name];
+          if (C) {
+            window[name] = class extends C {
+              constructor(...a) { super(...a); window.__oscAudit.ctx += 1; }
+            };
+          }
+        }
+        const md = navigator.mediaDevices;
+        if (md && md.getUserMedia) {
+          const g = md.getUserMedia.bind(md);
+          md.getUserMedia = (...a) => { window.__oscAudit.gum += 1; return g(...a); };
+        }
+      });
+      const NODE = 'filter-1';
+      const OPEN = '[data-osc="studio.inspector.openInLab"]';
+      const BACK = '[data-osc="filter.backToStudio"]';
+      // The lab, the node, the context line, the address, the audio and where focus is.
+      const read = (page) => page.evaluate((id) => {
+        const O = window.OSCILLA;
+        const a = O.app;
+        const s = O.studio;
+        const n = s.model.graph.nodes.find((x) => x.id === id);
+        const lab = O.labs.filter.config;
+        const radio = document.querySelector('[data-osc="filter.type"][aria-checked="true"]');
+        const line = document.querySelector('[data-osc="filter.fromStudio"]');
+        const el = document.activeElement;
+        const ed = s.editor;
+        return { workspace: a.workspace, hash: location.hash, revision: s.store.getRevision(),
+          selection: [...s.selection.nodes], view: ed ? ed.getView() : null,
+          node: n ? { type: n.params.type, frequency: n.params.frequency, Q: n.params.Q } : null,
+          lab: { type: lab.type, frequency: lab.frequency, Q: lab.Q,
+            radio: radio ? radio.dataset.value : null },
+          from: a.labFrom ? { ...a.labFrom } : null,
+          lineShown: !!line && line.getClientRects().length > 0,
+          lineText: line ? line.textContent.replace(/\s+/g, ' ').trim() : '',
+          focusNode: el && el.dataset ? el.dataset.nodeId || null : null,
+          focusBody: !el || el === document.body,
+          audit: { ...window.__oscAudit }, voice: !!O.engine.voice, playing: !!a.playing,
+          engineNodes: O.engine.activeNodeCount, studioPlaying: s.counts().playing,
+          domains: O.navigation.domains,
+          alerts: a.alerts.map((x) => `${x.level}: ${x.title}: ${x.message}`) };
+      }, NODE);
+      const same = (r) => !!r.node && r.lab.type === r.node.type && r.lab.radio === r.node.type
+        && Math.abs(r.lab.frequency - r.node.frequency) < 1e-6
+        && Math.abs(r.lab.Q - r.node.Q) < 1e-9;
+      const silent = (r, ctx) => r.audit.ctx === ctx && r.audit.gum === 0 && !r.voice
+        && !r.playing && !r.studioPlaying && r.engineNodes === 0;
+      const wrong = [];
+      let linkHash = null;
+      // Back: the browser's for pointer, the context line's link for keyboard and touch.
+      for (const input of INPUTS) {
+        const page = await H.open(audited, base, 'm=studio&st=subtractive-synth');
+        await page.keyboard.press('Shift'); // the first gesture: the app's own audio unlock
+        await page.evaluate((id) => window.OSCILLA.studio.store.dispatch({
+          type: 'SELECTION_CHANGE', selection: { nodes: [id] } }), NODE);
+        await page.locator(OPEN).waitFor({ state: 'visible', timeout: NAV_MS });
+        const before = await read(page);
+        if (before.domains.indexOf('lab') < 0) wrong.push('the lab hash domain is not registered');
+        await H.activate(page, OPEN, input);
+        const lab = await H.arrived(page, 'filter', `Open in Filter Lab (${input}) opens Filter Lab`)
+          .then(() => until(async () => {
+            const r = await read(page);
+            return r.workspace === 'filter' && r.from && r.from.kind === 'from' ? r : null;
+          }, { ms: NAV_MS, what: `Filter Lab shows the node (${input})` })).catch(() => null);
+        if (!lab) {
+          wrong.push(`${input}: ${JSON.stringify(await read(page))}`);
+          await page.close();
+          continue;
+        }
+        linkHash = `m=filter&from=studio&node=${NODE}&rev=${before.revision}`;
+        if (lab.hash !== `#${linkHash}`) wrong.push(`${input}: address ${lab.hash}`);
+        if (!same(lab)) wrong.push(`${input}: lab ${JSON.stringify(lab.lab)} node `
+          + JSON.stringify(lab.node));
+        if (!lab.lineShown || !/^From Studio node Filter 1\. .*Back to Studio$/.test(lab.lineText)
+          || lab.from.notice) wrong.push(`${input}: context line "${lab.lineText}"`);
+        if (!silent(lab, before.audit.ctx)) {
+          wrong.push(`${input}: sound or microphone ${JSON.stringify({ before: before.audit,
+            after: lab.audit, voice: lab.voice, nodes: lab.engineNodes })}`);
+        }
+        if (input === 'pointer') {
+          await page.evaluate(() => history.back());
+        } else {
+          await H.activate(page, BACK, input);
+        }
+        const home = await until(async () => {
+          const r = await read(page);
+          return r.workspace === 'studio' && r.focusNode === NODE ? r : null;
+        }, { ms: NAV_MS, what: `Back (${input}) focuses Studio node ${NODE}` })
+          .catch(() => null);
+        if (!home) {
+          wrong.push(`${input}: Back ${JSON.stringify(await read(page))}`);
+        } else {
+          if (home.selection.join() !== NODE) wrong.push(`${input}: selection ${home.selection}`);
+          if (home.revision !== before.revision) {
+            wrong.push(`${input}: revision ${before.revision} -> ${home.revision}`);
+          }
+          if (JSON.stringify(home.view) !== JSON.stringify(before.view)) {
+            wrong.push(`${input}: view ${JSON.stringify(before.view)} -> `
+              + JSON.stringify(home.view));
+          }
+          if (!silent(home, before.audit.ctx)) wrong.push(`${input}: Back started sound`);
+        }
+        if (input === 'pointer') {
+          await page.evaluate(() => history.forward());
+          const fwd = await until(async () => {
+            const r = await read(page);
+            return r.workspace === 'filter' && same(r) ? r : null;
+          }, { ms: NAV_MS, what: 'Forward reopens Filter Lab with the node\'s values' })
+            .catch(() => null);
+          if (!fwd) wrong.push(`Forward: ${JSON.stringify(await read(page))}`);
+        }
+        await page.close();
+      }
+      check(leg, 'Open in Filter Lab opens the node\'s type, cutoff and Q, silent, and Back '
+        + 'returns to the node selected and focused, view and revision unchanged (pointer, '
+        + 'keyboard, touch)', !wrong.length, wrong.join(' | '));
+
+      // A reload of the lab link: no revision is compared (the revision is per page).
+      const reload = [];
+      if (linkHash) {
+        const page = await H.open(audited, base, linkHash);
+        const r = await until(async () => {
+          const x = await read(page);
+          return x.workspace === 'filter' && x.from ? x : null;
+        }, { ms: NAV_MS, what: 'a fresh page at the lab link shows the node' }).catch(() => null);
+        if (!r) reload.push(JSON.stringify(await read(page)));
+        else {
+          if (!same(r)) reload.push(`lab ${JSON.stringify(r.lab)} node ${JSON.stringify(r.node)}`);
+          if (r.from.kind !== 'from' || r.from.notice) reload.push(JSON.stringify(r.from));
+          if (!silent(r, 0)) reload.push(`audio ${JSON.stringify(r.audit)}`);
+        }
+        await page.close();
+      } else reload.push('no lab link was made');
+      check(leg, 'a fresh page at the lab link loads the node\'s values with no stale notice and '
+        + 'no AudioContext', !reload.length, reload.join(' | '));
+
+      // A link to a node the document does not have: refused, visibly; the lab keeps its own.
+      const refused = [];
+      {
+        const page = await H.open(audited, base, 'm=filter&from=studio&node=filter-404&rev=3');
+        const r = await until(async () => {
+          const x = await read(page);
+          return x.workspace === 'filter' && x.from && x.lineShown ? x : null;
+        }, { ms: NAV_MS, what: 'the refusal shows in Filter Lab' }).catch(() => null);
+        if (!r) refused.push(JSON.stringify(await read(page)));
+        else {
+          if (r.from.kind !== 'refused' || !/no node "filter-404"/.test(r.lineText)) {
+            refused.push(`line "${r.lineText}"`);
+          }
+          if (r.lab.type !== 'lowpass' || r.lab.frequency !== 2500) {
+            refused.push(`the lab changed: ${JSON.stringify(r.lab)}`);
+          }
+          if (r.hash !== '#m=filter') refused.push(`address ${r.hash}`);
+          if (!r.alerts.some((x) => /^warning: Studio node not opened: /.test(x))) {
+            refused.push(`alerts ${JSON.stringify(r.alerts)}`);
+          }
+          if (!silent(r, 0)) refused.push(`audio ${JSON.stringify(r.audit)}`);
+        }
+        await page.close();
+      }
+      check(leg, 'a lab link to a missing node is refused in the context line and the lab keeps '
+        + 'its own values', !refused.length, refused.join(' | '));
+      await audited.close();
     }
 
     if (want('citations')) {

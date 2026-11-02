@@ -54,6 +54,7 @@ import { STUDIO_TEMPLATES } from '../../src/js/studio/templates/index.js';
 import SEMI_MONO from '../../src/js/synth/panels/semi-mono.js';
 import { KEYBOARD_LINK_KEY } from '../../src/js/midi/keyboard.js';
 import { SYNTH_LINK_KEYS } from '../../src/js/core/url-state-synth.js';
+import { LAB_LINK_KEYS } from '../../src/js/core/url-state-lab.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (rel) => readFileSync(path.join(ROOT, rel), 'utf8');
@@ -89,6 +90,7 @@ const DOMAIN_KEYS = Object.freeze({
   records: Object.values(RECORD_LINK_KEYS),
   keyboard: [KEYBOARD_LINK_KEY],
   synth: Object.values(SYNTH_LINK_KEYS),
+  lab: Object.values(LAB_LINK_KEYS),
 });
 /** What a `<placeholder>` of a deep link stands for when the router reads it. */
 const PLACEHOLDER = 'u063-sample';

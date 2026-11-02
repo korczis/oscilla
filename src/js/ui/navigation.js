@@ -3,13 +3,16 @@
 // into the ONE OSCILLA component by main.js (Object.defineProperties, never spread), like
 // measure.js; its state lives in the closure `nav`, never in reactive state.
 //
-// The hash is shared by five codecs, each reading only its own keys: the instrument
+// The hash is shared by seven codecs, each reading only its own keys: the instrument
 // (core/url-state.js: v s p w f g d a r rm x, and V1 mode ids in `m`), the MEASURE recipe
 // (core/url-state-measure.js: mr), the Studio link (core/url-state-studio.js: m=studio, st,
 // sv) and a stored record (core/url-state-records.js: m=experiments with exp, def or finding,
 // ADR 0048; the record keys leave the address with Experiments, like the Studio keys) and the
 // keyboard (src/js/midi/keyboard-ui.js: kbd=1 arms the keyboard of the Playground or the
-// Studio the link opens, K026; it leaves the address with the first workspace change). `m`
+// Studio the link opens, K026; it leaves the address with the first workspace change), the
+// Synth (core/url-state-synth.js: yt ye yp yv yc) and the lab link (core/url-state-lab.js:
+// m=filter with from, node and rev, a Studio filter node opened in Filter Lab by
+// ui/studio/lab-bridge.js; its keys leave the address with Filter Lab). `m`
 // names the workspace: any workspace id (`m=measure`, `m=analyzer`, …) or, as V1 links wrote
 // it, a V1 mode id (`sweep` → Playground, `dual` → Synthesis).
 //
@@ -69,11 +72,12 @@ import {
 import { WORKSPACES } from './app.js';
 import { KEYBOARD_LINK_KEY } from '../midi/keyboard.js';
 import { SYNTH_LINK_MODE, withoutSynthParams } from '../core/url-state-synth.js';
+import { LAB_LINK_MODE, withoutLabParams } from '../core/url-state-lab.js';
 
 export const ROUTE_KEY = 'm';
 export const DEFAULT_WORKSPACE = 'playground';
 /** The domains that read the hash, in the order the dispatcher applies them. */
-export const HASH_DOMAINS = Object.freeze(['instrument', 'measure', 'studio', 'keyboard',
+export const HASH_DOMAINS = Object.freeze(['instrument', 'measure', 'studio', 'lab', 'keyboard',
   'synth', 'records']);
 /**
  * The domains re-applied on Back / Forward (ADR 0048): opening a stored record replaces nothing
@@ -176,7 +180,8 @@ export function hashForWorkspace(hash, workspace) {
     q.delete(STUDIO_LINK_KEYS.subview);
   }
   if (workspace !== RECORD_LINK_MODE) for (const k of Object.values(RECORD_LINK_KEYS)) q.delete(k);
-  const out = workspace === SYNTH_LINK_MODE ? q : new URLSearchParams(withoutSynthParams(q));
+  let out = workspace === SYNTH_LINK_MODE ? q : new URLSearchParams(withoutSynthParams(q));
+  if (workspace !== LAB_LINK_MODE) out = new URLSearchParams(withoutLabParams(out));
   out.set(ROUTE_KEY, workspace);
   return out.toString();
 }
@@ -197,7 +202,7 @@ export function hashForRecord(hash, link) {
  * The address to keep for a link some domain refused: the refused domain's keys leave (a Studio
  * link, a recipe, a record, an instrument configuration that could not be read), `m` names the
  * workspace the user stays in (a refused `m` is replaced the same way). So a refused link never
- * comes back through Back / Forward or a reload. results: { instrument, measure, studio,
+ * comes back through Back / Forward or a reload. results: { instrument, measure, studio, lab,
  * records, workspace } as the dispatcher collected them; false = refused.
  */
 export function hashAfterRefusal(hash, results, workspace) {
@@ -206,6 +211,7 @@ export function hashAfterRefusal(hash, results, workspace) {
   if (results.measure === false) h = withRecipeParam(h, null);
   if (results.records === false) h = withoutRecordParams(h);
   if (results.synth === false) h = withoutSynthParams(h);
+  if (results.lab === false) h = withoutLabParams(h);
   if (results.instrument === false) {
     const q = paramsOf(h);
     for (const k of INSTRUMENT_HASH_KEYS) q.delete(k);

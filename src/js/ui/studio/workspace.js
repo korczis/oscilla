@@ -1430,6 +1430,26 @@ export function createStudioUi(svc = {}) {
       return true;
     },
 
+    /**
+     * Select node `nodeId` and focus it, the graph's view not moved (lab-bridge.js: the way back
+     * from Filter Lab). Selection is view state: not undoable, not dirty, no revision. Where the
+     * graph is hidden (a phone's Inspector subview) the Inspector's heading takes focus.
+     */
+    studioFocusNode(nodeId) {
+      if (!ctx.handle.getModel().graph.nodes.some((n) => n.id === nodeId)) return false;
+      const sel = ctx.handle.getSelection();
+      if (sel.nodes.length !== 1 || sel.nodes[0] !== nodeId) {
+        ctx.handle.dispatch({ type: 'SELECTION_CHANGE', selection: { nodes: [nodeId] } });
+      }
+      if (ctx.editor && ctx.editor.focusNode(nodeId, { keepView: true })) return true;
+      return !!(ctx.inspector && ctx.inspector.focusHeading());
+    },
+
+    /** The document open now and its store revision, read only (lab-bridge.js). */
+    studioDocument() {
+      return { model: ctx.handle.getModel(), revision: ctx.handle.getRevision() };
+    },
+
     studioReturn() {
       if (ctx.transport) ctx.transport.returnToStart();
       tick();
