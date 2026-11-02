@@ -1,0 +1,17 @@
+# The model of the plan's drift gate (Majordomus capability plan.drift, ADR 0166 decision 2 of
+# Majordomus): how long main may carry merged work the plan has not recorded, and whether a
+# refusal fails yet. `majordomus plan drift` reads this file for both values; without it the
+# window is unread and no merge can be called young.
+#
+# A merge on main that names an issue is delivery, not acceptance: `majordomus plan
+# verify|done <id>` remains the act that records it (evidence at a commit of main, V272 D4). On
+# 2026-11-02 main carried two such issues, K144 and U009, merged by #367 40 h earlier.
+version: 1
+
+drift:
+  # A day between the newest merge that names an issue and the refusal: a feature train lands
+  # several issues at once and a release cut can fall in between.
+  window: 86400
+  # Advisory until the done_without_trace findings that predate the plan-id-in-title convention
+  # (R022, 2026-10-29) are settled upstream; the gate reports and exits 0.
+  enforcement: advisory
