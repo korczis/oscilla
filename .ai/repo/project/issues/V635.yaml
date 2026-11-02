@@ -1,0 +1,34 @@
+id: V635
+milestone: M054
+serves:
+- "ui-current#phone-whole"
+title: The Synth's dock never buries its panel on a phone, and its text is readable
+slug: the-synths-dock-never-buries-its-panel-on-a-phone
+priority: p1
+profile: implementation
+objective: "Make the Synth workspace usable on a phone (390x844, coarse pointer). Below sm the dock fixed over the view shows its keys and the Octave buttons; its instrument row, Arm and Velocity unfold from a More button (aria-expanded), so the dock is about 200 px instead of most of the screen. The dock publishes its height as --osc-kbd-h and the Synth view pads its bottom by it, so its last control scrolls clear of the dock at every width. The Synth's text classes under 12 px apply from xl only, with text-xs (12 px) below, so a phone reads 12 px and the desktop keeps its size."
+why: "Owner direction of 2026-11-02, in Czech: \"vyrazne vymazli to ui, ty synths, musi fungovat suprove i na mobile phone\" and \"musi fungovat klavesnice\". Measured on v3.14.1 under iPhone 13 emulation: the Synth dock covered Arm, Open in Studio, Copy link and the Panel, Engines and XY tabs (elementFromPoint), and 172 text runs were under 12 px."
+scope:
+- src/index.html
+- src/js/midi/keyboard-ui.js
+- src/js/synth/view/face.js
+- src/js/ui/kinds/xy-pad.js
+- tests/unit/synth-phone.test.mjs
+- tests/README.md
+- .ai/repo/project/issues/V635.yaml
+- dist
+depends_on:
+- V634
+acceptance_criteria:
+- "Before: VERIFIED: at 390x844 under touch the Synth dock covers the view's actions and tabs, and 172 text runs are under 12 px."
+- "After: the dock shows the keys and Octave with More, the view's actions and tabs show above it, and no Synth text outside the patch bay's SVG drawing is under 12 px."
+- "Negative cases: from sm up the dock shows every row as before and More is hidden; from xl the Synth's small labels keep their measured sizes."
+- "Rollback: revert the merge commit; no stored record or schema changes."
+validation:
+- node --test tests/unit/synth-phone.test.mjs
+- node scripts/ui-flowbite-pro-record.mjs --check
+- node tests/browser/synth.cjs
+evidence_required:
+- verified
+created_at: '2026-11-02'
+updated_at: '2026-11-02'

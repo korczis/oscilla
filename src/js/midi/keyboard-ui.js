@@ -89,6 +89,9 @@ export function createKeyboardUi({ win = window } = {}) {
     kbdHeld: '',
     kbdSounding: false,
     kbdRange: '',
+    // V635: on a phone the Synth's dock shows its keys and the Octave buttons; the instrument
+    // row, Arm and Velocity unfold from its More button, so the dock never buries the panel.
+    kbdMore: false,
 
     /** The view the keyboard belongs to now ('playground' | 'studio'), else null. */
     get kbdView() {
