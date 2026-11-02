@@ -285,6 +285,15 @@ export function createNodeRegistry(definitions) {
 
 export const NODE_REGISTRY = createNodeRegistry(NODE_DEFINITIONS);
 
+/**
+ * Whether the keys may play a node of `type` (K066): a type with capabilities.notes (Keys and
+ * the engines) or capabilities.hits (a kit whose keys trigger voices).
+ */
+export function playsNotes(type, registry = NODE_REGISTRY) {
+  const c = (registry.get(type) || {}).capabilities || {};
+  return !!(c.notes || c.hits);
+}
+
 /** Node types matching `query` over name, aliases and category (library order on ties). */
 export function searchNodeTypes(query, registry = NODE_REGISTRY) {
   return registry.search(query);

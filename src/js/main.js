@@ -255,17 +255,18 @@ function labVizInputs(plan) {
 }
 bridge.labInputs = labVizInputs;
 
-// One output owner at a time (C002): the instrument, the sequencer, the Studio, a measurement.
-// stopPlayback also releases the MIDI notes (V502); sequencerPlaying is the editor's own state.
-const { claimOutput, stopPlayback, stopSequence, sequencerPlaying } = createOutputOwner({
+// One output owner at a time (C002, C016): instrument, sequencer, Studio, a measurement.
+// stopPlayback also frees the MIDI notes (V502); outputBusy is MEASURE's other-audio probe.
+const {
+  claimOutput, stopPlayback, stopSequence, sequencerPlaying, outputBusy,
+} = createOutputOwner({
   app: () => app,
   sequencer: () => (labs.sequencer ? labs.sequencer.editor : null), changed: notifyAdapter });
 
 withLabOptions(engine, (plan) => v2PlayOptions(plan, engine.ctx, true), () => {
   // Playground and Measure share one output (spec §74): no instrument voice while a measurement
-  // owns it. The measurement itself never calls play (capture.js schedules its own source).
-  // claimOutput raises the notice itself and refuses while a measurement owns the output (C002);
-  // otherwise it takes the output from the sequencer (and Studio) and the play goes on.
+  // owns it (capture.js schedules its own source). claimOutput raises the notice and refuses
+  // then (C002); otherwise it takes the output from the sequencer (and Studio).
   return claimOutput('instrument') !== true;
 });
 
@@ -866,7 +867,7 @@ function createOscillaComponent(ui) {
     stopPlayback, sequencerPlaying,
   });
   const measure = createMeasureUi({
-    engine, build: BUILD, stopPlayback,
+    engine, build: BUILD, stopPlayback, outputBusy,
     loopback: new URLSearchParams(window.location.search).get('measure') === 'loopback',
   });
   const experiments = createExperimentsUi();
