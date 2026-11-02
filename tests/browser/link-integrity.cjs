@@ -34,7 +34,10 @@
 //                   once per step, visit them in order.
 //   exits           every workspace shows the nav (a way onward) and at least one in-content
 //                   control that leads to another workspace, except the ones in NO_EXIT_OK.
-//   actions         the cross-workspace controls (ACTIONS) land where their label says.
+//   actions         the cross-workspace controls (ACTIONS) land where their label says: the
+//                   header About, Measure → Experiments, the compact Studio and its Back, the
+//                   Filter Lab back, a Learn demo, every link of About's workspace list and
+//                   every Synth link of Filter Lab, Synthesis, the Sequencer and Presets.
 //   no-console-errors
 //
 // Waits are condition polls through lib/wait.cjs with a named wall-clock deadline (rule
@@ -98,6 +101,14 @@ async function loadModel() {
   TEMPLATES.push(...(await import(src('studio', 'templates', 'index.js'))).STUDIO_TEMPLATES
     .map((t) => t.id));
   ROUTES.push(...routesOf());
+  ACTIONS.push(...WORKSPACES.filter((w) => w !== 'about').map((w) => [`About list → ${w}`,
+    'about', `[data-osc="about.open.${w}"]`, w]));
+  const { COUNTERPARTS } = await import(src('ui', 'counterparts.js'));
+  for (const c of COUNTERPARTS.filter((x) => x.osc)) {
+    for (const w of c.from) {
+      ACTIONS.push([`${w} → ${c.workspace}`, w, `[data-osc="${c.osc[w]}"]`, c.workspace]);
+    }
+  }
   // A Studio template's deep link (#294, #278: "Open ... in Studio"), any shipped template.
   ALLOWED_HREF.push(new RegExp(`^#m=studio&st=(${TEMPLATES.join('|')})$`));
 }
@@ -140,11 +151,16 @@ const ACTIONS = [
   // control is named "Back to the Playground" (#294 U010).
   ['Filter Lab back', 'filter', '#osc-filter-fullscreen', 'playground'],
   ['Learn demo', 'learn', '[data-osc="learn.demo"]', 'playground'],
+  // A1 connect, appended by loadModel from their sources: every workspace link of About's list
+  // (ui/app.js WORKSPACES) and every counterpart link written in a workspace's own panel
+  // (ui/counterparts.js COUNTERPARTS: Filter Lab, Synthesis, the Sequencer and Presets to the
+  // Synth).
 ];
 // Workspaces whose only way onward is the nav today (links.md, "dead ends"). Shrinks only.
 // The cross-links pull request (#294) and #273 gave Analyzer, Compare, Synthesis and
-// Experiments (B12, its empty lists now link to Measure) an in-content exit.
-const NO_EXIT_OK = new Set(['presets', 'about']);
+// Experiments (B12, its empty lists now link to Measure) an in-content exit; A1 connect gave
+// Presets its Synth link and About its workspace list, each entry a link.
+const NO_EXIT_OK = new Set([]);
 // Rendered links that do not yet say they open a new tab (B10: the Bioacoustics citations,
 // src/js/labs/bioacoustics.js), owned by the cross-links pull request. Each is reported as
 // KNOWN, never skipped silently; a listed href that is healed fails the run until it is removed

@@ -4,7 +4,7 @@
 // Space has one owner in each workspace, the same at every width:
 //   'instrument'  the workspaces that play, load or analyse the instrument's signal:
 //                 Playground, Analyzer, Filter Lab, Compare, Synthesis, Sequencer and Presets
-//                 (Load readies the instrument and says "Press TRIGGER (or Space)"). Space is
+//                 (Load readies the instrument and says "Press Space to play it here"). Space is
 //                 Hold to Play (V1, frozen): held, it plays; released, it stops; a programmed
 //                 pattern triggers once. It is so whether or not a Play control is on screen:
 //                 Hold and Trigger are laid out by width, the owner is not.
