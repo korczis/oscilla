@@ -377,21 +377,21 @@
     </button>
   </section>
 
-    <!-- ================= Page header: where the user is (breadcrumb and the workspace's name)
-         and the workspace's actions slot, which the workspace issues fill (U006's Related
-         links). One header for every workspace, derived from the registry. The page's one h1
-         is the Q002 sentence leading <main> (P002, Q004 option A); each workspace leads with
-         its own heading. ================ -->
+    <!-- ================= Page header (F002's, filled by lane A wave 3), rendered for every
+         workspace from the registry (src/js/ui/shell.js WORKSPACE_REGISTRY): the breadcrumb
+         (group > page), the summary, the Related strip (the related entries) and the actions
+         slot (U006). On a phone: the page name, a Related menu and the actions. The page's one
+         h1 is the Q002 sentence leading <main>. ================ -->
     <div data-osc="page.header"
       class="flex items-center flex-none min-w-0 gap-3 px-4 py-1.5 bg-white border-b border-gray-200 dark:bg-gray-800 dark:border-gray-700">
       <nav class="flex min-w-0" aria-label="Breadcrumb">
         <ol class="inline-flex items-center min-w-0 space-x-1 md:space-x-2">
-          <li class="inline-flex items-center flex-none">
+          <li class="inline-flex items-center flex-none max-md:hidden">
             <a href="#m=playground" data-osc="page.home" x-bind="crumbHome()"
               class="inline-flex items-center text-sm font-medium text-gray-700 rounded-lg min-h-8 [@media(pointer:coarse)]:min-h-11 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-300 dark:hover:text-white">
               <svg class="w-4 h-4 mr-2" aria-hidden="true"><use href="#i-ws-playground"/></svg>OSCILLA</a>
           </li>
-          <li class="flex-none" x-show="workspaceGroupLabel()" x-cloak>
+          <li class="flex-none max-md:hidden" x-show="workspaceGroupLabel()" x-cloak>
             <div class="flex items-center">
               <svg class="w-5 h-5 text-gray-400" aria-hidden="true"><use href="#i-right"/></svg>
               <span class="ml-1 text-sm font-medium text-gray-500 md:ml-2 dark:text-gray-400" x-text="workspaceGroupLabel()"></span>
@@ -399,14 +399,45 @@
           </li>
           <li class="min-w-0" aria-current="page">
             <div class="flex items-center min-w-0">
-              <svg class="flex-none w-5 h-5 text-gray-400" aria-hidden="true"><use href="#i-right"/></svg>
-              <p class="ml-1 text-sm font-semibold text-gray-900 truncate md:ml-2 dark:text-white"
+              <svg class="flex-none w-5 h-5 text-gray-400 max-md:hidden" aria-hidden="true"><use href="#i-right"/></svg>
+              <p class="text-sm font-semibold text-gray-900 truncate md:ml-2 dark:text-white"
                 data-osc="page.title" x-text="workspaceLabel()">Playground</p>
             </div>
           </li>
         </ol>
       </nav>
-      <div class="flex items-center gap-2 ml-auto" data-osc="page.actions">
+      <p data-osc="page.summary" x-text="workspaceSummary()" :title="workspaceSummary()"
+        class="flex-1 hidden min-w-0 text-sm text-gray-500 truncate xl:block dark:text-gray-400"></p>
+      <nav data-osc="page.related" aria-label="Related pages"
+        class="items-center flex-none hidden gap-1 ml-auto md:flex">
+        <span class="mr-1 text-sm text-gray-500 dark:text-gray-400">Related</span>
+        <template x-for="r in workspaceRelated()" :key="r.key">
+          <a :href="r.href" data-osc="page.relatedLink" :data-to="r.id" :title="r.why"
+            x-bind="relatedLink(r)" x-text="r.text"
+            class="inline-flex items-center px-2 text-sm font-medium rounded-lg text-primary-700 min-h-8 [@media(pointer:coarse)]:min-h-11 hover:underline hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-primary-400 dark:hover:bg-gray-700"></a>
+        </template>
+      </nav>
+      <div class="relative flex-none ml-auto md:hidden" data-osc-menu-anchor>
+        <button type="button" id="osc-related-menu" data-osc="page.relatedMenu"
+          aria-haspopup="menu" aria-expanded="false" aria-controls="osc-related-menu-panel"
+          x-bind="menuButton('related')"
+          class="inline-flex items-center justify-center px-3 text-sm font-medium text-gray-700 rounded-lg h-11 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700">
+          Related<svg class="w-5 h-5 ml-1" aria-hidden="true"><use href="#i-down"/></svg>
+        </button>
+        <div id="osc-related-menu-panel" role="menu" hidden aria-labelledby="osc-related-menu"
+          x-bind="menuPanel('related')"
+          class="absolute right-0 z-50 py-1 mt-2 bg-white rounded-lg shadow-lg w-72 top-full dark:bg-gray-700">
+          <template x-for="r in workspaceRelated()" :key="r.key">
+            <a role="menuitem" :href="r.href" data-osc="page.relatedItem" :data-to="r.id"
+              x-bind="relatedLink(r)"
+              class="flex flex-col justify-center w-full px-4 py-2 text-left min-h-11 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:hover:bg-gray-600">
+              <span class="text-sm font-medium text-gray-900 dark:text-white" x-text="r.text"></span>
+              <span class="text-xs text-gray-500 dark:text-gray-300" x-text="r.why"></span>
+            </a>
+          </template>
+        </div>
+      </div>
+      <div class="flex items-center flex-none gap-2" data-osc="page.actions">
         <!-- The notice reopens from here below 1536 px (Device & Limits' copy from 1536 px). -->
         <button type="button" id="osc-safety-reopen-phone" data-osc="safety.reopen"
           aria-controls="osc-safety" :aria-expanded="String(!safetyCollapsed)"
@@ -2525,9 +2556,19 @@
                   </div>
                 </li>
               </template>
-              <li class="osc-preset-empty" x-show="!presetsFor(presetTab).length">No presets here yet. Use “Save current…” or the status bar “Save Preset”.</li>
             </ul>
           </template>
+          <!-- The page's empty state (registry field `empty`, src/js/ui/shell.js): a Flowbite
+               Pro empty state, shown while its predicate holds (src/js/ui/empty-states.js). -->
+          <div data-osc="page.empty" data-workspace="presets" hidden :hidden="!emptyShown('presets')"
+            class="flex flex-col items-center max-w-xl px-4 py-8 mx-auto my-4 text-center bg-white rounded-lg shadow dark:bg-gray-800">
+            <h3 class="mb-2 text-lg font-semibold text-gray-900 dark:text-white"
+              x-text="emptyOf('presets').title"></h3>
+            <p class="mb-4 text-sm text-gray-500 dark:text-gray-400" x-text="emptyOf('presets').body"></p>
+            <a :href="'#m=' + emptyOf('presets').action.to" data-osc="page.emptyAction"
+              x-bind="emptyAction('presets')" x-text="emptyOf('presets').action.label"
+              class="inline-flex items-center justify-center px-5 text-sm font-medium text-center text-white rounded-lg min-h-11 bg-primary-700 hover:bg-primary-800 focus:outline-none focus:ring-4 focus:ring-primary-300 dark:bg-primary-700 dark:hover:bg-primary-800 dark:focus:ring-primary-800"></a>
+          </div>
           <template x-if="presetTab === 'history'">
             <ul class="osc-preset-list" role="list">
               <template x-for="h in history" :key="h.ts + h.label">
@@ -2955,56 +2996,17 @@
         <section class="osc-about-block" aria-labelledby="osc-about-ws">
           <h3 class="osc-about-h" id="osc-about-ws"><span class="osc-num">A</span> Workspaces</h3>
           <p>Every workspace of the navigation, in its order, and what it is for.</p>
+          <!-- Rendered from the registry (src/js/ui/shell.js WORKSPACE_REGISTRY): each
+               workspace's label and summary, in navigation order; About's own entry is this
+               page and links nowhere. -->
           <ul role="list" aria-label="Workspaces" data-osc="about.workspaces">
-            <li data-osc="about.workspace.playground"><a href="#m=playground" class="inline-flex min-h-6 items-center"
-              data-osc="about.open.playground"><b>Playground</b></a>
-              The instrument on one screen: generator, waveform, spectrum, spectrogram, microphone
-              analyzer, pattern sequencer and the labs.</li>
-            <li data-osc="about.workspace.measure"><a href="#m=measure" class="inline-flex min-h-6 items-center"
-              data-osc="about.open.measure"><b>Measure</b></a>
-              A guided measurement of the speaker, room and microphone chain: frequency response,
-              impulse response and RTA, each run rated for quality.</li>
-            <li data-osc="about.workspace.experiments"><a href="#m=experiments" class="inline-flex min-h-6 items-center"
-              data-osc="about.open.experiments"><b>Experiments</b></a>
-              Saved measurements as experiments: their definitions, a comparison against a baseline,
-              and the findings that cite them.</li>
-            <li data-osc="about.workspace.analyzer"><a href="#m=analyzer" class="inline-flex min-h-6 items-center"
-              data-osc="about.open.analyzer"><b>Analyzer</b></a>
-              The microphone's live spectrum and spectrogram: a live view, not a calibrated
-              measurement.</li>
-            <li data-osc="about.workspace.filter"><a href="#m=filter" class="inline-flex min-h-6 items-center"
-              data-osc="about.open.filter"><b>Filter Lab</b></a>
-              A biquad filter and the response the browser computes for it, set by type, cutoff and
-              Q.</li>
-            <li data-osc="about.workspace.compare"><a href="#m=compare" class="inline-flex min-h-6 items-center"
-              data-osc="about.open.compare"><b>Compare</b></a>
-              The microphone analyzer beside the bioacoustics hearing ranges and the phase and
-              stereo views.</li>
-            <li data-osc="about.workspace.synthesis"><a href="#m=synthesis" class="inline-flex min-h-6 items-center"
-              data-osc="about.open.synthesis"><b>Synthesis</b></a>
-              Additive harmonics, the ADSR envelope, the phase and stereo views and the dual
-              oscillator, beside the generator and its analysis.</li>
-            <li data-osc="about.workspace.sequencer"><a href="#m=sequencer" class="inline-flex min-h-6 items-center"
-              data-osc="about.open.sequencer"><b>Sequencer</b></a>
-              Block sequences of tones, sweeps, pulses and modulation, beside the compact
-              Studio.</li>
-            <li data-osc="about.workspace.presets"><a href="#m=presets" class="inline-flex min-h-6 items-center"
-              data-osc="about.open.presets"><b>Presets</b></a>
-              Built-in and saved instrument settings, and the history of what was played.</li>
-            <li data-osc="about.workspace.learn"><a href="#m=learn" class="inline-flex min-h-6 items-center"
-              data-osc="about.open.learn"><b>Learn</b></a>
-              Concept cards from frequency to speaker limitations, most with a demo to play.</li>
-            <li data-osc="about.workspace.studio"><a href="#m=studio" class="inline-flex min-h-6 items-center"
-              data-osc="about.open.studio"><b>Studio</b></a>
-              A signal graph you patch, with a timeline, transport and automation, run on Web
-              Audio.</li>
-            <li data-osc="about.workspace.synth"><a href="#m=synth" class="inline-flex min-h-6 items-center"
-              data-osc="about.open.synth"><b>Synth</b></a>
-              A semi-modular mono voice on the Studio model with a patch bay and docked keys, and an
-              Engines tab of additive, FM, AM and ring, wavetable, hard-sync and percussion
-              voices.</li>
-            <li data-osc="about.workspace.about"><b>About</b>
-              This page: what OSCILLA is, how it got here and what comes next.</li>
+            <template x-for="w in aboutWorkspaces()" :key="w.id">
+              <li :data-osc="'about.workspace.' + w.id"><template x-if="w.id !== 'about'"><a
+                :href="'#m=' + w.id" class="inline-flex min-h-6 items-center"
+                :data-osc="'about.open.' + w.id"><b x-text="w.label"></b></a></template><template
+                x-if="w.id === 'about'"><b x-text="w.label"></b></template>
+                <span x-text="w.summary"></span></li>
+            </template>
           </ul>
         </section>
 

@@ -11,24 +11,37 @@
 // (project.studio-model-is-canonical, project.no-fake-science).
 
 import { WORKSPACE_LABELS } from './shortcuts.js';
+import { livePanelLinks } from './counterparts.js';
+import { getTemplate } from '../studio/templates/index.js';
+
+/** The template id a related entry's address names (`studio&st=<id>`), or null. */
+export function templateOfRef(ref) {
+  const m = /^studio&st=([a-z][a-z0-9-]*)$/.exec(ref);
+  return m ? m[1] : null;
+}
 
 /**
- * The Studio template each lab offers: { id, from, template, title, osc }. `from` is the one
- * workspace that shows the link (its panel is also on the Playground grid, where the link is
- * hidden so the Playground keeps its layout), `osc` the link's data-osc name.
+ * The Studio template each lab offers: { id, from, template, title, osc }, generated from the
+ * registry's related entries that name a template (ui/counterparts.js PANEL_LINKS says where
+ * each is written). `from` is the one workspace that shows the link (its panel is also on the
+ * Playground grid, where the link is hidden so the Playground keeps its layout), `osc` the
+ * link's data-osc name, `title` the template's own (Studio names it so), `id` the panel's.
  */
-export const STUDIO_TEMPLATE_LINKS = Object.freeze([
-  Object.freeze({ id: 'filter', from: 'filter', template: 'filter-automation',
-    title: 'Filter Automation', osc: 'filter.toStudio' }),
-  Object.freeze({ id: 'synthesis', from: 'synthesis', template: 'subtractive-synth',
-    title: 'Subtractive Synth', osc: 'envelope.toStudio' }),
-  Object.freeze({ id: 'dual', from: 'synthesis', template: 'stereo-beat',
-    title: 'Stereo Beat', osc: 'dual.toStudio' }),
-  Object.freeze({ id: 'sequencer', from: 'sequencer', template: 'sweep-sequence',
-    title: 'Sweep Sequence', osc: 'seq.toStudioTemplate' }),
-  Object.freeze({ id: 'measure', from: 'measure', template: 'measurement-sweep',
-    title: 'Measurement Sweep', osc: 'measure.toStudio' }),
-]);
+export const STUDIO_TEMPLATE_LINKS = Object.freeze(livePanelLinks()
+  .filter((l) => templateOfRef(l.to) && getTemplate(templateOfRef(l.to)))
+  .map((l) => Object.freeze({ id: l.osc.split('.')[0], from: l.from[0],
+    template: templateOfRef(l.to), title: getTemplate(templateOfRef(l.to)).title,
+    osc: l.osc })));
+
+/**
+ * The text of a related entry's link in the page header: "Filter Automation in Studio" for a
+ * Studio template, else the target workspace's label.
+ */
+export function relatedText(r) {
+  const t = templateOfRef(`${r.id}${r.hash || ''}`);
+  const tpl = t ? getTemplate(t) : null;
+  return tpl ? `${tpl.title} in Studio` : (WORKSPACE_LABELS[r.id] || r.id);
+}
 
 /** The address of a Studio template link. */
 export function studioTemplateHref(template) {

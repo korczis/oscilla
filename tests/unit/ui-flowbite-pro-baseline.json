@@ -15,7 +15,7 @@
     "selectors": 1189,
     "domainViewSelectors": 438
   },
-  "debt": 3696,
+  "debt": 3695,
   "surfaces": {
     "pending": [
       "card#osc-exp-compare",
@@ -375,7 +375,7 @@
     "osc-preset-actions": 2,
     "osc-preset-desc": 1,
     "osc-preset-disabled": 1,
-    "osc-preset-empty": 2,
+    "osc-preset-empty": 1,
     "osc-preset-item": 2,
     "osc-preset-list": 2,
     "osc-preset-name": 2,

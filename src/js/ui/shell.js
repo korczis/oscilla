@@ -9,27 +9,144 @@
 // Hacking the navigation: a workspace is one row of WORKSPACE_REGISTRY (id, label, icon, group,
 // words) and, for its icon, one <symbol id="i-ws-<id>"> of the sprite in src/index.html. The
 // order, the groups, the sidebar, the search, the URL route ids (ui/navigation.js), the
-// shortcut dialog's names (ui/shortcuts.js) and the README's navigation paragraph all follow
-// from it; there is no second list.
+// shortcut dialog's names (ui/shortcuts.js), About's workspace list, the page header and the
+// README's navigation paragraph all follow from it; there is no second list.
+//
+// The page fields of a row (lane A wave 3, the API agreed with lane D; all optional, data only):
+//   summary  one sentence: what the workspace is for (the page header, About's list).
+//   related  [{ id, why, hash? }], at most three: the workspaces it leads on to, in order. id is
+//            a registry id, why one short reason, hash an optional route suffix of the target's
+//            address (`&st=<template>`): the link is `#m=<id><hash>`, which routeOfHash
+//            (ui/navigation.js) must send to <id>. The page header's Related strip renders
+//            them; the counterpart and Studio template links written in the panels
+//            (ui/counterparts.js PANEL_LINKS) are generated from them.
+//   enter    { '<control data-osc>': '<value>' }: applied when the workspace is entered, by
+//            the control itself (its own click, or its own change event; ui/app.js applyEnter),
+//            never by writing state.
+//   phone    { primary: '<panel data-osc-panel>' }: the own panel a phone shows first.
+//   empty    { when, title, body, action: { label, to } }: the page's empty state, shown while
+//            the predicate `when` (registered by its adapter, ui/empty-states.js) is true;
+//            action.to is a registry id.
 
 /** The workspaces, in navigation order. group: the sidebar group holding it, or none. */
 export const WORKSPACE_REGISTRY = Object.freeze([
-  { id: 'playground', label: 'Playground', words: 'instrument tone oscillator play hold' },
-  { id: 'measure', label: 'Measure', words: 'frequency response sweep impulse room test' },
-  { id: 'experiments', label: 'Experiments', words: 'saved records findings compare history' },
-  { id: 'analyzer', label: 'Analyzer', group: 'analyze', words: 'spectrum microphone fft rta' },
-  { id: 'filter', label: 'Filter Lab', group: 'analyze', words: 'lowpass highpass eq curve' },
-  { id: 'compare', label: 'Compare', group: 'analyze', words: 'phase hearing ranges bio' },
+  { id: 'playground', label: 'Playground', words: 'instrument tone oscillator play hold',
+    summary: 'The instrument on one screen: generator, waveform, spectrum, spectrogram, '
+      + 'microphone analyzer, pattern sequencer and the labs.',
+    related: [
+      { id: 'measure', why: 'Measure the speaker, room and microphone the tone plays through' },
+      { id: 'synth', why: 'A voice with filters, envelopes and keys' },
+      { id: 'learn', why: 'Concept cards whose demos play here' },
+    ] },
+  { id: 'measure', label: 'Measure', words: 'frequency response sweep impulse room test',
+    summary: 'A guided measurement of the speaker, room and microphone chain: frequency '
+      + 'response, impulse response and RTA, each run rated for quality.',
+    related: [
+      { id: 'experiments', why: 'Keep a run as an experiment and compare it with others' },
+      { id: 'studio', why: 'The measurement sweep as a Studio document',
+        hash: '&st=measurement-sweep' },
+      { id: 'learn', why: 'Logarithmic scales and speaker limits explained' },
+    ] },
+  { id: 'experiments', label: 'Experiments', words: 'saved records findings compare history',
+    summary: 'Saved measurements as experiments: their definitions, a comparison against a '
+      + 'baseline, and the findings that cite them.',
+    related: [
+      { id: 'measure', why: 'Run the measurement an experiment records' },
+      { id: 'analyzer', why: 'A live microphone spectrum, before a calibrated run' },
+    ] },
+  { id: 'analyzer', label: 'Analyzer', group: 'analyze', words: 'spectrum microphone fft rta',
+    summary: 'The microphone\'s live spectrum and spectrogram: a live view, not a calibrated '
+      + 'measurement.',
+    related: [
+      { id: 'measure', why: 'A calibrated RTA and frequency response' },
+      { id: 'experiments', why: 'Compare saved experiments' },
+      { id: 'learn', why: 'Harmonics, sampling and aliasing explained' },
+    ] },
+  { id: 'filter', label: 'Filter Lab', group: 'analyze', words: 'lowpass highpass eq curve',
+    summary: 'A biquad filter and the response the browser computes for it, set by type, '
+      + 'cutoff and Q.',
+    related: [
+      { id: 'synth', why: 'The Synth\'s voice filters what you play on its keys' },
+      { id: 'studio', why: 'A cutoff automated over time, as a Studio document',
+        hash: '&st=filter-automation' },
+      { id: 'analyzer', why: 'The spectrum of what the microphone hears' },
+    ] },
+  { id: 'compare', label: 'Compare', group: 'analyze', words: 'phase hearing ranges bio',
+    summary: 'The microphone analyzer beside the bioacoustics hearing ranges and the phase and '
+      + 'stereo views.',
+    related: [
+      { id: 'experiments', why: 'Compare saved experiments' },
+      { id: 'measure', why: 'A calibrated measurement of the chain' },
+      { id: 'learn', why: 'Hearing ranges and ultrasound explained' },
+    ],
+    // Compare's own job is the generator against the microphone: entering it selects the
+    // microphone panel's Compare tab (page audit, Compare fix 1).
+    enter: { 'mic.tab': 'compare' } },
   { id: 'synthesis', label: 'Synthesis', group: 'synthesis',
-    words: 'envelope adsr additive harmonics dual binaural' },
-  { id: 'sequencer', label: 'Sequencer', group: 'synthesis', words: 'pattern steps blocks song' },
-  { id: 'presets', label: 'Presets', group: 'synthesis', words: 'library load sounds' },
-  { id: 'learn', label: 'Learn', words: 'lessons guide acoustics' },
-  { id: 'studio', label: 'Studio', words: 'graph nodes cables timeline patch' },
+    words: 'envelope adsr additive harmonics dual binaural',
+    summary: 'Additive harmonics, the ADSR envelope, the phase and stereo views and the dual '
+      + 'oscillator, beside the generator and its analysis.',
+    related: [
+      { id: 'synth', why: 'Envelopes and oscillators on a voice you play from keys' },
+      { id: 'studio', why: 'An enveloped, filtered voice as a Studio document',
+        hash: '&st=subtractive-synth' },
+      { id: 'studio', why: 'Two detuned tones beating, as a Studio document',
+        hash: '&st=stereo-beat' },
+    ] },
+  { id: 'sequencer', label: 'Sequencer', group: 'synthesis', words: 'pattern steps blocks song',
+    summary: 'Block sequences of tones, sweeps, pulses and modulation, beside the compact '
+      + 'Studio.',
+    related: [
+      { id: 'synth', why: 'A voice to play the notes from keys' },
+      { id: 'studio', why: 'A sweep sequence as a Studio document', hash: '&st=sweep-sequence' },
+      { id: 'presets', why: 'Pattern presets to start from' },
+    ] },
+  { id: 'presets', label: 'Presets', group: 'synthesis', words: 'library load sounds',
+    summary: 'Built-in and saved instrument settings, and the history of what was played.',
+    related: [
+      { id: 'playground', why: 'Where a loaded preset plays: TRIGGER or hold to play' },
+      { id: 'synth', why: 'The Synth keeps its own patches' },
+      { id: 'synthesis', why: 'Where the dual-oscillator presets play' },
+    ],
+    empty: { when: 'presets.noCustom', title: 'No custom presets yet',
+      body: 'Set a sound in the Playground, then keep it with Save current… here or Save '
+        + 'Preset in the status bar.',
+      action: { label: 'Open the Playground', to: 'playground' } } },
+  { id: 'learn', label: 'Learn', words: 'lessons guide acoustics',
+    summary: 'Concept cards from frequency to speaker limitations, most with a demo to play.',
+    related: [
+      { id: 'analyzer', why: 'Waveforms, harmonics and aliasing in a live spectrum' },
+      { id: 'synth', why: 'Modulation, AM and FM on the Synth\'s engines' },
+      { id: 'measure', why: 'Logarithmic scales and speakers, measured' },
+    ] },
+  { id: 'studio', label: 'Studio', words: 'graph nodes cables timeline patch',
+    summary: 'A signal graph you patch, with a timeline, transport and automation, run on Web '
+      + 'Audio.',
+    related: [
+      { id: 'synth', why: 'A Studio document played from a panel and keys' },
+      { id: 'sequencer', why: 'Block sequences that open here as patterns' },
+      { id: 'filter', why: 'The filter response the templates automate' },
+    ] },
   // Synth (K058) is top level after Studio by the owner's decision Q019.
-  { id: 'synth', label: 'Synth', words: 'synthesizer engines voices keys midi patch' },
-  { id: 'about', label: 'About', words: 'credits licence version' },
-].map((w) => Object.freeze({ ...w, icon: `i-ws-${w.id}` })));
+  { id: 'synth', label: 'Synth', words: 'synthesizer engines voices keys midi patch',
+    summary: 'A semi-modular mono voice on the Studio model with a patch bay and docked keys, '
+      + 'and an Engines tab of additive, FM, AM and ring, wavetable, hard-sync and percussion '
+      + 'voices.',
+    related: [
+      { id: 'studio', why: 'The same document as a graph and a timeline' },
+      { id: 'sequencer', why: 'Block sequences of tones and sweeps' },
+      { id: 'learn', why: 'Modulation, AM and FM explained' },
+    ] },
+  { id: 'about', label: 'About', words: 'credits licence version',
+    summary: 'This page: what OSCILLA is, how it got here and what comes next.',
+    related: [
+      { id: 'playground', why: 'Start with the instrument' },
+      { id: 'learn', why: 'The concepts, each with a demo' },
+      { id: 'measure', why: 'A guided measurement of your speaker and room' },
+    ] },
+].map((w) => Object.freeze({ ...w, icon: `i-ws-${w.id}`,
+  ...(w.related ? { related: Object.freeze(w.related.map((r) => Object.freeze({ ...r }))) } : {}),
+})));
 
 /** The sidebar groups, in the order their first workspace appears. */
 export const GROUP_REGISTRY = Object.freeze({
@@ -50,6 +167,33 @@ export const WORKSPACE_LABELS = Object.freeze(Object.fromEntries(WORKSPACE_REGIS
 
 function byId(id) {
   return WORKSPACE_REGISTRY.find((w) => w.id === id);
+}
+
+/** A workspace's registry row, or null. */
+export function workspaceOf(id) {
+  return byId(id) || null;
+}
+
+/** The related entries of a workspace, in order ([] for none). */
+export function relatedOf(id) {
+  const w = byId(id);
+  return (w && w.related) || [];
+}
+
+/** A related entry's key: its target and route suffix (`studio&st=filter-automation`). */
+export function relatedRef(r) {
+  return `${r.id}${r.hash || ''}`;
+}
+
+/** A related entry's address: the target's route plus its suffix (`#m=studio&st=...`). */
+export function relatedHref(r) {
+  return `#m=${relatedRef(r)}`;
+}
+
+/** The own panel (data-osc-panel) a phone shows first in a workspace, or null. */
+export function phonePrimaryOf(id) {
+  const w = byId(id);
+  return (w && w.phone && w.phone.primary) || null;
 }
 
 /**

@@ -13,8 +13,11 @@
 import { shortcutHelp } from './shortcuts.js';
 import { counterpartOf, showsCounterparts } from './counterparts.js';
 import {
-  createShell, GROUP_REGISTRY, NAV_GROUPS, navGroupOf, WORKSPACE_IDS, WORKSPACE_LABELS,
+  createShell, GROUP_REGISTRY, NAV_GROUPS, navGroupOf, phonePrimaryOf, relatedHref, relatedOf,
+  WORKSPACE_IDS, WORKSPACE_LABELS, WORKSPACE_REGISTRY, workspaceOf,
 } from './shell.js';
+import { relatedText } from './cross-links.js';
+import { emptyPredicateHolds } from './empty-states.js';
 
 const THEME_KEY = 'oscilla.v2.theme';
 const ANALYSIS_TAB_KEY = 'oscilla.v2.analysisTab';
@@ -179,11 +182,45 @@ export function workspaceHeading(root, mode) {
  * as the workspace, a deep link's load included (ui/navigation.js), before the first paint.
  * `panels` are the elements carrying data-osc-modes (views among them are never marked).
  */
-export function markWorkspacePanels(panels, mode) {
+export function markWorkspacePanels(panels, mode, primary = phonePrimaryOf(mode)) {
   for (const p of panels) {
     const on = mode !== 'playground' && p.dataset.oscModes.split(/\s+/).includes(mode);
     p.classList.toggle('is-focused', on && p.classList.contains('osc-panel'));
+    // The registry's phone.primary: that own panel leads the workspace on a phone.
+    p.classList.toggle('max-md:order-first', on && !!primary && p.dataset.oscPanel === primary);
   }
+}
+
+/**
+ * Apply a workspace's `enter` (ui/shell.js): { '<data-osc>': '<value>' }. Each entry goes
+ * through the control itself, never through state: a choice (a tab, radio or button carrying
+ * data-value) is clicked unless it is already selected, a field (select, input, textarea) gets
+ * the value and its own input and change events. Returns the hooks applied (a hook with no
+ * such control is skipped).
+ */
+export function applyEnter(root, enter) {
+  const applied = [];
+  for (const [osc, value] of Object.entries(enter || {})) {
+    const els = [...root.querySelectorAll(`[data-osc="${osc}"]`)];
+    const choice = els.find((el) => el.dataset && el.dataset.value === value);
+    if (choice) {
+      const on = ['aria-selected', 'aria-checked', 'aria-pressed']
+        .some((a) => choice.getAttribute(a) === 'true');
+      if (!on) choice.click();
+      applied.push(osc);
+      continue;
+    }
+    const field = els.find((el) => /^(SELECT|INPUT|TEXTAREA)$/.test(el.tagName));
+    if (field) {
+      if (field.value !== value) {
+        field.value = value;
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+        field.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      applied.push(osc);
+    }
+  }
+  return applied;
 }
 
 /**
@@ -241,7 +278,7 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
     filterType: 'lowpass',
     stereoRoute: 'mono',
     dualRoute: 'mono',
-    menus: { overflow: false, export: false, addBlock: false, actions: false },
+    menus: { overflow: false, export: false, addBlock: false, actions: false, related: false },
     collapsed: { device: false, phase: false, bio: false },
 
     init() {
@@ -319,10 +356,15 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
      */
     setWorkspace(mode, { focusHeading = false } = {}) {
       if (!MODES.includes(mode)) return;
+      const entered = this.workspace !== mode;
+      // The root, read now: a control rendered by an x-for (the page header's Related links)
+      // is replaced as the workspace changes, and Alpine resolves $root from the element that
+      // called, so read later from a detached element it is undefined.
+      const root = this.$root;
       this.workspace = mode;
       // Below 1536 px the mark decides which panels show: set it in this step, so the heading
       // the microtask below focuses is already shown.
-      this.markWorkspace(mode);
+      this.markWorkspace(mode, root);
       this.emit('mode', 'mode', mode);
       // The heading takes focus within this task: a microtask queued after the change above
       // runs once Alpine has applied it (its effects flush in an earlier microtask) and before
@@ -331,19 +373,30 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
       // timer tries again when the heading was not shown yet.
       let moved = false;
       if (focusHeading) {
-        queueMicrotask(() => { moved = focusWorkspaceHeading(this.$root, mode); });
+        queueMicrotask(() => { moved = focusWorkspaceHeading(root, mode); });
       }
       this.$nextTick(() => {
-        this.focusWorkspace(mode);
-        if (focusHeading && !moved) focusWorkspaceHeading(this.$root, mode);
+        if (entered) this.enterWorkspace(mode, root);
+        this.focusWorkspace(mode, root);
+        if (focusHeading && !moved) focusWorkspaceHeading(root, mode);
       });
     },
-    /** Mark the panels of `mode` (markWorkspacePanels) without moving focus or scrolling. */
-    markWorkspace(mode) {
-      markWorkspacePanels(this.$root.querySelectorAll('[data-osc-modes]'), mode);
+    /** enterWorkspace once Alpine has bound the controls (a deep link's load). */
+    enterWorkspaceSoon(mode) {
+      const root = this.$root;
+      this.$nextTick(() => { if (this.workspace === mode) this.enterWorkspace(mode, root); });
     },
-    focusWorkspace(mode) {
-      const panels = [...this.$root.querySelectorAll('[data-osc-modes]')];
+    /** Apply the registry's `enter` of workspace `mode` through its controls (applyEnter). */
+    enterWorkspace(mode, root = this.$root) {
+      const w = workspaceOf(mode);
+      return w && w.enter ? applyEnter(root, w.enter) : [];
+    },
+    /** Mark the panels of `mode` (markWorkspacePanels) without moving focus or scrolling. */
+    markWorkspace(mode, root = this.$root) {
+      markWorkspacePanels(root.querySelectorAll('[data-osc-modes]'), mode);
+    },
+    focusWorkspace(mode, root = this.$root) {
+      const panels = [...root.querySelectorAll('[data-osc-modes]')];
       markWorkspacePanels(panels, mode);
       const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       const behavior = reduce ? 'auto' : 'smooth';
@@ -353,7 +406,7 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
       const tablet = window.matchMedia('(min-width: 768px) and (max-width: 1535.98px)').matches;
       if (mode === 'playground') {
         if (tablet) {
-          const main = this.$root.querySelector('.osc-main');
+          const main = root.querySelector('.osc-main');
           if (main && main.scrollTop > 0) main.scrollTo({ top: 0, behavior });
         }
         return;
@@ -388,6 +441,57 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
     workspaceGroupLabel() {
       const g = navGroupOf(this.workspace);
       return g ? GROUP_REGISTRY[g].label : '';
+    },
+    /** About's workspace list: every workspace of the registry, in navigation order. */
+    aboutWorkspaces() {
+      return WORKSPACE_REGISTRY;
+    },
+    /** The page header's one-sentence summary of the workspace in view (the registry's). */
+    workspaceSummary() {
+      const w = workspaceOf(this.workspace);
+      return (w && w.summary) || '';
+    },
+    /**
+     * The page header's Related links: the registry's related entries of the workspace in view,
+     * at most three, each { key, id, why, href, text }.
+     */
+    workspaceRelated() {
+      return relatedOf(this.workspace).slice(0, 3).map((r, i) => ({
+        key: `${this.workspace}:${i}`, id: r.id, why: r.why, href: relatedHref(r),
+        text: relatedText(r) }));
+    },
+    /**
+     * A Related link: its href is the target's address, so a modified click opens it as the
+     * browser does; a plain click on a workspace address switches through the component and
+     * moves focus to the workspace heading, as a counterpart link does. An address with a route
+     * suffix (a Studio template) is left to the router, which applies it.
+     */
+    relatedLink(link) {
+      return {
+        '@click'(e) {
+          if (e.button > 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+          if (link.href !== `#m=${link.id}`) return;
+          e.preventDefault();
+          this.closeMenus();
+          this.setWorkspace(link.id, { focusHeading: true });
+        },
+      };
+    },
+    /** The registry's empty state of workspace `ws`, or null. */
+    emptyOf(ws) {
+      const w = workspaceOf(ws);
+      return (w && w.empty) || null;
+    },
+    /** True while `ws` is in view and its empty state's predicate holds (ui/empty-states.js). */
+    emptyShown(ws) {
+      const e = this.emptyOf(ws);
+      return !!e && this.workspace === ws && emptyPredicateHolds(e.when, this);
+    },
+    /** The empty state's action: a link to its workspace, switched as a Related link is. */
+    emptyAction(ws) {
+      const e = this.emptyOf(ws);
+      const to = e && e.action ? e.action.to : null;
+      return to ? this.relatedLink({ id: to, href: `#m=${to}` }) : {};
     },
     /**
      * The logo goes home (H004 B6): its href is the Playground's address, and a plain click

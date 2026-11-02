@@ -32,7 +32,10 @@
 //                   (B11: Compare got the Analyzer's).
 //   history-walk    the nav walk through every workspace is one entry each; Back and Forward,
 //                   once per step, visit them in order.
-//   exits           every workspace shows the nav (a way onward) and at least one in-content
+//   exits           every workspace has a way onward derived from the registry (lane A wave 3,
+//                   src/js/ui/shell.js WORKSPACE_REGISTRY related): the page header renders
+//                   exactly its related pages, at least one, each an address routeOfHash sends
+//                   to that workspace; and every workspace shows the nav and at least one in-content
 //                   control that leads to another workspace, except the ones in NO_EXIT_OK.
 //   actions         the cross-workspace controls (ACTIONS) land where their label says: the
 //                   header About, Measure → Experiments, the compact Studio and its Back, the
@@ -103,6 +106,26 @@ async function loadModel() {
   ROUTES.push(...routesOf());
   ACTIONS.push(...WORKSPACES.filter((w) => w !== 'about').map((w) => [`About list → ${w}`,
     'about', `[data-osc="about.open.${w}"]`, w]));
+  // The registry's related pages: each address must route to its workspace (the app's own
+  // routeOfHash), and each Related link of the page header is a cross-workspace control.
+  const { WORKSPACE_REGISTRY, relatedHref } = await import(src('ui', 'shell.js'));
+  const { routeOfHash } = await import(src('ui', 'navigation.js'));
+  for (const w of WORKSPACE_REGISTRY) {
+    const hrefs = (w.related || []).map(relatedHref);
+    RELATED[w.id] = hrefs;
+    for (const [i, r] of (w.related || []).entries()) {
+      const route = routeOfHash(hrefs[i]);
+      if (!route || route.workspace !== r.id || route.badRoute) {
+        RELATED_BAD.push(`${w.id}: ${hrefs[i]} routes to ${route && route.workspace}`);
+      }
+      // A Studio template address opens its template dialog in the Studio (the cross-links
+      // suite follows those); a workspace address is clicked here.
+      if (!r.hash) {
+        ACTIONS.push([`${w.id} Related → ${r.id}`, w.id,
+          `[data-osc="page.relatedLink"][href="${hrefs[i]}"]`, r.id]);
+      }
+    }
+  }
   const { COUNTERPARTS } = await import(src('ui', 'counterparts.js'));
   for (const c of COUNTERPARTS.filter((x) => x.osc)) {
     for (const w of c.from) {
@@ -138,6 +161,9 @@ const GARBAGE = [
   ['%E0%A4%A', 'playground', [], null],
   [`m=${'a'.repeat(5000)}`, 'playground', [], 'm=playground', [PAGE]],
 ];
+// The registry's related addresses per workspace, and the ones that do not route there.
+const RELATED = {};
+const RELATED_BAD = [];
 // [name, from, selector, expected workspace]
 const ACTIONS = [
   ['header About', 'playground', '[data-osc="header.about"]', 'about',
@@ -260,6 +286,10 @@ const H = {
       anchorOk: a.getAttribute('href').startsWith('#') && !a.getAttribute('href').includes('=')
         ? !!document.getElementById(decodeURIComponent(a.getAttribute('href').slice(1)))
         : null }))),
+  /** The page header's rendered Related links, in order. */
+  related: (page) => page.evaluate(() => [...document.querySelectorAll(
+    '[data-osc="page.related"] [data-osc="page.relatedLink"]')]
+    .filter((a) => a.getClientRects().length > 0).map((a) => a.getAttribute('href'))),
   /** In-content controls (outside header and status bar) that name another workspace. */
   exits: (page) => page.evaluate(() => {
     const NAV = /setWorkspace|studioExpand|studioBack|experimentsShowInMeasure|experimentsRepeat|experimentsDefRun|runLearnDemo|connectionsFollow|findingsOpenRef|synthOpenStudio/;
@@ -312,7 +342,8 @@ async function runLeg(name, origin) {
           else if (blank && !hinted) bad.push(`${w}: ${l.href} does not say it opens a new tab`);
           else if (NEW_TAB_HINT_DEBT.has(l.href)) debtHealed.add(l.href);
         }
-        exitsOf[w] = { nav: (await H.state(page)).navVisible, exits: await H.exits(page) };
+        exitsOf[w] = { nav: (await H.state(page)).navVisible, exits: await H.exits(page),
+          related: await H.related(page) };
       }
       if (want('hrefs')) {
         if (debtSeen.size) {
@@ -335,6 +366,12 @@ async function runLeg(name, origin) {
           || (!exitsOf[w].exits.length && !NO_EXIT_OK.has(w)));
         const healed = [...NO_EXIT_OK].filter((w) => exitsOf[w].exits.length);
         check(leg, 'every workspace has a way onward', !dead.length, JSON.stringify(dead));
+        const unrelated = WORKSPACES.filter((w) => !(RELATED[w] || []).length
+          || JSON.stringify(exitsOf[w].related) !== JSON.stringify(RELATED[w]))
+          .map((w) => `${w}: shows ${JSON.stringify(exitsOf[w].related)}, the registry `
+            + `${JSON.stringify(RELATED[w] || [])}`);
+        check(leg, 'every workspace has a way onward from its related pages (the registry)',
+          !unrelated.length && !RELATED_BAD.length, [...unrelated, ...RELATED_BAD].join(' | '));
         check(leg, 'NO_EXIT_OK lists only workspaces that still lack an in-content exit',
           !healed.length, `remove ${healed.join(', ')} from NO_EXIT_OK`);
       }

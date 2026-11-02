@@ -42,6 +42,16 @@
 //     labels   every shown Pattern Sequencer block name reads whole (its text is no wider than
 //              its box): on a phone the lane draws the shortest block at least
 //              TIMELINE_OPTIONS.phoneBlockPx wide and scrolls.
+// - lane A wave 3, the registry's page fields (src/js/ui/shell.js WORKSPACE_REGISTRY):
+//     empty-state-<ws>   each declared empty state is forced (EMPTY_FORCE says how, per
+//                        predicate; a predicate with no way to force it fails) and shows its
+//                        block with the registry's title and action, hides once the predicate
+//                        stops holding, and its action opens its workspace;
+//     enter-<ws>         entering a workspace with `enter` (Compare: the microphone panel's
+//                        Compare tab) selects that control, from the nav and on a fresh load;
+//     related-menu-phone at 390x844 under touch the page header's Related menu opens on a tap,
+//                        lists the workspace's related pages as 44 px items, and one tap on
+//                        the first opens it.
 //   PHONE_WHOLE_DEBT lists the workspace measures still short, each with its reason; a listed
 //   one is reported KNOWN, an unlisted failure fails, and a listed one that passes fails until
 //   it is removed, so the list only shrinks.
@@ -98,10 +108,36 @@ const PHONE_WHOLE_DEBT = new Map([
 ]);
 // The workspaces, read from ui/app.js at start (loadWorkspaces), so the list cannot go stale.
 const WORKSPACES = [];
+// The registry's rows (src/js/ui/shell.js), read at start.
+const REGISTRY = [];
+// How each empty-state predicate (ui/empty-states.js) is made to hold, through the page's own
+// controls, and stop holding: { on(page), off(page) }.
+const EMPTY_FORCE = {
+  'presets.noCustom': {
+    on: async (page) => {
+      await page.evaluate(() => { window.OSCILLA.app.customPresets = []; });
+      await page.click('[data-osc="presets.tab"][data-value="custom"]');
+    },
+    off: (page) => page.click('[data-osc="presets.tab"][data-value="reference"]'),
+  },
+};
 
 async function loadWorkspaces() {
   const app = pathToFileURL(path.resolve(__dirname, '../../src/js/ui/app.js')).href;
   WORKSPACES.push(...(await import(app)).WORKSPACES);
+  const shell = pathToFileURL(path.resolve(__dirname, '../../src/js/ui/shell.js')).href;
+  REGISTRY.push(...(await import(shell)).WORKSPACE_REGISTRY);
+}
+
+/** In the page: workspace `ws`'s empty-state block, as shown. */
+function emptyBlock(ws) {
+  const el = document.querySelector(`[data-osc="page.empty"][data-workspace="${ws}"]`);
+  if (!el) return { present: false };
+  const r = el.getBoundingClientRect();
+  const a = el.querySelector('[data-osc="page.emptyAction"]');
+  return { present: true, shown: r.width > 0 && r.height > 0 && !el.closest('[hidden]'),
+    title: (el.querySelector('h3') || {}).textContent, action: a && a.getAttribute('href'),
+    label: a && a.textContent.trim(), mode: document.getElementById('osc-app').dataset.mode };
 }
 
 /**
@@ -403,7 +439,62 @@ async function runOne(name) {
     const exp = await pollFor(() => page.evaluate(() => window.OSCILLA.app.workspace),
       (w) => w === 'experiments', 'ui-current: Compare saved experiments opens Experiments');
     check('counterpart-opens-experiments', exp.ok, `workspace ${exp.last}`);
+
+    // Each declared empty state, forced through the page's controls.
+    for (const w of REGISTRY.filter((x) => x.empty)) {
+      const force = EMPTY_FORCE[w.empty.when];
+      if (!force) {
+        check(`empty-state-${w.id}`, false, `no way to force ${w.empty.when} (EMPTY_FORCE)`);
+        continue;
+      }
+      await setWorkspace(page, w.id);
+      await force.on(page);
+      const on = await pollFor(() => page.evaluate(emptyBlock, w.id),
+        (b) => b.present && b.shown && b.title === w.empty.title
+          && b.action === `#m=${w.empty.action.to}` && b.label === w.empty.action.label,
+        `ui-current: ${w.id}'s empty state shows while ${w.empty.when} holds`);
+      check(`empty-state-${w.id}`, on.ok, JSON.stringify(on.last));
+      await force.off(page);
+      const off = await pollFor(() => page.evaluate(emptyBlock, w.id), (b) => !b.shown,
+        `ui-current: ${w.id}'s empty state hides when ${w.empty.when} stops holding`);
+      check(`empty-state-${w.id}-hides`, off.ok, JSON.stringify(off.last));
+      await force.on(page);
+      await page.click(`[data-osc="page.empty"][data-workspace="${w.id}"] [data-osc="page.emptyAction"]`);
+      const went = await pollFor(() => page.evaluate(() => window.OSCILLA.app.workspace),
+        (x) => x === w.empty.action.to, `ui-current: ${w.id}'s empty action`);
+      check(`empty-state-${w.id}-action`, went.ok, `workspace ${went.last}`);
+    }
+
+    // Entering a workspace applies its `enter` through the control (Compare: the mic tab).
+    const micTab = () => page.evaluate(() => {
+      const t = document.querySelector('[data-osc="mic.tab"][aria-selected="true"]');
+      return { tab: window.OSCILLA.app.tabs.mic, selected: t && t.dataset.value };
+    });
+    for (const w of REGISTRY.filter((x) => x.enter)) {
+      await setWorkspace(page, 'playground');
+      await page.evaluate(() => window.OSCILLA.app.setTab('mic', 'live'));
+      await page.click(`[data-osc="nav.${w.id}"]`);
+      const want = w.enter['mic.tab'];
+      const r = await pollFor(micTab, (m) => m.tab === want && m.selected === want,
+        `ui-current: entering ${w.id} applies its enter`);
+      check(`enter-${w.id}`, r.ok, JSON.stringify(r.last));
+    }
     await page.close();
+    for (const w of REGISTRY.filter((x) => x.enter)) {
+      const fresh = await openPage(browser, DESKTOP);
+      await fresh.goto(`${URL}#m=${w.id}`);
+      await fresh.reload();
+      const want = w.enter['mic.tab'];
+      const r = await pollFor(() => fresh.evaluate(() => {
+        const t = document.querySelector('[data-osc="mic.tab"][aria-selected="true"]');
+        return { ws: window.OSCILLA && window.OSCILLA.app && window.OSCILLA.app.workspace,
+          tab: window.OSCILLA && window.OSCILLA.app && window.OSCILLA.app.tabs.mic,
+          selected: t && t.dataset.value };
+      }), (m) => m.ws === w.id && m.tab === want && m.selected === want,
+      `ui-current: a fresh load of #m=${w.id} applies its enter`);
+      check(`enter-${w.id}-load`, r.ok, JSON.stringify(r.last));
+      await fresh.close();
+    }
 
     // ---- 390x844: nothing overflows sideways; the counterparts are shown ----
     const phone = await openPage(browser, PHONE);
@@ -474,6 +565,30 @@ async function runOne(name) {
           + `(led by ${m.lead}), smallest text ${m.minFont.px} px, ${m.covered.length} covered, `
           + `${m.small.length}/${m.tested} small targets`);
       }
+    }
+    // The page header's Related menu on a phone: a tap opens it, its items are the related
+    // pages at 44 px, and a tap on the first opens that workspace.
+    {
+      const p = await ctx.newPage();
+      await p.goto(`${URL}#m=filter`);
+      await until(() => p.evaluate(() => document.documentElement.dataset.ready === 'true'
+        && document.getElementById('osc-app').dataset.mode === 'filter'),
+      { ms: READY_MS, what: 'ui-current: related menu, Filter Lab opened' });
+      const rel = REGISTRY.find((w) => w.id === 'filter').related;
+      await p.tap('#osc-related-menu');
+      const menu = await pollFor(() => p.evaluate(() => [...document.querySelectorAll(
+        '[data-osc="page.relatedItem"]')].filter((a) => a.getClientRects().length > 0)
+        .map((a) => ({ href: a.getAttribute('href'), h: a.getBoundingClientRect().height }))),
+      (items) => items.length === rel.length,
+      'ui-current: the phone Related menu opens');
+      const items = menu.last || [];
+      check('related-menu-phone', menu.ok && items.every((x, i) => x.h >= TOUCH_MIN
+        && x.href === `#m=${rel[i].id}${rel[i].hash || ''}`), JSON.stringify(items));
+      await p.tap('[data-osc="page.relatedItem"]');
+      const went = await pollFor(() => p.evaluate(() => window.OSCILLA.app.workspace),
+        (x) => x === rel[0].id, 'ui-current: a Related menu item opens its workspace');
+      check('related-menu-phone-opens', went.ok, `workspace ${went.last}`);
+      await p.close();
     }
     check('phone-whole-debt-current', [...PHONE_WHOLE_DEBT.keys()].every((k) => seen.has(k)),
       `PHONE_WHOLE_DEBT names a workspace that is not one: ${[...PHONE_WHOLE_DEBT.keys()]

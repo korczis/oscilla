@@ -332,6 +332,8 @@ export function createNavigation(svc = {}) {
         // a deep link paints its own panels first and never the Playground's.
         cmp.workspace = st.workspace;
         if (typeof cmp.markWorkspace === 'function') cmp.markWorkspace(st.workspace);
+        // Its `enter` (ui/shell.js) applies once Alpine has bound the controls.
+        if (typeof cmp.enterWorkspaceSoon === 'function') cmp.enterWorkspaceSoon(st.workspace);
       } else cmp.setWorkspace(st.workspace, { focusHeading: true });
     }
     cmp.mode = v1ModeFor(cmp.workspace, cmp.source);
