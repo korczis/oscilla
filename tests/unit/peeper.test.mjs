@@ -2,10 +2,13 @@
 // against createProbeStub(), and the page parts that make it reachable on every page.
 //
 // What it proves:
-//   - the stub has the documented shape: points(), tap(id, { windowMs }) -> lease { read,
-//     retarget, release }, active(); read() is a sine at the injected rate (44.1 and 48 kHz),
-//     with windowMs converted to the power of two an AnalyserNode accepts, marked stub: true;
-//     over budget a lease reads live: false, reason 'budget';
+//   - the stub mirrors src/js/studio/probe.js of feat/v616-probe-tap (2a94dc6a): its exports
+//     (createProbeStub, windowSamples, windowMsOf), its points; tap(id, { windowMs }) is the only
+//     tap form, converted with the injected rate (44.1 and 48 kHz) to a power of two, and read()
+//     returns window (samples) and the actual windowMs, marked stub: true; over budget a lease
+//     reads live: false, reason 'budget', with no frame;
+//   - the peeper asks with windowMs, shows the windowMs it got, and its release returns
+//     active() to 0/0;
 //   - the tap list is probe.points(), never a list of the page's own;
 //   - a pinned peeper survives a route change and retargets its lease; an unpinned one closes;
 //   - pinning is view state: it is kept in local storage (oscilla.peeper), never in the hash or
@@ -22,7 +25,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createProbeStub, STUB_POINTS, windowSamples }
+import { createProbeStub, STUB_POINTS, windowMsOf, windowSamples }
   from '../../src/js/ui/peeper/probe-stub.js';
 import { createPeeper, DEFAULT_TAP, PEEPER_KEY, PEEPER_WINDOWS_MS, pointFor, resolvePeeperPrefs }
   from '../../src/js/ui/peeper/model.js';
@@ -50,12 +53,13 @@ test('the stub has the documented shape at 44.1 and 48 kHz', () => {
     assert.equal(r.window, want);
     assert.equal(r.frame.length, want);
     assert.equal(r.sampleRate, sampleRate, 'the rate is the injected one, never assumed');
-    assert.ok(Math.abs(r.windowMs - want / sampleRate * 1000) < 1e-9);
+    assert.equal(r.windowMs, windowMsOf(want, sampleRate), 'the actual window, not the asked one');
+    assert.notEqual(r.windowMs, 20);
     assert.equal(r.live, true);
     assert.equal(r.stub, true);
     // A sine at 440 Hz: the sample at a quarter period is the peak.
     const quarter = Math.round(sampleRate / 440 / 4);
-    assert.ok(Math.abs(Math.abs(r.frame[quarter]) - 0.8) < 0.02);
+    assert.ok(Math.abs(Math.abs(r.frame[quarter]) - 1) < 0.02);
     assert.deepEqual(probe.active(), { analysers: 1, leases: 1 });
     lease.release();
     assert.deepEqual(probe.active(), { analysers: 0, leases: 0 });
@@ -64,18 +68,24 @@ test('the stub has the documented shape at 44.1 and 48 kHz', () => {
   assert.equal(windowSamples(20, 44100), 1024);
   assert.equal(windowSamples(0.1, 48000), 32, 'at least 32 samples');
   assert.equal(windowSamples(10000, 48000), 32768, 'at most 32768 samples');
+  assert.deepEqual(STUB_POINTS.map((p) => p.id), ['output:master', 'node:osc-1/audio',
+    'node:filter-1/audio', 'node:lfo-1/control'], 'the points of feat/v616-probe-tap');
+  // The one swap point: main.js imports the stub on one marked line.
+  const main = read('src/js/main.js');
+  assert.match(main, /SWAP POINT \(branch feat\/v616-probe-tap, src\/js\/studio\/probe\.js\)/);
+  assert.equal((main.match(/from '\.\/ui\/peeper\/probe-stub\.js'/g) || []).length, 1);
 });
 
 test('taps on one point share an analyser; over budget a lease says so', () => {
-  const probe = createProbeStub({ budget: 1 });
-  const a = probe.tap('output:master');
-  const b = probe.tap('output:master');
+  const probe = createProbeStub({ budget: 2 });
+  const a = probe.tap('output:master', { windowMs: 20 });
+  const b = probe.tap('output:master', { windowMs: 20 });
   assert.deepEqual(probe.active(), { analysers: 1, leases: 2 });
-  const c = probe.tap('node:osc-1/out');
+  const c = probe.tap('node:osc-1/audio', { windowMs: 20 });
   const r = c.read();
   assert.equal(r.live, false);
   assert.equal(r.reason, 'budget');
-  assert.equal(r.frame, undefined, 'never a fake frame');
+  assert.equal(r.frame, null, 'never a fake frame');
   for (const l of [a, b, c]) l.release();
   assert.deepEqual(probe.active(), { analysers: 0, leases: 0 });
 });
@@ -84,10 +94,12 @@ test('the tap list is the probe points; a target is a point, node or edge', () =
   const probe = createProbeStub();
   const p = createPeeper({ probe });
   assert.deepEqual(p.points(), probe.points());
-  assert.equal(pointFor(probe.points(), 'node:filter-1/out'), 'node:filter-1/out');
-  assert.equal(pointFor(probe.points(), { nodeId: 'osc-1' }), 'node:osc-1/out');
-  assert.equal(pointFor(probe.points(), { edgeId: 'edge-1' }), 'edge:edge-1');
-  assert.equal(pointFor(probe.points(), 'node:nope/out'), null);
+  assert.equal(pointFor(probe.points(), 'node:filter-1/audio'), 'node:filter-1/audio');
+  assert.equal(pointFor(probe.points(), { nodeId: 'osc-1' }), 'node:osc-1/audio');
+  const edges = [...probe.points(), { id: 'edge:edge-6', kind: 'audio', label: 'Cable',
+    edgeId: 'edge-6' }];
+  assert.equal(pointFor(edges, { edgeId: 'edge-6' }), 'edge:edge-6');
+  assert.equal(pointFor(probe.points(), 'node:nope/audio'), null);
   // The UI part renders peeper.points from the model; the page lists no tap point itself.
   const page = read('src/index.html');
   assert.match(page, /x-for="pt in peeper\.points"/);
@@ -98,14 +110,14 @@ test('peep(target) opens the peeper on the target and reads it while the output 
   const probe = createProbeStub();
   const p = createPeeper({ probe });
   p.transport(true);
-  assert.equal(p.open({ nodeId: 'filter-1' }), 'node:filter-1/out');
+  assert.equal(p.open({ nodeId: 'filter-1' }), 'node:filter-1/audio');
   assert.equal(p.state().open, true);
   assert.equal(p.read().live, true);
   assert.deepEqual(probe.active(), { analysers: 1, leases: 1 });
-  assert.equal(p.switchTap('node:env-1/out'), true, 'switchable');
-  assert.equal(p.state().tap, 'node:env-1/out');
+  assert.equal(p.switchTap('node:lfo-1/control'), true, 'switchable');
+  assert.equal(p.state().tap, 'node:lfo-1/control');
   assert.deepEqual(probe.active(), { analysers: 1, leases: 1 }, 'retargeted, not a second tap');
-  assert.equal(p.switchTap('node:missing/out'), false);
+  assert.equal(p.switchTap('node:missing/audio'), false);
 });
 
 test('pinned survives a route change and retargets; unpinned closes and releases', () => {
@@ -113,7 +125,7 @@ test('pinned survives a route change and retargets; unpinned closes and releases
   const store = memory();
   const p = createPeeper({ probe, ...store });
   p.transport(true);
-  p.open('node:osc-1/out');
+  p.open('node:osc-1/audio');
   p.route('measure');
   assert.equal(p.state().open, false, 'unpinned: a route change closes it');
   assert.deepEqual(probe.active(), { analysers: 0, leases: 0 });
@@ -125,12 +137,12 @@ test('pinned survives a route change and retargets; unpinned closes and releases
     assert.equal(p.leased(), true);
   }
   assert.deepEqual(probe.active(), { analysers: 1, leases: 1 });
-  assert.deepEqual(JSON.parse(store.value), { pinned: true, tap: 'node:osc-1/out',
+  assert.deepEqual(JSON.parse(store.value), { pinned: true, tap: 'node:osc-1/audio',
     windowMs: 20 });
   // A new page with the same storage: the pinned peeper comes back, on the same tap.
   const again = createPeeper({ probe: createProbeStub(), ...store });
   assert.equal(again.state().open, true);
-  assert.equal(again.state().tap, 'node:osc-1/out');
+  assert.equal(again.state().tap, 'node:osc-1/audio');
 });
 
 test('pinning is never in the hash or the history', () => {
@@ -141,8 +153,8 @@ test('pinning is never in the hash or the history', () => {
   }
   assert.equal(PEEPER_KEY, 'oscilla.peeper');
   assert.deepEqual(resolvePeeperPrefs(null), { pinned: false, tap: DEFAULT_TAP, windowMs: 20 });
-  assert.deepEqual(resolvePeeperPrefs('{"pinned":true,"tap":"edge:edge-1","windowMs":5}'),
-    { pinned: true, tap: 'edge:edge-1', windowMs: 5 });
+  assert.deepEqual(resolvePeeperPrefs('{"pinned":true,"tap":"node:lfo-1/control","windowMs":5}'),
+    { pinned: true, tap: 'node:lfo-1/control', windowMs: 5 });
   assert.deepEqual(resolvePeeperPrefs('{"windowMs":7,"tap":3}'),
     { pinned: false, tap: DEFAULT_TAP, windowMs: 20 }, 'an invalid value falls back');
   assert.deepEqual(resolvePeeperPrefs('not json'),
@@ -176,6 +188,26 @@ test('close, hide, collapse and Stop release the lease; stopped reads the reason
   assert.equal(p.leased(), true);
   p.close();
   assert.deepEqual(probe.active(), { analysers: 0, leases: 0 }, 'closed: released');
+});
+
+test('the peeper asks with windowMs, gets the actual window, and its release returns 0/0', () => {
+  for (const sampleRate of [44100, 48000]) {
+    const probe = createProbeStub({ sampleRate });
+    const asked = [];
+    const spy = { ...probe, tap: (id, opts) => { asked.push(opts); return probe.tap(id, opts); } };
+    const p = createPeeper({ probe: spy });
+    p.transport(true);
+    p.open();
+    assert.deepEqual(asked, [{ windowMs: 20 }], 'windowMs is the only option it passes');
+    const r = p.read();
+    assert.equal(r.window, windowSamples(20, sampleRate));
+    assert.equal(r.windowMs, windowMsOf(r.window, sampleRate));
+    // The UI shows the window it got, from the reading (ui.js peeperSync).
+    assert.match(read('src/js/ui/peeper/ui.js'),
+      /reading\.windowMs\.toFixed\(1\)\} ms · \$\{reading\.window\} samples/);
+    p.close();
+    assert.deepEqual(probe.active(), { analysers: 0, leases: 0 });
+  }
 });
 
 test('the window steps through its values and re-taps at the new window', () => {

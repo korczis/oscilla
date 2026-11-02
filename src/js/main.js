@@ -68,8 +68,9 @@ import { createWorkbench, followSequenceEdits } from './ui/workbench.js';
 import { createFrames } from './ui/catalog/frame.js';
 import { VISUAL_CATALOG } from './ui/catalog/visuals.js';
 import { createPeeperUi } from './ui/peeper/ui.js';
-// The probe tap API (V616) is not in the engine yet: the peeper shell runs on its stub, which
-// marks every frame stub: true; src/js/studio/probe.js createProbe replaces it here.
+// The probe tap API (V616) is not on main yet: the peeper shell runs on its stub, which marks
+// every frame stub: true. SWAP POINT (branch feat/v616-probe-tap, src/js/studio/probe.js): this
+// one import becomes `from './studio/probe.js'`, with the same names.
 import { createProbeStub } from './ui/peeper/probe-stub.js';
 import { createOutputOwner } from './ui/output-owner.js';
 import { createNavigation, v1ModeFor } from './ui/navigation.js';

@@ -935,7 +935,8 @@ function defineChecks() {
         stub: !!document.querySelector('[data-osc="peeper.stub"]')
           && document.querySelector('[data-osc="peeper.stub"]').getClientRects().length > 0,
         framed: !!document.querySelector('#osc-peeper-fullscreen'),
-        active: a.peeperActive(), playing: !!a.outputOwner, hash: location.hash, stored };
+        active: a.peeperActive(), playing: !!a.outputOwner, hash: location.hash, stored,
+        windowText: (document.querySelector('[data-osc="peeper.window"]') || {}).textContent };
     });
     const when = (pred, what) => until(async () => {
       const s = await st();
@@ -951,13 +952,20 @@ function defineChecks() {
       pages.push(await when((s) => s.ws === ws && s.open && s.shown,
         `the pinned peeper stays on ${ws}`));
     }
-    await page.selectOption('#osc-peeper-tap', 'node:filter-1/out');
-    const switched = await when((s) => s.tap === 'node:filter-1/out', 'the tap switches');
+    await page.selectOption('#osc-peeper-tap', 'node:filter-1/audio');
+    const switched = await when((s) => s.tap === 'node:filter-1/audio', 'the tap switches');
     // It never starts audio; the output plays, the lease reads; Stop releases it.
     await page.click('[data-osc="nav.playground"]');
     const idle = await when((s) => s.ws === 'playground', 'back on the Playground');
     await page.evaluate(() => window.OSCILLA.app.play('hold'));
-    const live = await when((s) => s.playing && s.active.leases === 1, 'the peeper reads');
+    const live = await when((s) => s.playing && s.active.leases === 1
+      && /samples/.test(s.windowText || ''), 'the peeper reads');
+    // It asked for 20 ms (windowMs) and shows the window the probe chose: a power of two of
+    // samples at the probe's rate, and the ms that window actually spans.
+    const got = /^(\d+\.\d) ms · (\d+) samples at (\d+\.\d) kHz$/
+      .exec((live.windowText || '').trim());
+    const actual = !!got && (Number(got[2]) & (Number(got[2]) - 1)) === 0
+      && Math.abs(Number(got[1]) - Number(got[2]) / Number(got[3])) < 0.06;
     await page.evaluate(() => window.OSCILLA.app.stop());
     const stopped = await when((s) => !s.playing && s.active.leases === 0
       && s.reason === 'stopped', 'Stop releases the tap');
@@ -1003,14 +1011,15 @@ function defineChecks() {
       pinned: pinned.pinned && /"pinned":true/.test(pinned.stored || ''),
       survives: pages.every((s) => s.open && s.shown) && pages.length === 2,
       notInHash: noHash,
-      switched: switched.tap === 'node:filter-1/out' && idle.open,
-      live: live.playing && live.active.leases === 1,
+      switched: switched.tap === 'node:filter-1/audio' && idle.open,
+      live: live.playing && live.active.leases === 1, actualWindow: actual,
       stopReleases: stopped.active.leases === 0 && stopped.active.analysers === 0,
       unpinnedCloses: !unpinned.open,
       closes: !closed.open && closed.active.leases === 0, focusBack: focus === 'peeper.toggle',
       phoneSheet: !!sheet && sheet.overlap <= 1 && sheet.small === 0 && sheet.inView,
       collapses: folded === true }),
-    opened, pinned, pages, live: live.active, stopped: stopped.active, sheet };
+    opened, pinned, pages, live: live.active, window: live.windowText, stopped: stopped.active,
+    sheet };
   });
 
   def('no-console-errors', async (ctx) => ({ ok: ctx.errors.length === 0,
