@@ -144,7 +144,7 @@
   overflow-wrap: anywhere;
 }
 
-/* ---------- One night: a timestamp, not a KPI ---------- */
+/* ---------- The release line: the headline, then one station per release line ---------- */
 .osc-about-night {
   display: grid;
   gap: 18px;
@@ -152,14 +152,6 @@
   border: 1px solid var(--osc-border);
   border-radius: var(--osc-radius-control);
   background: var(--osc-surface-2);
-}
-
-.osc-about-night-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px 24px;
 }
 
 .osc-about-statement {
@@ -174,21 +166,6 @@
 
 .osc-about-statement span {
   color: var(--osc-text-muted);
-}
-
-.osc-about-stamp {
-  color: var(--osc-text-muted);
-  font-family: var(--osc-font-mono);
-  font-size: var(--osc-fs-xs);
-  line-height: 1.6;
-}
-
-.osc-about-stamp time {
-  color: var(--osc-text);
-}
-
-.osc-about-stamp-sep {
-  margin: 0 4px;
 }
 
 /* The evolution strip reads like the sequencer lane: one station per entry, continuing on a
@@ -339,8 +316,11 @@
   font-weight: var(--osc-fw-medium);
 }
 
+/* The rules list, the method chain and the plain lists of the Workspaces and What comes next
+   cards (U002), which take the rules' label-and-text rows. */
 .osc-about-rules,
-.osc-about-chain {
+.osc-about-chain,
+.osc-about-block > ul {
   display: grid;
   gap: 7px;
   margin: 0;
@@ -348,7 +328,8 @@
   list-style: none;
 }
 
-.osc-about-rules li {
+.osc-about-rules li,
+.osc-about-block > ul > li {
   display: grid;
   grid-template-columns: 112px minmax(0, 1fr);
   gap: 10px;
@@ -358,7 +339,8 @@
   line-height: 1.5;
 }
 
-.osc-about-rules b {
+.osc-about-rules b,
+.osc-about-block > ul b {
   color: var(--osc-text);
   font-family: var(--osc-font-mono);
   font-size: var(--osc-fs-xs);
@@ -494,14 +476,6 @@
   line-height: 1.3;
 }
 
-.osc-about-coda {
-  padding-left: 12px;
-  border-left: 2px solid var(--osc-blue-trace);
-  color: var(--osc-text);
-  font-weight: var(--osc-fw-medium);
-  line-height: 1.7;
-}
-
 .osc-about-link {
   display: inline-flex;
   align-items: center;
@@ -601,7 +575,8 @@
     left: -7px;
   }
 
-  .osc-about-rules li {
+  .osc-about-rules li,
+  .osc-about-block > ul > li {
     grid-template-columns: minmax(0, 1fr);
     gap: 2px;
   }

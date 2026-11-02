@@ -2,7 +2,7 @@
 // stopped the chain and the suites after it (layout, qa-regressions, navigation,
 // ui-flowbite-pro, midi) never ran in CI. tests/browser/lib/run-suites.cjs runs every suite it is
 // given, in order, whatever the one before returned, and exits non-zero when any failed.
-//   - test:browser runs its six suites through the runner, with no && between them, and is still
+//   - test:browser runs its suites through the runner, with no && between them, and is still
 //     a browser suite to rule project.ci-bounded (its CI step keeps its time limit);
 //   - runAll runs every suite after a failure, and returns 1 when any failed, 0 when none did;
 //   - the runner as a process: a failing suite, a suite that refuses its selection (exit 2) and
@@ -28,10 +28,11 @@ const RUNNER = path.join(ROOT, 'tests', 'browser', 'lib', 'run-suites.cjs');
 const { runAll, suiteDeadline, DEFAULT_MS } = require(RUNNER);
 const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 
-const SUITES = ['app', 'layout', 'qa-regressions', 'navigation', 'ui-flowbite-pro', 'midi']
-  .map((s) => `tests/browser/${s}.cjs`);
+const SUITES = ['app', 'layout', 'qa-regressions', 'navigation', 'link-integrity',
+  'ui-flowbite-pro', 'midi', 'ui-current', 'demo-song', 'cross-links', 'first-screen',
+  'surface-census'].map((s) => `tests/browser/${s}.cjs`);
 
-test('test:browser runs its six suites through the runner, none chained with &&', () => {
+test('test:browser runs its suites through the runner, none chained with &&', () => {
   const cmd = pkg.scripts['test:browser'];
   assert.equal(cmd, `node tests/browser/lib/run-suites.cjs ${SUITES.join(' ')}`);
   assert.doesNotMatch(cmd, /&&|\|\||;/, 'no chain: one failing suite cannot hide the rest');

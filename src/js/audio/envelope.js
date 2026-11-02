@@ -217,6 +217,40 @@ export function releaseAt(param, t, r, options = {}) {
 }
 
 /**
+ * scheduleAdsrStep(param, t, dur, adsr, { floor }) → { attackEnd, decayEnd, releaseStart, endTime }
+ * The ADSR of one note of known length (a finite tone, a step of a steps plan, a ramps pass or
+ * one segment of a segment sweep), on the voice's tracked envelope param. Stateless: unlike
+ * applyAdsr/releaseAt it keeps no event log of its own, so the engine's recorded param stays
+ * the only record (its _freeze and releases stay exact) and a continuous sweep that tops up
+ * segment after segment grows nothing here.
+ * Shape: the floor at t, a linear attack to 1, an exponential decay to the sustain level, a
+ * hold, and an exponential release ending on the floor at t + dur. The times shrink to fit the
+ * note as the V1 step envelope's do (voice.js stepEnv): the attack to at most 40 % and the
+ * release to at most half of dur, and the decay takes only what is left, so a + d + r never
+ * exceeds dur and a 10 ms step stays click-free (no step, no exponential ramp to 0). With no
+ * room left for a decay the peak holds until the release, as in stepEnv.
+ */
+export function scheduleAdsrStep(param, t, dur, adsr, options = {}) {
+  const floor = options.floor || ENVELOPE_FLOOR;
+  const e = normalizeAdsr(adsr);
+  const len = Math.max(0, num(dur, 0));
+  const a = Math.max(MIN_SEGMENT_S, Math.min(e.a, len * 0.4));
+  const r = Math.max(MIN_SEGMENT_S, Math.min(e.r, len * 0.5));
+  const room = Math.max(0, Math.min(e.d, len - a - r));
+  const d = room >= MIN_SEGMENT_S ? room : 0;
+  const level = d > 0 ? Math.max(floor, e.s) : 1;
+  const attackEnd = t + a;
+  const decayEnd = attackEnd + d;
+  const releaseStart = t + len - r;
+  param.setValueAtTime(floor, t);
+  param.linearRampToValueAtTime(1, attackEnd);
+  if (d > 0) param.exponentialRampToValueAtTime(level, decayEnd);
+  if (releaseStart > decayEnd) param.setValueAtTime(level, releaseStart);
+  param.exponentialRampToValueAtTime(floor, t + len);
+  return { attackEnd, decayEnd, releaseStart: Math.max(releaseStart, decayEnd), endTime: t + len };
+}
+
+/**
  * envelopePoints(adsr, { peak = 1, holdS, samples = 160, floor }) → graph data
  *   { t: Float32Array, v: Float32Array, totalS, handles: { attack, decay, sustainEnd, release } }
  * Samples the exact schedule applyAdsr + releaseAt produce for a note held holdS seconds after

@@ -39,7 +39,7 @@ acceptance_criteria:
 - "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no review verdict is needed."
 - "The owner's definition of done, one item each: extends Settings, the hash routes and the guide; interlinks Learn topics to views, views to the guide, every link a row of the integration map where it exists; interactive: the renderer choice and the deep links; docs, menus and routes: Settings dialog, README, docs/renderers.md, Learn; tested with pointer, keyboard and touch; deployed by merge commit under project.deploy-often (Pages deploys on the merge)."
 - "Designed at 390x844 first: every check runs at 390x844 and at 1536x1024, touch targets are at least 44 px, and each gesture has a pointer, a keyboard and a touch path."
-- "scripts/size-report.mjs shows at most 1 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of the Y line's figures stays within the component line's cap Q037 records, under the gzip budget of scripts/build-config.mjs (1 000 000 B on main at b67d1e58, 1 200 000 B once #279 lands; project.single-file-deliverable)."
+- "scripts/size-report.mjs shows at most 1 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of the Y line's figures stays within the component line's cap Q037 records, under the gzip budget of scripts/build-config.mjs (1 200 000 B since #279 landed, BUDGET.gzipBytes of scripts/build-config.mjs; dist measured 825 984 B gzip at f887066f; project.single-file-deliverable)."
 - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
 validation:
 - node --test tests/unit/gl-renderer-setting.test.mjs
@@ -49,4 +49,4 @@ validation:
 evidence_required:
 - verified
 created_at: '2026-10-29'
-updated_at: '2026-10-29'
+updated_at: '2026-11-01'

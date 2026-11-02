@@ -30,13 +30,13 @@ depends_on:
 - F002
 - Q037
 acceptance_criteria:
-- "tests/unit/ui-catalog-explain.test.mjs fails on the merge base: the panel's view model for a fixture declaration lists its docs, owner, persistence, instances and related links, and states each negative case."
+- "tests/unit/ui-catalog-explain.test.mjs fails on the merge base: the panel's view model for a fixture declaration lists its docs, owner, persistence, instances and related links, and states each negative case; and for every declaration of the registry the view model is built, each related link is an address G007's decoder accepts, and each control declaration has a context-menu path."
 - "The runtime registry bundles only id, kind, label, state, links and the one-sentence docs; trace fields and long docs stay in the docs-only part (measured by size-report)."
 - "Definition of done, extends: the registry (G001), the addresses (G007) and the generated catalogue (G014)."
 - "Definition of done, interlinks: the panel is the hub of 'interlinked': every related view is one activation away."
 - "Definition of done, interactivity: the panel follows focus: it updates when another component is explained."
 - "Definition of done, docs, menus and routes: the Help menu gains What is this?; the shortcuts dialog its key; docs/ui-catalog.md says how to open it. tests/README.md has a row for each new test; the component's catalogue declaration (G001) names its docs, links and tests; dist is rebuilt and npm run build:check passes."
-- "Definition of done, tested: tests/browser/ui-catalog-explain.cjs (wired into npm run test:browser) opens the panel on the Filter Lab cutoff, the cockpit Play and a Studio node card by context menu, by the key and by a hasTouch long-press, waits with until() (deadline 'explain panel', 2 s) for its text to equal the declaration, follows one related link and checks focus on the target. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, tested: tests/browser/ui-catalog-explain.cjs (wired into npm run test:browser) opens the panel on the Filter Lab cutoff, the cockpit Play and a Studio node card by context menu, by the key and by a hasTouch long-press, waits with until() (deadline 'explain panel', 2 s) for its text to equal the declaration, follows one related link and checks focus on the target; it is a sample of three, says so in its output, and the unit test is the proof over the whole registry. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
 - "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit, and the release that carried it is recorded when the milestone is verified."
 - "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
 - "On Pro (after F002): its chrome is markup adapted from the matching Flowbite Pro block (the template names its flowbite-pro reference.md section), recorded as migrated, never pending; it adds no osc-* class token, no legacy vocabulary use and no selector, removes the legacy ones it replaces, and the domain views' stylesheets gain nothing (compact density is Tailwind utilities on the domain view's own elements); the record's debt falls (project.ui-uses-flowbite-pro, project.visual-identity-lock v2, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs)."
@@ -48,4 +48,4 @@ validation:
 evidence_required:
 - verified
 created_at: '2026-10-29'
-updated_at: '2026-10-29'
+updated_at: '2026-11-01'

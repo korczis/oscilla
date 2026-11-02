@@ -7,7 +7,7 @@ profile: routine
 owner: "repository owner"
 objective: "The owner's full-DAW direction of 2026-10-29 asks for input monitoring, honest about latency. project.no-silent-feedback refuses a live input (the microphone) with an AUDIO path to the output (live-input-to-output), because speakers and a microphone make a feedback loop. The plan recommends a new version of that rule that allows monitoring an armed audio track only after an explicit per-session confirmation that headphones are used, with the monitor gain starting at the floor, the estimated round-trip latency shown, and nothing of it persisted; every other live-input-to-output path stays refused."
 why: "Asked by the connected-instrument plan (owner direction of 2026-10-29). .ai/repo/project/README.md: work that waits on an answer names the Q issue in depends_on."
-current_state: "Open on 2026-10-29. The plan's recommendation is not an answer. K110 name this issue in depends_on, so majordomus plan next does not hand them out before it is answered."
+current_state: "Answered by the owner on 2026-10-31: yes, with headphones (see evidence). The follow-up is K110 (M072, depends_on Q024), already planned: it writes the new version of project.no-silent-feedback under .ai/repo/rules/project before any code lands (its first acceptance criterion) and then the monitoring itself. Until K110 lands, the rule's current version still refuses every live-input-to-output path."
 scope:
   - ".ai/repo/project/issues/Q024.yaml"
 acceptance_criteria:
@@ -18,4 +18,15 @@ validation:
 evidence_required:
   - "owner_decision"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-10-31T22:21:02Z
+started_at: 2026-10-31T22:20:44Z
+started_event: sha256:a650f131bc3f267ce6a680422a51fc794eca67313c6e0fa07f8ef414cd1eebf6
+completed_at: 2026-10-31T22:21:02Z
+completed_event: sha256:7c80290e21f31e417aa467fc18137d112b7bd24dc0f8ac6eb17c29fb7ef9cd2d
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "AskUserQuestion in Claude Code session oscilla-26 (claude-code 9c196196), 2026-10-31 (Czech)"
+    result: "Owner chose 'Povolit se sluchátky (Recommended)' (allow with headphones), yes to the plan's rule version: a new version of project.no-silent-feedback allows monitoring an armed audio track only after an explicit per-session confirmation that headphones are used, with the monitor gain starting at the floor, the estimated round-trip latency shown, and nothing of it persisted; every other live-input-to-output path stays refused. The rule version itself is written by K110 before any of its code lands."
+    commit: 1f35a1d82999e2586c1f7b51e4b04a98fb3fe7e8
+    recorded_at: 2026-10-31T22:20:57Z

@@ -7,7 +7,7 @@ profile: routine
 owner: "repository owner"
 objective: "The Synth workspace was decided (Q018). The drum kit, the engines, the XY pad and the session grid need a place: Pro tabs inside the one Synth workspace (Panel, Drums, Engines, XY, Session, Arrange, Mix; sv= in the address) with the piano docked at the bottom, or workspaces of their own; and the Synth entry's place and name in the sidebar, now that it holds a DAW (owner direction of 2026-10-29). The plan recommends one workspace with tabs, as a top-level sidebar entry after Studio, keeping the name Synth unless the owner renames it."
 why: "Asked by the connected-instrument plan (owner direction of 2026-10-29). .ai/repo/project/README.md: work that waits on an answer names the Q issue in depends_on."
-current_state: "Open on 2026-10-29. The plan's recommendation is not an answer. K073 and K097 name this issue in depends_on, so majordomus plan next does not hand them out before it is answered."
+current_state: "Answered by the owner on 2026-10-31: one Synth workspace with tabs, the plan's recommendation (see evidence). Panel, Drums, Engines, XY, Session, Arrange and Mix are Pro tabs of the Synth workspace (sv= in the address), the piano is docked at the bottom, and Synth keeps its name as a top-level sidebar entry after Studio. K073 and K097, which name this issue in depends_on, are built from that answer."
 scope:
   - ".ai/repo/project/issues/Q019.yaml"
 acceptance_criteria:
@@ -18,4 +18,15 @@ validation:
 evidence_required:
   - "owner_decision"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-10-31T22:19:56Z
+started_at: 2026-10-31T22:19:37Z
+started_event: sha256:389db557cb74070cef14fa4acd380455d7a71fbe9cb1228bb598b970379b8421
+completed_at: 2026-10-31T22:19:56Z
+completed_event: sha256:d3419b46c757a2e769b6a22b7c07cb4287589976a5332f3bac33be8d3d24a3a5
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "AskUserQuestion in Claude Code session oscilla-26 (claude-code 9c196196), 2026-10-31 (Czech)"
+    result: "Owner chose 'Jeden Synth workspace s taby (Recommended)', the plan's recommendation: the drum kit, the engines, the XY pad, the session grid, the arrangement and the mixer are Pro tabs inside the one Synth workspace (Panel, Drums, Engines, XY, Session, Arrange, Mix; the tab is sv= in the address), with the piano docked at the bottom; Synth stays named Synth and is a top-level sidebar entry after Studio. No instrument gets a workspace of its own."
+    commit: 1f35a1d82999e2586c1f7b51e4b04a98fb3fe7e8
+    recorded_at: 2026-10-31T22:19:51Z

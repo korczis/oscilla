@@ -1,0 +1,33 @@
+id: E027
+milestone: M046
+serves:
+  - "engineering-integrity#size-delta-reported"
+title: "The dist gzip budget is 1 200 000 B by owner decision of 2026-10-29, replacing the #114 stopgap"
+slug: the-dist-gzip-budget-is-1-200-000-b-by-owner-decision
+priority: p2
+profile: implementation
+objective: "Apply the owner's decision of 2026-10-29: BUDGET.gzipBytes in scripts/build-config.mjs goes from 1 000 000 to 1 200 000, and rawBytes follows in proportion from 3 500 000 to 4 200 000 so gzip stays the binding limit (#114 kept raw at the measured ratio, 3.47; main at b67d1e5 measured 2 839 952 B raw / 820 005 B gzip, ratio 3.46). The size report's threshold (1 % of the gzip budget) becomes 12 000 B and its text names the decision; ADR 0012 records it as a dated resolution note."
+why: "The 1 MB gzip budget of #114 (2026-10-05) was a stopgap; main uses 82 % of it. The engineering-integrity intent measures the budget and leaves the decision to the owner (ADR 0013, #114), who decided it on 2026-10-29. Replacing p5 stays deferred."
+scope:
+  - "scripts/build-config.mjs"
+  - "scripts/size-report.mjs"
+  - "tests/unit/size-report.test.mjs"
+  - ".ai/repo/adrs/0012-self-contained-runtime.md"
+  - "dist/index.html"
+non_scope:
+  - "Replacing p5 (ADR 0013, E012): deferred by the owner"
+  - "The per-file source caps of E001 (tests/unit/source-size-budget.test.mjs)"
+depends_on: []
+acceptance_criteria:
+  - "scripts/build-config.mjs exports BUDGET { rawBytes: 4 200 000, gzipBytes: 1 200 000 }; tests/unit/size-report.test.mjs pins both values and the 12 000 B threshold."
+  - "ADR 0012 carries a dated 2026-10-29 resolution note naming the owner decision and #114; the sections above it and the status are unchanged."
+  - "npm run build:check and npm run verify-dist pass against the new budget."
+  - "The pull request carries a review verdict for the guarded paths it changes (project.review-verdict)."
+validation:
+  - "node --test tests/unit/size-report.test.mjs"
+  - "npm run verify-dist"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

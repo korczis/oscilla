@@ -2,7 +2,7 @@ id: gl-live-views
 title: "OSCILLA's dense live views draw on WebGL where it measurably pays, with a Canvas 2D twin that draws the same data everywhere else, honest axes, one frame loop and nothing allocated per frame"
 statement: "On 2026-10-29 the owner asked, in Czech, for p5.js, WebGL and interactivity, deployed: WebGL renderers for the scrolling spectrogram with a 3D option, a phosphor XY scope and a live spectrum, falling back to canvas or p5 where WebGL is unavailable, under one frame loop with no per-frame allocation, inside the single file and its gzip budget, with axes and units from the analysis. This intent takes that order on top of the charts line M062 (#269): GL is a view of data the CPU already holds, never a second analysis; Canvas 2D stays the reference and the fallback; and every GL path is measured against it."
 invariants:
-- "A GL view draws only data the analysis already holds on the CPU (the K033 level history, the analyser buffers the chart already read); it computes no new analysis and its loss loses no data (project.studio-model-is-canonical in spirit; ADR 0016)"
+- "A GL view draws only data the analysis already holds on the CPU (the K033 level history, the analyser buffers the chart already read); it computes no new analysis and its loss loses no data; the one GPU-held state allowed is display persistence (Y005's decaying accumulation of the samples it drew), which no readout reads and which a context loss restarts from zero, the view saying so (project.studio-model-is-canonical in spirit; ADR 0016)"
 - "Every GL view has a Canvas 2D twin drawing the same data, chosen by capability, cost and the user's setting, and says which backend it is on (project.no-inert-surfaces)"
 - "One frame loop: every GL view is a subscriber of src/js/charts/frame-loop.js with its host, allocates nothing per tick and draws nothing while hidden (playable-instrument#chart-cost)"
 - "Axes, ticks and units come from the analysis descriptor, levels are dB relative unless calibrated, height, brightness and persistence say what they encode, and the 3D view is never called a waterfall (project.no-fake-science v2, D7)"
@@ -13,7 +13,7 @@ milestones:
 - M096
 satisfaction:
 - id: backend-honest
-  criterion: "Every GL host picks WebGL 2, WebGL 1 or its Canvas 2D twin from a capability probe and the view's declared needs (a major performance caveat refused unless ?gl=sw), states its backend and reason in its summary and through OSCILLA.charts.renderers(), switches to its twin on a lost context within a named deadline keeping its data, never holds more live contexts than the measured budget, and ?gl=0 or Settings 'Canvas 2D only' mounts no context"
+  criterion: "Every GL host picks WebGL 2, WebGL 1 or its Canvas 2D twin from a capability probe and the view's declared needs (a major performance caveat refused, and a software rasteriser named where the renderer string identifies one and never chosen automatically), states its backend and reason in its summary and through OSCILLA.charts.renderers(), switches to its twin on a lost context within a named deadline keeping its data, never holds more live contexts than the measured budget, and ?gl=0 or Settings 'Canvas 2D only' mounts no context"
   evidence: command
   ref: "node --test tests/unit/gl-caps.test.mjs tests/unit/gl-renderer-setting.test.mjs && node tests/browser/gl-renderers.cjs"
 - id: gl-parity
@@ -21,7 +21,7 @@ satisfaction:
   evidence: command
   ref: node tests/browser/gl-parity.cjs
 - id: gl-cost
-  criterion: "Every GL view is a frame-loop subscriber with its host, allocates nothing per tick, draws nothing while hidden or paused, and has its main-thread time per frame recorded beside its Canvas 2D twin's; GL is the automatic backend only where it is not slower; the line stays within the component line's cap Q037 records"
+  criterion: "Every GL view is a frame-loop subscriber with its host, allocates nothing per tick (its heap increment over one window with the view on GL, on ?gl=0 and unmounted at most 128 B per frame), draws nothing while hidden or paused, and has its per-frame cost measured beside its Canvas 2D twin's by a measure that resolves below the timer tick (five interleaved windows of 300 frame calls timed as one interval, with the synced and the rAF-interval figures); GL is the automatic backend only where it is faster beyond the minimum detectable difference on every hardware leg, and a tie keeps Canvas 2D; the line stays within the component line's cap Q037 records"
   evidence: command
   ref: node tests/browser/chart-cost.cjs --require-complete
 - id: views-honest
@@ -62,4 +62,4 @@ non_goals:
 - "WebGPU, until a gate browser leg measures it (Y001 records it as not probed)"
 - Cumulative spectral decay (waterfall) plots of room acoustics (intent measurement-extensions)
 created_at: 2026-10-29
-updated_at: '2026-10-30'
+updated_at: '2026-11-01'

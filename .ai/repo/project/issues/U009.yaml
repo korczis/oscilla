@@ -1,0 +1,39 @@
+id: U009
+milestone: M054
+serves:
+  - "ui-current#ui-audited"
+title: "Route hygiene: no address that repeats a notice on reload, a title and a heading per workspace, and the link-integrity suite in the gate"
+slug: route-hygiene-and-link-integrity
+priority: p2
+profile: implementation
+objective: "Fix the router and URL-state findings of the link audit of 2026-10-29 (B3, B4, B5, B9, B11) and land its suite tests/browser/link-integrity.cjs in test:browser: a link to a definition or finding not stored here leaves no record key in the address (a record named while a link is applied is named after the route); an unknown or conflicting m= is refused with one notice and the address names the workspace shown, and a repeated m= counts once; an unreadable instrument link loses its keys after one warning, and one restored in part is rewritten to the values restored; every workspace sets a document title of its own; a link to Compare focuses a heading the Analyzer does not get."
+why: "The audit found three kinds of bad address kept in the URL that repeat their notice on every reload, eleven workspaces sharing one document title (the browser's Back menu and screen-reader page titles cannot tell them apart), and Compare announcing the Analyzer's heading; nothing in the gate checked the links at all."
+scope:
+  - "src/js/ui/navigation.js"
+  - "src/js/ui/app.js"
+  - "src/js/core/instrument.js"
+  - "src/js/core/url-state.js"
+  - "tests/unit/route-hygiene.test.mjs"
+  - "tests/unit/navigation.test.mjs"
+  - "tests/unit/about.test.mjs"
+  - "tests/browser/link-integrity.cjs"
+  - "tests/README.md"
+  - "package.json"
+  - "dist/index.html"
+  - "README.md"
+depends_on: []
+acceptance_criteria:
+  - "#m=experiments&def=<missing> and #m=experiments&finding=<missing> followed as links end on #m=experiments after one notice."
+  - "#m=bogus, #m=, #m=STUDIO, #m=about&m=learn and a 5 kB m= end on the address of the workspace shown after one 'Page link not applied' notice; #m=measure&m=measure opens Measure at #m=measure."
+  - "#v=1&x=notbase64!! ends on #m=playground; #v=1&f=-5&g=99 ends on the values restored; a reload of either warns no second time."
+  - "Every workspace has a document title of its own (the Playground keeps the product title), also after a reload."
+  - "A link to each workspace focuses a heading no other workspace gets."
+  - "tests/browser/link-integrity.cjs runs in test:browser; the Bioacoustics new-tab hints (B10) and the empty Experiments exit (B12/P1) are listed debt owned by the cross-links pull request, reported as KNOWN and shrink-only."
+validation:
+  - "node --test tests/unit/route-hygiene.test.mjs tests/unit/navigation.test.mjs tests/unit/about.test.mjs"
+  - "node tests/browser/link-integrity.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

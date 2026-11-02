@@ -1,0 +1,56 @@
+# Review verdict for pull request #274, plan item U002: About tells the project as it stands and
+# what comes next (branch feat/u002-about-current). Reviewed head 7077e98da3 (== origin at fetch);
+# merge base origin/main c7e041698d. Built by oscilla-b0's session; reviewed by dev-68.
+#
+# The digest: the base branch's scripts/review-verdict.mjs (git archive origin/main scripts into
+# a scratch dir), `--content --base-branch origin/main` and `--repo . --head HEAD --content --list
+# --base-branch origin/main`, over the one guarded path the pull request changes,
+# scripts/release-prepare.mjs: 80fc4ade...73ee9, which matches the builder's.
+#
+# Lenses:
+# - release:prepare (guarded): RESTORE_PATHS now holds src/data/roadmap.json, and GATE_COMMANDS
+#   runs node scripts/roadmap.mjs before npm run build. Every gate command runs through sh(); a
+#   non-zero exit, a spawn error and a child killed by a signal (status null) all give ok false,
+#   and the loop then restores all four paths from HEAD in one git checkout. The tree was required
+#   clean, so that restore is byte-exact. roadmap.mjs computes the plan before it writes, so a
+#   failing plan leaves the file untouched, and the write is one writeFileSync of the whole
+#   serialization. OSC_ROADMAP_CHECK=1 rides in gateEnv for every gate command, the build
+#   included, but only tests/unit/about-current.test.mjs reads it (grep over scripts, src, tests
+#   and .github), so its reaching the build is harmless.
+# - A plan-only commit leaves dist unchanged: the bundle imports src/data/roadmap.json (about.js:5)
+#   and nothing reads .ai/ or fetches. Shown in a scratch copy: build.mjs --check is up to date at
+#   HEAD (source 48efc4fc31fe) and still up to date, with the same source digest, after a change
+#   to .ai/repo/project/issues/D001.yaml alone.
+# - roadmap.mjs: majordomus missing (ENOENT) and majordomus exiting non-zero both throw a named
+#   error and exit 1, with the file untouched (checked with PATH stripped and outside a repository).
+#   --check compares shape, membership, closed status, title, done/required and order; each of
+#   those is held by a test (below).
+# - About: the owner's 2026-10-28 override of Q005's headline is named in about-origin.test.mjs
+#   (lines 16, 95, 132, 189). The workspace list is checked against the navigation's own
+#   data-osc="nav.<id>" links in nav order (about-current workspaceProblems), so it cannot drift.
+# - Flowbite ratchet: F001 has not landed, so no Flowbite classes are available yet. The two new
+#   lists take no class; `.osc-about-block > ul` and `> ul > li` join the existing rules-list
+#   selectors, and four dead classes (night-head, stamp, stamp time, stamp-sep) go. Debt goes 3910
+#   to 3901, and about.css 90 to 89 selectors. That is the right call while F001 is out: it adds no
+#   class and lowers the debt. See R-4 for the selector's reach.
+#
+# Runs (existing node_modules, nothing installed):
+# - node --test about-current, about-origin and about: 21 pass and 1 skip (the plan check, by
+#   design without OSC_ROADMAP_CHECK). With OSC_ROADMAP_CHECK=1, about-current passes 9/9 against
+#   the live plan.
+# - Mutations in a scratch git-archive copy, each failing about-current (7/8): roadmap dropped
+#   from RESTORE_PATHS; --check ignoring progress; --check ignoring order; gateEnv without
+#   OSC_ROADMAP_CHECK; closed milestones kept; the refresh moved after the build.
+# - build.mjs --check before and after a plan-only change: up to date both times.
+#
+# Open: R-1 to R-4, all P3. No P0, P1 or P2 is open.
+schema: review-verdict/v1
+pr: 274
+verdict: merge
+reviewer: "dev-68 (Claude Opus 5.5 session 4f90795d); did not build, merge or edit this change; wrote only this file"
+content: 80fc4ade05c670d3cffdbe7c254d705b42208fda083e51c3beca39b6e6273ee9
+findings:
+  - { id: R-1, severity: P3, status: open, title: "release:prepare has no signal handler (scripts/release-prepare.mjs:443-457): a Ctrl-C reaches the whole foreground process group, so the parent dies with the child and the restore never runs, leaving package.json, the lock, dist and now src/data/roadmap.json modified. This predates #274 for the other three paths; #274 adds the roadmap to what is left. The tree was required clean, so `git checkout HEAD --` repairs it. Fix (follow-up): restore on SIGINT/SIGTERM, or say so in the loud message." }
+  - { id: R-2, severity: P3, status: open, title: "scripts/roadmap.mjs:155 lets planRoadmap's error escape main(), so a missing or failing majordomus prints a stack trace rather than a one-line `roadmap: ...` message. It fails closed (exit 1, file untouched), so this is presentation only. Fix: catch in main and return 1 with the message." }
+  - { id: R-3, severity: P3, status: open, title: "The gate refreshes the roadmap and the next release commit must carry it, but nothing between releases says the committed roadmap is stale: the plan check runs only under OSC_ROADMAP_CHECK=1. That is the design (a pull request is not held to the plan), and About can show a roadmap one release old. Fine if intended; the PR body could say it." }
+  - { id: R-4, severity: P3, status: open, title: "`.osc-about-block > ul` (src/styles/about.css:323, 331) styles every direct ul child of any About block, including one a later card adds, and the class ratchet cannot see it (it counts classes; the stylesheet's selector count still moves). Fix when F001 lands: move both lists to Flowbite list markup and drop the descendant selectors." }

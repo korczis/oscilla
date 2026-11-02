@@ -1,0 +1,28 @@
+id: E041
+milestone: M046
+serves:
+  - "engineering-integrity#sequencer-helpers-one-owner"
+title: "The sequencer's numeric helpers are core's: one round, one mulberry32, one log mapping, one formatMs and one lfoShape"
+slug: the-sequencer-numeric-helpers-are-cores
+priority: p3
+profile: implementation
+objective: "DRY audit 2026-10-29 (cases clones-seq-model-math, domain-v1-helper-forks, clones-lfo-shape, the sequencer parts of clones-mulberry32-owner, domain-log-normalize and domain-time-text). src/js/sequencer/model.js kept its own copy of the V1 helpers clamp, isNum, toNumber, toInt, pick, round, sig, mulberry32, deepCopy, frequencyToNormalized, normalizedToFrequency and formatMs, which core/math.js and core/frequency.js own, and src/js/sequencer/compiler.js a copy of audio/patterns.js lfoShape. The round copy is the pre-S079 body, so a decimal tie stored just under its decimal value (32.0025 Hz, 16.0005 ms, a 32.0025 BPM tempo, 1.000001 beats at 120 BPM = 500.0005 ms) rounds down in a sequencer block and in every Studio clip normalized through it, and up in core. Delete the copies; model.js re-exports core's functions under the same names, normalizedToFrequency wraps core's with the sequencer's 20 Hz floor for an invalid range, and compiler.js re-exports lfoShape from audio/patterns.js, so no importer changes."
+why: "Two owners of one helper let a fix reach one of them only: S079 fixed core's round and left the sequencer's, so the stored sequencer and Studio model rounds ties differently from the rest of OSCILLA."
+scope:
+  - "src/js/sequencer/model.js"
+  - "src/js/sequencer/compiler.js"
+  - "tests/unit/sequencer-core-helpers.test.mjs"
+  - "tests/unit/v31-studio-sequence-file.test.mjs"
+  - "tests/README.md"
+  - "dist/index.html"
+acceptance_criteria:
+  - "tests/unit/sequencer-core-helpers.test.mjs pins, before the change, the helpers' results on ordinary values, the 20 Hz floor of normalizedToFrequency, the mulberry32 stream and lfoShape; its tie cases (normalizeBlock of a 32.0025 Hz, 16.0005 ms tone stores 32.003 and 16.001; setTempo 32.0025 stores 32.003) and the identity of each re-export fail on the merge base (fail-first)."
+  - "tests/unit/v31-studio-sequence-file.test.mjs states the one changed tie: 1.000001 beats at 120 BPM open as 500.001 ms, the Sequencer's own save, which is now a fixed point."
+  - "No helper body remains in src/js/sequencer/model.js or the lfoShape body in compiler.js; importers are unchanged; npm test passes; dist/index.html is rebuilt and committed; the sequencer and labs browser suites pass in Chromium, Firefox and WebKit."
+validation:
+  - "node --test tests/unit/sequencer-core-helpers.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

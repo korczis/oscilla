@@ -7,6 +7,7 @@ problem: "The owner found the live Studio, About and, in their view, the whole i
 outcome: "Every workspace is audited, About tells the project as it stands and what comes next, no workspace is an isolated or half-empty panel, empty states offer a real example and a next step, and the workspaces link to each other; a browser check holds it in every gate browser and origin."
 acceptance_criteria:
   - "U001 to U008 are done with their evidence."
+  - "U011 to U025, the section 74 quality-bar findings of S074 (2026-10-30), are done with their evidence."
 validation:
   - "npm run release-gate"
 evidence_required:
@@ -17,4 +18,4 @@ risks:
   - "src/index.html is shared with E005 (partials), P002, S083 and MIDI V504: every U issue that edits it lands in its own train round with one rebuild."
   - "About's pace statement was kept by Q005's delegated decision; the owner's 2026-10-28 statement that About is outdated overrides it, so U002 changes about-origin.test.mjs with that reason."
 created_at: 2026-10-28
-updated_at: 2026-10-28
+updated_at: 2026-10-30

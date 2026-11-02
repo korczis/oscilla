@@ -21,7 +21,11 @@ validation:
 evidence_required:
   - "owner_decision"
 created_at: 2026-10-30
-updated_at: 2026-10-30
+updated_at: 2026-10-30T14:19:08Z
+started_at: 2026-10-30T14:18:59Z
+started_event: sha256:53ec45f70906f02198e1262447573ed67af82291b36d7fe3f65d3e642c8adb18
+completed_at: 2026-10-30T14:19:08Z
+completed_event: sha256:e841d1cda818ae20b9d706a02c643a0cd151df91a7029cba5ee0fb6fafd7e7d6
 evidence:
   - covers: owner_decision
     type: manual

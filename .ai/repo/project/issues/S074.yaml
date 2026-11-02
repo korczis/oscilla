@@ -12,7 +12,7 @@ depends_on:
   - "S000"
   - "Q001"
   - "S071"
-current_state: "Kept as work, triaged. Parts are delivered as standing rules: project.no-fake-science (no fake metrics, every claim derived), project.visual-identity-lock (no generic visual identity), S046-S050 and S063 for V1. Whether every visible control has an effect and every graph shows real state is not decided by any check or record, so a review of the current build against the section's list is this issue. Triage of 2026-10-18 under Q001, decided by the coordinating Claude session under the owner's delegation of 2026-10-18 ('tak to vse pores'); the owner may override."
+current_state: "Reviewed on 2026-10-30 at origin/main d9db6bdf by oscilla-af, which built none of the build: the eleven symptoms and three rules of section 74 in four lenses (controls, graphs and metrics, visual, mobile at 390x844 and 768x1024), each finding reproduced by an independent verifier and mapped against the plan and the open pull requests. 21 findings survived; every one is named in a pull request or its own issue. Already owned: the inert sequencer tempo select (K002, #266); the loop toggle drawn as a record dot (C005, #292, twice: controls and visual); the status bar reporting the Playground while the Studio plays (C012, #290); the Envelope's power-icon enable beside toggle switches (G008); the Binaural switch track collapsing at phone width (F003, U007, recorded Flowbite Pro debt). Opened as issues under M054: U011 duplicate header/footer actions (export.import part also H004 B13, #346); U012 the status-bar Play and Export Audio act on the hidden Playground in the Studio (revisits ADR 0050's reading in C001/C012); U013 the additive chart ignores the additive switch; U014 'Safe max' has no derivation; U015 the Harmonics chart has no frequency labels and bare dB numbers; U016 the fast-forward glyph on Play from the start; U017 contradictory export/import arrows; U018 a spinner on idle checks and an info glyph on safety cautions; U019 repeated disclaimers and always-open help; U020 (p1) horizontal scroll at 390 px pushing Play A + B off screen; U021 the Output level buttons covering their hint; U022 sequencer blocks squeezed to slivers at phone width; U023 the 14 px Runtime details disclosure; U024 the phase-offset field over the Phase traces; U025 the cramped Studio at tablet size. The review scripts and screenshots were in the reviewing session's scratchpad (s074/); the issues carry the reproduction. Previously: kept as work, triaged under Q001 (2026-10-18); parts were delivered as standing rules (project.no-fake-science, project.visual-identity-lock, S046-S050, S063)."
 acceptance_criteria:
   - "A reviewer who is not the builder reads the current build against the section's eleven symptoms and its three rules (every control does something, every graph shows real state, every metric has a derivation) and records the result on this issue as evidence."
   - "Each finding is fixed in a named pull request or opened as its own issue named in that evidence; none is left in prose only."
@@ -21,4 +21,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-01
-updated_at: 2026-10-18
+updated_at: 2026-10-31T22:28:14Z
+started_at: 2026-10-31T22:27:59Z
+started_event: sha256:4397c2628d07ede497fd60afb6777d76eb6e69a543f1ba14ee337669f0ea6469
+completed_at: 2026-10-31T22:28:14Z
+completed_event: sha256:8bc0d809f894281a30679fc353e29a5740dc198664cf81e2a9311ca79ee84c8f
+evidence:
+  - covers: verified
+    type: artifact
+    command: "majordomus plan show S074; majordomus plan validate"
+    result: "an independent review of origin/main d9db6bdf against section 74 found 21 verified findings: 6 owned by K002/#266, C005/#292, C012/#290, G008, F003/U007; 15 filed as U011-U025 under M054; S074 current_state records the mapping; landed in #352 via train #354 (f887066f)"
+    artifact: ".ai/repo/project/issues/S074.yaml"
+    commit: f887066f3e869735cbb62cd4226459e9b6db498a
+    recorded_at: 2026-10-31T22:25:37Z

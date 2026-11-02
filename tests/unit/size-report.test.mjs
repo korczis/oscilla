@@ -120,15 +120,21 @@ test('the threshold is 1 % of the gzip budget of scripts/build-config.mjs', () =
   assert.equal(GZIP_THRESHOLD_BYTES, BUDGET.gzipBytes / 100);
 });
 
+test('the budget is the owner\'s 1 200 000 B gzip of 2026-10-29, raw in proportion (E027)', () => {
+  assert.deepEqual(BUDGET, { rawBytes: 4_200_000, gzipBytes: 1_200_000 },
+    'a budget change is an owner decision recorded on ADR 0012, not an edit here');
+  assert.equal(GZIP_THRESHOLD_BYTES, 12_000);
+});
+
 test('formatReport prints the four numbers, the commits, the threshold and the decisions', () => {
-  const budget = { rawBytes: 3_500_000, gzipBytes: 1_000_000 };
+  const budget = { rawBytes: 4_200_000, gzipBytes: 1_200_000 };
   const r = sizeReport({ head: { raw: 2_610_384, gzip: 751_494 },
     base: { raw: 2_600_000, gzip: 740_000 }, budget, threshold: 10_000 });
   const md = formatReport(r, { head: '1111111aaaa', base: '2222222bbbb' });
   assert.match(md, /^### dist\/index\.html size/m);
   assert.match(md, /\| size \(head `1111111`\) \| 2 610 384 B \| 751 494 B \|/);
-  assert.match(md, /\| budget \(scripts\/build-config\.mjs\) \| 3 500 000 B \| 1 000 000 B \|/);
-  assert.match(md, /\| headroom \| 889 616 B \(25\.4 %\) \| 248 506 B \(24\.9 %\) \|/);
+  assert.match(md, /\| budget \(scripts\/build-config\.mjs\) \| 4 200 000 B \| 1 200 000 B \|/);
+  assert.match(md, /\| headroom \| 1 589 616 B \(37\.8 %\) \| 448 506 B \(37\.4 %\) \|/);
   assert.match(md, /\| merge base `2222222` \| 2 600 000 B \| 740 000 B \|/);
   assert.match(md, /\| change from the merge base \| \+10 384 B \| \+11 494 B \|/);
   assert.match(md, /more than 10 000 B gzip/);

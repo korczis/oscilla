@@ -26,6 +26,8 @@ export const WORKSPACE_REGISTRY = Object.freeze([
   { id: 'presets', label: 'Presets', group: 'synthesis', words: 'library load sounds' },
   { id: 'learn', label: 'Learn', words: 'lessons guide acoustics' },
   { id: 'studio', label: 'Studio', words: 'graph nodes cables timeline patch' },
+  // Synth (K058) is top level after Studio by the owner's decision Q019.
+  { id: 'synth', label: 'Synth', words: 'synthesizer engines voices keys midi patch' },
   { id: 'about', label: 'About', words: 'credits licence version' },
 ].map((w) => Object.freeze({ ...w, icon: `i-ws-${w.id}` })));
 

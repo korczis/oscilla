@@ -15,7 +15,7 @@
     "selectors": 1189,
     "domainViewSelectors": 438
   },
-  "debt": 3735,
+  "debt": 3717,
   "surfaces": {
     "pending": [
       "card#osc-exp-compare",
@@ -80,6 +80,7 @@
       "shell:main"
     ],
     "migrated": [
+      "page#osc-view-synth",
       "shell:navbar",
       "shell:sidebar"
     ]
@@ -89,10 +90,8 @@
     "osc-about-block": 4,
     "osc-about-chain": 1,
     "osc-about-chips": 1,
-    "osc-about-coda": 1,
-    "osc-about-credits": 1,
     "osc-about-digest": 1,
-    "osc-about-grid": 2,
+    "osc-about-grid": 1,
     "osc-about-grid--foot": 1,
     "osc-about-h": 5,
     "osc-about-hero": 1,
@@ -104,12 +103,9 @@
     "osc-about-majordomus": 1,
     "osc-about-name": 1,
     "osc-about-night": 1,
-    "osc-about-night-head": 1,
     "osc-about-rules": 1,
     "osc-about-spec": 2,
     "osc-about-spec--credits": 1,
-    "osc-about-stamp": 1,
-    "osc-about-stamp-sep": 2,
     "osc-about-statement": 1,
     "osc-about-sub": 1,
     "osc-about-tagline": 1,
@@ -237,7 +233,7 @@
     "osc-icon-btn": 44,
     "osc-icon-btn--ghost": 13,
     "osc-icon-btn--sm": 19,
-    "osc-label": 94,
+    "osc-label": 93,
     "osc-learn": 1,
     "osc-learn-actions": 1,
     "osc-learn-body": 1,
@@ -317,7 +313,7 @@
     "osc-m-textarea": 5,
     "osc-m-toolbar": 3,
     "osc-m-unsaved": 1,
-    "osc-main": 11,
+    "osc-main": 12,
     "osc-max-select": 1,
     "osc-measure": 1,
     "osc-menu": 1,
@@ -342,8 +338,8 @@
     "osc-mode-row": 1,
     "osc-mode-seg": 1,
     "osc-muted": 20,
-    "osc-num": 58,
-    "osc-number": 60,
+    "osc-num": 57,
+    "osc-number": 59,
     "osc-p-additive": 1,
     "osc-p-analysis": 3,
     "osc-p-bio": 1,
@@ -372,9 +368,9 @@
     "osc-phase-view": 1,
     "osc-play-row": 1,
     "osc-pp-error": 13,
-    "osc-pp-field": 3,
+    "osc-pp-field": 2,
     "osc-pp-field--wide": 1,
-    "osc-pp-grid": 2,
+    "osc-pp-grid": 1,
     "osc-pp-warn": 1,
     "osc-preset-actions": 2,
     "osc-preset-desc": 1,
@@ -460,7 +456,7 @@
     "osc-seg--primary": 1,
     "osc-seg--split": 1,
     "osc-seg-btn": 24,
-    "osc-select": 32,
+    "osc-select": 31,
     "osc-select--xs": 1,
     "osc-seq-add": 1,
     "osc-seq-delete": 3,
@@ -492,14 +488,14 @@
     "osc-settings-pair": 1,
     "osc-settings-wide": 1,
     "osc-sg": 1,
-    "osc-sg-banner": 3,
+    "osc-sg-banner": 1,
     "osc-sg-banner-text": 1,
     "osc-sg-cables": 1,
     "osc-sg-cat": 1,
     "osc-sg-col": 2,
     "osc-sg-col--in": 1,
     "osc-sg-col--out": 1,
-    "osc-sg-controls": 3,
+    "osc-sg-controls": 1,
     "osc-sg-ctl": 1,
     "osc-sg-ctl-glyph": 1,
     "osc-sg-edge": 3,
@@ -608,7 +604,7 @@
     "osc-spg-scale": 1,
     "osc-spg-scale-col": 1,
     "osc-spg-span": 1,
-    "osc-sr-only": 41,
+    "osc-sr-only": 42,
     "osc-st-add": 1,
     "osc-st-back": 1,
     "osc-st-bar": 1,
@@ -762,7 +758,6 @@
     "osc-top-right": 1,
     "osc-transport": 2,
     "osc-transport-btn": 5,
-    "osc-transport-btn--record": 1,
     "osc-trigger": 1,
     "osc-unit": 8,
     "osc-unit-suffix": 8,
@@ -868,23 +863,23 @@
   },
   "stylesheets": {
     "src/styles/about.css": {
-      "selectors": 90,
-      "declarations": 333
+      "selectors": 89,
+      "declarations": 317
     },
     "src/styles/base.css": {
       "selectors": 38,
       "declarations": 63
     },
     "src/styles/components.css": {
-      "selectors": 132,
-      "declarations": 489
+      "selectors": 131,
+      "declarations": 488
     },
     "src/styles/instrument.css": {
       "selectors": 245,
-      "declarations": 634
+      "declarations": 632
     },
     "src/styles/integration.css": {
-      "selectors": 198,
+      "selectors": 199,
       "declarations": 381
     },
     "src/styles/main.css": {
@@ -896,7 +891,7 @@
       "declarations": 623
     },
     "src/styles/responsive.css": {
-      "selectors": 171,
+      "selectors": 170,
       "declarations": 184
     }
   },
@@ -911,7 +906,7 @@
     },
     "src/styles/studio.css": {
       "selectors": 275,
-      "declarations": 788
+      "declarations": 777
     },
     "src/styles/tokens.css": {
       "selectors": 4,

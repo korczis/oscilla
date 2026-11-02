@@ -1,0 +1,43 @@
+id: U017
+milestone: M054
+serves:
+  - "ui-current#ui-audited"
+title: "Export and import each show one glyph, from one icon family, wherever they appear"
+slug: export-and-import-each-show-one-glyph-from-one-icon-family
+priority: p2
+profile: implementation
+objective: "Lands as fix(ui). Before: the same action has no stable glyph and the arrows contradict each other. The header Export ([data-osc=header.export], src/index.html:199) uses the hand-drawn #i-export (arrow up out of a tray, src/index.html:45) and the status bar's Export Audio ([data-osc=action.exportAudio], src/index.html:2824) the hand-drawn #i-upload (arrow up, src/index.html:46), while the Studio toolbar's Export project file ([data-osc=studio.export], src/index.html:2387) uses the Lucide #s-export (file-down, src/index.html:99) and its Import ([data-osc=studio.import], src/index.html:2398) the Lucide #s-import (file-up, src/index.html:98): export points up in the header and down in the Studio, where import points up, and one toolbar mixes the hand-drawn i-* family (stroke 2.2) with the Lucide family the packer inlines (scripts/pack-single-file.mjs, @icon markers). After: one export glyph (a file leaves for the user's disk: the Lucide download family, arrow down) and one import glyph (a file is read in: arrow up), both Lucide symbols inlined by the packer, used by every control whose accessible name starts with Export or Import and carries a glyph; #i-export and #i-upload are removed once nothing uses them. The fix changes only which symbol a <use> names: no new osc-* class, selector, markup surface or inline style (project.ui-uses-flowbite-pro), and every control keeps its action (project.no-inert-surfaces). Because the header, the Studio toolbar and the status bar are legacy surfaces that F002, F008 and F010 rebuild on Pro, it lands on (or as a criterion of) those migrations so the rebuilt Pro icon buttons carry the agreed glyphs. Negative cases: a control named Export or Import whose glyph is not the agreed one; an i-* symbol beside a Lucide symbol in one toolbar; a glyph with an arrow but no export or import meaning reusing the export symbol. Rollback: revert; markup and symbol references only. Not this: G009 (one look for expand, fullscreen and open-in-workspace only), H004 (moves Import out of the Export menu: naming and placement), C005 and K017 (the sequencer loop icon); F002 and F008 restyle these controls but name no glyph."
+why: "Found by the S074 quality-bar review of 2026-10-30 at origin/main d9db6bdf, section 74 symptom 'random icon usage: the arrow direction for export and import is contradictory across the app', reproduced by an independent verifier. Evidence: scratchpad s074/d-studio.png (1536x1024: header Export at x=1460 and status-bar Export Audio at x=1232 show up-arrows; the Studio's Export project file at x=1399 y=185 a down arrow and Import at x=1467 an up arrow) and the control crops s074/btn-header.export.png, s074/btn-action.exportAudio.png, s074/btn-studio.export.png and s074/btn-studio.import.png; serves ui-current#ui-audited."
+scope:
+  - "src/index.html"
+  - "scripts/pack-single-file.mjs"
+  - "tests/unit/icon-meaning.test.mjs"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/browser/v31-studio-workflows.cjs"
+  - "docs/ui-audit.md"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "F002"
+  - "F008"
+  - "F010"
+acceptance_criteria:
+  - "Fail-first: tests/unit/icon-meaning.test.mjs reads src/index.html and fails on the merge base: every control whose accessible name or text starts with Export uses the one export symbol and every one that starts with Import the one import symbol ([data-osc=header.export], [data-osc=action.exportAudio], [data-osc=studio.export] and [data-osc=studio.import] among them); both symbols are Lucide @icon markers; no <symbol id=\"i-export\"> or <symbol id=\"i-upload\"> remains unused; and no toolbar container holds both an #i-* and an #s-* use."
+  - "A browser check in tests/browser/v31-studio-workflows.cjs (or the suite F002 adds, once landed) reads the rendered <use> of the four controls in the header, the Studio toolbar and the status bar at 1536x1024 and asserts the export ones name one symbol and the import one the other, and that each control still performs its action (the export menu opens, the Studio project downloads, the import file picker is requested, the audio export starts)."
+  - "It adds no class token, selector, markup surface or inline style and only removes legacy ones, so tests/unit/ui-flowbite-pro-baseline.json stays equal or falls (node scripts/ui-flowbite-pro-record.mjs --check passes, rewritten only where a count fell) and node --test tests/unit/ui-flowbite-pro.test.mjs passes (project.ui-uses-flowbite-pro, project.visual-identity-lock v2)."
+  - "As a fix change it carries a unit test that fails on the merge base and passes on the head (project.fail-first)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named deadline (project.suite-harness, project.bounded-test-timing)."
+  - "Definition of done, extends: the icon set gains a rule of meaning (one glyph per action) on top of G009's one look for expand and fullscreen."
+  - "Definition of done, interlinks: the objective names G009, H004, F002, F008 and F010; the unit test names this issue and the review finding."
+  - "Definition of done, interactivity: the four controls keep their actions, asserted by the browser check above."
+  - "Definition of done, docs, menus and routes: no route or menu entry changes (stated); docs/ui-audit.md records the finding as resolved and states which glyph means export and which import."
+  - "Definition of done, tested: tests/README.md has a row for each new test; npm test and the browser check pass."
+  - "Definition of done, deployed: dist is rebuilt and npm run build:check passes; it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+  - "node --test tests/unit/icon-meaning.test.mjs"
+  - "node tests/browser/v31-studio-workflows.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-10-30'
+updated_at: '2026-10-30'

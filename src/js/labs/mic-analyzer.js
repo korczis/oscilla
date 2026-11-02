@@ -18,6 +18,13 @@
 // builds MediaStreamSource → Analyser inside the engine's accounting and returns the analyser;
 // detachMicrophone() disconnects it. The graph is never connected to the output, so there is
 // no feedback path. Without attachMicrophone the microphone is reported unavailable.
+//
+// The engine may detach the graph itself: when it discards a context that closed from outside
+// it stops the tracks, and a stopped track dispatches no 'ended'. adapter.onMicDetached(fn)
+// tells the lab; it stops when the detached analyser is its own and says why
+// (MIC_CONTEXT_CLOSED, or MIC_ENGINE_DETACHED when another caller replaced its graph), so no
+// reading of a dead graph is presented as live. Its own Stop lets the analyser go before it
+// calls detachMicrophone(), whose 'user' event therefore names no analyser of the lab's.
 
 import { createSpectrumChart } from '../charts/spectrum-chart.js';
 import { createSpectrogramView } from '../charts/spectrogram-view.js';
@@ -63,6 +70,10 @@ export function micUnavailableText(e, env = {}) {
 }
 export const MIC_OFF = 'UNAVAILABLE (microphone off)';
 export const MIC_NOTE = 'Not a calibrated measurement. Microphone frequency response varies.';
+/** Readout when the engine discarded a closed audio context and detached the microphone. */
+export const MIC_CONTEXT_CLOSED = 'The audio context was closed; the microphone was stopped.';
+/** Readout when the engine detached the lab's microphone for any other reason. */
+export const MIC_ENGINE_DETACHED = 'The audio engine disconnected the microphone; it was stopped.';
 const READOUT_INTERVAL_MS = 100;
 const MIC_FFT_SIZE = 8192;
 
@@ -191,14 +202,26 @@ export function mount(rootEl, adapter) {
   }
 
   function releaseNodes() {
-    if (attached && adapter.detachMicrophone) {
+    const own = attached;
+    attached = null; // first, so the engine's detach event for it is not taken as a loss
+    if (own && adapter.detachMicrophone) {
       try {
         adapter.detachMicrophone();
       } catch (e) {
         /* engine reports its own errors */
       }
     }
-    attached = null;
+  }
+
+  // The engine detached a graph itself. Only the lab's own analyser concerns it: closed with
+  // the context, or 'replaced' by another caller's attachMicrophone (the lab's own start()
+  // attaches while it holds none, so that event never names its analyser).
+  function onEngineDetached(d) {
+    if (!d || d.attached) return;
+    if (!attached || d.analyser !== attached) return;
+    attached = null; // already disconnected by the engine: stop() must not detach again
+    error = d.reason === 'closed' ? MIC_CONTEXT_CLOSED : MIC_ENGINE_DETACHED;
+    stop();
   }
 
   function stop() {
@@ -318,6 +341,7 @@ export function mount(rootEl, adapter) {
   const offs = [
     stopFrames,
     on(toggle, 'click', () => (stream ? stop() : start())),
+    (adapter.onMicDetached && adapter.onMicDetached(onEngineDetached)) || (() => {}),
     onUi(rootEl, (d) => {
       if (d.kind === 'tab' && d.key === 'mic') {
         tab = d.value;

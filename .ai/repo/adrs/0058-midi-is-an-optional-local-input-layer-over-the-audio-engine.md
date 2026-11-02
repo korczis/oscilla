@@ -353,3 +353,130 @@ visualizations and MEASURE.
 **Consequences.** Intent `playable-instrument` records D5 as superseded by D11 and hands its
 unissued Wave 3 instrument items to `connected-instrument`; issues K016-K021, K025 and K026
 state D11 where they stated D5. The knob is built in K058. The status of this ADR is unchanged.
+
+### 2026-10-29: how notes sound through the engine (V502)
+
+**Note of 2026-10-29 (V502), no section above changes.** Decision 1 says voices sound through
+the existing engine and its safety limits. The critique of `midi-jam-companion` found five open
+questions for that (`polyphony-contradicts-voice-replacement`,
+`velocity-curve-and-message-semantics`, `held-notes-and-drone-vs-safety-limit`,
+`stuck-notes-have-no-criterion`, `output-ownership-with-measure-and-studio`). This note states
+what V502 built for each. The findings stay open until a critic re-reviews them against it, and
+the status stays `proposed`.
+
+- **Polyphony, without amending ADR 0002.** `play()` keeps its one voice and ADR 0002's rule
+  that a new voice fades every earlier one out first. Notes are a second kind of voice of the
+  same engine: `engine.noteOn(key, o)`, `noteOff(key)`, `notesOff(fast)` and `noteCount` in
+  `src/js/audio/audio-engine.js`. A note is a voice in `voices`, never `voice`, built through
+  the engine's own accounting (osc, env, fade, cut, master), so `stop`, Escape (`stopAll`),
+  `revokeContinuous`, a replacing `play()` and a closed context free it as they free any voice.
+  A note and the `play()` voice never sound together: each one's start fades the other out
+  first (FAST_RELEASE_S) and starts once that fade has ended. The sequencer plays into the
+  engine's master outside `voices`, so it is kept apart from notes in the MIDI layer instead:
+  starting a sequence fades every note within ESCAPE_RELEASE_S (`main.js`, around the editor's
+  `play`), and a Note On is refused while the sequencer plays.
+- **The bound and the gain law.** At most `NOTE_POLYPHONY` (8) notes sound at once. Each peaks
+  at `level / NOTE_POLYPHONY`, so the notes together never exceed one voice's level: notes,
+  with or without the `play()` voice, stay under the master level (at most `MAX_OUTPUT_GAIN`)
+  without relying on the ceiling. What this does not cover: the sequencer's start overlaps the
+  notes' fade (at most ESCAPE_RELEASE_S), as a `play()` tone and a stopping sequence overlap
+  today; there the limiter and the ceiling are the bound. A ninth
+  note fades out the oldest note already releasing, or else the oldest held one, within
+  FAST_RELEASE_S, and starts when that fade has ended. The price is level: one note at full
+  velocity is 18 dB under a `play()` tone at the same master level. This is a decision, not a
+  measurement of what players want.
+- **Velocity.** Amplitude `(velocity / 127)^2`, that is `40 log10(velocity / 127)` dB
+  (`velocityLevel` in `src/js/midi/notes.js`). Chosen here; it is not claimed to be any
+  standard's curve. The engine raises a note's peak to GAIN_FLOOR (-80 dB), so velocities 1 to
+  3 sound at that floor, above the law; from velocity 4 the law holds exactly.
+- **Messages.** Every channel is heard (omni); a key is input, channel and note, so the same
+  note on two channels or two inputs is two notes. Note On with velocity 0 is a Note Off. A
+  repeated Note On for a sounding key fades the old note out under the new one. A Note Off for a
+  key that is not sounding changes nothing. CC 120 (All Sound Off) fades every note within
+  ESCAPE_RELEASE_S; CC 123 (All Notes Off) releases every note with its release time. Every
+  other message, CC 64 (sustain) included, is ignored in the first version. Pitch is
+  `midiToFrequency(note, A4)` with the Playground's A4; waveform, attack and release are the
+  Playground's. The Labs stages `play()` adds (filter, ADSR, additive) do not apply to notes.
+- **The safety limit.** A note obeys the session safety limit exactly as HOLD does: without the
+  continuous permission it ends at the limit (2 s by default) with the key still down, and
+  withdrawing the permission releases the notes it lengthened. A drone (V503) is not decided
+  here.
+- **The 0.95 × Nyquist bound.** A note whose frequency is at or above `safeMaximum` of the
+  running context is refused (nothing is scheduled), never clamped to a wrong pitch.
+- **Nothing keeps sounding.** Every note fades within ESCAPE_RELEASE_S when any input that was
+  listened to leaves (a `statechange` that disconnects it; every note stops, not only that
+  input's: the safe side), when the access is withdrawn (`revoked`) or replaced by a new Connect
+  MIDI, when the page is hidden (`visibilitychange`, `pagehide`), on Escape, when Measure or
+  Studio PLAY takes the output (`stopPlayback` in `main.js`) and when the sequencer starts.
+  Window blur does not stop notes: a Note Off still arrives while another window has the focus.
+- **Who owns the output.** While a measurement, a level reference capture, the Studio transport
+  or the sequencer owns the output a Note On is refused, and the page says so once per run of
+  refused notes (an info notice, the sentences of `MIDI_REFUSED` in `src/js/midi/ui.js`, quoted
+  in `docs/midi.md`), not per note.
+
+What V502 does not decide: latency and the clock mapping of `MIDIMessageEvent.timeStamp`
+(finding `latency-and-clock-mapping-unstated`: a note starts at `currentTime + START_OFFSET_S`
+when its message is handled, later when a fade must end first); sustain; a recorded check on
+real hardware (finding `no-real-device-check`). Every proof is on the fake audio context
+(`tests/unit/midi/notes.test.mjs`) and on synthetic MIDI events from the stub in the gate builds
+(`tests/browser/midi.cjs` check `midi-seam-notes`).
+
+### 2026-10-29: knobs, and how a MIDI controller reaches a parameter (D11)
+
+**Note of 2026-10-29 (J001), no section above changes.** On 2026-10-29 the owner chose rotary
+knobs for the continuous parameters of the instrument surfaces (D11, answered through
+AskUserQuestion and recorded by Q018), and asked for knobs, sliders and control panels done in
+one generic way. Decision 1 says MIDI input becomes note and controller events and that voices
+sound through the existing engine. It does not say what a controller event may change. This
+note decides that for the knob and for every other view of a continuous parameter. It
+decides nothing about MIDI output, MIDI clock, multiple tracks or the full-DAW scope that
+decision 5 keeps out; Q062 asks the owner about those.
+
+1. **A knob is a view of a parameter declaration, never a target of its own.** The knob (K058),
+   the slider and the typed field render one parameter declaration (the section 79
+   descriptor that N001 extends as `paramSpec`). They share one mapping between a normalised
+   position in [0, 1] and a value: linear, or logarithmic for a log parameter. MIDI never
+   addresses a knob, a DOM element, a lab closure or a MEASURE setting. A controller reaches a
+   parameter only through that declaration.
+2. **A controller is a modulation source in the Studio model.** A Control Change becomes the
+   output of a `midi-cc` node (controller number, channel, smoothing; K077) feeding the
+   parameter's PARAMETER port through a typed CONTROL edge (ADR 0032,
+   `project.typed-ports`). It is therefore a modulation in the sense of ADR 0037. It is added
+   in the parameter's mapped domain on the audio clock. It never writes the stored value, the
+   history or the knob's base. The mapping lives in the Studio document as that node and edge:
+   it is saved, undoable and part of the hash like any other edit. It is never kept in
+   `localStorage` or in a second map (`project.studio-model-is-canonical`).
+3. **Learn is a menu item of the control, not a mode of the page.** "Learn MIDI controller" is
+   an item of the one control menu (N004), on every parameter that has a PARAMETER port. The
+   menu opens with the ContextMenu key, a right click or a long-press (K058); Space is never
+   taken (ADR 0050). Choosing it
+   waits for the next Control Change and then dispatches one action that adds the node and the
+   edge, which is one history entry. Escape cancels the wait. On a parameter without a
+   PARAMETER port (a lab setting, a form field), the item is disabled and says why: "MIDI
+   controllers move Studio parameters; open this in Studio to map one."
+4. **MEASURE settings are never mapped.** They have no PARAMETER port, and "a measurement
+   setting is fixed for the duration of a take" (N001's static reason)
+   (`project.no-fake-science`).
+5. **The 7-bit value is mapped through the declaration's own scale.** Value v in 0..127 is the
+   position v / 127, and the position becomes a value through the same mapping the knob uses.
+   The value text the knob shows is the declaration's formatted value with its unit, never
+   the raw controller number. The raw number and the controller and channel are stated in the
+   knob's description ("MIDI CC 74, channel 1: 96 of 127"). 14-bit pairs, NRPN and relative
+   encoders are out of scope until a plan issue measures a device that sends them.
+6. **No jump is hidden.** When a learned controller first moves, the parameter follows it. The
+   knob shows the modulation band and, where a tap measures it, the live value (N005, N006).
+   It is never shown as if the stored base had changed. A pickup or soft-takeover mode is not
+   decided here.
+7. **The support states are unchanged.** The thirteen states of the 2026-10-18 note hold. In
+   every state but `connected`, the Learn item is disabled with that state's exact copy, and
+   nothing else on the control changes. Checks of learning use the seam of that note (the
+   `requestMIDIAccess` stub, the `midi-seam-...` group). Only measured checks support a claim
+   about which build exposes MIDI.
+8. **Timing stays deterministic.** A controller event sets the `midi-cc` node's source on the
+   audio clock with the declared smoothing. Nothing is allocated per event in the audio path,
+   and no network call or model inference sits between the controller and the parameter
+   (decision 3).
+
+What stays decided where it was: the knob's look, keys, touch and reduced-motion behaviour are
+K058's acceptance; the control menu is N004's; the `midi-cc` node type, its default depth and
+its tests are K077's. This note binds them to one route.

@@ -3,19 +3,19 @@ title: "Live views on WebGL where it pays, Canvas 2D everywhere"
 slug: live-views-on-webgl-where-it-pays-canvas-2d-everywhere
 order: 96
 priority: p2
-problem: "No view draws with WebGL (git grep finds no getContext('webgl') in src on main); the spectrogram composes its history with two drawImage blits and recolours W x H bytes on the CPU on a theme or range change (K033); there is no 3D view of the history, no persistence view of the live L/R signal beyond K035's optional afterglow, and no density view of the spectrum; nothing says which browsers of the gate can draw WebGL at all."
+problem: "No view draws with WebGL (git grep finds no getContext('webgl') in src on main); the spectrogram composes its history with two drawImage blits, and on main a LUT change (theme or range) clears the history (spectrogram-view.js:220, spectrogram.js:277), which K033 plans to replace with a W x H recolour on the CPU; there is no 3D view of the history, no persistence view of the live L/R signal beyond K035's optional afterglow, and no density view of the spectrum; nothing says which browsers of the gate can draw WebGL at all."
 outcome: "A measured GL layer under src/js/charts/gl: each view picks WebGL 2, WebGL 1 or its Canvas 2D twin by capability and cost and says which; the spectrogram is composed on the GPU from the K033 history and has a 3D view of it; the Phase & Stereo XY view has sample-density persistence; the live spectrum has a density layer; pinned markers link the views; one frame loop, nothing allocated per tick, axes and units from the analysis, the single file within its cap (intent gl-live-views)."
 acceptance_criteria:
-- "Y001, Y002, Y003, Y004, Y005, Y006, Y007, Y007 and Y008 are done with their evidence; npm run release-gate passes at Y009; node tests/browser/chart-cost.cjs --require-complete, node scripts/chart-census.mjs --require-complete and node tests/browser/gl-parity.cjs pass."
+- "Y001, Y002, Y003, Y004, Y005, Y006, Y007 and Y008 are done with their evidence; npm run release-gate passes at Y009; node tests/browser/chart-cost.cjs --require-complete, node scripts/chart-census.mjs --require-complete and node tests/browser/gl-parity.cjs pass."
 - "The line's gzip cost, the sum over its pull requests of head minus base size-report figures, is within the cap Q037 records."
 validation:
 - npm run release-gate
 evidence_required:
 - milestone_verified
 risks:
-- "CI legs without WebGL: Y001 measures which legs draw GL; a leg that cannot is tested on the Canvas 2D twin and says so, and the parity suite proves GL output where a leg can draw it; ?gl=sw exists for software rasterisers in tests only."
+- "CI legs without WebGL: Y001 measures which legs draw GL; a leg that cannot is tested on the Canvas 2D twin and says so, and the parity suite proves GL output where a leg can draw it; no ?gl=sw exists, because no leg reports a performance caveat (Y001); auto picks Canvas 2D on a software rasteriser, and the GL checks force ?gl=2 there and say so."
 - "The GL views build on M062 (K025, K027, K030, K031, K033, K034, K035, K036, K052, K053), on F002, F003 and F006 of #251 and on K016 (M061); through K028 and K053 they also wait on Q014 and Q016 of M063. Every one is a depends_on edge."
 - "src/js/analysis/spectrogram.js is guarded: Y003 adds a read-only ring accessor only, with a reviewer's verdict."
 - "The drafts of this session are not on main and are not edges here: the mini-scope is components-new W004 (Canvas 2D, never a GL context, under the budget Y002 measures), the integration map is synth K075 (the Y007 links become its rows), the readout with provenance is a components-new kind the K053 readout row can become an instance of."
 created_at: '2026-10-29'
-updated_at: '2026-10-30'
+updated_at: '2026-11-01'

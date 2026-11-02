@@ -7,7 +7,7 @@ profile: routine
 owner: "repository owner"
 objective: "On 2026-10-29 the owner raised the gzip budget to 1.2 MB, which leaves about 355 KB of headroom (coordinator's figure) for every open line, the charts line's cap of Q014 among them. Wave 1 of this line states ceilings that sum to 59 KB; the later waves 115 KB more. The plan recommends a cap of 200 KB for the whole line (Wave 1 within its stated ceilings), re-measured before Wave 3 and before Wave 4."
 why: "Asked by the connected-instrument plan (owner direction of 2026-10-29). .ai/repo/project/README.md: work that waits on an answer names the Q issue in depends_on."
-current_state: "Open on 2026-10-29. The plan's recommendation is not an answer. Every Wave 2 and Wave 3 slice that adds bytes name this issue in depends_on, so majordomus plan next does not hand them out before it is answered."
+current_state: "Answered by the owner on 2026-10-31: no line cap (see evidence); the plan's 200 KB recommendation was declined. Where a slice's acceptance criteria say the line's figures stay within the cap Q023 records, that clause reduces to the global gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29); each slice's own stated ceiling still applies."
 scope:
   - ".ai/repo/project/issues/Q023.yaml"
 acceptance_criteria:
@@ -18,4 +18,15 @@ validation:
 evidence_required:
   - "owner_decision"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-10-31T22:20:31Z
+started_at: 2026-10-31T22:20:09Z
+started_event: sha256:3a7821743c781c994b990793ff84f6708eaeed91f155d984cb0b5e506ec60d7a
+completed_at: 2026-10-31T22:20:31Z
+completed_event: sha256:57f4bbbd39d4cc9debe52e6d32b948a21170deb9ebe24fe706e1c095ff103b66
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "AskUserQuestion in Claude Code session oscilla-26 (claude-code 9c196196), 2026-10-31 (Czech)"
+    result: "Owner chose 'Bez stropu linie' (no line cap): the instrument line has no gzip cap of its own for Waves 2 and 3 (nor for Wave 1 beyond its slices' stated ceilings); only the global gzip budget of scripts/build-config.mjs, 1.2 MB by the owner's decision of 2026-10-29, applies, with each slice's own stated ceiling still in force. The plan's recommendation (a 200 KB line cap) was declined."
+    commit: 1f35a1d82999e2586c1f7b51e4b04a98fb3fe7e8
+    recorded_at: 2026-10-31T22:20:22Z

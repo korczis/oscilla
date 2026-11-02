@@ -18,7 +18,9 @@ import { mulberry32 } from '../../src/js/audio/noise.js';
 
 const html = readFileSync(new URL('../../src/index.html', import.meta.url), 'utf8');
 const between = (from, to) => html.slice(html.indexOf(from), html.indexOf(to, html.indexOf(from)));
-const measureView = between('id="osc-view-measure"', 'id="osc-view-experiments"');
+// The MEASURE view stands between the Playground's rows (P002): it ends where row 3 begins.
+// The third row's tag carries the Synth workspace's :class binding (#329), so only its start.
+const measureView = between('id="osc-view-measure"', '<div class="osc-row3"');
 const experimentsView = between('id="osc-view-experiments"', 'id="osc-view-learn"');
 
 // The sidebar is rendered from the one registry (shell.js, issue F002): its x-for walks NAV_TREE,
@@ -37,7 +39,7 @@ test('Measure and Experiments follow Playground; About stays last', () => {
 test('the top level is §73 plus Studio (§198) and About; groups hold the V2 workspaces', () => {
   const ids = NAV_TREE.map((e) => `${e.kind === 'group' ? 'nav-group' : 'nav'}.${e.id}`);
   assert.deepEqual(ids, ['nav.playground', 'nav.measure', 'nav.experiments', 'nav-group.analyze',
-    'nav-group.synthesis', 'nav.learn', 'nav.studio', 'nav.about']);
+    'nav-group.synthesis', 'nav.learn', 'nav.studio', 'nav.synth', 'nav.about']);
   assert.deepEqual(Object.keys(NAV_GROUPS), ['analyze', 'synthesis']);
   for (const g of NAV_TREE.filter((e) => e.kind === 'group')) {
     assert.deepEqual(g.items.map((w) => w.id), [...NAV_GROUPS[g.id]]);
@@ -58,7 +60,10 @@ test('the top level is §73 plus Studio (§198) and About; groups hold the V2 wo
 });
 
 test('the workspaces are full-width views keyed on `workspace`, with their own panels', () => {
-  assert.match(measureView, /:hidden="workspace !== 'measure'"/);
+  // The Playground shows MEASURE's guided flow as its measurement row (P002, Q004 option A),
+  // so the view is shown there too; its other panels stay MEASURE's (instrument.css,
+  // tests/unit/first-screen-layout.test.mjs, tests/browser/first-screen.cjs check layout).
+  assert.match(measureView, /:hidden="workspace !== 'measure' && workspace !== 'playground'"/);
   assert.match(experimentsView, /:hidden="workspace !== 'experiments'"/);
   assert.equal((measureView.match(/<section class="osc-panel /g) || []).length, 7);
   // Definitions (ADR 0043), saved experiments, findings (ADR 0046), detail, compare.

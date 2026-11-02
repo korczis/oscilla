@@ -27,4 +27,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-10-30T16:06:11Z
+started_at: 2026-10-30T16:05:49Z
+started_event: sha256:f38af9c58f56c404fb5855ec506bf55e049905e44eed4a1428090fb84a32bef7
+completed_at: 2026-10-30T16:06:11Z
+completed_event: sha256:56bee44a4d712870fc42f6748f2286a65b7a2f1632a1cb9225182a426f02f766
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/test-helpers-one-owner.test.mjs"
+    result: "2/2 pass at main e872c444; landed in #282 via train #316 (88b936cb)"
+    artifact: "tests/unit/test-helpers-one-owner.test.mjs"
+    commit: e872c44489bd66ecfd8a6b58a0dd868270da3cf0
+    recorded_at: 2026-10-30T16:06:04Z

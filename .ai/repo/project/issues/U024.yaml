@@ -1,0 +1,42 @@
+id: U024
+milestone: M054
+serves:
+  - "ui-current#ui-audited"
+title: "On touch the phase-offset field sits beside the Phase chart, not over its traces"
+slug: on-touch-the-phase-offset-field-sits-beside-the-phase-chart-no
+priority: p3
+profile: implementation
+objective: "Lands as fix(ui). Defect: in the Phase & Stereo panel (section#osc-panel-phase, data-osc-modes compare synthesis) div.osc-phase-offset is absolutely positioned over the chart (src/styles/integration.css:111, position:absolute, top 0, left 8px, z-index 3), and the coarse-pointer rule at src/styles/integration.css:774 raises its input#osc-phase-offset [data-osc=\"phase.offset\"] to 44 px; on touch the field then covers the top 44 of the 112 px of div#osc-chart-phase over its first 83 px of width (Compare at 390, Playground at 768), hiding the A trace label and the start of both traces. After: the offset field is a Pro form control in the Pro chart card F003 and F006 build for this panel (in the card header's actions or a toolbar row above the plot, Tailwind responsive variants for the coarse size), laid out in flow, so at every width and pointer the field and the plot share no pixel; the absolute overlay rule and the panel's entry in the coarse list leave src/styles/integration.css, and no osc-* class, selector or inline style is added (project.ui-uses-flowbite-pro). Negative cases: the field stays hidden on the Stereo tab and shown on Phase and Lissajous; its id, data-osc hook, label 'Δφ B', unit (degrees), 0-359 range and aria-label are unchanged, and the value it shows is the offset that plays (project.no-fake-science); it stays a 44 px target on a coarse pointer and a working input everywhere (project.no-inert-surfaces); the fine-pointer desktop layout loses no chart area to it. Rollback: revert the fix commit; the overlay returns and no data or stored state changes. Not this: C010 (PR #293, the field's value after an import), V220 and V241 (phase-offset function), S048 and S071 (general touch targets and coarse layouts), V252 (stepper keys hidden), U005 (PR #273, Analyzer and Compare fill their workspace), PRs #278 and #330 (markup moves only)."
+why: "Found by the S074 quality-bar review of 2026-10-30 at origin/main d9db6bdf, section 74 symptom \"On touch, the 44 px phase-offset input sits over the top-left of the Phase chart and hides the A trace label and the start of the traces.\", reproduced by an independent verifier; evidence: the measured boxes (390: input x 28-111, y 451-495 on a chart x 20-370, y 451-563; 768: input y 548-592 on a chart y 548-660) and the screenshot scratchpad s074/out/probe-phase-390.png. The panel is pending Flowbite debt, but the overlap comes from the coarse-size rule, so the Pro rebuild must not carry the overlay over."
+scope:
+  - "src/index.html"
+  - "src/styles"
+  - "tests/browser/layout.cjs"
+  - "tests/unit/phase-offset-placement.test.mjs"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "F003"
+  - "F006"
+acceptance_criteria:
+  - "Fail-first: tests/unit/phase-offset-placement.test.mjs reads src/index.html and src/styles and fails on the merge base: input#osc-phase-offset is not inside an element that a src/styles rule positions absolute or fixed, and its container is not a later sibling overlaid on #osc-chart-phase."
+  - "The coarse-pointer loop of tests/browser/layout.cjs (hasTouch, 390x844 Compare and 768x1024 Playground) asserts that the bounding boxes of input#osc-phase-offset and div#osc-chart-phase do not intersect and that document.elementFromPoint at the chart's top-left plot corner returns the chart or a descendant, in chromium, firefox and webkit; it fails on the merge base."
+  - "The same check asserts the field is hidden on the Stereo tab, visible on Phase and Lissajous, at least 44 px tall on a coarse pointer, and that typing 90 into it changes the offset the Phase chart draws."
+  - "It adds no class token, selector, markup surface or inline style and only removes legacy ones, so tests/unit/ui-flowbite-pro-baseline.json stays equal or falls (node scripts/ui-flowbite-pro-record.mjs --check passes, rewritten only where a count fell) and node --test tests/unit/ui-flowbite-pro.test.mjs passes (project.ui-uses-flowbite-pro, project.visual-identity-lock v2)."
+  - "As a fix change it carries a unit test that fails on the merge base and passes on the head (project.fail-first)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named deadline (project.suite-harness, project.bounded-test-timing)."
+  - "Definition of done, extends: the touch invariant of tests/browser/layout.cjs gains a no-overlap clause for a control over its chart."
+  - "Definition of done, interlinks: the pull request names U024, F003, F006 and C010 by plan id; the tests/README.md row of layout.cjs names the new clause."
+  - "Definition of done, interactivity: the offset field stays a live 44 px input on touch that redraws the Phase chart (asserted above)."
+  - "Definition of done, docs, menus and routes: tests/README.md gains the row of the new unit test and the extended row of layout.cjs; no menu or route changes (stated)."
+  - "Definition of done, tested: the unit test and the browser check above, and npm test; dist is rebuilt and npm run build:check passes."
+  - "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+  - "node --test tests/unit/phase-offset-placement.test.mjs"
+  - "node tests/browser/layout.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-10-30'
+updated_at: '2026-10-30'

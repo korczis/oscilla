@@ -65,7 +65,7 @@ test('one registry: ids, order, groups, labels and the router all come from it',
     synthesis: ['synthesis', 'sequencer', 'presets'] });
   // The tree: a group sits where its first workspace is, and holds its workspaces in order.
   assert.deepEqual(NAV_TREE.map((e) => e.id), ['playground', 'measure', 'experiments', 'analyze',
-    'synthesis', 'learn', 'studio', 'about']);
+    'synthesis', 'learn', 'studio', 'synth', 'about']);
   const flat = NAV_TREE.flatMap((e) => (e.kind === 'group' ? e.items : [e])).map((w) => w.id);
   assert.deepEqual(flat, WORKSPACE_IDS);
   // Hackable: one more row is one more entry, in its group, and nothing else changes.
@@ -111,8 +111,10 @@ test('the sidebar is rendered from the registry, with the hooks the suites addre
   // The backdrop and the drawer appear in one frame: a class binding, never x-show (which
   // defers a show to a later task, so a first tap on the backdrop missed it).
   assert.doesNotMatch(html, /data-osc="sidebar\.backdrop"[^>]*x-show/);
-  assert.match(html, /<h1 [^>]*data-osc="page\.title" x-text="workspaceLabel\(\)">/);
-  assert.equal((html.match(/<h1\b/g) || []).length, 1, 'one H1: the page header names it');
+  assert.match(html, /<p [^>]*data-osc="page\.title" x-text="workspaceLabel\(\)">/);
+  // One h1: the Q002 sentence leading <main> (P002, Q004 option A); the page header names the
+  // workspace in its breadcrumb, and each workspace leads with its own heading.
+  assert.equal((html.match(/<h1\b/g) || []).length, 1, 'one H1, in <main>');
 });
 
 test('the navbar and the sidebar carry the Pro class sets of their kinds, no legacy class', () => {

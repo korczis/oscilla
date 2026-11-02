@@ -26,4 +26,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-10-30T16:05:33Z
+started_at: 2026-10-30T16:05:11Z
+started_event: sha256:4e559c2cbd87e2ff144439c3dedce3416794ca779d22467fc36d01ff15a24706
+completed_at: 2026-10-30T16:05:33Z
+completed_event: sha256:df321936c128eb5c8a2fd9b13445af6727adf80b38abdc83157eddd8d8fdc510
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v31-studio-performance.test.mjs tests/unit/v31-studio-docs.test.mjs"
+    result: "16/16 pass at main e872c444; landed in #309 via train #316 (88b936cb); budgets judged on CPU time"
+    artifact: "tests/unit/v31-studio-performance.test.mjs"
+    commit: e872c44489bd66ecfd8a6b58a0dd868270da3cf0
+    recorded_at: 2026-10-30T16:05:26Z

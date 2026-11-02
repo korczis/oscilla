@@ -17,6 +17,7 @@ non_scope:
 depends_on: []
 acceptance_criteria:
 - "ADR 0016 carries a dated resolution note with the capability table per browser, OS and mode (headless, headed), the context limit observed per browser, and the per-frame allocation, main-thread time, draw calls and gzip cost of each backend for the level ring and the XY trace, each figure with its command and the spike commit it ran at; the note is appended and leaves the sections above it and the status as written (.ai/repo/adrs/README.md)."
+- "Done covers the capability table and the context limits, which load does not change. The per-frame timings of the note are indicative only (the shared Mac at a 1-minute load of 6.7 to 24.5 with runs overlapping, headed timings Chromium only, linux emulated and not quoted) and decide nothing: Y002 measures the core again, and each of Y003 to Y006 its own design, under Y002's measure, one browser at a time on a quiet machine; the gzip figures of record are each slice's npm run build size-report, G1's insertion into the committed dist being an approximation. Q050 part 1 rests on the allocation and draw-call figures (p5's 25 KB to 29 MB per frame against about 340 B), which a load of that size does not reverse; Q050 part 2 is a rule that Y002's measure applies per view."
 - "The curated record webgl-in-the-gate-browsers (schema knowledge/v1, class fact, epistemics observed, derived_from the spike commit) states what each CI leg can draw, so every later GL check names its skips from it; majordomus knowledge check and majordomus knowledge validate report no finding for it, and majordomus knowledge search webgl finds it."
 - "The note states the uPlot spectrum's measured draw time and says whether a GL spectrum line would save anything measurable; Y006 builds only the density layer unless it would."
 - "main carries no spike code: git grep -n -i webgl -- src on main finds nothing the spike added."
@@ -28,4 +29,4 @@ validation:
 evidence_required:
 - verified
 created_at: '2026-10-29'
-updated_at: '2026-10-29'
+updated_at: '2026-11-01'

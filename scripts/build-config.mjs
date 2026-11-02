@@ -71,6 +71,10 @@ export const BUILD_TIME_ASSETS = ['flowbite', 'lucide-static', 'tailwindcss'];
 // ~245 KB of the gzip, while the views call only about 28 of its 2D drawing functions; replacing
 // it is the deferred alternative. Raw follows gzip at the measured ratio (3.47), so gzip stays
 // the binding limit.
+// On 2026-10-29 the owner raised the gzip budget from 1 000 000 to 1 200 000, replacing the #114
+// stopgap (plan issue E027; ADR 0012 note): main at b67d1e5 measured 2 839 952 B raw / 820 005 B
+// gzip. Raw follows in proportion, from 3 500 000 to 4 200 000 (measured ratio 3.46), so gzip
+// stays the binding limit. Replacing p5 stays the deferred alternative (ADR 0013).
 // F001 (ADR 0061) compiles Tailwind with the flowbite plugin into the <style> and bundles five
 // flowbite components (drawer, dropdown, collapse, tooltip, tabs, with @popperjs/core) into the
 // app script, within the budget. Both sides are measured as verify-dist and size-report measure
@@ -87,6 +91,6 @@ export const BUILD_TIME_ASSETS = ['flowbite', 'lucide-static', 'tailwindcss'];
 // 2 902 810 B raw / 837 741 B gzip, after about 2 935 000 B raw / about 844 200 B gzip
 // (+32 KB raw, +6.4 KB gzip), within the budget.
 export const BUDGET = {
-  rawBytes: 3_500_000,
-  gzipBytes: 1_000_000,
+  rawBytes: 4_200_000,
+  gzipBytes: 1_200_000,
 };

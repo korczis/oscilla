@@ -66,6 +66,9 @@ accepted` lists them. The rest stay `proposed`, each for a stated reason:
   (Q003), which the owner may override, so its acceptance is the owner's.
 - 0063: new on 2026-10-29 (the G1 coherence contract); proposed, with two open questions
   for the owner, and nothing implements it yet.
+- 0081: new on 2026-10-30 (plan issue J001, the component contract and its Majordomus
+  projection); proposed, because accepting it is the owner's act, and nothing implements it
+  yet (G001 builds the catalogue on it).
 
 On 2026-10-28 the owner ordered Flowbite Pro for the UI of every project; ADR 0061 records
 that order as an accepted decision (its acceptance note quotes it) and supersedes the bullet of

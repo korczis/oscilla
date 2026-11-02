@@ -47,6 +47,6 @@ live edits and the node counts after stop).
 
 ## What it does not do
 
-There are no delay or feedback nodes in 3.1, no node groups or subgraphs, and no minimap.
+There are no delay or feedback nodes in 3.1 and no node groups or subgraphs.
 `engine.stopAll()` does not reach the Studio graph; Studio STOP and Escape do
 (`docs/v31/compiler.md`, "Known limitations"). Microphone input never reaches Master Output.

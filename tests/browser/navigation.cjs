@@ -5,6 +5,7 @@
 //
 //   node tests/browser/navigation.cjs [--dist dist/index.html] [--browsers chromium,firefox,webkit]
 //        [--origins file,http] [--only name1,name2] [--json out.json]   (or OSC_BROWSERS=...)
+//        [--viewport 1536x1024]   (the page size of the run; 390x844 is the phone)
 //
 // Checks (asserted):
 //   guard-studio      a clean page registers no beforeunload listener and a reload asks
@@ -20,7 +21,7 @@
 //                     no notification is raised, a changed instrument setting and unsaved Studio
 //                     changes survive Back / Forward, and the guard asks nothing for them; a
 //                     reload reopens the workspace the address names
-//   open-every-workspace  a fresh page at `#m=<id>` opens each of the twelve workspaces; the
+//   open-every-workspace  a fresh page at `#m=<id>` opens each of the thirteen workspaces; the
 //                     Experiments list loads, About sets its title
 //   hashchange-mode   a hash set after load moves the workspace AND the V1 mode together
 //                     (`m=learn` → Learn, `m=dual` → Synthesis/dual, `m=sweep` → Playground/sweep)
@@ -33,6 +34,14 @@
 //                     notes" and a rename being typed in Experiments each arm the guard
 //   guard-memory-store    with IndexedDB refused, a saved experiment and a saved Studio project
 //                     (page memory only) arm the guard and a reload asks
+//   seq-unsaved-guard  (C019, finding persist-7) a fresh page and a lab-only edit (Filter,
+//                     Envelope, the instrument waveform the sequence follows) arm nothing; a
+//                     block added through the Add menu arms the guard with "sequencer: Unsaved
+//                     sequence", shows "unsaved sequence" in the panel, and a reload asks and
+//                     keeps the block; Export config disarms it, a reload asks nothing, and the
+//                     exported file imported back restores the sequence with the guard quiet; a
+//                     Tempo change through its select arms it again, and choosing the saved tempo
+//                     again disarms it
 //   refused-link-not-in-history  a refused Studio or recipe link (as a new hash or at load) is
 //                     replaced in the address: Back never opens it
 //   nav-links         each nav href is `#m=<id>` and opens that workspace on a fresh page; a
@@ -55,6 +64,19 @@
 //                     workspace in view and lists that workspace's keys (Studio: its table, the
 //                     timeline keys and the note on keyboard paths) and the global ones; no key
 //                     is listed twice in one view and a kbd holds keys only
+//   control-names     (H004) each control reaches what its name says: the logo, described as
+//                     "Open the Playground", opens it from Measure; the skip link names the workspace shown
+//                     in the Playground, Measure and Studio and moves focus to the main region
+//                     that holds it; the header "?", named "Keyboard shortcuts", opens the dialog
+//                     of that title; the Export menu has no Import item, and More's "Import
+//                     config…" opens the file picker
+//   experiment-row-keyboard  (H004 B14) a saved experiment's row body is a focusable button:
+//                     Enter opens the record in the detail, Space opens it too
+//   keyboard-link     (K026) the link key `kbd` arms the keyboard of the view a link opens:
+//                     `#m=playground&kbd=1` arms the Playground only (Arm keys pressed, the keys
+//                     shown) and the key leaves the address with the first workspace change;
+//                     `#m=studio&kbd=1` arms the Studio only, and a link set in the page arms
+//                     the Playground beside it; `#m=measure&kbd=1` arms nothing and shows no keys
 //   no-console-errors
 'use strict';
 const { serveDist } = require('./lib/serve.cjs');
@@ -65,7 +87,7 @@ const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
 const shell = require('./lib/shell.cjs');
 const seam = require('./lib/measure-seam.cjs');
-const { until } = require('./lib/wait.cjs');
+const { until, bounded } = require('./lib/wait.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -81,6 +103,11 @@ const BROWSERS = RUN.browsers;
 const ORIGINS = RUN.origins;
 const ONLY = arg('only', '') ? new Set(arg('only', '').split(',')) : null;
 const JSON_OUT = arg('json', '');
+const [VIEW_W, VIEW_H] = arg('viewport', '1536x1024').split('x').map(Number);
+if (!(VIEW_W > 0 && VIEW_H > 0)) {
+  console.error('--viewport takes <width>x<height>, e.g. 390x844');
+  process.exit(2);
+}
 const LAUNCH = {
   chromium: { args: ['--autoplay-policy=no-user-gesture-required'] },
   firefox: { firefoxUserPrefs: { 'media.autoplay.default': 0, 'media.autoplay.blocking_policy': 0,
@@ -600,6 +627,121 @@ function defineChecks() {
     }
   });
 
+  def('seq-unsaved-guard', async (ctx) => {
+    const MS = 10000;
+    const seqState = (page) => page.evaluate(() => {
+      // whatWouldBeLost() re-reads the sources first, so the listener count is current.
+      const lost = window.OSCILLA.unsaved.whatWouldBeLost().map((x) => `${x.domain}: ${x.label}`);
+      const m = window.OSCILLA.labs.sequencer.editor.model;
+      const el = document.querySelector('[data-osc="seq.unsaved"]');
+      return { lost, listeners: window.__oscBeforeUnload(), armed: window.OSCILLA.unsaved.armed,
+        blocks: m.blocks.length, types: m.blocks.map((b) => b.type).join(','),
+        tempoBpm: m.tempoBpm, indicator: !!el && el.getClientRects().length > 0,
+        indicatorText: el ? el.textContent.trim() : null };
+    });
+    const SEQ = 'sequencer: Unsaved sequence';
+    const armedSeq = (s) => s.lost.includes(SEQ) && s.listeners === 1 && s.armed && s.indicator;
+    const quiet = (s) => s.lost.length === 0 && s.listeners === 0 && !s.armed && !s.indicator;
+    // A reload: the browser's beforeunload dialog (dismissed: the page stays) or a new page.
+    const reload = async (page, what) => {
+      let dialog = null;
+      const onDialog = (d) => { dialog = d.type(); d.dismiss().catch(() => {}); };
+      page.on('dialog', onDialog);
+      await page.evaluate(() => { window.__oscSamePage = true; });
+      await page.reload({ waitUntil: 'load', timeout: 3000 }).catch(() => {});
+      page.off('dialog', onDialog);
+      const stayed = await bounded(page.evaluate(() => window.__oscSamePage === true),
+        { ms: MS, what: `${what}: read the page after the reload` }).catch(() => false);
+      if (!stayed) {
+        await until(() => page.evaluate(() => document.documentElement.dataset.ready === 'true'
+          && !!(window.OSCILLA.labs && window.OSCILLA.labs.sequencer)).catch(() => false),
+        { ms: 15000, what: `${what}: the reloaded page is ready` });
+      }
+      return { dialog, stayed };
+    };
+    const page = await H.open(ctx, ctx.baseUrl);
+    const clean = await seqState(page);
+    // Lab and instrument settings are configuration, kept by an explicit save (ADR 0045).
+    await page.evaluate(() => {
+      const O = window.OSCILLA;
+      O.labs.filter.update({ enabled: true, frequency: 300 });
+      O.labs.envelope.update({ enabled: true });
+      O.app.setWaveform('square');
+    });
+    const labOnly = await seqState(page);
+    await H.navTo(page, 'sequencer');
+    await page.click('[data-osc="seq.add"]');
+    // An item below the menu's first row, which the scroll area clips until C005 lands.
+    await page.click('[data-osc="seq.addType"][data-value="burst"]');
+    const added = await until(async () => {
+      const s = await seqState(page);
+      return armedSeq(s) ? s : null;
+    }, { ms: MS, what: 'seq-unsaved-guard: an added block arms the guard' }).catch(() => null);
+    const addedNow = added || await seqState(page);
+    const askReload = await reload(page, 'seq-unsaved-guard (unsaved)');
+    const afterAsk = await seqState(page);
+    // Export config is the save: the file holds the sequence.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oscilla-nav-seq-'));
+    const file = path.join(dir, 'config.json');
+    await page.click('[data-osc="header.export"]');
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: MS }),
+      page.click('[data-osc="export.config"]'),
+    ]);
+    await bounded(download.saveAs(file), { ms: MS, what: 'seq-unsaved-guard: save the export' });
+    const exported = await until(async () => {
+      const s = await seqState(page);
+      return quiet(s) ? s : null;
+    }, { ms: MS, what: 'seq-unsaved-guard: Export config disarms the guard' })
+      .catch(() => null);
+    const exportedNow = exported || await seqState(page);
+    const doc = JSON.parse(fs.readFileSync(file, 'utf8'));
+    await page.mouse.click(3, 1000);
+    const quietReload = await reload(page, 'seq-unsaved-guard (exported)');
+    await page.mouse.click(3, 1000);
+    const fresh = await seqState(page);
+    // The exported file restores the sequence; an imported sequence is saved work.
+    await H.navTo(page, 'sequencer');
+    await page.setInputFiles('#osc-import-file', file);
+    const imported = await until(async () => {
+      const s = await seqState(page);
+      return s.blocks === addedNow.blocks && s.types === addedNow.types ? s : null;
+    }, { ms: MS, what: 'seq-unsaved-guard: the exported file restores the sequence' })
+      .catch(() => null);
+    const importedNow = imported || await seqState(page);
+    await page.selectOption('[data-osc="seq.tempo"]', '90');
+    const tempo = await until(async () => {
+      const s = await seqState(page);
+      return armedSeq(s) ? s : null;
+    }, { ms: MS, what: 'seq-unsaved-guard: a Tempo change arms the guard' }).catch(() => null);
+    const tempoNow = tempo || await seqState(page);
+    await page.selectOption('[data-osc="seq.tempo"]', String(importedNow.tempoBpm));
+    const back = await until(async () => {
+      const s = await seqState(page);
+      return quiet(s) ? s : null;
+    }, { ms: MS, what: 'seq-unsaved-guard: the saved tempo again disarms the guard' })
+      .catch(() => null);
+    const backNow = back || await seqState(page);
+    await page.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+    return { ...H.verdict({
+      cleanQuiet: quiet(clean),
+      labOnlyQuiet: quiet(labOnly),
+      addArms: !!added && added.blocks === clean.blocks + 1
+        && added.indicatorText === 'unsaved sequence',
+      reloadAsks: askReload.dialog === 'beforeunload' && askReload.stayed
+        && afterAsk.blocks === addedNow.blocks && armedSeq(afterAsk),
+      exportDisarms: !!exported && Array.isArray(doc.sequencer && doc.sequencer.blocks)
+        && doc.sequencer.blocks.length === addedNow.blocks,
+      exportedReloads: quietReload.dialog === null && !quietReload.stayed && quiet(fresh)
+        && fresh.blocks === clean.blocks,
+      importRestoresQuiet: !!imported && quiet(importedNow),
+      tempoArms: !!tempo && tempo.tempoBpm === 90,
+      savedTempoQuiet: !!back && back.tempoBpm === importedNow.tempoBpm,
+    }), clean, labOnly, added: addedNow, askReload, afterAsk, exported: exportedNow, quietReload,
+    fresh, imported: importedNow, tempo: tempoNow, back: backNow };
+  });
+
   def('refused-link-not-in-history', async (ctx) => {
     // A refused link changes nothing, and nothing brings it back: not Back, not a reload.
     const bad = Buffer.from(JSON.stringify({ v: 1, f1: -1 })).toString('base64url');
@@ -660,7 +802,8 @@ function defineChecks() {
       await p.close();
     }
     return { ...H.verdict({
-      twelve: links.length === 12,
+      // Synth (#329, owner Q019: top-level after Studio) is the thirteenth workspace.
+      thirteen: links.length === 13,
       hrefs: links.every((l) => l.href === `#m=${l.id}`),
       landed: landed.every((l) => l.workspace === l.id),
       modifiedLeftToBrowser: modified.prevented === false && modified.workspace === 'playground',
@@ -890,6 +1033,168 @@ function defineChecks() {
     }), repeated, prose, lists, play, studio, measure };
   });
 
+  // H004: a control reaches the workspace, focus target or dialog its accessible name states.
+  const reach = (pred, what, ms = 5000) => until(pred, { ms, what }).catch((e) => {
+    if (e.name === 'WaitTimeout') return null;
+    throw e;
+  });
+  def('control-names', async (ctx) => {
+    const page = await H.open(ctx, `${ctx.baseUrl}#m=measure`);
+    const nameOf = (sel) => page.evaluate((s) => {
+      const el = document.querySelector(s);
+      return el ? (el.getAttribute('aria-label') || el.textContent).replace(/\s+/g, ' ').trim()
+        : null;
+    }, sel);
+    // B6: the logo goes home.
+    const BRAND = '[data-osc="header.brand"]'; // the Pro navbar's logo (F002)
+    const logo = { name: await nameOf(BRAND),
+      title: await page.getAttribute(BRAND, 'title') };
+    await page.click(BRAND);
+    logo.reached = await reach(() => page.evaluate(() => (window.OSCILLA.app.workspace
+      === 'playground' ? new URLSearchParams(window.location.hash.slice(1)).get('m') : null)),
+    'control-names: the logo opens the Playground');
+    // B7: the skip link names the workspace shown and lands on the main region holding it.
+    const skip = {};
+    for (const ws of ['playground', 'measure', 'studio']) {
+      if (ws !== 'playground') {
+        await page.evaluate((w) => { window.location.hash = `#m=${w}`; }, ws);
+        await reach(() => page.evaluate((w) => window.OSCILLA.app.workspace === w, ws),
+          `control-names: #m=${ws} opens ${ws}`);
+      }
+      const name = await reach(async () => {
+        const n = await nameOf('.osc-skip');
+        return /instrument/.test(n || '') ? null : n;
+      }, `control-names: the skip link is re-labelled for ${ws}`);
+      await page.focus('.osc-skip');
+      await page.keyboard.press('Enter');
+      const landed = await reach(() => page.evaluate((w) => {
+        const a = document.activeElement;
+        if (!a || a.tagName !== 'MAIN') return null;
+        const view = document.getElementById(`osc-view-${w}`);
+        const shown = w === 'playground' ? a.querySelector(':scope > h1')
+          : view && view.getClientRects().length > 0 && view;
+        return shown && a.contains(shown) ? a.id : null;
+      }, ws), `control-names: the skip link focuses the main region holding ${ws}`);
+      skip[ws] = { name, landed };
+    }
+    // B8: the header "?" opens the dialog it is named for. A phone hides it; there More's
+    // "Keyboard shortcuts" is the way to that dialog, and is judged the same way.
+    const helpShown = await H.shown(page, '[data-osc="header.help"]');
+    const opener = helpShown ? '[data-osc="header.help"]' : '[data-osc="header.shortcuts"]';
+    const helpName = await nameOf(opener);
+    if (!helpShown) await page.click('[data-osc="header.overflow"]');
+    await page.click(opener);
+    const help = await reach(() => page.evaluate(() => {
+      const d = [...document.querySelectorAll('dialog[open]')];
+      if (d.length !== 1) return null;
+      const t = document.getElementById(d[0].getAttribute('aria-labelledby'));
+      return { id: d[0].id, title: t ? t.textContent.trim() : null,
+        focusInside: d[0].contains(document.activeElement) };
+    }), 'control-names: the header "?" opens one dialog');
+    await page.keyboard.press('Escape');
+    await reach(() => page.evaluate(() => !document.querySelector('dialog[open]')),
+      'control-names: Escape closes the shortcut dialog');
+    // B13: Import is not in the Export menu; More's import opens the file picker.
+    const exportItems = await page.evaluate(() => [...document
+      .querySelectorAll('#osc-export-menu [role^="menuitem"]')].map((b) => b.textContent.trim()));
+    await page.click('[data-osc="header.overflow"]');
+    const importName = await nameOf('[data-osc="config.import"]');
+    const [chooser] = await Promise.all([
+      page.waitForEvent('filechooser', { timeout: 5000 }).catch(() => null),
+      page.click('[data-osc="config.import"]'),
+    ]);
+    const picker = chooser ? await chooser.element().evaluate((x) => x.id) : null;
+    await page.close();
+    return { ...H.verdict({
+      logoNamed: /^OSCILLA · /.test(logo.name || '') && logo.title === 'Open the Playground',
+      logoOpensPlayground: logo.reached === 'playground',
+      skipNamed: skip.playground.name === 'Skip to main content: Playground'
+        && skip.measure.name === 'Skip to main content: Measure'
+        && skip.studio.name === 'Skip to main content: Studio',
+      skipLands: ['playground', 'measure', 'studio'].every((w) => skip[w].landed === 'osc-main'),
+      helpNamed: helpName === 'Keyboard shortcuts',
+      helpOpensIt: !!help && help.id === 'osc-dlg-help' && help.title === helpName
+        && help.focusInside,
+      exportHasNoImport: exportItems.length > 0 && !exportItems.some((t) => /import/i.test(t)),
+      importOpensPicker: /^Import config/.test(importName || '') && picker === 'osc-import-file',
+    }), logo, skip, helpShown, helpName, help, exportItems, importName, picker };
+  });
+
+  def('experiment-row-keyboard', async (ctx) => {
+    const page = await H.open(ctx, ctx.baseUrl);
+    const runState = await H.complete(page);
+    if (runState !== 'COMPLETE') return { ok: false, failed: ['run'], runState };
+    await H.save(page);
+    await H.navTo(page, 'experiments');
+    const id = await reach(() => page.evaluate(() => {
+      const r = window.OSCILLA.app.exps.rows[0];
+      return r ? r.id : null;
+    }), 'experiment-row-keyboard: the saved run is listed', 10000);
+    const sel = `[data-osc="exp.row"][data-id="${id}"] .osc-x-main`;
+    const row = await page.evaluate((s) => {
+      const el = document.querySelector(s);
+      const a = window.OSCILLA.app;
+      window.__oscOpened = [];
+      const open = a.experimentsOpen;
+      a.experimentsOpen = (...args) => {
+        window.__oscOpened.push(args[0]);
+        return open.apply(a, args);
+      };
+      return el ? { role: el.getAttribute('role'), tabIndex: el.tabIndex } : null;
+    }, sel);
+    await page.focus(sel);
+    await page.keyboard.press('Enter');
+    const enter = await reach(() => page.evaluate((x) => {
+      const d = window.OSCILLA.app.exps.detail;
+      return window.__oscOpened.length === 1 && d && d.id === x ? window.__oscOpened.slice()
+        : null;
+    }, id), 'experiment-row-keyboard: Enter opens the record');
+    await page.focus(sel);
+    await page.keyboard.press('Space');
+    const space = await reach(() => page.evaluate(() => (window.__oscOpened.length === 2
+      ? window.__oscOpened.slice() : null)), 'experiment-row-keyboard: Space opens the record');
+    await page.close();
+    return { ...H.verdict({
+      focusableButton: !!row && row.role === 'button' && row.tabIndex === 0,
+      enterOpens: !!enter && enter[0] === id,
+      spaceOpens: !!space && space[1] === id,
+    }), row, enter, space };
+  });
+
+  def('keyboard-link', async (ctx) => {
+    const read = (page) => page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      const el = document.querySelector('[data-osc="keyboard"]');
+      const arm = document.querySelector('[data-osc="keyboard.arm"]');
+      return { workspace: a.workspace, armed: { ...a.kbdArmed }, here: a.kbdArmedHere,
+        shown: !!el && el.getClientRects().length > 0,
+        pressed: arm ? arm.getAttribute('aria-pressed') : null, hash: window.location.hash };
+    });
+    const play = await H.open(ctx, `${ctx.baseUrl}#m=playground&kbd=1`);
+    const p1 = await read(play);
+    await H.navTo(play, 'measure');
+    const away = await H.until(() => read(play), (s) => s.workspace === 'measure');
+    await play.close();
+    const studio = await H.open(ctx, `${ctx.baseUrl}#m=studio&kbd=1`);
+    const s1 = await read(studio);
+    await studio.evaluate(() => { window.location.hash = 'm=playground&kbd=1'; });
+    const s2 = await H.until(() => read(studio), (s) => s.workspace === 'playground');
+    await studio.close();
+    const none = await H.open(ctx, `${ctx.baseUrl}#m=measure&kbd=1`);
+    const m1 = await read(none);
+    await none.close();
+    return { ...H.verdict({
+      playgroundArmed: p1.workspace === 'playground' && p1.here && p1.shown
+        && p1.pressed === 'true' && !p1.armed.studio,
+      leavesTheAddress: away.workspace === 'measure' && !/kbd=/.test(away.hash) && !away.shown,
+      studioArmed: s1.workspace === 'studio' && s1.here && s1.armed.studio
+        && !s1.armed.playground && s1.shown,
+      linkInPage: s2.workspace === 'playground' && s2.armed.playground && s2.armed.studio,
+      measureNone: m1.workspace === 'measure' && !m1.here && !m1.armed.playground
+        && !m1.armed.studio && !m1.shown,
+    }), p1, away, s1, s2, m1 };
+  });
+
   def('no-console-errors', async (ctx) => ({ ok: ctx.errors.length === 0,
     errors: ctx.errors.slice(0, 8) }));
 
@@ -898,7 +1203,7 @@ function defineChecks() {
 
 async function runOne(browserName, origin, baseUrl) {
   const browser = await playwright[browserName].launch(LAUNCH[browserName]);
-  const context = await browser.newContext({ viewport: { width: 1536, height: 1024 },
+  const context = await browser.newContext({ viewport: { width: VIEW_W, height: VIEW_H },
     reducedMotion: 'reduce' });
   await context.addInitScript(beforeUnloadProbe);
   const ctx = { browser, browserName, origin, baseUrl, context, errors: [] };

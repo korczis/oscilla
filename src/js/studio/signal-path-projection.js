@@ -181,9 +181,11 @@ export function projectSignalPath(model, { registry = NODE_REGISTRY, annotations
       mod: false }, { nodes: roots.map((r) => r.id) });
     // 2. The junction is the modulation stage.
     const j = byId.get(junction);
+    // Its records follow the signal: the nodes on the branches first, then the junction (a
+    // filter on a branch of a mixer, as in the demo song, comes before the mixer it feeds).
     const between = branches.flatMap((b) => b.slice(1));
     push({ title: upper(j), sub: junctionSub(j, branches, byId, registry), mod: true,
-      enabled: true }, { nodes: [j.id, ...between] });
+      enabled: true }, { nodes: [...between, j.id] });
     rest = chain.slice(1);
   } else if (chain.length) {
     const src = byId.get(chain[0]);

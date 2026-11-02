@@ -29,7 +29,7 @@ depends_on:
 acceptance_criteria:
 - "tests/unit/ui-link-graph.test.mjs fails on the merge base, and fixtures make it fail on a related view three steps away, a related view reachable only through the What is this panel or the navigation, a relation rule whose join yields nothing, an undeclared producer and an exemption that rises or returns; the real graph passes with its exemptions listed."
 - "A declared link counts as an edge only with the control that realises it: each row of the generated map names that control's hook, the unit test refuses a link whose row names none, and the browser walk fails a row whose control is missing or hidden."
-- "The browser walk runs in Chromium, Firefox and WebKit from file:// and the sub-path through npm run test:browser (no workflow file changes, so no .github verdict)."
+- "The browser walk runs in Chromium, Firefox and WebKit from file:// and the sub-path through npm run test:browser; the pull request states the wall time the walk adds per browser and origin, and if test:browser would then exceed 10 of the 15 minutes its CI step allows per browser, the walk moves to its own npm script and CI step, the scope widens to .github/workflows/ci.yml and a reviewer's verdict is required; otherwise no workflow file changes and no .github verdict is needed."
 - "Definition of done, extends: the declarations of G001, the addresses of G007 and the link-integrity crawl of links.md; the integration map of K075."
 - "Definition of done, interlinks: it is the check of 'everything interlinked with everything'."
 - "Definition of done, interactivity: every edge is activated by pointer, keyboard and touch."
@@ -46,4 +46,4 @@ validation:
 evidence_required:
 - verified
 created_at: '2026-10-29'
-updated_at: '2026-10-29'
+updated_at: '2026-11-01'

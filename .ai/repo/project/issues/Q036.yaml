@@ -18,4 +18,16 @@ validation:
 evidence_required:
 - owner_decision
 created_at: '2026-10-29'
-updated_at: '2026-10-29'
+updated_at: 2026-10-30T09:57:34Z
+started_at: 2026-10-30T09:57:17Z
+started_event: sha256:4ceb48c36a4ca8ec12804f01246886c36cd24cae969230ebef8f4eb3e3972bd0
+completed_at: 2026-10-30T09:57:34Z
+completed_event: sha256:405d2a861107073e4bf0ac48ab8a145c252fcc65c075710b9645b3dc596cbbbc
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "AskUserQuestion in Claude Code session oscilla-21, 2026-10-30 (Czech), after the U063 census measured 47 surfaces without a deep link"
+    result: "Owner chose (1a) and (2a), the plan's recommendation: (1) a catalogued component is addressed by the hash key c=<id> (#...&c=<id> opens its workspace, reveals and focuses it; an unknown, repeated, empty or over-long id is refused and leaves the address), a fifth hash domain of ADR 0045's one dispatcher; (2) a Studio node is addressable only together with an unmodified shipped template (st=<template>&c=studio.node:<node id>), since node ids are local to a document; never inside a user's own document."
+    artifact: ".ai/repo/project/issues/G007.yaml"
+    commit: 88b936cb023f14028e02d525ec8e691a6d09c870
+    recorded_at: 2026-10-30T09:56:47Z

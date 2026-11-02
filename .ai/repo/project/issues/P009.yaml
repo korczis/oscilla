@@ -19,4 +19,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-30
-updated_at: 2026-10-30
+updated_at: 2026-10-30T14:18:35Z
+started_at: 2026-10-30T14:18:21Z
+started_event: sha256:cc10ef24c8487bf7586b4d0a57394f387e142f22f0cfb05c976114014e7b08b2
+completed_at: 2026-10-30T14:18:35Z
+completed_event: sha256:bd1dd465d7167797374175a2ab4b639e8d56440d1dbea56af5a2186af6aead59
+evidence:
+  - covers: verified
+    type: artifact
+    command: "majordomus plan show Q070; git show d412bea0:.ai/repo/project/issues/Q070.yaml"
+    result: "Q070's current_state on main carries, per library (Mermaid runtime, Chart.js, Cytoscape.js, Apache ECharts) against uPlot and p5, the pinned version, licence, minified gzip delta with the esbuild command that produced it, the consumer and a recommendation; no file under src/, dist/ or package.json changed (landed in #319 via train #316, 88b936cb)"
+    artifact: ".ai/repo/project/issues/Q070.yaml"
+    commit: d412bea07121dc5eb7d05ac0fe53a51e4ab8d482
+    recorded_at: 2026-10-30T14:18:30Z
