@@ -17,17 +17,44 @@ Oscillator → Filter → Gain → Pan, five Mixers into a sixth, the Master Out
 One copy, `PERF_BUDGETS` and `BROWSER_BUDGETS` in the fixture module, used by the tests and
 checked against this table by `tests/unit/v31-studio-docs.test.mjs`. A budget is what an
 interaction may cost: one 60 Hz frame (16.7 ms) for what a single gesture commits, a few frames
-for whole-document work. The times below (the fastest of the repeats) are about 8 times
-(build) to several hundred times under them on a quiet machine, so a budget fails on a real
-regression (an accidental O(n²) per action), not on a slower CI runner. The headroom shrinks
-under load: build measured 281 ms of its 1000 at a load of 60 on the shared Mac (2026-10-28).
+for whole-document work. The unit test compares each budget with the fastest repeat of the
+operation's main-thread CPU time (`process.threadCpuUsage`); the browser suite measures wall
+time in the browser.
+
+Why CPU time (plan E029): the operations are synchronous JavaScript on the main thread, so their
+wall time is their CPU time plus the time the scheduler gave other processes. On the shared Mac
+at loads of 55-110 on 18 cores (2026-10-29) the second part was most of it: the fastest of 15
+builds took 2459 ms of wall time and 280 ms of CPU time, and the 1000 ms wall budget failed on
+every batch (1138-3262 ms), however often it was re-measured. Main-thread CPU time is what a
+frame pays; helper threads (concurrent GC, the compiler) do not block it and are not counted.
+
+The build has a second bound, relative to the machine. Its 1000 ms is about 3.5 times its cost,
+so on its own it would pass a build twice as slow. The build's CPU time may be at most
+`BUILD_REFERENCE_RATIO` times the CPU time of `referenceWork()`, a fixed workload of no product
+code in the build's shape (300 steps growing a 100-node / 200-edge graph of plain objects, each
+followed by a JSON round trip and a check of the whole graph), measured first in the same
+process on the same clock.
+
+The ratio is not the same on every machine (table below), so a fixed multiple of the reference
+cannot both pass the build and fail it twice as slow everywhere: at 3.78 a doubled build is
+7.56 times the reference, within 9 (CI run 41190815003 failed the old self-check on that,
+with nothing regressed). The budget is derived from the ratio r measured in the run:
+`min(1000 ms, min(9, max(2, 1.9 r)) x reference)`. It passes the measured build whenever r is
+at most 9, and twice the measured build is over it whenever r is above 1, which the test
+asserts (and skips, saying why, at r <= 1, where the reference does not measure the build). A
+build slowed by a change is still judged by the bound of 9: on the M5 Pro a 2x slower build
+fails, on the GitHub runner only one more than 2.38x slower does.
+
+| Where | build / reference |
+| --- | --- |
+| Apple M5 Pro (arm64), Node 22.20.0, loads 79-112, 2026-10-29 | 5.5-6.5 |
+| GitHub Actions `ubuntu-latest`, Node 22, CI run 41190815003, 2026-10-31 | 3.78 |
 
 An operation whose fastest repeat is over its budget is re-measured in further batches,
 keeping the running minimum, until it is within budget or `REMEASURE_DEADLINE_MS` (20 s, wall
 clock) passes; all operations together share `TOTAL_DEADLINE_MS` (60 s), so the file stays
-well inside fail-first's 180 s per-file timeout. A failure names the minimum, the batch count
-and the load. This narrows the load flake and does not remove it: when the load starves the CPU
-(build missed its budget by 28 ms at a load of 90.7), more batches do not help.
+well inside fail-first's 180 s per-file timeout. A failure names the CPU and wall minimum, the
+batch count and the load.
 
 <!-- budgets:begin -->
 | Operation (fastest repeat) | Budget (ms) |
@@ -54,7 +81,7 @@ and the load. This narrows the load flake and does not remove it: when the load 
 Apple M5 Pro, Node 22.20.0, Playwright 1.63.0 browsers, 2026-10-03.
 
 Model, compiler and views (`node --test tests/unit/v31-studio-performance.test.mjs`, fastest of
-15 after a warm-up):
+15 after a warm-up; wall time on a quiet machine, before E029):
 
 | Operation | What it covers | Median (ms) |
 | --- | --- | --- |
@@ -89,6 +116,23 @@ median of 9:
 | Chromium | 55-115 ms | 4.5-8.5 ms | 3.5-6.7 ms | 0.2-0.4 ms |
 | Firefox | 78-141 ms | 6-11 ms | 4-9 ms | 1 ms |
 | WebKit | 250-850 ms | 6-13 ms | 5-10 ms | ≤ 1 ms |
+
+The graph commands of plan K009 run many store actions as one undo step, and the store
+handle's `hold` (`src/js/ui/studio/workspace.js`) delivers them to the projections as one store
+event, so the sync, compile and render run once. Measured in the same check at a load of about
+25 (one run each):
+
+| Browser | L, all 100 nodes (median of 5) | M, 8 cables | M, all 200 cables |
+| --- | --- | --- | --- |
+| Chromium | 11 ms | 27-29 ms | 290-320 ms |
+| Firefox | 19 ms | 34-63 ms | 495-1020 ms |
+| WebKit | 20 ms | 46 ms | 480 ms |
+
+L is held to `editMs`. M is not: it dispatches one EDGE_UPDATE per cable, and the store validates
+the whole model on each (about 1.9 ms in Node and 4-6 ms in these browsers on this fixture), so
+its time grows with the selection. Before `hold`, one L took 614 ms and M on all 200 cables
+1,528 ms (Chromium, at a load of about 24). One store action for several cables would need a
+multi-edge EDGE_UPDATE in `src/js/studio/actions.js`; that has not been built.
 
 Ranges are separate runs; WebKit's first render is slowest after the rest of the suite has run
 (250 ms on a fresh page). A node drag never dispatches before the gesture ends and moves only

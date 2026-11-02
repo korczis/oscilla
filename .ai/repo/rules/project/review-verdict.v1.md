@@ -4,7 +4,7 @@ version: 1
 kind: rule
 title: Risky changes merge only with a recorded review verdict for the reviewed content
 description: A pull request that changes a guarded path merges only with a committed verdict file that says merge, names the reviewer, records the digest of the guarded content the pull request changes and lists no open P0 or P1 finding.
-statement: A pull request touching src/js/audio, src/js/analysis, src/js/experiments, src/js/studio, src/js/measurement, src/js/calibration, src/js/core/storage*, src/js/core/safety*, src/js/ui/measure.js, src/js/ui/experiments.js, src/js/ui/findings.js, scripts/release-*, the build, pack, stamp and deploy-verification scripts (scripts/build*, scripts/pack-single-file.mjs, scripts/stamp-build.mjs, scripts/verify-deploy.mjs, scripts/verify-dist.mjs), the release rules' tests (tests/unit/release-*, tests/unit/version-authority.test.mjs, tests/browser/live-smoke.cjs), anything under .github/, or the programs and tests that enforce the process rules (scripts/review-verdict.mjs, scripts/fail-first.mjs, scripts/ci-workflow-rules.mjs, scripts/yaml-subset.mjs, their tests under tests/unit/ and tests/unit/fixtures/git-repo.mjs) merges only with .ai/repo/reviews/<pr>.yaml carrying `verdict: merge`, the reviewer session, a `content` equal to the SHA-256 of the guarded paths the pull request changes against its merge base (mode, blob and name of each, as merged with the base branch for the run), and no finding of severity P0 or P1 with status open; the guarded list that applies is the base branch's, the verdict is written by a reviewer who did not build the change, and a pull request is bound from the first CI run of a head that contains this rule's job.
+statement: A pull request touching src/js/audio, src/js/analysis, src/js/experiments, src/js/studio, src/js/measurement, src/js/calibration, src/js/core/storage*, src/js/core/safety*, src/js/ui/measure.js, src/js/ui/measure/, src/js/ui/experiments.js, src/js/ui/findings.js, scripts/release-*, the build, pack, stamp and deploy-verification scripts (scripts/build*, scripts/pack-single-file.mjs, scripts/stamp-build.mjs, scripts/verify-deploy.mjs, scripts/verify-dist.mjs), the release rules' tests (tests/unit/release-*, tests/unit/version-authority.test.mjs, tests/browser/live-smoke.cjs), anything under .github/, or the programs and tests that enforce the process rules (scripts/review-verdict.mjs, scripts/fail-first.mjs, scripts/ci-workflow-rules.mjs, scripts/yaml-subset.mjs, their tests under tests/unit/ and tests/unit/fixtures/git-repo.mjs) merges only with .ai/repo/reviews/<pr>.yaml carrying `verdict: merge`, the reviewer session, a `content` equal to the SHA-256 of the guarded paths the pull request changes against its merge base (mode, blob and name of each, as merged with the base branch for the run), and no finding of severity P0 or P1 with status open; the guarded list that applies is the base branch's, the verdict is written by a reviewer who did not build the change, and a pull request is bound from the first CI run of a head that contains this rule's job.
 status: active
 class: blocking
 depends_on: []
@@ -32,8 +32,9 @@ never reviewed.
   code (`src/js/analysis/`), experiments (`src/js/experiments/`), Studio (`src/js/studio/`),
   the MEASURE engine (`src/js/measurement/`), calibration (`src/js/calibration/`), storage
   (`src/js/core/storage*`), the output safety stage (`src/js/core/safety*`), the MEASURE,
-  Experiments and Findings adapters (`src/js/ui/measure.js`, `src/js/ui/experiments.js`,
-  `src/js/ui/findings.js`: where #139 and #149 put their defects); what proves a build, a
+  Experiments and Findings adapters (`src/js/ui/measure.js` with the modules it is composed
+  of under `src/js/ui/measure/`, `src/js/ui/experiments.js`, `src/js/ui/findings.js`: where
+  #139 and #149 put their defects); what proves a build, a
   deployment and a release: the release scripts (`scripts/release-*`), the build and pack
   scripts (`scripts/build*`, `scripts/pack-single-file.mjs`), the deploy stamp and its
   verifiers (`scripts/stamp-build.mjs`, `scripts/verify-deploy.mjs`,
@@ -141,15 +142,22 @@ What it cannot see:
   pull request's guarded files alone keeps the verdict although the reviewer never saw the
   two together: whether they still work together is what the suites of the same run are
   for, not this rule.
-- A merge that bypasses branch protection. Protection on `main` requires the `gate` check
-  on an up-to-date branch (`strict: true`, `contexts: [gate]`, read from
-  `gh api repos/korczis/oscilla/branches/main/protection` on 2026-10-28). A pull request
-  therefore merges only after a run on a head that contains `main`: a guarded file changed on
-  `main` after its last run is judged together with it, and a branch whose last green run
-  predates this rule must merge `main` and run again, with this rule, before it can merge.
-  An administrator's merge past protection is the owner's and is not checked here; the
-  protection setting itself is the owner's too, and this paragraph is re-read against it
-  when it changes.
+- A pull request whose last green run is older than `main`. Protection on `main` requires
+  the `gate` check and, by the owner's decision of 2026-10-30, no longer an up-to-date branch
+  (`contexts: [gate]`, `strict: false`; read it with
+  `gh api repos/korczis/oscilla/branches/main/protection -q .required_status_checks`). A run
+  judges GitHub's merge of the head into `main` as `main` stood when the run started, with
+  the guarded list and program `origin/main` held then. The pull request merges on that run
+  however old it is, so what lands on `main` after it does not judge it: a path added to
+  `GUARDED`, a change to this rule or its program, and a guarded file that `main` changed
+  under the reviewed one (the reviewer never saw the two together, and no suite ran them
+  together either). Nothing judges the pull request later: this job runs only for a pull
+  request, `ci.yml` does not run on a push to `main`, and a later pull request's run judges
+  only the guarded paths that pull request changes. Merging `main` into the branch starts a
+  run that does; nothing requires it.
+- A merge that bypasses branch protection. An administrator's merge past protection is the
+  owner's and is not checked here; the protection setting itself is the owner's too, and
+  this paragraph is re-read against it when it changes.
 - A stale branch started by hand. The `triggers` check holds on a branch that contains this
   rule; a branch from before it still carries a `ci.yml` with `workflow_dispatch`.
 - A pull request that rewrites the `review-verdict` job itself, or the wrapper, or the test

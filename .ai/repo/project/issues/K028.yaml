@@ -1,0 +1,40 @@
+id: K028
+milestone: M062
+serves:
+  - "playable-instrument#chart-cost"
+title: "Chart wiring out of main.js and one reduced-motion source"
+slug: chart-wiring-out-of-main-js-and-one-reduced-motion-source
+priority: p1
+profile: implementation
+objective: "Lands as refactor(charts), the entry slice of M062 and the first chart-line change to src/js/main.js: once F001, #266 and #261 land, main.js is at about 39 894 of its 40 000 B cap (tests/unit/source-size-baseline.json), so no other chart slice may add an import there first. src/js/charts/wire.js takes the chart theme and visibility wiring out of main.js. src/js/charts/motion-policy.js is the one matchMedia('(prefers-reduced-motion: reduce)') source and replaces the copies in main.js, src/js/visualization/p5-host.js, src/js/ui/studio/graph-dom.js and src/js/ui/app.js (line 313 on main): chrome fades at most 120 ms and zoom easing at most 150 ms, instant under reduce; data is never eased. It adds no markup, so it waits on no F issue."
+why: "Owner order of 2026-10-29: \"make the charts really sexy, modern, interactive\", for all charts; reviewer f3 scoped it to every surface that draws data. Revised after f3's review of the plan (CHANGES-REQUESTED, 2026-10-29): owner decisions are Q issues under M063, Pro chrome waits on F002 and on the card issue of its workspace, every chart that claims chart-interaction delivers the keyboard cursor and the announced readout, chart keys never take Escape or Space; revision 3 answers f3's delta review. Facts checked against origin/main at e2720e07 and the branches of #251, #253, #263 and #265 (charts-plan.md, charts-plan-changes.md)."
+scope:
+  - "src/js/charts/wire.js"
+  - "src/js/charts/motion-policy.js"
+  - "src/js/main.js"
+  - "src/js/visualization/p5-host.js"
+  - "src/js/ui/studio/graph-dom.js"
+  - "src/js/ui/app.js"
+  - "tests/unit/motion-policy.test.mjs"
+  - "tests/unit/source-size-baseline.json"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "Q014"
+  - "Q016"
+acceptance_criteria:
+  - "tests/unit/motion-policy.test.mjs: one subscription answers every caller, a change event reaches them all, easing is instant under reduce and at most 120 ms and 150 ms otherwise; a scan of src/js finds the call pattern matchMedia('(prefers-reduced-motion' only in motion-policy.js (comments that mention the media feature, such as visualization-bridge.js:250 on main, are not calls)."
+  - "main.js shrinks by the wiring it hands to wire.js (both sizes in the pull request) and stays under its cap; tests/unit/source-size-baseline.json is updated only where a cap moves down."
+  - "Theme, visibility and reduced-motion behaviour are unchanged: npm run test:browser and test:studio pass with no behaviour check changed."
+  - "Its paths are not guarded (scripts/review-verdict.mjs GUARDED); as a refactor it is outside project.fail-first and still adds the motion-policy test."
+  - "No visual reference moves."
+  - "scripts/size-report.mjs shows at most 0.5 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of M062's figures stays within the cap Q014 records, under the 1 000 000 B gzip budget (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/motion-policy.test.mjs"
+  - "npm run test:browser"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

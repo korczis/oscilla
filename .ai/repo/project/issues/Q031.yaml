@@ -1,0 +1,21 @@
+id: Q031
+milestone: M084
+title: "Owner decision: how many knobs a Studio box shows on its face"
+slug: owner-decision-how-many-knobs-a-studio-box-shows-on-its-face
+priority: p2
+profile: routine
+owner: repository owner
+objective: "(a) at most three, the ones the node definition marks face (V619), with the expanded box and the Inspector showing all; (b) every continuous parameter on the face. The Inspector's own controls follow the synth line's Q020. The plan recommends (a): a 100-node graph stays readable and the culling of V618 holds."
+why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings S1-S14 measured on origin/main b67d1e58)."
+current_state: "Answered by the owner on 2026-10-29 (relayed by the coordinator): every parameter is shown on the box face, not at most three; the plan's recommendation (a) is overridden. Built by V619 (face sections hold every parameter), V622 (first-class collapse and expand, landing first) and V620 (the controls). Evidence must name a commit of main, so the plan change that adds this record does not record it: after that lands, a follow-up chore(plan) pull request records it as owner_decision evidence from a worktree whose HEAD is origin/main."
+scope:
+- .ai/repo/project/issues/Q031.yaml
+acceptance_criteria:
+- "The decision is recorded as evidence on this issue (covers owner_decision), either in the owner's words with date and source, or as a decision of a coordinating session under an owner delegation it quotes with its date, stating its reasoning and that the owner may override it; a worker without such a delegation never answers it."
+- The answer names (a) or (b).
+validation:
+- manual
+evidence_required:
+- owner_decision
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

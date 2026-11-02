@@ -1,0 +1,46 @@
+id: C011
+milestone: M090
+serves:
+  - "coherent-state#live-edits-reach-the-voice"
+title: "Safety limits reach what sounds: a lower hard limit shortens the sounding note, a sequencer loop stops at the programmed cap"
+slug: safety-limits-reach-what-sounds-a-lower-hard-limit-shortens
+priority: p1
+profile: implementation
+objective: "Lands as fix(audio). Findings dead-controls-4 and coupling-4. setSafetyLimit only writes this.safetyLimit and the limit is fixed at play: lowering 5 s to 0.5 s while a trigger or held note sounds leaves it alive at 1.6 s, although the control's help says the finite tone and trigger stop after N s. The sequencer Loop repeats with 'Allow continuous playback' off (still playing after 5.5 s of audio clock with a 0.5 s limit), against README Safety, the Help dialog and accepted ADR 0005, which keeps sequences to their programmed end of at most MAX_PROGRAMMED_S (30 s). Add engine.tightenLimit(limitS), mirroring revokeContinuous: for each live voice the limit governs (hold, trigger, the finite tone; not programmed patterns, not extended voices) newEnd = v.t0 + limitS, applied only when earlier than the current end; lower v.opts.limitS and v.deadline, release at once when newEnd is past or inside the schedule lead, else schedule the release on the untouched output-stage gain at newEnd, re-stop the sources, update endTime and re-arm the timers; never edit env or eg (V249), never extend. setSafetyLimit calls it when the value drops and continuous is off. For the sequencer, the adapter passes a read-only continuousAllowed(); while it is false _pump schedules no pass that would end past MAX_PROGRAMMED_S since play() and ends with the click-free stop and a stated reason ('Loop stopped at 30 s: allow continuous playback to loop until stopped'); withdrawing the permission stops a loop past the cap. The loop flag in the model is never rewritten (an imported loop:true is capped, not changed), Loop stays usable with the cap in its title, and the Device & Limits help names the loop cap. The Studio transport loop is not changed here."
+why: "Owner brief OSCILLA PACK 03, 'One Instrument, One Coherent State' (2026-10-29): every control must provably reach its subsystem and every view that reflects it, and be covered by a test (owner: 'filters, sequencer, bpm and many other interactive knobs / sliders / control elements are not reflected / working / tested'). The findings named here were reproduced by an independent skeptic on a fresh export of origin/main b67d1e58 (v3.13.0)."
+scope:
+  - "src/js/audio/audio-engine.js"
+  - "src/js/ui/workbench.js"
+  - "src/js/core/instrument.js"
+  - "src/js/sequencer/editor.js"
+  - "src/js/labs/sequencer-panel.js"
+  - "src/js/main.js"
+  - "src/index.html"
+  - "README.md"
+  - "tests/unit"
+  - "tests/unit/sequencer-editor.test.mjs"
+  - "tests/browser/engine-v1port.cjs"
+  - "tests/browser/sequencer.cjs"
+  - "tests/README.md"
+  - "dist"
+non_scope:
+  - "src/js/studio/transport.js"
+depends_on:
+  - "C002"
+acceptance_criteria:
+  - "A unit test with a fake clock: with the permission off the loop schedules no pass ending past 30 s and stops with the stated reason, with it on it continues, and an imported loop:true sequence is capped the same way; it fails on the merge base."
+  - "Browser check `limit-tightens-live` in tests/browser/engine-v1port.cjs: a 5000 ms trigger with the limit lowered to 0.5 s about 100 ms in ends within release + 50 ms of t0 + 0.5 s on the audio clock; raising the limit again does not extend it."
+  - "Browser check `seq-loop-cap` in tests/browser/sequencer.cjs: with the permission off the last pass the editor has scheduled ends at or before t0 + 30 s, read from the editor's schedule without waiting 30 s, and the reason is on the Loop control."
+  - "fail-first holds: the unit test or browser check named above fails on the merge base (project.fail-first)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named wall-clock deadline; tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "engine.activeNodeCount returns to 0 after every stop in the new checks, in Chromium, Firefox and WebKit (project.audio-engine-discipline v2)."
+  - "The pull request carries a reviewer-written .ai/repo/reviews/<pr>.yaml because it changes src/js/audio/audio-engine.js (project.review-verdict); the builder never writes it."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node tests/browser/engine-v1port.cjs"
+  - "node tests/browser/sequencer.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

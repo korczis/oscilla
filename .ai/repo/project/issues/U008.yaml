@@ -6,7 +6,7 @@ title: "Hold the current interface in the gate and register its claims"
 slug: hold-the-current-interface-in-the-gate-and-register-its-clai
 priority: p2
 profile: implementation
-objective: "Make tests/browser/ui-current.cjs part of the release gate (package.json test:release), run through tests/browser/lib/suite.cjs with bounded waits, update the visual reference through the visual gate with the reason, update tests/browser/live-smoke.cjs where a changed layout moves what it checks, register the claims of ui-current in docs/CLAIMS.yaml and point the intent's criteria at them."
+objective: "Built on Flowbite Pro (intent ui-flowbite-pro, owner 2026-10-28): F011 regenerates the visual references and the live smoke from the Pro shell first, so this issue updates only what M054's content changes on top of it. Make tests/browser/ui-current.cjs part of the release gate (package.json test:release), run through tests/browser/lib/suite.cjs with bounded waits, update the visual reference through the visual gate with the reason, update tests/browser/live-smoke.cjs where a changed layout moves what it checks, register the claims of ui-current in docs/CLAIMS.yaml and point the intent's criteria at them."
 why: "The intent is held only when a check fails on regression."
 scope:
   - "tests/browser/ui-current.cjs"
@@ -23,6 +23,7 @@ depends_on:
   - "U005"
   - "U006"
   - "U007"
+  - "F011"
 acceptance_criteria:
   - "npm run release-gate runs ui-current in every gate browser and origin."
   - "docs/CLAIMS.yaml names the ui-current claims with their tests."

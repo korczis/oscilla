@@ -1,0 +1,51 @@
+id: K041
+milestone: M062
+serves:
+  - "playable-instrument#chart-palette"
+  - "playable-instrument#chart-interaction"
+title: "Experiments compare: categorical colours, direct labels, Pro legend toggles, linked cursors"
+slug: experiments-compare-categorical-colours-direct-labels-pro-le
+priority: p2
+profile: implementation
+objective: "Lands as feat(experiments). COMPARE_ROLES maps experiments to semantic roles (C draws in the purple that elsewhere means CALIBRATED, D in the warning orange at 1.73:1 in light) and i % 4 repeats colours from the fifth experiment on. A categorical COMPARE_SERIES in src/js/measurement/views/common.js, separate from the semantic roles and registered in K027's palette: A green (the reference, observed), B blue, C magenta, D orange at the K027 values; a warning span always carries hatching and a label, so D's hue never signals a warning alone; entries after D are neutral and rely on their direct label. A letter label at the right end of each curve. The compare list's legend becomes Pro toggle buttons (aria-pressed) with inline SVG swatches drawn from the descriptor's stroke, emphasis and dash (K054), SVG attributes and not inline styles; it removes the osc-m-swatch use of the compare list (index.html:2156 on main; the list itself is osc-x-entries, and the MEASURE legend osc-m-legend is F004's). Hovering an entry focuses its curve (focus.alpha 0.4); hiding a curve hides its reliable and unreliable parts together and a badge counts hidden curves; overlay, delta and IR overlay share cursor.sync and the zoom of K038."
+why: "Owner order of 2026-10-29: \"make the charts really sexy, modern, interactive\", for all charts; reviewer f3 scoped it to every surface that draws data. Revised after f3's review of the plan (CHANGES-REQUESTED, 2026-10-29): owner decisions are Q issues under M063, Pro chrome waits on F002 and on the card issue of its workspace, every chart that claims chart-interaction delivers the keyboard cursor and the announced readout, chart keys never take Escape or Space; revision 3 answers f3's delta review. Facts checked against origin/main at e2720e07 and the branches of #251, #253, #263 and #265 (charts-plan.md, charts-plan-changes.md)."
+scope:
+  - "src/js/measurement/views/common.js"
+  - "src/js/measurement/views/compare-view.js"
+  - "src/js/ui/experiments.js"
+  - "src/js/charts/measure-charts.js"
+  - "src/js/charts/palette.js"
+  - "src/index.html"
+  - "src/partials"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "src/styles/measure.css"
+  - "tests/unit/v3-views.test.mjs"
+  - "tests/unit/chart-palette.test.mjs"
+  - "tests/browser/v3-ui.cjs"
+  - "scripts/visual-measure.mjs"
+  - "tests/visual"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K027"
+  - "K037"
+  - "K038"
+  - "K054"
+  - "F005"
+acceptance_criteria:
+  - "Unit tests that fail on the merge base: A-D are distinct and pass tests/unit/chart-palette.test.mjs in both themes; entry 5 and later are neutral and labelled; a hidden curve hides both its reliable and unreliable descriptors; each swatch equals its mark."
+  - "tests/browser/v3-ui.cjs: a legend toggle hides both descriptors and the badge counts them; overlay and delta cursors and zoom stay in sync. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline and assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac); tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "The pull request carries a reviewer's verdict (src/js/measurement and src/js/ui/experiments.js are guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "Chart chrome (legend, toolbar, toggle, badge, tooltip, readout row) is Flowbite Pro markup adapted from the matching Pro component and lands after F002 turned on preflight and the form base styles (the border trap of review #253, R-3) and after F005 placed the card it sits in; no osc-* class token or legacy selector is added and src/styles/tokens.css, charts.css, measure.css, studio.css and studio-timeline.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+  - "Every osc-* use it removes leaves the record in the same change: tests/unit/ui-flowbite-pro-baseline.json is rewritten by node scripts/ui-flowbite-pro-record.mjs (osc-m-swatch falls by the compare list's use, 3 to 2 (K027 already moved the swatch colours onto palette classes)), and a selector left without a producer is deleted from src/styles/measure.css (tests/unit/css-producers.test.mjs); the pull request states by how much the debt fell."
+  - "A new Experiments compare scene in scripts/visual-measure.mjs (desktop and phone, darwin-arm64 and linux-x64, in each theme that has references); accepting it is part of the review."
+  - "scripts/size-report.mjs shows at most 2 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of M062's figures stays within the cap Q014 records, under the 1 000 000 B gzip budget (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/v3-views.test.mjs tests/unit/chart-palette.test.mjs"
+  - "node tests/browser/v3-ui.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

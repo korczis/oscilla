@@ -1,0 +1,29 @@
+id: J008
+milestone: M118
+serves:
+- "component-system#majordomus-served"
+title: "File the Majordomus-side gaps the component projection works around, and retire each workaround when its fix ships"
+slug: file-the-majordomus-side-gaps-the-component-projection-works
+priority: p3
+profile: routine
+objective: "Lands as chore(plan). The coordinator hands the upstream candidates of components-followup/majordomus-kb-adr.md section 7 to f3 by the backprop route (drafts to the Majordomus session, plain-id cross-references); this repository edits nothing of Majordomus. Each filed issue's Majordomus id is recorded as evidence here. When a fix ships in a version the pin moves to (project.majordomus-layer-current), the matching workaround is retired by its own issue: the resolver of J002 for issue: and criterion references, the record check of J003 for knowledge check's reach, and, if repository kinds gain edges, a superseding decision that moves the projection to one generated YAML file of a component kind. Before: the gaps are known only to this plan. After: each is a Majordomus issue with an id. Rollback: none needed; records only."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs and knowledge base, interlink them and add more; knobs, sliders and control panels in one generic way, Majordomus integrated: each component and parameter declaration carries its intent, issue and rule ids, a deterministic generator projects the registry into .ai/repo/knowledge so that Majordomus serves it (context resolve, why, traceability), and a check fails when a component has no plan or knowledge link. Design: components-followup/majordomus-kb-adr.md of this plan change, measured with Majordomus 1.0.0-alpha.1 (the CI pin) and 1.0.0-alpha.8 on a throwaway copy of origin/main cdda563c."
+scope:
+- .ai/repo/project/issues/J008.yaml
+depends_on:
+- J003
+acceptance_criteria:
+- "Every candidate of section 7 is filed in Majordomus with an id, or declined there with a reason, and the ids are recorded as evidence on this issue."
+- No file of Majordomus is edited from this repository.
+- "Definition of done, extends: the Majordomus plan gains the candidates."
+- "Definition of done, interlinks: each filed issue names this repository's issue and the measurement it rests on."
+- "Definition of done, interactivity: none (stated)."
+- "Definition of done, docs, menus and routes: none (stated)."
+- "Definition of done, tested: none: a filing (stated)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+- manual
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

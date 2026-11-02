@@ -17,12 +17,24 @@
 //     catalogue describes the current build beside dated change notes, so it is held where it
 //     names the code, not exempt as history); the node registry list of
 //     docs/v31/studio-model.md is NODE_REGISTRY.list(); the template table of
-//     docs/v31/patches-and-provenance.md is STUDIO_TEMPLATES.
+//     docs/v31/patches-and-provenance.md is STUDIO_TEMPLATES, and so are the template lists of
+//     docs/v31/user-guide.md and .ai/repo/features/studio-patches.md, in library order (E042);
+//   - the release timing (E042): every '<n> hours' / '<n> minutes' the README, CLAUDE.md, the
+//     rules deploy-often and release-flow-complete, the rules index and the cadence workflow
+//     state for the cadence limit, the release-record window and a stuck Pages run is
+//     MAX_AGE_HOURS, RECORD_WINDOW_HOURS or STUCK_AFTER_MIN;
+//   - README.md: the Licences list names every package of the notice build.mjs writes into
+//     dist/index.html with its licence, the replaceable one is VENDOR_SCRIPTS, and OSCILLA's
+//     own licence is package.json's (E042);
+//   - CLAUDE.md and AGENTS.md (H006): a status they state for the ADRs as a whole ("all
+//     `proposed`") is every ADR's front-matter status; README.md's Studio "Not yet built" list
+//     and the Studio user guide's "Not built yet" sentence name no feature whose unit test
+//     exists and runs in `npm test` (minimap, timeline pinch).
 //   node --test tests/unit/docs-derived.test.mjs
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -34,6 +46,10 @@ import { PATTERNS } from '../../src/js/audio/patterns.js';
 import { BLOCK_TYPES } from '../../src/js/sequencer/model.js';
 import { NODE_REGISTRY } from '../../src/js/studio/registry.js';
 import { STUDIO_TEMPLATES } from '../../src/js/studio/templates/index.js';
+import { MAX_AGE_HOURS } from '../../scripts/release-cadence.mjs';
+import { RECORD_WINDOW_HOURS } from '../../scripts/release-record.mjs';
+import { STUCK_AFTER_MIN } from '../../scripts/release-publish.mjs';
+import { VENDOR_SCRIPTS } from '../../scripts/build-config.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (rel) => readFileSync(path.join(ROOT, rel), 'utf8');
@@ -275,4 +291,274 @@ test('the template table of docs/v31/patches-and-provenance.md is STUDIO_TEMPLAT
   for (const [phrase, n] of flat(doc).matchAll(/\bthe (\w+) templates\b/g)) {
     if (numberOf(n) >= 0) assert.equal(numberOf(n), STUDIO_TEMPLATES.length, `"${phrase}"`);
   }
+});
+
+test('E042: the template lists of the user guide and the studio-patches feature are STUDIO_TEMPLATES', () => {
+  const titles = STUDIO_TEMPLATES.map((t) => t.title);
+  const guide = flat(read('docs/v31/user-guide.md'))
+    .match(/\*\*Templates\*\* lists the shipped documents: ([^.]+)\./);
+  assert.ok(guide, 'the user guide names the templates');
+  assert.deepEqual(series(guide[1]), titles, 'docs/v31/user-guide.md, in library order');
+  const feat = flat(read('.ai/repo/features/studio-patches.md')).match(/(\w+) templates \(([^)]*)\)/);
+  assert.ok(feat, 'the feature record names the templates');
+  assert.equal(numberOf(feat[1]), titles.length, `"${feat[0]}"`);
+  assert.deepEqual(series(feat[2]), titles, '.ai/repo/features/studio-patches.md, in library order');
+});
+
+// ---------------------------------------------------------------- release timing (E042)
+
+/** Each copied timing number: the constant, and per file the phrases that state it. */
+const TIMING = [
+  { name: 'MAX_AGE_HOURS', value: MAX_AGE_HOURS, sites: {
+    'README.md': [/released within (\d+) hours of landing/g],
+    'CLAUDE.md': [/whether a release is overdue \((\d+) h\)/g],
+    '.ai/repo/rules/project/deploy-often.v1.md': [/(?:at most|within) (\d+) hours (?:old|ago|of landing)/g],
+    '.ai/repo/rules/project/README.md': [/released within (\d+) hours/g],
+    '.github/workflows/cadence.yml': [/(?:more than|older than|at most) (\d+) (?:hours|h)\b/g],
+  } },
+  { name: 'RECORD_WINDOW_HOURS', value: RECORD_WINDOW_HOURS, sites: {
+    'README.md': [/more than (\d+) hours old and has no record/g],
+    '.ai/repo/rules/project/release-flow-complete.v1.md': [/more than (\d+) hours old has its record/g,
+      /`RECORD_WINDOW_HOURS` \((\d+)\)/g, /the (\d+)-hour window/g],
+  } },
+  { name: 'STUCK_AFTER_MIN', value: STUCK_AFTER_MIN, sites: {
+    'README.md': [/no job has started for (\d+) minutes/g],
+    '.ai/repo/rules/project/release-flow-complete.v1.md': [/no job start for (\d+) minutes/g,
+      /`STUCK_AFTER_MIN` \((\d+)\)/g, /given a runner for (\d+) minutes/g],
+  } },
+];
+
+/** The timing statements of a text that differ from the constant, and the phrases not found. */
+export function timingProblems(text, value, patterns, where) {
+  const problems = [];
+  for (const re of patterns) {
+    const hits = [...flat(text).matchAll(re)];
+    if (!hits.length) problems.push(`${where}: no phrase matches ${re}`);
+    for (const m of hits) {
+      if (Number(m[1]) !== value) problems.push(`${where}: "${m[0]}" states ${m[1]}, the code ${value}`);
+    }
+  }
+  return problems;
+}
+
+test('E042: the release timing the documents state is MAX_AGE_HOURS, RECORD_WINDOW_HOURS and STUCK_AFTER_MIN', () => {
+  const problems = [];
+  for (const { name, value, sites } of TIMING) {
+    for (const [file, patterns] of Object.entries(sites)) {
+      problems.push(...timingProblems(read(file), value, patterns, `${file} (${name})`));
+    }
+  }
+  assert.deepEqual(problems, []);
+});
+
+test('E042 mutation: a document that drifts from a timing constant is named', () => {
+  const readme = read('README.md');
+  const drifted = readme.replace(`within ${MAX_AGE_HOURS} hours of landing`, 'within 48 hours of landing');
+  assert.notEqual(drifted, readme, 'the fixture sentence exists');
+  const p = timingProblems(drifted, MAX_AGE_HOURS, TIMING[0].sites['README.md'], 'README.md');
+  assert.equal(p.length, 1);
+  assert.match(p[0], /states 48, the code 24/);
+  const gone = timingProblems('no such sentence', STUCK_AFTER_MIN, TIMING[2].sites['README.md'], 'x');
+  assert.match(gone[0], /no phrase matches/);
+});
+
+// ---------------------------------------------------------------- licences (E042)
+
+/** README display names of the bundled packages; a package missing here fails the test. */
+const LICENCE_NAMES = {
+  alpinejs: 'Alpine.js', uplot: 'uPlot', p5: 'p5.js', 'lucide-static': 'lucide-static',
+  '@vue/reactivity': '@vue/reactivity', '@vue/shared': '@vue/shared',
+  '@popperjs/core': '@popperjs/core', flowbite: 'Flowbite', tailwindcss: 'Tailwind CSS',
+};
+
+/** The '== <pkg>@<version> - <licence>' headers of the notice comment build.mjs writes. */
+export function noticePackages(html) {
+  const notice = html.slice(0, html.indexOf('-->', html.indexOf('<!--\n')));
+  return [...notice.matchAll(/^== ((?:@[^/@\s]+\/)?[^@\s]+)@\S+ - (\S+)$/gm)]
+    .map((m) => ({ pkg: m[1], licence: m[2] }));
+}
+
+/** What the README Licences section gets wrong against the notice's packages. */
+export function licenceProblems(section, packages, names = LICENCE_NAMES) {
+  const problems = [];
+  const bullets = section.split('\n- ').slice(1).map((b) => b.replace(/\s+/g, ' '));
+  for (const { pkg, licence } of packages) {
+    const name = names[pkg];
+    if (!name) { problems.push(`${pkg}: no README name in LICENCE_NAMES`); continue; }
+    const bullet = bullets.find((b) => b.includes(name));
+    if (!bullet) problems.push(`${pkg}: README's Licences list does not name ${name}`);
+    else if (!bullet.includes(`${licence}.`)) problems.push(`${pkg}: README does not say ${licence}`);
+  }
+  for (const pkg of Object.keys(names)) {
+    if (!packages.some((p) => p.pkg === pkg)) problems.push(`${pkg}: named but not bundled`);
+  }
+  return problems;
+}
+
+test('E042: README\'s Licences list is the notice of dist/index.html, and OSCILLA\'s own licence', () => {
+  const html = read('dist/index.html');
+  const packages = noticePackages(html);
+  assert.ok(packages.length >= 1, 'the notice lists the bundled packages');
+  const lic = section(README, 'Licences');
+  assert.deepEqual(licenceProblems(lic, packages), []);
+  for (const { pkg } of VENDOR_SCRIPTS) {
+    const bullet = lic.split('\n- ').find((b) => b.includes(LICENCE_NAMES[pkg]));
+    assert.match(flat(bullet), /shipped unmodified/, `${pkg} is a replaceable vendor script`);
+  }
+  assert.ok(html.includes(`OSCILLA - ${PKG.license}`), 'the notice opens with package.json\'s licence');
+  assert.ok(flat(lic).includes(`released under the ${PKG.license} License`), 'README names it');
+});
+
+test('E042 mutation: a bundled package missing from README\'s Licences list is named', () => {
+  const packages = [...noticePackages(read('dist/index.html')), { pkg: 'left-pad', licence: 'WTFPL' }];
+  const p = licenceProblems(section(README, 'Licences'), packages);
+  assert.deepEqual(p, ['left-pad: no README name in LICENCE_NAMES']);
+  const named = licenceProblems(section(README, 'Licences'), packages,
+    { ...LICENCE_NAMES, 'left-pad': 'left-pad' });
+  assert.deepEqual(named, ['left-pad: README\'s Licences list does not name left-pad']);
+});
+
+// ---------------------------------------------------------------- what ships (H006)
+
+/** The front-matter `status` of every ADR under .ai/repo/adrs/. */
+export function adrStatuses(root = ROOT) {
+  const dir = path.join(root, '.ai/repo/adrs');
+  return readdirSync(dir).filter((f) => /^\d{4}-.+\.md$/.test(f)).map((f) => {
+    const text = readFileSync(path.join(dir, f), 'utf8');
+    const front = text.match(/^---\n([\s\S]*?)\n---/);
+    const status = front && front[1].match(/^status:\s*(\S+)/m);
+    return { adr: f.slice(0, 4), status: status ? status[1] : null };
+  });
+}
+
+const ADR_STATUS = 'proposed|accepted|superseded|rejected|deprecated|extracted';
+
+/**
+ * Statements of one status for the ADRs as a whole ("all `proposed`", "every ADR is accepted",
+ * "none is accepted") that the front matter contradicts.
+ */
+export function adrStatusProblems(text, statuses, where) {
+  const problems = [];
+  const t = flat(text);
+  const subject = '(?:all(?: (?:the )?(?:ADRs|decisions)(?: here)?(?: are)?)?'
+    + '|every (?:ADR|decision)(?: here)?(?: is| has)?)';
+  const all = new RegExp(`\\b${subject}\\s+(?:status:?\\s*)?\`?(${ADR_STATUS})\`?`, 'gi');
+  for (const m of t.matchAll(all)) {
+    const want = m[1].toLowerCase();
+    const other = statuses.filter((s) => s.status !== want);
+    if (other.length) {
+      problems.push(`${where}: "${m[0]}", but ${other.length} ADR(s) are not ${want} `
+        + `(${other.slice(0, 3).map((s) => `${s.adr} ${s.status}`).join(', ')})`);
+    }
+  }
+  const none = new RegExp(`\\bnone (?:is|are|has been|have been)\\s+\`?(${ADR_STATUS})\`?`, 'gi');
+  for (const m of t.matchAll(none)) {
+    const want = m[1].toLowerCase();
+    const hit = statuses.filter((s) => s.status === want);
+    if (hit.length) problems.push(`${where}: "${m[0]}", but ${hit[0].adr} is ${want}`);
+  }
+  return problems;
+}
+
+test('H006: CLAUDE.md and AGENTS.md state no ADR status the ADR front matter contradicts', () => {
+  const statuses = adrStatuses();
+  assert.ok(statuses.length >= 1, 'the ADRs are read');
+  assert.deepEqual(statuses.filter((s) => !s.status), [], 'every ADR states a status');
+  const problems = [];
+  for (const file of ['CLAUDE.md', 'AGENTS.md']) {
+    problems.push(...adrStatusProblems(read(file), statuses, file));
+  }
+  assert.deepEqual(problems, []);
+});
+
+test('H006 mutation: "all proposed" beside an accepted ADR is named, and a true one is not', () => {
+  const mixed = [{ adr: '0002', status: 'accepted' }, { adr: '0051', status: 'proposed' }];
+  const p = adrStatusProblems('the ADRs in `.ai/repo/adrs/` (0011 on; all `proposed`, see its\n'
+    + 'README)', mixed, 'CLAUDE.md');
+  assert.equal(p.length, 1);
+  assert.match(p[0], /all `proposed`.*1 ADR\(s\) are not proposed \(0002 accepted\)/);
+  assert.match(adrStatusProblems('none is accepted', mixed, 'x')[0], /0002 is accepted/);
+  assert.equal(adrStatusProblems('All the ADRs here are `proposed`.', mixed, 'x').length, 1);
+  const same = [{ adr: '0051', status: 'proposed' }];
+  assert.deepEqual(adrStatusProblems('all `proposed`; none is accepted', same, 'x'), []);
+});
+
+/**
+ * Features the README once listed as not yet built and that now ship, each with the unit test
+ * that proves it. The test runs in `npm test` (tests/unit/**), so it passes wherever this does.
+ */
+const SHIPPED = [
+  { feature: 'a minimap', match: /\bminimap\b/i, test: 'tests/unit/studio-minimap.test.mjs' },
+  { feature: 'pinch zoom on the timeline', match: /\bpinch\b/i,
+    test: 'tests/unit/studio-timeline-pinch.test.mjs' },
+];
+
+/** The bullets of the "Not yet built:" list of a README section. */
+export function notYetBuilt(text) {
+  const at = text.indexOf('\nNot yet built:\n');
+  assert.ok(at >= 0, 'the "Not yet built:" list exists');
+  const items = [];
+  for (const line of text.slice(at + '\nNot yet built:\n'.length).split('\n')) {
+    const m = line.match(/^- (.+)$/);
+    if (!m) break;
+    items.push(m[1].trim());
+  }
+  return items;
+}
+
+/** The "Not yet built" items that name a shipped feature whose unit test exists. */
+export function shippedButListed(items, shipped = SHIPPED, root = ROOT) {
+  const problems = [];
+  for (const item of items) {
+    for (const s of shipped) {
+      if (s.match.test(item) && existsSync(path.join(root, s.test))) {
+        problems.push(`"${item}" ships (${s.test})`);
+      }
+    }
+  }
+  return problems;
+}
+
+test('H006: README\'s Studio "Not yet built" list names no feature that ships', () => {
+  const pkgTest = PKG.scripts.test;
+  for (const s of SHIPPED) {
+    assert.ok(existsSync(path.join(ROOT, s.test)), `${s.test} exists`);
+    assert.match(pkgTest, /tests\/unit\/\*\*\/\*\.test\.mjs/, `npm test runs ${s.test}`);
+  }
+  const items = notYetBuilt(section(README, 'The V3.1 Studio'));
+  assert.ok(items.length >= 1, 'the list has items');
+  assert.deepEqual(shippedButListed(items), []);
+});
+
+test('H006 mutation: a shipped feature put back on the "Not yet built" list is named', () => {
+  const doc = 'x\nNot yet built:\n- a minimap\n- node groups\n'
+    + '- pinch zoom on the timeline\n\n## Next';
+  const items = notYetBuilt(doc);
+  assert.deepEqual(items, ['a minimap', 'node groups', 'pinch zoom on the timeline']);
+  assert.deepEqual(shippedButListed(items), [
+    '"a minimap" ships (tests/unit/studio-minimap.test.mjs)',
+    '"pinch zoom on the timeline" ships (tests/unit/studio-timeline-pinch.test.mjs)',
+  ]);
+  const gone = [{ ...SHIPPED[0], test: 'tests/unit/no-such.test.mjs' }];
+  assert.deepEqual(shippedButListed(items, gone), [], 'a feature with no unit test is not judged');
+});
+
+/** The items of the Studio user guide's "Not built yet:" sentence (its Limits section). */
+export function guideNotBuilt(text) {
+  const m = flat(text).match(/Not built yet: ([^.]*)\./);
+  assert.ok(m, 'the user guide\'s "Not built yet:" sentence exists');
+  return m[1].split(/,\s*|\s+and\s+/).map((s) => s.trim()).filter(Boolean);
+}
+
+test('H006: the Studio user guide\'s "Not built yet" sentence names no feature that ships', () => {
+  const items = guideNotBuilt(read('docs/v31/user-guide.md'));
+  assert.ok(items.length >= 1, 'the sentence has items');
+  assert.deepEqual(shippedButListed(items), []);
+});
+
+test('H006 mutation: a shipped feature put back in the user guide\'s sentence is named', () => {
+  const items = guideNotBuilt('- Not built yet: a minimap, node groups, pinch zoom on the\n'
+    + '  timeline. A link opens a shipped template only.');
+  assert.deepEqual(items, ['a minimap', 'node groups', 'pinch zoom on the timeline']);
+  assert.equal(shippedButListed(items).length, 2);
 });

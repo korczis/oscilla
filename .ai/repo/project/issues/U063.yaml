@@ -1,0 +1,34 @@
+id: U063
+milestone: M054
+serves:
+  - "ui-current#ui-audited"
+title: "Navigable-surface census: every workspace, panel, subview, dialog and route kind derived from the code and the running page, each with a contract, and a new one refused until it has one"
+slug: navigable-surface-census
+priority: p2
+profile: implementation
+objective: "Lands as test(census). Owner prompt pack 'Every navigable surface' (2026-10-29), Phase 0: no hand-written claim of 'all'. Add tests/unit/surface-census.json, a contract per navigable surface: the workspaces of src/js/ui/app.js WORKSPACES; the panels of src/index.html carrying data-osc-modes, keyed by their id or aria-labelledby, with the workspaces that show them; the subviews, every role=tab of the shell (static ones from the markup, templated ones from MEASURE_RESULT_TABS and PRESET_CATEGORIES) and the Studio subviews of STUDIO_LINK_SUBVIEWS; the dialogs, every <dialog> with an id; and the route kinds, the hash domains of src/js/ui/navigation.js HASH_DOMAINS. Each entry names its kind, the workspaces it is reached from, its purpose, its canonical state (a src/js path that exists), the evidence class of what it shows (measured, derived, inferred, recorded, planned, test-context or none), its deep link (the address, or null with the reason), the tests that exercise it (each file exists and names the surface's id, data-osc or tab value) and the plan issues that own its next step (each an issue of .ai/repo/project/issues). Chart hosts are K053's census (tests/unit/chart-host-census.json) and are not duplicated: a panel that hosts a chart says so and points there. tests/unit/surface-census.test.mjs derives the inventory statically and fails, naming the surface, when a surface exists with no entry, when an entry names a surface that no longer exists, and when a named file, test or issue does not hold; its mutation proofs add a dialog, a tab and a data-osc-modes panel to a copy of the shell and require each to be found and refused. tests/browser/surface-census.cjs opens every workspace on the built page through tests/browser/lib/suite.cjs and records what the running page shows (the visible data-osc-modes panels, every role=tab, every dialog element, the Studio subviews after selecting each), and fails on a surface the contract lacks or a contracted one never reached, so a surface built only in src/js is caught too. The entries whose deep link is null or whose tests are empty are the census's debt, counted by the unit test and allowed only to shrink against the file's git history."
+why: "The owner's prompt pack asks for every navigable surface to be connected, current and tested, and forbids counting 'all' by hand. The repository has a control census (C020), a link-integrity suite (U009), cross-links (U010) and a chart-host census (K053), but nothing derives which workspaces, panels, subviews and dialogs exist, so a new one can arrive with no deep link, no test and no owner and no check notices. This census is the inventory the other contracts are judged against."
+scope:
+  - ".ai/repo/project/issues/U063.yaml"
+  - "tests/unit/surface-census.test.mjs"
+  - "tests/unit/surface-census.json"
+  - "tests/browser/surface-census.cjs"
+  - "tests/README.md"
+  - "package.json"
+  - "README.md"
+depends_on:
+  - "U001"
+acceptance_criteria:
+  - "tests/unit/surface-census.test.mjs passes on the tree and fails, naming the surface, on a copy of src/index.html with an added <dialog id>, an added role=tab and an added data-osc-modes panel, and on a contract entry whose test file does not name its surface."
+  - "Every entry's canonical-state path, test files and plan issues exist; chart hosts are referenced to K053's census, not listed again."
+  - "The debt (entries with no deep link or no test) is counted and may not grow against the history of tests/unit/surface-census.json."
+  - "tests/browser/surface-census.cjs runs in npm run test:browser in Chromium, Firefox and WebKit from file:// and the Pages sub-path, through tests/browser/lib/suite.cjs with wait.cjs deadlines and no fixed sleep, and fails on a runtime surface the contract lacks."
+  - "tests/README.md and README.md's testing table name both tests; no count of surfaces is written by hand in prose."
+validation:
+  - "node --test tests/unit/surface-census.test.mjs"
+  - "node tests/browser/surface-census.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

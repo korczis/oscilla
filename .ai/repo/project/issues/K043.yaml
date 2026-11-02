@@ -1,0 +1,48 @@
+id: K043
+milestone: M062
+serves:
+  - "playable-instrument#chart-interaction"
+title: "Filter lab chart: exact hover response, -3 dB markers, keyboard control, no wheel trap"
+slug: filter-lab-chart-exact-hover-response-3-db-markers-keyboard
+priority: p2
+profile: implementation
+objective: "Lands as feat(charts). filter-chart.js gets the kit's crosshair with a readout \"1.00 kHz . -3.0 dB gain\" from getResponse evaluated with 1-element arrays at the exact cursor frequency, not the nearest of 256 samples; interpolated -3 dB markers for low-, high- and band-pass labelled as approximate; a low-alpha pass-band fill; a dashed curve and a flat 0 dB line labelled \"bypassed\" when bypassed, the bypassed trace (alpha 0.45 on main, 1.8-2.3:1) drawn in a faded colour registered in K027's palette at 3:1 in both themes; the caption \"computed response (getFrequencyResponse)\". The wheel never changes Q unless Alt is held, whether the chart is focused or not, so clicking a handle and then scrolling scrolls the page (filter-chart.js:192-197 changes Q on every wheel today); the wheel policy is K052's. The focused host moves the cutoff by 1/12 octave with left and right and Q with up and down, the readout follows and is announced through the kit; Escape propagates. Handle hit area 12 px (22 px for coarse pointers); a drag chip \"fc . Q\". Gestures emit onPreview and onCommit beside onChange (lab behaviour unchanged), which K048 uses."
+why: "Owner order of 2026-10-29: \"make the charts really sexy, modern, interactive\", for all charts; reviewer f3 scoped it to every surface that draws data. Revised after f3's review of the plan (CHANGES-REQUESTED, 2026-10-29): owner decisions are Q issues under M063, Pro chrome waits on F002 and on the card issue of its workspace, every chart that claims chart-interaction delivers the keyboard cursor and the announced readout, chart keys never take Escape or Space; revision 3 answers f3's delta review. Facts checked against origin/main at e2720e07 and the branches of #251, #253, #263 and #265 (charts-plan.md, charts-plan-changes.md)."
+scope:
+  - "src/js/charts/filter-chart.js"
+  - "src/js/labs/filter-lab.js"
+  - "src/index.html"
+  - "src/js/charts/palette.js"
+  - "tests/unit/chart-palette.test.mjs"
+  - "tests/unit/filter-chart.test.mjs"
+  - "tests/browser/labs.cjs"
+  - "tests/unit/chart-host-census.json"
+  - "tests/browser/charts-interaction.cjs"
+  - "tests/visual"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K027"
+  - "K053"
+  - "K052"
+  - "F006"
+acceptance_criteria:
+  - "tests/unit/filter-chart.test.mjs, failing on the merge base: the -3 dB interpolation, the wheel decision table (plain wheel, focused or not: no Q change; Alt + wheel: Q), and onCommit once per gesture."
+  - "tests/browser/labs.cjs: after a click on the chart a plain wheel leaves Q unchanged and scrolls the page; ArrowRight on the focused chart moves the cutoff by 1/12 octave. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline and assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac); tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Its chart hosts (filter response) move from pending to done in tests/unit/chart-host-census.json, each carrying data-osc-chart, and the table-driven pass of tests/browser/charts-interaction.cjs holds for each: the host is role=group holding the aria-describedby summary and the snapshot data table, and its focusable plot surface is role=application with aria-roledescription \"interactive chart\" (never role=img), both asserted in the accessibility tree, with a visible focus ring; ArrowRight moves the cursor one step and the one polite live region announces the readout once after the keys settle; Escape clears the cursor and still reaches the page's stop (a playing tone stops); Space keeps its workspace meaning (SPACE_MEANING of src/js/ui/shortcuts.js) and is never taken (ADR 0050); on a touch pointer a tap pins the cursor and it stays after the finger lifts."
+  - "Levels say dB relative (dBFS-like) unless a valid LevelCalibration applies, every estimate is labelled as one, and no data value is tweened or eased; every readout, tooltip, axis title and caption string it adds is registered in its chart's wording table and passes tests/unit/charts-readout-wording.test.mjs (project.no-fake-science)."
+  - "The chart reads existing AnalyserNodes on the main thread only, creates no audio node and adds no work to the audio path; hover and keyboard work runs on events only, a live readout under a still pointer is rewritten at most 4 times a second through the kit's live-readout, and no draw loop writes the DOM per frame (project.audio-engine-discipline v2)."
+  - "Chart chrome (legend, toolbar, toggle, badge, tooltip, readout row) is Flowbite Pro markup adapted from the matching Pro component and lands after F002 turned on preflight and the form base styles (the border trap of review #253, R-3) and after F006 placed the card it sits in; no osc-* class token or legacy selector is added and src/styles/tokens.css, charts.css, measure.css, studio.css and studio-timeline.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+  - "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no review verdict is needed; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+  - "The visual references of the filter region of test:visual are re-accepted in darwin-arm64 and linux-x64, in each theme that has references (light ones exist once F011 lands), with the reason \"pass-band fill and -3 dB markers\" in the pull request body (npm run test:visual)."
+  - "scripts/size-report.mjs shows at most 1.5 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of M062's figures stays within the cap Q014 records, under the 1 000 000 B gzip budget (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/filter-chart.test.mjs"
+  - "node tests/browser/labs.cjs"
+  - "node tests/browser/charts-interaction.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

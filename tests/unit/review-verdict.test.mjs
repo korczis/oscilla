@@ -6,7 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync } from 'node:fs';
+import { chmodSync, existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gitRepo } from './fixtures/git-repo.mjs';
@@ -149,8 +149,8 @@ test('a deleted guarded file needs a verdict too', (t) => {
 test('the guarded paths are the rule\'s list', () => {
   assert.deepEqual(GUARDED, ['src/js/audio/*', 'src/js/analysis/*', 'src/js/experiments/*',
     'src/js/studio/*', 'src/js/measurement/*', 'src/js/calibration/*', 'src/js/core/storage*',
-    'src/js/core/safety*', 'src/js/ui/measure.js', 'src/js/ui/experiments.js',
-    'src/js/ui/findings.js',
+    'src/js/core/safety*', 'src/js/ui/measure.js', 'src/js/ui/measure/*',
+    'src/js/ui/experiments.js', 'src/js/ui/findings.js',
     'scripts/release-*', 'scripts/build*', 'scripts/pack-single-file.mjs',
     'scripts/stamp-build.mjs', 'scripts/verify-deploy.mjs', 'scripts/verify-dist.mjs',
     'tests/unit/release-*', 'tests/unit/version-authority.test.mjs',
@@ -163,6 +163,7 @@ test('the guarded paths are the rule\'s list', () => {
     'tests/unit/fixtures/git-repo.mjs']);
   for (const f of ['src/js/audio/voice.js', 'src/js/analysis/peak.js',
     'src/js/experiments/store.js', 'src/js/studio/runtime/x.js', 'src/js/core/storage.js',
+    'src/js/ui/measure/session.js', 'src/js/ui/measure/test-seam.js',
     'src/js/core/storage-inventory.js', 'scripts/release-publish.mjs',
     '.github/workflows/ci.yml', '.github/scripts/ci-install.sh', '.github/scripts/base-rule.sh',
     '.github/actions/setup/action.yml', '.github/doctor-verdict.jq',
@@ -215,6 +216,18 @@ test('V272 D5: the files of the cited incidents and the deploy and release proof
       assert.ok(existsSync(path.join(ROOT, f)), `${f} exists`);
     }
   });
+
+// E002: the MEASURE adapter src/js/ui/measure.js is composed of the modules under
+// src/js/ui/measure/; the code that decides what MEASURE runs and saves stays guarded whichever
+// of them it lives in.
+test('E002: every module of the MEASURE adapter is guarded', () => {
+  const dir = path.join(ROOT, 'src', 'js', 'ui', 'measure');
+  const modules = readdirSync(dir, { recursive: true }).filter((f) => f.endsWith('.js'));
+  assert.ok(modules.length > 0, 'src/js/ui/measure/ holds the split modules');
+  for (const f of ['src/js/ui/measure.js', ...modules.map((m) => `src/js/ui/measure/${m}`)]) {
+    assert.equal(isGuarded(f), true, f);
+  }
+});
 
 test('a PR changing what enforces the process rules needs a verdict', (t) => {
   for (const file of ['scripts/review-verdict.mjs', 'scripts/fail-first.mjs',

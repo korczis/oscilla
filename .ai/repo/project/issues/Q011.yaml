@@ -1,0 +1,21 @@
+id: Q011
+milestone: M063
+title: "Owner decision: what the Studio filter plot shows while stopped"
+slug: owner-decision-what-the-studio-filter-plot-shows-while-stopp
+priority: p2
+profile: routine
+owner: "repository owner"
+objective: "OD4 of the charts plan. While the Studio is stopped there is no running BiquadFilterNode to ask getFrequencyResponse of, and no probe node may be created outside the AudioEngine (project.audio-engine-discipline v2). (a) A response computed from the Web Audio specification's biquad formulas (new src/js/charts/biquad-response.js), captioned \"computed (Web Audio biquad formulas)\" and checked against the browser to 0.05 dB in every gate engine; (b) an empty plot stating \"Not running: start the Studio to see the browser response\". The plan recommends (a)."
+why: "Asked by the charts plan for M062 (owner order of 2026-10-29, session oscilla-b0); reviewer f3 found that the plan's open owner decisions let blocked slices derive READY (review of the charts plan, 2026-10-29). .ai/repo/project/README.md: work that waits on an answer names the Q issue in depends_on."
+current_state: "Open on 2026-10-29. The plan's recommendation is not an answer. K048 name this issue in depends_on, so majordomus plan next does not hand them out before it is answered."
+scope:
+  - ".ai/repo/project/issues/Q011.yaml"
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision), either in the owner's words with date and source, or as a decision of a coordinating session under an owner delegation it quotes with its date, stating its reasoning and that the owner may override it; a worker without such a delegation never answers it."
+  - "The answer names (a) or (b)."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-10-29
+updated_at: 2026-10-29

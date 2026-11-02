@@ -1,0 +1,21 @@
+id: Q014
+milestone: M063
+title: "Owner decision: the gzip cap of the charts line"
+slug: owner-decision-the-gzip-cap-of-the-charts-line
+priority: p2
+profile: routine
+owner: "repository owner"
+objective: "OD7 of the charts plan. Main is 816 424 B gzip (level 9); the open queue (#253, #261-#264, #266-#268) adds about 28.0 KB, so about 155.6 KB of the 1 000 000 B budget remains for the F-line, the K-line and M062. The required M062 slices state ceilings that sum to 52 KB (compiled CSS included, since size-report measures the whole dist), and the optional export K051 adds 2.5 KB. (a) Cap M062 at 60 KB, 5.5 KB above every ceiling with K051, leaving about 95 KB for F002-F012 and the rest of the K-line; (b) cap it at 55 KB, 3 KB above the required ceilings, with K051 cancelled; (c) another figure. The plan recommends (a). Whatever the cap, the line stops for a decision before a pull request would pass it, and each pull request records its base and head size-report figures."
+why: "Asked by the charts plan for M062 (owner order of 2026-10-29, session oscilla-b0); reviewer f3 found that the plan's open owner decisions let blocked slices derive READY (review of the charts plan, 2026-10-29). .ai/repo/project/README.md: work that waits on an answer names the Q issue in depends_on."
+current_state: "Open on 2026-10-29. The plan's recommendation is not an answer. K027 and K028, the entry slices of M062, and through K028 and K053 every M062 slice except K029, K039 and K056, and K016 (M061) and K025 (M060), which build on the kit K053 name this issue in depends_on, so majordomus plan next does not hand them out before it is answered."
+scope:
+  - ".ai/repo/project/issues/Q014.yaml"
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision), either in the owner's words with date and source, or as a decision of a coordinating session under an owner delegation it quotes with its date, stating its reasoning and that the owner may override it; a worker without such a delegation never answers it."
+  - "The answer names the cap in KB gzip at level 9; M062's acceptance criterion then reads it from this issue."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-10-29
+updated_at: 2026-10-29

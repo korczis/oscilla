@@ -1,0 +1,39 @@
+id: C007
+milestone: M090
+serves:
+  - "coherent-state#current-lab-state-wins"
+title: "Lab play options are built in one place and the current lab state always wins"
+slug: lab-play-options-are-built-in-one-place-and-the-current-lab
+priority: p1
+profile: implementation
+objective: "Lands as fix(audio). Findings engine-sync-1, engine-sync-6 and engine-sync-7. _restart copies { ...v.opts } and the main.js play wrapper merges { ...o, ...v2PlayOptions() }, which sets adsr, periodicWave and dualRouter only when a lab is on; after Additive or Envelope is switched off a pattern change or setDualPhase restart brings it back (carrier 'custom', h2-h1 -25.7 dB; adsr { s: 0.6 }) while the panels and the Signal Path say off. The additive onChange calls engine.setPeriodicWave on any sounding voice, which on a dual voice puts the wave on oscillator A only (its 2nd harmonic rises from -169 to -73 dB) although v2PlayOptions and labVizInputs exclude dual. v2PlayOptions never passes o.stepEnvelope, so Decay and Sustain never reach finite-tone, steps or ramps voices (0.0 dB at Sustain 0.10 where the open Tone gives -20 dB) while voice.adsr and the views report them. Move the merge into a pure module (for example src/js/audio/lab-play-options.js) that always returns every V2 key, set or null, used by the realtime wrapper, renderWav and src/js/ui/exporters.js. engine.setPeriodicWave refuses dual voices (returns false) and its doc comment says so. With the Envelope lab on, pass o.stepEnvelope built from a stateless scheduleAdsrStep(eg, t, dur, adsr) in src/js/audio/envelope.js that schedules only through the tracked eg and shrinks attack, decay and release to the step as stepEnv does (not applyAdsr, whose per-param log grows with every continuous top-up). With the lab off the V1 stepEnv and the freeze golden vectors are unchanged; the PR says that sequence blocks played through engine.play take the ADSR too."
+why: "Owner brief OSCILLA PACK 03, 'One Instrument, One Coherent State' (2026-10-29): every control must provably reach its subsystem and every view that reflects it, and be covered by a test (owner: 'filters, sequencer, bpm and many other interactive knobs / sliders / control elements are not reflected / working / tested'). The findings named here were reproduced by an independent skeptic on a fresh export of origin/main b67d1e58 (v3.13.0)."
+scope:
+  - "src/js/main.js"
+  - "src/js/audio/lab-play-options.js"
+  - "src/js/audio/audio-engine.js"
+  - "src/js/audio/envelope.js"
+  - "src/js/ui/exporters.js"
+  - "tests/unit"
+  - "tests/unit/engine.test.mjs"
+  - "tests/browser/app.cjs"
+  - "tests/README.md"
+  - "dist"
+acceptance_criteria:
+  - "A unit test with a mock engine: play with Additive and Envelope on, switch both off, _restart: the second play() receives adsr null and periodicWave null, and a dual voice restarted into a plan that needs no router receives dualRouter null; it fails on the merge base."
+  - "A unit test: setPeriodicWave on a dual voice returns false and leaves both oscillator types unchanged; browser check `additive-skips-dual` in tests/browser/app.cjs toggles #osc-add-enable during a dual hold and finds both types unchanged."
+  - "A unit test of scheduleAdsrStep: with s=0.1 the gain holds 0.1 mid-step for steps and finite const plans, and attack+decay+release fit inside a 10 ms step; browser check `adsr-reaches-programmed` in tests/browser/app.cjs: Sustain 0.10 typed into #osc-env-sustain-value gives -20 dB within 1.5 dB, 1 s into a finite tone and into a steps pattern, against the Envelope off."
+  - "node --test tests/unit/freeze.test.mjs tests/unit/freeze-guard.test.mjs passes unchanged."
+  - "fail-first holds: the unit test or browser check named above fails on the merge base (project.fail-first)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named wall-clock deadline; tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "engine.activeNodeCount returns to 0 after every stop in the new checks, in Chromium, Firefox and WebKit (project.audio-engine-discipline v2)."
+  - "The pull request carries a reviewer-written .ai/repo/reviews/<pr>.yaml because it changes src/js/audio (project.review-verdict); the builder never writes it."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/engine.test.mjs tests/unit/freeze.test.mjs"
+  - "node tests/browser/app.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

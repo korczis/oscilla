@@ -11,7 +11,8 @@ a custom packer into ONE static `dist/index.html`, committed and served by GitHu
 its build-metadata region is stamped at deploy); it must run from `file://` and the Pages
 sub-path. V1 is tagged `v1.0.0`. `README.md` covers features, limits, testing, releases and
 privacy; `docs/GLOSSARY.md` the terms; the reasons are the ADRs in `.ai/repo/adrs/` (0011 on
-for V2 and later; all `proposed`, see its README).
+for V2 and later; each states its status in its front matter, and their README says which the
+owner accepted and why the rest stay `proposed`).
 
 The binding constraints are the project rules in `.ai/repo/rules/project/` (version in the file
 name): `project.single-file-deliverable`, `project.audio-engine-discipline`,
@@ -34,7 +35,7 @@ Two more bind `tests/browser/`: `project.bounded-test-timing` (a wait is a condi
 a named wall-clock deadline through `tests/browser/lib/wait.cjs`; no new fixed sleep, frame count
 or assumed sample rate, and the recorded debt in `tests/browser/timing-baseline.json` only shrinks) and `project.suite-harness` (every suite runs through
 `tests/browser/lib/suite.cjs`). Read them before adding or changing a browser check. Outside CI
-each suite waits for the 1-minute load to fall below `OSC_LOAD_MAX` (default 2 x cores) and then
+each suite waits for the 1-minute load to fall below `OSC_LOAD_MAX` and then
 fails without running, so `release-gate` and `release:prepare` need a quiet machine or a stated
 limit (`OSC_LOAD_MAX`, `OSC_LOAD_WAIT_MS`; see `tests/README.md`).
 
@@ -101,7 +102,7 @@ enumerates neither, because ranges written here go stale.
 - Build and release: `scripts/`. Tests: `tests/unit/`, `tests/browser/`, `tests/visual/`;
   `tests/README.md` says what each proves and which gate runs it.
 
-<!-- majordomus:begin 446ca2e497aa f2d9a1017395dba3 -->
+<!-- majordomus:begin 891aae631b23 f2d9a1017395dba3 -->
 # CLAUDE.md
 
 Claude Code bootstrap. The repository's provider-neutral AI context lives under

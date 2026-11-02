@@ -1,0 +1,20 @@
+id: M059
+title: "Sequencer: audible tempo, real editing and a Studio clock"
+slug: sequencer-audible-tempo-real-editing-and-a-studio-clock
+order: 59
+priority: p2
+problem: "The tempo select changes nothing you can hear (design gap G1); the V2 editor has no undo, copy or Space; its nodes are outside engine accounting (src/js/sequencer/editor.js:317 calls compileSequence without track or source); the Studio has no clock, so there is no quantised step."
+outcome: "V2: audible tempo, keyboard editing and engine accounting within ADR 0058; Studio: a Clock node, Step quantize with a trigger out and trigger clips; a step-bar editor."
+acceptance_criteria:
+  - "K001 to K003, K017, K019 and K023 are done with their evidence; npm run release-gate passes at the last one."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "ADR 0058 line 92 rejects turning the block sequencer into a MIDI sequencer: note-name entry and tempo are block parameters, not a piano roll."
+  - "The V1 freeze and golden tests may move when K002 makes beats the default: the change to them is stated in the pull request, never silent."
+  - "K003 and K017 both edit src/js/sequencer/editor.js; K017 waits on F003 of #251."
+  - "Step quantize is a new parameter on an existing type, so it lands in K022's epoch and K023 follows K022."
+created_at: 2026-10-29
+updated_at: 2026-10-29

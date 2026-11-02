@@ -1,0 +1,30 @@
+id: K021
+milestone: M058
+serves:
+  - "playable-instrument#front-panel"
+title: "Mod matrix: a Pro table of the CONTROL edges"
+slug: mod-matrix-a-pro-table-of-the-control-edges
+priority: p2
+profile: implementation
+objective: "Lands as feat(studio-ui). A Pro table lists every CONTROL edge (source, target, depth, polarity) as a projection of the model; an edit is an EDGE_UPDATE and \"add route\" goes through canConnect, showing its sentence when refused. It waits on F001, F002 and F008 of plan pull request #251 (intent ui-flowbite-pro), which are not on main yet; depends_on names them in the plan change after #251 lands. It also waits on E004."
+why: "Owner direction of 2026-10-29 (session oscilla-b0): OSCILLA becomes a playable, patchable instrument and an audio-band signal lab; the plan checked every fact it relies on against main at 8b5792cd, and the sizes it quotes are unchanged at e2720e07."
+scope:
+  - "src/js/ui/studio"
+  - "tests/unit/studio-mod-matrix.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "E004"
+  - "K013"
+acceptance_criteria:
+  - "The table lists exactly the CONTROL edges of the model, an edit is one EDGE_UPDATE, and a refused route shows canConnect's sentence and changes nothing, in a unit test that fails on the merge base."
+  - "Any new chrome is Flowbite Pro markup adapted from the matching Pro block and lowers or keeps the ratchet (project.ui-uses-flowbite-pro, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs); controls are Pro range sliders with number inputs; a continuous instrument parameter in the Synth workspace is the knob of K058 (D11, Q018, superseding D5 there)."
+  - "A reviewer's verdict is needed if it touches src/js/studio (project.review-verdict); fail-first holds."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/studio-mod-matrix.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

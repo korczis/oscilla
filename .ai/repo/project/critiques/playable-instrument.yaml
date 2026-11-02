@@ -1,0 +1,121 @@
+intent: playable-instrument
+reviewed_at: "b8e160ef3932f0211508b7f4833d6e1425d52b0e"
+reviewed_by: "claude-opus-5.5 (two independent reviewers of pull request #265, reviews 0 and 1, oscilla-b0 workflow); the findings are theirs, transcribed by the plan builder, who wrote the resolutions"
+findings:
+  - id: k010-log-edge-sidebands-false
+    class: unproven_assumption
+    subject: "K010"
+    finding: "A log edge adds octaves to the carrier's detune in cents (src/js/studio/compiler.js, mapping log), which is exponential FM: the lines sit at the mean frequency fc x <2^(d sin)> +- n x fm, not at fc +- n x fm. At 48 kHz, fc 1000 Hz and fm 440 Hz the level at fc + 440 is -115 dB at 0.5 octave and -175 dB at 1 octave, so the stated figure either fails or holds only at a depth tuned small enough to hide the error (project.no-fake-science)."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "K010"
+      because: "K010 and the voice-nodes criterion now assert lines at fc +- n x 440 Hz on a linear edge (depth in Hz, as the Playground FM voice maps it) with the first sideband within 1 dB of J1/J0 of the stated index, and any log-edge figure states its depth and its mean-frequency centre (2026-10-29)."
+  - id: k011-shelf-q-inert-and-missing-scope
+    class: missed_requirement
+    subject: "K011"
+    finding: "Web Audio ignores Q on a shelf (usesQ, src/js/audio/filters.js), so a shelf leaves the Q control inert (project.no-inert-surfaces). The new types also reach gainIsUsed in src/js/studio/clip-targets.js (peaking only), the V431 gain test that loops over FILTER_TYPES, the Filter help text, the Filter Lab that shares FILTER_TYPES and the V1 config file that keeps its own list, none of which was in scope."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "K011"
+      because: "K011's scope names those files and its criteria require Q hidden or disabled with its reason on a shelf, a Q edge marked inactive, the help text corrected, and the Filter Lab and config file decision stated (2026-10-29)."
+  - id: k004-round-trip-outside-the-model
+    class: regression_risk
+    subject: "K004"
+    finding: "exportSequence(importSequence(x)) deep-equal to x can be met only by keeping the imported file's seed in workspace state outside the StudioModel, which a save and reload loses; that is a parallel copy (project.studio-model-is-canonical). The \"Export track as sequence\" control is new markup that would raise the ratchet before F001."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "K004"
+      because: "K004 now requires the round trip through serialize and parse of the model alone, or a listed set of fields the model does not carry with their defaults, and no state outside the model; the export control moves to K018 in Wave 2 as Pro markup (2026-10-29)."
+  - id: d10-premise
+    class: unproven_assumption
+    subject: "V605"
+    finding: "V605 depends on V604 only by a scope chain (M048), which narrows once E003 names its modules, not when the LFO is widened. The real link is the other way: V605's AM and FM configurations above 100 Hz cannot validate until K010 lands, so V605 should gain a dependency on K010."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "K010"
+      because: "D10 is restated in the intent, V605 depends on K010, and its V604 dependency and M048's E003 condition stay (2026-10-29)."
+  - id: k007-describes-main-as-missing
+    class: unnecessary_work
+    subject: "K007"
+    finding: "Ctrl + wheel already zooms at the pointer and touch pinch exists on main (graph-editor.js:570-577, 685-688, 915-922), and the minimap (V602) and timeline pinch (V603) are built although the feature record lists them as missing. A pinch test would pass on the base, and changing the plain wheel to pan removes mouse-wheel zoom without saying so."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "K007"
+      because: "K007 is limited to a panning wheel with Ctrl/Cmd + wheel zoom, states that mouse-wheel zoom moves to Ctrl/Cmd + wheel, keeps the existing pinch and buttons, and only corrects the stale minimap and timeline-pinch lines (2026-10-29)."
+  - id: edge-mute-already-exists
+    class: unnecessary_work
+    subject: "K009"
+    finding: "Every edge type already has the muted property (EDGE_PROPERTY_FIELDS, src/js/studio/ports.js) and the compiler applies it, so the hedge that edge mute may need a new property and wait for K022 is unfounded; and \"No studioHash changes\" is wrong as written, because muting an edge changes that document's hash by design."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "K009"
+      because: "K009, K022 and M057 drop the hedge; K009 says no pinned template hash changes while a muted edge changes its own document's hash (2026-10-29)."
+  - id: criteria-pass-on-the-base
+    class: delivery_verification
+    subject: "playable-instrument#editor-headroom"
+    finding: "The reproduce commands of patching-gestures, editor-headroom, voice-nodes, template-pack and sequencer-editing ran tests that already pass on main or missed the tests their issues add (sequencer-chrome, studio-step-bars, v31-studio-links, K002's unit test); editor-headroom passed with 4 475 B of room."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "K005"
+      because: "Each reference now names the tests its serving issues add, editor-headroom runs two headroom tests (K005, K006) that read each file and its cap, and the in-flight branches' test names are used (2026-10-29)."
+  - id: sequencer-editing-misdescribes-k019
+    class: delivery_verification
+    subject: "K019"
+    finding: "The sequencer-editing criterion put a step-bar editor in the V2 sequencer, while K019 builds an editor for the Studio Step node in the Inspector."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "K019"
+      because: "The step-bar editor has its own criterion, step-editing, which K019 serves (2026-10-29)."
+  - id: chrome-waits-unstated
+    class: missed_requirement
+    subject: "K018"
+    finding: "Plan section 3 puts Studio chrome after F008 and E004, but K018 (a Studio button and the workspace file I/O) named only F001 and F002 and not E003, K019 (an Inspector card) omitted F008, and K026 did not say which surface the on-screen keyboard goes on."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "K018"
+      because: "K018 names F003 for the Sequencer side, F008 for the Studio side and depends on E003; K019 names F008; K026 puts the keyboard in the Playground behind F003 (2026-10-29)."
+  - id: k022-waits-on-chrome
+    class: unnecessary_work
+    subject: "K022"
+    finding: "K022 depended on K020, a Wave 2 chrome issue behind F001, F002 and F008, which held the chrome-free hash epoch, K023's Clock and Step quantize behind the UI migration."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "K022"
+      because: "K022 depends on K014 only, adds no markup, and gets its controls from the existing parameter rendering (2026-10-29)."
+  - id: k014-contradiction
+    class: delivery_verification
+    subject: "K014"
+    finding: "K014 said templates that need nothing new could land early, while its depends_on held all six behind K010, K012 and K013."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "K014"
+      because: "The six land together after K010, K012 and K013, and their test is a new file that fails on the base (2026-10-29)."
+  - id: playback-limit-is-not-2-s
+    class: unproven_assumption
+    subject: "K026"
+    finding: "ADR 0005 sets a configurable playback limit of 0.5-5 s with a 2 s default; \"the 2 s limit\" misstates it."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "K026"
+      because: "D3, the invariant, held-notes-safe and K026 name the configured playback limit, keeping the owner's 2 s as its default (2026-10-29)."
+  - id: wave-1-scopes-not-concurrent
+    class: delivery_verification
+    subject: "K005"
+    finding: "K005 and K006 claimed all of tests/unit, which made them scope-conflict with K001, K004, K015 and K024 against D9, and the scope widening stopped at K006, so K003 and K007-K013 named test files the in-flight branches do not add and omitted files they change."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "K006"
+      because: "K005 and K006 name their files; K003 and K007-K013 name the files and tests of feat/k001-k003-sequencer-wave-1, feat/k006-k009-graph-ergonomics and feat/k005-k013-studio-nodes (2026-10-29)."

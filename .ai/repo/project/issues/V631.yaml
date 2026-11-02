@@ -1,0 +1,32 @@
+id: V631
+milestone: M080
+serves:
+- "studio-box-system#model-and-views"
+title: Seeded edit sequences hold the Studio model invariants after every step
+slug: seeded-edit-sequences-hold-the-studio-model-invariants-after
+priority: p1
+profile: implementation
+objective: "P04 slice A (model invariants and round-trip). Lands as test(studio) with any fix it forces as fix(studio). tests/unit/studio-model-invariants.test.mjs drives the one store with seeded sequences (mulberry32, the seed printed) of every action the store accepts, valid and invalid, and after every step checks: the model validates; no edge names a missing node or port (no dangling edge); no automation lane or clip names a missing target; serialize, import and serialize again is byte-identical; studioHash changes only when execution state changes; a refused action leaves model, history, selection and revision unchanged; and at the end undo-all returns the initial model and redo-all the final one. Each later slice that adds an action (V612 insert, V613 fan-out, V614 align and box mute, V622, V626, V629) adds it to the generator in its own pull request. Nothing in src/ changes unless a sequence finds a defect, which is then fixed here with the seed as its regression case."
+why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings S1-S14 measured on origin/main b67d1e58)."
+scope:
+- tests/unit/studio-model-invariants.test.mjs
+- tests/unit/fixtures/studio-actions.mjs
+- src/js/studio/actions.js
+- src/js/studio/validate.js
+- tests/README.md
+acceptance_criteria:
+- "Before: VERIFIED: tests/unit/v31-studio-model.test.mjs proves serialization round trip, undo-all identity, deletion cascade, refusal at every entry point and gesture coalescing on hand-written cases; no seeded sequence of mixed actions is checked after every step."
+- "After: a seeded edit-sequence test runs every store action, and every action later slices add, in random valid and invalid order and checks the invariants after each step."
+- "Negative cases: an invalid action (wrong type, missing port, stale node id, cycle, second Master Output) leaves model, history, selection and revision unchanged; a generator seed that finds a violation prints the seed and the shortest failing prefix."
+- "Rollback: revert the merge commit. Nothing changes the schema, a studioHash or a stored record, so documents saved while it was live load unchanged after the revert."
+- "The test runs at least 200 seeded sequences of 50 steps within the 180 s fail-first budget of one file, and fails on a fixture store that drops the cascade of NODE_REMOVE (mutation: a dangling edge), one that coerces a refused EDGE_ADD to another port (mutation: silent coercion) and one that repairs a cycle (mutation: silent feedback)."
+- "As a test-only change fail-first does not apply; any src/ fix it forces lands as a fix commit whose unit test (the failing seed) fails on the merge base (project.fail-first), and src/js/studio is guarded, so a fix carries a reviewer's verdict (project.review-verdict)."
+- "Definition of done: extends tests/unit/v31-studio-model.test.mjs; cross-links nothing new; dynamics: none (a model slice, stated); docs: docs/v31/studio-model.md names the invariants and the seed rule; tested: the mutations above; deployed with the next release."
+- "Wave 1: it adds no class token, selector, markup surface or inline style, so the Flowbite Pro record does not change: node scripts/ui-flowbite-pro-record.mjs --check passes with no rewrite and node --test tests/unit/ui-flowbite-pro.test.mjs passes (project.ui-uses-flowbite-pro); live drawing is on a canvas, a domain view."
+validation:
+- node --test tests/unit/studio-model-invariants.test.mjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

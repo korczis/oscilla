@@ -1,0 +1,44 @@
+id: K067
+milestone: M065
+serves:
+  - "connected-instrument#step-sequencer"
+title: "Steps clip: the step sequencer's pattern as Studio timeline data"
+slug: steps-clip-the-step-sequencer-s-pattern-as-studio-timeline-d
+priority: p1
+profile: implementation
+objective: "Lands as feat(studio). A new clip kind steps on event tracks (enum option, D2), with a strict payload: length 1-64, division (1/8, 1/16, 1/32, 1/8t, 1/16t), swing 50-75 %, seed, scale { root, mode }, transpose -24..+24, and per step on, note 0-127, gate 0.05-1 or tie, velocity 0-1, accent, slide, ratchet 1-4 and probability 0-1. The registry capabilities notes and hits name the node types a steps clip may target (keys from K060; drum voices from K071; this slice introduces both capability names), and clipRules refuses any other target with a sentence. The clip-target policy (clip-targets.js, the one answer of store, timeline UI, transport and offline render) and its test gain the steps rows first, and offline.js planOfflineRender lists a steps clip as unplayed with its reason until K068. The import pipeline's limits cover it. This slice adds no playback (K068) and no chrome. Before: the Studio timeline has no step data. After: a steps clip validated as model data. User-value tier 1 of 4 (synth-design.md section 17). Rollback: revert the pull request; a document with a steps clip is then refused by the import pipeline with its sentence, so after a release the clip kind stays and the editor is removed instead."
+why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
+scope:
+  - "src/js/studio/schema.js"
+  - "src/js/studio/timeline.js"
+  - "src/js/studio/validate.js"
+  - "src/js/studio/nodes/common.js"
+  - "src/js/studio/registry.js"
+  - "docs/v31/timeline.md"
+  - "src/js/ui/studio/timeline-view.js"
+  - "src/js/studio/clip-targets.js"
+  - "src/js/studio/offline.js"
+  - "tests/unit/v4-clip-target-policy.test.mjs"
+  - "tests/unit/studio-steps-clip.test.mjs"
+  - "tests/browser/v31-studio-timeline.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K060"
+acceptance_criteria:
+  - "tests/unit/studio-steps-clip.test.mjs, failing on the merge base: a valid steps clip round-trips through serialize, parse and the import pipeline; each field out of range is refused with its sentence and leaves the store unchanged; a steps clip on a target without notes or hits capability is refused; an oversized payload is refused by the import limits; every pinned template hash is unchanged."
+  - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: each field out of range; a target without notes or hits; an oversized payload."
+  - "A browser check in tests/browser/v31-studio-timeline.cjs, wired into npm run test:studio (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: a steps clip dispatched through the Studio store shows as a clip chip in the Studio timeline and in the compact Studio of the Playground, and survives a save and reload. Real-time: the chip appears after the dispatch and disappears after undo, each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: the chip is selected by pointer, by keyboard (arrows in the timeline listbox) and by touch, deleted by Delete, and carries its role and accessible name ('Steps clip, 16 steps'). Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Every edit is one undoable dispatch through the one Studio store (a continuous gesture is one history entry, undo and redo restore the exact serialized model) and the model holds plain data only (project.studio-model-is-canonical); every connection goes through canConnect and full-model validation, and a refusal shows the validator's sentence and leaves model, history and runtime unchanged (project.typed-ports, project.no-silent-feedback)."
+  - "Every pinned template studioHash is unchanged: it adds node types, ports, capabilities, enum options or clip kinds only, never a parameter on an existing node type (D2, K022)."
+  - "The pull request carries a reviewer's verdict (src/js/studio is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "scripts/size-report.mjs shows at most 2 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; it does not wait on Q023, and its figure joins the line's sum once Q023 records the cap, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/studio-steps-clip.test.mjs"
+  - "node tests/browser/v31-studio-timeline.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

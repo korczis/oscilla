@@ -1,0 +1,52 @@
+id: K048
+milestone: M062
+serves:
+  - "playable-instrument#chart-interaction"
+  - "playable-instrument#chart-states-honest"
+title: "Studio inspector plots for the Filter, Envelope, Sweep and LFO nodes"
+slug: studio-inspector-plots-for-the-filter-envelope-sweep-and-lfo
+priority: p2
+profile: implementation
+objective: "Lands as feat(studio-ui). A new src/js/ui/studio/inspector-plots.js with a hook of under 1 KB in the inspector (inspector.js is 73 184 of 81 000 B; E004 splits it). It lands after K016 and K019, which add the live-view and Step-bar cards to the same inspector, so the cards stack in one order. Filter: filter-chart.js from handle.info.stage.getResponse while running, captioned \"browser response\"; while stopped, what Q011 (OD4) decides: the plan recommends a new src/js/charts/biquad-response.js (the biquad formulas the Web Audio specification defines for BiquadFilterNode, with the dB-valued Q of low- and high-pass), captioned \"computed (Web Audio biquad formulas)\", because no probe node may be created outside the engine; a modulated cutoff shows modulationRange as a shaded \"cutoff sweep range\". Envelope: envelope-graph.js with the K045 axes. Sweep: \"REQUESTED INSTANTANEOUS FREQUENCY\" from visualization/motion.js and audio/patterns.js planFreqAt. LFO: two periods of shape x depth in the target's unit when a MOD edge exists, captioned \"ideal shape; the browser oscillator is band-limited\". Each plot is a kit host with the keyboard cursor and announced readout. Every drag previews and dispatches one store action at pointerup; Escape and pointercancel revert the drag and Escape still propagates; the numeric fields stay the editing keyboard path (project.studio-model-is-canonical). Random is out (it would need adapter changes)."
+why: "Owner order of 2026-10-29: \"make the charts really sexy, modern, interactive\", for all charts; reviewer f3 scoped it to every surface that draws data. Revised after f3's review of the plan (CHANGES-REQUESTED, 2026-10-29): owner decisions are Q issues under M063, Pro chrome waits on F002 and on the card issue of its workspace, every chart that claims chart-interaction delivers the keyboard cursor and the announced readout, chart keys never take Escape or Space; revision 3 answers f3's delta review. Facts checked against origin/main at e2720e07 and the branches of #251, #253, #263 and #265 (charts-plan.md, charts-plan-changes.md)."
+scope:
+  - "src/js/ui/studio/inspector-plots.js"
+  - "src/js/ui/studio/inspector.js"
+  - "src/js/charts/biquad-response.js"
+  - "src/js/charts/filter-chart.js"
+  - "src/js/charts/envelope-graph.js"
+  - "tests/unit/biquad-response.test.mjs"
+  - "tests/unit/studio-inspector-plots.test.mjs"
+  - "tests/browser/v31-studio-runtime.cjs"
+  - "tests/unit/chart-host-census.json"
+  - "tests/browser/charts-interaction.cjs"
+  - "tests/visual"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "Q011"
+  - "E004"
+  - "K043"
+  - "K045"
+  - "K016"
+  - "K019"
+  - "F008"
+acceptance_criteria:
+  - "Unit tests that fail on the merge base: golden biquad-response values for each of the 8 filter types; a fake store sees N pointer moves give 1 dispatch and a cancel give 0; the sweep trajectory equals planFreqAt samples."
+  - "tests/browser/v31-studio-runtime.cjs: the computed response is within 0.05 dB of getFrequencyResponse of the engine's own running filter over 8 types and a parameter grid, skipping non-finite values (an exact notch) as tests/browser/labs.cjs does; dragging the filter handle adds exactly one history entry. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline and assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac); tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Its chart hosts (Studio inspector Filter, Envelope, Sweep and LFO plots) move from pending to done in tests/unit/chart-host-census.json, each carrying data-osc-chart, and the table-driven pass of tests/browser/charts-interaction.cjs holds for each: the host is role=group holding the aria-describedby summary and the snapshot data table, and its focusable plot surface is role=application with aria-roledescription \"interactive chart\" (never role=img), both asserted in the accessibility tree, with a visible focus ring; ArrowRight moves the cursor one step and the one polite live region announces the readout once after the keys settle; Escape clears the cursor and still reaches the page's stop (a playing tone stops); Space keeps its workspace meaning (SPACE_MEANING of src/js/ui/shortcuts.js) and is never taken (ADR 0050); on a touch pointer a tap pins the cursor and it stays after the finger lifts."
+  - "The chart reads existing AnalyserNodes on the main thread only, creates no audio node and adds no work to the audio path; hover and keyboard work runs on events only, a live readout under a still pointer is rewritten at most 4 times a second through the kit's live-readout, and no draw loop writes the DOM per frame (project.audio-engine-discipline v2)."
+  - "Chart chrome (legend, toolbar, toggle, badge, tooltip, readout row) is Flowbite Pro markup adapted from the matching Pro component and lands after F002 turned on preflight and the form base styles (the border trap of review #253, R-3) and after F008 placed the card it sits in; no osc-* class token or legacy selector is added and src/styles/tokens.css, charts.css, measure.css, studio.css and studio-timeline.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+  - "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no review verdict is needed; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first). An edit under src/js/studio/adapters would need a reviewer's verdict."
+  - "The visual references of the visual-studio scenes showing the inspector, where they move, are re-accepted in darwin-arm64 and linux-x64, in each theme that has references (light ones exist once F011 lands), with the reason \"inspector plots\" in the pull request body (npm run test:visual)."
+  - "scripts/size-report.mjs shows at most 5 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of M062's figures stays within the cap Q014 records, under the 1 000 000 B gzip budget (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/biquad-response.test.mjs tests/unit/studio-inspector-plots.test.mjs"
+  - "node tests/browser/v31-studio-runtime.cjs"
+  - "node tests/browser/charts-interaction.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

@@ -1,0 +1,48 @@
+id: K059
+milestone: M064
+serves:
+  - "connected-instrument#synth-panel"
+  - "connected-instrument#honest-instrument"
+title: "Oscillator and contour node kinds, and the instrument wording test"
+slug: oscillator-and-contour-node-kinds-and-the-instrument-wording
+priority: p1
+profile: implementation
+objective: "Lands as feat(studio). Two new node types: vco (waveform sine, triangle, saw, square, pulse; octave -3..+3; fine in cents; pulse width 5-95 % as a parameter that is not modulatable, the pulse built as a band-limited PeriodicWave of that width recomputed when the width changes, so it tracks pitch exactly; modulated width (PWM) comes with the worklet oscillator of K089, and the help says so; interval -24..+24 semitones; mode off or ring, ring multiplying by an AUDIO ring input; level) and contour (attack, hold, release, invert; a gate TRIGGER input; a 0..1 CONTROL output from a ConstantSource ramped on the audio clock). Their adapters live in the category module K005 created. It adds tests/unit/instrument-wording.test.mjs: the string literals of src/js/synth, src/js/ui/synth, src/js/ui/piano and the instrument node definitions refuse product, brand and model names and analog-modelling words with the negation rules of tests/unit/no-fake-science.test.mjs, and every later instrument slice adds its modules to that scan. Before: the Studio has one generic oscillator with no octave, pulse width or ring mode, and no gate-driven control contour. After: vco and contour nodes with figures checked offline. User-value tier 1 of 4 (synth-design.md section 17). Rollback: revert the pull request; a document saved with the new node type is then refused by the import pipeline with its unknown-type sentence, never dropped silently, so a revert after a release ships it keeps the registry entry and removes only the UI."
+why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
+scope:
+  - "src/js/studio/nodes"
+  - "src/js/studio/registry.js"
+  - "src/js/studio/adapters"
+  - "src/js/audio"
+  - "docs/v31/studio-model.md"
+  - "tests/unit/instrument-wording.test.mjs"
+  - "tests/browser/instrument-dsp.cjs"
+  - "tests/unit/synth-vco-contour.test.mjs"
+  - "tests/browser/synth-nodes.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K005"
+  - "K075"
+acceptance_criteria:
+  - "tests/unit/synth-vco-contour.test.mjs, failing on the merge base, asserts on StudioFakeContext (tests/unit/sequencer-fake-audio.mjs) the scheduled calls, times, ramps and node census; tests/browser/instrument-dsp.cjs, rendering a real OfflineAudioContext in Chromium, Firefox and WebKit at each context's own rate (in the style of tests/browser/dsp.cjs) and failing on the merge base, checks the figures: a vco saw at 220 Hz has its fundamental at 220 Hz within one FFT bin; octave +1 doubles it within 0.1 cent; a pulse at width 25 % has its third harmonic within 1 dB of the analytic |sin(3 pi w)| / 3 relative to the fundamental's |sin(pi w)|, and its fourth harmonic at least 40 dB down, the same at A4, A5 and A6 played from a keys node (the width tracks pitch); ring mode output equals the sample-wise product of the two inputs within 1e-6; a contour with attack 10 ms reaches 0.99 of 1 at 10 ms +- one render quantum and never steps by more than the click limit of the freeze suite at release."
+  - "tests/unit/instrument-wording.test.mjs refuses a fixture string with a product name, one with 'analog warmth' and one that calls a biquad self-oscillating, and passes their negated forms; it fails on the merge base (the file does not exist)."
+  - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: a width outside 5-95 %; a width edge (not modulatable in Wave 1, refused); a frequency above 0.95 x Nyquist; a product name in a string."
+  - "A browser check in tests/browser/synth-nodes.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: a vco and a contour added in the Studio show in the Signal Path and the compact Studio of the Playground as the same nodes. Real-time: a vco pulse width changed in the Inspector reaches the runtime's width AudioParam (read from the runtime's debugInfo) and the Studio spectrum node's summary, each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: each type is added from the library by pointer, by the keyboard quick add (N) and by touch, and its ports have their accessible names ('Pitch control input'). Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Every edit is one undoable dispatch through the one Studio store (a continuous gesture is one history entry, undo and redo restore the exact serialized model) and the model holds plain data only (project.studio-model-is-canonical); every connection goes through canConnect and full-model validation, and a refusal shows the validator's sentence and leaves model, history and runtime unchanged (project.typed-ports, project.no-silent-feedback)."
+  - "Every node it plays is built by an engine adapter with track()/source() accounting, all timing is on the audio clock (no timer or rAF times audio), envelopes are click-free, frequencies stay below 0.95 x Nyquist of the running context, the peak stays at or below the output ceiling and the engine node census is 0 after stop (project.audio-engine-discipline v2)."
+  - "Every pinned template studioHash is unchanged: it adds node types, ports, capabilities, enum options or clip kinds only, never a parameter on an existing node type (D2, K022)."
+  - "Every string it adds passes tests/unit/instrument-wording.test.mjs (added by K059): no product, brand or model name, no analog-modelling or vintage claim, and every approximation it makes labelled where it is shown (project.no-fake-science)."
+  - "The pull request carries a reviewer's verdict (src/js/audio and src/js/studio is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "scripts/size-report.mjs shows at most 4 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; it does not wait on Q023, and its figure joins the line's sum once Q023 records the cap, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/synth-vco-contour.test.mjs"
+  - "node --test tests/unit/instrument-wording.test.mjs"
+  - "node tests/browser/synth-nodes.cjs"
+  - "node tests/browser/instrument-dsp.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

@@ -1,0 +1,44 @@
+id: K110
+milestone: M072
+serves:
+  - "connected-instrument#daw-tracks"
+  - "connected-instrument#honest-instrument"
+title: "Input monitoring, honest about its latency"
+slug: input-monitoring-honest-about-its-latency
+priority: p3
+profile: implementation
+objective: "Lands as feat(audio). Under Q024's answer (input monitoring is refused today: project.no-silent-feedback rejects a live input with an AUDIO path to the output), an armed audio track may monitor its input only through the rule version Q024 records: an explicit per-session confirmation that headphones are used, monitor gain starting at the floor, the estimated round-trip latency (input and output latency the browser reports, plus one render quantum) shown, never persisted to storage or the address. Before: a live input to the output is refused. After: monitoring under a confirmed rule version with its latency stated. User-value tier 4 of 4 (synth-design.md section 17). Rollback: revert the pull request; no saved state depends on it."
+why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
+scope:
+  - ".ai/repo/rules/project"
+  - "src/js/studio/validate.js"
+  - "src/js/studio/compiler.js"
+  - "src/js/audio"
+  - "src/js/ui/synth"
+  - "tests/unit/v31-studio-model.test.mjs"
+  - "tests/unit/input-monitoring.test.mjs"
+  - "tests/browser/arrange.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K109"
+  - "Q024"
+acceptance_criteria:
+  - "The rule's new version is recorded and majordomus doctor passes before any code lands."
+  - "tests/unit/input-monitoring.test.mjs, failing on the merge base: without the confirmation a live input to output is refused with the rule's sentence; with it the monitor starts at the floor; the latency figure is computed from the reported latencies; nothing of it is persisted."
+  - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: no confirmation (refused); a reload (not persisted)."
+  - "A browser check in tests/browser/arrange.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: the monitor state shows on the track header and the mixer strip alike. Real-time: confirming and raising the monitor gain makes the TEST CONTEXT input audible at the output tap, each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: the confirmation and the monitor control work by pointer, keyboard and touch. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Every edit is one undoable dispatch through the one Studio store (a continuous gesture is one history entry, undo and redo restore the exact serialized model) and the model holds plain data only (project.studio-model-is-canonical); every connection goes through canConnect and full-model validation, and a refusal shows the validator's sentence and leaves model, history and runtime unchanged (project.typed-ports, project.no-silent-feedback)."
+  - "Every node it plays is built by an engine adapter with track()/source() accounting, all timing is on the audio clock (no timer or rAF times audio), envelopes are click-free, frequencies stay below 0.95 x Nyquist of the running context, the peak stays at or below the output ceiling and the engine node census is 0 after stop (project.audio-engine-discipline v2)."
+  - "Every string it adds passes tests/unit/instrument-wording.test.mjs (added by K059): no product, brand or model name, no analog-modelling or vintage claim, and every approximation it makes labelled where it is shown (project.no-fake-science)."
+  - "The pull request carries a reviewer's verdict (src/js/audio and src/js/studio is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "scripts/size-report.mjs shows at most 1 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of the line's figures stays within the cap Q023 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/input-monitoring.test.mjs"
+  - "node tests/browser/arrange.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

@@ -1,0 +1,24 @@
+id: M073
+title: "Measurement truth in the interface"
+slug: measurement-truth-in-the-interface
+order: 73
+priority: p1
+problem: "The P05 audit of origin/main b67d1e58 (v3.13.0) traced 126 readouts across the Playground, Synthesis, Analyzer, Filter Lab, MEASURE and Studio and found 41 surviving defects plus one contested one (scratchpad p05/truth-table.md): clipped or out-of-range signals shown as ordinary readings (output ceiling, scope clamp, live RTA, MEASURE quality bar at the rail, Render WAV, Filter Lab and additive charts), labels that name the wrong quantity or scale (dual beats under a stereo split, bare dB of the analyser scale, an unscaled MAD as ±, an SNR floor as a value, CALIBRATED for a profile that covers nothing, the microphone lag step as ±), and controls or comparisons that show a value not in effect (Nyquist axis, Phase & Stereo fields, live pan, frozen microphone verdicts, Studio frequencies limited to 0.95 x Nyquist). No test binds a readout to its provenance."
+outcome: "Every readout the audit found defective shows an explicit state instead of a plausible number, names the quantity, scale and statistic it shows, and shows the value in effect; every readout has a row in a canonical truth table that a unit test enforces, so a new readout without provenance fails; T027 registers the claims and points the v3-measure readout criteria at them."
+acceptance_criteria:
+  - "T001-T027, Q040 and Q041 are done with their evidence."
+  - "npm run release-gate passes at T027, and npm run visual passes or every baseline change is declared."
+validation:
+  - "npm run release-gate"
+  - "majordomus intent validate"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "A DSP change made only to make a chart look right: P05 forbids it; T008 keeps the spectrogram data and LUT unchanged and labels the scale instead, T011 and T007 change only what the readout claims, after Q040 and Q041."
+  - "An invented confidence number: no issue here adds a confidence score; thresholds are derived (clip.v2 rule, chord error cos(pi f/sr), the cap with a 2^-20 tolerance) or declared in the test."
+  - "Shared files: src/index.html, dist and tests/README.md are touched by most issues (a rebase, not a design conflict); the microphone issues are chained T009 → T010 → T007 → T011 on src/js/labs/mic-analyzer.js, the Phase & Stereo issues T012 → T013 → T014 → T015 on phase-stereo.js, and the MEASURE views T017 → T018 and T017 → T020."
+  - "Overlap with M062 (charts, K027-K057, on main since #269): K030 gives the microphone chart its relative caption and dB rel readouts, K033 the generated spectrogram colour keys, K034 the Canvas 2D phase and Lissajous views with L and R axes, K035 the canvas correlation meter with its tau, K032, K043 and K044 the scope, filter and additive readouts. The T issues that touch those files depend on them and add only the truth states K does not plan; if the owner wants the truth fixes first, the dependency direction flips (owner question). K049 (if Q010 says yes) plans a clip latch \"sample >= 0 dBFS seen\" on the output analyser, which sits after the -12.04 dBFS ceiling and cannot reach 0 dBFS (DERIVED from audio-engine.js:244-273); T001 is the reachable clipping state."
+  - "Guarded paths (audio, analysis, measurement, studio, ui/measure.js): those issues carry a reviewer verdict and fail-first (project.review-verdict, project.fail-first)."
+  - "The milestone sits under intent v3-measure although half the readouts are V1/V2 surfaces; the owner may prefer another intent (owner question in the plan README)."
+created_at: 2026-10-29
+updated_at: 2026-10-29

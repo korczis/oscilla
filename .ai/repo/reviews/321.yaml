@@ -1,0 +1,66 @@
+# Review verdict for pull request #321, T001 (P05 truth-table row GEN-01): the output says when the
+# safety ceiling acts, and the gain readout is labelled a setpoint (branch
+# fix/t001-output-ceiling-indicator). Reviewed head a6b2fb19, against origin/main. Another session
+# built it (oscilla-b0); this reviewer did not build or edit any of it.
+#
+# The digest: the base branch's scripts/review-verdict.mjs, run from `git archive origin/main
+# scripts` with --repo on this worktree and --head a6b2fb19, gives b62b2be8...c7db over the 2
+# guarded paths it names (src/js/audio/audio-engine.js, src/js/audio/output-ceiling.js); the
+# branch's own copy gives the same. The worktree held uncommitted edits by the builder when this
+# was reviewed (audio-engine.js, workbench.js, README.md, ADR 0002, the unit test, dist): they are
+# not part of this verdict. Committing the audio-engine.js one changes a guarded path, which makes
+# this verdict stale; that delta then needs its own look.
+#
+# How it was reviewed: read the diff of every changed source file against the rules
+# project.review-verdict, project.no-fake-science and project.audio-engine-discipline, the
+# truth-table row GEN-01 and the issue draft T001.yaml; traced the output chain at the head
+# (voice -> cutNode -> master -> limiter -> trim -> ceiling -> analyser -> destination,
+# audio-engine.js:277-282 and :500) and every node that feeds master (Studio engine-hooks, MEASURE
+# capture.js:891, the lab sequencer through main.js:119); ran tests/unit/readout-states-ceiling,
+# no-fake-science and freeze on a `git archive a6b2fb19` copy (8/8 and 1150/1150 pass); read the
+# CI run 40976201319 of this head.
+#
+# What holds: the tap is an AnalyserNode on `trim`, exactly the ceiling's input, with nothing
+# connected from it, so it changes no sample; it is built by the engine, kept off voice accounting
+# like the output analyser (invariant comment updated), rebuilt for every new context and
+# disconnected in _discardContext; it is opt-in, so the freeze vectors keep the V1 chain.
+# ceilingCurve(0.25) puts the cap on grid point 2560 of the 4097-point curve, so the WaveShaper is
+# an exact clamp and "above the cap by more than 2^-20" is exactly "a sample the ceiling changes"
+# (up to float rounding). The bridge reads the tap only while the context runs and reports a change
+# of `acting`, never per frame; no engine object enters Alpine state (main.js uses the boolean
+# only). The copy says "re digital full scale" and "relative, not SPL"; nothing claims an acoustic
+# level. The browser check output-ceiling-indicator runs the audit path at both viewports, the
+# 2 s clear deadline and the 100 % sine, square and sawtooth negatives through the suite harness
+# and named waits; it passed in Browser gate chromium and webkit.
+#
+# CI: "V3 measurement and UI (webkit)" failed on check `definitions` in webkit/file only
+# (newVersion, listShows, detailShows, compareSaysVersion); webkit/http passed 37/37, and this pull
+# request touches nothing of measurement definitions. That is the known definitions flake, not this
+# change. review-verdict failed for want of this file.
+#
+# Verdict: merge. No P0 or P1. F1 (P2) should be fixed before landing: the head's description of the
+# chain is the wrong way round in four places, in a change whose subject is exactly that chain's
+# truth. The builder's uncommitted edits appear to fix it; they need a review once committed.
+#
+# Re-review of the fix delta (head 65b373f8, one commit on a6b2fb19; digest 23b0de69...28d0, the
+# same 2 guarded paths, computed with the base branch's script): output-ceiling.js is unchanged;
+# audio-engine.js changes one comment only (the envelope, additive normalisation and inserts act
+# before `master`, the limiter and ceiling after it), which matches the chain at :277-282 and
+# :500. The gain title, README.md:493-495 and ADR 0002:84-85 now say the same, and no text of the
+# head places the gain before the filter (git grep). The unit test pins the new title, refuses the
+# old wording and adds a single-sample case; readout-states-ceiling and no-fake-science pass 14/14
+# on a `git archive 65b373f8` copy. F1 is fixed. Note: 65b373f8 also carried this file, staged by
+# the reviewer and swept into the builder's commit while the reviewer's commit hook ran; this
+# revision is the reviewer's own commit.
+#
+# Verdict: merge. No P0 or P1, and no P2 open. F2-F4 (P3) stand, for follow-up.
+schema: review-verdict/v1
+pr: 321
+verdict: merge
+reviewer: prismatic-majordomus-1d (claude-code 1423ad2b)
+content: 23b0de69b1bc38cb461cbf633e4166ad0a63f58d3208fa7bd2cacb3c923d28d0
+findings:
+  - { id: F1, severity: P2, status: closed, title: "fixed in 65b373f8; the head of a6b2fb19 said the filter and envelope come after the gain, while every voice's filter, envelope and cutNode feed master (audio-engine.js:500): audio-engine.js:254-255 ('a filter boost, the envelope, additive normalisation, the limiter and the ceiling all act after it'), the gain title workbench.js:100 ('set before the filter, envelope, limiter'), README.md:494 and ADR 0002:84; only the limiter and ceiling are after master" }
+  - { id: F2, severity: P3, status: open, title: "workbench.js:96 shows the state only while the workbench sounds (playing or seqPlaying), but Studio (engine-hooks masterInput) and MEASURE capture (capture.js:891) feed the same master chain; a Studio or MEASURE signal the ceiling flattens is still reported nowhere. Outside T001's acceptance; worth a follow-up issue" }
+  - { id: F3, severity: P3, status: open, title: "output-ceiling.js:19 the tap window (0.12 s) covers the reads only when they come every 100 ms as asked; a main-thread stall or a throttled tab longer than the window leaves a gap in which a short clip is not reported. State it as a bound of the indicator (comment or ADR note) rather than 'leaves no gap'" }
+  - { id: F4, severity: P3, status: open, title: "main.js:642 announces only the onset, with the same string each time (a polite live region may not repeat it), and never the clearing; a screen-reader user is not told when the ceiling stops acting" }

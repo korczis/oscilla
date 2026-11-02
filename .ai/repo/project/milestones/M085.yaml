@@ -1,0 +1,19 @@
+id: M085
+title: "Component system, wave 0: one contract, one registry and the proven duplicates, before Pro"
+slug: component-system-wave-0-one-contract-one-registry-and-the-pr
+order: 85
+priority: p2
+problem: "The interface is built four ways with no declaration of any component: 576 data-osc hooks, 313 named by a test; 14 semantics implemented several ways that already disagree (D1-D14); the embedded Studio's cables blur modulation into signal and its transport is a third copy (inventory of 2026-10-29)."
+outcome: "Every component can be declared once and a test refuses drift; units, the parameter model, the clip face, the counts and the cable styles exist once; the embedded Studio's transport and timeline are the Studio's own; every component has an address. Nothing grows the Flowbite Pro ratchet."
+acceptance_criteria:
+- G001-G007 are done with their evidence; npm run release-gate passes at the last one.
+validation:
+- npm run release-gate
+evidence_required:
+- milestone_verified
+risks:
+- "The labs' defaults move into src/js/labs/lab-state.js; a lab slice of the synth or charts line that edits them rebases on it."
+- "G006 changes what the embedded Studio renders under the live smoke's selectors; it keeps the hooks so tests/browser/live-smoke.cjs (guarded) does not change."
+- "G005 touches src/js/studio/a11y.js (guarded) and needs a reviewer's verdict."
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

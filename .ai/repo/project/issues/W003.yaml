@@ -1,0 +1,50 @@
+id: W003
+milestone: M101
+serves:
+- "instrument-kinds#honest-observation"
+title: "Meter kind over the one level-meter model: densities for card, toolbar, strip and face, two channels, and the Studio header's output level"
+slug: meter-kind-over-the-one-level-meter-model-densities-for-card
+priority: p2
+profile: implementation
+objective: "Lands as feat(ui). The meter kind and the one level-meter model src/js/charts/level-meter-model.js (sample peak, window RMS, 2 s hold, clip latch 'sample >= 0 dBFS seen', gap detection; pure and allocation-free), which this slice lands in wave 1 and K049 then places in the analysis panel (K049 depends on W003; no second model): src/js/ui/kinds/meter.js draws one or two channels at the densities card, toolbar, strip and face, with role=meter, aria-valuetext in dB rel at the 4 Hz readout rate, and its numbers as W002 readouts. First new consumer: the Studio workspace header's output level, read from the engine's post-master analyser, labelled 'Output, dB rel (dBFS-like), sample peak, not true peak'. K016's Meter node mini canvas and the cockpit (G011), box faces (V621), channel strips (W013) and the Generator (K136) then mount the same kind. Before: VERIFIED no level is shown in the Studio workspace. After: one meter kind, one model. Negative cases: no AudioContext (Not running, never a flat bar); MEASURE owns the output (stated); reduced motion (the hold line still); a gap in the reads (the latch says >=). Rollback: revert. Merged plan of the component follow-up (2026-10-30): Wave 1: it needs F001 only. One model instance per observed signal, created and held by that signal's owner (the Studio workspace for its output) and passed to every view of it, so two densities of one signal show one number; latch.reset calls the owner's model, the view holds no hold or latch of its own. Enter on the focused meter or the latch button resets the latch (no letter key). Its numbers are formatted through G002 and carry T026 rows; they become W002 readout instances when W002 lands. This slice creates tests/browser/ui-kinds.cjs."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs, knowledge and interlinking, and add more; add p5.js, WebGL and interactivity, and deploy; a full DAW, a full sequencer and a full piano, everything interlinked, clickable, parameterized and joined; knobs, sliders and control panels done one generic way, integrated with Majordomus; the landing easy to use, easy to extend and open to hack; mobile first. The architecture still binds: one AudioEngine, the Studio model canonical, typed ports, one offline file under the 1.2 MB gzip budget, the cockpit identity, no fake science, Flowbite Pro (ADR 0061). Design: the instrument-kinds design of 2026-10-29 (scratchpad components-followup/components-new.md), on the component-system design (G001-G019) and the synth and studio-siggen drafts of the same day, facts checked against origin/main cdda563c."
+scope:
+- src/js/ui/kinds/meter.js
+- src/js/ui/catalog/kinds/meter.js
+- src/js/ui/studio/workspace.js
+- src/index.html
+- tests/unit/ui-kind-meter.test.mjs
+- tests/browser/ui-kinds.cjs
+- tests/unit/ui-flowbite-pro-baseline.json
+- tests/README.md
+- dist
+- src/js/charts/level-meter-model.js
+- tests/unit/level-meter-model.test.mjs
+- docs/v3/readout-truth.yaml
+depends_on:
+- W001
+- T026
+- F001
+acceptance_criteria:
+- "tests/unit/ui-kind-meter.test.mjs fails on the merge base: one model (a static scan finds no peak or RMS maths under src/js/ui/kinds); the four densities render the same numbers from one sampler; L and R stay apart; the floor and the unit are in aria-valuetext; under reduced motion the hold line does not move."
+- "Negative cases, each asserted by a test that fails on the merge base: the four of the objective."
+- "Definition of done, tested: tests/browser/ui-kinds.cjs plays the Basic Tone template in the Studio and waits with until() (deadline 'studio output meter live', 3 s) for the header meter's aria-valuenow to rise above its floor, then Stop and waits for 'Stopped'; the latch resets by pointer, Enter and a hasTouch tap. The check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, runs at 1536x1024 and 390x844, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, extends: K049's model; interlinks: the header meter opens the Playground analysis panel's level card (K049) or a Meter node when one is selected."
+- "Definition of done, interactivity: the meter is a live view; its one control (latch reset) works by pointer, keyboard and touch."
+- "The engine node census is unchanged by the meter: it reads the existing analyser and adds no AudioNode (project.audio-engine-discipline v2)."
+- "Definition of done, docs, menus and routes: the kind's declaration names its docs, links and tests; docs/ui-catalog.md (G014) lists it; the Keyboard shortcuts dialog lists its keys; tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Its trace entry in scripts/ui-catalog/trace/kinds.mjs names the intent criterion, this issue, its rules, ADRs and tests, each resolved by the trace check, for the Majordomus knowledge projection."
+- "The kind's modules pass W001's static scan: no import of src/js/studio/actions.js, a store, sources.js or a lab module; no dispatch or owner writer called; no AudioContext, AudioNode or worklet created (project.audio-engine-discipline v2: one AudioEngine); no requestAnimationFrame, setInterval or setTimeout outside src/js/charts/frame-loop.js; no allocation in a frame callback (1000 ticks keep the same typed arrays) and frameSubscriberCount() returns to its value after destroy()."
+- "Its chrome (buttons, button groups, popovers, dropdowns, inputs) is markup adapted from the matching Flowbite Pro block and names its flowbite-pro reference.md section; its instrument surface is a domain view under ADR 0061 decision 3 as J001's ADR 0061 resolution note records it: inline SVG or canvas and Tailwind utilities inside a Pro card, no stylesheet, no selector, no osc-* class token, no el.style write or style attribute; no osc-* name in the ratchet record rises and the domain views' stylesheets gain nothing (project.ui-uses-flowbite-pro, project.visual-identity-lock v2, ADR 0061; node scripts/ui-flowbite-pro-record.mjs --check and node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "No input path of the build gains a components, widgets, ui-kit or design-system segment (the COMPONENT_LIBRARY check of scripts/ui-flowbite-pro-measure.mjs): declarations live in src/js/ui/catalog/kinds, views in src/js/ui/kinds."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat change it carries a unit test that fails on the merge base (project.fail-first)."
+- "scripts/size-report.mjs shows at most 2 KB gzip added, compiled CSS included, with the base and head figures in the pull request body, inside the component line's cap Q037 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+- node --test tests/unit/ui-kind-meter.test.mjs
+- node tests/browser/ui-kinds.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-30'

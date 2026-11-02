@@ -1,0 +1,46 @@
+id: V618
+milestone: M080
+serves:
+- "studio-box-system#large-graphs"
+title: "Large graphs: a 300-node fixture, offscreen culling and transform-only pan and zoom"
+slug: large-graphs-a-300-node-fixture-offscreen-culling-and-transf
+priority: p2
+profile: implementation
+objective: "P04 slice F (visual, keyboard and responsive). Lands as perf(studio-ui). tests/unit/fixtures/v31-large-studio.mjs gains a 300-node / 600-edge build beside the 100-node one. The graph editor skips layout work for boxes and cables outside the viewport plus a margin (their elements stay in the DOM with their accessible names, so find and Tab order are unchanged), and pan and zoom change one transform on the world layer per frame instead of per-node work. docs/v31/performance.md gains the new rows and browser budgets: a node drag frame and a pan frame on the 300-node graph within 16.7 ms median on a quiet machine, re-measured under load with the existing REMEASURE_DEADLINE_MS rule."
+why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings S1-S14 measured on origin/main b67d1e58)."
+scope:
+- src/js/ui/studio/graph-editor.js
+- src/js/ui/studio/graph-view.js
+- src/js/ui/studio/graph-geometry.js
+- tests/unit/fixtures/v31-large-studio.mjs
+- tests/unit/v31-studio-performance.test.mjs
+- tests/unit/v31-studio-docs.test.mjs
+- docs/v31/performance.md
+- tests/browser/v31-studio-workflows.cjs
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+acceptance_criteria:
+- "Before: VERIFIED (S14): budgets exist for 100 nodes / 200 edges only."
+- "After: a 300-node / 600-edge fixture within budget, culling and transform-only pan."
+- "Negative cases: a culled node keeps its accessible name and Tab order; find reaches it."
+- "Rollback: revert the merge commit. Nothing changes the schema, a studioHash or a stored record, so documents saved while it was live load unchanged after the revert."
+- "tests/unit/v31-studio-performance.test.mjs, failing on the merge base (the 300-node rows do not exist there): build, dispatchMove, search and the culling computation of the 300-node fixture are within their budgets; the culled set of a viewport is exactly the boxes outside it plus margin."
+- "tests/unit/v31-studio-docs.test.mjs holds the new budget rows equal to the fixture's PERF_BUDGETS and BROWSER_BUDGETS."
+- "Definition of done, extends: the performance budgets of V431 and docs/v31/performance.md."
+- "Definition of done, cross-links: the minimap (V602) and find (/) still reach every node of the 300-node graph (round trip: find a culled node, frame it, its box is laid out). The link is a row of tests/browser/integration-map.json once that map (synth line K075) is on main."
+- "Definition of done, dynamics: pan and zoom stay one transform per frame; the budget table reports the drag and pan frame times."
+- "Definition of done, docs and routes: docs/v31/performance.md gains the 300-node rows and how they were measured. tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: A check 'large-graph' in tests/browser/v31-studio-workflows.cjs imports the 300-node fixture, waits with until() (deadline '300-node graph rendered', 10 s) for the node count, drags a node by pointer and pans by keyboard (arrow keys on the canvas) and by a two-finger touch pan in a hasTouch context, records each frame's duration through a PerformanceObserver and holds the medians to the browser budgets; finds a node that was culled by / and waits until its box is laid out; on the merge base the fixture has no 300-node build and the check fails. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit and the completed evidence the release that carried it; E030's judge passes on the pull request once E030 is on main."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "Wave 1: it adds no class token, selector, markup surface or inline style, so the Flowbite Pro record does not change: node scripts/ui-flowbite-pro-record.mjs --check passes with no rewrite and node --test tests/unit/ui-flowbite-pro.test.mjs passes (project.ui-uses-flowbite-pro); live drawing is on a canvas, a domain view."
+- "scripts/size-report.mjs shows at most 1 KB gzip added, with the base and head figures in the pull request body, within the owner's dist budget of 1 200 000 B gzip (decision of 2026-10-29, about 355 KB of headroom at origin/main b67d1e58); the ceiling of this line is 35 KB gzip in all (Studio boxes 35 KB, signal generator 25 KB), stated in the milestone (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/v31-studio-performance.test.mjs tests/unit/v31-studio-docs.test.mjs
+- node tests/browser/v31-studio-workflows.cjs --only large-graph
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

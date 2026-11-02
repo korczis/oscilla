@@ -23,4 +23,16 @@ validation:
 evidence_required:
   - "owner_decision"
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-10-29T10:47:40Z
+started_at: 2026-10-29T10:47:33Z
+started_event: sha256:5f05d12dab607891b37667a56dfa8ec35b283b3bf4973d412e184c0437833cd6
+completed_at: 2026-10-29T10:47:40Z
+completed_event: sha256:a46a16105af50f203e2717bfc0e8bef8305e9b9b3e3f6c5bc528f0a2ca90f92e
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "AskUserQuestion in Claude Code session oscilla-b0, 2026-10-29 (Czech), after reading docs/first-screen-options.md"
+    result: "Owner chose option A, 'the Playground, lighter, with the measurement in view': the opening view stays the Playground (no route change, ADR 0045 unchanged); under the visible sentence it keeps Source & Pattern beside Signal analysis, Microphone Analyzer and Device & Limits, gains a full-width Guided measurement row (the seven steps, Check setup, UNCALIBRATED badges) and the compact Studio beside the Pattern Sequencer; the separate Spectrogram panel and the bottom row (Filter Lab, Envelope, Additive Synthesis, Phase & Stereo, Bioacoustics) leave the first screen; on a 390x844 phone the same order top to bottom with Mode folded and the measurement steps folded to the current one. The guided path (waveform, spectrum, filter, compare, export) does NOT belong on the first screen now (owner: 'No, not now'; it may come later as a lesson under M049). P002 states the testable criteria from section 5, option A, of docs/first-screen-options.md."
+    artifact: "docs/first-screen-options.md"
+    commit: 8b5792cde2a37f392f362d6d523bd266478137fe
+    recorded_at: 2026-10-29T10:47:21Z

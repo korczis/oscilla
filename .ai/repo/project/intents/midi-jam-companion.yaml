@@ -6,7 +6,7 @@ invariants:
   - "MIDI is optional: its absence or a denied permission changes nothing else, and the single-file build still runs from file:// and the Pages sub-path (project.single-file-deliverable)"
   - "No network call and no model inference sit in the MIDI event or audio path; response modes are deterministic and scheduled on the AudioContext clock"
   - "Support is stated as measured: no browser or origin is claimed to support MIDI before a check proves it (project.no-fake-science)"
-  - "New surfaces extend the existing OSCILLA tokens and visual language and have a non-pointer path (project.visual-identity-lock)"
+  - "New surfaces are built on the Flowbite Pro shell and components (owner, 2026-10-28; ADR 0061, project.ui-uses-flowbite-pro, project.visual-identity-lock v2, intent ui-flowbite-pro), add no surface off Pro and no legacy osc-* primitive, keep the signal palette for the note and spectrum visuals, and have a non-pointer path"
 milestones:
   - M045
 satisfaction:

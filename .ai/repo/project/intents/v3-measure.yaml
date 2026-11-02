@@ -23,6 +23,7 @@ milestones:
   - M041
   - M043
   - M044
+  - M073
 satisfaction:
   - id: algorithm-ids
     criterion: "Every stored result names its algorithm by a versioned ID, an unknown ID is refused on import, and every known ID reproduces its golden output"
@@ -104,6 +105,22 @@ satisfaction:
     criterion: "The public page serves the 3.x release with its version and commit, and the MEASURE and Playground smoke passes"
     evidence: command
     ref: "npm run test:live -- --expect-commit origin/main"
+  - id: readout-states
+    criterion: "A readout whose signal is clipped, over range, out of the analysed band, undersampled or absent shows that state in place (output ceiling, waveform scope, sweep fields, microphone input, correlation meter, Lissajous, MEASURE quality bar, live RTA, Filter Lab and additive charts, Render WAV) instead of a plausible number, and a unit test fails on the merge base of each fix"
+    evidence: command
+    ref: "node --test tests/unit/readout-states-*.test.mjs"
+  - id: readout-labels
+    criterion: "Every readout names the quantity it shows: a setpoint as a setpoint, the analyser scale as analyser-relative and uncalibrated, a statistic by name, calibration only where the profile covers, L/R or A/B by what is drawn, a model by what it assumes, a lag step or bin resolution by what it is"
+    evidence: command
+    ref: "node --test tests/unit/readout-labels-*.test.mjs"
+  - id: readout-in-effect
+    criterion: "A control, axis or comparison shows the value in effect: the Nyquist axis after audio starts, Phase & Stereo fields after commit and import, the pan while playing, a frozen microphone frame and verdict, the generator state and band of a comparison, a Studio frequency limited to 0.95 x Nyquist"
+    evidence: command
+    ref: "node --test tests/unit/readout-in-effect-*.test.mjs"
+  - id: readout-provenance
+    criterion: "Every readout in the shipped interface has a row in docs/v3/readout-truth.yaml stating quantity, unit, source, algorithm, resolution, calibration, limitations, tests, UI label and an evidence label, and a unit test fails for a readout without a complete row"
+    evidence: command
+    ref: "node --test tests/unit/readout-provenance.test.mjs"
 governance:
   - "rule:project.no-fake-science"
   - "rule:project.audio-engine-discipline"
@@ -128,4 +145,4 @@ non_goals:
   - "The v4.0 experiment-record work not yet released (findings, connected records, raw capture retention and the work of ADRs 0046-0053, on main after v3.10.3): it has no milestone in the plan, so no intent names it. The released part (immutable runs, semantic comparison, versioned definitions, evidence on a run; ADRs 0040, 0041, 0043 and 0044, releases 3.6 to 3.10) is recorded retrospectively by M040, M041, M043 and M044"
   - "A knowledge explorer: v4.0 ships method claims on experiment evidence instead (ADR 0051)"
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-10-29

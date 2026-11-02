@@ -1,0 +1,38 @@
+id: K117
+milestone: M072
+serves:
+  - "connected-instrument#daw-files"
+title: "Export WAV stems and the mixdown, rendered offline"
+slug: export-wav-stems-and-the-mixdown-rendered-offline
+priority: p2
+profile: implementation
+objective: "Lands as feat(export). The existing offline render of the Studio (renderStudioOffline, the transport on an OfflineAudioContext) renders the mixdown and one stem per channel (that channel alone, through the same master chain) to WAV through src/js/audio/wav.js, each download named with the project and the channel, the render's sample rate and the studioHash stated in the file names' companion JSON. Before: WAV export covers the Playground tone, pattern or sequence. After: stems and the mixdown of a Studio project. User-value tier 3 of 4 (synth-design.md section 17). Rollback: revert the pull request; no saved state depends on it."
+why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
+scope:
+  - "src/js/studio/offline.js"
+  - "src/js/audio/wav.js"
+  - "src/js/ui/exporters.js"
+  - "src/js/ui/synth"
+  - "tests/unit/export-stems.test.mjs"
+  - "tests/browser/arrange.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K107"
+acceptance_criteria:
+  - "tests/unit/export-stems.test.mjs, failing on the merge base: the sum of the stems equals the mixdown before the master limiter within 1e-4 when the limiter is not engaged; each WAV header states the rate and length; the companion JSON names the studioHash."
+  - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: a project with no channel (mixdown only, stated)."
+  - "A browser check in tests/browser/arrange.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: Export from the arrangement and from the mixer produce the same files. Real-time: the download starts when the render completes (download event), each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: export works by pointer, keyboard and touch. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Every node it plays is built by an engine adapter with track()/source() accounting, all timing is on the audio clock (no timer or rAF times audio), envelopes are click-free, frequencies stay below 0.95 x Nyquist of the running context, the peak stays at or below the output ceiling and the engine node census is 0 after stop (project.audio-engine-discipline v2)."
+  - "Every string it adds passes tests/unit/instrument-wording.test.mjs (added by K059): no product, brand or model name, no analog-modelling or vintage claim, and every approximation it makes labelled where it is shown (project.no-fake-science)."
+  - "The pull request carries a reviewer's verdict (src/js/audio and src/js/studio is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "scripts/size-report.mjs shows at most 2 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of the line's figures stays within the cap Q023 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/export-stems.test.mjs"
+  - "node tests/browser/arrange.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

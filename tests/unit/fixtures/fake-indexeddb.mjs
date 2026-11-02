@@ -1,5 +1,6 @@
 // A minimal in-memory IndexedDB for the experiment store tests (src/js/experiments/store.js),
-// shared by tests/unit/v3-experiments.test.mjs and v3-experiment-immutable.test.mjs.
+// shared by the store tests (v3-experiments, v3-experiment-immutable, v31-studio-patches and
+// others; E040 retired the last inline copy).
 // A minimal in-memory IndexedDB: open/upgrade, object stores with keyPath, readonly/readwrite
 // transactions with put/get/getAll/delete, async events, rollback on abort, and switches for
 // quota errors (on a request, or when the transaction commits) and open failures.
@@ -97,6 +98,7 @@ export function fakeIndexedDB() {
           closed: false,
           objectStoreNames: { contains: (n) => rec.stores.has(n) },
           createObjectStore: (n, { keyPath }) => rec.stores.set(n, { keyPath, data: new Map() }),
+          deleteObjectStore: () => { throw new Error('an upgrade must never delete a store'); },
           transaction: (names, mode = 'readonly') => {
             if (db.closed) throw new DOMException('closed', 'InvalidStateError');
             return new Tx(rec, [].concat(names), mode);

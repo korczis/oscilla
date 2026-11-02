@@ -1,0 +1,31 @@
+id: T004
+milestone: M073
+serves:
+  - "v3-measure#readout-labels"
+title: "The dual difference readout names the route: amplitude beats only in the mono mix"
+slug: the-dual-difference-readout-names-the-route-amplitude-beats
+priority: p2
+profile: implementation
+objective: "Truth-table rows GEN-05 (scratchpad p05/truth-table.md). beatText branches on dual.stereo and dual.binaural: mono keeps the V1 text; split says one tone per channel, no beat in the signal, may beat acoustically over speakers depending on position, perceptual over headphones; binaural describes only the perceptual beat. sig(d, 3) and formatPeriod stay."
+why: "P05 audit of origin/main b67d1e58 (v3.13.0): With Output = Stereo split (one steady tone per channel, leakage < -40 dB) and in binaural mode the readout still says \"amplitude beats at about 2 Hz\"; the V1 freeze golden pins that text for dual/stereo-6Hz, dual/stereo-40Hz and dual/stereo-binaural-6Hz. Claim dual-oscillator-beats scopes beating to the mono mix, and project.no-fake-science says binaural content is described as perceptual only."
+scope:
+  - "src/js/core/instrument.js"
+  - "tests/unit/readout-labels-dual-beat.test.mjs"
+  - "tests/unit/freeze.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "T003"
+acceptance_criteria:
+  - "Fail-first fixture: tests/unit/readout-labels-dual-beat.test.mjs: source dual, 440/442 Hz, stereo true → text has no \"amplitude beats\" and names one tone per channel; stereo false → contains \"amplitude beats at about 2 Hz\"; binaural → contains \"perceptual\". Fails on the merge base. tests/unit/freeze.test.mjs gains DEVIATIONS entries for the three stereo golden cases, each mapping back to the V1 text."
+  - "Negative cases, each asserted: Every mono golden case stays byte-identical; Δf = 0 keeps \"no beating\"; tests/unit/no-fake-science.test.mjs passes on the new copy."
+  - "Revertible on its own: Revert: one function and three DEVIATIONS entries."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "tests/README.md has a row for each new test; this issue does not edit docs/CLAIMS.yaml or the intent (T027 does)."
+validation:
+  - "npm test"
+  - "npm run verify"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

@@ -1,0 +1,38 @@
+id: G017
+milestone: M087
+serves:
+- "component-system#traceable"
+title: "Every component names its source, plan, tests and ADRs, and the capability to source to test to ADR chain is generated"
+slug: every-component-names-its-source-plan-tests-and-adrs-and-the
+priority: p2
+profile: implementation
+objective: "Lands as feat(docs). P06 step 2 for the interface: each declaration's trace { source, plan, intents, adrs, tests } is checked (the source module contains the hook; every plan id is an issue or intent under .ai/repo/project; every ADR exists under .ai/repo/adrs; every test file exists, is run by npm test or a package.json script, and names the hook inside a string literal with comments removed) and scripts/ui-catalog.mjs --trace writes docs/ui-traceability.md: intent criterion, issues, components, source, tests, ADRs, each link labelled VERIFIED (an existence fact the test checked: module, plan id, ADR), NAMED (a test file addresses the hook, which says nothing about what it asserts) or DERIVED (computed from the registries), never INFERRED. The chain is a projection for readers: the plan itself stays in Majordomus (no second planner, P06 step 7). Before: VERIFIED 5 of 77 UI modules name their tests; 14 modules are named by no test (inventory 4.3). After: every catalogued component carries and passes its trace. Negative cases: a plan id that does not exist, a test that does not name the hook, an ADR typo. Rollback: revert; docs and tests only."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: \"the embedded Studio is ugly as hell\"; components in general must be generic, linkable, traceable, composable, unified, documented, dynamic, generated and interlinked; \"everything must be interlinked with everything\"; improve the main page and the first experience, deploy often. The owner's evolution prompt pack (MASTER, P02, P04, P06) binds it: the dark technical cockpit is locked, shared primitives only where duplication is proven, no new framework, generated docs only where deterministic, no decorative wires. Findings: the UI component inventory of 2026-10-29 (D1-D14 duplication, U1-U15 on the embedded Studio, measured on origin/main b67d1e58, v3.13.0); design: the component-system design of 2026-10-29 (scratchpad components/design.md)."
+scope:
+- scripts/ui-catalog.mjs
+- docs/ui-traceability.md
+- scripts/ui-catalog
+- tests/unit/ui-catalog-trace.test.mjs
+- package.json
+- tests/README.md
+depends_on:
+- G014
+acceptance_criteria:
+- tests/unit/ui-catalog-trace.test.mjs fails on the merge base and on each negative fixture; the generated file is current (--trace --check in npm test).
+- "Definition of done, extends: the catalogue's trace field (G001) and the plan records Majordomus reads."
+- "Definition of done, interlinks: every component links to its plan issue, ADR and tests in the generated chain."
+- "Definition of done, interactivity: none: a document (stated)."
+- "Definition of done, docs, menus and routes: docs/ui-traceability.md is generated; README.md links it. tests/README.md has a row for each new test; the component's catalogue declaration (G001) names its docs, links and tests; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: the unit test only (no browser surface; stated). The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit, and the release that carried it is recorded when the milestone is verified."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "Before Pro (it may land before F001): it adds no class token, selector, markup surface or inline style and only removes legacy ones, so tests/unit/ui-flowbite-pro-baseline.json stays equal or falls (node scripts/ui-flowbite-pro-record.mjs --check passes, rewritten only where a count fell) and node --test tests/unit/ui-flowbite-pro.test.mjs passes; studio.css, studio-timeline.css, charts.css and tokens.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock v2)."
+- "scripts/size-report.mjs shows at most 0 KB gzip added, with the base and head figures in the pull request body, inside the cap Q037 records (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/ui-catalog-trace.test.mjs
+- node scripts/ui-catalog.mjs --trace --check
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

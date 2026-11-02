@@ -129,15 +129,40 @@ export function snapPoint(p, grid = GRID) {
  * The SVG path of a cable from an output anchor (sx, sy) to an input anchor (tx, ty) (§67):
  * M sx sy C sx+dx sy, tx-dx ty, tx ty. The handle length grows with the horizontal distance and,
  * when the target lies left of the source, with the vertical distance too, so a backwards cable
- * loops out of the source and into the target instead of folding over itself.
+ * loops out of the source and into the target instead of folding over itself. `minHandle` is
+ * the shortest forward handle: 40 in the graph; the compact Studio, whose chips sit 22 px apart
+ * and whose cables end at their ports (G004), passes less, so a short cable between two ports
+ * at different heights is an S inside the gap instead of a loop past both chips.
  */
-export function cablePath(sx, sy, tx, ty) {
+export function cablePath(sx, sy, tx, ty, minHandle = 40) {
   const ddx = tx - sx;
   const ddy = Math.abs(ty - sy);
-  let dx = Math.max(40, Math.abs(ddx) / 2);
+  let dx = Math.max(minHandle, Math.abs(ddx) / 2);
   if (ddx < 0) dx = Math.max(dx, Math.min(160, 40 + ddy / 2 + Math.abs(ddx) / 4));
   const r = (n) => Math.round(n * 100) / 100 + 0;
   return `M ${r(sx)} ${r(sy)} C ${r(sx + dx)} ${r(sy)}, ${r(tx - dx)} ${r(ty)}, ${r(tx)} ${r(ty)}`;
+}
+
+/**
+ * Where a cable meets a node drawn as one chip, the rectangle `rect` { x, y, w, h } (G004): an
+ * input on the chip's left edge, an output on its right edge, at (index + 1) / (count + 1) of
+ * its height, index and count from the registry's port list of that direction (`def.inputs`
+ * or `def.outputs`). A completed definition's inputs end with one PARAMETER port per
+ * modulatable parameter (registry.js), so a modulation cable ends at its parameter's row, below
+ * the audio input it would otherwise share. A node without ports in that direction, or a port
+ * the list lacks, is met at the middle of the edge. Pure: numbers in, a point out.
+ */
+export function portAnchor(rect, def, direction, portId) {
+  const r = rect || {};
+  const x0 = finite(r.x) ? r.x : 0;
+  const y0 = finite(r.y) ? r.y : 0;
+  const h = finite(r.h) ? r.h : 0;
+  const out = direction === 'out';
+  const x = out ? x0 + (finite(r.w) ? r.w : 0) : x0;
+  const list = (def && (out ? def.outputs : def.inputs)) || [];
+  const index = list.findIndex((p) => p && p.id === portId);
+  const f = index < 0 ? 0.5 : (index + 1) / (list.length + 1);
+  return { x, y: y0 + h * f };
 }
 
 /** Half the arm length of the cross on a cable that carries nothing (logical units). */

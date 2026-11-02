@@ -1,0 +1,40 @@
+id: K042
+milestone: M062
+serves:
+  - "playable-instrument#chart-interaction"
+title: "Findings evidence point pinned on the experiment chart"
+slug: findings-evidence-point-pinned-on-the-experiment-chart
+priority: p3
+profile: implementation
+objective: "Lands as feat(experiments). A click, a tap or Enter on the focused detail chart calls experimentsEvidenceAt(hz), which snaps to the stored grid point through resultPoint (Enter is not a global key: shortcuts.js binds it only on Hold and Trigger); a pin marker \"EVIDENCE 1.000 kHz (stored grid point)\" is drawn only when evidence.point exists, from a small marker-descriptor helper with its own test; Escape clears the cursor and propagates. \"Show on chart\" for a value reference in Findings opens through the existing verified Open path, then pins the point, and refuses an unverifiable reference with the stated reason. Mini-plots inside the Findings list are not built (OD9: each row would need a verified store.get under the integrity contract of review 3 of #149; no slice waits on that question)."
+why: "Owner order of 2026-10-29: \"make the charts really sexy, modern, interactive\", for all charts; reviewer f3 scoped it to every surface that draws data. Revised after f3's review of the plan (CHANGES-REQUESTED, 2026-10-29): owner decisions are Q issues under M063, Pro chrome waits on F002 and on the card issue of its workspace, every chart that claims chart-interaction delivers the keyboard cursor and the announced readout, chart keys never take Escape or Space; revision 3 answers f3's delta review. Facts checked against origin/main at e2720e07 and the branches of #251, #253, #263 and #265 (charts-plan.md, charts-plan-changes.md)."
+scope:
+  - "src/js/ui/experiments.js"
+  - "src/js/ui/findings.js"
+  - "src/js/charts/measure-charts.js"
+  - "src/index.html"
+  - "src/partials"
+  - "tests/unit/v3-views.test.mjs"
+  - "tests/browser/v3-ui.cjs"
+  - "tests/visual"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K041"
+  - "F005"
+acceptance_criteria:
+  - "A unit test that fails on the merge base: the marker descriptor carries the exact grid-point frequency and exists only when evidence.point does."
+  - "tests/browser/v3-ui.cjs: a click at x and Enter at the keyboard cursor each set #osc-x-ev-hz to the grid point's exact Hz; the marker is drawn; \"Show on chart\" refuses an unverifiable reference with its reason. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline and assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac); tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "The pull request carries a reviewer's verdict (src/js/ui/experiments.js and src/js/ui/findings.js are guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "Chart chrome (legend, toolbar, toggle, badge, tooltip, readout row) is Flowbite Pro markup adapted from the matching Pro component and lands after F002 turned on preflight and the form base styles (the border trap of review #253, R-3) and after F005 placed the card it sits in; no osc-* class token or legacy selector is added and src/styles/tokens.css, charts.css, measure.css, studio.css and studio-timeline.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+  - "The pin appears only after an interaction, so no default reference moves; the Experiments compare scene of K041 is re-accepted if it does."
+  - "scripts/size-report.mjs shows at most 1 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of M062's figures stays within the cap Q014 records, under the 1 000 000 B gzip budget (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/v3-views.test.mjs"
+  - "node tests/browser/v3-ui.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

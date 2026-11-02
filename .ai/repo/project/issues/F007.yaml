@@ -1,0 +1,35 @@
+id: F007
+milestone: M055
+serves:
+  - "ui-flowbite-pro#no-legacy-chrome"
+title: "Learn on Pro components"
+slug: learn-on-pro-components
+priority: p2
+profile: implementation
+objective: "Rebuild Learn from Pro components: the concept index as Pro cards or a Pro list with category badges, a lesson as a Pro card with a description list and its demo action as a Pro primary button, the lesson navigation as Pro tabs or a breadcrumb in the page header, and the in-lesson figures kept as they are inside cards. The perception lessons of M049 (L001 to L006) use the same components, so this issue records the lesson card markup they extend. Remove the legacy primitives and selectors Learn no longer uses, lower the ratchet baseline by the surfaces migrated and the primitive uses removed, keep every data-osc hook and id."
+why: "Owner, 2026-10-28: the whole interface on Flowbite Pro."
+scope:
+  - "src/index.html"
+  - "src/styles"
+  - "src/js/ui/app.js"
+  - "src/js/data"
+  - "tests/browser/ui-flowbite-pro.cjs"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/unit/source-size-baseline.json"
+  - "tests/visual"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "F002"
+acceptance_criteria:
+  - "ui-flowbite-pro.cjs asserts Learn's index and a lesson are Pro cards with every surface listed as migrated by the ratchet at both sizes, in every gate browser from file:// and the sub-path, and that every lesson's demo action opens its workspace."
+  - "npm run test:browser passes with no behaviour check changed."
+  - "A Learn reference is added through the visual gate with the reason; the ratchet baseline's debt is lower (the surfaces migrated move from surfaces.pending to surfaces.migrated and the primitive uses removed leave the counts); dist's size is stated and within BUDGET."
+validation:
+  - "node tests/browser/ui-flowbite-pro.cjs"
+  - "npm run test:browser"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-28
+updated_at: 2026-10-28

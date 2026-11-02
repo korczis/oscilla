@@ -1,0 +1,44 @@
+id: U022
+milestone: M054
+serves:
+  - "ui-current#ui-audited"
+title: "The Sequencer's blocks stay readable and hittable at phone width, and the lane scrolls instead"
+slug: the-sequencers-blocks-stay-readable-and-hittable-at-phone-width
+priority: p2
+profile: implementation
+objective: "Lands as fix(ui). Defect: at 390x844 the Pattern Sequencer lane (#osc-panel-sequencer .osc-seq-timeline-wrap) fits the whole sequence into 350 px and never scrolls (scrollWidth = clientWidth = 350), so its blocks (div.osc-block, #osc-seq-block-b1..b5) shrink to 36x40 px and the Silence block #osc-seq-block-b3 to 16x40 px, under 24 px on a coarse pointer; span.osc-block-name and span.osc-block-detail clip ('Silence' scrollWidth 41 against clientWidth 0, '440 -> 880 Hz' 79 against 18, 'Tone' 27 against 20; at 768 px 'Silence' still clips, 41 against 25). Cause: timelineWindow() (src/js/labs/sequencer-panel.js:33-48, TIMELINE_OPTIONS minSpanS 3.75, minPxPerS 66) fits at least minSpanS and the whole sequence into the lane before it ever scrolls, so a narrower lane only shrinks the blocks; the block width is then Math.max(4, r.w) (sequencer-panel.js:233). Before: blocks are slivers whose names read 'T... / S... / P... / C...'. After: the window is bounded by the shortest block as well as by the duration: the visible span shrinks until the shortest block is at least 24 px wide (44 px under a coarse pointer, the layout.cjs touch minimum) and its name fits, and the lane then scrolls through the scrollbar and thumb it already has (maxScrollPx); the time scale stays linear, so every block's width remains proportional to its duration (project.no-fake-science: no minimum-width padding that misstates a duration, no non-linear squeeze). Each block's accessible name carries its full name and detail, so a truncated detail is never the only label. Negative cases: a sequence that already fits at its current pixel density renders unchanged at 1536 px (no scroll appears); an empty sequence still shows minSpanS; a single very short block (10 ms) is still reachable by scrolling, not dropped; the playhead, the drop index and the insertion marker follow the scrolled window. Fixes use the existing lane and Pro components and Tailwind utilities, never a new osc-* class, stylesheet rule or inline style beyond the block geometry the lane already sets (project.ui-uses-flowbite-pro). Rollback: revert the commit; the window maths returns to fit-to-lane. Not this: C005 (Loop glyph and Add-menu clipping at desktop width), C006, K001-K003 and K017 (tempo, ms/beats and note-name chrome), K047 (frequency glyphs, hover readout and playhead chip), F003 (moves the Sequencer onto Pro, keeps the grid's drawing and sets no phone-width criterion), G011, G008, W011 and Q063 (touch criteria on other surfaces)."
+why: "Found by the S074 quality-bar review of 2026-10-30 at origin/main d9db6bdf, section 74 symptom 'The Pattern Sequencer's blocks are squeezed to unreadable slivers at phone width: labels show 1-2 letters, and the Silence block is 16 px wide.', reproduced by an independent verifier. Evidence: screenshot scratchpad s074/out/probe-seq.png of the review session (/private/tmp/claude-501/-Users-korczis-dev-oscilla/901211e2-501d-4cb8-8333-88e1a6fcf519/scratchpad/s074/out/probe-seq.png) and the measured block boxes and scroll widths quoted in the objective. On a phone the blocks cannot be told apart and the Silence block is hard to hit. No plan issue or open PR covers it (map note: C005, C006, K001-K003, K017, K047, F003, G011, G008, W011, Q063; PRs #292, #306, #266, #283, #302, #315 checked); the cause is the layout maths, not legacy osc-* styling, so it does not wait for the Pro migration."
+scope:
+  - "src/js/labs/sequencer-panel.js"
+  - "src/js/sequencer/timeline.js"
+  - "src/index.html"
+  - "tests/unit/charts.test.mjs"
+  - "tests/unit/sequencer-timeline.test.mjs"
+  - "tests/browser/layout.cjs"
+  - "tests/browser/sequencer.cjs"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/charts.test.mjs (beside the existing timelineWindow cases) fails on the merge base: for the default five-block sequence at laneW 350, the window's pixels per second give the shortest block at least 24 px (44 px with the coarse-pointer option) and maxScrollPx > 0; at laneW 1536 the window is unchanged from the merge base; for every case contentPx / spanS is one constant, so block widths stay proportional to their durations."
+  - "A check in tests/browser/layout.cjs, at 390x844 and 768x1024 with a coarse pointer, opens the Sequencer workspace and asserts every div.osc-block in #osc-panel-sequencer is at least 44 px wide, every span.osc-block-name has scrollWidth <= clientWidth, each block's accessible name contains its name and detail, and the lane's scrollWidth exceeds its clientWidth; at 390x844 it scrolls the lane to #osc-seq-block-b3 and taps it, and the timeline selection becomes that block."
+  - "tests/browser/sequencer.cjs at 1536x1024 still passes unchanged (no scroll for the default sequence, the playhead, drop index and insertion marker as before), in chromium, firefox and webkit."
+  - "It adds no class token, selector, markup surface or inline style and only removes legacy ones, so tests/unit/ui-flowbite-pro-baseline.json stays equal or falls (node scripts/ui-flowbite-pro-record.mjs --check passes, rewritten only where a count fell) and node --test tests/unit/ui-flowbite-pro.test.mjs passes (project.ui-uses-flowbite-pro, project.visual-identity-lock)."
+  - "As a fix change it carries a unit test that fails on the merge base and passes on the head (project.fail-first)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named deadline (project.suite-harness, project.bounded-test-timing)."
+  - "Definition of done, extends: the Sequencer lane gains a block-aware zoom bound and phone-width scrolling; the layout gate gains a Sequencer block criterion at 390 and 768 px."
+  - "Definition of done, interlinks: the objective names C005, K047 and F003 by id, and tests/README.md's layout.cjs row names the Sequencer block criterion."
+  - "Definition of done, interactivity: the lane scrolls by pointer, touch and keyboard at phone width and a scrolled-to block is selectable by tap and by keyboard (project.no-inert-surfaces)."
+  - "Definition of done, docs, menus and routes: tests/README.md rows for layout.cjs and charts.test.mjs updated; no route or menu changes (stated)."
+  - "Definition of done, tested: node --test tests/unit/charts.test.mjs, node tests/browser/layout.cjs, node tests/browser/sequencer.cjs and npm test pass; dist is rebuilt and npm run build:check passes."
+  - "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+  - "node --test tests/unit/charts.test.mjs"
+  - "node tests/browser/layout.cjs"
+  - "node tests/browser/sequencer.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-10-30'
+updated_at: '2026-10-30'

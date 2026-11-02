@@ -1,0 +1,37 @@
+id: T007
+milestone: M073
+serves:
+  - "v3-measure#readout-labels"
+title: "The microphone frequency readout says what its \"±\" is, and the dialog says only what the code does"
+slug: the-microphone-frequency-readout-says-what-its-is-and-the-di
+priority: p1
+profile: implementation
+objective: "Truth-table rows MIC-03, SPC-06, MIC-20 (scratchpad p05/truth-table.md). The policy Q040 chooses: (a) round to at least the analysis resolution (displayStepHz(max(u, binHz / 2))) and print the autocorrelation figure only as a labelled extra, or (b) keep the lag-grid digits, name the method and call the figure a lag step, not \"±\". The three copies say what is shown; the dialog says the constraints are requested off and that a browser or device may ignore the request. An ADR records the microphone precision policy."
+why: "P05 audit of origin/main b67d1e58 (v3.13.0): Below 1 kHz the readout prints \"55.00 Hz ± 0.04 Hz\" and \"100.0 Hz ± 0.2 Hz\" from a 42.7 ms window while the bin is 5.86 Hz, and three shipped texts promise detected frequencies are \"never shown finer than the bin resolution\" (index.html:2936-2938, mic-analyzer.js:13, peak-detector.js:12-14). The \"±\" is the lag-grid half-step, not an error bound: on a stationary tone at 20 dB SNR 24 of 30 readings at 100 Hz and 30 of 30 at 55 Hz fall outside it (worst 1.16 Hz against ± 0.2 Hz). The dialog also says the constraints are off \"so the analyser sees the raw input\", which nothing checks."
+scope:
+  - "src/js/analysis/peak-detector.js"
+  - "src/js/labs/mic-analyzer.js"
+  - "src/index.html"
+  - ".ai/repo/adrs"
+  - "tests/unit/readout-labels-mic-precision.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "Q040"
+  - "T010"
+  - "K030"
+acceptance_criteria:
+  - "Fail-first fixture: tests/unit/readout-labels-mic-precision.test.mjs, deterministic (seeded PRNG): stationary tones at 55 and 100 Hz, 48 kHz, N = 8192, 20 dB SNR, 30 trials through estimateFrequency and detectedText. Under (a) no reading has a digit finer than the analysis resolution; under (b) every reading names the method and contains no bare \"±\". A copy test binds the dialog and module header text to the chosen policy and forbids \"sees the raw input\". Fails on the merge base under either policy."
+  - "Negative cases, each asserted: FFT-path readings at or above 1 kHz keep \"1.000 kHz ± 3 Hz\"; silence and noise keep \"no clear peak\"; analysis-peak.test.mjs (interpolation error ≤ 0.0066 bin) passes unchanged."
+  - "Revertible on its own: Revert: display rounding and copy; the estimator is unchanged."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "The pull request touches a guarded path and carries a reviewer-written .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+  - "Any new visible element follows the Flowbite Pro components and the locked tokens (project.ui-uses-flowbite-pro, project.visual-identity-lock); npm run visual passes or the baseline change is declared."
+  - "tests/README.md has a row for each new test; this issue does not edit docs/CLAIMS.yaml or the intent (T027 does)."
+validation:
+  - "npm test"
+  - "npm run verify"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

@@ -5,7 +5,7 @@ invariants:
   - "The StudioModel is the only Studio state; every new surface is a projection of it and every edit is one undoable action (project.studio-model-is-canonical)"
   - "Typed ports and feedback rejection hold across a group boundary (project.typed-ports, project.no-silent-feedback)"
   - "Every pointer gesture has a keyboard path (use case studio-operate-without-dragging)"
-  - "New surfaces extend the existing tokens and components (project.visual-identity-lock)"
+  - "New surfaces are built on the Flowbite Pro components (owner, 2026-10-28; ADR 0061, project.ui-uses-flowbite-pro, project.visual-identity-lock v2, intent ui-flowbite-pro): the chrome of groups, the minimap and the recovery prompt adds no surface off Pro and no legacy osc-* primitive, while the graph and timeline drawing keeps its own palette inside Pro cards"
   - "Every M048 pull request touches guarded paths (src/js/studio, and for V604 src/js/experiments/store.js) and therefore carries a reviewer's verdict and, as a feat change, fail-first (project.review-verdict, project.fail-first)"
 milestones:
   - "M048"

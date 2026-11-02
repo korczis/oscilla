@@ -1,0 +1,49 @@
+id: W016
+milestone: M103
+serves:
+- "instrument-kinds#linked-and-mobile"
+title: "Every kind instance in the integration map and the control census, and a 390x844 sweep of every kind"
+slug: every-kind-instance-in-the-integration-map-and-the-control-c
+priority: p2
+profile: implementation
+objective: "Lands as test(ui). Each kind instance's links (design section 3.3) become rows of tests/browser/integration-map.json (K075's file; generated once G016 lands), walked by pointer and keyboard with Back, Forward and reload; the control census (PACK 03 and qa-regressions.cjs no-inert-controls) asserts that every visible kind instance exposes its parameters through declarations (the owner's 'every element tweakable'); and tests/browser/ui-kinds.cjs runs every bundled kind at 390x844 and asserts its declared mobile rule (target sizes, no horizontal page scroll, in-card scroll only where declared). Before: kinds are tested one by one. After: one sweep that fails a kind instance with a missing link, an untweakable parameter or a broken phone layout. Negative cases: a target under 44 px without its exemption; a page that scrolls sideways at 390 px; a declared link whose control is hidden. Rollback: revert; tests only."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs, knowledge and interlinking, and add more; add p5.js, WebGL and interactivity, and deploy; a full DAW, a full sequencer and a full piano, everything interlinked, clickable, parameterized and joined; knobs, sliders and control panels done one generic way, integrated with Majordomus; the landing easy to use, easy to extend and open to hack; mobile first. The architecture still binds: one AudioEngine, the Studio model canonical, typed ports, one offline file under the 1.2 MB gzip budget, the cockpit identity, no fake science, Flowbite Pro (ADR 0061). Design: the instrument-kinds design of 2026-10-29 (scratchpad components-followup/components-new.md), on the component-system design (G001-G019) and the synth and studio-siggen drafts of the same day, facts checked against origin/main cdda563c."
+scope:
+- tests/browser/ui-kinds.cjs
+- tests/browser/integration-map.json
+- tests/browser/qa-regressions.cjs
+- tests/unit/ui-kinds.test.mjs
+- tests/README.md
+depends_on:
+- W002
+- W003
+- W004
+- W005
+- W006
+- W007
+- W008
+- W010
+- W013
+- W014
+- K075
+acceptance_criteria:
+- "tests/unit/ui-kinds.test.mjs (extended) fails on the merge base: every bundled kind instance's declared links have a row in integration-map.json and every row's producer is a declared instance."
+- "Negative cases, each asserted by a test that fails on the merge base: the three of the objective."
+- "Definition of done, tested: tests/browser/ui-kinds.cjs at 390x844 and 1536x1024 visits every bundled kind instance, measures its coarse-pointer targets, asserts no horizontal page scroll, and walks its links by pointer and Enter with Back and Forward, each within a named until() deadline. The check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, runs at 1536x1024 and 390x844, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, extends: K075's map and the control census; interlinks: this slice is the check of the intent's linked-and-mobile criterion."
+- "Definition of done, interactivity: the census fails a visible parameter with no control."
+- "Definition of done, docs, menus and routes: the kind's declaration names its docs, links and tests; docs/ui-catalog.md (G014) lists it; the Keyboard shortcuts dialog lists its keys; tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Its trace entry in scripts/ui-catalog/trace/kinds.mjs names the intent criterion, this issue, its rules, ADRs and tests, each resolved by the trace check, for the Majordomus knowledge projection."
+- "It adds no markup, class token, selector or inline style, so it may land before F001; tests/unit/ui-flowbite-pro-baseline.json stays equal (node scripts/ui-flowbite-pro-record.mjs --check; node --test tests/unit/ui-flowbite-pro.test.mjs) (project.ui-uses-flowbite-pro)."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat change it carries a unit test that fails on the merge base (project.fail-first)."
+- "scripts/size-report.mjs shows at most 0.5 KB gzip added, compiled CSS included, with the base and head figures in the pull request body, inside the component line's cap Q037 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+- node --test tests/unit/ui-kinds.test.mjs
+- node tests/browser/ui-kinds.cjs
+- node tests/browser/qa-regressions.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

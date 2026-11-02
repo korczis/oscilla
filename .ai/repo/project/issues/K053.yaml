@@ -1,0 +1,65 @@
+id: K053
+milestone: M062
+serves:
+  - "playable-instrument#chart-interaction"
+  - "playable-instrument#chart-states-honest"
+title: "Chart interaction kit: crosshair, announced keyboard cursor, state notes, data table"
+slug: chart-interaction-kit-crosshair-announced-keyboard-cursor-st
+priority: p1
+profile: implementation
+objective: "Lands as feat(charts). New modules under src/js/charts/interaction/: cursor-math.js (pure: nearest index on lin and log axes, keyboard steps, band, row and bar hit tests, and a pixel column's provenance, \"max of N bins\" or \"interpolated, below bin resolution\"); overlay.js (crosshair, per-series point markers and a Pro tooltip inside the host, never placed from window.scrollY, written only when its text or position changes); pointer.js (keeps the last client point and re-hit-tests on scroll of the host's nearest scrolling ancestor, found from the host and never from the .osc-main class, on ResizeObserver and on data change; hides on leave for a mouse, keeps a pinned touch cursor: K015 F2 made general); live-readout.js (a live chart's readout under a still pointer is rewritten at most 4 times a second with a \"live\" marker and says \"held\" once the data stops); state-note.js (a role=status note naming why a plot is blank: Audio not started, No signal, Paused, Frozen, History cleared by a scale, span or range change, Model; K015 F1 made general); keys.js (the one key map: arrows one step, PageUp and PageDown a large step, 10 points on a linear axis and 1/3 octave on a log one, Home and End, and the zoom keys of K052; it stops propagation only for keys it handles and never handles Space, Tab, letters or Escape: Escape clears the cursor and propagates, so the page's stop and the MEASURE abort still run; the chart and zoom rows join src/js/ui/shortcuts.js, the one list the shortcuts dialog shows, which also exports MEASURE_ROWS and SEQUENCER_ROWS for the cross-check; F010 owns the dialog's markup and K053 only its rows, so if both are open K053 lands second and rebases); live-region.js (one sr-only polite region that announces a keyboard readout once the keys settle, 500 ms after the last key, and state changes; never hover); host.js (the host is role=group with aria-label and aria-describedby, holding the summary and the data table, which browse mode reads; its focusable plot surface is role=application with aria-roledescription \"interactive chart\", because NVDA and JAWS switch to focus mode only on a widget or application role and a focusable group would leave the arrow keys to the virtual cursor; the drawing canvas is aria-hidden, the focus ring visible, and the state note and tooltip sit outside any role=img subtree); summary.js and data-table.js (the aria-describedby summary and a Pro table in a collapse holding a snapshot of the plotted values, labelled as a snapshot and refreshed on open, never per frame, at most 512 rows, a decimated table stating its aggregation, a spectrogram's table being the column under the cursor or the newest column; mandatory for every plot, bar and row host); link.js (a cursor bus keyed by quantity, which K025's shared frequency cursor uses). The census, tests/unit/chart-host-census.json, lists every chart host with its kind (plot, bars, rows, meter, scatter, timeline or thumbnail), its capabilities and the slice that delivers them; pending only shrinks, and a host a slice adds after K053 enters as done in that slice's change. A shared host with several views gets one entry per view (#osc-chart-waveform: waveform#scope, waveform#harmonics, waveform#path). Hosts that are not data charts are listed under exempt with a reason: the signal-path diagram (waveform#path), the Studio graph editor (SVG through graph-dom.js), K019's step-bar editor (an input control with its own keyboard path), the offscreen canvas of ui/exporters.js and of K051's export, and the unmounted compact Studio timeline (compact-timeline.js, mounted by no surface, completion ledger W7k; the slice that mounts it enters its lane previews as thumbnails). Helper call sites are attributed, not hosts: the shared fitCanvas of chart-theme.js (:82 on main), the ring OffscreenCanvas of analysis/spectrogram.js (:193, :246; part of the spectrogram hosts), the palette probe of K027, and timeline-dom.js (drawing K046's lane hosts). Every census host carries data-osc-chart (K053 adds it to the existing hosts; a slice that adds a host sets it). \"A host the tree has\" is defined by two detectors, and an unlisted find of either fails: a static scan of src/js for every chart mount call site (new uPlot(, createP5Host(, document.createElement('canvas'), getContext('2d'), and SVG built with svgEl('svg' or createElementNS with the SVG namespace), each attributed to a census entry, a helper or an exempt site by file and function; and a runtime inventory in tests/browser/charts-interaction.cjs that opens every workspace of the navigation inventory, each Studio template and each p5 view, and records every element holding a chart canvas, a .uplot root or a p5 canvas, every svg with path, polyline or rect data inside a panel or card, and every element carrying data-osc-chart or .osc-chart-host. Fixtures with an unlisted canvas mount and an unlisted SVG chart prove each detector fails. scripts/chart-census.mjs --require-complete fails while a host is pending; it is the criteria's evidence and is not part of npm test, which runs the census test. tests/unit/charts-readout-wording.test.mjs reads the wording table every chart module exports and refuses \"dB SPL\" without the calibration flag, \"audible\" and \"inaudible\", \"true peak\" outside \"not true peak\", VU and LUFS; a dataset string quoted from a cited source (the bio basis strings of src/js/data/bioacoustics.js, such as \"60 dB SPL audibility limits\") is a sourced entry that names its reference and is exempt from the dB SPL rule, because it reports the literature and not a level the page measured. First consumer: the bio chart, whose tooltip loses its document.body and scrollY positioning and its osc-chip-readout class. The overlay and the host attributes live inside the bio host, not the card F003 rebuilds; whichever lands second rebases that element."
+why: "Owner order of 2026-10-29: \"make the charts really sexy, modern, interactive\", for all charts; reviewer f3 scoped it to every surface that draws data. Revised after f3's review of the plan (CHANGES-REQUESTED, 2026-10-29): owner decisions are Q issues under M063, Pro chrome waits on F002 and on the card issue of its workspace, every chart that claims chart-interaction delivers the keyboard cursor and the announced readout, chart keys never take Escape or Space; revision 3 answers f3's delta review. Facts checked against origin/main at e2720e07 and the branches of #251, #253, #263 and #265 (charts-plan.md, charts-plan-changes.md)."
+scope:
+  - "src/js/charts/interaction/cursor-math.js"
+  - "src/js/charts/interaction/overlay.js"
+  - "src/js/charts/interaction/pointer.js"
+  - "src/js/charts/interaction/live-readout.js"
+  - "src/js/charts/interaction/state-note.js"
+  - "src/js/charts/interaction/keys.js"
+  - "src/js/charts/interaction/live-region.js"
+  - "src/js/charts/interaction/host.js"
+  - "src/js/charts/interaction/summary.js"
+  - "src/js/charts/interaction/data-table.js"
+  - "src/js/charts/interaction/link.js"
+  - "src/js/charts/bio-chart.js"
+  - "src/js/ui/shortcuts.js"
+  - "src/index.html"
+  - "scripts/chart-census.mjs"
+  - "tests/visual"
+  - "package.json"
+  - "README.md"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "src/styles/charts.css"
+  - "tests/unit/chart-interaction.test.mjs"
+  - "tests/unit/chart-host-census.test.mjs"
+  - "tests/unit/chart-host-census.json"
+  - "tests/unit/charts-readout-wording.test.mjs"
+  - "tests/browser/charts-interaction.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K028"
+  - "K052"
+  - "F002"
+  - "K056"
+acceptance_criteria:
+  - "Unit tests that fail on the merge base: host-relative tooltip placement; change-only writes against a fake element; the re-hit-test decision table (scroll, resize, leave, data change, touch pin); nearest index on a log axis with its provenance text; the live-readout rate bound under a fake clock; the live-region settle rule under a fake clock; the key map with K052's zoom keys, cross-checked against GLOBAL_SHORTCUTS, MEASURE_ROWS, SEQUENCER_ROWS and STUDIO_SHORTCUTS of src/js/ui/shortcuts.js: Space, Tab, letters and Escape are never handled, and every overlap a chart host shadows while it has focus is listed by name."
+  - "tests/unit/chart-host-census.test.mjs: the static scan attributes every chart mount call site of src/js, canvas, uPlot, p5 and SVG, to a census entry, a named helper or an exempt site, and fixtures with an unlisted canvas mount and an unlisted SVG chart fail it; every census host carries data-osc-chart; the bio host is done; no host leaves pending except into done; scripts/chart-census.mjs --require-complete fails on this change, since the other hosts are pending."
+  - "tests/unit/charts-readout-wording.test.mjs refuses each banned term in a fixture, accepts a sourced entry that names its reference, and passes on the bio chart's wording table with its basis strings as sourced entries."
+  - "tests/browser/charts-interaction.cjs, table-driven over the census's done hosts (the bio chart here): with the pointer parked over the chart, a scroll of the scrolling ancestor leaves the tooltip hidden or re-placed under the pointer; ArrowRight announces once after the keys settle; Escape clears the cursor, and with a tone playing the tone stops; Space keeps its Playground meaning (hold to play) with the chart focused; a tap pins the cursor and it stays after the finger lifts; the accessibility tree shows the host as group with its summary and table and the plot surface as application, not img; the runtime inventory finds no chart mount the census lacks. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline and assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac); tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "tests/browser/charts-interaction.cjs runs in npm run test:browser (package.json), so CI and the release gate run it. README.md's Testing table names it (tests/unit/ci-workflows.test.mjs, tests/unit/docs-derived.test.mjs), and the Keyboard shortcuts dialog shows the chart rows."
+  - "Chart chrome (legend, toolbar, toggle, badge, tooltip, readout row) is Flowbite Pro markup adapted from the matching Pro component and lands after F002 turned on preflight and the form base styles (the border trap of review #253, R-3); no osc-* class token or legacy selector is added and src/styles/tokens.css, charts.css, measure.css, studio.css and studio-timeline.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+  - "Every osc-* use it removes leaves the record in the same change: tests/unit/ui-flowbite-pro-baseline.json is rewritten by node scripts/ui-flowbite-pro-record.mjs (osc-chip-readout falls by the bio chart's use, 3 to 2), and a selector left without a producer is deleted from src/styles/charts.css (tests/unit/css-producers.test.mjs); the pull request states by how much the debt fell."
+  - "The chart reads existing AnalyserNodes on the main thread only, creates no audio node and adds no work to the audio path; hover and keyboard work runs on events only, a live readout under a still pointer is rewritten at most 4 times a second through the kit's live-readout, and no draw loop writes the DOM per frame (project.audio-engine-discipline v2)."
+  - "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no review verdict is needed; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+  - "No visual reference is expected to move (the visual scripts park the pointer away from charts); one that does is re-accepted in both environments with its reason."
+  - "scripts/size-report.mjs shows at most 5 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of M062's figures stays within the cap Q014 records, under the 1 000 000 B gzip budget (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/chart-interaction.test.mjs tests/unit/chart-host-census.test.mjs tests/unit/charts-readout-wording.test.mjs"
+  - "node tests/browser/charts-interaction.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

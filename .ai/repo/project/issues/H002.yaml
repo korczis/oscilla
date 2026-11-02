@@ -1,0 +1,37 @@
+id: H002
+milestone: M079
+serves:
+  - "v2-laboratory#presets"
+  - "v2-laboratory#link-state"
+title: "A saved continuous repeat that restores as once says so on every restore path"
+slug: a-saved-continuous-repeat-that-restores-as-once-says-so-on-eve
+priority: p1
+profile: implementation
+objective: "Lands as fix(state). A continuous repeat is saved, but restoring it through a preset, History, a config import or a link turns it into 'once' with no issue and no notice. Continuous permission is deliberately not restored (ADR 0005; the rule-mandated drops of src/js/core/url-state.js:5-6), so the fix is not to restore it but to name the drop: every restore path returns what it applied, what it limited and what it dropped, and the person sees 'Continuous repeat saved; it plays once until continuous playback is allowed again' (exact copy decided in the change) beside the existing 'Binaural mode not restored' notice. This is decision 3 of ADR 0063 for this field."
+why: "Repro persist-2 of the G1 coherence contract of 2026-10-29 (scratchpad g1/coherence-contract.md, section 5 row 2.8; inventory g1/inventory.md; critique g1/critique.md), FAIL on main cdda563c: preset, history, import and hash each restore repeat 'once' with 0 issues; only the hash path shows a notice, and that one says 'Configuration restored from link'. No plan record names it (grep of main and #280)."
+scope:
+  - "src/js/core/url-state.js"
+  - "src/js/core/instrument.js"
+  - "src/js/core/storage.js"
+  - "src/js/ui/config-file.js"
+  - "src/js/main.js"
+  - "tests/unit/restore-notices.test.mjs"
+  - "tests/browser/app.cjs"
+  - "tests/README.md"
+  - "dist"
+acceptance_criteria:
+  - "Fail-first: tests/unit/restore-notices.test.mjs restores one record with repeat 'continuous' through each restore entry (preset, history, config import, link) and requires the result to name continuous repeat among the dropped items and the notice text to say so; it fails on the merge base (0 issues, no notice)."
+  - "A check in tests/browser/app.cjs saves a continuous sweep and restores it by preset, History, config import and link, and waits with until() (a named deadline) for the notice on each path."
+  - "Negative cases, each asserted: a record saved as once restores with no notice; no restore path grants continuous permission (ADR 0005); the binaural notice is unchanged; a link restore does not say 'Configuration restored' without naming the drop."
+  - "If the change touches a guarded path (core/storage.js is a storage path), it carries a reviewer-written .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+  - "As a fix change it carries a unit test that fails on the merge base and passes on the head (project.fail-first)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named deadline (project.suite-harness, project.bounded-test-timing)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/restore-notices.test.mjs"
+  - "node tests/browser/app.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

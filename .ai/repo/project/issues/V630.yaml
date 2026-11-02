@@ -1,0 +1,44 @@
+id: V630
+milestone: M081
+serves:
+- "studio-box-system#comments-and-reroutes"
+title: Group faces with exposed knobs
+slug: group-faces-with-exposed-knobs
+priority: p2
+profile: implementation
+objective: "P04 slice D (editing and undo invariants). Lands as feat(studio). A V601 group's face shows the knobs the user exposed from its inner boxes (at most six), each a projection of the inner parameter, edited with V620's knob; exposing and hiding is one history entry; entering the group shows the inner boxes with the exposed knobs marked."
+why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings S1-S14 measured on origin/main b67d1e58)."
+scope:
+- src/js/studio/schema.js
+- src/js/ui/studio/graph-face.js
+- tests/unit/studio-group-face.test.mjs
+- tests/browser/studio-boxes.cjs
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- V601
+- V620
+acceptance_criteria:
+- "Before: PROPOSED: groups are V601, not built."
+- "After: a group face exposes chosen inner knobs."
+- "Negative cases: exposing a parameter of a node outside the group is refused; the render of the grouped graph equals the ungrouped one."
+- "Rollback: the reader lands with the writer and stays when the writer is reverted (the field is presentation state that an older reader would refuse), so a revert removes only the writer and documents saved while it was live still load; this is stated in the pull request."
+- "tests/unit/studio-group-face.test.mjs, failing on the merge base: an exposed knob edits the inner parameter in one entry, and the offline render equals the ungrouped one."
+- "Definition of done, extends: V601's groups and V620's face knobs."
+- "Definition of done, cross-links: the exposed knob, the inner box's knob and the Inspector show one value. The link is a row of tests/browser/integration-map.json once that map (synth line K075) is on main."
+- "Definition of done, dynamics: the group's face knobs move with automation while playing."
+- "Definition of done, docs and routes: docs/v31/user-guide.md and .ai/repo/features/studio-signal-graph.md say what changed; tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: A check 'group-face' in tests/browser/studio-boxes.cjs exposes the cutoff of a grouped Filter by the box menu (pointer, keyboard, touch), turns it on the group face and waits with until() (deadline 'inner cutoff changed', 3 s); on the merge base nothing can be exposed. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit and the completed evidence the release that carried it; E030's judge passes on the pull request once E030 is on main."
+- "The pull request carries a reviewer's verdict (it touches a guarded path; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+- "Wave 2: its chrome is Flowbite Pro markup adapted from the matching Pro component, lands after F002, adds no osc-* class token or legacy selector, and studio.css, studio-timeline.css, charts.css and tokens.css gain no selector or declaration; the domain drawing stays OSCILLA's own inside Pro cards (project.ui-uses-flowbite-pro, project.visual-identity-lock v2; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "scripts/size-report.mjs shows at most 1.5 KB gzip added, with the base and head figures in the pull request body, within the owner's dist budget of 1 200 000 B gzip (decision of 2026-10-29, about 355 KB of headroom at origin/main b67d1e58); the ceiling of this line is 35 KB gzip in all (Studio boxes 35 KB, signal generator 25 KB), stated in the milestone (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/studio-group-face.test.mjs
+- node tests/browser/studio-boxes.cjs --only group-face
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

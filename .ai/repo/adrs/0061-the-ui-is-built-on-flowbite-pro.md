@@ -232,3 +232,29 @@ plugin function fails, an `@import` must be relative or an allowed package, and 
 stylesheets and `tokens.css` are recorded apart, ratcheted and not debt (debt 3905 on the same
 `src/`, with 438 domain-view selectors apart). The record now has a committed writer,
 `scripts/ui-flowbite-pro-record.mjs`, with a `--check` mode.
+
+### 2026-10-30: the instrument visuals, and the Synth panel surface narrows the skeuomorphism ban
+
+The instrument visuals Pro has no component for (a knob's arc, the patch bay's jacks and
+cables, the piano keys) are domain views inside Pro cards: inline SVG and literal Tailwind
+utilities, no stylesheet, no osc-* class name, no `el.style`, every colour an OSCILLA token.
+The domain-view exemption of `project.ui-uses-flowbite-pro` is not widened by this: their
+chrome (cards, buttons, lists, dropdowns, toolbars) is Pro and counted by the ratchet like any
+other surface. This is the note plan issue J001 plans for the instrument views; it is written
+here, ahead of J001, because the Synth panel of pull request #329 needs it.
+
+On 2026-10-30 the owner ordered, in Czech, for the Synth workspace: "musi to vypadat jako
+arturia" ("it must look like Arturia"). Decision 3 of this record amended
+`project.visual-identity-lock` to version 2, which banned "skeuomorphic analog-synth
+treatment" on every surface. Rule version 3 narrows that one ban on one surface, the Synth
+panel surface (`src/js/synth/view/`: module plates, knobs, patch bay, jacks, cables), to a
+restrained hardware look drawn only from OSCILLA tokens (a two-token plate gradient, a knob
+cap with one highlight and a value ring, jacks as rings, cables with sag and a soft shadow),
+with no texture, no screws or rivets, and no brand mark, product name, colourway, layout or
+trade dress of any product; every other clause of version 2 is restated in version 3 and
+binds unchanged. For that surface only, this supersedes the flat 270-degree knob that D11
+(Q018) chose and plan issue K058 records: the Synth panel's knob (`src/js/synth/view/knob.js`)
+draws a cap with one highlight. K058's own component (`src/js/ui/kinds/param/knob.js`), its
+range-input control and its aria-valuenow position of 0..1000 (N003) are unchanged by this
+note and remain planned work; the Synth panel's knob is a panel-local view until K058 lands
+and replaces it. The status of this record is unchanged.

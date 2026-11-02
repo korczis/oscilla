@@ -1,0 +1,37 @@
+id: K039
+milestone: M062
+serves:
+  - "playable-instrument#chart-states-honest"
+title: "No line drawn across a phase wrap on the MEASURE phase view"
+slug: no-line-drawn-across-a-phase-wrap-on-the-measure-phase-view
+priority: p2
+profile: implementation
+objective: "Lands as fix(measure). buildPhaseView joins points across the +180/-180 jump, so each wrap draws a full-height line that is not data: the phase descriptor in src/js/measurement/views/response-chart.js gets wrapDeg 360 and a pure wrapBreaks(values) (indices where |delta| > 180), and measure-charts breaks the path there. Wrapped degrees only. Unwrapped phase and group delay are V395 (M047, intent measurement-extensions#phase-group-delay), which already settles their algorithm questions; this plan change adds K039 to V395's depends_on, so the unwrapped series lands on the fixed path. V397's context overlays change the same response chart on the frequency axis only; they share no function with this fix and rebase over it. The Magnitude | Phase | Both view is K055. It adds no markup; it waits on F004 because F004 rebuilds the same files (src/js/measurement/views and measure-charts.js) and re-accepts the same visual-measure references, a shared-file edge, not a chrome gate."
+why: "Owner order of 2026-10-29: \"make the charts really sexy, modern, interactive\", for all charts; reviewer f3 scoped it to every surface that draws data. Revised after f3's review of the plan (CHANGES-REQUESTED, 2026-10-29): owner decisions are Q issues under M063, Pro chrome waits on F002 and on the card issue of its workspace, every chart that claims chart-interaction delivers the keyboard cursor and the announced readout, chart keys never take Escape or Space; revision 3 answers f3's delta review. Facts checked against origin/main at e2720e07 and the branches of #251, #253, #263 and #265 (charts-plan.md, charts-plan-changes.md)."
+scope:
+  - "src/js/measurement/views/response-chart.js"
+  - "src/js/charts/measure-charts.js"
+  - "tests/unit/v3-views.test.mjs"
+  - "tests/visual"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "F004"
+  - "K056"
+non_scope:
+  - "Unwrapped phase and group delay: V395 (M047), which depends on this issue"
+  - "The context overlays of V397 (M047) on the same chart"
+acceptance_criteria:
+  - "A unit test that fails on the merge base: wrapBreaks draws no line across +-180 and keeps real gaps."
+  - "The pull request carries a reviewer's verdict (src/js/measurement is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "It adds no markup, osc-* class token or selector (node --test tests/unit/ui-flowbite-pro.test.mjs)."
+  - "The visual-measure references run with phase off and do not move; if phase pixels appear they are re-accepted in both environments with that reason."
+  - "scripts/size-report.mjs shows at most 0.5 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of M062's figures stays within the cap Q014 records, under the 1 000 000 B gzip budget (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/v3-views.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

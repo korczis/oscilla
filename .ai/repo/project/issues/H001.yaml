@@ -1,0 +1,35 @@
+id: H001
+milestone: M079
+serves:
+  - "v31-studio#click-free-live-edit"
+title: "A waveform change in the Studio Inspector while playing keeps the oscillator sounding"
+slug: a-waveform-change-in-the-studio-inspector-while-playing-keeps
+priority: p1
+profile: implementation
+objective: "Lands as fix(studio). In the default Basic Synth document, changing Oscillator 1's Waveform in the Inspector (#osc-si-osc-1-waveform) while the transport plays silences the oscillator for the rest of the clips already scheduled, instead of changing its timbre. 'waveform' is a structural key of the oscillator adapter (src/js/studio/adapters/nodes.js:116), so the runtime rebuilds the node; the rebuilt carrier is built held at ROUTE_FLOOR for its owner (src/js/studio/runtime.js header, :140-149) and the pattern owner's events stay on the disposed node (INFERRED; the cause is not located, and locating it is the first step). After the fix a structural rebuild of a node that a playing clip owns hands the owner's remaining scheduled events, and its held level, to the rebuilt node in the same crossfaded transaction (ADR 0035), so the Inspector path behaves as the patch-level waveformReplace check (section 45 of tests/browser/v31-studio-audio.cjs, click-free) already does. No dependency beyond main: a builder can start it at once."
+why: "Repro dead-controls-9 of the G1 coherence contract of 2026-10-29 (scratchpad g1/coherence-contract.md, section 5 row 1.5; inventory g1/inventory.md; critique g1/critique.md), FAIL on main cdda563c: with the transport playing (Tone 220 Hz 0-1 s, Sweep 1-3 s), the samples after a waveform edit at 0.33 s read -106.7 dB at 0.80 s (the noise floor) while the control legs sound (no edit -31.7 to -32.3 dB; a Level edit -37.5 to -38.3 dB); the node counts stay 25 nodes and 4 sources, the model holds the new waveform, and no page error is raised. The suite's waveformReplace check covers the runtime patch, not the Inspector path."
+scope:
+  - "src/js/studio/runtime.js"
+  - "src/js/studio/adapters"
+  - "src/js/studio/transport.js"
+  - "src/js/ui/studio/inspector.js"
+  - "tests/unit/v31-studio-structural-edit.test.mjs"
+  - "tests/browser/v31-studio-audio.cjs"
+  - "tests/README.md"
+  - "dist"
+acceptance_criteria:
+  - "Fail-first: tests/unit/v31-studio-structural-edit.test.mjs drives the runtime on a fake context: a structural parameter set (waveform) on an oscillator that a playing pattern clip owns leaves every remaining event of that clip scheduled on the node that is connected after the rebuild, at the owner's level, never at ROUTE_FLOOR; it fails on the merge base."
+  - "A check in tests/browser/v31-studio-audio.cjs plays the default Basic Synth document, selects square in #osc-si-osc-1-waveform at about 0.33 s and reads the output tap at every sample point to 3 s: each reads above -60 dB, and the model's waveform is square; the no-edit and Level-edit legs still sound."
+  - "Negative cases, each asserted: a non-structural edit (Level) is unchanged; an edit while stopped schedules nothing; after stop the engine node census is 0 (project.audio-engine-discipline v2); the edit adds no click beyond the threshold of the existing waveformReplace check."
+  - "The pull request touches the guarded src/js/studio and carries a reviewer-written .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+  - "As a fix change it carries a unit test that fails on the merge base and passes on the head (project.fail-first)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named deadline (project.suite-harness, project.bounded-test-timing)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/v31-studio-structural-edit.test.mjs"
+  - "node tests/browser/v31-studio-audio.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

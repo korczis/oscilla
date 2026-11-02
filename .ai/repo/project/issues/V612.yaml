@@ -1,0 +1,50 @@
+id: V612
+milestone: M080
+serves:
+- "studio-box-system#wiring-gestures"
+title: Insert a node into a cable by dropping it on the cable or by key
+slug: insert-a-node-into-a-cable-by-dropping-it-on-the-cable-or-by
+priority: p2
+profile: implementation
+objective: "P04 slice C (typed edge UX). Lands as feat(studio-ui). Dragging a node that has a free input and a free output compatible with a cable over that cable highlights the cable (the existing selected-edge treatment); dropping splices it in as one batch (EDGE_REMOVE of the cable and two EDGE_ADD), validated as a whole model before the store commits it, one history entry 'Insert <node> into <from> to <to>'. With a cable selected, the I key opens quick add filtered to the types that can be inserted into it, and the choice is added at the cable's midpoint and inserted in one entry; Enter on a selected cable opens a list of its actions (insert, mute, delete, re-route by the connection dialog). It is the inverse of K009's delete-and-bridge and uses the same batch helper."
+why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings S1-S14 measured on origin/main b67d1e58)."
+scope:
+- src/js/ui/studio/graph-wire.js
+- src/js/ui/studio/graph-gestures.js
+- src/js/ui/studio/graph-commands.js
+- src/js/ui/studio/graph-picker.js
+- src/js/ui/studio/graph-keys.js
+- src/js/studio/actions.js
+- tests/unit/studio-graph-insert.test.mjs
+- tests/browser/v31-studio-graph.cjs
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- V631
+- V611
+- K009
+acceptance_criteria:
+- "Before: VERIFIED: a node dropped on a cable only moves; inserting needs delete and two connects (three history entries)."
+- "After: dropping a node on a cable, or I with a cable selected, splices it in one entry."
+- "Negative cases: a node with no input or output of the cable's type does not highlight the cable and the drop only moves it; an insertion that would close a cycle or reach a single-input port that is occupied is refused whole; a TRIGGER or ANALYSIS cable is never offered an AUDIO node."
+- "Rollback: revert the merge commit. Nothing changes the schema, a studioHash or a stored record, so documents saved while it was live load unchanged after the revert."
+- "tests/unit/studio-graph-insert.test.mjs, failing on the merge base: inserting a Filter into an audio cable yields the two edges and removes the one; inserting a node whose ports cannot take the cable's type, or whose insertion would close a cycle, is refused with canConnect's or the cycle sentence and leaves the store unchanged; undo restores the original cable by id; the inserted node's existing edges are kept."
+- STUDIO_SHORTCUTS gains I (insert into the selected cable) and Enter on a cable.
+- "Definition of done, extends: K009's delete-and-bridge (its inverse) and create-node-from-cable (§66)."
+- "Definition of done, cross-links: the inserted node appears in the compact Studio's signal path and in the runtime graph once playing (round trip through the store and the incremental patcher V415). The link is a row of tests/browser/integration-map.json once that map (synth line K075) is on main."
+- "Definition of done, dynamics: the target cable highlights while a node is dragged over it."
+- "Definition of done, docs and routes: docs/v31/user-guide.md and .ai/repo/features/studio-signal-graph.md say what changed; STUDIO_SHORTCUTS and the shortcut dialog list I and Enter on a cable. tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: A check 'insert-on-cable' in tests/browser/v31-studio-graph.cjs drags a new Gain node by pointer onto the Oscillator to Envelope cable and waits with until() (deadline 'node spliced into the cable', 3 s) for the two edges and one history entry, then Ctrl+Z restores the cable; selects the Filter to Master cable by keyboard, presses I, types 'gain', Enter, and waits for the same; plays the Studio and waits until the runtime revision includes the inserted node; repeats the drop by touch (long-press drag) in a hasTouch context; on the merge base the drop moves the node and the check fails. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit and the completed evidence the release that carried it; E030's judge passes on the pull request once E030 is on main."
+- "The pull request carries a reviewer's verdict (it touches a guarded path; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+- "Wave 1: it adds no class token, selector, markup surface or inline style, so the Flowbite Pro record does not change: node scripts/ui-flowbite-pro-record.mjs --check passes with no rewrite and node --test tests/unit/ui-flowbite-pro.test.mjs passes (project.ui-uses-flowbite-pro); live drawing is on a canvas, a domain view."
+- "scripts/size-report.mjs shows at most 1.5 KB gzip added, with the base and head figures in the pull request body, within the owner's dist budget of 1 200 000 B gzip (decision of 2026-10-29, about 355 KB of headroom at origin/main b67d1e58); the ceiling of this line is 35 KB gzip in all (Studio boxes 35 KB, signal generator 25 KB), stated in the milestone (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/studio-graph-insert.test.mjs
+- node tests/browser/v31-studio-graph.cjs --only insert-on-cable
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

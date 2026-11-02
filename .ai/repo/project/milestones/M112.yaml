@@ -1,0 +1,18 @@
+id: M112
+title: "Parameters and controls, wave 2: the menu, the band, the automation hook and the reference, on the Pro shell"
+slug: parameters-and-controls-wave-2-the-menu-the-band-the-automation
+order: 92
+priority: p2
+problem: Modulation and automation are visible only as Inspector text; no control offers reset or a link; every surface lays out its fields by hand; no document says how a control behaves or how to add one.
+outcome: "Every control has one menu, shows the computed range of its routes and whether a lane overrides it, opens its lane and comes back; parameter groups render as panels that fold, with every parameter on the expanded face; a generated reference and an extending recipe describe it."
+acceptance_criteria:
+- "N004, N005, N007 and N010 are done with their evidence; npm run release-gate passes at the last one."
+validation:
+- npm run release-gate
+evidence_required:
+- milestone_verified
+risks:
+- "N005 depends on K058 (#285) for the arc; the slider's track segment can land first if K058 is late."
+- "V620, K062, K076, K096 and K120 are the consumers; each takes the coordination edit of params-controls.md section 8."
+created_at: '2026-10-29'
+updated_at: '2026-10-30'

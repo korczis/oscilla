@@ -1,0 +1,18 @@
+id: M101
+title: "Instrument kinds, wave 1: the kind contract, the meter and the 88-key piano"
+slug: instrument-kinds-wave-1-the-kind-contract-the-meter-and-the
+order: 89
+priority: p2
+problem: "No instrument surface of OSCILLA is declared: numbers carry no stated source, there is no meter or scope kind, ports and cables are drawn per editor and three Studio transports disagree (component inventory of 2026-10-29)."
+outcome: "The kinds are declared and held to one contract; the meter exists once with one model and shows the Studio output; the piano is one 88-key kind of named buttons that K026, K065, K115 and K142 mount."
+acceptance_criteria:
+- "W001, W003 and W007 are done with their evidence; npm run release-gate passes at the last one."
+validation:
+- npm run release-gate
+evidence_required:
+- milestone_verified
+risks:
+- "W003 and W007 need F001 (#253); W007 also K026 (#299) and Q063."
+- "W003 takes the level-meter model from K049, which then depends on W003 (an amendment of a record on main)."
+created_at: '2026-10-29'
+updated_at: '2026-10-30'

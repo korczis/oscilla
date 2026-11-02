@@ -1,0 +1,41 @@
+id: E044
+milestone: M046
+serves:
+  - "engineering-integrity#main-red-shows"
+title: "A push to main runs the unit, knowledge and browser-gate jobs, so a red combination shows on main"
+slug: a-push-to-main-runs-the-unit-knowledge-and-browser-gate-jobs
+priority: p2
+profile: implementation
+objective: "Owner decision 2026-10-30 (AskUserQuestion, session abd8bbe3, 'Strict off + main workflow'): main's branch protection drops strict, and a separate workflow on push to main, with no gate job, runs the unit tests and the browser suites, so two green pull requests that combine into a red main show it on the merge commit. ci.yml cannot do it: project.ci-bounded forbids any trigger but pull_request for a workflow with a gate job, and its fail-first and review-verdict jobs judge a pull request. .github/workflows/main-checks.yml runs on push to main the unit, knowledge and browser (chromium, firefox, webkit) jobs of ci.yml, the same job definitions minus the unit job's pull-request-only size report, and a report job that fails with a summary naming the failed jobs and the commit. tests/unit/main-checks.test.mjs holds each mirrored job equal to ci.yml's, so a change to one that is not made in the other fails npm test (the Majordomus pin included), and holds the triggers, the absence of a gate job and the report's needs, with mutation cases."
+why: "With strict off nothing runs npm test or a browser suite on main after a merge: pages.yml checks only build:check, verify-dist and version:check before deploying, and the next pull request's run is blamed for the combination (PR #326, 'Correction to the premise')."
+scope:
+  - ".github/workflows/main-checks.yml"
+  - "tests/unit/main-checks.test.mjs"
+  - "tests/README.md"
+  - ".ai/repo/ci/gates.yaml"
+  - ".ai/repo/project/issues/E044.yaml"
+  - ".ai/repo/project/intents/engineering-integrity.yaml"
+acceptance_criteria:
+  - ".github/workflows/main-checks.yml starts on push to main only, has no gate job, and its unit, knowledge and browser jobs equal ci.yml's jobs of the same name except the unit job's size-report step, which needs a merge base; a report job with if: always() needs every other job, writes the job results to the step summary and fails with an error annotation when one did not succeed."
+  - "project.ci-bounded holds for the new file (tests/unit/ci-workflows.test.mjs, 'the repository has no violation')."
+  - "tests/unit/main-checks.test.mjs fails on the merge base (the workflow is absent) and passes with it; its mutation cases prove a drifted step, a drifted Majordomus pin, a pull_request or workflow_dispatch trigger, a gate job, a dropped browser leg and a report that does not need a job are each named."
+  - "tests/README.md has a row for the test; ci.yml and the CI model's gates are unchanged."
+validation:
+  - "node --test tests/unit/main-checks.test.mjs tests/unit/ci-workflows.test.mjs tests/unit/ci-gates-model.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-30
+updated_at: 2026-10-31T23:01:33Z
+started_at: 2026-10-31T23:01:10Z
+started_event: sha256:4079875bec2a591d3677b95d85b449669669628dee23fcfe26f81ae42554ca98
+completed_at: 2026-10-31T23:01:33Z
+completed_event: sha256:bc0e4c093ac8306e333f0f2beaeec81134043c5a4de2e68e7855b0d133d3a6a8
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/main-checks.test.mjs tests/unit/ci-workflows.test.mjs tests/unit/ci-gates-model.test.mjs"
+    result: "47/47 pass at main d8268b02; landed in #337 (3980cc61), gate green on head f3e5ce3a (CI run 41053951866); review verdict .ai/repo/reviews/337.yaml (merge)"
+    artifact: ".github/workflows/main-checks.yml"
+    commit: d8268b026ecde328eb0356212649be81541f17ce
+    recorded_at: 2026-10-31T23:01:26Z

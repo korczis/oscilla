@@ -38,8 +38,16 @@
 //                        100 node cards and 200 cables within BROWSER_BUDGETS.importMs; one edit
 //                        (store dispatch + every projection) and Frame All within
 //                        BROWSER_BUDGETS.editMs (median of 9; tests/unit/fixtures/
-//                        v31-large-studio.mjs, docs/v31/performance.md); the numbers are printed
-//                        (V431)
+//                        v31-large-studio.mjs, docs/v31/performance.md); L (tidy all 100 nodes,
+//                        median of 5) within it too; L and M (8 selected cables, then all 200)
+//                        each reach the projections as one store event (K009); M is printed,
+//                        not budgeted: it is one validated store action per cable; the numbers
+//                        are printed (V431)
+//   sequence-import      a configuration saved with Export config opens through the Studio
+//                        Import button as one event track of N pattern clips (one per block of
+//                        its sequence) playing a Sequence node, clean, and announced; a damaged
+//                        sequence is refused with its reason and leaves the document unchanged;
+//                        the track exported as a V2 sequence equals the configuration's (K004)
 //   deleted-project-detaches  Save, Open that project, Delete + Confirm delete: the document is
 //                        detached (no project id), counts as unsaved (the indicator shows), the
 //                        announcement says so; Templates then shows its unsaved-changes note and
@@ -67,6 +75,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
+const { isDeepStrictEqual } = require('node:util');
 const suite = require('./lib/suite.cjs');
 const { until } = require('./lib/wait.cjs');
 
@@ -770,19 +779,117 @@ function defineChecks(fx) {
         s.editor.frameAll();
         frame.push(performance.now() - t1);
       }
+      // K009: L moves every node, M mutes the selected cables; one store event each.
+      let events = 0;
+      const off = s.store.subscribe(() => { events += 1; });
+      const counted = (fn) => {
+        events = 0;
+        const t2 = performance.now();
+        fn();
+        return { ms: performance.now() - t2, events };
+      };
+      // L median of 5 (undone between, untimed), as the edits above are medians.
+      const tidies = [];
+      let tidied = true;
+      for (let i = 0; i < 5; i++) {
+        tidies.push(counted(() => s.editor.tidy()));
+        tidied = tidied && s.store.debugInfo().lastAction.label === 'Tidy the graph';
+        if (i < 4) s.store.undo();
+      }
+      const tidy = { ms: med(tidies.map((x) => x.ms)),
+        events: Math.max(...tidies.map((x) => x.events)) };
+      const edges = s.store.getModel().graph.edges.map((e) => e.id);
+      const pick = edges.filter((_, i) => i % 25 === 0);
+      s.store.dispatch({ type: 'SELECTION_CHANGE', selection: { edges: pick } });
+      const mute = counted(() => s.editor.toggleMute());
+      const muted = s.store.getModel().graph.edges.filter((e) => e.props.muted).length;
+      s.store.dispatch({ type: 'SELECTION_CHANGE', selection: { edges } });
+      const muteAll = counted(() => s.editor.toggleMute());
+      off();
+      const tidyMs = tidy.ms;
+      const muteMs = mute.ms;
+      const muteAllMs = muteAll.ms;
+      const oneEvent = [tidy, mute, muteAll].every((x) => x.events === 1);
       return { ok: r.ok, importMs, nodes: info.nodes, edges: info.edges, cards, cables,
-        editMs: med(edit), moveMs: med(move), frameMs: med(frame) };
+        editMs: med(edit), moveMs: med(move), frameMs: med(frame), tidied, tidyMs,
+        picked: pick.length, muted, muteMs, muteAllMs, oneEvent };
     }, fx.largeText);
     console.log(`   ${browserName} 100 nodes / 200 edges: import+render `
       + `${t.importMs.toFixed(1)} ms, `
       + `edit ${t.editMs.toFixed(2)} ms, move ${t.moveMs.toFixed(2)} ms, frame all `
-      + `${t.frameMs.toFixed(2)} ms (median of 9)`);
+      + `${t.frameMs.toFixed(2)} ms (median of 9); L ${t.tidyMs.toFixed(1)} ms (median of 5), M on `
+      + `${t.picked} cables ${t.muteMs.toFixed(1)} ms, on all ${t.edges} `
+      + `${t.muteAllMs.toFixed(1)} ms`);
     return { ...H.verdict({
       imported: t.ok && t.nodes === 100 && t.edges === 200 && t.cards === 100 && t.cables === 200,
       importBudget: t.importMs <= fx.budgets.importMs,
       editBudget: t.editMs <= fx.budgets.editMs && t.moveMs <= fx.budgets.editMs
         && t.frameMs <= fx.budgets.editMs,
+      tidyBudget: t.tidied === true && t.tidyMs <= fx.budgets.editMs,
+      muteSelected: t.picked === 8 && t.muted === 8,
+      oneProjectionUpdate: t.oneEvent === true,
     }), t };
+  });
+
+  def('sequence-import', async ({ page }) => {
+    // A configuration saved the way a user saves one (Export config), with the Sequencer's
+    // sequence in it, then opened through the Studio Import button (plan K004).
+    await page.evaluate(() => window.OSCILLA.app.setWorkspace('sequencer'));
+    await until(() => page.evaluate(() => !!window.OSCILLA.labs.sequencer),
+      { ms: 15000, what: 'sequence-import: the Sequencer lab is mounted' });
+    await H.fresh(page);
+    await H.recordLive(page);
+    const [cfgDl] = await Promise.all([page.waitForEvent('download', { timeout: 20000 }),
+      page.evaluate(() => { window.OSCILLA.app.exportConfig(); })]);
+    const cfgText = fs.readFileSync(await cfgDl.path(), 'utf8');
+    const cfg = JSON.parse(cfgText);
+    const n = cfg.sequencer && Array.isArray(cfg.sequencer.blocks) ? cfg.sequencer.blocks.length
+      : -1;
+    const [chooser] = await Promise.all([page.waitForEvent('filechooser', { timeout: 15000 }),
+      page.click('[data-osc="studio.import"]')]);
+    await chooser.setFiles({ name: cfgDl.suggestedFilename(), mimeType: 'application/json',
+      buffer: Buffer.from(cfgText) });
+    const opened = await until(() => page.evaluate(() => {
+      const m = window.OSCILLA.studio.model;
+      if (m.metadata.title !== 'Configuration sequence') return null;
+      const track = m.timeline.tracks[0];
+      const target = track && m.graph.nodes.find((x) => x.id === track.target);
+      return { tracks: m.timeline.tracks.length, kind: track && track.kind,
+        target: target && target.type, clips: m.timeline.clips.length,
+        pattern: m.timeline.clips.filter((c) => c.kind === 'pattern'
+          && c.trackId === track.id).length,
+        tempo: m.transport.tempo, dirty: window.OSCILLA.studio.dirty,
+        model: JSON.stringify(m) };
+    }), { ms: 15000, what: 'sequence-import: the saved config opens in Studio' });
+    // A damaged sequence is refused: the document stays as it is and the reason is shown.
+    const bad = { ...cfg, sequencer: { ...cfg.sequencer, blocks: 'none' } };
+    await page.setInputFiles('#osc-studio-import-file', { name: 'damaged.json',
+      mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(bad)) });
+    const refusal = await until(() => page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      return a.studio.warning.startsWith('Not imported') ? { warning: a.studio.warning,
+        model: JSON.stringify(window.OSCILLA.studio.model) } : null;
+    }), { ms: 15000, what: 'sequence-import: the damaged file is refused' });
+    // The track goes back out as the V2 sequence the configuration held.
+    const [seqDl] = await Promise.all([page.waitForEvent('download', { timeout: 20000 }),
+      page.evaluate(() => { window.OSCILLA.app.studioExportTrackSequence(); })]);
+    const exported = JSON.parse(fs.readFileSync(await seqDl.path(), 'utf8'));
+    const live = await H.live(page);
+    return { ...H.verdict({
+      savedConfig: cfg.kind === 'oscilla-config' && n > 0,
+      oneTrack: opened.tracks === 1 && opened.kind === 'event' && opened.target === 'sequence',
+      nPatternClips: opened.clips === n && opened.pattern === n,
+      tempo: opened.tempo === cfg.sequencer.tempoBpm,
+      clean: opened.dirty === false,
+      announced: live.includes(`Imported the configuration file's V2 sequence: ${n} pattern `
+        + `clip${n === 1 ? '' : 's'} on one track`),
+      refused: refusal.warning === 'Not imported: sequencer.blocks: The sequence blocks are not '
+        + 'a list; the file is refused.',
+      unchanged: refusal.model === opened.model,
+      exported: /\.sequence\.json$/.test(seqDl.suggestedFilename())
+        && isDeepStrictEqual(exported, cfg.sequencer),
+    }), n, opened: { ...opened, model: undefined }, warning: refusal.warning,
+    live: live.slice(-4) };
   });
 
   def('deleted-project-detaches', async ({ page }) => {

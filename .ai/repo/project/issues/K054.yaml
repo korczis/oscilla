@@ -1,0 +1,46 @@
+id: K054
+milestone: M062
+serves:
+  - "playable-instrument#chart-palette"
+title: "MEASURE faded lines get validated carriers in the guarded view descriptors"
+slug: measure-faded-lines-get-validated-carriers-in-the-guarded-vi
+priority: p2
+profile: implementation
+objective: "Lands as fix(measure). LINE_STYLES.unreliable and LINE_STYLES.context are alpha 0.45 in src/js/measurement/views/common.js:80-81 (guarded), 1.6-2.9:1 on the plot surface, and in light no alpha below 1.0 lifts --osc-green to 3:1. The renderer draws a series exactly as its descriptor says (measure-charts.js header), so the change is made in the descriptors, under a reviewer's verdict, never by overriding alpha in the renderer. A descriptor carries emphasis (primary, context, unreliable, invalid) instead of a bare alpha for fading: the palette resolves role x emphasis per theme to a colour validated at 3:1 (K027) in light always, and in dark only if Q009 answers (b); under (a) the dark faded colours keep today's contrast and are named exceptions in chart-palette, and no dark reference moves. Context lines are 1 px against the primary's 1.5 px (LINE_STYLES.primary on main) and carry a direct \"context\" label; unreliable keeps its dash, and the marker and peak-hold lines (LINE_STYLES.marker and peakHold) keep theirs and are named in the legend, so on a measured curve a dash means only unreliable; and INVALID keeps a signal of its own (the INVALID badge plus emphasis invalid) instead of the alpha cap of response-chart.js:391, so raising the faded contrast does not hide it. ui/measure's test of d.alpha < 1 (ui/measure.js:843 on main) reads emphasis. Which dark references move is Q009's answer."
+why: "Owner order of 2026-10-29: \"make the charts really sexy, modern, interactive\", for all charts; reviewer f3 scoped it to every surface that draws data. Revised after f3's review of the plan (CHANGES-REQUESTED, 2026-10-29): owner decisions are Q issues under M063, Pro chrome waits on F002 and on the card issue of its workspace, every chart that claims chart-interaction delivers the keyboard cursor and the announced readout, chart keys never take Escape or Space; revision 3 answers f3's delta review. Facts checked against origin/main at e2720e07 and the branches of #251, #253, #263 and #265 (charts-plan.md, charts-plan-changes.md)."
+scope:
+  - "src/js/measurement/views/common.js"
+  - "src/js/measurement/views/response-chart.js"
+  - "src/js/measurement/views/compare-view.js"
+  - "src/js/measurement/views/rta-chart.js"
+  - "src/js/charts/measure-charts.js"
+  - "src/js/charts/palette.js"
+  - "src/js/ui/measure"
+  - "src/js/ui/measure.js"
+  - "tests/unit/v3-views.test.mjs"
+  - "tests/unit/chart-palette.test.mjs"
+  - "tests/visual/measure"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K027"
+  - "Q009"
+  - "E002"
+  - "F004"
+  - "F005"
+  - "K039"
+acceptance_criteria:
+  - "Unit tests that fail on the merge base: every faded descriptor resolves, in light and, if Q009 answers (b), in dark, to a colour at or above 3:1 that differs from its primary (under (a) the dark ones are named exceptions); a context line differs from its primary by width and label; an INVALID result stays distinguishable from a context line (tests/unit/v3-views.test.mjs asserts emphasis invalid where it asserted alpha <= 0.45); the legend swatch of each descriptor equals its mark (chart-palette)."
+  - "The pull request carries a reviewer's verdict (src/js/measurement and src/js/ui/measure.js, src/js/ui/measure/* after E002, are guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "Units and values do not change; only how faded series are drawn (project.no-fake-science)."
+  - "The light visual-measure references, where F011 added them, are re-accepted in darwin-arm64 and linux-x64 with the reason \"faded MEASURE lines reach 3:1\"; the dark ones move only if Q009 answers (b), with the reason \"dark faded lines reach 3:1 under Q009\" (npm run test:visual)."
+  - "scripts/size-report.mjs shows at most 0.5 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of M062's figures stays within the cap Q014 records, under the 1 000 000 B gzip budget (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/v3-views.test.mjs tests/unit/chart-palette.test.mjs"
+  - "node tests/browser/v3-ui.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

@@ -21,4 +21,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-01
-updated_at: 2026-10-18
+updated_at: 2026-10-30T16:08:20Z
+started_at: 2026-10-30T16:07:55Z
+started_event: sha256:dcd1a1a893c3c27ba2346e6aa7272393df97202dcde1ceb98c5cde19f46f9d60
+completed_at: 2026-10-30T16:08:20Z
+completed_event: sha256:fc6b2339682d89c9d5851625d03b377be1df9a2a238473975eaeec1f2f994c2e
+evidence:
+  - covers: verified
+    type: ci
+    command: "npm run test:engine (CI V1 engine checks, run 40933224190 on #260)"
+    result: "V1 engine checks pass on chromium, firefox and webkit; landed in #260 via train #316 (88b936cb)"
+    artifact: "tests/browser/engine-v1port.cjs"
+    commit: e872c44489bd66ecfd8a6b58a0dd868270da3cf0
+    recorded_at: 2026-10-30T16:08:11Z

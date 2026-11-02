@@ -1,0 +1,37 @@
+id: T022
+milestone: M073
+serves:
+  - "v3-measure#readout-states"
+title: "Additive bars show a partial below the axis floor differently from a harmonic that is off"
+slug: additive-bars-show-a-partial-below-the-axis-floor-differentl
+priority: p3
+profile: implementation
+objective: "Truth-table rows LAB-07, LAB-08 (scratchpad p05/truth-table.md). Bars have three states (off at gain 0 or ≤ -96 dB, below-range, in-range); a below-range partial gets a floor marker that does not rely on colour; getBars() reports the state (K044 adds the dB rel unit and the bar tooltips); the slider shows the below-range state instead of a silent clamp."
+why: "P05 audit of origin/main b67d1e58 (v3.13.0): The default Custom table plays harmonic 9 at -81.1 dB and 10 at -85.0 dB, but bars are drawn only above -80 dB, so both look exactly like \"off\"; claim additive-coefficients-play says the bars are exactly the coefficients that play. The gain field reads -85.0 dB while the slider sits at its -60 dB minimum."
+scope:
+  - "src/js/charts/additive-chart.js"
+  - "src/js/labs/additive.js"
+  - "src/index.html"
+  - "tests/unit/readout-states-additive.test.mjs"
+  - "tests/browser/labs.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "T021"
+  - "K044"
+acceptance_criteria:
+  - "Fail-first fixture: tests/unit/readout-states-additive.test.mjs: the default Custom table gives states in for 1-8 and below for 9 and 10; fails on the merge base (no state). A labs.cjs check reads the states from the chart."
+  - "Negative cases, each asserted: An off harmonic stays off; -79.9 dB is in range; PeriodicWave coefficients unchanged (audio-synthesis.test.mjs passes)."
+  - "Revertible on its own: Revert: chart states and slider display."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named deadline (project.suite-harness, project.bounded-test-timing)."
+  - "Any new visible element follows the Flowbite Pro components and the locked tokens (project.ui-uses-flowbite-pro, project.visual-identity-lock); npm run visual passes or the baseline change is declared."
+  - "tests/README.md has a row for each new test; this issue does not edit docs/CLAIMS.yaml or the intent (T027 does)."
+validation:
+  - "npm test"
+  - "npm run verify"
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

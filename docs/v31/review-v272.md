@@ -116,7 +116,7 @@ The independent reviewer of the pull request requested changes (`.ai/repo/review
 
 ## Open
 
-- **D2: resolved on 2026-10-18.** The owner approved, and main's branch protection now requires the `gate` check with `strict: true`, so a pull request merges only when its branch is current with main and CI ran on the combined tree. A merge queue was not chosen (`project.ci-bounded` would have to allow `merge_group`).
+- **D2: resolved on 2026-10-18.** The owner approved, and main's branch protection now requires the `gate` check with `strict: true`, so a pull request merges only when its branch is current with main and CI ran on the combined tree. A merge queue was not chosen (`project.ci-bounded` would have to allow `merge_group`). **Superseded on 2026-10-30:** by the owner's decision protection keeps `gate` and drops the up-to-date requirement (`strict: false`), so a pull request can merge on a run that predates `main`, and two green pull requests can combine into a red `main`; ADR 0009's note of 2026-10-30 states what catches each and what does not.
 - **D3 (defect, Majordomus).** 0 of the 85 intent criteria read met while their milestones are DONE: Majordomus 0.29 cannot record `node --test` or Playwright runs. This is queued post-alpha in Majordomus (foreign runners as evidence).
 - **Follow-ups named by the builders:**
   - a browser check of the A5 level wiring;

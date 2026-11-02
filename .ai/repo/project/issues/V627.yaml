@@ -1,0 +1,46 @@
+id: V627
+milestone: M081
+serves:
+- "studio-box-system#first-patch-and-previews"
+title: Template and patch previews drawn from their graphs
+slug: template-and-patch-previews-drawn-from-their-graphs
+priority: p2
+profile: implementation
+objective: "P04 slice F (visual, keyboard and responsive). Lands as feat(studio-ui). The Templates dialog and the patch and project library show a thumbnail of each graph, drawn on a canvas from its model (node boxes by category colour, cables by type) by a pure layout of src/js/ui/studio/graph-thumb.js; a corrupt record shows its refusal reason instead. The thumbnail is aria-hidden; the card's text names the node count and the signal path."
+why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings S1-S14 measured on origin/main b67d1e58)."
+scope:
+- src/js/ui/studio/graph-thumb.js
+- src/js/ui/studio/patches-panel.js
+- src/js/ui/studio/workspace.js
+- src/index.html
+- tests/unit/studio-graph-thumb.test.mjs
+- tests/browser/v31-studio-workflows.cjs
+- tests/visual
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- F010
+acceptance_criteria:
+- "Before: VERIFIED (S9): templates and patches are text cards."
+- "After: thumbnails drawn from each model."
+- "Negative cases: a corrupt record shows its refusal reason instead of a thumbnail; thumbnails are aria-hidden."
+- "Rollback: revert the merge commit. Nothing changes the schema, a studioHash or a stored record, so documents saved while it was live load unchanged after the revert."
+- "tests/unit/studio-graph-thumb.test.mjs, failing on the merge base: the thumbnail layout of each template fits its box and keeps the graph's left-to-right order."
+- "Definition of done, extends: the Templates dialog of V425 and the library of V426."
+- "Definition of done, cross-links: a thumbnail opens its template or patch (the card's action), and saving a patch adds its thumbnail to the library. The link is a row of tests/browser/integration-map.json once that map (synth line K075) is on main."
+- "Definition of done, dynamics: thumbnails redraw on theme change."
+- "Definition of done, docs and routes: docs/v31/user-guide.md and .ai/repo/features/studio-signal-graph.md say what changed; tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: A check 'previews' in tests/browser/v31-studio-workflows.cjs opens the Templates dialog by pointer, by keyboard and by touch, waits with until() (deadline 'six template thumbnails drawn', 5 s) for non-empty canvases, saves a patch and waits for its thumbnail in the library; on the merge base no canvas exists. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit and the completed evidence the release that carried it; E030's judge passes on the pull request once E030 is on main."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "Wave 2: its chrome is Flowbite Pro markup adapted from the matching Pro component, lands after F002, adds no osc-* class token or legacy selector, and studio.css, studio-timeline.css, charts.css and tokens.css gain no selector or declaration; the domain drawing stays OSCILLA's own inside Pro cards (project.ui-uses-flowbite-pro, project.visual-identity-lock v2; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "scripts/size-report.mjs shows at most 2 KB gzip added, with the base and head figures in the pull request body, within the owner's dist budget of 1 200 000 B gzip (decision of 2026-10-29, about 355 KB of headroom at origin/main b67d1e58); the ceiling of this line is 35 KB gzip in all (Studio boxes 35 KB, signal generator 25 KB), stated in the milestone (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/studio-graph-thumb.test.mjs
+- node tests/browser/v31-studio-workflows.cjs --only previews
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

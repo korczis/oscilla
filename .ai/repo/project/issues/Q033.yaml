@@ -1,0 +1,21 @@
+id: Q033
+milestone: M084
+title: "Owner decision: where the signal generator lives"
+slug: owner-decision-where-the-signal-generator-lives
+priority: p2
+profile: routine
+owner: repository owner
+objective: "(a) it stays the Playground's Source panel, rebuilt on Pro by F003 and K138, with a deep link #m=playground&gen=1 that opens it with the analysis beside it; (b) a workspace of its own. The plan recommends (a): the Synth workspace (synth line Q019) is the instrument and the generator is the lab, and Q004 already decided the first screen."
+why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings S1-S14 measured on origin/main b67d1e58)."
+current_state: "Answered by the owner on 2026-10-29 (relayed by the coordinator): (b), the generator gets its own Generator workspace with its own route and navigation entry; the Playground keeps a link to it. The plan's recommendation (a) is overridden. Built by K138 (the workspace) and the slices that live in it (K137, K139-K143). Evidence must name a commit of main, so the plan change that adds this record does not record it: after that lands, a follow-up chore(plan) pull request records it as owner_decision evidence from a worktree whose HEAD is origin/main."
+scope:
+- .ai/repo/project/issues/Q033.yaml
+acceptance_criteria:
+- "The decision is recorded as evidence on this issue (covers owner_decision), either in the owner's words with date and source, or as a decision of a coordinating session under an owner delegation it quotes with its date, stating its reasoning and that the owner may override it; a worker without such a delegation never answers it."
+- The answer names (a) or (b).
+validation:
+- manual
+evidence_required:
+- owner_decision
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

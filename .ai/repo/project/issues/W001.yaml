@@ -1,0 +1,41 @@
+id: W001
+milestone: M101
+serves:
+- "instrument-kinds#kind-contract"
+title: "Instrument kinds: one defineKind declaration per kind, the generic contract test and the state-path rows, before any view"
+slug: instrument-kinds-one-definekind-declaration-per-kind-the-gen
+priority: p1
+profile: implementation
+objective: "Lands as test(ui). src/js/ui/catalog/kind.js adds defineKind() and prop descriptors in the section 79 style; src/js/ui/catalog/kinds/ declares the twelve kinds of the design (readout, meter, scope, jack, edge, transport, piano, step-grid, xy-pad, piano-roll, clip-slot, scene, channel-strip, track-header) with props, io, events and what each emits, state path, links, aria, keys, pointer, touch, minimum target, the 390x844 layout rule, reduced motion, truth rows and impl modules; G001's kind list gains them. sources.js (G001) gains the rows studio.edge, studio.clip, studio.track, notes, observation and view with their persistence sentence. The trace part is scripts/ui-catalog/trace/kinds.mjs, outside src/. Before: VERIFIED no declaration of any instrument surface; three Studio transports disagree (inventory D1); no step editor, no meter kind, no piano range contract. After: twelve declarations a test holds to their contract. Negative cases: a kind without keys for a pointer event; a key map holding Space or a bare key used twice; an event emitting an action type the Studio does not export; a state path outside the grammar; a target under 44 px without an exemption of five words; a missing truth row; an instance whose props fail its kind; a declared shape changed without a version bump. Rollback: revert; nothing imports the declarations at run time yet. Merged plan of the component follow-up (2026-10-30): The ADR 0061 resolution note for the instrument visuals is J001's (Q061 is withdrawn: ADR 0061 decisions 1 and 3 already leave to OSCILLA's domain views the surfaces Pro has no component for). Five rules join the contract test: (1) no kind binds a bare letter key, because letters belong to the armed computer-keyboard piano (K026, W007) and the workspace shortcuts; a letter action is a visible button or an item of the kind's menu; (2) a view keeps only transient interaction state (focus, an in-progress drag preview, an open entry); selection, scroll, zoom, page, folding, markers, taps, holds and latches are passed in by the owner; (3) class names are literal strings (Tailwind's content scan sees them), sizes come from SVG attributes or literal utilities, and no view writes el.style or a style attribute; (4) every mount returns { element, set, setDisabled, destroy } plus its documented extras, and commit returns true or { refused } so the refusal sentence reaches the view; (5) no runtime module interprets a declaration: each view handles its own events and keys, and the contract test proves the view's behaviour equals the declaration with a recording owner. The truth rows are T026's docs/v3/readout-truth.yaml. The param kind (N003) and the panel kind (N008) add their records to this table. The pinned digest is a hash of the declarations serialised with sorted keys and no functions."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs, knowledge and interlinking, and add more; add p5.js, WebGL and interactivity, and deploy; a full DAW, a full sequencer and a full piano, everything interlinked, clickable, parameterized and joined; knobs, sliders and control panels done one generic way, integrated with Majordomus; the landing easy to use, easy to extend and open to hack; mobile first. The architecture still binds: one AudioEngine, the Studio model canonical, typed ports, one offline file under the 1.2 MB gzip budget, the cockpit identity, no fake science, Flowbite Pro (ADR 0061). Design: the instrument-kinds design of 2026-10-29 (scratchpad components-followup/components-new.md), on the component-system design (G001-G019) and the synth and studio-siggen drafts of the same day, facts checked against origin/main cdda563c."
+scope:
+- src/js/ui/catalog
+- scripts/ui-catalog/trace/kinds.mjs
+- tests/unit/ui-kinds.test.mjs
+- tests/unit/ui-kinds-digest.json
+- tests/README.md
+depends_on:
+- G001
+- J001
+acceptance_criteria:
+- "tests/unit/ui-kinds.test.mjs fails on the merge base and checks, for every declared kind: unique kind and version; defaults that validate; io entries from the closed list; every event's emits is a Studio action type exported under src/js/studio (NODE_PARAM_SET, CLIP_UPDATE, EDGE_ADD, ...), a transport-commands.js command, a note-router call, view or null; state paths under the grammar and known to sources.has(); links resolving under G007's grammar or a workspace route; an allowed WAI-ARIA role; no Space and no bare key used twice; every pointer and touch event reachable by a key; every key listed in the shortcuts table of src/js/ui/shortcuts.js; a minimum target of 44 px or an exemption of at least five words; a non-empty 390x844 rule; a reduced-motion rule for every live kind; truth rows that exist; impl modules that exist or are named by the issue that adds them."
+- "Negative cases, each a fixture the test refuses: the eight of the objective."
+- "tests/unit/ui-kinds-digest.json pins each kind's shape (props, events, keys) with its version; a change of shape without a version bump fails."
+- "The static scan of the design's section 1.5 runs over src/js/ui/kinds and the kinds' model modules: The kind's modules pass W001's static scan: no import of src/js/studio/actions.js, a store, sources.js or a lab module; no dispatch or owner writer called; no AudioContext, AudioNode or worklet created (project.audio-engine-discipline v2: one AudioEngine); no requestAnimationFrame, setInterval or setTimeout outside src/js/charts/frame-loop.js; no allocation in a frame callback (1000 ticks keep the same typed arrays) and frameSubscriberCount() returns to its value after destroy()."
+- "Definition of done, extends: G001's catalogue and kind list, G003's parameter model and the section 79 descriptor; no second registry."
+- "Definition of done, interlinks: every kind names the links it opens and is opened by; G016's link graph reads them."
+- "Definition of done, interactivity: the declarations are the interaction contract every later view slice is tested against; no view ships here, so no browser check is owed (stated in the pull request)."
+- "Definition of done, docs, menus and routes: the kind's declaration names its docs, links and tests; docs/ui-catalog.md (G014) lists it; the Keyboard shortcuts dialog lists its keys; tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Its trace entry in scripts/ui-catalog/trace/kinds.mjs names the intent criterion, this issue, its rules, ADRs and tests, each resolved by the trace check, for the Majordomus knowledge projection."
+- "No input path of the build gains a components, widgets, ui-kit or design-system segment (the COMPONENT_LIBRARY check of scripts/ui-flowbite-pro-measure.mjs): declarations live in src/js/ui/catalog/kinds, views in src/js/ui/kinds."
+- "It adds no markup, class token, selector or inline style, so it may land before F001; tests/unit/ui-flowbite-pro-baseline.json stays equal (node scripts/ui-flowbite-pro-record.mjs --check; node --test tests/unit/ui-flowbite-pro.test.mjs) (project.ui-uses-flowbite-pro)."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat change it carries a unit test that fails on the merge base (project.fail-first)."
+- "scripts/size-report.mjs shows at most 1 KB gzip added, compiled CSS included, with the base and head figures in the pull request body, inside the component line's cap Q037 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+- node --test tests/unit/ui-kinds.test.mjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-30'

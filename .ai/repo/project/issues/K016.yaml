@@ -1,0 +1,50 @@
+id: K016
+milestone: M061
+serves:
+  - "playable-instrument#live-analysis-views"
+title: "Live views of the Scope, Spectrum, Spectrogram, Meter and RTA nodes"
+slug: live-views-of-the-scope-spectrum-spectrogram-meter-and-rta-n
+priority: p1
+profile: implementation
+objective: "Lands as feat(studio-ui). Wave 2, first: the largest inert surface. Each analysis node paints live from its adapter's info.reader into an Inspector Pro card and a mini canvas on its node card, as one subscriber of src/js/charts/frame-loop.js over visible nodes only, and says \"No signal\" and \"Live only\" where that is the truth. It waits on F002 and F008 of #251 (intent ui-flowbite-pro; F002 needs F001), on E004, which splits the inspector, on K053 of M062, the chart interaction kit whose census, keyboard cursor and readouts its views use, and on K036 of M062, whose frame loop takes a host and an essential flag; the plan change that added M062 named these edges. Through K053 and K028 it also waits on the charts owner decisions Q014 (the gzip cap) and Q016 (the home of M062) of M063. Its loop is a subscriber of src/js/charts/frame-loop.js registered with its views' hosts, not a rAF chain of its own (playable-instrument#chart-cost). Merged plan of the component follow-up (2026-10-30): The Meter node's mini view is W003's face density and the Scope node's mini is W004's kind."
+why: "Owner direction of 2026-10-29 (session oscilla-b0): OSCILLA becomes a playable, patchable instrument and an audio-band signal lab; the plan checked every fact it relies on against main at 8b5792cd, and the sizes it quotes are unchanged at e2720e07."
+scope:
+  - "src/js/ui/studio"
+  - "src/js/studio/adapters"
+  - "src/index.html"
+  - "src/partials"
+  - "tests/unit/studio-live-views.test.mjs"
+  - "tests/browser/v31-studio-runtime.cjs"
+  - "tests/README.md"
+  - "dist"
+  - "tests/unit/chart-host-census.json"
+  - "tests/browser/charts-interaction.cjs"
+  - "tests/visual/charts"
+depends_on:
+  - "E004"
+  - "F002"
+  - "F008"
+  - "K053"
+  - "K036"
+  - "W003"
+  - "W004"
+acceptance_criteria:
+  - "A unit test, failing on the merge base, shows the live views painting as one subscriber of src/js/charts/frame-loop.js registered with the hosts of all its views (K036's hosts option): only visible analysis nodes paint, no rAF of its own is requested, and it unsubscribes when none is visible."
+  - "A browser check shows each of the five node kinds painting during play and stating \"No signal\" when stopped. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline and assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac) (project.suite-harness, project.bounded-test-timing)."
+  - "Any new chrome is Flowbite Pro markup adapted from the matching Pro block and lowers or keeps the ratchet (project.ui-uses-flowbite-pro, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs); controls are Pro range sliders with number inputs; a continuous instrument parameter in the Synth workspace is the knob of K058 (D11, Q018, superseding D5 there)."
+  - "A reviewer's verdict is needed if it touches src/js/studio (project.review-verdict); fail-first holds."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+  - "Its chart hosts (the Scope, Spectrum, Spectrogram and RTA node views in their Inspector cards, kind plot or rows) enter tests/unit/chart-host-census.json as done in this change (they do not exist when K053 lands, so they are never pending), each carrying data-osc-chart, and the table-driven pass of tests/browser/charts-interaction.cjs holds for each: the host is role=group holding the aria-describedby summary and the snapshot data table, and its focusable plot surface is role=application with aria-roledescription \"interactive chart\" (never role=img), both asserted in the accessibility tree, with a visible focus ring; ArrowRight moves the cursor one step and the one polite live region announces the readout once after the keys settle; Escape clears the cursor and still reaches the page's stop (a playing tone stops); Space keeps its workspace meaning (SPACE_MEANING of src/js/ui/shortcuts.js) and is never taken (ADR 0050); on a touch pointer a tap pins the cursor and it stays after the finger lifts. It lands before K050 of M062 through K048 or K033, so its hosts are in the census when K050 captures the per-host references; if scripts/visual-charts.mjs already exists, each host it adds gets its light and dark reference, bound and expected colours in the same change, which also opens the M063 question that re-accepts the light references."
+  - "Its hosts (the Meter node view in its Inspector card) enter tests/unit/chart-host-census.json as done in this change (they do not exist when K053 lands, so they are never pending) as kind meter: role=meter with aria-valuetext that states the value and its unit, rewritten at most 4 times a second, an aria-describedby summary of the window and the estimate, and no keyboard cursor (a meter has no axis to move along); tests/browser/charts-interaction.cjs checks the role, the valuetext and the summary."
+  - "Its thumbnail hosts (the node-card mini canvases of the five node kinds) enter tests/unit/chart-host-census.json as done in this change as kind thumbnail, each naming the done host it previews: the thumbnail is aria-hidden and has no focusable descendant (no tabindex, no role=application, no control), so it passes aria-hidden-focus; tests/browser/charts-interaction.cjs checks that it is absent from the accessibility tree and from the tab order, and that the host it names is done."
+  - "tests/browser/chart-cost.cjs passes with the live views painting: they add no rAF chain of their own (the Studio transport tick's own chain stays a pending check until K057 moves it onto the frame loop)."
+validation:
+  - "node --test tests/unit/studio-live-views.test.mjs"
+  - "node tests/browser/v31-studio-runtime.cjs"
+  - "npm run release-gate"
+  - "node tests/browser/charts-interaction.cjs"
+  - "node tests/browser/chart-cost.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-30

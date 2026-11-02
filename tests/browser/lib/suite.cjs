@@ -34,6 +34,9 @@ const README = path.resolve(__dirname, '..', '..', 'README.md');
 const EXIT_USAGE = 2;
 const DEFAULT_EVALUATE_MS = 300000;
 const DEFAULT_LOAD_WAIT_MS = 600000;
+// OSC_LOAD_MAX's default is this many times the core count (tests/README.md states it, held by
+// tests/unit/browser-suite-contract.test.mjs).
+const LOAD_MAX_PER_CORE = 2;
 const LOAD_POLL_MS = 5000;
 // Properties a runtime probes on any object (await, JSON, util.inspect, ESM interop).
 const BENIGN_PROPS = new Set(['then', 'toJSON', 'inspect', 'default', '__esModule', 'constructor']);
@@ -133,7 +136,7 @@ async function loadGate({
     return { waitedMs: 0, load: first, max: null, ci: true };
   }
   const given = Number(env.OSC_LOAD_MAX);
-  const max = Number.isFinite(given) && given > 0 ? given : 2 * cores;
+  const max = Number.isFinite(given) && given > 0 ? given : LOAD_MAX_PER_CORE * cores;
   const givenWait = Number(env.OSC_LOAD_WAIT_MS);
   const boundMs = Number.isFinite(givenWait) && givenWait > 0 ? givenWait : DEFAULT_LOAD_WAIT_MS;
   const start = now();
@@ -416,6 +419,8 @@ module.exports = {
   KNOWN_BROWSERS,
   KNOWN_ORIGINS,
   DEFAULT_EVALUATE_MS,
+  DEFAULT_LOAD_WAIT_MS,
+  LOAD_MAX_PER_CORE,
   UsageError,
   SuiteError,
   parse,

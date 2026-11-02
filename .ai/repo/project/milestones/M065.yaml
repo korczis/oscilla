@@ -1,0 +1,19 @@
+id: M065
+title: "Instrument wave 1b: the piano keyboard, one note source and a proper step sequencer"
+slug: instrument-wave-1b-the-piano-keyboard-one-note-source-and-a
+order: 65
+priority: p1
+problem: "The V2 block sequencer composes sound patterns, not notes (ADR 0058); the Studio has no step clip, no note source and no keyboard; K026 plans a Playground keyboard only."
+outcome: "A steps clip on the Studio timeline played sample-accurately on the one transport, with per-step note, gate, velocity, accent, slide, ratchet and seeded probability, swing, tap tempo, a fully keyboard-operable grid with clear playback, record, transpose and scale tools; one piano component played by pointer, touch, two-row keys and MIDI, lit from every source, and an instrument picker."
+acceptance_criteria:
+  - "K065, K066, K067, K068, K069, K070 are done with their evidence; npm run release-gate passes at the last one; npm run test:synth and node tests/browser/integration-map.cjs pass."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "K067 and K068 change src/js/studio and need a reviewer's verdict."
+  - "K065 extends K026 (shared component) and waits on V502 through it."
+  - "Space stays the transport everywhere the transport plays (ADR 0050); sustain is MIDI CC64 and a toggle."
+created_at: 2026-10-29
+updated_at: 2026-10-29

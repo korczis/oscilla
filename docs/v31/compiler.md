@@ -8,7 +8,9 @@ runtime patching). ADR 0035 says why; this document says how. Code:
 | --- | --- |
 | `src/js/studio/compiler.js` | `compileStudio` (model → plan), `diffPlans`, `instantiateNode`, `createEdgeHandle`, `computeBases`, `disposeHandle` |
 | `src/js/studio/runtime.js` | `createStudioRuntime`: id → handle map, transactional `apply`, `start` / `stop` / `dispose`, `debugInfo`, owned parameters (`setOwnedParams`, `baseOffset`) |
-| `src/js/studio/adapters/nodes.js` | one adapter per registry node type, built only from existing builders |
+| `src/js/studio/adapters/nodes.js` | the adapter contract (header) and `NODE_ADAPTERS`, one adapter per registry node type, built only from existing builders |
+| `src/js/studio/adapters/{sources,modulation,processing,output,analysis,measurement}.js` | the adapters by node category, as the definitions in `src/js/studio/nodes/` (K005) |
+| `src/js/studio/adapters/common.js` | the helpers the adapters share (`setParam`, `free`, `linearOnly`, `inertHandle`) |
 | `src/js/studio/adapters/engine-hooks.js` | the single place that touches the AudioEngine instance; accounting closures |
 | `src/js/studio/adapters/ramp.js` | click-free route ramps (ADR 0001 applied to edge gains) |
 
@@ -42,15 +44,17 @@ The runtime never creates an AudioContext or an output chain. It takes the appli
 | Sweep | `audio/patterns.js#buildPlan` | log, 1-30 s, start < end: `renderStimulus` buffer (the exact digital reference); otherwise the engine `ramps` topology (`engine._osc`, frequency ramp, linear fades) and no reference, with a reason |
 | Sequence | `sequencer/compiler.js#compileSequence` | a level bus exposed as `info.destination` + `info.accounting` for the timeline's `compileSequence` voices |
 | Microphone | `audio/microphone.js#openMicrophone` | `openMicrophone` → output gain (analysis only); degraded without getUserMedia or until the Inspector's Allow microphone; its tracks stop on dispose, also when the context closes |
-| LFO | `audio/modulation.js#buildLfo` | `engine._osc` as modulator; the depth gain belongs to the edge |
+| LFO | `audio/modulation.js#buildLfo` | `engine._osc` as modulator, its rate clamped by `hooks.clampFrequency` (K010: up to 0.95 × Nyquist, audio rate; `computeBases` reports a clamped rate in `limitedParams`); the depth gain belongs to the edge |
 | Envelope | `audio/envelope.js#applyAdsr` | `applyAdsr` / `releaseAt` on a VCA gain and on a ConstantSourceNode offset (contour 0..1) |
 | Random | `audio/noise.js#mulberry32` | seeded values in a looping AudioBuffer (`steppedControl`); clocked (below): a ConstantSourceNode holding one value per trigger (`clockedControl`) |
 | Step Modulator | `audio/scheduler.js#scheduleSteps` | the step list in a looping AudioBuffer (`once`: holds the last step); clocked: a ConstantSourceNode holding one step per trigger (`clockedControl`; `once`: stays on the last step) |
+| Macro | `audio/audio-engine.js#AudioEngine` | one ConstantSourceNode whose offset is the value (0..1, unipolar output, K013); degraded with a reason without ConstantSourceNode |
 | Gain | `audio/audio-engine.js#AudioEngine` | GainNode |
-| Filter | `audio/filters.js#createFilterStage` | `createFilterStage` (glides, bypass crossfade, Q conversion) |
+| Filter | `audio/filters.js#createFilterStage` | `createFilterStage` (glides, bypass crossfade, Q conversion); K011 adds low-shelf, high-shelf and all-pass: Q modulation on a shelf is an inactive route with its reason (Web Audio ignores it), gain modulation applies to peaking and the shelves |
 | Pan | `audio/stereo.js#createStereoRouter` | StereoPannerNode on a 1-channel input (the engine's `buildDual` panner); fallback `createStereoRouter` 'pan' mode |
 | Stereo Split | `audio/stereo.js#createStereoRouter` | `createStereoRouter` |
 | Mixer | `audio/audio-engine.js#AudioEngine` | one level GainNode per input into a sum (the only summing node, §188) |
+| Drive | `audio/drive.js#createDriveStage` | drive GainNode → tanh WaveShaperNode (`oversample` 4x, the curve scaled by `DRIVE_HEADROOM` for the ordinary resampling overshoot) → trim GainNode ≤ 1 → clip WaveShaperNode (`oversample` none, identity inside ±`DRIVE_CLIP` 0.95, held there beyond): the output peak is at most 0.95 whatever the input, drive or trim edge (K012) |
 | Scope, Spectrum, Meter | `analysis/analyser.js#createAnalyserReader` | AnalyserNode + `createAnalyserReader` |
 | Spectrogram | `analysis/spectrogram.js#createSpectrogram` | AnalyserNode + reader; the view binds `createSpectrogram(canvas)` |
 | RTA | `measurement/rta.js#createRtaAverager` | AnalyserNode + reader + `createRtaAverager` |
@@ -104,7 +108,16 @@ The runtime then instantiates the plan in order and routes it:
   to fit above the frequency (a lane's peak counts as its reference), a positive one lowers the
   cap of the frequency's own edges, and the upward excursion of the detune's edges is scaled to
   what is left; a static base lowered this way is listed in `debugInfo().limitedParams`
-  (`{ node, param }`), a scaled edge in `limitedEdges`. That lowering is not an edge offset:
+  (`{ node, param }`), a scaled edge in `limitedEdges`. Each of them is also a
+  `frequency-limited` diagnostic while the graph runs (T023, below), so the Inspector says
+  what plays: the field reads "30.00 kHz, plays 22.80 kHz" (with cables, "20.00 kHz
+  (25.00 kHz with cables), plays 22.80 kHz") with a note naming the cap that applied, and the
+  Runtime section no longer says the revision "plays as edited" but how many values it lowered
+  and why. Every frequency (Hz) parameter is held at or below the lower of its own range
+  maximum and 0.95 × Nyquist (`caps`, with `bound` `range` or `nyquist`): a Random's or a Step
+  Modulator's Rate stops at 100 Hz, the top of its range, and the diagnostic says so, not
+  0.95 × Nyquist (an LFO's Rate reaches audio rate since K010, so its cap is 0.95 × Nyquist).
+  That lowering is not an edge offset:
   `runtime.baseOffset` leaves it out, so a detune lane, which overrides the static value, plays
   its own values within its own bound (review V272 R-1). Other parameters are not clamped at
   audio rate (an AudioParam sum cannot be); when base ± modulation can leave the range it is
@@ -262,7 +275,8 @@ runtimeSourceCount, handleCount, routedEdgeCount, pendingCleanups, engineNodeCou
 engineSourceCount, degraded, inactiveEdges, limitedEdges, limitedParams, exceeds, warnings,
 diagnostics, lastOps, lastError, applied, ownedParams }`. `degraded` and `inactiveEdges` are
 `{ id, status, code, reason }` (the live handle's or route's, else the plan's); `diagnostics`
-holds validation's warnings and the runtime's own, structured; `warnings` is their message text.
+holds validation's warnings and the runtime's own, structured, including the
+`frequency-limited` diagnostics in effect; `warnings` is their message text.
 
 ## Runtime truth (ADR 0039)
 
@@ -282,7 +296,7 @@ the transport:
 `owner` is one of `DIAGNOSTIC_OWNERS` (`validate`, `compiler`, `runtime`, `transport`).
 `code` is the machine reason that a consumer branches on, and `message` is display prose that
 nobody parses. `entity` names the node, edge, clip or lane the diagnostic is about. `details`
-is optional plain data, reserved: no producer sets it yet. Validation
+is optional plain data; `frequency-limited` is the one producer that sets it. Validation
 keeps its compatibility fields `path`, `nodeId?`, `edgeId?` and `detail?` (a cycle's node names,
 as prose). A plan node or edge, a runtime handle or route, and a transport `unplayed` entry carry
 the same `code` beside their display `reason`. `code` is `null` when there is no reason. The
@@ -299,6 +313,7 @@ status maps the views read (`compiledStatus`, `compiledEdgeStatus`, `runtimeStat
 | runtime | handle `code` | `mic-pending` (waiting for the input), `mic-error` (the input failed to open), `mic-ended` (its track ended by itself: permission withdrawn, device gone); otherwise the plan node's. A settled handle is announced as the runtime event `'handle'` |
 | runtime | route `code` | `no-output`, `no-input`, `no-mod-target` (the handles cannot make the route); otherwise the plan edge's |
 | runtime | `apply` warnings, `debugInfo().diagnostics` | `update-failed`, `parameters-failed`, `output-failed`, `engage-failed`, `stop-failed` (entity: node), `route-failed` (entity: edge): a guarded step after the commit that threw; `commit-failed` (no entity): any other throw after the commit. `engage-failed` and `commit-failed` stay in `diagnostics` while unresolved (`runtime.unresolved()`, the `degraded` verdict) |
+| runtime | `apply` / `start` warnings, `debugInfo().diagnostics` (warning) | `frequency-limited` (T023): a value the running graph plays below what the model and its cables ask, because `computeBases` holds a frequency (Hz) parameter at or below its cap, the lower of its range maximum and 0.95 × Nyquist. Entity: the node, for a base that plays lower (a frequency, an Oscillator's detune), with `details` `{ node, param, unit, stored, offset, cents, asked, played, base, target, cap, bound, safeMaximum, sampleRate }`: `offset` is the constant part its linear cables add, `cents` the constant cents its log cables ask, `asked` what that asks and `played` what sounds, for a frequency the AudioParam `base` shifted by the log cables' constant cents (30 kHz with a −1 octave log offset at 48 kHz: base 22.8 kHz, plays 11.4 kHz; 20 kHz with a +5 kHz cable offset: asks 25 kHz, plays 22.8 kHz); `target` is the parameter whose cap applied (an Oscillator's detune spends its frequency's) and `bound` `range` or `nyquist`. Or the edge, for a CONTROL edge it limited, with `stored` and `played` its depth (in the parameter's unit, octaves for a log mapping), `mapping`, `scale`, the same `target`, `cap` and `bound`, and `offsetStored` / `offsetPlayed` (octaves) when the log cables' constant offset was lowered. The text is built when read from the plan in effect, so a rename names the node as it is now. In effect while the graph runs (none while stopped); a base an automation lane owns is left out (its lane plays, bounded on its own). The audio is unchanged: these only report what `computeBases` already does (`compiler.js` `frequencyLimits`) |
 | runtime | `lastError.errors`, a refused `apply` / `start` | `prepare-failed` (entity: the node or edge whose preparation threw), `start-failed`, `nothing-compiled`, `disposed`; a validation refusal carries validation's diagnostics |
 | transport | `debugInfo().diagnostics`, the `'warning'` event | `edit-refused` (the commit gate refused a live edit), `sync-refused` (the runtime refused a synced model), both with the runtime diagnostic's entity, `automation-failed` (entity: lane), `measurement-callback-failed`, `timeline` (a timeline-compiler warning, its prose as the message). One diagnostic per code and entity (per code and message without an entity); a newer one replaces the older |
 | transport | `debugInfo().lastError` (a Diagnostic plus `phase`), `start()`'s `code` | PLAY refused: `disposed`, `claim-failed` (the output claim threw), `claim-refused`, `play-refused` (the runtime refused to apply or start the model; entity: the runtime diagnostic's); or a live edit's `edit-refused` / `sync-refused` |
@@ -600,7 +615,11 @@ method (an engine change, out of this issue's scope):
   `transport.start()` calls the injected `onClaimOutput({ owner: 'studio', position })` before
   anything is built; the UI stops the Playground voice there (`engine.release()` /
   `stopAll()`), and a hook returning `false` refuses PLAY. When the Playground starts a voice,
-  the UI calls `transport.stop()`. `audio-engine.js` is unchanged.
+  the UI calls `transport.stop()`. `audio-engine.js` is unchanged. The V2 pattern sequencer is
+  a third owner (C002): its Play asks `claimOutput()` before it schedules a pass and again
+  before each loop pass, and `main.js` answers from the same owner table as the `engine.play`
+  wrapper. It releases the instrument and stops the Studio, and is refused while a measurement
+  owns the output; a Playground voice or Studio PLAY stops a playing sequence first.
 - **Automated parameters belong to their lane.** For a parameter with an automation lane the
   runtime does not glide its base value; the lane owns the AudioParam and modulation edges add on
   top (`automation.js` `combineAutomationAndModulation`).

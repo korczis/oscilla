@@ -1,0 +1,62 @@
+id: K037
+milestone: M062
+serves:
+  - "playable-instrument#chart-interaction"
+  - "playable-instrument#chart-states-honest"
+  - "playable-instrument#chart-cost"
+title: "MEASURE and Experiments readouts rendered, announced, live-honest and gated while hidden"
+slug: measure-and-experiments-readouts-rendered-announced-live-hon
+priority: p2
+profile: implementation
+objective: "Lands as feat(measure). createViewChart in src/js/charts/measure-charts.js keeps zoomX, pinIdx and lastIdx across build() and moves its chip onto the kit's Pro tooltip inside the host (a body-anchored tooltip would bring K015 F2 back). Today meas.readout and exps.readout are Alpine writes on every pointer move that nothing renders, and the chip is aria-hidden: the chip and onReadout now update when cursor.idx changes and, for the live RTA, at most 4 times a second with a LIVE marker while the pointer is still (a frame redraw does not move uPlot's cursor, so the band text is stale today). Each chart gets a visible Pro description-list readout row, hidden until a cursor exists, not itself aria-live: announcements go through the kit's one polite region after the keys settle. Keys are the kit's one key map (arrows one step, PageUp and PageDown a large step: 10 points on a linear axis, 1/3 octave on a log one, Home and End, Escape clears and propagates); Escape on a focused MEASURE chart still aborts a running measurement and stops output (the MEASURE row of shortcuts.js). New readouts: IR (ms re direct peak; where decimation.factor > 1 a column reads \"column 3.20-3.24 ms: min, max (48 samples)\"), the overlay (each entry at its nearest stored or resampled point, \"resampled to 48/oct for display\" where the grid is resampled, \"NOT MEASURED\" in gaps) and the IR overlay; RTA band hover \"1/3 oct . 1 kHz (891-1122 Hz) . -23.4 dB rel\", saying where a band is under-resolved with the threshold measurement/rta.js uses. The live RTA's liveTick (ui/measure.js:962-968 on main, subscribed without a host at :1062) passes its host to onFrame, so a hidden RTA reads no analyser and pushes nothing, and its pending check in tests/browser/chart-cost-baseline.json is removed; a peak hold cannot cover reads it never made, so on return the RTA restarts its hold and says \"peak hold restarted: not read while hidden\". The Experiments detail chart (#osc-exp-chart-detail, experiments.js:547 on main, built on createViewChart) is a host of this slice. The 11 osc-m-chip uses of src/index.html are MEASURE, Experiments and Findings header badges, F004's and F005's work, not chart chips."
+why: "Owner order of 2026-10-29: \"make the charts really sexy, modern, interactive\", for all charts; reviewer f3 scoped it to every surface that draws data. Revised after f3's review of the plan (CHANGES-REQUESTED, 2026-10-29): owner decisions are Q issues under M063, Pro chrome waits on F002 and on the card issue of its workspace, every chart that claims chart-interaction delivers the keyboard cursor and the announced readout, chart keys never take Escape or Space; revision 3 answers f3's delta review. Facts checked against origin/main at e2720e07 and the branches of #251, #253, #263 and #265 (charts-plan.md, charts-plan-changes.md)."
+scope:
+  - "src/js/charts/measure-charts.js"
+  - "src/js/measurement/views/ir-chart.js"
+  - "src/js/measurement/views/compare-view.js"
+  - "src/js/measurement/views/rta-chart.js"
+  - "src/js/ui/measure"
+  - "src/js/ui/measure.js"
+  - "src/js/ui/experiments.js"
+  - "src/index.html"
+  - "src/partials"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "src/styles/charts.css"
+  - "src/styles/measure.css"
+  - "tests/unit/v3-views.test.mjs"
+  - "tests/unit/measure-readouts.test.mjs"
+  - "tests/browser/v3-ui.cjs"
+  - "tests/visual"
+  - "tests/browser/chart-cost.cjs"
+  - "tests/browser/chart-cost-baseline.json"
+  - "tests/unit/chart-host-census.json"
+  - "tests/browser/charts-interaction.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "E002"
+  - "F004"
+  - "F005"
+  - "K053"
+  - "K036"
+acceptance_criteria:
+  - "tests/unit/measure-readouts.test.mjs, failing on the merge base: irReadoutAt gives sample text undecimated and column text decimated; the overlay readoutAt carries the resampled flag and \"NOT MEASURED\" in gaps; the RTA band-edge formatter; a live frame under a still cursor refreshes the band text within the live-readout bound."
+  - "tests/browser/v3-ui.cjs: hovering grid point i makes the chip text equal view.readout(i).lines; ArrowRight moves exactly one index; pointer moves within one index cause no extra Alpine write; the IR chart has a readout; with a measurement running, Escape on a focused MEASURE chart aborts it. tests/browser/chart-cost.cjs: the hidden live RTA check passes (no analyser read while its tab is hidden) and is no longer pending. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline and assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac); tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Its chart hosts (MEASURE response, IR and RTA; Experiments detail, overlay, delta and IR overlay) move from pending to done in tests/unit/chart-host-census.json, each carrying data-osc-chart, and the table-driven pass of tests/browser/charts-interaction.cjs holds for each: the host is role=group holding the aria-describedby summary and the snapshot data table, and its focusable plot surface is role=application with aria-roledescription \"interactive chart\" (never role=img), both asserted in the accessibility tree, with a visible focus ring; ArrowRight moves the cursor one step and the one polite live region announces the readout once after the keys settle; Escape clears the cursor and still reaches the page's handler (a running measurement aborts); Space keeps its workspace meaning (SPACE_MEANING of src/js/ui/shortcuts.js) and is never taken (ADR 0050); on a touch pointer a tap pins the cursor and it stays after the finger lifts."
+  - "Units do not change: Magnitude dB relative or NORMALIZED, RTA dB relative (dBFS-like) unless a valid LevelCalibration applies, IR re direct peak; the strings join the wording table (project.no-fake-science)."
+  - "The pull request carries a reviewer's verdict (src/js/measurement, src/js/ui/measure.js (src/js/ui/measure/* after E002) and src/js/ui/experiments.js are guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "Chart chrome (legend, toolbar, toggle, badge, tooltip, readout row) is Flowbite Pro markup adapted from the matching Pro component and lands after F002 turned on preflight and the form base styles (the border trap of review #253, R-3) and after F004 and F005 placed the card it sits in; no osc-* class token or legacy selector is added and src/styles/tokens.css, charts.css, measure.css, studio.css and studio-timeline.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+  - "Every osc-* use it removes leaves the record in the same change: tests/unit/ui-flowbite-pro-baseline.json is rewritten by node scripts/ui-flowbite-pro-record.mjs (osc-chip-readout and osc-chip-readout--stack fall by the measure chip's use; the change that removes the last osc-chip-readout use deletes the selector), and a selector left without a producer is deleted from src/styles/charts.css and src/styles/measure.css (.osc-chip-readout--stack at measure.css:556 on main) (tests/unit/css-producers.test.mjs); the pull request states by how much the debt fell."
+  - "The visual-measure references do not move (the pointer is parked at (0, h-1) and the readout row is hidden until a cursor exists); one that does is re-accepted in both environments with its reason."
+  - "scripts/size-report.mjs shows at most 3 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of M062's figures stays within the cap Q014 records, under the 1 000 000 B gzip budget (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/measure-readouts.test.mjs tests/unit/v3-views.test.mjs"
+  - "node tests/browser/v3-ui.cjs"
+  - "node tests/browser/chart-cost.cjs"
+  - "node tests/browser/charts-interaction.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

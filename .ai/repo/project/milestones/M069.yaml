@@ -1,0 +1,19 @@
+id: M069
+title: "Instrument wave 3: the XY performance pad, notes clips, MIDI record and out, the session grid"
+slug: instrument-wave-3-the-xy-performance-pad-notes-clips-midi-re
+order: 69
+priority: p3
+problem: "There is no performance pad, no note clip or piano roll, no MIDI recording into clips, no MIDI output and no clip-launch grid."
+outcome: "An XY pad with scale-quantised pitch, a loop recorder and a gate arpeggio; notes clips with a piano roll; MIDI recorded into clips and sent out where permitted; a session grid of tracks by scenes launched on the bar; one patch browser across instruments."
+acceptance_criteria:
+  - "K097, K098, K099, K100, K101, K102 are done with their evidence; npm run release-gate passes at the last one; npm run test:synth and node tests/browser/integration-map.cjs pass."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "K101 follows V601's schema step; K099 follows V505; K100 follows V502."
+  - "The owner's full-DAW direction of 2026-10-29 (about 22:00) put these in scope; they still come after the playable core (Waves 1 and 2), ranked by user value."
+  - "ADR 0058's amendment note of 2026-10-29 moves MIDI output and multiple tracks into scope."
+created_at: 2026-10-29
+updated_at: 2026-10-29

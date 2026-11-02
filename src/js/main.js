@@ -21,7 +21,10 @@
 // engine.play is wrapped once (instance property) so every play — instrument, Learn demo,
 // preset — carries the V2 options: ADSR (envelope lab), the filter insert (filter lab; always
 // inserted, its own crossfaded bypass handles "disabled"), the additive PeriodicWave and the
-// stereo router for dual plans.
+// stereo router for dual plans. audio/lab-play-options.js builds them, with every key present
+// (value or null), for the realtime wrapper and the WAV render alike, so the current lab state
+// wins over the options a restarted voice copies (C007). With the Envelope on, notes of known
+// length (finite tone, steps, ramps) take the whole ADSR through o.stepEnvelope.
 
 import Alpine from 'alpinejs';
 import p5 from 'p5';
@@ -32,9 +35,13 @@ import { applyAdsr, releaseAt } from './audio/envelope.js';
 import { createStereoRouter } from './audio/stereo.js';
 import { createFilterStage } from './audio/filters.js';
 import { buildPeriodicWave } from './audio/additive.js';
+import {
+  followEnvelopeLab, labPlayOptions, withLabOptions,
+} from './audio/lab-play-options.js';
 import { encodeWav, parseWav } from './audio/wav.js';
 import { buildPlan, planFreqAt, PATTERNS } from './audio/patterns.js';
 import { createVisualizationBridge } from './visualization/visualization-bridge.js';
+import { requestedFrequencyFor } from './visualization/output-owner.js';
 import { startVisualizer, createDefaultViews } from './visualization/p5-host.js';
 import { harmonicTable } from './visualization/harmonics.js';
 import { createInstrument } from './core/instrument.js';
@@ -49,24 +56,33 @@ import {
 import { nearestNote, noteToFrequency } from './core/music.js';
 import { BUILTIN_PRESETS } from './data/presets.js';
 import { LEARN_TOPICS } from './data/learn.js';
+import { createCrossLinksUi } from './ui/cross-links.js';
 import { serializeSequence } from './sequencer/model.js';
 
 import { registerOscillaUi, workspaceTitle } from './ui/app.js';
-import { keyGuard, openModal, closeModal, watchDialogs, focusSafely } from './ui/dialogs.js';
+import {
+  keyGuard, openModal, closeModal, watchDialogs, focusSafely, keepFocusInView,
+} from './ui/dialogs.js';
 import { instrumentTakesSpace, isSpace } from './ui/shortcuts.js';
-import { createWorkbench } from './ui/workbench.js';
+import { createWorkbench, followSequenceEdits } from './ui/workbench.js';
+import { createOutputOwner } from './ui/output-owner.js';
 import { createNavigation, v1ModeFor } from './ui/navigation.js';
 import { createUnsavedGuard } from './ui/unsaved.js';
+import { sequenceDigest } from './sequencer/editor.js';
 import { createMeasureUi } from './ui/measure.js';
 import { createExperimentsUi } from './ui/experiments.js';
 import { createFindingsUi } from './ui/findings.js';
 import { createConnectionsUi } from './ui/connections.js';
 import { createStudioUi } from './ui/studio/workspace.js';
+import { startFlowbiteAfterAlpine } from './ui/flowbite.js';
 import { createMidiUi } from './midi/ui.js';
 import { createScopeView, createHarmonicBarsView } from './ui/p5-views.js';
-import { buildConfigExport, parseConfigImport, CONFIG_FILE_VERSION } from './ui/config-file.js';
+import {
+  buildConfigExport, parseConfigImport, CONFIG_FILE_VERSION, limitedValues,
+} from './ui/config-file.js';
 import { renderPlanToWav, renderSequenceToWav, screenshotCanvases } from './ui/exporters.js';
 import { BUILD } from './core/build-info.js';
+import { aboutPart } from './ui/about.js';
 
 import { mount as mountAnalysis } from './labs/analysis.js';
 import { mount as mountFilter } from './labs/filter-lab.js';
@@ -106,21 +122,44 @@ const adapter = {
   getSampleRate: () => engine.sampleRate,
   getAnalyser: () => engine.analyser,
   getMicAnalyser: () => null,
+  // The Spectrum's requested marker follows what sounds (C013): the instrument while it plays,
+  // else the sequence while the editor plays (its own flag, not the 150 ms seqPlaying copy; null
+  // in a gap hides the marker and its chip), else the instrument's idle frequency. Read every
+  // frame: currentFrequency() reads the audio clock and allocates nothing.
   requestedFrequency: () => {
     if (!app) return null;
-    return app.source === 'dual' ? app.dualFa : app.metricFrequency;
+    const ed = labs.sequencer ? labs.sequencer.editor : null;
+    const seq = !!(ed && ed.playing);
+    return requestedFrequencyFor(app.playing,
+      app.source === 'dual' ? app.dualFa : app.metricFrequency, seq,
+      seq ? ed.currentFrequency() : null);
   },
   isPlaying: () => !!(app && (app.playing || app.seqPlaying)),
+  // C011: read-only; the sequencer's loop keeps to its cap without the permission.
+  continuousAllowed: () => !!(app && app.continuousAllowed),
   getA4: () => (app && app.a4) || 440,
   onChange(fn) {
     adapterListeners.add(fn);
     return () => adapterListeners.delete(fn);
   },
   getDestination: () => engine.master,
+  // C012 F1: a started sequence takes the output at the Playground gain.
+  claimOutput: () => { if (app) app.claimMasterLevel(); },
+  // C003: the sequencer plays through the engine's counted stage chain (the Filter Lab).
+  openSequencerStage: () => engine.stageChain(sequenceInserts(true)),
+  // V2 sequencer playback is counted by the engine (K001, audio-engine-discipline).
+  sequencerAccounting: engine.stageAccounting(),
+  // The sequencer takes the output through the one owner table (ui/output-owner.js, C002).
+  claimSequencerOutput: () => claimOutput('sequencer'),
   getStereoRouter: () => (liveRouter ? liveRouter.router : null),
   // The mic lab's nodes are built and accounted by the engine (audio-engine-discipline).
   attachMicrophone: (stream, opts) => engine.attachMicrophone(stream, opts),
   detachMicrophone: () => engine.detachMicrophone(),
+  // The engine detaches the graph itself when it discards a closed context (C015); the lab
+  // hears of it here, because a stopped track dispatches no 'ended'.
+  onMicDetached: (fn) => engine.on((type, d) => {
+    if (type === 'micAttachment' && d && !d.attached) fn(d);
+  }),
   ensureContext: () => {
     if (app) app.ensureAudio(); else engine.init();
     return engine.resume().then(() => engine.ctx);
@@ -159,24 +198,39 @@ function dualRouterFactory(live) {
   };
 }
 
-/** The V2 options for a plan on `ctx`. live: the realtime engine (labs track its stages). */
+/**
+ * The V2 options for a plan on `ctx`. live: the realtime engine (labs track its stages).
+ * Built by audio/lab-play-options.js, which returns every V2 key (value or null), so the
+ * current lab state wins over the options a restarted voice copies from its predecessor (C007).
+ */
 function v2PlayOptions(plan, ctx, live) {
-  const o = {};
-  const env = labs.envelope;
-  if (env && env.enabled) o.adsr = env.adsr;
   const filter = labs.filter;
-  if (filter) {
-    o.inserts = live ? [filter.createInsert]
-      : [(c, track) => createFilterStage(c, filter.config, { track })];
-  }
   const add = labs.additive;
-  if (add && add.enabled && plan.type !== 'dual' && ctx) {
-    const wave = live ? add.periodicWave(ctx) : buildPeriodicWave(ctx, add.partials).wave;
-    if (wave) o.periodicWave = wave;
-  }
-  if (plan.type === 'dual' && needsRouter(plan)) o.dualRouter = dualRouterFactory(live);
-  if (plan.type === 'dual' && labs.phase) o.dualPhaseDeg = labs.phase.config.phaseDeg;
-  return o;
+  return labPlayOptions(plan, ctx, {
+    envelope: labs.envelope,
+    insert: !filter ? null : live ? filter.createInsert
+      : (c, track) => createFilterStage(c, filter.config, { track }),
+    additive: add ? {
+      enabled: add.enabled,
+      wave: (c) => (live ? add.periodicWave(c) : buildPeriodicWave(c, add.partials).wave),
+    } : null,
+    dualRouter: (p) => (needsRouter(p) ? dualRouterFactory(live) : null),
+    phaseDeg: labs.phase ? labs.phase.config.phaseDeg : null,
+  });
+}
+
+/**
+ * C003: the lab stages the V2 sequencer plays through, live (the lab's tracked insert, so cutoff
+ * and enable edits reach the sounding sequence) or offline (the WAV export). Only the Filter
+ * Lab: the Envelope and Additive labs shape the instrument's voice, while each sequence block
+ * keeps its own click-free envelope and the sequence's waveform (ADR 0003, ADR 0015); their
+ * panels say so (index.html envelope.scope, additive.scope).
+ */
+function sequenceInserts(live) {
+  const filter = labs.filter;
+  if (!filter) return [];
+  if (live) return [filter.createInsert];
+  return [(c, track) => createFilterStage(c, filter.config, { track })];
 }
 
 /**
@@ -193,33 +247,26 @@ function labVizInputs(plan) {
     additive,
     adsr: env && env.enabled ? { ...env.adsr } : null,
     filter: filter && filter.enabled ? { ...filter } : null,
-    router: dual && needsRouter(plan) ? routerConfigFor(plan) : null,
+    // A sounding voice keeps its router once built, at centre too (C010).
+    router: dual && (needsRouter(plan) || liveRouter) ? routerConfigFor(plan) : null,
     phaseDeg: dual && labs.phase ? labs.phase.config.phaseDeg : 0,
   };
 }
 bridge.labInputs = labVizInputs;
 
-const basePlay = engine.play.bind(engine);
-engine.play = (plan, o = {}) => {
+// One output owner at a time (C002): the instrument, the sequencer, the Studio, a measurement.
+// stopPlayback also releases the MIDI notes (V502); sequencerPlaying is the editor's own state.
+const { claimOutput, stopPlayback, stopSequence, sequencerPlaying } = createOutputOwner({
+  app: () => app,
+  sequencer: () => (labs.sequencer ? labs.sequencer.editor : null), changed: notifyAdapter });
+
+withLabOptions(engine, (plan) => v2PlayOptions(plan, engine.ctx, true), () => {
   // Playground and Measure share one output (spec §74): no instrument voice while a measurement
   // owns it. The measurement itself never calls play (capture.js schedules its own source).
-  if (app && app.measureOwnsOutput()) {
-    app.notify('info', 'Measurement in progress', 'The output belongs to the measurement: stop '
-      + 'it (Esc) before playing.');
-    return null;
-  }
-  return basePlay(plan, { ...o, ...v2PlayOptions(plan, engine.ctx, true) });
-};
-
-/**
- * Measure (and Studio PLAY) take the output: stop the instrument and the sequencer (their
- * voices fade), and a playing Studio (V3.1; it is not playing while it claims the output).
- */
-function stopPlayback(cmp) {
-  if (cmp.seqPlaying && labs.sequencer) labs.sequencer.editor.stop();
-  if (cmp.playing) cmp.stopNow();
-  if (typeof cmp.studioOwnsOutput === 'function' && cmp.studioOwnsOutput()) cmp.studioStop();
-}
+  // claimOutput raises the notice itself and refuses while a measurement owns the output (C002);
+  // otherwise it takes the output from the sequencer (and Studio) and the play goes on.
+  return claimOutput('instrument') !== true;
+});
 
 /** Revert the sounding voice from a PeriodicWave to its oscillator type (additive off). */
 function clearPeriodicWave() {
@@ -248,12 +295,29 @@ function exportConfigDoc(cmp) {
   });
 }
 
+/**
+ * Apply a parsed config file. Returns { issues, notes, limited, dropped }: the count of values
+ * rejected and kept, the sentences to say (C004: a sequence waveform that was not applied), the
+ * lab values clamped on the way in (config-file.js limitedValues), and the instrument's report
+ * of what it dropped (H002). The labs' limits depend on the running sample rate, so they are
+ * read back after applying.
+ */
 function applyImport(cmp, parsed) {
-  let issues = cmp.applyConfig(parsed.instrument, 'import');
+  const restored = cmp.restoreConfig(parsed.instrument, 'import');
+  let issues = restored.issues;
+  const notes = [];
+  const requested = {};
+  const applied = {};
   if (parsed.envelope && labs.envelope) {
     labs.envelope.update({ adsr: parsed.envelope.adsr, enabled: parsed.envelope.enabled });
+    requested.envelope = parsed.envelope.adsr;
+    applied.envelope = labs.envelope.adsr;
   }
-  if (parsed.filter && labs.filter) labs.filter.update(parsed.filter);
+  if (parsed.filter && labs.filter) {
+    labs.filter.update(parsed.filter);
+    requested.filter = parsed.filter;
+    applied.filter = labs.filter.config;
+  }
   if (parsed.additive && labs.additive) {
     labs.additive.update({ partials: parsed.additive.partials, enabled: parsed.additive.enabled });
   }
@@ -262,23 +326,36 @@ function applyImport(cmp, parsed) {
     const { phaseDeg, pan } = parsed.phaseStereo;
     labs.phase.update({ phaseDeg, pan, freqA: cmp.dual.a.freq, freqB: cmp.dual.b.freq,
       route: cmp.dual.stereo ? 'stereo' : 'mono' });
+    requested.phaseStereo = { pan };
+    applied.phaseStereo = labs.phase.config;
   }
   if (parsed.sequencer && labs.sequencer) {
     const seqIssues = labs.sequencer.editor.load(parsed.sequencer) || [];
     issues += seqIssues.length;
+    // The instrument owns the sequence waveform (C004): re-apply it now (no undo step), and
+    // say so when the file's differs instead of reporting it as restored.
+    labs.sequencer.editor.setWaveform(cmp.waveform);
+    const fileWave = parsed.sequencer.waveform;
+    if (typeof fileWave === 'string' && fileWave !== cmp.waveform) {
+      notes.push(`The sequence follows the instrument waveform (${cmp.waveform}); the file's `
+        + `${fileWave.slice(0, 40)} was not applied.`);
+    }
     labs.sequencer.render();
+    cmp.markSequenceSaved(); // the sequence now is the file's (C019)
   }
   cmp.sourceKind = cmp.source === 'single' && cmp.pattern === 'tone' ? 'oscillator' : 'pattern';
   syncLabFlags();
-  return issues;
+  return { issues, notes, limited: limitedValues(requested, applied), dropped: restored.dropped };
 }
 
 async function renderWav(cmp, what) {
   const sampleRate = engine.sampleRate || 48000;
   if (what === 'sequence') {
     if (!labs.sequencer) throw new Error('The sequencer is not available.');
+    // What plays is what renders: the model's waveform, the one realtime playback compiles,
+    // through the live sequence's stage chain (C003).
     return renderSequenceToWav(labs.sequencer.editor.model, {
-      sampleRate, level: cmp.gainLevel, waveform: cmp.waveform,
+      sampleRate, level: cmp.gainLevel, inserts: sequenceInserts(false),
     });
   }
   const res = cmp.currentPlan();
@@ -317,6 +394,10 @@ function applyVizPause(paused) {
   const chart = labs.analysis && labs.analysis.chart;
   if (chart && typeof chart.setFreeze === 'function') chart.setFreeze(!!paused);
   if (analysisSpg && typeof analysisSpg.setFreeze === 'function') analysisSpg.setFreeze(!!paused);
+  // The Analyzer spectrogram has its own Freeze switch, so Pause goes through setPaused and
+  // leaves that switch's state alone (C014).
+  const spgView = labs.spectrogram && labs.spectrogram.view;
+  if (spgView && typeof spgView.setPaused === 'function') spgView.setPaused(!!paused);
 }
 
 // ------------------------------------------------------------------------------ analysis tabs
@@ -367,6 +448,21 @@ function vizLabsChanged() {
   if (!app) return;
   app.labRev += 1;
   app.syncViz();
+}
+
+/**
+ * C009: the release letting go of a held note uses is the one on screen: the Envelope lab's
+ * Release when the lab is on, else Settings Release. The engine stores it on the sounding voice
+ * and writes no AudioParam (audio-engine.js setNoteOffRelease); attack stays next-note.
+ * Run as an effect on the instrument's release, its playing state and labRev (bumped by every
+ * Envelope lab edit and power toggle through vizLabsChanged).
+ */
+function syncNoteOffRelease(cmp) {
+  void cmp.labRev;
+  const settingsS = cmp.release / 1000;
+  if (!cmp.playing) return;
+  const env = labs.envelope;
+  engine.setNoteOffRelease(env && env.enabled ? env.adsr.r : settingsS);
 }
 
 function syncLabFlags() {
@@ -432,6 +528,9 @@ function mountLabs(root) {
       syncLabFlags();
       vizLabsChanged(); // Harmonics tab and signal path show the additive table
       if (!engine.voice || engine.voice.ended) return;
+      // Additive does not apply to a dual plan (labPlayOptions, labVizInputs); the engine
+      // refuses it too, so no wave is built for nothing.
+      if (engine.voice.plan && engine.voice.plan.type === 'dual') return;
       if (labs.additive.enabled) {
         const wave = labs.additive.periodicWave(engine.ctx);
         if (wave) engine.setPeriodicWave(wave);
@@ -439,17 +538,35 @@ function mountLabs(root) {
     });
   }
   const labChanged = () => { syncLabFlags(); vizLabsChanged(); };
-  if (labs.envelope) labs.envelope.onChange(labChanged);
+  if (labs.envelope) {
+    // The live path (C007 R-2): an edit reaches the sounding voice, which the views show; a
+    // drag restarts it once, at its end (meta.settling while it moves, #296 R-7).
+    labs.envelope.onChange((adsr, enabled, meta) => {
+      labChanged();
+      followEnvelopeLab(engine, labs.envelope, meta);
+    });
+  }
   if (labs.filter) labs.filter.onChange(labChanged);
   if (labs.phase) {
     let lastPhaseDeg = labs.phase.config.phaseDeg;
+    let lastPan = labs.phase.config.pan;
     labs.phase.onChange((cfg) => {
       if (!app) return;
       if (Math.abs(app.dual.a.freq - cfg.freqA) > 1e-6) app.setDualFreq('a', String(cfg.freqA));
       if (Math.abs(app.dual.b.freq - cfg.freqB) > 1e-6) app.setDualFreq('b', String(cfg.freqB));
       const stereo = cfg.route === 'stereo';
       if (app.dual.stereo !== stereo) app.setStereo(stereo);
-      if (liveRouter) liveRouter.wrapper.refresh();
+      // Pan: a sounding dual voice with the router re-reads it (a glide). One started centred in
+      // Mono output has none, so the first pan off centre restarts it click-free with one, and
+      // it keeps it, at centre too (C010). The level does not step: the StereoPanners it
+      // replaces use the same equal-power law.
+      const v = engine.voice;
+      const want = !!(v && v.plan && v.plan.type === 'dual' && needsRouter(v.plan));
+      const routed = engine.setDualRouter(want ? dualRouterFactory(true) : null);
+      if (routed === 'restarted' || cfg.pan !== lastPan) {
+        lastPan = cfg.pan;
+        vizLabsChanged(); // the signal path shows the router and its pan
+      }
       if (cfg.phaseDeg !== lastPhaseDeg) {
         // B's phase offset is a start time: a sounding dual voice restarts click-free with it.
         lastPhaseDeg = cfg.phaseDeg;
@@ -459,7 +576,18 @@ function mountLabs(root) {
     });
   }
   if (labs.sequencer) syncSequencerIcon(root);
+  // The status bar's sequence length follows the sounding pass and the edited sequence (C006).
+  if (labs.sequencer) labs.sequencer.onPassChange(() => { if (app) app.labRev += 1; });
   if (labs.sequencer) {
+    // MIDI notes and a sequence never sound together (V502): the sequence plays into the
+    // master outside the engine's voices, so its start stops every note first (they fade within
+    // ESCAPE_RELEASE_S) and the MIDI part refuses notes while it plays (sequencerPlaying).
+    const editor = labs.sequencer.editor;
+    const playSequence = editor.play;
+    editor.play = function playAfterMidi(...args) {
+      if (app && typeof app.midiAllOff === 'function') app.midiAllOff();
+      return playSequence.apply(this, args);
+    };
     // UI bookkeeping only (the sequencer schedules on the audio clock itself).
     setInterval(() => {
       const on = !!labs.sequencer.editor.playing;
@@ -479,6 +607,7 @@ const unsavedGuard = createUnsavedGuard({ sources: [
   () => (app ? app.measureWhatWouldBeLost() : []),
   () => (app ? app.experimentsWhatWouldBeLost() : []),
   () => (app ? app.findingsWhatWouldBeLost() : []),
+  () => (app ? app.sequencerWhatWouldBeLost() : []),
 ] });
 
 function compose(...parts) {
@@ -532,9 +661,7 @@ function integrationInit() {
   const unlock = () => { if (engine.isSupported()) cmp.ensureAudio(); };
   window.addEventListener('pointerdown', unlock, { capture: true });
   window.addEventListener('keydown', unlock, { capture: true });
-  const stopSequencer = () => {
-    if (cmp.seqPlaying && labs.sequencer) labs.sequencer.editor.stop();
-  };
+  const stopSequencer = () => stopSequence(cmp); // the editor's live state (C001, C002)
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       stopSequencer();
@@ -564,6 +691,11 @@ function integrationInit() {
 
   // live state -> plan, readouts, bridge and live audio (unthrottled, K2)
   Alpine.effect(() => cmp.syncViz());
+  // C013: the views of the one output follow its owner (instrument, sequencer or Studio), handed
+  // to the bridge as a plain string on every play, stop and Studio transport state change.
+  Alpine.effect(() => bridge.setOutputOwner(cmp.outputOwner));
+  // ... and the release a held note will use when let go (C009), next to updateLive above
+  Alpine.effect(() => syncNoteOffRelease(cmp));
   // Calm announcements (V1 a7b7a23): only PLAYING, SUSPENDED, STOPPED and ERROR, kept until the
   // next one; RELEASING/READY and readout changes are not announced.
   Alpine.effect(() => {
@@ -587,7 +719,11 @@ function integrationInit() {
     void cmp.metricFrequency; void cmp.playing; void cmp.sampleRate; void cmp.dualFa;
     notifyAdapter();
   });
-  cmp.$watch('gainLevel', (g) => engine.setMasterGain(g));
+  cmp.$watch('gainLevel', (g) => {
+    engine.setMasterGain(g);
+    // The newer level: the status bar drops the Studio's Master (C012; kept at STOP, #119 D2).
+    if (cmp.studio && cmp.studio.masterLevel !== null) cmp.studio.masterLevel = null;
+  });
   cmp.$watch('theme', () => {
     bridge.readPalette();
     requestAnimationFrame(() => {
@@ -635,6 +771,12 @@ function integrationInit() {
   // V1 initVisualizer: the primary host reports the wave layout (V2's primary view is the scope,
   // which labels itself in the canvas; the layout is still forwarded for the V1 views).
   bridge.onWaveLayout = (l) => { cmp.waveLayout = l; };
+  // T001: the output ceiling starts or stops flattening the signal (a change, never per frame).
+  engine.enableCeilingTap();
+  bridge.onCeiling = (acting) => {
+    cmp.outputAtCeiling = acting;
+    if (acting && cmp.isSounding) cmp.announceText = cmp.ceilingText;
+  };
 
   cmp.$nextTick(() => {
     const el = document.getElementById('osc-chart-waveform');
@@ -664,10 +806,16 @@ function integrationInit() {
       });
     }
     if (labs.sequencer) {
+      // An unsaved sequence arms the unsaved-work guard (C019): every change recomputes the
+      // reactive digest the guard compares; the sequence the page opens with is not work.
+      labs.sequencer.editor.onChange((m) => { cmp.seqDigest = sequenceDigest(m); });
+      cmp.markSequenceSaved();
       Alpine.effect(() => {
         const w = cmp.waveform;
         try { labs.sequencer.editor.setWaveform(w); } catch (e) { /* unknown waveform */ }
       });
+      // Every sequence change bumps cmp.seqRev, which its readouts read (C004).
+      followSequenceEdits(cmp, labs.sequencer.editor);
     }
     setAnalysisTab(cmp.tabs.analysis);
     if (cmp.debug) setInterval(() => cmp.refreshDebug(), 250);
@@ -676,30 +824,6 @@ function integrationInit() {
     // ms since navigation start, set once, together with the attribute the suites wait for.
     try { performance.mark('oscilla:ready'); } catch (e) { /* no User Timing here */ }
     document.documentElement.dataset.ready = 'true';
-  });
-}
-
-/**
- * Firefox and WebKit do not scroll a keyboard-focused control that is already partly inside
- * the #osc-main scroller, so its edge (the status bar below it) can cut the control (WCAG
- * 2.4.11). After the browser's own focus scroll, nudge #osc-main until it is fully visible.
- */
-function keepFocusInView(main) {
-  if (!main) return;
-  document.addEventListener('focusin', (e) => {
-    const el = e.target;
-    if (!(el instanceof Element) || el === main || !main.contains(el)) return;
-    requestAnimationFrame(() => {
-      let keyboard = true;
-      try { keyboard = el.matches(':focus-visible'); } catch (err) { /* no :focus-visible */ }
-      if (document.activeElement !== el || !keyboard) return;
-      const r = el.getBoundingClientRect();
-      if (!r.height) return;
-      const top = main.getBoundingClientRect().top + main.clientTop + 4;
-      const bottom = top + main.clientHeight - 8;
-      if (r.top < top) main.scrollTop -= top - r.top;
-      else if (r.bottom > bottom) main.scrollTop += Math.min(r.bottom - bottom, r.top - top);
-    });
   });
 }
 
@@ -726,11 +850,19 @@ function createOscillaComponent(ui) {
   const instrument = createInstrument({
     engine, bridge, keyGuard: (e) => keyGuard(e), openModal: (id) => openModal(id),
     closeModal: (id) => closeModal(id),
+    // C011: the sequencer follows the continuous permission (a loop past the cap ends at it).
+    onContinuousChange: () => {
+      const seq = labs.sequencer;
+      if (!seq) return;
+      seq.editor.followPermission();
+      seq.render();
+    },
   });
   const shellInit = ui.init;
   const workbench = createWorkbench({
     engine, bridge, labs, exportConfigDoc, applyImport, renderWav, screenshot,
     relayout: () => { if (host) host.resize(); repairCharts(); },
+    stopPlayback, sequencerPlaying,
   });
   const measure = createMeasureUi({
     engine, build: BUILD, stopPlayback,
@@ -739,11 +871,15 @@ function createOscillaComponent(ui) {
   const experiments = createExperimentsUi();
   const findings = createFindingsUi();
   const connections = createConnectionsUi();
-  const studio = createStudioUi({ engine, stopPlayback });
+  const studio = createStudioUi({ engine, stopPlayback,
+    // The Sequencer's pattern now, for Studio's "Open this pattern in Studio" (U010, P4).
+    currentSequence: () => (labs.sequencer ? serializeSequence(labs.sequencer.editor.model) : null),
+  });
   const navigation = createNavigation();
-  const midi = createMidiUi(); // optional input (ADR 0058): reads support at load, never requests
+  // Optional input (ADR 0058): reads support at load, never requests; notes sound through engine.
+  const midi = createMidiUi({ engine, sequencerPlaying });
   const cmp = compose(instrument, ui, workbench, measure, experiments, findings, connections,
-    studio, navigation, midi, provenancePart(), TEMPLATE_HELPERS);
+    studio, navigation, midi, createCrossLinksUi(), provenancePart(), aboutPart(), TEMPLATE_HELPERS);
   cmp.dismissAlert = focusSafeDismiss(cmp.dismissAlert);
   const baseRefreshDebug = cmp.refreshDebug;
   Object.defineProperty(cmp, 'refreshDebug', {
@@ -886,4 +1022,5 @@ Object.defineProperties(window.OSCILLA, {
 registerOscillaUi(Alpine, { compose: createOscillaComponent });
 for (const [name, fn] of Object.entries(TEMPLATE_HELPERS)) Alpine.magic(name, () => fn);
 window.Alpine = Alpine;
+startFlowbiteAfterAlpine();
 Alpine.start();

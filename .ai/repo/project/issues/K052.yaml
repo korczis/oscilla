@@ -1,0 +1,32 @@
+id: K052
+milestone: M062
+serves:
+  - "playable-instrument#chart-interaction"
+title: "Shared zoom: keyboard, single-pointer and modified-wheel zoom, clamped to the data"
+slug: shared-zoom-keyboard-single-pointer-and-modified-wheel-zoom
+priority: p1
+profile: implementation
+objective: "Lands as feat(charts). The zoom modules every zoomable chart shares, in a slice of their own so MEASURE zoom (K038), the spectrum (K031), the scope window (K032) and the filter wheel (K043) do not wait on each other. src/js/charts/interaction/zoom-math.js (pure): zoom about an anchor on log and lin axes, clamp to the data range (Nyquist for a spectrum), a minimum span given by the caller (4 bins, 3 grid points, 20 IR samples), pan bounds, reset, the key map + and - (about the cursor, else the centre), Shift + arrows (pan by a tenth of the span) and 0 (reset), and the wheel policy: a plain wheel never zooms or changes a value, Ctrl or Cmd + wheel and a pinch zoom. src/js/charts/interaction/uplot-plugin.js: drag-select on x for mouse and pen only, setScale hooks that make the fixed range functions zoom-aware, a double-click reset, the toolbar contract (Zoom in, Zoom out and Reset call the same functions as the keys; = counts as +, as Studio's key resolver already reads it) and easing from motion-policy. On a touch pointer a one-finger drag scrolls (touch-action pan-y), a tap places the cursor and a pinch zooms. It adds no markup; consumers place the buttons in their cards."
+why: "Owner order of 2026-10-29: \"make the charts really sexy, modern, interactive\", for all charts; reviewer f3 scoped it to every surface that draws data. Revised after f3's review of the plan (CHANGES-REQUESTED, 2026-10-29): owner decisions are Q issues under M063, Pro chrome waits on F002 and on the card issue of its workspace, every chart that claims chart-interaction delivers the keyboard cursor and the announced readout, chart keys never take Escape or Space; revision 3 answers f3's delta review. Facts checked against origin/main at e2720e07 and the branches of #251, #253, #263 and #265 (charts-plan.md, charts-plan-changes.md)."
+scope:
+  - "src/js/charts/interaction/zoom-math.js"
+  - "src/js/charts/interaction/uplot-plugin.js"
+  - "tests/unit/charts-zoom-math.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K028"
+acceptance_criteria:
+  - "tests/unit/charts-zoom-math.test.mjs, failing on the merge base: clamp, minimum span, anchor fixed in log space, pan bounds, + / - / 0 / Shift + arrows, the wheel decision table (plain wheel: no zoom whether focused or not; Ctrl, Cmd and pinch: zoom), the pointer-type table (mouse and pen brush, touch scrolls and pins), and that the toolbar and the keys reach the same scale."
+  - "+ - 0 are taken only while a zoomable chart host has focus; K053, which depends on this slice, cross-checks them against src/js/ui/shortcuts.js and lists them in the shortcuts dialog."
+  - "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no review verdict is needed; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+  - "No visual reference moves (no consumer yet)."
+  - "scripts/size-report.mjs shows at most 0.5 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of M062's figures stays within the cap Q014 records, under the 1 000 000 B gzip budget (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/charts-zoom-math.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

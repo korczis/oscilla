@@ -1,0 +1,41 @@
+id: N010
+milestone: M112
+serves:
+- "parameter-controls#documented-extensible"
+title: "Control reference generated from the views, and 'Add a parameter' in the extending guide"
+slug: control-reference-generated-from-the-views-and-add-a-parameter
+priority: p2
+profile: implementation
+objective: "Lands as docs(ui). scripts/ui-catalog.mjs writes docs/ui-catalog.md from src/js/ui/kinds/param and src/js/ui/catalog: per view, its interface, the keys and gestures, the attributes controlAttrs gives, the contract clauses control-contract.cjs checks, and viewFor's table; npm run docs:controls writes it and --check, run by npm test, fails when it is stale. The authored part, the one sentence per view, stays authored. docs/EXTENDING.md (docs/extending-guide) gains 'Add a parameter or a control': a parameter is one constructor call in a node definition plus its face section; the face, the Inspector, the menu, the reference and the census follow; a new view implements mountControl and passes the harness. Help and the What is this panel (G015) link to the reference. Before: VERIFIED no document describes a control's keys or contract. After: one generated reference and one recipe. Negative cases: a view added without its sentence, a stale reference. Rollback: revert. Merged plan of the component follow-up (2026-10-30): The control reference is the Controls section of G014's one generated catalogue, written by scripts/ui-catalog.mjs from the declarations and the pure controlAttrs, never from a rendered page; npm run docs:ui -- --check covers it with the rest, sorted by code unit, LF, no clock, plan ids only."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs, KB and interlinking; full DAW, full sequencer, full piano, everything interlinked, clickable, parameterized and joined; knobs, sliders and control panels in one generic way, integrated with Majordomus; every element tweakable; mobile first; the landing easy to use, easy to extend and open to hack. Owner decisions: knobs that always show value and unit (D11, Q018, the ADR 0058 note of 2026-10-29), every parameter on the box face (Q031), the generator in its own workspace (Q033). Design: the params-controls part of the component follow-up of 2026-10-29 (scratchpad components-followup/params-controls.md), checked against origin/main b67d1e58 and the head of plan pull request #285 (c0a631b2)."
+scope:
+- scripts/ui-catalog.mjs
+- docs/ui-catalog.md
+- docs/EXTENDING.md
+- package.json
+- tests/unit/ui-catalog-docs.test.mjs
+- tests/unit/extending-guide.test.mjs
+- tests/README.md
+depends_on:
+- N003
+- N008
+- G014
+acceptance_criteria:
+- "tests/unit/ui-catalog-docs.test.mjs fails on the merge base: the generator is byte-stable over two runs, lists every view module, and --check fails on a fixture view without its sentence."
+- "Definition of done, tested: No browser check is owed: the slice adds documents and a generator; the Help link it adds is walked by the link-integrity suite of the route-hygiene line."
+- "Definition of done, extends: docs/EXTENDING.md's 'Add a Studio node' and the generated node reference of V619."
+- "Definition of done, interlinks: the reference links each view to its Learn and Help entries, and Help links back."
+- "Definition of done, interactivity: none; the documents describe the interactivity N002-N008 build."
+- "Definition of done, docs, menus and routes: docs/ui-catalog.md, docs/EXTENDING.md and tests/README.md. tests/README.md has a row for each new test; the parameter's or view's catalogue entry names its docs, links and tests (G001 trace part); dist is rebuilt and npm run build:check passes."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit, and the release that carried it is recorded when the milestone is verified."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "It changes no markup, class token or stylesheet (tests and docs only), so the Flowbite Pro record is untouched (node scripts/ui-flowbite-pro-record.mjs --check passes)."
+- "scripts/size-report.mjs shows no bundled byte added (tests, scripts and docs only), with the base and head figures in the pull request body (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/ui-catalog-docs.test.mjs tests/unit/extending-guide.test.mjs
+- node scripts/ui-catalog.mjs --check
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-30'

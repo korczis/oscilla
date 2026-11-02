@@ -1,0 +1,36 @@
+id: P010
+milestone: M099
+serves:
+  - "public-discoverability#libraries-decided"
+title: "A read-only relationship explorer on Cytoscape.js, over relationships a canonical source records"
+slug: a-read-only-relationship-explorer-on-cytoscapejs-over-relationships-a-canonical-source-records
+priority: p3
+profile: deep-work
+objective: "Build the one consumer ADR 0080 admits. A read-only explorer draws the relationships between workspaces that U006's one relationship table records, and, only where a canonical source exists, between experiments and their definitions. Cytoscape.js is pinned and imported through one adapter. Each node and each edge carries a real type, a stable id, its source and a deep link that the hash dispatcher routes. Selecting a node opens its target. Dragging moves only the view. Nothing writes a record, and the explorer is idle while hidden."
+why: "The owner chose Cytoscape for a read-only explorer (Q070, 2026-10-30); the pack's P07 asks for a semantics-preserving explorer whose graph is derived, never a second truth store."
+scope:
+  - "src"
+  - "dist/index.html"
+  - "package.json"
+  - "package-lock.json"
+  - "licenses"
+  - "tests/unit"
+  - "tests/browser"
+  - "tests/README.md"
+  - "docs/CLAIMS.yaml"
+  - ".ai/repo/project/issues/P010.yaml"
+depends_on:
+  - "Q070"
+  - "U006"
+acceptance_criteria:
+  - "E027's budget raise to 1 200 000 B is on main before P010 lands (ADR 0080 decision 3), and the measured gzip delta of Cytoscape and the explorer together is at most 140 000 B."
+  - "A unit test that fails on the merge base and passes on the head proves that every node and edge the explorer draws comes from the relationship table with a routed deep link, and that a drag leaves every record unchanged (project.fail-first)."
+  - "A browser suite proves selection opens the target, keyboard navigation and a screen-reader summary of the selected node, idle when hidden, in Chromium, Firefox and WebKit, from file:// and the sub-path; the Flowbite Pro ratchet does not grow; a reviewer verdict covers the guarded paths."
+  - "Cytoscape's MIT notice is in licenses/ and its version is exact in package.json."
+  - "A claim in docs/CLAIMS.yaml cites adr-0080 with the explorer's test, and the 0080 entry of ADR_NOT_A_CAPABILITY in tests/unit/knowledge-integrity.test.mjs is removed."
+validation:
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-30
+updated_at: 2026-10-30

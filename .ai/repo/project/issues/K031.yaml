@@ -1,0 +1,39 @@
+id: K031
+milestone: M062
+serves:
+  - "playable-instrument#chart-interaction"
+title: "Spectrum zoom and pan: honest about bin resolution, keyboard and button paths"
+slug: spectrum-zoom-and-pan-honest-about-bin-resolution-keyboard-a
+priority: p2
+profile: implementation
+objective: "Lands as feat(charts). The spectrum uses the shared zoom of K052: x zoom rebuilds buildPixelMap over the window, so zoom adds real resolution down to the bin width; below 2 px per bin the bins are drawn as steps under the badge \"bin width 11.7 Hz: finer zoom adds no detail\" (the width from the live sampleRate); the live dB y axis stays fixed. Zoom has a keyboard path (+ and - about the cursor, Shift + arrows pan, 0 resets) and a single-pointer path (Zoom in, Zoom out and Reset as a Pro button group); a plain wheel never zooms, focused or not, so a click followed by a wheel scrolls the page; Ctrl or Cmd + wheel and a pinch zoom; a mouse or pen drag brushes, a one-finger touch drag scrolls (touch-action pan-y) and a tap pins the cursor; the zoom badge is a Pro badge with a dismiss button; easing of at most 150 ms only when motion is allowed."
+why: "Owner order of 2026-10-29: \"make the charts really sexy, modern, interactive\", for all charts; reviewer f3 scoped it to every surface that draws data. Revised after f3's review of the plan (CHANGES-REQUESTED, 2026-10-29): owner decisions are Q issues under M063, Pro chrome waits on F002 and on the card issue of its workspace, every chart that claims chart-interaction delivers the keyboard cursor and the announced readout, chart keys never take Escape or Space; revision 3 answers f3's delta review. Facts checked against origin/main at e2720e07 and the branches of #251, #253, #263 and #265 (charts-plan.md, charts-plan-changes.md)."
+scope:
+  - "src/js/charts/spectrum-chart.js"
+  - "src/js/charts/spectrum-data.js"
+  - "src/index.html"
+  - "src/partials"
+  - "tests/browser/charts-interaction.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K030"
+  - "K052"
+  - "F006"
+acceptance_criteria:
+  - "A unit test that fails on the merge base: the pixel map over a zoom window and the step decision below 2 px per bin."
+  - "tests/browser/charts-interaction.cjs: a drag sets u.scales.x inside the dragged range and Reset restores it; + on the focused chart and the Zoom in button each zoom about the cursor or the centre; after a click on the chart a plain wheel leaves the scale unchanged and scrolls the page; Ctrl + wheel zooms; under emulated reduced motion the scale reaches its target in exactly one setScale. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline and assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac); tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Levels say dB relative (dBFS-like) unless a valid LevelCalibration applies, every estimate is labelled as one, and no data value is tweened or eased; every readout, tooltip, axis title and caption string it adds is registered in its chart's wording table and passes tests/unit/charts-readout-wording.test.mjs (project.no-fake-science)."
+  - "Chart chrome (legend, toolbar, toggle, badge, tooltip, readout row) is Flowbite Pro markup adapted from the matching Pro component and lands after F002 turned on preflight and the form base styles (the border trap of review #253, R-3) and after F006 placed the card it sits in; no osc-* class token or legacy selector is added and src/styles/tokens.css, charts.css, measure.css, studio.css and studio-timeline.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+  - "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no review verdict is needed; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+  - "No visual reference moves: the default view is unzoomed."
+  - "scripts/size-report.mjs shows at most 2.5 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of M062's figures stays within the cap Q014 records, under the 1 000 000 B gzip budget (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/charts.test.mjs"
+  - "node tests/browser/charts-interaction.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

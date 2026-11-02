@@ -1,0 +1,52 @@
+id: K011
+milestone: M058
+serves:
+  - "playable-instrument#voice-nodes"
+title: "Lowshelf, highshelf and allpass filter types, and a brown-noise option"
+slug: lowshelf-highshelf-and-allpass-filter-types-and-a-brown-nois
+priority: p2
+profile: implementation
+objective: "Lands as feat(studio). Add the lowshelf, highshelf and allpass types to the Filter node (src/js/audio/filters.js usesQ and usesGain, src/js/studio/nodes/processing.js) and a brown option to the Noise node (src/js/studio/nodes/sources.js, src/js/audio/noise.js). New enum options leave every pinned hash unchanged. Everything that reads the filter types follows: gainIsUsed in src/js/studio/clip-targets.js (peaking only today) and the graph view's inactive-edge rule, the Filter help text (\"gain applies to peaking only\", src/js/studio/nodes/processing.js), the V431 gain test that loops over FILTER_TYPES, the Filter Lab that shares FILTER_TYPES (src/js/labs/filter-lab.js) and the V1 config file that keeps its own list (src/js/ui/config-file.js)."
+why: "Owner direction of 2026-10-29 (session oscilla-b0): OSCILLA becomes a playable, patchable instrument and an audio-band signal lab; the plan checked every fact it relies on against main at 8b5792cd, and the sizes it quotes are unchanged at e2720e07."
+scope:
+  - "src/js/audio/filters.js"
+  - "src/js/audio/noise.js"
+  - "src/js/studio/nodes/processing.js"
+  - "src/js/studio/nodes/sources.js"
+  - "src/js/studio/adapters"
+  - "tests/unit/k010-k013-studio-voice-nodes.test.mjs"
+  - "src/js/studio/clip-targets.js"
+  - "src/js/ui/studio/graph-view.js"
+  - "src/js/ui/studio/inspector.js"
+  - "src/js/labs/filter-lab.js"
+  - "src/js/ui/config-file.js"
+  - "tests/unit/v31-studio-review-v431-ui.test.mjs"
+  - "tests/unit/v4-clip-target-policy.test.mjs"
+  - "tests/unit/one-source-constants.test.mjs"
+  - "tests/browser/v31-studio-offline.cjs"
+  - "tests/browser/fixtures/v31-studio-offline-entry.js"
+  - "docs/v31/compiler.md"
+  - "docs/v31/studio-model.md"
+  - "docs/v31/studio-report.md"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K005"
+acceptance_criteria:
+  - "The response probe shows the shelf gain within +-0.5 dB and the allpass magnitude flat within 0.1 dB, in a unit test that fails on the merge base."
+  - "A type change keeps the existing click-free crossfade."
+  - "Brown noise has a -6 dB/octave slope within 1.5 dB."
+  - "Web Audio ignores Q on a shelf (usesQ in src/js/audio/filters.js), so on a shelf the Inspector's Q control is hidden or disabled with that reason and a Q edge or lane is marked inactive with it; gain is live on the shelves and peaking only, and the help text says so (project.no-inert-surfaces)."
+  - "The Filter Lab and the V1 config file either accept the new types, with a test, or keep their current set, stated in the pull request; no new markup."
+  - "All hashes are unchanged."
+  - "The pull request carries a reviewer's verdict (src/js/audio and src/js/studio is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first). It adds no markup, osc-* class token or stylesheet selector, so the Flowbite Pro ratchet stays flat (node --test tests/unit/ui-flowbite-pro.test.mjs). A capped file it grows past its cap is split first or its raise is declared in tests/unit/source-size-baseline.json's raises ledger."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/k010-k013-studio-voice-nodes.test.mjs"
+  - "node --test tests/unit/v31-studio-review-v431-ui.test.mjs"
+  - "node tests/browser/v31-studio-offline.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

@@ -1,0 +1,49 @@
+id: W015
+milestone: M103
+serves:
+- "instrument-kinds#daw-surfaces"
+title: "DAW transport: a metronome scheduled on the audio clock, a count-in and record arm in the transport kind"
+slug: daw-transport-a-metronome-scheduled-on-the-audio-clock-a-cou
+priority: p3
+profile: implementation
+objective: "Lands as feat(audio). The transport kind gains metronome (TRANSPORT_SET { metronome }, a new transport field, not hashed into execution state; clicks scheduled on the audio clock from the transport's beat grid by an engine-owned, counted click source, at a stated relative level), count-in (one or two bars before PLAY, stated in the clock) and record arm (view state; shown only once K113's recording exists). Before: no metronome or count-in. After: the DAW transport. Negative cases: metronome while MEASURE owns the output (refused, stated); a tempo change mid-bar (the next click follows the new tempo); the node census after stop (0). Rollback: revert; a saved metronome flag is ignored by an older build's normalizer, stated."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs, knowledge and interlinking, and add more; add p5.js, WebGL and interactivity, and deploy; a full DAW, a full sequencer and a full piano, everything interlinked, clickable, parameterized and joined; knobs, sliders and control panels done one generic way, integrated with Majordomus; the landing easy to use, easy to extend and open to hack; mobile first. The architecture still binds: one AudioEngine, the Studio model canonical, typed ports, one offline file under the 1.2 MB gzip budget, the cockpit identity, no fake science, Flowbite Pro (ADR 0061). Design: the instrument-kinds design of 2026-10-29 (scratchpad components-followup/components-new.md), on the component-system design (G001-G019) and the synth and studio-siggen drafts of the same day, facts checked against origin/main cdda563c."
+scope:
+- src/js/audio
+- src/js/studio/transport.js
+- src/js/studio/schema.js
+- src/js/ui/studio/transport-bar.js
+- src/js/ui/kinds/transport-model.js
+- src/js/ui/catalog/kinds/transport.js
+- tests/unit/ui-kind-transport.test.mjs
+- tests/unit/engine.test.mjs
+- tests/browser/v31-studio-transport.cjs
+- tests/README.md
+- dist
+depends_on:
+- W006
+- Q062
+- K113
+acceptance_criteria:
+- "tests/unit/ui-kind-transport.test.mjs and tests/unit/engine.test.mjs fail on the merge base: on StudioFakeContext (tests/unit/sequencer-fake-audio.mjs) the clicks are scheduled at baseTime + beats x 60 / tempo on whole frames, a tempo change takes effect at the next beat, and the node census returns to 0 after stop; count-in shifts PLAY by the stated bars."
+- "Negative cases, each asserted by a test that fails on the merge base: the three of the objective."
+- "Every node it plays is built by an engine adapter with track()/source() accounting, all timing is on the audio clock, the click is click-free and below the output ceiling, and the engine node census is 0 after stop (project.audio-engine-discipline v2)."
+- "Definition of done, tested: tests/browser/v31-studio-transport.cjs toggles the metronome by pointer, keyboard and a hasTouch tap and waits with until() (deadline 'metronome clicks scheduled', 3 s) for clicks in the runtime's debugInfo. The check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, runs at 1536x1024 and 390x844, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, extends: W006 and the one transport; interlinks: none new (stated)."
+- "Definition of done, interactivity: every new control by pointer, keyboard and touch."
+- "Every Studio edit it builds is one plain action the owning surface dispatches through the one Studio store; a continuous gesture is one history entry and undo and redo restore the exact serialized model; a refusal leaves model, history and runtime unchanged and the kind states the store's sentence once in the polite live region (project.studio-model-is-canonical, project.typed-ports)."
+- "Definition of done, docs, menus and routes: the kind's declaration names its docs, links and tests; docs/ui-catalog.md (G014) lists it; the Keyboard shortcuts dialog lists its keys; tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Its trace entry in scripts/ui-catalog/trace/kinds.mjs names the intent criterion, this issue, its rules, ADRs and tests, each resolved by the trace check, for the Majordomus knowledge projection."
+- "The kind's modules pass W001's static scan: no import of src/js/studio/actions.js, a store, sources.js or a lab module; no dispatch or owner writer called; no AudioContext, AudioNode or worklet created (project.audio-engine-discipline v2: one AudioEngine); no requestAnimationFrame, setInterval or setTimeout outside src/js/charts/frame-loop.js; no allocation in a frame callback (1000 ticks keep the same typed arrays) and frameSubscriberCount() returns to its value after destroy()."
+- "Its chrome (buttons, button groups, popovers, dropdowns, inputs) is markup adapted from the matching Flowbite Pro block and names its flowbite-pro reference.md section; its instrument surface is a domain view under ADR 0061 decision 3 as J001's ADR 0061 resolution note records it: inline SVG or canvas and Tailwind utilities inside a Pro card, no stylesheet, no selector, no osc-* class token, no el.style write or style attribute; no osc-* name in the ratchet record rises and the domain views' stylesheets gain nothing (project.ui-uses-flowbite-pro, project.visual-identity-lock v2, ADR 0061; node scripts/ui-flowbite-pro-record.mjs --check and node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "The pull request touches guarded paths (src/js/audio, src/js/studio/transport.js, schema.js; scripts/review-verdict.mjs GUARDED) and carries a reviewer's .ai/repo/reviews/<pr>.yaml, written by a session that did not build it (project.review-verdict); as a feat change it carries a unit test that fails on the merge base (project.fail-first)."
+- "scripts/size-report.mjs shows at most 2 KB gzip added, compiled CSS included, with the base and head figures in the pull request body, inside the component line's cap Q037 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+- node --test tests/unit/ui-kind-transport.test.mjs tests/unit/engine.test.mjs
+- node tests/browser/v31-studio-transport.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

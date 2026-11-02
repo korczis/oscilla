@@ -5,9 +5,10 @@
 // its step summary. It reports and never fails on a size: the budget is verify-dist's gate.
 //
 // The number feeds two decisions: the reviewer's acceptance of a size change, and the owner's
-// deferred decisions on the 1 MB gzip budget stopgap (#114) and on p5 (ADR 0013, plan issue
-// E012). A pull request whose gzip growth is more than GZIP_THRESHOLD_BYTES names where the
-// bytes come from in its body; that is a review convention, not a gate.
+// decisions on the gzip budget (1 200 000 B since 2026-10-29, plan issue E027, replacing the
+// #114 stopgap) and on p5 (ADR 0013, plan issue E012). A pull request whose gzip growth is more
+// than GZIP_THRESHOLD_BYTES names where the bytes come from in its body; that is a review
+// convention, not a gate.
 //
 // Both builds are read from git (`git show <commit>:dist/index.html`): the head's, and the
 // merge base's of the head and the base branch. In CI the head is the checkout's HEAD, the pull
@@ -85,8 +86,9 @@ export function formatReport(r, { head, base }) {
       + 'budget) names where the bytes come from in its body; a review convention, not a gate. '
       + verdict,
     '',
-    'The number feeds the reviewer\'s acceptance of a size change and the owner\'s deferred '
-      + 'decisions on the 1 MB budget stopgap (#114) and on p5 (ADR 0013).',
+    'The number feeds the reviewer\'s acceptance of a size change and the owner\'s '
+      + 'decisions on the gzip budget (raised on 2026-10-29, replacing the #114 stopgap) and on '
+      + 'p5 (ADR 0013).',
     '',
   ].join('\n');
 }

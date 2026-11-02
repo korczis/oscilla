@@ -1,0 +1,43 @@
+id: N007
+milestone: M112
+serves:
+- "parameter-controls#honest-modulation-automation"
+title: "Automation hook on every control: base readout under a lane, the lane's scheduled value while playing, open the lane and come back"
+slug: automation-hook-on-every-control-base-readout-under-a-lane-the
+priority: p2
+profile: implementation
+objective: "Lands as feat(ui). automationState(spec, model, nodeId, playhead) in src/js/ui/catalog/param-model.js is the automation half of the Inspector's fieldOf (inspector.js:156-198), moved unchanged and shared: available where a lane plays (clipTarget), else its reason; lane { id } when one exists, with the readout 'Base 1.20 kHz' and aria-valuetext '1.20 kHz, base, overridden by the lane' (the existing texts); valueAt while playing from laneValueAt (automation.js:146), drawn as a tick with 'Lane 900 Hz', never read from AudioParam.value. setAutomation(state) shows it on every view; the menu item of N004 calls the owner's openLane(laneId | null): in the Studio the automation view focuses the lane, from a Synth card the Studio opens at the lane and Back returns (K120 consumes this hook). Turning an automated control while playing writes the base and says the lane overrides it; it never writes the AudioParam. Before: VERIFIED only the Inspector knows a lane overrides a value. After: every control says so and opens its lane. Negative cases: an automated control turned while playing (base written, lane wins, stated), a parameter whose lane plays nowhere (reason shown), a lane removed (the tick and the base wording go). Rollback: revert."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs, KB and interlinking; full DAW, full sequencer, full piano, everything interlinked, clickable, parameterized and joined; knobs, sliders and control panels in one generic way, integrated with Majordomus; every element tweakable; mobile first; the landing easy to use, easy to extend and open to hack. Owner decisions: knobs that always show value and unit (D11, Q018, the ADR 0058 note of 2026-10-29), every parameter on the box face (Q031), the generator in its own workspace (Q033). Design: the params-controls part of the component follow-up of 2026-10-29 (scratchpad components-followup/params-controls.md), checked against origin/main b67d1e58 and the head of plan pull request #285 (c0a631b2)."
+scope:
+- src/js/ui/catalog/param-model.js
+- src/js/ui/studio/inspector.js
+- src/js/ui/kinds/param
+- tests/unit/automation-hook.test.mjs
+- tests/browser/v31-studio-graph.cjs
+- tests/browser/integration-map.json
+- tests/unit/ui-flowbite-pro-baseline.json
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- N003
+- N004
+acceptance_criteria:
+- "tests/unit/automation-hook.test.mjs fails on the merge base: automationState over fixtures (no lane, a lane that plays, a lane on a parameter that plays nowhere) gives the Inspector's existing texts byte for byte; laneValueAt equals what compileLaneEvents schedules at sampled times for each curve shape."
+- "Definition of done, tested: tests/browser/v31-studio-graph.cjs automates a Filter cutoff from its control menu, plays, and waits with until() (deadline 'lane value shown', 3 s) for the tick to describe the lane value and the readout to say Base; Show lane focuses the lane and Back returns focus to the control; by keyboard and touch. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), runs at 390x844 and at 1536x1024, adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, extends: the Inspector's fieldOf automation model, unchanged in wording."
+- "Definition of done, interlinks: Show lane and Back are a row of tests/browser/integration-map.json."
+- "Definition of done, interactivity: the tick follows the playhead; the menu opens the lane by pointer, keyboard and touch."
+- "Definition of done, docs, menus and routes: docs/v31/user-guide.md describes base and lane once, for every control. tests/README.md has a row for each new test; the parameter's or view's catalogue entry names its docs, links and tests (G001 trace part); dist is rebuilt and npm run build:check passes."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit, and the release that carried it is recorded when the milestone is verified."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "On Pro (after F002): its chrome is markup adapted from the matching Flowbite Pro block (named by its flowbite-pro reference.md section) with Tailwind class lists only; the knob arc and the band are inline SVG with Tailwind utilities under the ADR 0061 resolution note of K058; it adds no osc-* class token, no legacy vocabulary use and no selector, and the domain views' stylesheets gain nothing; the record's debt does not rise (project.ui-uses-flowbite-pro, project.visual-identity-lock v2, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "scripts/size-report.mjs shows at most 0.6 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the line's sum stays within its row of the cap Q037 records, under the 1.2 MB gzip budget of scripts/build-config.mjs (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/automation-hook.test.mjs
+- node tests/browser/v31-studio-graph.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

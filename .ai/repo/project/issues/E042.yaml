@@ -1,0 +1,41 @@
+id: E042
+milestone: M046
+serves:
+  - "engineering-integrity#copied-facts-held"
+title: "Facts the documents copy from the code are held to it: release timing, template lists, licences and the load gate's defaults"
+slug: facts-the-documents-copy-from-the-code-are-held-to-it
+priority: p3
+profile: implementation
+objective: "DRY audit 2026-10-29 (cases facts-release-timing-constants, facts-studio-templates-list, facts-licence-notice-list, facts-load-gate-defaults). The 24 h cadence limit (scripts/release-cadence.mjs MAX_AGE_HOURS), the 6 h release-record window (release-record.mjs RECORD_WINDOW_HOURS) and the 15 min stuck Pages run (release-publish.mjs STUCK_AFTER_MIN) are retyped in README.md, CLAUDE.md, the rules deploy-often and release-flow-complete, the rules index and .github/workflows/cadence.yml; the six Studio templates are listed in docs/v31/user-guide.md and .ai/repo/features/studio-patches.md in an order that is not the library's (Filter Automation before Stereo Beat); README's Licences list repeats the notice scripts/build.mjs writes into dist/index.html; and the load gate's defaults (2 x cores, 600000 ms) are an inline literal in tests/browser/lib/suite.cjs restated in tests/README.md and CLAUDE.md. tests/unit/docs-derived.test.mjs holds the timing, the template lists (after the order is corrected) and the Licences list to their sources, with mutation cases; suite.cjs exports LOAD_MAX_PER_CORE and DEFAULT_LOAD_WAIT_MS, browser-suite-contract holds tests/README.md's sentence to them, and CLAUDE.md names the variables and leaves the defaults to tests/README.md."
+why: "A copied fact nothing checks goes stale silently; the template order already had, so the user guide described a dialog order the Studio does not show."
+scope:
+  - "tests/unit/docs-derived.test.mjs"
+  - "tests/unit/browser-suite-contract.test.mjs"
+  - "tests/browser/lib/suite.cjs"
+  - "docs/v31/user-guide.md"
+  - ".ai/repo/features/studio-patches.md"
+  - "CLAUDE.md"
+  - "tests/README.md"
+acceptance_criteria:
+  - "The E042 cases of tests/unit/docs-derived.test.mjs: every timing phrase of each named file states its constant and each named phrase exists; the template lists equal STUDIO_TEMPLATES' titles in library order (the case fails on the merge base's documents); the Licences list names every package of the dist notice with its licence, the VENDOR_SCRIPTS package as shipped unmodified, and package.json's licence; mutation cases prove a drifted timing, a missing phrase and an unlisted bundled package are named."
+  - "tests/unit/browser-suite-contract.test.mjs: tests/README.md states OSC_LOAD_MAX's default as LOAD_MAX_PER_CORE x cores and OSC_LOAD_WAIT_MS's as DEFAULT_LOAD_WAIT_MS; the load gate's behaviour (the 18-core and 600 s cases) is unchanged."
+  - "npm test passes; no src/ or dist/ change; no guarded path is touched."
+validation:
+  - "node --test tests/unit/docs-derived.test.mjs tests/unit/browser-suite-contract.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-30T16:06:48Z
+started_at: 2026-10-30T16:06:25Z
+started_event: sha256:8f21dd3c862e0ddba93bc306531a7cbcfeab5ab77a22f6a5f48c7dcf81c80630
+completed_at: 2026-10-30T16:06:48Z
+completed_event: sha256:52e6ccd3e65614617627326d63a45acf3dce665cba8ab498e4f4bd45431d2fbc
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/docs-derived.test.mjs tests/unit/browser-suite-contract.test.mjs"
+    result: "46/46 pass at main e872c444; landed in #284 (fde49bd1)"
+    artifact: "tests/unit/docs-derived.test.mjs"
+    commit: e872c44489bd66ecfd8a6b58a0dd868270da3cf0
+    recorded_at: 2026-10-30T16:06:41Z

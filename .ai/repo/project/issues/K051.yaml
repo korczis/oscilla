@@ -1,0 +1,48 @@
+id: K051
+milestone: M062
+serves:
+  - "playable-instrument#chart-states-honest"
+title: "Chart export: PNG with a provenance caption and CSV only where the numbers are data"
+slug: chart-export-png-with-a-provenance-caption-and-csv-only-wher
+priority: p3
+profile: implementation
+objective: "Lands as feat(charts), only if Q015 (OD10) keeps it; otherwise it is cancelled citing Q015, and the same change removes it from M062's acceptance list. src/js/charts/export.js: a PNG offscreen 2x composite of plot, axes and legend with a caption (title, provenance line, ISO timestamp, build-info.js version) on the theme's surface, without the tooltip; CSV only where the numbers are data: the live spectrum's raw analyser bins (bin-centre Hz, dB) with a header naming sampleRate, fftSize, binHz, smoothingTimeConstant, source and \"relative dBFS-like, uncalibrated\", the frozen scope buffer, the filter's \"computed response\", the harmonics \"theoretical\" and the bio citation table; MEASURE and Experiments delegate to experiments/csv.js (transferCsv, irCsv, rtaCsv); no CSV for the spectrogram, phase or envelope. A Pro dropdown menu (F001 bundles dropdown) in the card headers, outside the chart host, so no per-host reference of K050 moves and the owner's light acceptance (Q017) stays valid. The snapshot data table every chart already has (K053) is not part of this issue. The export's offscreen canvas is an exempt site of the census."
+why: "Owner order of 2026-10-29: \"make the charts really sexy, modern, interactive\", for all charts; reviewer f3 scoped it to every surface that draws data. Revised after f3's review of the plan (CHANGES-REQUESTED, 2026-10-29): owner decisions are Q issues under M063, Pro chrome waits on F002 and on the card issue of its workspace, every chart that claims chart-interaction delivers the keyboard cursor and the announced readout, chart keys never take Escape or Space; revision 3 answers f3's delta review. Facts checked against origin/main at e2720e07 and the branches of #251, #253, #263 and #265 (charts-plan.md, charts-plan-changes.md)."
+scope:
+  - "src/js/charts/export.js"
+  - "src/js/charts/spectrum-chart.js"
+  - "src/js/charts/filter-chart.js"
+  - "src/js/charts/bio-chart.js"
+  - "src/js/ui/measure"
+  - "src/js/ui/measure.js"
+  - "src/js/ui/experiments.js"
+  - "src/index.html"
+  - "src/partials"
+  - "tests/unit/charts-export.test.mjs"
+  - "tests/unit/charts-readout-wording.test.mjs"
+  - "tests/unit/chart-host-census.json"
+  - "tests/browser/charts-interaction.cjs"
+  - "tests/visual"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "Q015"
+  - "K030"
+  - "K053"
+acceptance_criteria:
+  - "tests/unit/charts-export.test.mjs, failing on the merge base: CSV header metadata carries the sample rate, FFT size, bin width, smoothing and the relative, uncalibrated wording; MEASURE delegates to experiments/csv.js."
+  - "tests/browser/charts-interaction.cjs: the PNG blob is produced and the CSV header reads as specified. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline and assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac); tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Levels say dB relative (dBFS-like) unless a valid LevelCalibration applies, every estimate is labelled as one, and no data value is tweened or eased; every readout, tooltip, axis title and caption string it adds is registered in its chart's wording table and passes tests/unit/charts-readout-wording.test.mjs (project.no-fake-science)."
+  - "The pull request carries a reviewer's verdict (src/js/ui/measure.js (src/js/ui/measure/* after E002) and src/js/ui/experiments.js are guarded where the delegate is wired; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "Chart chrome (legend, toolbar, toggle, badge, tooltip, readout row) is Flowbite Pro markup adapted from the matching Pro component and lands after F002 turned on preflight and the form base styles (the border trap of review #253, R-3) and after F004, F005 and F006 placed the card it sits in; no osc-* class token or legacy selector is added and src/styles/tokens.css, charts.css, measure.css, studio.css and studio-timeline.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+  - "No per-host reference moves: if scripts/visual-charts.mjs exists it passes unchanged, with --check-accepted; the full-page references it moves are re-accepted in both themes and both environments with the reason \"export menu in the card header\"."
+  - "scripts/size-report.mjs shows at most 2.5 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of M062's figures stays within the cap Q014 records, under the 1 000 000 B gzip budget (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/charts-export.test.mjs"
+  - "node tests/browser/charts-interaction.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

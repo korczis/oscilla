@@ -1,0 +1,19 @@
+id: M063
+title: "Owner decisions of the charts line"
+slug: owner-decisions-of-the-charts-line
+order: 996
+priority: p2
+problem: "The charts plan (M062) has owner decisions that its slices wait on: the palette source, the dark identity exception, the meter card, the stopped filter plot, the envelope labels, the SNR placement, the budget cap, the export and the milestone's home; and the light chart references need the owner's acceptance as a design reference."
+current_state: "Opened on 2026-10-29 with Q008-Q017. Like M053 (Q007), it is named by no intent: its questions serve no criterion of their own, and the slices of M062 that wait on them name them in depends_on; M052 is not used, because it realises intent product-direction, where a question serving another intent fails majordomus intent validate (serves_outside_milestone, checked 2026-10-29), and naming M052 from a second intent would couple it as critique m052-couples-unrelated-questions of intent first-run-experience records. It sorts after every live milestone except M053, M052 and M005 (order 996), so majordomus plan next does not nominate a question before the work; that ordering and the owner field are conventions, and nothing stops a worker from running majordomus plan start on one. majordomus counts a cancelled dependency as not done, so a cancelled Q issue, or a slice cancelled under one (K049 under Q010, K051 under Q015), is removed from its dependents' depends_on in the same change. Q017 serves nothing; the criterion it decides reads the acceptance Q017 records as data, bound to Q017's owner_decision evidence. A slice that moves a light per-host reference after an acceptance opens, in the same change, a new Q issue here to re-accept them, and the criterion stays red until it is answered."
+outcome: "Every owner decision the charts line waits on is answered, by the owner or under a delegation the owner gave, and recorded, and the slices that waited are built from the answer or cancelled."
+acceptance_criteria:
+  - "Every Q issue of this milestone carries owner_decision evidence with its date and source, either quoting the owner or attributed to the session that decided under a quoted owner delegation, or is cancelled with the reason."
+validation:
+  - "manual"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "Nobody asks the owner: majordomus plan list --milestone M063 lists the questions, and the coordinator raises them; the plan cannot."
+  - "A delegated decision read as the owner's own: each records who decided and under which delegation, and the owner may override it."
+created_at: 2026-10-29
+updated_at: 2026-10-29

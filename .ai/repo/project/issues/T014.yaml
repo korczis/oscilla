@@ -1,0 +1,33 @@
+id: T014
+milestone: M073
+serves:
+  - "v3-measure#readout-states"
+title: "The live Lissajous figure marks when it is drawn from too few samples per cycle"
+slug: the-live-lissajous-figure-marks-when-it-is-drawn-from-too-fe
+priority: p3
+profile: implementation
+objective: "Truth-table rows STP-09 (scratchpad p05/truth-table.md). Vertex generation moves to a pure lissajous-path module. Below a threshold derived from the chord error cos(π f / sr) and a declared tolerance of one plot pixel, the samples are drawn as dots with \"sampled: N.N samples/cycle at <sr> Hz\" (K034 labels the L and R axes)."
+why: "P05 audit of origin/main b67d1e58 (v3.13.0): At 18 kHz on a 48 kHz context each sample advances the phase by 135°, and joining samples with straight lines draws an octagram {8/3} instead of the quadrature circle; chord midpoints sit at radius cos(π f / fs) = 0.383. The correlation (0.00) stays right. The chart has no axis labels."
+scope:
+  - "src/js/charts/lissajous.js"
+  - "src/js/charts/lissajous-path.js"
+  - "src/js/labs/phase-stereo.js"
+  - "tests/unit/readout-states-lissajous.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "T013"
+acceptance_criteria:
+  - "Fail-first fixture: tests/unit/readout-states-lissajous.test.mjs, fixture F4 (18 kHz quadrature at 48 kHz): the path reports the undersampled state and its label; fails on the merge base (no state, minimum chord radius 0.383)."
+  - "Negative cases, each asserted: 440 Hz quadrature draws a polyline circle with no state; the threshold sits where cos(π f / sr) meets the declared pixel tolerance at both 44.1 and 48 kHz; the model figure is unchanged."
+  - "Revertible on its own: Revert: drawing mode and labels."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "Any new visible element follows the Flowbite Pro components and the locked tokens (project.ui-uses-flowbite-pro, project.visual-identity-lock); npm run visual passes or the baseline change is declared."
+  - "tests/README.md has a row for each new test; this issue does not edit docs/CLAIMS.yaml or the intent (T027 does)."
+validation:
+  - "npm test"
+  - "npm run verify"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

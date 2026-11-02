@@ -1,0 +1,50 @@
+id: V622
+milestone: M081
+serves:
+- "studio-box-system#box-faces"
+title: "Collapse and expand are first-class: per box, selection and graph, and a mute toggle on the face"
+slug: collapse-and-expand-are-first-class-per-box-selection-and-gr
+priority: p2
+profile: implementation
+objective: "P04 slice D (editing and undo invariants). Every parameter is on the face (owner decision Q031 of 2026-10-29), so folding is first-class: a box collapses to its title, ports, primary parameters (V619) and live view, or expands to every section; commands collapse and expand the focused box, the selection and the whole graph (keys listed in STUDIO_SHORTCUTS, toolbar and box chrome by Pro buttons with aria-expanded); the state is presentation (node metadata), saved, undoable, never hashed. The face carries V614's box mute as a toggle. V620 adds the knobs inside the expanded sections and lands after this slice; bypass (K022) is a box-menu item of V623. Merged plan of the component follow-up (2026-10-30): The folding owner is stated, not unified (params-controls.md section 7.1): a Synth-workspace card's folding is view state (K062: persisted per view, never in history or the hash), a Studio box's folding is node presentation state (V622: saved, undoable, never hashed), and the two projections of one node fold independently."
+why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings S1-S14 measured on origin/main b67d1e58)."
+scope:
+- src/js/studio/schema.js
+- src/js/studio/migrate.js
+- src/js/ui/studio/graph-face.js
+- tests/unit/studio-box-state.test.mjs
+- tests/browser/studio-boxes.cjs
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+- src/js/ui/studio/graph-keys.js
+- tests/unit/v31-studio-performance.test.mjs
+depends_on:
+- "V619"
+- "V614"
+- "V618"
+- "F008"
+acceptance_criteria:
+- "Before: VERIFIED (S6): every box has one size and shows a summary line; nothing collapses."
+- "After: collapse and expand are first-class (owner decision Q031 of 2026-10-29: every parameter is on the face, so a box must fold): per box, for the selection and for the whole graph, by pointer, key and touch, saved as presentation state and never hashed; the box mute of V614 is a face toggle."
+- "Negative cases: collapsing changes no studioHash and no compiled topology; a collapsed box keeps every port reachable for wiring and its accessible name; expanding restores the exact layout; collapse-all on an empty selection is one entry or none, never an error."
+- "Rollback: the reader lands with the writer and stays when the writer is reverted (the field is presentation state that an older reader would refuse), so a revert removes only the writer and documents saved while it was live still load; this is stated in the pull request."
+- "tests/unit/studio-box-state.test.mjs, failing on the merge base: collapse of a box, the selection and the graph round-trips through save and load, changes semanticState but not studioHash or the compiled topology, and its undo restores the layout; a collapsed box keeps every port wireable."
+- "Definition of done, extends: V614's box mute and the box card of V430."
+- "Definition of done, cross-links: a box collapsed in the full Studio keeps its identity and selection in the compact Studio (V632), which draws its own automatic layout. The link is a row of tests/browser/integration-map.json once that map (synth line K075) is on main."
+- "Definition of done, dynamics: folding and unfolding resize the box in one frame; nothing animates that is not state."
+- "Definition of done, docs and routes: docs/v31/user-guide.md and .ai/repo/features/studio-signal-graph.md say what changed; tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: A check 'box-state' in tests/browser/studio-boxes.cjs collapses a box by pointer, by keyboard (the box's toggle by Tab and Enter) and by touch, waits with until() (deadline 'box collapsed', 2 s) for the metadata and the face height; collapses the whole graph by its key and waits for every box folded, then expands the selection only; on the merge base the toggles do not exist. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit and the completed evidence the release that carried it; E030's judge passes on the pull request once E030 is on main."
+- "The pull request carries a reviewer's verdict (it touches a guarded path; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+- "Wave 2: its chrome is Flowbite Pro markup adapted from the matching Pro component, lands after F002, adds no osc-* class token or legacy selector, and studio.css, studio-timeline.css, charts.css and tokens.css gain no selector or declaration; the domain drawing stays OSCILLA's own inside Pro cards (project.ui-uses-flowbite-pro, project.visual-identity-lock v2; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "scripts/size-report.mjs shows at most 1.5 KB gzip added, with the base and head figures in the pull request body, within the owner's dist budget of 1 200 000 B gzip (decision of 2026-10-29, about 355 KB of headroom at origin/main b67d1e58); the ceiling of this line is 35 KB gzip in all (Studio boxes 35 KB, signal generator 25 KB), stated in the milestone (project.single-file-deliverable)."
+- "tests/unit/v31-studio-performance.test.mjs measures V618's 300-node fixture with every box expanded (every parameter on its face) and collapsed, and holds the drag and pan budgets for both, or the slice states which it meets and the collapsed default for imported graphs above 100 nodes."
+validation:
+- node --test tests/unit/studio-box-state.test.mjs
+- node tests/browser/studio-boxes.cjs --only box-state
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: 2026-10-30

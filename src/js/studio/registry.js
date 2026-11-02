@@ -27,11 +27,14 @@ import processing from './nodes/processing.js';
 import analysis from './nodes/analysis.js';
 import output from './nodes/output.js';
 import measurement from './nodes/measurement.js';
+import instrument from './nodes/instrument.js';
+import engines from './nodes/engines.js';
 
 export { CATEGORIES, CATEGORY_ORDER, CLIP_KINDS };
 
 export const NODE_DEFINITIONS = Object.freeze([
-  ...sources, ...modulation, ...processing, ...analysis, ...output, ...measurement,
+  ...sources, ...modulation, ...processing, ...analysis, ...output, ...measurement, ...instrument,
+  ...engines,
 ]);
 
 export const PARAM_TYPES = Object.freeze(['number', 'integer', 'enum', 'boolean', 'list', 'id']);
@@ -129,6 +132,9 @@ export function validateNodeDefinition(def) {
     }
     if (p.softRange && !(p.softRange[0] >= p.min && p.softRange[1] <= p.max)) {
       err(`${p.key}: softRange outside the range`);
+    }
+    if (p.laneRange && !(p.laneRange[0] >= p.min && p.laneRange[1] <= p.max)) {
+      err(`${p.key}: laneRange outside the range`);
     }
     const why = PARAM_TYPES.includes(p.type) ? validateParamValue(p, p.default) : null;
     if (why) err(`${p.key}: default ${why}`);

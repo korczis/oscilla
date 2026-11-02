@@ -57,7 +57,7 @@ import {
   AUTOMATION_CURVES, MARKER_KINDS, MIN_CLIP_S, MUSICAL_TOLERANCE_S, NAME_MAX_CHARS,
   NOTES_MAX_CHARS, POSITION_LIMIT, POSITION_MESSAGE, STUDIO_KIND, STUDIO_SCHEMA_VERSION,
   TEMPO_RANGE, TIMELINE_MAX_S, TIME_MODES, TIME_SIGNATURE_DENOMINATORS, TITLE_MAX_CHARS,
-  TRACK_KINDS, CLIP_KINDS, VIEW_LIMITS, isPosition, normalizeStudio,
+  TRACK_KINDS, CLIP_KINDS, VIEW_LIMITS, isPosition, normalizeStudio, PANEL_REF_MESSAGE, isPanelRef,
 } from './schema.js';
 
 export const AUDIO_FEEDBACK_MESSAGE = 'Connection rejected: This would create an unsupported '
@@ -704,8 +704,11 @@ function structure(c, doc, lim, registry) {
       c.num(n.position.x, `${p}.position.x`, -POSITION_LIMIT, POSITION_LIMIT);
       c.num(n.position.y, `${p}.position.y`, -POSITION_LIMIT, POSITION_LIMIT);
     }
-    if (n.metadata !== undefined && c.keys(n.metadata, `${p}.metadata`, [], ['name'])) {
+    if (n.metadata !== undefined && c.keys(n.metadata, `${p}.metadata`, [], ['name', 'panel'])) {
       if (n.metadata.name !== undefined) s(n.metadata.name, `${p}.metadata.name`, NAME_MAX_CHARS);
+      if (n.metadata.panel !== undefined && !isPanelRef(n.metadata.panel)) {
+        c.add(`${p}.metadata.panel`, PANEL_REF_MESSAGE);
+      }
     }
     const def = registry.get(n.type);
     if (!def) c.add(`${p}.type`, `unknown node type "${String(n.type).slice(0, 64)}"`);
@@ -844,12 +847,12 @@ const failed = (path, message, code = 'invalid-structure') => ({ ok: false, warn
   errors: [asError({ text: message, path }, code)] });
 
 /**
- * The import front end, one implementation for validateStudioImport and migrate.js
- * importStudio: the size cap (before JSON.parse) → JSON.parse → the structural scan (plain data
- * only, no prototype keys, finite numbers) → nesting depth → a Studio object (`kind`). No
- * version is looked at. Returns { ok: true, doc } or a failed import result.
+ * The untrusted-JSON front end of every Studio file import: the size cap (before JSON.parse) →
+ * JSON.parse → the structural scan (plain data only, no prototype keys, finite numbers) →
+ * nesting depth. Nothing about the document's kind is looked at (library.js reads V2 sequence
+ * and configuration files through it too). Returns { ok: true, doc } or a failed import result.
  */
-export function readStudioInput(input, lim) {
+export function readUntrustedInput(input, lim) {
   let doc = input;
   if (typeof input === 'string') {
     if (utf8Length(input, lim.maxBytes) > lim.maxBytes) {
@@ -868,6 +871,18 @@ export function readStudioInput(input, lim) {
   if (depthOf(doc, lim.depth) > lim.depth) {
     return failed('', `The data is nested deeper than ${lim.depth} levels.`, 'limit-exceeded');
   }
+  return { ok: true, doc };
+}
+
+/**
+ * The import front end, one implementation for validateStudioImport and migrate.js
+ * importStudio: readUntrustedInput → a Studio object (`kind`). No version is looked at.
+ * Returns { ok: true, doc } or a failed import result.
+ */
+export function readStudioInput(input, lim) {
+  const read = readUntrustedInput(input, lim);
+  if (!read.ok) return read;
+  const doc = read.doc;
   if (!doc || typeof doc !== 'object' || Array.isArray(doc)) {
     return failed('', 'The file does not contain a Studio object.');
   }

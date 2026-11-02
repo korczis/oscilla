@@ -1,0 +1,18 @@
+id: M071
+title: "Instrument wave 4a: the parameter contract, deep links, the mixer and the full piano"
+slug: instrument-wave-4a-the-parameter-contract-deep-links-the-mix
+order: 71
+priority: p2
+problem: "Parameters have no contract across every control, elements have no addresses beyond workspaces and records, there is no channel strip, bus, solo or mixer, and the piano covers a few octaves and one target."
+outcome: "Every parameter declared, shown, automatable or modulatable and linkable; every element deep-linked to its related views; channel and bus nodes and a mixer view with meters; an 88-key piano with velocity by position, splits, layers and chords; Automate this knob."
+acceptance_criteria:
+  - "K105, K106, K107, K108, K115, K116, K120 are done with their evidence; npm run release-gate passes at the last one; npm run test:synth and node tests/browser/integration-map.cjs pass."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "K106 is big and is split further when started."
+  - "K107 changes src/js/studio and needs a reviewer's verdict."
+created_at: 2026-10-29
+updated_at: 2026-10-29

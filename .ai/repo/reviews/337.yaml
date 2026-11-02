@@ -1,0 +1,53 @@
+# Review verdict for pull request #337, E044: a push to main runs ci.yml's unit, knowledge and
+# browser-gate jobs, so a red combination of green pull requests shows on the merge commit
+# (owner decision 2026-10-30, strict off + main workflow). Reviewed head 56d6961d in a detached
+# worktree of its own; base origin/main. Another session built it (oscilla-b0); this reviewer
+# did not build or edit any of it.
+#
+# The digest: the base branch's scripts/review-verdict.mjs, run from `git archive origin/main
+# scripts` with --repo on this worktree, gives a3962ff8...c6de over the one guarded path it
+# names, .github/workflows/main-checks.yml.
+#
+# How it was reviewed: read main-checks.yml whole against ci.yml's jobs of the same names, E044,
+# and the four questions asked (project.ci-bounded compliance, reuse, loudness, cost); ran
+# tests/unit/main-checks.test.mjs, ci-workflows.test.mjs and ci-gates-model.test.mjs (47 of 47
+# pass); mutated the workflow twelve ways and ran the tests on each; measured the mirrored jobs'
+# durations from two green ci.yml runs on main.
+#
+# project.ci-bounded: holds. The only trigger is push to main; there is no gate job and nothing
+# requires the workflow; every job has timeout-minutes, and the long steps have their own; the
+# Majordomus install is pinned by version and sha256 and retried (curl --retry 5
+# --retry-all-errors); the actions are the same tags ci.yml uses. ci-workflows.test.mjs ("the
+# repository has no violation") passes with the file present.
+#
+# Reuse: the jobs are copies, not references. They are held equal to ci.yml's by the test, and
+# that holding is real: of twelve mutations each was caught (a browser timeout 45->50, the
+# MJ_SHA256 digest, a workflow_dispatch or pull_request trigger, the report renamed gate, webkit
+# dropped, report not needing knowledge, `|| true` after the browser suite, the report exiting 0
+# on red, report without if: always(), continue-on-error on unit, the branch renamed). Drift
+# cannot land silently; a change to a mirrored job of ci.yml is made in both files in one pull
+# request, as the header says. See F1 for the shape that would remove the copy.
+#
+# Loudness: a job that fails, times out or is cancelled makes `report` fail (it needs every job
+# and runs always), with a step-summary table naming each job's result and one ::error annotation
+# naming the commit, so the merge commit carries a red check that says which merge and which
+# jobs. It is a check, not a stop: nothing requires it, and pages.yml deploys main on the same
+# push independently (F2).
+#
+# Cost per merge, measured on ci.yml's green runs: unit about 1 min, knowledge under 1 min,
+# browser gate chromium 7, firefox 9-10, webkit 10-12 min, report seconds: about 28-30 runner
+# minutes in six jobs, a critical path of about 12 minutes, per merge commit. There is no
+# concurrency group by design (every merge gets its own verdict), so a burst of N merges costs N
+# full runs; on an account where 47 OSCILLA runs stood queued on 2026-10-30, that is the price of
+# attribution (F3).
+#
+# Verdict: merge. No P0, P1 or P2. Three P3s for the owner's or a follow-up's attention.
+schema: review-verdict/v1
+pr: 337
+verdict: merge
+reviewer: prismatic-majordomus-1d (claude-code 1423ad2b)
+content: a3962ff893686dc48a8cf33d8c424cd5b6725fb1925395f14a3686b8e623c6de
+findings:
+  - { id: F1, severity: P3, status: open, title: "main-checks.yml copies ci.yml's unit, knowledge and browser jobs and a test holds the copies equal (twelve of twelve mutations caught); moving the three jobs into one reusable workflow (on: workflow_call, no gate job) called from both files would leave one definition, at the cost of touching ci.yml, which E044 keeps unchanged" }
+  - { id: F2, severity: P3, status: open, title: "a red main-checks run does not stop pages.yml, which deploys main on the same push; the red check is visible on the commit but the site may already serve the combination it failed" }
+  - { id: F3, severity: P3, status: open, title: "about 28-30 runner minutes in six jobs per merge commit, with no concurrency group by design, so a burst of N merges queues N full runs on an account already starved of runners; worth a measured look after a week of merges" }

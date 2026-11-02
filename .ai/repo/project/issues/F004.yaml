@@ -1,0 +1,41 @@
+id: F004
+milestone: M055
+serves:
+  - "ui-flowbite-pro#no-legacy-chrome"
+title: "Measure on Pro components"
+slug: measure-on-pro-components
+priority: p2
+profile: implementation
+objective: "Rebuild the MEASURE workspace from Pro components: the guided seven-step flow as a Pro stepper inside a card, the stimulus, live input and quality panels as Pro cards with the quality states as Pro status badges (green, yellow, red pairs with their dark variants), the device and calibration selectors as Pro form controls, the result views (frequency response, impulse response, RTA) as Pro chart cards whose header carries the view's actions, and Measure's three dialogs (osc-dlg-level-cal, osc-dlg-cal-convention, osc-dlg-recipe-link, opened from src/js/ui/measure.js) on the Pro modal pattern F010 lands, with their rows of F010's dialog table turned on. The measurement charts keep their axes, units, traces and the signal palette; the TEST CONTEXT label and every quality warning stay as prominent as today (project.no-fake-science). Remove the legacy primitives and selectors Measure no longer uses, lower the ratchet baseline by the surfaces migrated and the primitive uses removed, keep every data-osc hook and id."
+why: "Owner, 2026-10-28: the whole interface on Flowbite Pro. Measure is the wedge (ADR 0051) and its labels carry scientific meaning, so it lands on its own."
+scope:
+  - "src/index.html"
+  - "src/styles"
+  - "src/js/ui/measure.js"
+  - "src/js/ui/measure-experiment.js"
+  - "src/js/measurement/views"
+  - "src/js/charts/measure-charts.js"
+  - "tests/browser/ui-flowbite-pro.cjs"
+  - "tests/browser/v3-ui.cjs"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/unit/source-size-baseline.json"
+  - "tests/visual/measure"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "F002"
+  - "F010"
+acceptance_criteria:
+  - "ui-flowbite-pro.cjs asserts the Measure panels are Pro cards and are listed as migrated by the ratchet at both sizes, and that osc-dlg-level-cal, osc-dlg-cal-convention and osc-dlg-recipe-link carry the Pro modal structure with focus entry, Escape, focus return and an inert background, in every gate browser from file:// and the sub-path."
+  - "npm run test:measure passes with no behaviour check changed; the TEST CONTEXT label and the quality warnings are visible in the same steps as before."
+  - "The Measure references (tests/visual/measure, desktop and phone, darwin and linux) are updated through the visual gate with the reason; the ratchet baseline's debt is lower (the surfaces migrated move from surfaces.pending to surfaces.migrated and the primitive uses removed leave the counts); dist's size is stated and within BUDGET."
+  - "The pull request carries a review verdict (src/js/ui/measure.js and src/js/measurement are guarded)."
+validation:
+  - "node tests/browser/ui-flowbite-pro.cjs"
+  - "npm run test:measure"
+  - "npm run test:visual"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-28
+updated_at: 2026-10-28

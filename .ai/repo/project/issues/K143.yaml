@@ -1,0 +1,43 @@
+id: K143
+milestone: M082
+serves:
+- "signal-generator-lab#hand-offs"
+title: "Add the generator's setting as a sequencer block"
+slug: add-the-generator-s-setting-as-a-sequencer-block
+priority: p2
+profile: implementation
+objective: "Lands as feat(sequencer). 'Add as block' in the Generator workspace appends the current tone, sweep, burst or chirp as a block of the V2 sequencer (sequencer/model.js normalizeBlock), with its frequency, duration and level; a pattern the block types cannot hold is refused with the reason. One undo step in the sequencer's history (K003)."
+why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings G1-G14 measured on origin/main b67d1e58)."
+scope:
+- src/js/ui/workbench.js
+- src/js/sequencer/model.js
+- tests/unit/generator-to-sequencer.test.mjs
+- tests/browser/generator.cjs
+- tests/browser/sequencer.cjs
+- tests/README.md
+- dist
+depends_on:
+- K138
+- K017
+acceptance_criteria:
+- "Before: VERIFIED: blocks are added in the Sequencer workspace only."
+- "After and negative cases: as the objective and the criteria below state; the setpoint (what was requested) and the observation (what the analyser measured on the digital output, or the microphone on the room) are separate readouts with separate labels, and no readout claims the acoustic output."
+- "Rollback: revert the merge commit. Nothing changes the schema, a studioHash, URL key meaning or stored preset, so documents saved while it was live load unchanged after the revert."
+- "tests/unit/generator-to-sequencer.test.mjs, failing on the merge base: each pattern maps to a normalized block or a refusal; the block's offline render matches the generator's within the sequencer's timing bound."
+- "Definition of done, extends: the V2 sequencer blocks and K003's undo."
+- "Definition of done, cross-links: the new block is selected in the Sequencer workspace (round trip: Add, open Sequencer, Back). The link is a row of tests/browser/integration-map.json once that map (synth line K075) is on main."
+- "Definition of done, dynamics: the sequencer lane draws the new block's frequency glyph (K047 when it lands)."
+- "Definition of done, docs and routes: README.md's Playground feature list and docs/GLOSSARY.md where a term is new; .ai/repo/features/playground.md (or the feature record of the Playground) says what changed; tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: A check 'to-sequencer' in tests/browser/generator.cjs adds the current sweep by pointer, by keyboard and by touch in a hasTouch context, and waits with until() (deadline 'sequencer has the sweep block', 3 s); on the merge base the action does not exist. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit and the completed evidence the release that carried it; E030's judge passes on the pull request once E030 is on main."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "Wave 2: its chrome is Flowbite Pro markup adapted from the matching Pro component, lands after F002, adds no osc-* class token or legacy selector, and studio.css, studio-timeline.css, charts.css and tokens.css gain no selector or declaration; the domain drawing stays OSCILLA's own inside Pro cards (project.ui-uses-flowbite-pro, project.visual-identity-lock v2; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "scripts/size-report.mjs shows at most 0.5 KB gzip added, with the base and head figures in the pull request body, within the owner's dist budget of 1 200 000 B gzip (decision of 2026-10-29, about 355 KB of headroom at origin/main b67d1e58); the ceiling of this line is 25 KB gzip in all (Studio boxes 35 KB, signal generator 25 KB), stated in the milestone (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/generator-to-sequencer.test.mjs
+- node tests/browser/generator.cjs --only to-sequencer
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

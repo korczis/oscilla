@@ -20,4 +20,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-01
-updated_at: 2026-10-18
+updated_at: 2026-10-29T17:35:44Z
+started_at: 2026-10-29T17:35:38Z
+started_event: sha256:8924770db03713528fd7d9a3bfc58228dc899c09b158915e33b5a2b4e00f1df7
+completed_at: 2026-10-29T17:35:44Z
+completed_event: sha256:9ee2863ac3b4be30f8311b2e8078fbfbd8c0f3e7101998470dfb58b89dd2d628
+evidence:
+  - covers: verified
+    type: manual
+    command: "AskUserQuestion in Claude Code session oscilla-b0, 2026-10-29 (Czech); README.md 'Browser support' at c7e04169 (#259); node scripts/review-verdict.mjs --pr 259 --head c7e04169 --base-branch c7e04169^1"
+    result: "Second criterion met. The owner declined real-device checks for now on 2026-10-29 (source: AskUserQuestion in session oscilla-b0, recorded in the body of #259). README.md 'Browser support' on main at c7e04169 (#259) says only Chromium, Firefox and WebKit are checked and that Safari on iOS, Chrome on Android and Edge have not been tried for tap-to-start, resume after background or hold-to-play by touch, naming the decline and its date. Review verdict: PR #259 changed README.md and .ai/repo/project/issues/Q004.yaml, none guarded; no verdict needed (review-verdict.mjs, base program at the merge c7e04169 of #259)."
+    artifact: "README.md"
+    commit: c7e041698d65d76aaee4f85aa79ff17991dcf143
+    recorded_at: 2026-10-29T17:35:42Z

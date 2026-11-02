@@ -1,0 +1,46 @@
+id: K045
+milestone: M062
+serves:
+  - "playable-instrument#chart-interaction"
+title: "Envelope graph with time and level axes, A D S R labels and exact hover values"
+slug: envelope-graph-with-time-and-level-axes-a-d-s-r-labels-and-e
+priority: p2
+profile: implementation
+objective: "Lands as feat(charts). envelope-graph.js gets a time axis (linearTicks, ms and s) and a level axis 0, 0.5, 1 \"gain (linear, peak 1)\"; the labels A D S R if Q012 (OD5) answers so (today envelope-graph.js:140 shows only A, D and R to match the reference image); the kit's crosshair and keyboard cursor read t and level from audio/envelope.js valueAtTime(adsrEvents(...)), the closed form the voice schedules; sustain is drawn at a display hold marked \"held until note-off\"; handle hover shows the exact parameter (\"A 12 ms\") and a drag chip; gestures emit onPreview and onCommit beside onChange, which K048 uses; the handles use the handle role of K027's registry in both themes; the disabled envelope (globalAlpha 0.6 on main) enters the registry as an inactive exemption under WCAG 1.4.11, named, with \"disabled\" stated in its summary."
+why: "Owner order of 2026-10-29: \"make the charts really sexy, modern, interactive\", for all charts; reviewer f3 scoped it to every surface that draws data. Revised after f3's review of the plan (CHANGES-REQUESTED, 2026-10-29): owner decisions are Q issues under M063, Pro chrome waits on F002 and on the card issue of its workspace, every chart that claims chart-interaction delivers the keyboard cursor and the announced readout, chart keys never take Escape or Space; revision 3 answers f3's delta review. Facts checked against origin/main at e2720e07 and the branches of #251, #253, #263 and #265 (charts-plan.md, charts-plan-changes.md)."
+scope:
+  - "src/js/charts/envelope-graph.js"
+  - "src/js/labs/envelope.js"
+  - "src/index.html"
+  - "src/js/charts/palette.js"
+  - "tests/unit/chart-palette.test.mjs"
+  - "tests/unit/envelope-graph.test.mjs"
+  - "tests/browser/labs.cjs"
+  - "tests/unit/chart-host-census.json"
+  - "tests/browser/charts-interaction.cjs"
+  - "tests/visual"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "Q012"
+  - "K027"
+  - "K053"
+  - "F003"
+acceptance_criteria:
+  - "tests/unit/envelope-graph.test.mjs, failing on the merge base: the hover value equals valueAtTime at 5 sample times, and onCommit fires once per gesture."
+  - "tests/browser/labs.cjs: hovering a handle shows its parameter value. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline and assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac); tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Its chart hosts (envelope) move from pending to done in tests/unit/chart-host-census.json, each carrying data-osc-chart, and the table-driven pass of tests/browser/charts-interaction.cjs holds for each: the host is role=group holding the aria-describedby summary and the snapshot data table, and its focusable plot surface is role=application with aria-roledescription \"interactive chart\" (never role=img), both asserted in the accessibility tree, with a visible focus ring; ArrowRight moves the cursor one step and the one polite live region announces the readout once after the keys settle; Escape clears the cursor and still reaches the page's stop (a playing tone stops); Space keeps its workspace meaning (SPACE_MEANING of src/js/ui/shortcuts.js) and is never taken (ADR 0050); on a touch pointer a tap pins the cursor and it stays after the finger lifts."
+  - "Chart chrome (legend, toolbar, toggle, badge, tooltip, readout row) is Flowbite Pro markup adapted from the matching Pro component and lands after F002 turned on preflight and the form base styles (the border trap of review #253, R-3) and after F003 placed the card it sits in; no osc-* class token or legacy selector is added and src/styles/tokens.css, charts.css, measure.css, studio.css and studio-timeline.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+  - "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no review verdict is needed; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+  - "The visual references of the envelope region of test:visual are re-accepted in darwin-arm64 and linux-x64, in each theme that has references (light ones exist once F011 lands), with the reason \"axes and the labels Q012 decided\" in the pull request body (npm run test:visual)."
+  - "scripts/size-report.mjs shows at most 1.5 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of M062's figures stays within the cap Q014 records, under the 1 000 000 B gzip budget (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/envelope-graph.test.mjs"
+  - "node tests/browser/labs.cjs"
+  - "node tests/browser/charts-interaction.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

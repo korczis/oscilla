@@ -1,0 +1,41 @@
+id: K087
+milestone: M067
+serves:
+  - "connected-instrument#measure-a-patch"
+title: "Measure a patch digitally and save the run with the patch as provenance"
+slug: measure-a-patch-digitally-and-save-the-run-with-the-patch-as
+priority: p2
+profile: implementation
+objective: "Lands as feat(studio). 'Measure this patch' inserts, as one batch, M029's measurement topology on a digital loop (Sweep with its reference into the panel's External input or Mixer, the processing chain to Output, Capture, Transfer Analyzer), runs it through src/js/studio/measurement-run.js with Envelope 2 held open for the run (a held gate, stated, because a closed amp would measure silence), shows transfer and RTA (distortion once V393 lands) labelled 'digital patch measurement, no speaker or microphone', and saves the run as an experiment whose provenance names the patch's studioHash. Before: a patch cannot be measured. After: a patch is measured digitally and saved with its hash. User-value tier 3 of 4 (synth-design.md section 17). Rollback: revert the pull request; no saved state depends on it."
+why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
+scope:
+  - "src/js/studio/measurement-run.js"
+  - "src/js/ui/synth"
+  - "src/js/experiments"
+  - "tests/browser/integration-map.json"
+  - "tests/unit/synth-measure-patch.test.mjs"
+  - "tests/browser/v3-ui.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K062"
+  - "Q023"
+acceptance_criteria:
+  - "tests/unit/synth-measure-patch.test.mjs, failing on the merge base: the inserted topology validates; the transfer of the panel's Low-pass at 1 kHz cutoff matches its biquad response within 0.5 dB from 100 Hz to 10 kHz; the saved experiment's provenance hash equals the patch's studioHash."
+  - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: a patch with no processing chain (refused); a run aborted by Escape."
+  - "A browser check in tests/browser/v3-ui.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: the saved experiment opens in Experiments with the patch named, and its 'Open patch' returns to the Synth workspace at that hash. Real-time: the transfer curve appears when the measurement completes, each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: Measure this patch works by pointer, keyboard and touch; the result's label is in its accessible description. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Every edit is one undoable dispatch through the one Studio store (a continuous gesture is one history entry, undo and redo restore the exact serialized model) and the model holds plain data only (project.studio-model-is-canonical); every connection goes through canConnect and full-model validation, and a refusal shows the validator's sentence and leaves model, history and runtime unchanged (project.typed-ports, project.no-silent-feedback)."
+  - "Every link it adds (open in, send to, a modulation route, a probe or a jump between views) is a row of tests/browser/integration-map.json, and tests/browser/integration-map.cjs walks it: the control works by pointer and by keyboard, the target shows the same Studio revision, focus lands on the target heading, and Back, Forward and reload keep the state."
+  - "Every string it adds passes tests/unit/instrument-wording.test.mjs (added by K059): no product, brand or model name, no analog-modelling or vintage claim, and every approximation it makes labelled where it is shown (project.no-fake-science)."
+  - "The pull request carries a reviewer's verdict (src/js/experiments and src/js/studio is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "scripts/size-report.mjs shows at most 2 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of the line's figures stays within the cap Q023 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/synth-measure-patch.test.mjs"
+  - "node tests/browser/v3-ui.cjs"
+  - "npm run test:measure"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

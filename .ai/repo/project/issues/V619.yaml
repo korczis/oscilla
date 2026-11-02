@@ -1,0 +1,46 @@
+id: V619
+milestone: M080
+serves:
+- "studio-box-system#node-declaration"
+title: "One declaration per node: face sections in defineNode and a generated node reference"
+slug: one-declaration-per-node-face-sections-in-definenode-and-a
+priority: p2
+profile: implementation
+objective: "P04 slice A (model invariants and round-trip). defineNode (src/js/studio/nodes/common.js) accepts face: { sections: [{ label, params: [parameter ids] }], primary: [ids shown while collapsed], view: 'level' | 'waveform' | 'response' | 'spectrum' | 'scope' | 'none' }; every parameter of the type is in exactly one section (owner decision Q031 of 2026-10-29: every parameter is on the face), primary lists at most three, and the registry refuses a face that misses or repeats a parameter. Every shipped node type declares one; the face is drawn by V622 and V620. scripts/studio-node-reference.mjs writes docs/v31/node-reference.md from NODE_REGISTRY (category, aliases, ports with type and role, parameters with unit, range, default and flags, face sections, help); npm run docs:nodes writes it and --check, run by npm test, fails when it is stale. tests/unit/studio-face-declaration.test.mjs is table-driven over the registry for the face, help and aliases; the contract over every parameter (unit, range, mapping, automatable, modulatable, deep-link address) is synth K105's and is not repeated here. The registry is not in the model, so no studioHash changes."
+why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings S1-S14 measured on origin/main b67d1e58)."
+scope:
+- src/js/studio/nodes
+- src/js/studio/registry.js
+- scripts/studio-node-reference.mjs
+- docs/v31/node-reference.md
+- package.json
+- tests/unit/studio-face-declaration.test.mjs
+- tests/unit/studio-node-reference.test.mjs
+- tests/browser/qa-regressions.cjs
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+acceptance_criteria:
+- "Before: VERIFIED: defineNode declares ports, parameters, summary, help and aliases; nothing declares a face, and no reference is generated from the registry."
+- "After: every node type declares face sections holding all its parameters; docs/v31/node-reference.md is generated and checked; a face-declaration test covers every type."
+- "Negative cases: a face that misses, repeats or invents a parameter, more than three primary parameters, or a missing help field is refused with the type's name."
+- "Rollback: revert the merge commit. Nothing changes the schema, a studioHash or a stored record, so documents saved while it was live load unchanged after the revert."
+- "tests/unit/studio-face-declaration.test.mjs and tests/unit/studio-node-reference.test.mjs fail on the merge base (no face, no reference); a fixture node whose face misses a parameter, repeats one, lists four primary parameters, or lacks a help field is refused with a message naming the type."
+- "Adding a node type is one declaration in src/js/studio/nodes/<category>.js: the registry, the reference, the contract test and the no-inert-surfaces walk of tests/browser/qa-regressions.cjs pick it up without another edit (shown by a fixture type in the test)."
+- "Definition of done, extends: defineNode and the node registry of V411, and E008's table-driven parameter test."
+- "Definition of done, cross-links: the reference links each type to its help in the in-app node library (the same text), and the node library's 'About <type>' shows the registry help. The link is a row of tests/browser/integration-map.json once that map (synth line K075) is on main."
+- "Definition of done, dynamics: the node library's help panel shows the face parameters a type declares."
+- "Definition of done, docs and routes: docs/v31/node-reference.md is generated; docs/v31/studio-model.md says how to add a node; package.json gains docs:nodes. tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: A check 'node-help' in tests/browser/qa-regressions.cjs selects every node type in the library by keyboard and by pointer and waits with until() (deadline 'library help for <type>', 2 s) for its 'About' text to equal the registry help, and taps one in a hasTouch context; on the merge base the face line does not exist and the check fails. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit and the completed evidence the release that carried it; E030's judge passes on the pull request once E030 is on main."
+- "The pull request carries a reviewer's verdict (it touches a guarded path; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+- "Wave 1: it adds no class token, selector, markup surface or inline style, so the Flowbite Pro record does not change: node scripts/ui-flowbite-pro-record.mjs --check passes with no rewrite and node --test tests/unit/ui-flowbite-pro.test.mjs passes (project.ui-uses-flowbite-pro); live drawing is on a canvas, a domain view."
+- "scripts/size-report.mjs shows at most 1 KB gzip added, with the base and head figures in the pull request body, within the owner's dist budget of 1 200 000 B gzip (decision of 2026-10-29, about 355 KB of headroom at origin/main b67d1e58); the ceiling of this line is 35 KB gzip in all (Studio boxes 35 KB, signal generator 25 KB), stated in the milestone (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/studio-face-declaration.test.mjs tests/unit/studio-node-reference.test.mjs
+- node scripts/studio-node-reference.mjs --check
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

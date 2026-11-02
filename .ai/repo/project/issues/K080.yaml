@@ -1,0 +1,48 @@
+id: K080
+milestone: M067
+serves:
+  - "connected-instrument#modulation-everywhere"
+  - "connected-instrument#synth-panel"
+  - "connected-instrument#honest-instrument"
+title: "Follower: an audio-band signal to envelope, gate and pitch CV, labelled with its latency"
+slug: follower-an-audio-band-signal-to-envelope-gate-and-pitch-cv
+priority: p2
+profile: implementation
+objective: "Lands as feat(studio). A follower node type: a TAP audio input; an envelope CONTROL output at audio rate (rectifying WaveShaper and a low-pass, attack and release stated); a gate TRIGGER output and a pitch CONTROL output detected on the main thread from an AnalyserNode every analysis frame and scheduled at currentTime plus the stated latency (frame length and hop at the running rate), with the pitch uncertainty from the mic analyzer's estimator shown on the card; gate and pitch are live only: an offline render compiles them to a stated 'live only' status (the envelope renders offline), and moving the detector onto the K088 worklet is what would make them render offline. The microphone may feed it; a path from the microphone to the output stays refused (live-input-to-output); drum and synth outputs may feed it. It becomes the panel's Follower module. Before: an outside signal cannot play the synth. After: a follower gives envelope, gate and pitch CV with its latency stated. User-value tier 3 of 4 (synth-design.md section 17). Rollback: revert the pull request; a document saved with the new node type is then refused by the import pipeline with its unknown-type sentence, never dropped silently, so a revert after a release ships it keeps the registry entry and removes only the UI."
+why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
+scope:
+  - "src/js/studio/nodes"
+  - "src/js/studio/registry.js"
+  - "src/js/studio/adapters"
+  - "src/js/analysis"
+  - "src/js/synth/panels.js"
+  - "src/js/ui/synth"
+  - "tests/browser/instrument-dsp.cjs"
+  - "tests/unit/synth-follower.test.mjs"
+  - "tests/browser/synth-modulation.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K059"
+  - "K061"
+  - "Q023"
+acceptance_criteria:
+  - "tests/unit/synth-follower.test.mjs, failing on the merge base: the detector's pure kernel turns a 440 Hz frame into A4 within its stated uncertainty and schedules the gate at currentTime plus the stated latency; an offline compile states 'live only' for gate and pitch; tests/browser/instrument-dsp.cjs renders the envelope offline and checks that it follows a 20 dB step within its stated time constant, and tests/browser/synth-modulation.cjs checks the live gate and pitch with a digital source; a model connecting the microphone through the follower's audio path to the output is refused with the rule's sentence."
+  - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: microphone to output (refused); silence (no gate)."
+  - "A browser check in tests/browser/synth-modulation.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: a drum out patched into the follower drives the synth's gate in the Studio graph and the panel at the same revision. Real-time: a TEST CONTEXT-like digital source into the follower opens the synth's gate and the latency figure is shown, each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: the follower is patched by pointer, keyboard and touch; its latency text is in its card's accessible description. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Every edit is one undoable dispatch through the one Studio store (a continuous gesture is one history entry, undo and redo restore the exact serialized model) and the model holds plain data only (project.studio-model-is-canonical); every connection goes through canConnect and full-model validation, and a refusal shows the validator's sentence and leaves model, history and runtime unchanged (project.typed-ports, project.no-silent-feedback)."
+  - "Every node it plays is built by an engine adapter with track()/source() accounting, all timing is on the audio clock (no timer or rAF times audio), envelopes are click-free, frequencies stay below 0.95 x Nyquist of the running context, the peak stays at or below the output ceiling and the engine node census is 0 after stop (project.audio-engine-discipline v2)."
+  - "Every pinned template studioHash is unchanged: it adds node types, ports, capabilities, enum options or clip kinds only, never a parameter on an existing node type (D2, K022)."
+  - "Every string it adds passes tests/unit/instrument-wording.test.mjs (added by K059): no product, brand or model name, no analog-modelling or vintage claim, and every approximation it makes labelled where it is shown (project.no-fake-science)."
+  - "The pull request carries a reviewer's verdict (src/js/analysis and src/js/studio and src/js/synth is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "scripts/size-report.mjs shows at most 3 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of the line's figures stays within the cap Q023 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/synth-follower.test.mjs"
+  - "node tests/browser/synth-modulation.cjs"
+  - "node tests/browser/instrument-dsp.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

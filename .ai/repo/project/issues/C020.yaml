@@ -1,0 +1,33 @@
+id: C020
+milestone: M090
+serves:
+  - "coherent-state#every-control-reaches-its-subsystem"
+title: "A control-drive ratchet, and the filter, envelope, sequencer, BPM, dual, phase and stereo and settings controls driven through the UI"
+slug: a-control-drive-ratchet-and-the-filter-envelope-sequencer-bp
+priority: p1
+profile: implementation
+objective: "Lands as test(controls). Finding control-census-5. Of the 90 controls the owner named (filters, envelope, the sequencer including Tempo and Loop, dual, phase and stereo, settings) 64 are driven by no browser test, and 226 of all 395; the existing engine checks set the labs through labs.filter.update and labs.envelope.update rather than the controls, and tests/browser/labs.cjs judges charts against a fake engine on purpose. Add a static ratchet, tests/unit/control-drive-baseline.test.mjs with tests/unit/control-drive-baseline.json: every id and data-osc control in src/index.html, the set no tests/browser file drives (click, fill, select, press or keyboard on it), compared with the committed baseline, which may only shrink as judged against its git history, with a mutation proof so the check names its enforcement. Then drive the owner-named families in the suites that own them: in tests/browser/app.cjs labs-basic replace the lab update calls with #osc-ftype-*, #osc-filter-cutoff-value, #osc-filter-q-value, #osc-filter-gain and the #osc-env-* fields, with output assertions by until() polls in place of sleep(400); the dual A/B fields and levels and #osc-stereo-fa, -fb, -pan and -split read through #osc-corr-value and the output; Settings opened through its menu and every #osc-set-* field; in tests/browser/sequencer.cjs #osc-seq-tempo, Loop, start, move-later and the start-hz, end-hz, duration and curve fields, each with its effect on the render or the playing output. The 722-line draft suite is not landed as it is, and no row that waits on another issue's fix enters the tree."
+why: "Owner brief OSCILLA PACK 03, 'One Instrument, One Coherent State' (2026-10-29): every control must provably reach its subsystem and every view that reflects it, and be covered by a test (owner: 'filters, sequencer, bpm and many other interactive knobs / sliders / control elements are not reflected / working / tested'). The findings named here were reproduced by an independent skeptic on a fresh export of origin/main b67d1e58 (v3.13.0)."
+scope:
+  - "tests/unit/control-drive-baseline.test.mjs"
+  - "tests/unit/control-drive-baseline.json"
+  - "tests/browser/app.cjs"
+  - "tests/browser/sequencer.cjs"
+  - "tests/browser/labs.cjs"
+  - "tests/browser/timing-baseline.json"
+  - "tests/README.md"
+acceptance_criteria:
+  - "The ratchet fails when a control is added to src/index.html with no driving test and when the baseline grows; its mutation proof shows both."
+  - "None of the 90 owner-named controls is in the baseline: each is driven by pointer or keyboard and its effect is asserted at the subsystem (engine output level, offline render or model) and at a view that reflects it."
+  - "tests/browser/timing-baseline.json only shrinks (the labs-basic sleep(400) is replaced by condition polls)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named wall-clock deadline; tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "tests/README.md has a row for each new test."
+validation:
+  - "node --test tests/unit/control-drive-baseline.test.mjs"
+  - "node tests/browser/app.cjs"
+  - "node tests/browser/sequencer.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

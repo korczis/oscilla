@@ -1,0 +1,48 @@
+# Review verdict for pull request #329, PR A of the Synth order: an MS-20-style semi-modular panel
+# on the one engine (branch feat/synth-panel). Delta re-review of head 8b2690f1 against the head
+# b3f7d006 that prismatic-majordomus-f3 judged merge (rounds 1 and 2 at 29c55b0b and 36cae18a; its
+# findings R1-R12 are kept below as it recorded them). Another builder wrote it (oscilla-b0); this
+# reviewer (oscilla-af) built none of it and found the delta's subject, R13, in its review of #332.
+#
+# The digest: scripts/review-verdict.mjs from `git archive origin/main scripts` (origin/main
+# e786886d), run in a detached worktree at 8b2690f1 with --content --list --base-branch origin/main:
+# e729f65d...8812.
+#
+# The delta (git diff b3f7d006 8b2690f1, 9 files): Keys-gated envelopes are built closed. The
+# transport passes setOwnedParams(..., { gated: gatedEnvelopes(m) }) at start, in claimFor and in
+# refusedBy; runtime and compiler hand the flag to the envelope adapter, which runs releaseAt(p, at, r)
+# after applyAdsr, so no attack is left on the schedule when no key is held.
+# - Fail-first: tests/unit/synth-arm-closed.test.mjs on b3f7d006 1 pass 3 fail ('the VCA gain opened
+#   to 1'), at the head 4/4. s-armstall (synth.cjs) on b3f7d006's dist fails in chromium at -45.3 dB
+#   rel, on the head passes at -109.6 dB rel.
+# - Mutants (adapter release dropped; transport start without gated; compiler always gated:false):
+#   all three killed by the unit test, the first two also by s-armstall in chromium.
+# - No regression: synth.cjs 18/18 desktop and 4/4 phone in chromium, firefox and webkit (a key at Arm
+#   still sounds); an ungated envelope still opens at the graph's start; v31-studio-transport and
+#   v31-studio-audio 27/27 each in chromium; v31/studio/synth unit tests 586/586; dist up to date.
+#   npm test fails only about.test (the branch predates v3.14.0) and, in the reviewer's worktree,
+#   ui-flowbite-pro-build for want of tailwindcss in its node_modules (environmental).
+# - Both s-armstall waits are until() with a named deadline; the 20 ms connect stall is the stimulus.
+#
+# Verdict: merge. No open P0 or P1.
+schema: review-verdict/v1
+pr: 329
+verdict: merge
+reviewer: oscilla-af (claude-code 901211e2)
+content: e729f65df654ec53e88ebd87fb52fb0e5622dfba8bde28dabe4605c7ae4f8812
+findings:
+  - { id: R1, severity: P1, status: closed, title: "round 1: a cable took the Studio's default edge props (EG into VCA droned at -35.7 dB; Keys pitch tracked 1/6 oct/oct); fixed, cables inherit the normal they replace" }
+  - { id: R2, severity: P1, status: closed, title: "round 1: HPF/LPF Q jacks dead; Copy link refused cables from hpf/lpf/vca audio; preset test vacuous; fixed" }
+  - { id: R3, severity: P1, status: closed, title: "round 1: visual-identity-lock v3 dropped v2 guarantees silently; fixed by restating v2 and narrowing the Synth surface" }
+  - { id: R4, severity: P2, status: open, title: "normals.js:241 on a 'mixed' jack (Studio edge plus normal), adding then removing a panel cable drops the normals while the UI says 'the normal is restored'" }
+  - { id: R5, severity: P2, status: open, title: "normals.js:120 amount memory goes stale when a preset or link is applied while all of the amount's edges are broken: the restored normal ignores the preset" }
+  - { id: R6, severity: P2, status: open, title: "ui.js:756 Escape leaves the connection list open with inert Patch buttons and the source jack drawn as pending" }
+  - { id: R7, severity: P2, status: open, title: "visual-identity-lock.v3.md:74 v3 also narrows v2's 'a migrated view gets a reference' for Synth while saying nothing else is narrowed" }
+  - { id: R8, severity: P3, status: open, title: "v3.md:48 the Interface clause's surface qualifier also lifts the glassmorphism, marketing-gradient and soft-styling bans on the panel; v3.md:31 the 'verbatim' owner quote is not verbatim nor from a committed record" }
+  - { id: R9, severity: P3, status: open, title: "normals.js:113,157,166 S&H Rate refused while Clock is muted; Keys pitch into VCO Tune tracks 1/72 oct/oct; a bipolar cable into VCA gain opens it with no key" }
+  - { id: R10, severity: P3, status: open, title: "link.js:21 a link over Studio edges or open normals does not reopen the sound; url-state-synth.js:93 two cables into one jack accepted then refused; normals.js:141 an open normal returns on unpatch; ui.js:555 restoreModule bypasses plan()" }
+  - { id: R11, severity: P3, status: open, title: "tests: s-look leak probe covers jack children 1 and 4 only; s-look measures control labels only; the named-colour regex's paint alternative is dead (\\b in a template literal); s-look's theme wait hardcodes jackRing" }
+  - { id: R12, severity: P3, status: open, title: "face.js:46 plate text uses Tailwind palette, not tokens; face.js:119 a removed card keeps aria-expanded and a dangling aria-controls; knob track and cap 1.0-1.4:1; nav tab clones osc-tab with arbitrary values; ADR 0061 related list names only v2" }
+  - { id: R13, severity: P2, status: closed, title: "transport.js:615 (V4 of the #332 review) a stalled first Arm with no key held sounded a full-level note of about 120 ms; fixed at 8b2690f1: Keys-gated envelopes are built closed, fail-first unit test and s-armstall" }
+  - { id: R14, severity: P3, status: open, title: "synth-arm-closed.test.mjs and s-armstall reach only the start/arm path; nothing catches gated dropped from claimFor (transport.js:386) or refusedBy (:1375), the same race on an edit that adds a Keys-gated EG while armed under a stalled apply" }
+  - { id: R15, severity: P3, status: open, title: "synth.cjs s-armstall restores its connect() patch and clears its sampler only on success; harmless while every check gets a fresh context" }

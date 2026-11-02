@@ -1,0 +1,37 @@
+id: T008
+milestone: M073
+serves:
+  - "v3-measure#readout-labels"
+title: "Every spectrogram time axis is anchored at now and marks its pauses, and every colour key names the analyser scale"
+slug: every-spectrogram-time-axis-is-anchored-at-now-and-marks-its
+priority: p2
+profile: implementation
+objective: "Truth-table rows SPC-10, SPC-11, SPC-12, MIC-22 (scratchpad p05/truth-table.md). K033 (M062) generates the colour key of all three hosts from minDb and maxDb; this issue makes its visible text say \"dB rel. analyser, uncalibrated\". Time ticks read \"-10 s … now\", the aria-label says so, and the first column after a pause is a marker column the view labels. The data and the LUT mapping are unchanged (P05 non-goal: no DSP change for chart cosmetics)."
+why: "P05 audit of origin/main b67d1e58 (v3.13.0): The Spectrogram panel colour bar reads \"0 dB … -100\" in raw analyser dB, the alternative ADR 0017 rejected, and its top 7.5 dB cannot be reached (a full-scale sine sits at -13.5 dB). The Analysis-tab and microphone spectrograms have no key at all. \"0s\" labels the oldest column, so an event drawn at \"8s\" happened about 2 s ago, and a Freeze or hidden tab joins columns with no mark."
+scope:
+  - "src/js/charts/spectrogram-view.js"
+  - "src/js/charts/spectrogram-panel.js"
+  - "src/js/analysis/spectrogram.js"
+  - "src/index.html"
+  - "src/styles"
+  - "tests/unit/readout-labels-spectrogram.test.mjs"
+  - "tests/visual"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K033"
+acceptance_criteria:
+  - "Fail-first fixture: tests/unit/readout-labels-spectrogram.test.mjs: the key end ticks equal the view minDb and maxDb and the key text contains \"uncalibrated\"; the time tick at the right edge is \"now\" and at the left \"-<span> s\"; after freeze then unfreeze the renderer reports one marker column. Fails on the merge base."
+  - "Negative cases, each asserted: Every existing analysis-spectrogram.test.mjs case passes (same colour for each dB value, row maps, silence gives the floor); the frequency axis is unchanged; claim spectrogram-mapping still holds."
+  - "Revertible on its own: Revert: view code and markup; stored data unaffected (nothing is stored)."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "The pull request touches a guarded path and carries a reviewer-written .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+  - "Any new visible element follows the Flowbite Pro components and the locked tokens (project.ui-uses-flowbite-pro, project.visual-identity-lock); npm run visual passes or the baseline change is declared."
+  - "tests/README.md has a row for each new test; this issue does not edit docs/CLAIMS.yaml or the intent (T027 does)."
+validation:
+  - "npm test"
+  - "npm run verify"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

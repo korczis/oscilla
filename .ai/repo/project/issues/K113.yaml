@@ -1,0 +1,42 @@
+id: K113
+milestone: M072
+serves:
+  - "connected-instrument#daw-arrangement"
+  - "connected-instrument#session-and-midi"
+title: "Record into the arrangement: notes, automation and session takes"
+slug: record-into-the-arrangement-notes-automation-and-session-tak
+priority: p3
+profile: implementation
+objective: "Lands as feat(synth). Recording while the transport plays writes, on armed tracks, the piano's and MIDI's notes into notes clips (K099, K100), knob gestures into automation lanes (write and touch modes), and a session performance (K101) into arrangement clips at the times they were launched. Before: takes are entered by hand. After: notes, automation and session takes recorded into the arrangement. User-value tier 4 of 4 (synth-design.md section 17). Rollback: revert the pull request; no saved state depends on it."
+why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
+scope:
+  - "src/js/ui/synth"
+  - "src/js/synth"
+  - "src/js/studio/automation.js"
+  - "src/js/studio/timeline.js"
+  - "tests/unit/arrange-record.test.mjs"
+  - "tests/browser/arrange.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K099"
+  - "K100"
+  - "K101"
+  - "K111"
+acceptance_criteria:
+  - "tests/unit/arrange-record.test.mjs, failing on the merge base: a recorded note lands at its quantised time; a knob gesture in write mode becomes lane points at the gesture's times; a session take becomes clips at their launch bars."
+  - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: recording on no armed track (stated)."
+  - "A browser check in tests/browser/arrange.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: recorded clips and lanes appear in the arrangement and the Studio timeline. Real-time: a recorded lane replays its gesture on the next pass, each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: record and the write modes work by pointer, keyboard and touch. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Every edit is one undoable dispatch through the one Studio store (a continuous gesture is one history entry, undo and redo restore the exact serialized model) and the model holds plain data only (project.studio-model-is-canonical); every connection goes through canConnect and full-model validation, and a refusal shows the validator's sentence and leaves model, history and runtime unchanged (project.typed-ports, project.no-silent-feedback)."
+  - "Every string it adds passes tests/unit/instrument-wording.test.mjs (added by K059): no product, brand or model name, no analog-modelling or vintage claim, and every approximation it makes labelled where it is shown (project.no-fake-science)."
+  - "The pull request carries a reviewer's verdict (src/js/studio and src/js/synth is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "scripts/size-report.mjs shows at most 3 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of the line's figures stays within the cap Q023 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/arrange-record.test.mjs"
+  - "node tests/browser/arrange.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

@@ -1,0 +1,34 @@
+# Review verdict for pull request #263, K015: the spectrogram's hover readout (branch
+# feat/k015-spectrogram-readout). Reviewed head 3bc96a11, merge base origin/main e2720e07.
+# Another builder wrote it (oscilla-b0), whose session ran two reviews and a fix round of its own.
+#
+# The digest: the base branch's scripts/review-verdict.mjs, run from `git archive origin/main
+# scripts` with --repo on this worktree: 9463929d...0d44 over the 1 guarded path it names.
+#
+# How it was reviewed: two independent lenses (the readout's correctness; regressions and tests),
+# read-only, in git-archive copies with stubbed-DOM harnesses; every finding handed to a separate
+# skeptic (9 agents; none refuted).
+#
+# What holds: a bin reads its centre frequency (bin * sampleRate / fftSize, Nyquist excluded, the
+# rate from the node's context, the size change re-synced); the unsmoothed feed applies the periodic
+# Blackman window and |X|/N, on the scale of getFloatFrequencyData (within 1e-3 dB), and -Infinity
+# and NaN print as such; the label is always "dB relative (dBFS-like)", never SPL
+# (project.no-fake-science); hover rows map correctly for every devicePixelRatio tried (216 of 216
+# readouts within 1.5 bins, log and linear, 44.1 and 48 kHz); the readout holds a copy, so no later
+# write to a shared buffer changes it; existing smoothed consumers are unchanged (the default feed
+# stays the analyser); listeners are removed on dispose; dist/index.html is the build of the
+# sources; the readout's unit tests pass 38/38.
+#
+# Verdict: merge. No P0, P1 or P2. The P3s are worth a follow-up, F1 and F2 first.
+schema: review-verdict/v1
+pr: 263
+verdict: merge
+reviewer: prismatic-majordomus-f3 (claude-code 1f47a36e)
+content: 9463929df1ef9219769cd56d5e050efc64ddd2bddf28df64893e60f22caa0d44
+findings:
+  - { id: F1, severity: P3, status: open, title: "spectrogram-view.js:46 a scale, span or theme change while frozen clears the history, and the readout then says 'No analyser data' though the analyser is live; say the history was cleared" }
+  - { id: F2, severity: P3, status: open, title: "spectrogram-view.js:189 the cursor row is kept from the last pointermove, so a scroll, reflow or resize under a still pointer leaves the line and readout on a row no longer under it" }
+  - { id: F3, severity: P3, status: open, title: "spectrogram-view.js:236 the opt-in unsmoothed feed runs its JS FFT every frame, before push decides whether a column is due" }
+  - { id: F4, severity: P3, status: open, title: "spectrogram.js:195 a NaN at the first bin of a max row makes the readout pick a different bin than the pixel shows" }
+  - { id: F5, severity: P3, status: open, title: "spectrogram-view.js:258 the readout is pointer-only and drawn on an aria-hidden canvas, with no keyboard or non-visual equivalent, and that limit is not stated" }
+  - { id: F6, severity: P3, status: open, title: "analysis-spectrogram.test.mjs:487 the hover tests stub the host at left 0, top 0, so a wrong host-offset term in onPointer would pass" }

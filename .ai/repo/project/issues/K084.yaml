@@ -1,0 +1,37 @@
+id: K084
+milestone: M067
+serves:
+  - "connected-instrument#probes-and-views"
+title: "Sequencer playback on the scrolling spectrogram's time axis"
+slug: sequencer-playback-on-the-scrolling-spectrogram-s-time-axis
+priority: p2
+profile: implementation
+objective: "Lands as feat(charts). The step onsets of the playing steps clips are tick marks on the scrolling spectrogram's time axis (K025), read from the same schedule the transport applies, so a note's tick sits on its onset in the image; one frame-loop subscriber, no allocation. Before: the spectrogram does not show what the sequencer plays. After: step ticks on its time axis. User-value tier 3 of 4 (synth-design.md section 17). Rollback: revert the pull request; no saved state depends on it."
+why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
+scope:
+  - "src/js/charts"
+  - "src/js/analysis"
+  - "src/js/ui/synth"
+  - "tests/unit/spectrogram-step-ticks.test.mjs"
+  - "tests/browser/charts-interaction.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K025"
+  - "K068"
+acceptance_criteria:
+  - "tests/unit/spectrogram-step-ticks.test.mjs, failing on the merge base: a tick's position equals its onset time mapped through the spectrogram's time axis within one column."
+  - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: a frozen spectrogram (ticks stop with it)."
+  - "A browser check in tests/browser/charts-interaction.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: the ticks name the track and step that the Synth grid shows. Real-time: a step toggled while playing gets its tick on its next pass, each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: the ticks are listed in the chart's data table and reachable by its keyboard cursor. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Every string it adds passes tests/unit/instrument-wording.test.mjs (added by K059): no product, brand or model name, no analog-modelling or vintage claim, and every approximation it makes labelled where it is shown (project.no-fake-science)."
+  - "The pull request carries a reviewer's verdict (src/js/analysis is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "scripts/size-report.mjs shows at most 1 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of the line's figures stays within the cap Q023 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/spectrogram-step-ticks.test.mjs"
+  - "node tests/browser/charts-interaction.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

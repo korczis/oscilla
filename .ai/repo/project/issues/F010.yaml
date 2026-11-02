@@ -1,0 +1,42 @@
+id: F010
+milestone: M055
+serves:
+  - "ui-flowbite-pro#no-legacy-chrome"
+  - "ui-flowbite-pro#pro-accessible"
+title: "Dialogs, settings, menus, toasts and the status bar on Pro components"
+slug: dialogs-settings-menus-toasts-and-the-status-bar-on-pro-comp
+priority: p2
+profile: implementation
+objective: "Land the Pro modal pattern once for every dialog, and rebuild the six shared dialogs on it: save preset (osc-dlg-save), headphones (osc-dlg-headphones), copy link (osc-dlg-copy), help (osc-dlg-help), microphone (osc-dlg-mic) and settings (osc-dlg-settings), opened through src/js/ui/dialogs.js and app.js. The pattern is the Pro modal markup of reference.md section 11 (header with title and close button, body, footer with the Pro primary and secondary buttons; the confirm variant for destructive actions) on the native <dialog> elements OSCILLA already uses, so the browser's focus trap, inert background and Escape keep working; Flowbite's modal script is not used for any dialog. tests/browser/ui-flowbite-pro.cjs gains a dialog table that lists all 22 <dialog> elements of the shell with the issue that owns each: F010 the six above; F004 osc-dlg-level-cal, osc-dlg-cal-convention and osc-dlg-recipe-link (src/js/ui/measure.js); F005 osc-dlg-exp-rename, osc-dlg-def, osc-dlg-exp-delete (src/js/ui/experiments.js), osc-dlg-finding and osc-dlg-finding-delete (src/js/ui/findings.js); F008 osc-dlg-studio-templates, -link, -add, -connect, -find, -render, -library and -patch (src/js/ui/studio/workspace.js). The table fails when the shell holds a <dialog> it does not list; from this issue on it checks focus entry, Escape, focus return and the inert background for every listed dialog (the native dialogs hold them today), and it asserts the Pro modal structure for every dialog the ratchet lists as migrated, so each owning issue turns its rows on. Settings become Pro form sections with toggles (the 2.x peer pattern) and selects; the context and overflow menus outside the Studio Pro dropdowns; transient messages Pro toasts with role=status; the status bar a Pro footer bar; the unsaved-work indicators Pro badges (the leave-page prompt is the browser's own beforeunload and stays). The headphones prompt's decision stays in src/js/core/safety.js and the stored settings in src/js/core/storage*, both guarded and both unchanged by this issue. Remove the legacy primitives and selectors these no longer use (osc-menu and its kin; the shared osc-dialog selectors leave with the last dialog that uses them, at the latest in F012), lower the ratchet baseline by the surfaces migrated and the primitive uses removed, keep every data-osc hook and id."
+why: "Owner, 2026-10-28: the whole interface on Flowbite Pro; dialogs are shared by every workspace and carry the safety prompts (headphones), so they land once for all."
+scope:
+  - "src/index.html"
+  - "src/styles"
+  - "src/js/ui/dialogs.js"
+  - "src/js/ui/unsaved.js"
+  - "src/js/ui/shortcuts.js"
+  - "src/js/ui/app.js"
+  - "tests/browser/ui-flowbite-pro.cjs"
+  - "tests/browser/qa-regressions.cjs"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/unit/no-inert-surfaces.test.mjs"
+  - "tests/unit/source-size-baseline.json"
+  - "tests/visual"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "F002"
+acceptance_criteria:
+  - "ui-flowbite-pro.cjs's dialog table lists all 22 dialogs with their owning issue (F004, F005, F008, F010) and fails, with a fixture case, on a <dialog> it does not list; it opens every dialog and asserts that focus moves into it, that Escape closes it and focus returns to the opener, and that the background is inert, and asserts the Pro modal structure for F010's six, in every gate browser from file:// and the sub-path."
+  - "The pull request changes no guarded path: src/js/core/safety* (the headphones prompt's decision) and src/js/core/storage* (the stored settings) stay as they are. A change that must touch one widens the scope to it and carries a reviewer's verdict (project.review-verdict)."
+  - "The headphones safety prompt still appears before any output that requires it; qa-regressions.cjs and no-inert-surfaces pass."
+  - "The references of the changed views are updated through the visual gate with the reason; the ratchet baseline's debt is lower (the surfaces migrated move from surfaces.pending to surfaces.migrated and the primitive uses removed leave the counts); dist's size is stated and within BUDGET."
+  - "The class tokens tests/browser/live-smoke.cjs reads after every Pages deploy (.osc-statusbar .osc-sb-name, .osc-sb-version, .osc-sg-node, .osc-sg-title, .osc-sg-cat, .osc-sg-edge-line, .osc-block-name, .osc-stl-hrow--track) stay on their elements, unstyled if need be, until F011 moves the smoke to data-osc hooks; the smoke passes against the built file."
+validation:
+  - "node tests/browser/ui-flowbite-pro.cjs"
+  - "npm run test:browser"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-28
+updated_at: 2026-10-28

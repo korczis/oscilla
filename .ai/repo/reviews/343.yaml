@@ -1,0 +1,53 @@
+# Review verdict for pull request #343, T019: the impulse-response noise tail is stated as an upper
+# bound (branch fix/t019-ir-noise-tail-upper-bound). Another builder wrote it (oscilla-b0).
+#
+# Delta re-review at head 854d70c1 (merge base origin/main 682a45e4). The first verdict was
+# 3e77fb6e at head df067f93 (content de3b34e1...2f7e); 3e77fb6e is an ancestor of this head. Since
+# then 0174b7f3 merged main (no guarded path; dist rebuilt) and 854d70c1 answered R1, R3 and R4
+# (ir-chart.js copy, the unit file, v3-ui.cjs, docs/v3/algorithms.md, tests/README.md, T019.yaml).
+#
+# The digest: the base branch's scripts/review-verdict.mjs, from a fresh `git archive origin/main
+# scripts .github/scripts`, with --repo on this worktree: ef14701f...6d0e over the 4 guarded paths
+# (impulse-response.js, stimulus.js, views/ir-chart.js, ui/measure.js).
+#
+# What holds (first review, re-checked at this head):
+# - Measured values unchanged: the delta touches only copy in ir-chart.js. Probes against the
+#   origin/main module (delta, noisy, clipped at 0.1, all-zero capture, post-rolls 4.5 ms to
+#   0.5 s) still give bit-identical samples, peakIndex, noiseFloorDb, noiseFloorMethod and
+#   algorithm. No algorithm ID, IrResult field or stored experiment field changes.
+# - The stated window is the one averaged (spectral, farina-inverse, capped); ms after the peak.
+# - Rounding: Math.ceil, toward +infinity for every sign; -0 printed as 0.
+# - R1 fixed: the summary reads "tail level estimate <= X dB re peak (noise or unfinished
+#   decay)", true of the estimate read; the note reads "so the noise lies at or below this level,
+#   within the estimate's own scatter", true on average with the scatter named. No margin is
+#   invented; docs/v3/algorithms.md records the 30-seed probe. No other user-visible string in
+#   src/ claims a bound on the noise (the only "upper bound" left is csv.js:240, the response
+#   envelope's upper column, unrelated). The unit file and v3-ui.cjs refuse "is an upper bound"
+#   and a bare "tail level <=".
+# - R3 fixed: silent, clipped (0.1) and 16-lag window tests, and 15 lags reading none. The silent
+#   case reads a level re a 3.4e-16 rounding peak, as on the base; it is library-only: align()
+#   returns lagSamples null for an all-zero capture, so the engine refuses NO_ALIGNMENT and
+#   MEASURE never shows it.
+# - R4 fixed: T019.yaml scope lists stimulus.js, ui/measure.js, tests/browser/v3-ui.cjs and
+#   docs/v3/algorithms.md.
+# - R2 deferred: the PR body names it P3 "left for a follow-up", but no plan issue records the
+#   follow-up yet; it stays open. It does not touch the stated level, only the window of a record
+#   whose recipe disagrees with its IR.
+#
+# Tests run here at 854d70c1: node --test tests/unit/**/*.test.mjs 3337 tests, 3336 pass,
+# 1 skipped, 0 fail (the T019 file 11/11); build:check up to date; verify-dist PASS; v3-ui.cjs
+# --browsers chromium --origins file --only loopback-workflow (OSC_LOAD_MAX=40) PASS 2/2, the
+# live summary "tail level estimate <= -88 dB re peak (noise or unfinished decay)" and the note
+# "444.54 ms to 493.90 ms after the peak ... within the estimate's own scatter".
+#
+# Verdict: merge. No P0 or P1; R2 (P3) open and deferred.
+schema: review-verdict/v1
+pr: 343
+verdict: merge
+reviewer: oscilla-26-review
+content: ef14701fea45c302e0b08a6ec560b4ca6d8b39c7d97adf790948e1c5fd9a6d0e
+findings:
+  - { id: R1, severity: P2, status: closed, title: "ir-chart.js 'so the level is an upper bound' held only in expectation; fixed at 854d70c1: 'tail level estimate' and 'at or below this level, within the estimate's own scatter', refused by test" }
+  - { id: R2, severity: P3, status: open, title: "measure.js:855 irStimulusFrames trusts a saved or imported recipe.stimulus without checking its sampleRate equals ir.sampleRate, no test drives the saved-experiment branch; deferred by the builder (PR body), follow-up not yet filed as a plan issue" }
+  - { id: R3, severity: P3, status: closed, title: "readout-labels-ir-tail.test.mjs lacked silent, clipped and minimum-window cases; fixed at 854d70c1 (silent, clip 0.1, 16 lags, 15 lags none)" }
+  - { id: R4, severity: P3, status: closed, title: "T019.yaml scope omitted stimulus.js, ui/measure.js, tests/browser/v3-ui.cjs and docs/v3/algorithms.md; fixed at 854d70c1" }

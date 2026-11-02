@@ -1,0 +1,36 @@
+id: T015
+milestone: M073
+serves:
+  - "v3-measure#readout-in-effect"
+title: "The Phase & Stereo fields and the Pan slider show the value in effect"
+slug: the-phase-stereo-fields-and-the-pan-slider-show-the-value-in
+priority: p2
+profile: implementation
+objective: "Truth-table rows STP-12, STP-13 (scratchpad p05/truth-table.md). setCfg writes the normalised values back to the fields (offset, pan, A, B) on commit and on update() from an import; the pan change while playing rebuilds the router through the engine's seamless restart (ADR 0003), or the dual plan always has a router; the slider is disabled with a stated reason in Stereo split; Δφ B shows its unit and the B-leads, start-only meaning."
+why: "P05 audit of origin/main b67d1e58 (v3.13.0): Typing 400 into Δφ B leaves \"400\" (invalid) while 40° applies; after a configuration import with phaseDeg 90 the field still shows 180, and the Pan slider shows 0 while cfg.pan is -0.5. Moving Pan from 0 to -1 while a mono dual plays changes nothing (no router, panners at 0) while the slider and aria-valuetext say \"100% left\", which also contradicts accepted ADR 0003 (glide or restart)."
+scope:
+  - "src/js/labs/phase-stereo.js"
+  - "src/js/main.js"
+  - "src/index.html"
+  - "tests/unit/readout-in-effect-phase-controls.test.mjs"
+  - "tests/browser/labs.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "T014"
+acceptance_criteria:
+  - "Fail-first fixture: tests/unit/readout-in-effect-phase-controls.test.mjs: entering 400 leaves the field at 40; update({ phaseDeg: 90, pan: -0.5 }) leaves the fields at 90 and -0.5. Browser check in tests/browser/labs.cjs: mono dual playing, pan 0 → -1, poll with a named deadline until the router gains are gL 1, gR 0. Fails on the merge base."
+  - "Negative cases, each asserted: Valid values 0-359 unchanged; split route ignores pan and says so; no audible click on the restart (engine-v1port.cjs restart checks pass)."
+  - "Revertible on its own: Revert: write-back and the restart call."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named deadline (project.suite-harness, project.bounded-test-timing)."
+  - "Any new visible element follows the Flowbite Pro components and the locked tokens (project.ui-uses-flowbite-pro, project.visual-identity-lock); npm run visual passes or the baseline change is declared."
+  - "tests/README.md has a row for each new test; this issue does not edit docs/CLAIMS.yaml or the intent (T027 does)."
+validation:
+  - "npm test"
+  - "npm run verify"
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

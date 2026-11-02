@@ -1,0 +1,43 @@
+id: C004
+milestone: M090
+serves:
+  - "coherent-state#sequence-state-one-owner"
+title: "One sequence state, notified: the waveform follows the instrument on every load, the WAV renders what plays, the status duration follows edits"
+slug: one-sequence-state-notified-the-waveform-follows-the-instrum
+priority: p1
+profile: implementation
+objective: "Lands as fix(sequencer). Findings dup-stale-3, persist-6 and dup-stale-6. The instrument owns the sequence waveform (main.js mirrors cmp.waveform into the editor; PR #266 K003 states it), but the mirror is an Alpine effect that runs only when cmp.waveform changes. An import whose instrument waveform equals the current one leaves editor.load's model.waveform stale: playback is square while the status bar says Sine and the sequence WAV, which renderWav forces to cmp.waveform (compiler.js:593), renders sine, and the toast says 'All settings were restored.' while it ignored sequencer.waveform. statusDurationText reads the non-reactive editor.model behind labRev, which no sequence edit bumps, so after Loop off and an added block during playback it still reads '2.25 s (loop)'. Re-apply the owner value on every load without an undo step (editor.load keeps the mirrored waveform as K003's undo does, or applyImport calls setWaveform(cmp.waveform) right after load), report a differing sequencer.waveform as an import note ('the sequence follows the instrument waveform (sawtooth); the file's square was not applied'), and render editor.model.waveform in renderSequenceToWav without the override. Give the editor onChange(fn), fired from _apply and load, and bump a dedicated reactive seqRev in main.js that statusDurationText reads; editor.model stays outside Alpine. serializeSequence keeps writing waveform for the file format and the Studio migration, documented as derived in docs/v31/sequencer-migration.md."
+why: "Owner brief OSCILLA PACK 03, 'One Instrument, One Coherent State' (2026-10-29): every control must provably reach its subsystem and every view that reflects it, and be covered by a test (owner: 'filters, sequencer, bpm and many other interactive knobs / sliders / control elements are not reflected / working / tested'). The findings named here were reproduced by an independent skeptic on a fresh export of origin/main b67d1e58 (v3.13.0)."
+scope:
+  - "src/js/main.js"
+  - "src/js/sequencer/editor.js"
+  - "src/js/sequencer/compiler.js"
+  - "src/js/ui/workbench.js"
+  - "src/js/labs/sequencer-panel.js"
+  - "docs/v31/sequencer-migration.md"
+  - "tests/unit/qa-regressions.test.mjs"
+  - "tests/unit/sequencer-editor.test.mjs"
+  - "tests/unit"
+  - "tests/browser/app.cjs"
+  - "tests/browser/qa-regressions.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "C001"
+acceptance_criteria:
+  - "A unit test: loading a sequence whose waveform differs from the instrument's leaves model.waveform equal to the instrument waveform and adds no undo step; it fails on the merge base."
+  - "Browser check `seq-waveform-one-owner` in tests/browser/app.cjs: importing waveform=sine with sequencer.waveform=square while the instrument is already sine gives 'sine' for the realtime OscillatorNode type, the sequence WAV's harmonic signature (Goertzel h2 and h3 below -60 dB) and the status readout, and the import message names the waveform note."
+  - "A unit test in tests/unit/qa-regressions.test.mjs: while the sequence plays, setLoop(false) then addBlock('tone') makes statusDurationText equal formatMs(totalDurationMs(model)), with ' (loop)' only when model.loop; browser check `seq-status-duration-follows-edits` in tests/browser/qa-regressions.cjs drives the same edits through the Loop button and the Add menu."
+  - "fail-first holds: the unit test or browser check named above fails on the merge base (project.fail-first)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named wall-clock deadline; tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "A reviewer's verdict is needed if the change reaches a path in scripts/review-verdict.mjs GUARDED (project.review-verdict); the builder never writes it."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/qa-regressions.test.mjs tests/unit/sequencer-editor.test.mjs"
+  - "node tests/browser/app.cjs"
+  - "node tests/browser/qa-regressions.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

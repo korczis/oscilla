@@ -1,0 +1,45 @@
+id: J007
+milestone: M118
+serves:
+- "component-system#majordomus-served"
+title: "Each component says where its knowledge lives: the catalogue, the traceability chain, the explain panel and the extending guide"
+slug: each-component-says-where-its-knowledge-lives-the-catalogue
+priority: p2
+profile: implementation
+objective: "Lands as feat(ui). docs/ui-catalog.md and docs/ui-traceability.md (G014, G017) gain a column with each component's knowledge record id and the commands that read it (majordomus knowledge show <id>, knowledge related <id>, trace_issue <issue>). The What is this panel of G015, under ?debug=1, shows the record id, derived from the declaration id by the slug rule at run time (no per-component bytes), and a Copy button that copies the majordomus knowledge show command. docs/EXTENDING.md gains the section 'Add a component': declare it, write its trace entry, run npm run kb:components, read what npm test says is missing. Before: nothing in the app or the docs names a component's knowledge record. After: the catalogue, the chain, the panel and the guide do. Negative cases: a declaration whose slug collides (refused by J003, so the panel never shows two); ?debug=1 absent (no record id shown). Rollback: revert; the panel's debug row goes, nothing is saved."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs and knowledge base, interlink them and add more; knobs, sliders and control panels in one generic way, Majordomus integrated: each component and parameter declaration carries its intent, issue and rule ids, a deterministic generator projects the registry into .ai/repo/knowledge so that Majordomus serves it (context resolve, why, traceability), and a check fails when a component has no plan or knowledge link. Design: components-followup/majordomus-kb-adr.md of this plan change, measured with Majordomus 1.0.0-alpha.1 (the CI pin) and 1.0.0-alpha.8 on a throwaway copy of origin/main cdda563c."
+scope:
+- scripts/ui-catalog.mjs
+- docs/ui-catalog.md
+- docs/ui-traceability.md
+- docs/EXTENDING.md
+- src/js/ui/catalog/explain.js
+- tests/unit/ui-catalog-explain-kb.test.mjs
+- tests/browser/ui-catalog-explain.cjs
+- tests/README.md
+- dist
+depends_on:
+- J003
+- G015
+- G017
+acceptance_criteria:
+- "tests/unit/ui-catalog-explain-kb.test.mjs fails on the merge base: the run-time slug of every declaration id equals the file name J003 generated for it."
+- "A browser check in tests/browser/ui-catalog-explain.cjs fails on the merge base: with ?debug=1 the panel of the Filter Lab cutoff shows component-panel-filter-lab and its Copy button copies the command, by pointer, keyboard and touch, at 390x844 and at 1536x1024; without ?debug=1 no record id is shown. It runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate, and adds nothing to tests/browser/timing-baseline.json (project.suite-harness, project.bounded-test-timing)."
+- "Its chrome is the Pro markup of G015's drawer; it adds no osc-* name, legacy selector, inline style or stylesheet, and the ratchet stays equal or falls (project.ui-uses-flowbite-pro, ADR 0061)."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no review verdict is needed unless its scope widens to one; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "scripts/size-report.mjs shows at most 0.3 KB gzip added, with the base and head figures in the pull request body, inside the line's cap (Q037) under the 1.2 MB budget (project.single-file-deliverable)."
+- "tests/README.md has a row for each new test. dist is rebuilt and npm run build:check passes."
+- "Definition of done, extends: the explain panel (G015) and the generated documents (G014, G017) gain the knowledge link."
+- "Definition of done, interlinks: every component's panel row links its record, its issues and its rule."
+- "Definition of done, interactivity: the debug row and its Copy button, by pointer, keyboard and touch."
+- "Definition of done, docs, menus and routes: docs/EXTENDING.md 'Add a component'; README.md links it; Help keeps 'What is this?'."
+- "Definition of done, tested: the unit test and the browser check above."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+- node --test tests/unit/ui-catalog-explain-kb.test.mjs
+- node tests/browser/ui-catalog-explain.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

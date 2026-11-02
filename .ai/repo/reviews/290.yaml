@@ -1,0 +1,149 @@
+# Review verdict for pull request #290, plan item C012: the Studio master level has one writer;
+# the status bar shows what the Studio plays (branch fix/c012-studio-master-level-one-writer).
+# Delta re-review of the fixes for the changes verdict 33ada8b4 (reviewed head 6624639c3756).
+# Reviewed head b46e8c818912 (== origin at fetch). Delta 33ada8b4..b46e8c81 is two commits:
+# 25a40939, a merge of origin/main 88b936cb whose tree equals git merge-tree's clean merge of
+# 33ada8b4 and 88b936cb (diff empty: no hand edit in the merge); main changed, of the files the
+# PR changes, only README.md, docs/v31/user-guide.md and tests/README.md (none guarded); and
+# b46e8c81, the fix: tests/README.md, tests/unit/c012-studio-master-level.test.mjs and
+# tests/unit/control-drive-baseline.json, no source file. origin/main has since moved to
+# 27ce813e (v3.14.0, #333), which conflicts with the head in dist/index.html (F8).
+# Built by the builder's session; reviewed by dev-68 (Claude Opus 5.5 session 4f90795d), who
+# did not build, merge or edit this change and wrote only this file.
+#
+# The digest: the branch's scripts/review-verdict.mjs, identical to origin/main's (diff empty),
+# `--content --list --base origin/main` in a fresh detached worktree of b46e8c81: one guarded
+# path, src/js/studio/runtime.js, 37a33a98...42df2: unchanged, as the builder claims (neither
+# the delta nor main since cdda563c touches runtime.js; main 27ce813e changes no guarded file).
+#
+# Lenses: (a) the C020 ratchet: settings.reset leaves the baseline only because it is driven now,
+# by this PR's reset-over-studio check (tests/browser/v31-studio-transport.cjs:449, a .click()
+# on the line naming [data-osc="settings.reset"]), not by main; it is not owner-named; the list
+# only shrinks; (b) audio-engine discipline: the delta adds no source code, node or automation
+# (tests only); nothing to check for setTargetAtTime at t=0, a rendering-ramp edit, a step on a
+# sounding param, a ramp to 0 or an untracked node; (c) fail-first of the new tests;
+# (d) tests/README.md vs the runs; (e) the claimed kills, re-applied, plus new mutants.
+#
+# Runs (all at b46e8c81, node_modules symlinked read-only from the primary checkout):
+# - node scripts/build.mjs --check: dist/index.html is up to date (v3.13.0, source b8df55c1).
+# - node --test tests/unit/control-drive-baseline.test.mjs: 8/8 pass (the history-based
+#   shrink-only test ran: the worktree has the baseline's history).
+# - node --test tests/unit/c012-studio-master-level.test.mjs: 12/12 pass.
+# - node --test "tests/unit/**/*.test.mjs": 3322 tests, 3318 pass, 1 skipped, 3 fail:
+#   version-authority (2, EISDIR on the node_modules symlink; 12/12 without it) and about.test
+#   'release line 3.14 (v3.14.0) has a station on the About timeline' (the fetched v3.14.0 tag
+#   is main's; the head lacks its station, F8).
+# - Fail-first, the head's C012 test file on git archive copies: at cdda563c 11 fail, test 5
+#   passes (as tests/README.md says); at 6624639c 12/12 pass (the round is test-only).
+# - node tests/browser/v31-studio-transport.cjs --app-only --browsers chromium: ALL PASS, 17
+#   (reset-over-studio, playground-over-studio, sequencer-over-studio among them).
+# - The PR merged with origin/main 27ce813e (git merge-tree 65bc1a72, archive copy): dist conflict
+#   only, src/index.html auto-merges (main's change is the About timeline); node
+#   scripts/build.mjs regenerates dist clean (v3.14.0, --check up to date); ratchet + C012 19/19
+#   (shrink-only skipped, no history in the copy); full unit 3302 pass, 9 fail, all git-bound
+#   (ls-files / tracked-file tests in a non-git copy); about.test passes there.
+# - Mutants (git archive of b46e8c81, one textual change each, the C012 unit file):
+#     M8   workbench.js drop `void this.gainLevel`            killed (F4 test 10)
+#     M9   studioMasterLevel ignores masterWrites             killed (tests 4, 10)
+#     N7   play(): claim before the plan check                killed (F6 test 11)
+#     N8b  sequencer: claim in resume() instead of onStart    killed (F6 test 12)
+#     N13  editor.play: onStart before the `if (!voice)` check killed (tests 7, 12)
+#     N14  play(): clear studio.masterLevel before the plan  killed (test 11)
+#     N12  play(): claim after engine.play and `if (!info)`   SURVIVED (F10)
+# - gh pr view 290: mergeable CONFLICTING, no status checks on b46e8c81 (F8, F5).
+#
+# F4 closed: M8 is killed by a reactive test on @vue/reactivity (Alpine's engine) over the real
+# workbench getters. F6 closed: N7 and N8b are killed (and N13, N14). F7 closed: the baseline
+# drops settings.reset, the ratchet passes at the head and on the merge with current main.
+# Open: F5, F8, F9, F10 (all P3). Verdict: merge, once main is merged and dist rebuilt (F8).
+schema: review-verdict/v1
+pr: 290
+verdict: merge
+reviewer: dev-68
+content: 37a33a9885d03fa0176f56e49e9d6adbe61d20197a1cbb246566312563442df2
+findings:
+  - id: F1
+    severity: P2
+    status: closed
+    title: >-
+      A Playground, status-bar Play or Pattern Sequencer voice started over a playing Studio
+      sounded its first ~70 ms at the Studio's Master level. Fixed in 6624639c:
+      claimMasterLevel (src/js/core/instrument.js:459) is called in play() after the plan check
+      (:440) and from the sequencer's onStart (src/js/labs/sequencer-panel.js:150 via
+      main.js:121 claimOutput). Re-checked at b46e8c81: playground-over-studio and
+      sequencer-over-studio pass in chromium (1 write, held null).
+  - id: F2
+    severity: P2
+    status: closed
+    title: >-
+      resetDefaults was an unconditional second writer and left the status bar on
+      'Master <Studio dB>' when the gain was already at its default. Fixed in 6624639c
+      (src/js/core/instrument.js:932); re-checked at b46e8c81: reset-over-studio passes in
+      chromium (readout 'Gain -21.9 dB', engine 0.08, Studio still playing).
+  - id: F3
+    severity: P3
+    status: closed
+    title: >-
+      tests/README.md said every C012 test fails before its fix. Fixed in 6624639c; still true
+      at b46e8c81 with the new F4 and F6 tests: at cdda563c 11 of 12 fail, test 5 passes.
+  - id: F4
+    severity: P3
+    status: closed
+    title: >-
+      Dropping `void this.gainLevel` (src/js/ui/workbench.js:102, M8) survived. Fixed in
+      b46e8c81: test 10 wraps the real workbench getters in @vue/reactivity and asserts the
+      readout effect re-runs when gainLevel is written while studio.masterLevel stays; M8 and M9
+      are killed. The workspace 'master' mirror (src/js/ui/studio/workspace.js:765) and the
+      main.js:596 clear remain covered by the browser checks only (status-bar-studio).
+  - id: F5
+    severity: P3
+    status: open
+    title: >-
+      CI run 41003287882 (on 6624639c) was red on V3.1 Studio UI (webkit), the Tone -> Sweep
+      boundary on the fixture engine path this diff does not touch; local webkit runs at
+      6624639c passed 44/44 twice. b46e8c81 has no CI run at all (GitHub cannot build its merge
+      ref, F8), so this is still unconfirmed. Require a green CI run before merge.
+  - id: F6
+    severity: P3
+    status: closed
+    title: >-
+      'A refused start claims nothing' was tested only on the earliest refusal. Fixed in
+      b46e8c81: test 11 (a frequency currentPlan refuses, a playing Studio keeps its level and
+      readout) kills N7 and N14; test 12 (a suspended context, so PLAY reaches resume(), then a
+      pass that schedules nothing) kills N8b and N13.
+  - id: F7
+    severity: P2
+    status: closed
+    title: >-
+      The PR merged with main failed the C020 control-drive ratchet: settings.reset was listed
+      as undriven while this PR's reset-over-studio drives it. Fixed in b46e8c81 by dropping
+      only that key from tests/unit/control-drive-baseline.json; the drive is the PR's own
+      .click() at tests/browser/v31-studio-transport.cjs:449, the key is not owner-named, the
+      list shrinks. Ratchet 8/8 at the head and passing on the merge with main 27ce813e.
+  - id: F8
+    severity: P3
+    status: open
+    title: >-
+      The head conflicts with origin/main 27ce813e (v3.14.0, #333) in dist/index.html: gh says
+      CONFLICTING and no check ran on b46e8c81; about.test fails at the head against the v3.14.0
+      tag. Verified on the merge (merge-tree 65bc1a72): src/index.html auto-merges, a rebuild
+      resolves dist, about, ratchet and C012 pass. Merge main and rebuild dist; neither is
+      guarded, so this verdict stands while runtime.js comes out at 37a33a98.
+  - id: F9
+    severity: P3
+    status: open
+    title: >-
+      tests/unit/c012-studio-master-level.test.mjs:16 imports @vue/reactivity, which
+      package.json does not declare (a transitive dependency of alpinejs, ~3.1.1, locked at
+      3.1.5): the first bare import of an undeclared package in src/js, scripts or tests/unit.
+      It works under npm ci today; declare it (devDependencies, 3.1.5) so an alpinejs bump or a
+      non-hoisting install cannot break the gate.
+  - id: F10
+    severity: P3
+    status: open
+    title: >-
+      N12 survives: moving claimMasterLevel in play() after engine.play and its `if (!info)`
+      check passes the C012 file. Same-task writes, so no audible difference found; but the
+      F1 rationale ('the claim precedes engine.play') is not pinned, and as written a voice that
+      engine.play fails to build (its catch returns null) has already taken the Studio's level.
+      Pin the order in a test, or claim only once info is returned.

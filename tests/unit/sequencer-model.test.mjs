@@ -1,5 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { renderSequenceOffline } from '../../src/js/sequencer/compiler.js';
+import { createSequencerEditor } from '../../src/js/sequencer/editor.js';
+import { FakeContext } from './sequencer-fake-audio.mjs';
 import {
   BLOCK_TYPES,
   BLOCK_SCHEMA,
@@ -268,6 +271,9 @@ test('updateBlock merges params, validates, and handles type changes', () => {
 
 test('tempo-locked durations: beats lock, ms unlock, setTempo rescales only locked blocks', () => {
   let m = referenceSequence({ sampleRate: SR });
+  // K002: the reference is tempo-locked; unlock its Silence to keep one millisecond block.
+  m = setDurationUnit(m, 'b3', 'ms');
+  assert.equal(m.blocks[2].beats, null);
   m = setDurationUnit(m, 'b1', 'beats');
   assert.equal(m.blocks[0].beats, 1);
   assert.equal(m.blocks[0].durationMs, 500);
@@ -358,4 +364,69 @@ test('random blocks get a deterministic seed from the model seed and block id', 
   const r1 = mulberry32(42);
   const r2 = mulberry32(42);
   for (let i = 0; i < 5; i++) assert.equal(r1(), r2());
+});
+
+// ---------------------------------------------------------------- K002: tempo is audible (G1)
+
+/** The OfflineAudioContext shape renderSequenceOffline needs, on the recording fake. */
+class FakeOffline extends FakeContext {
+  constructor(o) {
+    super({ sampleRate: o.sampleRate });
+    this.length = o.length;
+  }
+  async startRendering() {
+    return { length: this.length, sampleRate: this.sampleRate };
+  }
+}
+const renderedLength = async (m) => (await renderSequenceOffline(m, FakeOffline,
+  { sampleRate: SR })).buffer.length;
+
+test('K002: the default sequence is tempo-locked; a tempo change changes its render', async () => {
+  const m = referenceSequence({ sampleRate: SR });
+  assert.deepEqual(m.blocks.map((b) => b.beats), [1, 1, 0.5, 1, 1], 'beats at 120 BPM');
+  assert.deepEqual(m.blocks.map((b) => b.durationMs), [500, 500, 250, 500, 500],
+    'the 120 BPM reference keeps its V2 design durations');
+  const at120 = await renderedLength(m);
+  const at60 = await renderedLength(setTempo(m, 60));
+  const at240 = await renderedLength(setTempo(m, 240));
+  assert.ok(at60 > at120 && at120 > at240, `${at240} < ${at120} < ${at60} frames`);
+  assert.equal(totalDurationMs(setTempo(m, 60)), 4500);
+  assert.equal(totalDurationMs(setTempo(m, 240)), 1125);
+  // The editor starts with that sequence and its tempo control is what the user hears.
+  const ed = createSequencerEditor({ timers: null, sampleRate: SR });
+  ed.setTempo(90);
+  assert.ok(Math.abs(ed.totalDurationS - 3) < 1e-5, `${ed.totalDurationS} s at 90 BPM`);
+});
+
+test('K002: an added block defaults to beats (its default length at 120 BPM)', () => {
+  const m = setTempo(createSequence(), 60);
+  for (const type of BLOCK_TYPES) {
+    const b = addBlock(m, type, { sampleRate: SR }).blocks[0];
+    const beats = BLOCK_SCHEMA[type].durationMs.default / (60000 / DEFAULT_TEMPO_BPM);
+    assert.equal(b.beats, beats, type);
+    assert.equal(b.durationMs, beats * 1000, `${type} at 60 BPM`);
+  }
+  // An explicit duration is still milliseconds; explicit beats are still beats.
+  assert.equal(addBlock(m, 'tone', { durationMs: 120 }).blocks[0].beats, null);
+  assert.equal(addBlock(m, 'tone', { beats: 2 }).blocks[0].durationMs, 2000);
+});
+
+test('K002: stored millisecond sequences parse, re-serialize and render unchanged', async () => {
+  // A sequence saved before K002: the reference as it was stored, every block in ms.
+  const stored = {
+    version: 1, tempoBpm: 120, loop: false, waveform: 'sine', seed: 20261001,
+    blocks: [
+      { id: 'b1', type: 'tone', durationMs: 500, beats: null, params: { freq: 440 } },
+      { id: 'b2', type: 'sweep', durationMs: 500, beats: null,
+        params: { start: 440, end: 880, curve: 'log' } },
+      { id: 'b3', type: 'silence', durationMs: 250, beats: null, params: {} },
+    ],
+  };
+  const { model, issues } = parseSequence(JSON.stringify(stored), { sampleRate: SR });
+  assert.deepEqual(issues, []);
+  assert.deepEqual(serializeSequence(model), stored);
+  const before = await renderedLength(model);
+  const slower = setTempo(model, 60);
+  assert.deepEqual(slower.blocks.map((b) => b.durationMs), [500, 500, 250]);
+  assert.equal(await renderedLength(slower), before, 'ms blocks ignore the tempo');
 });

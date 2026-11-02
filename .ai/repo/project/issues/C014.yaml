@@ -1,0 +1,33 @@
+id: C014
+milestone: M090
+serves:
+  - "coherent-state#views-describe-what-sounds"
+title: "The spectrogram writes nothing for a paused or hidden interval"
+slug: the-spectrogram-writes-nothing-for-a-paused-or-hidden-interv
+priority: p2
+profile: implementation
+objective: "Lands as fix(analysis). Finding vis-divergence-2. tick() in src/js/charts/frame-loop.js skips every subscriber while paused or document.hidden, so the reset in spectrogram push() (lastNow = null when frozen or hidden) never runs, and main.js applyVizPause freezes only the analysis chart and the analysis-tab spectrogram, not labs.spectrogram. The first push afterwards adds (now - lastNow) worth of columns of one spectrum: after 4 s paused or hidden, 414 columns show a 1 kHz tone of which at most 37 can be real, against the header of src/js/analysis/spectrogram.js ('nothing is written for the paused interval ... never synthetic data'). Make the frame loop set a skipped flag when it skips subscribers and pass { resumed: true } on the first tick that runs them again; spectrogram-view.js calls spg.freeze() on it so lastNow resets; applyVizPause also freezes labs.spectrogram.view; and push() treats a wall-clock gap above about 250 ms as a pause (reset lastNow, at most one column) as a backstop for a main-thread stall. If K036 (plan pull request #269) has landed its one frame loop first, the resumed signal goes there."
+why: "Owner brief OSCILLA PACK 03, 'One Instrument, One Coherent State' (2026-10-29): every control must provably reach its subsystem and every view that reflects it, and be covered by a test (owner: 'filters, sequencer, bpm and many other interactive knobs / sliders / control elements are not reflected / working / tested'). The findings named here were reproduced by an independent skeptic on a fresh export of origin/main b67d1e58 (v3.13.0)."
+scope:
+  - "src/js/charts/frame-loop.js"
+  - "src/js/charts/spectrogram-view.js"
+  - "src/js/analysis/spectrogram.js"
+  - "src/js/main.js"
+  - "tests/unit"
+  - "tests/browser/app.cjs"
+  - "tests/README.md"
+  - "dist"
+acceptance_criteria:
+  - "Unit tests: push(s, t) then push(s, t + 4000) writes at most one column; a tick after setFramesPaused(true) then false, and the first tick after document.hidden, deliver resumed; they fail on the merge base."
+  - "Browser check `spectrogram-no-backfill` in tests/browser/app.cjs: Pause animation, start a 1 kHz tone, wait on the audio clock (a wait.cjs condition on ctx.currentTime, not a sleep), Resume, poll until the tone appears: the bright-column count stays within the columns of the time since Resume plus two; the same with an emulated hidden document."
+  - "fail-first holds: the unit test or browser check named above fails on the merge base (project.fail-first)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named wall-clock deadline; tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "The pull request carries a reviewer-written .ai/repo/reviews/<pr>.yaml because it changes src/js/analysis/spectrogram.js (project.review-verdict); the builder never writes it."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node tests/browser/app.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

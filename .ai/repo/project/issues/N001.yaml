@@ -1,0 +1,39 @@
+id: N001
+milestone: M111
+serves:
+- "parameter-controls#one-declaration"
+title: "One parameter declaration: the section 79 descriptor plus id, state path, links, docs and a stated reason, derived for every registry parameter"
+slug: one-parameter-declaration-the-section-79-descriptor-plus-id-st
+priority: p2
+profile: implementation
+objective: "Lands as feat(ui). src/js/ui/catalog/param-spec.js exports paramSpec(descriptor, { id, state, links, docs, staticReason }), which freezes the section 79 descriptor of src/js/studio/nodes/common.js (key, label, type, min, max, step, unit, scale, options, default, softRange, automatable, modulatable, modDepth: unchanged, built only by numberParam, frequencyParam and the other constructors) with four new fields: a global id, a canonical state path in G001's sources grammar (documentation and tests only; nothing resolves it at run time), links (opens, related) as G007 addresses, and a one-sentence docs; staticReason is required exactly when a number or integer parameter is neither automatable nor modulatable (synth K105's rule, moved here so it lands in wave 1). specsOf(type) derives the spec of every NODE_REGISTRY parameter (id studio.param:<type>.<key>, state studio.param:<type>.<key>, links to its node, docs from the node's help); the only registry edit is staticReason on the parameters that need one. The parameter declarations of G018 and G019 (kind param) are paramSpec values; no third declaration exists. The ADR is J001's: its first decision states that a parameter is declared once and every control is a projection of it; this slice cites it and writes no ADR. Before: VERIFIED the descriptor has automatable and modulatable but no id, state, links, docs or reason; seven hand-built parameter fields declare nothing. After: one declaration per parameter, validated in Node. Negative cases: duplicate id, scale log with min <= 0, default outside the range, state not in sources, docs that repeats the label, a continuous parameter that is neither automatable nor modulatable without a reason. Rollback: revert the merge commit; nothing stored changes (the registry is not in the model, so no studioHash changes)."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs, KB and interlinking; full DAW, full sequencer, full piano, everything interlinked, clickable, parameterized and joined; knobs, sliders and control panels in one generic way, integrated with Majordomus; every element tweakable; mobile first; the landing easy to use, easy to extend and open to hack. Owner decisions: knobs that always show value and unit (D11, Q018, the ADR 0058 note of 2026-10-29), every parameter on the box face (Q031), the generator in its own workspace (Q033). Design: the params-controls part of the component follow-up of 2026-10-29 (scratchpad components-followup/params-controls.md), checked against origin/main b67d1e58 and the head of plan pull request #285 (c0a631b2)."
+scope:
+- src/js/ui/catalog/param-spec.js
+- src/js/studio/nodes
+- tests/unit/param-spec.test.mjs
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- G001
+- G003
+- J001
+acceptance_criteria:
+- "tests/unit/param-spec.test.mjs fails on the merge base: every NODE_REGISTRY parameter has a derived spec that validates; each negative case above is refused with its reason; every spec id is unique across the registry and the catalogue; every state path satisfies sources.has()."
+- "Definition of done, tested: No browser check is owed: the slice adds no rendered surface; the declarations are proven in Node, and N003 and N009 assert them in the browser."
+- "Definition of done, extends: the section 79 descriptor and defineNode registry, unchanged in shape."
+- "Definition of done, interlinks: every spec names its address and related views, which G016's link graph walks and G015's panel shows."
+- "Definition of done, interactivity: none directly; N002 and N003 make every declared parameter operable the same way."
+- "Definition of done, docs, menus and routes: docs/v31/studio-model.md states the four fields and the staticReason rule; the decision is J001's ADR, linked from the doc. tests/README.md has a row for each new test; the parameter's or view's catalogue entry names its docs, links and tests (G001 trace part); dist is rebuilt and npm run build:check passes."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit, and the release that carried it is recorded when the milestone is verified."
+- "Its scope includes guarded paths (src/js/studio/nodes; scripts/review-verdict.mjs GUARDED), so the pull request carries a reviewer's .ai/repo/reviews/<pr>.yaml written by a session that did not build it (project.review-verdict); as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "Before Pro (it may land before F001): it adds no class token, selector, markup surface or inline style and only removes legacy ones, so tests/unit/ui-flowbite-pro-baseline.json stays equal or falls (node scripts/ui-flowbite-pro-record.mjs --check passes) and node --test tests/unit/ui-flowbite-pro.test.mjs passes; no module, listener or string it adds contains an osc- name; studio.css, studio-timeline.css, charts.css and tokens.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock v2)."
+- "scripts/size-report.mjs shows at most 1.0 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the line's sum stays within its row of the cap Q037 records, under the 1.2 MB gzip budget of scripts/build-config.mjs (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/param-spec.test.mjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-30'

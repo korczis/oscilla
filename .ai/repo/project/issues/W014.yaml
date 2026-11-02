@@ -1,0 +1,51 @@
+id: W014
+milestone: M103
+serves:
+- "instrument-kinds#daw-surfaces"
+title: "Track header kind: name, kind, target and clips on every Studio track, rename by TRACK_UPDATE, mute, solo and arm only where they exist"
+slug: track-header-kind-name-kind-target-and-clips-on-every-studio
+priority: p2
+profile: implementation
+objective: "Lands as feat(studio). src/js/ui/kinds/track-header.js renders the Studio timeline's track headers (role=rowheader, named 'Bass, instrument track, plays Synth 1, 4 clips'); F2 renames through a new TRACK_UPDATE { name } action in src/js/studio (reduced, validated, undoable; no rename exists today, VERIFIED by the action names under src/js/studio); Enter selects (SELECTION_CHANGE); the target opens its node in the graph; mute and solo appear only on a track with a channel node (K107), arm only once recording exists (K113), collapse is view state; 120 px headers with 44 px buttons at 390 px. K111 then renders the arrangement's headers through it. Before: headers show name, kind, target and count with no action. After: a track header kind. Negative cases: an empty or 200-character name (refused with a sentence); arm in the model or the hash (never); mute without a channel (absent). Rollback: revert; a saved name change is an ordinary track name. Merged plan of the component follow-up (2026-10-30): Mute, solo and arm are buttons (no M, S or R key); F2 renames. K111 depends on W014."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs, knowledge and interlinking, and add more; add p5.js, WebGL and interactivity, and deploy; a full DAW, a full sequencer and a full piano, everything interlinked, clickable, parameterized and joined; knobs, sliders and control panels done one generic way, integrated with Majordomus; the landing easy to use, easy to extend and open to hack; mobile first. The architecture still binds: one AudioEngine, the Studio model canonical, typed ports, one offline file under the 1.2 MB gzip budget, the cockpit identity, no fake science, Flowbite Pro (ADR 0061). Design: the instrument-kinds design of 2026-10-29 (scratchpad components-followup/components-new.md), on the component-system design (G001-G019) and the synth and studio-siggen drafts of the same day, facts checked against origin/main cdda563c."
+scope:
+- src/js/studio/actions.js
+- src/js/studio/schema.js
+- src/js/studio/validate.js
+- src/js/ui/kinds/track-header.js
+- src/js/ui/catalog/kinds/track-header.js
+- src/js/ui/studio/timeline-view.js
+- src/js/ui/studio/timeline-editor.js
+- tests/unit/ui-kind-track-header.test.mjs
+- tests/unit/v31-studio-model.test.mjs
+- tests/browser/v31-studio-timeline.cjs
+- tests/unit/ui-flowbite-pro-baseline.json
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- W001
+- F001
+acceptance_criteria:
+- "tests/unit/ui-kind-track-header.test.mjs fails on the merge base: rename builds one TRACK_UPDATE that validates and undoes; an empty name is refused with a sentence; mute and solo are absent without a channel; arm never enters the model or studioHash; every pinned template hash is unchanged."
+- "Negative cases, each asserted by a test that fails on the merge base: the three of the objective."
+- "Definition of done, tested: tests/browser/v31-studio-timeline.cjs renames a track by F2, by a double-click and by a hasTouch double-tap, waits with until() (deadline 'track renamed in model', 2 s), undoes, and opens the track's target in the graph. The check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, runs at 1536x1024 and 390x844, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, extends: timeline-view.js's track rows; interlinks: the header opens its target node and, after K108, its strip."
+- "Definition of done, interactivity: every header control by pointer, keyboard and touch."
+- "Every Studio edit it builds is one plain action the owning surface dispatches through the one Studio store; a continuous gesture is one history entry and undo and redo restore the exact serialized model; a refusal leaves model, history and runtime unchanged and the kind states the store's sentence once in the polite live region (project.studio-model-is-canonical, project.typed-ports)."
+- "Definition of done, docs, menus and routes: the kind's declaration names its docs, links and tests; docs/ui-catalog.md (G014) lists it; the Keyboard shortcuts dialog lists its keys; tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Its trace entry in scripts/ui-catalog/trace/kinds.mjs names the intent criterion, this issue, its rules, ADRs and tests, each resolved by the trace check, for the Majordomus knowledge projection."
+- "The kind's modules pass W001's static scan: no import of src/js/studio/actions.js, a store, sources.js or a lab module; no dispatch or owner writer called; no AudioContext, AudioNode or worklet created (project.audio-engine-discipline v2: one AudioEngine); no requestAnimationFrame, setInterval or setTimeout outside src/js/charts/frame-loop.js; no allocation in a frame callback (1000 ticks keep the same typed arrays) and frameSubscriberCount() returns to its value after destroy()."
+- "Its chrome (buttons, button groups, popovers, dropdowns, inputs) is markup adapted from the matching Flowbite Pro block and names its flowbite-pro reference.md section; its instrument surface is a domain view under ADR 0061 decision 3 as J001's ADR 0061 resolution note records it: inline SVG or canvas and Tailwind utilities inside a Pro card, no stylesheet, no selector, no osc-* class token, no el.style write or style attribute; no osc-* name in the ratchet record rises and the domain views' stylesheets gain nothing (project.ui-uses-flowbite-pro, project.visual-identity-lock v2, ADR 0061; node scripts/ui-flowbite-pro-record.mjs --check and node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "No input path of the build gains a components, widgets, ui-kit or design-system segment (the COMPONENT_LIBRARY check of scripts/ui-flowbite-pro-measure.mjs): declarations live in src/js/ui/catalog/kinds, views in src/js/ui/kinds."
+- "The pull request touches guarded paths (src/js/studio/actions.js, schema.js, validate.js; scripts/review-verdict.mjs GUARDED) and carries a reviewer's .ai/repo/reviews/<pr>.yaml, written by a session that did not build it (project.review-verdict); as a feat change it carries a unit test that fails on the merge base (project.fail-first)."
+- "scripts/size-report.mjs shows at most 3 KB gzip added, compiled CSS included, with the base and head figures in the pull request body, inside the component line's cap Q037 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+- node --test tests/unit/ui-kind-track-header.test.mjs tests/unit/v31-studio-model.test.mjs
+- node tests/browser/v31-studio-timeline.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-30'

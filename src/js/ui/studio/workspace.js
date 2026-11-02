@@ -78,9 +78,12 @@ import {
   REFERENCE_TEMPLATE_ID, getTemplate, listTemplates, templateModel,
 } from '../../studio/templates/index.js';
 import { decodeStudioLink, encodeStudioLink } from '../../core/url-state-studio.js';
+import { createSynthUi } from '../../synth/ui.js';
 import {
-  createDirtyTracker, createStudioLibrary, exportProjectFile, fileSlug, importStudioFile,
+  createDirtyTracker, createStudioLibrary, exportProjectFile, exportSequenceFile, fileSlug,
+  importStudioFile,
 } from '../../studio/library.js';
+import { importSequence } from '../../studio/sequence-import.js';
 import { announceRedo, announceUndo, announceAction } from '../../studio/a11y.js';
 import { observeMemoryStore, openExperimentStoreOrMemory } from '../../experiments/store.js';
 import { pageIndexedDb } from '../experiments.js';
@@ -96,6 +99,8 @@ import { mountLibrary } from './library-panel.js';
 import { compactTime, mountCompact } from './compact.js';
 import { STUDIO_STORE_FALLBACK_TEXT, mountPatches, recordId } from './patches-panel.js';
 import { mountStudioTimeline } from './timeline-editor.js';
+import { studioBackTarget, workspacePhrase } from '../cross-links.js';
+import { WORKSPACE_LABELS } from '../shortcuts.js';
 
 /** First keyboard-reachable control inside a pane. */
 const TABBABLE = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), '
@@ -379,6 +384,9 @@ export function microphoneOutcome(mics, { playing = false } = {}) {
  * A stable handle over the current store (§9): the same object for every projection, the
  * document behind it replaceable (open project / template / import). Revisions are monotonic
  * across documents. subscribe(fn) -> off: fn(event) after every store change and replacement.
+ * hold(fn) -> fn's result: the events of the changes fn makes reach the listeners once, when it
+ * returns: the last model change (else the last event), so a command of many actions (L, M:
+ * graph-commands.js) syncs, compiles and renders once (docs/v31/performance.md editMs).
  * `gate(next, info)`: the store's commit gate (actions.js), with info.revision in the handle's
  * monotonic numbering (the workspace passes transport.admit). `trace`: the operation trace port
  * (core/trace.js), its store steps carrying the handle's revision.
@@ -389,7 +397,13 @@ export function createStoreHandle(initialModel, {
   const listeners = new Set();
   let offset = 0;
   let store = null;
+  let held = 0;
+  let pending = null;
   const emit = (ev) => {
+    if (held) {
+      if (!pending || ev.type === 'model' || pending.type !== 'model') pending = ev;
+      return;
+    }
     for (const fn of [...listeners]) {
       try { fn(ev); } catch (e) { console.error('OSCILLA Studio listener failed:', e); }
     }
@@ -429,6 +443,18 @@ export function createStoreHandle(initialModel, {
     subscribe(fn) {
       listeners.add(fn);
       return () => listeners.delete(fn);
+    },
+    hold(fn) {
+      held++;
+      try {
+        return fn();
+      } finally {
+        if (--held === 0 && pending) {
+          const ev = pending;
+          pending = null;
+          emit(ev);
+        }
+      }
     },
     /** Open another document (validated by createStudioStore); a new history. */
     replace(model, reason = 'replace') {
@@ -757,6 +783,15 @@ export function createStudioUi(svc = {}) {
     // A pending handle settled (a Microphone opened, failed or ended): show its status, and
     // keep why an input is not open on that node (the stopped status shows it too).
     ctx.runtime.on((type, d) => {
+      if (type === 'master') {
+        // The level the Studio wrote into the engine's master stage, or null once it gave it
+        // up: plain numbers for the status bar (C012), never the engine or one of its nodes.
+        if (ctx.cmp) {
+          ctx.cmp.studio.masterLevel = d.level;
+          ctx.cmp.studio.masterWrites = d.writes;
+        }
+        return;
+      }
       if (type !== 'handle') return;
       const h = ctx.runtime.nodes.get(d.id);
       if (h && h.type === 'microphone') {
@@ -801,6 +836,9 @@ export function createStudioUi(svc = {}) {
   }
 
   // ---------------------------------------------------------------- documents
+  /** The running context's rate, or null before audio (a V2 sequence file is read at it). */
+  const studioSampleRate = () => (svc.engine ? svc.engine.sampleRate : null);
+
   function openDocument(model, { reason, projectId = null, templateId = null } = {}) {
     if (ctx.transport && ctx.transport.playing) stopStudio({ fast: true });
     ctx.handle.replace(model, reason);
@@ -938,6 +976,9 @@ export function createStudioUi(svc = {}) {
     const ed = ctx.editor;
     switch (cmd.id) {
       case 'delete': consume(); ed.deleteSelection(); break;
+      case 'delete-bridge': consume(); ed.deleteBridge(); break;
+      case 'tidy': consume(); ed.tidy(); break;
+      case 'mute': consume(); ed.toggleMute(); break;
       case 'copy': consume(); ed.copySelection(); break;
       case 'cut': consume(); ed.cutSelection(); break;
       case 'paste': consume(); ed.paste(); break;
@@ -1093,8 +1134,13 @@ export function createStudioUi(svc = {}) {
     cmp.studio.ready = true;
   }
 
+  // The Synth workspace (K058-K066) shares this part's ONE store and transport.
+  const synth = createSynthUi({ get: () => ({ handle: ctx.handle, transport: ctx.transport }),
+    setupAudio: () => setupAudio(), announce, registry });
+
   // ---------------------------------------------------------------- the Alpine part
   return {
+    ...synth,
     studio: {
       ready: false,
       title: '',
@@ -1103,6 +1149,10 @@ export function createStudioUi(svc = {}) {
       memoryHeld: 0, // Studio projects and patches held by the memory fallback store
       storeNote: '',
       playing: false,
+      // The Studio's Master Output level while it holds the engine's master stage (runtime
+      // 'master' events) and engine.masterWrites after that write; null otherwise (C012).
+      masterLevel: null,
+      masterWrites: null,
       loop: false,
       canUndo: false,
       canRedo: false,
@@ -1124,6 +1174,7 @@ export function createStudioUi(svc = {}) {
       link: '', // the last link Copy link wrote (the dialog shows it when there is no clipboard)
       linkNote: '',
       linkPending: '', // a linked template waiting for an explicit Open (unsaved changes)
+      backTo: 'playground', // the workspace the Studio was opened from (Back returns there)
     },
 
     studioInit() {
@@ -1134,6 +1185,7 @@ export function createStudioUi(svc = {}) {
       ctx.templateBaseline = createDirtyTracker(ctx.handle.getModel());
       ctx.handle.subscribe(onStoreChange);
       setupAudio();
+      this.synthInit();
       // Registered before main.js's own window keydown listener: Studio keys run first and
       // stop the instrument's Space / Escape handling when they belong to Studio (§125).
       window.addEventListener('keydown', onKeyDown);
@@ -1146,7 +1198,10 @@ export function createStudioUi(svc = {}) {
       };
       this.$watch('meas.state', follow);
       this.$watch('meas.progressPct', follow);
-      this.$watch('workspace', (ws) => {
+      this.$watch('workspace', (ws, was) => {
+        // Back returns where the Studio was opened from (links.md P8): Expand in the Sequencer,
+        // a lab's template link, the navigation, Back / Forward.
+        if (ws === 'studio' && was !== 'studio') this.studio.backTo = studioBackTarget(was);
         if (ws === 'studio' && ctx.editor) requestAnimationFrame(() => ctx.editor.onShow());
         // The hidden workspace must not stay fullscreen (a blank screen). The browser's
         // fullscreenchange may still be on its way, so ask the document, not the flag.
@@ -1502,10 +1557,18 @@ export function createStudioUi(svc = {}) {
       });
     },
 
+    /** "Back to the Sequencer": the Studio's Back button's name; its label is the workspace's. */
+    studioBackText() {
+      return `Back to ${workspacePhrase(studioBackTarget(this.studio.backTo))}`;
+    },
+    studioBackLabel() {
+      return WORKSPACE_LABELS[studioBackTarget(this.studio.backTo)];
+    },
+
     studioBack() {
-      this.setWorkspace('playground');
+      this.setWorkspace(studioBackTarget(this.studio.backTo));
       // The button that had focus is now hidden: focus the compact Studio's Expand (the way
-      // back), else the Playground tab, never <body> (WCAG 2.4.3; V431 U6).
+      // back) where it is shown, else the workspace's tab, never <body> (WCAG 2.4.3; V431 U6).
       requestAnimationFrame(() => {
         const a = document.activeElement;
         if (a && a !== document.body && a.getClientRects().length) return;
@@ -1605,9 +1668,72 @@ export function createStudioUi(svc = {}) {
       }
     },
 
-    /** Import a project (replaces the document) or a patch (inserted, undoable). */
+    /**
+     * The V2 sequence file of one event track (default: the first with pattern clips), at the
+     * Studio's rate. No control calls it yet (K004 part: the entry point is the owner's choice).
+     */
+    studioExportTrackSequence(trackId = null) {
+      try {
+        const f = exportSequenceFile(ctx.handle.getModel(), { trackId: trackId || undefined,
+          sampleRate: studioSampleRate() });
+        downloadFile(f);
+        announce(`Exported ${f.name}${f.issues.length ? `: ${f.issues.join(' ')}` : ''}`,
+          { assertive: f.issues.length > 0 });
+        return f;
+      } catch (e) {
+        announce(`Not exported: ${(e && e.message) || e}`, { assertive: true });
+        return null;
+      }
+    },
+
+    /**
+     * The Sequencer's own pattern as a Studio document (U010; links.md P4). The V2 sequence the
+     * Sequencer holds now (svc.currentSequence, sequencer/model.js serializeSequence) goes
+     * through importSequence, the pipeline of a sequence file (K004), and opens as a new
+     * document; Studio then edits its copy, the Sequencer keeps its own. Unsaved Studio changes
+     * are never replaced: nothing opens and the notice says so. A modified click is left to the
+     * browser (the link's address opens Studio). -> { ok, clips? , reason? }
+     */
+    studioOpenSequence(e) {
+      if (e && (e.button > 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)) return null;
+      if (e && typeof e.preventDefault === 'function') e.preventDefault();
+      const seq = typeof svc.currentSequence === 'function' ? svc.currentSequence() : null;
+      if (!seq) {
+        this.notify('warning', 'Pattern not opened', 'The Sequencer is not available here.');
+        return { ok: false, reason: 'no-sequencer' };
+      }
+      const r = importSequence(seq, { sampleRate: studioSampleRate(),
+        title: 'Sequencer pattern' });
+      if (!r.ok) {
+        const why = (r.errors && r.errors[0] && r.errors[0].message) || 'invalid pattern';
+        this.notify('warning', 'Pattern not opened', `${why}. Nothing was changed.`);
+        return { ok: false, reason: why };
+      }
+      if (ctx.dirty && ctx.dirty.isDirty(ctx.handle.getModel())) {
+        this.notify('warning', 'Pattern not opened', 'This Studio has unsaved changes, so the '
+          + 'pattern did not replace them. Save or export them in Studio, then open the pattern '
+          + 'again.', { action: { href: '#m=studio', text: 'Open Studio' } });
+        announce('The pattern was not opened: this Studio has unsaved changes.',
+          { assertive: true });
+        return { ok: false, reason: 'unsaved' };
+      }
+      openDocument(r.model, { reason: 'import' });
+      this.setWorkspace('studio', { focusHeading: true });
+      const n = r.model.timeline.clips.length;
+      const issues = r.issues && r.issues.length ? ` ${r.issues.join(' ')}` : '';
+      this.notify('info', 'Pattern opened in Studio', `${n} pattern clip${n === 1 ? '' : 's'} `
+        + `on one track, a copy of the Sequencer's pattern.${issues} Nothing plays until you `
+        + 'press Play.');
+      announce(`Opened the Sequencer pattern in Studio: ${n} pattern clip${n === 1 ? '' : 's'}`);
+      return { ok: true, clips: n };
+    },
+
+    /**
+     * Import a project or a V2 sequence or configuration file (replaces the document), or a
+     * patch (inserted, undoable). A refused file leaves the document as it was.
+     */
     studioImportText(text) {
-      const r = importStudioFile(text);
+      const r = importStudioFile(text, { sampleRate: studioSampleRate() });
       if (!r.ok) {
         const e = r.errors && r.errors[0];
         const msg = `Not imported: ${e ? `${e.path ? `${e.path}: ` : ''}${e.message}`
@@ -1622,6 +1748,12 @@ export function createStudioUi(svc = {}) {
         return res;
       }
       openDocument(r.model, { reason: 'import' });
+      if (r.kind === 'sequence') {
+        const n = r.model.timeline.clips.length;
+        announce(`Imported the ${r.source === 'config' ? 'configuration file\'s ' : ''}V2 `
+          + `sequence: ${n} pattern clip${n === 1 ? '' : 's'} on one track`);
+        return { ok: true, kind: 'sequence', clips: n };
+      }
       announce(`Imported ${r.model.metadata.title}`);
       return { ok: true, kind: 'project' };
     },
