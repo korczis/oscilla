@@ -273,7 +273,7 @@
   </section>
 
   <!-- ================= Main grid ================= -->
-  <main class="osc-main" id="osc-main" tabindex="-1" :class="workspace === 'synth' && '!block'">
+  <main class="osc-main scroll-pb-[var(--osc-dock-h,0px)]" id="osc-main" tabindex="-1" :class="workspace === 'synth' && '!block'">
     <!-- The first screen (P002, Q004 option A): the positioning sentence of Q002 leads the
          Playground; the other workspaces lead with their own heading and keep it unseen. -->
     <h1 :class="{ 'osc-sr-only': workspace !== 'playground' }">A zero-install, scientifically
@@ -1872,6 +1872,44 @@
       x-show="kbdView" x-cloak
       :class="kbdView === 'synth' ? 'fixed inset-x-0 bottom-[var(--osc-statusbar-h)] z-30 max-h-[45vh] overflow-y-auto border-t border-solid border-gray-200 bg-white px-4 py-2 shadow dark:border-gray-700 dark:bg-gray-800' : ''">
       <h2 id="osc-kbd-title">Keyboard</h2>
+      <!-- K066, beside the piano in the Synth: a Pro dropdown of what the keys play, a Pro button
+           group of the waveform, the quick presets (src/js/synth/picker.js, presets.js). -->
+      <div class="mb-2 flex items-center gap-2" data-osc="synth.dock"
+        x-show="kbdView === 'synth'" role="group" aria-label="Instrument">
+        <div class="relative" x-init="synthDockRoving($el, false)">
+          <button type="button" id="osc-synth-pick" x-ref="pick" data-osc="synth.pick"
+            @click.outside="synth.dock.open = false"
+            aria-haspopup="menu" aria-controls="osc-synth-pick-menu"
+            :aria-expanded="String(synth.dock.open)" @click="synthPickToggle()"
+            class="inline-flex h-11 items-center gap-1 rounded-lg border border-solid border-gray-300 bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700"
+            x-text="'Plays: ' + synth.dock.target">Plays</button>
+          <ul id="osc-synth-pick-menu" x-ref="menu" role="menu" aria-labelledby="osc-synth-pick"
+            data-osc="synth.pick.menu" x-show="synth.dock.open"
+            class="absolute bottom-full left-0 z-40 mb-1 w-72 rounded-lg bg-white py-2 text-sm shadow dark:bg-gray-700">
+            <template x-for="c in synth.dock.choices" :key="c.id">
+              <li role="none"><button type="button" role="menuitem" :data-pick="c.id"
+                :aria-disabled="String(c.disabled)" :aria-current="c.selected ? 'true' : null"
+                :title="c.reason || c.kind" @click="c.disabled ? synthSay(c.reason) : synthPick(c.id)"
+                :class="c.selected ? 'font-semibold text-primary-700 dark:text-primary-400' : 'text-gray-700 dark:text-gray-200'"
+                class="flex h-11 w-full items-center justify-between gap-2 border-0 bg-transparent px-4 text-left hover:bg-gray-100 aria-disabled:opacity-50 dark:hover:bg-gray-600"><span x-text="c.name"></span><span class="text-xs text-gray-500 dark:text-gray-400" x-text="c.kind"></span></button></li>
+            </template>
+          </ul>
+        </div>
+        <div class="flex min-w-0 flex-1 gap-2 overflow-x-auto sm:flex-wrap sm:overflow-visible">
+        <template x-for="g in [{ id: 'osc', label: 'Oscillator', items: synth.dock.oscs, on: synth.dock.osc, pick: (id) => synthOsc(id) }, { id: 'wave', label: 'Waveform', items: synth.dock.waves, on: synth.dock.wave, pick: (id) => synthWave(id) }, { id: 'preset', label: 'Quick presets', items: synth.presets.filter((x) => x.tab === synth.tab).map((x) => ({ id: x.id, label: x.title.split(':')[0] })), on: synth.preset, pick: (id) => synthPreset(id) }]" :key="g.id">
+          <div role="radiogroup" :aria-label="g.label" :data-osc="'synth.dock.' + g.id"
+            x-init="synthDockRoving($el, true)" class="inline-flex shrink-0 rounded-lg shadow-sm">
+            <template x-for="(it, i) in g.items" :key="it.id">
+              <button type="button" role="radio" :data-v="it.id" :aria-checked="String(it.id === g.on)"
+                :tabindex="it.id === g.on || (i === 0 && !g.items.some((x) => x.id === g.on)) ? '0' : '-1'"
+                @click="g.pick(it.id)" x-text="it.label"
+                :class="it.id === g.on ? 'bg-primary-600 text-white dark:bg-primary-500' : 'bg-white text-gray-900 hover:bg-gray-100 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700'"
+                class="h-11 whitespace-nowrap border border-solid border-gray-200 px-3 text-sm font-medium first:rounded-s-lg last:rounded-e-lg focus:z-10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 dark:border-gray-600"></button>
+            </template>
+          </div>
+        </template>
+        </div>
+      </div>
       <div role="group" aria-label="Keyboard controls" aria-describedby="osc-kbd-readout">
         <button type="button"
           class="[@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
@@ -2395,13 +2433,13 @@
          src/js/ui/studio/workspace.js): every module plate, knob, switch and jack is generated
          from src/js/synth/panels/semi-mono.js and the registry's node descriptors. The keyboard
          docks at the bottom here and plays the panel. -->
-    <section class="px-4 pt-6 pb-80" id="osc-view-synth" data-osc="synth-view"
+    <section class="px-4 pt-6 pb-[max(1.5rem,var(--osc-dock-h,20rem))]" id="osc-view-synth" data-osc="synth-view"
       data-osc-modes="synth" hidden :hidden="workspace !== 'synth'"
       aria-labelledby="osc-synth-title" tabindex="-1">
       <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <nav aria-label="Breadcrumb" class="text-xs text-gray-500 dark:text-gray-400"
-            x-text="'Synth / ' + (synth.tab === 'engines' ? 'Engines' : 'Panel')">Synth / Panel</nav>
+            x-text="'Synth / ' + synth.tabs.find((t) => t.id === synth.tab).label">Synth / Panel</nav>
           <h2 id="osc-synth-title" class="text-xl font-semibold text-gray-900 dark:text-white"
             x-text="synth.title">Semi-modular mono voice</h2>
           <p class="hidden max-w-3xl text-sm text-gray-600 sm:block dark:text-gray-300"
@@ -2420,13 +2458,16 @@
           <button type="button" data-osc="synth.arm" :aria-pressed="String(synth.armed)"
             @click="synth.armed ? synthDisarm() : synthArm()" x-text="synth.armed ? 'Disarm' : 'Arm'"
             class="h-11 rounded-lg bg-primary-600 px-4 text-sm font-medium text-white hover:bg-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300">Arm</button>
+          <button type="button" data-osc="synth.library" @click="patchLibraryOpen()"
+            class="h-11 rounded-lg border border-solid border-gray-300 bg-white px-4 text-sm font-medium text-gray-900 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700">Library</button>
           <button type="button" data-osc="synth.studio" @click="synthOpenStudio()"
             class="h-11 rounded-lg border border-solid border-gray-300 bg-white px-4 text-sm font-medium text-gray-900 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700">Open in Studio</button>
           <button type="button" data-osc="synth.copy-link" @click="synthCopyLink()"
             class="h-11 rounded-lg border border-solid border-gray-300 bg-white px-4 text-sm font-medium text-gray-900 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700">Copy link</button>
         </div>
       </div>
-      <!-- Tabs (Q019): Panel, the semi-modular voice; Engines, the polyphonic engines. -->
+      <!-- Tabs (Q019): Panel, the semi-modular voice; Engines, the polyphonic engines; XY, the
+           performance pad (K097, src/js/ui/kinds/xy-pad.js over the xy-pad node). -->
       <div class="mb-3 border-0 border-b border-solid border-gray-200 dark:border-gray-700">
         <ul class="-mb-px flex text-sm font-medium" role="tablist" aria-label="Synth instrument">
           <template x-for="t in synth.tabs" :key="t.id">

@@ -4,8 +4,10 @@
 
 import { SAFE_NYQUIST_FACTOR } from '../../core/constants.js';
 import { buildPeriodicWave, pulseSeries } from '../../audio/additive.js';
-import { KEYS_PITCH_RANGE, VCO_SCALES } from '../nodes/instrument.js';
-import { UNIPOLAR, did, free, inertHandle, linearOnly, setParam } from './common.js';
+import { KEYS_PITCH_RANGE, VCO_SCALES, xyDegree } from '../nodes/instrument.js';
+import {
+  PARAM_TAU_S, UNIPOLAR, did, free, inertHandle, linearOnly, setParam,
+} from './common.js';
 
 /** Octaves the VCO pitch clip spans each way (its WaveShaper input is pitch / span). */
 export const PITCH_SPAN_OCT = 8;
@@ -180,6 +182,48 @@ export const ring = {
       stop() {},
       dispose() {},
       info: {},
+      status: 'ready',
+      reason: null,
+    };
+  },
+};
+
+export const xyPad = {
+  compiler: 'audio/audio-engine.js#AudioEngine',
+  structural: [],
+  create({ ctx, acct, at, params }) {
+    // Three ConstantSources (X, Y, the quantised pitch); the gate is a logical TRIGGER output
+    // that studio/live-notes.js fans out along its edges, as the Keys gate.
+    if (!hasConstant(ctx)) return inertHandle('degraded', `The XY pad ${NEEDS_CONSTANT_SOURCE}`);
+    let p = { ...params };
+    const [x, y, pitch] = [0, 1, 2].map(() => started(acct, ctx.createConstantSource(), at));
+    for (const n of [x, y, pitch]) n.offset.setValueAtTime(0, ctx.currentTime);
+    return {
+      inputs: {},
+      outputs: { x, y, pitch },
+      outputRange: { x: UNIPOLAR, y: UNIPOLAR, pitch: KEYS_PITCH_RANGE },
+      modTarget: (key) => ({ reason: `${key} is not modulatable` }),
+      applyBase() {},
+      update(changed, owned, w) {
+        p = { ...p, ...changed };
+        did(w, changed, Object.keys(changed), 'next-note');
+      },
+      /** The pad at (fx, fy) from t: X and Y glide (τ 15 ms, no click), the pitch steps. */
+      move(t, fx, fy, { legato = false } = {}) {
+        const cx = Math.min(1, Math.max(0, Number(fx) || 0));
+        const cy = Math.min(1, Math.max(0, Number(fy) || 0));
+        const d = xyDegree(cx, p);
+        x.offset.setTargetAtTime(cx, t, PARAM_TAU_S);
+        y.offset.setTargetAtTime(cy, t, PARAM_TAU_S);
+        if (p.glide > 0 && legato) pitch.offset.setTargetAtTime(d.pitch, t, p.glide / 3);
+        else pitch.offset.setValueAtTime(d.pitch, t);
+        return { ...d, x: cx, y: cy };
+      },
+      stop(t) {
+        for (const n of [x, y, pitch]) { try { n.stop(t); } catch (e) { /* stopped */ } }
+      },
+      dispose() {},
+      info: { pad: true },
       status: 'ready',
       reason: null,
     };

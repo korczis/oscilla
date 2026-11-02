@@ -25,7 +25,7 @@
     }
   },
   "caps": {
-    "src/index.html": 281000,
+    "src/index.html": 282000,
     "src/js/audio/audio-engine.js": 73000,
     "src/js/core/instrument.js": 62000,
     "src/js/experiments/validate.js": 64000,
@@ -73,6 +73,18 @@
       "cap": 62000,
       "pr": 367,
       "reason": "merging C-line train B (#380) into the feature train 2026-10-31 (#367) adds main's restoreConfig and its whole restore report (#345 H002) to the instrument beside the train's superseded-sweep-error handling"
+    },
+    {
+      "file": "src/js/synth/ui.js",
+      "cap": 45000,
+      "pr": 372,
+      "reason": "the K097 XY tab's wiring (tab, presets, all-off over the xy node) meets the feature train's link notice (#367 surface-census routes) in the Synth UI, which passes 40 000 bytes for the first time"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 282000,
+      "pr": 375,
+      "reason": "the K066/K102 presets and patch library markup meets the K097 XY tab and the feature train's Synth tabs in the shell, one byte past the 281 000 cap"
     }
   ]
 }

@@ -24,7 +24,8 @@ export const OUTPUT_YIELDS = Object.freeze({
 /**
  * options: { app() → the reactive component or null, sequencer() → the sequencer editor or
  *            null, changed() → called (in a microtask) after app.seqPlaying was set here }
- * → { sequencerPlaying(), stopSequence(cmp), claimOutput(owner), stopPlayback(cmp) }
+ * → { sequencerPlaying(), stopSequence(cmp), claimOutput(owner), stopPlayback(cmp),
+ *      outputBusy(cmp) }
  */
 export function createOutputOwner({ app, sequencer, changed = () => {} }) {
   const later = (fn) => (typeof queueMicrotask === 'function' ? queueMicrotask(fn)
@@ -46,17 +47,30 @@ export function createOutputOwner({ app, sequencer, changed = () => {} }) {
     return true;
   }
 
+  // The one table of the sources that sound into the master output (C002, C016): what yields
+  // when an owner takes the output and what the setup check of a measurement reports as other
+  // audio read the same rows. The sequencer is read live (editor.playing), never through the
+  // 150 ms app.seqPlaying copy; its voices and the Studio's never enter the engine's
+  // audibleVoiceCount.
+  const SOURCES = {
+    sequencer: { busy: () => sequencerPlaying(), stop: (cmp) => stopSequence(cmp) },
+    instrument: { busy: (cmp) => !!cmp.playing, stop: (cmp) => cmp.stopNow() },
+    studio: {
+      busy: (cmp) => typeof cmp.studioOwnsOutput === 'function' && !!cmp.studioOwnsOutput(),
+      stop: (cmp) => cmp.studioStop(),
+    },
+  };
+
   function yieldOutput(cmp, owners) {
-    for (const owner of owners) {
-      if (owner === 'sequencer') {
-        stopSequence(cmp);
-      } else if (owner === 'instrument' && cmp.playing) {
-        cmp.stopNow();
-      } else if (owner === 'studio' && typeof cmp.studioOwnsOutput === 'function'
-        && cmp.studioOwnsOutput()) {
-        cmp.studioStop();
-      }
-    }
+    for (const owner of owners) if (SOURCES[owner].busy(cmp)) SOURCES[owner].stop(cmp);
+  }
+
+  /**
+   * True while any owner that stopPlayback stops sounds (MEASURE's setup check reports it as
+   * other audio, C016); it stops and claims nothing.
+   */
+  function outputBusy(cmp) {
+    return OUTPUT_YIELDS.measure.some((owner) => SOURCES[owner].busy(cmp));
   }
 
   /**
@@ -89,5 +103,5 @@ export function createOutputOwner({ app, sequencer, changed = () => {} }) {
     if (typeof cmp.midiAllOff === 'function') cmp.midiAllOff();
   }
 
-  return { sequencerPlaying, stopSequence, claimOutput, stopPlayback };
+  return { sequencerPlaying, stopSequence, claimOutput, stopPlayback, outputBusy };
 }

@@ -51,7 +51,7 @@ import { BLOCK_SCHEMA, normalizeBlock } from '../sequencer/model.js';
 import { SAMPLE_RATE_LIMITS } from '../measurement/stimulus.js';
 import { clipTarget } from './clip-targets.js';
 import { canConnect, describePort, validateEdgeProps } from './ports.js';
-import { NODE_REGISTRY, validateParamValue } from './registry.js';
+import { NODE_REGISTRY, playsNotes, validateParamValue } from './registry.js';
 import { clipRules } from './timeline.js';
 import {
   AUTOMATION_CURVES, MARKER_KINDS, MIN_CLIP_S, MUSICAL_TOLERANCE_S, NAME_MAX_CHARS,
@@ -590,7 +590,7 @@ function validateTimeline(model, registry, sink, ids, nodeById) {
   }
 }
 
-function validateRest(model, sink) {
+function validateRest(model, sink, registry = NODE_REGISTRY) {
   if (model.kind !== STUDIO_KIND) sink.error('invalid-structure', `kind must be ${STUDIO_KIND}.`);
   if (model.schemaVersion !== STUDIO_SCHEMA_VERSION) {
     sink.error('invalid-structure', `schemaVersion must be ${STUDIO_SCHEMA_VERSION}.`);
@@ -617,6 +617,15 @@ function validateRest(model, sink) {
   }
   const meta = model.metadata;
   checkName(meta.title, 'metadata.title', sink, TITLE_MAX_CHARS);
+  // K066: the node the keys play, when not the Synth's own; it must exist and play notes.
+  if (meta.noteTarget !== undefined) {
+    const n = model.graph.nodes.find((x) => x.id === meta.noteTarget);
+    if (!n || !playsNotes(n.type, registry)) {
+      sink.error('invalid-note-target', n ? `${n.metadata.name} does not play notes: the keys `
+        + 'play a node with the notes or hits capability.' : `The keys play "${
+        String(meta.noteTarget)}", which is not in this Studio.`, { path: 'metadata.noteTarget' });
+    }
+  }
   if (typeof meta.notes !== 'string' || meta.notes.length > NOTES_MAX_CHARS) {
     sink.error('invalid-name', `Notes must be at most ${NOTES_MAX_CHARS} characters.`,
       { path: 'metadata.notes' });
@@ -632,7 +641,7 @@ export function validateStudioModel(model, { registry = NODE_REGISTRY } = {}) {
   const ids = new Set();
   const { order, nodeById } = validateGraph(model, registry, sink, ids);
   validateTimeline(model, registry, sink, ids, nodeById);
-  validateRest(model, sink);
+  validateRest(model, sink, registry);
   const errors = sink.diagnostics.filter((d) => d.severity === 'error');
   const warnings = sink.diagnostics.filter((d) => d.severity === 'warning');
   return { ok: errors.length === 0, errors, warnings, diagnostics: sink.diagnostics,
@@ -832,8 +841,15 @@ function structure(c, doc, lim, registry) {
       }
     }
   }
-  if (doc.metadata !== undefined && c.keys(doc.metadata, 'metadata', [], ['title', 'notes'])) {
+  if (doc.metadata !== undefined
+    && c.keys(doc.metadata, 'metadata', [], ['title', 'notes', 'noteTarget'])) {
     if (doc.metadata.title !== undefined) s(doc.metadata.title, 'metadata.title', TITLE_MAX_CHARS);
+    if (doc.metadata.noteTarget !== undefined) {
+      const t = doc.metadata.noteTarget;
+      if (typeof t !== 'string' || !ID_PATTERN.test(t)) {
+        c.add('metadata.noteTarget', 'is no node id');
+      }
+    }
     if (doc.metadata.notes !== undefined) {
       c.str(doc.metadata.notes, 'metadata.notes', lim.notesChars, { multiline: true });
     }
