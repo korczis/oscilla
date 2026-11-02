@@ -74,8 +74,10 @@ aggregates the CI jobs, whose `npm test` includes `tests/unit/knowledge-integrit
 
 Releases: the version lives only in `package.json` (`version:check` rejects a hard-coded copy
 of the current version elsewhere, this file included). On a clean tree `release:prepare`
-bumps it and runs the gate; land `chore(release): vX.Y.Z` by PR (nothing else merges until
-the publish: the receipt binds the whole tree); on main `release:publish`, then `-- --yes`;
+bumps it, rebuilds and runs `verify` (the full local gate only with `--local-gate`); land
+`chore(release): vX.Y.Z` by PR with `--merge` (its CI run is the gate verdict, ADR 0082; nothing
+else merges until the publish: the verdict binds the whole tree); on main `release:publish`,
+then `-- --yes`;
 `verify-deploy` fails Pages on a mismatch; land the release record by a small PR
 (`chore/release-record-vX.Y.Z`) before the next `release:prepare`, which refuses without it.
 `node scripts/release-cadence.mjs` says whether a release is overdue (24 h).

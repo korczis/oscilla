@@ -56,7 +56,7 @@ rule files in this directory, and fails when a row is missing, extra or stale.
 | `project.majordomus-layer-current` v1 | blocking | the local Majordomus is the pinned one; no missing policy key | `scripts/majordomus-pin-check.mjs` in `npm run verify`, `.github/doctor-verdict.jq` |
 | `project.bounded-test-timing` v2 | blocking | a browser check waits for its condition against a named wall-clock deadline; no new fixed sleep in the suite or the page, frame count or assumed rate; the recorded debt only shrinks | `tests/unit/browser-timing.test.mjs` |
 | `project.suite-harness` v1 | blocking | every browser suite runs through one harness: no unknown or empty selection, no leg without checks or on another engine, no undeclared skip in CI, no start on a loaded machine | `tests/unit/browser-suite-contract.test.mjs` |
-| `project.release-receipt-binds-gate` v1 | blocking | the gate receipt binds every tracked file except the release records, and how the gate ran (every browser and origin, declared skips only) | `tests/unit/release-publish.test.mjs`, `tests/unit/release-gate-env.test.mjs` |
+| `project.release-receipt-binds-gate` v2 | blocking | a release is published only on a tree a gate verdict binds: the CI run of its release pull request (ADR 0082) or the local receipt over every tracked file except the release records, with how the gate ran | `tests/unit/release-ci-receipt.test.mjs`, `tests/unit/release-publish.test.mjs`, `tests/unit/release-gate-env.test.mjs` |
 | `project.release-flow-complete` v1 | blocking | prepare, pull request, publish, live verification and record, in order; every published tag in a checkout's history has its record in that checkout | `tests/unit/release-analyze.test.mjs`, `release-publish.test.mjs`, `release-record.test.mjs` |
 | `project.deploy-often` v1 | blocking | a releasable commit on main is released within 24 hours | `tests/unit/release-cadence.test.mjs`, `.github/workflows/cadence.yml` (not part of the required `gate`) |
 | `project.ci-bounded` v1 | blocking | every workflow job and network step bounded, pinned, retried; nothing fatal made non-fatal | `tests/unit/ci-workflows.test.mjs` over `scripts/ci-workflow-rules.mjs`, in `npm test`; a pull request that rewrites the workflow is held only by `project.review-verdict` |
@@ -69,9 +69,10 @@ rule files in this directory, and fails when a row is missing, extra or stale.
 How a release is cut, in the order the steps happen. Each rule's `# Enforcement` names the
 script and the test that hold it, and says what no check holds.
 
-- `project.release-receipt-binds-gate` (`release-receipt-binds-gate.v1.md`): the gate receipt
-  binds every tracked file except the release records, so a merge to main between
-  `release:prepare` and `release:publish` needs the gate again.
+- `project.release-receipt-binds-gate` (`release-receipt-binds-gate.v2.md`; v1 deprecated):
+  a release is published only on a tree a gate verdict binds, the CI run of its release pull
+  request (ADR 0082) or the local receipt, so a merge to main between the verdict and
+  `release:publish` needs the gate again.
 - `project.release-flow-complete` (`release-flow-complete.v1.md`): the flow from prepare to
   the record, in order; the next release does not start before the previous one is recorded,
   the first stable release of a new major follows a published release candidate, and a Pages
