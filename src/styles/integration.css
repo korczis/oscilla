@@ -829,12 +829,13 @@
   }
 }
 
-/* The phone reopen control lives in the Source header; Device & Limits carries it elsewhere. */
+/* Below 1280 px the notice reopens from the header on every workspace; from 1280 px Device &
+   Limits carries the control (its own copy is hidden below 1280 px, max-xl:hidden). */
 .osc-safety-reopen--phone {
   display: none;
 }
 
-@media (max-width: 767.98px) {
+@media (max-width: 1279.98px) {
   .osc-safety-reopen--phone {
     display: inline-flex;
   }

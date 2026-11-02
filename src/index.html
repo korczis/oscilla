@@ -169,6 +169,16 @@
     </nav>
 
     <div class="osc-header-actions">
+      <!-- Below 1280 px a workspace shows only its own panels, so Device & Limits (whose control
+           reopens the notice from 1280 px) is not on every page: the notice reopens from here,
+           the same control on every workspace. -->
+      <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm
+        osc-safety-reopen osc-safety-reopen--phone" id="osc-safety-reopen-phone"
+        data-osc="safety.reopen" aria-controls="osc-safety"
+        :aria-expanded="String(!safetyCollapsed)" aria-label="Show the listening safety notice"
+        title="Listening safety notice" @click="reopenSafety()">
+        <svg aria-hidden="true"><use href="#i-headphones"/></svg>
+      </button>
       <button type="button" class="osc-icon-btn osc-header-theme" id="osc-theme-toggle"
         data-osc="header.theme" aria-label="Switch to light theme" @click="toggleTheme()"
         :aria-label="theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'">
@@ -250,7 +260,7 @@
   </section>
 
   <!-- ================= First-run safety notice (in flow: never covers a control) ========= -->
-  <section class="osc-safety" id="osc-safety" data-osc="safety" aria-labelledby="osc-safety-title"
+  <section class="osc-safety relative z-[1]" id="osc-safety" data-osc="safety" aria-labelledby="osc-safety-title"
     x-show="!safetyCollapsed" style="display: none">
     <svg class="osc-safety-icon" aria-hidden="true"><use href="#i-info"/></svg>
     <p class="osc-safety-text">
@@ -290,14 +300,6 @@
             <div class="osc-panel-header">
               <h2 class="osc-panel-title" id="osc-source-title">Source &amp; Pattern</h2>
               <span class="osc-spacer"></span>
-              <!-- Phones hide Device & Limits, so the safety notice reopens from here below 768 px. -->
-              <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm
-                osc-safety-reopen osc-safety-reopen--phone" id="osc-safety-reopen-phone"
-                data-osc="safety.reopen" aria-controls="osc-safety"
-                :aria-expanded="String(!safetyCollapsed)" aria-label="Show the listening safety notice"
-                title="Listening safety notice" @click="reopenSafety()">
-                <svg aria-hidden="true"><use href="#i-headphones"/></svg>
-              </button>
             </div>
 
             <div class="osc-seg osc-seg--split osc-source-kind" role="radiogroup"
@@ -684,7 +686,7 @@
                 <output class="osc-num" id="osc-mic-requested" data-osc="mic.requested">—</output></p>
               <p><span class="osc-mic-k">Microphone detected:</span>
                 <output class="osc-num" id="osc-mic-detected" data-osc="mic.detected">UNAVAILABLE (microphone off)</output></p>
-              <p class="osc-mic-note">Not a calibrated measurement. Microphone frequency response varies.</p>
+              <p class="osc-mic-note max-md:whitespace-normal">Not a calibrated measurement. Microphone frequency response varies.</p>
             </div>
             <p data-osc="mic.counterparts" hidden :hidden="!counterpartsShown()">For a calibrated measurement:
               <a href="#m=measure" data-osc="counterpart.measure-rta"
@@ -699,8 +701,8 @@
             <div class="osc-panel-header">
               <h2 class="osc-panel-title" id="osc-dev-title">Device &amp; Limits</h2>
               <span class="osc-spacer"></span>
-              <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm osc-safety-reopen"
-                id="osc-safety-reopen" data-osc="safety.reopen" aria-controls="osc-safety"
+              <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm osc-safety-reopen
+                max-xl:hidden" id="osc-safety-reopen" data-osc="safety.reopen" aria-controls="osc-safety"
                 :aria-expanded="String(!safetyCollapsed)" aria-label="Show the listening safety notice"
                 title="Listening safety notice" @click="reopenSafety()">
                 <svg aria-hidden="true"><use href="#i-headphones"/></svg>
@@ -1426,7 +1428,7 @@
       <!-- ---------- Filter Lab ---------- -->
       <section class="osc-panel osc-p-filter" id="osc-panel-filter" data-osc-panel="filter"
         data-osc-modes="filter" aria-labelledby="osc-filter-title">
-        <div class="osc-panel-header">
+        <div class="osc-panel-header max-md:flex-wrap">
           <h2 class="osc-panel-title" id="osc-filter-title">Filter Lab</h2>
           <button type="button" class="osc-toggle osc-toggle--lg" role="switch" aria-checked="false"
             id="osc-filter-enable" data-osc="filter.enable" aria-label="Filter enabled">
@@ -1437,7 +1439,8 @@
             :hidden="workspace !== 'filter'">Open Filter Automation in Studio</a>
           <a href="#m=synth" data-osc="filter.toSynth" hidden :hidden="workspace !== 'filter'"
             x-bind="counterpartLink('synth')">Open the Synth</a>
-          <button type="button" class="osc-icon-btn osc-icon-btn--sm osc-panel-fs" id="osc-filter-fullscreen"
+          <button type="button" class="osc-icon-btn osc-icon-btn--sm osc-panel-fs max-md:order-first"
+            id="osc-filter-fullscreen"
             data-osc="filter.fullscreen" aria-label="Open the Filter Lab page"
             title="Open the Filter Lab page" :aria-label="filterLabToggle().label"
             :title="filterLabToggle().label" @click="setWorkspace(filterLabToggle().to)">
@@ -1462,7 +1465,7 @@
             x-bind="choice('filterType', 'peaking')">Peaking</button>
         </div>
         <div class="osc-filter-body">
-          <div class="osc-chart-host osc-h-filter" id="osc-chart-filter" data-osc-chart="filter"
+          <div class="osc-chart-host osc-h-filter max-md:h-[260px]" id="osc-chart-filter" data-osc-chart="filter"
             role="img" aria-label="Filter magnitude response (getFrequencyResponse)"></div>
           <div class="osc-filter-controls">
             <label class="osc-label" for="osc-filter-cutoff-value">Cutoff</label>
