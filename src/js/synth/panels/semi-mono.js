@@ -3,10 +3,12 @@
 // contour, EG 2 the amplifier's), a modulation generator, a sample-and-hold of a seeded random
 // source and the output. The whole panel is this one declaration (synth/panel.js): every knob,
 // switch and jack comes from the registry's node descriptors. The Engines tab's modules join it
-// (panels/engines.js): the panel's amplifier feeds their chain into the one Output.
+// (panels/engines.js): the panel's amplifier feeds their chain into the one Output. The XY tab's
+// pad (panels/xy.js, plan K097) joins it with no normals: its cables replace the keyboard's.
 
 import { definePanel } from '../panel.js';
 import { ENGINE_MODULES, ENGINE_TAB, enginesChain } from './engines.js';
+import { XY_MODULE, XY_TAB } from './xy.js';
 
 const FILTER_FIXED = { gain: 0, enabled: true };
 const FILTER_NOTE = 'A 12 dB/oct biquad: the peak rings but does not self-oscillate.';
@@ -19,10 +21,11 @@ export default definePanel({
   id: 'semi-mono',
   version: 1,
   title: 'Semi-modular mono voice',
-  tabs: [{ id: 'panel', title: 'Semi-modular mono voice', description: 'Two oscillators and '
-    + 'noise through two 12 dB/oct filters in series, high-pass then low-pass, into an '
-    + 'envelope-driven amplifier. Every jack is normalled: it sounds with no cable, and a cable '
-    + 'into a jack replaces what was normalled there.' }, ENGINE_TAB],
+  tabs: [{ id: 'panel', label: 'Panel', title: 'Semi-modular mono voice',
+    description: 'Two oscillators and noise through two 12 dB/oct filters in series, high-pass '
+    + 'then low-pass, into an envelope-driven amplifier. Every jack is normalled: it sounds '
+    + 'with no cable, and a cable into a jack replaces what was normalled there.' }, ENGINE_TAB,
+  XY_TAB],
   description: 'Two oscillators and noise through two 12 dB/oct filters in series, high-pass '
     + 'then low-pass, into an envelope-driven amplifier. Every jack is normalled: it sounds '
     + 'with no cable, and a cable into a jack replaces what was normalled there.',
@@ -57,6 +60,7 @@ export default definePanel({
       + 'samples no input.' },
     { id: 'out', label: 'OUTPUT', node: 'master' },
     ...ENGINE_MODULES,
+    XY_MODULE,
   ],
   // [id, from jack, to jack, edge props]. A cable into a `to` jack breaks every normal of that
   // jack; removing the last cable restores them, with the same ids (synth/normals.js).
@@ -103,5 +107,5 @@ export default definePanel({
       to: ['lpf.frequency'], range: [-4, 4] },
   ],
   layout: { desktop: [['vco1', 'vco2', 'ring', 'noise', 'mix', 'hpf', 'lpf'],
-    ['keys', 'eg1', 'eg2', 'vca', 'mg', 'sh', 'out'], ENGINE_MODULES.map((m) => m.id)] },
+    ['keys', 'eg1', 'eg2', 'vca', 'mg', 'sh', 'out'], ENGINE_MODULES.map((m) => m.id), ['xy']] },
 });

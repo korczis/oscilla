@@ -113,8 +113,9 @@ function createFakeIo(opts = {}) {
     captures: [],
     windows: [],
     now: () => t,
-    async preflight() {
+    async preflight(opts) {
       io.calls.preflight += 1;
+      io.preflightOpts = opts;
       if (hooks.preflight) await hooks.preflight();
       return {
         audioContext: { available: true, state: 'running' },
@@ -513,6 +514,59 @@ test('preflight warnings do not block: clipping, noise, processing, high output,
       'LIMITER_RANGE',
       'OTHER_AUDIO', 'WORKLET_FALLBACK', 'RANGE_CLAMPED', 'UNCALIBRATED', 'LEVEL_RELATIVE']) {
       assert.ok(codes.includes(c), `warning ${c}`);
+    }
+  });
+
+// C016 (finding coupling-5): the sequencer and the Studio transport never enter
+// engine.audibleVoiceCount, so the setup check takes the app's own output state from the
+// caller (main.js outputBusy, the owners stopPlayback stops) and hands it to the io.
+test('C016: OTHER_AUDIO is raised by any output owner the caller reports, not only voices',
+  async () => {
+    // The caller's fact reaches the io, which reports it as output.otherAudio.
+    const passed = makeEngine();
+    await passed.engine.preflight(sweepRecipe(), { otherAudio: true });
+    assert.deepEqual(passed.io.preflightOpts, { otherAudio: true });
+    passed.engine.reset();
+    await passed.engine.preflight(sweepRecipe());
+    assert.deepEqual(passed.io.preflightOpts, { otherAudio: false }, 'absent means false');
+
+    const codes = (rep) => rep.warnings.map((w) => w.code);
+    // A sequencer or Studio source: no engine voice, the io reports otherAudio.
+    const seq = makeEngine({ facts: { output: { gain: 0.08, maxGain: 0.25, audibleVoices: 0,
+      otherAudio: true } } });
+    const rep = await seq.engine.preflight(sweepRecipe(), { otherAudio: true });
+    assert.equal(rep.ready, true, 'a warning, never a blocker: the check stops nothing');
+    assert.ok(codes(rep).includes('OTHER_AUDIO'), JSON.stringify(codes(rep)));
+    const other = rep.warnings.find((w) => w.code === 'OTHER_AUDIO');
+    assert.match(other.text, /Measure stops/);
+    assert.doesNotMatch(other.text, /they will be stopped/, 'the check itself stops nothing');
+    // Nothing sounding: no warning.
+    const quiet = makeEngine();
+    assert.ok(!codes(await quiet.engine.preflight(sweepRecipe())).includes('OTHER_AUDIO'));
+    // An instrument voice alone still raises it (the V3 behaviour).
+    const voice = makeEngine({ facts: { output: { gain: 0.08, maxGain: 0.25,
+      audibleVoices: 1 } } });
+    assert.ok(codes(await voice.engine.preflight(sweepRecipe())).includes('OTHER_AUDIO'));
+  });
+
+test('C016: with the app\'s own output playing, noise and clipping do not blame the room',
+  async () => {
+    const loud = { inputLevel: { peak: 0.99, rmsDb: -20 } };
+    const own = makeEngine({ facts: { ...loud, output: { gain: 0.08, maxGain: 0.25,
+      audibleVoices: 0, otherAudio: true } } });
+    const rep = await own.engine.preflight(sweepRecipe(), { otherAudio: true });
+    const text = (c) => (rep.warnings.find((w) => w.code === c) || {}).text || '';
+    for (const c of ['NOISE_HIGH', 'INPUT_CLIPPING']) {
+      assert.match(text(c), /includes the app's own output/, `${c}: ${text(c)}`);
+    }
+    assert.doesNotMatch(text('NOISE_HIGH'), /^Background level/);
+    // Without it the reading is the background, as before.
+    const room = makeEngine({ facts: loud });
+    const r2 = await room.engine.preflight(sweepRecipe());
+    const t2 = (c) => (r2.warnings.find((w) => w.code === c) || {}).text || '';
+    assert.match(t2('NOISE_HIGH'), /^Background level/);
+    for (const c of ['NOISE_HIGH', 'INPUT_CLIPPING']) {
+      assert.doesNotMatch(t2(c), /own output/, c);
     }
   });
 

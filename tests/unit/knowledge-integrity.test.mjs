@@ -1102,6 +1102,9 @@ const ADR_NOT_A_CAPABILITY = new Map([
   ['0055', 'repository operation: how a merge train lands'],
   ['0056', 'repository operation: when the Majordomus CI pin moves'],
   ['0057', 'release evidence: what proves a static Pages deployment'],
+  ['0082', 'release engineering: the gate verdict of a release is the CI run of its own pull'
+    + ' request (rule project.release-receipt-binds-gate v2, tests/unit/release-ci-receipt'
+    + '.test.mjs); it adds no capability of the page'],
   ['0060', 'a product-path decision (Q003): no commercial path before v4.0; it adds no'
     + ' capability of the page'],
   ['0061', 'the UI system (Flowbite Pro on Tailwind, built and inlined): rule'

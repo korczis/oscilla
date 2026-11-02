@@ -174,7 +174,7 @@ export function createKeyboardUi({ win = window } = {}) {
       }
 
       if (doc && typeof doc.querySelector === 'function') {
-        const mount = () => { view = mountKeys(win, doc, kb) || view; };
+        const mount = () => { view = mountKeys(win, doc, kb) || view; trackDockHeight(win, doc); };
         if (typeof cmp.$nextTick === 'function') cmp.$nextTick(mount); else mount();
       }
     },
@@ -207,6 +207,29 @@ export function createKeyboardUi({ win = window } = {}) {
       return kbdRelease();
     },
   };
+}
+
+/**
+ * The band the docked keyboard covers at the bottom of the viewport (the dock and the status
+ * bar under it) as --osc-dock-h on the root, 0px unless the dock is fixed over the page (the
+ * Synth dock): the Synth view reserves it below its content and the page keeps it as scroll
+ * padding, so no control and no focused element ends under the dock (WCAG 2.4.11).
+ */
+function trackDockHeight(win, doc) {
+  const dock = doc.querySelector('[data-osc="keyboard"]');
+  const root = doc.documentElement;
+  if (!dock || !root || typeof win.ResizeObserver !== 'function') return;
+  const set = () => {
+    const fixed = win.getComputedStyle(dock).position === 'fixed';
+    const top = dock.getBoundingClientRect().top;
+    const h = fixed && top > 0 ? Math.ceil(win.innerHeight - top) : 0;
+    root.style.setProperty('--osc-dock-h', `${h}px`);
+  };
+  new win.ResizeObserver(set).observe(dock);
+  if (typeof win.MutationObserver === 'function') {
+    new win.MutationObserver(set).observe(dock, { attributes: true, attributeFilter: ['class'] });
+  }
+  set();
 }
 
 /**

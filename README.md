@@ -170,10 +170,12 @@ changed.
 - **ADSR:** an attack/decay/sustain/release envelope with a draggable graph. It shapes every
   note of the instrument: a held tone, a continuous sweep, a finite tone and each step of the
   instrument's programmed patterns, where it shrinks to fit a short step. An edit reaches the
-  note that sounds: a new release in place, anything else by a click-free restart of the
-  note, once per slider or graph drag, when the drag ends, and once per run of arrow keys on
-  a slider, a quarter of a second after the last key is let go (at once when the focus
-  leaves it). A release edited while a note is held (here, or Settings Release with the
+  note that sounds: a new release in place, a new Sustain (or switching the Envelope off) by a
+  short glide of the held level on the same note, anything else (Attack, Decay, switching it
+  on, a programmed pattern's steps) by a click-free restart of the note, once per slider or
+  graph drag, when the drag ends, and once per run of arrow keys on a slider, a quarter of a
+  second after the last key is let go (at once when the focus leaves it). The Sequencer's
+  blocks keep their own envelopes, so the lab never reaches them. A release edited while a note is held (here, or Settings Release with the
   envelope off) is the one letting go of that note uses, shortened to end by the hard limit
   or a pattern's own end; a note that reaches either, or a Trigger note's end, fades over the
   release it started with. The Pattern sequencer and Studio keep their own envelopes.
@@ -857,7 +859,7 @@ from the background, or hold-to-play by touch. The owner declined real-device ch
 | V3 unit | `tests/unit/v3-*.test.mjs` | Measurement core, transfer and impulse response on synthetic systems with known answers, RTA and aggregation, calibration, quality, experiments (schema, round trip, corrupt imports, store), goldens per algorithm ID, the engine on a fake io and the view models, all in `npm test` |
 | V3 browser | `npm run test:measure` | `tests/browser/v3-measure.cjs`: the measurement engine on real Web Audio, a recovered digital loopback response, limiter transparency, 0 nodes after finish and abort. `tests/browser/analysis-worker.cjs`: the offline analysis in its Worker against the inline run, identical results, no inline fallback, abort. `tests/browser/v3-ui.cjs`: Measure and Experiments of the built page, guided flow, abort at every stage, calibration, experiment import, compare and export, and no "SPL" without a level calibration. All run in Chromium, Firefox and WebKit, from `file://` and `/oscilla/` |
 | V3 visual | `scripts/visual-measure.mjs`, `tests/visual/measure/` | Measure at 1536x1024 and 390x844 showing a deterministic TEST CONTEXT experiment, against the accepted reference for each environment (part of `npm run test:visual`) |
-| Studio browser | `npm run test:studio` | The Studio of the built page: the graph editor (`tests/browser/v31-studio-graph.cjs`), the timeline editor (`tests/browser/v31-studio-timeline.cjs`), the compiler and runtime on the real engine (`tests/browser/v31-studio-audio.cjs`), the transport on the audio clock (`tests/browser/v31-studio-transport.cjs`), offline rendering of the templates (`tests/browser/v31-studio-offline.cjs`), the transport Inspector, Find node, Render WAV and a measurement from Studio (`tests/browser/v31-studio-workflows.cjs`), deep links and fullscreen (`tests/browser/v31-studio-links.cjs`), and the Inspector's Runtime and Trace sections (`tests/browser/v31-studio-runtime.cjs`), and the Synth panel's sound, cables, links and phone layout (`tests/browser/synth.cjs`), and the Synth engines' spectra, decays, voice census, routing, links and phone layout (`tests/browser/synth-engines.cjs`) |
+| Studio browser | `npm run test:studio` | The Studio of the built page: the graph editor (`tests/browser/v31-studio-graph.cjs`), the timeline editor (`tests/browser/v31-studio-timeline.cjs`), the compiler and runtime on the real engine (`tests/browser/v31-studio-audio.cjs`), the transport on the audio clock (`tests/browser/v31-studio-transport.cjs`), offline rendering of the templates (`tests/browser/v31-studio-offline.cjs`), the transport Inspector, Find node, Render WAV and a measurement from Studio (`tests/browser/v31-studio-workflows.cjs`), deep links and fullscreen (`tests/browser/v31-studio-links.cjs`), and the Inspector's Runtime and Trace sections (`tests/browser/v31-studio-runtime.cjs`), and the Synth panel's sound, cables, links and phone layout (`tests/browser/synth.cjs`), and the Synth engines' spectra, decays, voice census, routing, links and phone layout (`tests/browser/synth-engines.cjs`), and the Synth XY pad's scale steps, timbre axis, presets, keys and touch (`tests/browser/xy-pad.cjs`) |
 | Studio visual | `scripts/visual-studio.mjs`, `tests/visual/studio/` | Studio at 1536x1024 and its GRAPH and TIMELINE subviews at 390x844, against the accepted reference for each environment (part of `npm run test:visual`) |
 
 Every V3 browser check runs on a TEST CONTEXT digital loopback or a fake microphone. No
@@ -899,16 +901,21 @@ run it alone.
      proposes the level, with a reason for each commit.
   2. `npm run release:prepare` starts from a clean tree. It bumps `package.json` once (or
      confirms an untagged version), refreshes `src/data/roadmap.json` from the plan, rebuilds,
-     and runs `version:check`, the release gate (with `OSC_ROADMAP_CHECK=1`, so a roadmap that
-     differs from the plan fails it) and `majordomus doctor`. If anything fails, it restores
-     the files. It never tags. Land the
-     result on `main` through a pull request. It refuses to start while the newest release has
+     and runs `version:check` and `npm run verify` (with `OSC_ROADMAP_CHECK=1`, so a roadmap
+     that differs from the plan fails it). If anything fails, it restores the files. It never
+     tags. Land the result on `main` through a pull request, by merge commit: the CI run of
+     that pull request is the release's gate verdict (the CI receipt,
+     [ADR 0082](.ai/repo/adrs/0082-a-release-rests-on-the-ci-run-of-its-own-pull-request.md)).
+     `-- --local-gate` instead runs the full release gate and `majordomus doctor` here and
+     writes a local gate receipt. It refuses to start while the newest release has
      no record (step 4), and it refuses the first stable release of a new major (`X.0.0`, and
      equally `X.0.1` or `X.1.0` typed into `package.json`) that no published `X.0.0-rc.N`
      preceded (`npm run release:prepare -- --prerelease` cuts the candidate;
      [ADR 0047](.ai/repo/adrs/0047-a-major-release-is-preceded-by-a-release-candidate-v3-0-0-wa.md)).
-     The gate receipt it writes binds every tracked file except the release records, so any
-     other pull request merged before the publish means running it again
+     Either verdict binds the whole tree (the CI receipt: main's HEAD is the merge of the
+     release pull request with the tree its newest green CI run tested, every job `ci.yml`
+     declares green; the local receipt: every tracked file except the release records), so
+     any other pull request merged before the publish means a new verdict
      (rule `project.release-receipt-binds-gate`).
   3. `npm run release:publish` is a dry run by default. With `-- --yes`, on `main`, it creates
      the annotated tag `vX.Y.Z`, pushes it, waits for the Pages deployment, verifies it, and
