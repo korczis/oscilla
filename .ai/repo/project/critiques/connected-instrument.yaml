@@ -137,3 +137,177 @@ findings:
       state: planned
       issue: "K060"
       because: "K060 records project.review-verdict v2 before code and scopes the rules, CLAUDE.md and AGENTS.md; later slices' verdict claims hold after K060 merges (2026-10-29)."
+  # Second review, 2026-11-03: the findings below concern M120 (K155-K162) only. Reviewer:
+  # claude-opus-5.5, an independent critic agent of session oscilla-af that wrote neither the
+  # plan nor the library, reading origin/chore/plan-music-library at 91e6db61. The header's
+  # reviewed_at and reviewed_by name the first review (2026-10-29) and are left as they were.
+  # Four findings block one issue each (K156, K157, K158 wave 1, K160) and say so in their
+  # resolution; none blocks the intent, so each is recorded with blocking false.
+  - id: m120-content-rights-check-has-no-region-to-read
+    class: unproven_assumption
+    subject: "K157"
+    finding: "M120 review, 2026-11-03. K157 'reads the library region of dist/index.html' and recomputes each entry's fingerprint there, as R01's design does, but R01's design rests on a delimited data region (<script type=application/json data-library>) that no issue creates. Today the riffs reach dist as minified module code, not data: the factory r() of src/js/studio/riffs/library.js adds author, licence and method at run time, so they appear once in dist and not per entry, and two riffs (neon-causeway, coldwave-pulse) build their notes with flatMap and replace, so their notes are not in dist at all (grep of dist/index.html at 91e6db61). A scanner of the shipped file can only evaluate the bundle or read src, and neither is 'what dist ships'. K156 (the schema) is where the shipped form is decided: a JSON region the build emits and the app parses, with a byte cost of its own, or an explicit decision that the check reads the evaluated modules and a separate sweep reads dist for media only."
+    blocking: false
+    resolution:
+      state: open
+      because: "K157 must not start until K156 states the shipped form of an entry (a build-emitted data region that the build and the check share) and K157's criterion names it. Issue-blocking, not intent-blocking: recorded as blocking false because Majordomus's blocking flag stops the whole connected-instrument intent (executing_with_open_blocker), which is already executing (Q079-Q082 done) on work this finding does not touch."
+  - id: m120-notes-payload-form-contradicts-itself
+    class: unproven_assumption
+    subject: "K156"
+    finding: "M120 review, 2026-11-03. K156's schema carries 'the notes payload (K099's agreed form)', but K099.yaml still names { notes: [{ t, dur, note, vel }] } while the agreement R00 records and K149's toNotes produce is { at, note, len, vel } in beats; the form is therefore not fixed by any record a builder can read. K156 also requires 'the sixteen riffs' notes payloads are byte-identical before and after the migration', which cannot hold if the payload becomes K099's object form: K149 stores [step, pitch, lengthSteps, velocity] arrays with note names, 16 steps a bar. The criterion is undecidable until it says which of the two is stored (compact arrays, with toNotes as the derived projection, is also the smaller one for 128 entries) and K099.yaml is amended to the agreed field names. Every later issue (K157-K162) reads this payload."
+    blocking: false
+    resolution:
+      state: open
+      because: "Before K156 starts: K099's objective is amended to { at, note, len, vel } (R00 collision table), and K156's criterion names the stored form and what 'byte-identical' compares. Issue-blocking, not intent-blocking: recorded as blocking false because Majordomus's blocking flag stops the whole connected-instrument intent (executing_with_open_blocker), which is already executing (Q079-Q082 done) on work this finding does not touch."
+  - id: m120-near-duplicate-guard-is-not-defined
+    class: unproven_assumption
+    subject: "K158"
+    finding: "M120 review, 2026-11-03. K158 asks for 'an interval-and-rhythm fingerprint invariant to transposition and rotation, with a stated distance threshold' but states neither the features, the n of the n-grams, the distance nor the threshold, so the builder of the content would also set the bar it is judged by. Undefined: rotation (cyclic over the riff's bars, in steps, which also covers 'time-shifted'); tempo (the steps grid of K149 is already tempo-free, so only the tempo field must be excluded); octave displacement (mirrorball-octaves alternates octaves, so interval n-grams treat an octave-folded copy as new); diatonic transposition and shuffles (a melody moved a third within its key changes every semitone interval, and the owner's pack names 'shuffled' copies, which interval n-grams do not catch); a one-note edit of an existing entry; songs (per track, and against the riffs they might contain); and comparison with the demo song, whose originality guard (tests/unit/demo-song.test.mjs, at most two shared intervals in a row) is the precedent to reuse. The criterion should state the representation (for example interval and inter-onset n-grams with octave folding, plus a pitch-class and onset-set similarity), the threshold, and that the threshold is calibrated so that K149's sixteen riffs and the demo song's parts pass pairwise and the mutation fixtures (transposed, rotated, octave-folded, diatonically shifted, one note changed) fail."
+    blocking: false
+    resolution:
+      state: open
+      because: "Wave 1 of K158 must not start until the guard's metric, n, threshold and calibration set are written into K158's criterion; the guard itself may be built first. Issue-blocking, not intent-blocking: recorded as blocking false because Majordomus's blocking flag stops the whole connected-instrument intent (executing_with_open_blocker), which is already executing (Q079-Q082 done) on work this finding does not touch."
+  - id: m120-library-link-semantics-undecided
+    class: unproven_assumption
+    subject: "K160"
+    finding: "M120 review, 2026-11-03. K160 does not say what opening an entry link does to the user's document. A riff's only way in is Insert (riffVoiceAction, a mutation of the current model), but the Studio link codec's policy is that a link only opens an unmodified shipped template and never carries a document (src/js/core/url-state-studio.js header, spec section 200), and Q036 (G007) limits node addresses to unmodified shipped templates for the same reason; 'honours the unsaved guard' suggests a fresh document, 'selects the entry' suggests the library. The overrides are not bounded in the criterion: no tempo range, transposition range, value length or total length is stated, so 'oversized or out-of-range' is undecidable. Swing has nothing to act on: the Studio has no swing (only src/js/sequencer/model.js has one; Studio swing is K068, blocked), so a swing key would be an inert surface (project.no-inert-surfaces). 'Version' has no definition (K156 has schemaVersion and a fingerprint, no entry version, and nothing says whether an entry is immutable once shipped). No producer is planned: nothing writes the link (a Copy link control, and the rule that an edited document is not link-shareable), which K075's integration map requires of every link producer. The key names, their place in HASH_DOMAINS (src/js/ui/navigation.js) and their precedence against st, sv, c (G007) and the synth keys are unstated."
+    blocking: false
+    resolution:
+      state: open
+      because: "Before K160 starts: its objective says whether a link opens a new document built from the entry (as a template, under the unsaved guard) or only preselects the entry in the library; it names the keys, their domain order and every bound; it drops swing or depends on K068; it defines version; it plans the producer. Issue-blocking, not intent-blocking: recorded as blocking false because Majordomus's blocking flag stops the whole connected-instrument intent (executing_with_open_blocker), which is already executing (Q079-Q082 done) on work this finding does not touch."
+  - id: m120-pitch-check-cannot-resolve-a-semitone
+    class: delivery_verification
+    subject: "K155"
+    finding: "M120 review, 2026-11-03. s-riff-pitch asks the engine's spectral peak to move by 7 semitones 'within one semitone of tolerance' after the first note of an inserted riff is raised. The engine analyser has fftSize 8192 and smoothingTimeConstant 0.55 (src/js/audio/audio-engine.js:313-314): a bin is 5.38 Hz at the CI rate of 44.1 kHz and 5.86 Hz at 48 kHz, wider than a semitone below about 90 Hz (A1 to A#1 is 3.3 Hz, E2 to F2 is 4.9 Hz). The first riff of the Riffs category in K149's order, mirrorball-octaves, is a bass that starts on A1 for two steps, 0.25 s at 118 BPM, shorter than the analyser's 0.19 s window plus its smoothing, so a live read during PLAY mixes the note with its neighbours and depends on when the probe lands. synth.cjs's helpers (peakAt within one bin) cannot decide the claim. The check should render the first note's window offline (renderStudioOffline, src/js/studio/offline.js, where a stated sampleRate literal is allowed by project.bounded-test-timing) or loop the first clip, estimate the fundamental with a resolution finer than the tolerance, state the tolerance in cents, and name the riff it uses (or one whose first note is high enough)."
+    blocking: false
+    resolution:
+      state: open
+  - id: m120-pitch-field-criteria-gaps
+    class: missed_requirement
+    subject: "K155"
+    finding: "M120 review, 2026-11-03. K155's criteria leave out what the Pitch field does in cases its control will meet. 'Within the voice's range' is undefined: a tone clip carries a frequency in Hz (payload.params.freq), the role ranges of K149 exist only in tests/unit/riff-library.test.mjs, and the Oscillator's frequency range is another bound. A tone clip whose frequency is off the 12-TET grid (any imported project, or a frequency typed elsewhere) has no note: the field must show it, with its cent offset, and must never round it silently. The defect R00 found in the same panel, the Block select dropping the pitch (src/js/ui/studio/timeline-details.js:146), is in K155's why but not its criteria. 'Every pinned template hash is unchanged by the change of code' holds for any UI change and proves nothing. The fail-first file proves only if it imports a new pure helper (R00 proposed clipPitchAction): a test that dispatches CLIP_UPDATE, which the store already accepts (src/js/studio/actions.js:557), passes on the merge base and is not evidence under project.fail-first. Accessibility (the field's name, its value text as note name and Hz, the arrow-key step) and the phone leg are not stated."
+    blocking: false
+    resolution:
+      state: open
+  - id: m120-song-criteria-ambiguous-and-unmeasurable
+    class: delivery_verification
+    subject: "K161"
+    finding: "M120 review, 2026-11-03. K161 says a song is materialised 'when opened (one undo, transactional, unsaved guard)': one undo means an insertion into the current document, the unsaved guard means the document is replaced (as studioLoadTemplate does, resetting history); the criterion must choose. 'PCM non-silent on every track at its first note' cannot be read from the engine analyser, which hears the master mix only; it needs a per-track offline render (renderStudioOffline on the model with the other tracks removed) or a per-track tap. 'Close with 0 active sources' names neither the census (the engine's activeSourceCount, the Studio runtime's counts()) nor 'close' (STOP, a new document, leaving the workspace) nor the deadline that project.bounded-test-timing requires of the poll. The milestone's outcome says every entry is 'heard through K149's audition', but that audition plays a riff as one monophonic steps plan of engine.play() (auditionPlan, src/js/studio/riffs/audition.js on origin/feat/riff-library 69107fd7), so a multitrack song has no audition path in any issue."
+    blocking: false
+    resolution:
+      state: open
+  - id: m120-songs-wait-on-k099-without-need
+    class: unproven_assumption
+    subject: "K161"
+    finding: "M120 review, 2026-11-03. K161 depends on K099, which is blocked on K068, V505, Q019, Q023 and W011, and W011 on the owner's Q062, so the songs and K162 behind them wait on a piano-roll editor they do not use. A compact score materialised as one tone pattern clip per note on event tracks is exactly how the demo song plays today (src/js/studio/templates/demo-song.js, 744 clips from demo-song-score.js), and K149 already isolates the step that changes when notes clips land (toNotes in expand.js, 'the expander alone changes when that kind lands'). Velocity is then not played, as the demo song states in DEMO_SONG_OMITTED. Either K161 materialises songs as tone clips now and moves to notes clips when they land, or it depends on the data half of the notes clip kind split out of K099 (R00 owner question 2), not on K099 as a whole. K162 depends on K161 only to inherit the same wait: Expand adds declared clips to a riff session and needs K156's style fields and riffAction, not the song kind."
+    blocking: false
+    resolution:
+      state: open
+  - id: m120-two-song-formats
+    class: unnecessary_work
+    subject: "K161"
+    finding: "M120 review, 2026-11-03. K161 introduces a 'compact score in K156's schema' while the repository already has one: the demo song is a compact score (src/js/studio/templates/demo-song-score.js, sections, tracks, [step, pitch, length, velocity] notes) expanded at load into a template. Two song formats would mean two expanders and two sets of tests. K161 should state that its song kind generalises demo-song-score.js's format and expander, and whether the demo song is itself a library entry (it is original, has a pinned studioHash and would count toward the 128) or stays a template only."
+    blocking: false
+    resolution:
+      state: open
+  - id: m120-rights-record-thinner-than-r01
+    class: missed_requirement
+    subject: "K156"
+    finding: "M120 review, 2026-11-03. K156 records the rights of an entry as author OSCILLA, licence MIT and a method from three words. R01's authorship block for original content, which K157 cites as its design, also asks for the date, the tool for an AI-assisted entry or the generator's name, version and seed, a declaration that nothing was copied, and influences limited to genre terms. Q081's answer is 'method recorded', and the three words do not record a method. Q079's current_state adds that 'well-known commercial songs appear only as reference links that load nothing', while K157 refuses 'a reference-only entry shipped in dist' and no issue builds reference links: whether reference links exist in the product at all is the plan builder's gloss on the owner's answer 'Original-only', not part of it, and should be removed from Q079 or planned. Nothing checks the human-facing label either: the style string 'Original, in the style of <genre> (<era>)' with no artist or song name is held by K149's test, and K156's schema should keep that refusal."
+    blocking: false
+    resolution:
+      state: open
+  - id: m120-original-only-has-no-copy-detector
+    class: unproven_assumption
+    subject: "K157"
+    finding: "M120 review, 2026-11-03. Under Q079 every entry is author OSCILLA, so K157's negative fixture 'a third-party entry relabelled original by author' can only be caught through the author field, which a relabelled entry by definition carries correctly; the fixture is vacuous. What would catch a copied riff is R01's fingerprint comparison against a reference denylist, and R01's question Q5 (commit one-way hashes of locally transcribed iconic titles, keep them local, or rely on review) was not among the four questions the owner answered (Q079-Q082). Without it the original-only decision is held by the listening review alone. The unaccounted-media sweep is also narrower than R01's: K157 refuses media 'in an entry', R01 sweeps every data: URI and base64 run in dist that decodes to a media header (RIFF, OggS, fLaC, ID3, MThd), which is what Q082's symbolic-only decision needs."
+    blocking: false
+    resolution:
+      state: open
+      because: "Needs an owner question (R01 Q5) before K157's relabelled-original fixture means anything; the dist-wide media sweep is a criterion change of K157."
+  - id: m120-rights-check-duplicates-the-schema
+    class: unnecessary_work
+    subject: "K157"
+    finding: "M120 review, 2026-11-03. K156 already refuses a licence other than MIT, a method outside the three and an author other than OSCILLA at schema validation, over the same entries, and K157 refuses the same three again over dist. Under original-only and symbolic-only the part of K157 that nothing else does is the scan of the shipped file: the data region's digest against the entries, the media sweep, and library data that no entry accounts for. K157 can be reduced to that and call K156's validator for the rest. Its 'unaccounted library data' clause will also refuse K162's shipped accompaniment tables (drum and bass patterns per style, which are authored or generated musical data in dist and are not entries) unless K162 declares them as entries or K157 names them; the two issues should agree. R01 also proposes a rule (project.content-rights) so that the check is named enforcement under project.rules-name-their-enforcement; K157 adds a check without a rule."
+    blocking: false
+    resolution:
+      state: open
+  - id: m120-entries-not-proven-playable
+    class: missed_requirement
+    subject: "K158"
+    finding: "M120 review, 2026-11-03. K158 counts an entry when it passes the schema, the rights check and the near-duplicate guard; nothing proves that it plays. The owner's pack sets the floor at 128 'genuinely playable' entries. A per-entry unit check is cheap: riffVoiceAction on the reference template validates and compiles for every entry, and a sampled offline render is non-silent. 'Across electronic and wider styles' is not test-decidable: a minimum number of distinct genres and a cap on entries per genre would make it so. The 'recorded listening review' names no reviewer: an AI session cannot listen, so a review it records would be a claim without an observation (project.no-fake-science), and if the reviewer is the owner, 112 entries is an owner task the plan should ask for (or sample) as an owner question; evidence_required lists only verified, which a manual review is not."
+    blocking: false
+    resolution:
+      state: open
+  - id: m120-three-waves-in-one-issue
+    class: insufficient_work
+    subject: "K158"
+    finding: "M120 review, 2026-11-03. K158 holds the guard and three content waves (32, 64, 128 entries), each with its own listening review, gzip ceiling and, under project.review-verdict, its own reviewer verdict on src/js/studio/riffs. As one issue its derived status stays READY or ACTIVE until the last wave, and a wave's evidence has no issue to land on. The guard (which K157 and K161 also need) and each wave are separate landable slices; splitting them lets the plan show wave 1 done and lets wave 2 wait on its predecessor's review."
+    blocking: false
+    resolution:
+      state: open
+  - id: m120-budget-ceilings-not-stated
+    class: missed_requirement
+    subject: "M120"
+    finding: "M120 review, 2026-11-03. M120's risks say 'each wave states its own ceiling (Q023)', and Q023's answer keeps each slice's stated ceiling binding, but none of K155-K162 states a number; K158 defers it to the waves. Measured on 91e6db61: dist/index.html is 937 037 B at gzip -9, 262 963 B under the 1 200 000 B budget (scripts/build-config.mjs:86-89), a headroom every open line shares (the Flowbite F issues, the instrument waves, the component catalogue). For scale: the sixteen riffs' source is 3 217 B gzipped (src/js/studio/riffs/library.js) and the 44-bar demo song's score 3 216 B (demo-song-score.js), so 128 entries and three songs are likely to fit in tens of KB, but a JSON data region (m120-content-rights-check-has-no-region-to-read) and the facets UI add their own. Each issue should state its ceiling, and K158 each wave's."
+    blocking: false
+    resolution:
+      state: open
+  - id: m120-facets-check-proves-nothing-fail-first-can-see
+    class: delivery_verification
+    subject: "K159"
+    finding: "M120 review, 2026-11-03. K159's fail-first is 's-riff-facets fails on the merge base', a browser check; project.fail-first judges only tests/unit files (scripts/fail-first.mjs), so a feat PR for K159 would have to carry a waiver. The facet logic belongs in browseView of src/js/studio/patch-catalog.js, with a unit test in tests/unit/patch-browser.test.mjs that can fail on the merge base, and neither file is in K159's scope (patch-catalog.js is also a guarded path). 'The listing of 128 entries renders within a stated budget measured in the gate' states no budget, depends on 128 entries that K158 delivers (K159 does not depend on K158 and names no fixture), and puts a wall-clock time into a GATE suite, which measures the host as much as OSCILLA (project.bounded-test-timing's rationale); the repository's place for such medians is tests/browser/perf-budgets.cjs, which is DIAGNOSTIC (tests/README.md), or a structural bound (rows rendered, a virtualised list) can be gated instead. The pack's facets difficulty and favourites are neither planned nor declined."
+    blocking: false
+    resolution:
+      state: open
+  - id: m120-link-check-origins-and-autoplay
+    class: delivery_verification
+    subject: "K160"
+    finding: "M120 review, 2026-11-03. K160's why names file:// and the Pages sub-path, but its criterion names browsers only, and tests/browser/synth.cjs runs from file:// alone unless --origins says otherwise (suite.open defaultOrigins ['file']); the CI studio step runs npm run test:studio without OSC_ORIGINS, so s-riff-link would never open a link from /oscilla/. The dropped K154 named both origins; K155-K162 name none. 'No audio starts until a gesture' cannot be observed in synth.cjs, which launches Chromium with --autoplay-policy=no-user-gesture-required and Firefox with autoplay allowed: an autoplay defect would sound there and pass. The check should assert state (no transport playing, the engine's activeSourceCount 0 and no AudioContext created or running after the link opens) or run with the gesture rule on as tests/browser/touch-audio.cjs does (project.a-phone-sounds)."
+    blocking: false
+    resolution:
+      state: open
+  - id: m120-guarded-paths-scope-and-docs
+    class: missed_requirement
+    subject: "M120"
+    finding: "M120 review, 2026-11-03. K156, K158, K159, K161 and K162 change src/js/studio/riffs, a guarded path of project.review-verdict, and K157's 'run by verify-dist' changes scripts/verify-dist.mjs, also guarded, but no issue says that its pull request needs a reviewer-written .ai/repo/reviews/<pr>.yaml, as K144 does. Scopes miss files their objectives change: scripts/verify-dist.mjs (K157), src/js/studio/patch-catalog.js and tests/unit/patch-browser.test.mjs (K159), and tests/README.md for the new synth.cjs checks of K159-K162 (s-riff-facets, s-riff-link, s-song-open, s-riff-expand), whose rows and the suite's header list are how tests/README.md says what each check proves. README.md and docs/GLOSSARY.md gain terms (entry, song, Expand to session) and are scoped nowhere. Every issue also shares dist/index.html, synth.cjs and src/js/studio/riffs, so majordomus intent validate reports duplicate_work for every pair and none of them can run concurrently."
+    blocking: false
+    resolution:
+      state: open
+  - id: m120-ui-rules-phone-and-accessibility-unstated
+    class: missed_requirement
+    subject: "M120"
+    finding: "M120 review, 2026-11-03. K155 (Pitch field), K159 (facets and search) and K162 (Expand) add interface, and none states project.ui-uses-flowbite-pro (built on Pro, the ratchet of tests/unit/ui-flowbite-pro-baseline.json only falls), the component catalogue (G001: a new surface is declared once it lands) or the key registry (K153: Expand's and the Pitch field's keys bind through src/js/ui/keys). Only K159 names a screen reader, and none states the accessible names, roles and live announcements a test can check (the facets' result count, the Pitch field's value text, Expand's outcome). None of the new checks joins synth.cjs's phone leg (PHONE_CHECKS: s-sound, s-cable, s-mobile, s-look, s-dock, s-library), although K155 and K159 claim touch and the Studio folds its Inspector away at 390 px; and no new check sounds with the gesture rule on (project.a-phone-sounds). K099 and K117, by contrast, carry these as explicit criteria."
+    blocking: false
+    resolution:
+      state: open
+  - id: m120-criterion-narrower-than-its-work
+    class: missed_requirement
+    subject: "connected-instrument#riff-library"
+    finding: "M120 review, 2026-11-03. All eight issues serve connected-instrument#riff-library, whose criterion is 'a library of short riffs ... monophonic and in its role's range, inserts into the Studio as one undoable batch', with the ref node --test tests/unit/riff-library.test.mjs. Multitrack songs (K161), a rights check over dist (K157), facets (K159), links (K160), expansion (K162) and the 128 floor (K158) are outside that sentence, and its ref runs none of their checks, so the criterion can be met while M120's outcome is not, and the songs contradict 'monophonic'. R00 recommended new criteria under connected-instrument for gaps 1-7. The criterion should be widened (or criteria added for library scale and rights, songs, and sharing) with refs that run scripts/content-rights.mjs and the new browser checks."
+    blocking: false
+    resolution:
+      state: open
+  - id: m120-audition-rests-on-an-unmerged-k149
+    class: delivery_verification
+    subject: "M120"
+    finding: "M120 review, 2026-11-03. M120 dropped K154 because 'K149 builds the audition', but K149.yaml on this branch (91e6db61) still says 'Insert (riffVoiceAction) the only way in'; the audition is in K149's objective only on origin/feat/riff-library (45475c66 and 69107fd7), which this plan branch does not contain. Its proof there is s-riffs hearing RMS above -40 dB rel and Stop below -70 dB rel; K154's criterion that the spectral peak matches the first note was dropped with it, so no criterion now shows that the audition plays the right notes. The audition plays riff.voice.waveform without the Filter that Insert builds (auditionPlan), so what is heard is not what is inserted; K149 or its follow-up should say so where it is shown (project.no-fake-science)."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "K149"
+      because: "K149's objective on origin/feat/riff-library (45475c66) adds audition.js; the pitch proof and the voice difference remain open until K149 or an issue under M120 states them."
+  - id: m120-expand-is-over-planned
+    class: unnecessary_work
+    subject: "K162"
+    finding: "M120 review, 2026-11-03. K162 adds a deterministic accompaniment generator (drums and bass per style), which is new musical content in dist under the same rights questions as the entries, for a feature the owner's pack marks optional ('a riff may offer Expand to session'). It also says 'drums and bass' for every riff, so a bass riff gains a second bass; the declared accompaniment should be the roles the riff lacks. 'Session' already names the Synth workspace's Session sub-view of K099 and the session grid of K101 (W012), so 'Expand to session' would be a third meaning. Given its dependency chain (K161, K099) and these open points, K162 can leave M120 for a later milestone without weakening the outcome M120 states, which does not mention expansion."
+    blocking: false
+    resolution:
+      state: open
+  - id: m120-studio-suite-time-budget
+    class: regression_risk
+    subject: "M120"
+    finding: "M120 review, 2026-11-03. K155 and K159-K162 add five checks to tests/browser/synth.cjs, which already runs 24 checks in three browsers at two sizes inside npm run test:studio, one CI step of eleven suites bounded at 15 minutes (.github/workflows/ci.yml, 'STUDIO workspace ...', timeout-minutes: 15; project.ci-bounded). A song opened and played in three browsers, and a 128-entry listing, add minutes. R00 proposed a sibling suite (tests/browser/riff-library.cjs through lib/suite.cjs); a separate suite with its own CI step, or a measured step time in the first PR, keeps the bound honest."
+    blocking: false
+    resolution:
+      state: open
