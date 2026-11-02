@@ -8,6 +8,7 @@
 //            ensurePanel(), dispatch(action), say(text, assertive), allOff() }
 
 import { WAVES, instrumentChoices, routeAction, waveAction, waveOf } from './picker.js';
+import { roving } from '../ui/keys/roving.js';
 
 export function createDock(ctx) {
   const { panel, registry } = ctx;
@@ -73,15 +74,29 @@ export function createDock(ctx) {
     },
 
     /** Arrow keys in a menu or a radio group of the dock move (in a group they also choose). */
-    synthDockKey(e, choose) {
-      const items = [...e.currentTarget.querySelectorAll('[role="menuitem"],[role="radio"]')];
-      const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
-      if (!step || !items.length) return;
-      e.preventDefault();
-      const i = items.indexOf(document.activeElement);
-      const next = items[(i + step + items.length) % items.length];
-      next.focus();
-      if (choose) next.click();
+    /** Roving focus over the picker's menu (Escape closes it) or a radio group (a move
+     *  chooses), through the one sanctioned widget key listener (src/js/ui/keys/roving.js). */
+    synthDockRoving(el, choose) {
+      const items = () => [...el.querySelectorAll('[role="menuitem"],[role="radio"]')]
+        .filter((x) => x.getClientRects().length > 0);
+      // Not returned: Alpine calls a function an x-init expression yields (it would detach).
+      roving(el, {
+        orientation: 'both',
+        count: () => items().length,
+        index: () => items().indexOf(el.ownerDocument.activeElement),
+        move(i) {
+          const next = items()[i];
+          next.focus();
+          if (choose) next.click();
+        },
+        escape: choose ? undefined : () => {
+          if (!this.synth.dock.open) return false; // a closed picker leaves Escape to the page
+          this.synth.dock.open = false;
+          const pick = el.querySelector('[data-osc="synth.pick"]');
+          if (pick) pick.focus();
+          return true;
+        },
+      });
     },
   };
   /** An engine chosen on the Engines tab: the tab chooses what the keys play again. */

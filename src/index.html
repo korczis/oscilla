@@ -1877,7 +1877,7 @@
       <div class="mb-2 flex items-center gap-2" data-osc="synth.dock" id="osc-synth-dock"
         x-show="kbdView === 'synth'" role="group" aria-label="Instrument"
         :class="!kbdMore && 'max-sm:hidden'">
-        <div class="relative" @keydown.escape.stop="synth.dock.open = false; $refs.pick.focus()">
+        <div class="relative" x-init="synthDockRoving($el, false)">
           <button type="button" id="osc-synth-pick" x-ref="pick" data-osc="synth.pick"
             @click.outside="synth.dock.open = false"
             aria-haspopup="menu" aria-controls="osc-synth-pick-menu"
@@ -1885,7 +1885,7 @@
             class="inline-flex h-11 items-center gap-1 rounded-lg border border-solid border-gray-300 bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700"
             x-text="'Plays: ' + synth.dock.target">Plays</button>
           <ul id="osc-synth-pick-menu" x-ref="menu" role="menu" aria-labelledby="osc-synth-pick"
-            data-osc="synth.pick.menu" x-show="synth.dock.open" @keydown="synthDockKey($event)"
+            data-osc="synth.pick.menu" x-show="synth.dock.open"
             class="absolute bottom-full left-0 z-40 mb-1 w-72 rounded-lg bg-white py-2 text-sm shadow dark:bg-gray-700">
             <template x-for="c in synth.dock.choices" :key="c.id">
               <li role="none"><button type="button" role="menuitem" :data-pick="c.id"
@@ -1899,7 +1899,7 @@
         <div class="flex min-w-0 flex-1 gap-2 overflow-x-auto sm:flex-wrap sm:overflow-visible">
         <template x-for="g in [{ id: 'osc', label: 'Oscillator', items: synth.dock.oscs, on: synth.dock.osc, pick: (id) => synthOsc(id) }, { id: 'wave', label: 'Waveform', items: synth.dock.waves, on: synth.dock.wave, pick: (id) => synthWave(id) }, { id: 'preset', label: 'Quick presets', items: synth.presets.filter((x) => x.tab === synth.tab).map((x) => ({ id: x.id, label: x.title.split(':')[0] })), on: synth.preset, pick: (id) => synthPreset(id) }]" :key="g.id">
           <div role="radiogroup" :aria-label="g.label" :data-osc="'synth.dock.' + g.id"
-            @keydown="synthDockKey($event, true)" class="inline-flex shrink-0 rounded-lg shadow-sm">
+            x-init="synthDockRoving($el, true)" class="inline-flex shrink-0 rounded-lg shadow-sm">
             <template x-for="(it, i) in g.items" :key="it.id">
               <button type="button" role="radio" :data-v="it.id" :aria-checked="String(it.id === g.on)"
                 :tabindex="it.id === g.on || (i === 0 && !g.items.some((x) => x.id === g.on)) ? '0' : '-1'"
