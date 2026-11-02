@@ -10,19 +10,27 @@
 //     - every data-led / data-needle element names an interpolated data-source and state;
 //     - src/styles/base.css keeps the global prefers-reduced-motion guard;
 //     - every Tailwind colour key but primary maps to a var(--osc-*) token tokens.css defines;
+//     - the hardware vocabulary (wood, brushed, anodis, screw, jack-nut, sheen, cheek, data-led,
+//       data-needle, data-hw) appears only in THEME_DIRS, so no surface is skinned outside the
+//       judged layer (af's review of 2026-11-02, P2-A); rivets appear nowhere, the layer included;
+//     - the palette of tokens.css equals its reviewed snapshot (visual-identity-palette.json);
+//     - the hardware intensity keys of tailwind.config.cjs stay within their bounds;
 //   the theme layer (THEME_DIRS: src/js/synth/view now; src/js/ui/synth and src/js/ui/cable,
 //   the shared synth-theme layer, once they exist):
 //     - no colour literal, colour function, named colour, literal paint, arbitrary Tailwind
 //       colour or url() but an in-SVG fragment; every --osc-* token it names exists;
 //     - animate-* only behind motion-safe:, a script or SVG animation only in a file that checks
-//       prefers-reduced-motion; "SPL" only in a file that reads the calibration state.
+//       prefers-reduced-motion; "SPL" only in a file that reads the calibration state;
+//     - (layer directories only) no literal opacity, alpha or shadow: the intensity keys are read.
 //
-// While src/js/ui/synth/ does not exist, the layer's own directories pass vacuously and the test
-// says so in its output; once it exists it must hold a module and every guard is strict on it.
+// While src/js/ui/synth/ and src/js/ui/cable/ do not exist, their guards pass vacuously and the
+// test says so in its output; once one exists it must hold a module and every guard is strict.
 //   node --test tests/unit/visual-identity-lock-v4.test.mjs
+// After a reviewed palette change: OSC_PALETTE_WRITE=1 node --test <this file> rewrites the
+// snapshot; the diff of tests/unit/visual-identity-palette.json is what the reviewer judges.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ROOT = new URL('../../', import.meta.url).pathname;
@@ -39,8 +47,9 @@ const SRC = SRC_PATHS.filter((p) => TEXT.test(p)).map((p) => [p, read(p)]);
 const TOKENS_CSS = read('src/styles/tokens.css');
 
 export const THEME_DIRS = ['src/js/synth/view', 'src/js/ui/synth', 'src/js/ui/cable'];
-// The shared synth-theme layer's home; the guards turn strict on it once it exists.
-export const LAYER_DIR = 'src/js/ui/synth';
+// The shared synth-theme layer's homes (F013); the guards turn strict on each once it exists.
+export const LAYER_DIRS = ['src/js/ui/synth', 'src/js/ui/cable'];
+const inDirs = (p, dirs) => dirs.some((d) => p === d || p.startsWith(`${d}/`));
 
 /** Removes // line comments and block comments (strings that hold // stay, e.g. a URL). */
 export const stripComments = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '')
@@ -373,6 +382,118 @@ export function themeSpl(files) {
     && !/calibrat/i.test(stripComments(t))).map(([p]) => `${p}: SPL without the calibration`);
 }
 
+// --- where the hardware look may be drawn ---------------------------------------------------
+
+export const HW_VOCAB =
+  /wood|brushed|anodis|screw|jack-nut|sheen|cheek|data-led|data-needle|data-hw/i;
+// path -> the one reason a match outside THEME_DIRS is legitimate. Empty at v4 (nothing in src
+// matched on 2026-11-02); an entry only shrinks, and a stale one fails.
+export const HW_ALLOW = new Map();
+const HW_SCANNED = /\.(m?js|css|html)$/;
+
+/** The hardware vocabulary only under THEME_DIRS (outside comments), so no skin escapes. */
+export function hardwareOutsideLayer(files, allow = HW_ALLOW) {
+  const out = [];
+  const seen = new Set();
+  for (const [p, raw] of files) {
+    if (!HW_SCANNED.test(p) || inDirs(p, THEME_DIRS)) continue;
+    const text = stripComments(raw);
+    const m = new RegExp(HW_VOCAB.source, 'gi').exec(text);
+    if (!m) continue;
+    if (allow.has(p)) { seen.add(p); continue; }
+    out.push(`${p}:${lineOf(text, m.index)}: "${m[0]}" outside the synth-theme layer `
+      + `(${THEME_DIRS.join(', ')})`);
+  }
+  for (const p of allow.keys()) if (!seen.has(p)) out.push(`${p}: stale HW_ALLOW entry`);
+  return out;
+}
+
+/** Rivets are not among Q071's options and v3 banned them: nowhere, the layer included. */
+export function rivets(files) {
+  const out = [];
+  for (const [p, raw] of files) {
+    const text = stripComments(raw);
+    const m = /rivet/i.exec(text);
+    if (m) out.push(`${p}:${lineOf(text, m.index)}: a rivet ("${m[0]}"); rivets stay banned`);
+  }
+  return out;
+}
+
+// --- the palette and the intensity bounds ----------------------------------------------------
+
+export const PALETTE_SNAPSHOT = 'tests/unit/visual-identity-palette.json';
+const COLOUR_VALUE = /#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?|oklch|oklab|lab|lch|hwb)\(/i;
+
+/** Every custom property of tokens.css whose value is a colour, per selector. */
+export function palette(tokensCss) {
+  const out = {};
+  for (const b of cssBlocks(tokensCss.replace(/\/\*[\s\S]*?\*\//g, ''))) {
+    if (b.selector === '@keyframes') continue;
+    for (const m of b.body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);?/g)) {
+      const value = m[2].trim().replace(/\s+/g, ' ');
+      if (!COLOUR_VALUE.test(value)) continue;
+      (out[b.selector] ||= {})[m[1]] = value;
+    }
+  }
+  return out;
+}
+
+/** Differences between the reviewed snapshot and the palette now, one string each. */
+export function paletteDiff(snapshot, now) {
+  const out = [];
+  for (const sel of new Set([...Object.keys(snapshot), ...Object.keys(now)])) {
+    const a = snapshot[sel] || {};
+    const b = now[sel] || {};
+    for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
+      if (a[k] !== b[k]) out.push(`${sel} ${k}: ${a[k] ?? '(none)'} -> ${b[k] ?? '(none)'}`);
+    }
+  }
+  return out;
+}
+
+// The hardware intensity keys of tailwind.config.cjs and their bounds (rule v4, "decent").
+// tokens.css cannot gain a declaration (project.ui-uses-flowbite-pro's ratchet), so they are
+// Tailwind theme keys the layer reads as classes (opacity-hw-sheen, w-hw-wood, shadow-hw-led).
+export const HW_BOUNDS = [
+  { scope: 'opacity', key: 'hw-sheen', max: 0.25, unit: '' },
+  { scope: 'opacity', key: 'hw-texture', max: 0.08, unit: '' },
+  { scope: 'width', key: 'hw-wood', max: 16, unit: 'px' },
+  { scope: 'boxShadow', key: 'hw-led', max: GLOW_MAX_PX, unit: 'glow px' },
+];
+
+/** Each intensity key exists and stays within its bound. */
+export function hwIntensity(configText) {
+  const out = [];
+  for (const { scope, key, max, unit } of HW_BOUNDS) {
+    const block = new RegExp(`\\b${scope}\\s*:\\s*\\{([^}]*)\\}`).exec(configText);
+    const m = block && new RegExp(`['"]${key}['"]\\s*:\\s*['"]([^'"]+)['"]`).exec(block[1]);
+    if (!m) { out.push(`${scope}.${key}: not declared`); continue; }
+    let v;
+    if (scope === 'boxShadow') {
+      v = glowReach(m[1]);
+      if (!/currentColor|var\(--osc-/.test(m[1])) out.push(`${scope}.${key}: colour not a token`);
+    } else v = PX(m[1]);
+    if (v === null || !(v > 0) || v > max) {
+      out.push(`${scope}.${key}: ${m[1]} not in (0, ${max}] ${unit}`);
+    }
+  }
+  return out;
+}
+
+/** In the layer's own directories, no literal opacity, alpha or shadow: the keys are read. */
+export function layerIntensityLiterals(files) {
+  const out = [];
+  for (const [p, raw] of files) {
+    if (!inDirs(p, LAYER_DIRS)) continue;
+    const text = stripComments(raw);
+    const m = new RegExp(String.raw`\b(?:bg-|text-|border-)?opacity-\[|\/\[0?\.\d`
+      + String.raw`|\b(?:drop-)?shadow-\[|\bopacity\s*:\s*0?\.\d|box-shadow\s*:|\bw-\[`)
+      .exec(text);
+    if (m) out.push(`${p}:${lineOf(text, m.index)}: a literal intensity (${m[0]}), not a hw-* key`);
+  }
+  return out;
+}
+
 function themeFiles() {
   const present = THEME_DIRS.filter((d) => existsSync(join(ROOT, d)));
   const absent = THEME_DIRS.filter((d) => !present.includes(d));
@@ -434,9 +555,9 @@ test('the theme layer draws only from tokens, moves only behind reduced motion, 
   (t) => {
     const { present, absent, files } = themeFiles();
     assert.ok(present.includes('src/js/synth/view'), 'the Synth panel view is judged');
-    if (present.includes(LAYER_DIR)) {
-      assert.ok(files.some(([p]) => p.startsWith(`${LAYER_DIR}/`) && p.endsWith('.js')),
-        `${LAYER_DIR} exists and holds no module`);
+    for (const d of LAYER_DIRS.filter((x) => present.includes(x))) {
+      assert.ok(files.some(([p]) => p.startsWith(`${d}/`) && p.endsWith('.js')),
+        `${d} exists and holds no module`);
     }
     for (const d of absent) {
       const msg = `VACUOUS: ${d}/ does not exist yet; its theme-layer guards pass vacuously and `
@@ -448,7 +569,36 @@ test('the theme layer draws only from tokens, moves only behind reduced motion, 
     assert.deepEqual(themeColours(files, TOKENS_CSS), []);
     assert.deepEqual(themeMotion(files), []);
     assert.deepEqual(themeSpl(files), []);
+    assert.deepEqual(layerIntensityLiterals(files), []);
   });
+
+test('the hardware look is drawn only in the synth-theme layer, and rivets nowhere', () => {
+  assert.deepEqual(hardwareOutsideLayer(SRC), []);
+  assert.deepEqual(rivets(SRC), []);
+});
+
+test('the palette of tokens.css equals its reviewed snapshot', (t) => {
+  const now = palette(TOKENS_CSS);
+  assert.ok(Object.keys(now[':root'] || {}).length > 20, 'the dark palette is read');
+  if (process.env.OSC_PALETTE_WRITE === '1') {
+    writeFileSync(join(ROOT, PALETTE_SNAPSHOT), `${JSON.stringify(now, null, 2)}\n`);
+    t.diagnostic(`wrote ${PALETTE_SNAPSHOT}`);
+  }
+  const diff = paletteDiff(JSON.parse(read(PALETTE_SNAPSHOT)), now);
+  assert.deepEqual(diff, [], 'the palette changed (a colourway is the owner\'s and the '
+    + `reviewer's call): ${diff.join('; ')}. If it is intended, rewrite ${PALETTE_SNAPSHOT} `
+    + 'with OSC_PALETTE_WRITE=1 in a commit a reviewer judges.');
+});
+
+test('the hardware intensity keys stay within their bounds', (t) => {
+  assert.deepEqual(hwIntensity(read('tailwind.config.cjs')), []);
+  if (!LAYER_DIRS.some((d) => existsSync(join(ROOT, d)))) {
+    const msg = 'VACUOUS: no layer directory yet, so no file reads the hw-* keys; '
+      + 'layerIntensityLiterals turns strict with the layer (project.visual-identity-lock v4).';
+    t.diagnostic(msg);
+    console.log(`# ${msg}`);
+  }
+});
 
 // --- mutation proofs: every guard catches a seeded violation and passes its clean twin ------
 
@@ -577,4 +727,47 @@ test('mutation: motion without a reduced-motion guard is caught', () => {
 test('mutation: a needle labelled SPL without the calibration is caught', () => {
   caught(themeSpl, f('src/js/ui/synth/meter.js', '`<text>dB SPL</text>`'),
     f('src/js/ui/synth/meter.js', '`<text>${cal.calibrated ? "dB SPL" : "dB rel"}</text>`'));
+});
+
+test('mutation: the hardware look outside the layer, and a rivet anywhere, are caught', () => {
+  const ok = f('src/js/ui/synth/plate.js', '`<div class="w-hw-wood" data-hw="cheek"></div>`');
+  assert.deepEqual(hardwareOutsideLayer(ok), [], 'inside the layer');
+  for (const [p, bad] of [
+    ['src/js/ui/studio/graph-view.js', '`<div class="bg-wood-grain"></div>`'],
+    ['src/styles/measure.css', '.knob { --plate-sheen: 0.2; }'],
+    ['src/index.html', '<span class="screw-head"></span>'],
+    ['src/js/ui/measure.js', '`<i data-led data-source="${s}" data-lit="${on}"></i>`'],
+    ['src/js/ui/app.js', "const finish = 'anodised';"],
+    ['src/js/ui/workbench.js', '`<i data-hw="nut"></i>`']]) {
+    caught(hardwareOutsideLayer, f(p, bad), f(p, '`<div class="rounded-lg"></div>`'));
+  }
+  assert.deepEqual(hardwareOutsideLayer(f('src/js/ui/app.js', '// a wood note')), [],
+    'a comment is not a skin');
+  assert.ok(hardwareOutsideLayer([], new Map([['src/x.js', 'why']])).length > 0, 'stale allow');
+  caught(rivets, f('src/js/ui/synth/plate.js', '`<circle class="rivet"/>`'),
+    f('src/js/ui/synth/plate.js', '`<circle class="screw"/>`'));
+});
+
+test('mutation: a palette change and an intensity beyond its bound are caught', () => {
+  const css = ':root {\n  --osc-bg: #0b1220;\n  --osc-touch: 44px;\n}\n'
+    + '[data-theme="light"] {\n  --osc-bg: #e9eef4;\n}\n';
+  const snap = palette(css);
+  assert.deepEqual(snap, { ':root': { '--osc-bg': '#0b1220' },
+    '[data-theme="light"]': { '--osc-bg': '#e9eef4' } });
+  assert.deepEqual(paletteDiff(snap, palette(css)), []);
+  assert.equal(paletteDiff(snap, palette(css.replace('#0b1220', '#8b5a2b'))).length, 1);
+  assert.equal(paletteDiff(snap, palette(`${css}:root { --osc-wood: #8b5a2b; }`)).length, 1);
+  const cfg = (o) => `opacity: { 'hw-sheen': '${o.sheen ?? '0.12'}', 'hw-texture': '0.04' },\n`
+    + `width: { 'hw-wood': '0.75rem' },\n`
+    + `boxShadow: { 'hw-led': '${o.led ?? '0 0 4px currentColor'}' },`;
+  assert.deepEqual(hwIntensity(cfg({})), []);
+  assert.ok(hwIntensity(cfg({ sheen: '0.6' })).length > 0, 'sheen 0.6');
+  assert.ok(hwIntensity(cfg({ led: '0 0 14px currentColor' })).length > 0, 'glow 14 px');
+  assert.ok(hwIntensity(cfg({ led: '0 0 4px #39ff14' })).length > 0, 'a neon literal');
+  assert.ok(hwIntensity("opacity: { 'hw-sheen': '0.1' }").length > 0, 'a missing key');
+  caught(layerIntensityLiterals, f('src/js/ui/synth/plate.js', '`<i class="opacity-[0.6]"></i>`'),
+    f('src/js/ui/synth/plate.js', '`<i class="opacity-hw-sheen"></i>`'));
+  caught(layerIntensityLiterals,
+    f('src/js/ui/cable/cable.js', '`<i class="shadow-[0_0_20px_var(--osc-cyan)]"></i>`'),
+    f('src/js/ui/cable/cable.js', '`<i class="shadow-hw-led text-osc-green"></i>`'));
 });

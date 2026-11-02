@@ -4,7 +4,7 @@ version: 4
 kind: rule
 title: Visual identity lock - the Flowbite Pro interface around OSCILLA's own domain views, drawn app-wide as a restrained old-school modular
 description: Every surface's interface (shell, panels, dialogs, controls) is Flowbite Pro on Tailwind themed to OSCILLA, and the domain views (charts, Signal Path, the Studio graph and timeline) keep OSCILLA's own visual language inside Pro cards; no surface imports the visual identity of any product, flow editor or UI kit. Version 4 keeps every guarantee of version 3 and lifts its one narrowing from the Synth panel surface to the whole app, by the owner's decision of 2026-11-02 (Q071) - a restrained hardware treatment (jacks, plugs, cables, screws, wooden cheeks, metal, texture, LED glow) drawn only from OSCILLA tokens, never implying a measurement that is not made.
-statement: The interface of every surface, Studio included, is built from Flowbite Pro on Tailwind (project.ui-uses-flowbite-pro, ADR 0061), themed with OSCILLA's palette in dark and light; the domain views (charts, Signal Path, the Studio graph, nodes, cables and timeline, the spectrogram, meters and readouts) keep their meaning, the Signal Path grammar, the dataviz rules and tabular numerals as the content of Pro cards; no surface carries the brand mark, logo, product name, product colourway, panel layout, traced face or other trade dress of any product, and no surface uses another UI kit or a flow-editor theme; every surface may carry a restrained old-school modular hardware treatment (jacks with nuts, plugs on cable ends, cables with sag, sheen and shadow, screws, wooden cheeks, brushed or anodised metal plates, a subtle surface texture, LED glow) in which every colour is an OSCILLA token, every texture is procedural (CSS, SVG or token-driven) and never a bitmap, nothing animates a gradient or uses glassmorphism, no glow but on an LED that shows real state, motion honours prefers-reduced-motion, and no lamp, needle or scale implies a measurement, a calibration or a dB SPL figure the engine has not produced; and with the logo hidden the screen still obviously belongs to OSCILLA.
+statement: The interface of every surface, Studio included, is built from Flowbite Pro on Tailwind (project.ui-uses-flowbite-pro, ADR 0061), themed with OSCILLA's palette in dark and light; the domain views (charts, Signal Path, the Studio graph, nodes, cables and timeline, the spectrogram, meters and readouts) keep their meaning, the Signal Path grammar, the dataviz rules and tabular numerals as the content of Pro cards; no surface carries the brand mark, logo, product name, product colourway, panel layout, traced face or other trade dress of any product, and no surface uses another UI kit or a flow-editor theme; every surface may carry a restrained old-school modular hardware treatment (jacks with nuts, plugs on cable ends, cables with sag, sheen and shadow, screws, wooden cheeks, brushed or anodised metal plates, a subtle surface texture, LED glow; never rivets), drawn only by the one synth-theme layer, in which every colour is an OSCILLA token, every texture is procedural (CSS, SVG or token-driven) and never a bitmap, nothing animates a gradient or uses glassmorphism, no glow but on an LED that shows real state, motion honours prefers-reduced-motion, and no lamp, needle or scale implies a measurement, a calibration or a dB SPL figure the engine has not produced; and with the logo hidden the screen still obviously belongs to OSCILLA.
 status: active
 class: blocking
 depends_on: [project.no-fake-science@2]
@@ -84,9 +84,13 @@ can hold, and keeps every other clause of version 3 unchanged. ADR 0061's resolu
 - **The hardware treatment, app-wide.** Every surface (the shell, Studio's graph, nodes,
   cables and timeline, the Synth, the labs, MEASURE, Experiments, Analyzer and Compare) may
   draw: jacks with nuts; plugs on cable ends; cables with sag, sheen and a soft shadow; screws;
-  wooden cheeks; brushed or anodised metal plates; a subtle surface texture; LED glow. Built
-  as the shared synth-theme layer (planned as plan issue F013: the directories `ui/synth/` and
-  `ui/cable/` under `src/js`, with the Synth panel's `src/js/synth/view/`), and:
+  wooden cheeks; brushed or anodised metal plates; a subtle surface texture; LED glow. Screws
+  are allowed; rivets stay banned (not among Q071's options), on every surface, the layer
+  included. The treatment is drawn only by the shared synth-theme layer (planned as plan issue
+  F013: the directories `ui/synth/` and `ui/cable/` under `src/js`, with the Synth panel's
+  `src/js/synth/view/`); a surface takes it by calling the layer, so its hardware vocabulary
+  (wood, brushed, anodised, screw, jack nut, sheen, cheek, `data-led`, `data-needle`,
+  `data-hw`) appears in no other source file and no skin escapes the layer's checks. And:
   - **Tokens only.** Every colour is an OSCILLA token (`src/styles/tokens.css`), read at run
     time or through a Tailwind theme key that maps to a `var(--osc-*)`; the two themes differ
     only by token values. No hex, colour function, named colour, literal paint or arbitrary
@@ -98,10 +102,17 @@ can hold, and keeps every other clause of version 3 unchanged. ADR 0061's resolu
   - **Decent, real, old school: no frills.** No glassmorphism (no backdrop blur or backdrop
     filter), no animated gradient, no gradient text, no neon over-glow: a glow (a shadow with
     no offset) is drawn only on an LED (`data-led`) and spreads at most 6 px, and text never
-    glows; the one glow recorded before this version (the shell's status lamp) only shrinks. Motion is restrained: the global `prefers-reduced-motion` guard of
-    `src/styles/base.css` stays, a Tailwind `animate-*` in the theme layer is `motion-safe:`,
-    and a script or SVG animation (`.animate(`, `<animate`) in the theme layer checks
-    `prefers-reduced-motion` in the same file.
+    glows; the one glow recorded before this version (the shell's status lamp) only shrinks.
+    Intensity is bounded: sheen, texture, the wooden cheek's width and the LED glow are the
+    Tailwind keys `hw-sheen` (opacity at most 0.25), `hw-texture` (at most 0.08), `hw-wood`
+    (at most 16 px) and `hw-led` (a token-coloured glow of at most 6 px), and the layer reads
+    them, never a literal opacity, alpha or shadow (`src/styles/tokens.css` cannot gain a
+    declaration under the ratchet of `project.ui-uses-flowbite-pro`). The palette of
+    `tokens.css` changes only in a reviewed commit that rewrites its snapshot, so no product's
+    colourway slips in as a token. Motion is restrained: the global `prefers-reduced-motion`
+    guard of `src/styles/base.css` stays, a Tailwind `animate-*` in the theme layer is
+    `motion-safe:`, and a script or SVG animation (`.animate(`, `<animate`) in the theme layer
+    checks `prefers-reduced-motion` in the same file.
   - **Indicators bind to state.** An LED is marked `data-led` and a needle `data-needle`;
     the same element names its state source (`data-source`) and carries its state
     (`data-lit`, `data-value`) as an interpolated value, never a literal.
@@ -124,6 +135,17 @@ can hold, and keeps every other clause of version 3 unchanged. ADR 0061's resolu
   and allowed one highlight and two-token plates; version 4 allows jacks with nuts, plugs,
   cable sheen, screws, wooden cheeks, brushed or anodised metal, a subtle procedural texture
   and LED glow (Q071, all four element options). Bitmaps stay banned.
+- **Reworded, domain views:** "the domain views keep OSCILLA's own visual language" became
+  "keep their meaning, the Signal Path grammar and the dataviz rules", so a skin from the layer
+  may now dress a domain view (a cable, a plate, a knob, a meter) without changing what it
+  says.
+- **Reworded, foreign identity:** "imports the visual identity of another product" became the
+  enumerated trade dress: a brand mark, logo, product name, product colourway, panel layout or
+  traced face, so a hardware look is allowed and a product's identity is not.
+- **Rivets:** screws are allowed and rivets stay banned, as in version 3: the owner's option
+  named "Šroubky a dřevěné bočnice" (screws and wooden cheeks), not rivets.
+- **Where:** the treatment is drawn only by the synth-theme layer; the hardware vocabulary
+  outside it fails (af's review of 2026-11-02, P2-A).
 - **Unchanged:** the Flowbite Pro interface and its ratchet; the domain views' meaning; the
   measurement-truth clauses; no foreign identity; the hidden-logo question; contrast and
   focus. The flat-knob decision D11 (Q018) stays superseded on the Synth panel as ADR 0061's
@@ -144,19 +166,25 @@ is a review rejection even when every functional test passes.
     background and no `animate-*` beside a gradient; a zero-offset glow only on a `data-led`
     element and at most 6 px, never on text (the legacy status lamp of the shell,
     `.osc-status.is-playing .osc-status-dot`, a real-state lamp that glows 8 px, is recorded
-    debt in the test's `GLOW_DEBT`, only shrinks, and fails once stale); every `data-led` or `data-needle` element names
-    an interpolated `data-source` and state; the global reduced-motion guard of
-    `src/styles/base.css` exists; every colour key of `tailwind.config.cjs` but `primary` maps
-    to a `var(--osc-*)` token;
+    debt in the test's `GLOW_DEBT`, only shrinks, and fails once stale); every `data-led` or
+    `data-needle` element names an interpolated `data-source` and state; the global
+    reduced-motion guard of `src/styles/base.css` exists; every colour key of
+    `tailwind.config.cjs` but `primary` maps to a `var(--osc-*)` token; the hardware
+    vocabulary appears only in the theme layer (an allow-list that only shrinks is empty at
+    version 4) and "rivet" nowhere; the colour values of `src/styles/tokens.css` equal the
+    reviewed snapshot `tests/unit/visual-identity-palette.json`; the intensity keys
+    `hw-sheen`, `hw-texture`, `hw-wood` and `hw-led` exist within their bounds;
   - over the theme layer (`src/js/synth/view/` now, and `ui/synth/` and `ui/cable/` under
     `src/js` once they exist): no colour literal, colour function, named colour, literal paint,
     arbitrary Tailwind colour or `url()` but an in-SVG fragment; every `var(--osc-*)` it names
     is defined by `src/styles/tokens.css`; `animate-*` only behind `motion-safe:`; a script or
     SVG animation only in a file that checks `prefers-reduced-motion`; "SPL" only in a file
-    that reads the calibration state.
-  While `ui/synth/` under `src/js` does not exist the theme-layer guards judge only
-  `src/js/synth/view/` and the test prints that the layer's own directories pass vacuously;
-  once the directory exists it must hold a module and every guard is strict on it.
+    that reads the calibration state; in the layer's own directories no literal opacity,
+    alpha or shadow.
+  While `ui/synth/` and `ui/cable/` under `src/js` do not exist the theme-layer guards judge
+  only `src/js/synth/view/`, and the test prints that the layer's directories, and the
+  intensity-literal guard, pass vacuously; once either directory exists it must hold a `.js`
+  module and every guard is strict on it.
 - `tests/unit/ui-flowbite-pro.test.mjs`, in `npm test` (CI `unit` job): the interface half.
   Growth of the recorded legacy interface (a surface not migrated, an osc-* class token, a
   class name outside the frozen vocabulary, a legacy selector or declaration, an inline
@@ -179,9 +207,13 @@ is a review rejection even when every functional test passes.
   shown, and a card that folds with `aria-expanded`. A re-skinned surface outside the Synth
   gets a check of that style in the same change.
 
-Review-only (a reviewer owns them): the hidden-logo question for every re-skinned surface;
+Review-only (a reviewer owns them), with this checklist line in the review of every pull
+request that re-skins a surface (the repository has no pull-request template):
+"Masked logo: with the OSCILLA logo covered, the re-skinned screens still read as OSCILLA, and
+as no other product." Also review-only: the hidden-logo question for every re-skinned surface;
 that no product's colourway, panel layout or face is reproduced (a deny list catches names,
-not shapes); that the treatment stays restrained and old-school (how much wood, how much
+not shapes; a palette change is judged on its snapshot diff); that the treatment stays
+restrained and old-school (how much wood, how much
 sheen, whether a texture is subtle); that an LED's or a needle's `data-source` is the real
 engine or measurement state it names; the theme mapping; that the domain views keep their
 grammar and the dataviz rules; and the identity in the light theme, in Firefox and WebKit,
