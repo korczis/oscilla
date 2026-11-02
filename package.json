@@ -22,7 +22,7 @@
     "release:stamp": "node scripts/stamp-build.mjs",
     "release:verify-deploy": "node scripts/verify-deploy.mjs",
     "test": "node --test \"tests/unit/**/*.test.mjs\"",
-    "test:browser": "node tests/browser/lib/run-suites.cjs tests/browser/app.cjs tests/browser/layout.cjs tests/browser/qa-regressions.cjs tests/browser/navigation.cjs tests/browser/link-integrity.cjs tests/browser/ui-flowbite-pro.cjs tests/browser/midi.cjs tests/browser/ui-current.cjs tests/browser/demo-song.cjs tests/browser/cross-links.cjs tests/browser/first-screen.cjs tests/browser/surface-census.cjs",
+    "test:browser": "node tests/browser/lib/run-suites.cjs tests/browser/app.cjs tests/browser/layout.cjs tests/browser/qa-regressions.cjs tests/browser/navigation.cjs tests/browser/link-integrity.cjs tests/browser/ui-flowbite-pro.cjs tests/browser/midi.cjs tests/browser/ui-current.cjs tests/browser/touch-audio.cjs tests/browser/demo-song.cjs tests/browser/cross-links.cjs tests/browser/first-screen.cjs tests/browser/surface-census.cjs",
     "test:dsp": "node tests/browser/dsp.cjs",
     "test:labs": "node tests/browser/labs.cjs",
     "test:sequencer": "node tests/browser/sequencer.cjs",
