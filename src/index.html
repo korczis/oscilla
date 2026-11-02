@@ -1287,8 +1287,8 @@
             </button>
           </div>
           <!-- The workspace's links share the one flexible cell of the head grid with its spacer,
-               so Tempo keeps its own cell in the first row (A1). -->
-          <div class="flex min-w-0 flex-wrap items-center gap-x-3 self-center">
+               so Tempo keeps its own cell in the first row; on a phone they take a row (A1). -->
+          <div class="flex min-w-0 flex-wrap items-center gap-x-3 self-center max-md:col-span-full">
             <a href="#m=studio&amp;st=sweep-sequence" data-osc="seq.toStudioTemplate" hidden
               :hidden="workspace !== 'sequencer'">Open Sweep Sequence in Studio</a>
             <a href="#m=studio" data-osc="seq.toStudio" hidden :hidden="workspace !== 'sequencer'"
@@ -2804,49 +2804,49 @@
           <h3 class="osc-about-h" id="osc-about-ws"><span class="osc-num">A</span> Workspaces</h3>
           <p>Every workspace of the navigation, in its order, and what it is for.</p>
           <ul role="list" aria-label="Workspaces" data-osc="about.workspaces">
-            <li data-osc="about.workspace.playground"><a href="#m=playground"
+            <li data-osc="about.workspace.playground"><a href="#m=playground" class="inline-flex min-h-6 items-center"
               data-osc="about.open.playground"><b>Playground</b></a>
               The instrument on one screen: generator, waveform, spectrum, spectrogram, microphone
               analyzer, pattern sequencer and the labs.</li>
-            <li data-osc="about.workspace.measure"><a href="#m=measure"
+            <li data-osc="about.workspace.measure"><a href="#m=measure" class="inline-flex min-h-6 items-center"
               data-osc="about.open.measure"><b>Measure</b></a>
               A guided measurement of the speaker, room and microphone chain: frequency response,
               impulse response and RTA, each run rated for quality.</li>
-            <li data-osc="about.workspace.experiments"><a href="#m=experiments"
+            <li data-osc="about.workspace.experiments"><a href="#m=experiments" class="inline-flex min-h-6 items-center"
               data-osc="about.open.experiments"><b>Experiments</b></a>
               Saved measurements as experiments: their definitions, a comparison against a baseline,
               and the findings that cite them.</li>
-            <li data-osc="about.workspace.analyzer"><a href="#m=analyzer"
+            <li data-osc="about.workspace.analyzer"><a href="#m=analyzer" class="inline-flex min-h-6 items-center"
               data-osc="about.open.analyzer"><b>Analyzer</b></a>
               The microphone's live spectrum and spectrogram: a live view, not a calibrated
               measurement.</li>
-            <li data-osc="about.workspace.filter"><a href="#m=filter"
+            <li data-osc="about.workspace.filter"><a href="#m=filter" class="inline-flex min-h-6 items-center"
               data-osc="about.open.filter"><b>Filter Lab</b></a>
               A biquad filter and the response the browser computes for it, set by type, cutoff and
               Q.</li>
-            <li data-osc="about.workspace.compare"><a href="#m=compare"
+            <li data-osc="about.workspace.compare"><a href="#m=compare" class="inline-flex min-h-6 items-center"
               data-osc="about.open.compare"><b>Compare</b></a>
               The microphone analyzer beside the bioacoustics hearing ranges and the phase and
               stereo views.</li>
-            <li data-osc="about.workspace.synthesis"><a href="#m=synthesis"
+            <li data-osc="about.workspace.synthesis"><a href="#m=synthesis" class="inline-flex min-h-6 items-center"
               data-osc="about.open.synthesis"><b>Synthesis</b></a>
               Additive harmonics, the ADSR envelope, the phase and stereo views and the dual
               oscillator, beside the generator and its analysis.</li>
-            <li data-osc="about.workspace.sequencer"><a href="#m=sequencer"
+            <li data-osc="about.workspace.sequencer"><a href="#m=sequencer" class="inline-flex min-h-6 items-center"
               data-osc="about.open.sequencer"><b>Sequencer</b></a>
               Block sequences of tones, sweeps, pulses and modulation, beside the compact
               Studio.</li>
-            <li data-osc="about.workspace.presets"><a href="#m=presets"
+            <li data-osc="about.workspace.presets"><a href="#m=presets" class="inline-flex min-h-6 items-center"
               data-osc="about.open.presets"><b>Presets</b></a>
               Built-in and saved instrument settings, and the history of what was played.</li>
-            <li data-osc="about.workspace.learn"><a href="#m=learn"
+            <li data-osc="about.workspace.learn"><a href="#m=learn" class="inline-flex min-h-6 items-center"
               data-osc="about.open.learn"><b>Learn</b></a>
               Concept cards from frequency to speaker limitations, most with a demo to play.</li>
-            <li data-osc="about.workspace.studio"><a href="#m=studio"
+            <li data-osc="about.workspace.studio"><a href="#m=studio" class="inline-flex min-h-6 items-center"
               data-osc="about.open.studio"><b>Studio</b></a>
               A signal graph you patch, with a timeline, transport and automation, run on Web
               Audio.</li>
-            <li data-osc="about.workspace.synth"><a href="#m=synth"
+            <li data-osc="about.workspace.synth"><a href="#m=synth" class="inline-flex min-h-6 items-center"
               data-osc="about.open.synth"><b>Synth</b></a>
               A semi-modular mono voice on the Studio model with a patch bay and docked keys, and an
               Engines tab of additive, FM, AM and ring, wavetable, hard-sync and percussion

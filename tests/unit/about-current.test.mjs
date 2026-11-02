@@ -234,8 +234,8 @@ test('A1: each workspace of About\'s list is a link to its workspace, About\'s o
     assert.notEqual(v, html, `${from} is in the shell`);
     return workspaceProblems(v);
   };
-  const filterLink = '<a href="#m=filter"\n              data-osc="about.open.filter">'
-    + '<b>Filter Lab</b></a>';
+  const filterLink = html.match(
+    /<a href="#m=filter"[^>]*data-osc="about\.open\.filter"><b>Filter Lab<\/b><\/a>/)[0];
   const unlinked = swap(filterLink, '<b>Filter Lab</b>');
   assert.equal(unlinked.length, 1, unlinked.join('; '));
   assert.match(unlinked[0], /^workspace filter is not a link to #m=filter/);
