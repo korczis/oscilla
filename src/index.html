@@ -3163,8 +3163,9 @@
     <!-- The phone drawer's backdrop: a tap outside the drawer closes it. Shown by a class
          binding, as the drawer is, so both appear in the same frame (x-show defers a show to
          a later task, which left a first tap on the backdrop landing on the page beneath). -->
-    <div class="fixed inset-0 z-30 hidden bg-gray-900/50 dark:bg-gray-900/80 lg:hidden" data-osc="sidebar.backdrop"
-      aria-hidden="true" :class="{ hidden: !drawerOpen }" @click="closeDrawer(true)"></div>
+    <button type="button" tabindex="-1" aria-hidden="true"
+      class="fixed inset-0 z-30 hidden w-full cursor-default bg-gray-900/50 dark:bg-gray-900/80 lg:hidden" data-osc="sidebar.backdrop"
+      :class="{ hidden: !drawerOpen }" @click="closeDrawer(true)"></button>
   </div>
 
   <input type="file" id="osc-import-file" class="osc-sr-only" accept="application/json,.json"

@@ -25,7 +25,7 @@
     }
   },
   "caps": {
-    "src/index.html": 281000,
+    "src/index.html": 292000,
     "src/js/audio/audio-engine.js": 73000,
     "src/js/core/instrument.js": 62000,
     "src/js/experiments/validate.js": 64000,
@@ -73,6 +73,12 @@
       "cap": 62000,
       "pr": 367,
       "reason": "merging C-line train B (#380) into the feature train 2026-10-31 (#367) adds main's restoreConfig and its whole restore report (#345 H002) to the instrument beside the train's superseded-sweep-error handling"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 292000,
+      "pr": 330,
+      "reason": "the Flowbite Pro admin shell (F002) adds the navbar, the registry-rendered sidebar with its drawer, search and backdrop, the page header and 16 lucide symbols beside the markup the feature train 2026-10-31 (#367) added to main"
     }
   ]
 }
