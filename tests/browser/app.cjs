@@ -1259,6 +1259,11 @@ function defineChecks() {
     await page.waitForSelector('[data-osc="page.emptyAction"]', { state: 'visible', timeout: 5000 })
       .catch(() => {});
     await collect();
+    // A preset above this device's limit: its reason and the way to a tone within it (journey 20).
+    await page.click('[data-osc="presets.tab"][data-value="high"]');
+    await page.waitForSelector('[data-osc="presets.altPlayground"]', { state: 'visible',
+      timeout: 5000 }).catch(() => {});
+    await collect();
     await page.click('[data-osc="presets.tab"][data-value="reference"]');
     await H.workspace(page, 'playground');
     await page.setViewportSize({ width: 375, height: 800 });
