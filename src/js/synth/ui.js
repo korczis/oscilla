@@ -27,7 +27,7 @@ import {
 } from './normals.js';
 import { linkAction, linkOf } from './link.js';
 import { splitJack } from './panel.js';
-import { esc, plateHtml, platesShown } from './view/face.js';
+import { esc, plateHtml, platesShown, refreshScope } from './view/face.js';
 import { knobModel, knobSvg } from './view/knob.js';
 import { createGestures } from './gestures.js';
 import { bayLayout, baySvg, cablePath } from './view/bay.js';
@@ -417,6 +417,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     gestures.aria(box, v, x.c.param, km.text(v));
     const out = el.querySelector(`[data-value="${cid}"]`);
     if (out) out.textContent = km.format(v);
+    refreshScope(el, x.mid, panel.module(x.mid).node, x.node.params, panelTokens(el));
   }
 
   function refresh() {

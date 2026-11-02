@@ -10,10 +10,13 @@
 
 import { choiceLayout, choiceSvg, knobModel, knobSvg, selectorSvg } from './knob.js';
 import { ariaAttrs } from '../../ui/synth/knob.js';
+import { refreshScope, scopeOf } from './scopes.js';
 import { amountEdges, amountReason, brokenByRemoval } from '../normals.js';
 import { CHIP, LABEL, NOTE, VALUE } from '../../ui/synth/label.js';
 import { plateSvg } from '../../ui/synth/plate.js';
 import { displayHtml } from '../../ui/synth/display.js';
+
+export { refreshScope };
 
 export function platesShown({ panel, tab, engine, resolved, model }) {
   const own = tab === 'engines' ? [panel.module(engine)].filter(Boolean) : panel.modulesOf(tab);
@@ -211,9 +214,12 @@ export function plateHtml({ panel, module: m, node, model, tokens, collapsed = f
     return `<span class="${CHIP}" title="Fixed by the panel">${esc(f.label)} `
       + `${esc(shown)}</span>`;
   }).join('');
+  const scope = scopeOf(m.node, node.params, tokens);
   return '<section class="relative overflow-hidden bg-white rounded-lg shadow '
     + 'dark:bg-gray-800" '
     + `aria-labelledby="${hid}" data-module="${m.id}">${bg}${head}<div id="${bid}">`
+    + (scope ? `<div class="relative mx-3 mt-1 rounded-md bg-gray-900/5 px-1 dark:bg-black/30" `
+      + `data-scope="${m.id}">${scope.svg}</div>` : '')
     + `<div class="relative flex flex-wrap items-start gap-x-2 gap-y-3 px-3 pb-3 pt-2">`
     + `${controls}</div>`
     + (fixed || m.note ? `<div class="relative flex flex-wrap items-center gap-1 px-3 pb-3">`
