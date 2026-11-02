@@ -1,0 +1,20 @@
+id: M086
+title: "Component system, wave 1: rendered from declarations on Pro, and the embedded Studio as a compact cockpit"
+slug: component-system-wave-1-rendered-from-declarations-on-pro-an
+order: 86
+priority: p2
+problem: "The embedded Studio is unseen on the first screen, mostly empty, set in 10 px uppercase, without category, state or meaningful cables (U1-U15); seven parameter fields, two switch forms and inline choice copies drift (D2, D4, D8); empty states lead nowhere and one icon means five things (D9, D10)."
+outcome: "Parameter fields, switches and choices render from their declarations as Pro markup; every empty state has an action; the embedded Studio is the full Studio's renderer at a readable density in a compact cockpit card with transport, level and scope, that opens the full Studio keeping selection and comes back; the Sequencer's pipeline opens in it and plays end to end."
+acceptance_criteria:
+- G008-G013 are done with their evidence; npm run release-gate passes at the last one.
+validation:
+- npm run release-gate
+evidence_required:
+- milestone_verified
+risks:
+- "Order with the F line: G008 lands before F003 so F003 builds the Playground panels from declarations; the embedded Studio's chrome is G011's, so F003 and F008 leave it out once G011 is planned (their objectives name the compact widget today)."
+- P002 places the cockpit on the first screen (Q004 option A); whichever of G011 and P002 lands second re-accepts the Playground visual reference.
+- graph-editor.js and workspace.js are near their size caps; the density and handoff code goes into new modules declared in the size baseline.
+- "V619, V632, K058 and K075 are drafts of other lines: when they land, G010 and G014 read V619's faces, G006 and G012 extend V632's check, G008's param kind is K058's base, and G016 owns or adopts K075's map."
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

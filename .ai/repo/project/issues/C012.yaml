@@ -1,0 +1,37 @@
+id: C012
+milestone: M090
+serves:
+  - "coherent-state#views-describe-what-sounds"
+  - "coherent-state#one-output-owner"
+title: "The Studio's master level has one writer, and the status bar shows what the Studio plays"
+slug: the-studio-s-master-level-has-one-writer-and-the-status-bar
+priority: p1
+profile: implementation
+objective: "Lands as fix(studio). Findings engine-sync-2 and dup-stale-4. A capture-phase unlock listener calls cmp.ensureAudio() on every pointerdown and keydown, and ensureAudio calls engine.setMasterGain(this.gainLevel) every time: one click during Studio PLAY moves the master from the Master Output's 0.02 to 0.08 (+12.0 dB), masterWrites moves so the Studio skips its restore on STOP, and the model and Inspector still show 0.02. The status bar's Gain reads cmp.gainLevel (-21.9 dB while -26.0 dB plays) and its state label says READY while the Studio sounds. Write the level in ensureAudio only when a context is built (if (first), before engine.init(), which builds master.gain from engine.gainLevel); the gainLevel $watch keeps the Playground slider in sync. For the status bar, statusLabel and the is-playing dot use playing || seqPlaying || studio.playing; isSounding and the status Play key stay the instrument's (ADR 0050). Mirror a plain number such as cmp.studio.masterLevel from the engine-hooks setMasterLevel and restore path, cleared when the Studio's write is restored or superseded (the masterWrites rule of PR #119 D2), and show 'Master <dB>' from it while the Studio holds the last master write; never write it into cmp.gainLevel, whose watcher would echo it into the engine."
+why: "Owner brief OSCILLA PACK 03, 'One Instrument, One Coherent State' (2026-10-29): every control must provably reach its subsystem and every view that reflects it, and be covered by a test (owner: 'filters, sequencer, bpm and many other interactive knobs / sliders / control elements are not reflected / working / tested'). The findings named here were reproduced by an independent skeptic on a fresh export of origin/main b67d1e58 (v3.13.0)."
+scope:
+  - "src/js/core/instrument.js"
+  - "src/js/ui/workbench.js"
+  - "src/js/studio/adapters/engine-hooks.js"
+  - "src/js/studio/runtime.js"
+  - "src/js/ui/studio/workspace.js"
+  - "src/index.html"
+  - "tests/unit"
+  - "tests/browser/v31-studio-transport.cjs"
+  - "tests/README.md"
+  - "dist"
+acceptance_criteria:
+  - "A unit test with a fake engine counting setMasterGain: the first ensureAudio writes once, a second on a running context writes nothing, and one after the context reports 'closed' writes again; it fails on the merge base."
+  - "Browser check `studio-level-survives-gesture` in tests/browser/v31-studio-transport.cjs: subtractive-synth with Master level 0.02 playing, a pointerdown on a node title and a keydown leave engine.gainLevel and master.gain at 0.02, and STOP restores the Playground level."
+  - "Browser check `status-bar-studio` in the same suite at 1536x1024: while only the Studio plays, [data-osc=\"status.state\"] reads PLAYING with is-playing and the gain readout shows the Master level (-26.0 dB for 0.05); the hidden status Play key keeps its instrument meaning."
+  - "fail-first holds: the unit test or browser check named above fails on the merge base (project.fail-first)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named wall-clock deadline; tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "The pull request carries a reviewer-written .ai/repo/reviews/<pr>.yaml because it changes src/js/studio (project.review-verdict); the builder never writes it."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node tests/browser/v31-studio-transport.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

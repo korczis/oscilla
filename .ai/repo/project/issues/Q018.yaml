@@ -1,0 +1,21 @@
+id: Q018
+milestone: M070
+title: "Owner decision: rotary knobs that always show value and unit (D11, replacing D5)"
+slug: owner-decision-rotary-knobs-that-always-show-value-and-unit
+priority: p1
+profile: routine
+owner: "repository owner"
+objective: "Record the owner's answer of 2026-10-29. D5 of intent playable-instrument said controls are Pro range sliders with number inputs and no custom rotary knob. The owner answered, through AskUserQuestion in the coordinating session (Czech; relayed in English): rotary knobs that always show their value with a unit; drag up or down to turn, with fine adjustment on Shift; arrow keys and PageUp/PageDown work; double-click resets to the default; a value can be typed. This is D11; it amends ADR 0058 (resolution note of 2026-10-29) and the D5 wording of playable-instrument and K016-K021, K025, K026. In the same exchange the owner chose a NEW workspace 'Synth', a front panel with a patch bay on the Studio model, every cable a typed Studio connection the sequencer plays."
+why: "Asked by the connected-instrument plan (owner direction of 2026-10-29). .ai/repo/project/README.md: work that waits on an answer names the Q issue in depends_on."
+current_state: "Answered by the owner on 2026-10-29 (AskUserQuestion, coordinating session of the instrument plan). Evidence must name a commit of main (tests/unit/plan-evidence-commits.test.mjs, V272 D4), so it is not recorded by the plan change that adds this record: after that lands, a follow-up chore(plan) pull request records it from a worktree whose HEAD is still origin/main (record-decisions.sh of the plan change), and K058, which names this issue in depends_on, waits until then."
+scope:
+  - ".ai/repo/project/issues/Q018.yaml"
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision), either in the owner's words with date and source, or as a decision of a coordinating session under an owner delegation it quotes with its date, stating its reasoning and that the owner may override it; a worker without such a delegation never answers it."
+  - "The answer names the knob behaviour (value and unit always shown, vertical drag with Shift fine, arrows and PageUp/PageDown, double-click reset, typed value) and the Synth workspace on the Studio model."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-10-29
+updated_at: 2026-10-29

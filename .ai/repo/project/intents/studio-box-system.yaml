@@ -1,0 +1,76 @@
+id: studio-box-system
+title: "A Studio box is the unit of thought: wired in one gesture, played from its face, showing what it does live, with every option one menu away"
+statement: "The owner asked on 2026-10-29 (relayed in Czech by the coordinator) to polish Studio to the best it can be and to make wiring the boxes, their features, options and knobs, the ergonomics and the UI, UX and DX much better. The Studio already has typed ports, create-node-from-cable, quick add, find, a connection dialog, tap-connect, a minimap and one undoable store; K006-K009 (#268) add wheel pan, re-route, bridge delete, tidy and edge mute. This intent adds what the findings of 2026-10-29 (S1-S14 on origin/main b67d1e58) show missing: magnetic capture and stated refusals, insert on a cable, duplicate and fan-out, fuzzy search, align and distribute, box mute, multi-selection edits, a cable probe, faces with the D11 knob and live views, a box menu, cable activity, an ephemeral audition, previews, a first patch, large-graph budgets, comments, reroute points, group faces, and one declaration per node with a generated reference."
+invariants:
+- "The StudioModel is the only Studio state; faces, menus, probes and previews are projections of it, and every semantic edit is one undoable action (project.studio-model-is-canonical)"
+- "Every connection a gesture makes goes through canConnect and the whole-model validation, and a refusal leaves model, history, selection and runtime unchanged and says why (project.typed-ports, project.no-silent-feedback)"
+- "Probe taps, face views and auditions are engine-owned and counted, and the node census is 0 after stop (project.audio-engine-discipline v2)"
+- Levels are relative (dBFS-like) unless a valid LevelCalibration applies (project.no-fake-science v2)
+- Every pointer gesture has a keyboard and a touch path
+- "Wave 1 adds no class token, selector or markup surface; later chrome is Flowbite Pro and the ratchet only falls (project.ui-uses-flowbite-pro)"
+- "Every slice meets the owner's definition of done (intent definition-of-done)"
+milestones:
+- M080
+- M081
+satisfaction:
+- id: wiring-gestures
+  criterion: "Magnetic capture, insert on a cable, Alt-drag duplicate and Shift-drag fan-out are each one history entry through canConnect, a refused drop states the validator's sentence, and Shift+C wires in the input direction"
+  evidence: command
+  ref: node --test tests/unit/studio-graph-wire.test.mjs tests/unit/studio-graph-insert.test.mjs tests/unit/studio-graph-fanout.test.mjs
+- id: find-and-layout
+  criterion: "Fuzzy node search finds fltr, lp and eq first; align, distribute, tidy-selection and box mute are one entry each; a multi-selection edit sets a shared parameter in one batch"
+  evidence: command
+  ref: node --test tests/unit/studio-graph-search.test.mjs tests/unit/studio-graph-layout.test.mjs tests/unit/studio-multi-edit.test.mjs
+- id: cable-probe
+  criterion: A selected cable shows live peak and RMS and a mini scope from an engine-owned tap; cables show level and modulation while playing; Listen here never changes the model
+  evidence: command
+  ref: node --test tests/unit/studio-probe.test.mjs tests/unit/studio-cable-activity.test.mjs tests/unit/studio-listen.test.mjs
+- id: box-faces
+  criterion: "Faces show every parameter (Q031) with modulation rings and a live view, fold first-class, mute, and open a box menu whose every item is a command"
+  evidence: command
+  ref: node --test tests/unit/studio-graph-face.test.mjs tests/unit/studio-face-views.test.mjs tests/unit/studio-box-state.test.mjs tests/unit/studio-box-menu.test.mjs
+- id: node-declaration
+  criterion: "A node type is one declaration whose face, reference and contract test follow from the registry, and the generated reference is current"
+  evidence: command
+  ref: "node --test tests/unit/studio-face-declaration.test.mjs tests/unit/studio-node-reference.test.mjs && node scripts/studio-node-reference.mjs --check"
+- id: first-patch-and-previews
+  criterion: "The First patch template opens from Learn with its five step markers, and templates and patches show previews"
+  evidence: command
+  ref: node --test tests/unit/v31-studio-templates.test.mjs tests/unit/studio-graph-thumb.test.mjs
+- id: model-and-views
+  criterion: "Seeded edit sequences keep every model invariant after every step, and selection, viewport and the selected cable are one identity across the compact Studio, the full Studio and browser fullscreen"
+  evidence: command
+  ref: node --test tests/unit/studio-model-invariants.test.mjs
+- id: compile-and-playback
+  criterion: "Every new graph gesture patches the running graph to what a fresh compile builds, with the intended audible effect"
+  evidence: command
+  ref: node --test tests/unit/studio-gesture-runtime.test.mjs
+- id: large-graphs
+  criterion: A 300-node / 600-edge graph stays within the budgets of docs/v31/performance.md
+  evidence: command
+  ref: node --test tests/unit/v31-studio-performance.test.mjs
+- id: comments-and-reroutes
+  criterion: "Comments, reroute points and group faces round-trip and change neither studioHash nor the compiled topology"
+  evidence: command
+  ref: node --test tests/unit/studio-comments.test.mjs tests/unit/studio-reroute.test.mjs tests/unit/studio-group-face.test.mjs
+governance:
+- "rule:project.studio-model-is-canonical"
+- "rule:project.typed-ports"
+- "rule:project.no-silent-feedback"
+- "rule:project.audio-engine-discipline"
+- "rule:project.no-fake-science"
+- "rule:project.no-inert-surfaces"
+- "rule:project.ui-uses-flowbite-pro"
+- "rule:project.visual-identity-lock"
+- "rule:project.review-verdict"
+- "rule:project.fail-first"
+- "adr:adr-0030"
+- "adr:adr-0034"
+- "adr:adr-0061"
+non_goals:
+- "A command palette: search covers node types and nodes only (intent studio-completion's non-goal stands)"
+- "A second Studio state, a solo stored in the model, or a graph the engine does not run"
+- Feedback delay or chorus before project.no-silent-feedback v2 (D8)
+- "The visual identity of any other patcher, DAW or flow-editor library"
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

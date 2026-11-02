@@ -1,0 +1,48 @@
+id: C021
+milestone: M090
+serves:
+  - "coherent-state#user-journeys-hold"
+title: "User-journey suite: start, live change, synchronized views, stop and restart, save and restore, honest refusals"
+slug: user-journey-suite-start-live-change-synchronized-views-stop
+priority: p1
+profile: implementation
+objective: "Lands as test(journeys). The owner's six journeys as one suite, tests/browser/journeys.cjs, run through tests/browser/lib/suite.cjs with wait.cjs deadlines and no fixed sleep, added to npm run test:browser so that CI and the release gate run it in Chromium, Firefox and WebKit. Each journey drives the real controls, never the lab update functions, and covers filters, the sequencer, BPM and every other control family. J1 set parameters and start: waveform, frequency, gain, Filter type, cutoff and Q, Envelope, Additive, dual and pan, and a sequence with Tempo and Loop, set through the UI, then started: the output peak, level and filter attenuation match the settings. J2 change while active: cutoff, Q, sustain, release, pan, Additive, waveform, gain, Tempo, Loop and the hard limit changed while sounding each reach the output within a named deadline, or the control states that it applies from the next note. J3 synchronized views: after each J2 change the status bar (state, gain, frequency, duration), the scope label, the Spectrum requested marker, the Signal Path stages, the sequencer playhead and the controls' own values agree with the engine, for the instrument, the sequencer and the Studio as owner. J4 stop and restart: ten cycles each of the instrument, the sequencer and the Studio, and the hand-overs between them by Escape, page hide, the status key and a MEASURE claim: exactly one owner at a time, a node census of 0 after each stop, no page error. J5 save, restore and compare: config file export and import, preset, History and link, compared field by field (instrument, labs, phase and stereo, sequence), the sequence WAV compared with the live waveform, and the unsaved guard armed and disarmed. J6 invalid input and transitions: an out-of-range custom range, an import with Q 50, sequencer Play during a measurement, a loop past the cap without permission, pan in Stereo output and Additive on a dual voice are each refused or limited with a message that names the field or the reason, and leave the model unchanged."
+why: "Owner brief OSCILLA PACK 03, 'One Instrument, One Coherent State' (2026-10-29): every control must provably reach its subsystem and every view that reflects it, and be covered by a test (owner: 'filters, sequencer, bpm and many other interactive knobs / sliders / control elements are not reflected / working / tested'). The findings named here were reproduced by an independent skeptic on a fresh export of origin/main b67d1e58 (v3.13.0)."
+scope:
+  - "tests/browser/journeys.cjs"
+  - "tests/browser/lib"
+  - "tests/browser/timing-baseline.json"
+  - "package.json"
+  - "tests/README.md"
+depends_on:
+  - "C001"
+  - "C002"
+  - "C003"
+  - "C004"
+  - "C005"
+  - "C006"
+  - "C007"
+  - "C008"
+  - "C009"
+  - "C010"
+  - "C011"
+  - "C012"
+  - "C013"
+  - "C016"
+  - "C017"
+  - "C018"
+  - "C019"
+  - "C020"
+acceptance_criteria:
+  - "tests/browser/journeys.cjs holds J1 to J6 as named checks (journey-1-start ... journey-6-refusals), each failing when the behaviour its fix issue restored is reverted (shown by a recorded mutation run per journey)."
+  - "npm run test:browser runs the suite and it is green in Chromium, Firefox and WebKit in CI."
+  - "The suite adds no entry to tests/browser/timing-baseline.json (zero fixed sleeps, frame counts or assumed sample rates)."
+  - "tests/README.md has its row, naming what each journey proves."
+validation:
+  - "node tests/browser/journeys.cjs"
+  - "npm run test:browser"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

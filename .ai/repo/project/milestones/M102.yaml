@@ -1,0 +1,18 @@
+id: M102
+title: "Instrument kinds, wave 2: readouts, jacks and cables, the transport, the step grid and locks, the XY pad, the channel strip and the track header"
+slug: instrument-kinds-wave-2-readouts-jacks-and-cables-the-transport
+order: 93
+priority: p2
+problem: "After wave 1, numbers still carry no stated source, ports and cables are drawn per editor, three Studio transports disagree, there is no step editor, and the DAW surfaces have no kind (component inventory of 2026-10-29)."
+outcome: "Readouts, jacks, cables, the transport, the step grid with locks, the XY pad, the channel strip and the track header each exist once and are used by their first consumers."
+acceptance_criteria:
+- "W002, W005, W006, W008, W009, W010, W013 and W014 are done with their evidence (a model-first slice with its contract test); npm run release-gate passes at the last one."
+validation:
+- npm run release-gate
+evidence_required:
+- milestone_verified
+risks:
+- "W010 waits on K043 and K045 (M062), which wait on F003 and F006."
+- W014 touches guarded src/js/studio and needs a verdict.
+created_at: '2026-10-29'
+updated_at: '2026-10-30'

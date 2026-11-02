@@ -1,0 +1,38 @@
+id: C005
+milestone: M090
+serves:
+  - "coherent-state#every-control-reaches-its-subsystem"
+title: "Sequencer chrome: Loop is drawn as a loop and every Add-menu item can be clicked"
+slug: sequencer-chrome-loop-is-drawn-as-a-loop-and-every-add-menu
+priority: p2
+profile: implementation
+objective: "Lands as fix(sequencer). Findings control-census-4 and control-census-6. #osc-seq-record (aria-label 'Loop sequence') draws the red #i-record glyph with no visible text or title, so a sighted user sees Record and nothing records. The upward .osc-menu--grid (src/styles/instrument.css 225-230) is clipped by .osc-main (overflow auto, scrollTop 0, nothing to scroll), so at 1536x1024, 1920x1080 and 1280x800 the point under the Tone and Silence items is the header and a click adds nothing; the keyboard path works. Use the existing #s-loop sprite symbol with title=\"Loop\", remove the osc-transport-btn--record class and its red rule (the aria-pressed border already shows Loop on), and delete the two upward declarations so the menu opens downward (734 px of room below the button for a 170 px menu at 1536x1024; a downward overflow stays reachable by scrolling). If K017 (plan pull request #265) has landed the loop icon first, that criterion is met by it and recorded as evidence. The seqTransport visual region is re-accepted through the visual gate with its reason (project.visual-identity-lock v2); accepting it is the review step, not the builder's."
+why: "Owner brief OSCILLA PACK 03, 'One Instrument, One Coherent State' (2026-10-29): every control must provably reach its subsystem and every view that reflects it, and be covered by a test (owner: 'filters, sequencer, bpm and many other interactive knobs / sliders / control elements are not reflected / working / tested'). The findings named here were reproduced by an independent skeptic on a fresh export of origin/main b67d1e58 (v3.13.0)."
+scope:
+  - "src/index.html"
+  - "src/styles/components.css"
+  - "src/styles/instrument.css"
+  - "src/js/labs/sequencer-panel.js"
+  - "tests/unit"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/browser/sequencer.cjs"
+  - "tests/visual"
+  - "tests/README.md"
+  - "dist"
+acceptance_criteria:
+  - "A unit test reads src/index.html: the element bound as loopBtn uses a loop glyph and a Loop title and not #i-record; it fails on the merge base."
+  - "Browser check `seq-add-menu-pointer` in tests/browser/sequencer.cjs: at 1536x1024, 1920x1080 and 1280x800, elementFromPoint at the centre of every Add-menu item returns that item and a mouse click adds a block of that type, Tone and Silence included."
+  - "The change adds no osc-* class token, stylesheet selector or inline style, so the Flowbite Pro ratchet only shrinks (node --test tests/unit/ui-flowbite-pro.test.mjs)."
+  - "npm run visual passes after the seqTransport region is re-accepted with its reason."
+  - "fail-first holds: the unit test or browser check named above fails on the merge base (project.fail-first)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named wall-clock deadline; tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node tests/browser/sequencer.cjs"
+  - "node --test tests/unit/ui-flowbite-pro.test.mjs"
+  - "npm run visual"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

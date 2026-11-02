@@ -4,7 +4,49 @@
 
 A zero-install, scientifically honest acoustic laboratory in your browser: generate, measure and reproduce sound experiments, and know how far each result can be trusted.
 
-What you can do with it today, from one static file and with no account:
+**See sound. Shape frequency.**
+
+![Illustration of OSCILLA's signal path: a generated sine passes through oscillator, envelope and filter nodes, splits into a waveform view and a spectrum view, and ends in an evidence card naming the valid range, the quality reasons, the method and the UNCALIBRATED state. It is an illustration, not a measurement.](docs/assets/oscilla-signal-path.svg)
+
+**Try it:** <https://korczis.github.io/oscilla/>. It is one HTML file that loads nothing at
+runtime: no install, no account, nothing sent anywhere, and the same file runs when you open
+[`dist/index.html`](dist/index.html) from disk (claims `dist-self-contained`,
+`opens-from-file-and-subpath`).
+
+### Three things to try first
+
+Each link opens its workspace and starts nothing until you press a button.
+
+1. **[Hear and see a tone](https://korczis.github.io/oscilla/#m=playground).** Hold
+   **Hold to Play** (or Space) for the default 440 Hz sine, and watch its waveform, spectrum and
+   spectrogram; letting go stops it (claims `tone-plays-and-releases`, `space-one-owner`).
+2. **[Measure your speaker, room and microphone chain](https://korczis.github.io/oscilla/#m=measure&mr=eyJ2IjoxLCJkIjozLCJuIjoyfQ).**
+   The link fills the Measure setup with two 3-second log sweeps. Check the setup, start quietly
+   and without headphones, and read the response with its valid range and the quality reasons
+   for its rating. Nothing is called dB SPL until you calibrate the level (claims
+   `measurement-workbench`, `transfer-function`, `measurement-quality`,
+   `spl-only-with-level-calibration`).
+3. **[Patch a synth in the Studio](https://korczis.github.io/oscilla/#m=studio&st=subtractive-synth&sv=graph).**
+   The Subtractive Synth template opens on its graph: an oscillator through an envelope and a
+   filter whose cutoff an LFO and an automation lane move. Press Play; the graph on screen is the
+   graph that sounds (claims `studio-compiled-topology`, `studio-click-free-live-edit`).
+
+`tests/unit/extending-guide.test.mjs` checks that each of these addresses routes to the workspace,
+recipe and template it names (claim `readme-landing-links-route`). Each claim id is an entry of
+[`docs/CLAIMS.yaml`](docs/CLAIMS.yaml) with the test that proves it.
+
+### Extend it
+
+OSCILLA is MIT-licensed, modular source that you can read, change and build into the same single
+file. [**Hack and extend OSCILLA**](docs/EXTENDING.md) shows where each kind of extension plugs
+in: a Studio node (with a complete example), a template, a lab or workspace, a chart, a browser
+check, and the rules a change has to satisfy. Every file, export and npm script the guide names
+is checked by a unit test, and its example node compiles through the real Studio registry
+(claim `extending-guide-checked`).
+
+### What it does today
+
+From one static file and with no account:
 
 - measure the response of your speaker, room and microphone chain with a log sweep, and see the
   quality reasons that say how far that response can be trusted;
@@ -14,20 +56,42 @@ What you can do with it today, from one static file and with no account:
 - generate tones, sweeps and sequences and see them as waveform, spectrum and spectrogram;
 - patch a signal graph in the Studio and run it.
 
-![OSCILLA playing a 440 Hz sine: source, waveform, relative spectrum, spectrogram, microphone analyzer, sequencer and device limits](site/og-image.png)
+### From a tone to a result you can trust
 
-**Live demo:** https://korczis.github.io/oscilla/
+```mermaid
+flowchart LR
+  gen["Generate<br/>tone, sweep or sequence"] -->|"listen and watch"| obs["Observe<br/>waveform, spectrum, spectrogram"]
+  obs -->|"play a log sweep through<br/>speaker, room and microphone"| mea["Measure<br/>transfer function, impulse response, RTA"]
+  mea -->|"valid range and<br/>quality reasons"| int["Interpret<br/>relative dB until the level is calibrated"]
+  int -->|"save the run"| exp["Save and repeat<br/>an experiment reruns from its recipe"]
+  exp -->|"two setups or positions"| cmp["Compare<br/>every difference between records named"]
+  gen -.->|"the same engine, as a patch"| stu["Studio<br/>the graph on screen is the graph that sounds"]
+```
+
+The illustration above is drawn, not measured. The screenshot below is the real built app,
+captured by `npm run social` from `dist/index.html`:
+
+![OSCILLA playing a 440 Hz sine: source, waveform, relative spectrum, spectrogram, microphone analyzer, sequencer and device limits](site/og-image.png)
 
 ## What it does
 
 OSCILLA generates signals with the native Web Audio API and measures them while they play. It
 shows them as a waveform, a live spectrum and a spectrogram, and it compares them with what your
-microphone picks up. You can arrange signals into block sequences, shape them with filters, an
-ADSR envelope and additive harmonics, explore phase and stereo, and export the result. In the
+microphone picks up. You can arrange signals into block sequences that play through the Filter
+Lab, while the ADSR envelope and additive harmonics shape the instrument; you can explore phase
+and stereo, and export the result. In the
 Measure workspace it records a sweep through your speaker and microphone. From that recording
 it computes the response of the whole playback and capture chain, rates the quality of the
 measurement and keeps it as a reproducible experiment. The app is a single HTML file. It needs no server, no account and no network once loaded, and it works
 when opened straight from disk.
+
+It is also playable. **Arm keys** under the Playground's panels (or open `#m=playground&kbd=1`)
+and the computer keyboard plays notes the way music software does: A W S E D F T G Y H U J K
+from C to the next C, black keys on W E T Y U, Z / X for the octave and C / V for the velocity,
+by physical key, so a QWERTZ or AZERTY keyboard works too. Space stays the play key. The
+on-screen keys under them play with a pointer and light up whatever plays them, a MIDI keyboard
+included. The Studio has its own switch (`#m=studio&kbd=1`). The details are in
+[docs/midi.md](docs/midi.md) and in the Keyboard shortcuts dialog (**?**).
 
 The words OSCILLA uses for its objects (project, Studio, runtime, measurement, run, experiment,
 definition, calibration, trace) are defined in the [glossary](docs/GLOSSARY.md).
@@ -35,7 +99,7 @@ definition, calibration, trace) are defined in the [glossary](docs/GLOSSARY.md).
 ## Navigation
 
 The header has these entries: **Playground**, **Measure**, **Experiments**, **Analyze**,
-**Synthesis**, **Learn**, **Studio** and **About**, in that order. Analyze and Synthesis are
+**Synthesis**, **Learn**, **Studio**, **Synth** and **About**, in that order. Analyze and Synthesis are
 groups. Analyze opens Analyzer, Filter Lab and Compare; Synthesis opens Synthesis, Sequencer and
 Presets. A group is a button that shows its list of workspaces: Enter or Space opens it and Tab
 walks the list, or ArrowDown opens it on the current workspace and the arrow keys move. Escape
@@ -51,7 +115,11 @@ changed.
   ([ADR 0045](.ai/repo/adrs/0045-workspace-in-history-one-hash-dispatcher-unsaved-guard.md)).
   **Copy config URL** keeps the recipe and Studio keys that are in the address. Each nav item
   links to its workspace's address, so opening it in a new tab opens that workspace. A link
-  that is refused does not stay in the address or in history.
+  that is refused does not stay in the address or in history: an `m` that names no page (or
+  two) says "Page link not applied" once and changes no workspace, an instrument link that
+  cannot be read loses its keys, and one restored only in part is rewritten to the values
+  restored, so a reload never repeats a warning. Each workspace names itself in the document
+  title (`OSCILLA · Measure`, …; the Playground keeps the product title).
 - **The address names a stored record.** In Experiments, the experiment the detail shows is
   named in the address (`#m=experiments&exp=<id>`, no new history entry) on every path: when it
   opens, when the detail closes, and on return to Experiments. A definition is `def=<id>` and a
@@ -63,11 +131,13 @@ changed.
 - **Unsaved work.** While something would be lost, a reload, a closed tab or leaving the page
   makes the browser ask first: unsaved Studio changes, a completed measurement that is not
   saved, a saved experiment's name or notes not yet stored with "Update name and notes", a
-  rename being typed, a finding being written, or a level calibration (it is kept in page memory
-  only). Where the browser allows no IndexedDB, saved experiments, findings and Studio projects
-  live in page memory too and count as well.
-  Studio shows "unsaved changes" and Measure "unsaved result" or "unsaved name or notes". With
-  nothing to lose the page asks nothing. Sequencer patterns are not guarded yet.
+  rename being typed, a finding being written, a level calibration (it is kept in page memory
+  only), or a sequence edited since the page opened, its last import or its last Export config.
+  Where the browser allows no IndexedDB, saved experiments, findings and Studio projects live in
+  page memory too and count as well. Studio shows "unsaved changes", Measure "unsaved result" or
+  "unsaved name or notes", and the Sequencer "unsaved sequence". Lab and instrument settings are
+  configuration: they are kept by Export config, Copy config URL or a preset, and are not
+  counted. With nothing to lose the page asks nothing.
 
 ## The V2 laboratory
 
@@ -76,28 +146,57 @@ changed.
   FM, random, alternating, octave-stepping and user-defined step sequences, plus a dual
   oscillator.
 - **Analyzer:** a live spectrum on log or linear frequency axes, with the requested frequency
-  marked.
-- **Spectrogram:** a scrolling time-frequency view, with level shown as colour.
+  marked: the instrument's, or while only the sequencer plays the sequence's (hidden in its
+  silences). The waveform scope traces the output analyser whenever the instrument, the
+  sequencer or the Studio plays, and names which one.
+- **Spectrogram:** a scrolling time-frequency view, with level shown as colour. Freeze,
+  Pause animation and a hidden page pause its time axis: the paused interval is left unwritten,
+  never filled with the first spectrum read afterwards.
 - **Microphone analyzer and compare:** your microphone's spectrum and spectrogram, the detected
   frequency with its uncertainty, and a generator-versus-microphone comparison with freeze,
-  averaging and peak hold.
+  averaging and peak hold. If the browser closes the audio context, the microphone stops and
+  the panel says so; it never keeps showing readings from the closed graph. None of it is a
+  calibrated measurement: in the Analyzer and Compare workspaces the panel links to its
+  counterparts, the RTA in Measure and the comparison of saved experiments in Experiments.
 - **Sequencer:** a timeline of tone, silence, sweep, pulse, chirp, burst, siren, AM, FM and
   random blocks, with drag-and-drop editing, keyboard control, looping and tempo-locked
-  durations.
+  durations. Escape, hiding the page and the status bar's stop key stop a playing sequence
+  from the moment it starts; that stop key never starts the instrument in the same press. An
+  edit made while the sequence plays applies from the next pass; until then the playhead stays
+  on the block that sounds (outlined), the panel says so and the status bar shows the sounding
+  and the next length.
 - **Filter Lab:** biquad filters with a response chart drawn from the browser's own filter
   response. Cutoff and Q can be dragged on the chart.
-- **ADSR:** an attack/decay/sustain/release envelope with a draggable graph.
+- **ADSR:** an attack/decay/sustain/release envelope with a draggable graph. It shapes every
+  note of the instrument: a held tone, a continuous sweep, a finite tone and each step of the
+  instrument's programmed patterns, where it shrinks to fit a short step. An edit reaches the
+  note that sounds: a new release in place, anything else by a click-free restart of the
+  note, once per slider or graph drag, when the drag ends, and once per run of arrow keys on
+  a slider, a quarter of a second after the last key is let go (at once when the focus
+  leaves it). A release edited while a note is held (here, or Settings Release with the
+  envelope off) is the one letting go of that note uses, shortened to end by the hard limit
+  or a pattern's own end; a note that reaches either, or a Trigger note's end, fades over the
+  release it started with. The Pattern sequencer and Studio keep their own envelopes.
 - **Additive synthesis:** a harmonic editor. The bars you see are the same coefficients that
-  build the waveform you hear.
+  build the waveform you hear. It applies to single-oscillator sources, not to the dual
+  oscillator.
 - **Phase, Lissajous and stereo:** A/B phase views, a Lissajous figure, a correlation meter and
-  stereo routing (split, panned or mono).
+  stereo routing (split, panned or mono). Pan acts on the sounding A/B dual voice in Mono
+  output, also while it plays; for a single source and in Stereo output the slider is disabled
+  and says why.
 - **Bioacoustics:** approximate hearing ranges and call examples for humans and several animal
   species, every value cited.
 - **Export:** WAV of the current tone, pattern or sequence, rendered offline through the same
   signal chain as live playback; a PNG of the graphs; the configuration as JSON (export and
-  import); a shareable configuration URL.
-- **About:** the last workspace tells how OSCILLA was built and with what discipline, and shows
-  the running build's version, commit, channel and source digest.
+  import; an import names every value it had to limit to the supported range, such as a
+  filter Q above 30, apart from the values it rejected); a shareable configuration URL. The
+  sequence plays and exports in the instrument's waveform; importing a file whose sequence
+  names another waveform says so instead of reporting it restored.
+- **About:** the last workspace tells OSCILLA as it stands: the release line up to the current
+  release, every workspace and what it is for, and what comes next (the plan's open milestones
+  with their progress, from `src/data/roadmap.json`, which `scripts/roadmap.mjs` writes and
+  `release:prepare` refreshes); then how it was built and with what discipline. It shows the
+  running build's version, commit, channel and source digest.
 
 ## The V3 measurement workbench
 
@@ -130,9 +229,12 @@ is in the [algorithm notes](docs/v3/algorithms.md).
   anything; it never carries results, calibration or a device, and an altered link is refused
   as a whole.
 - **During the run.** A quality bar reports INPUT, NOISE, CLIPPING, SIGNAL and CAPTURE, and a
-  screen reader hears one announcement per stage. While a measurement owns the output, the
-  instrument cannot play. Escape, STOP, hiding the page or leaving the workspace aborts the
-  measurement, and no audio node, capture or input track is left running.
+  screen reader hears one announcement per stage. CLIPPING NONE means no sample of any run so
+  far reached 0.98 of digital full scale; a peak that reached it without a flat top reads AT
+  RAIL (brief clipping is not excluded), and a run whose peak is unknown reads NOT CHECKED.
+  While a measurement owns the output, neither the instrument nor the sequencer can play: both
+  are refused with the same notice. Escape, STOP, hiding the page or leaving the workspace
+  aborts the measurement, and no audio node, capture or input track is left running.
 - **Capture.** Mono PCM is recorded by an AudioWorklet loaded from a `data:` URL, so it also
   works from `file://`. When AudioWorklet is unavailable, a ScriptProcessor fallback records
   instead. The stimulus passes through the same master safety chain as every other sound, and
@@ -154,7 +256,9 @@ is in the [algorithm notes](docs/v3/algorithms.md).
   Errors are reported with their line numbers. A profile is identified by the SHA-256 of its
   points and interpolated linearly in dB over log frequency. It applies only between its first
   and last frequency: outside that range the curve stays uncorrected and is marked
-  uncalibrated. The raw curve is always kept beside the CALIBRATED one. The loaded profile
+  uncalibrated. A profile that covers none of the measured points, or none of the RTA bands,
+  corrects nothing, so the response and the RTA read UNCALIBRATED and say why. The raw curve
+  is always kept beside the CALIBRATED one. The loaded profile
   exports as CSV or JSON; both files are deterministic and import back to the same profile.
 - **Absolute level calibration.** You enter an external reference (for example 94 dB SPL at
   1 kHz from a calibrator) and the relative level OSCILLA observed. This is the only way to
@@ -395,6 +499,19 @@ is in the proposed [ADR 0025](.ai/repo/adrs/0025-data-driven-quality-with-reason
 - **No medical or certification claims.** OSCILLA is not audiometry and not an IEC 61672
   sound level meter.
 
+## The Synth
+
+**Synth** (`#m=synth`) is a playable semi-modular mono voice with a docked keyboard: two VCOs, a
+ring modulator and noise into a mixer, a high-pass and a low-pass 12 dB/oct filter in series,
+two envelopes, a VCA, a modulation generator and a sample-and-hold, every jack normalled so it
+sounds with no cable, and a patch bay to re-route it. The panel is generated from one data
+declaration and the Studio node registry, and it is the same document as Studio: **Open in
+Studio** shows its nodes. Its **Engines** tab adds polyphonic engines, up to 16 voices each:
+additive (drawbars), FM (2-4 operators, 7 algorithms), AM and ring, wavetable with morph, hard
+sync at set ratios and a percussion kit on the keys. The keyboard, the computer keys and MIDI
+play the panel or the chosen engine; presets and **Copy link** keep a sound. Details, cables
+and the honest limits: [docs/synth.md](docs/synth.md).
+
 ## The V3.1 Studio
 
 **Studio** is the last workspace before About. It is a patching and composition workspace
@@ -472,24 +589,110 @@ release and deployment are evidenced is the [final report](docs/v31/studio-repor
   unmodified. An optional **Fullscreen** button uses the browser's Fullscreen API where it
   exists; where it does not (Safari on iPhone), the button says so.
 
-Studio output and Playground output are exclusive: starting one stops the other, and a
-measurement stops the Studio.
+Studio output, the Playground voice and the Sequencer are exclusive: starting one stops the
+others in the same action, and a measurement stops the Studio. While the Studio plays, its Master
+Output level is the engine's output level and a click or key press elsewhere leaves it alone; the
+status bar says PLAYING and shows `Master <dB>`, or `Gain <dB>` once the Playground gain is set
+again. The status bar's Play button stays the Playground's.
 
 Not yet built:
-- a minimap
 - node groups
 - dragging several clips at once
-- pinch zoom on the timeline
+
+## Demo song: a vertical slice
+
+"Lantern in the Slag Yard" is an original song written for OSCILLA (plan issue K144): a slow
+riff-rock piece in A minor at 96 BPM, 44 bars (110 s), in seven sections (intro, verse 1,
+chorus 1, verse 2, build, chorus 2, outro). It has a bass riff, a lead line and drums. Its
+score is `src/js/studio/templates/demo-song-score.js`. It ships as the Studio template
+**Demo song**: open it from Studio, Templates, or with the link
+[`#m=studio&st=demo-song`](https://korczis.github.io/oscilla/#m=studio&st=demo-song).
+
+It is a vertical slice: one piece of music taken through every part of OSCILLA that exists
+today, to show where the parts meet and where they do not yet.
+
+- **Studio graph.** A sawtooth bass voice goes into a low-pass filter. A square lead voice goes
+  into a resonant low-pass filter, with an LFO on its cutoff. The kick is a sine Oscillator
+  swept from 140 to 45 Hz. Snare and hats are white noise through band-pass and high-pass
+  filters, each into an Envelope; the open hat has an Envelope of its own, which holds on for
+  its longer note. Everything meets in a mixer that feeds the Master Output, and
+  Scope, Spectrum, Spectrogram and Meter nodes tap the mix.
+- **Timeline.** Every note is a tempo-linked clip on one of six tracks (Bass, Lead, Kick,
+  Snare, Hats, Open hat), 744 in all, so a tempo change moves the whole song. Seven markers name the
+  sections.
+- **Automation.** The bass filter opens during the build, the lead LFO speeds up, and the
+  outro fades the mix.
+- **Playback, analysis and export.** PLAY, STOP, Save and Open, the Analyzer's scope, spectrum
+  and spectrogram, and Render WAV all work on it as on any Studio document.
+
+What it does not do yet, each named with the work that would fill it:
+
+- A MIDI performance cannot be recorded into the song (V505).
+- Velocity is not represented, so the drums have no accents: a Studio clip has no level (K144
+  gap G4).
+- A filter's Q cannot be automated, so the build's rising resonance is in the score only (K144
+  gap G10).
+- The Studio's view nodes draw nothing (K016).
+- After a reload the Studio opens the default template, not the last project (V604).
+- No MEASURE or Experiments step is part of the slice: the Studio's measurement clips measure
+  the speaker or loopback path a sound plays through, not the song.
+
+The score keeps the velocities and the Q lane, so each can join the template once the Studio
+can play it, and a drive lane, which the template does not use yet although the Drive node
+exists.
+
+`tests/unit/demo-song.test.mjs` checks the song as data: one clip per note of the score, the
+pinned hash, an offline render plan of the whole song with no limitation, and that the six
+earlier templates keep their hashes. It also bounds the song's similarity to the riff whose style
+it follows: the bass and the lead share at most two consecutive intervals with it. That is the
+only melody it is compared with. `tests/browser/demo-song.cjs` takes the song
+through the user's whole journey in Chromium, Firefox and WebKit:
+
+1. Connect MIDI through the test seam, and play the riff in.
+2. Open the song.
+3. Change the tempo.
+4. Add a drum hit.
+5. Change the tone.
+6. Show the build automation.
+7. Play, read the Analyzer views and the playhead.
+8. Stop and play again.
+9. Save, reload and open.
+10. Render the WAV.
+
+Each gap above is an expected failure of that suite, named by its plan issue. It runs every
+time, and it fails the suite once it starts passing, so its mark is removed when the work
+lands. MIDI notes sounding through the engine (V502), a Drive node for the driven tone (K012)
+and a keyboard view whose key lights and sounds (K026, V504) have landed: the suite checks
+them as steps of the journey.
 
 ## Safety and measurement limits
 
 - **Start quietly, especially on headphones.** Loudness is a poor guide to acoustic output,
   above all at very low and very high frequencies. Open-ended patterns stop at a hard time
   limit unless you allow continuous playback for the session, and a limiter caps the output.
+  A note held on the keyboard or a MIDI key sounds while it is held, under the same cap, and
+  stops on release, Escape or when the page loses the focus
+  ([ADR 0062](.ai/repo/adrs/0062-a-held-key-or-midi-note-is-exempt-from-the-playback-limit-while-held.md)).
+  Lowering the limit also ends a hold, trigger, latched or finite note that is sounding at its
+  start plus the new limit, release included (it never lengthens one), and a looped Pattern
+  Sequencer sequence sounds for at most 30 s without the permission, a first pass longer than
+  that included (the loop setting itself is kept).
 - **Levels are relative, not SPL.** Every level is relative to digital full scale (dBFS-like)
   and labelled as uncalibrated. A browser knows sample values, not sound pressure. The only
   exception is the Measure workspace with a valid absolute level calibration that you supply
   from an external reference.
+- **The gain is a setpoint; the output says when its ceiling acts.** The Gain readout is the
+  master level you set, not the output level: it leaves out the envelope and the filter before
+  it, and the limiter and the output ceiling at -12.0 dBFS (a safety backstop, ADR 0002) after
+  it. A filter boost can push a voice past that ceiling,
+  which then flattens it: while it does, the source panel and the status bar show "OUTPUT AT
+  CEILING (clipped)" with a warning sign and the status dot turns red. The state is read from
+  the signal just before the ceiling, and is never shown while nothing sounds.
+- **The analyser scale is not 0 dB at full scale.** The live spectrum and the microphone
+  analyser plot the dB of a Blackman-windowed analyser FFT (dBFS-like, uncalibrated), on which a
+  full-scale sine reads near -13.6 dB. The detected-peak level corrects it so that sine reads
+  0 dBFS, and the Measure analysis has its own tone and mean-square (RTA) scales, defined in
+  [docs/v3/algorithms.md](docs/v3/algorithms.md).
 - **The microphone is not calibrated.** Its response, the input processing and the room are
   unknown, so readings are only comparisons. In Measure, a frequency-response profile corrects
   the microphone only inside the profile's range. Detected frequencies are never shown with more
@@ -499,6 +702,12 @@ Not yet built:
   anything. The [measurement guide](docs/v3/measurement-guide.md) has the details.
 - **Speaker output is unknown.** Generating a frequency digitally does not mean your hardware
   reproduces it accurately, or at all.
+- **The digital limit is provisional until audio starts.** Generated frequencies stop at 95 %
+  of Nyquist. Until the first key press or tap starts audio, the browser has not reported its
+  sample rate, so the limit comes from an assumed 44.1 kHz (20.95 kHz); a sweep frequency
+  limited then says "provisional until audio starts", and at 48 kHz the limit is 22.80 kHz.
+  Each sweep field (start, end, duration) shows under itself why a typed value was limited,
+  raised to the 1 Hz floor, adjusted or not understood, until a preset or link replaces it.
 - **Hearing ranges are approximate.** They depend on the threshold criterion and on the
   individual. Each entry cites its source (for example Heffner & Heffner 2007) and lists
   differing published values.
@@ -587,7 +796,8 @@ Or use the public URL: https://korczis.github.io/oscilla/
 ## Development
 
 Requires Node.js 22 or later. The fast check also runs `majordomus doctor`, so it needs the
-`majordomus` CLI.
+`majordomus` CLI. To add a Studio node, a template, a lab, a chart or a browser check, start
+with [Hack and extend OSCILLA](docs/EXTENDING.md).
 
 ```bash
 npm ci
@@ -604,7 +814,10 @@ and CI fail.
 
 The browser suites need Playwright's browsers (`npx playwright install chromium firefox
 webkit`). Work lands through small pull requests. CI runs the gate on every pull request,
-branch protection requires the `gate` check, and a merge to `main` redeploys Pages.
+branch protection requires the `gate` check, and a merge to `main` redeploys Pages. The branch
+need not be up to date with `main` (`strict: false`, the owner's decision of 2026-10-30), so a
+pull request merges on its last green run and the gate's suites never run on `main` itself:
+ADR 0009's note of that date says what still catches a stale run or a red combination.
 
 Two of the gate's jobs check the pull request rather than the product. `fail-first`: when the
 title starts with `feat` or `fix`, a unit test the pull request adds or changes must fail on
@@ -639,16 +852,25 @@ from the background, or hold-to-play by touch. The owner declined real-device ch
 | --- | --- | --- |
 | Unit | `tests/unit/` | Pure modules (DSP, analysis, sequencer, charts), the packer, the artifact rules and the release tooling, all under `node --test` |
 | V1 freeze | `tests/freeze/` | Golden vectors that pin V1 behaviour ([ADR 0014](.ai/repo/adrs/0014-v1-behaviour-frozen-by-golden-vectors.md)) |
-| Browser | `npm run test:browser`, `test:engine`, `test:dsp`, `test:labs`, `test:sequencer` | Playwright suites on the built page: the app gate (`tests/browser/app.cjs`), layout (`tests/browser/layout.cjs`), the V2 final-QA regressions (`tests/browser/qa-regressions.cjs`), navigation history and unsaved work (`tests/browser/navigation.cjs`), the MIDI support state (`tests/browser/midi.cjs`), the V1 engine port (`tests/browser/engine-v1port.cjs`), DSP (`tests/browser/dsp.cjs`), labs (`tests/browser/labs.cjs`) and the sequencer (`tests/browser/sequencer.cjs`) |
+| Browser | `npm run test:browser`, `test:engine`, `test:dsp`, `test:labs`, `test:sequencer` | Playwright suites on the built page: the app gate (`tests/browser/app.cjs`), layout (`tests/browser/layout.cjs`), the V2 final-QA regressions (`tests/browser/qa-regressions.cjs`), navigation history and unsaved work (`tests/browser/navigation.cjs`), link integrity and route hygiene (`tests/browser/link-integrity.cjs`), the MIDI support state, MIDI notes and the keyboard (`tests/browser/midi.cjs`), the workspaces against the interface audit (`tests/browser/ui-current.cjs`), a phone's audio unlock and playback session (`tests/browser/touch-audio.cjs`), the demo song journey (`tests/browser/demo-song.cjs`), the cross-links between workspaces as round trips (`tests/browser/cross-links.cjs`), the first-screen entry-path inventory (`tests/browser/first-screen.cjs`), the navigable-surface census against its contract (`tests/browser/surface-census.cjs`, held statically by `tests/unit/surface-census.test.mjs`), the V1 engine port (`tests/browser/engine-v1port.cjs`), DSP (`tests/browser/dsp.cjs`), labs (`tests/browser/labs.cjs`) and the sequencer (`tests/browser/sequencer.cjs`) |
 | Visual | `scripts/visual-gate.mjs`, `tests/visual/` | The 1536x1024 reference and named regions, compared region by region with thresholds measured from run-to-run variance ([ADR 0029](.ai/repo/adrs/0029-visual-regression-in-the-release-gate.md)) |
 | V3 unit | `tests/unit/v3-*.test.mjs` | Measurement core, transfer and impulse response on synthetic systems with known answers, RTA and aggregation, calibration, quality, experiments (schema, round trip, corrupt imports, store), goldens per algorithm ID, the engine on a fake io and the view models, all in `npm test` |
 | V3 browser | `npm run test:measure` | `tests/browser/v3-measure.cjs`: the measurement engine on real Web Audio, a recovered digital loopback response, limiter transparency, 0 nodes after finish and abort. `tests/browser/analysis-worker.cjs`: the offline analysis in its Worker against the inline run, identical results, no inline fallback, abort. `tests/browser/v3-ui.cjs`: Measure and Experiments of the built page, guided flow, abort at every stage, calibration, experiment import, compare and export, and no "SPL" without a level calibration. All run in Chromium, Firefox and WebKit, from `file://` and `/oscilla/` |
 | V3 visual | `scripts/visual-measure.mjs`, `tests/visual/measure/` | Measure at 1536x1024 and 390x844 showing a deterministic TEST CONTEXT experiment, against the accepted reference for each environment (part of `npm run test:visual`) |
-| Studio browser | `npm run test:studio` | The Studio of the built page: the graph editor (`tests/browser/v31-studio-graph.cjs`), the timeline editor (`tests/browser/v31-studio-timeline.cjs`), the compiler and runtime on the real engine (`tests/browser/v31-studio-audio.cjs`), the transport on the audio clock (`tests/browser/v31-studio-transport.cjs`), offline rendering of the templates (`tests/browser/v31-studio-offline.cjs`), the transport Inspector, Find node, Render WAV and a measurement from Studio (`tests/browser/v31-studio-workflows.cjs`), deep links and fullscreen (`tests/browser/v31-studio-links.cjs`), and the Inspector's Runtime and Trace sections (`tests/browser/v31-studio-runtime.cjs`) |
+| Studio browser | `npm run test:studio` | The Studio of the built page: the graph editor (`tests/browser/v31-studio-graph.cjs`), the timeline editor (`tests/browser/v31-studio-timeline.cjs`), the compiler and runtime on the real engine (`tests/browser/v31-studio-audio.cjs`), the transport on the audio clock (`tests/browser/v31-studio-transport.cjs`), offline rendering of the templates (`tests/browser/v31-studio-offline.cjs`), the transport Inspector, Find node, Render WAV and a measurement from Studio (`tests/browser/v31-studio-workflows.cjs`), deep links and fullscreen (`tests/browser/v31-studio-links.cjs`), and the Inspector's Runtime and Trace sections (`tests/browser/v31-studio-runtime.cjs`), and the Synth panel's sound, cables, links and phone layout (`tests/browser/synth.cjs`), and the Synth engines' spectra, decays, voice census, routing, links and phone layout (`tests/browser/synth-engines.cjs`) |
 | Studio visual | `scripts/visual-studio.mjs`, `tests/visual/studio/` | Studio at 1536x1024 and its GRAPH and TIMELINE subviews at 390x844, against the accepted reference for each environment (part of `npm run test:visual`) |
 
 Every V3 browser check runs on a TEST CONTEXT digital loopback or a fake microphone. No
 automated test proves how a physical speaker, room or microphone behaves.
+
+Every control of the page is operated by a browser suite, or is listed as debt that only
+shrinks (`tests/unit/control-drive-baseline.test.mjs` with its `.json` record). The filter,
+envelope, additive, dual oscillator, phase and stereo, source, device, analysis and Settings
+controls are driven by pointer and keyboard in `tests/browser/app.cjs` (the `ui-*-controls`
+checks and `labs-basic`), each judged where it acts (the live filter stage and the tone's
+level, the next note's envelope, the dual voice, the stereo router) and in a view that shows
+it; the Sequencer panel's Tempo (BPM), Loop, timeline, block fields, Move, Add, Delete and
+transport are driven in `tests/browser/sequencer.cjs`.
 
 `npm run release-gate` is the authority on what the gate runs and in what order; the table
 names every suite and visual script its `test:release` runs (`tests/unit/docs-derived.test.mjs`
@@ -676,8 +898,10 @@ run it alone.
   1. `npm run release:analyze` reads the conventional commits since the last `v*` tag and
      proposes the level, with a reason for each commit.
   2. `npm run release:prepare` starts from a clean tree. It bumps `package.json` once (or
-     confirms an untagged version), rebuilds, and runs `version:check`, the release gate and
-     `majordomus doctor`. If anything fails, it restores the files. It never tags. Land the
+     confirms an untagged version), refreshes `src/data/roadmap.json` from the plan, rebuilds,
+     and runs `version:check`, the release gate (with `OSC_ROADMAP_CHECK=1`, so a roadmap that
+     differs from the plan fails it) and `majordomus doctor`. If anything fails, it restores
+     the files. It never tags. Land the
      result on `main` through a pull request. It refuses to start while the newest release has
      no record (step 4), and it refuses the first stable release of a new major (`X.0.0`, and
      equally `X.0.1` or `X.1.0` typed into `package.json`) that no published `X.0.0-rc.N`
@@ -839,7 +1063,10 @@ Browser storage holds only these keys and one database, `oscilla-experiments` (v
 | IndexedDB | `oscilla-experiments`, object store `findings` | Your findings (statement, status, notes, the evidence each cites and the id and result hash of each cited experiment) |
 
 Experiments and findings are deleted only when you delete them. Permission to play continuously is never
-stored.
+stored. A preset, History entry, config file or link saved with a continuous sweep repeat
+therefore restores it as once, and a notice says so ("Continuous repeat not restored"). Allowing
+continuous playback does not bring the repeat back by itself: allow it in Playback safety, then
+load the preset, History entry or file again. A link never carries the permission.
 
 ## Licences
 
@@ -848,6 +1075,8 @@ licence text of every bundled third-party package:
 
 - Alpine.js (including its `@vue/reactivity` and `@vue/shared`) and uPlot: MIT.
 - lucide-static (icons): ISC.
+- Flowbite (its components, with @popperjs/core) and Tailwind CSS (compiled at build time):
+  MIT.
 - p5.js: LGPL-2.1. It is shipped unmodified as a separately identifiable script block, and any
   compatible p5.js build can replace it.
 

@@ -1,0 +1,18 @@
+id: M072
+title: "Instrument wave 4b: audio tracks, the arrangement, the tempo map, recording and files"
+slug: instrument-wave-4b-audio-tracks-the-arrangement-the-tempo-ma
+order: 72
+priority: p3
+problem: "There are no audio tracks or takes, no arrangement view with track headers, one tempo for the whole timeline, no recording into the arrangement, no stems, no MIDI files and no project round trip across every instrument."
+outcome: "Audio tracks and clips with recording, input monitoring under Q024, an arrangement over the Studio timeline, a tempo and meter map, recording of notes, automation and session takes, WAV stems and mixdown, MIDI file export and import, and one project that round-trips with its measurement provenance."
+acceptance_criteria:
+  - "K109, K110, K111, K112, K113, K114, K117, K118, K119 are done with their evidence; npm run release-gate passes at the last one; npm run test:synth and node tests/browser/integration-map.cjs pass."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "K109, K111 and K112 are big and are split further when started."
+  - "K112 follows V601's schema step; K110 waits on Q024."
+created_at: 2026-10-29
+updated_at: 2026-10-29

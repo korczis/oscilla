@@ -1,0 +1,42 @@
+id: G004
+milestone: M085
+serves:
+- "component-system#embedded-cockpit"
+title: "Cables keep their meaning in the embedded Studio: one edge style table and cables that end at their ports"
+slug: cables-keep-their-meaning-in-the-embedded-studio-one-edge-st
+priority: p2
+profile: implementation
+objective: "Lands as fix(studio-ui). D5 and U5 of the inventory: the full graph and the embedded Studio draw the same edge types with different dash arrays and widths (CONTROL 6 4 against 5 3, ANALYSIS 9 3 2 3 against 8 3 2 3, 1.5 against 1.25), and the embedded Studio's cables end at the chip edges, so in Subtractive Synth the LFO's CONTROL cable to the Filter cutoff enters at the same point as the Envelope's AUDIO cable. One edge style per signal type in studio.css serves both views: each pair of rules becomes one rule whose selector list names both (.osc-sg-edge.is-control .osc-sg-edge-line, .osc-sc-link.is-control), which keeps the domain view's selector count and lowers its declarations; compact.js keeps its own osc-sc-link names and never takes up an osc-sg-* name, because the ratchet counts every osc-* name per occurrence in the JavaScript text and a name used in one more place is a rise (the osc-sc-link selectors leave with G010). compact.js anchors each cable at its port: inputs on the chip's left edge and outputs on its right, at (index + 1) / (count + 1) of its height, computed from the registry's port lists by a pure function in graph-geometry.js; a PARAMETER port's cable ends at the parameter row. Before: VERIFIED in compact-default-1536-dark.png. After: a modulation cable is visibly a different line entering at a different point. Negative cases: a node with no ports, ten inputs, a port type the table lacks (the unit test fails instead of drawing it as AUDIO). Rollback: revert; presentation only."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: \"the embedded Studio is ugly as hell\"; components in general must be generic, linkable, traceable, composable, unified, documented, dynamic, generated and interlinked; \"everything must be interlinked with everything\"; improve the main page and the first experience, deploy often. The owner's evolution prompt pack (MASTER, P02, P04, P06) binds it: the dark technical cockpit is locked, shared primitives only where duplication is proven, no new framework, generated docs only where deterministic, no decorative wires. Findings: the UI component inventory of 2026-10-29 (D1-D14 duplication, U1-U15 on the embedded Studio, measured on origin/main b67d1e58, v3.13.0); design: the component-system design of 2026-10-29 (scratchpad components/design.md)."
+scope:
+- src/js/ui/studio/compact.js
+- src/js/ui/studio/graph-geometry.js
+- src/styles/studio.css
+- tests/unit/studio-edge-style.test.mjs
+- tests/browser/v31-studio-graph.cjs
+- tests/visual/studio
+- tests/unit/ui-flowbite-pro-baseline.json
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+acceptance_criteria:
+- "tests/unit/studio-edge-style.test.mjs fails on the merge base: every port type of the compatibility matrix has exactly one style, the graph and the embedded Studio read it, and portAnchor() places the Filter's cutoff input and its audio input at different points for Subtractive Synth."
+- "The ratchet record shows studio.css's selectors equal and its declarations lower, and no osc-* name with a higher count (node scripts/ui-flowbite-pro-record.mjs --check)."
+- "The compact visual references (tests/visual/studio/*-compact.png) are re-accepted through the visual gate with the reason."
+- "Definition of done, extends: graph-geometry.js cablePath, which both views already share."
+- "Definition of done, interlinks: the embedded Studio's cable is the same edge the full graph and its Inspector describe (one style table)."
+- "Definition of done, interactivity: selecting a cable's target chip states the cable's type in the screen-reader summary."
+- "Definition of done, docs, menus and routes: docs/v31/user-guide.md shows the edge legend once for both views. tests/README.md has a row for each new test; the component's catalogue declaration (G001) names its docs, links and tests; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: A check 'compact-cables' in tests/browser/v31-studio-graph.cjs reads the rendered path end points for Subtractive Synth and waits with until() (deadline 'compact cables drawn', 2 s) for the CONTROL and AUDIO ends at the Filter to differ, at 1536x1024 and 390x844. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit, and the release that carried it is recorded when the milestone is verified."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "Before Pro (it may land before F001): it adds no class token, selector, markup surface or inline style and only removes legacy ones, so tests/unit/ui-flowbite-pro-baseline.json stays equal or falls (node scripts/ui-flowbite-pro-record.mjs --check passes, rewritten only where a count fell) and node --test tests/unit/ui-flowbite-pro.test.mjs passes; studio.css, studio-timeline.css, charts.css and tokens.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock v2)."
+- "scripts/size-report.mjs shows at most 1 KB gzip added, with the base and head figures in the pull request body, inside the cap Q037 records (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/studio-edge-style.test.mjs
+- node tests/browser/v31-studio-graph.cjs --only compact-cables
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

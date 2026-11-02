@@ -1,0 +1,20 @@
+id: M081
+title: "Studio boxes, wave 2 and 3: knobs and live views on faces, box menu, cable activity, listen, previews, comments, reroutes, group faces"
+slug: studio-boxes-wave-2-and-3-knobs-and-live-views-on-faces-box
+order: 81
+priority: p2
+problem: "A box face is a title and a summary line: no control, no live view, no menu, no bypass or mute on it (S6, S7); templates and patches have no preview (S9); there are no comments, reroute points or group faces (S10)."
+outcome: "Every box can be played from its face, shows what it does live, and offers every option from one menu; the graph can be annotated and routed tidily."
+acceptance_criteria:
+- "V615, V620, V621, V622, V623, V624, V625, V626, V627, V629 and V630 are done with their evidence; npm run release-gate passes at the last one."
+validation:
+- npm run release-gate
+evidence_required:
+- milestone_verified
+risks:
+- "V620 uses the synth line's knob (K058) and parameter contract (K105); V622's collapse lands before it, since every parameter is on the face (Q031)."
+- "Wave 2 waits on F002, F008 and F010 for its chrome; wave 3 on V601's schema step."
+- "Face views and cable activity are continuous draws: they are K036 subscribers or they do not land."
+- "Ceiling of the line: 35 KB gzip for M080 and M081 together, inside the owner's 1 200 000 B budget of 2026-10-29."
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

@@ -17,7 +17,7 @@ depends_on:
   - "E004"
 acceptance_criteria:
   - "A drag across several bars is one history entry and the keyboard reaches every step, in a unit test that fails on the merge base."
-  - "Any new chrome is Flowbite Pro markup adapted from the matching Pro block and lowers or keeps the ratchet (project.ui-uses-flowbite-pro, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs); controls are Pro range sliders with number inputs, never a custom rotary knob (D5)."
+  - "Any new chrome is Flowbite Pro markup adapted from the matching Pro block and lowers or keeps the ratchet (project.ui-uses-flowbite-pro, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs); controls are Pro range sliders with number inputs; a continuous instrument parameter in the Synth workspace is the knob of K058 (D11, Q018, superseding D5 there)."
   - "No reviewer's verdict is needed (src/js/ui/studio is not a guarded path); as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
   - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
 validation:

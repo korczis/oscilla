@@ -1,0 +1,155 @@
+# Review verdict for pull request #301, finding group C009 (engine-sync-9, dead-controls-8): a
+# release time edited while a note is held is the one letting go uses (branch
+# fix/c009-release-edit-while-held). Delta re-review of the builder's round for verdict
+# 03d127f7 (changes-requested on 6ccd81fd7beb). Reviewed head b062e1ae6837 (== origin at fetch;
+# merge base cdda563c1982; origin/main has moved to 88b936cb, merge train #316, which changes
+# no file under src/, dist/ or scripts/). Built by the builder's session; reviewed by dev-68,
+# which did not build, merge or edit this change.
+#
+# The digest: `node scripts/review-verdict.mjs --content --list --base origin/main` in a
+# detached worktree of b062e1ae, with the branch's copy of the script, which is identical to
+# origin/main's (git diff origin/main HEAD -- scripts/review-verdict.mjs is empty). One guarded
+# path, src/js/audio/audio-engine.js: 80a8c16f...8058, which matches the builder's claim and
+# the PR body. Main changed no guarded file, so a merge of main keeps it as reviewed.
+#
+# Delta: one fix commit, b062e1ae (engine, Settings note, README, tests/README, engine.test,
+# app.cjs, dist); no merge of main. release() passes `fit` to _releaseVoice only for the
+# note-off release; a fade that does not fit before v.endTime becomes
+# max(0.005, endTime - t - 0.012), so its stop lands 2 ms before the old end.
+#
+# Lenses: (a) every caller of release() (let go, releaseHold on blur and pagehide, latch off;
+# the fast and play-time paths keep fit off); (b) audio-engine-discipline v2 and V249 on the
+# fit fade: it runs on the output-stage `fade` gain (exactly 1 until then), set 1 at t on a
+# render-quantum boundary, linear to GAIN_FLOOR, never to 0, no setTargetAtTime, no envelope,
+# dip or frequency param written, sources stopped and nodes freed; (c) fail-first and
+# mutation; (d) docs and PR body vs code; (e) the merge with origin/main.
+#
+# Runs (git-archive copies of b062e1ae, 6ccd81fd and cdda563c in the scratchpad, node_modules
+# symlinked read-only from the primary checkout, V1 freeze mock AudioContext):
+# - Probe F1, app default (continuous off, limit 2 s, Settings 30 ms), hold a tone, edit
+#   30 ms -> 1 s at 0.5, let go 1.2. b062e1ae: release() true, 'release' (natural false),
+#   fade [set 1 @1.2213, linear 1e-4 @2.018] (0.797 s), endTime 2.03 -> 2.028, envelope
+#   untouched, 0 nodes left. 6ccd81fd: refused, nothing until 2.03. Base: 30 ms fade.
+# - Probe F7, held sweep (once, 3 s), continuous ON, edit 30 ms -> 2 s at 0.2, let go 1.5.
+#   b062e1ae: fade 1.52 -> 3.018 (1.498 s), endTime 3.03 -> 3.028, 'release' emitted.
+#   6ccd81fd: refused, full level to 3.03.
+# - Edges on b062e1ae: an edit that fits (0.4 s) is used as is; let go at 1.97 gives a 26 ms
+#   fit fade (the play-time tail is 30 ms); at 1.995, 2.0 and 2.01 release() is refused
+#   because the voice's own 30 ms tail is already running and ends within 15 ms (the same on
+#   base); Escape during a fit fade takes `cut` (8 ms); a continuous tone keeps the full 2 s;
+#   play-time 1 s edited to 2 s, let go 0.5: fit fade 1.498 s over the running tail, no step.
+# - Fail-first: b062e1ae's engine.test.mjs on 6ccd81fd's engine: 36 pass, 2 fail (the two new
+#   cases, 'letting go starts a fade'); 38/38 on b062e1ae.
+# - Delta mutants N1-N12 (fit off, no 0.005 floor, 2 ms margin, half room, fit on the
+#   play-time path, clamp to deadline, clamp always, ramp to 0, no release event, fast fade,
+#   fit on the fast path, an envelope write at the fit let-go) against engine, freeze,
+#   v3-engine and audio-envelope tests: 8 killed; N2, N5, N11 and N12 survived (F9). N5 and
+#   N11 change only a let-go in the voice's last ~40 ms and stay click-free (equivalent here).
+# - Unit at b062e1ae: engine + freeze + guard 1184/1184; full suite in a copy (load ~39):
+#   3282 tests, 3270 pass, 7 skipped, 5 fail, all in tests that read git history or the
+#   tracked tree (about, plan-evidence-commits, ui-flowbite-pro, version-authority), which
+#   pass in the detached worktree (57 tests, 56 pass, 1 skipped). v31-studio-performance passed.
+# - node scripts/build.mjs --check: dist/index.html is up to date.
+# - Browser, release-edit-while-held alone, b062e1ae dist (load 22-31): PASS in chromium,
+#   firefox and webkit, file:// and http; Settings and lab ratios 0.79-0.82; the limited leg
+#   RELEASING, room 1.63-1.69 s, halfway ratio 0.422-0.446. The same check on 6ccd81fd's dist:
+#   FAIL, limited leg ratio 1.0, PLAYING, releasing false: the new leg detects F1.
+# - Merge with origin/main (git merge-tree): one conflict, tests/README.md (not guarded).
+#   Merged tree: engine, freeze, browser-suite-contract, browser-timing 1237 pass, 0 fail of
+#   1238; release-edit-while-held alone PASS (chromium). With hold-plays-release-zero-nodes
+#   before it, it fails in chromium on the merged tree, on b062e1ae and on 6ccd81fd (F8).
+# - CI has no checks on b062e1ae (mergeStateStatus DIRTY: the conflict above).
+#
+# Closed: F1 (P1), F7, F2, F3 (P2), F5 (P3). Open: F4, F6, F8, F9, F10 (P3). No open P1 or P2:
+# the verdict is merge.
+schema: review-verdict/v1
+pr: 301
+verdict: merge
+reviewer: "dev-68 (Claude Opus 5.5 session 4f90795d); did not build, merge or edit this change"
+content: 80a8c16f790d19547056885cb227fa243ee4d6b91ff4b5fb990de54d6dd08058
+findings:
+  - id: F1
+    severity: P1
+    status: closed
+    title: >-
+      Closed on b062e1ae. In the app default (continuous off, 2 s limit) a release edited
+      upward while held made letting go do nothing. release() now passes fit for the note-off
+      release, so the fade is shortened to end before v.endTime. Probe: edit 30 ms -> 1 s at
+      0.5, let go 1.2: true, RELEASING, fade 1.221 -> 2.018 on the output stage, endTime
+      2.028 < 2.03, no envelope write. The new unit case fails on 6ccd81fd and kills N1, N3,
+      N4, N7, N9, N10; the browser limited leg fails 6ccd81fd's dist (ratio 1.0, PLAYING).
+  - id: F7
+    severity: P2
+    status: closed
+    title: >-
+      Closed on b062e1ae. A held programmed pattern (3 s sweep, continuous on) edited 30 ms ->
+      2 s at 0.2 and let go at 1.5 now fades 1.52 -> 3.018 and ends at 3.028 (before 3.03)
+      with a release event; 6ccd81fd refused it. The new sweep unit case fails on 6ccd81fd and
+      kills N1, N3 and N6 (a clamp to v.deadline).
+  - id: F2
+    severity: P2
+    status: closed
+    title: >-
+      Closed on b062e1ae. release-edit-while-held gains the default leg (continuous off, 2 s
+      limit): RELEASING, end <= limit, halfway ratio 0.2-0.8. Measured here 0.422-0.446 in
+      chromium, firefox and webkit, file:// and http, and it fails on 6ccd81fd's dist. The PR
+      body's review-round section states the limited and programmed-end cases.
+  - id: F3
+    severity: P2
+    status: closed
+    title: >-
+      Closed on b062e1ae. The Settings note (src/index.html:2978-2981) and the README ADSR
+      bullet scope the edit to the let-go, say it is shortened to end by the hard limit or a
+      pattern's own end, and that a note reaching either, or a Trigger note's end, fades over
+      the release it started with. That matches the code (v1OpenEnvelope and makeAdsrEnvelope
+      schedule the tail at play; setNoteOffRelease writes no param).
+  - id: F4
+    severity: P3
+    status: open
+    title: >-
+      Unchanged: syncNoteOffRelease (main.js:379-385) and its Alpine.effect (:582-583) have no
+      unit test; only the browser check covers the wiring.
+  - id: F5
+    severity: P3
+    status: closed
+    title: >-
+      Closed: the PR body records the npm test failure with head, load and a re-run (3281
+      pass, 0 fail at load 19-27). Here the full unit suite passed v31-studio-performance at
+      load ~39.
+  - id: F6
+    severity: P3
+    status: open
+    title: >-
+      Informational, updated: mergeStateStatus is DIRTY. git merge-tree with origin/main
+      (88b936cb) conflicts in tests/README.md only (both sides edit the engine.test and app.cjs
+      rows), so CI has run no check on b062e1ae. Main changes no guarded file, so the digest
+      stands after the merge; the merged tree's engine, freeze and browser-contract tests pass
+      (1237 of 1238, 1 skipped). Resolve the conflict keeping both row texts.
+  - id: F8
+    severity: P3
+    status: open
+    title: >-
+      release-edit-while-held depends on where an earlier check left the mouse. Run with
+      --only hold-plays-release-zero-nodes,release-edit-while-held (chromium, file://) the
+      Settings leg fails on b062e1ae, on 6ccd81fd and on the merged tree: ratio 0, noteOff
+      0.03, endTime ~0.7 before the edit, i.e. the held note was already released. Likely
+      cause: the pointer is parked over #osc-hold-play, whose @pointerleave calls holdLeave
+      when the Settings dialog opens. It passes in the full suite (another check moves the
+      mouse). It fails safe; move the mouse away or release through the engine state first.
+  - id: F9
+    severity: P3
+    status: open
+    title: >-
+      Two guards of the fit path are not pinned. N12 (an envelope write at a note-off let-go)
+      survives: the V249 test covers only the play-time release and the C009 case checks
+      writes during the hold, not at the let-go. N2 (no 0.005 floor on the fit time) survives:
+      no case lets go in the voice's last 17 ms, where the fit time would go to 0 or below (a
+      ramp ending before its start). The code is correct on both (probes); add the two cases.
+  - id: F10
+    severity: P3
+    status: open
+    title: >-
+      The PR body's Change section still quotes the old Settings note ('release also applies
+      to a held note') and says release() fades over v.noteOff ?? v.release, and its
+      fail-first block names the removed test 'a limited voice never ends later than its
+      hard-limit endTime'; the review-round section is current. Update the stale bullets.

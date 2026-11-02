@@ -1,0 +1,48 @@
+id: K068
+milestone: M065
+serves:
+  - "connected-instrument#step-sequencer"
+  - "connected-instrument#one-transport"
+title: "Steps playback on the audio clock: swing, ratchet, slide, accent, seeded probability, tap tempo"
+slug: steps-playback-on-the-audio-clock-swing-ratchet-slide-accent
+priority: p1
+profile: implementation
+objective: "Lands as feat(studio). The timeline compiler compiles each look-ahead window of a steps clip into note events, and the transport applies them to the target's notes() or hit() on the audio clock at baseTime + beats x 60 / tempo on whole frames: swing delays odd steps by (swing / 100 - 0.5) x 2 x step; a ratchet of r plays r equal hits in the step; a slide glides the Keys pitch without a new gate; an accent raises velocity by 0.25 (capped at 1); a step plays iff mulberry32(seed ^ pass ^ index) < probability, so live and offline play the same hits; transpose and scale apply at compile time. Tempo is transport.tempo; tap tempo (the mean of the last four taps within 2 s, clamped) is one TRANSPORT_SET per tap series. The one timer stays the bookkeeping wake-up. Before: a steps clip does not play. After: steps play within one frame of their computed time, live and offline alike. User-value tier 1 of 4 (synth-design.md section 17). Rollback: revert the pull request; steps clips stay valid data that play nothing, which the transport lists in debugInfo().unplayed with its reason. Merged plan of the component follow-up (2026-10-30): Tap tempo is W006's pure tapTempo(taps, now); this slice calls it."
+why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
+scope:
+  - "src/js/studio/timeline-compiler.js"
+  - "src/js/studio/transport.js"
+  - "src/js/studio/offline.js"
+  - "src/js/studio/adapters"
+  - "src/js/ui/studio/transport-bar.js"
+  - "src/js/studio/clip-targets.js"
+  - "tests/unit/v4-clip-target-policy.test.mjs"
+  - "docs/v31/timeline.md"
+  - "tests/browser/instrument-dsp.cjs"
+  - "tests/unit/studio-steps-playback.test.mjs"
+  - "tests/browser/steps.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K067"
+  - "K060"
+  - "W006"
+acceptance_criteria:
+  - "tests/unit/studio-steps-playback.test.mjs, failing on the merge base, asserts on StudioFakeContext (tests/unit/sequencer-fake-audio.mjs) the scheduled calls, times, ramps and node census; tests/browser/instrument-dsp.cjs, rendering a real OfflineAudioContext in Chromium, Firefox and WebKit at each context's own rate (in the style of tests/browser/dsp.cjs) and failing on the merge base, checks the figures: every step onset is within one frame of its computed time at 120 and 97 BPM, with swing 50 and 66; a ratchet of 3 gives three onsets per step; a slide step has no gate onset and reaches its pitch within the glide time; two renders of a pattern with probability 0.5 are identical and change when the seed changes; a tempo change rescales the onsets; the node census is 0 after stop; tap tempo of four taps 500 ms apart sets 120 BPM."
+  - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: probability 0 and 1; ratchet 4 at 1/32 at the tempo maximum; a tempo change while playing; stop with a ratchet pending."
+  - "A browser check in tests/browser/steps.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: a steps clip on the panel's Keys node plays the panel in the Synth workspace and in the Studio from the same transport, and the Studio playhead and the Synth playhead show the same position. Real-time: the playing step index read from the page follows transport.playhead(); a tempo changed while playing changes the measured onset interval in the runtime's debugInfo, each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: Play and Stop by pointer, Space and touch; Tap by pointer, Enter and touch; the transport group's buttons and the tempo spinbutton are asserted in the accessibility tree. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Every edit is one undoable dispatch through the one Studio store (a continuous gesture is one history entry, undo and redo restore the exact serialized model) and the model holds plain data only (project.studio-model-is-canonical); every connection goes through canConnect and full-model validation, and a refusal shows the validator's sentence and leaves model, history and runtime unchanged (project.typed-ports, project.no-silent-feedback)."
+  - "Every node it plays is built by an engine adapter with track()/source() accounting, all timing is on the audio clock (no timer or rAF times audio), envelopes are click-free, frequencies stay below 0.95 x Nyquist of the running context, the peak stays at or below the output ceiling and the engine node census is 0 after stop (project.audio-engine-discipline v2)."
+  - "Every string it adds passes tests/unit/instrument-wording.test.mjs (added by K059): no product, brand or model name, no analog-modelling or vintage claim, and every approximation it makes labelled where it is shown (project.no-fake-science)."
+  - "The pull request carries a reviewer's verdict (src/js/studio is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "scripts/size-report.mjs shows at most 4 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; it does not wait on Q023, and its figure joins the line's sum once Q023 records the cap, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/studio-steps-playback.test.mjs"
+  - "node tests/browser/steps.cjs"
+  - "node tests/browser/instrument-dsp.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-30

@@ -1,0 +1,38 @@
+id: T012
+milestone: M073
+serves:
+  - "v3-measure#readout-states"
+title: "The correlation meter never shows a number or a bar for silence or a one-sided signal"
+slug: the-correlation-meter-never-shows-a-number-or-a-bar-for-sile
+priority: p2
+profile: implementation
+objective: "Truth-table rows STP-03, STP-04, STP-05 (scratchpad p05/truth-table.md). correlationDisplay returns available: false for idle, silent and one-sided states; the canvas meter of K035 (M062) gets data-state=\"unavailable\" and a hatched or dimmed track with no value bar; \"1.00 mono\" requires the engine output (an adapter getter) above DEFAULT_SILENCE_RMS; a new one-sided state names the side with signal and says the coefficient is undefined."
+why: "P05 audit of origin/main b67d1e58 (v3.13.0): An unavailable meter draws the same empty bar as a correlation of -1 (idle 0.0 % against split-180 1.0 %). A mono dual pair at equal frequency with Δφ 180 cancels (output RMS 2.6e-9) and the panel shows \"1.00 mono\" at 100 %. Mono with Pan -1 carries signal on the left only, and the reason shown is \"no signal on the stereo router yet\"."
+scope:
+  - "src/js/analysis/correlation.js"
+  - "src/js/labs/phase-stereo.js"
+  - "src/js/main.js"
+  - "src/styles"
+  - "tests/unit/readout-states-correlation.test.mjs"
+  - "tests/browser/qa-regressions.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K035"
+acceptance_criteria:
+  - "Fail-first fixture: tests/unit/readout-states-correlation.test.mjs: idle and silent are unavailable and differ from correlationDisplay(-1, \"live\"); a silent mono buffer gives \"—\"; routingGains({ mode: \"pan\", panA: -1, panB: -1 }) with pearson gives the one-sided state naming left. Browser check in tests/browser/qa-regressions.cjs: dual A = B, Δφ 180, mono, pan 0 shows \"—\". Fails on the merge base."
+  - "Negative cases, each asserted: Mono with signal still \"1.00 mono\"; split 180 still \"-1.00 est.\" with its bar in the live state; both channels silent keeps \"silent\"; aria-valuenow stays present (role=meter requires it)."
+  - "Revertible on its own: Revert: display states and one adapter getter."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "The pull request touches a guarded path and carries a reviewer-written .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named deadline (project.suite-harness, project.bounded-test-timing)."
+  - "Any new visible element follows the Flowbite Pro components and the locked tokens (project.ui-uses-flowbite-pro, project.visual-identity-lock); npm run visual passes or the baseline change is declared."
+  - "tests/README.md has a row for each new test; this issue does not edit docs/CLAIMS.yaml or the intent (T027 does)."
+validation:
+  - "npm test"
+  - "npm run verify"
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

@@ -1,0 +1,18 @@
+id: M099
+title: "The first screen's parts lead to their workspaces, and a read-only explorer shows how they relate"
+slug: the-first-screens-parts-lead-to-their-workspaces
+order: 99
+priority: p3
+problem: "Q004 places a Guided measurement row and a compact Studio on the first screen, but nothing yet proves that each leads a newcomer to its full workspace, and the owner's prompt pack (2026-10-29) asks for an entry that works from GitHub to the running app."
+outcome: "Each part Q004 placed on the first screen leads to its full workspace through the hash dispatcher, targets read from the one entry-path inventory, proven in three browsers, both themes, by keyboard, from file://, the sub-path and the live site."
+acceptance_criteria:
+  - "P008 and P010 are done with their evidence."
+validation:
+  - "node tests/browser/public-entry.cjs"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "P008 waits on P002, which waits on the F001-F003 chain; it is kept out of M098 so the README and GitHub slices can finish without it."
+  - "It spends gzip headroom Q014 divides between M062, the F-line and the K-line; P008 carries its own ceiling."
+created_at: 2026-10-30
+updated_at: 2026-10-30

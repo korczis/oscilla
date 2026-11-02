@@ -1,0 +1,21 @@
+id: Q034
+milestone: M088
+title: "Owner decision: is a catalogue that renders Flowbite Pro markup from declarations allowed under ADR 0061"
+slug: owner-decision-is-a-catalogue-that-renders-flowbite-pro-mark
+priority: p2
+profile: routine
+owner: repository owner
+objective: "ADR 0061 and project.ui-uses-flowbite-pro forbid 'an ad-hoc component library' and inventing a component the Pro set has; their check is a path test (no components, widgets, ui-kit or design-system segment). The design's src/js/ui/catalog renders markup adapted from Pro blocks from declarations, holds no CSS of its own, and renders only the kinds whose duplication is proven (D1-D14). What it is not, so the owner judges the whole of it: it holds no value, resolves no state path, subscribes to no store, evaluates no condition and registers no directive at run time; a surface calls one function per kind with its own value and commit function. (a) Allowed, on five conditions checked by the catalogue test: no CSS, every template names its Pro block in the flowbite-pro reference, only proven-duplicate kinds get a template, no runtime binding (the static scan of G008), the path is src/js/ui/catalog; (b) not allowed: every surface keeps hand-adapted Pro markup and the catalogue is metadata (docs, links, tests) only. The plan recommends (a): it is what makes one declaration render the same control in seven places."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: \"the embedded Studio is ugly as hell\"; components in general must be generic, linkable, traceable, composable, unified, documented, dynamic, generated and interlinked; \"everything must be interlinked with everything\"; improve the main page and the first experience, deploy often. The owner's evolution prompt pack (MASTER, P02, P04, P06) binds it: the dark technical cockpit is locked, shared primitives only where duplication is proven, no new framework, generated docs only where deterministic, no decorative wires. Findings: the UI component inventory of 2026-10-29 (D1-D14 duplication, U1-U15 on the embedded Studio, measured on origin/main b67d1e58, v3.13.0); design: the component-system design of 2026-10-29 (scratchpad components/design.md)."
+current_state: "Open on 2026-10-29. The plan's recommendation is not an answer. G008 name this issue in depends_on, so majordomus plan next does not hand them out before it is answered."
+scope:
+- .ai/repo/project/issues/Q034.yaml
+acceptance_criteria:
+- "The decision is recorded as evidence on this issue (covers owner_decision), either in the owner's words with date and source, or as a decision of a coordinating session under an owner delegation it quotes with its date, stating its reasoning and that the owner may override it; a worker without such a delegation never answers it."
+- The answer names (a) or (b).
+validation:
+- manual
+evidence_required:
+- owner_decision
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

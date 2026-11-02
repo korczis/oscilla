@@ -1,0 +1,19 @@
+id: M111
+title: "Parameters and controls, wave 1: one declaration, one interaction model, one control interface (the slider) and the panel"
+slug: parameters-and-controls-wave-1-one-declaration-one-interaction
+order: 88
+priority: p2
+problem: "A parameter is described five ways (the section 79 descriptor, the Inspector's fieldOf, seven hand-built lab fields, the knob of K058, the contract of K105); arrows step linearly through log mappings, nothing resets to a default, and K105's declaration waits behind the whole synth panel."
+outcome: "Every parameter is declared once and validated in Node; every existing slider has Shift fine adjustment, PageUp, Home, End and reset; one control interface with its slider and field views, one browser contract, and the panel that lays out a group of parameters, with the Studio Inspector as their first subject; the knob (K058) is a view of the same interface. Nothing in the Flowbite Pro record rises."
+acceptance_criteria:
+- "N001, N002, N003 and N008 are done with their evidence; npm run release-gate passes at the last one."
+validation:
+- npm run release-gate
+evidence_required:
+- milestone_verified
+risks:
+- "N003 and N008 need F001 (#253) on main; N001 and N002 do not."
+- "N001 edits src/js/studio/nodes (guarded): a reviewer's verdict is needed."
+- "G001-G003 and V619 are PR #285 drafts; this milestone lands after #285."
+created_at: '2026-10-29'
+updated_at: '2026-10-30'

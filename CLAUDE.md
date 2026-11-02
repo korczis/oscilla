@@ -11,7 +11,8 @@ a custom packer into ONE static `dist/index.html`, committed and served by GitHu
 its build-metadata region is stamped at deploy); it must run from `file://` and the Pages
 sub-path. V1 is tagged `v1.0.0`. `README.md` covers features, limits, testing, releases and
 privacy; `docs/GLOSSARY.md` the terms; the reasons are the ADRs in `.ai/repo/adrs/` (0011 on
-for V2 and later; all `proposed`, see its README).
+for V2 and later; each states its status in its front matter, and their README says which the
+owner accepted and why the rest stay `proposed`).
 
 The binding constraints are the project rules in `.ai/repo/rules/project/` (version in the file
 name): `project.single-file-deliverable`, `project.audio-engine-discipline`,
@@ -101,7 +102,7 @@ enumerates neither, because ranges written here go stale.
 - Build and release: `scripts/`. Tests: `tests/unit/`, `tests/browser/`, `tests/visual/`;
   `tests/README.md` says what each proves and which gate runs it.
 
-<!-- majordomus:begin 446ca2e497aa f2d9a1017395dba3 -->
+<!-- majordomus:begin 891aae631b23 f2d9a1017395dba3 -->
 # CLAUDE.md
 
 Claude Code bootstrap. The repository's provider-neutral AI context lives under

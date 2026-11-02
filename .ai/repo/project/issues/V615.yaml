@@ -1,0 +1,45 @@
+id: V615
+milestone: M081
+serves:
+- "studio-box-system#find-and-layout"
+title: "Multi-selection edits: one change sets a shared parameter on every selected box"
+slug: multi-selection-edits-one-change-sets-a-shared-parameter-on
+priority: p2
+profile: implementation
+objective: "P04 slice D (editing and undo invariants). Lands as feat(studio-ui), in the Inspector module E004 creates for the multi view. The multi-selection Inspector lists the parameters the selected nodes share (same node type, or the same parameter id with the same unit and kind) with the common value or 'mixed'; an edit sets every selected node's value in one NODE_PARAM_SET batch and one history entry; a value a node refuses (out of its range) refuses the whole batch with the node's reason. Chrome is Pro form inputs."
+why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings S1-S14 measured on origin/main b67d1e58)."
+scope:
+- src/js/ui/studio/inspector.js
+- src/js/ui/studio/inspector-multi.js
+- src/js/studio/actions.js
+- tests/unit/studio-multi-edit.test.mjs
+- tests/browser/v31-studio-graph.cjs
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- E004
+- F008
+acceptance_criteria:
+- "Before: VERIFIED (S5): no shared-parameter edit exists."
+- "After: a shared parameter edit sets every selected node in one batch."
+- "Negative cases: a value one node refuses refuses the whole batch with that node's reason; parameters with the same id but different units are not shared."
+- "Rollback: revert the merge commit. Nothing changes the schema, a studioHash or a stored record, so documents saved while it was live load unchanged after the revert."
+- "tests/unit/studio-multi-edit.test.mjs, failing on the merge base: shared parameters of mixed selections, one batch per edit, refusal of the whole batch with the first node's reason, undo restores each node's own previous value."
+- "Definition of done, extends: the multi-selection Inspector of V427."
+- "Definition of done, cross-links: each edited node's own Inspector shows the new value; the compact Studio summary updates (round trip through the store). The link is a row of tests/browser/integration-map.json once that map (synth line K075) is on main."
+- "Definition of done, dynamics: the 'mixed' state resolves as the user types; the box summaries update live."
+- "Definition of done, docs and routes: docs/v31/user-guide.md and .ai/repo/features/studio-signal-graph.md say what changed; tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: A check 'multi-edit' in tests/browser/v31-studio-graph.cjs selects two Oscillators by pointer, types 330 in the shared Frequency field and waits with until() (deadline 'both oscillators at 330 Hz', 3 s) for both in the store and one history entry; repeats by keyboard and by touch in a hasTouch context; on the merge base the field does not exist. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit and the completed evidence the release that carried it; E030's judge passes on the pull request once E030 is on main."
+- "The pull request carries a reviewer's verdict (it touches a guarded path; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+- "Wave 2: its chrome is Flowbite Pro markup adapted from the matching Pro component, lands after F002, adds no osc-* class token or legacy selector, and studio.css, studio-timeline.css, charts.css and tokens.css gain no selector or declaration; the domain drawing stays OSCILLA's own inside Pro cards (project.ui-uses-flowbite-pro, project.visual-identity-lock v2; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "scripts/size-report.mjs shows at most 1.5 KB gzip added, with the base and head figures in the pull request body, within the owner's dist budget of 1 200 000 B gzip (decision of 2026-10-29, about 355 KB of headroom at origin/main b67d1e58); the ceiling of this line is 35 KB gzip in all (Studio boxes 35 KB, signal generator 25 KB), stated in the milestone (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/studio-multi-edit.test.mjs
+- node tests/browser/v31-studio-graph.cjs --only multi-edit
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

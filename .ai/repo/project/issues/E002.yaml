@@ -28,4 +28,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-10-31T23:02:12Z
+started_at: 2026-10-31T23:01:46Z
+started_event: sha256:6a24529440f5c8e49c6f8196813f15364a157e195a419e2ad2a9cafb916ef0ae
+completed_at: 2026-10-31T23:02:12Z
+completed_event: sha256:186cba1991689fe54129615f24d6827330e5e7e2a08181727406e578ada83a64
+evidence:
+  - covers: verified
+    type: ci
+    command: "CI run 41111147889 on #262 head ea2fdf1a; node scripts/review-verdict.mjs --pr 262"
+    result: "gate green on head ea2fdf1a, including the browser gates in chromium, firefox and webkit; review verdict .ai/repo/reviews/262.yaml (merge, dev-68) accepted; landed as e786886d; present at main d8268b02"
+    artifact: ".ai/repo/reviews/262.yaml"
+    commit: d8268b026ecde328eb0356212649be81541f17ce
+    recorded_at: 2026-10-31T23:02:05Z

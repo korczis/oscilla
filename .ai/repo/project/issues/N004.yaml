@@ -1,0 +1,44 @@
+id: N004
+milestone: M112
+serves:
+- "parameter-controls#generated-views"
+title: "One control menu for every control: reset, type a value, copy link, modulate, automate, MIDI learn and what is this"
+slug: one-control-menu-for-every-control-reset-type-a-value-copy-lin
+priority: p2
+profile: implementation
+objective: "Lands as feat(ui). src/js/ui/kinds/param/control-menu.js: one Pro dropdown for every control, opened by right-click, the ContextMenu key, Shift+F10 or a 500 ms long-press, closed by Escape with focus back on the control. Items come from the spec and the owner's MenuProvider: Reset to default (with the default's text), Type a value (number, integer, list), Copy link to this parameter (its G007 address or the K105 deep link), Modulate <label> (spec.modulatable; K076 supplies the action), Automate <label> or Show <label> lane (spec.automatable where a lane plays; the Inspector's existing texts, inspector.js:198), Learn MIDI controller (K077 supplies it), What is this? (G015). An item that does not apply here is listed disabled with its reason: no compatible source (canConnect's reason), no lane would play here (clipTarget's reason, the Inspector's 'No automation: ...'), Web MIDI not available (ADR 0058's support-state sentence). K076, K120 and K077 add their actions to this menu; none builds a knob-only menu. Before: VERIFIED only the Inspector offers Automate, as a button; nothing offers reset or a link. After: one menu on every control. Negative cases: each disabled item with its reason; long-press cancelled by a move over 10 px; the menu on a disabled control (only What is this and Copy link). Rollback: revert."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs, KB and interlinking; full DAW, full sequencer, full piano, everything interlinked, clickable, parameterized and joined; knobs, sliders and control panels in one generic way, integrated with Majordomus; every element tweakable; mobile first; the landing easy to use, easy to extend and open to hack. Owner decisions: knobs that always show value and unit (D11, Q018, the ADR 0058 note of 2026-10-29), every parameter on the box face (Q031), the generator in its own workspace (Q033). Design: the params-controls part of the component follow-up of 2026-10-29 (scratchpad components-followup/params-controls.md), checked against origin/main b67d1e58 and the head of plan pull request #285 (c0a631b2)."
+scope:
+- src/js/ui/kinds/param
+- src/js/ui/studio/inspector.js
+- src/js/ui/shortcuts.js
+- tests/unit/control-menu.test.mjs
+- tests/browser/v31-studio-graph.cjs
+- tests/browser/labs.cjs
+- tests/unit/ui-flowbite-pro-baseline.json
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- N003
+- F002
+acceptance_criteria:
+- "tests/unit/control-menu.test.mjs fails on the merge base: the item list for a table of specs and providers (modulatable or not, automatable where a lane plays or not, MIDI available or not, disabled control) is the expected set, each disabled item with its reason."
+- "Definition of done, tested: tests/browser/v31-studio-graph.cjs and tests/browser/labs.cjs open the menu of a Filter cutoff by right-click, the ContextMenu key, Shift+F10 and a hasTouch long-press, choose Reset, Type a value and Copy link, and wait with until() (deadline 'control menu applied', 2 s) for the value, the clipboard text and the focus to land. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), runs at 390x844 and at 1536x1024, adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, extends: the Inspector's Automate action and the knob menu that K058 describes."
+- "Definition of done, interlinks: Copy link, Modulate, Automate and What is this each open another view: each is a row of tests/browser/integration-map.json."
+- "Definition of done, interactivity: every control gains reset and a link by pointer, keyboard and touch."
+- "Definition of done, docs, menus and routes: the Keyboard shortcuts dialog lists ContextMenu and Shift+F10; docs/v31/user-guide.md describes the menu once. tests/README.md has a row for each new test; the parameter's or view's catalogue entry names its docs, links and tests (G001 trace part); dist is rebuilt and npm run build:check passes."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit, and the release that carried it is recorded when the milestone is verified."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "On Pro (after F002): its chrome is markup adapted from the matching Flowbite Pro block (named by its flowbite-pro reference.md section) with Tailwind class lists only; the knob arc and the band are inline SVG with Tailwind utilities under the ADR 0061 resolution note of K058; it adds no osc-* class token, no legacy vocabulary use and no selector, and the domain views' stylesheets gain nothing; the record's debt does not rise (project.ui-uses-flowbite-pro, project.visual-identity-lock v2, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "scripts/size-report.mjs shows at most 1.2 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the line's sum stays within its row of the cap Q037 records, under the 1.2 MB gzip budget of scripts/build-config.mjs (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/control-menu.test.mjs
+- node tests/browser/v31-studio-graph.cjs
+- node tests/browser/labs.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

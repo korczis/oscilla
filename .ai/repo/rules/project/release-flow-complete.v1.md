@@ -213,7 +213,9 @@ Not mechanically enforced, and stated as such:
 
 - that dist-changing pull requests land one at a time. `build:check` in the `gate` and in
   `pages.yml` refuses a stale committed dist, and two such pull requests normally conflict in
-  `dist/index.html`, but no check orders them;
+  `dist/index.html`, but no check orders them, and since 2026-10-30 branch protection does
+  not require an up-to-date branch (`strict: false`), so a stale dist that does not conflict
+  is first refused by `pages.yml` on `main`, which then does not deploy;
 - that auto-merge stays unarmed during a release. The consequence is enforced
   (`project.release-receipt-binds-gate`), the abstention is not;
 - that the record pull request uses the branch name above, and that the task is closed with

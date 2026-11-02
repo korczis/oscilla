@@ -1,0 +1,54 @@
+id: V620
+milestone: M081
+serves:
+- "studio-box-system#box-faces"
+title: "Every parameter on the box face, with the synth knob and modulation rings"
+slug: every-parameter-on-the-box-face-with-the-synth-knob-and-modu
+priority: p2
+profile: implementation
+objective: "P04 slice F (visual, keyboard and responsive). Each box's expanded face shows every parameter of its node type (owner decision Q031 of 2026-10-29), in the sections V619 declares: continuous parameters as the synth line's knob (src/js/ui/kinds/param/knob.js, K058: value and unit always shown, vertical drag with Shift for fine, arrow keys, PageUp and PageDown, Home and End, double-click resets to the registry default, Enter types a value, the ContextMenu key opens the knob menu), enums as a Pro button group, booleans as a Pro toggle; every control is bound to one parameter of synth K105's contract. A drag is one NODE_PARAM_SET history entry with the live preview of §80; the face control and the Inspector field are two projections of one parameter. A knob with incoming CONTROL edges draws the band its depth sweeps and, while playing, N006's dot from a measured tap, never AudioParam.value (which excludes modulation in all three engines) (hidden under prefers-reduced-motion). Folding is V622's, which lands first. Merged plan of the component follow-up (2026-10-30): The face is N008's panel with N005's computed band; the measured dot comes with N006 on every control. It no longer waits on K105 (M071), whose declaration half moved to N001."
+why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings S1-S14 measured on origin/main b67d1e58)."
+scope:
+- src/js/ui/studio/graph-face.js
+- src/js/ui/studio/graph-editor.js
+- src/js/ui/studio/graph-view.js
+- src/js/ui/kinds/param
+- src/index.html
+- tests/unit/studio-graph-face.test.mjs
+- tests/browser/studio-boxes.cjs
+- tests/visual
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- "V619"
+- "V622"
+- "F008"
+- "Q031"
+- "K058"
+- "N008"
+- "N005"
+acceptance_criteria:
+- "Before: VERIFIED (S6): faces carry no control."
+- "After: every parameter of a box is on its face (owner decision Q031), grouped by the sections V619 declares: continuous parameters as the synth line's knob (K058), enums as a Pro button group, booleans as a toggle; modulated knobs show their modulation ring."
+- "Negative cases: a knob never shows a value the model does not hold (the live preview is overwritten by the next dispatch); a typed value out of range is refused with the parameter's reason; Space is never taken; a parameter without a control on the face fails K105's contract."
+- "Rollback: revert the merge commit. Nothing changes the schema, a studioHash or a stored record, so documents saved while it was live load unchanged after the revert."
+- "tests/unit/studio-graph-face.test.mjs, failing on the merge base: the expanded face of every node type holds a control for every parameter and the collapsed face the primary ones; a knob drag maps to one NODE_PARAM_SET gesture; the modulation band of a CONTROL edge equals the depth the edge model states for that parameter's mapping (log for frequency, linear for level)."
+- "Studio visual references are re-accepted in darwin-arm64 and linux-x64 with the reason 'box faces with knobs' (npm run test:visual)."
+- "Definition of done, extends: the box card of V430 and the D11 knob of the synth line."
+- "Definition of done, cross-links: a face knob, the Inspector field and the Synth workspace's knob for the same node show one value (one store); an automation lane on that parameter moves the knob while playing. The link is a row of tests/browser/integration-map.json once that map (synth line K075) is on main."
+- "Definition of done, dynamics: knobs turn as values change; modulation bands and live dots on modulated knobs."
+- "Definition of done, docs and routes: docs/v31/user-guide.md and .ai/repo/features/studio-signal-graph.md say what changed; docs/v31/node-reference.md shows each face. tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: A check 'face-knobs' in tests/browser/studio-boxes.cjs drags the Filter cutoff knob on its face by pointer and waits with until() (deadline 'cutoff changed by face knob', 3 s) for the store value, the Inspector field and one history entry; changes it by ArrowUp, PageUp, Home and a typed '2k' Enter; double-clicks to reset; drags it by touch in a hasTouch context; plays the Subtractive Synth template and waits until the cutoff knob's modulation dot moves; on the merge base the face has no knob. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit and the completed evidence the release that carried it; E030's judge passes on the pull request once E030 is on main."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "Wave 2: its chrome is Flowbite Pro markup adapted from the matching Pro component, lands after F002, adds no osc-* class token or legacy selector, and studio.css, studio-timeline.css, charts.css and tokens.css gain no selector or declaration; the domain drawing stays OSCILLA's own inside Pro cards (project.ui-uses-flowbite-pro, project.visual-identity-lock v2; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "scripts/size-report.mjs shows at most 6 KB gzip added, with the base and head figures in the pull request body, within the owner's dist budget of 1 200 000 B gzip (decision of 2026-10-29, about 355 KB of headroom at origin/main b67d1e58); the ceiling of this line is 35 KB gzip in all (Studio boxes 35 KB, signal generator 25 KB), stated in the milestone (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/studio-graph-face.test.mjs
+- node tests/browser/studio-boxes.cjs --only face-knobs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: 2026-10-30

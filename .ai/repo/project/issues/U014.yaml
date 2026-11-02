@@ -1,0 +1,43 @@
+id: U014
+milestone: M054
+serves:
+  - "ui-current#ui-audited"
+title: "The Device & Limits panel names its upper frequency the digital limit and states it is 95 % of Nyquist"
+slug: the-device-limits-panel-names-its-upper-frequency-the-digital
+priority: p3
+profile: implementation
+objective: "Lands as fix(ui). Before: the Device & Limits panel (Analyzer and Playground; section #osc-panel-device) shows 'Safe max 22,800 Hz' at 48 kHz (src/index.html:714, '<dt>Safe max</dt>' on [data-osc=\"device.safeMax\"] #osc-dev-safemax, filled by src/js/charts/device-panel.js:18 and :78) with no title, description or glossary entry; the value is Nyquist × SAFE_NYQUIST_FACTOR 0.95 (src/js/core/constants.js:17), a digital headroom margin below Nyquist and no safety property, so the word 'safe' reads as a frequency-safety claim. After: the readout is labelled with the word the rest of the app already uses for this bound, 'Digital limit' (DIGITAL_LIMIT_LABEL of src/js/visualization/spectrum-data.js, the preset refusal of src/js/core/safety.js), and carries its derivation on screen, '95 % of Nyquist', composed from SAFE_NYQUIST_PERCENT_TEXT (never a hard-coded 0.95 or 95), bound to the value by aria-describedby and shown as Flowbite Pro helper text or a Pro tooltip; docs/GLOSSARY.md gains a 'Digital limit' entry naming the factor, its source constant and that it is no hearing or equipment safety bound. The data-osc hook device.safeMax and the id #osc-dev-safemax stay (tests and probes read them). Negative cases: no sample rate (no AudioContext yet) keeps the value '—' while the derivation text still shows; a 44.1 kHz context reads 20,948 Hz; no copy anywhere calls this bound safe. Rollback: revert; copy, one description element and a glossary entry only, no stored record changes. Not this: S006 and V215 (the original specs of the 0.95 × Nyquist bound), T023 (the Studio Inspector's clamp diagnostic), C011 (the safety limit and loop cap), T026 (the readout truth-table in docs/v3/readout-truth.yaml, no on-screen derivation), T006 and T003 (the Max: Nyquist select and the sweep's provisional limit)."
+why: "Found by the S074 quality-bar review of 2026-10-30 at origin/main d9db6bdf, section 74 symptom \"Device & Limits shows 'Safe max 22,800 Hz' with no derivation: no title, note or glossary entry; 'safe' suggests a safety property although the value is only a digital headroom margin below Nyquist\", reproduced by an independent verifier (probe 'device 48,000 Hz 24,000 Hz 22,800 Hz'; script scratchpad s074/safemax.cjs, screenshot s074/device-panel.png; grep for 'safe max' in docs/GLOSSARY.md and README.md finds nothing). Rule project.no-fake-science: every metric states its derivation and the shipped copy makes no frequency-safety claim; the spec section 73 avoid list names 'safe tone'. Serves ui-current#ui-audited, an INFERRED fit."
+scope:
+  - "src/index.html"
+  - "src/js/charts/device-panel.js"
+  - "docs/GLOSSARY.md"
+  - "tests/unit/device-limit-copy.test.mjs"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/browser/labs.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "F003"
+  - "F006"
+acceptance_criteria:
+  - "Fail-first: tests/unit/device-limit-copy.test.mjs reads src/index.html, src/js/charts/device-panel.js and docs/GLOSSARY.md and fails on the merge base: the label of [data-osc=\"device.safeMax\"] is 'Digital limit' and contains no 'safe' (case-insensitive); the value element carries aria-describedby naming an element whose text is built from SAFE_NYQUIST_PERCENT_TEXT and names Nyquist; no literal 0.95 or '95 %' is written in the panel's markup or module; docs/GLOSSARY.md has a '**Digital limit.**' entry naming SAFE_NYQUIST_FACTOR."
+  - "The check 'device panel shows the real sampleRate, Nyquist and safe max' of tests/browser/labs.cjs is extended in chromium, firefox and webkit: the label reads 'Digital limit', the described-by text reads '95 % of Nyquist', the value equals sampleRate / 2 × SAFE_NYQUIST_FACTOR of the running context, and before audio starts the value is '—' with the derivation still present."
+  - "node --test tests/unit/no-fake-science.test.mjs passes and the panel copy holds no frequency-safety phrase (project.no-fake-science)."
+  - "It adds no osc-* class token, selector, legacy surface or inline style; the label and description use Flowbite Pro helper text or tooltip markup with literal Tailwind utilities, so tests/unit/ui-flowbite-pro-baseline.json stays equal or falls (node scripts/ui-flowbite-pro-record.mjs --check passes) and node --test tests/unit/ui-flowbite-pro.test.mjs passes (project.ui-uses-flowbite-pro)."
+  - "Every new or changed browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named deadline (project.suite-harness, project.bounded-test-timing)."
+  - "Definition of done, extends: the Device & Limits readout gains its stated derivation and a glossary term shared with the spectrum marker and the preset refusal."
+  - "Definition of done, interlinks: the label uses DIGITAL_LIMIT_LABEL's word, the description is composed from SAFE_NYQUIST_PERCENT_TEXT, and docs/GLOSSARY.md links the term to src/js/core/constants.js and the Device & Limits panel."
+  - "Definition of done, interactivity: the derivation is reachable by keyboard and screen reader through aria-describedby (and the Pro tooltip on focus where one is used); the value still follows the running sample rate."
+  - "Definition of done, docs, menus and routes: docs/GLOSSARY.md gains 'Digital limit'; tests/README.md gains the row of tests/unit/device-limit-copy.test.mjs and the extended labs.cjs description; no menu or route changes (stated)."
+  - "Definition of done, tested: tests/unit/device-limit-copy.test.mjs, tests/unit/no-fake-science.test.mjs and tests/browser/labs.cjs; dist is rebuilt and npm run build:check passes."
+  - "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+  - "node --test tests/unit/device-limit-copy.test.mjs"
+  - "node --test tests/unit/no-fake-science.test.mjs"
+  - "node tests/browser/labs.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-10-30'
+updated_at: '2026-10-30'

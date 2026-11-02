@@ -1,0 +1,43 @@
+# Review verdict for pull request #355, K004 follow-up: Studio Import accepts every Sequencer
+# save of a tempo-locked block, refuses non-string block types, pins the id length, and adds the
+# save/reload round trip (branch feat/k004-studio-import-sequence). Closes F6-F9 of #264's review.
+# Reviewed head 4f47f9c5, merge base origin/main 36dd6136 (main is at 682a45e4 and did not touch
+# the guarded path; the head merges with it without conflict and the digest is the same on the
+# merged tree). Another builder wrote it (oscilla-af); this reviewer built none of it.
+#
+# The digest: the base branch's scripts/review-verdict.mjs, run from `git archive origin/main
+# scripts` with --repo on this worktree, `--content --list --base-branch origin/main`:
+# 3756566b...f3be over the one guarded path, src/js/studio/sequence-import.js.
+#
+# How it was reviewed: read the diff against model.js round/clamp/normalizeBlock/setTempo; an
+# independent probe (ulp stepping, not the PR's bisection) found the exact preimage ends of each
+# canonical beats and checked, for 16 tempos (20-300 BPM, non-integer tempos included), 4 block
+# types and ~6,400 beats values, that a real Sequencer save at both ends opens and that every
+# durationMs from two steps below to two steps above the derivable range opens exactly when it is
+# derivable: 204,253 checks, 0 wrong (the merge base's code: 5,382 wrong on the same probe).
+# Targeted ulp-critical points at 60 BPM (1.000501 and 1.001401 beats) open and refuse exactly.
+# Fail-first: node scripts/fail-first.mjs proves it (tests 9, 10 and 12 fail on 36dd6136, by
+# assertion). Eleven mutations of the fix: 7 fail the unit file, 1 is equivalent (the small-beats
+# guard is unreachable: a tempo-locked beats that small is clamped and re-derived), 3 survive (V1,
+# V2). npm test: 3319 pass, 0 fail, 1 skipped. build:check: dist is the build of the sources.
+# tests/browser/v31-studio-workflows.cjs: chromium, firefox and webkit, 13/13 on file and 3/3 on
+# http each.
+#
+# What holds: the preimage is exact to the double (round's +EPSILON bias included, both ends
+# inclusive); derivation is monotone, so every canonical ms between the two derived ends is a
+# save; derivableMs is reached only when the file's beats equal the canonical beats; the
+# bisection is bounded (< 64 halvings per block, MAX_BLOCKS blocks); a non-string type is refused
+# at blocks[i].type before parseSequence with no model; no input is evaluated (no eval, Function,
+# dynamic import or innerHTML on the import path); the round-trip test opens, saves, reloads and
+# deep-equals every fixture.
+#
+# Verdict: merge. No P0, P1 or P2. Three P3s, all test sensitivity, none a defect of the head.
+schema: review-verdict/v1
+pr: 355
+verdict: merge
+reviewer: oscilla reviewer (claude-code abd8bbe3)
+content: 3756566b3d12e3c901bf539f7fc9f1fde6484793ad7289a34102c497dbbdf3be
+findings:
+  - { id: V1, severity: P3, status: open, title: "v31-studio-sequence-file tests 9/10 do not pin the preimage ends to the double: returning the first outside double at the upper or lower end, or stopping the bisection at 2 ulps, passes all 16 tests, yet those mutants accept 1000.502 ms with 1.000501 beats, or 1001.4 ms with 1.001401 beats, at 60 BPM, which no save produces; add those two 60 BPM cases (head: 1000.5/1000.501 open, 1000.502 refused; 1001.401 opens, 1001.4 and 1001.402 refused)" }
+  - { id: V2, severity: P3, status: open, title: "sequence-import.js:292 the clamp in derive is not pinned: without it 5000.001 and 5000.002 ms chirp with 1.666667 beats at 20 BPM, and 9.999 ms tone with 0.003333 beats, open (past the type's bounds); the head refuses them; add those refusals to test 10" }
+  - { id: V3, severity: P3, status: open, title: "sequence-import.js:55 F9 is closed by a test pin, not by derivation: CLIP_ID_MAX and the refusal's character list stay hand copies of ID_PATTERN; the pin fails on drift (mutating CLIP_ID_MAX to 129 fails test 13), so this is a note, not a defect" }

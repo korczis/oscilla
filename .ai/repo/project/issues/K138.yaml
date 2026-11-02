@@ -1,0 +1,62 @@
+id: K138
+milestone: M082
+serves:
+- "signal-generator-lab#pitch-entry"
+title: "A Generator workspace with its own route and navigation entry, linked from the Playground"
+slug: a-generator-workspace-with-its-own-route-and-navigation-entr
+priority: p1
+profile: implementation
+objective: "Lands as feat(generator), on the Pro shell of F002 (owner decision Q033 of 2026-10-29: the generator gets a workspace of its own). A new workspace 'Generator' with the route #m=generator and a navigation entry after Playground, built from Pro cards: Signal (waveform, the pattern vocabulary of audio/patterns.js including the noise, test-signal and burst patterns, a typed field that accepts Hz and note names through K132's parsePitch with the other form beside it, a level typed in dBFS-like units, output to left, right or both and a polarity switch per channel, an inverted channel being a gain of -1 inside the engine's stereo router), Live (scope and spectrum with a requested-frequency marker per tone and the setpoint and observed readouts side by side), and Plan (the pattern's parameters). The workspace and the Playground's Source panel are two projections of the one instrument state (core/instrument.js): no copy, no second voice; the Source panel gains 'Open in Generator' and the Generator a link back. Every field is carried by URL state and presets, and a link never raises the gain above DEFAULT_GAIN. The surface is Pro from its first commit, so the Flowbite ratchet gains no pending surface."
+why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings G1-G14 measured on origin/main b67d1e58)."
+scope:
+- src/index.html
+- src/js/ui/generator
+- src/js/ui/workbench.js
+- src/js/ui/app.js
+- src/js/core/constants.js
+- src/js/core/instrument.js
+- src/js/core/url-state.js
+- src/js/audio/stereo.js
+- src/js/audio/audio-engine.js
+- tests/unit/generator-workspace.test.mjs
+- tests/unit/url-state.test.mjs
+- tests/unit/ui-flowbite-pro-baseline.json
+- tests/browser/generator.cjs
+- tests/browser/navigation.cjs
+- tests/browser/qa-regressions.cjs
+- .ai/repo/features
+- README.md
+- docs/v3/readout-truth.yaml
+- tests/visual
+- tests/README.md
+- dist
+depends_on:
+- F002
+- F003
+- K132
+- K136
+- Q033
+acceptance_criteria:
+- "Before: VERIFIED (G3, G6, G13): the generator is the Playground's Source panel only, with no typed field, no channel or polarity, and its analysis a scroll away at phone width; no Generator route or navigation entry exists."
+- "After and negative cases: as the objective and the criteria below state; the setpoint (what was requested) and the observation (what the analyser measured on the digital output, or the microphone on the room) are separate readouts with separate labels, and no readout claims the acoustic output."
+- "Rollback: revert the merge commit. Nothing changes the schema, a studioHash, URL key meaning or stored preset, so documents saved while it was live load unchanged after the revert."
+- "Scientific-truth rows (Quantity | Unit | Source | Algorithm | Resolution | Calibration | Limitations | Tests | UI label) are added to T026's canonical readout table docs/v3/readout-truth.yaml and checked by T026's tests/unit/readout-provenance.test.mjs, which this issue extends so that each UI label's text is in the source, each Tests path exists, and a setpoint row never shares its label with an observed row: Requested and observed frequency side by side | Hz | setpoint; output AnalyserNode | observed: peak bin with parabolic interpolation | observed +-1 bin stated | uncalibrated | the observed value is the digital output's, never the acoustic one; a difference beyond one bin is shown, never hidden | tests/unit/generator-workspace.test.mjs | Requested 440 Hz | Analyser 440.1 Hz +-5.9 Hz (digital output)"
+- "The pull request carries a reviewer's verdict (it touches a guarded path; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+- "Wave 2: its chrome is Flowbite Pro markup adapted from the matching Pro component, lands after F002, adds no osc-* class token or legacy selector, and studio.css, studio-timeline.css, charts.css and tokens.css gain no selector or declaration; the domain drawing stays OSCILLA's own inside Pro cards (project.ui-uses-flowbite-pro, project.visual-identity-lock v2; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "scripts/size-report.mjs shows at most 4 KB gzip added, with the base and head figures in the pull request body, within the owner's dist budget of 1 200 000 B gzip (decision of 2026-10-29, about 355 KB of headroom at origin/main b67d1e58); the ceiling of this line is 25 KB gzip in all (Studio boxes 35 KB, signal generator 25 KB), stated in the milestone (project.single-file-deliverable)."
+- "tests/unit/generator-workspace.test.mjs, failing on the merge base: the route #m=generator is an app mode with a navigation entry; the Generator and the Source panel read and write one instrument state (an edit in one is the value in the other, with no second store); the field's parse and echo; polarity and channel routing on the recording mock context (an inverted channel's samples are the negation of the normal one's); URL round trip of every field; a link never raises the gain above DEFAULT_GAIN."
+- "The new surface is on Pro from its first commit: node --test tests/unit/ui-flowbite-pro.test.mjs passes with the surface listed as migrated and no pending surface added (project.ui-uses-flowbite-pro)."
+- "Definition of done, extends: the Source panel of S005-S012 and the pattern vocabulary of audio/patterns.js."
+- "Definition of done, cross-links: Playground to Generator ('Open in Generator') and back, the navigation entry, and the deep link #m=generator; each a row of tests/browser/integration-map.json once that map (synth line K075) is on main."
+- "Definition of done, dynamics: the Live card's scope and spectrum follow every field, with the setpoint and the observed digital output side by side."
+- "Definition of done, docs and routes: README.md's workspace list and route table, a feature record .ai/repo/features/generator.md, docs/GLOSSARY.md for setpoint and observed; tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: a check 'workspace' in tests/browser/generator.cjs opens the Generator from the navigation entry by pointer, by keyboard and by touch in a hasTouch context, types 'C#5' and waits with until() (deadline 'C#5 sounding', 5 s) for 554.37 Hz in the engine while Hold is pressed; opens the Playground and waits for the Source panel to show 554.37 Hz (one state); follows 'Open in Generator' and Back; opens #m=generator directly and waits for focus on its heading; sets the left channel inverted and waits for the stereo analyser's L and R correlation below -0.95; on the merge base the route does not exist. The check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs, assumes no sample rate and adds nothing to tests/browser/timing-baseline.json."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit and the completed evidence the release that carried it; E030's judge passes once E030 is on main."
+validation:
+- node --test tests/unit/generator-workspace.test.mjs tests/unit/url-state.test.mjs
+- node tests/browser/generator.cjs --only workspace
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

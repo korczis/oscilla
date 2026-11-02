@@ -1,0 +1,21 @@
+id: Q035
+milestone: M088
+title: "Owner decision: what the embedded Studio may edit, and whether the Sequencer keeps a second strip"
+slug: owner-decision-what-the-embedded-studio-may-edit-and-whether
+priority: p2
+profile: routine
+owner: repository owner
+objective: "Two parts. (1) Editing in the embedded Studio: (a) select, play, open in Studio, face parameters and clip move with a visible hint; adding, deleting, wiring and moving boxes only in the full Studio, each stating so; (b) full editing in the embedded view; (c) read-only. (2) The Sequencer workspace stacks the pattern sequencer and the embedded Studio's clip strip: (a) keep the cockpit, drop the stacked strip, add 'Open this sequence in Studio'; (b) remove the embedded Studio from the Sequencer; (c) keep both. The plan recommends (1a) and (2a): the summary stays a summary that never edits by surprise, and the sequencer gains a path instead of a duplicate."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: \"the embedded Studio is ugly as hell\"; components in general must be generic, linkable, traceable, composable, unified, documented, dynamic, generated and interlinked; \"everything must be interlinked with everything\"; improve the main page and the first experience, deploy often. The owner's evolution prompt pack (MASTER, P02, P04, P06) binds it: the dark technical cockpit is locked, shared primitives only where duplication is proven, no new framework, generated docs only where deterministic, no decorative wires. Findings: the UI component inventory of 2026-10-29 (D1-D14 duplication, U1-U15 on the embedded Studio, measured on origin/main b67d1e58, v3.13.0); design: the component-system design of 2026-10-29 (scratchpad components/design.md)."
+current_state: "Open on 2026-10-29. The plan's recommendation is not an answer. G010 and G013 name this issue in depends_on, so majordomus plan next does not hand them out before it is answered."
+scope:
+- .ai/repo/project/issues/Q035.yaml
+acceptance_criteria:
+- "The decision is recorded as evidence on this issue (covers owner_decision), either in the owner's words with date and source, or as a decision of a coordinating session under an owner delegation it quotes with its date, stating its reasoning and that the owner may override it; a worker without such a delegation never answers it."
+- The answer names an option for each part.
+validation:
+- manual
+evidence_required:
+- owner_decision
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

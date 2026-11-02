@@ -1,0 +1,34 @@
+id: T009
+milestone: M073
+serves:
+  - "v3-measure#readout-in-effect"
+  - "v3-measure#readout-labels"
+title: "A frozen microphone view shows one moment, and the traces state their averaging"
+slug: a-frozen-microphone-view-shows-one-moment-and-the-traces-sta
+priority: p2
+profile: implementation
+objective: "Truth-table rows MIC-06, SPC-09, MIC-08 (scratchpad p05/truth-table.md). Turning Freeze on runs measure() on the same reader frame before the chart freezes, so the dot, chip and readout describe the frozen trace. The Compare buttons carry titles from exported constants (Average: exponential power average, time constant 1 s; Peak hold: per-bin maximum since enabled, no decay; Freeze: holds the current frame), and the dialog says (beside the K030 provenance line with the smoothing of each node) both traces are smoothed by the browser analyser and that the generator trace is the digital output on its own full scale."
+why: "P05 audit of origin/main b67d1e58 (v3.13.0): Freeze freezes the trace on the click frame while the dot, chip and \"relative level\" readout come from the last 100 ms measure(): reproduced as a frozen trace maximum of -20.8 dB beside a dot and chip at -30.4 dB. The node smoothing (0.5 microphone, 0.55 output), the 1 s Average time constant and the different references of the two traces are stated nowhere in the UI (open item docs/v3/audits-v383.md:112)."
+scope:
+  - "src/js/labs/mic-analyzer.js"
+  - "src/index.html"
+  - "docs/v3/audits-v383.md"
+  - "tests/unit/readout-in-effect-mic-freeze.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K030"
+acceptance_criteria:
+  - "Fail-first fixture: tests/unit/readout-in-effect-mic-freeze.test.mjs: a fake reader whose level changes between frames; after freeze, chart.setPeak receives the interpolated peak of the frozen buffer (within the 0.09 dB bound peak-detector.js documents), not the earlier tick. A copy test reads the titles from AVERAGE_TAU_S and the smoothing constants. Fails on the merge base."
+  - "Negative cases, each asserted: Unfrozen live readout cadence (100 ms) unchanged; a steady tone still agrees within 0.5 dB; peak-hold behaviour unchanged."
+  - "Revertible on its own: Revert: one call order in the toolbar handler and copy."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "Any new visible element follows the Flowbite Pro components and the locked tokens (project.ui-uses-flowbite-pro, project.visual-identity-lock); npm run visual passes or the baseline change is declared."
+  - "tests/README.md has a row for each new test; this issue does not edit docs/CLAIMS.yaml or the intent (T027 does)."
+validation:
+  - "npm test"
+  - "npm run verify"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

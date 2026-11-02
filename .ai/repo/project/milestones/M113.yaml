@@ -1,0 +1,18 @@
+id: M113
+title: "Parameters and controls, wave 2: the measured modulation dot and the parameter census"
+slug: parameters-and-controls-wave-2-the-measured-modulation-dot-and
+order: 97
+priority: p2
+problem: "A dot 'read from the runtime' would read AudioParam.value, which excludes modulation (measured in the three gate browsers); nothing proves that every parameter is shown and every continuous control declared."
+outcome: "A modulated control shows a dot measured from its modulation signal, or none; the census proves every parameter shown and every continuous control declared and conforming, with an empty allowance."
+acceptance_criteria:
+- "N006, N009 are done with their evidence; npm run release-gate passes at the last one."
+validation:
+- npm run release-gate
+evidence_required:
+- milestone_verified
+risks:
+- N006 touches the runtime and engine (guarded); the tap cap of four bounds its cost.
+- "N009 waits on G019 and PACK 03's census (#280)."
+created_at: '2026-10-29'
+updated_at: '2026-10-30'

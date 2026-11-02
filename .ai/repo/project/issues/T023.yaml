@@ -1,0 +1,32 @@
+id: T023
+milestone: M073
+serves:
+  - "v3-measure#readout-in-effect"
+title: "Studio says when it plays a lower frequency than the one stored"
+slug: studio-says-when-it-plays-a-lower-frequency-than-the-one-sto
+priority: p2
+profile: implementation
+objective: "Truth-table rows LAB-15 (scratchpad p05/truth-table.md). The runtime emits a structured frequency-limited diagnostic (ADR 0039 shape) for each clamped parameter and limited edge with stored, played, safeMaximum and sampleRate, returned from apply and kept in debugInfo().diagnostics; the Inspector field reads \"30.00 kHz, plays 22.80 kHz\" with a note; runtimeView stops claiming \"plays as edited\"; the code is listed in docs/v31/compiler.md."
+why: "P05 audit of origin/main b67d1e58 (v3.13.0): An Oscillator stored at 30000 Hz plays 22800 Hz on a 48 kHz context (0.95 x Nyquist, as audio-engine-discipline requires); the clamp is visible only in runtime.debugInfo().limitedParams, the Inspector shows \"30.00 kHz\" and runtimeView says \"plays as edited\"."
+scope:
+  - "src/js/studio/runtime.js"
+  - "src/js/studio/compiler.js"
+  - "src/js/ui/studio/inspector.js"
+  - "docs/v31/compiler.md"
+  - "tests/unit/readout-in-effect-studio-limits.test.mjs"
+  - "tests/README.md"
+  - "dist"
+acceptance_criteria:
+  - "Fail-first fixture: tests/unit/readout-in-effect-studio-limits.test.mjs: Oscillator 30000 Hz → Master at 44.1 and 48 kHz yields the diagnostic with played = sr / 2 x 0.95, a runtimeView diagnostic naming the node and a field note; a limited LFO edge and a static detune case. Fails on the merge base."
+  - "Negative cases, each asserted: 1000 Hz yields no diagnostic; a value exactly at safeMaximum yields none; the audio values are unchanged (v31-studio-compiler.test.mjs:740-750 passes)."
+  - "Revertible on its own: Revert: diagnostic emission and Inspector note; scheduling unchanged."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "The pull request touches a guarded path and carries a reviewer-written .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+  - "tests/README.md has a row for each new test; this issue does not edit docs/CLAIMS.yaml or the intent (T027 does)."
+validation:
+  - "npm test"
+  - "npm run verify"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

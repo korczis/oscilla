@@ -1,0 +1,45 @@
+id: K078
+milestone: M067
+serves:
+  - "connected-instrument#step-sequencer"
+  - "connected-instrument#modulation-everywhere"
+title: "Parameter locks and CV lanes that target any knob of any instrument"
+slug: parameter-locks-and-cv-lanes-that-target-any-knob-of-any-ins
+priority: p2
+profile: implementation
+objective: "Lands as feat(studio). A steps clip gains locks per step ({ '<node>.<param>': value }) and CV lanes (one value per step for a target parameter, own length for polymeter), compiled to setValueAtTime on that parameter at the step time under the transport's parameter ownership (runtime.setOwnedParams) as automation lanes are; the sequencer fields swing, probability and length are lane targets at step resolution, stated as such. In the grid, holding a step and turning a knob writes a lock (one history entry). Before: a step cannot change a parameter. After: locks and CV lanes per step. User-value tier 3 of 4 (synth-design.md section 17). Rollback: revert the pull request; a document with a steps (with locks) clip is then refused by the import pipeline with its sentence, so after a release the clip kind stays and the editor is removed instead. Merged plan of the component follow-up (2026-10-30): The lock gesture and its validation are W009's."
+why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
+scope:
+  - "src/js/studio/schema.js"
+  - "src/js/studio/timeline.js"
+  - "src/js/studio/timeline-compiler.js"
+  - "src/js/studio/transport.js"
+  - "src/js/ui/synth"
+  - "tests/browser/instrument-dsp.cjs"
+  - "tests/unit/studio-steps-locks.test.mjs"
+  - "tests/browser/steps.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K069"
+  - "K076"
+  - "W009"
+acceptance_criteria:
+  - "tests/unit/studio-steps-locks.test.mjs, failing on the merge base, asserts on StudioFakeContext (tests/unit/sequencer-fake-audio.mjs) the scheduled calls, times, ramps and node census; tests/browser/instrument-dsp.cjs, rendering a real OfflineAudioContext in Chromium, Firefox and WebKit at each context's own rate (in the style of tests/browser/dsp.cjs) and failing on the merge base, checks the figures: a lock on step 5 sets the cutoff at step 5's frame and the base value returns at step 6; a CV lane of length 3 against a pattern of 4 realigns every 12 steps; a lock on a parameter an automation lane owns is refused with a sentence."
+  - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: a lock on a parameter an automation lane owns; a lane longer than 64."
+  - "A browser check in tests/browser/steps.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: a lock written in the Synth grid shows in the Studio clip detail and on the knob of the locked step. Real-time: while playing, the locked parameter's runtime value changes at the step, each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: a lock is written by holding a step (pointer, keyboard Shift+Enter, touch long-press) and turning a knob; the locked step's accessible name lists its locks. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Every edit is one undoable dispatch through the one Studio store (a continuous gesture is one history entry, undo and redo restore the exact serialized model) and the model holds plain data only (project.studio-model-is-canonical); every connection goes through canConnect and full-model validation, and a refusal shows the validator's sentence and leaves model, history and runtime unchanged (project.typed-ports, project.no-silent-feedback)."
+  - "Every node it plays is built by an engine adapter with track()/source() accounting, all timing is on the audio clock (no timer or rAF times audio), envelopes are click-free, frequencies stay below 0.95 x Nyquist of the running context, the peak stays at or below the output ceiling and the engine node census is 0 after stop (project.audio-engine-discipline v2)."
+  - "Every string it adds passes tests/unit/instrument-wording.test.mjs (added by K059): no product, brand or model name, no analog-modelling or vintage claim, and every approximation it makes labelled where it is shown (project.no-fake-science)."
+  - "The pull request carries a reviewer's verdict (src/js/studio is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "scripts/size-report.mjs shows at most 3 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of the line's figures stays within the cap Q023 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/studio-steps-locks.test.mjs"
+  - "node tests/browser/steps.cjs"
+  - "node tests/browser/instrument-dsp.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-30

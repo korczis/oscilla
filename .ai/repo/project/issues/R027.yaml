@@ -1,0 +1,43 @@
+id: R027
+milestone: M011
+serves:
+  - "release-provenance#majordomus-knows-the-product"
+title: "The CI knowledge job pins Majordomus 1.0.0-alpha.9, the latest release"
+slug: ci-pins-majordomus-1-0-0-alpha-9
+priority: p1
+profile: implementation
+objective: "Owner order 2026-10-29: 'must use latest majordomus.dev'. The CI knowledge job pins MJ_VERSION 1.0.0-alpha.1 while the newest release is v1.0.0-alpha.9 (prerelease, 2026-10-28) and the machine launcher runs 1.0.0-alpha.8, so the layer is judged by a tool eight pre-releases old. Move MJ_VERSION and MJ_SHA256 together to 1.0.0-alpha.9 (the x86_64-unknown-linux-gnu digest of the release's SHA256SUMS and its release record), vendor the 1.0.0-alpha.9 standard rules (majordomus.deployment-contract v1 to v2), regenerate the projections, and re-capture the doctor lines tests/unit/ci-knowledge-job.test.mjs holds under the new version. Rule project.majordomus-layer-current, steps 1 to 3; the machine-wide launcher flip (step 4) stays the owner's."
+why: "CI and the git hooks must judge the .ai layer with the same, current Majordomus; a pin that lags the release lets the layer drift from what the tool now requires."
+scope:
+  - ".github/workflows/ci.yml"
+  - ".ai/repo/rules/vendor/majordomus"
+  - "tests/unit/ci-knowledge-job.test.mjs"
+  - "AGENTS.md"
+  - "CLAUDE.md"
+  - "GEMINI.md"
+depends_on: []
+acceptance_criteria:
+  - "MJ_VERSION is 1.0.0-alpha.9 and MJ_SHA256 equals the x86_64-unknown-linux-gnu sha256 of the v1.0.0-alpha.9 SHA256SUMS; the knowledge job's name and comment name the same version; the job passes in CI."
+  - "majordomus doctor reports 0 failures on the branch under both 1.0.0-alpha.9 and 1.0.0-alpha.8, and the vendored standard rules show no difference against 1.0.0-alpha.9 (majordomus rules vendor diff)."
+  - "CAPTURED_WITH in tests/unit/ci-knowledge-job.test.mjs is 1.0.0-alpha.9, and the lines it holds equal what 1.0.0-alpha.9 doctor --json prints for a clone without hooks and without the knowledge: block."
+  - "The pull request carries a review verdict (.github/ is guarded)."
+validation:
+  - "npm test"
+  - "majordomus doctor"
+  - "majordomus plan validate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-30T16:07:27Z
+started_at: 2026-10-30T16:07:04Z
+started_event: sha256:f5e76381ccaf8850f8b9d487c3339926ef5caa53b7acc01c171033f257006bc4
+completed_at: 2026-10-30T16:07:27Z
+completed_event: sha256:ec8460d4efe4ba1f5d9eea0ed175d61569fb3c938a5ae02c116855ef49757ee5
+evidence:
+  - covers: verified
+    type: ci
+    command: "CI run 41070402575 on #291 head fc89ebc1; node scripts/review-verdict.mjs --pr 291"
+    result: "All checks green incl. the knowledge job on majordomus 1.0.0-alpha.9 and the browser gates; review verdict .ai/repo/reviews/291.yaml (merge, f3) accepted; landed as e872c444; machine launcher runs 1.0.0-alpha.9"
+    artifact: ".ai/repo/reviews/291.yaml"
+    commit: e872c44489bd66ecfd8a6b58a0dd868270da3cf0
+    recorded_at: 2026-10-30T16:07:19Z

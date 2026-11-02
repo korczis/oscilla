@@ -25,6 +25,7 @@ const os = require('os');
 
 const args = process.argv.slice(2);
 const suite = require('./lib/suite.cjs');
+const { until } = require('./lib/wait.cjs');
 // This file is also loaded as a module (instrument, LAUNCH); only the entry script opens a run.
 const RUN = require.main === module
   ? suite.open({ name: 'engine-v1port',
@@ -46,12 +47,14 @@ import { makeAdsrEnvelope } from './audio/voice.js';
 import { applyAdsr, releaseAt } from './audio/envelope.js';
 import { createFilterStage } from './audio/filters.js';
 import { buildPeriodicWave } from './audio/additive.js';
+import { createStereoRouter } from './audio/stereo.js';
 
 const engine = new AudioEngine();
 window.OSCILLA = { engine, buildPlan, planFreqAt, PATTERNS, BUILTIN_PRESETS };
 window.Alpine = Alpine;
 // V2 extension points, for the section after the V1 checks
-window.OSCILLA_V2 = { adsrEnvelope: makeAdsrEnvelope({ applyAdsr, releaseAt }), createFilterStage, buildPeriodicWave };
+window.OSCILLA_V2 = { adsrEnvelope: makeAdsrEnvelope({ applyAdsr, releaseAt }), createFilterStage, buildPeriodicWave,
+  createStereoRouter };
 
 // V1 isTypingTarget and the modal check, as the UI layer passes them (deps.keyGuard).
 function isTypingTarget(el) {
@@ -696,6 +699,347 @@ async function runBrowser() {
         JSON.stringify(r.nav));
     }
     check('no console problems (§80 pattern matrix)', problems.length === 0, problems.join(' | '));
+    await context.close();
+  }
+
+  // ------------------------------------------------------------------ §81 dual oscillator tests
+  // S081: section 81 of the V1 specification (sections 64-95). The dual voice plays 440 + 440,
+  // 441, 442 and 450 Hz in mono and in the stereo split, changes one oscillator while playing,
+  // silences one and then stops both, and restarts rapidly; every stop ends with 0 oscillators
+  // in the in-page census (window.__T, counted from createOscillator and the 'ended' events, not
+  // from the engine) and 0 in the engine's activeNodeCount, within release + 50 ms (tornDown).
+  // The stereo split runs on two paths: the V1 StereoPanners (this fixture's play passes no
+  // dualRouter) and the split the app builds (main.js v2PlayOptions: a createStereoRouter in mode
+  // 'split' with levels 1, and the phase lab's default B phase of 45 degrees).
+  // The engine has no per-oscillator stop: a dual voice is one voice of two oscillators, so
+  // "stopping one" is its level glided to 0, with both oscillators still accounted for until the
+  // voice stops. The signal is judged on the output tap: the RMS envelope (10 ms windows, 5 ms
+  // hop) beats when two different frequencies share a channel and is steady when a channel
+  // carries one sine or two equal ones; a channel that carries one sine has its frequency read
+  // from its zero crossings. Every wait is until() against a wall-clock deadline, and a case
+  // that times out fails by name and stops, so the cases after it still run.
+  section('§81 dual oscillator tests');
+  {
+    const { page, problems, context } = await openPage(browser);
+    await startAudio(page);
+    const RELEASE_S = 0.03;
+    const bound = RELEASE_S + 0.05;
+    const WAIT_MS = 15000;
+    const APP_PHASE_DEG = 45; // src/js/labs/phase-stereo.js default phaseDeg
+    const PATHS = [
+      { tag: 'mono', stereo: false, router: false },
+      { tag: 'stereo (panners)', stereo: true, router: false },
+      { tag: 'stereo (router split)', stereo: true, router: true },
+    ];
+    // engine.play as main.js wraps it, on this page only: with s81Router set, a dual plan gets
+    // the app's stereo router and B phase.
+    await app(page, (a, e, O, T, c) => {
+      const base = e.play.bind(e);
+      e.s81 = { base, router: false };
+      e.play = (plan, o = {}) => {
+        if (!e.s81.router || !plan || plan.type !== 'dual') return base(plan, o);
+        const cfg = { mode: 'split', panA: -1, panB: 1, levelA: 1, levelB: 1 };
+        const dualRouter = (ctx, track) => {
+          const r = window.OSCILLA_V2.createStereoRouter(ctx, cfg, { track });
+          return { inputA: r.inputA, inputB: r.inputB, output: r.output,
+            update() { r.update(cfg); }, dispose() { r.dispose(); } };
+        };
+        return base(plan, { ...o, dualRouter, dualPhaseDeg: c.phaseDeg });
+      };
+    }, { phaseDeg: APP_PHASE_DEG });
+    const census = () => app(page, (a, e, O, T) => {
+      const v = e.voice;
+      const live = !!(v && !v.releasing && !v.ended && v.plan && v.plan.type === 'dual');
+      return {
+        oscs: T.liveOscs(), created: T.oscs.length, voices: e.voices.size,
+        nodes: e.activeNodeCount, now: e.ctx.currentTime, rendered: T.recEnd(),
+        voice: live ? { t0: v.t0, a: v.plan.a.freq, b: v.plan.b.freq, stereo: v.plan.stereo,
+          levelB: v.plan.levelB, waveB: v.live.B.osc.type,
+          freqB: +v.live.B.osc.frequency.value.toFixed(3), router: !!v.live.router,
+          panners: !!(v.live.A.panner && v.live.B.panner) } : null,
+      };
+    });
+    const setup = (cfg) => app(page, (a, e, O, T, c) => {
+      a.setMode('dual');
+      a.release = c.releaseMs;
+      a.attack = 10;
+      a.safetyLimit = 5;
+      Object.assign(a.dual.a, { freq: c.fa, wave: 'sine', gain: 100, detune: 0 });
+      Object.assign(a.dual.b, { freq: c.fb, wave: 'sine', gain: 100, detune: 0 });
+      a.dual.levelA = 80;
+      a.dual.levelB = 80;
+      e.s81.router = c.router;
+      a.setStereo(c.stereo);
+      return a.source;
+    }, { ...cfg, releaseMs: RELEASE_S * 1000 });
+    // Oscillators the last stop left running (0 unless a teardown check failed): a start counts
+    // from there, so one leak fails its own case and not every case after it.
+    let idle = 0;
+    // Wait until a voice started after `before` sounds with both of its oscillators (and any
+    // voice it replaced has ended).
+    const sounding = (before, what) => until(async () => {
+      const c = await census();
+      return c.created >= before.created + 2 && c.oscs === idle + 2 && c.voice
+        ? { ...c, createdBefore: before.created } : null;
+    }, { ms: WAIT_MS, what: `${what}: both oscillators started` });
+    // PLAY, then wait until it sounds.
+    const startDual = async (what) => {
+      const before = await census();
+      await app(page, (a) => a.play('hold'));
+      return sounding(before, what);
+    };
+    const renderedTo = (t, what) => until(async () => (await census()).rendered >= t,
+      { ms: WAIT_MS, what: `${what}: the tap recorded up to ${t.toFixed(3)} s` });
+    // STOP, then the teardown probe of the prelude (gone: audio-clock poll, wall-bounded).
+    const stopBoth = async () => {
+      const g = await app(page, async (a, e) => {
+        const tS = e.ctx.currentTime;
+        a.stop();
+        return gone(tS, 0.5);
+      });
+      idle = g.oscs;
+      return g;
+    };
+    // One case: a wait that times out (or any throw) fails `${name}: runs to the end` by name,
+    // and the voice is stopped before the next case.
+    const runCase = async (name, body) => {
+      try {
+        await body();
+      } catch (err) {
+        check(`${name}: runs to the end`, false, String((err && err.message) || err));
+        try { await stopBoth(); } catch (_) { /* the next case's own checks judge the state */ }
+      }
+    };
+    const measure = (w) => app(page, (a, e, O, T, win) => {
+      const env = (ch) => {
+        const rms = [];
+        for (let t = win.t0; t + 0.01 <= win.t1; t += 0.005) rms.push(T.stats(t, t + 0.01, ch).rms);
+        const hi = Math.max(...rms);
+        return { rms: +T.stats(win.t0, win.t1, ch).rms.toFixed(5),
+          ratio: +(hi / Math.max(1e-9, Math.min(...rms))).toFixed(2), windows: rms.length };
+      };
+      // the frequency of a channel that carries one sine: upward zero crossings, interpolated
+      const hz = (x) => {
+        let first = -1;
+        let last = -1;
+        let periods = 0;
+        for (let i = 1; i < x.length; i++) {
+          if (x[i - 1] < 0 && x[i] >= 0) {
+            const t = i - 1 + -x[i - 1] / (x[i] - x[i - 1]);
+            if (first < 0) first = t; else { last = t; periods++; }
+          }
+        }
+        return periods ? +((periods * T.rec.sr) / (last - first)).toFixed(3) : 0;
+      };
+      const L = T.samples(win.t0, win.t1, 'L').data;
+      const R = T.samples(win.t0, win.t1, 'R').data;
+      let diff = 0;
+      let sum = 0;
+      const n = Math.min(L.length, R.length);
+      for (let i = 0; i < n; i++) { diff += (L[i] - R[i]) ** 2; sum += L[i] ** 2; }
+      const tones = {};
+      for (const f of win.tones || []) {
+        tones[`L${f}`] = +T.tone(win.t0, win.t1, f, 'L').toFixed(5);
+        tones[`R${f}`] = +T.tone(win.t0, win.t1, f, 'R').toFixed(5);
+      }
+      return { L: env('L'), R: env('R'), lrDiff: +Math.sqrt(diff / Math.max(1e-12, sum)).toFixed(6),
+        n, minN: Math.round(0.9 * (win.t1 - win.t0) * T.rec.sr), tones, hzL: hz(L), hzR: hz(R) };
+    }, w);
+    const BEAT = 4; // envelope max / min above which a channel beats
+    const STEADY = 1.25; // and below which it carries one sine (or two equal ones)
+    const HZ_TOL = 0.05; // zero-crossing frequency tolerance (a clean sine reads within 0.01 Hz)
+    const near = (x, f) => Math.abs(x - f) < HZ_TOL;
+    const onPath = (v, path) => v.stereo === path.stereo && v.router === path.router
+      && v.panners === !path.router;
+
+    // 440 + 440, 441, 442 and 450 Hz, mono and stereo split (both paths)
+    const level = {};
+    for (const path of PATHS) {
+      for (const fb of [440, 441, 442, 450]) {
+        const name = `§81 ${path.tag} 440 + ${fb} Hz`;
+        await runCase(name, async () => {
+          await setup({ fa: 440, fb, ...path });
+          const s = await startDual(name);
+          // the beat envelope's first null is 0.5 / (fb - 440) s after the start (0.5 s at 1 Hz)
+          await renderedTo(s.voice.t0 + 0.9, name);
+          const m = await measure({ t0: s.voice.t0 + 0.1, t1: s.voice.t0 + 0.9 });
+          const g = await stopBoth();
+          level[`${path.tag}${fb}`] = m.L.rms;
+          check(`${name}: one voice of two oscillators at the set frequencies, on this path`,
+            s.voices === 1 && s.oscs === 2 && s.voice.a === 440 && s.voice.b === fb
+              && onPath(s.voice, path), JSON.stringify(s));
+          const enough = m.n >= m.minN && m.L.rms > 0.01 && m.R.rms > 0.01;
+          if (!path.stereo) {
+            const beats = fb === 440 ? m.L.ratio < STEADY : m.L.ratio > BEAT;
+            check(`${name}: both channels carry the same mix, ${fb === 440 ? 'steady' : 'beating'}`,
+              enough && m.lrDiff < 1e-3 && beats, JSON.stringify(m));
+          } else {
+            check(`${name}: each channel carries one oscillator (no beat in either)`,
+              enough && m.L.ratio < STEADY && m.R.ratio < STEADY, JSON.stringify(m));
+            check(`${name}: the left channel plays A at 440 Hz and the right B at ${fb} Hz`,
+              enough && near(m.hzL, 440) && near(m.hzR, fb), JSON.stringify(m));
+          }
+          check(`${name}: stop leaves 0 census oscillators and 0 engine nodes`, tornDown(g, bound),
+            JSON.stringify(g));
+        });
+      }
+    }
+    // Two equal sines in phase add up. A StereoPanner passes a mono input at pan 0 with
+    // cos(pi/4) to each channel and at pan -1 whole to the left (the equal-power law of Web
+    // Audio), and the router's split passes A whole to the left, so the split's left channel
+    // (A alone) is 1 / (2 cos(pi/4)) = 1 / sqrt(2) of the mono mix of both.
+    for (const path of PATHS.filter((p) => p.stereo)) {
+      const ratio = level[`${path.tag}440`] / Math.max(1e-9, level.mono440);
+      check(`§81 ${path.tag} 440 + 440 Hz: the split's left channel carries one oscillator of `
+        + 'the mono mix (1 / sqrt 2 of it)', Math.abs(ratio - Math.SQRT1_2) < 0.05,
+      JSON.stringify({ ratio, ...level }));
+    }
+
+    for (const path of PATHS) {
+      const tag = `§81 ${path.tag}`;
+      const ch = path.stereo ? 'R' : 'L'; // the channel B is heard on
+      // change one oscillator while playing: B 441 -> 450 Hz glides in place, then its waveform
+      {
+        const name = `${tag} change B while playing`;
+        await runCase(name, async () => {
+          await setup({ fa: 440, fb: 441, ...path });
+          const s = await startDual(name);
+          await renderedTo(s.voice.t0 + 0.3, name);
+          const tChange = await app(page, (a, e) => {
+            a.dual.b.freq = 450;
+            return e.ctx.currentTime;
+          });
+          // the plan says 450 Hz and B's oscillator has glided there
+          const c = await until(async () => {
+            const x = await census();
+            return x.voice && x.voice.b === 450 && Math.abs(x.voice.freqB - 450) < 0.5 ? x : null;
+          }, { ms: WAIT_MS, what: `${name}: B's oscillator runs at 450 Hz` });
+          await renderedTo(tChange + 0.75, name);
+          const tones = [440, 441, 450, 1350];
+          const m = await measure({ t0: tChange + 0.15, t1: tChange + 0.75, tones });
+          const tWave = await app(page, (a, e) => {
+            a.dual.b.wave = 'triangle';
+            return e.ctx.currentTime;
+          });
+          const w = await until(async () => {
+            const x = await census();
+            return x.voice && x.voice.waveB === 'triangle' ? x : null;
+          }, { ms: WAIT_MS, what: `${name}: B switched to triangle` });
+          await renderedTo(tWave + 0.75, name);
+          const mw = await measure({ t0: tWave + 0.15, t1: tWave + 0.75, tones });
+          const g = await stopBoth();
+          check(`${name}: frequency and waveform change in place (no new oscillator, A kept)`,
+            c.created === s.created && w.created === s.created && c.oscs === 2 && w.oscs === 2
+              && c.voices === 1 && c.voice.a === 440, JSON.stringify({ s, c, w }));
+          const heard = path.stereo
+            ? m.L.ratio < STEADY && m.R.ratio < STEADY && near(m.hzL, 440) && near(m.hzR, 450)
+              && m.tones.R450 > 10 * m.tones.R441 && m.tones.R450 > 10 * m.tones.R440
+            : m.L.ratio > BEAT && m.lrDiff < 1e-3 && m.tones.L450 > 0.01;
+          check(`${name}: the output follows the frequency (${path.stereo
+            ? 'right 450 Hz, left 440 Hz' : '10 Hz beat with a 450 Hz component'})`,
+          m.n >= m.minN && heard, JSON.stringify(m));
+          // a triangle's third harmonic is 1/9 of its fundamental; B's sine had none
+          const k = `${ch}1350`;
+          const f = `${ch}450`;
+          check(`${name}: the output follows the waveform (B's third harmonic, 1350 Hz, appears)`,
+            mw.n >= mw.minN && m.tones[k] < 0.01 * m.tones[f] && mw.tones[k] > 0.05 * mw.tones[f],
+            JSON.stringify({ sine: m.tones, triangle: mw.tones }));
+          check(`${name}: stop leaves 0 census oscillators and 0 engine nodes`, tornDown(g, bound),
+            JSON.stringify(g));
+        });
+      }
+      // stop one (B's level to 0), then both
+      {
+        const name = `${tag} B to level 0, then stop both`;
+        await runCase(name, async () => {
+          await setup({ fa: 440, fb: 442, ...path });
+          const s = await startDual(name);
+          await renderedTo(s.voice.t0 + 0.3, name);
+          const tMute = await app(page, (a, e) => {
+            a.dual.levelB = 0;
+            return e.ctx.currentTime;
+          });
+          const c = await until(async () => {
+            const x = await census();
+            return x.voice && x.voice.levelB === 0 ? x : null;
+          }, { ms: WAIT_MS, what: `${name}: the voice plays B at level 0` });
+          // the level glides with a 15 ms time constant: 0.2 s is more than 13 of them
+          await renderedTo(tMute + 0.8, name);
+          const m = await measure({ t0: tMute + 0.2, t1: tMute + 0.8 });
+          const g = await stopBoth();
+          check(`${name}: B at level 0 keeps the voice and both oscillators accounted for (no `
+            + 'per-oscillator stop)', c.created === s.created && c.oscs === 2 && c.voices === 1,
+          JSON.stringify({ s, c }));
+          const heard = path.stereo
+            ? m.L.rms > 0.01 && m.L.ratio < STEADY && near(m.hzL, 440) && m.R.rms < 1e-4
+            : m.L.rms > 0.01 && m.L.ratio < STEADY && m.lrDiff < 1e-3;
+          const only = path.stereo ? 'right channel silent' : 'the beat is gone';
+          check(`${name}: only A sounds (${only})`, m.n >= m.minN && heard, JSON.stringify(m));
+          check(`${name}: stopping both leaves 0 census oscillators and 0 engine nodes`,
+            tornDown(g, bound), JSON.stringify(g));
+        });
+      }
+      // rapid restart: eight start/stop pairs, eight starts back to back, a restart mid-tone
+      {
+        const name = `${tag} rapid restart`;
+        await runCase(name, async () => {
+          await setup({ fa: 440, fb: 450, ...path });
+          const pairs = await app(page, async (a, e) => {
+            for (let i = 0; i < 8; i++) {
+              a.play('hold');
+              a.stop();
+            }
+            const tS = e.ctx.currentTime;
+            return gone(tS, 0.5);
+          });
+          idle = pairs.oscs;
+          check(`${name}: eight start/stop pairs leave 0 census oscillators and 0 engine nodes`,
+            tornDown(pairs, bound), JSON.stringify(pairs));
+          const before = await census();
+          const burst = await app(page, (a, e, O, T) => {
+            for (let i = 0; i < 8; i++) a.play('hold');
+            const vs = [...e.voices];
+            return { voices: vs.length, releasing: vs.filter((v) => v.releasing && !v.ended).length,
+              oscs: T.liveOscs() };
+          });
+          const s = await sounding(before, `${name} (burst)`);
+          const g1 = await stopBoth();
+          // In one task each start replaces the voice before it, so the replaced voices are
+          // releasing when the burst returns; the census then falls back to the last one.
+          check(`${name}: eight back-to-back starts replace the voice each time (the replaced `
+            + 'ones releasing, then ended: one voice of two oscillators)',
+          burst.voices >= 2 && burst.releasing === burst.voices - 1 && s.voices === 1
+            && s.oscs === 2 && s.created === before.created + 16 && s.voice !== null,
+          JSON.stringify({ burst, s }));
+          check(`${name}: stop after the burst leaves 0 census oscillators and 0 engine nodes`,
+            tornDown(g1, bound), JSON.stringify(g1));
+          const first = await startDual(`${name} (first)`);
+          await renderedTo(first.voice.t0 + 0.2, name);
+          const before2 = await census();
+          const atRestart = await app(page, (a, e) => {
+            a.play('hold');
+            const vs = [...e.voices];
+            const releasing = vs.filter((v) => v.releasing && !v.ended).length;
+            return { voices: vs.length, releasing };
+          });
+          const second = await sounding(before2, `${name} (restart)`);
+          const g2 = await stopBoth();
+          check(`${name}: a restart while sounding replaces the voice (the old one releasing)`,
+            atRestart.voices === 2 && atRestart.releasing === 1 && second.voice.t0 > first.voice.t0
+              && second.voices === 1 && second.oscs === 2,
+            JSON.stringify({ first, atRestart, second }));
+          check(`${name}: stop after the restart leaves 0 census oscillators and 0 engine nodes`,
+            tornDown(g2, bound), JSON.stringify(g2));
+        });
+      }
+    }
+    await app(page, (a, e) => {
+      e.play = e.s81.base;
+      a.setStereo(false);
+      a.setMode('playground');
+    });
+    check('no console problems (§81 dual oscillators)', problems.length === 0,
+      problems.join(' | '));
     await context.close();
   }
 
@@ -1357,6 +1701,118 @@ async function runBrowser() {
   }
 
   // ------------------------------------------------------------------ V2 extension points
+  // ------------------------------------------------------------------ C011 limit-tightens-live
+  // Not part of V1's suite. Finding dead-controls-4: the Device & Limits hard limit lowered
+  // while a trigger sounds reaches that voice (instrument.setSafetyLimit -> engine.tightenLimit).
+  // A 5000 ms trigger under the 5 s limit; about 100 ms in (polled on the audio clock against a
+  // wall deadline) the limit drops to 0.5 s and is raised to 2 s again in the same task. The
+  // voice must end where a fresh note at 0.5 s ends (t0 + 0.5 s, its release inside the limit,
+  // from a render-quantum boundary; review R-1 of #303), its oscillators stop within 50 ms of
+  // t0 + 0.5 s on the audio clock, not be extended by the raise, be silent on the output tap
+  // after its release, release without a click and leave nothing behind. A second round uses
+  // the longest release (3 s) and a drop from 5 s to 2 s, which must still shorten the note.
+  section('limit-tightens-live: a lower hard limit shortens the sounding trigger (C011)');
+  {
+    const { page, problems, context } = await openPage(browser);
+    await startAudio(page);
+    const s0 = await app(page, (a, e, O, T) => {
+      a.setPattern('tone'); a.setWaveform('sine'); a.setFrequency(220);
+      a.release = 30;
+      a.duration = 5000;
+      a.setSafetyLimit('5');
+      const n0 = T.oscs.length;
+      a.trigger();
+      const v = e.voice;
+      return { n0, t0: v.t0, release: v.release, endTime: v.endTime, limit: a.safetyLimit,
+        gain: a.gainLevel, sr: e.ctx.sampleRate };
+    });
+    await until(() => app(page, (a, e, O, T, t) => e.ctx.currentTime >= t, s0.t0 + 0.1),
+      { ms: 15000, what: 'limit-tightens-live: 100 ms of the 5 s trigger rendered' });
+    const ch = await app(page, (a, e) => {
+      const v = e.voice;
+      const tReq = e.ctx.currentTime;
+      a.setSafetyLimit('0.5');
+      const lowered = v.endTime;
+      a.setSafetyLimit('2');
+      return { tReq, lowered, raised: v.endTime, limit: a.safetyLimit, ended: v.ended };
+    });
+    const done = await until(() => app(page, (a, e, O, T) => (T.liveOscs() === 0
+      && e.voices.size === 0 && e.activeNodeCount === 0 ? { now: e.ctx.currentTime } : null)),
+    { ms: 15000, what: 'limit-tightens-live: the shortened trigger torn down' })
+      .catch((err) => ({ error: err.message }));
+    const r = await app(page, async (a, e, O, T, arg) => {
+      const recs = T.oscs.slice(arg.n0).filter((x) => x.started);
+      const stops = recs.map((x) => (x.stopEff == null ? Infinity : x.stopEff - arg.t0));
+      const relEnd = arg.t0 + 0.5;
+      await T.waitRec(relEnd + 0.25);
+      const slope = (2 * Math.PI * 220 * arg.gain) / arg.sr;
+      return {
+        oscs: recs.length, stopAt: stops.length ? Math.max(...stops) : null,
+        before: T.stats(arg.t0 + 0.2, arg.t0 + 0.45).peak,
+        after: T.stats(relEnd + 0.03, relEnd + 0.25).peak,
+        clickRatio: +(T.stats(arg.t0 + 0.4, relEnd + 0.03).maxStep / slope).toFixed(2),
+        nodes: e.activeNodeCount, voices: e.voices.size, live: T.liveOscs(),
+        playing: a.playing, status: a.status,
+      };
+    }, s0);
+    const bound = 0.5 + 0.05;
+    const q = 128 / s0.sr;
+    check('limit-tightens-live: the 5 s trigger started under the 5 s limit',
+      s0.limit === 5 && s0.endTime - s0.t0 > 4.9, JSON.stringify(s0));
+    check('limit-tightens-live: lowering to 0.5 s moves the end to t0 + 0.5 s, release inside',
+      !ch.ended && ch.limit === 2 && ch.lowered <= s0.t0 + 0.51 + 1e-6
+        && ch.lowered > s0.t0 + 0.51 - q - 1e-6, JSON.stringify({ ...ch, t0: s0.t0 }));
+    check('limit-tightens-live: raising the limit again does not extend the voice',
+      ch.raised === ch.lowered, JSON.stringify(ch));
+    check('limit-tightens-live: oscillators stop within 50 ms of t0 + 0.5 s (audio clock)',
+      r.oscs >= 1 && r.stopAt > 0.49 && r.stopAt <= bound, JSON.stringify({ ...r, bound }));
+    check('limit-tightens-live: it sounded until the limit and is silent after its release',
+      r.before > 0.01 && r.after < 1e-4, JSON.stringify(r));
+    check('limit-tightens-live: the release is click-free (step ratio < 3)', r.clickRatio < 3,
+      JSON.stringify(r));
+    check('limit-tightens-live: 0 oscillators, nodes and voices afterwards, STOPPED',
+      !done.error && r.live === 0 && r.nodes === 0 && r.voices === 0 && !r.playing,
+      JSON.stringify({ done, r }));
+    check('no console problems (limit-tightens-live)', problems.length === 0, problems.join(' | '));
+    await context.close();
+  }
+  {
+    // The longest release (3 s, the UI maximum) and a drop smaller than it: 5 s -> 2 s.
+    const { page, problems, context } = await openPage(browser);
+    await startAudio(page);
+    const s0 = await app(page, (a, e) => {
+      a.setPattern('tone'); a.setWaveform('sine'); a.setFrequency(220);
+      a.release = 3000;
+      a.duration = 5000;
+      a.setSafetyLimit('5');
+      a.trigger();
+      const v = e.voice;
+      return { t0: v.t0, release: v.release, endTime: v.endTime, sr: e.ctx.sampleRate };
+    });
+    await until(() => app(page, (a, e, O, T, t) => e.ctx.currentTime >= t, s0.t0 + 0.1),
+      { ms: 15000, what: 'limit-tightens-live (3 s release): 100 ms rendered' });
+    const ch = await app(page, (a, e) => {
+      const v = e.voice;
+      a.setSafetyLimit('2');
+      return { lowered: v.endTime, ended: v.ended, limit: a.safetyLimit };
+    });
+    const q = 128 / s0.sr;
+    check('limit-tightens-live: with a 3 s release, 5 -> 2 s ends the note at t0 + 2 s',
+      s0.release === 3 && s0.endTime - s0.t0 > 4.9 && !ch.ended && ch.limit === 2
+        && ch.lowered <= s0.t0 + 2.01 + 1e-6 && ch.lowered > s0.t0 + 2.01 - q - 1e-6,
+      JSON.stringify({ s0, ch }));
+    await app(page, (a) => { a.stopNow(); });
+    const done = await until(() => app(page, (a, e, O, T) => (T.liveOscs() === 0
+      && e.voices.size === 0 && e.activeNodeCount === 0 ? true : null)),
+    { ms: 15000, what: 'limit-tightens-live (3 s release): torn down after stop' })
+      .catch((err) => ({ error: err.message }));
+    check('limit-tightens-live (3 s release): 0 oscillators, nodes and voices after stop',
+      done === true, JSON.stringify(done));
+    check('no console problems (limit-tightens-live, 3 s release)', problems.length === 0,
+      problems.join(' | '));
+    await context.close();
+  }
+
   // Not part of V1's suite: the V2 hooks on the ported engine, measured the same way (click
   // ratio from the output tap, oscillator accounting).
   section('V2 extension points on the ported engine');

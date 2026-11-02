@@ -1,0 +1,38 @@
+id: W009
+milestone: M102
+serves:
+- "instrument-kinds#sequencer-surfaces"
+title: "Parameter locks on the step grid: hold a step and turn a knob, Shift+Enter, long-press; each lock checked by its parameter's descriptor"
+slug: parameter-locks-on-the-step-grid-hold-a-step-and-turn-a-knob
+priority: p2
+profile: implementation
+objective: "Lands as feat(studio-ui). The step grid kind gains locks: a held step (pointer hold, Shift+Enter, touch long-press) opens its lock row, where any lockable parameter of the target (its section 79 descriptor through the params-controls knob) writes steps[i].locks['<node>.<param>'] as one CLIP_UPDATE, the value first checked by the parameter's validateParamValue; a lock mark on the step; the step's accessible name lists its locks; Delete in the row clears a lock. The lock data and its playback are K078's. Model first: no module on main shows this kind yet, so the slice ships the model, the view model, the view and the contract test, and no runtime module imports it (esbuild leaves it out of dist, 0 B); its browser, interactivity and deployed criteria are carried by K078, which mounts it. The plan notes this on the consumer when the drafts land. Before: no lock interaction exists. After: one lock interaction for every grid. Negative cases: a value the parameter refuses (no action, its sentence); a lock on a parameter an automation lane owns (K078's refusal, stated); a lock on a step that is off. Rollback: revert. Merged plan of the component follow-up (2026-10-30): K078 depends on W009; the hold-and-turn lock gesture is this slice's."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs, knowledge and interlinking, and add more; add p5.js, WebGL and interactivity, and deploy; a full DAW, a full sequencer and a full piano, everything interlinked, clickable, parameterized and joined; knobs, sliders and control panels done one generic way, integrated with Majordomus; the landing easy to use, easy to extend and open to hack; mobile first. The architecture still binds: one AudioEngine, the Studio model canonical, typed ports, one offline file under the 1.2 MB gzip budget, the cockpit identity, no fake science, Flowbite Pro (ADR 0061). Design: the instrument-kinds design of 2026-10-29 (scratchpad components-followup/components-new.md), on the component-system design (G001-G019) and the synth and studio-siggen drafts of the same day, facts checked against origin/main cdda563c."
+scope:
+- src/js/ui/kinds/step-grid.js
+- src/js/ui/kinds/step-grid-model.js
+- src/js/ui/catalog/kinds/step-grid.js
+- tests/unit/ui-kind-step-grid-locks.test.mjs
+- tests/README.md
+depends_on:
+- W008
+- N003
+acceptance_criteria:
+- "tests/unit/ui-kind-step-grid-locks.test.mjs fails on the merge base: on a fixture shaped as K078's payload, each lock gesture builds one CLIP_UPDATE; a refused value builds none and returns the descriptor's sentence; the accessible name lists the locks; clearing restores the step's name."
+- "Negative cases, each asserted by the test: the three of the objective."
+- "Model first: no module on main shows this kind yet, so the slice ships the model, the view model, the view and the contract test, and no runtime module imports it (esbuild leaves it out of dist, 0 B); its browser, interactivity and deployed criteria are carried by K078, which mounts it. The plan notes this on the consumer when the drafts land."
+- "Definition of done, extends: W008, the section 79 descriptor and N003's control interface (the lock value is set on the parameter's own N003 knob or field; the grid declares no continuous control of its own); interlinks: a locked step jumps to the locked parameter's knob (declared, walked once K078 mounts it)."
+- "Definition of done, docs, menus and routes: the kind's declaration names its docs, links and tests; docs/ui-catalog.md (G014) lists it; the Keyboard shortcuts dialog lists its keys; tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Its trace entry in scripts/ui-catalog/trace/kinds.mjs names the intent criterion, this issue, its rules, ADRs and tests, each resolved by the trace check, for the Majordomus knowledge projection."
+- "The kind's modules pass W001's static scan: no import of src/js/studio/actions.js, a store, sources.js or a lab module; no dispatch or owner writer called; no AudioContext, AudioNode or worklet created (project.audio-engine-discipline v2: one AudioEngine); no requestAnimationFrame, setInterval or setTimeout outside src/js/charts/frame-loop.js; no allocation in a frame callback (1000 ticks keep the same typed arrays) and frameSubscriberCount() returns to its value after destroy()."
+- "It adds no markup, class token, selector or inline style, so it may land before F001; tests/unit/ui-flowbite-pro-baseline.json stays equal (node scripts/ui-flowbite-pro-record.mjs --check; node --test tests/unit/ui-flowbite-pro.test.mjs) (project.ui-uses-flowbite-pro)."
+- "No input path of the build gains a components, widgets, ui-kit or design-system segment (the COMPONENT_LIBRARY check of scripts/ui-flowbite-pro-measure.mjs): declarations live in src/js/ui/catalog/kinds, views in src/js/ui/kinds."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat change it carries a unit test that fails on the merge base (project.fail-first)."
+- "scripts/size-report.mjs shows at most 2 KB gzip added, compiled CSS included, with the base and head figures in the pull request body, inside the component line's cap Q037 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/ui-kind-step-grid-locks.test.mjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-30'

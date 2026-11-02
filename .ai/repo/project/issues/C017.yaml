@@ -1,0 +1,35 @@
+id: C017
+milestone: M090
+serves:
+  - "coherent-state#saved-state-is-honest"
+title: "Config import names every value it limited, and Reset refreshes the custom range fields"
+slug: config-import-names-every-value-it-limited-and-reset-refresh
+priority: p2
+profile: implementation
+objective: "Lands as fix(config). Findings persist-4 and persist-1. parseConfigImport accepts any filter frequency and Q above 0 and ADSR times from 0, promising the per-field validators 'skip or clamp them and report it'; applyImport then calls labs.filter.update and labs.envelope.update, which clamp silently, so a file with 21000 Hz / Q 50 and a=10 s / r=20 s applies 20000 Hz / Q 30 and 2 s / 5 s and toasts 'All settings were restored.' Compare after applying, because the filter's upper limit depends on the running sample rate: read labs.filter.config and labs.envelope.adsr back, collect { field, requested, applied } for each value that differs, return { issues, limited } from applyImport, and let importConfigText show a warning naming them ('filter Q limited to 30 (file: 50)'), separate from the 'invalid and kept at their previous setting' count; 'All settings were restored.' only when both are empty. resetDefaults restores customMin and customMax but leaves customMinText, customMaxText (shown as '2.50 kHz' and '5.00 kHz' for 100 Hz and 10 kHz) and a visible rangeError: recompute both texts with formatFrequency, as applyConfigTo does, and clear rangeError."
+why: "Owner brief OSCILLA PACK 03, 'One Instrument, One Coherent State' (2026-10-29): every control must provably reach its subsystem and every view that reflects it, and be covered by a test (owner: 'filters, sequencer, bpm and many other interactive knobs / sliders / control elements are not reflected / working / tested'). The findings named here were reproduced by an independent skeptic on a fresh export of origin/main b67d1e58 (v3.13.0)."
+scope:
+  - "src/js/main.js"
+  - "src/js/ui/config-file.js"
+  - "src/js/ui/workbench.js"
+  - "src/js/core/instrument.js"
+  - "src/js/labs/filter-lab.js"
+  - "src/js/labs/envelope.js"
+  - "tests/unit"
+  - "tests/browser/app.cjs"
+  - "tests/README.md"
+  - "dist"
+acceptance_criteria:
+  - "A unit test of the comparison helper: a file with filter 21000 Hz, Q 50 and ADSR a=10 s, r=20 s yields limited entries for filter.frequency, filter.Q, envelope.a and envelope.r with their applied values; it fails on the merge base."
+  - "Browser check `import-names-limits` in tests/browser/app.cjs: importing that file shows a warning naming the four limited fields and never 'All settings were restored.'; an in-range file still shows it."
+  - "A unit test: after custom bounds that raise a rangeError, resetDefaults leaves customMinText and customMaxText equal to formatFrequency of the restored bounds and rangeError empty; it fails on the merge base."
+  - "fail-first holds: the unit test or browser check named above fails on the merge base (project.fail-first)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named wall-clock deadline; tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node tests/browser/app.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

@@ -1,0 +1,35 @@
+id: T025
+milestone: M073
+serves:
+  - "v3-measure#readout-labels"
+title: "Studio analysis nodes say they display nothing yet, and their floor must lie below their ceiling"
+slug: studio-analysis-nodes-say-they-display-nothing-yet-and-their
+priority: p3
+profile: implementation
+objective: "Truth-table rows SPC-16 (scratchpad p05/truth-table.md). Until views exist (owner question in the plan README: wire them later), each node's help says it observes the signal and shows nothing in Studio yet, its status carries that reason, the view-only parameters are read-only with the reason, validate.js reports minDb ≥ maxDb, and the compiler doc and nodes.js comment are corrected."
+why: "P05 audit of origin/main b67d1e58 (v3.13.0): Spectrum, Spectrogram, Scope, Meter and RTA nodes build analysers that nothing reads; their help says \"Shows …\", status is ready, the Inspector offers editable FFT size, scale, floor, ceiling, time span and lowest frequency with no observable effect (project.no-inert-surfaces), and \"The floor must be below the ceiling\" is not validated. docs/v31/compiler.md:55 says a view binds createSpectrogram(canvas); none exists."
+scope:
+  - "src/js/studio/nodes/analysis.js"
+  - "src/js/studio/validate.js"
+  - "src/js/studio/adapters/nodes.js"
+  - "src/js/ui/studio/inspector.js"
+  - "docs/v31/compiler.md"
+  - "tests/unit/readout-labels-studio-analysis.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "T024"
+acceptance_criteria:
+  - "Fail-first fixture: tests/unit/readout-labels-studio-analysis.test.mjs: no analysis node help starts with \"Shows\"; a Spectrogram with minDb 0 and maxDb -10 yields a validation diagnostic. Fails on the merge base."
+  - "Negative cases, each asserted: Audio pass-through of the nodes unchanged; patches with these parameters round-trip byte-identically; other node help unchanged."
+  - "Revertible on its own: Revert: copy, status reason and one validation rule."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "The pull request touches a guarded path and carries a reviewer-written .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+  - "tests/README.md has a row for each new test; this issue does not edit docs/CLAIMS.yaml or the intent (T027 does)."
+validation:
+  - "npm test"
+  - "npm run verify"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

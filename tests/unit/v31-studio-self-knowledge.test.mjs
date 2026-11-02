@@ -30,18 +30,13 @@ import { STUDIO_IMPORT_LIMITS } from '../../src/js/studio/validate.js';
 import { STUDIO_HISTORY_LIMIT } from '../../src/js/studio/history.js';
 import { PASTE_OFFSET } from '../../src/js/studio/actions.js';
 import { PORT_TYPE_LIST } from '../../src/js/studio/ports.js';
+import { unquote } from './claims-parse.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (rel) => readFileSync(path.join(ROOT, rel), 'utf8');
 const exists = (rel) => existsSync(path.join(ROOT, rel));
 const list = (rel) => readdirSync(path.join(ROOT, rel)).sort();
 const norm = (s) => s.replace(/\s+/g, ' ');
-const unquote = (v) => {
-  const t = v.trim();
-  if (t.startsWith("'") && t.endsWith("'")) return t.slice(1, -1).replace(/''/g, "'");
-  if (t.startsWith('"') && t.endsWith('"')) return t.slice(1, -1);
-  return t;
-};
 
 /** The top-level scalars and flow lists of a Markdown record's front matter, and its body. */
 function record(rel) {

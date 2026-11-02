@@ -1,0 +1,42 @@
+id: K100
+milestone: M069
+serves:
+  - "connected-instrument#session-and-midi"
+title: "Record MIDI into clips, and MIDI output where the browser allows it"
+slug: record-midi-into-clips-and-midi-output-where-the-browser-all
+priority: p3
+profile: implementation
+objective: "Lands as feat(midi). MIDI in (V501) records into a notes clip quantised as stated; a midi-out node type (notes capability) sends notes to a MIDI output with timestamps mapped from the audio clock through src/js/audio/clock.js, its states following ADR 0058's table as amended, and the page states that output timing follows the browser's MIDI clock and its jitter is not measured here. Before: MIDI cannot be recorded into clips or sent out. After: MIDI record and output where permitted. User-value tier 4 of 4 (synth-design.md section 17). Rollback: revert the pull request; a document saved with the new node type is then refused by the import pipeline with its unknown-type sentence, never dropped silently, so a revert after a release ships it keeps the registry entry and removes only the UI."
+why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
+scope:
+  - "src/js/midi"
+  - "src/js/studio/nodes"
+  - "src/js/studio/registry.js"
+  - "src/js/studio/adapters"
+  - "src/js/ui/synth"
+  - "tests/browser/lib/midi-stub.cjs"
+  - "tests/unit/midi-record-out.test.mjs"
+  - "tests/browser/midi.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K099"
+  - "V502"
+acceptance_criteria:
+  - "tests/unit/midi-record-out.test.mjs, failing on the merge base: recorded notes equal the stubbed input's notes quantised as stated; the output's timestamps equal the scheduled audio times mapped through the clock estimate within its stated bound; without permission the node compiles to the table's state."
+  - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: no permission (table state); output without a device."
+  - "A browser check in tests/browser/midi.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: a recorded clip is the clip the Studio timeline shows. Real-time: notes from the stub's input appear in the recording, and a playing clip on midi-out sends to the stub's output (seam group), each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: record and output selection work by pointer, keyboard and touch. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Every edit is one undoable dispatch through the one Studio store (a continuous gesture is one history entry, undo and redo restore the exact serialized model) and the model holds plain data only (project.studio-model-is-canonical); every connection goes through canConnect and full-model validation, and a refusal shows the validator's sentence and leaves model, history and runtime unchanged (project.typed-ports, project.no-silent-feedback)."
+  - "Every pinned template studioHash is unchanged: it adds node types, ports, capabilities, enum options or clip kinds only, never a parameter on an existing node type (D2, K022)."
+  - "Every string it adds passes tests/unit/instrument-wording.test.mjs (added by K059): no product, brand or model name, no analog-modelling or vintage claim, and every approximation it makes labelled where it is shown (project.no-fake-science)."
+  - "The pull request carries a reviewer's verdict (src/js/studio is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "scripts/size-report.mjs shows at most 3 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of the line's figures stays within the cap Q023 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/midi-record-out.test.mjs"
+  - "node tests/browser/midi.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

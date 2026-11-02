@@ -45,6 +45,6 @@ the sub-path).
 
 ## What it does not do
 
-It is not an audio-file editor and records no input. Dragging several clips at once and pinch
-zoom on the timeline are not built. Musical time never applies to measurement clips, and
+It is not an audio-file editor and records no input. Dragging several clips at once is not
+built. Musical time never applies to measurement clips, and
 measurement clips are not rendered offline; they run live.

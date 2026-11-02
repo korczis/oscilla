@@ -1,0 +1,60 @@
+id: K060
+milestone: M064
+serves:
+  - "connected-instrument#synth-panel"
+  - "connected-instrument#piano-keyboard"
+  - "connected-instrument#one-transport"
+title: "Keys node: the one note source, with exact pitch CV and gates on the audio clock"
+slug: keys-node-the-one-note-source-with-exact-pitch-cv-and-gates
+priority: p1
+profile: implementation
+objective: "Lands as feat(studio). The Keys node that intent playable-instrument's Wave 3 named and never issued: a keys node type with outputs pitch (CONTROL over the source range [-6, 6] octaves relative to A4, so that a bipolar log edge of depth 6 octaves has edge gain a = 1 and moves a frequency by exactly one octave per octave of note, compiler.js routing semantics), gate (TRIGGER) and velocity (CONTROL 0..1), parameters glide (ms), transpose (semitones), priority (last, low, high; monophonic, D4), key range low and high (notes 0-127, for splits and layers) and chord (off, or a chord shape in the pattern's scale), the last three declared now and applied by K116, so no hash epoch is needed later, and the registry capability notes. Its adapter exposes notes(t, { note, vel, gate, slide }) and release(t), applied on the audio clock by the transport (event clips on it gate it from this slice) and by src/js/synth/note-router.js, the only place that applies live notes; the router releases every held note on blur, hide and Escape (D3) through the engine's release path. A pitch edge (a CONTROL edge from a keys pitch output) is exempt from computeBases' downward scaling of a log edge's gain (kc), which would change the tracking ratio of every note; its frequency is clamped at 0.95 x Nyquist instead, the clamp stated in debugInfo and on the card. The clip-target policy (src/js/studio/clip-targets.js) gains the keys row: event clips gate it. src/js/synth joins GUARDED through project.review-verdict v2, recorded before any code (the rule's statement enumerates the guarded paths and tests/unit/review-verdict.test.mjs pins them), with the repository's CLAUDE.md enumeration updated in the same change. Before: nothing turns a note into pitch and gate in the Studio. After: a keys node whose pitch CV is exact and whose gates sit on the audio clock. User-value tier 1 of 4 (synth-design.md section 17). Rollback: revert the pull request; a document saved with the new node type is then refused by the import pipeline with its unknown-type sentence, never dropped silently, so a revert after a release ships it keeps the registry entry and removes only the UI."
+why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
+scope:
+  - "src/js/studio/nodes"
+  - "src/js/studio/registry.js"
+  - "src/js/studio/adapters"
+  - "src/js/studio/transport.js"
+  - "src/js/studio/timeline-compiler.js"
+  - "src/js/studio/compiler.js"
+  - "src/js/studio/clip-targets.js"
+  - "src/js/ui/studio/timeline-view.js"
+  - "src/js/synth"
+  - "docs/v31/studio-model.md"
+  - "scripts/review-verdict.mjs"
+  - ".ai/repo/rules/project"
+  - "CLAUDE.md"
+  - "AGENTS.md"
+  - "tests/unit/review-verdict.test.mjs"
+  - "tests/unit/v4-clip-target-policy.test.mjs"
+  - "tests/browser/instrument-dsp.cjs"
+  - "tests/unit/synth-keys.test.mjs"
+  - "tests/browser/synth-nodes.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K005"
+  - "K075"
+acceptance_criteria:
+  - "tests/unit/synth-keys.test.mjs, failing on the merge base, asserts on StudioFakeContext (tests/unit/sequencer-fake-audio.mjs) the scheduled calls, times, ramps and node census; tests/browser/instrument-dsp.cjs, rendering a real OfflineAudioContext in Chromium, Firefox and WebKit at each context's own rate (in the style of tests/browser/dsp.cjs) and failing on the merge base, checks the figures: a keys node driving a vco through a bipolar log edge of depth 6 octaves plays A4 at 440 Hz and A5 at 880 Hz within 0.1 cent; at vco octave +3, note 0 tracks exactly and note 127 is clamped at 0.95 x Nyquist with the clamp stated, and every note below the clamp keeps exact tracking (no kc scaling of a pitch edge); a glide of 100 ms reaches the new pitch within 1 cent at 100 ms +- one render quantum; a gate starts the contour at the scheduled frame within one frame; last-note priority returns to the held note on release; an event clip on the keys node gates it at its start."
+  - "Releasing on blur, visibilitychange to hidden and Escape leaves no held note and a node census of 0 after stop, in the same test with the router's injected window events."
+  - "project.review-verdict v2 is recorded and majordomus doctor passes before any code lands; src/js/synth (the note router now, the panel model from K061) then joins GUARDED in scripts/review-verdict.mjs, with a fixture of tests/unit/review-verdict.test.mjs proving a change under it needs a verdict; because the base branch's list applies, a later slice's verdict claim for src/js/synth holds only once K060 has merged, which their depends_on ensures."
+  - "tests/unit/v4-clip-target-policy.test.mjs gains the keys row and still proves that store, timeline UI, transport and offline render agree for every node type and clip kind."
+  - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: a note held over blur, hide or Escape; a note outside 0-127; a second simultaneous note under last-note priority."
+  - "A browser check in tests/browser/synth-nodes.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: a keys node added in the Studio is offered as a target of an event clip in the timeline and of the note router. Real-time: a note sent through window.OSCILLA's existing Drive surface for the Studio (no new seam member) reaches the runtime pitch value and opens the gate, read back from the runtime's debugInfo, each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: the keys node is added by pointer, keyboard and touch, and its outputs carry accessible names ('Pitch control output', 'Gate trigger output'). Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Every edit is one undoable dispatch through the one Studio store (a continuous gesture is one history entry, undo and redo restore the exact serialized model) and the model holds plain data only (project.studio-model-is-canonical); every connection goes through canConnect and full-model validation, and a refusal shows the validator's sentence and leaves model, history and runtime unchanged (project.typed-ports, project.no-silent-feedback)."
+  - "Every node it plays is built by an engine adapter with track()/source() accounting, all timing is on the audio clock (no timer or rAF times audio), envelopes are click-free, frequencies stay below 0.95 x Nyquist of the running context, the peak stays at or below the output ceiling and the engine node census is 0 after stop (project.audio-engine-discipline v2)."
+  - "Every pinned template studioHash is unchanged: it adds node types, ports, capabilities, enum options or clip kinds only, never a parameter on an existing node type (D2, K022)."
+  - "Every string it adds passes tests/unit/instrument-wording.test.mjs (added by K059): no product, brand or model name, no analog-modelling or vintage claim, and every approximation it makes labelled where it is shown (project.no-fake-science)."
+  - "The pull request carries a reviewer's verdict (src/js/studio and scripts/review-verdict.mjs and src/js/synth is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "scripts/size-report.mjs shows at most 3 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; it does not wait on Q023, and its figure joins the line's sum once Q023 records the cap, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/synth-keys.test.mjs"
+  - "node tests/browser/synth-nodes.cjs"
+  - "node tests/browser/instrument-dsp.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

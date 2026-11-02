@@ -1,0 +1,21 @@
+id: Q021
+milestone: M070
+title: "Owner decision: polyphony inside engine nodes"
+slug: owner-decision-polyphony-inside-engine-nodes
+priority: p2
+profile: routine
+owner: "repository owner"
+objective: "D4 keeps the Studio Keys node monophonic until node groups and a polyphony ADR. The FM, additive, wavetable and granular engines could hold voices inside the node. The plan recommends up to 8 voices at 1/8 gain each inside an engine node, as the V502 note voices do, with the semi-modular panel staying monophonic."
+why: "Asked by the connected-instrument plan (owner direction of 2026-10-29). .ai/repo/project/README.md: work that waits on an answer names the Q issue in depends_on."
+current_state: "Open on 2026-10-29. The plan's recommendation is not an answer. K090, K091, K092 and K093 name this issue in depends_on, so majordomus plan next does not hand them out before it is answered."
+scope:
+  - ".ai/repo/project/issues/Q021.yaml"
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision), either in the owner's words with date and source, or as a decision of a coordinating session under an owner delegation it quotes with its date, stating its reasoning and that the owner may override it; a worker without such a delegation never answers it."
+  - "The answer says monophonic or a voice count and gain per voice for engine nodes."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-10-29
+updated_at: 2026-10-29

@@ -1,0 +1,68 @@
+id: instrument-kinds
+title: "Every instrument surface of OSCILLA (readouts, meters, scopes, jacks and cables, the transport, the piano, the step grid with locks, the XY pad, the piano roll, clip slots and scenes, channel strips, track headers) is one declared kind with one model, one view and one contract test, used by every surface that shows it"
+statement: "On 2026-10-29 the owner asked, in Czech, for better components and interfaces, more of them, a full DAW, a full sequencer and a full piano, everything interlinked, clickable, parameterized and joined, in one generic way, integrated with Majordomus and mobile first. The component-system intent declares every component and renders the proven duplicates; this intent adds the instrument kinds those surfaces need. Each kind extends what exists (K049's level model, K032's scope readout, ports.js, transport-bar.js, K026's keyboard model, drag-math.js, timeline-view.js) instead of adding a second one, holds no state, builds plain actions its owner dispatches, and is tested by a generic contract, a kind contract and a browser check at phone and desktop sizes."
+invariants:
+- "A kind holds no value and calls no store: the owning surface passes the value and dispatches the plain action the kind builds; the StudioModel stays the only Studio state (project.studio-model-is-canonical)"
+- A kind creates no AudioContext or AudioNode and times nothing with timers; live kinds draw from an owner-passed sampler through one frame loop with no per-frame allocation (project.audio-engine-discipline)
+- "A jack's compatibility comes only from canConnect; a cable's look only from PORT_VISUALS and the one edge-style table (project.typed-ports)"
+- "Every number a kind shows names its source, unit, window and calibration, and dB SPL appears only under a valid calibration (project.no-fake-science)"
+- "Chrome is adapted Flowbite Pro; instrument surfaces are domain views with no stylesheet and no osc-* name, and the ratchet only falls (project.ui-uses-flowbite-pro, ADR 0061)"
+- "Every pointer gesture has a key path and a touch path, Space is never taken, and targets are 44 px on a coarse pointer or carry a stated exemption"
+- A kind shares an implementation only once its second consumer lands; until then it is model first and costs no bytes in the single file (project.single-file-deliverable)
+- "No kind binds a bare letter key; letters belong to the armed computer-keyboard piano and the workspace shortcuts, and every letter action is a visible button or a menu item"
+milestones:
+- M101
+- M102
+- M103
+satisfaction:
+- id: kind-contract
+  criterion: "Every instrument kind is declared with props, io, events, state path, links, aria, keys, pointer, touch, target, mobile rule and truth rows, and the generic contract test refuses a kind or instance that lacks any"
+  evidence: command
+  ref: node --test tests/unit/ui-kinds.test.mjs
+- id: honest-observation
+  criterion: "Readouts, meters and mini scopes state source, unit, window and calibration, use the one level model and the one scope readout, and draw no value the data does not hold"
+  evidence: command
+  ref: node --test tests/unit/ui-kind-readout.test.mjs tests/unit/ui-kind-meter.test.mjs tests/unit/ui-kind-scope.test.mjs
+- id: patching
+  criterion: "Jacks and cables take type, glyph and verdict from the registry and canConnect only, and wire by pointer, keyboard and touch"
+  evidence: command
+  ref: node --test tests/unit/ui-kind-jack.test.mjs
+- id: sequencer-surfaces
+  criterion: "The transport, the step grid with parameter locks, the XY pad and the piano roll are kinds with contract tests, each event one undoable action"
+  evidence: command
+  ref: node --test tests/unit/ui-kind-transport.test.mjs tests/unit/ui-kind-step-grid.test.mjs tests/unit/ui-kind-step-grid-locks.test.mjs tests/unit/ui-kind-xy-pad.test.mjs tests/unit/ui-kind-piano-roll.test.mjs
+- id: piano-surface
+  criterion: "The piano spans 88 keys, each a named button, with scroll, zoom, velocity by position and white keys of at least 44 px at every width"
+  evidence: command
+  ref: node --test tests/unit/ui-kind-piano.test.mjs
+- id: daw-surfaces
+  criterion: "Clip slots and scenes, channel strips, track headers and the DAW transport are kinds with contract tests"
+  evidence: command
+  ref: node --test tests/unit/ui-kind-clip-slot.test.mjs tests/unit/ui-kind-channel-strip.test.mjs tests/unit/ui-kind-track-header.test.mjs
+- id: linked-and-mobile
+  criterion: "Every bundled kind instance is in the integration map and the control census and passes the 390x844 and 1536x1024 sweep by pointer, keyboard and touch"
+  evidence: command
+  ref: node tests/browser/ui-kinds.cjs
+governance:
+- "rule:project.studio-model-is-canonical"
+- "rule:project.audio-engine-discipline"
+- "rule:project.typed-ports"
+- "rule:project.no-fake-science"
+- "rule:project.ui-uses-flowbite-pro"
+- "rule:project.visual-identity-lock"
+- "rule:project.single-file-deliverable"
+- "rule:project.no-inert-surfaces"
+- "rule:project.suite-harness"
+- "rule:project.bounded-test-timing"
+- "rule:project.review-verdict"
+- "rule:project.fail-first"
+- "adr:adr-0050"
+- "adr:adr-0058"
+- "adr:adr-0061"
+non_goals:
+- "A second level model, scope readout, key map, transport or compatibility table: each kind wraps the one that exists"
+- "A UI framework or a component library beside Flowbite Pro: kinds are declarations, pure models and one mount function each"
+- "The knob, the slider and control panels (the params-controls part) and the WebGL renderers (the render-gl part)"
+- "Placing the kinds in the Synth or DAW workspaces: the synth slices do that"
+created_at: '2026-10-29'
+updated_at: '2026-10-30'

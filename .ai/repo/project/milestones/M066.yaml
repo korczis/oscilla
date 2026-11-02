@@ -1,0 +1,18 @@
+id: M066
+title: "Instrument wave 1c: the drum machine on the same transport"
+slug: instrument-wave-1c-the-drum-machine-on-the-same-transport
+order: 66
+priority: p1
+problem: "There is no drum voice, no kit and no drum grid."
+outcome: "Six synthesized drum voices with stated figures, a kit with per-voice outs in the patch bay, a step grid with accents, flam and choke groups on the same transport as the synth."
+acceptance_criteria:
+  - "K071, K072, K073 are done with their evidence; npm run release-gate passes at the last one; npm run test:synth and node tests/browser/integration-map.cjs pass."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "K073 waits on Q019 (where the Drums sub-view lives)."
+  - "K071 and K072 change src/js/studio and src/js/audio and need a reviewer's verdict."
+created_at: 2026-10-29
+updated_at: 2026-10-29

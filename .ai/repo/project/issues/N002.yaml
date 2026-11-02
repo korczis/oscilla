@@ -1,0 +1,43 @@
+id: N002
+milestone: M111
+serves:
+- "parameter-controls#one-interaction-model"
+title: "One interaction model: keys, drag, fine adjustment, reset and double-tap as pure functions, wired to the Inspector and lab sliders"
+slug: one-interaction-model-keys-drag-fine-adjustment-reset-and-doub
+priority: p2
+profile: implementation
+objective: "Lands as feat(ui). src/js/ui/catalog/param-input.js exports keyStep(spec, value, key, { shift }), dragStep(spec, start, dy, { shift }), resetValue(spec) and isDoubleTap(prev, next): ArrowUp and ArrowRight one step (log parameters 1/100 of the display range in the log domain, about a tenth of an octave over 20 Hz-20 kHz; linear parameters their step, else 1/100 of the range; integers 1), Shift a tenth of that (integers 1), PageUp and PageDown a tenth of the range, Home and End the display range's ends, Space never taken (ADR 0050); a knob drag of 200 px is the full range with Shift x0.1; reset is double-click and a double-tap (two touch pointerups within 300 ms on one control), never a letter key (R is a note key of the computer-keyboard piano). Rounding is G003's sliderToValue. Wired without markup change: the Studio Inspector's range inputs (inspector.js numberField) and the Filter Lab, Envelope, Additive and Synthesis range inputs of src/index.html take keyStep and the reset, each key press and reset one commit (one history entry in the Studio). Before: VERIFIED arrows move one native step, 1/1000 of the slider positions, linearly across the log mapping; nothing resets to the default. After: one model, Shift for fine, reset everywhere. Negative cases: a key on a disabled control, Home with a value beyond softRange, Shift on an integer, Space. Rollback: revert; nothing stored changes."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs, KB and interlinking; full DAW, full sequencer, full piano, everything interlinked, clickable, parameterized and joined; knobs, sliders and control panels in one generic way, integrated with Majordomus; every element tweakable; mobile first; the landing easy to use, easy to extend and open to hack. Owner decisions: knobs that always show value and unit (D11, Q018, the ADR 0058 note of 2026-10-29), every parameter on the box face (Q031), the generator in its own workspace (Q033). Design: the params-controls part of the component follow-up of 2026-10-29 (scratchpad components-followup/params-controls.md), checked against origin/main b67d1e58 and the head of plan pull request #285 (c0a631b2)."
+scope:
+- src/js/ui/catalog/param-input.js
+- src/js/ui/studio/inspector.js
+- src/js/labs
+- src/js/ui/app.js
+- tests/unit/param-input.test.mjs
+- tests/browser/labs.cjs
+- tests/browser/v31-studio-graph.cjs
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- G003
+acceptance_criteria:
+- "tests/unit/param-input.test.mjs fails on the merge base: a table of specs (log frequency, linear level, seconds, integer, bipolar cents) gives the expected value for every key with and without Shift, for drags of 0, 100 and 200 px, and for reset; a double-tap pair 299 ms apart is one, 301 ms apart is not."
+- "Definition of done, tested: tests/browser/labs.cjs and tests/browser/v31-studio-graph.cjs focus the Filter Lab cutoff and the Inspector cutoff of a Filter node, press ArrowUp, Shift+ArrowUp, PageUp and Home, double-click and double-tap (hasTouch), and wait with until() (deadline 'parameter key applied', 2 s) for the value, the readout and aria-valuetext to agree after each; in the Studio each step is one undo entry. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), runs at 390x844 and at 1536x1024, adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, extends: the Inspector's slider mapping (inspector.js valueToSlider, sliderToValue) and G003's model."
+- "Definition of done, interlinks: the knob (K058), the slider and field (G008) and every face control use these functions, never their own."
+- "Definition of done, interactivity: every continuous control in the labs and the Inspector gains Shift fine adjustment, PageUp, Home and End, and reset."
+- "Definition of done, docs, menus and routes: the Keyboard shortcuts dialog lists the control keys once, and states that Shift is fine on a control and x4 when moving a box; docs/v31/user-guide.md says the same. tests/README.md has a row for each new test; the parameter's or view's catalogue entry names its docs, links and tests (G001 trace part); dist is rebuilt and npm run build:check passes."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit, and the release that carried it is recorded when the milestone is verified."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "Before Pro (it may land before F001): it adds no class token, selector, markup surface or inline style and only removes legacy ones, so tests/unit/ui-flowbite-pro-baseline.json stays equal or falls (node scripts/ui-flowbite-pro-record.mjs --check passes) and node --test tests/unit/ui-flowbite-pro.test.mjs passes; no module, listener or string it adds contains an osc- name; studio.css, studio-timeline.css, charts.css and tokens.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock v2)."
+- "scripts/size-report.mjs shows at most 1.0 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the line's sum stays within its row of the cap Q037 records, under the 1.2 MB gzip budget of scripts/build-config.mjs (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/param-input.test.mjs
+- node tests/browser/labs.cjs
+- node tests/browser/v31-studio-graph.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

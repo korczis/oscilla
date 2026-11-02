@@ -1,0 +1,48 @@
+id: K061
+milestone: M064
+serves:
+  - "connected-instrument#synth-panel"
+title: "Synth panel model: panel definition, normalling that a cable breaks and its removal restores"
+slug: synth-panel-model-panel-definition-normalling-that-a-cable-b
+priority: p1
+profile: implementation
+objective: "Lands as feat(studio). src/js/synth/panels.js defines the semi-modular voice (modules, their Studio node types and the normalling table N1-N15 of the design) as frozen registry-side data; src/js/synth/normals.js is pure: which jacks are normalled, which normal edges are present, the batch that patches a cable (EDGE_ADD plus EDGE_REMOVE of the jack's normals) and the batch that removes the last cable (EDGE_REMOVE plus EDGE_ADD of its normals), with deterministic normal ids <panel>-n<k>. 'New Synth voice' is one PATCH_INSERT. normalizeStudio, the import structure check of validate.js (node metadata allows only name today) and patches.js keep an optional presentation field metadata.panel = { id, module }, omitted when absent and excluded from executionState and studioHash; PATCH_INSERT of a panel gives it a new panel id, PASTE and DUPLICATE drop it (a copied module is a free node). A new guarded BATCH action reduces a list of edge actions, validates the result as a whole, passes transport.admit once and is one history entry, so patching over a normal while playing applies no in-between model (the store has no batch today; #268's handle.hold only merges change events). The normal invariant is a Synth projection, never a repair: the panel writes normals only through its own batches, and a normal deleted in the Studio graph stays deleted, the panel showing that jack 'open: normal removed in Studio' with a Restore normal action (one BATCH). Before: a voice must be patched by hand from empty. After: New Synth voice sounds with no cable; a cable breaks a normal and its removal restores it. User-value tier 1 of 4 (synth-design.md section 17). Rollback: revert the pull request; an older normalizeStudio drops metadata.panel and keeps the nodes and edges, so only the grouping is lost."
+why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
+scope:
+  - "src/js/synth"
+  - "src/js/studio/schema.js"
+  - "src/js/studio/actions.js"
+  - "src/js/studio/validate.js"
+  - "src/js/studio/patches.js"
+  - "docs/v31/studio-model.md"
+  - "tests/unit/v31-studio-model.test.mjs"
+  - "tests/browser/instrument-dsp.cjs"
+  - "tests/unit/synth-panel-normals.test.mjs"
+  - "tests/browser/synth-panel.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K059"
+  - "K060"
+  - "K103"
+  - "K008"
+acceptance_criteria:
+  - "tests/unit/synth-panel-normals.test.mjs, failing on the merge base: the inserted panel validates, and with no user cable and one held note it renders non-silent in tests/browser/instrument-dsp.cjs on a real OfflineAudioContext (peak at or below the ceiling); a cable into Low-pass cutoff removes N12 in the same history entry and its undo restores it; removing that cable restores N12 with its id; a cable that closes an audio loop is refused whole with the no-silent-feedback sentence and leaves the normals as they were; every pinned template hash and every template's serialization are unchanged, and a model with metadata.panel round-trips through serialize, parse and the import pipeline; PATCH_INSERT renumbers the panel id and PASTE and DUPLICATE drop it; a BATCH that patches over a normal while playing calls transport.admit exactly once and a BATCH whose second step is refused leaves model, history and runtime unchanged."
+  - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: a cable that closes an audio loop; a cable of the wrong type; a deleted normal while a cable occupies the jack."
+  - "A browser check in tests/browser/synth-panel.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: a panel inserted through the Studio's patches dialog shows its nodes and normal edges in the Studio graph, and a normal deleted there stays deleted while the panel shows its jack open with Restore normal, which restores it as one history entry. Real-time: a cable patched over a normal in the Studio graph removes the normal from the runtime's edge list (debugInfo) and the cable carries the signal, each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: the panel is inserted by pointer, keyboard and touch, and the restored-normal announcement is in the polite live region. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Every edit is one undoable dispatch through the one Studio store (a continuous gesture is one history entry, undo and redo restore the exact serialized model) and the model holds plain data only (project.studio-model-is-canonical); every connection goes through canConnect and full-model validation, and a refusal shows the validator's sentence and leaves model, history and runtime unchanged (project.typed-ports, project.no-silent-feedback)."
+  - "Every node it plays is built by an engine adapter with track()/source() accounting, all timing is on the audio clock (no timer or rAF times audio), envelopes are click-free, frequencies stay below 0.95 x Nyquist of the running context, the peak stays at or below the output ceiling and the engine node census is 0 after stop (project.audio-engine-discipline v2)."
+  - "Every pinned template studioHash is unchanged: it adds node types, ports, capabilities, enum options or clip kinds only, never a parameter on an existing node type (D2, K022)."
+  - "Every string it adds passes tests/unit/instrument-wording.test.mjs (added by K059): no product, brand or model name, no analog-modelling or vintage claim, and every approximation it makes labelled where it is shown (project.no-fake-science)."
+  - "The pull request carries a reviewer's verdict (src/js/studio and src/js/synth is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+  - "scripts/size-report.mjs shows at most 4 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; it does not wait on Q023, and its figure joins the line's sum once Q023 records the cap, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/synth-panel-normals.test.mjs"
+  - "node tests/browser/synth-panel.cjs"
+  - "node tests/browser/instrument-dsp.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

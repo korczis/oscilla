@@ -93,6 +93,18 @@ knowledge:
   candidates_max_files: 40               # more candidates than this awaiting review is a WARN
   candidate_max_age_minutes: 20160       # 14d: a candidate this old was ignored, not reviewed
 
+# How far a checkout may drift from origin/main before its standing is judged. On 2026-10-29
+# the primary checkout's shared server answered a session from a tree 38 commits behind and
+# called it "unjudged", because nothing was declared here (Majordomus I4418). The distance
+# counts every commit behind, merged branch commits included: origin/main took 94 such
+# commits in the day to 2026-10-29 and 154 in the week. Lagging (one day) warns; stale
+# (about four days) fails doctor and so the commit hook, which a merge of main clears. The
+# values are the ones prismatic-majordomus declares for its own trunk.
+checkout:
+  trunk_distance:
+    warn_behind: 100                     # about a day of origin/main's commits
+    fail_behind: 400                     # several days: what it serves is not the trunk
+
 # `majordomus bench` samples every public command this many times after the warm-up runs;
 # `bench --check` refuses a regression larger than these fractions of the baseline's
 # p50, p95 and p99; doctor and watch report their own wall time against these budgets

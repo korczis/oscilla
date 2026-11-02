@@ -96,6 +96,15 @@ export const POSITION_MESSAGE = 'A position needs finite x and y between '
 export const isPosition = (p) => !!p && [p.x, p.y].every((v) => typeof v === 'number'
   && Number.isFinite(v) && Math.abs(v) <= POSITION_LIMIT);
 export const NAME_MAX_CHARS = 64;
+/**
+ * A node's optional metadata.panel (K061): the Synth panel and module it belongs to, kept by
+ * normalize, save and import, and outside the execution state (studioHash); presentation only.
+ */
+export const PANEL_REF_MESSAGE = 'metadata.panel must be { id, module }: an id of 1-48 letters, '
+  + 'digits or dashes and a module of 1-32 lower-case letters, digits or dashes.';
+export const isPanelRef = (p) => !!p && typeof p === 'object' && !Array.isArray(p)
+  && Object.keys(p).every((k) => k === 'id' || k === 'module')
+  && /^[a-z][a-z0-9-]{0,47}$/.test(p.id) && /^[a-z][a-z0-9-]{0,31}$/.test(p.module);
 export const TITLE_MAX_CHARS = 200;
 export const NOTES_MAX_CHARS = 10000;
 export const DEFAULT_TITLE = 'Untitled Studio';
@@ -208,7 +217,9 @@ function normalizeNodes(list, registry) {
       type,
       position: { x: num(pos.x, 0), y: num(pos.y, 0) },
       params: def ? projectParams(def, copyPlain(obj(n.params))) : copyPlain(obj(n.params)),
-      metadata: { name: str(meta.name) || `${def ? def.displayName : type || 'Node'} ${k}` },
+      metadata: { name: str(meta.name) || `${def ? def.displayName : type || 'Node'} ${k}`,
+        ...(isPanelRef(meta.panel) ? { panel: { id: meta.panel.id, module: meta.panel.module } }
+          : {}) },
     };
   });
 }

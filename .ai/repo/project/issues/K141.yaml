@@ -1,0 +1,48 @@
+id: K141
+milestone: M082
+serves:
+- "signal-generator-lab#measured-imd"
+title: "IMD of a two-tone signal, measured from the spectrum and stated honestly"
+slug: imd-of-a-two-tone-signal-measured-from-the-spectrum-and-stat
+priority: p2
+profile: implementation
+objective: "Lands as feat(analysis). src/js/analysis/imd.js computes the SMPTE/DIN ratio (sidebands f2 +- n f1 over f2, n = 1..4) and the CCIF/ITU difference-tone ratio from a spectrum frame and the tone plan, with the bin resolution and window stated. The Generator's Live card and the Analyzer's spectrum show it while a two-tone plays, through K053's readout: 'IMD of the generated digital signal' on the loopback analyser, 'of the microphone input' when the mic analyzer is the source; it is a measured residual, never a device rating."
+why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings G1-G14 measured on origin/main b67d1e58)."
+scope:
+- src/js/analysis/imd.js
+- src/js/charts/spectrum-chart.js
+- tests/unit/analysis-imd.test.mjs
+- tests/browser/generator.cjs
+- tests/README.md
+- dist
+- docs/v3/readout-truth.yaml
+depends_on:
+- K138
+- K134
+- K030
+- K053
+- T026
+acceptance_criteria:
+- "Before: VERIFIED: no IMD figure exists."
+- "After and negative cases: as the objective and the criteria below state; the setpoint (what was requested) and the observation (what the analyser measured on the digital output, or the microphone on the room) are separate readouts with separate labels, and no readout claims the acoustic output."
+- "Rollback: revert the merge commit. Nothing changes the schema, a studioHash, URL key meaning or stored preset, so documents saved while it was live load unchanged after the revert."
+- "Scientific-truth rows (Quantity | Unit | Source | Algorithm | Resolution | Calibration | Limitations | Tests | UI label) are added to T026's canonical readout table docs/v3/readout-truth.yaml and checked by T026's tests/unit/readout-provenance.test.mjs, which this issue extends so that each UI label's text is in the source, each Tests path exists, and a setpoint row never shares its label with an observed row: Two-tone IMD (observed) | % and dB | output or microphone AnalyserNode and the tone plan | SMPTE/DIN sidebands f2 +- n f1 (n = 1..4) over f2; CCIF difference tone over the tones | bin resolution and the window's floor stated | uncalibrated | a measured residual of the digital loopback or of the microphone input, never a device rating | tests/unit/analysis-imd.test.mjs | IMD (SMPTE) 0.02 % of the generated digital signal"
+- "tests/unit/analysis-imd.test.mjs, failing on the merge base: synthetic two-tone frames with known products give the known SMPTE and CCIF ratios within 0.1 percentage points at 44.1 and 48 kHz; a clean two-tone reads below the floor the window allows and says so."
+- "The wording never says THD+N, true peak or a standard's compliance (the M062 wording table, tests/unit/charts-readout-wording.test.mjs)."
+- "Definition of done, extends: K134's two-tone patterns and K030's spectrum readout."
+- "Definition of done, cross-links: the IMD readout names the plan it reads (the same plan as the Generator workspace) and the analyser it reads (loopback or microphone). The link is a row of tests/browser/integration-map.json once that map (synth line K075) is on main."
+- "Definition of done, dynamics: the IMD figure updates live as the level or the tones change."
+- "Definition of done, docs and routes: README.md's Playground feature list and docs/GLOSSARY.md where a term is new; .ai/repo/features/playground.md (or the feature record of the Playground) says what changed; docs/GLOSSARY.md defines IMD as computed here. tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: A check 'imd' in tests/browser/generator.cjs plays SMPTE two-tone by pointer and waits with until() (deadline 'IMD readout present', 6 s) for a finite figure below 0.1 %; raises the Drive of a Studio template fed by it (by keyboard) and waits for a higher figure; taps the readout in a hasTouch context to pin it; on the merge base no readout exists. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit and the completed evidence the release that carried it; E030's judge passes on the pull request once E030 is on main."
+- "The pull request carries a reviewer's verdict (it touches a guarded path; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
+- "Wave 2: its chrome is Flowbite Pro markup adapted from the matching Pro component, lands after F002, adds no osc-* class token or legacy selector, and studio.css, studio-timeline.css, charts.css and tokens.css gain no selector or declaration; the domain drawing stays OSCILLA's own inside Pro cards (project.ui-uses-flowbite-pro, project.visual-identity-lock v2; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "scripts/size-report.mjs shows at most 1.5 KB gzip added, with the base and head figures in the pull request body, within the owner's dist budget of 1 200 000 B gzip (decision of 2026-10-29, about 355 KB of headroom at origin/main b67d1e58); the ceiling of this line is 25 KB gzip in all (Studio boxes 35 KB, signal generator 25 KB), stated in the milestone (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/analysis-imd.test.mjs
+- node tests/browser/generator.cjs --only imd
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'

@@ -1,0 +1,41 @@
+id: T021
+milestone: M073
+serves:
+  - "v3-measure#readout-states"
+  - "v3-measure#readout-labels"
+title: "The Filter Lab chart marks off-scale responses, keeps the model-rate note when bypassed, and names the frequency for each type"
+slug: the-filter-lab-chart-marks-off-scale-responses-keeps-the-mod
+priority: p2
+profile: implementation
+objective: "Truth-table rows LAB-02, LAB-03, LAB-04, LAB-13 (scratchpad p05/truth-table.md). Above +17 dB (or below the floor at a notch) the chart draws a caret at the edge with the true value from getResponse and draws the handle as an edge marker; getData() reports offScaleHigh and the value. Bypassed keeps the model-rate note beside the K043 bypassed label: \"BYPASSED · model @ 48 kHz\". The label reads Cutoff for low- and high-pass and Centre otherwise (Filter Lab only; the Studio label is left alone). The gain shows its value."
+why: "P05 audit of origin/main b67d1e58 (v3.13.0): Low-pass Q 30 is +29.54 dB at the cutoff and peaking +24 dB is +24.00 dB, but the plot stops at +17 dB with the handle pinned to the edge and no marker. In the default state (filter off, no context) \"BYPASSED\" replaces \"model @ 48 kHz\", so the curve computed at an assumed rate is not labelled. The field says \"Cutoff\" for band-pass, notch and peaking, where it is the centre. The peaking gain has no visible value."
+scope:
+  - "src/js/charts/filter-chart.js"
+  - "src/js/labs/filter-lab.js"
+  - "src/index.html"
+  - "README.md"
+  - ".ai/repo/features/filter-lab.md"
+  - "tests/unit/readout-states-filter-chart.test.mjs"
+  - "tests/browser/labs.cjs"
+  - "tests/visual"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "T006"
+  - "K043"
+acceptance_criteria:
+  - "Fail-first fixture: tests/unit/readout-states-filter-chart.test.mjs plus labs.cjs checks: low-pass 2.5 kHz Q 30 → offScaleHigh with 29.5 dB, equal to getFrequencyResponse at display precision; peaking Q 1 +24 dB → 24.0 dB; a chart mounted with enabled false and getNote \"model @ 48 kHz\" shows both strings; band-pass shows \"Centre\". Fails on the merge base."
+  - "Negative cases, each asserted: The default Butterworth shows no marker; a live stage shows BYPASSED alone; the -30..+17 dB reference range is unchanged (visual lock); the Studio Filter node label unchanged."
+  - "Revertible on its own: Revert: chart overlay, note and label."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named deadline (project.suite-harness, project.bounded-test-timing)."
+  - "Any new visible element follows the Flowbite Pro components and the locked tokens (project.ui-uses-flowbite-pro, project.visual-identity-lock); npm run visual passes or the baseline change is declared."
+  - "tests/README.md has a row for each new test; this issue does not edit docs/CLAIMS.yaml or the intent (T027 does)."
+validation:
+  - "npm test"
+  - "npm run verify"
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

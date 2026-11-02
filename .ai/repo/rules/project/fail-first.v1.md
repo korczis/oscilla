@@ -130,13 +130,18 @@ What it cannot see:
 - Whether a train's member table tells the truth. The job reads the titles the body states;
   that a row's title is its member's and that every merged member is listed is for the
   reviewer of the train (`gh pr view <n> --json title` answers it).
-- A merge that bypasses branch protection. Protection on `main` requires `gate` on an
-  up-to-date branch (`strict: true`, `contexts: [gate]`, read from
-  `gh api repos/korczis/oscilla/branches/main/protection` on 2026-10-28), so a pull request
-  merges only after a run on a head that contains `main`, and therefore this rule; a branch
-  whose last green run predates the rule must merge `main` and run again first. An
-  administrator's merge past protection is the owner's and is not checked here
-  (`project.review-verdict` says the same of itself).
+- A pull request whose last green run is older than `main`. Protection on `main` requires
+  the `gate` check and, by the owner's decision of 2026-10-30, no longer an up-to-date branch
+  (`contexts: [gate]`, `strict: false`; read it with
+  `gh api repos/korczis/oscilla/branches/main/protection -q .required_status_checks`). A run
+  judges GitHub's merge of the head into `main` as `main` stood when the run started, with
+  the program `origin/main` held then. The pull request then merges on that run however old
+  it is: a change to this rule or to `scripts/fail-first.mjs` that lands on `main` after the
+  run does not judge it, and nothing judges it later, because this job runs only for a pull
+  request and `ci.yml` does not run on a push to `main`. Merging `main` into the branch
+  starts a run that does; nothing requires it.
+- A merge that bypasses branch protection. An administrator's merge past protection is the
+  owner's and is not checked here (`project.review-verdict` says the same of itself).
 
 Locally: `node scripts/fail-first.mjs --title "fix(scope): ..."` checks the committed head against
 `origin/main`.

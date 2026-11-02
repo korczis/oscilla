@@ -1,0 +1,28 @@
+id: H006
+milestone: M046
+serves:
+  - "engineering-integrity#adr-index-complete"
+title: "README.md and CLAUDE.md say what ships: ADR status, the Studio's not-yet-built list, sequencer tempo and output exclusivity"
+slug: readme-md-and-claude-md-say-what-ships-adr-status-the-studio-s
+priority: p2
+profile: implementation
+objective: "Lands as docs. D1: CLAUDE.md:14 says the ADRs are 'all proposed', while the ADR README records the owner's acceptance of 2026-10-18 and many carry status accepted; the sentence points to the ADR README instead of stating a status. D2: README.md's Studio 'Not yet built' list names a minimap and pinch zoom on the timeline, which ship; both leave the list. D3: README.md's Sequencer line claims tempo-locked durations, which the interface does not offer; it says what ships until K002 and K017 land. D4: README.md says Studio and Playground output are exclusive, while the instrument and the sequencer sum and the sequencer overlaps the Studio until a 150 ms poll; it states the current behaviour until the output-owner fix of ADR 0063 lands. A check in tests/unit/docs-derived.test.mjs keeps D1 and D2 from coming back."
+why: "Doc drift D1-D4 of the G1 coherence contract of 2026-10-29 (scratchpad g1/coherence-contract.md, section 5 row 6.6; inventory g1/inventory.md; critique g1/critique.md) (VERIFIED on main cdda563c); the README rows that change behaviour are changed again by the issues that change it."
+scope:
+  - "README.md"
+  - "CLAUDE.md"
+  - "AGENTS.md"
+  - "tests/unit/docs-derived.test.mjs"
+  - "tests/README.md"
+acceptance_criteria:
+  - "tests/unit/docs-derived.test.mjs fails on the merge base: CLAUDE.md and AGENTS.md state no ADR status that contradicts the ADR front matter (no 'all proposed' while an ADR is accepted), and README.md's 'Not yet built' list names no feature whose unit test exists and passes (the minimap and timeline pinch tests)."
+  - "README.md's Sequencer and Studio output sentences describe the behaviour on main at the commit they land on, each with the plan id that will change it."
+  - "No count of ADRs, apps or tests is written by hand (CLAUDE.md, Plan: ranges written here go stale)."
+  - "tests/README.md has a row for each new test."
+validation:
+  - "node --test tests/unit/docs-derived.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

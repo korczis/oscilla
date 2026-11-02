@@ -1,0 +1,47 @@
+id: W008
+milestone: M102
+serves:
+- "instrument-kinds#sequencer-surfaces"
+title: "Step grid kind: lanes, pages, range edit and a playhead on the audio clock, first on the Step Modulator's steps"
+slug: step-grid-kind-lanes-pages-range-edit-and-a-playhead-on-the
+priority: p1
+profile: implementation
+objective: "Lands as feat(studio-ui). src/js/ui/kinds/step-grid.js and its pure model (cursor, range selection, clipboard, paging, lanes of gate, value or note steps, the playing step index): role=grid, a gridcell per step with aria-selected and a name ('Step 5, 0.50, on'), aria-current=step on the playing step; keys arrows, Enter, Shift+arrows, Ctrl/Cmd+C, X, V, Delete, PageUp and PageDown a semitone (Shift an octave), [ and ] page; drag paints along a lane, a value lane drags vertically; 8 steps per page at 390 px, 16 at 1536 px; the playhead from transport.playhead() through one frame-loop subscriber that writes the DOM only when the step index changes. Events build CLIP_UPDATE for a steps clip or NODE_PARAM_SET for a list parameter. First consumer: the Step Modulator node's steps in the Studio Inspector, edited today as one comma-separated text field (VERIFIED inspector.js:182); K069 and K073 then mount the kind. Before: no step editor on main. After: a step grid by pointer, keyboard and touch. Negative cases: a paste longer than the target (the target's length kept); Delete on an empty step (no action); Space (the transport's); a value out of the parameter's range (refused with its sentence). Rollback: revert; the text field returns. Merged plan of the component follow-up (2026-10-30): Accent, slide and ratchet are buttons of the focused step's detail row and items of its menu (ContextMenu, Shift+F10), never bare letter or digit keys. K069 and K073 depend on W008 and drop their own grid model."
+why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs, knowledge and interlinking, and add more; add p5.js, WebGL and interactivity, and deploy; a full DAW, a full sequencer and a full piano, everything interlinked, clickable, parameterized and joined; knobs, sliders and control panels done one generic way, integrated with Majordomus; the landing easy to use, easy to extend and open to hack; mobile first. The architecture still binds: one AudioEngine, the Studio model canonical, typed ports, one offline file under the 1.2 MB gzip budget, the cockpit identity, no fake science, Flowbite Pro (ADR 0061). Design: the instrument-kinds design of 2026-10-29 (scratchpad components-followup/components-new.md), on the component-system design (G001-G019) and the synth and studio-siggen drafts of the same day, facts checked against origin/main cdda563c."
+scope:
+- src/js/ui/kinds/step-grid.js
+- src/js/ui/kinds/step-grid-model.js
+- src/js/ui/catalog/kinds/step-grid.js
+- src/js/ui/studio/inspector.js
+- tests/unit/ui-kind-step-grid.test.mjs
+- tests/browser/ui-kinds.cjs
+- tests/unit/ui-flowbite-pro-baseline.json
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- W001
+- F001
+acceptance_criteria:
+- "tests/unit/ui-kind-step-grid.test.mjs fails on the merge base: every key maps to exactly one action of the expected payload (recorded through a fake commit); a paste keeps the target's length; Space builds nothing; the playhead subscriber writes only on a step change and reuses its state across ticks; a list-parameter grid builds one NODE_PARAM_SET per gesture."
+- "Negative cases, each asserted by a test that fails on the merge base: the four of the objective."
+- "Definition of done, tested: tests/browser/ui-kinds.cjs selects a Step Modulator, sets step 3 by pointer drag, by arrows and Enter and by a hasTouch drag, waits with until() (deadline 'step value in model', 2 s) for the node's steps in the model, undoes once per gesture, and while playing waits for aria-current to move (deadline 'step playhead moves', 3 s). The check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, runs at 1536x1024 and 390x844, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, extends: the Inspector's list parameter and the section 79 descriptor; interlinks: the grid's clip (for a steps clip) opens in the Studio timeline."
+- "Definition of done, interactivity: pointer, keyboard and touch on every step."
+- "Every Studio edit it builds is one plain action the owning surface dispatches through the one Studio store; a continuous gesture is one history entry and undo and redo restore the exact serialized model; a refusal leaves model, history and runtime unchanged and the kind states the store's sentence once in the polite live region (project.studio-model-is-canonical, project.typed-ports)."
+- "Definition of done, docs, menus and routes: the kind's declaration names its docs, links and tests; docs/ui-catalog.md (G014) lists it; the Keyboard shortcuts dialog lists its keys; tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Its trace entry in scripts/ui-catalog/trace/kinds.mjs names the intent criterion, this issue, its rules, ADRs and tests, each resolved by the trace check, for the Majordomus knowledge projection."
+- "The kind's modules pass W001's static scan: no import of src/js/studio/actions.js, a store, sources.js or a lab module; no dispatch or owner writer called; no AudioContext, AudioNode or worklet created (project.audio-engine-discipline v2: one AudioEngine); no requestAnimationFrame, setInterval or setTimeout outside src/js/charts/frame-loop.js; no allocation in a frame callback (1000 ticks keep the same typed arrays) and frameSubscriberCount() returns to its value after destroy()."
+- "Its chrome (buttons, button groups, popovers, dropdowns, inputs) is markup adapted from the matching Flowbite Pro block and names its flowbite-pro reference.md section; its instrument surface is a domain view under ADR 0061 decision 3 as J001's ADR 0061 resolution note records it: inline SVG or canvas and Tailwind utilities inside a Pro card, no stylesheet, no selector, no osc-* class token, no el.style write or style attribute; no osc-* name in the ratchet record rises and the domain views' stylesheets gain nothing (project.ui-uses-flowbite-pro, project.visual-identity-lock v2, ADR 0061; node scripts/ui-flowbite-pro-record.mjs --check and node --test tests/unit/ui-flowbite-pro.test.mjs)."
+- "No input path of the build gains a components, widgets, ui-kit or design-system segment (the COMPONENT_LIBRARY check of scripts/ui-flowbite-pro-measure.mjs): declarations live in src/js/ui/catalog/kinds, views in src/js/ui/kinds."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat change it carries a unit test that fails on the merge base (project.fail-first)."
+- "scripts/size-report.mjs shows at most 3 KB gzip added, compiled CSS included, with the base and head figures in the pull request body, inside the component line's cap Q037 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+- node --test tests/unit/ui-kind-step-grid.test.mjs
+- node tests/browser/ui-kinds.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-30'

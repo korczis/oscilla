@@ -86,9 +86,14 @@ Shipping
     merge commit (skill `merge-train`). Read release and deploy state from GitHub
     (`gh release list`, `npm run release:verify-deploy`), never from memory.
 13. Land dist-changing pull requests one at a time, each merged up to date with main and
-    rebuilt. Do not arm auto-merge on a pull request that changes build inputs between
-    `release:prepare` and `release:publish`: the receipt the gate wrote would describe a
-    tree that is no longer HEAD.
+    rebuilt; branch protection no longer asks for that (`strict: false` since 2026-10-30),
+    so it is this item and the `dist/index.html` conflict that hold it. Before arming
+    auto-merge on a pull request whose last run predates a change on `main` to a rule, to
+    `scripts/fail-first.mjs`, `scripts/review-verdict.mjs` or a guarded file it builds on,
+    merge `main` into it so the gate runs once more on the combination. Do not arm
+    auto-merge on a pull request that changes build inputs between `release:prepare` and
+    `release:publish`: the receipt the gate wrote would describe a tree that is no longer
+    HEAD.
 14. Owner-only actions are listed for the owner and never routed around, and "proceed
     autonomously" is not approval for them: accepting an ADR, the machine-wide Majordomus
     launcher flip, `gh release upload` or an asset backfill, raising the size budget or

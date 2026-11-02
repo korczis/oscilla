@@ -1,0 +1,49 @@
+id: V611
+milestone: M080
+serves:
+- "studio-box-system#wiring-gestures"
+title: "Magnetic port capture, port-row hit targets, refusal reasons with the cycle outlined, and keyboard wiring in both directions"
+slug: magnetic-port-capture-port-row-hit-targets-refusal-reasons-w
+priority: p2
+profile: implementation
+objective: "P04 slice C (typed edge UX). Lands as feat(studio-ui), in a new src/js/ui/studio/graph-wire.js beside K006's graph-gestures.js. (1) While a cable is dragged, a pure nearestPort(geometry, point, radius) over the model's node positions and port rows captures the cable end at the nearest port within 32 screen pixels, compatible ones first; the whole port row, label included, is the hit target (at least 24 px on a coarse pointer). (2) Hovering or dropping on an incompatible port writes canConnect's sentence into the existing graph banner and the polite live region; a drop that would close a cycle shows the project.no-silent-feedback sentence and selects the cycle's nodes for 2 s as view state (nothing in history). (3) Shift+C on a selected node opens the connection dialog in the input direction: each input of the node with the outputs that can feed it, refused ones with their reasons; Enter on a row is one EDGE_ADD. (4) On touch, a released cable end within the radius of a compatible port connects. Every connection goes through canConnect and the store; the existing is-compatible and is-incompatible classes carry the highlight."
+why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings S1-S14 measured on origin/main b67d1e58)."
+scope:
+- src/js/ui/studio/graph-wire.js
+- src/js/ui/studio/graph-gestures.js
+- src/js/ui/studio/graph-editor.js
+- src/js/ui/studio/graph-geometry.js
+- src/js/ui/studio/graph-picker.js
+- src/js/ui/studio/graph-keys.js
+- tests/unit/studio-graph-wire.test.mjs
+- tests/browser/v31-studio-graph.cjs
+- tests/unit/source-size-baseline.json
+- tests/README.md
+- dist
+depends_on:
+- V631
+- K008
+acceptance_criteria:
+- "Before: VERIFIED (S2, S6, S13): a cable connects only when released on the port element or a node; refusals are announced; wiring from the keyboard is node-level, outputs first."
+- "After: a cable end released within 32 px of a compatible port connects; refusals show the validator's sentence in the banner; Shift+C wires in the input direction."
+- "Negative cases: an incompatible port inside the radius never captures; a release equidistant from two compatible ports takes the one under the pointer's direction of travel and states which; a missing port or stale node (deleted during the drag) refuses with canConnect's sentence; a cycle refuses with the no-silent-feedback sentence and nothing is coerced, retyped or rerouted."
+- "Rollback: revert the merge commit. Nothing changes the schema, a studioHash or a stored record, so documents saved while it was live load unchanged after the revert."
+- "tests/unit/studio-graph-wire.test.mjs, failing on the merge base: nearestPort picks the nearest compatible port inside the radius and none outside it, prefers a compatible port over a nearer incompatible one, and scales the radius with zoom; the input-direction list of the connection dialog is built from canConnect only (no table of its own, project.typed-ports); a refused drop leaves model, history, selection and revision unchanged."
+- "STUDIO_SHORTCUTS gains Shift+C, and the in-app list and the docs are generated from it."
+- "Definition of done, extends: the cable drag, tap-connect and connection dialog of V430 and §139, and K008's re-route."
+- "Definition of done, cross-links: a connection made by capture appears in the edge Inspector and in the Signal Path projection of the compact Studio (round trip through the one store). The link is a row of tests/browser/integration-map.json once that map (synth line K075) is on main."
+- "Definition of done, dynamics: the captured port lights in its type colour as the pointer approaches; the banner states the refusal while the pointer is over a refused port."
+- "Definition of done, docs and routes: docs/v31/user-guide.md and .ai/repo/features/studio-signal-graph.md say what changed; STUDIO_SHORTCUTS and the shortcut dialog list Shift+C. tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+- "Definition of done, tested: A check 'magnet' in tests/browser/v31-studio-graph.cjs drags a cable from Oscillator 1's output by pointer and releases it 20 px beside Filter 1's audio input (outside the port element), waits with until() (deadline 'captured cable connects', 3 s) for the edge in the store and one history entry; drops an audio cable 20 px beside a CONTROL input and waits for the type sentence in the banner with no edge added; closes a loop and waits for the feedback sentence and the cycle's nodes selected; then connects by Shift+C, arrow keys and Enter, and by touch (tap the output, release within the radius of the input) in a hasTouch context; on the merge base the near-miss drop adds no edge and the check fails. The browser check runs through tests/browser/lib/suite.cjs, waits only through tests/browser/lib/wait.cjs until() with a named wall-clock deadline, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), adds nothing to tests/browser/timing-baseline.json, and fails on the merge base (project.suite-harness, project.bounded-test-timing)."
+- "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit and the completed evidence the release that carried it; E030's judge passes on the pull request once E030 is on main."
+- "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "Wave 1: it adds no class token, selector, markup surface or inline style, so the Flowbite Pro record does not change: node scripts/ui-flowbite-pro-record.mjs --check passes with no rewrite and node --test tests/unit/ui-flowbite-pro.test.mjs passes (project.ui-uses-flowbite-pro); live drawing is on a canvas, a domain view."
+- "scripts/size-report.mjs shows at most 2 KB gzip added, with the base and head figures in the pull request body, within the owner's dist budget of 1 200 000 B gzip (decision of 2026-10-29, about 355 KB of headroom at origin/main b67d1e58); the ceiling of this line is 35 KB gzip in all (Studio boxes 35 KB, signal generator 25 KB), stated in the milestone (project.single-file-deliverable)."
+validation:
+- node --test tests/unit/studio-graph-wire.test.mjs
+- node tests/browser/v31-studio-graph.cjs --only magnet
+- npm test
+evidence_required:
+- verified
+created_at: '2026-10-29'
+updated_at: '2026-10-29'
