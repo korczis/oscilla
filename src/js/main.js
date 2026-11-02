@@ -63,7 +63,9 @@ import { registerOscillaUi, workspaceTitle } from './ui/app.js';
 import {
   keyGuard, openModal, closeModal, watchDialogs, focusSafely, keepFocusInView,
 } from './ui/dialogs.js';
-import { instrumentTakesSpace, isSpace } from './ui/shortcuts.js';
+import { createKeyRegistry } from './ui/keys/registry.js';
+import { createKeyDispatcher } from './ui/keys/dispatcher.js';
+import { bindPageKeys, pageKeyContext } from './ui/keys/clients.js';
 import { createWorkbench, followSequenceEdits } from './ui/workbench.js';
 import { createOutputOwner } from './ui/output-owner.js';
 import { createNavigation, v1ModeFor } from './ui/navigation.js';
@@ -663,18 +665,12 @@ function integrationInit() {
   armAudioUnlock({ win: window, nav: navigator,
     unlock: () => { if (engine.isSupported()) cmp.ensureAudio(); } });
   const stopSequencer = () => stopSequence(cmp); // the editor's live state (C001, C002)
-  window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      stopSequencer();
-      cmp.measureAbort('escape'); // spec §111: Escape aborts a measurement (after the sequencer)
-    }
-    // ADR 0050: Space is Hold to Play only in the workspaces that play, load or analyse the
-    // instrument's signal; in Studio it is the transport's (handled above), elsewhere it
-    // starts nothing.
-    if (isSpace(e) && !instrumentTakesSpace(cmp.workspace)) return;
-    cmp.onKeyDown(e);
-  });
-  window.addEventListener('keyup', (e) => cmp.onKeyUp(e));
+  // The page's keys (Escape stops, Space is Hold to Play where the instrument owns it) are
+  // bound through the one key registry and its one dispatcher (ui/keys/, K153).
+  const keys = createKeyRegistry();
+  bindPageKeys({ keys, cmp, stopSequencer });
+  createKeyDispatcher({ registry: keys, context: () => pageKeyContext(cmp) }).attach();
+  cmp.keys = keys;
   window.addEventListener('blur', () => cmp.releaseHold());
   const hide = () => {
     cmp.releaseHold();

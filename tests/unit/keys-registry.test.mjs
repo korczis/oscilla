@@ -153,3 +153,54 @@ test('key listeners outside src/js/ui/keys/ only shrink (the ratchet)', () => {
     .map(([p, n]) => `${p}: ${now[p] || 0} < ${n} (lower the baseline)`);
   assert.deepEqual(stale, [], 'a count fell: lower its entry in the same change');
 });
+
+test('the page keys bind through the registry: Escape everywhere, Space where the instrument owns it', async () => {
+  const { bindPageKeys, pageKeyContext } = await import('../../src/js/ui/keys/clients.js')
+    .catch(() => ({}));
+  assert.equal(typeof bindPageKeys, 'function');
+  const log = [];
+  const cmp = { workspace: 'playground', synth: { tab: 'xy' },
+    measureAbort: (why) => log.push(`abort ${why}`), onKeyDown: (e) => log.push(`down ${e.code}`),
+    onKeyUp: (e) => log.push(`up ${e.code}`) };
+  const keys = reg.createKeyRegistry();
+  bindPageKeys({ keys, cmp, stopSequencer: () => log.push('stop sequencer') });
+  const d = dis.createKeyDispatcher({ registry: keys, context: () => pageKeyContext(cmp) });
+  const esc = ev('Escape');
+  assert.equal(d.keydown(esc), true);
+  assert.equal(esc.defaultPrevented, false, 'Escape keeps its default: a dialog still closes');
+  d.keyup(ev('Escape'));
+  assert.deepEqual(log.splice(0), ['stop sequencer', 'abort escape', 'down Escape']);
+  const text = { tagName: 'INPUT', isContentEditable: false, getAttribute: () => 'text',
+    closest: () => null };
+  const inText = dis.createKeyDispatcher({ registry: keys, context: () => pageKeyContext(cmp),
+    doc: { activeElement: text, body: {}, querySelector: () => null } });
+  assert.equal(inText.keydown(ev('Escape')), true, 'Escape stops even from a text field');
+  assert.equal(inText.keydown(ev('Space')), false, 'Space types into the text field');
+  log.length = 0;
+  const sp = ev('Space');
+  assert.equal(d.keydown(sp), true);
+  assert.equal(sp.defaultPrevented, true);
+  d.keydown(ev('Space', { repeat: true }));
+  d.keyup(ev('Space'));
+  assert.deepEqual(log.splice(0), ['down Space', 'up Space'], 'one press, one release');
+  for (const w of ['measure', 'studio', 'synth', 'about']) {
+    cmp.workspace = w;
+    assert.equal(d.keydown(ev('Space')), false, `${w}: Space is not the instrument's`);
+  }
+  assert.deepEqual(pageKeyContext(cmp), { workspace: 'about', view: null });
+  cmp.workspace = 'synth';
+  assert.deepEqual(pageKeyContext(cmp), { workspace: 'synth', view: 'xy' });
+  assert.deepEqual(log, []);
+});
+
+test('focus "*" and prevent: false: a page-wide stop acts in any focus and keeps the default', () => {
+  const keys = reg.createKeyRegistry();
+  keys.bind({ id: 'stop', keys: ['Escape'], scope: { workspace: '*', focus: '*' },
+    prevent: false, run: noop, label: 'Stop' });
+  keys.bind({ id: 'dialog.esc', keys: ['Escape'], scope: { workspace: '*', focus: 'dialog' },
+    run: noop, label: 'Close' });
+  assert.equal(keys.resolve('Escape', { workspace: 'x', focus: 'text' }).id, 'stop');
+  assert.equal(keys.resolve('Escape', { workspace: 'x', focus: 'dialog' }).id, 'dialog.esc',
+    'an exact focus beats focus *');
+  assert.equal(keys.list().find((b) => b.id === 'stop').prevent, false);
+});
