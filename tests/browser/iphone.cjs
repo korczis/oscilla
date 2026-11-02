@@ -28,6 +28,11 @@
 //                    refused (journey 22): Use microphone says "permission denied" and shows no
 //                    detected frequency, Connect MIDI ends `denied`, Experiments says its
 //                    records last for this page view only, and the page raises no error
+//   same-hold-touch-keyboard  Hold to Play held by a finger and by Space on the focused control
+//                    (journey 24): both sound, both say aria-pressed true with the same
+//                    accessible name, and letting go stops within HIDE_MS and says false
+//   escape-stops-sequencer  the sequencer started by a tap stops at Escape within HIDE_MS and
+//                    its Play control stops saying pressed
 //
 // Every wait is a condition poll with a named wall-clock deadline (tests/browser/lib/wait.cjs).
 //
@@ -273,6 +278,95 @@ async function deniedJourney(browser, engine, device, phone, check) {
   }
 }
 
+/** The control's accessible name and pressed state, as a screen reader reads them. */
+const announced = (page, sel) => page.evaluate((q) => {
+  const el = document.querySelector(q);
+  if (!el) return null;
+  const by = el.getAttribute('aria-labelledby');
+  const name = (el.getAttribute('aria-label')
+    || (by ? by.split(/\s+/).map((id) => document.getElementById(id)?.textContent || '').join(' ')
+      : el.textContent) || '').replace(/\s+/g, ' ').trim();
+  return { name, pressed: el.getAttribute('aria-pressed') };
+}, sel);
+
+/**
+ * Journey 24: a finger, a keyboard and a screen reader reach the same action and the same safe
+ * stop. Hold to Play held by touch and by Space on the focused control both sound and both say
+ * pressed; letting go stops within HIDE_MS and says not pressed. The sequencer started by a tap
+ * stops at Escape, and its Play control stops saying pressed.
+ */
+async function sameActionJourney(browser, engine, device, phone, check) {
+  const { context, page, errors } = await openAt(browser, engine, device, '#m=playground');
+  try {
+    const spot = await page.evaluate(inertSpot);
+    if (spot) await page.touchscreen.tap(spot.x, spot.y);
+    const hold = page.locator('#osc-hold-play').locator('visible=true').first();
+    await hold.scrollIntoViewIfNeeded({ timeout: 5000 });
+    const box = await hold.boundingBox();
+    const idle = (v) => !!v && v.sources === 0 && v.claims.length === 0;
+    const ways = {
+      touch: {
+        press: async () => {
+          await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+          await page.mouse.down();
+        },
+        lift: () => page.mouse.up(),
+      },
+      keyboard: {
+        press: async () => {
+          await hold.focus();
+          await page.keyboard.down('Space');
+        },
+        lift: () => page.keyboard.up('Space'),
+      },
+    };
+    const seen = {};
+    for (const [way, w] of Object.entries(ways)) {
+      await w.press();
+      const on = await pollFor(() => sounding(page), isSounding, `iphone: hold by ${way} sounds`);
+      const said = await announced(page, '#osc-hold-play');
+      await w.lift();
+      const off = await pollFor(() => sounding(page), idle, `iphone: hold by ${way} stops`,
+        HIDE_MS);
+      const after = await announced(page, '#osc-hold-play');
+      seen[way] = { sounds: on.ok, pressed: said && said.pressed, stops: off.ok,
+        released: after && after.pressed, name: said && said.name };
+    }
+    const same = JSON.stringify(seen.touch) === JSON.stringify(seen.keyboard);
+    check(`same-hold-touch-keyboard@${phone}`, same && seen.touch.sounds && seen.touch.stops
+      && seen.touch.pressed === 'true' && seen.touch.released === 'false'
+      && seen.touch.name.length > 0 && errors.length === 0,
+    `${JSON.stringify(seen)} ${errors.join(' | ')}`);
+  } catch (error) {
+    check(`same-hold-touch-keyboard@${phone}`, false,
+      `the journey stopped: ${error.message.split('\n')[0]}`);
+  } finally {
+    await context.close();
+  }
+  const seq = await openAt(browser, engine, device, '#m=sequencer');
+  try {
+    const spot = await seq.page.evaluate(inertSpot);
+    if (spot) await seq.page.touchscreen.tap(spot.x, spot.y);
+    const play = seq.page.locator('[data-osc="seq.play"]').locator('visible=true').first();
+    await play.scrollIntoViewIfNeeded({ timeout: 5000 });
+    await play.tap({ timeout: 5000 });
+    const on = await pollFor(() => sounding(seq.page), isSounding, 'iphone: the sequencer plays');
+    const playing = await announced(seq.page, '[data-osc="seq.play"]');
+    await seq.page.keyboard.press('Escape');
+    const off = await pollFor(() => sounding(seq.page),
+      (v) => !!v && v.sources === 0 && v.claims.length === 0, 'iphone: Escape stops it', HIDE_MS);
+    const stopped = await announced(seq.page, '[data-osc="seq.play"]');
+    check(`escape-stops-sequencer@${phone}`, on.ok && off.ok && playing.pressed === 'true'
+      && stopped.pressed === 'false' && seq.errors.length === 0,
+    `${JSON.stringify({ on: on.last, off: off.last, playing, stopped })} ${seq.errors.join(' | ')}`);
+  } catch (error) {
+    check(`escape-stops-sequencer@${phone}`, false,
+      `the journey stopped: ${error.message.split('\n')[0]}`);
+  } finally {
+    await seq.context.close();
+  }
+}
+
 async function runOne(engine, baseline, recorded) {
   const browser = await playwright[engine].launch();
   const failures = [];
@@ -360,6 +454,7 @@ async function runOne(engine, baseline, recorded) {
         await context.close();
       }
       await deniedJourney(browser, engine, device, phone, check);
+      await sameActionJourney(browser, engine, device, phone, check);
     }
   } finally {
     await browser.close();
