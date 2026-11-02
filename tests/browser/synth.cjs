@@ -89,6 +89,9 @@
 //   s-scope    K152: a drag across the LPF plate's scope sets its cutoff on the drawing's log
 //              axis (left 20 Hz, right 20 kHz) as one undo step, the curve and the knob's value
 //              follow, and its label says what it draws
+//   s-monitor  K152: the Synth's live monitor (a second host of the Playground's bridge and
+//              scope view) has a canvas the size of its box, and its picture changes once a held
+//              key sounds
 //   s-dock     K066, beside the piano: the instrument picker is a menu button whose role=menu
 //              lists every notes node (8, the XY pad too) and New Synth voice; arrows and
 //              Enter route the keys to the FM engine in one undo entry (a note then takes an FM voice) and undo
@@ -879,6 +882,28 @@ function defineChecks() {
     return { ok: Math.abs(after.hz - 632.5) < 20 && after.depth === before.depth + 1
       && after.value !== before.value && /^lowpass response, 6\d\d(\.\d)? Hz, /.test(after.label),
     before, after };
+  });
+
+  def('s-monitor', async ({ page }) => {
+    const mon = page.locator('#osc-synth-monitor');
+    await mon.scrollIntoViewIfNeeded();
+    const box = await mon.boundingBox();
+    const shot = () => page.evaluate(() => {
+      const c = document.querySelector('#osc-synth-monitor canvas');
+      return c ? { w: c.clientWidth, h: c.clientHeight, data: c.toDataURL() } : null;
+    });
+    const quiet = await shot();
+    if (!quiet || Math.abs(quiet.w - box.width) > 2 || quiet.h < 40) {
+      return { ok: false, detail: 'the monitor has no canvas of its box', box, quiet };
+    }
+    await hold(page, 'KeyA');
+    await sound(page, (q) => q.rmsDb > -45, 'a held key sounds');
+    let moved = false;
+    await until(async () => { moved = (await shot()).data !== quiet.data; return moved; },
+      { ms: 5000, what: 'the monitor draws the sounding note' });
+    await page.keyboard.up('KeyA');
+    await silent(page, 'the note releases');
+    return { ok: moved, canvas: [quiet.w, quiet.h] };
   });
 
   def('s-dock', async ({ page, size }) => {

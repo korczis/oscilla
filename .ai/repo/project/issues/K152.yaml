@@ -6,7 +6,7 @@ title: Every Synth plate draws what it does, redrawn while its knob moves
 slug: every-synth-plate-draws-what-it-does
 priority: p2
 profile: implementation
-objective: "Add src/js/synth/view/scopes.js and draw it on the plates: a VCO's one cycle (pulse at its width), a filter's magnitude response from 20 Hz to 20 kHz with its cutoff marked (the Web Audio biquad of the specification for the linear Q the Studio stores, shelves at S = 1), an envelope's attack, decay, sustain and release, an LFO's two cycles. Each scope is an image labelled with its values; a knob drag redraws it in the same frame (ui.js updateKnob). Computed from the parameters, so it is exact for what the node is set to and never claims to be a measurement. Each scope is also a handle for the parameter it draws (owner: every element clickable and interactive): a drag sets a filter's cutoff on the drawing's log axis, a pulse's width, an LFO's rate on its knob scale and an envelope's sustain, as one undo step, while the knob stays the keyboard control. The section jump moves from ui.js to view/faces.js (scrollToSection) so ui.js keeps headroom under its source budget."
+objective: "Add src/js/synth/view/scopes.js and draw it on the plates: a VCO's one cycle (pulse at its width), a filter's magnitude response from 20 Hz to 20 kHz with its cutoff marked (the Web Audio biquad of the specification for the linear Q the Studio stores, shelves at S = 1), an envelope's attack, decay, sustain and release, an LFO's two cycles. Each scope is an image labelled with its values; a knob drag redraws it in the same frame (ui.js updateKnob). Computed from the parameters, so it is exact for what the node is set to and never claims to be a measurement. Each scope is also a handle for the parameter it draws (owner: every element clickable and interactive): a drag sets a filter's cutoff on the drawing's log axis, a pulse's width, an LFO's rate on its knob scale and an envelope's sustain, as one undo step, while the knob stays the keyboard control. The section jump moves from ui.js to view/faces.js (scrollToSection) so ui.js keeps headroom under its source budget. Above the tabs, the Synth shows its live output: the Playground's scope view in a second p5 host of the one visualization bridge, over the engine's analyser after the safety chain (no second analyser, no second state), drawing while the Synth owns the output."
 why: "Owner direction of 2026-11-02, in Czech, on https://korczis.github.io/oscilla/#m=synth: \"pridej prubehy, visualizace, monityori, vlny, interatktivitu, vic to propoj\", \"vic visible\" and \"kazdy jeden element by mel byt klikatelny, interaktivni, propojeny, funkcni, zapojeny, otestovany\". A plate showed knobs and numbers only: a cutoff of 886 Hz said nothing about the curve it makes."
 scope:
 - src/js/synth/view/scopes.js
@@ -14,6 +14,11 @@ scope:
 - src/js/synth/ui.js
 - src/js/synth/view/faces.js
 - tests/browser/synth.cjs
+- src/index.html
+- src/js/main.js
+- tests/unit/surface-census.json
+- docs/v3/readout-truth.yaml
+- docs/v3/readout-truth.md
 - tests/unit/synth-scopes.test.mjs
 - tests/README.md
 - .ai/repo/project/intents/connected-instrument.yaml
@@ -23,12 +28,12 @@ depends_on:
 - K151
 acceptance_criteria:
 - "Before: VERIFIED: the Synth's VCO, filter, envelope and LFO plates show knobs and values only."
-- "After: each draws its curve as a labelled image; a Butterworth low-pass reads -3.01 dB at its cutoff, a peaking filter its gain at its centre, a band-pass 0 dB at its centre, an all-pass flat; dragging a knob redraws the curve; a drag across the LPF scope from 90 % to 50 % of its width sets 632.5 Hz in one undo step."
+- "After: each draws its curve as a labelled image; a Butterworth low-pass reads -3.01 dB at its cutoff, a peaking filter its gain at its centre, a band-pass 0 dB at its centre, an all-pass flat; dragging a knob redraws the curve; a drag across the LPF scope from 90 % to 50 % of its width sets 632.5 Hz in one undo step; the live monitor's canvas fills its box and its picture changes once a held key sounds."
 - "Negative cases: a module with no curve (mixer, noise, VCA) draws none; a bypassed filter says so in its label; no NaN on any value."
 - "Rollback: revert the merge commit; no stored record or schema changes."
 validation:
 - node --test tests/unit/synth-scopes.test.mjs
-- node tests/browser/synth.cjs --only s-scope
+- node tests/browser/synth.cjs --only s-scope,s-monitor
 evidence_required:
 - verified
 created_at: '2026-11-02'
