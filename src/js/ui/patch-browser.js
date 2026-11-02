@@ -20,6 +20,7 @@ import {
 } from '../studio/patch-catalog.js';
 import { announceAction } from '../studio/a11y.js';
 import { h, replaceChildren } from './studio/graph-dom.js';
+import { roving } from './keys/roving.js';
 
 const FIELD = 'h-11 rounded-lg border border-solid border-gray-300 bg-gray-50 px-3 text-sm '
   + 'text-gray-900 focus:border-primary-500 focus:ring-primary-500 dark:border-gray-600 '
@@ -134,21 +135,21 @@ export function mountPatchBrowser(host, svc) {
   search.addEventListener('input', () => { f.query = search.value; render(); });
   inst.addEventListener('change', () => { f.instrument = inst.value; render(); });
   tag.addEventListener('change', () => { f.tag = tag.value; render(); });
-  list.addEventListener('keydown', (e) => {
-    const items = view().items;
-    const i = items.findIndex((x) => x.id === active);
-    const next = { ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: items.length - 1 }[e.key];
-    if (next !== undefined && items.length) {
-      e.preventDefault();
-      active = items[Math.max(0, Math.min(items.length - 1, next))].id;
+  // The listbox keeps focus and moves aria-activedescendant (roving.js, the one widget listener).
+  roving(list, {
+    count: () => view().items.length,
+    index: () => view().items.findIndex((x) => x.id === active),
+    wrap: false,
+    move(i) {
+      active = view().items[i].id;
       render();
       const el = list.querySelector('[aria-selected="true"]');
       if (el) el.scrollIntoView({ block: 'nearest' });
-    } else if (e.key === 'Enter' && i >= 0) {
-      e.preventDefault();
-      const x = items[i];
+    },
+    activate(i) {
+      const x = view().items[i];
       load(x, x.applicable ? 'apply' : x.modes.find((m) => m !== 'apply'));
-    }
+    },
   });
 
   function renderSave() {

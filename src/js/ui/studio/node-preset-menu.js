@@ -10,6 +10,7 @@
 import { nodePresetAction, nodePresets } from '../../studio/node-presets.js';
 import { announceAction } from '../../studio/a11y.js';
 import { h, replaceChildren } from './graph-dom.js';
+import { roving } from '../keys/roving.js';
 
 const BTN = 'inline-flex h-11 items-center gap-1 rounded-lg border border-solid border-gray-300 '
   + 'bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none '
@@ -69,17 +70,11 @@ export function presetMenu(view, svc) {
       items()[0].focus();
     }
   });
-  menu.addEventListener('keydown', (e) => {
-    const all = items();
-    const step = { ArrowDown: 1, ArrowUp: -1 }[e.key];
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      e.stopPropagation();
-      close(true);
-    } else if (step) {
-      e.preventDefault();
-      all[(all.indexOf(document.activeElement) + step + all.length) % all.length].focus();
-    }
+  roving(menu, {
+    count: () => items().length,
+    index: () => items().indexOf(document.activeElement),
+    move: (i) => items()[i].focus(),
+    escape: () => { close(true); return true; },
   });
   return h('div', { class: 'relative mb-3', 'data-osc': 'studio.inspector.presetsBox' },
     [button, menu]);
