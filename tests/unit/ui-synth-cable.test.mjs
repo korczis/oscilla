@@ -128,6 +128,30 @@ test('a near-vertical cable still hangs: it bows sideways, and the bow fades as 
   assert.deepEqual([p0, p3], [{ x: 0, y: 0 }, { x: 0, y: 200 }], 'the ends do not move');
 });
 
+test('the bow is continuous: moving an end across the vertical never jumps the cable', () => {
+  // The bow: the curve's middle less the chord's (which itself moves dx / 2).
+  const midX = (dx) => at(cableCurve({ x: 0, y: 0 }, { x: dx, y: 200 }), 0.5).x - dx / 2;
+  let prev = midX(-1);
+  let lo = prev;
+  let hi = prev;
+  for (let i = -99; i <= 100; i++) {
+    const x = midX(i / 100);
+    assert.ok(Math.abs(x - prev) < 0.1, `dx ${i / 100}: ${prev} -> ${x}`);
+    lo = Math.min(lo, x);
+    hi = Math.max(hi, x);
+    prev = x;
+  }
+  assert.ok(hi - lo < 1, `the bow changes ${hi - lo} over dx -1..1`);
+  const raw = (dx) => at(cableCurve({ x: 0, y: 0 }, { x: dx, y: 200 }), 0.5).x;
+  assert.ok(Math.abs(raw(1) - raw(-1)) <= 1 + 1e-6, 'the midpoint moves no more than the chord');
+  assert.ok(Math.abs(midX(0)) >= 3, 'and a vertical cable still bows');
+  for (const dx of [-0.01, 0.01]) {
+    const [p0, p1, p2, p3] = points(cableCurve({ x: 0, y: 0 }, { x: dx, y: 200 }));
+    const [q0, q1, q2, q3] = points(cableCurve({ x: dx, y: 200 }, { x: 0, y: 0 }));
+    assert.deepEqual([q0, q1, q2, q3], [p3, p2, p1, p0], 'independent of the order of the ends');
+  }
+});
+
 test('cableCurve refuses a non-finite end or slack', () => {
   assert.throws(() => cableCurve({ x: NaN, y: 0 }, B), /finite/);
   assert.throws(() => cableCurve(A, { x: 0 }), /finite/);
@@ -232,14 +256,15 @@ test('every dashed type keeps its own dasharray when hovered and selected', () =
 });
 
 test('a refused cable differs from a normal one by shape, not by colour alone', () => {
-  const noStroke = (svg) => svg.replace(/\sstroke="[^"]*"/g, '');
+  const shape = (svg) => svg.replace(/\sstroke="[^"]*"/g, '').replace(/\sdata-[\w-]+="[^"]*"/g, '');
   for (const type of TYPES) {
     for (const st of [{}, { hover: true }, { selected: true }]) {
       const normal = draw({ type, state: st });
       const refused = draw({ type, state: { ...st, refused: true } });
-      assert.notEqual(noStroke(refused), noStroke(normal), `${type} ${JSON.stringify(st)}`);
+      assert.notEqual(shape(refused), shape(normal), `${type} ${JSON.stringify(st)}: a shape`);
       assert.match(refused, /^<g data-cable="c1" data-refused=""/, type);
-      assert.doesNotMatch(normal, /data-refused/, type);
+      assert.match(refused, /<g data-cross="" pointer-events="none"><line /, `${type}: a cross`);
+      assert.doesNotMatch(normal, /data-refused|data-cross/, type);
     }
   }
   const refused = draw({ state: { refused: true } });

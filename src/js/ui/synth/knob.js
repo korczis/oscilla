@@ -3,10 +3,12 @@
 // as the node registry writes it ({ key or id, label, unit, min, max, step, scale: 'lin' |
 // 'linear' | 'log', default, type: 'number' | 'integer' | 'enum' | 'boolean', options }); the
 // control holds no constant of any parameter. An enum or boolean is a row of positions in option
-// order (a switch draws one per option). The value is a setpoint (project.no-fake-science):
-// nothing here tweens or smooths it. The core adds no listener and reads no document: a host calls
-// knobKey from its own delegated listener (K153 counts key listeners), and draws controlSvg where
-// it wants, an HTML panel or an SVG graph box at any zoom. Every colour is a token passed in
+// order (a switch draws one per option, up to four; a number is never a switch). The value is
+// a setpoint (project.no-fake-science): nothing here tweens or smooths it. The core adds no
+// listener and reads no document: a host calls knobKey from its own delegated listener (K153
+// counts key listeners), and draws controlSvg where it wants, an HTML panel or an SVG graph box
+// at any zoom. ariaAttrs is the controlAttrs shape N003 adopts (aria-valuenow a 0..1000
+// position). Every colour is a token passed in
 // (tokens.js; project.visual-identity-lock v3), so nothing here is a colour literal.
 //
 //   clampValue, toNorm, fromNorm, quantize, defaultValue, stepOption   value mapping
@@ -41,8 +43,15 @@ export const WHEEL_LINE_PX = 16;
 /** A stepless linear range moves 1/KEY_DIVS of itself per key; PageUp/PageDown PAGE_STEPS. */
 const KEY_DIVS = 100;
 const PAGE_STEPS = 10;
-/** The least a wheel notch moves, as a part of the norm range (fine: a tenth of it). */
+/** The least a wheel notch moves, as a part of the norm range (fine: a tenth of it), except on
+ *  an integer range of more than WHEEL_FLOOR_MAX_STEPS steps (a seed: an identifier, where one
+ *  notch is one step). */
 const WHEEL_FLOOR = 0.01;
+const WHEEL_FLOOR_MAX_STEPS = 1e4;
+/** A switch draws at most this many positions; more options are a knob (a rotary selector). */
+const SWITCH_MAX_POSITIONS = 4;
+/** The ARIA position's range: aria-valuenow is the position 0..ARIA_POSITIONS (N003). */
+const ARIA_POSITIONS = 1000;
 const LINEAR = new Set(['lin', 'linear']);
 const BOOL_OPTIONS = Object.freeze([Object.freeze([false, 'Off']), Object.freeze([true, 'On'])]);
 
@@ -100,6 +109,19 @@ function quantumOf(p, fine) {
   return integer ? Math.max(1, Math.round(step / FINE_DIV)) : step / FINE_DIV;
 }
 
+/** A log range's grid at `x`: four significant digits (five fine), as K058 kept them, so the
+ *  bottom of a range spanning decades is as fine as its top. */
+const relQuantum = (x, fine) => 10 ** (Math.floor(Math.log10(Math.abs(x))) - (fine ? 4 : 3));
+
+/** The grid at `v`: a log range's relative grid where it is finer than the step, else the
+ *  step (quantumOf); 0 for a stepless linear range. */
+function quantumAt(v, p, fine) {
+  const q = quantumOf(p, fine);
+  if (!rangeOf(p).log) return q;
+  const r = relQuantum(clampValue(v, p), fine);
+  return q && q <= r ? q : r;
+}
+
 /** `v` held to [min, max]; anything not a number reads min. A choice: a known option, else the
  *  default, else the first. */
 export function clampValue(v, p) {
@@ -130,13 +152,16 @@ export function fromNorm(n, p) {
   return log ? min * (max / min) ** t : min + t * (max - min);
 }
 
-/** `v` clamped and snapped to the step in value space (fine: to a tenth of it). */
+/** `v` clamped and snapped to the grid in value space: the step (fine: a tenth of it), anchored
+ *  at min; on a log range four significant digits (fine: five) where that is finer. */
 export function quantize(v, p, { fine = false } = {}) {
   if (choicesOf(p)) return clampValue(v, p);
-  const { min } = rangeOf(p);
+  const { min, log } = rangeOf(p);
   let x = clampValue(v, p);
   const q = quantumOf(p, fine);
-  if (q) x = clampValue(min + Math.round((x - min) / q) * q, p);
+  const r = log ? relQuantum(x, fine) : 0;
+  if (r && !(q && q <= r)) x = clampValue(Math.round(clean(x / r)) * r, p);
+  else if (q) x = clampValue(min + Math.round(clean((x - min) / q)) * q, p);
   return clean(x);
 }
 
@@ -163,8 +188,8 @@ export function stepOption(p, v, dir) {
 function nudge(value, p, steps, fine) {
   if (choicesOf(p)) return stepOption(p, clampValue(value, p), steps);
   const { min, max, log } = rangeOf(p);
-  const q = quantumOf(p, fine);
   const v = clampValue(value, p);
+  const q = quantumAt(v, p, fine);
   const div = fine ? FINE_DIV : 1;
   let next;
   if (!log && q) next = v + steps * q;
@@ -177,13 +202,9 @@ function nudge(value, p, steps, fine) {
   return out;
 }
 
-/** PageUp/PageDown: 10 steps on a stepped linear range, else 10 % of the (norm) range; a choice
- *  one option. */
+/** PageUp/PageDown: 10 % of the (norm) range, on the grid, as K058 states; a choice one option. */
 function page(value, p, dir) {
   if (choicesOf(p)) return stepOption(p, clampValue(value, p), dir);
-  const { log } = rangeOf(p);
-  const step = quantumOf(p, false);
-  if (!log && step) return quantize(clampValue(value, p) + dir * PAGE_STEPS * step, p);
   return quantize(fromNorm(toNorm(value, p) + dir / PAGE_STEPS, p), p);
 }
 
@@ -220,33 +241,51 @@ export function pixelsPerRangeFor(kind, zoom = 1, param) {
   }
   if (kind === 'knob') return DRAG_PX_PER_RANGE;
   if (kind === 'fader') return FADER_TRAVEL * zoom;
-  return leverOf(positionsOf(param)).travel * zoom;
+  return leverOf(switchPositions(param)).travel * zoom;
 }
 
 /**
  * The value after a wheel event, and the px the host keeps for the next one: pixels are deltaY
  * × (deltaMode 1: WHEEL_LINE_PX, 2: WHEEL_NOTCH_PX, else 1) plus the carried `rest`, and every
- * WHEEL_NOTCH_PX of them is one notch (up, deltaY < 0, increases). A notch is one key step, but
- * never less than 1 % of the norm range (fine: 0.1 %), so a tiny step never makes the wheel
- * glacial; a choice moves one option per notch. The arrow keys are exempt from that floor: they
- * are the precise path (one step, or 1/LOG_STEPS, per press), PageUp/PageDown the coarse one.
+ * WHEEL_NOTCH_PX of them is one notch (up, deltaY < 0, increases); a line- or page-mode event is
+ * always at least one notch (one detent of such a wheel is 3 lines, 48 px). The rest is dropped
+ * when the wheel turns back (its sign differs from deltaY's) and when the value is held at
+ * min or max, so the first notch back always moves. Under a notch the value comes back as it
+ * was, only clamped. A notch is one key step, but never less than 1 % of the norm range (fine:
+ * 0.1 %), so a tiny step never makes the wheel glacial; an integer range of more than 10 000
+ * steps is exempt (a seed is an identifier: one notch, one step), and a choice moves one option
+ * per notch. The arrow keys are exempt from that floor: they are the precise path (one step, or
+ * 1/LOG_STEPS, per press), PageUp/PageDown the coarse one.
  */
 export function wheelValue(value, deltaY, p, { fine = false, deltaMode = 0, rest = 0 } = {}) {
   const scale = deltaMode === 1 ? WHEEL_LINE_PX : (deltaMode === 2 ? WHEEL_NOTCH_PX : 1);
-  const px = (Number.isFinite(deltaY) ? deltaY * scale : 0) + (Number.isFinite(rest) ? rest : 0);
-  const notches = Math.trunc(px / WHEEL_NOTCH_PX);
-  const left = clean(px - notches * WHEEL_NOTCH_PX);
-  const kept = left === 0 ? 0 : left;
-  if (notches === 0) return { value: quantize(value, p, { fine }), rest: kept };
+  const d = Number.isFinite(deltaY) ? deltaY * scale : 0;
+  let carried = Number.isFinite(rest) ? rest : 0;
+  if (d !== 0 && carried !== 0 && Math.sign(d) !== Math.sign(carried)) carried = 0;
+  const px = d + carried;
+  let notches = Math.trunc(px / WHEEL_NOTCH_PX);
+  let left = clean(px - notches * WHEEL_NOTCH_PX);
+  if (notches === 0 && d !== 0 && (deltaMode === 1 || deltaMode === 2)) {
+    notches = Math.sign(d);
+    left = 0;
+  }
+  const v0 = clampValue(value, p);
+  const dir = -Math.sign(px);
+  const held = (v) => (dir > 0 && toNorm(v, p) >= 1) || (dir < 0 && toNorm(v, p) <= 0);
+  const out = (v) => ({ value: v, rest: left === 0 || held(v) ? 0 : left });
+  if (notches === 0) return out(v0);
   const steps = -notches;
-  if (choicesOf(p)) return { value: nudge(value, p, steps, fine), rest: kept };
-  let next = nudge(value, p, steps, fine);
+  if (choicesOf(p)) return out(nudge(v0, p, steps, fine));
+  let next = nudge(v0, p, steps, fine);
+  const { min, max } = rangeOf(p);
+  const identifier = p.type === 'integer'
+    && (max - min) / (quantumOf(p, false) || 1) > WHEEL_FLOOR_MAX_STEPS;
   const floor = WHEEL_FLOOR / (fine ? FINE_DIV : 1);
-  const n0 = toNorm(value, p);
-  if (Math.abs(toNorm(next, p) - n0) < Math.abs(steps) * floor - 1e-12) {
+  const n0 = toNorm(v0, p);
+  if (!identifier && Math.abs(toNorm(next, p) - n0) < Math.abs(steps) * floor - 1e-12) {
     next = quantize(fromNorm(n0 + steps * floor, p), p, { fine });
   }
-  return { value: next, rest: kept };
+  return out(next);
 }
 
 /**
@@ -283,6 +322,15 @@ export function knobKey(e, { value, param, fine = false } = {}) {
 
 const NUMBER_TEXT = /^([-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?)\s*(k)?\s*(.*)$/i;
 
+/** Typed text made plain: a Unicode minus is '-', a thin, narrow or normal space between digit
+ *  groups of three is a thousands separator, and a comma is the decimal mark when the text has
+ *  no dot (the owner's locale writes 1,5). */
+function plainNumber(raw) {
+  let t = raw.replace(/\u2212/g, '-').replace(/(\d)[ \u00a0\u2009\u202f](?=\d{3}(?!\d))/g, '$1');
+  if (!t.includes('.')) t = t.replace(/^([-+]?\d*),(\d)/, '$1.$2');
+  return t;
+}
+
 /** The units a typed value may carry for `p`, each with its factor to the parameter's unit. */
 function unitsFor(p) {
   const u = String(p.unit || '').toLowerCase();
@@ -305,12 +353,15 @@ export function parseValue(text, p) {
   const opts = choicesOf(p);
   if (opts) {
     const low = raw.toLowerCase();
+    if (p.type === 'boolean' && (low === '1' || low === '0')) {
+      return { ok: true, value: low === '1' };
+    }
     const hit = opts.find(([v, label]) => String(label).toLowerCase() === low
       || String(v).toLowerCase() === low);
     return hit ? { ok: true, value: hit[0] }
       : { ok: false, reason: `${labelOf(p)} must be one of ${opts.map((o) => o[1]).join(', ')}.` };
   }
-  const m = NUMBER_TEXT.exec(raw);
+  const m = NUMBER_TEXT.exec(plainNumber(raw));
   if (!m) return { ok: false, reason: `"${raw.slice(0, 24)}" is not a number.` };
   const units = unitsFor(p);
   const unit = m[3].trim().toLowerCase();
@@ -324,7 +375,13 @@ export function parseValue(text, p) {
   if (!Number.isFinite(v)) return { ok: false, reason: `"${raw.slice(0, 24)}" is not a number.` };
   const why = validateParamValue({ type: p.type === 'integer' ? 'integer' : 'number',
     min: p.min, max: p.max }, v);
-  return why ? { ok: false, reason: `${labelOf(p)} ${why}.` } : { ok: true, value: clean(v) };
+  if (why) return { ok: false, reason: `${labelOf(p)} ${why}.` };
+  // Stored as the readout shows it: the fine grid, or a stepless range's shown decimals.
+  let stored = quantize(v, p, { fine: true });
+  if (!quantumAt(stored, p, true)) {
+    stored = clampValue(Number(stored.toFixed(fineDecimals(stored, p))), p);
+  }
+  return { ok: true, value: clean(stored) };
 }
 
 // ---------------------------------------------------------------- text and ARIA
@@ -351,8 +408,8 @@ function stepDecimals(p) {
 /** The most decimals worth showing at `v`: the fine step's, or for a stepless range those that
  *  resolve one fine key step there. */
 function fineDecimals(v, p) {
-  const fine = quantumOf(p, true);
-  if (fine) return decimalsIn(fine);
+  const fine = quantumAt(v, p, true);
+  if (fine) return decimalsIn(clean(fine));
   const { min, max, log } = rangeOf(p);
   const res = log ? Math.abs(v) * ((max / min) ** (1 / (LOG_STEPS * FINE_DIV)) - 1)
     : (max - min) / (KEY_DIVS * FINE_DIV);
@@ -396,41 +453,53 @@ export function formatValue(v, p) {
   const own = ownDecimals(v, p);
   if (p.unit === 'Hz') return formatFrequencyCompact(v, digitsAt(v, own));
   if (p.unit === 's') return timeText(v, own);
-  const d = Math.max(stepDecimals(p), own);
+  const least = { oct: 2, dB: 1 }[p.unit] || 0;
+  const base = Math.max(stepDecimals(p), least);
+  let d = Math.max(base, own);
+  // A value that rounds to zero reads as zero itself does (0 ct, never 0.0 ct).
+  if (Number(fixed(v, d)) === 0) d = base;
+  const text = fixed(v, d);
   switch (p.unit) {
-    case 'cents': return `${signed(fixed(v, d))} ct`;
-    case 'st': return `${signed(fixed(v, d))} st`;
-    case 'oct': return `${signed(fixed(v, Math.max(2, d)))} oct`;
-    case 'dB': return `${fixed(v, Math.max(1, d))} dB`;
-    default: return p.unit ? `${fixed(v, d)} ${p.unit}` : fixed(v, d);
+    case 'cents': return `${signed(text)} ct`;
+    case 'st': return `${signed(text)} st`;
+    case 'oct': return `${signed(text)} oct`;
+    case 'dB': return `${text} dB`;
+    default: return p.unit ? `${text} ${p.unit}` : text;
   }
 }
+
+/** The spellings a text may end in for `p`'s unit; the first is the one this core writes. */
+const unitSpellings = (unit) => (unit === 'cents' ? ['ct', 'cents'] : [unit]);
 
 /** Whether `text` ends in `unit` (or a k/m/µ-prefixed `unit`) after a digit, space or start. */
 function endsWithUnit(text, unit) {
-  const u = unit.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`(?:^|[\\d\\s.])(?:[kmµu])?${u}$`).test(text.trim());
+  return unitSpellings(unit).some((spelling) => {
+    const u = spelling.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(?:^|[\\d\\s.])(?:[kmµu])?${u}$`).test(text.trim());
+  });
 }
 
-/** The control's ARIA attributes. A number is a slider; `format(v, param)` overrides the text,
- *  and the unit is added when the text does not end in it. An enum is a slider of option
- *  positions with the label as its text; a boolean a switch. The value is clamped, never NaN. */
+/**
+ * The control's ARIA attributes, in the shape N003's controlAttrs adopts (dev-53, 2026-11-02):
+ * role slider, aria-valuemin 0, aria-valuemax 1000 and aria-valuenow the position,
+ * round(toNorm(value) × 1000), so a log parameter steps in its log domain; an enum or boolean
+ * has the position of its option index. aria-valuetext carries the value with its unit and stays
+ * truthful beyond the range: the position clamps to 0..1000, the text shows the real value.
+ * `format(v, param)` overrides the text, and the unit is added when the text does not end in it.
+ * Anything not a number reads min, never NaN.
+ */
 export function ariaAttrs(value, p, format) {
   const opts = choicesOf(p);
-  const v = clampValue(value, p);
+  let v;
+  if (opts) v = clampValue(value, p);
+  else v = typeof value === 'number' && Number.isFinite(value) ? value : clampValue(value, p);
   const custom = typeof format === 'function';
   let text = custom ? String(format(v, p)) : formatValue(v, p);
-  if (opts && p.type === 'boolean') {
-    return { role: 'switch', 'aria-checked': v ? 'true' : 'false', 'aria-valuetext': text };
+  if (!opts && custom && p.unit && !endsWithUnit(text, p.unit)) {
+    text = `${text} ${unitSpellings(p.unit)[0]}`;
   }
-  if (opts) {
-    return { role: 'slider', 'aria-valuemin': 0, 'aria-valuemax': opts.length - 1,
-      'aria-valuenow': optionIndex(v, p, opts), 'aria-valuetext': text };
-  }
-  const { min, max } = rangeOf(p);
-  if (custom && p.unit && !endsWithUnit(text, p.unit)) text = `${text} ${p.unit}`;
-  return { role: 'slider', 'aria-valuemin': min, 'aria-valuemax': max, 'aria-valuenow': v,
-    'aria-valuetext': text };
+  return { role: 'slider', 'aria-valuemin': 0, 'aria-valuemax': ARIA_POSITIONS,
+    'aria-valuenow': Math.round(toNorm(v, p) * ARIA_POSITIONS), 'aria-valuetext': text };
 }
 
 // ---------------------------------------------------------------- the drawing
@@ -466,24 +535,27 @@ export const CONTROL_BOX = Object.freeze({
   switch: Object.freeze({ x: -17, y: -18, width: 34, height: 36 }),
 });
 
-/** How many positions a switch of `p` has: an option each, else two (min and max). */
-const positionsOf = (p) => {
-  const opts = p ? choicesOf(p) : null;
-  return opts ? Math.max(2, opts.length) : 2;
-};
-
-/** A switch lever for `n` positions: its height and its travel inside the slot. Two to four
- *  positions read best; a knob draws any enum as a rotary selector. */
-function leverOf(n) {
-  const span = SWITCH.h - 2 * SWITCH.inset;
-  const h = n <= 2 ? 12 : Math.max(4, span / n);
-  return { h, travel: span - h };
+/** How many positions a switch of `p` has: one per option of an enum (at most
+ *  SWITCH_MAX_POSITIONS), two for a boolean. A number is refused: a switch cannot show the
+ *  values between its ends, so a number is a knob or a fader. */
+function switchPositions(p) {
+  const opts = choicesOf(p);
+  if (!opts) {
+    throw new Error(`${idOf(p)}: a switch is for an enum or a boolean; draw a number as a knob `
+      + 'or a fader.');
+  }
+  if (opts.length > SWITCH_MAX_POSITIONS) {
+    throw new Error(`${idOf(p)}: a switch has at most ${SWITCH_MAX_POSITIONS} positions, not `
+      + `${opts.length}; draw it as a knob (a rotary selector).`);
+  }
+  return Math.max(2, opts.length);
 }
 
-/** The position index of `v` on a switch of `p`. */
-function switchIndex(v, p) {
-  const opts = choicesOf(p);
-  return opts ? optionIndex(v, p, opts) : (toNorm(v, p) >= 0.5 ? 1 : 0);
+/** A switch lever for `n` positions: its height and its travel inside the slot. */
+function leverOf(n) {
+  const span = SWITCH.h - 2 * SWITCH.inset;
+  const h = n <= 2 ? 12 : span / n;
+  return { h, travel: span - h };
 }
 
 /** Whether an applied value is given and sits elsewhere than the value. */
@@ -534,9 +606,13 @@ function faderShapes(value, applied, p, t, st) {
   const len = FADER.travel + 4;
   const tw = FADER.trackW;
   const ax = FADER.capW / 2 + 3;
+  // The value fill runs from the bottom, or from zero on a range across zero (as the knob's arc).
+  const bipolar = p.min < 0 && p.max > 0;
+  const from = bipolar ? yOf(0) : half + 2;
+  const [f0, f1] = y < from ? [y, from] : [from, y];
   return `<rect x="${-tw / 2}" y="${top}" width="${tw}" height="${len}" rx="${tw / 2}" `
     + `fill="${esc(c.track)}" stroke="${esc(t.surface.edge)}" stroke-width="0.5"/>`
-    + (y < half ? `<rect x="${-tw / 2}" y="${y}" width="${tw}" height="${num(half + 2 - y)}" `
+    + (f1 - f0 > 0.01 ? `<rect x="${-tw / 2}" y="${f0}" width="${tw}" height="${num(f1 - f0)}" `
       + `rx="${tw / 2}" fill="${esc(st.disabled ? c.disabled : c.ring)}" stroke="none"/>` : '')
     + (applied !== null ? `<line data-applied="" x1="${-ax}" y1="${yOf(applied)}" x2="${ax}" `
       + `y2="${yOf(applied)}" stroke="${esc(c.pointer)}" stroke-width="1"/>` : '')
@@ -552,11 +628,13 @@ function faderShapes(value, applied, p, t, st) {
 
 function switchShapes(value, applied, p, t, st) {
   const c = t.control;
-  const n = positionsOf(p);
+  const n = switchPositions(p);
+  const opts = choicesOf(p);
   const lever = leverOf(n);
   const bottom = SWITCH.h / 2 - SWITCH.inset - lever.h / 2;
   const centre = (i) => num(bottom - (i * lever.travel) / (n - 1));
-  const yc = centre(switchIndex(value, p));
+  const index = (v) => optionIndex(v, p, opts);
+  const yc = centre(index(value));
   const x = SWITCH.w / 2;
   let detents = '';
   if (n > 2) {
@@ -565,7 +643,7 @@ function switchShapes(value, applied, p, t, st) {
         + `y2="${centre(i)}" stroke="${esc(c.track)}" stroke-width="1"/>`;
     }
   }
-  const ay = applied !== null ? centre(switchIndex(applied, p)) : null;
+  const ay = applied !== null ? centre(index(applied)) : null;
   return `<rect x="${-x}" y="${-SWITCH.h / 2}" width="${SWITCH.w}" `
     + `height="${SWITCH.h}" rx="3" fill="${esc(c.track)}" stroke="${esc(t.surface.edge)}" `
     + 'stroke-width="1"/>'
@@ -587,12 +665,14 @@ const SHAPES = Object.freeze({ knob: knobShapes, fader: faderShapes, switch: swi
 /**
  * One control as an SVG '<g>' string, centred on the origin inside CONTROL_BOX[kind], drawn
  * only from `tokens` (synthTokens): knob = track, value ring (control.ring), cap with one
- * highlight, pointer; fader = track, value fill and cap; switch = one lever position per option
- * (two for a number or a boolean), with detents past two. `applied`, when given and elsewhere
- * than `value`, draws a second, thin marker in control.pointer where the engine's applied value
- * is (the requested and applied split). An invisible hit rect of at least HIT_PX / zoom graph
- * units, and never smaller than the box, takes the pointer, so the target stays 44 screen px at
- * any zoom and holds the whole drawing; the drawing takes none. Every shape sets its own stroke.
+ * highlight, pointer; fader = track, value fill (from zero on a range across zero) and cap;
+ * switch = one lever position per option of an enum of up to four or a boolean, with detents
+ * past two (a number, or more options, is refused: draw it as a knob). `applied`, when given
+ * and elsewhere than `value`, draws a second, thin marker in control.pointer where the engine's
+ * applied value is (the requested and applied split). An invisible hit rect of at least
+ * HIT_PX / zoom graph units, and never smaller than the box, takes the pointer, so the target
+ * stays 44 screen px at any zoom and holds the whole drawing; the drawing takes none. Every
+ * shape sets its own stroke.
  * A setpoint: no animation.
  */
 export function controlSvg({ kind, value, applied, param, tokens, zoom = 1, state = {} } = {}) {
@@ -604,6 +684,7 @@ export function controlSvg({ kind, value, applied, param, tokens, zoom = 1, stat
   }
   const shapes = Object.hasOwn(SHAPES, kind) ? SHAPES[kind] : null;
   if (!shapes) throw new Error(`controlSvg: kind must be knob, fader or switch, not '${kind}'.`);
+  if (kind === 'switch') switchPositions(param);
   const box = CONTROL_BOX[kind];
   const w = num(Math.max(HIT_PX / zoom, box.width));
   const h = num(Math.max(HIT_PX / zoom, box.height));

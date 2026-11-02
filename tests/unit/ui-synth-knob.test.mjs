@@ -17,6 +17,7 @@ import {
   CONTROL_BOX, DRAG_PX_PER_RANGE, FADER_TRAVEL, LOG_STEPS, WHEEL_NOTCH_PX, WHEEL_LINE_PX,
 } from '../../src/js/ui/synth/knob.js';
 import { NODE_DEFINITIONS } from '../../src/js/studio/registry.js';
+import PANEL from '../../src/js/synth/panels/semi-mono.js';
 import { TOKENS, colourLiterals, shapesWithoutStroke, paints, tokenValues } from
   './ui-synth-fixture.mjs';
 
@@ -109,7 +110,7 @@ test('ariaAttrs and controlSvg never carry NaN, whatever the value', () => {
     const a = ariaAttrs(v, LIN);
     assert.equal(a['aria-valuenow'], 0, String(v));
     assert.equal(a['aria-valuetext'], '0 %');
-    for (const kind of ['knob', 'fader', 'switch']) {
+    for (const kind of ['knob', 'fader']) {
       assert.doesNotMatch(controlSvg({ kind, value: v, param: LIN, tokens: TOKENS }), /NaN/);
     }
   }
@@ -122,7 +123,10 @@ test('quantize snaps to the step in value space, clamps, and leaves no float noi
   assert.equal(quantize(150, LIN), 100);
   assert.equal(quantize(0.1 + 0.2, FLOAT), 0.3);
   assert.equal(quantize(0.123, FLOAT), 0.12);
-  assert.equal(quantize(440.4, LOG), 440);
+  assert.equal(quantize(440.44, LOG), 440.4, 'a log range keeps four significant digits');
+  assert.equal(quantize(12345.6, LOG), 12346, 'and never more than its step');
+  assert.equal(quantize(0.0012345, TIME), 0.001235, 'the bottom of a log range is not coarse');
+  assert.equal(quantize(2.34567, TIME), 2.346);
   assert.equal(quantize(0.30000000000000004, SMOOTH), 0.3, 'no step: only the noise goes');
   assert.equal(quantize(0.123456, SMOOTH), 0.123456);
 });
@@ -176,14 +180,36 @@ test('wheel: 100 px is a notch, up one step, down one step, fine a tenth', () =>
 });
 
 test('wheel: lines and pages are scaled to px, and the host keeps the rest', () => {
-  assert.deepEqual(wheelValue(50, -3, LIN, { deltaMode: 1 }), { value: 50, rest: -48 },
-    'three lines are 48 px: not yet a notch');
+  assert.deepEqual(wheelValue(50, -3, LIN, { deltaMode: 1 }), { value: 51, rest: 0 },
+    'a three-line event (one notch of a line-mode wheel) is a notch');
+  assert.deepEqual(wheelValue(50, -1, LIN, { deltaMode: 1 }), { value: 51, rest: 0 },
+    'every line-mode event is at least a notch');
   assert.deepEqual(wheelValue(50, -7, LIN, { deltaMode: 1 }), { value: 51, rest: -12 });
   assert.deepEqual(wheelValue(50, 1, LIN, { deltaMode: 2 }), { value: 49, rest: 0 }, 'a page');
   assert.deepEqual(wheelValue(50, -60, LIN, { rest: -60 }), { value: 51, rest: -20 },
     'the rest carried in counts');
-  assert.deepEqual(wheelValue(50, 30, LIN, { rest: -60 }), { value: 50, rest: -30 },
-    'a reversal spends the rest first');
+  assert.deepEqual(wheelValue(50, 30, LIN, { rest: -60 }), { value: 50, rest: 30 },
+    'a reversal drops the rest: no lag when the hand turns back');
+  assert.deepEqual(wheelValue(50, 90, LIN, { rest: -60 }), { value: 50, rest: 90 });
+  assert.deepEqual(wheelValue(50, 100, LIN, { rest: -60 }), { value: 49, rest: 0 });
+});
+
+test('wheel: under a notch the value comes back unchanged, never quantized', () => {
+  const PW = { key: 'width', label: 'Pulse width', unit: '%', min: 5, max: 95, step: 1 };
+  assert.deepEqual(wheelValue(50.1, 1, PW), { value: 50.1, rest: 1 });
+  assert.deepEqual(wheelValue(0.505, -1, FLOAT), { value: 0.505, rest: -1 });
+  assert.deepEqual(wheelValue(120, 1, LIN), { value: 100, rest: 1 }, 'only clamped');
+});
+
+test('wheel: at an end stop the rest is dropped, so the first notch back moves', () => {
+  const PW = { key: 'width', label: 'Pulse width', unit: '%', min: 5, max: 95, step: 1 };
+  const atMax = wheelValue(95, -250, PW);
+  assert.deepEqual(atMax, { value: 95, rest: 0 });
+  assert.deepEqual(wheelValue(atMax.value, 100, PW, { rest: atMax.rest }), { value: 94, rest: 0 });
+  assert.deepEqual(wheelValue(94.5, -250, PW), { value: 95, rest: 0 }, 'reaching the stop');
+  assert.deepEqual(wheelValue(5, 150, PW), { value: 5, rest: 0 }, 'held at min');
+  assert.deepEqual(wheelValue(95, -40, PW), { value: 95, rest: 0 }, 'under a notch, held');
+  assert.deepEqual(wheelValue('triangle', -250, ENUM), { value: 'triangle', rest: 0 });
 });
 
 test('wheel: a trackpad\'s many small deltas move what their sum says, no more', () => {
@@ -203,6 +229,11 @@ test('wheel: a notch is never less than 1 % of the (norm) range', () => {
   assert.equal(wheelValue(50, -100, { ...LIN, step: 5 }).value, 55, 'a big step stays a step');
   assert.equal(knobKey(key('ArrowUp'), { value: 50, param: TINY }), 50.001,
     'keys are exempt: one step per press is the precise path');
+  const SEED = { key: 'seed', label: 'Seed', type: 'integer', min: 0, max: 4294967295, step: 1 };
+  assert.equal(wheelValue(1, -100, SEED).value, 2, 'an identifier-sized integer range: one step');
+  assert.equal(wheelValue(1, -300, SEED).value, 4);
+  const SMALL = { key: 'n', type: 'integer', min: 0, max: 5000, step: 1 };
+  assert.equal(wheelValue(0, -100, SMALL).value, 50, 'a smaller integer range keeps the floor');
 });
 
 // ---------------------------------------------------------------- knobKey, every branch
@@ -239,12 +270,12 @@ test('knobKey: a log range moves 1/LOG_STEPS in norm space and never stalls on i
   near(toNorm(fine0, TIME_LOG) - toNorm(1000, TIME_LOG), 0.0005, 1e-4);
   const fine = knobKey(key('ArrowUp', { shiftKey: true }), { value: 1000, param: LOG });
   assert.ok(fine > 1000 && fine < up, `${fine} between 1000 and ${up}`);
-  assert.equal(knobKey(key('ArrowUp', { shiftKey: true }), { value: 20, param: LOG }), 20.1,
-    'a fine step at the bottom of the range moves at least a tenth of the step');
+  assert.equal(knobKey(key('ArrowUp', { shiftKey: true }), { value: 20, param: LOG }), 20.069,
+    'a fine step at the bottom of a log range is relative, not a tenth of the step');
   assert.ok(knobKey(key('ArrowDown'), { value: 20000, param: LOG }) < 20000);
 });
 
-test('knobKey: PageUp and PageDown move 10 steps, or 10 % of a log or stepless range', () => {
+test('knobKey: PageUp and PageDown move 10 % of the (norm) range, on the grid', () => {
   assert.equal(knobKey(key('PageUp'), { value: 50, param: LIN }), 60);
   assert.equal(knobKey(key('PageDown'), { value: 50, param: LIN }), 40);
   assert.equal(knobKey(key('PageUp'), { value: 95, param: LIN }), 100);
@@ -334,12 +365,34 @@ test('formatValue follows the value\'s own grid, so a fine move shows', () => {
   assert.notEqual(formatValue(t, TIME), formatValue(0.25, TIME),
     `a fine time move shows: ${formatValue(t, TIME)}`);
   assert.equal(formatValue(0.1 + 0.2, FLOAT), '0.30', 'float noise is not a grid');
+  const CENTS = { key: 'c', unit: 'cents', min: -1200, max: 1200, step: 1 };
+  for (const v of [-0.04, 0.04, -0.0001, 1e-9]) {
+    assert.equal(formatValue(v, CENTS), '0 ct', `${v}: a value that rounds to zero is 0`);
+  }
+  assert.equal(formatValue(-0.004, { ...LIN, unit: 'dB', min: -60, max: 0, step: 0.1 }),
+    '0.0 dB', 'as zero itself shows');
+  assert.equal(formatValue(-0.0004, FLOAT), '0.00');
 });
 
-test('ariaAttrs is a slider with its range, value and text with the unit', () => {
-  assert.deepEqual(ariaAttrs(440, LOG), { role: 'slider', 'aria-valuemin': 20,
-    'aria-valuemax': 20000, 'aria-valuenow': 440, 'aria-valuetext': '440 Hz' });
-  assert.equal(ariaAttrs(500, LIN)['aria-valuenow'], 100, 'the value is clamped');
+test('ariaAttrs is N003\'s controlAttrs shape: position 0..1000, text with value and unit', () => {
+  assert.deepEqual(ariaAttrs(440, LOG), { role: 'slider', 'aria-valuemin': 0,
+    'aria-valuemax': 1000, 'aria-valuenow': Math.round(toNorm(440, LOG) * 1000),
+    'aria-valuetext': '440 Hz' });
+  assert.equal(ariaAttrs(440, LOG)['aria-valuenow'], 447, 'a log range steps in its log domain');
+  assert.equal(ariaAttrs(25, LIN)['aria-valuenow'], 250);
+  assert.equal(ariaAttrs(0, LIN)['aria-valuenow'], 0);
+  assert.equal(ariaAttrs(100, LIN)['aria-valuenow'], 1000);
+  const out = ariaAttrs(500, LIN);
+  assert.equal(out['aria-valuenow'], 1000, 'beyond the range the position clamps');
+  assert.equal(out['aria-valuetext'], '500 %', 'but the text stays truthful');
+  assert.equal(ariaAttrs(-5, LIN)['aria-valuetext'], '-5 %');
+  assert.equal(ariaAttrs(-5, LIN)['aria-valuenow'], 0);
+  const steps = new Set();
+  for (let i = 0; i < 40; i++) {
+    steps.add(ariaAttrs(knobKey(key('ArrowUp'), { value: 20 * 1.2 ** i, param: LOG }), LOG)[
+      'aria-valuenow']);
+  }
+  assert.ok(steps.size > 30, 'positions are distinct along a log range');
   assert.equal(ariaAttrs(50, LIN, (v) => `${v}`)['aria-valuetext'], '50 %',
     'a format without the unit gets it');
   assert.equal(ariaAttrs(50, LIN, (v) => `${v} %`)['aria-valuetext'], '50 %');
@@ -357,8 +410,13 @@ test('ariaAttrs: the unit is checked as a suffix, never as a substring', () => {
   assert.equal(ariaAttrs(2500, LOG, () => '2.5 kHz')['aria-valuetext'], '2.5 kHz');
   assert.equal(ariaAttrs(50, LIN, () => '% 50')['aria-valuetext'], '% 50 %');
   assert.equal(ariaAttrs(12, INT)['aria-valuetext'], '+12 st');
-  assert.equal(ariaAttrs(5, { key: 'c', unit: 'cents', min: -100, max: 100, step: 1 })[
-    'aria-valuetext'], '+5 ct', 'the table\'s own text is not suffixed again');
+  const CENTS = { key: 'c', unit: 'cents', min: -100, max: 100, step: 1 };
+  assert.equal(ariaAttrs(5, CENTS)['aria-valuetext'], '+5 ct',
+    'the table\'s own text is not suffixed again');
+  assert.equal(ariaAttrs(5, CENTS, () => '+5 ct')['aria-valuetext'], '+5 ct',
+    'ct is the spelling of cents');
+  assert.equal(ariaAttrs(5, CENTS, () => '+5 cents')['aria-valuetext'], '+5 cents');
+  assert.equal(ariaAttrs(5, CENTS, () => '+5')['aria-valuetext'], '+5 ct', 'appended as ct');
 });
 
 // ---------------------------------------------------------------- typed entry (Enter)
@@ -377,6 +435,49 @@ test('parseValue reads a typed number with an optional unit, as K058 did', () =>
     unit: 'cents', min: -1200, max: 1200, step: 1 }), { ok: true, value: 5 });
   assert.deepEqual(parseValue('50 %', LIN), { ok: true, value: 50 });
   assert.deepEqual(parseValue('1e3', LOG), { ok: true, value: 1000 });
+});
+
+test('parseValue: a decimal comma, a Unicode minus, a spaced thousands', () => {
+  const Q = { key: 'Q', label: 'Q', type: 'number', min: 0.0001, max: 1000, scale: 'log' };
+  assert.deepEqual(parseValue('1,5', Q), { ok: true, value: 1.5 });
+  assert.deepEqual(parseValue('0,707', Q), { ok: true, value: 0.707 });
+  const PW = { key: 'width', label: 'Pulse width', type: 'number', unit: '%', min: 5, max: 95,
+    step: 1 };
+  assert.deepEqual(parseValue('50,5 %', PW), { ok: true, value: 50.5 });
+  const GAIN = { key: 'g', label: 'Gain', type: 'number', unit: 'dB', min: -40, max: 40,
+    step: 0.1 };
+  assert.deepEqual(parseValue('\u22126 dB', GAIN), { ok: true, value: -6 });
+  assert.deepEqual(parseValue('\u22126,5', GAIN), { ok: true, value: -6.5 });
+  assert.deepEqual(parseValue('1 000', LOG), { ok: true, value: 1000 });
+  assert.deepEqual(parseValue('12\u2009000 Hz', LOG), { ok: true, value: 12000 });
+  assert.deepEqual(parseValue('1\u202f500', LOG), { ok: true, value: 1500 });
+  assert.equal(parseValue('1,000.5', LOG).ok, false, 'a comma with a dot is not a decimal comma');
+  assert.equal(parseValue('12 5', LOG).ok, false, 'a space is a separator only before three');
+});
+
+test('parseValue stores what the readout shows', () => {
+  const PW = { key: 'width', label: 'Pulse width', type: 'number', unit: '%', min: 5, max: 95,
+    step: 1 };
+  assert.deepEqual(parseValue('50.37', PW), { ok: true, value: 50.4 });
+  assert.equal(formatValue(parseValue('50.37', PW).value, PW), '50.4 %');
+  const HZ = { key: 'f', label: 'Frequency', type: 'number', unit: 'Hz', min: 1, max: 182400,
+    scale: 'log' };
+  for (const text of ['440.4', '440.43', '12345.678', '0.5 kHz', '1.23456 kHz']) {
+    const r = parseValue(text, HZ);
+    assert.ok(r.ok, text);
+    const shown = formatValue(r.value, HZ);
+    assert.equal(parseValue(shown, HZ).value, r.value, `${text}: stored ${r.value}, shown ${
+      shown}`);
+  }
+  assert.equal(formatValue(parseValue('440.4', HZ).value, HZ), '440.4 Hz');
+  for (const { where, p } of REGISTRY_NUMBERS) {
+    for (const t of [0.13, 0.5, 0.77]) {
+      const r = parseValue(String(fromNorm(t, p)), p);
+      assert.ok(r.ok, where);
+      assert.equal(parseValue(formatValue(r.value, p), p).value, r.value,
+        `${where}: ${r.value} shows ${formatValue(r.value, p)}`);
+    }
+  }
 });
 
 test('parseValue refuses what the parameter would refuse, with a reason', () => {
@@ -421,6 +522,9 @@ test('enum and boolean: positions in order, stepOption, text and typed entry', (
   assert.deepEqual(parseValue('saw', ENUM), { ok: true, value: 'sawtooth' });
   assert.deepEqual(parseValue('Square', ENUM), { ok: true, value: 'square' });
   assert.deepEqual(parseValue('off', BOOL), { ok: true, value: false });
+  for (const [t, v] of [['1', true], ['0', false], ['true', true], ['FALSE', false]]) {
+    assert.deepEqual(parseValue(t, BOOL), { ok: true, value: v }, t);
+  }
   assert.equal(parseValue('noise', ENUM).ok, false);
 });
 
@@ -441,21 +545,27 @@ test('enum and boolean: keys step the options, the wheel a notch per option', ()
   assert.equal(dragValue('sine', -DRAG_PX_PER_RANGE, ENUM), 'triangle');
 });
 
-test('enum and boolean ARIA: a slider of labelled positions, a switch that is checked', () => {
+test('enum and boolean ARIA: the position of the option index, the label as text', () => {
   assert.deepEqual(ariaAttrs('sawtooth', ENUM), { role: 'slider', 'aria-valuemin': 0,
-    'aria-valuemax': 3, 'aria-valuenow': 2, 'aria-valuetext': 'Saw' });
-  assert.deepEqual(ariaAttrs(true, BOOL), { role: 'switch', 'aria-checked': 'true',
-    'aria-valuetext': 'On' });
-  assert.deepEqual(ariaAttrs('x', BOOL)['aria-checked'], 'true', 'the default');
+    'aria-valuemax': 1000, 'aria-valuenow': 667, 'aria-valuetext': 'Saw' });
+  assert.equal(ariaAttrs('sine', ENUM)['aria-valuenow'], 0);
+  assert.equal(ariaAttrs('triangle', ENUM)['aria-valuenow'], 1000);
+  assert.deepEqual(ariaAttrs(true, BOOL), { role: 'slider', 'aria-valuemin': 0,
+    'aria-valuemax': 1000, 'aria-valuenow': 1000, 'aria-valuetext': 'On' });
+  assert.equal(ariaAttrs(false, BOOL)['aria-valuenow'], 0);
+  assert.equal(ariaAttrs('x', BOOL)['aria-valuenow'], 1000, 'the default');
 });
 
 // ---------------------------------------------------------------- controlSvg
 
 const KINDS = ['knob', 'fader', 'switch'];
-const SWITCH = Object.freeze({ id: 'sync', label: 'Sync', unit: '', min: 0, max: 1, step: 1,
-  scale: 'lin', default: 0 });
+const SWITCH = Object.freeze({ key: 'range', label: 'Range', type: 'enum',
+  options: [['lo', 'Lo'], ['mid', 'Mid'], ['hi', 'Hi']], default: 'lo' });
 const paramOf = (kind) => (kind === 'switch' ? SWITCH : LIN);
-const draw = (kind, extra = {}) => controlSvg({ kind, value: kind === 'switch' ? 1 : 70,
+/** The lowest, highest and a middle value of each kind's test parameter. */
+const ends = (kind) => (kind === 'switch' ? { lo: 'lo', hi: 'hi', mid: 'mid' }
+  : { lo: LIN.min, hi: LIN.max, mid: (LIN.min + LIN.max) / 2 });
+const draw = (kind, extra = {}) => controlSvg({ kind, value: kind === 'switch' ? 'hi' : 70,
   param: paramOf(kind), tokens: TOKENS, ...extra });
 const hitOf = (svg) => {
   const m = /<rect data-hit="" x="([^"]+)" y="([^"]+)" width="([^"]+)" height="([^"]+)"/.exec(svg);
@@ -531,10 +641,11 @@ test('at zoom 2 and 3 the hit still holds the whole drawing, in every state', ()
   const states = [{}, { focus: true }, { dragging: true }, { focus: true, dragging: true }];
   for (const kind of KINDS) {
     const param = paramOf(kind);
+    const e = ends(kind);
     for (const zoom of [1, 2, 3]) {
       for (const state of states) {
-        for (const value of [param.min, param.max, (param.min + param.max) / 2]) {
-          for (const applied of [undefined, param.min, param.max]) {
+        for (const value of [e.lo, e.hi, e.mid]) {
+          for (const applied of [undefined, e.lo, e.hi]) {
             const svg = controlSvg({ kind, value, applied, param, tokens: TOKENS, zoom, state });
             const [hx, hy, hw, hh] = hitOf(svg);
             const [x0, y0, x1, y1] = drawingBox(svg);
@@ -573,7 +684,7 @@ test('no colour literal in any control, in any state; every paint is a token or 
   for (const kind of KINDS) {
     for (const state of [{}, { focus: true }, { disabled: true }, { dragging: true },
       { focus: true, dragging: true }]) {
-      for (const value of [paramOf(kind).min, paramOf(kind).max, 0.5]) {
+      for (const value of Object.values(ends(kind))) {
         const svg = controlSvg({ kind, value, param: paramOf(kind), tokens: TOKENS, state });
         assert.deepEqual(colourLiterals(svg), [], `${kind} ${JSON.stringify(state)}`);
         for (const p of paints(svg)) assert.ok(allowed.has(p), `${kind}: paint ${p}`);
@@ -636,10 +747,10 @@ test('fader: the cap tracks the pointer one to one at any zoom', () => {
       near((capY(v) - capY(0.5)) * zoom, dy, 0.03);
     }
   }
-  const S = { key: 'x', min: 0, max: 1, step: 1 };
-  assert.equal(dragValue(0, -pixelsPerRangeFor('switch', 1, S) * 0.6, S, {
-    pixelsPerRange: pixelsPerRangeFor('switch', 1, S) }), 1, 'a switch flips under the finger');
-  assert.ok(pixelsPerRangeFor('switch', 1, S) < 30);
+  const ppr = pixelsPerRangeFor('switch', 1, BOOL);
+  assert.equal(dragValue(false, -ppr * 0.6, BOOL, { pixelsPerRange: ppr }), true,
+    'a switch flips under the finger');
+  assert.ok(ppr < 30);
 });
 
 test('fader: a track and a cap whose position follows the value; switch: two positions', () => {
@@ -649,10 +760,48 @@ test('fader: a track and a cap whose position follows the value; switch: two pos
   assert.ok(capY(hi) < capY(lo), 'up is more');
   assert.ok(lo.includes(`stroke="${TOKENS.control.track}"`) || lo.includes(
     `fill="${TOKENS.control.track}"`), 'track');
-  const off = controlSvg({ kind: 'switch', value: 0, param: SWITCH, tokens: TOKENS });
-  const on = controlSvg({ kind: 'switch', value: 1, param: SWITCH, tokens: TOKENS });
+  const off = controlSvg({ kind: 'switch', value: false, param: BOOL, tokens: TOKENS });
+  const on = controlSvg({ kind: 'switch', value: true, param: BOOL, tokens: TOKENS });
   assert.ok(capY(on) < capY(off), 'on is up');
-  assert.equal(controlSvg({ kind: 'switch', value: 0.4, param: SWITCH, tokens: TOKENS }), off);
+});
+
+/** The fader's value fill: the one rect with no stroke. */
+const FILL = new RegExp('<rect x="[^"]+" y="([^"]+)" width="[^"]+" height="([^"]+)" rx="[^"]+" '
+  + 'fill="([^"]+)" stroke="none"/>');
+
+test('fader: a range across zero fills from zero, as the knob\'s arc does', () => {
+  const BI = { key: 'tune', label: 'Tune', unit: 'st', min: -24, max: 24, step: 1 };
+  const fill = (v) => {
+    const m = FILL.exec(controlSvg({ kind: 'fader', value: v, param: BI, tokens: TOKENS }));
+    return m ? [Number(m[1]), Number(m[1]) + Number(m[2])] : null;
+  };
+  assert.equal(fill(0), null, 'no fill at zero');
+  const yOf = (v) => FADER_TRAVEL / 2 - FADER_TRAVEL * toNorm(v, BI);
+  const up = fill(12);
+  near(up[0], yOf(12), 0.01);
+  near(up[1], yOf(0), 0.01);
+  const down = fill(-12);
+  near(down[0], yOf(0), 0.01);
+  near(down[1], yOf(-12), 0.01);
+  const uni = FILL.exec(controlSvg({ kind: 'fader', value: 50, param: LIN, tokens: TOKENS }));
+  near(Number(uni[1]) + Number(uni[2]), FADER_TRAVEL / 2 + 2, 0.01, 'a range from min fills up');
+});
+
+test('a switch is for an enum of up to four options or a boolean; a number is refused', () => {
+  for (const param of [LIN, LOG, INT, { key: 'x', min: 0, max: 1, step: 1 }]) {
+    assert.throws(() => controlSvg({ kind: 'switch', value: param.min, param, tokens: TOKENS }),
+      /switch.*enum or a boolean/);
+    assert.throws(() => pixelsPerRangeFor('switch', 1, param), /switch.*enum or a boolean/);
+  }
+  const FIVE = { key: 'f', label: 'Five', type: 'enum', default: 0,
+    options: [[0, 'a'], [1, 'b'], [2, 'c'], [3, 'd'], [4, 'e']] };
+  assert.throws(() => controlSvg({ kind: 'switch', value: 0, param: FIVE, tokens: TOKENS }),
+    /at most 4 positions.*knob/);
+  assert.throws(() => pixelsPerRangeFor('switch', 1, FIVE), /at most 4 positions/);
+  assert.doesNotMatch(controlSvg({ kind: 'knob', value: 3, param: FIVE, tokens: TOKENS }), /NaN/,
+    'a knob draws it as a rotary selector');
+  assert.ok(controlSvg({ kind: 'switch', value: true, param: BOOL, tokens: TOKENS }));
+  assert.ok(controlSvg({ kind: 'switch', value: 'square', param: ENUM, tokens: TOKENS }));
 });
 
 test('switch: an enum draws one position per option, a boolean two', () => {
@@ -678,10 +827,10 @@ test('applied: a second, thin marker in control.pointer where the applied value 
   const t = TOKENS.control;
   for (const kind of KINDS) {
     const param = paramOf(kind);
-    const plain = controlSvg({ kind, value: param.max, param, tokens: TOKENS });
-    const same = controlSvg({ kind, value: param.max, applied: param.max, param, tokens: TOKENS });
-    const split = controlSvg({ kind, value: param.max, applied: param.min, param,
-      tokens: TOKENS });
+    const e = ends(kind);
+    const plain = controlSvg({ kind, value: e.hi, param, tokens: TOKENS });
+    const same = controlSvg({ kind, value: e.hi, applied: e.hi, param, tokens: TOKENS });
+    const split = controlSvg({ kind, value: e.hi, applied: e.lo, param, tokens: TOKENS });
     assert.equal(same, plain, `${kind}: no marker when applied equals the value`);
     assert.doesNotMatch(plain, /data-applied/);
     const m = /<line data-applied=""[^>]*>/.exec(split);
@@ -690,11 +839,8 @@ test('applied: a second, thin marker in control.pointer where the applied value 
     const others = /<line (?!data-applied)[^>]*stroke-width="([^"]+)"/g;
     const pointerW = Math.max(...[...split.matchAll(others)].map((x) => Number(x[1])));
     assert.ok(Number(/stroke-width="([^"]+)"/.exec(m[0])[1]) < pointerW, `${kind}: thinner`);
-    const other = controlSvg({ kind, value: param.max, applied: (param.min + param.max) / 2,
-      param, tokens: TOKENS });
-    if (kind !== 'switch') {
-      assert.notEqual(/<line data-applied=""[^>]*>/.exec(other)[0], m[0], `${kind}: it moves`);
-    }
+    const other = controlSvg({ kind, value: e.hi, applied: e.mid, param, tokens: TOKENS });
+    assert.notEqual(/<line data-applied=""[^>]*>/.exec(other)[0], m[0], `${kind}: it moves`);
   }
 });
 
@@ -731,13 +877,16 @@ test('every finite numeric parameter of every registry node type works the whole
     assert.ok(back.ok, `${where}: "${text}" reads back (${back.reason})`);
     near(back.value, v, Math.abs(v) * 0.01 + 1e-9);
     const aria = ariaAttrs(v, p);
-    assert.equal(aria['aria-valuenow'], v, where);
-    for (const kind of KINDS) {
+    assert.equal(aria['aria-valuenow'], Math.round(toNorm(v, p) * 1000), where);
+    assert.equal(aria['aria-valuetext'], formatValue(v, p), where);
+    for (const kind of ['knob', 'fader']) {
       const svg = controlSvg({ kind, value: v, applied: p.min, param: p, tokens: TOKENS,
         state: { focus: true } });
       assert.doesNotMatch(svg, /NaN|undefined|Infinity/, `${where} ${kind}`);
       assert.deepEqual(colourLiterals(svg), [], `${where} ${kind}`);
     }
+    assert.throws(() => controlSvg({ kind: 'switch', value: v, param: p, tokens: TOKENS }),
+      /switch/, `${where}: a number is not a switch`);
   }
 });
 
@@ -750,11 +899,55 @@ test('every enum and boolean parameter of the registry works the switch and the 
     const up = knobKey(key('ArrowUp'), { value: v, param: p });
     assert.ok(up !== null && up !== undefined, where);
     assert.equal(parseValue(formatValue(v, p), p).value, v, `${where}: ${formatValue(v, p)}`);
+    const positions = p.type === 'boolean' ? 2 : p.options.length;
     for (const kind of KINDS) {
+      if (kind === 'switch' && positions > 4) {
+        assert.throws(() => controlSvg({ kind, value: v, param: p, tokens: TOKENS }), /knob/);
+        continue;
+      }
       const svg = controlSvg({ kind, value: v, param: p, tokens: TOKENS });
       assert.doesNotMatch(svg, /NaN|undefined|Infinity/, `${where} ${kind}`);
     }
   }
+});
+
+// ---------------------------------------------------------------- K058's checks, on the core
+
+const cutoff = PANEL.module('lpf').params.find((p) => p.key === 'frequency');
+const tune = PANEL.module('vco1').params.find((p) => p.key === 'tune');
+const wave = PANEL.module('vco1').params.find((p) => p.key === 'waveform');
+
+test('K058\'s checks hold on the core (tests/unit/synth-knob.test.mjs, same parameters)', () => {
+  const angle = (v, p) => -135 + 270 * toNorm(v, p);
+  assert.equal(angle(10, cutoff), -135);
+  assert.equal(angle(20000, cutoff), 135);
+  assert.ok(Math.abs(angle(Math.sqrt(10 * 20000), cutoff)) < 1e-9, 'the geometric middle is up');
+  assert.equal(angle(0, tune), 0);
+  assert.equal(dragValue(-1200, -DRAG_PX_PER_RANGE, tune), 1200);
+  assert.equal(dragValue(0, -DRAG_PX_PER_RANGE / 2, tune, { fine: true }), 120);
+  assert.equal(dragValue(0, 10_000, tune), -1200, 'clamped');
+  const k = (name, v, p, shiftKey = false) => knobKey(key(name, { shiftKey }),
+    { value: v, param: p });
+  assert.equal(k('ArrowUp', 0, tune), 1);
+  assert.equal(k('ArrowLeft', 0, tune), -1);
+  assert.equal(k('PageUp', 0, tune), 240, 'PageUp is 10 % of the range, as K058 states');
+  assert.equal(k('PageDown', 0, tune), -240);
+  assert.equal(k('Home', 0, tune), -1200);
+  assert.equal(k('End', 0, tune), 1200);
+  assert.equal(k(' ', 0, tune), null, 'Space is never taken (ADR 0050)');
+  assert.ok(k('ArrowUp', 1000, cutoff) > 1000
+    && k('ArrowUp', 1000, cutoff, true) < k('ArrowUp', 1000, cutoff));
+  assert.deepEqual(parseValue('1.2k', cutoff), { ok: true, value: 1200 });
+  assert.deepEqual(parseValue('1200 Hz', cutoff), { ok: true, value: 1200 });
+  assert.deepEqual(parseValue('-3', tune), { ok: true, value: -3 });
+  assert.match(parseValue('40k', cutoff).reason, /Cutoff must be between 10 and 20000/);
+  assert.equal(parseValue('loud', cutoff).ok, false);
+  const att = PANEL.module('eg2').params.find((p) => p.key === 'attack');
+  assert.equal(parseValue('350 ms', att).value, 0.35);
+  assert.equal(formatValue(-12, tune), '-12 ct');
+  assert.equal(formatValue(702, tune), '+702 ct');
+  assert.equal(stepOption(wave, 'sawtooth', 1), 'square');
+  assert.equal(stepOption(wave, 'triangle', -1), 'triangle');
 });
 
 test('a control is a setpoint: the same input draws the same markup, with no animation', () => {

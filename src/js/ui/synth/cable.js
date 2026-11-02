@@ -25,7 +25,7 @@ export const CABLE_MIN_SAG = 12;
 export const CABLE_SLACK = 0.25;
 /** The hit path's width in screen px (divided by the zoom, as the control's hit area is). */
 export const CABLE_HIT_PX = 24;
-/** A near-vertical cable's sideways bow at its middle, as a part of min(sag, rise). */
+/** A near-vertical cable's sideways bow (to +x) at its middle, as a part of min(sag, rise). */
 export const CABLE_BOW = 0.3;
 /** Half the arm of the refused cross, graph units, and its stroke width. */
 const CROSS = Object.freeze({ arm: 5, width: 2, under: 4.5 });
@@ -51,16 +51,14 @@ function controls(a, b, slack) {
   const dy = b.y - a.y;
   const sag = Math.max(CABLE_MIN_SAG, slack * Math.hypot(dx, dy));
   const h = (sag * 4) / 3;
-  // A near-vertical cable bows sideways, out past its lower end's side, so it still reads as
-  // hanging; the bow fades to nothing as the cable leans to |dx| = sag. Which end is lower does
-  // not depend on the order of a and b, so reversed ends draw the same curve.
+  // A near-vertical cable bows sideways, always to the right (+x), so it still reads as
+  // hanging; the bow fades to nothing as the cable leans to |dx| = sag. One fixed side keeps the
+  // curve continuous as an end is dragged across the vertical (a side taken from the sign of dx
+  // would jump from one side to the other there, where the bow is largest), and it does not
+  // depend on the order of a and b, so reversed ends draw the same curve.
   const lean = Math.abs(dx);
-  let bow = 0;
-  if (lean < sag && dy !== 0) {
-    const [upper, lower] = a.y < b.y ? [a, b] : [b, a];
-    const side = lower.x >= upper.x ? 1 : -1;
-    bow = side * CABLE_BOW * Math.min(sag, Math.abs(dy)) * (1 - lean / sag) * (4 / 3);
-  }
+  const bow = lean < sag
+    ? CABLE_BOW * Math.min(sag, Math.abs(dy)) * (1 - lean / sag) * (4 / 3) : 0;
   return [
     { x: num((2 * a.x + b.x) / 3 + bow), y: num((2 * a.y + b.y) / 3 + h) },
     { x: num((a.x + 2 * b.x) / 3 + bow), y: num((a.y + 2 * b.y) / 3 + h) },
