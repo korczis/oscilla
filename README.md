@@ -899,16 +899,21 @@ run it alone.
      proposes the level, with a reason for each commit.
   2. `npm run release:prepare` starts from a clean tree. It bumps `package.json` once (or
      confirms an untagged version), refreshes `src/data/roadmap.json` from the plan, rebuilds,
-     and runs `version:check`, the release gate (with `OSC_ROADMAP_CHECK=1`, so a roadmap that
-     differs from the plan fails it) and `majordomus doctor`. If anything fails, it restores
-     the files. It never tags. Land the
-     result on `main` through a pull request. It refuses to start while the newest release has
+     and runs `version:check` and `npm run verify` (with `OSC_ROADMAP_CHECK=1`, so a roadmap
+     that differs from the plan fails it). If anything fails, it restores the files. It never
+     tags. Land the result on `main` through a pull request, by merge commit: the CI run of
+     that pull request is the release's gate verdict (the CI receipt,
+     [ADR 0082](.ai/repo/adrs/0082-a-release-rests-on-the-ci-run-of-its-own-pull-request.md)).
+     `-- --local-gate` instead runs the full release gate and `majordomus doctor` here and
+     writes a local gate receipt. It refuses to start while the newest release has
      no record (step 4), and it refuses the first stable release of a new major (`X.0.0`, and
      equally `X.0.1` or `X.1.0` typed into `package.json`) that no published `X.0.0-rc.N`
      preceded (`npm run release:prepare -- --prerelease` cuts the candidate;
      [ADR 0047](.ai/repo/adrs/0047-a-major-release-is-preceded-by-a-release-candidate-v3-0-0-wa.md)).
-     The gate receipt it writes binds every tracked file except the release records, so any
-     other pull request merged before the publish means running it again
+     Either verdict binds the whole tree (the CI receipt: main's HEAD is the merge of the
+     release pull request with the tree its newest green CI run tested, every job `ci.yml`
+     declares green; the local receipt: every tracked file except the release records), so
+     any other pull request merged before the publish means a new verdict
      (rule `project.release-receipt-binds-gate`).
   3. `npm run release:publish` is a dry run by default. With `-- --yes`, on `main`, it creates
      the annotated tag `vX.Y.Z`, pushes it, waits for the Pages deployment, verifies it, and
