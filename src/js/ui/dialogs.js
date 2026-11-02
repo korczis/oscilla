@@ -69,8 +69,19 @@ export function openModal(id, doc = document) {
       try { dlg.showModal(); } catch (e) { dlg.setAttribute('open', ''); }
     } else dlg.setAttribute('open', '');
   }
+  // showModal() has already focused the dialog's first control; the deferred focus is for
+  // content rendered after the dialog opens. It runs only while focus is still where the
+  // opening left it: a control the user (or assistive technology) moved to before the timer
+  // fired keeps focus. On a loaded machine the timer can fire long after the first keystroke,
+  // and taking focus back then sends Enter to Cancel instead of the button the user chose.
   const focus = dlg.querySelector('[autofocus], input, select, textarea, button');
-  if (focus) setTimeout(() => focus.focus(), 0);
+  if (focus) {
+    const placed = doc.activeElement;
+    setTimeout(() => {
+      const now = doc.activeElement;
+      if (dlg.open && (now === placed || !dlg.contains(now))) focus.focus();
+    }, 0);
+  }
   return true;
 }
 
@@ -104,6 +115,30 @@ export function watchDialogs(root = document) {
       const inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top
         && e.clientY <= r.bottom;
       if (!inside) dlg.close();
+    });
+  });
+}
+
+/**
+ * Firefox and WebKit do not scroll a keyboard-focused control that is already partly inside
+ * the #osc-main scroller, so its edge (the status bar below it) can cut the control (WCAG
+ * 2.4.11). After the browser's own focus scroll, nudge #osc-main until it is fully visible.
+ */
+export function keepFocusInView(main) {
+  if (!main) return;
+  document.addEventListener('focusin', (e) => {
+    const el = e.target;
+    if (!(el instanceof Element) || el === main || !main.contains(el)) return;
+    requestAnimationFrame(() => {
+      let keyboard = true;
+      try { keyboard = el.matches(':focus-visible'); } catch (err) { /* no :focus-visible */ }
+      if (document.activeElement !== el || !keyboard) return;
+      const r = el.getBoundingClientRect();
+      if (!r.height) return;
+      const top = main.getBoundingClientRect().top + main.clientTop + 4;
+      const bottom = top + main.clientHeight - 8;
+      if (r.top < top) main.scrollTop -= top - r.top;
+      else if (r.bottom > bottom) main.scrollTop += Math.min(r.bottom - bottom, r.top - top);
     });
   });
 }

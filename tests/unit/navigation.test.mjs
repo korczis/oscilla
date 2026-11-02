@@ -60,8 +60,11 @@ test('precedence: Studio keys > m > mr > Playground (ADR 0045)', () => {
   assert.deepEqual(routeOfHash(`#v=1&f=440&mr=${RECIPE}`), { workspace: 'measure', owner: 'measure' });
   assert.deepEqual(routeOfHash('#v=1&f=440'), { workspace: 'playground', owner: null });
   assert.deepEqual(routeOfHash(''), { workspace: 'playground', owner: null });
-  assert.deepEqual(routeOfHash('#v=1&m=nowhere&f=440'), { workspace: 'playground', owner: null });
-  assert.equal(routeOfHash('#m=learn&m=dual'), null, 'two m keys name no workspace');
+  // An m naming no page, or two pages, is refused (badRoute) and changes no workspace.
+  assert.deepEqual(routeOfHash('#v=1&m=nowhere&f=440'),
+    { workspace: 'playground', owner: 'workspace', badRoute: ['nowhere'] });
+  assert.deepEqual(routeOfHash('#m=learn&m=dual'),
+    { workspace: 'playground', owner: 'workspace', badRoute: ['learn', 'dual'] });
 });
 
 test('an in-page anchor is not a route', () => {
@@ -118,7 +121,8 @@ test('Copy config URL keeps mr and the Studio keys and names the workspace', () 
 });
 
 test('the dispatcher applies the domains in one declared order', () => {
-  assert.deepEqual([...HASH_DOMAINS], ['instrument', 'measure', 'studio', 'records']);
+  assert.deepEqual([...HASH_DOMAINS], ['instrument', 'measure', 'studio', 'keyboard',
+    'synth', 'records']);
 });
 
 function fakeWindow() {

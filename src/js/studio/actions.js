@@ -16,7 +16,9 @@
 // Actions (semantic, undoable): NODE_ADD, NODE_REMOVE, NODE_MOVE, NODE_PARAM_SET, NODE_RENAME,
 // EDGE_ADD, EDGE_REMOVE, EDGE_UPDATE, TRACK_ADD, TRACK_REMOVE, CLIP_ADD, CLIP_REMOVE, CLIP_MOVE,
 // CLIP_RESIZE, AUTOMATION_POINT_ADD, AUTOMATION_POINT_MOVE, AUTOMATION_POINT_REMOVE, MARKER_ADD,
-// MARKER_REMOVE, LOOP_SET, TRANSPORT_SET, METADATA_SET, PASTE, DUPLICATE; timeline additions
+// MARKER_REMOVE, LOOP_SET, TRANSPORT_SET, METADATA_SET, PASTE, DUPLICATE, BATCH { label, steps }
+// (K061: one entry, one gate call; NODE_ADD and EDGE_ADD may name an unused id, NODE_ADD a
+// metadata.panel { id, module }, which PASTE, DUPLICATE and PATCH_INSERT drop); timeline additions
 // (V416-V420): CLIP_UPDATE, CLIP_SET_TIME_BASE, MARKER_MOVE; patch additions (V426, patches.js):
 // PATCH_INSERT { patch, at? } ("Insert <name>") and PATCH_REPLACE { patch, at? } ("Replace
 // graph with <name>"), the explicit insert-or-replace intent of §114.
@@ -66,8 +68,8 @@ import { clipTarget } from './clip-targets.js';
 import { canConnect, validateEdgeProps } from './ports.js';
 import { NODE_REGISTRY, projectParams, validateParamValue } from './registry.js';
 import {
-  CLIP_KINDS, CLIP_TIME_BASES, MARKER_KINDS, NAME_MAX_CHARS, POSITION_MESSAGE, StudioSchemaError,
-  TRACK_CLIP_KINDS, VIEW_LIMITS,
+  CLIP_KINDS, CLIP_TIME_BASES, MARKER_KINDS, NAME_MAX_CHARS, PANEL_REF_MESSAGE, POSITION_MESSAGE,
+  StudioSchemaError, TRACK_CLIP_KINDS, VIEW_LIMITS, isPanelRef,
   assertPlainData, isPosition, collectIds, copyPlain, createStudioModel, normalizeClipPayload,
   normalizeStudio, sortPoints, withoutNodes,
 } from './schema.js';
@@ -174,6 +176,12 @@ function defaultName(nodes, def) {
     if (m) max = Math.max(max, Number(m[1]));
   }
   return `${def.displayName} ${max + 1}`;
+}
+
+/** metadata.panel (K061): which Synth panel module a node is; presentation only. */
+function checkPanel(panel) {
+  if (!isPanelRef(panel)) reject(PANEL_REF_MESSAGE);
+  return { id: panel.id, module: panel.module };
 }
 
 function checkParams(def, params, node) {
@@ -319,11 +327,12 @@ const REDUCERS = {
         : `At most ${def.maxInstances} ${def.displayName} nodes are allowed.`);
     }
     const node = {
-      id: ctx.newId(def.idPrefix),
+      id: a.id != null ? ctx.claim(a.id, model) : ctx.newId(def.idPrefix),
       type: def.type,
       position: checkPosition(a.position || { x: 0, y: 0 }),
       params: { ...projectParams(def, {}), ...checkParams(def, a.params, null) },
-      metadata: { name: a.name != null ? checkName(a.name) : defaultName(model.graph.nodes, def) },
+      metadata: { name: a.name != null ? checkName(a.name) : defaultName(model.graph.nodes, def),
+        ...(a.panel != null ? { panel: checkPanel(a.panel) } : {}) },
     };
     return {
       model: withGraph(model, { nodes: [...model.graph.nodes, node] }),
@@ -405,7 +414,7 @@ const REDUCERS = {
       reject(`Connection rejected: ${props.errors.map((e) => `${e.field} ${e.text}`).join('; ')}.`);
     }
     const edge = {
-      id: ctx.newId('edge'),
+      id: a.id != null ? ctx.claim(a.id, model) : ctx.newId('edge'),
       from: { node: r.a.id, port: r.src.id },
       to: { node: r.b.id, port: r.tgt.id },
       props: props.props,
@@ -755,6 +764,28 @@ const REDUCERS = {
       select: { nodes: r.created.nodes, edges: r.created.edges } };
   },
 
+  // K061: several edits as one: reduced in order, validated once as a whole, one gate call,
+  // one revision and one history entry. A refused step refuses the batch with its sentence.
+  BATCH(model, a, ctx) {
+    if (!Array.isArray(a.steps) || !a.steps.length) reject('A batch needs at least one edit.');
+    let m = model;
+    const created = { nodes: [], edges: [] };
+    for (const step of a.steps) {
+      const t = step && step.type;
+      if (t === 'BATCH') reject('A batch cannot hold another batch.');
+      if (!Object.prototype.hasOwnProperty.call(REDUCERS, t)) {
+        reject(t === 'SELECTION_CHANGE' || t === 'VIEW_SET'
+          ? 'A batch holds model edits only, not view changes.'
+          : `Unknown action "${String(t)}" in a batch.`);
+      }
+      const r = REDUCERS[t](m, step, ctx);
+      m = r.model;
+      for (const k of ['nodes', 'edges']) created[k].push(...((r.created || {})[k] || []));
+    }
+    return { model: m, label: typeof a.label === 'string' && a.label.trim() ? checkName(a.label)
+      : `${a.steps.length} edits`, created };
+  },
+
   PATCH_REPLACE(model, a, ctx) {
     let r;
     try {
@@ -913,7 +944,15 @@ export function createStudioStore(initialModel, {
         }
         return reject('Could not allocate a unique id.');
       };
-      const result = reducer(model, action, { registry, newId });
+      // An explicit id (a Synth panel's modules and normals, K061): unused in `m`, the model
+      // the step edits (a batch may remove an id and add it back).
+      const claim = (id, m) => {
+        if (typeof id !== 'string' || !ID_PATTERN.test(id)) reject('That id is not valid.');
+        if (collectIds(m).has(id)) reject(`The id "${id}" is already in use.`);
+        used.add(id);
+        return id;
+      };
+      const result = reducer(model, action, { registry, newId, claim });
       if (result.model === model) return { ok: true, changed: false, model, revision };
       // The model holds plain JSON data only (§10, ADR 0030), whatever an action carried in
       // (a function or a prototype-setting key in a payload or pasted props: V431 A4, X9).

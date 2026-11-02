@@ -111,6 +111,13 @@ const SB_EXTRAS_SHOWN = VIEWPORT.width >= 1280;
 // fixture measures "before" from that graph start, bounds what sounds between the two at the
 // carrier floor, and predicts the onset with the graph's ramps and envelope `lead` seconds in.
 // Without the re-anchor the graph start is baseTime and the checks are the plain ones.
+// A Tone voice compiled after the clock passed its start (the main thread late between the
+// window's lateness check and the compile: webkit on CI and a loaded linux container, 3-50 ms)
+// keeps its grid (compileSequence keepGrid, transport decision 'joined-late'): it joins at the
+// first safe render quantum (STOP_LEAD_S ahead, as a stop) and the onset prediction follows that
+// join, while the boundary and end checks stay exactly as strict (before keepGrid such a voice
+// moved late as a whole, its release overlapped the Sweep's attack and the quietest window was
+// the Sweep's own waveform at 1.016 s, −6.5 dB).
 // The engine's limiter (DynamicsCompressorNode) delays the destination by its look-ahead: 6 ms in
 // Blink, Gecko and WebKit (measured 288 frames at 48 kHz in each), which is why the analyser tap
 // read the onset at 14 ms and the boundary at 1.006 s. Firefox's limiter also lags the first
@@ -180,6 +187,13 @@ async function runOne(browserName, url) {
       + `baseTime (re-anchored from ${f(re.from, 5)} s to ${f(re.to, 5)} s at ${f(re.at, 5)} s)`
       : 'graph started at baseTime';
     if (re) console.log(`  INFO [${key}] PLAY re-anchored: ${startedAt}`);
+    const jn = s.joined;
+    const joinedAt = jn ? `; the Tone voice joined its grid ${f((jn.to - jn.from) * 1000, 2)} ms `
+      + 'late' : '';
+    if (jn) {
+      console.log(`  INFO [${key}] the Tone voice was compiled after the clock passed its start `
+        + `(${f(jn.at, 5)} s) and joined its grid at ${f(jn.to, 5)} s`);
+    }
     check(key, 'nothing sounds before the graph starts (< −100 dB)', st.beforeDb < -100,
       `${f(st.beforeDb, 1)} dB; ${startedAt}`);
     check(key, 'between the graph start and baseTime only the carrier floor sounds '
@@ -189,7 +203,7 @@ async function runOne(browserName, url) {
       st.onset !== null && p.onset !== null
       && Math.abs(st.onset - p.onset) <= ONSET_WINDOWS * s.detectStepS + 1e-9,
       `onset ${f(st.onset, 4)} s after baseTime, predicted ${f(p.onset, 4)} s (${p.ramps} route `
-      + `ramps × ADSR attack × voice edge, ${f(p.lead * 1000, 2)} ms into the graph)`);
+      + `ramps × ADSR attack × voice edge, ${f(p.lead * 1000, 2)} ms into the graph${joinedAt})`);
     check(key, 'the Tone → Sweep boundary is at baseTime + 1 s',
       Math.abs(st.dip - 1) < BOUNDARY_S, `dip at ${f(st.dip, 4)} s (${f(st.dipDb, 1)} dB)`);
     check(key, 'the boundary frame is the quietest 0.5 ms window (exact to the window)',
