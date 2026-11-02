@@ -22,6 +22,6 @@ export default {
   bio: entry(),
   'exp.detailView': entry(),
   'exp.compareView': entry(),
-  peeper: entry({ plan: ['G001', 'U006', 'W004'],
+  peeper: entry({ plan: ['G001', 'U067'],
     tests: [...TESTS, 'tests/unit/peeper.test.mjs', 'tests/browser/ui-flowbite-pro.cjs'] }),
 };

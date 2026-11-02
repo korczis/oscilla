@@ -1,0 +1,44 @@
+id: U067
+milestone: M054
+serves:
+  - "ui-current#no-isolated-workspace"
+title: "The signal peeper on every page: a framed, switchable, pinnable view of one probe tap point"
+slug: the-signal-peeper-on-every-page-a-framed-switchable-pinnable
+priority: p2
+profile: implementation
+objective: "Lands as feat(ui) on branch feat/a5-frame-peeper. The peeper shell in src/js/ui/peeper: model.js (pure: the view state and the probe lease), ui.js (the Alpine part composed into the ONE component), view.js (one swappable draw function, the placeholder line until W004's scope replaces it through setPeeperView) and probe-stub.js (a local mirror of the probe tap API stub of V616, createProbeStub, windowSamples and windowMsOf, swapped for src/js/studio/probe.js by one marked import line in src/js/main.js). It opens on every workspace from the page header's action (peeper.toggle, in the page actions of the registry-driven header) and from Backquote, bound through the one key registry of src/js/ui/keys (K153). It is a visual component of the UI catalogue (decl/visual.js, rule project.visual-components-framed), so the one frame gives it full screen; its controls are declared in decl/peeper.js. It docks below the workspace in the content column's flow, so it covers nothing at any width, and on a phone it is a bottom sheet that collapses to its header. The tap list is probe.points(), derived by the probe from the port declarations and never placed per page; peep(target) ({ id } | { nodeId } | { edgeId } | 'id') is the one API the patch bay and the Studio graph call. It asks the probe with windowMs only and shows the window it got (samples and actual ms at the probe's rate). Pinned, it survives route changes and retargets its lease; the pin is view state, kept in local storage (oscilla.peeper) and never in the hash or the history. A lease is held only while it is open and expanded, the output plays and the page is visible: close, hide, collapse and Stop release it, and it never starts audio. A reading with live: false shows its reason and never a fake frame; the stub's signal is marked STUB SIGNAL."
+why: "Owner order (2026-11-02 16:31Z, relayed via 1d), verbatim: \"vzdu musi byt oscillosope like komponenta (genericka / derived / infered - na vsech strankach; dost vymazlena, prepinatelna, pripnutelna) pro vizualizaci prubehu signalu kdykoliv a kdykoliv - anglicke kukatke - peeper\". No workspace let the signal be watched outside the Analyzer's own charts: the peeper makes it watchable from every page without leaving it, which is the connection between workspaces this intent asks for."
+scope:
+  - "src/js/ui/peeper"
+  - "src/js/ui/catalog/decl/peeper.js"
+  - "src/js/ui/catalog/decl/visual.js"
+  - "scripts/ui-catalog/trace/peeper.mjs"
+  - "src/js/ui/shortcuts.js"
+  - "src/js/main.js"
+  - "src/index.html"
+  - "docs/v3/readout-truth.yaml"
+  - "docs/v3/readout-truth.md"
+  - "tests/unit/peeper.test.mjs"
+  - "tests/unit/v4-shortcuts.test.mjs"
+  - "tests/browser/ui-flowbite-pro.cjs"
+  - "tests/README.md"
+  - "dist"
+current_state: "Relates to, and does not wait for, V616 (the probe tap, oscilla-26: the shell runs on a local mirror of its createProbeStub, and the one marked import line in src/js/main.js swaps in src/js/studio/probe.js when it lands) and W004 (the scope view, b0: setPeeperView replaces the placeholder line), and rides on G001's catalogue and frame (rule project.visual-components-framed) and K153's key registry. None is a depends_on: the shell is built and tested against the stub, so a dependency would only block it. Built on feat/a5-frame-peeper; the pull request is not open yet."
+acceptance_criteria:
+  - "On every page: the page header's action [data-osc=\"peeper.toggle\"] opens the peeper, and the browser leg peeper of tests/browser/ui-flowbite-pro.cjs opens it on the Playground and keeps it on Measure and About; the unit test finds the action inside the page actions of the registry-driven header and the section docked between <main> and the status bar."
+  - "The pin persists across route changes and is never in the hash or the history: pinned, a route change keeps it open and retargets its lease (unit and browser); the stored value is localStorage oscilla.peeper; no peeper module writes location.hash, pushState or replaceState (unit), and the browser leg reads no peeper or pin key in the address."
+  - "The tap list is derived from probe.points(): the select renders peeper.points from the model, the page lists no tap point of its own (unit), and the browser leg reads the select's options equal to the points."
+  - "peep(target) opens the peeper on a point id, { nodeId } or { edgeId } (unit)."
+  - "Release on hide, and active() 0/0 after Stop: close, hide, collapse and Stop release the lease (unit), and in the browser playing taps one lease and Stop returns active() to { analysers: 0, leases: 0 }; opening it starts no audio."
+  - "live: false shows a reason and never a fake frame: stopped, the peeper reads { live: false, reason: 'stopped' } and the page shows the sentence; over budget the probe reads live: false, reason 'budget', frame null (unit and browser)."
+  - "On a phone (390x844, touch) it is a bottom sheet in the flow: the browser leg measures no overlap with <main>, every control at least 44 x 44 px, and the collapse."
+  - "Backquote goes through the key registry: ui.js binds { id: 'peeper.toggle', keys: ['Backquote'], scope: { workspace: '*' } } through the page's one registry and adds no key listener of its own (unit; the key-listener ratchet of tests/unit/keys-registry.test.mjs); the binding never resolves in a text field or a dialog (unit), and the browser leg toggles it with Backquote and not inside the search field."
+  - "The window is asked with windowMs only and the actual window is shown: the unit test spies the tap call ({ windowMs: 20 }) and reads window and windowMs from the reading at 44.1 and 48 kHz; the browser leg reads 'ms · samples at kHz' consistent with the samples and the rate."
+validation:
+  - "node --test tests/unit/peeper.test.mjs"
+  - "node tests/browser/ui-flowbite-pro.cjs --only peeper"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-02
+updated_at: 2026-11-02
