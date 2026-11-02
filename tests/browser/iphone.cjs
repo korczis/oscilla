@@ -20,6 +20,10 @@
 //   sounds-<what>    after one tap on the page (the gesture unlock), HOLD TO PLAY held, TRIGGER,
 //                    the sequencer's play, the Studio's play and a key of the Synth keyboard each
 //                    leave the engine running with an active source
+//   stops-on-hide-<what>  then the page is hidden (visibilitychange, as a phone's lock or app
+//                    switch sends it) with a held control's finger still down: within HIDE_MS
+//                    the engine is left with no active source and no surface still claims to
+//                    play (journey 21; not TRIGGER, whose note ends that soon by itself)
 //
 // Every wait is a condition poll with a named wall-clock deadline (tests/browser/lib/wait.cjs).
 //
@@ -45,6 +49,9 @@ const BASELINE_FILE = path.resolve(__dirname, 'iphone-baseline.json');
 const CENSUS = require('../unit/surface-census.json').surfaces;
 const WORKSPACES = CENSUS.filter((s) => s.kind === 'workspace');
 const SETTLE_MS = 8000;
+// a hidden page stops with a fast fade, well inside this; a control that ends on its own (a
+// trigger's note, a transport's last step) takes longer, so it cannot pass for a stop
+const HIDE_MS = 1500;
 const PHONES = {
   webkit: ['iPhone 13', 'iPhone SE'],
   chromium: ['Pixel 7'],
@@ -126,13 +133,13 @@ function inertSpot() {
 }
 
 /** Poll `measure` until `ok(value)`; the last value read is returned either way. */
-async function pollFor(measure, ok, what) {
+async function pollFor(measure, ok, what, ms = SETTLE_MS) {
   let last = null;
   try {
     await until(async () => {
       last = await measure();
       return ok(last);
-    }, { ms: SETTLE_MS, what });
+    }, { ms, what });
     return { ok: true, last };
   } catch (error) {
     if (!(error instanceof WaitTimeout)) throw error;
@@ -142,14 +149,20 @@ async function pollFor(measure, ok, what) {
 
 const sounding = (page) => page.evaluate(() => {
   const s = window.OSCILLA.engine.snapshot();
-  return { running: s.running, sources: s.activeSources, voices: s.audibleVoices };
+  const app = window.OSCILLA.app;
+  // what the surfaces claim: a transport that says it plays is live whatever the engine holds
+  // between two of its notes
+  const claims = app ? ['playing', 'seqPlaying', 'studioPlaying', 'latched']
+    .filter((k) => !!app[k]) : ['no app'];
+  return { running: s.running, sources: s.activeSources, voices: s.audibleVoices, claims };
 });
 const isSounding = (s) => !!s && s.running && s.sources > 0;
 
 // What each sounding control is, where it lives and how a finger drives it.
 const SOUNDS = [
   { id: 'hold-to-play', ws: 'playground', sel: '#osc-hold-play', how: 'hold' },
-  { id: 'trigger', ws: 'playground', sel: '#osc-trigger', how: 'tap' },
+  // a trigger's note ends inside HIDE_MS by itself, so a hide can prove nothing about it
+  { id: 'trigger', ws: 'playground', sel: '#osc-trigger', how: 'tap', endsByItself: true },
   { id: 'sequencer-play', ws: 'sequencer', sel: '[data-osc="seq.play"]', how: 'tap' },
   { id: 'studio-play', ws: 'studio', sel: '[data-osc="studio.play"]', how: 'tap' },
   // the keys are drawn on one canvas: a finger holds the low part of a white key near its left
@@ -207,6 +220,7 @@ async function runOne(engine, baseline, recorded) {
         // the first match a finger can see: a hidden copy of the control is no control
         const target = page.locator(s.sel).locator('visible=true').first();
         let result = { ok: false, last: 'no visible control' };
+        let lift = null; // a held control's finger stays down until the page has been hidden
         try {
           if (await target.count()) {
             await target.scrollIntoViewIfNeeded({ timeout: 5000 });
@@ -219,17 +233,37 @@ async function runOne(engine, baseline, recorded) {
                 pointerType: 'touch', isPrimary: true, pointerId: 1, buttons: 1 };
               await target.dispatchEvent('pointerdown', at);
               result = await pollFor(() => sounding(page), isSounding, `iphone: ${s.id} sounds`);
-              await target.dispatchEvent('pointerup', { ...at, buttons: 0 });
+              lift = () => target.dispatchEvent('pointerup', { ...at, buttons: 0 });
             } else {
-              await target.dispatchEvent('pointerdown', { pointerType: 'touch', isPrimary: true });
+              // a trusted press: the control takes pointer capture, which a synthetic pointer
+              // loses at once (lostpointercapture ends the hold by itself)
+              const box = await target.boundingBox();
+              await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+              await page.mouse.down();
               result = await pollFor(() => sounding(page), isSounding, `iphone: ${s.id} sounds`);
-              await target.dispatchEvent('pointerup', { pointerType: 'touch', isPrimary: true });
+              lift = () => page.mouse.up();
             }
           }
         } catch (error) {
           result = { ok: false, last: `the control did not take the gesture: ${error.message.split('\n')[0]}` };
         }
         check(`sounds-${s.id}@${phone}`, result.ok, JSON.stringify(result.last));
+        // Journey 21 (One Living System, G): a page the phone hides (lock, switch app) stops
+        // everything it plays, with the finger still on a held control: no live source is left
+        // and no surface still claims to play.
+        if (result.ok && !s.endsByItself) {
+          await page.evaluate(() => {
+            Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+            Object.defineProperty(document, 'visibilityState', { configurable: true,
+              get: () => 'hidden' });
+            document.dispatchEvent(new Event('visibilitychange'));
+          });
+          const silent = await pollFor(() => sounding(page),
+            (v) => !!v && v.sources === 0 && v.claims.length === 0,
+            `iphone: ${s.id} silent once the page is hidden`, HIDE_MS);
+          check(`stops-on-hide-${s.id}@${phone}`, silent.ok, JSON.stringify(silent.last));
+        }
+        if (lift) await lift().catch(() => {});
         await context.close();
       }
     }
