@@ -119,28 +119,15 @@ export function patchSvg({ source, layout, cables = [], states = new Map(), pend
   // A patched input shows its cable's colour, the source module's (as the cable does).
   const feeders = new Map(cables.map((c) => [`${c.to}:in`, c.fromModule]));
   const feederOf = (key) => feeders.get(key) || null;
-  // Each module is a plate: a raised surface, its cable colour as a strip along the top (the
-  // colour every cable from it wears; the label names it, never colour alone) and two screws.
-  const plates = layout.groups.map((g) => {
-    const x = g.x - 4;
-    const y = g.y - 3;
-    const w = g.w + 8;
-    const h = g.h + 4;
-    const screw = (cx, cy) => `<circle cx="${cx}" cy="${cy}" r="2.5" fill="${t.capHi}" `
-      + `stroke="${t.track}" stroke-width="1"/>`;
-    return `<g data-plate="${esc(g.module)}" pointer-events="none">`
-      + `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" fill="${t.plateHi}" `
-      + `stroke="${t.track}" stroke-width="1"/>`
-      + `<rect x="${x + 6}" y="${y}" width="${w - 12}" height="3" rx="1.5" `
-      + `fill="${colourOf(g.module)}" stroke="none"/>`
-      + `${screw(x + w - 7, y + 9)}${screw(x + w - 7, y + h - 7)}</g>`;
-  }).join('');
-  // A hex nut behind each jack, as a panel socket is held.
-  const nut = (x, y, r = 17) => `<polygon points="${[0, 1, 2, 3, 4, 5].map((k) => {
-    const a = Math.PI / 6 + (k * Math.PI) / 3;
-    return `${(x + r * Math.cos(a)).toFixed(1)},${(y + r * Math.sin(a)).toFixed(1)}`;
-  }).join(' ')}" fill="${t.plateLo}" stroke="${t.track}" stroke-width="1"/>`;
-  const nuts = [...layout.jacks.values()].map(({ x, y }) => nut(x, y)).join('');
+  // Each module is a plate, the one treatment visual-identity-lock v3 allows a plate: a tonal
+  // gradient between two OSCILLA tokens (no screws, rivets, nuts or texture). Its label is the
+  // group text below.
+  const plates = layout.groups.map((g) => `<rect x="${g.x - 4}" y="${g.y - 3}" `
+    + `width="${g.w + 8}" height="${g.h + 4}" rx="8" fill="url(#bay-plate)" `
+    + `stroke="${t.track}" stroke-width="1" data-plate="${esc(g.module)}"/>`).join('');
+  const plateFill = '<defs><linearGradient id="bay-plate" x1="0" y1="0" x2="0" y2="1">'
+    + `<stop offset="0" stop-color="${t.plateHi}"/><stop offset="1" stop-color="${t.plateLo}"/>`
+    + '</linearGradient></defs>';
   const groups = layout.groups.map((g) => `<text x="${g.x + 2}" y="${g.y + 12}" `
     + `font-size="${BAY_TEXT}" font-weight="700" letter-spacing="1" stroke="none" `
     + `fill="${t.label}">${esc(g.label)}`
@@ -183,28 +170,14 @@ export function patchSvg({ source, layout, cables = [], states = new Map(), pend
       + 'transform="translate(0 3)" stroke-linecap="round"/>'
       + `<path d="${d}" fill="none" stroke="${colourOf(c.fromModule)}" stroke-width="`
       + `${on ? 7 : 4.5}" stroke-linecap="round"${dash[c.type] || ''} `
-      + 'class="group-hover:[stroke-width:7]"/>'
-      + `<path d="${d}" fill="none" stroke="${t.text}" stroke-opacity="0.3" stroke-width="1.2" `
-      + `transform="translate(0 -1)" stroke-linecap="round"${dash[c.type] || ''} `
-      + 'pointer-events="none"/></g>';
-  }).join('');
-  // Each cable ends in a plug seated in its jack, in the cable's colour; it never takes a tap
-  // (the jack under it does).
-  const plug = (p, colour) => `<circle cx="${p.x}" cy="${p.y}" r="8" fill="${colour}" `
-    + `stroke="${t.edge}" stroke-width="1.5"/><circle cx="${p.x - 2}" cy="${p.y - 2}" r="2.5" `
-    + `fill="${t.text}" fill-opacity="0.35" stroke="none"/>`;
-  const plugs = cables.map((c) => {
-    const a = layout.jacks.get(`${c.from}:out`);
-    const b = layout.jacks.get(`${c.to}:in`);
-    return a && b ? plug(a, colourOf(c.fromModule)) + plug(b, colourOf(c.fromModule)) : '';
+      + 'class="group-hover:[stroke-width:7]"/></g>';
   }).join('');
   return `<svg viewBox="0 0 ${layout.width} ${layout.height}" width="100%" `
     + `height="${layout.height}" data-osc="synth.bay.svg" role="group" `
     + `aria-label="Patch bay: ${layout.jacks.size} jacks, ${cables.length} cables">`
-    + `<g data-layer="plates">${plates}${nuts}</g>`
+    + `${plateFill}<g data-layer="plates" pointer-events="none">${plates}</g>`
     + `${groups}<g data-layer="cables" pointer-events="stroke">${wires}</g>`
     + `<g data-layer="jacks">${jacks}</g>`
-    + `<g data-layer="plugs" pointer-events="none">${plugs}</g>`
     + '<path data-live-cable="" d="" fill="none" '
     + `stroke="${t.focus}" stroke-width="4" stroke-linecap="round" pointer-events="none"/></svg>`;
 }

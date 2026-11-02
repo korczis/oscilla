@@ -1,8 +1,9 @@
-// B2 slice 3a: the patch bay drawn as hardware (src/js/ui/patch/patch-bay.js). Each module is a
-// plate with its cable colour as a strip along the top and two screws; each jack sits in a hex
-// nut; each cable ends in a plug seated in both its jacks, in its colour, and carries a sheen.
-// None of it takes a pointer (the jacks and cables under it do), and every shape sets its own
-// stroke, so the legacy `svg { stroke }` never draws on the bay.
+// B2 slice 3a: the patch bay's modules sit on plates (src/js/ui/patch/patch-bay.js), drawn as
+// visual-identity-lock v3 allows the Synth panel surface and no further: a plate is a tonal
+// gradient between two OSCILLA tokens with its label as text; no screws, rivets, nuts, plugs or
+// texture; cables keep sag and a soft shadow and thicken on hover. Plates take no pointer (the
+// jacks and cables do), and every shape sets its own stroke, so the legacy `svg { stroke }`
+// never draws on the bay.
 //
 //   node --test tests/unit/patch-bay-hardware.test.mjs
 import test from 'node:test';
@@ -12,43 +13,35 @@ import PANEL from '../../src/js/synth/panels/semi-mono.js';
 import * as bay from '../../src/js/synth/view/bay.js';
 import { panelTokens } from '../../src/js/synth/view/tokens.js';
 
-const tokens = { ...panelTokens(null), cables: ['#c1', '#c2', '#c3', '#c4', '#c5', '#c6'] };
+const tokens = { ...panelTokens(null), plateHi: '#p1', plateLo: '#p2',
+  cables: ['#c1', '#c2', '#c3', '#c4', '#c5', '#c6'] };
 const layout = bay.bayLayout(PANEL, 376);
 const cables = [{ id: 'k1', from: 'keys.velocity', to: 'vco2.pitch', fromModule: 'keys',
   type: 'CONTROL' }, { id: 'k2', from: 'vco1.audio', to: 'ring.carrier', fromModule: 'vco1',
   type: 'AUDIO' }];
 const svg = bay.baySvg({ panel: PANEL, layout, cables, tokens });
-const layer = (name) => {
-  const end = '(?=<g data-layer|<text|<path data-live)';
-  const m = svg.match(new RegExp(`<g data-layer="${name}"[^>]*>(.*?)</g>${end}`, 's'));
-  return m ? m[0] : '';
-};
 
-test('every module is a plate with its cable colour along the top', () => {
-  const order = PANEL.modules.map((m) => m.id);
+test('every module sits on a plate: a tonal gradient between two tokens, taking no pointer', () => {
+  const plates = svg.match(/<g data-layer="plates" pointer-events="none">(.*?)<\/g>/s);
+  assert.ok(plates, 'a plates layer that takes no pointer');
   for (const g of layout.groups) {
-    const plate = svg.match(new RegExp(`<g data-plate="${g.module}"[^>]*>(.*?)</g>`, 's'));
-    assert.ok(plate, `${g.module} has a plate`);
-    assert.match(plate[0], /pointer-events="none"/);
-    const colour = tokens.cables[order.indexOf(g.module) % tokens.cables.length];
-    assert.match(plate[1], new RegExp(`height="3"[^>]*fill="${colour}"`), `${g.module} strip`);
-    assert.equal((plate[1].match(/<circle /g) || []).length, 2, `${g.module} screws`);
+    const plate = new RegExp(`<rect [^>]*fill="url\\(#bay-plate\\)"[^>]*data-plate="${g.module}"`);
+    assert.match(plates[1], plate, `${g.module} has a plate`);
   }
+  assert.match(svg, new RegExp('<linearGradient id="bay-plate"[^>]*>'
+    + '<stop offset="0" stop-color="#p1"/><stop offset="1" stop-color="#p2"/>'));
 });
 
-test('every jack sits in a hex nut, and every cable ends in two plugs of its colour', () => {
-  const plates = layer('plates');
-  assert.equal((plates.match(/<polygon /g) || []).length, layout.jacks.size);
-  const plugs = layer('plugs');
-  assert.match(plugs, /^<g data-layer="plugs" pointer-events="none">/);
-  for (const [i, c] of cables.entries()) {
-    const colour = tokens.cables[PANEL.modules.findIndex((m) => m.id === c.fromModule)];
-    for (const end of [layout.jacks.get(`${c.from}:out`), layout.jacks.get(`${c.to}:in`)]) {
-      assert.match(plugs, new RegExp(`<circle cx="${end.x}" cy="${end.y}" r="8" `
-        + `fill="${colour}"`), `cable ${i + 1} plug`);
-    }
+test('nothing the identity lock forbids: no screws, nuts, plugs, sheen or texture', () => {
+  const plates = svg.match(/<g data-layer="plates"[^>]*>(.*?)<\/g>/s)[1];
+  assert.doesNotMatch(plates, /<circle|<polygon|<image|<pattern/, 'a plate is one shape');
+  assert.doesNotMatch(svg, /data-layer="plugs"|<polygon|<image|<pattern/);
+  for (const c of cables) {
+    const g = svg.match(new RegExp(`<g data-cable="${c.id}"[^>]*>(.*?)</g>`, 's'));
+    assert.ok(g, `${c.id} drawn`);
+    assert.equal((g[1].match(/<path /g) || []).length, 2, `${c.id}: a shadow and the cable`);
+    assert.match(g[1], /group-hover:\[stroke-width:7\]/, `${c.id} thickens on hover`);
   }
-  assert.equal((svg.match(/stroke-opacity="0.3"/g) || []).length, cables.length, 'one sheen each');
 });
 
 test('every shape of the bay sets its own stroke', () => {
