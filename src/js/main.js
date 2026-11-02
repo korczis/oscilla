@@ -83,6 +83,7 @@ import {
 import { renderPlanToWav, renderSequenceToWav, screenshotCanvases } from './ui/exporters.js';
 import { BUILD } from './core/build-info.js';
 import { aboutPart } from './ui/about.js';
+import { armAudioUnlock } from './ui/audio-unlock.js';
 
 import { mount as mountAnalysis } from './labs/analysis.js';
 import { mount as mountFilter } from './labs/filter-lab.js';
@@ -658,10 +659,10 @@ function integrationInit() {
       + 'API, so OSCILLA cannot generate sound here.');
   }
 
-  // first gesture creates/resumes the context inside the gesture
-  const unlock = () => { if (engine.isSupported()) cmp.ensureAudio(); };
-  window.addEventListener('pointerdown', unlock, { capture: true });
-  window.addEventListener('keydown', unlock, { capture: true });
+  // first gesture creates/resumes the context inside the gesture, at either end of a touch, and
+  // iOS is asked for a playback session (ui/audio-unlock.js: a phone sounds)
+  armAudioUnlock({ win: window, nav: navigator,
+    unlock: () => { if (engine.isSupported()) cmp.ensureAudio(); } });
   const stopSequencer = () => stopSequence(cmp); // the editor's live state (C001, C002)
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
