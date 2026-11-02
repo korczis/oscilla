@@ -1648,9 +1648,17 @@ function defineChecks() {
     await H.continuous(page, true);
     await H.focusBody(page);
     await page.keyboard.down(' ');
-    // The held Space starts the engine voice; wait for it rather than for a fixed time.
-    await U.poll(() => page.evaluate(() => !!window.OSCILLA.engine.voice?.carrier),
-      (v) => v, 'held Space starts the engine voice');
+    // The held Space starts the engine voice; wait for it rather than for a fixed time. The
+    // polled value says why it did not (the output owner, a typing target or an open modal
+    // that keyGuard() honours, a suspended context) when the deadline passes.
+    await U.poll(() => page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      const el = document.activeElement;
+      return { carrier: !!window.OSCILLA.engine.voice?.carrier, playing: !!a.playing,
+        owner: a.outputOwner ?? null, ctx: window.OSCILLA.engine.ctx?.state ?? null,
+        workspace: a.workspace, focus: el ? `${el.tagName}#${el.id}` : null,
+        modal: !!document.querySelector('[data-oscilla-modal][aria-modal="true"]') };
+    }), (v) => v.carrier, 'held Space starts the engine voice');
     const read = () => page.evaluate(() => ({ app: window.OSCILLA.app.frequency,
       eng: window.OSCILLA.engine.voice?.carrier?.frequency.value,
       readout: document.querySelector('#osc-freq-value').textContent }));
