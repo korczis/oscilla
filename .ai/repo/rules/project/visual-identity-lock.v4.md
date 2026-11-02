@@ -87,8 +87,8 @@ can hold, and keeps every other clause of version 3 unchanged. ADR 0061's resolu
   wooden cheeks; brushed or anodised metal plates; a subtle surface texture; LED glow. Screws
   are allowed; rivets stay banned (not among Q071's options), on every surface, the layer
   included. The treatment is drawn only by the shared synth-theme layer (planned as plan issue
-  F013: the directories `ui/synth/` and `ui/cable/` under `src/js`, with the Synth panel's
-  `src/js/synth/view/`); a surface takes it by calling the layer, so its hardware vocabulary
+  F013: the one directory `ui/synth/` under `src/js`, its cable included, with the Synth
+  panel's `src/js/synth/view/`); a surface takes it by calling the layer, so its hardware vocabulary
   (wood, brushed, anodised, screw, jack nut, sheen, cheek, grain, knurl, bolt, bezel, metal or
   metallic, the `hw-*` intensity classes, `data-led`, `data-needle`, `data-hw`) appears in no
   other source file and no skin escapes the layer's checks. And:
@@ -179,18 +179,18 @@ is a review rejection even when every functional test passes.
     `src/styles/tokens.css` equal the reviewed snapshot `tests/unit/visual-identity-palette.json`;
     the intensity keys `hw-sheen`, `hw-texture`, `hw-shadow`, `hw-wood` and `hw-led` exist
     within their bounds;
-  - over the theme layer (`src/js/synth/view/` now, and `ui/synth/` and `ui/cable/` under
-    `src/js` once they exist): no colour literal, colour function, named colour, literal paint,
+  - over the theme layer (`src/js/synth/view/` now, and `ui/synth/` under `src/js` once it
+    exists): no colour literal, colour function, named colour, literal paint,
     arbitrary Tailwind colour or `url()` but an in-SVG fragment; every `var(--osc-*)` it names
     is defined by `src/styles/tokens.css`; `animate-*` only behind `motion-safe:`; a script or
     SVG animation only in a file that checks `prefers-reduced-motion`; "SPL" only in a file
     that reads the calibration state; in the layer's own directories no literal opacity,
     alpha or shadow, CSS or SVG attribute (below 1, or exactly 0; a fully opaque `1` and a hit
     path hidden with `visibility="hidden"` stay allowed).
-  While `ui/synth/` and `ui/cable/` under `src/js` do not exist the theme-layer guards judge
-  only `src/js/synth/view/`, and the test prints that the layer's directories, and the
-  intensity-literal guard, pass vacuously; once either directory exists it must hold a `.js`
-  module and every guard is strict on it.
+  While `ui/synth/` under `src/js` does not exist the theme-layer guards judge only
+  `src/js/synth/view/`, and the test prints that the layer's directory, and the
+  intensity-literal guard, pass vacuously; once it exists it must hold a `.js` module and
+  every guard is strict on it. `tests/unit/synth-wording.test.mjs` reads it too.
 - `tests/unit/ui-flowbite-pro.test.mjs`, in `npm test` (CI `unit` job): the interface half.
   Growth of the recorded legacy interface (a surface not migrated, an osc-* class token, a
   class name outside the frozen vocabulary, a legacy selector or declaration, an inline

@@ -15,16 +15,16 @@
 //       judged layer (af's review of 2026-11-02, P2-A); rivets appear nowhere, the layer included;
 //     - the palette of tokens.css equals its reviewed snapshot (visual-identity-palette.json);
 //     - the hardware intensity keys of tailwind.config.cjs stay within their bounds;
-//   the theme layer (THEME_DIRS: src/js/synth/view now; src/js/ui/synth and src/js/ui/cable,
-//   the shared synth-theme layer, once they exist):
+//   the theme layer (THEME_DIRS: src/js/synth/view now; src/js/ui/synth, the shared
+//   synth-theme layer of F013, its cable included, once it exists):
 //     - no colour literal, colour function, named colour, literal paint, arbitrary Tailwind
 //       colour or url() but an in-SVG fragment; every --osc-* token it names exists;
 //     - animate-* only behind motion-safe:, a script or SVG animation only in a file that checks
 //       prefers-reduced-motion; "SPL" only in a file that reads the calibration state;
 //     - (layer directories only) no literal opacity, alpha or shadow: the intensity keys are read.
 //
-// While src/js/ui/synth/ and src/js/ui/cable/ do not exist, their guards pass vacuously and the
-// test says so in its output; once one exists it must hold a module and every guard is strict.
+// While src/js/ui/synth/ does not exist, its guards pass vacuously and the test says so in its
+// output; once it exists it must hold a module and every guard is strict on it.
 //   node --test tests/unit/visual-identity-lock-v4.test.mjs
 // After a reviewed palette change: OSC_PALETTE_WRITE=1 node --test <this file> rewrites the
 // snapshot; the diff of tests/unit/visual-identity-palette.json is what the reviewer judges.
@@ -46,9 +46,10 @@ const SRC_PATHS = walk('src');
 const SRC = SRC_PATHS.filter((p) => TEXT.test(p)).map((p) => [p, read(p)]);
 const TOKENS_CSS = read('src/styles/tokens.css');
 
-export const THEME_DIRS = ['src/js/synth/view', 'src/js/ui/synth', 'src/js/ui/cable'];
-// The shared synth-theme layer's homes (F013); the guards turn strict on each once it exists.
-export const LAYER_DIRS = ['src/js/ui/synth', 'src/js/ui/cable'];
+export const THEME_DIRS = ['src/js/synth/view', 'src/js/ui/synth'];
+// The shared synth-theme layer's one home (F013, its cable at src/js/ui/synth/cable.js); the
+// guards turn strict on it once it exists.
+export const LAYER_DIRS = ['src/js/ui/synth'];
 const inDirs = (p, dirs) => dirs.some((d) => p === d || p.startsWith(`${d}/`));
 
 /** Removes // line comments and block comments (strings that hold // stay, e.g. a URL). */
@@ -344,7 +345,7 @@ export function themeColours(files, tokensCss) {
     hit(/#[0-9a-f]{3,8}\b(?![-\w])/i, 'a hex colour');
     hit(/\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|color-mix)\(/i, 'a colour function');
     hit(/url\((?!#|\$\{)/i, 'a url() other than a fragment');
-    hit(/\b(?:fill|stroke|stop-color|flood-color)="(?!\$\{|none|url\(#|currentColor)/,
+    hit(/(?<![\w-])(?:fill|stroke|stop-color|flood-color)="(?!\$\{|none|url\(#|currentColor)/,
       'a literal paint');
     hit(/-\[(?:#|rgb|hsl|oklch|color)/i, 'an arbitrary Tailwind colour');
     hit(/var\(--(?!osc-)[\w-]+\)/, 'a custom property that is not an OSCILLA token');
@@ -497,7 +498,7 @@ export function hwIntensity(configText) {
 // hidden hit path is written visibility="hidden", so both stay allowed.
 export const INTENSITY_LITERAL = new RegExp(
   String.raw`\b(?:bg-|text-|border-)?opacity-\[|\/\[0?\.\d`
-  + String.raw`|\b(?:drop-)?shadow-\[|\bopacity\s*:\s*0?\.\d|box-shadow\s*:|\bw-\[`
+  + String.raw`|\b(?:drop-)?shadow-\[|\bopacity\s*:\s*0?\.\d|box-shadow\s*:|(?<![\w-])w-\[`
   + String.raw`|\b(?:stroke-|fill-|flood-|stop-)?opacity\s*=\s*["']?(?:0?\.\d|0(?![.\d]))`);
 
 /** In the layer's own directories, no literal opacity, alpha or shadow: the keys are read. */
@@ -685,9 +686,9 @@ test('mutation: a glow off an LED, an over-glow and glowing text are caught', ()
   assert.deepEqual(glows(f('src/styles/components.css', lamp), GLOW_DEBT), [], 'recorded debt');
   assert.ok(glows(f('src/styles/components.css', lamp.replace('is-playing', 'is-idle')),
     GLOW_DEBT).length >= 2, 'a new glow beside the debt fails, and so does a stale entry');
-  caught(glows, f('src/js/ui/cable/cable.js',
+  caught(glows, f('src/js/ui/synth/cable.js',
     '`<feDropShadow dx="0" dy="0" stdDeviation="3"/>`'),
-  f('src/js/ui/cable/cable.js', '`<feDropShadow dx="0" dy="2" stdDeviation="1.5"/>`'));
+  f('src/js/ui/synth/cable.js', '`<feDropShadow dx="0" dy="2" stdDeviation="1.5"/>`'));
 });
 
 test('mutation: an LED or a needle with a literal or no state source is caught', () => {
@@ -735,8 +736,8 @@ test('mutation: a colour literal or an unknown token in the theme layer is caugh
 test('mutation: motion without a reduced-motion guard is caught', () => {
   caught(themeMotion, f('src/js/ui/synth/led.js', '`<span class="animate-pulse"></span>`'),
     f('src/js/ui/synth/led.js', '`<span class="motion-safe:animate-pulse"></span>`'));
-  caught(themeMotion, f('src/js/ui/cable/cable.js', 'el.animate([{ opacity: 0 }], 200);'),
-    f('src/js/ui/cable/cable.js', "if (!matchMedia('(prefers-reduced-motion: reduce)').matches) "
+  caught(themeMotion, f('src/js/ui/synth/cable.js', 'el.animate([{ opacity: 0 }], 200);'),
+    f('src/js/ui/synth/cable.js', "if (!matchMedia('(prefers-reduced-motion: reduce)').matches) "
       + 'el.animate([{ opacity: 0 }], 200);'));
   caught(themeMotion, f('src/js/ui/synth/meter.js', '`<animateTransform attributeName="x"/>`'),
     f('src/js/ui/synth/meter.js', '`<g transform="rotate(${deg})"/>`'));
@@ -807,12 +808,26 @@ test('mutation: a palette change and an intensity beyond its bound are caught', 
   caught(layerIntensityLiterals, f('src/js/ui/synth/plate.js', '`<i class="opacity-[0.6]"></i>`'),
     f('src/js/ui/synth/plate.js', '`<i class="opacity-hw-sheen"></i>`'));
   caught(layerIntensityLiterals,
-    f('src/js/ui/cable/cable.js', '`<i class="shadow-[0_0_20px_var(--osc-cyan)]"></i>`'),
-    f('src/js/ui/cable/cable.js', '`<i class="shadow-hw-led text-osc-green"></i>`'));
+    f('src/js/ui/synth/cable.js', '`<i class="shadow-[0_0_20px_var(--osc-cyan)]"></i>`'),
+    f('src/js/ui/synth/cable.js', '`<i class="shadow-hw-led text-osc-green"></i>`'));
+});
+
+test('mutation: a data- attribute is not a paint, and min-w/max-w are not the wood width', () => {
+  const tokens = '--osc-cyan: x;';
+  const at = 'src/js/ui/synth/jack.js';
+  assert.deepEqual(themeColours(f(at, '`<g data-stroke="" data-fill="dashed"></g>`'), tokens), []);
+  caught((files) => themeColours(files, tokens), f(at, '`<path stroke="crimson"/>`'),
+    f(at, '`<path data-stroke="" stroke="${t.cable}"/>`'));
+  caught((files) => themeColours(files, tokens), f(at, '`<path fill="#222"/>`'),
+    f(at, '`<path data-fill="" fill="none"/>`'));
+  assert.deepEqual(layerIntensityLiterals(f(at,
+    '`<span class="min-w-[2.75rem] max-w-[12rem]"></span>`')), []);
+  caught(layerIntensityLiterals, f(at, '`<span class="w-[3px]"></span>`'),
+    f(at, '`<span class="w-hw-wood min-w-[2.75rem]"></span>`'));
 });
 
 test('mutation: a literal SVG opacity in the layer is caught; opaque, hidden stay allowed', () => {
-  const at = 'src/js/ui/cable/cable.js';
+  const at = 'src/js/ui/synth/cable.js';
   const ok = f(at, '`<path class="opacity-hw-shadow" d="${d}"/>`'
     + '`<path opacity="1" visibility="hidden" stroke-opacity="${o}" d="${hit}"/>`');
   assert.deepEqual(layerIntensityLiterals(ok), []);
