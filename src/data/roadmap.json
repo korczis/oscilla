@@ -3,6 +3,12 @@
   "note": "The open milestones of the plan (.ai/repo/project) in its derived order, each with how many of its required issues are done, as `majordomus plan roadmap --json` gave them. Written by scripts/roadmap.mjs, which release:prepare runs before its build; About renders it from the bundle. Do not edit by hand.",
   "milestones": [
     {
+      "id": "M011",
+      "title": "Release engineering, provenance and product graph",
+      "done": 19,
+      "required": 20
+    },
+    {
       "id": "M045",
       "title": "MIDI jam companion: first usable version",
       "done": 2,
@@ -180,7 +186,7 @@
       "id": "M086",
       "title": "Component system, wave 1: rendered from declarations on Pro, and the embedded Studio as a compact cockpit",
       "done": 0,
-      "required": 6
+      "required": 7
     },
     {
       "id": "M087",
