@@ -46,8 +46,9 @@
 //   about-workspaces (A1) every entry of About's workspace list but About's own is a link that
 //                   opens its workspace (WORKSPACES, read at start) with focus on its heading;
 //                   Back returns to About
-//   preset-load     (A1) Load in Presets stays in Presets and its notice says Space, never
-//                   "Press TRIGGER"; the notice's "Open the Playground" opens the Playground
+//   preset-load     (A1) Load in Presets stays in Presets and its notice says Space (under a
+//                   coarse pointer, "Open the Playground to play it"), never "Press TRIGGER"; the
+//                   notice's "Open the Playground" opens the Playground
 //                   with focus on its heading, Back returns to Presets
 //   learn-demo-back (one-way link 2) a Learn demo's notice carries the way back to the lesson;
 //                   left untouched it still closes on its own (the notices are in flow)
@@ -660,9 +661,13 @@ async function runLeg(name, origin) {
           const a = window.OSCILLA.app;
           const n = a.alerts.find((x) => /^Loaded/.test(x.title));
           return n ? { workspace: a.workspace, message: n.message,
-            action: n.action && n.action.text } : null;
+            action: n.action && n.action.text,
+            coarse: matchMedia('(pointer: coarse)').matches } : null;
         }), { ms: NAV_MS, what: `Load (${input}) announces the preset` }).catch(() => null);
-        if (!said || said.workspace !== 'presets' || !/Space/.test(said.message)
+        // A keyboard plays it with Space; a coarse pointer (no Space) is sent to the tap.
+        const words = said && (said.coarse ? /^Open the Playground to play it with /
+          : /^(Press|Hold) Space to play it here/);
+        if (!said || said.workspace !== 'presets' || !words.test(said.message)
           || /^Press TRIGGER/.test(said.message) || said.action !== 'Open the Playground') {
           wrong.push(`${input}: ${JSON.stringify(said)}`);
           await page.close();

@@ -925,7 +925,8 @@ function defineChecks() {
       const a = window.OSCILLA.app;
       const alert = a.alerts.find((x) => /^Loaded/.test(x.title));
       const said = alert ? `${alert.title} ${alert.message}` : '';
-      return said ? { workspace: a.workspace, said } : null;
+      return said ? { workspace: a.workspace, said,
+        coarse: matchMedia('(pointer: coarse)').matches } : null;
     }), { ms: 8000, what: 'Load in Presets announces the loaded preset' });
     const controls = await page.evaluate(() => ['source.hold', 'source.trigger', 'status.play']
       .filter((k) => {
@@ -936,7 +937,9 @@ function defineChecks() {
     await page.close();
     return { ...H.verdict({
       staysInPresets: loaded.workspace === 'presets',
-      noticeNamesSpace: /Space/.test(loaded.said),
+      // A coarse pointer has no Space: the notice sends the tap to the Playground (A1).
+      noticeNamesSpace: loaded.coarse ? /Open the Playground to play it/.test(loaded.said)
+        : /Space/.test(loaded.said),
       spacePlaysIt: space.heard === 'instrument',
     }), loaded, controls, space };
   });

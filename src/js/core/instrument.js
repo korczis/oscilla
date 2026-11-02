@@ -931,7 +931,8 @@ export function createInstrument(deps = {}) {
       this.loadedLabel = p.name;
       if (issues) this.notify('warning', 'Preset partly applied', `${issues} value(s) were invalid and kept at their previous setting.`);
       else {
-        const said = presetLoadedNotice(this.mode, this.isProgrammed, this.source);
+        const coarse = !!host.matchMedia && host.matchMedia('(pointer: coarse)').matches;
+        const said = presetLoadedNotice(this.mode, this.isProgrammed, this.source, coarse);
         this.notify('success', `Loaded “${p.name}”`, said.message, { action: said.action });
       }
     },

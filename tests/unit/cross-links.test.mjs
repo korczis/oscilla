@@ -250,6 +250,21 @@ test('A1: a preset loaded in Presets says what plays it there and links to its t
       assert.equal(routeOfHash(n.action.href).workspace, href.slice(3));
       assert.match(n.action.text, /^Open (the Playground|Synthesis)$/);
     }
+    // Under a coarse pointer (a phone: no Space key) the notice offers the tap: the link to
+    // the workspace whose own control starts the sound, worded to match; no Space.
+    for (const [programmed, source, href, words] of [
+      [true, 'single', '#m=playground', 'Open the Playground to play it with TRIGGER.'],
+      [false, 'single', '#m=playground', 'Open the Playground to play it with HOLD TO PLAY.'],
+      [true, 'dual', '#m=synthesis', 'Open Synthesis to play it with TRIGGER.'],
+    ]) {
+      const n = presetLoadedNotice('presets', programmed, source, true);
+      assert.equal(n.message, words);
+      assert.doesNotMatch(n.message, /Space/);
+      assert.equal(n.action.href, href);
+      assert.equal(presetLoadedNotice('presets', programmed, source, false).action.href, href);
+    }
+    assert.deepEqual(presetLoadedNotice('playground', true, 'single', true),
+      presetLoadedNotice('playground', true, 'single', false), 'the V1 text stands on a phone');
     // Where the transport is on screen, the V1 text stands and nothing is linked.
     for (const mode of ['playground', 'dual', 'sweep']) {
       assert.deepEqual(presetLoadedNotice(mode, true, 'single'),
@@ -272,4 +287,14 @@ test('A1: a preset loaded in Presets says what plays it there and links to its t
       assert.match(loaded.message, /Space/, p.id);
       assert.ok(loaded.action && /^#m=(playground|synthesis)$/.test(loaded.action.href), p.id);
     }
+    // The instrument asks the host for a coarse pointer: on a phone the notice names no Space.
+    const phone = createInstrument({ engine: null,
+      env: { matchMedia: (q) => ({ matches: q === '(pointer: coarse)' }), innerWidth: 390 } });
+    phone.sampleRate = 48000;
+    phone.mode = 'presets';
+    phone.applyPreset(BUILTIN_PRESETS.find((x) => x.id === 'ref-440'));
+    const said = phone.alerts.find((x) => x.title.startsWith('Loaded'));
+    assert.ok(said, 'Load on a phone announces the preset');
+    assert.match(said.message, /^Open the Playground to play it with /);
+    assert.equal(said.action.href, '#m=playground');
   });
