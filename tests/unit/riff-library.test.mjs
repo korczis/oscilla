@@ -26,6 +26,12 @@ test('the library holds original riffs, each named by a genre and an era', () =>
     assert.ok(!ids.has(r.id), `${r.id} is unique`);
     ids.add(r.id);
     assert.equal(r.origin, 'original', r.id);
+    // The owner's library decisions (Q079-Q082): original only, MIT as the code, the method
+    // recorded, symbolic only (notes, no audio).
+    assert.equal(r.licence, 'MIT', `${r.id} licence`);
+    assert.equal(r.author, 'OSCILLA', `${r.id} author`);
+    assert.ok(lib.METHODS.includes(r.method), `${r.id} method`);
+    assert.ok(Array.isArray(r.notes) && !('audio' in r), `${r.id} is symbolic`);
     assert.equal(r.style, `Original, in the style of ${r.genre} (${r.era})`, r.id);
     assert.ok(r.title && r.genre && r.era && r.key, r.id);
     assert.ok(lib.ROLES.includes(r.role), `${r.id} role`);

@@ -12,7 +12,14 @@
 // voice: what the riff was written for, as Oscillator and Filter parameters; Insert uses them
 // when it builds a voice for a riff.
 
-const r = (o) => Object.freeze({ ...o, origin: 'original',
+// The owner's library decisions (2026-11-02, Q079-Q082): only OSCILLA-authored entries ship,
+// under MIT as the code; each records how it was written (METHODS); symbolic only, notes played
+// by the one AudioEngine, never embedded audio. These sixteen were composed by an AI session
+// for OSCILLA and reviewed on the mesh: 'ai-assisted'.
+export const METHODS = Object.freeze(['human', 'generator', 'ai-assisted']);
+
+const r = (o) => Object.freeze({ method: 'ai-assisted', ...o, origin: 'original',
+  author: 'OSCILLA', licence: 'MIT',
   style: `Original, in the style of ${o.genre} (${o.era})`,
   notes: Object.freeze(o.notes.map((n) => Object.freeze(n))) });
 
