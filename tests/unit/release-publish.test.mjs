@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import {
-  appendFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync,
+  appendFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync,
 } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -73,8 +73,12 @@ function fakes({ branch = 'main', dirty = '', originMain = HEAD, tagRemote = '',
     }
     throw new Error(`unexpected git ${args.join(' ')}`);
   };
+  const notes = []; // the notes file's text, read when the Release is created (it is removed after)
   const sh = (cmd, args) => {
     calls.push([cmd, ...args]);
+    if (cmd === 'gh' && args[0] === 'release' && args[1] === 'create') {
+      notes.push(readFileSync(args[args.indexOf('--notes-file') + 1], 'utf8'));
+    }
     if (cmd === 'git' && args[0] === 'ls-remote' && args[1] === '--tags') {
       return { status: 0, stdout: tagRemote };
     }
@@ -119,7 +123,7 @@ function fakes({ branch = 'main', dirty = '', originMain = HEAD, tagRemote = '',
     if (live instanceof Error) throw live;
     return typeof live === 'function' ? live() : live;
   };
-  return { run, sh, calls, out, log: (l) => out.push(l), fetchPage,
+  return { run, sh, calls, notes, out, log: (l) => out.push(l), fetchPage,
     dispatched: () => dispatched };
 }
 
@@ -251,8 +255,15 @@ test('a key missing on both sides never verifies a receipt', () => {
 
 // ---------------------------------------------------------------- the gate tree
 // A throwaway repository: tracked files only need to be in the index (`git ls-files`).
+// Every fixture repository is removed when the test file ends (they filled TMPDIR).
+const FIXTURES = [];
+process.on('exit', () => {
+  for (const r of FIXTURES) rmSync(r, { recursive: true, force: true });
+});
+
 function fixtureRepo() {
   const root = mkdtempSync(path.join(os.tmpdir(), 'oscilla-gate-tree-'));
+  FIXTURES.push(root);
   const write = (rel, text) => {
     mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
     writeFileSync(path.join(root, rel), text);
@@ -600,6 +611,26 @@ test('--yes: tags, waits for a job of the Pages run to start, verifies, releases
   assert.ok(!direct.calls.some((c) => c[0] === 'gh' && c[1] === 'run' && c[2] === 'view'));
 });
 
+test('a publish leaves no oscilla-release-* directory behind (the notes and asset copy)',
+  async () => {
+    const tmp = mkdtempSync(path.join(os.tmpdir(), 'oscilla-publish-tmp-'));
+    const saved = process.env.TMPDIR;
+    process.env.TMPDIR = tmp; // os.tmpdir() reads it at each call
+    try {
+      const f = fakes({ runs: (args) => (args.includes('--commit')
+        ? [{ databaseId: 7005, status: 'in_progress', headSha: HEAD, createdAt: ago(1) }] : []) });
+      const code = await publish({ argv: ['--yes'], run: f.run, sh: f.sh, log: f.log,
+        receipt: RECEIPT, fingerprint: FP, fetchPage: f.fetchPage, ...fakeTime() });
+      assert.equal(code, 0, f.out.join('\n'));
+      assert.ok(f.calls.some((c) => c[0] === 'gh' && c[1] === 'release' && c[2] === 'create'),
+        'the publish reached the Release step');
+      assert.deepEqual(readdirSync(tmp).filter((n) => n.startsWith('oscilla-release-')), []);
+    } finally {
+      if (saved === undefined) delete process.env.TMPDIR; else process.env.TMPDIR = saved;
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
 // ---------------------------------------------------------------- E025: the redeploy after the tag
 const sequence = (f) => f.calls.map((c) => c.join(' '));
 // The deploy of the merge: the Pages run of HEAD, under way when the tag is pushed.
@@ -817,8 +848,8 @@ test('R021: resuming when the GitHub Release already exists refuses', async () =
 // Review R-1 and R-2 of #242. The interrupted run left its own local tag at HEAD: that tag is
 // never the previous release, and the local tag decides whether the publish may resume.
 const notesOf = (f) => {
-  const create = f.calls.find((c) => c[0] === 'gh' && c[1] === 'release' && c[2] === 'create');
-  return readFileSync(create[create.indexOf('--notes-file') + 1], 'utf8');
+  assert.ok(f.notes.length, 'the Release was created');
+  return f.notes[f.notes.length - 1];
 };
 
 test('R021 resume with the local tag at HEAD: the notes run from the previous release',

@@ -56,7 +56,7 @@
 // ECONNRESET, "can't assign requested address", an HTTP 5xx), and a call out of attempts
 // named in the refusal or failure with its reason. The publish of 2026-10-31: one gh run list sat
 // for 2 h 20 min, and local port exhaustion ended the wait for the dispatched Pages run.
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -567,14 +567,20 @@ export async function publish({
       if (n < TAGGED_ATTEMPTS) await sleep(10);
     }
     if (tagged !== null) throw new Error(`after the redeploy of ${tag}, ${tagged}`);
+    // The notes and the asset copy are temporary: removed whatever the create answers (a
+    // dist copy per publish, and per test run of it, filled the machine's TMPDIR).
     const dir = mkdtempSync(path.join(os.tmpdir(), 'oscilla-release-'));
-    const notesFile = path.join(dir, 'notes.md');
-    writeFileSync(notesFile, notes);
-    // The clean tree and build:check above make the working-tree dist the committed one.
-    const assetFile = path.join(dir, asset);
-    writeFileSync(assetFile, readFileSync(path.join(root, DIST_PATH)));
-    must('gh', ['release', 'create', tag, assetFile, ...releaseCreateFlags(version, notesFile)],
-      'creating the GitHub Release');
+    try {
+      const notesFile = path.join(dir, 'notes.md');
+      writeFileSync(notesFile, notes);
+      // The clean tree and build:check above make the working-tree dist the committed one.
+      const assetFile = path.join(dir, asset);
+      writeFileSync(assetFile, readFileSync(path.join(root, DIST_PATH)));
+      must('gh', ['release', 'create', tag, assetFile, ...releaseCreateFlags(version, notesFile)],
+        'creating the GitHub Release');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   } catch (e) {
     log(`\nRELEASE:PUBLISH FAILED: ${e.message}`);
     if (pushed) {
