@@ -1,0 +1,40 @@
+id: R028
+milestone: M011
+serves:
+  - "release-provenance#gate-runs-every-suite"
+title: "A release rests on the CI run of its own pull request (the CI receipt)"
+slug: release-ci-receipt
+priority: p0
+profile: implementation
+objective: "Owner order 2026-11-02: 'each fix is one version - deployed as app', and owner decision of the same day: 'CI receipt for all releases'. release:publish accepts the green CI run of the chore(release) pull request as the gate verdict for main's HEAD when it binds exactly HEAD's tree (ADR 0082); release:prepare builds the candidate and runs verify and the roadmap check only, and keeps the full local gate behind --local-gate."
+why: "The local release gate takes about an hour on the shared Mac and nothing may merge while it waits for a publish; one release per landing at that cost serialises the repository. CI already runs every release-gate suite on the merged tree of the release pull request."
+scope:
+  - "scripts/release-ci-receipt.mjs"
+  - "tests/unit/knowledge-integrity.test.mjs"
+  - "scripts/release-publish.mjs"
+  - "scripts/release-prepare.mjs"
+  - "tests/unit/release-ci-receipt.test.mjs"
+  - ".ai/repo/rules/project/release-receipt-binds-gate.v2.md"
+  - ".ai/repo/rules/project/release-receipt-binds-gate.v1.md"
+  - ".ai/repo/rules/project/release-flow-complete.v1.md"
+  - ".ai/repo/rules/project/README.md"
+  - ".ai/repo/adrs/0082-a-release-rests-on-the-ci-run-of-its-own-pull-request.md"
+  - ".ai/repo/adrs/README.md"
+  - ".ai/repo/skills/release/SKILL.md"
+  - "README.md"
+  - "CLAUDE.md"
+  - "tests/README.md"
+depends_on: []
+acceptance_criteria:
+  - "release:publish verifies a CI receipt only when HEAD is the merge of a pull request head H with HEAD's tree, H contains the base, the newest CI pull_request run on H is completed/success on its latest attempt, every job ci.yml declares (derived from ci.yml, matrix expanded) is among its latest jobs on H with success and no undeclared job is, and the roadmap check passes; each failing condition is reported by name and an unreadable fact refuses."
+  - "tests/unit/release-ci-receipt.test.mjs refuses each mutation (another tree, a head without its base, a non-merge HEAD, a missing, skipped, cancelled or foreign job, an undeclared job, a run on another sha or event, a newer red or running run beside an older green one, a red latest attempt, a failing roadmap check, unreadable runs or jobs), and removing any guard of ciReceiptProblems() fails it."
+  - "The judge verifies the real release merge of v3.15.0 (e8bb8b95) against GitHub with no problem."
+  - "release:prepare runs CI_PREPARE_COMMANDS by default and writes no receipt; --local-gate runs the full gate and writes the receipt release:publish still accepts."
+  - "The pull request carries an independent review verdict (scripts/release-* and the release rules are guarded)."
+validation:
+  - "npm test"
+  - "majordomus doctor"
+  - "majordomus plan validate"
+evidence_required:
+  - "verified"
+created_at: 2026-11-02
