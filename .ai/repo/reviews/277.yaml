@@ -27,11 +27,28 @@
 # - R1: no real-git test covers a type change, a symbolic link or a submodule, so a change to
 #   changedRecords' git flags (e.g. dropping --raw or -z) that hides one passes every test; add
 #   fixture commits for 120000, 160000 and a T status under docs/.
+#
+# Delta review, 2026-11-02, by oscilla-af (claude-code 901211e2), at head 157ed250 (local
+# 0ad8736b = d2faab61 merged with main 32b439e6, plus 157ed250). Read: the net diff against main
+# (`git diff 32b439e6..157ed250 -- .github tests/unit/main-checks.test.mjs`): ci.yml keeps main's
+# 30-minute browser step inside the 45-minute job and the alpha.9 pin; the changes job, the six
+# `needs: changes` / `if: runtime != 'false'` pairs and the gate VERDICT are as f3 reviewed them;
+# ci-changes.mjs is unchanged since d2faab61. The content digest moved from da784e59 only by the
+# merge with main; with the base copy (git archive origin/main scripts) it is 4e8acc1c...a987
+# over the 3 guarded paths.
+# New finding R11 (P2), fixed at 157ed250: main-checks.test.mjs excused PR_ONLY_GATE only when the
+# copy had neither field, but compared fields first, so the EXACT gate copied into
+# main-checks.yml (needs: changes, the same if) passed (probe: mainChecksProblems returned []),
+# and main-checks would then need a job it does not have, which GitHub rejects, silently ending
+# E044's post-merge checks. Now a copy carrying either field of the gate reports "carries ci.yml's
+# pull-request-only path gate"; the exact-copy probe reports both fields; main-checks 9/0.
+# R1-R10 are from the first review by prismatic-majordomus-f3 (claude-code 1f47a36e), carried
+# unchanged (not re-verified in this delta).
 schema: review-verdict/v1
 pr: 277
 verdict: merge
-reviewer: prismatic-majordomus-f3 (claude-code 1f47a36e)
-content: da784e59d0f4410603799cdb68f7642ce51698c09e3bac1ed8ead2f3aa9d7259
+reviewer: oscilla-af (claude-code 901211e2)
+content: 4e8acc1c86ee990327a938ae0ffed37a25b2874bee879c959c1c9d4c8c66a987
 findings:
   - { id: R1, severity: P2, status: open, title: "ci-changes.mjs:166 no real-git test covers a type change, symlink or submodule; a change to changedRecords' git flags that hides one passes every test" }
   - { id: R2, severity: P3, status: open, title: "ci-changes.mjs:165 the merge base is taken against freshly fetched origin/main, not HEAD^1 of the checked-out merge, so a main that moved can make the diff docs-only while HEAD^1..HEAD carries src/; not exploitable while protection is strict with merge commits only; diff HEAD^1 HEAD or pass base.sha" }
@@ -43,3 +60,4 @@ findings:
   - { id: R8, severity: P3, status: open, title: "ci-gates-model.test.mjs:116 accepts the path-gating condition on any job, not only the six; two mutants survive (checking only dstMode; diffing from HEAD's first parent)" }
   - { id: R9, severity: P3, status: open, title: "review-verdict.mjs:81 ci-changes.test.mjs and ci-gates-model.test.mjs are not in GUARDED although base-rule.test.mjs is" }
   - { id: R10, severity: P3, status: open, title: "ci.yml:25,32 header comment: wrong job count, ambiguous 'those six', lines over 100 columns" }
+  - { id: R11, severity: P2, status: fixed, title: "main-checks.test.mjs PR_ONLY_GATE excused only a copy without the gate but never refused the exact gate copied into main-checks.yml, which would reference a missing changes job; fixed at 157ed250, with the exact copy as a mutation" }
