@@ -60,9 +60,10 @@ export const FAMILIES = Object.freeze([
       + 'calibration lives for the page and is frozen into each experiment.',
     'ui/measure/run.js, ui/measure/session.js and measurement/engine.js'),
   // ui/app.js (workspace, theme, navOpen), ui/workbench.js (labFlags, seqPlaying),
-  // labs/mic-analyzer.js (micCompare), ui/studio/timeline-editor.js (timelineSnap).
+  // labs/mic-analyzer.js (micCompare), ui/studio/timeline-editor.js (timelineSnap),
+  // midi/keyboard-ui.js (kbdArmed, kbdBase, kbdVelocity), synth/ui.js (synthTab).
   family('ui', ['workspace', 'theme', 'navOpen', 'labFlags', 'seqPlaying', 'micCompare',
-    'timelineSnap'],
+    'timelineSnap', 'kbdArmed', 'kbdBase', 'kbdVelocity', 'synthTab'],
   'The theme in local storage (oscilla.theme) and the workspace in the URL key m; every other key '
     + 'lasts for the page only.',
   'ui/app.js, ui/navigation.js, ui/workbench.js and the view that owns the key'),

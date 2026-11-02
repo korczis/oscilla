@@ -1245,10 +1245,6 @@
       "reason": "The pattern hooks are not declared yet; a later catalogue slice declares them."
     },
     {
-      "id": "pattern.param",
-      "reason": "The pattern hooks are not declared yet; a later catalogue slice declares them."
-    },
-    {
       "id": "phase.collapse",
       "reason": "The phase hooks are not declared yet; a later catalogue slice declares them."
     },

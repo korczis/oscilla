@@ -12,7 +12,7 @@
 //     not VERIFIED); and the allowance only shrinks against its committed copies;
 //   - the contract table below: each declared hook, the kind of its declaration and the element
 //     that carries it in the source (for a pattern on a variable site, one of the elements its
-//     helpers build);
+//     helpers build; for markup in a JS string, the open tag before its attribute);
 //   - a fixture per negative case of the issue is refused with a message naming the id;
 //   - node faces are derived from the node registry (a fixture node type gains one);
 //   - no module under src/ imports scripts/ or the trace, and no catalogue path has a segment
@@ -28,7 +28,8 @@ import { CATALOG, DECLARATIONS, createCatalog } from '../../src/js/ui/catalog/re
 import { defineComponent, hooksOf } from '../../src/js/ui/catalog/define.js';
 import * as sources from '../../src/js/ui/catalog/sources.js';
 import { KINDS, STATE_NONE_KINDS } from '../../src/js/ui/catalog/kinds.js';
-import { NODE_DEFINITIONS, createNodeRegistry } from '../../src/js/studio/registry.js';
+import { NODE_DEFINITIONS, NODE_REGISTRY, createNodeRegistry }
+  from '../../src/js/studio/registry.js';
 import { CATEGORIES, defineNode, numberParam } from '../../src/js/studio/nodes/common.js';
 import { lexJs, scanHooks, scanSources, stringLiteralsOf }
   from '../../scripts/ui-catalog/scan.mjs';
@@ -112,6 +113,39 @@ const CONTRACT = [
   ['studio.inspector.connect', 'open', 'button'], ['studio.inspector.savePatch', 'open', 'button'],
   ['studio.inspector.allowMic', 'action', 'button'],
   ['studio.inspector.limitNote', 'readout', 'p'],
+  ['nav.synth', 'open', 'a'],
+  ['synth-view', 'workspace', 'section'], ['synth.preset', 'choice', 'select'],
+  ['synth.arm', 'switch', 'button'], ['synth.studio', 'open', 'button'],
+  ['synth.copy-link', 'action', 'button'], ['synth.tab', 'choice', 'button'],
+  ['synth.status', 'readout', 'p'], ['synth.link', 'readout', 'p'],
+  ['synth.panel', 'panel', 'div'], ['synth.insert-cuts', 'readout', 'p'],
+  ['synth.modules', 'panel', 'div'], ['synth.bay', 'panel', 'section'],
+  ['synth.bay.canvas', 'panel', 'div'], ['synth.bay.svg', 'edge', 'svg'],
+  ['synth.connect', 'panel', 'div'], ['synth.cables', 'readout', 'ul'],
+  ['keyboard', 'panel', 'div'], ['keyboard.arm', 'switch', 'button'],
+  ['keyboard.octave-down', 'action', 'button'], ['keyboard.octave-up', 'action', 'button'],
+  ['keyboard.velocity-down', 'action', 'button'], ['keyboard.velocity-up', 'action', 'button'],
+  ['keyboard.readout', 'readout', 'p'], ['keyboard.held', 'readout', 'p'],
+  ['keyboard.keys', 'action', 'canvas'],
+  ['alert.action', 'open', 'a'], ['mic.counterparts', 'panel', 'p'],
+  ['counterpart.measure-rta', 'open', 'a'], ['counterpart.experiments', 'open', 'a'],
+  ['measure.toStudio', 'open', 'a'], ['seq.toStudioTemplate', 'open', 'a'],
+  ['seq.toStudio', 'open', 'a'], ['filter.toStudio', 'open', 'a'],
+  ['envelope.toStudio', 'open', 'a'], ['dual.toStudio', 'open', 'a'],
+  ['def.toMeasure', 'open', 'a'], ['exp.toMeasure', 'open', 'a'],
+  ['fnd.toExperiments', 'open', 'a'], ['presets.toPlayground', 'open', 'a'],
+  ['learn.tool', 'open', 'a'],
+  ['source.ceiling', 'readout', 'p'], ['status.ceiling', 'readout', 'span'],
+  ['seq.unsaved', 'readout', 'span'],
+  ['about.workspaces', 'readout', 'ul'],
+  ['about.workspace.playground', 'readout', 'li'], ['about.workspace.measure', 'readout', 'li'],
+  ['about.workspace.experiments', 'readout', 'li'], ['about.workspace.analyzer', 'readout', 'li'],
+  ['about.workspace.filter', 'readout', 'li'], ['about.workspace.compare', 'readout', 'li'],
+  ['about.workspace.synthesis', 'readout', 'li'], ['about.workspace.sequencer', 'readout', 'li'],
+  ['about.workspace.presets', 'readout', 'li'], ['about.workspace.learn', 'readout', 'li'],
+  ['about.workspace.studio', 'readout', 'li'], ['about.workspace.synth', 'readout', 'li'],
+  ['about.workspace.about', 'readout', 'li'],
+  ['about.next', 'readout', 'ul'], ['about.next.milestone', 'readout', 'li'],
 ];
 
 /** The tags of the elements that carry `hook` in the source (see the header). */
@@ -134,9 +168,23 @@ function carrierTags(census, hook, decl) {
     const t = /^`(.*)`$/.exec(o.expr);
     return !t || t[1].replace(/\$\{[^}]*\}/g, '{key}') === decl.pattern.template;
   };
+  // A string is markup when its data-osc attribute follows an open tag; a selector
+  // ('[data-osc="..."]') names a hook and carries none.
+  const markupTag = (file, index) => {
+    const t = read(file);
+    const attr = t.lastIndexOf('data-osc', index);
+    const open = t.lastIndexOf('<', attr);
+    if (t[attr - 1] === '[' || open < 0 || t.slice(open, attr).includes('>')) return null;
+    const m = /^<([a-z][\w-]*)/.exec(t.slice(open));
+    return m ? m[1] : null;
+  };
   const out = new Set();
   for (const o of census.occurrences) {
-    if (o.form === 'string') continue; // a selector names a hook; it carries none
+    if (o.form === 'string') {
+      const tag = o.hook === hook ? markupTag(o.file, o.index) : null;
+      if (tag) out.add(tag);
+      continue;
+    }
     if (o.hook === hook || (o.hook === null && decl.pattern
       && decl.pattern.sites.includes(o.file) && builds(o))) out.add(tagAt(o.file, o.index));
   }
@@ -384,8 +432,10 @@ test('node faces are derived: a fixture node type gains its face with no catalog
   assert.equal(face.docs, 'A fixture tone that only the catalogue test adds.');
   assert.equal(face.state, 'studio.model');
   assert.equal(catalog.nodeFaces().length, CATALOG.nodeFaces().length + 1);
-  assert.deepEqual(CATALOG.nodeFaces().map((d) => d.id),
-    NODE_DEFINITIONS.map((d) => `studio.node.${d.type}`));
+  // One face per node definition, in the registry's order (by category, not by definition).
+  const faces = CATALOG.nodeFaces().map((d) => d.id);
+  assert.deepEqual(faces, NODE_REGISTRY.list().map((d) => `studio.node.${d.type}`));
+  assert.deepEqual([...faces].sort(), NODE_DEFINITIONS.map((d) => `studio.node.${d.type}`).sort());
   assert.throws(() => defineComponent({ id: 'studio.node.x', kind: 'node-face', label: 'X',
     docs: 'A node face declared by hand here.', state: 'studio.model' }), /derived/);
 });

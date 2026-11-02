@@ -13,20 +13,26 @@
 
 import { NODE_REGISTRY } from '../../studio/registry.js';
 import { defineComponent, hooksOf } from './define.js';
+import about from './decl/about.js';
+import crossLinks from './decl/cross-links.js';
 import filterLab from './decl/filter-lab.js';
+import keyboard from './decl/keyboard.js';
 import mic from './decl/mic.js';
 import navigation from './decl/navigation.js';
 import records from './decl/records.js';
+import status from './decl/status.js';
 import studioCompact from './decl/studio-compact.js';
 import studioGraph from './decl/studio-graph.js';
 import studioInspector from './decl/studio-inspector.js';
 import studioPatches from './decl/studio-patches.js';
 import studioTimeline from './decl/studio-timeline.js';
 import studioTransport from './decl/studio-transport.js';
+import synth from './decl/synth.js';
 
 export const DECLARATIONS = Object.freeze([...studioTransport, ...studioTimeline,
   ...studioCompact, ...filterLab, ...mic, ...navigation, ...records, ...studioGraph,
-  ...studioPatches, ...studioInspector]);
+  ...studioPatches, ...studioInspector, ...synth, ...keyboard, ...crossLinks, ...status,
+  ...about]);
 
 /** The node face of a node definition: its name, its help sentence, the model as its state. */
 export function nodeFaceOf(def) {
