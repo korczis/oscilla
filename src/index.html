@@ -1286,13 +1286,17 @@
               <svg aria-hidden="true"><use href="#s-loop"/></svg>
             </button>
           </div>
-          <a href="#m=studio&amp;st=sweep-sequence" data-osc="seq.toStudioTemplate" hidden
-            :hidden="workspace !== 'sequencer'">Open Sweep Sequence in Studio</a>
-          <a href="#m=studio" data-osc="seq.toStudio" hidden :hidden="workspace !== 'sequencer'"
-            @click="studioOpenSequence($event)">Open this pattern in Studio</a>
-          <a href="#m=synth" data-osc="seq.toSynth" hidden :hidden="workspace !== 'sequencer'"
-            x-bind="counterpartLink('synth')">Open the Synth</a>
-          <span class="osc-spacer"></span>
+          <!-- The workspace's links share the one flexible cell of the head grid with its spacer,
+               so Tempo keeps its own cell in the first row (A1). -->
+          <div class="flex min-w-0 flex-wrap items-center gap-x-3 self-center">
+            <a href="#m=studio&amp;st=sweep-sequence" data-osc="seq.toStudioTemplate" hidden
+              :hidden="workspace !== 'sequencer'">Open Sweep Sequence in Studio</a>
+            <a href="#m=studio" data-osc="seq.toStudio" hidden :hidden="workspace !== 'sequencer'"
+              @click="studioOpenSequence($event)">Open this pattern in Studio</a>
+            <a href="#m=synth" data-osc="seq.toSynth" hidden :hidden="workspace !== 'sequencer'"
+              x-bind="counterpartLink('synth')">Open the Synth</a>
+            <span class="osc-spacer"></span>
+          </div>
           <label class="osc-label osc-seq-tempo-label" for="osc-seq-tempo">Tempo</label>
           <div class="osc-select osc-seq-tempo">
             <select id="osc-seq-tempo" data-osc="seq.tempo">
