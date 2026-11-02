@@ -25,7 +25,7 @@
     }
   },
   "caps": {
-    "src/index.html": 295000,
+    "src/index.html": 302000,
     "src/js/audio/audio-engine.js": 73000,
     "src/js/core/instrument.js": 62000,
     "src/js/experiments/validate.js": 64000,
@@ -91,6 +91,12 @@
       "cap": 295000,
       "pr": 386,
       "reason": "lane A's page fields and iPhone fixes: the Related strip and menu, the empty state, the folds' display rule, the safety More target and journey 20's visible reasons and alternative for the disabled export and preset controls"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 302000,
+      "pr": 392,
+      "reason": "the one frame's slots on the framed panels and the docked peeper with its page-header action (rule project.visual-components-framed, owner order 2026-11-02)"
     }
   ]
 }

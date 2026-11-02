@@ -2433,13 +2433,13 @@ function defineChecks() {
     await page.click('#osc-analysis-fullscreen');
     await sleep(300);
     const fs1 = await page.evaluate(() => !!(document.fullscreenElement
-      || document.querySelector('.osc-panel.is-fullscreen')));
+      || document.querySelector('[data-osc-frame-state="full"]')));
     await page.click('#osc-analysis-fullscreen').catch(() => {});
     let fs2 = true;
     for (let i = 0; i < 20 && fs2; i++) {
       await sleep(100);
       fs2 = await page.evaluate(() => !!(document.fullscreenElement
-        || document.querySelector('.osc-panel.is-fullscreen')));
+        || document.querySelector('[data-osc-frame-state="full"]')));
     }
     await page.selectOption('#osc-time-window', '5');
     const ok = res.harmonics.view === 'harmonicBars' && res.signalPath.view === 'path'

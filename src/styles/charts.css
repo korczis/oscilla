@@ -112,12 +112,3 @@
 .osc-chart-host .u-select {
   background: rgb(10 134 240 / 12%);
 }
-
-/* Fullscreen: any chart panel can be promoted with the Fullscreen API or this class. */
-.osc-panel.is-fullscreen,
-.osc-panel:fullscreen {
-  position: fixed;
-  inset: 12px;
-  z-index: 80;
-  overflow: auto;
-}

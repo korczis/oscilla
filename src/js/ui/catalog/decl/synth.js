@@ -98,14 +98,6 @@ export default [
     in: 'synth.panel',
   }),
   defineComponent({
-    id: 'synth.bay',
-    kind: 'panel',
-    label: 'Patch bay',
-    docs: 'Groups the jacks, the connect list and the cables of the voice.',
-    state: { none: 'the section groups the patching views and owns no value' },
-    in: 'synth.panel',
-  }),
-  defineComponent({
     id: 'synth.bay.canvas',
     kind: 'panel',
     label: 'Patch bay canvas',

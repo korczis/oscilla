@@ -84,7 +84,6 @@ export function createWorkbench(svc) {
     exportBusy: false,
     importErrors: [],
     lastPattern: null,
-    fullscreen: '',
     learnOpen: 'frequency',
     // T001: set by main.js when the bridge reports that the output ceiling starts or stops
     // flattening the signal (the engine's pre-ceiling tap); never per frame.
@@ -588,37 +587,8 @@ export function createWorkbench(svc) {
       }
     },
 
-    // ------------------------------------------------------------------ fullscreen
-    toggleFullscreen(panelId) {
-      const el = document.getElementById(panelId);
-      if (!el) return;
-      const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
-      if (fsEl === el) {
-        (document.exitFullscreen || document.webkitExitFullscreen).call(document);
-        return;
-      }
-      if (this.fullscreen === panelId) {
-        el.classList.remove('is-fullscreen');
-        this.fullscreen = '';
-        if (svc.relayout) requestAnimationFrame(() => svc.relayout());
-        return;
-      }
-      const req = el.requestFullscreen || el.webkitRequestFullscreen;
-      const fallback = () => {
-        document.querySelectorAll('.osc-panel.is-fullscreen').forEach((p) => p.classList
-          .remove('is-fullscreen'));
-        el.classList.add('is-fullscreen');
-        this.fullscreen = panelId;
-        if (svc.relayout) requestAnimationFrame(() => svc.relayout());
-      };
-      if (!req) { fallback(); return; }
-      try {
-        const p = req.call(el);
-        if (p && typeof p.catch === 'function') p.catch(fallback);
-      } catch (e) {
-        fallback();
-      }
-    },
+    // Full screen of a panel or chart is the one frame's (ui/catalog/frame.js, main.js
+    // mountFrames), driven by the visual declarations of the UI catalogue.
 
     // ------------------------------------------------------------------ learn / presets
     runLearnDemo(topic) {

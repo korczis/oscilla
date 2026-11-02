@@ -140,6 +140,8 @@ export function mountCompact(host, svc) {
       h('span', { class: 'osc-spacer' }),
       counts,
       expand,
+      // The one frame's place (catalog/frame.js): its full-screen trigger lands here.
+      h('div', { 'data-osc-frame-slot': '' }),
     ]),
     h('div', { class: 'osc-sc-body' }, [path, clipsBox]),
     summary,

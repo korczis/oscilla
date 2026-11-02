@@ -61,8 +61,11 @@ export default [
     state: 'lab.filter.gain',
   }),
   defineComponent({
+    // A route, not a full screen (rule project.visual-components-framed): the expand icon
+    // leads to the Filter Lab page and back. Full screen of the panel is the one frame's
+    // (filter.lab.fullscreen, decl/visual.js); the hook stays, as the tests name it.
     id: 'filter.fullscreen',
-    kind: 'fullscreen',
+    kind: 'open',
     label: 'Open Filter Lab page',
     docs: 'Switches between the Filter Lab page and the Playground.',
     state: 'ui.workspace',

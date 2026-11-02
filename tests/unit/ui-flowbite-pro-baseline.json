@@ -15,7 +15,7 @@
     "selectors": 1189,
     "domainViewSelectors": 438
   },
-  "debt": 3695,
+  "debt": 3667,
   "surfaces": {
     "pending": [
       "card#osc-exp-compare",
@@ -80,6 +80,7 @@
       "shell:main"
     ],
     "migrated": [
+      "card#osc-peeper",
       "page#osc-view-synth",
       "shell:navbar",
       "shell:sidebar"
@@ -115,7 +116,6 @@
     "osc-add-fields": 1,
     "osc-add-preset": 2,
     "osc-analysis-foot": 1,
-    "osc-analysis-fs": 1,
     "osc-analysis-head": 1,
     "osc-analysis-legend": 1,
     "osc-analysis-sep": 1,
@@ -230,9 +230,9 @@
     "osc-hints-list": 1,
     "osc-hold": 1,
     "osc-ico": 3,
-    "osc-icon-btn": 43,
+    "osc-icon-btn": 40,
     "osc-icon-btn--ghost": 12,
-    "osc-icon-btn--sm": 18,
+    "osc-icon-btn--sm": 17,
     "osc-label": 93,
     "osc-learn": 1,
     "osc-learn-actions": 1,
@@ -353,8 +353,8 @@
     "osc-p-source": 3,
     "osc-p-spectrogram": 1,
     "osc-p-studio": 1,
-    "osc-panel": 35,
-    "osc-panel-fs": 2,
+    "osc-panel": 32,
+    "osc-panel-fs": 1,
     "osc-panel-header": 28,
     "osc-panel-title": 31,
     "osc-pattern-desc": 1,
@@ -599,7 +599,6 @@
     "osc-sp-saved": 1,
     "osc-spacer": 29,
     "osc-spg-body": 1,
-    "osc-spg-fs": 1,
     "osc-spg-scale": 1,
     "osc-spg-scale-col": 1,
     "osc-spg-span": 1,
@@ -835,7 +834,6 @@
     "is-error": 5,
     "is-faded": 1,
     "is-focused": 1,
-    "is-fullscreen": 3,
     "is-hover": 2,
     "is-inactive": 2,
     "is-incompatible": 2,
@@ -874,12 +872,12 @@
       "declarations": 488
     },
     "src/styles/instrument.css": {
-      "selectors": 245,
-      "declarations": 632
+      "selectors": 243,
+      "declarations": 626
     },
     "src/styles/integration.css": {
-      "selectors": 197,
-      "declarations": 379
+      "selectors": 186,
+      "declarations": 373
     },
     "src/styles/main.css": {
       "selectors": 0,
@@ -890,14 +888,14 @@
       "declarations": 623
     },
     "src/styles/responsive.css": {
-      "selectors": 156,
-      "declarations": 183
+      "selectors": 154,
+      "declarations": 181
     }
   },
   "domainViews": {
     "src/styles/charts.css": {
-      "selectors": 19,
-      "declarations": 50
+      "selectors": 17,
+      "declarations": 46
     },
     "src/styles/studio-timeline.css": {
       "selectors": 140,

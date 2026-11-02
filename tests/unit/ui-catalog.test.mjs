@@ -87,7 +87,7 @@ const CONTRACT = [
   ['filter.cutoff', 'param', 'input'], ['filter.cutoffValue', 'param', 'input'],
   ['filter.q', 'param', 'input'], ['filter.qValue', 'param', 'input'],
   ['filter.gain', 'param', 'input'], ['filter.gainGroup', 'param', 'div'],
-  ['filter.fullscreen', 'fullscreen', 'button'],
+  ['filter.fullscreen', 'open', 'button'],
   ['mic.freeze', 'switch', 'button'], ['mic.average', 'switch', 'button'],
   ['mic.peakHold', 'switch', 'button'],
   ['nav-group.analyze', 'open', 'button'], ['nav-group.synthesis', 'open', 'button'],
@@ -146,6 +146,19 @@ const CONTRACT = [
   ['about.workspace.about', 'readout', 'li'],
   ['about.next', 'readout', 'ul'], ['about.next.milestone', 'readout', 'li'],
   ['pattern.param', 'param', 'input'], ['sweep.param', 'param', 'select'],
+  // The visual components the one frame wraps (rule project.visual-components-framed).
+  ['analysis', 'panel', 'section'], ['spectrogram', 'panel', 'section'], ['mic', 'panel', 'section'],
+  ['measure.resultView', 'panel', 'section'], ['seq.panel', 'panel', 'section'],
+  ['filter.lab', 'panel', 'section'], ['envelope', 'panel', 'section'],
+  ['additive', 'panel', 'section'], ['phase', 'panel', 'section'], ['bio', 'panel', 'section'],
+  ['exp.detailView', 'panel', 'section'], ['exp.compareView', 'panel', 'section'],
+  ['peeper', 'panel', 'section'],
+  // The peeper's own controls.
+  ['peeper.toggle', 'open', 'button'], ['peeper.stub', 'readout', 'span'],
+  ['peeper.tap', 'choice', 'select'], ['peeper.window', 'readout', 'span'],
+  ['peeper.pin', 'switch', 'button'], ['peeper.collapse', 'switch', 'button'],
+  ['peeper.close', 'action', 'button'], ['peeper.canvas', 'readout', 'canvas'],
+  ['peeper.reason', 'readout', 'p'],
   // The Flowbite Pro shell, the page header and the registry-built entries (F002, U006).
   ['nav.playground', 'open', 'a'], ['nav.measure', 'open', 'a'], ['nav.experiments', 'open', 'a'],
   ['nav.analyzer', 'open', 'a'], ['nav.filter', 'open', 'a'], ['nav.compare', 'open', 'a'],

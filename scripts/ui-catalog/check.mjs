@@ -10,9 +10,12 @@
 //   allowanceHistory(root) -> [{ sha, allowance }]     every committed copy, newest first
 //   namesHook(strings, hook) -> boolean                a string literal names the hook
 //   unknownHooks(hooks, catalog, allowance) -> [hook]  a page's hooks neither declared nor allowed
+//   visualSurfaces(html) -> [{ line, what, frame }]   the chart hosts and drawing surfaces of the
+//                                                      markup, each with the data-osc hooks of
+//                                                      its element and its ancestors (frame)
 //
 // checkCatalog({ catalog, census, allowance, history, baseAllowance, sources, traces,
-//   testCorpus, read }):
+//   testCorpus, read, markup }):
 //   catalog      createCatalog() of src/js/ui/catalog/registry.js
 //   census       scanHooks() of scan.mjs: { literals: Map<hook, Set<file>>, sites }
 //   allowance    tests/unit/ui-catalog-allowance.json
@@ -22,6 +25,11 @@
 //   traces       { id: { docsLong?, source, plan, intents, adrs, tests } }
 //   testCorpus   { runs(file) -> boolean, strings(file) -> [string] | null }
 //   read(rel)    a repository file's text, or null when it does not exist
+//   markup       { file: html } the markup the visual census reads (rule
+//                project.visual-components-framed): every chart host (class osc-chart-host or
+//                data-osc-chart) and every drawing surface (<canvas>, or <svg> with role="img"
+//                or a data-osc hook) sits in an element whose data-osc is a declaration with
+//                visual: true; omitted, the visual census does not run
 //
 // A test names a hook when one of its string literals (comments removed) holds the hook as a
 // whole token. That is recorded as NAMED: it proves a test addresses the hook, not what the
@@ -39,6 +47,91 @@ export const ALLOWANCE_REL = 'tests/unit/ui-catalog-allowance.json';
 export const TRACE_DIR = 'scripts/ui-catalog/trace';
 /** The allowance's sections and the slice that opens each. */
 export const SECTIONS = Object.freeze({ undeclared: 'G001', untraced: 'J002', unlinked: 'J004' });
+/** The one frame: it builds the hooks of the visual declarations (define.js frameHooksOf). */
+export const FRAME_MODULE = 'src/js/ui/catalog/frame.js';
+const VOID = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta',
+  'source', 'track', 'wbr']);
+
+/** The value of attribute `name` in the open tag `tag`, or null. */
+function attrIn(tag, name) {
+  const m = new RegExp(`\\s${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`)
+    .exec(tag);
+  return m ? (m[1] !== undefined ? m[1] : m[2]) : null;
+}
+
+/**
+ * The chart hosts and drawing surfaces of `html`: { line, what, frame }, where frame lists the
+ * static data-osc hooks of the element and its ancestors, nearest first.
+ */
+export function visualSurfaces(html) {
+  const out = [];
+  const stack = []; // { name, osc }
+  let i = 0;
+  const lineAt = (at) => html.slice(0, at).split('\n').length;
+  while (i < html.length) {
+    const lt = html.indexOf('<', i);
+    if (lt < 0) break;
+    if (html.startsWith('<!--', lt)) {
+      const end = html.indexOf('-->', lt + 4);
+      i = end < 0 ? html.length : end + 3;
+      continue;
+    }
+    let j = lt + 1;
+    let q = null;
+    while (j < html.length && (q || html[j] !== '>')) {
+      if (q) { if (html[j] === q) q = null; } else if (html[j] === '"' || html[j] === "'") q = html[j];
+      j += 1;
+    }
+    const tag = html.slice(lt, j + 1);
+    i = j + 1;
+    const close = /^<\/([a-zA-Z][\w-]*)/.exec(tag);
+    if (close) {
+      const name = close[1].toLowerCase();
+      const at = stack.map((e) => e.name).lastIndexOf(name);
+      if (at >= 0) stack.length = at;
+      continue;
+    }
+    const open = /^<([a-zA-Z][\w-]*)/.exec(tag);
+    if (!open) continue;
+    const name = open[1].toLowerCase();
+    const osc = attrIn(tag, 'data-osc');
+    const cls = attrIn(tag, 'class') || '';
+    const host = /(^|\s)osc-chart-host(\s|$)/.test(cls) || attrIn(tag, 'data-osc-chart') !== null;
+    const drawing = name === 'canvas' || (name === 'svg'
+      && (attrIn(tag, 'role') === 'img' || osc !== null));
+    if (host || drawing) {
+      const frame = [osc, ...stack.slice().reverse().map((e) => e.osc)].filter(Boolean);
+      out.push({ line: lineAt(lt), what: host ? 'chart host' : `<${name}> drawing surface`,
+        frame });
+    }
+    if (name === 'script' || name === 'style') {
+      const end = html.indexOf(`</${name}`, i);
+      i = end < 0 ? html.length : end;
+      continue;
+    }
+    if (!VOID.has(name) && !tag.endsWith('/>')) stack.push({ name, osc });
+  }
+  return out;
+}
+
+/** The visual census: each surface sits in a frame (a declaration with visual: true). */
+function visualProblems(catalog, markup) {
+  const out = [];
+  const visual = (h) => {
+    const d = catalog.get(h);
+    return !!(d && d.visual === true);
+  };
+  for (const [file, html] of Object.entries(markup)) {
+    for (const s of visualSurfaces(html)) {
+      if (s.frame.some(visual)) continue;
+      const id = `${file}:${s.line}`;
+      out.push({ id, message: `${id}: a ${s.what} outside any visual frame (no element around it `
+        + 'carries the data-osc of a declaration with visual: true); declare its container '
+        + 'visual in src/js/ui/catalog/decl/visual.js (rule project.visual-components-framed)' });
+    }
+  }
+  return out;
+}
 
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const words = (s) => (typeof s === 'string' ? s.trim().split(/\s+/).filter(Boolean).length : 0);
@@ -181,7 +274,7 @@ function traceProblems(decl, entry, { census, testCorpus, read }) {
 
 /** Every problem of the catalogue contract; empty when it holds. */
 export function checkCatalog({ catalog, census, allowance, history = [], baseAllowance = null,
-  sources, traces = {}, testCorpus, read }) {
+  sources, traces = {}, testCorpus, read, markup = null }) {
   const out = [];
   const decls = catalog.list();
   const undeclared = Array.isArray(allowance && allowance.undeclared) ? allowance.undeclared : [];
@@ -202,7 +295,9 @@ export function checkCatalog({ catalog, census, allowance, history = [], baseAll
     }
   }
   const patterns = decls.filter((d) => d.pattern);
+  const framed = decls.some((d) => d.visual === true);
   for (const s of census.sites) {
+    if (s.file === FRAME_MODULE && framed) continue; // frameHooksOf, owned by the visuals
     if (!patterns.some((d) => d.pattern.sites.includes(s.file))) {
       out.push({ id: `${s.file}:${s.line}`, message: `${s.file}:${s.line}: data-osc value ${
         s.expr} is built at run time and no pattern declaration names this site` });
@@ -244,6 +339,9 @@ export function checkCatalog({ catalog, census, allowance, history = [], baseAll
   for (const id of Object.keys(traces)) {
     if (!catalog.has(id)) out.push({ id, message: `${id}: trace entry for an undeclared id` });
   }
+
+  // The visual census (rule project.visual-components-framed).
+  if (markup) out.push(...visualProblems(catalog, markup));
 
   // The allowance: its shape, and each section only shrinks.
   out.push(...allowanceShape(allowance));
@@ -364,7 +462,8 @@ export async function checkRepository(root = ROOT) {
   const allowance = JSON.parse(readFileSync(path.join(root, ALLOWANCE_REL), 'utf8'));
   return checkCatalog({ catalog: registry.CATALOG, census: scanHooks(root), allowance,
     history: allowanceHistory(root), sources, traces: await loadTraces(root),
-    testCorpus: testCorpus(root), read: reader(root) });
+    testCorpus: testCorpus(root), read: reader(root),
+    markup: { 'src/index.html': readFileSync(path.join(root, 'src/index.html'), 'utf8') } });
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

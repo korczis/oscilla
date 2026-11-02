@@ -21,8 +21,10 @@ name): `project.single-file-deliverable`, `project.audio-engine-discipline`,
 `project.visual-identity-lock`, `project.no-inert-surfaces`, `project.ui-uses-flowbite-pro`
 (ADR 0061: the UI is Flowbite Pro on Tailwind, built and inlined at build time; no other kit,
 no Pro source file committed; the legacy surfaces, osc-* class tokens, class names, CSS
-and inline styles in `tests/unit/ui-flowbite-pro-baseline.json` only shrink). Read them
-before changing `src/`.
+and inline styles in `tests/unit/ui-flowbite-pro-baseline.json` only shrink),
+`project.visual-components-framed` (every chart, scope, curve, meter, canvas or drawing is a
+catalogue declaration with `visual: true` inside the one frame of `src/js/ui/catalog/frame.js`).
+Read them before changing `src/`.
 Releases are bound by `project.release-receipt-binds-gate`, `project.release-flow-complete`
 (the flow, in order) and `project.deploy-often`. Four more bind how the repository is worked on:
 `project.rules-name-their-enforcement`, `project.no-conflict-markers`,

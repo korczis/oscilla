@@ -707,3 +707,46 @@ readouts:
     limitations: Describes the workspace, not its current state; hidden below 1280 px
     tests: [tests/unit/workspace-registry.test.mjs]
     label: VERIFIED
+  - key: peeper.window
+    readout: "Peeper window line (the docked peeper, every workspace)"
+    quantity: >-
+      The time window the peeper draws: its duration and its length in samples at the sample
+      rate the probe reports, or the window asked for while nothing is read
+    unit: ms; samples; kHz
+    source: [src/js/ui/peeper/ui.js, src/js/ui/peeper/probe-stub.js]
+    algorithm: >-
+      read().windowMs, read().window and read().sampleRate of the lease; the probe turns the
+      window asked for into the next power of two an AnalyserNode accepts (32 to 32768 samples)
+    resolution: 0.1 ms; one sample
+    calibration: none
+    limitations: >-
+      Until the engine's probe tap (V616) lands the reading is the stub's, a test sine marked
+      STUB SIGNAL; the rate shown is the one injected into the stub, never the context's
+    tests: [tests/unit/peeper.test.mjs, tests/browser/ui-flowbite-pro.cjs]
+    label: VERIFIED
+  - key: peeper.canvas
+    readout: Peeper trace canvas, role img, labelled by peeperLabel
+    quantity: The raw sample values of the tapped point over the window, as a line
+    unit: sample value, -1 to 1 full scale
+    source: [src/js/ui/peeper/view.js, src/js/ui/peeper/ui.js]
+    algorithm: >-
+      drawPeeperLine: one vertex per sample of read().frame, no smoothing and no dB conversion;
+      a reading with live false draws the centre line only
+    resolution: one sample per vertex, at the canvas's device pixels
+    calibration: none; relative to digital full scale
+    limitations: >-
+      The stub's sine until V616; a placeholder view that W004's scope replaces through
+      setPeeperView; no trigger, so the trace runs free
+    tests: [tests/unit/peeper.test.mjs, tests/browser/ui-flowbite-pro.cjs]
+    label: VERIFIED
+  - key: peeper.reason
+    readout: "Peeper reason line ('Nothing plays: press Play ...')"
+    quantity: Why the peeper draws nothing, from the lease's reading or the peeper's own state
+    unit: none (a sentence)
+    source: [src/js/ui/peeper/ui.js, src/js/ui/peeper/model.js]
+    algorithm: peeperReasonText of the reason (stopped, hidden, budget, unsupported)
+    resolution: one reason
+    calibration: none
+    limitations: Shown only while no live frame is read
+    tests: [tests/unit/peeper.test.mjs, tests/browser/ui-flowbite-pro.cjs]
+    label: VERIFIED

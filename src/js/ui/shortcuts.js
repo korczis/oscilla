@@ -68,6 +68,8 @@ export const GLOBAL_SHORTCUTS = Object.freeze([
   row('escape', 'Esc', 'Stop immediately; close menus and dialogs'),
   row('roving', '← →', 'Move and select', 'on tabs and segments'),
   row('tab', 'Tab', 'Move focus (never taken by a shortcut)'),
+  // ui/peeper/ui.js peeperInit holds the listener (Backquote, never in a text field).
+  row('peeper', '`', 'Open or close the signal peeper'),
 ]);
 
 // Hold, Trigger and the frequency slider are laid out by width and are not on screen in every

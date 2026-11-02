@@ -446,6 +446,15 @@
           class="inline-flex items-center justify-center flex-none w-8 h-8 text-gray-500 rounded-lg 2xl:hidden [@media(pointer:coarse)]:w-11 [@media(pointer:coarse)]:h-11 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-700">
           <svg class="w-5 h-5" aria-hidden="true"><use href="#i-headphones"/></svg>
         </button>
+        <!-- The peeper on every page (ui/peeper/ui.js); Backquote toggles it too. -->
+        <button type="button" id="osc-peeper-toggle" data-osc="peeper.toggle"
+          aria-controls="osc-peeper" :aria-expanded="String(peeper.open)" aria-expanded="false"
+          aria-keyshortcuts="`" aria-label="Signal peeper" title="Signal peeper (`)"
+          @click="peeperToggle()"
+          class="inline-flex items-center justify-center flex-none w-8 h-8 text-gray-500 rounded-lg [@media(pointer:coarse)]:w-11 [@media(pointer:coarse)]:h-11 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-700"
+          :class="peeper.open && 'text-primary-700 dark:text-primary-400'">
+          <svg class="w-5 h-5" aria-hidden="true"><use href="#i-sweep"/></svg>
+        </button>
       </div>
     </div>
 
@@ -672,7 +681,7 @@
           </section>
 
           <!-- ---------- Primary analysis ---------- -->
-          <section class="osc-panel osc-p-analysis" id="osc-panel-analysis" data-osc-panel="analysis"
+          <section class="osc-panel osc-p-analysis" id="osc-panel-analysis" data-osc="analysis" data-osc-panel="analysis"
             data-osc-modes="playground analyzer synthesis" aria-label="Signal analysis">
             <div class="osc-analysis-head">
               <div class="osc-tabs osc-tabs--auto osc-analysis-tabs" role="tablist"
@@ -713,11 +722,7 @@
                   <option value="100">Time: 100 ms</option>
                 </select>
               </div>
-              <button type="button" class="osc-icon-btn osc-analysis-fs" id="osc-analysis-fullscreen"
-                data-osc="analysis.fullscreen" aria-label="Analysis fullscreen"
-                @click="toggleFullscreen('osc-panel-analysis')">
-                <svg aria-hidden="true"><use href="#i-expand"/></svg>
-              </button>
+              <div data-osc-frame-slot></div>
               </div>
             </div>
             <hr class="osc-divider osc-analysis-sep">
@@ -766,7 +771,7 @@
         </div>
 
         <!-- ---------- Spectrogram ---------- -->
-        <section class="osc-panel osc-p-spectrogram" id="osc-panel-spectrogram"
+        <section class="osc-panel osc-p-spectrogram" id="osc-panel-spectrogram" data-osc="spectrogram"
           data-osc-panel="spectrogram" data-osc-modes="analyzer" aria-labelledby="osc-spg-title">
           <div class="osc-panel-header">
             <h2 class="osc-panel-title" id="osc-spg-title">Spectrogram</h2>
@@ -790,11 +795,7 @@
                 <option value="linear">Linear freq</option>
               </select>
             </div>
-            <button type="button" class="osc-icon-btn osc-spg-fs" id="osc-spg-fullscreen"
-              data-osc="spectrogram.fullscreen" aria-label="Spectrogram fullscreen"
-              @click="toggleFullscreen('osc-panel-spectrogram')">
-              <svg aria-hidden="true"><use href="#i-expand"/></svg>
-            </button>
+            <div data-osc-frame-slot></div>
           </div>
           <div class="osc-spg-body">
             <div class="osc-chart-host osc-h-spectrogram" id="osc-chart-spectrogram"
@@ -815,7 +816,7 @@
         <div class="osc-row1-right">
 
           <!-- ---------- Microphone analyzer ---------- -->
-          <section class="osc-panel osc-p-mic" id="osc-panel-mic" data-osc-panel="mic"
+          <section class="osc-panel osc-p-mic" id="osc-panel-mic" data-osc="mic" data-osc-panel="mic"
             data-osc-modes="analyzer compare" aria-labelledby="osc-mic-title">
             <div class="osc-panel-header osc-mic-head">
               <h2 class="osc-panel-title" id="osc-mic-title">Microphone Analyzer</h2>
@@ -827,6 +828,7 @@
                 @click="openDialog('osc-dlg-mic')">
                 <svg aria-hidden="true"><use href="#i-gear"/></svg>
               </button>
+              <div data-osc-frame-slot></div>
             </div>
             <div class="osc-tabs osc-mic-tabs" role="tablist" aria-label="Microphone view">
               <button type="button" class="osc-tab is-active" role="tab" aria-selected="true"
@@ -1118,7 +1120,7 @@
         </section>
 
         <!-- ---------- Measurement result: frequency response, impulse response, RTA ---------- -->
-        <section class="osc-panel osc-m-result" id="osc-measure-result" aria-labelledby="osc-m-result-title">
+        <section class="osc-panel osc-m-result" id="osc-measure-result" data-osc="measure.resultView" aria-labelledby="osc-m-result-title">
           <div class="osc-panel-header osc-m-result-head">
             <h3 class="osc-panel-title" id="osc-m-result-title">Measurement result</h3>
             <span class="osc-m-chip" data-osc="measure.shown" x-text="meas.shownTitle || 'NOT MEASURED'"></span>
@@ -1132,6 +1134,7 @@
                   @keydown="rovingKeydown($event)" x-text="t.label"></button>
               </template>
             </div>
+            <div data-osc-frame-slot></div>
           </div>
 
           <div class="osc-m-pane" id="osc-m-pane-response" role="tabpanel" aria-labelledby="osc-m-tab-response"
@@ -1440,7 +1443,7 @@
     <div class="osc-row3" :class="workspace === 'synth' && 'hidden'">
 
       <!-- ---------- Pattern sequencer ---------- -->
-      <section class="osc-panel osc-p-sequencer" id="osc-panel-sequencer"
+      <section class="osc-panel osc-p-sequencer" id="osc-panel-sequencer" data-osc="seq.panel"
         data-osc-panel="sequencer" data-osc-modes="sequencer" aria-labelledby="osc-seq-title">
         <div class="osc-panel-header osc-seq-head h-auto min-h-8">
           <h2 class="osc-panel-title" id="osc-seq-title">Pattern Sequencer</h2>
@@ -1487,6 +1490,7 @@
               <option value="180">180 BPM</option>
             </select>
           </div>
+          <div data-osc-frame-slot></div>
         </div>
 
         <div class="osc-seq-timeline-wrap">
@@ -1600,7 +1604,7 @@
         data-osc-panel="studio" data-osc-modes="playground sequencer" :class="workspace === 'synth' && 'hidden'"></section>
 
       <!-- ---------- Filter Lab ---------- -->
-      <section class="osc-panel osc-p-filter" id="osc-panel-filter" data-osc-panel="filter"
+      <section class="osc-panel osc-p-filter" id="osc-panel-filter" data-osc="filter.lab" data-osc-panel="filter"
         data-osc-modes="filter" aria-labelledby="osc-filter-title">
         <div class="osc-panel-header max-md:flex-wrap">
           <h2 class="osc-panel-title" id="osc-filter-title">Filter Lab</h2>
@@ -1620,6 +1624,7 @@
             :title="filterLabToggle().label" @click="setWorkspace(filterLabToggle().to)">
             <svg aria-hidden="true"><use href="#i-expand" :href="filterLabToggle().icon"/></svg>
           </button>
+          <div data-osc-frame-slot></div>
         </div>
         <div class="osc-tabs osc-filter-types" role="radiogroup" aria-label="Filter type">
           <button type="button" class="osc-tab is-active" role="radio" aria-checked="true" tabindex="0"
@@ -1669,7 +1674,7 @@
       </section>
 
       <!-- ---------- Envelope (ADSR) ---------- -->
-      <section class="osc-panel osc-p-envelope" id="osc-panel-envelope" data-osc-panel="envelope"
+      <section class="osc-panel osc-p-envelope" id="osc-panel-envelope" data-osc="envelope" data-osc-panel="envelope"
         data-osc-modes="synthesis" aria-labelledby="osc-env-title">
         <div class="osc-panel-header max-md:flex-wrap">
           <h2 class="osc-panel-title" id="osc-env-title">Envelope (ADSR)<span
@@ -1684,11 +1689,7 @@
             <svg aria-hidden="true"><use href="#i-power"/></svg>
           </button>
           <span class="osc-spacer"></span>
-          <button type="button" class="osc-icon-btn osc-icon-btn--sm osc-panel-fs" id="osc-env-fullscreen"
-            data-osc="envelope.fullscreen" aria-label="Open envelope editor"
-            @click="toggleFullscreen('osc-panel-envelope')">
-            <svg aria-hidden="true"><use href="#i-expand"/></svg>
-          </button>
+          <div data-osc-frame-slot></div>
         </div>
         <div class="osc-env-body">
           <div class="osc-chart-host osc-h-envelope" id="osc-chart-envelope" data-osc-chart="envelope"
@@ -1731,7 +1732,7 @@
       </section>
 
       <!-- ---------- Additive synthesis ---------- -->
-      <section class="osc-panel osc-p-additive" id="osc-panel-additive" data-osc-panel="additive"
+      <section class="osc-panel osc-p-additive" id="osc-panel-additive" data-osc="additive" data-osc-panel="additive"
         data-osc-modes="synthesis" aria-labelledby="osc-add-title">
         <div class="osc-panel-header">
           <h2 class="osc-panel-title" id="osc-add-title">Additive Synthesis<span
@@ -1753,6 +1754,7 @@
             id="osc-add-enable" data-osc="additive.enable" aria-label="Additive synthesis enabled">
             <span class="osc-toggle-track" aria-hidden="true"></span>
           </button>
+          <div data-osc-frame-slot></div>
         </div>
         <div class="osc-chart-host osc-h-additive" id="osc-chart-additive" data-osc-chart="additive"
           role="img" aria-label="Harmonic amplitudes 1 to 10" tabindex="0"></div>
@@ -1788,7 +1790,7 @@
       </section>
 
       <!-- ---------- Phase & Stereo ---------- -->
-      <section class="osc-panel osc-p-phase" id="osc-panel-phase" data-osc-panel="phase"
+      <section class="osc-panel osc-p-phase" id="osc-panel-phase" data-osc="phase" data-osc-panel="phase"
         data-osc-modes="compare synthesis" aria-labelledby="osc-phase-title">
         <div class="osc-panel-header">
           <h2 class="osc-panel-title" id="osc-phase-title">Phase &amp; Stereo</h2>
@@ -1799,6 +1801,7 @@
             x-bind="collapseButton('phase')">
             <svg aria-hidden="true"><use href="#i-close"/></svg>
           </button>
+          <div data-osc-frame-slot></div>
         </div>
         <div class="osc-phase-body" id="osc-phase-body" :hidden="collapsed.phase">
           <div class="osc-tabs osc-tabs--mid osc-phase-tabs" role="tablist" aria-label="Phase view">
@@ -1880,7 +1883,7 @@
       </section>
 
       <!-- ---------- Bioacoustics ---------- -->
-      <section class="osc-panel osc-p-bio" id="osc-panel-bio" data-osc-panel="bio"
+      <section class="osc-panel osc-p-bio" id="osc-panel-bio" data-osc="bio" data-osc-panel="bio"
         data-osc-modes="compare" aria-labelledby="osc-bio-title">
         <div class="osc-panel-header">
           <h2 class="osc-panel-title" id="osc-bio-title">Bioacoustics</h2>
@@ -1891,6 +1894,7 @@
             x-bind="collapseButton('bio')">
             <svg aria-hidden="true"><use href="#i-close"/></svg>
           </button>
+          <div data-osc-frame-slot></div>
         </div>
         <div class="osc-bio-body" id="osc-bio-body" :hidden="collapsed.bio">
           <div class="osc-tabs osc-tabs--primary osc-bio-tabs" role="tablist" aria-label="Bioacoustics view">
@@ -2080,6 +2084,9 @@
           class="[@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
           data-osc="keyboard.velocity-up" aria-keyshortcuts="V"
           @click="kbdControl('velocity-up')">Velocity +</button>
+        <!-- The frame's full screen; not in the Synth's docked sheet on a phone, where one more
+             row would cover the Synth's own controls (ui-current phone-whole at 375 px). -->
+        <div data-osc-frame-slot :class="kbdView === 'synth' && 'max-sm:hidden'"></div>
       </div>
       <p id="osc-kbd-readout" data-osc="keyboard.readout" role="status" x-text="kbdReadout"
         :class="kbdView === 'synth' && 'sr-only sm:not-sr-only'"></p>
@@ -2272,7 +2279,7 @@
         </section>
         </div>
 
-        <section class="osc-panel osc-x-detail" id="osc-exp-detail" aria-labelledby="osc-x-detail-title"
+        <section class="osc-panel osc-x-detail" id="osc-exp-detail" data-osc="exp.detailView" aria-labelledby="osc-x-detail-title"
           x-show="exps.panel === 'detail'">
           <div class="osc-panel-header">
             <h3 class="osc-panel-title" id="osc-x-detail-title"
@@ -2283,6 +2290,7 @@
               <svg class="osc-q-icon" aria-hidden="true"><use :href="exps.detail ? '#q-' + exps.detail.quality.className.slice(7) : '#q-unknown'"/></svg>
               <span x-text="exps.detail ? exps.detail.quality.text : ''"></span>
             </span>
+            <div data-osc-frame-slot></div>
           </div>
           <p class="osc-m-hint" x-show="!exps.detail">Open an experiment from the list to see its summary, provenance and response.</p>
           <div x-show="exps.detail" class="osc-x-body">
@@ -2410,7 +2418,7 @@
           </div>
         </section>
 
-        <section class="osc-panel osc-x-compare" id="osc-exp-compare" aria-labelledby="osc-x-compare-title"
+        <section class="osc-panel osc-x-compare" id="osc-exp-compare" data-osc="exp.compareView" aria-labelledby="osc-x-compare-title"
           x-show="exps.panel === 'compare'" style="display: none">
           <div class="osc-panel-header">
             <h3 class="osc-panel-title" id="osc-x-compare-title">Compare</h3>
@@ -2420,6 +2428,7 @@
               :disabled="!exps.compare" @click="findingsAskCompare()">Record a finding about this comparison</button>
             <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.backToDetail"
               @click="exps.panel = 'detail'">Back to detail</button>
+            <div data-osc-frame-slot></div>
           </div>
           <ul class="osc-x-entries" aria-label="Compared experiments">
             <template x-for="en in (exps.compare ? exps.compare.entries : [])" :key="en.label">
@@ -3115,6 +3124,55 @@
       </dl>
     </section>
   </main>
+
+  <!-- ================= The peeper (ui/peeper/ui.js; catalogue 'peeper', a framed visual) ======
+       Docked below the workspace in the content column's flow, so it covers nothing at any
+       width; on a phone it is a bottom sheet that collapses to its header. The tap list is the
+       probe's points(); a stub probe is marked as such. Pinned, it stays across pages. -->
+  <section id="osc-peeper" data-osc="peeper" aria-labelledby="osc-peeper-title"
+    x-show="peeper.open" x-cloak
+    class="flex flex-col flex-none group/peeper bg-white rounded-lg shadow border-t border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+    <div class="flex flex-wrap items-center gap-2 px-4 py-1">
+      <h2 id="osc-peeper-title" class="text-sm font-semibold text-gray-900 dark:text-white">Peeper</h2>
+      <span data-osc="peeper.stub" x-show="peeper.stub"
+        class="bg-yellow-100 text-yellow-800 text-xs font-medium px-2.5 py-0.5 rounded dark:bg-yellow-900 dark:text-yellow-300"
+        title="The tap API is not in the engine yet: this is a test sine, not your signal">STUB SIGNAL</span>
+      <label for="osc-peeper-tap" class="sr-only">Tap point</label>
+      <select id="osc-peeper-tap" data-osc="peeper.tap" @change="peeperSwitch($event.target.value)"
+        class="block min-w-0 p-1.5 text-sm text-gray-900 border border-gray-300 rounded-lg max-w-[14rem] min-h-8 bg-gray-50 [@media(pointer:coarse)]:min-h-11 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+        <template x-for="pt in peeper.points" :key="pt.id">
+          <option :value="pt.id" x-text="pt.label + ' (' + pt.kind + ')'" :selected="pt.id === peeper.tap"></option>
+        </template>
+      </select>
+      <span data-osc="peeper.window" class="text-xs text-gray-500 dark:text-gray-400"
+        x-text="peeper.live ? peeper.windowText : peeper.windowMs + ' ms window'"></span>
+      <span class="flex-1"></span>
+      <button type="button" data-osc="peeper.pin" @click="peeperPin()"
+        :aria-pressed="String(peeper.pinned)" aria-pressed="false"
+        :title="peeper.pinned ? 'Pinned: stays open on every page' : 'Pin: keep open on every page'"
+        class="inline-flex items-center px-3 text-sm font-medium rounded-lg min-h-8 [@media(pointer:coarse)]:min-h-11 focus:outline-none focus:ring-2 focus:ring-primary-500"
+        :class="peeper.pinned ? 'text-white bg-primary-700 hover:bg-primary-800' : 'text-gray-900 bg-white border border-gray-200 hover:bg-gray-100 dark:bg-gray-800 dark:text-white dark:border-gray-600 dark:hover:bg-gray-700'"
+        x-text="peeper.pinned ? 'Pinned' : 'Pin'">Pin</button>
+      <button type="button" data-osc="peeper.collapse" @click="peeperCollapse()"
+        aria-controls="osc-peeper-body" :aria-expanded="String(!peeper.collapsed)" aria-expanded="true"
+        :aria-label="peeper.collapsed ? 'Expand the peeper' : 'Collapse the peeper'"
+        class="inline-flex items-center justify-center w-8 h-8 text-gray-500 rounded-lg [@media(pointer:coarse)]:w-11 [@media(pointer:coarse)]:h-11 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-700">
+        <svg class="w-5 h-5" aria-hidden="true"><use :href="peeper.collapsed ? '#i-up' : '#i-down'" href="#i-down"/></svg>
+      </button>
+      <div data-osc-frame-slot></div>
+      <button type="button" data-osc="peeper.close" @click="peeperClose()" aria-label="Close the peeper"
+        class="inline-flex items-center justify-center w-8 h-8 text-gray-500 rounded-lg [@media(pointer:coarse)]:w-11 [@media(pointer:coarse)]:h-11 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-700">
+        <svg class="w-5 h-5" aria-hidden="true"><use href="#i-close"/></svg>
+      </button>
+    </div>
+    <div id="osc-peeper-body" class="relative px-4 pb-2" x-show="!peeper.collapsed">
+      <canvas data-osc="peeper.canvas" role="img" :aria-label="peeperLabel"
+        class="block w-full h-24 sm:h-36 group-[[data-osc-frame-state=full]]/peeper:h-[70vh]"></canvas>
+      <p data-osc="peeper.reason" role="status" x-show="!peeper.live && peeperReasonText"
+        x-text="peeperReasonText"
+        class="absolute inset-0 flex items-center justify-center px-6 text-sm text-center text-gray-500 dark:text-gray-400"></p>
+    </div>
+  </section>
 
   <!-- ================= Debug (?debug=1): provenance and live engine state ================= -->
   <aside class="osc-debug-panel" data-osc="debug.panel" x-show="debug" x-cloak

@@ -95,10 +95,6 @@
     scrollbar-width: none;
   }
 
-  .osc-analysis-fs {
-    margin-left: 0;
-  }
-
   .osc-h-waveform,
   .osc-h-spectrum,
   .osc-mic-view,
@@ -262,10 +258,6 @@
   .osc-p-spectrogram .osc-panel-header {
     flex-wrap: wrap;
     gap: 6px;
-  }
-
-  .osc-spg-fs {
-    margin-left: 0;
   }
 
   .osc-dual-grid {

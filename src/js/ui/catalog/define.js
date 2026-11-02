@@ -8,9 +8,14 @@
 //   declarationProblems(decl) -> [text]      the same checks, as a list (empty when valid)
 //     (both take { derived: true } for a node face, which only registry.js builds)
 //   hooksOf(decl) -> [hook]                  the concrete data-osc hooks the declaration owns
+//   frameHooksOf(decl) -> [hook]             the hooks the one frame (frame.js) builds for a
+//                                            visual declaration: <id>.fullscreen, and with
+//                                            fullscreenControls the menu <id>.frame and each
+//                                            control
 //
 // A declaration: { id, kind, label, docs, state, hooks?, pattern?, param?, effect?, in?,
-//   links?: { opens?, openedBy? }, related?, disabled?: { reason } }.
+//   links?: { opens?, openedBy? }, related?, disabled?: { reason }, visual?,
+//   fullscreenControls? }.
 //   id      the data-osc hook it owns; with `pattern`, a catalogue name that is not a hook
 //   hooks   more hooks when one component carries several (a slider and its text field)
 //   pattern { template: 'studio.tl.{key}', keys: [...], sites: ['src/js/...'] }: a hook built
@@ -21,12 +26,21 @@
 //           on the kinds of STATE_NONE_KINDS
 //   effect  { route | dialog | download | command | focus: '<what>' }, required with state none
 //           on the kinds of EFFECT_REQUIRED_KINDS
+//   visual  true: a visual component (a chart, scope, curve, meter, canvas or drawing), which
+//           exists only inside the one frame (src/js/ui/catalog/frame.js, rule
+//           project.visual-components-framed): the frame gives it full screen, its menu and its
+//           size class. Its id is a concrete hook (never a pattern): the element the frame wraps
+//   fullscreenControls  [declaration]: the extra controls the frame shows while the component
+//           is full screen (and lists in its menu at all times), each declared like any
+//           catalogue control (FRAME_CONTROL_KINDS), its id a hook of its own; only on a visual
 
 import { validateParamValue } from '../../studio/registry.js';
 import { EFFECT_REQUIRED_KINDS, EFFECT_TYPES, KINDS, STATE_NONE_KINDS } from './kinds.js';
 
 const FIELDS = ['id', 'kind', 'label', 'docs', 'state', 'hooks', 'pattern', 'param', 'effect',
-  'in', 'links', 'related', 'disabled'];
+  'in', 'links', 'related', 'disabled', 'visual', 'fullscreenControls'];
+/** The kinds a full-screen control of a frame may have. */
+export const FRAME_CONTROL_KINDS = Object.freeze(['action', 'switch', 'choice', 'param']);
 const HOOK = /^[A-Za-z][\w.-]*$/;
 const KEY = /^[\w.-]+$/;
 // Every field the common.js helpers give a descriptor; a hand-written object lacks some.
@@ -44,6 +58,46 @@ export function hooksOf(decl) {
   const expanded = p && typeof p.template === 'string' && Array.isArray(p.keys)
     ? p.keys.map((k) => p.template.replace('{key}', k)) : [];
   return [...own, ...more, ...expanded];
+}
+
+/** The hooks the frame builds for a visual declaration (none for any other). */
+export function frameHooksOf(decl) {
+  if (!decl || decl.visual !== true || typeof decl.id !== 'string') return [];
+  const controls = Array.isArray(decl.fullscreenControls) ? decl.fullscreenControls : [];
+  if (!controls.length) return [`${decl.id}.fullscreen`];
+  return [`${decl.id}.fullscreen`, `${decl.id}.frame`,
+    ...controls.map((c) => (c && typeof c.id === 'string' ? c.id : '?'))];
+}
+
+function frameProblems(decl) {
+  const out = [];
+  if (decl.visual !== undefined && typeof decl.visual !== 'boolean') {
+    out.push('visual must be true or false');
+  }
+  if (decl.visual === true && decl.pattern !== undefined) {
+    out.push('a visual component is one element, so its id is a hook and never a pattern');
+  }
+  const fc = decl.fullscreenControls;
+  if (fc === undefined) return out;
+  if (decl.visual !== true) out.push('fullscreenControls need visual: true');
+  if (!Array.isArray(fc)) return [...out, 'fullscreenControls must be a list of declarations'];
+  const ids = new Set();
+  fc.forEach((c, i) => {
+    const at = `fullscreenControls[${i}]`;
+    if (!c || typeof c !== 'object') { out.push(`${at}: must be a declaration`); return; }
+    for (const p of declarationProblems(c)) out.push(`${at}: ${p}`);
+    if (!FRAME_CONTROL_KINDS.includes(c.kind)) {
+      out.push(`${at}: kind ${JSON.stringify(c.kind)} is not a frame control kind (${
+        FRAME_CONTROL_KINDS.join(', ')})`);
+    }
+    if (c.visual !== undefined || c.fullscreenControls !== undefined || c.pattern !== undefined) {
+      out.push(`${at}: a frame control is neither visual, a pattern nor holds controls`);
+    }
+    if (c.in !== undefined && c.in !== decl.id) out.push(`${at}: in must be ${decl.id}`);
+    if (ids.has(c.id)) out.push(`${at}: repeats the control ${c.id}`);
+    ids.add(c.id);
+  });
+  return out;
 }
 
 function patternProblems(p) {
@@ -109,8 +163,9 @@ export function declarationProblems(decl, { derived = false } = {}) {
     out.push('hooks must be a list of hook names');
   }
   if (decl.pattern !== undefined) out.push(...patternProblems(decl.pattern));
-  const all = hooksOf(decl);
+  const all = [...hooksOf(decl), ...frameHooksOf(decl)];
   if (new Set(all).size !== all.length) out.push('a hook is listed twice');
+  out.push(...frameProblems(decl));
   out.push(...stateProblems(decl));
   if (decl.effect !== undefined) {
     const keys = decl.effect && typeof decl.effect === 'object' ? Object.keys(decl.effect) : [];

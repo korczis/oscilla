@@ -45,6 +45,21 @@
 //                 the workspace column within the press's task (never on <body>)
 //   shell-theme-default  review #330 F3: with data-theme absent the shell reads the dark
 //                 theme's colours, with "light" the light ones
+//   frame-fullscreen  rule project.visual-components-framed: every visual element of the page
+//                 is mounted by the one frame from its declaration; the analysis frame's
+//                 trigger (#osc-analysis-fullscreen, keyboard) enters full screen (the API in
+//                 chromium), Escape leaves it and focus returns to the trigger; its menu lists
+//                 every option, and the declared full-screen control shows and acts
+//   frame-overlay at 390x844 with touch and no element fullscreen (Safari on iPhone emulated):
+//                 the Filter Lab frame's 44 px trigger opens a fixed overlay over the viewport;
+//                 Back leaves it without changing the address or the workspace, Escape too, and
+//                 focus returns to the trigger
+//   peeper        the page header's action opens the peeper (framed, its stub marked, its tap
+//                 list the probe's points, nothing tapped while nothing plays); pinned, it
+//                 survives the Playground, Measure and About and is never in the hash; the tap
+//                 switches; playing taps it, Stop releases it (active 0/0); unpinned, a route
+//                 change closes it; Close closes it with focus back on the action; on a phone
+//                 the docked sheet covers nothing, its targets are 44 px and it collapses
 //   no-console-errors
 'use strict';
 const { serveDist } = require('./lib/serve.cjs');
@@ -790,6 +805,212 @@ function defineChecks() {
     return { ...H.verdict({ absentIsDark: JSON.stringify(absent) === JSON.stringify(dark),
       lightDiffers: light.column !== dark.column && light.navbar !== dark.navbar }),
     dark, absent, light };
+  });
+
+  // ---- the one frame (rule project.visual-components-framed) and the peeper ----
+  // A frame's state as the page shows it: the frame element's attributes, the browser's
+  // fullscreen element, where focus is and how the element sits in the viewport.
+  const frameState = (page, osc) => page.evaluate((id) => {
+    const el = document.querySelector(`[data-osc="${id}"]`);
+    const r = el ? el.getBoundingClientRect() : null;
+    return { mounted: !!(el && el.dataset.oscFrame === id), state: el && el.dataset.oscFrameState,
+      size: el && el.dataset.oscFrameSize,
+      api: document.fullscreenElement === el, anyApi: !!document.fullscreenElement,
+      fixed: !!el && getComputedStyle(el).position === 'fixed',
+      covers: !!r && r.left <= 1 && r.top <= 1 && r.right >= innerWidth - 1
+        && r.bottom >= innerHeight - 1,
+      focus: document.activeElement && document.activeElement.id,
+      hash: location.hash };
+  }, osc);
+  const frameIs = (page, osc, want, what) => until(async () => {
+    const f = await frameState(page, osc);
+    return f.state === want ? f : null;
+  }, { ms: 5000, what });
+
+  def('frame-fullscreen', async (ctx) => {
+    const page = await H.open(ctx, `${ctx.baseUrl}#m=analyzer`);
+    // Every visual element on the page is mounted by the frame from its declaration.
+    const census = await until(() => page.evaluate(() => {
+      const els = [...document.querySelectorAll('[data-osc-frame]')];
+      const ids = els.map((e) => e.dataset.oscFrame);
+      const triggers = ids.filter((id) => document.querySelector(
+        `[data-osc="${id}.fullscreen"]`));
+      return ids.length >= 12 && triggers.length === ids.length ? { ids, triggers } : null;
+    }), { ms: READY_MS, what: 'the frames are mounted' }).catch(() => null);
+    const trigger = '#osc-analysis-fullscreen';
+    await page.focus(trigger);
+    await page.keyboard.press('Enter');
+    // Chromium grants the Fullscreen API to a key press; the frame state is set at once and
+    // the browser's fullscreen element follows when its promise resolves.
+    const full = await until(async () => {
+      const f = await frameState(page, 'analysis');
+      return f.state === 'full' && (ctx.browserName !== 'chromium' || f.api) ? f : null;
+    }, { ms: 5000, what: 'analysis full screen' }).catch(() => frameState(page, 'analysis'));
+    const label = await page.getAttribute(trigger, 'aria-label');
+    await page.keyboard.press('Escape');
+    const back = await frameIs(page, 'analysis', 'inline', 'Escape leaves full screen')
+      .catch(() => frameState(page, 'analysis'));
+    const noApi = await until(() => page.evaluate(() => !document.fullscreenElement),
+      { ms: 5000, what: 'the browser left fullscreen' }).catch(() => false);
+    // The menu lists every option; its Full screen enters, the declared control shows and acts.
+    await page.click('#osc-analysis-frame');
+    const items = await page.$$eval('#osc-analysis-menu [role^="menuitem"]',
+      (els) => els.map((e) => e.textContent.trim()));
+    await page.click('#osc-analysis-menu [data-osc-frame-item="analysis.fullscreen"]');
+    await frameIs(page, 'analysis', 'full', 'the menu enters full screen').catch(() => null);
+    const paused0 = await page.evaluate(() => window.OSCILLA.app.vizPaused);
+    const row = await page.isVisible('[data-osc="analysis.fsPause"]');
+    await page.click('[data-osc="analysis.fsPause"]');
+    const paused1 = await page.evaluate(() => window.OSCILLA.app.vizPaused);
+    await page.click(trigger);
+    const out = await frameIs(page, 'analysis', 'inline', 'the trigger leaves full screen')
+      .catch(() => frameState(page, 'analysis'));
+    await page.evaluate(() => { window.OSCILLA.app.vizPaused = false; });
+    await page.close();
+    return { ...H.verdict({ mounted: !!census, full: full.state === 'full',
+      api: ctx.browserName !== 'chromium' || full.api, exitLabel: /^Exit full screen/.test(label),
+      escape: back.state === 'inline', apiLeft: noApi === true,
+      focusBack: back.focus === 'osc-analysis-fullscreen',
+      menu: JSON.stringify(items) === JSON.stringify(['Full screen', 'Pause animation']),
+      controlsRow: row, controlActs: paused1 === !paused0,
+      triggerLeaves: out.state === 'inline' && out.focus === 'osc-analysis-fullscreen' }),
+    frames: census && census.ids.length, full, back, items };
+  });
+
+  def('frame-overlay', async (ctx) => {
+    // Safari on iPhone: no element fullscreen. The frame falls back to a fixed overlay inside
+    // the safe area; Back and Escape leave it without changing the address.
+    const context = await ctx.browser.newContext({ viewport: { width: 390, height: 844 },
+      hasTouch: true, reducedMotion: 'reduce' });
+    await context.addInitScript(() => {
+      for (const k of ['requestFullscreen', 'webkitRequestFullscreen']) {
+        try { delete Element.prototype[k]; } catch (e) { /* not there */ }
+        Object.defineProperty(Element.prototype, k, { value: undefined, configurable: true });
+      }
+    });
+    const page = await H.open(ctx, `${ctx.baseUrl}#m=filter`, context);
+    const trigger = '#osc-filter-lab-fullscreen';
+    await until(() => page.$(trigger), { ms: READY_MS, what: 'the Filter Lab frame' });
+    const size = await page.$eval(trigger, (b) => {
+      const r = b.getBoundingClientRect();
+      return { w: r.width, h: r.height };
+    });
+    const before = await frameState(page, 'filter.lab');
+    await page.tap(trigger);
+    const full = await frameIs(page, 'filter.lab', 'full', 'the overlay')
+      .catch(() => frameState(page, 'filter.lab'));
+    await page.evaluate(() => history.back());
+    const back = await frameIs(page, 'filter.lab', 'inline', 'Back leaves the overlay')
+      .catch(() => frameState(page, 'filter.lab'));
+    const ws = await page.evaluate(() => window.OSCILLA.app.workspace);
+    await page.tap(trigger);
+    await frameIs(page, 'filter.lab', 'full', 'the overlay again').catch(() => null);
+    await page.keyboard.press('Escape');
+    const esc = await frameIs(page, 'filter.lab', 'inline', 'Escape leaves the overlay')
+      .catch(() => frameState(page, 'filter.lab'));
+    await page.close();
+    await context.close();
+    return { ...H.verdict({ target44: size.w >= 43.5 && size.h >= 43.5,
+      size: before.size === 'phone', overlay: full.state === 'full' && full.fixed && full.covers
+        && !full.anyApi,
+      back: back.state === 'inline' && back.hash === before.hash && ws === 'filter',
+      focusBack: back.focus === 'osc-filter-lab-fullscreen',
+      escape: esc.state === 'inline' && esc.focus === 'osc-filter-lab-fullscreen' }),
+    size, before, full, back, esc };
+  });
+
+  def('peeper', async (ctx) => {
+    const page = await H.open(ctx, `${ctx.baseUrl}#m=playground`);
+    const st = () => page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      const sec = document.querySelector('[data-osc="peeper"]');
+      const sel = document.querySelector('[data-osc="peeper.tap"]');
+      let stored = null;
+      try { stored = localStorage.getItem('oscilla.peeper'); } catch (e) { stored = 'blocked'; }
+      return { open: a.peeper.open, pinned: a.peeper.pinned, tap: a.peeper.tap,
+        shown: !!sec && sec.getClientRects().length > 0, ws: a.workspace,
+        options: sel ? [...sel.options].map((o) => o.value) : [],
+        points: a.peeper.points.map((p) => p.id), reason: a.peeper.liveReason,
+        reasonText: (document.querySelector('[data-osc="peeper.reason"]') || {}).textContent,
+        stub: !!document.querySelector('[data-osc="peeper.stub"]')
+          && document.querySelector('[data-osc="peeper.stub"]').getClientRects().length > 0,
+        framed: !!document.querySelector('#osc-peeper-fullscreen'),
+        active: a.peeperActive(), playing: !!a.outputOwner, hash: location.hash, stored };
+    });
+    const when = (pred, what) => until(async () => {
+      const s = await st();
+      return pred(s) ? s : null;
+    }, { ms: 8000, what }).catch(() => st());
+    await page.click('#osc-peeper-toggle');
+    const opened = await when((s) => s.open && s.shown, 'the peeper opens on the Playground');
+    await page.click('[data-osc="peeper.pin"]');
+    const pinned = await when((s) => s.pinned, 'the peeper pins');
+    const pages = [];
+    for (const ws of ['measure', 'about']) {
+      await page.click(`[data-osc="nav.${ws}"]`);
+      pages.push(await when((s) => s.ws === ws && s.open && s.shown,
+        `the pinned peeper stays on ${ws}`));
+    }
+    await page.selectOption('#osc-peeper-tap', 'node:filter-1/out');
+    const switched = await when((s) => s.tap === 'node:filter-1/out', 'the tap switches');
+    // It never starts audio; the output plays, the lease reads; Stop releases it.
+    await page.click('[data-osc="nav.playground"]');
+    const idle = await when((s) => s.ws === 'playground', 'back on the Playground');
+    await page.evaluate(() => window.OSCILLA.app.play('hold'));
+    const live = await when((s) => s.playing && s.active.leases === 1, 'the peeper reads');
+    await page.evaluate(() => window.OSCILLA.app.stop());
+    const stopped = await when((s) => !s.playing && s.active.leases === 0
+      && s.reason === 'stopped', 'Stop releases the tap');
+    await page.click('[data-osc="peeper.pin"]');
+    await page.click('[data-osc="nav.measure"]');
+    const unpinned = await when((s) => s.ws === 'measure' && !s.open,
+      'an unpinned peeper closes on a route change');
+    await page.click('#osc-peeper-toggle');
+    await when((s) => s.open, 'reopened');
+    await page.click('[data-osc="peeper.close"]');
+    const closed = await when((s) => !s.open && !s.shown, 'the peeper closes');
+    const focus = await page.evaluate(() => document.activeElement
+      && document.activeElement.dataset.osc);
+    await page.close();
+    // A phone: the docked sheet covers nothing and its targets are 44 px.
+    const phoneCtx = await ctx.browser.newContext({ viewport: { width: 390, height: 844 },
+      hasTouch: true, ...(ctx.browserName === 'firefox' ? {} : { isMobile: true }),
+      reducedMotion: 'reduce' });
+    const phone = await H.open(ctx, `${ctx.baseUrl}#m=sequencer`, phoneCtx);
+    await phone.tap('#osc-peeper-toggle');
+    const sheet = await until(() => phone.evaluate(() => {
+      const sec = document.querySelector('[data-osc="peeper"]');
+      if (!sec || !sec.getClientRects().length) return null;
+      const main = document.getElementById('osc-main').getBoundingClientRect();
+      const r = sec.getBoundingClientRect();
+      const small = [...sec.querySelectorAll('button, select')]
+        .filter((b) => b.getClientRects().length)
+        .map((b) => b.getBoundingClientRect())
+        .filter((b) => b.width < 43.5 || b.height < 43.5).length;
+      return { overlap: main.bottom - r.top, small, inView: r.bottom <= innerHeight + 1 };
+    }), { ms: 8000, what: 'the phone sheet' }).catch(() => null);
+    await phone.tap('[data-osc="peeper.collapse"]');
+    const folded = await phone.evaluate(() => window.OSCILLA.app.peeper.collapsed);
+    await phone.close();
+    await phoneCtx.close();
+    const noHash = [opened, pinned, ...pages, switched].every((s) => !/peeper|pin/i.test(s.hash));
+    return { ...H.verdict({
+      opened: opened.open && opened.shown && opened.stub && opened.framed,
+      pointsListed: JSON.stringify(opened.options) === JSON.stringify(opened.points)
+        && opened.points.length > 0,
+      noAudio: !opened.playing && opened.active.leases === 0 && opened.reason === 'stopped'
+        && /press Play/.test(opened.reasonText || ''),
+      pinned: pinned.pinned && /"pinned":true/.test(pinned.stored || ''),
+      survives: pages.every((s) => s.open && s.shown) && pages.length === 2,
+      notInHash: noHash,
+      switched: switched.tap === 'node:filter-1/out' && idle.open,
+      live: live.playing && live.active.leases === 1,
+      stopReleases: stopped.active.leases === 0 && stopped.active.analysers === 0,
+      unpinnedCloses: !unpinned.open,
+      closes: !closed.open && closed.active.leases === 0, focusBack: focus === 'peeper.toggle',
+      phoneSheet: !!sheet && sheet.overlap <= 1 && sheet.small === 0 && sheet.inView,
+      collapses: folded === true }),
+    opened, pinned, pages, live: live.active, stopped: stopped.active, sheet };
   });
 
   def('no-console-errors', async (ctx) => ({ ok: ctx.errors.length === 0,

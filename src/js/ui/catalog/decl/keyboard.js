@@ -7,13 +7,6 @@ import { defineComponent } from '../define.js';
 
 export default [
   defineComponent({
-    id: 'keyboard',
-    kind: 'panel',
-    label: 'Keyboard',
-    docs: 'Holds the computer-keyboard controls and the on-screen keys of the view in sight.',
-    state: { none: 'the panel holds the keys and owns no value' },
-  }),
-  defineComponent({
     id: 'keyboard.arm',
     kind: 'switch',
     label: 'Arm keys',

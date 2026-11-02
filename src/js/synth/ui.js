@@ -371,7 +371,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       + `data-osc="synth.modules">${plates}</div></div>`
       + '<section class="bg-white rounded-lg shadow dark:bg-gray-800 self-start p-3 '
       + 'xl:sticky xl:top-4" aria-labelledby="synth-bay-title" data-osc="synth.bay" '
-      + 'data-module="bay"><h3 id="synth-bay-title" class="text-sm font-bold tracking-widest '
+      + 'data-module="bay"><div data-osc-frame-slot class="float-right"></div><h3 '
+      + 'id="synth-bay-title" class="text-sm font-bold tracking-widest '
       + 'text-gray-900 dark:text-white">PATCH BAY</h3><p class="mt-1 text-xs text-gray-500 '
       + 'dark:text-gray-400">Every input is normalled: it plays with no cable. A cable into a '
       + 'jack replaces its normal; removing the cable restores it.</p>'

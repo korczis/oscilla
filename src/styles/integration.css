@@ -181,32 +181,12 @@
 }
 
 /* Fullscreen panels: let the chart hosts grow with the panel. */
-.osc-panel.is-fullscreen,
-.osc-panel:fullscreen {
-  display: flex;
-  flex-direction: column;
-  height: auto;
-  background: var(--osc-surface-1);
-}
-
-.osc-panel:fullscreen {
-  inset: 0;
-  padding: 16px;
-}
-
-.osc-panel.is-fullscreen .osc-h-waveform,
-.osc-panel:fullscreen .osc-h-waveform {
+[data-osc-frame-state="full"] .osc-h-waveform {
   height: 34vh;
 }
 
-.osc-panel.is-fullscreen .osc-h-spectrum,
-.osc-panel:fullscreen .osc-h-spectrum,
-.osc-panel.is-fullscreen .osc-h-spectrogram,
-.osc-panel:fullscreen .osc-h-spectrogram,
-.osc-panel.is-fullscreen .osc-h-analysis-spg,
-.osc-panel:fullscreen .osc-h-analysis-spg,
-.osc-panel.is-fullscreen .osc-h-envelope,
-.osc-panel:fullscreen .osc-h-envelope {
+[data-osc-frame-state="full"] :is(.osc-h-spectrum, .osc-h-spectrogram, .osc-h-analysis-spg,
+  .osc-h-envelope) {
   height: 48vh;
 }
 

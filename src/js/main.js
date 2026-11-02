@@ -65,6 +65,12 @@ import {
 } from './ui/dialogs.js';
 import { instrumentTakesSpace, isSpace } from './ui/shortcuts.js';
 import { createWorkbench, followSequenceEdits } from './ui/workbench.js';
+import { createFrames } from './ui/catalog/frame.js';
+import { VISUAL_CATALOG } from './ui/catalog/visuals.js';
+import { createPeeperUi } from './ui/peeper/ui.js';
+// The probe tap API (V616) is not in the engine yet: the peeper shell runs on its stub, which
+// marks every frame stub: true; src/js/studio/probe.js createProbe replaces it here.
+import { createProbeStub } from './ui/peeper/probe-stub.js';
 import { createOutputOwner } from './ui/output-owner.js';
 import { createNavigation, v1ModeFor } from './ui/navigation.js';
 import { createUnsavedGuard } from './ui/unsaved.js';
@@ -380,7 +386,7 @@ const SCREENSHOT_PANEL = {
 };
 
 function screenshot(cmp) {
-  const fs = document.querySelector('.osc-panel.is-fullscreen, .osc-panel:fullscreen');
+  const fs = document.querySelector('[data-osc-frame-state="full"]');
   const id = SCREENSHOT_PANEL[cmp.workspace] || 'osc-panel-analysis';
   const root = fs || document.getElementById(id);
   const bg = getComputedStyle(document.documentElement).getPropertyValue('--osc-surface-1').trim();
@@ -617,6 +623,26 @@ function compose(...parts) {
     Object.defineProperties(target, Object.getOwnPropertyDescriptors(part));
   }
   return target;
+}
+
+/**
+ * The one frame of every visual component (ui/catalog/frame.js; rule
+ * project.visual-components-framed): every element whose data-osc is a visual declaration of
+ * the catalogue gets its full screen and menu. A change of workspace leaves full screen; a
+ * change of a frame relayouts the charts, as the panel fullscreen did before it.
+ */
+function mountFrames(cmp) {
+  const frames = createFrames({
+    catalog: VISUAL_CATALOG,
+    controls: {
+      'analysis.fsPause': { run: () => { cmp.vizPaused = !cmp.vizPaused; },
+        pressed: () => !!cmp.vizPaused },
+      'peeper.fsWindow': { run: () => cmp.peeperStepWindow() },
+    },
+    onChange: () => requestAnimationFrame(() => { if (host) host.resize(); repairCharts(); }),
+  });
+  cmp.$nextTick(() => frames.scan(document));
+  cmp.$watch('workspace', () => frames.exitAll());
 }
 
 function integrationInit() {
@@ -879,8 +905,11 @@ function createOscillaComponent(ui) {
   const navigation = createNavigation();
   // Optional input (ADR 0058): reads support at load, never requests; notes sound through engine.
   const midi = createMidiUi({ engine, sequencerPlaying });
+  const peeper = createPeeperUi({ probe: createProbeStub(),
+    storage: localStore.available() ? window.localStorage : null });
   const cmp = compose(instrument, ui, workbench, measure, experiments, findings, connections,
-    studio, navigation, midi, createCrossLinksUi(), provenancePart(), aboutPart(), TEMPLATE_HELPERS);
+    studio, navigation, midi, createCrossLinksUi(), provenancePart(), aboutPart(), peeper,
+    TEMPLATE_HELPERS);
   cmp.dismissAlert = focusSafeDismiss(cmp.dismissAlert);
   const baseRefreshDebug = cmp.refreshDebug;
   Object.defineProperty(cmp, 'refreshDebug', {
@@ -902,6 +931,8 @@ function createOscillaComponent(ui) {
       this.studioInit(); // before integrationInit: Studio's key listener runs first (§125)
       this.midiInit();
       integrationInit.call(this);
+      this.peeperInit();
+      mountFrames(this);
     },
     enumerable: true,
     configurable: true,

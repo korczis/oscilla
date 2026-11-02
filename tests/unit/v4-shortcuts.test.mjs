@@ -133,11 +133,12 @@ test('review of #159: no key is listed twice in one view', () => {
   }
   // Studio's table already has Esc and Tab; Measure's Esc row is the global one plus the abort.
   const ids = (ws) => shortcutHelp(ws).global.map((g) => g.id);
-  assert.deepEqual(ids('studio'), ['roving']);
-  assert.deepEqual(ids('measure'), ['roving', 'tab']);
+  // The peeper's key works in every view (ui/peeper/ui.js), so it is a global row everywhere.
+  assert.deepEqual(ids('studio'), ['roving', 'peeper']);
+  assert.deepEqual(ids('measure'), ['roving', 'tab', 'peeper']);
   assert.match(shortcutHelp('measure').rows.find((r) => r.id === 'measure-abort').text,
     /^Stop immediately and abort a running measurement/);
-  assert.deepEqual(ids('playground'), ['escape', 'roving', 'tab']);
+  assert.deepEqual(ids('playground'), ['escape', 'roving', 'tab', 'peeper']);
 });
 
 test('review of #159: keys are keys; where they apply is stated beside them', () => {

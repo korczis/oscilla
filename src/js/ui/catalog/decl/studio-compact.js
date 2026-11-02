@@ -6,13 +6,6 @@ import { defineComponent } from '../define.js';
 
 export default [
   defineComponent({
-    id: 'studio.compact',
-    kind: 'panel',
-    label: 'Studio',
-    docs: 'Shows the open Studio document beside the instrument, with its own transport.',
-    state: { none: 'the panel shows the document and owns no value' },
-  }),
-  defineComponent({
     id: 'studio.compact.title',
     kind: 'readout',
     label: 'Document title',

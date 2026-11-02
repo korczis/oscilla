@@ -9,10 +9,13 @@
 //   catalogue.covers(hook) -> boolean       an id, a listed hook or an expanded pattern hook
 //   catalogue.hooks() -> [hook]             every concrete hook, sorted
 //   catalogue.nodeFaces() -> [decl]         the derived node faces, in registry order
+//   catalogue.visuals() -> [decl]           the visual declarations (visual: true), which the
+//                                           one frame (frame.js) wraps; their frame hooks
+//                                           (frameHooksOf) are covered and owned by them
 //   nodeFaceOf(def) -> decl                 the face of one node definition (id studio.node.<type>)
 
 import { NODE_REGISTRY } from '../../studio/registry.js';
-import { defineComponent, hooksOf } from './define.js';
+import { defineComponent, frameHooksOf, hooksOf } from './define.js';
 import about from './decl/about.js';
 import crossLinks from './decl/cross-links.js';
 import filterLab from './decl/filter-lab.js';
@@ -20,6 +23,7 @@ import keyboard from './decl/keyboard.js';
 import mic from './decl/mic.js';
 import navigation from './decl/navigation.js';
 import patternParams from './decl/pattern-params.js';
+import peeper from './decl/peeper.js';
 import records from './decl/records.js';
 import shell from './decl/shell.js';
 import status from './decl/status.js';
@@ -30,11 +34,12 @@ import studioPatches from './decl/studio-patches.js';
 import studioTimeline from './decl/studio-timeline.js';
 import studioTransport from './decl/studio-transport.js';
 import synth from './decl/synth.js';
+import visual from './decl/visual.js';
 
 export const DECLARATIONS = Object.freeze([...studioTransport, ...studioTimeline,
   ...studioCompact, ...filterLab, ...mic, ...navigation, ...records, ...studioGraph,
   ...studioPatches, ...studioInspector, ...synth, ...keyboard, ...crossLinks, ...status,
-  ...about, ...patternParams, ...shell]);
+  ...about, ...patternParams, ...shell, ...visual, ...peeper]);
 
 /** The node face of a node definition: its name, its help sentence, the model as its state. */
 export function nodeFaceOf(def) {
@@ -56,7 +61,7 @@ export function createCatalog(decls, nodeRegistry = NODE_REGISTRY) {
     const d = Object.isFrozen(raw) ? raw : defineComponent(raw);
     if (byId.has(d.id) || byHook.has(d.id)) throw new Error(`catalogue: duplicate id ${d.id}`);
     byId.set(d.id, d);
-    for (const h of hooksOf(d)) {
+    for (const h of [...hooksOf(d), ...frameHooksOf(d)]) {
       if (byHook.has(h) || (byId.has(h) && h !== d.id)) {
         throw new Error(`catalogue: hook ${h} is declared twice (${d.id})`);
       }
@@ -72,6 +77,7 @@ export function createCatalog(decls, nodeRegistry = NODE_REGISTRY) {
     covers: (hook) => byId.has(hook) || byHook.has(hook),
     hooks: () => hooks,
     nodeFaces: () => Object.freeze(list.filter((d) => d.kind === 'node-face')),
+    visuals: () => Object.freeze(list.filter((d) => d.visual === true)),
   });
 }
 
