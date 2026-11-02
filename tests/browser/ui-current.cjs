@@ -28,7 +28,9 @@
 //              row; elsewhere without Source & Pattern and Signal analysis, the Playground's
 //              panels), gaps of up to WORK_GAP px between them bridged, clipped to the viewport;
 //     covered  no interactive element is covered: scrolled to the centre of the view,
-//              elementFromPoint at its centre hits it, a descendant, or its wrapping label;
+//              elementFromPoint at its centre hits it, a descendant, or its wrapping label
+//              (unrendered elements, checkVisibility() false, and a centre still outside a
+//              clipping ancestor are off screen, not covered);
 //     font     no visible text is under FONT_MIN px: every rendered element with a text node
 //              of its own and every form control, by computed font size (SVG text scaled by its
 //              screen matrix; canvas text is not in the DOM and not read);
@@ -87,8 +89,9 @@ const PHONE_WHOLE_DEBT = new Map([
   ['studio:font', 'the Studio editor\'s graph, library and timeline labels are 9-10.5 px '
     + '(studio.css, studio-timeline.css: SMALL_FONT_DEBT of tests/unit/phone-font-floor.test.mjs); '
     + 'its node and lane geometry is sized to them: the Studio lane'],
-  ['synth:font', 'the Synth panel faces label their knobs with text-[11px] '
-    + '(src/js/synth/view/face.js: SMALL_TEXT_CLASS_DEBT of the same test): the Synth lane'],
+  ['synth:font', 'the Synth panel draws its bay labels in SVG at font-size 10 '
+    + '(src/js/synth/view/bay.js) and labels its knobs with text-[11px] (src/js/synth/view/'
+    + 'face.js: SMALL_TEXT_CLASS_DEBT of the same test): the Synth lane'],
 ]);
 // The workspaces, read from ui/app.js at start (loadWorkspaces), so the list cannot go stale.
 const WORKSPACES = [];
@@ -108,6 +111,9 @@ function phoneWhole({ ws, gap, touchMin }) {
   const vh = window.innerHeight;
   const shown = (el) => {
     if (!el.getClientRects().length) return false;
+    // A closed <details> keeps its content's boxes in some engines (content-visibility: hidden
+    // on its slot): checkVisibility() says it is not rendered.
+    if (el.checkVisibility && !el.checkVisibility({ visibilityProperty: true })) return false;
     const cs = getComputedStyle(el);
     return cs.visibility !== 'hidden' && cs.display !== 'none';
   };
@@ -194,7 +200,18 @@ function phoneWhole({ ws, gap, touchMin }) {
     const r = el.getBoundingClientRect();
     const cx = r.left + r.width / 2;
     const cy = r.top + r.height / 2;
-    if (!hits(el, cx, cy)) {
+    // A centre still outside a clipping ancestor (a snapping strip that settles on its nearest
+    // snap point) is off screen, not covered: the strip's own scroll reaches it.
+    const clipped = (() => {
+      for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+        const cs = getComputedStyle(a);
+        if (cs.overflowX === 'visible' && cs.overflowY === 'visible') continue;
+        const c = a.getBoundingClientRect();
+        if (cx < c.left || cx > c.right || cy < c.top || cy > c.bottom) return true;
+      }
+      return false;
+    })();
+    if (!clipped && !hits(el, cx, cy)) {
       const hit = document.elementFromPoint(cx, cy);
       coveredList.push(`${label(el)} under ${hit ? label(hit) : 'nothing'}`);
     }
