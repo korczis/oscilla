@@ -79,6 +79,19 @@ module.exports = {
         body: ['Inter', ...SYSTEM_SANS],
         mono: SYSTEM_MONO,
       },
+      // The hardware treatment's intensity (project.visual-identity-lock v4, "decent"): the
+      // synth-theme layer reads these keys, never a literal; tests/unit/visual-identity-lock-v4
+      // holds their bounds (sheen <= 0.25, texture <= 0.08, wood <= 16px, LED glow <= 6px).
+      opacity: {
+        'hw-sheen': '0.12',
+        'hw-texture': '0.04',
+      },
+      width: {
+        'hw-wood': '0.75rem',
+      },
+      boxShadow: {
+        'hw-led': '0 0 4px currentColor',
+      },
       transitionProperty: {
         width: 'width',
       },
