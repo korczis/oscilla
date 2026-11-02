@@ -352,3 +352,31 @@ test('no rule of responsive.css shows Source & Pattern or Signal analysis in eve
       .filter((s) => PLAYGROUND_PANELS.some((p) => s.includes(p)) && !s.includes('[data-mode='));
     assert.deepEqual(forced, []);
   });
+
+// ------------------------------------------------------------------ the Sequencer lane on a phone
+test('on a phone the Sequencer lane draws the shortest block readable and scrolls',
+  async () => {
+    const { timelineWindow, shortestBlockS, TIMELINE_OPTIONS } = await import(
+      '../../src/js/labs/sequencer-panel.js');
+    const pxPerS = (w) => w.contentPx / w.spanS;
+    // Desktop (no minBlockPx): unchanged, the ~4 s axis fits a 348 px lane.
+    const desk = timelineWindow({ durationS: 2.25, laneW: 348 });
+    assert.equal(desk.contentPx, 348);
+    assert.equal(desk.maxScrollPx, 0);
+    // Phone: a 0.4 s block gets phoneBlockPx; the lane is wider than the view and scrolls.
+    const phone = timelineWindow({ durationS: 2.25, laneW: 348,
+      minBlockPx: TIMELINE_OPTIONS.phoneBlockPx, shortestS: 0.4 });
+    assert.ok(Math.abs(pxPerS(phone) * 0.4 - TIMELINE_OPTIONS.phoneBlockPx) < 1e-9);
+    assert.ok(phone.maxScrollPx > 0);
+    // A very short block is capped at phoneMaxPxPerS; a long one never packs tighter than before.
+    const tiny = timelineWindow({ durationS: 2.25, laneW: 348,
+      minBlockPx: TIMELINE_OPTIONS.phoneBlockPx, shortestS: 0.01 });
+    assert.ok(Math.abs(pxPerS(tiny) - TIMELINE_OPTIONS.phoneMaxPxPerS) < 1e-9);
+    const slow = timelineWindow({ durationS: 20, laneW: 348,
+      minBlockPx: TIMELINE_OPTIONS.phoneBlockPx, shortestS: 5 });
+    assert.ok(pxPerS(slow) >= TIMELINE_OPTIONS.minPxPerS - 1e-9);
+    // Every block carries a name, a silence included: the shortest block decides.
+    assert.equal(shortestBlockS({ blocks: [{ type: 'tone', durationMs: 400 },
+      { type: 'silence', durationMs: 150 }, { type: 'sweep', durationMs: 500 }] }), 0.15);
+    assert.equal(shortestBlockS({ blocks: [] }), 0);
+  });
