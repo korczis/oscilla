@@ -11,7 +11,8 @@
 // (project.studio-model-is-canonical, project.no-fake-science).
 
 import { WORKSPACE_LABELS } from './shortcuts.js';
-import { livePanelLinks } from './counterparts.js';
+import { CONTENT_LINKS, livePanelLinks } from './counterparts.js';
+import { WORKSPACE_IDS, relatedOf, relatedRef, workspaceOf } from './shell.js';
 import { getTemplate } from '../studio/templates/index.js';
 
 /** The template id a related entry's address names (`studio&st=<id>`), or null. */
@@ -85,6 +86,29 @@ export const LEARN_NO_TOOL = Object.freeze({
   'semi-modular-voice': 'its demo opens the Synth itself',
   'synthesis-engines': 'its demo opens the Synth\'s Engines tab itself',
 });
+
+/**
+ * The routes (relatedRef form: `<id><hash>`) a workspace's own content already links to: its
+ * panel and content links (ui/counterparts.js PANEL_LINKS, CONTENT_LINKS), About's workspace
+ * list, Learn's tool links, the page's empty-state action, and the Playground, which the page
+ * header's breadcrumb root links to on every page. The page header's Related strip leaves these
+ * out (pageRelatedOf), so each target appears once per screen.
+ */
+export function contentRoutesOf(ws) {
+  const out = new Set(['playground']);
+  for (const l of [...livePanelLinks(), ...CONTENT_LINKS]) if (l.from.includes(ws)) out.add(l.to);
+  if (ws === 'about') WORKSPACE_IDS.filter((id) => id !== 'about').forEach((id) => out.add(id));
+  if (ws === 'learn') Object.values(LEARN_TOOLS).forEach((id) => out.add(id));
+  const w = workspaceOf(ws);
+  if (w && w.empty && w.empty.action) out.add(w.empty.action.to);
+  return out;
+}
+
+/** The related entries the page header shows: the registry's, less the content's routes. */
+export function pageRelatedOf(ws) {
+  const shown = contentRoutesOf(ws);
+  return relatedOf(ws).filter((r) => !shown.has(relatedRef(r)));
+}
 
 /** { workspace, href, text } of a Learn topic's tool link, or null. */
 export function learnToolOf(topicId) {

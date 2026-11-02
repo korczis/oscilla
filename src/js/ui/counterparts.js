@@ -55,6 +55,20 @@ export const PANEL_LINKS = Object.freeze([
   { osc: 'measure.toStudio', from: ['measure'], to: 'studio&st=measurement-sweep' },
 ].map((l) => Object.freeze({ ...l, from: Object.freeze([...l.from]) })));
 
+/**
+ * The other workspace links written in a workspace's content, by their hooks: { osc, from,
+ * to }. With PANEL_LINKS they are every literal `#m=` link inside <main> (the unit test reads
+ * src/index.html for that); the page header's Related strip leaves out a route one of them
+ * already shows (ui/cross-links.js contentRoutesOf), so a target appears once per screen.
+ */
+export const CONTENT_LINKS = Object.freeze([
+  { osc: 'counterpart.measure-rta', from: ['analyzer', 'compare'], to: 'measure' },
+  { osc: 'seq.toStudio', from: ['sequencer'], to: 'studio' },
+  { osc: 'def.toMeasure', from: ['experiments'], to: 'measure' },
+  { osc: 'exp.toMeasure', from: ['experiments'], to: 'measure' },
+  { osc: 'presets.toPlayground', from: ['presets'], to: 'playground' },
+].map((l) => Object.freeze({ ...l, from: Object.freeze([...l.from]) })));
+
 /** The panel links whose every workspace relates to their target in the registry. */
 export function livePanelLinks(links = PANEL_LINKS) {
   return links.filter((l) => l.from.length

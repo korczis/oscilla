@@ -109,19 +109,23 @@ async function loadModel() {
     'about', `[data-osc="about.open.${w}"]`, w]));
   // The registry's related pages: each address must route to its workspace (the app's own
   // routeOfHash), and each Related link of the page header is a cross-workspace control.
+  // The strip shows the related pages the content does not already link to (cross-links.js
+  // pageRelatedOf); every related page is shown once, in the strip or in the content.
   const { WORKSPACE_REGISTRY, relatedHref } = await import(src('ui', 'shell.js'));
+  const { pageRelatedOf } = await import(src('ui', 'cross-links.js'));
   const { routeOfHash } = await import(src('ui', 'navigation.js'));
   for (const w of WORKSPACE_REGISTRY) {
     const hrefs = (w.related || []).map(relatedHref);
-    RELATED[w.id] = hrefs;
+    REGISTRY_RELATED[w.id] = hrefs;
+    RELATED[w.id] = pageRelatedOf(w.id).map(relatedHref);
     for (const [i, r] of (w.related || []).entries()) {
       const route = routeOfHash(hrefs[i]);
       if (!route || route.workspace !== r.id || route.badRoute) {
         RELATED_BAD.push(`${w.id}: ${hrefs[i]} routes to ${route && route.workspace}`);
       }
       // A Studio template address opens its template dialog in the Studio (the cross-links
-      // suite follows those); a workspace address is clicked here.
-      if (!r.hash) {
+      // suite follows those); a workspace address in the strip is clicked here.
+      if (!r.hash && RELATED[w.id].includes(hrefs[i])) {
         ACTIONS.push([`${w.id} Related → ${r.id}`, w.id,
           `[data-osc="page.relatedLink"][href="${hrefs[i]}"]`, r.id]);
       }
@@ -164,6 +168,7 @@ const GARBAGE = [
 ];
 // The registry's related addresses per workspace, and the ones that do not route there.
 const RELATED = {};
+const REGISTRY_RELATED = {};
 const RELATED_BAD = [];
 // [name, from, selector, expected workspace]
 const ACTIONS = [
@@ -291,6 +296,10 @@ const H = {
   related: (page) => page.evaluate(() => [...document.querySelectorAll(
     '[data-osc="page.related"] [data-osc="page.relatedLink"]')]
     .filter((a) => a.getClientRects().length > 0).map((a) => a.getAttribute('href'))),
+  /** The visible workspace links of the content (<main>) and the breadcrumb's root. */
+  contentLinks: (page) => page.evaluate(() => [...document.querySelectorAll(
+    'main a[href^="#m="], [data-osc="page.home"]')].filter((a) => a.getClientRects().length > 0)
+    .map((a) => a.getAttribute('href'))),
   /** In-content controls (outside header and status bar) that name another workspace. */
   exits: (page) => page.evaluate(() => {
     const NAV = /setWorkspace|studioExpand|studioBack|experimentsShowInMeasure|experimentsRepeat|experimentsDefRun|runLearnDemo|connectionsFollow|findingsOpenRef|synthOpenStudio/;
@@ -344,7 +353,12 @@ async function runLeg(name, origin) {
           else if (NEW_TAB_HINT_DEBT.has(l.href)) debtHealed.add(l.href);
         }
         exitsOf[w] = { nav: (await H.state(page)).navVisible, exits: await H.exits(page),
-          related: await H.related(page) };
+          related: await until(async () => {
+            const r = await H.related(page);
+            return JSON.stringify(r) === JSON.stringify(RELATED[w]) ? r : null;
+          }, { ms: NAV_MS, what: `exits: ${w}'s Related strip is rendered` })
+            .catch(() => H.related(page)),
+          content: await H.contentLinks(page) };
       }
       if (want('hrefs')) {
         if (debtSeen.size) {
@@ -367,11 +381,15 @@ async function runLeg(name, origin) {
           || (!exitsOf[w].exits.length && !NO_EXIT_OK.has(w)));
         const healed = [...NO_EXIT_OK].filter((w) => exitsOf[w].exits.length);
         check(leg, 'every workspace has a way onward', !dead.length, JSON.stringify(dead));
-        const unrelated = WORKSPACES.filter((w) => !(RELATED[w] || []).length
-          || JSON.stringify(exitsOf[w].related) !== JSON.stringify(RELATED[w]))
-          .map((w) => `${w}: shows ${JSON.stringify(exitsOf[w].related)}, the registry `
-            + `${JSON.stringify(RELATED[w] || [])}`);
-        check(leg, 'every workspace has a way onward from its related pages (the registry)',
+        const unrelated = WORKSPACES.filter((w) => !(REGISTRY_RELATED[w] || []).length
+          || JSON.stringify(exitsOf[w].related) !== JSON.stringify(RELATED[w])
+          || REGISTRY_RELATED[w].some((h) => !exitsOf[w].related.includes(h)
+            && !exitsOf[w].content.includes(h))
+          || exitsOf[w].related.some((h) => exitsOf[w].content.includes(h)))
+          .map((w) => `${w}: strip ${JSON.stringify(exitsOf[w].related)} (want `
+            + `${JSON.stringify(RELATED[w] || [])}), content ${JSON.stringify(exitsOf[w].content)}`
+            + `, registry ${JSON.stringify(REGISTRY_RELATED[w] || [])}`);
+        check(leg, 'every workspace shows each related page once, in its strip or its content',
           !unrelated.length && !RELATED_BAD.length, [...unrelated, ...RELATED_BAD].join(' | '));
         check(leg, 'NO_EXIT_OK lists only workspaces that still lack an in-content exit',
           !healed.length, `remove ${healed.join(', ')} from NO_EXIT_OK`);

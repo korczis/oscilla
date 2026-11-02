@@ -49,6 +49,9 @@
 //                        stops holding, and its action opens its workspace;
 //     enter-<ws>         entering a workspace with `enter` (Compare: the microphone panel's
 //                        Compare tab) selects that control, from the nav and on a fresh load;
+//     once-per-screen-<ws> at 1536x1024 no workspace shows two visible links to one route
+//                        between its Related strip and its content (<main>), nor twice in the
+//                        strip (also with Presets' empty state shown);
 //     related-menu-phone at 390x844 under touch the page header's Related menu opens on a tap,
 //                        lists the workspace's related pages as 44 px items, and one tap on
 //                        the first opens it.
@@ -108,8 +111,10 @@ const PHONE_WHOLE_DEBT = new Map([
 ]);
 // The workspaces, read from ui/app.js at start (loadWorkspaces), so the list cannot go stale.
 const WORKSPACES = [];
-// The registry's rows (src/js/ui/shell.js), read at start.
+// The registry's rows (src/js/ui/shell.js), and the related pages each page header shows
+// (src/js/ui/cross-links.js pageRelatedOf), read at start.
 const REGISTRY = [];
+const PAGE_RELATED = {};
 // How each empty-state predicate (ui/empty-states.js) is made to hold, through the page's own
 // controls, and stop holding: { on(page), off(page) }.
 const EMPTY_FORCE = {
@@ -126,7 +131,23 @@ async function loadWorkspaces() {
   const app = pathToFileURL(path.resolve(__dirname, '../../src/js/ui/app.js')).href;
   WORKSPACES.push(...(await import(app)).WORKSPACES);
   const shell = pathToFileURL(path.resolve(__dirname, '../../src/js/ui/shell.js')).href;
-  REGISTRY.push(...(await import(shell)).WORKSPACE_REGISTRY);
+  const { WORKSPACE_REGISTRY, relatedHref } = await import(shell);
+  REGISTRY.push(...WORKSPACE_REGISTRY);
+  const links = pathToFileURL(path.resolve(__dirname, '../../src/js/ui/cross-links.js')).href;
+  const { pageRelatedOf } = await import(links);
+  for (const w of REGISTRY) PAGE_RELATED[w.id] = pageRelatedOf(w.id).map(relatedHref);
+}
+
+/** In the page: routes linked twice, between the Related strip and <main>, or in the strip. */
+function routesTwice() {
+  const vis = (a) => a.getClientRects().length > 0 && !a.closest('[hidden]');
+  const strip = [...document.querySelectorAll('[data-osc="page.relatedLink"]')].filter(vis)
+    .map((a) => a.getAttribute('href'));
+  const content = new Set([...document.querySelectorAll(
+    'main a[href^="#m="], [data-osc="page.home"]')].filter(vis)
+    .map((a) => a.getAttribute('href')));
+  return { mode: document.getElementById('osc-app').dataset.mode, strip,
+    twice: strip.filter((h, i) => content.has(h) || strip.indexOf(h) !== i) };
 }
 
 /** In the page: workspace `ws`'s empty-state block, as shown. */
@@ -440,6 +461,15 @@ async function runOne(name) {
       (w) => w === 'experiments', 'ui-current: Compare saved experiments opens Experiments');
     check('counterpart-opens-experiments', exp.ok, `workspace ${exp.last}`);
 
+    // Each target once per screen: no route linked twice between the strip and the content.
+    for (const ws of WORKSPACES) {
+      await setWorkspace(page, ws);
+      const r = await pollFor(() => page.evaluate(routesTwice),
+        (m) => m.mode === ws && JSON.stringify(m.strip) === JSON.stringify(PAGE_RELATED[ws])
+          && !m.twice.length, `ui-current: ${ws} links each route once`);
+      check(`once-per-screen-${ws}`, r.ok, JSON.stringify(r.last));
+    }
+
     // Each declared empty state, forced through the page's controls.
     for (const w of REGISTRY.filter((x) => x.empty)) {
       const force = EMPTY_FORCE[w.empty.when];
@@ -454,6 +484,8 @@ async function runOne(name) {
           && b.action === `#m=${w.empty.action.to}` && b.label === w.empty.action.label,
         `ui-current: ${w.id}'s empty state shows while ${w.empty.when} holds`);
       check(`empty-state-${w.id}`, on.ok, JSON.stringify(on.last));
+      const once = await page.evaluate(routesTwice);
+      check(`once-per-screen-${w.id}-empty`, !once.twice.length, JSON.stringify(once));
       await force.off(page);
       const off = await pollFor(() => page.evaluate(emptyBlock, w.id), (b) => !b.shown,
         `ui-current: ${w.id}'s empty state hides when ${w.empty.when} stops holding`);
@@ -575,7 +607,8 @@ async function runOne(name) {
       await until(() => p.evaluate(() => document.documentElement.dataset.ready === 'true'
         && document.getElementById('osc-app').dataset.mode === 'filter'),
       { ms: READY_MS, what: 'ui-current: related menu, Filter Lab opened' });
-      const rel = REGISTRY.find((w) => w.id === 'filter').related;
+      // Filter Lab's strip: the related pages its panel does not already link to.
+      const rel = PAGE_RELATED.filter;
       await p.tap('#osc-related-menu');
       const menu = await pollFor(() => p.evaluate(() => [...document.querySelectorAll(
         '[data-osc="page.relatedItem"]')].filter((a) => a.getClientRects().length > 0)
@@ -584,10 +617,10 @@ async function runOne(name) {
       'ui-current: the phone Related menu opens');
       const items = menu.last || [];
       check('related-menu-phone', menu.ok && items.every((x, i) => x.h >= TOUCH_MIN
-        && x.href === `#m=${rel[i].id}${rel[i].hash || ''}`), JSON.stringify(items));
+        && x.href === rel[i]), JSON.stringify(items));
       await p.tap('[data-osc="page.relatedItem"]');
       const went = await pollFor(() => p.evaluate(() => window.OSCILLA.app.workspace),
-        (x) => x === rel[0].id, 'ui-current: a Related menu item opens its workspace');
+        (x) => `#m=${x}` === rel[0], 'ui-current: a Related menu item opens its workspace');
       check('related-menu-phone-opens', went.ok, `workspace ${went.last}`);
       await p.close();
     }

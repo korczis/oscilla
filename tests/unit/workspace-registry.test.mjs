@@ -23,10 +23,11 @@ import {
 } from '../../src/js/ui/shell.js';
 import { routeOfHash } from '../../src/js/ui/navigation.js';
 import {
-  COUNTERPARTS, PANEL_LINKS, counterpartsOf, livePanelLinks,
+  CONTENT_LINKS, COUNTERPARTS, PANEL_LINKS, counterpartsOf, livePanelLinks,
 } from '../../src/js/ui/counterparts.js';
 import {
-  STUDIO_TEMPLATE_LINKS, relatedText, studioTemplateHref, studioTemplateText, templateOfRef,
+  LEARN_TOOLS, STUDIO_TEMPLATE_LINKS, contentRoutesOf, pageRelatedOf, relatedText,
+  studioTemplateHref, studioTemplateText, templateOfRef,
 } from '../../src/js/ui/cross-links.js';
 import {
   applyEnter, createOscillaUi, markWorkspacePanels, WORKSPACES,
@@ -244,10 +245,46 @@ test('the page header renders the registry: summary, Related strip and menu, act
   const ui = createOscillaUi({ storedAnalysisTab: null });
   ui.workspace = 'filter';
   assert.equal(ui.workspaceSummary(), WORKSPACE_REGISTRY.find((w) => w.id === 'filter').summary);
-  assert.deepEqual(ui.workspaceRelated().map((r) => r.href),
-    ['#m=synth', '#m=studio&st=filter-automation', '#m=analyzer']);
-  assert.deepEqual(ui.workspaceRelated().map((r) => r.text),
-    ['Synth', 'Filter Automation in Studio', 'Analyzer']);
+  // Filter Lab's panel already links to the Synth and to Filter Automation: the strip does not.
+  assert.deepEqual(ui.workspaceRelated().map((r) => r.href), ['#m=analyzer']);
+  assert.deepEqual(ui.workspaceRelated().map((r) => r.text), ['Analyzer']);
+  ui.workspace = 'studio';
+  assert.deepEqual(ui.workspaceRelated().map((r) => r.text), ['Synth', 'Sequencer', 'Filter Lab']);
+  assert.match(header, /<nav data-osc="page\.related"[^>]*x-show="workspaceRelated\(\)\.length"/,
+    'an empty strip is not shown');
+});
+
+test('each target appears once per screen: the strip leaves out what the content links to', () => {
+  // Every literal workspace link inside <main> is a panel or content link of the tables.
+  const main = HTML.slice(HTML.indexOf('<main'), HTML.indexOf('</main>'));
+  const literal = [...main.matchAll(/<a\b[^>]*>/g)].map((m) => m[0])
+    .filter((t) => /\shref="#m=/.test(t))
+    .map((t) => [/data-osc="([^"]+)"/.exec(t)?.[1], /\shref="#m=([^"]+)"/.exec(t)[1]
+      .replace(/&amp;/g, '&')]);
+  const tables = [...PANEL_LINKS, ...CONTENT_LINKS];
+  for (const [osc, to] of literal) {
+    const row = tables.find((l) => l.osc === osc);
+    assert.ok(row, `${osc} (#m=${to}) is in neither PANEL_LINKS nor CONTENT_LINKS`);
+    assert.equal(row.to, to, `${osc}: the table names its route`);
+  }
+  assert.equal(literal.length, tables.length, 'every row of the tables is written in <main>');
+  for (const w of WORKSPACE_REGISTRY) {
+    const content = contentRoutesOf(w.id);
+    const strip = pageRelatedOf(w.id).map(relatedRef);
+    assert.deepEqual(strip.filter((r) => content.has(r)), [], `${w.id}: a route twice`);
+    assert.equal(new Set(strip).size, strip.length, `${w.id}: two strip links to one route`);
+    // What the strip leaves out is still on the screen: every related route is shown once.
+    for (const r of relatedOf(w.id)) {
+      assert.ok(strip.includes(relatedRef(r)) || content.has(relatedRef(r)),
+        `${w.id} -> ${relatedRef(r)} is shown nowhere`);
+    }
+  }
+  assert.ok(contentRoutesOf('learn').has(LEARN_TOOLS.nyquist));
+  assert.deepEqual(pageRelatedOf('about'), [], 'About\'s list links every workspace');
+  assert.ok(WORKSPACE_REGISTRY.every((w) => !pageRelatedOf(w.id)
+    .some((r) => r.id === 'playground')),
+    'the breadcrumb root links to the Playground on every page');
+  assert.match(HTML, /<a href="#m=playground" data-osc="page\.home"/);
 });
 
 test('About\'s list and the shortcut dialog\'s names are the registry, not a copy', () => {

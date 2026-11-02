@@ -13,10 +13,10 @@
 import { shortcutHelp } from './shortcuts.js';
 import { counterpartOf, showsCounterparts } from './counterparts.js';
 import {
-  createShell, GROUP_REGISTRY, NAV_GROUPS, navGroupOf, phonePrimaryOf, relatedHref, relatedOf,
+  createShell, GROUP_REGISTRY, NAV_GROUPS, navGroupOf, phonePrimaryOf, relatedHref,
   WORKSPACE_IDS, WORKSPACE_LABELS, WORKSPACE_REGISTRY, workspaceOf,
 } from './shell.js';
-import { relatedText } from './cross-links.js';
+import { pageRelatedOf, relatedText } from './cross-links.js';
 import { emptyPredicateHolds } from './empty-states.js';
 
 const THEME_KEY = 'oscilla.v2.theme';
@@ -453,10 +453,11 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
     },
     /**
      * The page header's Related links: the registry's related entries of the workspace in view,
-     * at most three, each { key, id, why, href, text }.
+     * less the routes its content already links to (cross-links.js pageRelatedOf: a target
+     * appears once per screen), each { key, id, why, href, text }.
      */
     workspaceRelated() {
-      return relatedOf(this.workspace).slice(0, 3).map((r, i) => ({
+      return pageRelatedOf(this.workspace).slice(0, 3).map((r, i) => ({
         key: `${this.workspace}:${i}`, id: r.id, why: r.why, href: relatedHref(r),
         text: relatedText(r) }));
     },
