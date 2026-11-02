@@ -880,11 +880,28 @@ async function layoutWidths(ctx) {
             }
           }
         }
-        // The compact Studio's signal path keeps its whole width in view (no node clipped).
+        // The compact Studio's signal path clips no node for good: whether it fits depends on
+        // the fonts (a Linux runner's render it 9 px wider than its 1280 px column), so where
+        // it does not, it scrolls, and each chip reached with Tab ends wholly inside it
+        // (compact.js keepInScrollerView; preventScroll leaves the scrolling to that alone).
         const sp = document.querySelector('#osc-panel-studio .osc-sc-path');
-        if (!sp || sp.scrollWidth > sp.clientWidth + 1) {
-          spill.push(`compact Studio path ${sp ? `${sp.scrollWidth} > ${sp.clientWidth}`
-            : 'missing'}`);
+        if (!sp) spill.push('compact Studio path missing');
+        else if (sp.scrollWidth > sp.clientWidth + 1) {
+          if (!/auto|scroll/.test(getComputedStyle(sp).overflowX)) {
+            spill.push(`compact Studio path ${sp.scrollWidth} > ${sp.clientWidth}, not a scroller`);
+          }
+          for (const chip of sp.querySelectorAll('[data-osc="studio.compact.node"]')) {
+            chip.focus({ preventScroll: true });
+            const b = chip.getBoundingClientRect();
+            const box = sp.getBoundingClientRect();
+            if (b.left < box.left - 1 || b.right > box.right + 1) {
+              spill.push(`compact Studio chip ${chip.textContent.trim()} `
+                + `${Math.round(b.left)}-${Math.round(b.right)} outside the path `
+                + `${Math.round(box.left)}-${Math.round(box.right)} when focused`);
+            }
+          }
+          document.activeElement.blur();
+          sp.scrollLeft = 0;
         }
         return { spill, coarse: matchMedia('(pointer: coarse)').matches };
       }, { row1: ROW1 });
@@ -901,7 +918,7 @@ async function layoutWidths(ctx) {
         if (hit) wrong.push(`${sel} is covered by ${hit}`);
       }
       check(ctx.leg, `layout widths ${w.name}${w.touch ? ` (coarse ${f.coarse})` : ''}: `
-        + 'row 1 keeps its controls above the measurement row, the compact Studio path whole',
+        + 'row 1 keeps its controls above the measurement row, every compact Studio chip reachable',
       !wrong.length,
       wrong.slice(0, 8).join('; '));
     } finally {

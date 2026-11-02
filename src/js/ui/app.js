@@ -407,14 +407,15 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
     },
     /**
      * The logo goes home (H004 B6): its href is the Playground's address, and a plain click
-     * switches there through the router, as a nav item does; a modified click is the browser's.
+     * switches there through the router; a modified click is the browser's. It is a link, not a
+     * nav item, so focus moves to the Playground heading as any #m= link moves it (U010).
      */
     homeLink() {
       return {
         '@click'(e) {
           if (e.button > 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
           e.preventDefault();
-          this.setWorkspace('playground');
+          this.setWorkspace('playground', { focusHeading: true });
         },
       };
     },

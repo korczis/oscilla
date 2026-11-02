@@ -150,7 +150,15 @@ export function createKeyboardUi({ win = window } = {}) {
           const r = routeOfHash(hash);
           const v = r ? r.workspace : 'playground';
           if (!KEYBOARD_VIEWS.includes(v)) return null;
-          cmp.kbdArmed[v] = q.get(KEYBOARD_LINK_KEY) !== '0';
+          const armed = q.get(KEYBOARD_LINK_KEY) !== '0';
+          cmp.kbdArmed[v] = armed;
+          // The domain answers, as every link does (surface-census routes).
+          if (typeof cmp.notify === 'function') {
+            const where = v === 'studio' ? 'Studio' : 'Playground';
+            cmp.notify('info', `Keyboard ${armed ? 'armed' : 'disarmed'} from the link`, armed
+              ? `The computer keys play the ${where}. Nothing plays until you press a key.`
+              : `The computer keys no longer play the ${where}.`);
+          }
           return true;
         });
       }
