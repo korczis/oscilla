@@ -1,0 +1,37 @@
+# Review verdict for pull request #373, "fix(release): bound every gh call in the release scripts
+# and say how to publish from main" (branch fix/release-scripts-bounded-gh; builder oscilla-b0).
+# Reviewed head c5a584d5 against its merge base 60103776 (origin/main is 11cc9fbc; the PR is
+# behind, not conflicting). This reviewer (oscilla-dev-53) built none of it.
+#
+# The digest is scripts/review-verdict.mjs from `git archive origin/main scripts`, run --content
+# --list --base-branch origin/main in a detached worktree at the head: a554d491...6de over 7 paths
+# (release-bounded, release-cadence, release-publish, release-record, verify-deploy and the two
+# unit tests).
+#
+# What was checked:
+# - release-bounded.mjs: every call gets a per-attempt bound (60 s network, 180 s release
+#   transfer, 20 min local) with SIGKILL; only network calls retry, at most 3 attempts, 5 s then
+#   10 s apart; a call that can act twice (gh workflow run, gh release create, gh issue
+#   create/comment/close) retries only when it failed to connect, so no second Pages dispatch or
+#   second Release; a refusal (not found, not authenticated) is never retried; a signal-killed
+#   child reports 128 and a timed-out one 124. boundedFetch bounds the body too (the signal covers
+#   the stream) and returns a 4xx without retrying.
+# - release-publish.mjs: every precondition and step names its failing call and reason; gh run
+#   watch is bounded by --pages-timeout and not restarted after a timeout; git push of the tag is
+#   retried, which is safe (a second push of the same tag is up to date); the branch refusal
+#   names FROM_MAIN, the way out from a linked worktree.
+# - release-record.mjs, release-cadence.mjs, verify-deploy.mjs: the same runner or boundedFetch;
+#   verify-deploy keeps attempts 1 per request because --attempts is its own retry, so the
+#   number of requests does not multiply.
+# - The release unit tests at the head: 78 pass, 0 fail (release-bounded, release-publish,
+#   release-record, release-cadence, verify-deploy).
+#
+# Verdict: merge. No P0, P1 or P2. Two P3 notes, neither blocking.
+schema: review-verdict/v1
+pr: 373
+verdict: merge
+reviewer: oscilla-dev-53 (claude-code 4fba4ca0)
+content: a554d491c43e2015a2255d1236ed098f3f9635323df807f1a39a0163362e06de
+findings:
+  - { id: L1, severity: P3, status: open, title: "release-record's gh release download --output is retried after a transient failure without --clobber, so a first attempt that left a partial file can turn the retry into an 'already exists' refusal; delete the file before a retry or pass --clobber (the temporary directory is new per call)" }
+  - { id: L2, severity: P3, status: open, title: "gh run watch is restarted after a non-timeout transient failure, so the total wait can exceed --pages-timeout by up to two further attempts; the stated bound is per attempt, not for the watch as a whole" }
