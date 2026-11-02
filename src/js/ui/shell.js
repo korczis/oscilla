@@ -373,6 +373,13 @@ export function createShell({ get = storageGet, set = storageSet } = {}) {
           move: (i) => { const el = entries()[i]; if (el) el.focus(); },
           orientation: 'vertical', wrap: true, escape }));
       }
+      // The navbar holds the drawer's own button: Escape there closes the open drawer too, as
+      // the page-level listener did (no items: its arrows stay the controls').
+      const bar = root.querySelector('[role="banner"]');
+      if (bar) {
+        detachShellKeys.push(roving(bar, { count: () => 0, index: () => -1, move() {},
+          escape }));
+      }
       // Each search is item 0 before the entries: ArrowDown enters the list, every other key
       // but Escape stays the field's (roving leaves a text field Home, End and letters).
       for (const input of root.querySelectorAll('#osc-nav-search, #osc-nav-search-drawer')) {
