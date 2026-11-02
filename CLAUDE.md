@@ -22,6 +22,8 @@ name): `project.single-file-deliverable`, `project.audio-engine-discipline`,
 (ADR 0061: the UI is Flowbite Pro on Tailwind, built and inlined at build time; no other kit,
 no Pro source file committed; the legacy surfaces, osc-* class tokens, class names, CSS
 and inline styles in `tests/unit/ui-flowbite-pro-baseline.json` only shrink),
+`project.a-phone-sounds` (the instrument sounds on a phone; its proving suite stays in the
+gate with the browser's gesture rule on),
 `project.visual-components-framed` (every chart, scope, curve, meter, canvas or drawing is a
 catalogue declaration with `visual: true` inside the one frame of `src/js/ui/catalog/frame.js`).
 Read them before changing `src/`.
