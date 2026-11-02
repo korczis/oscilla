@@ -17,7 +17,8 @@
 // EDGE_ADD, EDGE_REMOVE, EDGE_UPDATE, TRACK_ADD, TRACK_REMOVE, CLIP_ADD, CLIP_REMOVE, CLIP_MOVE,
 // CLIP_RESIZE, AUTOMATION_POINT_ADD, AUTOMATION_POINT_MOVE, AUTOMATION_POINT_REMOVE, MARKER_ADD,
 // MARKER_REMOVE, LOOP_SET, TRANSPORT_SET, METADATA_SET, PASTE, DUPLICATE, BATCH { label, steps }
-// (K061: one entry, one gate call; NODE_ADD and EDGE_ADD may name an unused id, NODE_ADD a
+// (K061: one entry, one gate call; NODE_ADD, EDGE_ADD and TRACK_ADD (K149) may name an unused
+// id, NODE_ADD a
 // metadata.panel { id, module }, which PASTE, DUPLICATE and PATCH_INSERT drop); timeline additions
 // (V416-V420): CLIP_UPDATE, CLIP_SET_TIME_BASE, MARKER_MOVE; patch additions (V426, patches.js):
 // PATCH_INSERT { patch, at? } ("Insert <name>") and PATCH_REPLACE { patch, at? } ("Replace
@@ -460,7 +461,7 @@ const REDUCERS = {
     if (!TRACK_CLIP_KINDS[kind]) reject(`Unknown track kind "${String(kind)}".`);
     if (a.target != null) requireNode(model, a.target);
     const track = {
-      id: ctx.newId('track'),
+      id: a.id != null ? ctx.claim(a.id, model) : ctx.newId('track'),
       kind,
       name: a.name != null ? checkName(a.name) : `Track ${model.timeline.tracks.length + 1}`,
       target: a.target ?? null,

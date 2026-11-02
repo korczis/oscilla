@@ -8,6 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createIdGenerator, createStudioStore } from '../../src/js/studio/actions.js';
+import { compileStudio } from '../../src/js/studio/compiler.js';
 import { midiOf, noteHz } from '../../src/js/studio/templates/demo-song-score.js';
 import sweep from '../../src/js/studio/templates/sweep-sequence.js';
 import { REFERENCE_TEMPLATE_ID, templateModel } from '../../src/js/studio/templates/index.js';
@@ -95,4 +96,52 @@ test('toNotes gives the piano roll payload: beats, MIDI numbers, velocity 0..1',
   assert.deepEqual(notes[0], { at: 0, note: midiOf('D1'), len: 3, vel: Math.round(112 / 127
     * 1e6) / 1e6 });
   assert.ok(notes.every((n) => n.at + n.len <= ex.riffBeats(riff) && n.vel > 0 && n.vel <= 1));
+});
+
+test('Insert with its voice adds Oscillator, Filter, wiring, track and clips as one step', () => {
+  for (const id of [REFERENCE_TEMPLATE_ID, 'demo-song', 'subtractive-synth']) {
+    const start = templateModel(id);
+    const store = createStudioStore(start, { idGenerator: createIdGenerator(start) });
+    const riff = lib.riffOf('mirrorball-octaves');
+    const m0 = store.getModel();
+    const twice = [];
+    for (let k = 0; k < 2; k++) {
+      const res = ex.riffVoiceAction(store.getModel(), riff, { atBeats: 4 });
+      assert.ok(res.action, res.reason);
+      const r = store.dispatch(res.action);
+      assert.equal(r.ok, true, `${id}: ${r.reason}`);
+      twice.push(res.action.steps.find((s) => s.type === 'TRACK_ADD').id);
+    }
+    assert.notEqual(twice[0], twice[1], 'a second insert takes free ids');
+    const m = store.getModel();
+    const track = m.timeline.tracks.find((t) => t.id === twice[0]);
+    const osc = m.graph.nodes.find((n) => n.id === track.target);
+    assert.equal(osc.type, 'oscillator');
+    assert.equal(osc.params.waveform, riff.voice.waveform);
+    const filter = m.graph.nodes.find((n) => m.graph.edges.some((e) => e.from.node === osc.id
+      && e.to.node === n.id));
+    assert.equal(filter.type, 'filter');
+    assert.equal(filter.params.frequency, riff.voice.cutoff);
+    const master = m.graph.nodes.find((n) => n.type === 'master');
+    const reach = new Set([filter.id]);
+    for (let grew = true; grew;) {
+      grew = false;
+      for (const e of m.graph.edges) {
+        if (reach.has(e.from.node) && !reach.has(e.to.node)) grew = reach.add(e.to.node);
+      }
+    }
+    assert.ok(reach.has(master.id), `${id}: the riff's filter reaches the Master Output`);
+    assert.equal(m.graph.edges.filter((e) => e.to.node === master.id).length, 1);
+    for (const n of m0.graph.nodes) {
+      assert.ok(m.graph.nodes.some((x) => x.id === n.id), `${id}: ${n.id} kept`);
+    }
+    assert.equal(m.timeline.clips.filter((c) => c.trackId === track.id).length,
+      riff.notes.length);
+    const plan = compileStudio(m);
+    assert.equal(plan.ok, true, `${id}: ${JSON.stringify(plan.errors)}`);
+    store.undo();
+    store.undo();
+    assert.deepEqual(store.getModel().graph, m0.graph, `${id}: two Undos remove both`);
+    assert.deepEqual(store.getModel().timeline, m0.timeline);
+  }
 });

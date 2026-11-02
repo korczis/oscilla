@@ -6,19 +6,20 @@ title: A library of original riffs in the styles of genres and eras, inserted as
 slug: a-library-of-original-riffs-inserted-as-studio-clips
 priority: p2
 profile: implementation
-objective: "Add src/js/studio/riffs/: library.js holds sixteen short riffs written for OSCILLA on 2026-11-02, each labelled 'Original, in the style of <genre> (<era>)' (disco, synth-funk pop, French house, acid house, synthwave, Berlin school, Italo disco, Detroit techno, West Coast G-funk, drum and bass, chiptune, Detroit soul, trance, new wave, electro-funk, minimal techno), in the demo song's note format ([step, pitch, length, velocity], 16 steps a bar), monophonic, with a role (bass, lead, arp), tempo, key and the voice it was written for. expand.js turns a riff into one BATCH of tempo-linked tone pattern clips on an event track (one Undo removes it) and gives toNotes(riff), the payload of the multi-note clip kind the piano roll brings (lane C+), so the expander alone changes when that kind lands. The browser (a Riffs tab in the patch browser, with audition through the synth sink) is the next issue."
+objective: "Add src/js/studio/riffs/: library.js holds sixteen short riffs written for OSCILLA on 2026-11-02, each labelled 'Original, in the style of <genre> (<era>)' (disco, synth-funk pop, French house, acid house, synthwave, Berlin school, Italo disco, Detroit techno, West Coast G-funk, drum and bass, chiptune, Detroit soul, trance, new wave, electro-funk, minimal techno), in the demo song's note format ([step, pitch, length, velocity], 16 steps a bar), monophonic, with a role (bass, lead, arp), tempo, key and the voice it was written for. expand.js turns a riff into one BATCH of tempo-linked tone pattern clips on an event track (one Undo removes it) and gives toNotes(riff), the payload of the multi-note clip kind the piano roll brings (lane C+), so the expander alone changes when that kind lands. riffVoiceAction inserts a riff with a voice of its own in the same one batch: the Oscillator and low-pass Filter it was written for, wired to the Master Output (directly, into a free input of the Mixer that feeds it, or through a new Mixer, since the Master's input takes one connection), an event track on the Oscillator and the clips; TRACK_ADD may name an unused id, as NODE_ADD and EDGE_ADD already may. The browser (a Riffs tab in the patch browser, with audition through the synth sink) is the next issue."
 why: "Owner direction of 2026-11-02, in Czech: \"chcu mit lib klasickejch riffu - od jacksona, pres daft punk, pres ... az po ...\". A song is somebody's work and is not transcribed or quoted; a style is a shared vocabulary, so each riff is original and names its genre and era only (agreed on the mesh with b0 and 26)."
 scope:
 - src/js/studio/riffs/library.js
 - src/js/studio/riffs/expand.js
+- src/js/studio/actions.js
 - tests/unit/riff-library.test.mjs
 - tests/README.md
 - .ai/repo/project/intents/connected-instrument.yaml
 - .ai/repo/project/issues/K149.yaml
 acceptance_criteria:
 - "Before: VERIFIED: the Studio has one original song (the demo song) and no riff library."
-- "After: sixteen original riffs in sixteen genres; Insert on an event track adds one tempo-linked tone clip per note as one undoable batch; toNotes gives beats, MIDI numbers and velocity 0..1."
-- "Negative cases: Insert refuses a missing track, a track of another kind and a start before beat 0, with a reason."
+- "After: sixteen original riffs in sixteen genres; Insert on an event track adds one tempo-linked tone clip per note as one undoable batch; toNotes gives beats, MIDI numbers and velocity 0..1; Insert with its voice on the reference, demo-song and subtractive-synth templates adds the voice, its path to the Master Output, the track and the clips, compiles, and two inserts take free ids."
+- "Negative cases: Insert refuses a missing track, a track of another kind and a start before beat 0, with a reason; a Studio without a Master Output refuses the voice; nothing of the existing graph is removed but the one Master feed a new Mixer takes over."
 - "Rollback: revert the merge commit; no stored record or schema changes."
 validation:
 - node --test tests/unit/riff-library.test.mjs
