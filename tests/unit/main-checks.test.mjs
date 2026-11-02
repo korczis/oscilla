@@ -108,9 +108,13 @@ export function mainChecksProblems(ciText, mainText) {
     const fields = new Set([...Object.keys(source), ...Object.keys(copy)]);
     fields.delete('steps');
     for (const field of [...fields].sort()) {
-      const gate = Object.hasOwn(PR_ONLY_GATE, field)
-        && json(source[field]) === json(PR_ONLY_GATE[field]) && copy[field] === undefined;
-      if (gate) continue;
+      if (Object.hasOwn(PR_ONLY_GATE, field)
+        && json(source[field]) === json(PR_ONLY_GATE[field])) {
+        if (copy[field] !== undefined) {
+          found.push(`mirror: ${key}.${field} carries ci.yml's pull-request-only path gate`);
+        }
+        continue;
+      }
       if (json(source[field]) !== json(copy[field])) {
         found.push(`mirror: ${key}.${field} is ${json(copy[field])} here and `
           + `${json(source[field])} in ci.yml`);
@@ -217,7 +221,14 @@ test('mutation: a browser leg is dropped', () => {
 
 test('mutation: the E026 path gate is copied to main, or ci.yml gates on something else', () => {
   const gated = mutate(MAIN, '\n  browser:\n', '\n  browser:\n    needs: unit\n');
-  onlyProblem(CI, gated, 'mirror: browser.needs');
+  onlyProblem(CI, gated, 'mirror: browser.needs carries');
+  const exact = mutate(MAIN, '\n  browser:\n', '\n  browser:\n    needs: changes\n'
+    + "    if: needs.changes.outputs.runtime != 'false'\n");
+  const found = mainChecksProblems(CI, exact);
+  assert.deepEqual(found, [
+    "mirror: browser.if carries ci.yml's pull-request-only path gate",
+    "mirror: browser.needs carries ci.yml's pull-request-only path gate",
+  ]);
   const other = CI.replaceAll("if: needs.changes.outputs.runtime != 'false'",
     "if: needs.changes.outputs.docs != 'true'");
   assert.notEqual(other, CI);
