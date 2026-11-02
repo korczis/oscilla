@@ -60,4 +60,4 @@ findings:
   - { id: R8, severity: P3, status: open, title: "ci-gates-model.test.mjs:116 accepts the path-gating condition on any job, not only the six; two mutants survive (checking only dstMode; diffing from HEAD's first parent)" }
   - { id: R9, severity: P3, status: open, title: "review-verdict.mjs:81 ci-changes.test.mjs and ci-gates-model.test.mjs are not in GUARDED although base-rule.test.mjs is" }
   - { id: R10, severity: P3, status: open, title: "ci.yml:25,32 header comment: wrong job count, ambiguous 'those six', lines over 100 columns" }
-  - { id: R11, severity: P2, status: fixed, title: "main-checks.test.mjs PR_ONLY_GATE excused only a copy without the gate but never refused the exact gate copied into main-checks.yml, which would reference a missing changes job; fixed at 157ed250, with the exact copy as a mutation" }
+  - { id: R11, severity: P2, status: closed, title: "main-checks.test.mjs PR_ONLY_GATE excused only a copy without the gate but never refused the exact gate copied into main-checks.yml, which would reference a missing changes job; fixed at 157ed250, with the exact copy as a mutation" }
