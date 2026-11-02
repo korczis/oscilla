@@ -35,6 +35,10 @@ export function shortLabel(label, direction = 'in') {
   const text = s.length > room ? `${s.slice(0, room - 1)}…` : s;
   return direction === 'out' ? `${text} ▸` : text;
 }
+/** A full-length label is held to its pitch whatever the engine's font metrics (Firefox draws
+ *  wider than Chromium); a shorter one keeps its natural width. */
+const labelFit = (text) => (text.length >= LABEL_MAX
+  ? ` textLength="${JACK_PITCH - 6}" lengthAdjust="spacingAndGlyphs"` : '');
 const GAP = 12;
 const PAD = 8;
 
@@ -142,6 +146,7 @@ export function patchSvg({ source, layout, cables = [], states = new Map(), pend
     const src = j.direction === 'out' ? j.module : feederOf(j.key);
     const inner = st === 'patched' || st === 'mixed' ? colourOf(src || j.module)
       : st === 'normalled' ? t.normal : t.jack;
+    const text = shortLabel(j.label, j.direction);
     return `<g role="button" tabindex="0" data-jack="${j.key}" aria-label="${esc(label)}" `
       + `aria-pressed="${pending === j.key}" class="group cursor-pointer outline-none">`
       + `<rect x="${x - JACK_HIT / 2}" y="${y - JACK_HIT / 2}" width="${JACK_HIT}" `
@@ -154,8 +159,7 @@ export function patchSvg({ source, layout, cables = [], states = new Map(), pend
       + `${st === 'open' || st === 'mixed' ? ' stroke-dasharray="3 3"' : ''}/>`
       + `${glyph(shape, x, y, 5)} fill="${inner}" stroke="none"/>`
       + `<text x="${x}" y="${y + 34}" font-size="${BAY_TEXT}" text-anchor="middle" stroke="none" `
-      + `fill="${t.label}">`
-      + `${esc(shortLabel(j.label, j.direction))}</text></g>`;
+      + `fill="${t.label}"${labelFit(text)}>${esc(text)}</text></g>`;
   }).join('');
   const dash = { CONTROL: ' stroke-dasharray="9 6"', TRIGGER: ' stroke-dasharray="2 6"',
     AUDIO: '' };

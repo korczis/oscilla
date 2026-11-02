@@ -47,6 +47,18 @@ test('a jack label fits its pitch and its accessible name keeps the whole label'
     .map((m) => m[1].replace(/&[a-z]+;/g, '_'));
   assert.ok(labels.length > 10, 'jack labels drawn');
   assert.deepEqual(labels.filter((l) => l.length > bay.LABEL_MAX), []);
+  // A full-length label is held to its pitch whatever the engine's font metrics (Firefox's
+  // "Modulat…" drew 62 px and met its neighbours); a shorter one keeps its natural width.
+  const fit = [...svg.matchAll(/<text ([^>]*text-anchor="middle"[^>]*)>([^<]*)<\/text>/g)]
+    .map((m) => ({ n: m[2].replace(/&[a-z]+;/g, '_').length,
+      len: +(m[1].match(/textLength="([\d.]+)"/) || [])[1] || 0,
+      adjust: /lengthAdjust="spacingAndGlyphs"/.test(m[1]) }));
+  assert.ok(fit.some((f) => f.n === bay.LABEL_MAX), 'some label is full length');
+  for (const f of fit) {
+    if (f.n === bay.LABEL_MAX) {
+      assert.ok(f.adjust && f.len > 0 && f.len <= bay.JACK_PITCH - 6, JSON.stringify(f));
+    } else assert.equal(f.len, 0, 'a shorter label is not squeezed');
+  }
   for (const m of PANEL.modules) {
     for (const j of PANEL.jacksOf(m.id)) {
       const key = j.key.replace(/[.]/g, '\\.');
