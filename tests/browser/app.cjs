@@ -1062,6 +1062,25 @@ function defineChecks() {
     await collect();
     await H.workspace(page, 'about');
     await collect();
+    // The one frame's full-screen controls show only in full screen, and the peeper's only
+    // while it is open (rule project.visual-components-framed): each is opened, collected and
+    // closed again, waiting for the control itself.
+    await H.workspace(page, 'playground');
+    await page.click('#osc-analysis-fullscreen');
+    await page.waitForSelector('[data-osc="analysis.fsPause"]', { state: 'visible',
+      timeout: 5000 }).catch(() => {});
+    await collect();
+    await page.keyboard.press('Escape');
+    await page.click('#osc-peeper-toggle');
+    await page.waitForSelector('[data-osc="peeper.pin"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await collect();
+    await page.click('#osc-peeper-fullscreen');
+    await page.waitForSelector('[data-osc="peeper.fsWindow"]', { state: 'visible',
+      timeout: 5000 }).catch(() => {});
+    await collect();
+    await page.keyboard.press('Escape');
+    await page.click('[data-osc="peeper.close"]');
     // MEASURE and EXPERIMENTS: every state that shows a control. A TEST CONTEXT loopback
     // measurement (2 runs) gives the result tabs, Save/Repeat and, saved twice, two experiments
     // for the detail, compare and dialog controls.
