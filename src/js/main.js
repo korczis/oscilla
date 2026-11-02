@@ -68,6 +68,8 @@ import { createWorkbench, followSequenceEdits } from './ui/workbench.js';
 import { createFrames } from './ui/catalog/frame.js';
 import { VISUAL_CATALOG } from './ui/catalog/visuals.js';
 import { createPeeperUi } from './ui/peeper/ui.js';
+import { createKeyRegistry } from './ui/keys/registry.js';
+import { createKeyDispatcher } from './ui/keys/dispatcher.js';
 // The probe tap API (V616) is not on main yet: the peeper shell runs on its stub, which marks
 // every frame stub: true. SWAP POINT (branch feat/v616-probe-tap, src/js/studio/probe.js): this
 // one import becomes `from './studio/probe.js'`, with the same names.
@@ -632,9 +634,12 @@ function compose(...parts) {
  * the catalogue gets its full screen and menu. A change of workspace leaves full screen; a
  * change of a frame relayouts the charts, as the panel fullscreen did before it.
  */
+let pageFrames = null; // the frames of the page, for the key dispatcher's view
+
 function mountFrames(cmp) {
   const frames = createFrames({
     catalog: VISUAL_CATALOG,
+    keys: cmp.keys,
     controls: {
       'analysis.fsPause': { run: () => { cmp.vizPaused = !cmp.vizPaused; },
         pressed: () => !!cmp.vizPaused },
@@ -644,6 +649,7 @@ function mountFrames(cmp) {
   });
   cmp.$nextTick(() => frames.scan(document));
   cmp.$watch('workspace', () => frames.exitAll());
+  pageFrames = frames;
 }
 
 function integrationInit() {
@@ -906,11 +912,20 @@ function createOscillaComponent(ui) {
   const navigation = createNavigation();
   // Optional input (ADR 0058): reads support at load, never requests; notes sound through engine.
   const midi = createMidiUi({ engine, sequencerPlaying });
+  // The page's ONE key registry and its one dispatcher (K153, src/js/ui/keys). PROVISIONAL CALL
+  // SITE: main.js on origin/main exposes no registry instance yet, so it is made here and
+  // given to the component as `keys`; lane A's key migration (feat/a3-registry-header) is
+  // expected to own this instance, and the peeper's bind (ui/peeper/ui.js) moves with it.
+  const keyRegistry = createKeyRegistry();
+  const keyDispatcher = createKeyDispatcher({ registry: keyRegistry,
+    context: () => ({ workspace: app ? app.workspace : null,
+      view: pageFrames ? pageFrames.keyView() : null }) });
+  keyDispatcher.attach(document, window);
   const peeper = createPeeperUi({ probe: createProbeStub(),
     storage: localStore.available() ? window.localStorage : null });
   const cmp = compose(instrument, ui, workbench, measure, experiments, findings, connections,
     studio, navigation, midi, createCrossLinksUi(), provenancePart(), aboutPart(), peeper,
-    TEMPLATE_HELPERS);
+    { keys: keyRegistry }, TEMPLATE_HELPERS);
   cmp.dismissAlert = focusSafeDismiss(cmp.dismissAlert);
   const baseRefreshDebug = cmp.refreshDebug;
   Object.defineProperty(cmp, 'refreshDebug', {

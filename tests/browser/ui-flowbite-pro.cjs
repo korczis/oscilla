@@ -979,6 +979,14 @@ function defineChecks() {
     const closed = await when((s) => !s.open && !s.shown, 'the peeper closes');
     const focus = await page.evaluate(() => document.activeElement
       && document.activeElement.dataset.osc);
+    // Backquote, bound in the one key registry (K153): toggles it, and never in a text field.
+    await page.keyboard.press('Backquote');
+    const byKey = await when((s) => s.open, 'Backquote opens the peeper');
+    await page.keyboard.press('Backquote');
+    const byKeyClosed = await when((s) => !s.open, 'Backquote closes the peeper');
+    await page.focus('[data-osc="header.search"]');
+    await page.keyboard.press('Backquote');
+    const inField = await st();
     await page.close();
     // A phone: the docked sheet covers nothing and its targets are 44 px.
     const phoneCtx = await ctx.browser.newContext({ viewport: { width: 390, height: 844 },
@@ -1016,6 +1024,7 @@ function defineChecks() {
       stopReleases: stopped.active.leases === 0 && stopped.active.analysers === 0,
       unpinnedCloses: !unpinned.open,
       closes: !closed.open && closed.active.leases === 0, focusBack: focus === 'peeper.toggle',
+      backquote: byKey.open && !byKeyClosed.open, notInField: !inField.open,
       phoneSheet: !!sheet && sheet.overlap <= 1 && sheet.small === 0 && sheet.inView,
       collapses: folded === true }),
     opened, pinned, pages, live: live.active, window: live.windowText, stopped: stopped.active,

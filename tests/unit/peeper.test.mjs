@@ -32,6 +32,8 @@ import { createPeeper, DEFAULT_TAP, PEEPER_KEY, PEEPER_WINDOWS_MS, pointFor, res
 import { drawPeeperLine, peeperView, setPeeperView } from '../../src/js/ui/peeper/view.js';
 import { GLOBAL_SHORTCUTS } from '../../src/js/ui/shortcuts.js';
 import { CATALOG } from '../../src/js/ui/catalog/registry.js';
+import { createKeyRegistry } from '../../src/js/ui/keys/registry.js';
+import { createPeeperUi } from '../../src/js/ui/peeper/ui.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (rel) => readFileSync(path.join(ROOT, rel), 'utf8');
@@ -228,7 +230,10 @@ test('the page reaches the peeper on every page: header action, shortcut, docked
   assert.match(actions.slice(0, 3000), /data-osc="peeper\.toggle"/,
     'the action sits in the page header every workspace shows');
   assert.ok(GLOBAL_SHORTCUTS.some((r) => r.id === 'peeper' && r.keys === '`'));
-  assert.match(read('src/js/ui/peeper/ui.js'), /e\.code !== 'Backquote'/);
+  // Bound through the one key registry (K153), with no listener of its own.
+  const ui = read('src/js/ui/peeper/ui.js');
+  assert.match(ui, /this\.keys\.bind\(\{ id: 'peeper\.toggle', keys: \['Backquote'\],/);
+  assert.doesNotMatch(ui.replace(/^\s*\/\/.*$/gm, ''), /addEventListener\(\s*'key(down|up)'/);
   // Docked in the content column's flow, between <main> and the status bar: it covers nothing.
   const main = page.indexOf('</main>');
   const sec = page.indexOf('data-osc="peeper"');
@@ -251,4 +256,33 @@ test('the view is one function W004 can swap', () => {
   setPeeperView(null);
   assert.equal(peeperView(), drawPeeperLine);
   assert.equal(drawPeeperLine(null, null), false);
+});
+
+test('Backquote toggles the peeper through the one key registry, never in a field or dialog', () => {
+  const keys = createKeyRegistry();
+  const part = createPeeperUi({ probe: createProbeStub() });
+  const saved = globalThis.document;
+  globalThis.document = { addEventListener() {}, hidden: false };
+  try {
+    const cmp = Object.create(null);
+    Object.defineProperties(cmp, Object.getOwnPropertyDescriptors(part));
+    Object.assign(cmp, { keys, outputOwner: null, $watch() {}, $nextTick() {},
+      $root: { querySelector: () => null } });
+    cmp.peeperInit();
+    const b = keys.resolve('Backquote', { workspace: 'measure', focus: 'none' });
+    assert.equal(b && b.id, 'peeper.toggle');
+    assert.equal(b.scope.workspace, '*');
+    assert.equal(b.scope.focus, 'none', 'the default focus: never in a field or a dialog');
+    assert.equal(b.label, 'Show or hide the scope peeper');
+    assert.equal(b.group, 'View');
+    for (const focus of ['text', 'dialog']) {
+      assert.equal(keys.resolve('Backquote', { workspace: 'measure', focus }), null, focus);
+    }
+    b.run({ code: 'Backquote' });
+    assert.equal(cmp.peeper.open, true);
+    b.run({ code: 'Backquote' });
+    assert.equal(cmp.peeper.open, false);
+  } finally {
+    globalThis.document = saved;
+  }
 });

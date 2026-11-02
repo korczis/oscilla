@@ -1,6 +1,6 @@
 // The peeper's Alpine part (composed into the ONE component by main.js): the page-header action
-// (peeper.toggle) and the keyboard shortcut (Backquote, listed in ui/shortcuts.js
-// GLOBAL_SHORTCUTS) open it on every page; it docks below the workspace, in the flow of the
+// (peeper.toggle) and the keyboard shortcut (Backquote, bound in the key registry of
+// src/js/ui/keys and listed in ui/shortcuts.js GLOBAL_SHORTCUTS) open it on every page; it docks below the workspace, in the flow of the
 // content column, so it covers nothing at any width (a bottom sheet on a phone that collapses to
 // its header). It is a visual component of the catalogue ('peeper', decl/visual.js), so the one
 // frame gives it full screen. It never starts audio: it reads only while the output plays.
@@ -78,15 +78,13 @@ export function createPeeperUi({ probe, storage = null } = {}) {
     peeperInit() {
       const cmp = this;
       current = { peep: (t) => cmp.peeperOpen(t) };
-      // The shortcut (ui/shortcuts.js GLOBAL_SHORTCUTS 'peeper'): Backquote, never in a field.
-      document.addEventListener('keydown', (e) => {
-        if (e.code !== 'Backquote' || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
-        const t = e.target;
-        if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
-        if (document.querySelector('dialog[open]')) return;
-        e.preventDefault();
-        cmp.peeperToggle();
-      });
+      // The shortcut, through the page's one key registry (K153, src/js/ui/keys; the instance
+      // is `keys`, made in main.js): Backquote in every workspace. Its default focus 'none'
+      // never fires inside a text field or a modal dialog.
+      if (this.keys && typeof this.keys.bind === 'function') {
+        this.keys.bind({ id: 'peeper.toggle', keys: ['Backquote'], scope: { workspace: '*' },
+          run: () => cmp.peeperToggle(), label: 'Show or hide the scope peeper', group: 'View' });
+      }
       document.addEventListener('visibilitychange', () => {
         model.visibility(document.hidden);
         cmp.peeperTick();

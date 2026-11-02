@@ -14,8 +14,9 @@
 //                                     from it (the trigger: the page prefix, the slug and
 //                                     '-fullscreen', as the panels' buttons were named)
 //   frameView(decl, { full, mode }) -> { trigger, menu, controls }  what the frame shows (pure)
-//   createFrames({ doc, win, catalog, controls, onChange }) -> { scan(root), enter(id),
-//     exit(id), state(id), destroy() }
+//   createFrames({ doc, win, catalog, controls, keys, onChange }) -> { scan(root), enter(id),
+//     exit(id), state(id), keyView(), destroy() }   keys: the page's key registry (K153); the
+//     dispatcher's context asks keyView() for the frame's view ('frame-menu' | 'fullscreen')
 //
 // Sizes come from the frame's own box (a ResizeObserver), never from the device: the same
 // component is 'phone' in a narrow column of a large monitor. The frame writes
@@ -100,7 +101,7 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
  * full-screen control id to { run(), pressed?() }; `onChange(id, state)` runs after each change
  * of state (the composition root relayouts the charts there).
  */
-export function createFrames({ doc = document, win = window, catalog, controls = {},
+export function createFrames({ doc = document, win = window, catalog, controls = {}, keys = null,
   onChange = () => {} } = {}) {
   const visuals = catalog.visuals();
   const byId = new Map(visuals.map((d) => [d.id, d]));
@@ -212,16 +213,6 @@ export function createFrames({ doc = document, win = window, catalog, controls =
         if (open) {
           const first = menu.querySelector('[role^="menuitem"]');
           if (first) first.focus();
-        }
-      });
-      menu.addEventListener('keydown', (e) => {
-        const list = [...menu.querySelectorAll('[role^="menuitem"]')];
-        const i = list.indexOf(doc.activeElement);
-        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeMenu(f, true); }
-        else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-          e.preventDefault();
-          const n = (i + (e.key === 'ArrowDown' ? 1 : -1) + list.length) % list.length;
-          list[n].focus();
         }
       });
       bar.appendChild(menuButton);
@@ -362,14 +353,24 @@ export function createFrames({ doc = document, win = window, catalog, controls =
     for (const el of els) mount(el);
   }
 
-  const onKey = (e) => {
-    if (e.key !== 'Escape') return;
-    const f = [...frames.values()].find((x) => x.state === 'full');
-    if (!f || doc.querySelector('dialog[open]')) return;
-    if (f.parts.menu && !f.parts.menu.hidden) return; // the menu's own Escape
-    e.preventDefault();
-    exit(f.decl.id);
-  };
+  const fullFrame = () => [...frames.values()].find((x) => x.state === 'full') || null;
+  const openMenu = () => [...frames.values()].find((x) => x.parts && x.parts.menu
+    && !x.parts.menu.hidden) || null;
+  /** The frame's key view for the dispatcher's context: 'frame-menu', 'fullscreen' or null. */
+  const keyView = () => (openMenu() ? 'frame-menu' : fullFrame() ? 'fullscreen' : null);
+  // Escape through the page's one key registry (K153, src/js/ui/keys), in the frame's own
+  // views, so it never takes Escape from a workspace: it closes an open frame menu (focus back
+  // on its button), else leaves full screen. Focus 'none' (the default) never fires in a text
+  // field or a modal dialog. Tab and the items' own Enter and Space move through the menu.
+  const unbind = [];
+  if (keys && typeof keys.bind === 'function') {
+    unbind.push(keys.bind({ id: 'frame.menu.close', keys: ['Escape'],
+      scope: { workspace: '*', view: 'frame-menu' }, label: 'Close the frame menu',
+      group: 'View', run: () => { const f = openMenu(); if (f) closeMenu(f, true); } }));
+    unbind.push(keys.bind({ id: 'frame.fullscreen.exit', keys: ['Escape'],
+      scope: { workspace: '*', view: 'fullscreen' }, label: 'Leave full screen', group: 'View',
+      run: () => { const f = fullFrame(); if (f) exit(f.decl.id); } }));
+  }
   const onFsChange = () => {
     const fsEl = doc.fullscreenElement || doc.webkitFullscreenElement;
     for (const f of frames.values()) {
@@ -389,7 +390,6 @@ export function createFrames({ doc = document, win = window, catalog, controls =
       }
     }
   };
-  doc.addEventListener('keydown', onKey);
   doc.addEventListener('fullscreenchange', onFsChange);
   doc.addEventListener('webkitfullscreenchange', onFsChange);
   doc.addEventListener('click', onDocClick, true);
@@ -411,12 +411,13 @@ export function createFrames({ doc = document, win = window, catalog, controls =
     state: (id) => (frames.has(id) ? frames.get(id).state : null),
     mode: (id) => (frames.has(id) ? frames.get(id).mode : null),
     ids: () => [...frames.keys()],
+    keyView,
     /** Leave full screen wherever it is (a route change). */
     exitAll() {
       for (const f of frames.values()) if (f.state === 'full') exit(f.decl.id);
     },
     destroy() {
-      doc.removeEventListener('keydown', onKey);
+      for (const u of unbind) u();
       doc.removeEventListener('fullscreenchange', onFsChange);
       doc.removeEventListener('webkitfullscreenchange', onFsChange);
       doc.removeEventListener('click', onDocClick, true);
