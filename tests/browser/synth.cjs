@@ -77,7 +77,9 @@
 //              presets; Enter on the first applies it in one undo entry and the pad takes its
 //              scale; a name and Save the XY pad as a preset save it, listed under 'xy' at once
 //   s-mobile   390 x 844 with touch: no horizontal page scroll, every knob and jack box 44 px+,
-//              a section chip lands its plate's heading below the sticky chip bar, the docked
+//              the Patch bay chip shows the bay at the card's width with the cards hidden, its
+//              text 12 px+ and no two jack labels overlapping (V636), a section chip brings the
+//              cards back and lands its plate's heading below the sticky chip bar, the docked
 //              keys are visible and a tap on them sounds
 'use strict';
 
@@ -173,11 +175,21 @@ async function openSynth(context, base, hash = '#m=synth') {
   return page;
 }
 const knob = (page, cid) => page.locator(`[data-knob="${cid}"]`);
+/** Below xl the Synth shows one face, the cards or the bay: press its chip when it is not shown
+ *  (at xl the Panel chip is hidden and both faces show, so this does nothing). */
+async function face(page, f) {
+  const chip = page.locator(`[data-face="${f}"]`);
+  if (await chip.isVisible() && await chip.getAttribute('aria-pressed') !== 'true') {
+    await chip.click();
+  }
+}
 async function keyKnob(page, cid, key) {
+  await face(page, 'panel');
   await knob(page, cid).focus();
   await page.keyboard.press(key);
 }
 async function typeKnob(page, cid, text) {
+  await face(page, 'panel');
   await knob(page, cid).focus();
   await page.keyboard.press('Enter');
   const input = page.locator('[data-osc="synth.panel"] input[type="text"]');
@@ -186,6 +198,7 @@ async function typeKnob(page, cid, text) {
 }
 const option = (page, cid, v) => page.locator(`[data-option="${cid}"][data-v="${v}"]`).click();
 async function tapJack(page, id) {
+  await face(page, 'bay');
   await page.locator(`[data-jack="${id}"]`).focus();
   await page.keyboard.press('Enter');
 }
@@ -373,6 +386,7 @@ function defineChecks() {
       await page.keyboard.up(code);
       await silent(page, 'the note releases');
     }
+    await face(page, 'bay');
     await page.locator(`[data-remove-cable="${d.cables[0].id}"]`).click();
     await hold(page, 'KeyD');
     await sound(page, (q) => q.rmsDb > -45 && peakAt(q, C4 * 2 ** (4 / 12)),
@@ -879,6 +893,7 @@ function defineChecks() {
         off: other && getComputedStyle(other).opacity };
     });
     // Fold: a card header is a disclosure button.
+    await face(page, 'panel');
     await page.locator('[data-collapse="lpf"]').click();
     const fold = await page.evaluate(() => ({
       expanded: document.querySelector('[data-collapse="lpf"]').getAttribute('aria-expanded'),
@@ -924,6 +939,35 @@ function defineChecks() {
       return { scroll: document.documentElement.scrollWidth, inner: window.innerWidth,
         small, kb: { top: kb.top, bottom: kb.bottom, h: window.innerHeight } };
     });
+    // The bay face (B2): the whole width under the chip bar, its text 12 px and up, every
+    // jack a 44 px target; a module chip brings the cards back.
+    await page.locator('[data-face="bay"]').tap();
+    const bay = await page.evaluate(() => {
+      const svg = document.querySelector('[data-osc="synth.bay.svg"]').getBoundingClientRect();
+      const bar = document.querySelector('nav[aria-label="Synth sections"]')
+        .getBoundingClientRect();
+      const cards = document.querySelector('[data-face-of="panel"]').getBoundingClientRect();
+      const fonts = [...document.querySelectorAll('[data-osc="synth.bay.svg"] text')]
+        .map((t) => parseFloat(getComputedStyle(t).fontSize));
+      const jacks = [...document.querySelectorAll('[data-jack] > rect:first-child')]
+        .map((r) => r.getBoundingClientRect()).filter((r) => r.width < 43.5 || r.height < 43.5);
+      const labels = [...document.querySelectorAll('[data-jack] text')]
+        .map((t) => t.getBoundingClientRect());
+      const overlaps = labels.filter((a, i) => labels.some((b, k) => k > i
+        && a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5
+        && b.top < a.bottom - 0.5)).length;
+      const card = document.querySelector('[data-osc="synth.bay"]');
+      return { width: Math.round(svg.width), card: Math.round(card.clientWidth),
+        inner: window.innerWidth,
+        gap: Math.round(svg.top - bar.bottom), cardsHidden: cards.height === 0,
+        minFont: Math.min(...fonts), small: jacks.length, overlaps,
+        pressed: document.querySelector('[data-face="bay"]').getAttribute('aria-pressed') };
+    });
+    if (!(bay.cardsHidden && bay.card >= bay.inner - 56 && bay.width >= bay.card - 25
+      && bay.minFont >= 12 && !bay.small
+      && !bay.overlaps && bay.pressed === 'true')) {
+      return { ok: false, detail: 'the bay face', bay };
+    }
     await page.locator('[data-goto="lpf"]').tap();
     const chip = await page.evaluate(() => {
       const h = document.querySelector('#synth-m-lpf').getBoundingClientRect();
@@ -942,7 +986,7 @@ function defineChecks() {
     await page.mouse.up();
     await silent(page, 'releasing the key silences it');
     return { ok: m.scroll <= m.inner && m.small.length === 0 && m.kb.bottom <= m.kb.h
-      && m.kb.top > 0, ...m, chip, rmsDb: p.rmsDb };
+      && m.kb.top > 0, ...m, bay, chip, rmsDb: p.rmsDb };
   });
   return checks;
 }
