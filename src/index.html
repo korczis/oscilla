@@ -366,7 +366,7 @@
       <span class="osc-safety-more" id="osc-safety-more" :class="{ 'is-open': safetyExpanded }">
         Perceived loudness is not a reliable measure of acoustic output. Digital signal generation
         does not guarantee that your hardware reproduces the requested frequency.</span>
-      <button type="button" class="osc-safety-toggle" aria-controls="osc-safety"
+      <button type="button" class="osc-safety-toggle [@media(pointer:coarse)]:!inline-flex [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11 [@media(pointer:coarse)]:items-center [@media(pointer:coarse)]:justify-center [@media(pointer:coarse)]:align-middle" aria-controls="osc-safety"
         aria-expanded="false" :aria-expanded="String(safetyExpanded)"
         @click="safetyExpanded = !safetyExpanded" x-text="safetyExpanded ? 'Less' : 'More'">More</button>
     </p>
@@ -377,11 +377,8 @@
     </button>
   </section>
 
-    <!-- ================= Page header (F002's, filled by lane A wave 3), rendered for every
-         workspace from the registry (src/js/ui/shell.js WORKSPACE_REGISTRY): the breadcrumb
-         (group > page), the summary, the Related strip (the related entries) and the actions
-         slot (U006). On a phone: the page name, a Related menu and the actions. The page's one
-         h1 is the Q002 sentence leading <main>. ================ -->
+    <!-- ===== Page header, from the registry (src/js/ui/shell.js): breadcrumb, summary,
+         Related strip (a menu on a phone), actions (U006). The h1 leads <main>. ===== -->
     <div data-osc="page.header"
       class="flex items-center flex-none min-w-0 gap-3 px-4 py-1.5 bg-white border-b border-gray-200 dark:bg-gray-800 dark:border-gray-700">
       <nav class="flex min-w-0" aria-label="Breadcrumb">
@@ -531,14 +528,15 @@
             </div>
 
             <!-- On a phone the six steps and Mode fold behind the panel's own disclosures (P002,
-                 Q004 option A); from 768 px they stay open with the summary unseen (instrument.css). -->
+                 Q004 option A); from 768 px they stay open with the summary unseen (instrument.css).
+                 A closed fold's content is display: none (WebKit kept its boxes in layout). -->
             <details id="osc-fine-fold" open x-init="foldOnPhone($el)">
               <summary>Fine frequency steps</summary>
               <!-- Beside the desktop sidebar the panel can be narrower than the six buttons
                    (review #330 F1): from lg up one row while the row is 20rem or wider, three a
                    row below that; on any width the row wraps rather than leaving the panel, and
                    the view above grows from its 204 px to hold the second row (lg:h-auto). -->
-              <div class="osc-fine flex-wrap lg:*:basis-[clamp(0px,calc((20rem-100%)*999),calc(33.333%-4px))]" role="group" aria-label="Fine frequency steps">
+              <div class="osc-fine flex-wrap [details:not([open])>&]:hidden lg:*:basis-[clamp(0px,calc((20rem-100%)*999),calc(33.333%-4px))]" role="group" aria-label="Fine frequency steps">
                 <button type="button" class="osc-btn osc-btn-secondary osc-fine-btn" id="osc-step-oct-down"
                   data-osc="source.step" data-step="-1oct" @click="stepFine('-1oct')" aria-label="Down one octave">-1 oct</button>
                 <button type="button" class="osc-btn osc-btn-secondary osc-fine-btn" id="osc-step-st-down"
@@ -629,7 +627,7 @@
 
             <details id="osc-mode-fold" open x-init="foldOnPhone($el)">
               <summary>Mode: <span x-text="noteMode ? 'Note' : 'Frequency'">Frequency</span></summary>
-              <div class="osc-row-field osc-mode-row">
+              <div class="osc-row-field osc-mode-row [details:not([open])>&]:hidden">
                 <span class="osc-label" id="osc-mode-label">Mode</span>
                 <div class="osc-seg osc-mode-seg" role="radiogroup" aria-labelledby="osc-mode-label">
                   <button type="button" class="osc-seg-btn is-active" role="radio" aria-checked="true"
@@ -1673,7 +1671,7 @@
       <!-- ---------- Envelope (ADSR) ---------- -->
       <section class="osc-panel osc-p-envelope" id="osc-panel-envelope" data-osc-panel="envelope"
         data-osc-modes="synthesis" aria-labelledby="osc-env-title">
-        <div class="osc-panel-header">
+        <div class="osc-panel-header max-md:flex-wrap">
           <h2 class="osc-panel-title" id="osc-env-title">Envelope (ADSR)<span
             data-osc="envelope.scope" hidden :hidden="workspace !== 'sequencer' && !seqPlaying"
             title="The sequence keeps its blocks' envelopes and waveform; the Filter Lab shapes it."
@@ -1925,14 +1923,14 @@
       <!-- ---------- Dual oscillator (Synthesis workspace) ---------- -->
       <section class="osc-panel osc-p-dual" id="osc-panel-dual" data-osc-panel="dual"
         data-osc="dual-panel" data-osc-modes="synthesis" aria-labelledby="osc-dual-title">
-        <div class="osc-panel-header">
+        <div class="osc-panel-header max-md:flex-wrap">
           <h2 class="osc-panel-title" id="osc-dual-title">Dual Oscillator</h2>
           <a href="#m=studio&amp;st=stereo-beat" data-osc="dual.toStudio" hidden
             :hidden="workspace !== 'synthesis'">Open Stereo Beat in Studio</a>
           <a href="#m=synth" data-osc="dual.toSynth" hidden :hidden="workspace !== 'synthesis'"
             x-bind="counterpartLink('synth')">Open the Synth</a>
           <span class="osc-spacer"></span>
-          <output class="osc-dual-beat osc-num osc-muted" id="osc-dual-beat"
+          <output class="osc-dual-beat osc-num osc-muted max-md:basis-full" id="osc-dual-beat"
             data-osc="dual.beat" aria-label="Difference frequency" x-text="beatText">Δ —</output>
           <button type="button" class="osc-toggle" role="switch" aria-checked="false"
             id="osc-dual-enable" data-osc="dual.enable" :aria-checked="String(source === 'dual')"
@@ -3001,9 +2999,7 @@
         <section class="osc-about-block" aria-labelledby="osc-about-ws">
           <h3 class="osc-about-h" id="osc-about-ws"><span class="osc-num">A</span> Workspaces</h3>
           <p>Every workspace of the navigation, in its order, and what it is for.</p>
-          <!-- Rendered from the registry (src/js/ui/shell.js WORKSPACE_REGISTRY): each
-               workspace's label and summary, in navigation order; About's own entry is this
-               page and links nowhere. -->
+          <!-- From the registry (src/js/ui/shell.js); About's own entry links nowhere. -->
           <ul role="list" aria-label="Workspaces" data-osc="about.workspaces">
             <template x-for="w in aboutWorkspaces()" :key="w.id">
               <li :data-osc="'about.workspace.' + w.id"><template x-if="w.id !== 'about'"><a

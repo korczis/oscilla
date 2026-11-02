@@ -52,6 +52,8 @@
 //     once-per-screen-<ws> at 1536x1024 no workspace shows two visible links to one route
 //                        between its Related strip and its content (<main>), nor twice in the
 //                        strip (also with Presets' empty state shown);
+//     safety-more-target-<w> on a fresh page at each phone size the listening notice's More is
+//                        a 44 px target under a coarse pointer;
 //     related-menu-phone at 390x844 under touch the page header's Related menu opens on a tap,
 //                        lists the workspace's related pages as 44 px items, and one tap on
 //                        the first opens it.
@@ -99,8 +101,13 @@ const FONT_MIN = 12;
 const TOUCH_MIN = 44;
 // sessionStorage key of the dismissed listening notice (src/js/core/constants.js safetySeen).
 const SAFETY_SEEN = 'oscilla.safetyNoticeCollapsed';
-const PHONE_MEASURES = ['share', 'covered', 'font', 'target', 'reopen', 'labels'];
-// "<workspace>:<measure>" -> why it is still short and whose lane fixes it. Only shrinks.
+const PHONE_MEASURES = ['share', 'covered', 'font', 'target', 'reopen', 'labels', 'edge',
+  'overlap'];
+// The phone sizes phone-whole runs at: the iPhone SE (1st generation), SE (2nd, 3rd) and 13.
+const PHONE_SIZES = [{ width: 320, height: 568 }, { width: 375, height: 667 }, PHONE];
+// "<workspace>:<measure>" -> why it is still short and whose lane fixes it. Only shrinks. A key
+// may be scoped to a browser and a width: "<browser>@<width>:<ws>:<measure>",
+// "<browser>:<ws>:<measure>" or "@<width>:<ws>:<measure>"; the most specific listed key applies.
 const PHONE_WHOLE_DEBT = new Map([
   ['studio:font', 'the Studio editor\'s graph, library and timeline labels are 9-10.5 px '
     + '(studio.css, studio-timeline.css: SMALL_FONT_DEBT of tests/unit/phone-font-floor.test.mjs); '
@@ -108,6 +115,20 @@ const PHONE_WHOLE_DEBT = new Map([
   ['synth:font', 'the Synth panel draws its bay labels in SVG at font-size 10 '
     + '(src/js/synth/view/bay.js) and labels its knobs with text-[11px] (src/js/synth/view/'
     + 'face.js: SMALL_TEXT_CLASS_DEBT of the same test): the Synth lane'],
+  // The iPhone measures (sizes and the edge and overlap measures, lane A wave 3, 2026-11-02).
+  ['@320:playground:share', 'at 568 px of height the navbar, the page header and the Q002 '
+    + 'sentence leading <main> (P002, Q004 option A: wrapped to five lines at 320 px) leave the '
+    + 'Playground 63.8 % of the first screen: the first screen of P002, owned by the Playground'],
+  ['@320:synth:covered', 'the docked keyboard covers the Synth panel\'s header controls and tabs '
+    + '(synth.arm, synth.studio, synth.copy-link, the tabs): the Synth lane, #385 and V635'],
+  ['@320:synth:overlap', 'the keyboard dock\'s arm, octave and velocity buttons overlap the Synth '
+    + 'panel\'s header controls: the Synth lane, #385 and V635'],
+  ['@390:synth:overlap', 'the keyboard dock\'s arm and octave buttons overlap the Synth\'s mobile '
+    + 'keys toggle (synth-m-keys): the Synth lane, #385 and V635'],
+  ['firefox@375:synth:covered', 'in Firefox the docked keyboard covers the Synth bay\'s SVG '
+    + 'groups: the Synth lane, #385 and V635'],
+  ['firefox@390:synth:covered', 'in Firefox the docked keyboard covers the Synth bay\'s SVG '
+    + 'groups (CI run 41431865956: 13 covered): the Synth lane, #385 and V635'],
 ]);
 // The workspaces, read from ui/app.js at start (loadWorkspaces), so the list cannot go stale.
 const WORKSPACES = [];
@@ -236,6 +257,7 @@ function phoneWhole({ ws, gap, touchMin }) {
     + 'input:not([type=hidden]):not([type=file]), [role=button], [role=tab], [role=radio], '
     + '[role=switch], [role=menuitem], [role=checkbox], [role=slider]';
   const scrollTop = main.scrollTop;
+  const scrollLeft = main.scrollLeft;
   const pageTop = document.scrollingElement.scrollTop;
   // scrollIntoView centres a control by scrolling every ancestor, the app root too (its
   // overflow is hidden, not clip, so a script can scroll it): restored with the others below.
@@ -247,6 +269,69 @@ function phoneWhole({ ws, gap, touchMin }) {
     const wrap = hit.closest('label, .osc-toggle');
     return !!(wrap && wrap.contains(el));
   };
+  // edge and overlap, read before the covered scan scrolls anything. A horizontal scroller (a
+  // strip that scrolls sideways only, overflow-x auto or scroll with more content than width:
+  // the Sequencer lane, the compact Studio path, a tab strip) reaches what it holds by its own
+  // scroll, so an element inside one is judged by its visible part only (the rule of
+  // tests/browser/iphone.cjs). A scroller that also scrolls vertically (<main>) is no such
+  // strip: content that widens it is off the edge.
+  const hScroller = (el) => {
+    for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+      const cs = getComputedStyle(a);
+      if (/auto|scroll/.test(cs.overflowX) && a.scrollWidth > a.clientWidth + 1
+        && a.scrollHeight <= a.clientHeight + 1) return a;
+    }
+    return null;
+  };
+  /** The part of el's box its clipping ancestors leave visible, or null. */
+  const visibleBox = (el) => {
+    const b = el.getBoundingClientRect();
+    let [l, t, r, bt] = [b.left, b.top, b.right, b.bottom];
+    for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+      const cs = getComputedStyle(a);
+      if (cs.overflowX === 'visible' && cs.overflowY === 'visible') continue;
+      const c = a.getBoundingClientRect();
+      if (cs.overflowX !== 'visible') { l = Math.max(l, c.left); r = Math.min(r, c.right); }
+      if (cs.overflowY !== 'visible') { t = Math.max(t, c.top); bt = Math.min(bt, c.bottom); }
+    }
+    return r - l > 0.5 && bt - t > 0.5 ? { l, t, r, b: bt } : null;
+  };
+  const vw = document.documentElement.clientWidth;
+  // Laid out, not only shown: a closed <details> whose content keeps its boxes (WebKit) lays
+  // them over the rows below, which an engine that hit-tests them would take a tap on; such
+  // a box is judged here, where checkVisibility() hides it from the covered scan.
+  const laidOut = (el) => {
+    if (!el.getClientRects().length) return false;
+    const cs = getComputedStyle(el);
+    return cs.visibility !== 'hidden' && cs.display !== 'none';
+  };
+  const controls = [...document.querySelectorAll(SEL)].filter((el) => !el.closest(
+    '[hidden], dialog:not([open]), .osc-sr-only, .osc-skip, .osc-stepper-keys')
+    && laidOut(el) && getComputedStyle(el).pointerEvents !== 'none'
+    && el.getBoundingClientRect().width >= 2 && el.getBoundingClientRect().height >= 2);
+  const offEdge = [];
+  const boxes = [];
+  for (const el of controls) {
+    const b = el.getBoundingClientRect();
+    if ((b.left < -1 || b.right > vw + 1) && !hScroller(el)) {
+      offEdge.push(`${label(el)} [${Math.round(b.left)}..${Math.round(b.right)}]`);
+    }
+    const v = visibleBox(el);
+    if (v) boxes.push({ el, ...v });
+  }
+  const overlaps = [];
+  for (let i = 0; i < boxes.length; i += 1) {
+    for (let j = i + 1; j < boxes.length; j += 1) {
+      const a = boxes[i];
+      const c = boxes[j];
+      if (a.el.contains(c.el) || c.el.contains(a.el)) continue;
+      const w = Math.min(a.r, c.r) - Math.max(a.l, c.l);
+      const h = Math.min(a.b, c.b) - Math.max(a.t, c.t);
+      if (w > 2 && h > 2) {
+        overlaps.push(`${label(a.el)} x ${label(c.el)} ${Math.round(w)}x${Math.round(h)}`);
+      }
+    }
+  }
   const coveredList = [];
   const small = [];
   let minTarget = { px: Infinity, what: null };
@@ -291,6 +376,7 @@ function phoneWhole({ ws, gap, touchMin }) {
     }
   }
   main.scrollTop = scrollTop;
+  main.scrollLeft = scrollLeft;
   document.scrollingElement.scrollTop = pageTop;
   app.scrollTop = appTop;
   // labels: every Pattern Sequencer block's name reads whole (no ellipsis) where it is shown
@@ -309,7 +395,7 @@ function phoneWhole({ ws, gap, touchMin }) {
     share, lead: lead ? label(lead.el) : null, own: own.length, tested, reopen, cut,
     minFont: { px: Number.isFinite(minFont.px) ? Math.round(minFont.px * 100) / 100 : null,
       what: minFont.what },
-    covered: coveredList, small,
+    covered: coveredList, small, offEdge, overlaps, vw,
     minTarget: { px: Number.isFinite(minTarget.px) ? Math.round(minTarget.px) : null,
       what: minTarget.what },
   };
@@ -324,6 +410,8 @@ function phoneVerdicts(m, ws) {
     target: m.mode === ws && m.small.length === 0,
     reopen: m.mode === ws && m.reopen.some((r) => r.hit),
     labels: m.mode === ws && m.cut.length === 0,
+    edge: m.mode === ws && m.offEdge.length === 0,
+    overlap: m.mode === ws && m.overlaps.length === 0,
   };
 }
 
@@ -545,59 +633,89 @@ async function runOne(name) {
     }
     await phone.close();
 
-    // ---- phone-whole: every workspace at 390x844 under a coarse pointer ----
+    // ---- phone-whole: every workspace at each phone size under a coarse pointer ----
     // Firefox has no mobile emulation (Playwright refuses isMobile there): touch only.
-    const ctx = await browser.newContext({ viewport: PHONE, hasTouch: true,
-      reducedMotion: 'reduce', ...(name === 'firefox' ? {} : { isMobile: true }) });
-    await ctx.addInitScript((key) => {
-      try { sessionStorage.setItem(key, '1'); } catch { /* storage refused: notice shown */ }
-    }, SAFETY_SEEN);
     const seen = new Set();
-    for (const ws of WORKSPACES) {
-      const p = await ctx.newPage();
-      await p.goto(`${URL}#m=${ws}`);
-      await until(() => p.evaluate((w) => document.documentElement.dataset.ready === 'true'
-        && !!window.OSCILLA && !!window.OSCILLA.app
-        && document.getElementById('osc-app').dataset.mode === w, ws),
-      { ms: READY_MS, what: `ui-current: phone-whole ${ws} opened at #m=${ws}` });
-      const r = await pollFor(() => p.evaluate(phoneWhole,
-        { ws, gap: WORK_GAP, touchMin: TOUCH_MIN }),
-      (m) => Object.entries(phoneVerdicts(m, ws))
-        .every(([k, ok]) => ok || PHONE_WHOLE_DEBT.has(`${ws}:${k}`)),
-      `ui-current: phone-whole ${ws}`);
-      await p.close();
-      const m = r.last;
-      check(`phone-whole-coarse-${ws}`, !!(m && m.coarse), 'pointer: coarse not emulated');
-      const v = m ? phoneVerdicts(m, ws) : {};
-      const detail = {
-        share: m && `${(100 * m.share).toFixed(1)} % of ${m.vh} px is ${ws}'s own work `
-          + `(${m.own} elements, led by ${m.lead}), under ${(100 * WORK_SHARE).toFixed(1)} %`,
-        covered: m && m.covered.slice(0, 6).join('; '),
-        font: m && `smallest text ${m.minFont.px} px (${m.minFont.what}), under ${FONT_MIN} px`,
-        labels: m && `sequencer block names cut short: ${m.cut.slice(0, 6).join('; ')}`,
-        reopen: m && `no reopen control for the safety notice is shown and reachable: `
-          + `${JSON.stringify(m.reopen)}`,
-        target: m && `${m.small.length} of ${m.tested} targets under ${TOUCH_MIN} px: `
-          + `${m.small.slice(0, 6).join('; ')}`,
-      };
-      for (const k of PHONE_MEASURES) {
-        const key = `${ws}:${k}`;
-        if (PHONE_WHOLE_DEBT.has(key)) {
-          seen.add(key);
-          check(`phone-whole-${k}-${ws}`, !v[k], `${key} passes now: remove it from `
-            + 'PHONE_WHOLE_DEBT');
-          if (!v[k]) {
-            console.log(`  KNOWN ${name} ${key}: ${detail[k]} (${PHONE_WHOLE_DEBT.get(key)})`);
+    let ctx = null;
+    for (const size of PHONE_SIZES) {
+      if (ctx) await ctx.close();
+      ctx = await browser.newContext({ viewport: size, hasTouch: true,
+        reducedMotion: 'reduce', ...(name === 'firefox' ? {} : { isMobile: true }) });
+      await ctx.addInitScript((key) => {
+        try { sessionStorage.setItem(key, '1'); } catch { /* storage refused: notice shown */ }
+      }, SAFETY_SEEN);
+      const at = `${size.width}x${size.height}`;
+      const debtOf = (ws, k) => [`${name}@${size.width}:${ws}:${k}`, `${name}:${ws}:${k}`,
+        `@${size.width}:${ws}:${k}`, `${ws}:${k}`].find((key) => PHONE_WHOLE_DEBT.has(key));
+      for (const ws of WORKSPACES) {
+        const p = await ctx.newPage();
+        await p.goto(`${URL}#m=${ws}`);
+        await until(() => p.evaluate((w) => document.documentElement.dataset.ready === 'true'
+          && !!window.OSCILLA && !!window.OSCILLA.app
+          && document.getElementById('osc-app').dataset.mode === w, ws),
+        { ms: READY_MS, what: `ui-current: phone-whole ${ws} opened at #m=${ws} (${at})` });
+        const r = await pollFor(() => p.evaluate(phoneWhole,
+          { ws, gap: WORK_GAP, touchMin: TOUCH_MIN }),
+        (m) => Object.entries(phoneVerdicts(m, ws)).every(([k, ok]) => ok || debtOf(ws, k)),
+        `ui-current: phone-whole ${ws} (${at})`);
+        await p.close();
+        const m = r.last;
+        check(`phone-whole-coarse-${ws}-${size.width}`, !!(m && m.coarse),
+          'pointer: coarse not emulated');
+        const v = m ? phoneVerdicts(m, ws) : {};
+        const detail = {
+          share: m && `${(100 * m.share).toFixed(1)} % of ${m.vh} px is ${ws}'s own work `
+            + `(${m.own} elements, led by ${m.lead}), under ${(100 * WORK_SHARE).toFixed(1)} %`,
+          covered: m && m.covered.slice(0, 6).join('; '),
+          font: m && `smallest text ${m.minFont.px} px (${m.minFont.what}), under ${FONT_MIN} px`,
+          labels: m && `sequencer block names cut short: ${m.cut.slice(0, 6).join('; ')}`,
+          reopen: m && 'no reopen control for the safety notice is shown and reachable: '
+            + `${JSON.stringify(m.reopen)}`,
+          target: m && `${m.small.length} of ${m.tested} targets under ${TOUCH_MIN} px: `
+            + `${m.small.slice(0, 6).join('; ')}`,
+          edge: m && `${m.offEdge.length} beyond the ${m.vw} px width, in no horizontal `
+            + `scroller: ${m.offEdge.slice(0, 6).join('; ')}`,
+          overlap: m && `${m.overlaps.length} pairs overlap by more than 2 px: `
+            + `${m.overlaps.slice(0, 6).join('; ')}`,
+        };
+        for (const k of PHONE_MEASURES) {
+          const key = debtOf(ws, k);
+          const id = `phone-whole-${k}-${ws}-${size.width}`;
+          if (key) {
+            seen.add(key);
+            check(id, !v[k], `${key} passes now at ${at}: remove it from PHONE_WHOLE_DEBT`);
+            if (!v[k]) {
+              console.log(`  KNOWN ${name} ${at} ${key}: ${detail[k]} `
+                + `(${PHONE_WHOLE_DEBT.get(key)})`);
+            }
+          } else {
+            check(id, !!v[k], `${at}: ${detail[k] || 'no reading'}`);
           }
-        } else {
-          check(`phone-whole-${k}-${ws}`, !!v[k], detail[k] || 'no reading');
+        }
+        if (m) {
+          console.log(`  ${name} ${ws} ${at} coarse: own work ${(100 * m.share).toFixed(1)} % `
+            + `(led by ${m.lead}), smallest text ${m.minFont.px} px, ${m.covered.length} `
+            + `covered, ${m.small.length}/${m.tested} small targets, ${m.offEdge.length} off `
+            + `the edge, ${m.overlaps.length} overlaps`);
         }
       }
-      if (m) {
-        console.log(`  ${name} ${ws} 390x844 coarse: own work ${(100 * m.share).toFixed(1)} % `
-          + `(led by ${m.lead}), smallest text ${m.minFont.px} px, ${m.covered.length} covered, `
-          + `${m.small.length}/${m.tested} small targets`);
-      }
+    }
+    // The listening notice's More on a fresh page (the notice shown) at each phone size: a
+    // 44 px target under a coarse pointer (WebKit drew it 29x17, an iPhone audit).
+    for (const size of PHONE_SIZES) {
+      const fresh = await browser.newContext({ viewport: size, hasTouch: true,
+        ...(name === 'firefox' ? {} : { isMobile: true }) });
+      const p = await fresh.newPage();
+      await p.goto(`${URL}#m=playground`);
+      const r = await pollFor(() => p.evaluate((min) => {
+        const el = document.querySelector('.osc-safety-toggle');
+        if (!el || !el.getClientRects().length) return { shown: false };
+        const b = el.getBoundingClientRect();
+        return { shown: true, w: Math.round(b.width), h: Math.round(b.height),
+          ok: b.width >= min - 0.5 && b.height >= min - 0.5 };
+      }, TOUCH_MIN), (m) => m.shown && m.ok, `ui-current: safety More at ${size.width} px`);
+      check(`safety-more-target-${size.width}`, r.ok, JSON.stringify(r.last));
+      await fresh.close();
     }
     // The page header's Related menu on a phone: a tap opens it, its items are the related
     // pages at 44 px, and a tap on the first opens that workspace.
@@ -624,9 +742,12 @@ async function runOne(name) {
       check('related-menu-phone-opens', went.ok, `workspace ${went.last}`);
       await p.close();
     }
-    check('phone-whole-debt-current', [...PHONE_WHOLE_DEBT.keys()].every((k) => seen.has(k)),
-      `PHONE_WHOLE_DEBT names a workspace that is not one: ${[...PHONE_WHOLE_DEBT.keys()]
-        .filter((k) => !seen.has(k)).join(', ')}`);
+    // A key scoped to another browser is judged by that browser's run.
+    const mine = [...PHONE_WHOLE_DEBT.keys()].filter((k) => !/^(chromium|firefox|webkit)[:@]/
+      .test(k) || k.startsWith(`${name}:`) || k.startsWith(`${name}@`));
+    check('phone-whole-debt-current', mine.every((k) => seen.has(k)),
+      `PHONE_WHOLE_DEBT names a key no run applied: ${mine.filter((k) => !seen.has(k))
+        .join(', ')}`);
     await ctx.close();
   } finally {
     await browser.close();
