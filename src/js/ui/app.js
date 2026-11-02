@@ -372,8 +372,8 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
       });
       const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       const behavior = reduce ? 'auto' : 'smooth';
-      // 768-1279 px shows every panel in two columns (no focus layout): the nav brings the
-      // workspace's first panel to the top and rings its panels (CSS .is-focused).
+      // 768-1279 px shows a workspace's own panels first in two columns (responsive.css): the
+      // nav brings the first of them to the top and rings them (CSS .is-focused).
       const tablet = window.matchMedia('(min-width: 768px) and (max-width: 1279.98px)').matches;
       if (mode === 'playground') {
         if (tablet) {

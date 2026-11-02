@@ -36,7 +36,6 @@
   --osc-text-unit: #b8d4f0;        /* big readout unit ("Hz" at x=186, y=245) */
   --osc-text-on-accent: #ffffff;
   --osc-text-on-green: #04261a;    /* "Use microphone" label */
-  --osc-text-on-warm: #2a1600;     /* text on orange/green sequencer blocks */
 
   /* Blue primary */
   --osc-blue: #007afd;             /* primary buttons, Export, Oscillator segment, Log */
@@ -129,16 +128,23 @@
   /* Typography */
   --osc-font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --osc-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  /* Calibrated against text extents measured on reference.png (tools/textext.mjs). */
-  --osc-fs-2xs: 10px;
-  --osc-fs-xs: 10.5px;
-  --osc-fs-sm: 11.5px;
+  /* Calibrated against text extents measured on reference.png (tools/textext.mjs).
+     The phone floor (ui-current#phone-whole): below a 768 px viewport no text is under 12 px.
+     --osc-fs-floor is 12px there and 0px from 768 px (a step: the clamp saturates within
+     0.012 px of 768), so max(<desktop size>, floor) is the desktop size, unchanged, from 768 px
+     and 12 px below. It resolves where it is used, against that viewport. A size under 12 px
+     anywhere in src/styles is written max(<size>, var(--osc-fs-floor))
+     (tests/unit/phone-font-floor.test.mjs). */
+  --osc-fs-floor: clamp(0px, calc((768px - 100vw) * 1000), 12px);
+  --osc-fs-2xs: max(10px, var(--osc-fs-floor));
+  --osc-fs-xs: max(10.5px, var(--osc-fs-floor));
+  --osc-fs-sm: max(11.5px, var(--osc-fs-floor));
   --osc-fs-md: 12.5px;
   --osc-fs-lg: 13px;
   --osc-fs-xl: 14.25px;
   --osc-fs-nav: 13px;
-  --osc-fs-tab: 10.6px;
-  --osc-fs-control: 11px;
+  --osc-fs-tab: max(10.6px, var(--osc-fs-floor));
+  --osc-fs-control: max(11px, var(--osc-fs-floor));
   --osc-fs-readout: 40px;
   --osc-fs-readout-unit: 22px;
   --osc-fw-regular: 400;

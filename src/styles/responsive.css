@@ -1,10 +1,12 @@
 /*
  * Responsive behaviour.
  *   >= 1280px  desktop reference grid (instrument.css)
- *   768-1279   two columns, every panel visible, compact header and status bar
- *   < 768      single-column focused instrument: Source & Pattern + analysis always shown,
- *              the nav becomes a workspace switcher that shows one group of secondary panels,
- *              the status bar collapses to a compact transport plus an actions menu
+ *   768-1279   two columns, compact header and status bar; the Playground shows every panel,
+ *              every other workspace only the panels it lists, its own first
+ *   < 768      single-column focused instrument: each workspace shows the panels it lists, its
+ *              own first (Source & Pattern and analysis lead only the Playground), the nav
+ *              becomes a workspace switcher strip, the status bar collapses to a compact
+ *              transport plus an actions menu, and no text token is under 12 px (tokens.css)
  *   pointer: coarse  every control is at least 44px
  */
 
@@ -39,13 +41,29 @@
     display: contents;
   }
 
-  .osc-p-source { order: 1; }
-  .osc-p-analysis { order: 2; }
+  /* A workspace shows the panels it lists (data-osc-modes) and leads with its own: the
+     Playground's Source & Pattern and Signal analysis lead only the Playground (order 0, document
+     order) and follow the workspace's panels everywhere else (ui-current#phone-whole). */
+  .osc-app:not([data-mode="playground"]) .osc-panel[data-osc-modes] {
+    display: none;
+  }
+
+  .osc-app[data-mode="sequencer"] .osc-panel[data-osc-modes~="sequencer"],
+  .osc-app[data-mode="analyzer"] .osc-panel[data-osc-modes~="analyzer"],
+  .osc-app[data-mode="filter"] .osc-panel[data-osc-modes~="filter"],
+  .osc-app[data-mode="synthesis"] .osc-panel[data-osc-modes~="synthesis"],
+  .osc-app[data-mode="compare"] .osc-panel[data-osc-modes~="compare"] {
+    display: flex;
+  }
+
+  .osc-app:not([data-mode="playground"]) .osc-p-source { order: 14; }
+  .osc-app:not([data-mode="playground"]) .osc-p-analysis { order: 15; }
   .osc-p-mic { order: 3; }
   .osc-p-device { order: 4; }
   .osc-p-spectrogram { order: 5; grid-column: 1 / -1; }
   .osc-p-sequencer { order: 6; grid-column: 1 / -1; }
   .osc-p-filter { order: 7; }
+  .osc-app[data-mode="filter"] .osc-p-filter { grid-column: 1 / -1; }
   .osc-p-envelope { order: 8; }
   .osc-p-additive { order: 9; }
   .osc-p-phase { order: 10; }
@@ -244,35 +262,10 @@
     padding: 8px 8px 12px;
   }
 
-  .osc-p-spectrogram,
-  .osc-p-sequencer,
-  .osc-p-bio,
-  .osc-p-dual,
-  .osc-view {
-    grid-column: auto;
-  }
-
-  /* Secondary panels: hidden unless the current workspace lists them. */
-  .osc-panel[data-osc-modes] {
-    display: none;
-  }
-
-  .osc-panel.osc-p-source,
-  .osc-panel.osc-p-analysis,
-  .osc-app[data-mode="sequencer"] .osc-panel[data-osc-modes~="sequencer"],
-  .osc-app[data-mode="analyzer"] .osc-panel[data-osc-modes~="analyzer"],
-  .osc-app[data-mode="filter"] .osc-panel[data-osc-modes~="filter"],
-  .osc-app[data-mode="synthesis"] .osc-panel[data-osc-modes~="synthesis"],
-  .osc-app[data-mode="compare"] .osc-panel[data-osc-modes~="compare"] {
-    display: flex;
-  }
-
-  .osc-app[data-mode="learn"] .osc-panel.osc-p-source,
-  .osc-app[data-mode="learn"] .osc-panel.osc-p-analysis,
-  .osc-app[data-mode="presets"] .osc-panel.osc-p-source,
-  .osc-app[data-mode="presets"] .osc-panel.osc-p-analysis,
-  .osc-app[data-mode="about"] .osc-panel.osc-p-source,
-  .osc-app[data-mode="about"] .osc-panel.osc-p-analysis {
+  /* One column: the full-width panels (grid-column 1 / -1 above) span exactly it. The phone
+     Playground keeps the panels it lists (Source & Pattern, Signal analysis, the compact
+     Studio); the other workspaces show theirs by the rule above. */
+  .osc-app[data-mode="playground"] .osc-panel[data-osc-modes]:not([data-osc-modes~="playground"]) {
     display: none;
   }
 
@@ -638,8 +631,8 @@
   }
 }
 
-/* 768-1279: every panel stays visible (no focus layout), so the nav rings the workspace's
-   panels and scrolls the first of them to the top (ui/app.js focusWorkspace). */
+/* 768-1279: a workspace shows its own panels first (above), and the nav rings them and scrolls
+   the first of them to the top (ui/app.js focusWorkspace). */
 @media (min-width: 768px) and (max-width: 1279.98px) {
   .osc-panel.is-focused {
     border-color: var(--osc-blue-underline);

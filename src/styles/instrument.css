@@ -513,7 +513,7 @@
   height: 27px;
   padding: 0 4px;
   border-color: var(--osc-border-soft);
-  font-size: 11px;
+  font-size: max(11px, var(--osc-fs-floor));
   font-weight: var(--osc-fw-regular);
   color: var(--osc-text-2);
 }
@@ -731,7 +731,7 @@
 }
 
 .osc-mic-tabs .osc-tab {
-  font-size: 11.5px;
+  font-size: max(11.5px, var(--osc-fs-floor));
 }
 
 .osc-mic-sep {
@@ -750,7 +750,7 @@
   border-radius: var(--osc-radius-control);
   background: var(--osc-surface-2);
   color: var(--osc-text-2);
-  font-size: 11.25px;
+  font-size: max(11.25px, var(--osc-fs-floor));
   line-height: 20px;
 }
 
@@ -765,7 +765,7 @@
 
 .osc-mic-note {
   color: var(--osc-text-muted);
-  font-size: 9.75px;
+  font-size: max(9.75px, var(--osc-fs-floor));
   white-space: nowrap;
 }
 
@@ -839,7 +839,7 @@
   gap: 7px;
   margin: 9px -5px 0 -5px;
   padding: 6px 4px 7px 11px;
-  font-size: 10.25px;
+  font-size: max(10.25px, var(--osc-fs-floor));
   line-height: 16px;
 }
 
@@ -1124,7 +1124,7 @@
 
 .osc-filter-types .osc-tab {
   padding: 0 2px;
-  font-size: 10.25px;
+  font-size: max(10.25px, var(--osc-fs-floor));
 }
 
 .osc-filter-body {
@@ -1496,7 +1496,7 @@
 
 .osc-sb-sub {
   color: var(--osc-text-2);
-  font-size: 10.25px;
+  font-size: max(10.25px, var(--osc-fs-floor));
 }
 
 .osc-sb-play {
@@ -1518,12 +1518,12 @@
   gap: 8px;
   overflow: hidden;
   color: var(--osc-text-2);
-  font-size: 10.75px;
+  font-size: max(10.75px, var(--osc-fs-floor));
 }
 
 .osc-sb-dot {
   color: var(--osc-text-muted);
-  font-size: 9px;
+  font-size: max(9px, var(--osc-fs-floor));
 }
 
 .osc-sb-actions-wrap {
@@ -1550,7 +1550,7 @@
   border: 0;
   background: none;
   color: var(--osc-text-2);
-  font-size: 11.5px;
+  font-size: max(11.5px, var(--osc-fs-floor));
   white-space: nowrap;
 }
 
