@@ -83,6 +83,7 @@ import {
 import { renderPlanToWav, renderSequenceToWav, screenshotCanvases } from './ui/exporters.js';
 import { BUILD } from './core/build-info.js';
 import { aboutPart } from './ui/about.js';
+import { armAudioUnlock } from './ui/audio-unlock.js';
 
 import { mount as mountAnalysis } from './labs/analysis.js';
 import { mount as mountFilter } from './labs/filter-lab.js';
@@ -657,22 +658,10 @@ function integrationInit() {
       + 'API, so OSCILLA cannot generate sound here.');
   }
 
-  // first gesture creates/resumes the context inside the gesture. A touch is a user activation
-  // only at its end (HTML: pointerup, touchend; a mouse and a key at their start), so a phone
-  // also unlocks there (owner report 2026-11-02: no sound on the phone). A bare click, as
-  // assistive technology dispatches it, is no gesture and creates no context
-  // (surface-census no-audio).
-  const unlock = () => { if (engine.isSupported()) cmp.ensureAudio(); };
-  for (const type of ['pointerdown', 'pointerup', 'touchend', 'keydown']) {
-    window.addEventListener(type, unlock, { capture: true });
-  }
-  // iOS (Safari 17+): Web Audio follows the ringer switch unless the page is a playback app.
-  // An instrument is one, so a phone set to silent still sounds (tests/browser/touch-audio.cjs).
-  try {
-    if (navigator.audioSession && navigator.audioSession.type !== 'playback') {
-      navigator.audioSession.type = 'playback';
-    }
-  } catch (e) { /* the browser refuses the session type: Web Audio keeps its default */ }
+  // first gesture creates/resumes the context inside the gesture, at either end of a touch, and
+  // iOS is asked for a playback session (ui/audio-unlock.js: a phone sounds)
+  armAudioUnlock({ win: window, nav: navigator,
+    unlock: () => { if (engine.isSupported()) cmp.ensureAudio(); } });
   const stopSequencer = () => stopSequence(cmp); // the editor's live state (C001, C002)
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
