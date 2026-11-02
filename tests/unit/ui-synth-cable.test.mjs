@@ -98,14 +98,34 @@ test('the sag never falls below the minimum, and a == b stays finite', () => {
 });
 
 test('the curve is symmetric: reversed ends draw the same cable, lowest at the middle', () => {
-  const [p0, p1, p2, p3] = points(cableCurve(A, B));
-  const [q0, q1, q2, q3] = points(cableCurve(B, A));
-  assert.deepEqual([q0, q1, q2, q3], [p3, p2, p1, p0]);
+  for (const [a, b] of [[A, B], [{ x: 0, y: 0 }, { x: 0, y: 200 }],
+    [{ x: 0, y: 0 }, { x: 5, y: 300 }], [{ x: 40, y: 10 }, { x: 31, y: -90 }]]) {
+    const [p0, p1, p2, p3] = points(cableCurve(a, b));
+    const [q0, q1, q2, q3] = points(cableCurve(b, a));
+    assert.deepEqual([q0, q1, q2, q3], [p3, p2, p1, p0], JSON.stringify([a, b]));
+  }
   const mid = at(cableCurve({ x: 0, y: 0 }, { x: 200, y: 0 }), 0.5);
   assert.ok(Math.abs(mid.x - 100) < 1e-9);
   for (const t of [0.1, 0.3, 0.45, 0.55, 0.7, 0.9]) {
     assert.ok(at(cableCurve({ x: 0, y: 0 }, { x: 200, y: 0 }), t).y < mid.y, `t ${t}`);
   }
+});
+
+test('a near-vertical cable still hangs: it bows sideways, and the bow fades as it levels', () => {
+  const bow = (a, b) => at(cableCurve(a, b), 0.5).x - (a.x + b.x) / 2;
+  for (const [a, b] of [[{ x: 0, y: 0 }, { x: 0, y: 200 }], [{ x: 0, y: 0 }, { x: 5, y: 300 }],
+    [{ x: 100, y: 400 }, { x: 96, y: 0 }], [{ x: 0, y: 0 }, { x: 0, y: 30 }]]) {
+    const d = cableCurve(a, b);
+    assert.doesNotMatch(d, /NaN|Infinity/);
+    assert.ok(Math.abs(bow(a, b)) >= 3, `${JSON.stringify([a, b])}: bow ${bow(a, b)}`);
+    assert.ok(sagOf(a, b) > 0, 'and still down');
+  }
+  assert.ok(Math.abs(bow({ x: 0, y: 0 }, { x: 0, y: 200 }))
+    > Math.abs(bow({ x: 0, y: 0 }, { x: 40, y: 200 })), 'less bow as the cable leans');
+  assert.ok(Math.abs(bow({ x: 0, y: 0 }, { x: 200, y: 0 })) < 1e-6, 'a level cable: no bow');
+  assert.ok(Math.abs(bow({ x: 0, y: 0 }, { x: 300, y: 80 })) < 1e-6, 'nor a long, shallow one');
+  const [p0, , , p3] = points(cableCurve({ x: 0, y: 0 }, { x: 0, y: 200 }));
+  assert.deepEqual([p0, p3], [{ x: 0, y: 0 }, { x: 0, y: 200 }], 'the ends do not move');
 });
 
 test('cableCurve refuses a non-finite end or slack', () => {
@@ -161,11 +181,83 @@ test('hover and selection thicken the stroke; refused is the refuse token and a 
   for (const type of TYPES) {
     const main = mainStroke(draw({ type, state: { refused: true } }));
     assert.ok(main.includes(`stroke="${TOKENS.jack.refuse}"`), type);
-    assert.match(main, /stroke-dasharray="[^"]+"/, `${type}: refused is never colour alone`);
+    assert.match(main, /stroke-dasharray="[^"]+"/, `${type}: a refused cable is dashed`);
   }
   assert.ok(mainStroke(draw({ state: { refused: true } })).includes(
     `stroke-dasharray="${REFUSED_DASH}"`), 'a solid type refused takes the refused dash');
   assert.notEqual(draw({ state: { dragging: true } }), draw(), 'dragging lifts the shadow');
+});
+
+const linecap = (el) => /stroke-linecap="([^"]+)"/.exec(el)[1];
+const dasharray = (el) => {
+  const m = /stroke-dasharray="([^"]+)"/.exec(el);
+  return m ? m[1].split(/[\s,]+/).map(Number) : null;
+};
+const WIDTH_STATES = [{}, { hover: true }, { selected: true }, { selected: true, hover: true }];
+
+test('dashed strokes have butt caps, so every visible gap is at least 2 graph units', () => {
+  for (const type of TYPES) {
+    for (const st of WIDTH_STATES) {
+      for (const refused of [false, true]) {
+        const state = { ...st, refused };
+        const main = mainStroke(draw({ type, state }));
+        const dash = dasharray(main);
+        const where = `${type} ${JSON.stringify(state)}`;
+        if (dash === null) {
+          assert.equal(linecap(main), 'round', `${where}: a solid stroke is round`);
+          continue;
+        }
+        assert.equal(linecap(main), 'butt', `${where}: a dashed stroke is butt`);
+        const w = width(main);
+        const cap = linecap(main) === 'butt' ? 0 : w;
+        const list = dash.length % 2 ? [...dash, ...dash] : dash;
+        for (let i = 0; i < list.length; i += 2) {
+          assert.ok(list[i] + cap > 0, `${where}: dash ${list[i]} at width ${w}`);
+          assert.ok(list[i + 1] - cap >= 2, `${where}: gap ${list[i + 1]} at width ${w}`);
+        }
+      }
+    }
+  }
+  assert.equal(linecap(mainStroke(draw({ type: 'AUDIO' }))), 'round');
+});
+
+test('every dashed type keeps its own dasharray when hovered and selected', () => {
+  for (const type of TYPES.filter((t) => CABLE_DASH[t] !== null)) {
+    for (const state of WIDTH_STATES) {
+      const main = mainStroke(draw({ type, state }));
+      assert.ok(main.includes(`stroke-dasharray="${CABLE_DASH[type]}"`),
+        `${type} ${JSON.stringify(state)}: ${main}`);
+    }
+  }
+});
+
+test('a refused cable differs from a normal one by shape, not by colour alone', () => {
+  const noStroke = (svg) => svg.replace(/\sstroke="[^"]*"/g, '');
+  for (const type of TYPES) {
+    for (const st of [{}, { hover: true }, { selected: true }]) {
+      const normal = draw({ type, state: st });
+      const refused = draw({ type, state: { ...st, refused: true } });
+      assert.notEqual(noStroke(refused), noStroke(normal), `${type} ${JSON.stringify(st)}`);
+      assert.match(refused, /^<g data-cable="c1" data-refused=""/, type);
+      assert.doesNotMatch(normal, /data-refused/, type);
+    }
+  }
+  const refused = draw({ state: { refused: true } });
+  const cross = /<g data-cross=""[^>]*>(.*?)<\/g>/.exec(refused);
+  assert.ok(cross, 'a cross');
+  const lines = [...cross[1].matchAll(
+    /<line x1="([^"]+)" y1="([^"]+)" x2="([^"]+)" y2="([^"]+)"[^>]*>/g)];
+  const marks = lines.filter((l) => l[0].includes(`stroke="${TOKENS.jack.refuse}"`));
+  assert.equal(marks.length, 2, 'two strokes in jack.refuse');
+  assert.ok(lines.filter((l) => !marks.includes(l)).every((l) => l[0].includes(
+    `stroke="${TOKENS.cable.shadow}"`)), 'any underlay is the shadow token');
+  const mid = at(cableCurve(A, B), 0.5);
+  for (const l of lines) {
+    const [x1, y1, x2, y2] = l.slice(1).map(Number);
+    assert.ok(Math.abs((x1 + x2) / 2 - mid.x) < 0.01 && Math.abs((y1 + y2) / 2 - mid.y) < 0.01,
+      'centred on the curve at t = 0.5');
+    assert.ok(Math.hypot(x2 - x1, y2 - y1) >= 6, 'large enough to read');
+  }
 });
 
 test('the sheen stripe is drawn only when asked, and takes no pointer', () => {
@@ -173,6 +265,13 @@ test('the sheen stripe is drawn only when asked, and takes no pointer', () => {
   const sheen = /<path data-sheen=""[^>]*>/.exec(svg)[0];
   assert.match(sheen, /pointer-events="none"/);
   assert.ok(width(sheen) < width(mainStroke(svg)));
+  assert.ok(sheen.includes(`stroke="${TOKENS.cable.sheen}"`), 'the cable.sheen token');
+  assert.match(sheen, /stroke-opacity="0.3"/);
+  assert.match(sheen, /transform="translate\(-0.7 -0.7\)"/);
+  const at2 = /<path data-sheen=""[^>]*>/.exec(draw({ sheen: true, zoom: 2 }))[0];
+  assert.match(at2, /transform="translate\(-0.35 -0.35\)"/, 'the offset is in screen px');
+  const dashed = /<path data-sheen=""[^>]*>/.exec(draw({ sheen: true, type: 'CONTROL' }))[0];
+  assert.equal(linecap(dashed), 'butt', 'a dashed sheen keeps the gaps too');
 });
 
 test('no colour literal in any cable or plug; every paint is a token or none', () => {

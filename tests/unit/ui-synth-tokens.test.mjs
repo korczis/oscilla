@@ -16,7 +16,7 @@ const SHAPE = {
   text: ['label', 'value', 'dim'],
   control: ['cap', 'capHi', 'ring', 'track', 'pointer', 'focus', 'disabled'],
   jack: ['body', 'ring', 'normal', 'refuse'],
-  cable: ['palette', 'shadow'],
+  cable: ['palette', 'shadow', 'sheen'],
 };
 const tokensCss = readFileSync(new URL('../../src/styles/tokens.css', import.meta.url), 'utf8');
 const names = (n = SYNTH_TOKEN_NAMES) => Object.values(n).flatMap((g) => Object.values(g)
@@ -58,6 +58,8 @@ test('the names follow the Synth panel roles the lane file recorded', () => {
   assert.equal(n.control.capHi, '--osc-surface-4');
   assert.equal(n.control.focus, '--osc-focus');
   assert.equal(n.jack.refuse, '--osc-red');
+  assert.equal(n.cable.shadow, '--osc-bg');
+  assert.equal(n.cable.sheen, '--osc-text', 'the sheen is its own token (dev-53, 2026-11-02)');
   assert.deepEqual([...n.cable.palette], ['--osc-cyan', '--osc-red-soft', '--osc-magenta',
     '--osc-green', '--osc-purple', '--osc-blue']);
 });
@@ -75,7 +77,8 @@ test('tokensFrom maps every name through the lookup, trimmed, into a deep-frozen
 test('a missing, empty or non-string value falls back to currentColor', () => {
   for (const missing of [undefined, null, '', '   ', 0, {}]) {
     const t = tokensFrom(() => missing);
-    for (const leaf of [t.surface.edge, t.control.ring, t.jack.refuse, ...t.cable.palette]) {
+    for (const leaf of [t.surface.edge, t.control.ring, t.jack.refuse, t.cable.sheen,
+      ...t.cable.palette]) {
       assert.equal(leaf, 'currentColor', String(missing));
     }
   }

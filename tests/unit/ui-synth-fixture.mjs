@@ -15,7 +15,7 @@ export const TOKENS = Object.freeze({
   jack: Object.freeze({ body: v('surface-0'), ring: v('text-dim'), normal: v('text-dim'),
     refuse: v('red') }),
   cable: Object.freeze({ palette: Object.freeze([v('cyan'), v('red-soft'), v('magenta'),
-    v('green'), v('purple'), v('blue')]), shadow: v('bg') }),
+    v('green'), v('purple'), v('blue')]), shadow: v('bg'), sheen: v('text') }),
 });
 
 /** Every leaf of a token set, palette entries included. */

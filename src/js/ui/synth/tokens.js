@@ -1,5 +1,5 @@
-// The shared synth-theme layer's colours (dev-53's layer design; the token API agreed on
-// 2026-11-02): one deep-frozen set of five groups read from OSCILLA's --osc-* custom properties
+// The shared synth-theme layer's colours (plan F013; dev-53's layer design; the token API agreed
+// on 2026-11-02): one deep-frozen set of five groups read from OSCILLA's --osc-* custom properties
 // (src/styles/tokens.css) at run time, so the light and dark themes differ only by the tokens.
 // Nothing here is a colour literal (project.visual-identity-lock v3): a token the page lacks
 // reads currentColor. New tokens go through the layer's owner.
@@ -11,7 +11,8 @@
  * The --osc-* property of every role. The roles follow the Synth panel's (src/js/synth/view/
  * tokens.js): a jack ring and every cable colour are graphical objects that must hold 3:1 on
  * the card in both themes, so the cable palette is the panel's six (no --osc-orange, which is
- * 1.9:1 on the light card).
+ * 1.9:1 on the light card). The cable sheen has its own role (dev-53, 2026-11-02), drawn at
+ * a low opacity, so a theme can retune it without touching the control tokens.
  */
 export const SYNTH_TOKEN_NAMES = deepFreeze({
   surface: { plateHi: '--osc-surface-3', plateLo: '--osc-surface-1', card: '--osc-surface-2',
@@ -23,7 +24,7 @@ export const SYNTH_TOKEN_NAMES = deepFreeze({
   jack: { body: '--osc-surface-0', ring: '--osc-text-dim', normal: '--osc-text-dim',
     refuse: '--osc-red' },
   cable: { palette: ['--osc-cyan', '--osc-red-soft', '--osc-magenta', '--osc-green',
-    '--osc-purple', '--osc-blue'], shadow: '--osc-bg' },
+    '--osc-purple', '--osc-blue'], shadow: '--osc-bg', sheen: '--osc-text' },
 });
 
 /** The paint every role falls back to when its token has no value. */
