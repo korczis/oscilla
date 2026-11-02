@@ -21,6 +21,7 @@ milestones:
   - "M069"
   - "M071"
   - "M072"
+  - "M120"
 satisfaction:
   - id: "parameter-contract"
     criterion: "Every registry parameter declares its unit, range, default, mapping, whether it is automatable and modulatable (or why not) and its deep-link address, and every instrument and mixer control is bound to exactly one declared parameter shown on its box face"
