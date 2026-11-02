@@ -732,7 +732,24 @@ async function runLeg(name, origin) {
         const line = document.querySelector('[data-osc="filter.fromStudio"]');
         const el = document.activeElement;
         const ed = s.editor;
+        // How far the node is from showing what it can of itself in the graph's viewport (the
+        // rule of graph-geometry.js revealDelta, restated here): 0, 0 when it is in view.
+        const box = document.querySelector(`.osc-sg-node[data-node-id="${id}"]`);
+        const port = box && box.closest('.osc-sg-viewport');
+        let reveal = null;
+        if (box && port && a.workspace === 'studio') {
+          const b = box.getBoundingClientRect();
+          const v = port.getBoundingClientRect();
+          const axis = (lo, hi, plo, phi) => (hi - lo <= phi - plo
+            ? (lo < plo ? plo - lo : hi > phi ? phi - hi : 0)
+            : (lo > plo ? plo - lo : hi < phi ? phi - hi : 0));
+          reveal = { dx: Math.round(axis(b.left, b.right, v.left, v.right)),
+            dy: Math.round(axis(b.top, b.bottom, v.top, v.bottom)),
+            apart: b.right <= v.left || b.left >= v.right || b.bottom <= v.top
+              || b.top >= v.bottom };
+        }
         return { workspace: a.workspace, hash: location.hash, revision: s.store.getRevision(),
+          reveal,
           selection: [...s.selection.nodes], view: ed ? ed.getView() : null,
           node: n ? { type: n.params.type, frequency: n.params.frequency, Q: n.params.Q } : null,
           lab: { type: lab.type, frequency: lab.frequency, Q: lab.Q,
@@ -758,13 +775,17 @@ async function runLeg(name, origin) {
       for (const input of INPUTS) {
         const page = await H.open(audited, base, 'm=studio&st=subtractive-synth');
         await page.keyboard.press('Shift'); // the first gesture: the app's own audio unlock
-        await page.evaluate((id) => window.OSCILLA.studio.store.dispatch({
-          type: 'SELECTION_CHANGE', selection: { nodes: [id] } }), NODE);
+        // Find node's way to a node: selected, framed and focused (studioReveal).
+        await page.evaluate((id) => window.OSCILLA.app.studioReveal(id), NODE);
         await page.locator(OPEN).waitFor({ state: 'visible', timeout: NAV_MS });
-        const before = await read(page);
+        const before = await until(async () => {
+          const r = await read(page);
+          return r.focusNode === NODE && r.reveal && !r.reveal.dx && !r.reveal.dy ? r : null;
+        }, { ms: NAV_MS, what: `${NODE} selected, framed and focused` }).catch(() => read(page));
         if (before.domains.indexOf('lab') < 0) wrong.push('the lab hash domain is not registered');
         await H.activate(page, OPEN, input);
-        const lab = await H.arrived(page, 'filter', `Open in Filter Lab (${input}) opens Filter Lab`)
+        const lab = await H.arrived(page, 'filter',
+          `Open in Filter Lab (${input}) opens Filter Lab`)
           .then(() => until(async () => {
             const r = await read(page);
             return r.workspace === 'filter' && r.from && r.from.kind === 'from' ? r : null;
@@ -821,6 +842,45 @@ async function runLeg(name, origin) {
       check(leg, 'Open in Filter Lab opens the node\'s type, cutoff and Q, silent, and Back '
         + 'returns to the node selected and focused, view and revision unchanged (pointer, '
         + 'keyboard, touch)', !wrong.length, wrong.join(' | '));
+
+      // Panned away before Open in Filter Lab: Back pans by the least that shows the node,
+      // the zoom unchanged, and focuses it.
+      const away = [];
+      {
+        const page = await H.open(audited, base, 'm=studio&st=subtractive-synth');
+        await page.evaluate((id) => window.OSCILLA.app.studioReveal(id), NODE);
+        await until(async () => ((await read(page)).focusNode === NODE ? true : null),
+          { ms: NAV_MS, what: `${NODE} framed and focused` }).catch(() => null);
+        await page.evaluate(() => window.OSCILLA.studio.editor.panBy(3000, 0));
+        const gone = await read(page);
+        if (!gone.reveal || !gone.reveal.apart) {
+          away.push(`not panned away ${JSON.stringify(gone)}`);
+        }
+        await H.activate(page, OPEN, 'pointer');
+        await H.arrived(page, 'filter', 'Open in Filter Lab after a pan opens Filter Lab')
+          .catch(() => null);
+        await H.activate(page, BACK, 'pointer');
+        const home = await until(async () => {
+          const r = await read(page);
+          return r.workspace === 'studio' && r.focusNode === NODE ? r : null;
+        }, { ms: NAV_MS, what: `Back focuses ${NODE} after a pan` }).catch(() => null);
+        if (!home) away.push(`Back ${JSON.stringify(await read(page))}`);
+        else {
+          if (!home.reveal || home.reveal.dx || home.reveal.dy) {
+            away.push(`not in view ${JSON.stringify(home.reveal)}`);
+          }
+          if (home.view.zoom !== gone.view.zoom || home.view.panY !== gone.view.panY) {
+            away.push(`more than a sideways pan ${JSON.stringify([gone.view, home.view])}`);
+          }
+          if (!(home.view.panX < gone.view.panX)) away.push('no pan back');
+          if (home.revision !== gone.revision) {
+            away.push(`revision ${gone.revision} -> ${home.revision}`);
+          }
+        }
+        await page.close();
+      }
+      check(leg, 'a node panned out of view before Open in Filter Lab is shown by the least pan '
+        + 'and focused on the way back, the zoom unchanged', !away.length, away.join(' | '));
 
       // A reload of the lab link: no revision is compared (the revision is per page).
       const reload = [];

@@ -26,6 +26,7 @@ import { KEYBOARD_LINK_KEY } from '../../src/js/midi/keyboard.js';
 import {
   HASH_DOMAINS, INSTRUMENT_HASH_KEYS, ROUTE_KEY, hashAfterRefusal, hashForWorkspace, routeOfHash,
 } from '../../src/js/ui/navigation.js';
+import { revealDelta } from '../../src/js/ui/studio/graph-geometry.js';
 import {
   FILTER_LAB_TYPES, canOpenInLab, createLabBridgeUi, limitedNotices, openInLab, resolveLabLink,
   staleNotice,
@@ -291,4 +292,21 @@ test('a deep link read before Filter Lab mounts waits for it (labFlush)', () => 
   assert.equal(updates.length, 1);
   assert.equal(cmp.labFrom.kind, 'from');
   assert.equal(cmp.labFlush(), false, 'once');
+});
+
+// ------------------------------------------------------------------------------ the way back
+test('revealDelta: no pan while the node is in view, else the least pan that shows it', () => {
+  const port = { left: 100, top: 50, right: 700, bottom: 350 };
+  const at = (left, top, w = 160, h = 80) => ({ left, top, right: left + w, bottom: top + h });
+  assert.deepEqual(revealDelta(at(200, 100), port), { dx: 0, dy: 0 }, 'fully visible: kept');
+  assert.deepEqual(revealDelta(at(100, 50), port), { dx: 0, dy: 0 }, 'on the edges: kept');
+  assert.deepEqual(revealDelta(at(3200, 100), port), { dx: 700 - 3360, dy: 0 },
+    'off to the right: its right edge meets the port\'s');
+  assert.deepEqual(revealDelta(at(-500, -300), port), { dx: 600, dy: 350 },
+    'off to the top left: its top left meets the port\'s');
+  assert.deepEqual(revealDelta(at(650, 320), port), { dx: -110, dy: -50 }, 'partly cut off');
+  // Taller than the port: no pan while it spans it, else its near edge meets the port's.
+  assert.deepEqual(revealDelta(at(200, 0, 160, 400), port), { dx: 0, dy: 0 });
+  assert.deepEqual(revealDelta(at(200, 100, 160, 400), port), { dx: 0, dy: -50 });
+  assert.deepEqual(revealDelta(at(200, -200, 160, 400), port), { dx: 0, dy: 150 });
 });

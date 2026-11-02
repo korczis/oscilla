@@ -80,6 +80,21 @@ export function panBy(view, dx, dy) {
 }
 
 /** Bounding box { x, y, w, h } of rects { x, y, w, h }; null for none. */
+/**
+ * The smallest pan (screen px, { dx, dy }) that brings `box` into `port`, both screen rects
+ * { left, top, right, bottom }; { 0, 0 } when it is fully visible. A box larger than the port
+ * on an axis needs no pan there while it spans the port; else its near edge meets the port's.
+ * The zoom never changes: the way back to a node (lab-bridge.js) pans with panBy only.
+ */
+export function revealDelta(box, port) {
+  const axis = (lo, hi, plo, phi) => {
+    if (hi - lo <= phi - plo) return lo < plo ? plo - lo : hi > phi ? phi - hi : 0;
+    return lo > plo ? plo - lo : hi < phi ? phi - hi : 0;
+  };
+  return { dx: axis(box.left, box.right, port.left, port.right),
+    dy: axis(box.top, box.bottom, port.top, port.bottom) };
+}
+
 export function boundsOf(rects) {
   let x0 = Infinity;
   let y0 = Infinity;

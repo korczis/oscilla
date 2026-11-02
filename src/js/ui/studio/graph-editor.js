@@ -20,7 +20,8 @@
 //   editor.selectAll(), toggleFocusedNode(), nudge(key, large), endNudge(), deleteBridge(),
 //   editor.tidy(), toggleMute()            Shift+Delete, L, M (plan K009, graph-commands.js)
 //   editor.startTapConnect(from), cancelTransient() -> bool, hasGesture(), inSelectionMode()
-//   editor.setRunning(bool), focusNode(id, { keepView }) -> bool (keepView: no pan),
+//   editor.setRunning(bool), focusNode(id, { keepView }) -> bool (keepView: no pan while the
+//   node is in view, else the least pan, graph-geometry.js revealDelta),
 //   focusViewport() -> bool, isShown(),
 //   destroy()        focusNode / focusViewport refuse (false) while the graph subview is hidden
 //                    (phones, §136): focus never goes to an element nobody can see (V431 U7)
@@ -33,7 +34,8 @@ import { NODE_REGISTRY } from '../../studio/registry.js';
 import { summarizeGraph } from '../../studio/a11y.js';
 import {
   CABLE_HIT_PX, COARSE_FIT_MIN_ZOOM, GRID, NODE_WIDTH, boundsOf, cableCross, cablePath,
-  clampZoom, fitView, graphToScreen, normalizeView, panBy, screenToGraph, zoomAt, ZOOM_STEP,
+  clampZoom, fitView, graphToScreen, normalizeView, panBy, revealDelta, screenToGraph, zoomAt,
+  ZOOM_STEP,
 } from './graph-geometry.js';
 import { edgeView, nodeCard, probeConnection } from './graph-view.js';
 import { coarsePointer, h, s, setAttr, setText, replaceChildren } from './graph-dom.js';
@@ -476,12 +478,19 @@ export function createGraphEditor(host, svc) {
     const entry = nodeEls.get(id);
     if (!entry || !isShown()) return false;
     entry.el.focus({ preventScroll: true });
-    if (keepView) return true; // the way back to a node (lab-bridge.js): the view stays
     // Keep it visible: pan when it lies outside the viewport.
     measureSize();
     const p = graphToScreen(view, entry.pos.x, entry.pos.y);
     const w = entry.el.offsetWidth * view.zoom;
     const hh = entry.el.offsetHeight * view.zoom;
+    if (keepView) {
+      // The way back to a node (lab-bridge.js): the view stays while the node is in view, else
+      // the least pan shows it (revealDelta); the zoom never changes.
+      const d = size.w ? revealDelta({ left: p.x, top: p.y, right: p.x + w, bottom: p.y + hh },
+        { left: 0, top: 0, right: size.w, bottom: size.h }) : { dx: 0, dy: 0 };
+      if (d.dx || d.dy) setView(panBy(view, d.dx, d.dy));
+      return true;
+    }
     if (size.w && (p.x < 0 || p.y < 0 || p.x + w > size.w || p.y + hh > size.h)) {
       setView(panBy(view, size.w / 2 - (p.x + w / 2), size.h / 2 - (p.y + hh / 2)));
     }

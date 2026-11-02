@@ -1431,8 +1431,8 @@ export function createStudioUi(svc = {}) {
     },
 
     /**
-     * Select node `nodeId` and focus it, the graph's view not moved (lab-bridge.js: the way back
-     * from Filter Lab). Selection is view state: not undoable, not dirty, no revision. Where the
+     * Select node `nodeId` and focus it (lab-bridge.js: the way back from Filter Lab), the view
+     * kept while the node is in view, else panned by the least that shows it, never zoomed. Selection is view state: not undoable, not dirty, no revision. Where the
      * graph is hidden (a phone's Inspector subview) the Inspector's heading takes focus.
      */
     studioFocusNode(nodeId) {
