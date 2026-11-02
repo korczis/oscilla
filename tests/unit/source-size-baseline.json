@@ -91,6 +91,18 @@
       "cap": 295000,
       "pr": 386,
       "reason": "lane A's page fields and iPhone fixes: the Related strip and menu, the empty state, the folds' display rule, the safety More target and journey 20's visible reasons and alternative for the disabled export and preset controls"
+    },
+    {
+      "file": "src/js/synth/ui.js",
+      "cap": 45000,
+      "pr": 372,
+      "reason": "the K097 XY tab's wiring (tab, presets, all-off over the xy node) meets the feature train's link notice (#367 surface-census routes) in the Synth UI, which passes 40 000 bytes for the first time"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 282000,
+      "pr": 375,
+      "reason": "the K066/K102 presets and patch library markup meets the K097 XY tab and the feature train's Synth tabs in the shell, one byte past the 281 000 cap"
     }
   ]
 }

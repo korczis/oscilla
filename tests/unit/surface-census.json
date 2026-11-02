@@ -1229,6 +1229,24 @@
       ]
     },
     {
+      "id": "synth.tab:xy",
+      "kind": "subview",
+      "reachedFrom": [
+        "synth"
+      ],
+      "purpose": "The XY tab: the performance pad, pitch in a scale on one axis and timbre on the other",
+      "state": "src/js/synth/view/xy-tab.js",
+      "evidence": "none",
+      "deepLink": "#m=synth&yt=xy",
+      "tests": [
+        "tests/browser/xy-pad.cjs"
+      ],
+      "plan": [
+        "K097",
+        "Q019"
+      ]
+    },
+    {
       "id": "exps.panel:detail",
       "kind": "subview",
       "reachedFrom": [

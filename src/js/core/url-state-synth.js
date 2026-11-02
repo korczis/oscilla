@@ -1,7 +1,7 @@
 // The Synth deep link (plan K106 part): `#m=synth[&yt=<tab>][&ye=<engine>][&yp=<preset>]
 // [&yv=<values>][&yc=<cables>]`. Its own keys, so a Synth link never routes to Studio (`sv` is
 // a Studio key):
-//   yt  the tab ('panel' | 'engines')
+//   yt  the tab ('panel' | 'engines' | 'xy')
 //   ye  the engine module the keys play on the Engines tab (panels/engines.js)
 //   yp  a preset id (synth/presets.js)
 //   yv  values that differ from the preset, 'module.param:value' joined by ','
@@ -17,7 +17,7 @@ import { validateParamValue } from '../studio/registry.js';
 export const SYNTH_LINK_MODE = 'synth';
 export const SYNTH_LINK_KEYS = Object.freeze({ tab: 'yt', engine: 'ye', preset: 'yp',
   values: 'yv', cables: 'yc' });
-export const SYNTH_TABS = Object.freeze(['panel', 'engines']);
+export const SYNTH_TABS = Object.freeze(['panel', 'engines', 'xy']);
 const MAX_ITEMS = 128;
 
 const strip = (h) => String(h || '').replace(/^#/, '');
