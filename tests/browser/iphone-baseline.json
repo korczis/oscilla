@@ -1,0 +1,265 @@
+{
+  "note": "Reach debt of tests/browser/iphone.cjs per engine/phone/workspace: off-edge, covered and tiny controls. It only shrinks: a lower count is written with --record, a higher one fails.",
+  "debt": {
+    "chromium/Pixel 7/about": {
+      "offscreen": 0,
+      "covered": 0,
+      "tiny": 1
+    },
+    "chromium/Pixel 7/analyzer": {
+      "offscreen": 0,
+      "covered": 8,
+      "tiny": 1
+    },
+    "chromium/Pixel 7/compare": {
+      "offscreen": 0,
+      "covered": 10,
+      "tiny": 1
+    },
+    "chromium/Pixel 7/experiments": {
+      "offscreen": 0,
+      "covered": 0,
+      "tiny": 1
+    },
+    "chromium/Pixel 7/filter": {
+      "offscreen": 0,
+      "covered": 8,
+      "tiny": 1
+    },
+    "chromium/Pixel 7/learn": {
+      "offscreen": 0,
+      "covered": 0,
+      "tiny": 1
+    },
+    "chromium/Pixel 7/measure": {
+      "offscreen": 0,
+      "covered": 0,
+      "tiny": 1
+    },
+    "chromium/Pixel 7/playground": {
+      "offscreen": 0,
+      "covered": 8,
+      "tiny": 1
+    },
+    "chromium/Pixel 7/presets": {
+      "offscreen": 0,
+      "covered": 0,
+      "tiny": 1
+    },
+    "chromium/Pixel 7/sequencer": {
+      "offscreen": 0,
+      "covered": 8,
+      "tiny": 1
+    },
+    "chromium/Pixel 7/studio": {
+      "offscreen": 0,
+      "covered": 0,
+      "tiny": 1
+    },
+    "chromium/Pixel 7/synth": {
+      "offscreen": 0,
+      "covered": 0,
+      "tiny": 1
+    },
+    "chromium/Pixel 7/synthesis": {
+      "offscreen": 0,
+      "covered": 8,
+      "tiny": 1
+    },
+    "firefox/390x844/about": {
+      "offscreen": 0,
+      "covered": 0,
+      "tiny": 1
+    },
+    "firefox/390x844/analyzer": {
+      "offscreen": 0,
+      "covered": 8,
+      "tiny": 1
+    },
+    "firefox/390x844/compare": {
+      "offscreen": 0,
+      "covered": 10,
+      "tiny": 1
+    },
+    "firefox/390x844/experiments": {
+      "offscreen": 0,
+      "covered": 0,
+      "tiny": 1
+    },
+    "firefox/390x844/filter": {
+      "offscreen": 0,
+      "covered": 8,
+      "tiny": 1
+    },
+    "firefox/390x844/learn": {
+      "offscreen": 0,
+      "covered": 0,
+      "tiny": 1
+    },
+    "firefox/390x844/measure": {
+      "offscreen": 0,
+      "covered": 0,
+      "tiny": 1
+    },
+    "firefox/390x844/playground": {
+      "offscreen": 0,
+      "covered": 8,
+      "tiny": 1
+    },
+    "firefox/390x844/presets": {
+      "offscreen": 0,
+      "covered": 0,
+      "tiny": 1
+    },
+    "firefox/390x844/sequencer": {
+      "offscreen": 0,
+      "covered": 8,
+      "tiny": 1
+    },
+    "firefox/390x844/studio": {
+      "offscreen": 0,
+      "covered": 0,
+      "tiny": 1
+    },
+    "firefox/390x844/synth": {
+      "offscreen": 0,
+      "covered": 0,
+      "tiny": 1
+    },
+    "firefox/390x844/synthesis": {
+      "offscreen": 0,
+      "covered": 8,
+      "tiny": 1
+    },
+    "webkit/iPhone 13/about": {
+      "offscreen": 0,
+      "covered": 0,
+      "tiny": 1
+    },
+    "webkit/iPhone 13/analyzer": {
+      "offscreen": 0,
+      "covered": 8,
+      "tiny": 1
+    },
+    "webkit/iPhone 13/compare": {
+      "offscreen": 0,
+      "covered": 10,
+      "tiny": 1
+    },
+    "webkit/iPhone 13/experiments": {
+      "offscreen": 0,
+      "covered": 0,
+      "tiny": 1
+    },
+    "webkit/iPhone 13/filter": {
+      "offscreen": 0,
+      "covered": 8,
+      "tiny": 1
+    },
+    "webkit/iPhone 13/learn": {
+      "offscreen": 0,
+      "covered": 0,
+      "tiny": 1
+    },
+    "webkit/iPhone 13/measure": {
+      "offscreen": 0,
+      "covered": 0,
+      "tiny": 1
+    },
+    "webkit/iPhone 13/playground": {
+      "offscreen": 0,
+      "covered": 8,
+      "tiny": 1
+    },
+    "webkit/iPhone 13/presets": {
+      "offscreen": 0,
+      "covered": 0,
+      "tiny": 1
+    },
+    "webkit/iPhone 13/sequencer": {
+      "offscreen": 0,
+      "covered": 8,
+      "tiny": 1
+    },
+    "webkit/iPhone 13/studio": {
+      "offscreen": 0,
+      "covered": 0,
+      "tiny": 1
+    },
+    "webkit/iPhone 13/synth": {
+      "offscreen": 0,
+      "covered": 101,
+      "tiny": 1
+    },
+    "webkit/iPhone 13/synthesis": {
+      "offscreen": 0,
+      "covered": 8,
+      "tiny": 1
+    },
+    "webkit/iPhone SE/about": {
+      "offscreen": 0,
+      "covered": 0,
+      "tiny": 1
+    },
+    "webkit/iPhone SE/analyzer": {
+      "offscreen": 0,
+      "covered": 8,
+      "tiny": 1
+    },
+    "webkit/iPhone SE/compare": {
+      "offscreen": 0,
+      "covered": 9,
+      "tiny": 1
+    },
+    "webkit/iPhone SE/experiments": {
+      "offscreen": 0,
+      "covered": 0,
+      "tiny": 1
+    },
+    "webkit/iPhone SE/filter": {
+      "offscreen": 0,
+      "covered": 8,
+      "tiny": 1
+    },
+    "webkit/iPhone SE/learn": {
+      "offscreen": 0,
+      "covered": 0,
+      "tiny": 1
+    },
+    "webkit/iPhone SE/measure": {
+      "offscreen": 0,
+      "covered": 0,
+      "tiny": 1
+    },
+    "webkit/iPhone SE/playground": {
+      "offscreen": 0,
+      "covered": 8,
+      "tiny": 1
+    },
+    "webkit/iPhone SE/presets": {
+      "offscreen": 0,
+      "covered": 0,
+      "tiny": 1
+    },
+    "webkit/iPhone SE/sequencer": {
+      "offscreen": 0,
+      "covered": 8,
+      "tiny": 1
+    },
+    "webkit/iPhone SE/studio": {
+      "offscreen": 0,
+      "covered": 0,
+      "tiny": 1
+    },
+    "webkit/iPhone SE/synth": {
+      "offscreen": 0,
+      "covered": 102,
+      "tiny": 1
+    },
+    "webkit/iPhone SE/synthesis": {
+      "offscreen": 0,
+      "covered": 8,
+      "tiny": 1
+    }
+  }
+}
