@@ -1640,13 +1640,30 @@ function defineChecks() {
       await setLabRelease(`${Math.round(initial.labR * 1000)} ms`, initial.labR).catch(() => {});
       await setLab(initial.labOn).catch(() => {});
       await setSettings(initial.release).catch(() => {});
+      // Restoring the lab release types into its field (Synthesis on a phone): leave neither
+      // that focus nor that workspace to the next check.
+      await H.focusBody(page).catch(() => {});
+      if (await mode().catch(() => 'playground') !== 'playground') {
+        await H.navTo(page, 'playground').catch(() => {});
+      }
     }
     return { ok: res.settings.ok && res.lab.ok && res.limited.ok, ...res };
   });
 
   def('frequency-slider-and-fine-steps', async ({ page }) => {
+    // Held Space plays the Playground's voice only while no text field has focus (K153's
+    // dispatcher leaves Space to a field): open the Playground and wait until nothing holds focus
+    // (a field edited by an earlier check took it back once, CI #385: focus INPUT
+    // #osc-env-release-value in Synthesis).
+    if (await page.evaluate(() => window.OSCILLA.app.workspace) !== 'playground') {
+      await H.navTo(page, 'playground');
+    }
     await H.continuous(page, true);
-    await H.focusBody(page);
+    await until(async () => {
+      await H.focusBody(page);
+      return page.evaluate(() => window.OSCILLA.app.workspace === 'playground'
+        && (!document.activeElement || document.activeElement === document.body));
+    }, { ms: 8000, what: 'frequency-slider-and-fine-steps: the Playground, nothing focused' });
     await page.keyboard.down(' ');
     // The held Space starts the engine voice; wait for it rather than for a fixed time. The
     // polled value says why it did not (the output owner, a typing target or an open modal
