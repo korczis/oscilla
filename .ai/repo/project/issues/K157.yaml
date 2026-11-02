@@ -1,0 +1,28 @@
+id: K157
+milestone: M120
+serves:
+  - "connected-instrument#riff-library"
+title: "A content-rights check over what dist ships: original, MIT, method recorded, symbolic only"
+slug: a-content-rights-check-over-what-dist-ships
+priority: p2
+profile: implementation
+objective: "Add scripts/content-rights.mjs (R01 design) run by npm test and verify-dist: it reads the library region of dist/index.html, recomputes each entry's fingerprint, and refuses an entry that is not original, not MIT, without a method, or carrying any audio or media payload (Q082), and any library data in dist that no entry accounts for."
+why: "The owner chose original-only, MIT, method recorded and symbolic only (Q079-Q082); a choice without a check is a convention (R01 2026-11-02)."
+scope:
+  - "scripts/content-rights.mjs"
+  - "tests/unit/content-rights.test.mjs"
+  - "package.json"
+  - "tests/README.md"
+depends_on:
+  - "K156"
+acceptance_criteria:
+  - "Before: VERIFIED (R01): no check holds a library entry's rights."
+  - "After: node scripts/content-rights.mjs passes on the built dist and names the entries it judged."
+  - "Negative cases (synthetic fixtures built in the test): an unknown licence, a non-MIT licence, a missing method, an audio data: URI or base64 blob in an entry, a reference-only entry shipped in dist, a fingerprint mismatch and a third-party entry relabelled original by author are each refused with a reason; each refusal is mutation-proven."
+  - "Fail-first: tests/unit/content-rights.test.mjs fails on the merge base."
+validation:
+  - "node --test tests/unit/content-rights.test.mjs"
+  - "node scripts/content-rights.mjs"
+evidence_required:
+  - "verified"
+created_at: 2026-11-02

@@ -1,0 +1,29 @@
+id: K161
+milestone: M120
+serves:
+  - "connected-instrument#riff-library"
+title: "Original songs: arranged multitrack entries stored as compact scores and materialised on selection"
+slug: original-songs-as-compact-scores
+priority: p2
+profile: implementation
+objective: "Add the song kind: an original arrangement of several notes clips with sections, stored as a compact score in K156's schema and materialised into the one StudioModel when opened (one undo, transactional, unsaved guard), never as a shipped template per song."
+why: "The owner's pack: a song is an arranged multitrack sequence with meaningful sections; R00 found the Studio can represent a song only the K144 way (one tone clip per note, one oscillator per track)."
+scope:
+  - "src/js/studio/riffs"
+  - "tests/unit/riff-library.test.mjs"
+  - "tests/browser/synth.cjs"
+  - "dist/index.html"
+depends_on:
+  - "K156"
+  - "K099"
+acceptance_criteria:
+  - "Before: VERIFIED (R00): one song exists, the demo song template."
+  - "After: three original songs of at least three tracks each open into a valid StudioModel that compiles and plays (PCM non-silent on every track at its first note) and close with 0 active sources; the demo song's pinned hash is unchanged."
+  - "Negative cases: a song referencing a missing voice or a clip outside its section is refused at load with a reason."
+  - "Fail-first: the song tests fail on the merge base."
+validation:
+  - "node --test tests/unit/riff-library.test.mjs"
+  - "node tests/browser/synth.cjs --only s-song-open"
+evidence_required:
+  - "verified"
+created_at: 2026-11-02

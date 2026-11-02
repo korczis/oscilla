@@ -1,0 +1,29 @@
+id: K160
+milestone: M120
+serves:
+  - "connected-instrument#riff-library"
+title: "A bounded link to an entry and its settings, through the one hash dispatcher"
+slug: a-bounded-link-to-an-entry-and-its-settings
+priority: p2
+profile: implementation
+objective: "Extend the one hash dispatcher with an entry id and version plus bounded overrides (tempo, transposition, voice patch, swing): opening the link selects the entry with those settings, never starts audio before a gesture, and honours the unsaved guard."
+why: "The owner's pack: a recipient opens the same score and parameters, on file:// and the Pages sub-path; R00 found the URL carries a template id and subview only."
+scope:
+  - "src/js/ui/navigation.js"
+  - "src/js/core/url-state-studio.js"
+  - "tests/unit/library-url.test.mjs"
+  - "tests/browser/synth.cjs"
+  - "dist/index.html"
+depends_on:
+  - "K156"
+acceptance_criteria:
+  - "Before: VERIFIED (R00): no link reproduces an entry or its settings."
+  - "After: a link round-trips: the normalised entry and settings after opening equal those encoded, across chromium, firefox and webkit and after a reload (library-url.test and synth.cjs s-riff-link); no audio starts until a gesture."
+  - "Negative cases: an unknown key, a repeated key, an oversized or out-of-range value and an unknown entry or version are refused with a reason and change nothing."
+  - "Fail-first: tests/unit/library-url.test.mjs fails on the merge base."
+validation:
+  - "node --test tests/unit/library-url.test.mjs"
+  - "node tests/browser/synth.cjs --only s-riff-link"
+evidence_required:
+  - "verified"
+created_at: 2026-11-02

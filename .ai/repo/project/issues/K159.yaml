@@ -1,0 +1,27 @@
+id: K159
+milestone: M120
+serves:
+  - "connected-instrument#riff-library"
+title: "Find an entry by facets: genre, tempo, key, meter, mood and role, in the one patch library"
+slug: find-an-entry-by-facets
+priority: p2
+profile: implementation
+objective: "Add facet filters and search over K156's fields to the patch library's Riffs category (no second dialog), by pointer, touch, keyboard and screen reader, with a stable sort."
+why: "At 128 entries a flat list cannot be browsed; the owner's pack asks for search and filters without network indexing."
+scope:
+  - "src/js/ui/patch-browser.js"
+  - "src/js/studio/riffs"
+  - "tests/browser/synth.cjs"
+  - "dist/index.html"
+depends_on:
+  - "K156"
+acceptance_criteria:
+  - "Before: VERIFIED (R00): the patch library filters by instrument and tag only."
+  - "After: filtering by a tempo range, a key and a mood lists exactly the entries whose fields match (synth.cjs s-riff-facets), keyboard-only and touch alike; the listing of 128 entries renders within a stated budget measured in the gate."
+  - "Negative cases: an empty result says so; an unknown facet value from a link is refused."
+  - "Fail-first: s-riff-facets fails on the merge base."
+validation:
+  - "node tests/browser/synth.cjs --only s-riff-facets"
+evidence_required:
+  - "verified"
+created_at: 2026-11-02

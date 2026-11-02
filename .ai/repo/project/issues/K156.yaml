@@ -1,0 +1,26 @@
+id: K156
+milestone: M120
+serves:
+  - "connected-instrument#riff-library"
+title: "One library entry schema for riffs and songs, with facets and rights fields derived where they can be"
+slug: one-library-entry-schema-with-facets-and-rights
+priority: p2
+profile: implementation
+objective: "Define the versioned entry schema both kinds use: id, schemaVersion, kind (riff or song), title, style (genre, era), tempo, key, meter, mood, roles, the notes payload (K099's agreed form), author, licence and method (Q079-Q082: 'OSCILLA', 'MIT', one of human, generator, ai-assisted), and a content fingerprint; duration, pitches used and the instruments are derived from the content, never typed twice. Migrate K149's sixteen riffs into it without changing their sound."
+why: "The library must grow to 128 entries and songs without drifting metadata; the owner's decisions Q079-Q082 need fields a check can hold."
+scope:
+  - "src/js/studio/riffs"
+  - "tests/unit/riff-library.test.mjs"
+  - "dist/index.html"
+depends_on:
+  - "K149"
+acceptance_criteria:
+  - "Before: VERIFIED (R00): riff entries are K149's ad-hoc objects; author, licence and method were added by K149's follow-up."
+  - "After: every entry validates against the schema; derived fields equal their recomputation from the notes; the sixteen riffs' notes payloads are byte-identical before and after the migration."
+  - "Negative cases: a missing or unknown field, a hand-written derived field that disagrees with the notes, a licence other than MIT, a method outside the three and an author other than OSCILLA are refused with the field named."
+  - "Fail-first: the schema tests in tests/unit/riff-library.test.mjs fail on the merge base."
+validation:
+  - "node --test tests/unit/riff-library.test.mjs"
+evidence_required:
+  - "verified"
+created_at: 2026-11-02

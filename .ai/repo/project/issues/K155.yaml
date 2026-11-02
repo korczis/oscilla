@@ -1,0 +1,29 @@
+id: K155
+milestone: M120
+serves:
+  - "connected-instrument#riff-library"
+title: "A tone clip's pitch is a control: change one note of a riff, a template or the demo song"
+slug: a-tone-clip-s-pitch-is-a-control
+priority: p2
+profile: implementation
+objective: "Add a Pitch field to the clip details of a tone pattern clip that dispatches CLIP_UPDATE (the store already accepts it) by pointer, touch and keyboard, in semitone steps within the voice's range, one undo step per committed change."
+why: "R00 (2026-11-02): no control changes a note's pitch; changing the block type drops it. The owner's pack: changing a note is never cosmetic, it changes the canonical state and the sound."
+scope:
+  - "src/js/ui/studio"
+  - "tests/unit/studio-clip-pitch.test.mjs"
+  - "tests/browser/synth.cjs"
+  - "dist/index.html"
+  - "tests/README.md"
+depends_on:
+  - "K149"
+acceptance_criteria:
+  - "Before: VERIFIED (R00): clip details have no Pitch field."
+  - "After: raising an inserted riff's first note by 7 semitones moves the engine's spectral peak by 7 semitones within one semitone of tolerance (synth.cjs s-riff-pitch); undo restores the previous pitch and peak; every pinned template hash (demo song included) is unchanged by the change of code."
+  - "Negative cases: a pitch outside the voice's range, a non-tone clip and a non-integer step are refused with a reason and leave the model and the sound unchanged."
+  - "Fail-first: tests/unit/studio-clip-pitch.test.mjs fails on the merge base."
+validation:
+  - "node --test tests/unit/studio-clip-pitch.test.mjs"
+  - "node tests/browser/synth.cjs --only s-riff-pitch"
+evidence_required:
+  - "verified"
+created_at: 2026-11-02

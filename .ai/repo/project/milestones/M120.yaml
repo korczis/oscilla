@@ -1,0 +1,20 @@
+id: M120
+title: "Music library at scale: hear, edit, filter and share original riffs and songs"
+slug: music-library-at-scale
+order: 120
+priority: p2
+problem: "K149 lists sixteen original riffs in the patch library and inserts them, but a riff cannot be heard before it is inserted, no note's pitch can be changed from a control, entries carry no shared schema with facets or a rights check, there are no songs, nothing stops near-duplicate padding on the way to the owner's 128 entries, the library cannot be filtered by tempo, key or mood, and no link reproduces an entry with its settings."
+outcome: "Every entry is heard through the one engine before it is inserted, edited note by note afterwards, described by one schema whose rights fields a build check holds (original-only, MIT, method recorded, symbolic only: Q079-Q082), found by facets, shared by a bounded link, and grown to at least 128 distinct original riffs and songs without near-duplicates."
+acceptance_criteria:
+  - "K154, K155, K156, K157, K158, K159, K160, K161, K162 are done with their evidence; node --test tests/unit/riff-library.test.mjs passes with at least 128 entries; node scripts/content-rights.mjs passes on the built dist."
+validation:
+  - "node --test tests/unit/riff-library.test.mjs"
+  - "node scripts/content-rights.mjs"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "Songs (K161) need the multi-note clip kind K099 brings ({ notes: [{ at, note, len, vel }] } in beats, agreed by 26 and dev-53 on 2026-11-02); K099 is blocked, so songs wait and the riff issues do not."
+  - "128 entries must stay compact symbolic scores materialised on selection, never 128 shipped templates; gzip headroom was about 266 KB of 1.2 MB on 2026-11-02 (R00), and each wave states its own ceiling (Q023)."
+  - "Owner pack of 2026-11-02 (OSCILLA_MUSIC_LIBRARY_MASTER_PROMPT) is a proposal: this milestone takes only the gaps the R00 audit found that no existing issue owns."
+created_at: 2026-11-02
+updated_at: 2026-11-02

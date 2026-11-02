@@ -1,0 +1,28 @@
+id: K162
+milestone: M120
+serves:
+  - "connected-instrument#riff-library"
+title: "Expand a riff to a session: declared accompaniment with its lineage, as one undoable step"
+slug: expand-a-riff-to-a-session
+priority: p2
+profile: implementation
+objective: "Add Expand to session for a riff: a deterministic, declared accompaniment (drums and bass from the riff's style, key and tempo) added as clips that name the riff they came from, in one undo step."
+why: "The owner's pack: a riff may be expanded, but a one-track riff is never presented as a full song."
+scope:
+  - "src/js/studio/riffs"
+  - "tests/unit/riff-library.test.mjs"
+  - "tests/browser/synth.cjs"
+  - "dist/index.html"
+depends_on:
+  - "K161"
+acceptance_criteria:
+  - "Before: VERIFIED: no expansion exists."
+  - "After: expanding a riff adds the declared tracks, each naming its source riff, deterministically (the same riff gives the same document by canonicalJson), and one undo removes them all."
+  - "Negative cases: expanding a song, or a riff without a declared style, is refused with a reason."
+  - "Fail-first: the expansion tests fail on the merge base."
+validation:
+  - "node --test tests/unit/riff-library.test.mjs"
+  - "node tests/browser/synth.cjs --only s-riff-expand"
+evidence_required:
+  - "verified"
+created_at: 2026-11-02
