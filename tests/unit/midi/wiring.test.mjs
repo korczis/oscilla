@@ -135,7 +135,9 @@ test('docs/midi.md quotes every sentence that refuses a MIDI note', async () => 
 test('tests/browser/midi.cjs runs in the release gate', () => {
   const pkg = JSON.parse(read('package.json'));
   assert.ok(has('tests/browser/midi.cjs'));
-  assert.match(pkg.scripts['test:browser'], /node tests\/browser\/midi\.cjs/);
+  // Run by test:browser's runner, which runs every suite it names (review #330 F5).
+  assert.match(pkg.scripts['test:browser'],
+    /^node tests\/browser\/lib\/run-suites\.cjs (?:\S+ )*tests\/browser\/midi\.cjs(?: |$)/);
   assert.match(pkg.scripts['test:release'], /npm run test:browser/);
   assert.equal(pkg.scripts['test:midi'], 'node tests/browser/midi.cjs');
 });

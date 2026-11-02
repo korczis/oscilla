@@ -15,7 +15,7 @@
 //   hooks   more hooks when one component carries several (a slider and its text field)
 //   pattern { template: 'studio.tl.{key}', keys: [...], sites: ['src/js/...'] }: a hook built
 //           at run time, expanded to one concrete hook per enumerated key; `sites` names the
-//           modules that build it
+//           modules (or src/index.html, whose Alpine templates bind :data-osc) that build it
 //   param   a section 79 descriptor of studio/nodes/common.js (numberParam, enumParam, ...)
 //   state   a canonical state path of sources.js, or { none: '<reason, five words or more>' }
 //           on the kinds of STATE_NONE_KINDS
@@ -56,8 +56,9 @@ function patternProblems(p) {
   if (!isList(p.keys) || !p.keys.length || !p.keys.every((k) => KEY.test(k))) {
     out.push('pattern.keys must enumerate the keys');
   } else if (new Set(p.keys).size !== p.keys.length) out.push('pattern.keys repeat a key');
-  if (!isList(p.sites) || !p.sites.length || !p.sites.every((s) => /^src\/js\/.+\.js$/.test(s))) {
-    out.push('pattern.sites must name the src/js modules that build the hook');
+  if (!isList(p.sites) || !p.sites.length
+    || !p.sites.every((s) => /^src\/js\/.+\.js$/.test(s) || s === 'src/index.html')) {
+    out.push('pattern.sites must name the src/js modules (or src/index.html) that build the hook');
   }
   return out;
 }

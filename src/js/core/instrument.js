@@ -62,6 +62,7 @@ import {
   BUILTIN_PRESETS, PRESET_CATEGORIES, describeConfig, presetMaxFrequency,
 } from '../data/presets.js';
 import { LEARN_TOPICS } from '../data/learn.js';
+import { presetLoadedNotice } from './preset-notice.js';
 
 let alertSeq = 0;
 
@@ -929,7 +930,11 @@ export function createInstrument(deps = {}) {
       if (headphonesConfirmed && p.cfg.dual?.binaural) this.dual.binaural = true;
       this.loadedLabel = p.name;
       if (issues) this.notify('warning', 'Preset partly applied', `${issues} value(s) were invalid and kept at their previous setting.`);
-      else this.notify('success', `Loaded “${p.name}”`, this.isProgrammed ? 'Press TRIGGER (or Space) to play it.' : 'Press and hold HOLD TO PLAY.');
+      else {
+        const coarse = !!host.matchMedia && host.matchMedia('(pointer: coarse)').matches;
+        const said = presetLoadedNotice(this.mode, this.isProgrammed, this.source, coarse);
+        this.notify('success', `Loaded “${p.name}”`, said.message, { action: said.action });
+      }
     },
 
 

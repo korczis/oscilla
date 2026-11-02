@@ -1319,7 +1319,7 @@
   border-radius: var(--osc-radius-sm);
   background: var(--osc-surface-1);
   color: var(--osc-text-2);
-  font-size: 10px;
+  font-size: max(10px, var(--osc-fs-floor));
   font-weight: var(--osc-fw-semibold);
   letter-spacing: 0.05em;
   white-space: nowrap;
@@ -1388,8 +1388,8 @@
   font-size: var(--osc-fs-sm);
 }
 
-/* ================= 768-1279: graph + Inspector, timeline below; library in the picker ===== */
-@media (max-width: 1279.98px) {
+/* ================= 768-1535: graph + Inspector, timeline below; library in the picker ===== */
+@media (max-width: 1535.98px) {
   .osc-studio {
     grid-template-columns: minmax(0, 1fr) 272px;
     grid-template-rows: auto minmax(0, 1fr) minmax(0, 36%);

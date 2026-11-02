@@ -62,10 +62,12 @@ export const FAMILIES = Object.freeze([
   // ui/app.js (workspace, theme, navOpen), ui/workbench.js (labFlags, seqPlaying),
   // labs/mic-analyzer.js (micCompare), ui/studio/timeline-editor.js (timelineSnap),
   // midi/keyboard-ui.js (kbdArmed, kbdBase, kbdVelocity), synth/ui.js (synthTab).
+  // ui/shell.js (sidebarCollapsed, drawerOpen, navQuery).
   family('ui', ['workspace', 'theme', 'navOpen', 'labFlags', 'seqPlaying', 'micCompare',
-    'timelineSnap', 'kbdArmed', 'kbdBase', 'kbdVelocity', 'synthTab'],
-  'The theme in local storage (oscilla.theme) and the workspace in the URL key m; every other key '
-    + 'lasts for the page only.',
+    'timelineSnap', 'kbdArmed', 'kbdBase', 'kbdVelocity', 'synthTab', 'sidebarCollapsed',
+    'drawerOpen', 'navQuery'],
+  'The theme in local storage (oscilla.theme), the sidebar in local storage (oscilla.v2.sidebar) '
+    + 'and the workspace in the URL key m; every other key lasts for the page only.',
   'ui/app.js, ui/navigation.js, ui/workbench.js and the view that owns the key'),
 ]);
 

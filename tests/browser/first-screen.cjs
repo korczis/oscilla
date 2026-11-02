@@ -224,7 +224,7 @@ const H = {
     const e = window.OSCILLA.engine;
     const shown = (el) => !!el && el.getClientRects().length > 0
       && getComputedStyle(el).visibility !== 'hidden';
-    const cur = document.querySelector('.osc-nav [aria-current="page"]');
+    const cur = document.querySelector('#osc-nav [aria-current="page"]');
     const f = document.activeElement;
     const mv = (a.meas && a.meas.values) || {};
     return {

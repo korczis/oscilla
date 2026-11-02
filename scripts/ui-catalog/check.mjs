@@ -294,6 +294,10 @@ export function runnableFiles(root = ROOT) {
   const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
   for (const script of Object.values(pkg.scripts || {})) {
     for (const m of script.matchAll(/\bnode\s+([\w./-]+\.(?:c|m)?js)\b/g)) files.add(m[1]);
+    // tests/browser/lib/run-suites.cjs runs every suite it is given, one after another.
+    const runner = /\bnode\s+tests\/browser\/lib\/run-suites\.cjs((?:\s+[\w./-]+\.cjs)+)/
+      .exec(script);
+    if (runner) for (const f of runner[1].trim().split(/\s+/)) files.add(f);
   }
   return files;
 }

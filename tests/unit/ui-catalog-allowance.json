@@ -1185,54 +1185,6 @@
       "reason": "The midi hooks are not declared yet; a later catalogue slice declares them."
     },
     {
-      "id": "nav.about",
-      "reason": "The nav hooks are not declared yet; a later catalogue slice declares them."
-    },
-    {
-      "id": "nav.analyzer",
-      "reason": "The nav hooks are not declared yet; a later catalogue slice declares them."
-    },
-    {
-      "id": "nav.compare",
-      "reason": "The nav hooks are not declared yet; a later catalogue slice declares them."
-    },
-    {
-      "id": "nav.experiments",
-      "reason": "The nav hooks are not declared yet; a later catalogue slice declares them."
-    },
-    {
-      "id": "nav.filter",
-      "reason": "The nav hooks are not declared yet; a later catalogue slice declares them."
-    },
-    {
-      "id": "nav.learn",
-      "reason": "The nav hooks are not declared yet; a later catalogue slice declares them."
-    },
-    {
-      "id": "nav.measure",
-      "reason": "The nav hooks are not declared yet; a later catalogue slice declares them."
-    },
-    {
-      "id": "nav.playground",
-      "reason": "The nav hooks are not declared yet; a later catalogue slice declares them."
-    },
-    {
-      "id": "nav.presets",
-      "reason": "The nav hooks are not declared yet; a later catalogue slice declares them."
-    },
-    {
-      "id": "nav.sequencer",
-      "reason": "The nav hooks are not declared yet; a later catalogue slice declares them."
-    },
-    {
-      "id": "nav.studio",
-      "reason": "The nav hooks are not declared yet; a later catalogue slice declares them."
-    },
-    {
-      "id": "nav.synthesis",
-      "reason": "The nav hooks are not declared yet; a later catalogue slice declares them."
-    },
-    {
       "id": "pattern-desc",
       "reason": "The pattern hooks are not declared yet; a later catalogue slice declares them."
     },

@@ -10,7 +10,4 @@ export default {
   'nav.groups': entry({ source: 'src/js/ui/app.js',
     tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/demo-song.cjs',
       'tests/unit/v3-ui.test.mjs'] }),
-  'nav.synth': entry({ source: 'src/index.html',
-    tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/v31-studio-graph.cjs',
-      'tests/unit/v3-ui.test.mjs'] }),
 };

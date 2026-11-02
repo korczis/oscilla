@@ -38,6 +38,7 @@ export const STORAGE_MODULES = Object.freeze({
   'src/js/core/instrument.js': 'presets, history and the safety notice through the wrappers',
   'src/js/main.js': 'the safety notice and storage availability through the wrappers',
   'src/js/ui/app.js': 'theme and analysis tab (localStorage)',
+  'src/js/ui/shell.js': 'sidebar collapsed to icons and its groups (localStorage)',
   'src/js/ui/workbench.js': 'the safety notice through the wrappers',
   'src/js/ui/experiments.js': 'opens the experiments database (pageIndexedDb)',
   'src/js/ui/studio/workspace.js': 'opens the experiments database for the Studio library',
