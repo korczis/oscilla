@@ -1,0 +1,35 @@
+id: V636
+milestone: M054
+serves:
+- "ui-current#phone-whole"
+title: The Synth patch bay is a face of its own on a phone, with 12 px text
+slug: the-synth-patch-bay-is-a-face-of-its-own-on-a-phone
+priority: p1
+profile: implementation
+objective: "Make the Synth patch bay usable on a phone (390x844, coarse pointer). Below xl the Synth view shows one face at a time, the module cards or the bay, switched by a Panel and a Patch bay chip in the sticky chip bar (aria-pressed); the bay then takes the whole width under the bar instead of following every card, and a module chip brings the cards back. Every text of the bay SVG is 12 px (BAY_TEXT), and a jack label is cut to fit its 52 px pitch (LABEL_MAX, counted with an output's arrow) while the jack's accessible name keeps the whole label. At xl both faces show side by side as before and Patch bay scrolls to the bay."
+why: "Owner direction of 2026-11-02, in Czech: \"vymazli patch bay\", \"rozvin patchbay\" and \"musi fungovat bezchybne na mobilu i vsude\". Measured on V635 under iPhone 13 emulation: the bay was a 1262 px list below every module card, and its SVG text was 10 px."
+scope:
+- src/js/synth/ui.js
+- src/js/synth/view/bay.js
+- src/js/synth/view/faces.js
+- tests/unit/synth-bay-phone.test.mjs
+- tests/browser/synth.cjs
+- tests/browser/synth-engines.cjs
+- tests/README.md
+- .ai/repo/project/issues/V636.yaml
+- dist
+depends_on:
+- V635
+acceptance_criteria:
+- "Before: VERIFIED: at 390x844 under touch the bay starts below every module card and its SVG text is 10 px."
+- "After: the Patch bay chip shows the bay at the card's full width directly under the chip bar, with the cards hidden; its text is at least 12 px, no two jack labels overlap and every jack is a 44 px target; Panel or a module chip shows the cards again."
+- "Negative cases: at xl both faces show and the Panel chip is hidden; a cable patched on the bay face plays and is listed under Cables."
+- "Rollback: revert the merge commit; no stored record or schema changes."
+validation:
+- node --test tests/unit/synth-bay-phone.test.mjs
+- node scripts/ui-flowbite-pro-record.mjs --check
+- node tests/browser/synth.cjs
+evidence_required:
+- verified
+created_at: '2026-11-02'
+updated_at: '2026-11-02'

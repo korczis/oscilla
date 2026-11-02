@@ -17,6 +17,19 @@ export const JACK_PITCH = 52;
 export const ROW_PITCH = 62;
 export const JACK_HIT = 44;
 const LABEL_H = 18;
+/** The bay's text in user units, drawn 1:1 (the SVG is as wide as its box): 12 px, the
+ *  smallest text a phone shows (V634, criterion ui-current#phone-whole). */
+export const BAY_TEXT = 12;
+/** The widest jack label that fits its 52 px pitch at BAY_TEXT, counted with an output's " ▸":
+ *  longer labels keep their head and end in an ellipsis; the jack's accessible name carries the
+ *  whole label. */
+export const LABEL_MAX = 8;
+export function shortLabel(label, direction = 'in') {
+  const s = String(label);
+  const room = direction === 'out' ? LABEL_MAX - 2 : LABEL_MAX;
+  const text = s.length > room ? `${s.slice(0, room - 1)}…` : s;
+  return direction === 'out' ? `${text} ▸` : text;
+}
 const GAP = 12;
 const PAD = 8;
 
@@ -99,7 +112,7 @@ export function baySvg({ panel, layout, cables = [], states = new Map(), pending
   const feeders = new Map(cables.map((c) => [`${c.to}:in`, c.fromModule]));
   const feederOf = (key) => feeders.get(key) || null;
   const groups = layout.groups.map((g) => `<text x="${g.x + 2}" y="${g.y + 12}" `
-    + `font-size="10" font-weight="700" letter-spacing="1" stroke="none" `
+    + `font-size="${BAY_TEXT}" font-weight="700" letter-spacing="1" stroke="none" `
     + `fill="${t.label}">${esc(g.label)}`
     + '</text>').join('');
   const jacks = [...layout.jacks.values()].map(({ x, y, jack: j }) => {
@@ -123,10 +136,9 @@ export function baySvg({ panel, layout, cables = [], states = new Map(), pending
       + `${pending === j.key || compatible.has(j.key) ? 3.5 : 2}"`
       + `${st === 'open' || st === 'mixed' ? ' stroke-dasharray="3 3"' : ''}/>`
       + `${glyph(shape, x, y, 5)} fill="${inner}" stroke="none"/>`
-      + `<text x="${x}" y="${y + 33}" font-size="10" text-anchor="middle" stroke="none" `
+      + `<text x="${x}" y="${y + 34}" font-size="${BAY_TEXT}" text-anchor="middle" stroke="none" `
       + `fill="${t.label}">`
-      + `${esc(j.label.length > 9 ? `${j.label.slice(0, 8)}…` : j.label)}${j.direction === 'out'
-        ? ' ▸' : ''}</text></g>`;
+      + `${esc(shortLabel(j.label, j.direction))}</text></g>`;
   }).join('');
   const dash = { CONTROL: ' stroke-dasharray="9 6"', TRIGGER: ' stroke-dasharray="2 6"',
     AUDIO: '' };
