@@ -1,0 +1,54 @@
+# Review verdict for pull request #389, R028 "CI receipt for all releases" (branch
+# feat/release-ci-receipt; builder oscilla-af). Reviewed head b8136ccd (main merged into the
+# builder's content e9b874f7) against origin/main 66635acc. The reviewer (oscilla-21) built
+# none of it. Read-only review in a detached worktree; mutations only in a scratch copy.
+#
+# The digest is scripts/review-verdict.mjs from `git archive origin/main scripts`, run --content
+# --list in the worktree at the head (the same with --base-branch origin/main): be41a391...978c
+# over 4 guarded paths (scripts/release-ci-receipt.mjs, release-prepare.mjs, release-publish.mjs,
+# tests/unit/release-ci-receipt.test.mjs).
+#
+# Checked:
+# - Tree binding (release-ci-receipt.mjs:63-118): HEAD must have 2 parents (:66), tree(HEAD) ==
+#   tree(H) compared as tree hashes (:72-77, gathered by rev-parse <sha>^{tree} :141-144), base B
+#   an ancestor of H (:78, :156-157), so any base CI merged H with (<= B) yields H's tree. Runs
+#   filtered by workflow name, event pull_request and head_sha H (:90); the newest by created_at
+#   is judged (:91), its status/conclusion reflect the latest attempt (:94); jobs read with
+#   filter=latest (:164) and each declared job must be in that run, on H, completed/success
+#   (:102-111); an undeclared job refuses (:112-116). Re-run, other head, older run, skipped or
+#   cancelled job, gate green over skipped jobs, other workflow, other event: all refuse.
+#   Residual: a second pull request from the same head into another base (F1).
+# - expectedJobs (:27-55): derived from the real ci.yml = 21 names (6 matrix jobs x3 expanded);
+#   a multi-key matrix, a parse failure or an empty list is a problem; renaming gate is just
+#   another declared job. A matrix name without ${{ matrix.x }} yields wrong names: fail-closed.
+# - gateVerdict (release-publish.mjs:296-306, used :399-403): a local receipt verifies only for
+#   this gateTree, so it cannot be stale; CI is consulted only when it fails; gh missing (127),
+#   gh/network error, unparseable JSON -> null -> problem (fail-closed). No timeout (F3).
+# - Mutations (scratch copy, node --test tests/unit/release-ci-receipt.test.mjs, 12/12 clean):
+#   killed 13 of 17: tree compare, baseInPr null, skipped job, undeclared-job loop, oldest run,
+#   event filter, job run_id, job head_sha, roadmap, filter=latest, run status, gateVerdict
+#   fail-open without CI. Survived 4: workflow problems propagation (:64), "declares no jobs"
+#   (:53), workflow name (:83), merge-base exit 128 mapped to true (:157); each is backed by
+#   another guard (undeclared job / no matching run), so no hole, but the "every guard is
+#   mutation-proven" claim is overstated (F2).
+# - Rules: v2 names its enforcement (# Enforcement of version 2, x-majordomus.tests); v1 status
+#   deprecated, id/version distinct; release-flow-complete depends_on @2 resolves; majordomus
+#   doctor 0 failures; the knowledge-integrity exemption is the single ADR key '0082'.
+# - CLI: release:prepare --local-gat and release:publish --bogus exit 2; release-ci-receipt.mjs
+#   is a library without a CLI (exits 0 doing nothing).
+# - Live (gh authenticated): e8bb8b95 -> CI facts zero problems (run 41400581754 attempt 1,
+#   21 jobs); the roadmap check passes on e8bb8b95's own tree (scratch git copy) and fails on
+#   this branch's checkout (M011 omitted; expected, release:prepare refreshes it). Wrong commit
+#   a43218d9 (the PR head, 1 parent) -> "not the merge commit of a pull request".
+# - Docs: README, CLAUDE.md, release skill and tests/README match the behaviour (default
+#   CI_PREPARE_COMMANDS, --local-gate, --merge landing); version:check passes.
+# - Unit: release-ci-receipt, release-publish, release-gate-env, knowledge-integrity: 82/82.
+schema: review-verdict/v1
+pr: 389
+verdict: merge
+reviewer: oscilla-21 (claude-code af63bcf2)
+content: be41a391df148a213cebea3ad6ce23557e2cc0a82c151200e59d03b13184978c
+findings:
+  - { id: F1, severity: P3, status: open, title: "scripts/release-ci-receipt.mjs:89-91 accepts the newest CI run on head_sha H whatever pull request it ran for; ci.yml:28-29 runs on pull_request to any base, so a second PR from the same head into another branch tests H merged with that base and can stand in for the release PR; bind the run to the PR whose merge is HEAD (gh api commits/<HEAD>/pulls: base main, head H; run.pull_requests was [] live, so look the PR up) or say so under Not enforced" }
+  - { id: F2, severity: P3, status: open, title: "the v2 rule's 'each guard of ciReceiptProblems() is mutation-proven' is overstated: mutants of release-ci-receipt.mjs:64 (workflow problems dropped), :53 (no 'declares no jobs'), :83 (no workflow-name check) and gather :157 (merge-base 128 -> true) pass 12/12; add fixtures feeding expectedJobs of a multi-key matrix, an empty and a nameless workflow through ciReceiptProblems, and a merge-base status 128 through gatherCiReceipt" }
+  - { id: F3, severity: P3, status: open, title: "the two gh api calls (release-ci-receipt.mjs:158-165) go through release-publish.mjs:278-283 spawnSync with no timeout and no retry: fail-closed on error but a hung gh hangs publish; give them a timeout and one retry, as fetchPage does (release-publish.mjs:206)" }
