@@ -1661,11 +1661,29 @@ function defineChecks() {
 
   def('frequency-slider-and-fine-steps', async ({ page }) => {
     await H.continuous(page, true);
+    // Space is the instrument's only when no modal holds it (ui/dialogs.js keyGuard) and the
+    // previous check's voice is gone: wait for both, as CI's chromium/file once pressed Space
+    // into a state that never started the voice (#386 run 41431865956).
+    const keyState = () => page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      return { modal: !!document.querySelector('[data-oscilla-modal][aria-modal="true"]'),
+        playing: a.playing, releasing: a.releasing, voice: !!window.OSCILLA.engine.voice,
+        programmed: a.isProgrammed, workspace: a.workspace, audio: window.OSCILLA.engine.state,
+        active: document.activeElement && (document.activeElement.id
+          || document.activeElement.tagName) };
+    });
+    await U.poll(keyState, (k) => !k.modal && !k.playing && !k.voice,
+      'Space is free: no modal, no voice from the previous check').catch(() => {});
     await H.focusBody(page);
+    // A Space Playwright still holds from an earlier check would make this press a repeat,
+    // which the instrument ignores (core/instrument.js onKeyDown): let it go first.
+    await page.keyboard.up(' ');
     await page.keyboard.down(' ');
     // The held Space starts the engine voice; wait for it rather than for a fixed time.
     await U.poll(() => page.evaluate(() => !!window.OSCILLA.engine.voice?.carrier),
-      (v) => v, 'held Space starts the engine voice');
+      (v) => v, 'held Space starts the engine voice').catch(async (e) => {
+      throw new Error(`${e.message} ${JSON.stringify(await keyState())}`);
+    });
     const read = () => page.evaluate(() => ({ app: window.OSCILLA.app.frequency,
       eng: window.OSCILLA.engine.voice?.carrier?.frequency.value,
       readout: document.querySelector('#osc-freq-value').textContent }));
