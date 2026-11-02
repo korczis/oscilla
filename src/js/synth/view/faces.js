@@ -6,6 +6,7 @@
 //
 //   faceChips(face) -> the two chips' markup;  faceClass(face, of) -> '' | 'max-xl:hidden'
 //   applyFace(el, face) -> toggles the shown face and replaces the chips without a re-render
+//   scrollToSection(el, moduleId) -> a section chip's jump: the plate (or the bay) under the bar
 
 import { CHIP } from './engines.js';
 
@@ -33,4 +34,24 @@ export function applyFace(el, face) {
   for (const b of el.querySelectorAll('nav [data-face]')) {
     b.replaceWith(fresh.querySelector(`[data-face="${b.dataset.face}"]`));
   }
+}
+
+/**
+ * A section chip: the module's plate scrolled to the top of the view and then down past the
+ * sticky chip bar, so its heading is not under the bar; focus moves to the plate.
+ */
+export function scrollToSection(el, mid) {
+  const target = el && el.querySelector(`[data-module="${mid}"]`);
+  if (!target) return;
+  target.scrollIntoView({ block: 'start', behavior: 'auto' });
+  const bar = el.querySelector('nav[aria-label="Synth sections"]');
+  const r = bar ? bar.getBoundingClientRect() : null;
+  const over = r && r.height ? r.bottom + 8 - target.getBoundingClientRect().top : 0;
+  let s = target.parentElement;
+  while (s && s !== document.body && !/(auto|scroll)/.test(getComputedStyle(s).overflowY)) {
+    s = s.parentElement;
+  }
+  if (over > 0) (s && s !== document.body ? s : window).scrollBy(0, -over);
+  if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');
+  target.focus({ preventScroll: true });
 }

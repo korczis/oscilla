@@ -27,7 +27,7 @@ import {
 } from './normals.js';
 import { linkAction, linkOf } from './link.js';
 import { splitJack } from './panel.js';
-import { esc, plateHtml, platesShown, refreshScope } from './view/face.js';
+import { esc, plateHtml, platesShown, refreshScope, scopeValue } from './view/face.js';
 import { knobModel, knobSvg } from './view/knob.js';
 import { createGestures } from './gestures.js';
 import { bayLayout, baySvg, cablePath } from './view/bay.js';
@@ -40,7 +40,7 @@ import { CHIP, enginePickerHtml } from './view/engines.js';
 import { createXyTab } from './view/xy-tab.js';
 import { createStudioSink } from './studio-sink.js';
 import { BTN } from '../ui/synth/label.js';
-import { applyFace, faceChips, faceClass } from './view/faces.js';
+import { applyFace, faceChips, faceClass, scrollToSection } from './view/faces.js';
 import { createArmedFollow } from './armed-follow.js';
 import { createSynthNotes } from './notes-sink.js';
 
@@ -433,6 +433,16 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   // ------------------------------------------------------------------ events
 
   function onPointerDown(e) {
+    const sd = e.target.closest('[data-scope-drive]');
+    const sx = sd && controlOf(sd.dataset.scopeDrive);
+    if (sx && sx.node) { // a drag on a plate's scope sets the parameter it draws
+      e.preventDefault();
+      sd.setPointerCapture(e.pointerId);
+      knob = { cid: sd.dataset.scopeDrive, param: sx.c.param, scope: sd };
+      handle().beginGesture(`Change ${panel.module(sx.mid).label} ${sx.c.label}`);
+      onPointerMove(e);
+      return;
+    }
     const k = e.target.closest('[data-knob]');
     if (k) {
       const x = controlOf(k.dataset.knob);
@@ -466,7 +476,11 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
   function onPointerMove(e) {
     if (knob) {
-      gestures.drag(knob, e);
+      if (knob.scope) {
+        const x = controlOf(knob.cid);
+        const v = scopeValue(knob.scope, e, panel.module(x.mid).node, knob.param);
+        if (x && v !== valueOf(x)) setControl(knob.cid, v);
+      } else gestures.drag(knob, e);
       return;
     }
     if (!cable) return;
@@ -584,26 +598,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     }
   }
 
-  /**
-   * A section chip: the module's plate scrolled to the top of the view and then down past the
-   * sticky chip bar, so its heading is not under the bar; focus moves to the plate.
-   */
-  function gotoSection(mid) {
-    const el = host();
-    const target = el && el.querySelector(`[data-module="${mid}"]`);
-    if (!target) return;
-    target.scrollIntoView({ block: 'start', behavior: 'auto' });
-    const bar = el.querySelector('nav[aria-label="Synth sections"]');
-    const r = bar ? bar.getBoundingClientRect() : null;
-    const over = r && r.height ? r.bottom + 8 - target.getBoundingClientRect().top : 0;
-    let s = target.parentElement;
-    while (s && s !== document.body && !/(auto|scroll)/.test(getComputedStyle(s).overflowY)) {
-      s = s.parentElement;
-    }
-    if (over > 0) (s && s !== document.body ? s : window).scrollBy(0, -over);
-    if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');
-    target.focus({ preventScroll: true });
-  }
+  const gotoSection = (mid) => scrollToSection(host(), mid);
 
   function restoreModule(mid) {
     const m = panel.module(mid);

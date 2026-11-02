@@ -40,15 +40,18 @@ test('the filter curve is the Web Audio biquad for the linear Q', () => {
 test('each scope is a labelled image of the parameters it draws', () => {
   const vco = sc.scopeOf('vco', { waveform: 'pulse', width: 25 }, tokens);
   assert.match(vco.label, /Pulse 25 %, one cycle/);
-  assert.match(vco.svg, /role="img" aria-label="Pulse 25 %, one cycle"/);
+  assert.match(vco.svg, /role="img" aria-label="Pulse 25 %, one cycle; drag to set the width"/);
+  const end = vco.svg.match(/points="([^"]+)"/)[1].split(' ').slice(-2);
+  assert.deepEqual(end.map((q) => q.split(',')[1]), ['40.0', '40.0'], 'the cycle ends low, flat');
   const lfo = sc.scopeOf('lfo', { shape: 'triangle', rate: 0.5 }, tokens);
   assert.match(lfo.label, /triangle, two cycles at 0\.5 Hz/);
   const env = sc.scopeOf('envelope', { attack: 0.01, decay: 0.25, sustain: 0.5, release: 1.5 },
     tokens);
-  assert.equal(env.label, 'Envelope: attack 10 ms, decay 250 ms, sustain 50 %, release 1.5 s');
+  assert.equal(env.label, 'Envelope: attack 10 ms, decay 250 ms, sustain 50 %, release 1.5 s; '
+    + 'drag to set the sustain');
   const lpf = sc.scopeOf('filter', { type: 'lowpass', frequency: 1200, Q: 0.7071, gain: 0,
     enabled: true }, tokens);
-  assert.match(lpf.label, /^lowpass response, 1\.2 kHz, Q 0\.71, 20 Hz to 20 kHz$/);
+  assert.match(lpf.label, /^lowpass response, 1\.2 kHz, Q 0\.71, 20 Hz to 20 kHz; drag/);
   assert.equal(sc.scopeOf('mixer', {}, tokens), null, 'a module without a curve has none');
   for (const s of [vco, lfo, env, lpf]) {
     const shapes = s.svg.match(/<(line|polyline)\b[^>]*>/g);
@@ -70,4 +73,25 @@ test('the plates of the panel carry their scopes, and a knob drag redraws them',
   }
   const ui = readFileSync(new URL('../../src/js/synth/ui.js', import.meta.url), 'utf8');
   assert.match(ui, /function updateKnob[\s\S]*?refreshScope\(el, x\.mid,/);
+});
+
+test('a drag on a scope sets the parameter it draws, on the drawing\'s own axis', () => {
+  assert.deepEqual(sc.scopeDrive('filter', {}), { key: 'frequency', axis: 'x', verb: 'cutoff' });
+  assert.equal(sc.scopeDrive('vco', { waveform: 'sawtooth' }), null, 'only a pulse has a width');
+  assert.equal(sc.scopeDrive('vco', { waveform: 'pulse' }).key, 'width');
+  assert.equal(sc.scopeDrive('envelope', {}).axis, 'y');
+  assert.equal(sc.scopeDrive('mixer', {}), null);
+  const box = { getBoundingClientRect: () => ({ left: 100, top: 50, width: 120, height: 44 }) };
+  const at = (fx, fy) => ({ clientX: 100 + fx * 120, clientY: 50 + fy * 44 });
+  const freq = { key: 'frequency', min: 10, max: 20000, scale: 'log' };
+  assert.equal(sc.scopeValue(box, at(0, 0), 'filter', freq), 20, 'left edge is 20 Hz');
+  assert.equal(sc.scopeValue(box, at(0.5, 0), 'filter', freq), 632.5, 'middle is 632 Hz');
+  assert.equal(sc.scopeValue(box, at(1.2, 0), 'filter', freq), 20000, 'clamped to the range');
+  const sus = { key: 'sustain', min: 0, max: 1 };
+  assert.equal(sc.scopeValue(box, at(0.3, 41 / 44), 'envelope', sus), 0, 'the floor is 0');
+  assert.equal(sc.scopeValue(box, at(0.3, 4 / 44), 'envelope', sus), 1, 'the top is 1');
+  const rate = { key: 'rate', min: 0.01, max: 100, scale: 'log' };
+  assert.equal(sc.scopeValue(box, at(0.5, 0), 'lfo', rate), 1, 'the LFO rate on its log scale');
+  const lpf = sc.scopeOf('filter', { type: 'lowpass', frequency: 500, Q: 1, gain: 0 }, tokens);
+  assert.match(lpf.label, /; drag to set the cutoff$/);
 });

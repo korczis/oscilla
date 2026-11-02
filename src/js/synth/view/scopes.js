@@ -9,6 +9,10 @@
 //   scopeOf(nodeType, params, tokens, { sampleRate }) -> { svg, label } | null
 //   biquadDb(type, f0, Q, gainDb, f, sampleRate) -> the magnitude in dB at f
 //   refreshScope(el, moduleId, nodeType, params, tokens) -> redraws the plate's scope in place
+//   scopeDrive(nodeType, params) -> the parameter a drag on the scope sets, or null:
+//     a filter's cutoff (x, on the drawing's log axis), a pulse's width (x), an LFO's rate (x,
+//     the knob's own scale) and an envelope's sustain (y). The knob stays the keyboard control.
+//   scopeValue(box, event, nodeType, param) -> that parameter's value under the pointer
 
 const W = 120;
 const H = 44;
@@ -40,7 +44,7 @@ function cycles(shape, n, width) {
     // A step (square, pulse, saw reset) is drawn vertical: both values at the same x.
     const v = waveAt(shape, ph === 0 && i ? 0.999999 : ph, width);
     out.push([(i / steps) * W, MID - v * (MID - 4)]);
-    if (i && i < steps && ['square', 'pulse', 'sawtooth'].includes(shape)) {
+    if (i && i < steps - 1 && ['square', 'pulse', 'sawtooth'].includes(shape)) {
       const nx = ((i + 1) / steps) * n;
       const nv = waveAt(shape, nx - Math.floor(nx), width);
       if (Math.abs(nv - v) > 1) out.push([(i / steps) * W, MID - nv * (MID - 4)]);
@@ -137,6 +141,8 @@ export function scopeOf(nodeType, p, t, { sampleRate = 48000 } = {}) {
   } else {
     return null;
   }
+  const drive = scopeDrive(nodeType, p);
+  if (drive) label += `; drag to set the ${drive.verb}`;
   const svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="h-11 w-full" `
     + `role="img" aria-label="${label}" focusable="false">${grid}`
     + `<polyline points="${pts(line)}" fill="none" stroke="${t.accent}" stroke-width="1.75" `
@@ -148,4 +154,30 @@ export function refreshScope(el, moduleId, nodeType, params, tokens) {
   const box = el && el.querySelector(`[data-scope="${moduleId}"]`);
   const s = box && scopeOf(nodeType, params, tokens);
   if (s) box.innerHTML = s.svg;
+}
+
+export function scopeDrive(nodeType, p) {
+  if (nodeType === 'filter') return { key: 'frequency', axis: 'x', verb: 'cutoff' };
+  if (nodeType === 'vco' && p.waveform === 'pulse') {
+    return { key: 'width', axis: 'x', verb: 'width' };
+  }
+  if (nodeType === 'lfo') return { key: 'rate', axis: 'x', verb: 'rate' };
+  if (nodeType === 'envelope') return { key: 'sustain', axis: 'y', verb: 'sustain' };
+  return null;
+}
+
+export function scopeValue(box, e, nodeType, param) {
+  const r = box.getBoundingClientRect();
+  const fx = Math.max(0, Math.min(1, (e.clientX - r.left) / (r.width || 1)));
+  const fy = Math.max(0, Math.min(1, (e.clientY - r.top) / (r.height || 1)));
+  const lo = param.min;
+  const hi = param.max;
+  const clamp = (v) => Math.max(lo, Math.min(hi, v));
+  let v;
+  if (nodeType === 'filter') v = F_LO * (F_HI / F_LO) ** fx;
+  else if (nodeType === 'envelope') v = (H - 3 - fy * H) / (H - 7);
+  else if (param.scale === 'log' && lo > 0) v = lo * (hi / lo) ** fx;
+  else v = lo + fx * (hi - lo);
+  v = clamp(v);
+  return Number(v.toPrecision(param.scale === 'log' ? 4 : 3));
 }

@@ -86,6 +86,9 @@
 //              slide, ArrowUp +1 option, ArrowDown -1, Home and End the first and last radio
 //   s-connect  Enter on a jack opens the connection list (targets, refused ones with reasons);
 //              choosing a target patches; the jack names say which can take the cable
+//   s-scope    K152: a drag across the LPF plate's scope sets its cutoff on the drawing's log
+//              axis (left 20 Hz, right 20 kHz) as one undo step, the curve and the knob's value
+//              follow, and its label says what it draws
 //   s-dock     K066, beside the piano: the instrument picker is a menu button whose role=menu
 //              lists every notes node (8, the XY pad too) and New Synth voice; arrows and
 //              Enter route the keys to the FM engine in one undo entry (a note then takes an FM voice) and undo
@@ -849,6 +852,33 @@ function defineChecks() {
     return { ok: after.rev === before.rev && JSON.stringify(after.sel)
       === JSON.stringify(before.nodes) && after.sel.length === before.nodes.length
       && after.sel.length >= 14, before, after };
+  });
+
+  def('s-scope', async ({ page }) => {
+    const scope = page.locator('[data-scope-drive="lpf.frequency"]');
+    await scope.scrollIntoViewIfNeeded();
+    const box = await scope.boundingBox();
+    const depth = () => page.evaluate(() => window.OSCILLA.studio.store.debugInfo().undoDepth);
+    const before = { depth: await depth(),
+      value: await page.locator('[data-value="lpf.frequency"]').textContent() };
+    const y = box.y + box.height / 2;
+    await page.mouse.move(box.x + box.width * 0.9, y);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.6, y, { steps: 4 });
+    await page.mouse.move(box.x + box.width * 0.5, y, { steps: 4 });
+    await page.mouse.up();
+    const after = await page.evaluate(() => {
+      const m = window.OSCILLA.studio.store.getModel();
+      const lpf = m.graph.nodes.find((n) => n.metadata && n.metadata.panel
+        && n.metadata.panel.module === 'lpf');
+      return { hz: lpf.params.frequency,
+        depth: window.OSCILLA.studio.store.debugInfo().undoDepth,
+        value: document.querySelector('[data-value="lpf.frequency"]').textContent,
+        label: document.querySelector('[data-scope="lpf"] svg').getAttribute('aria-label') };
+    });
+    return { ok: Math.abs(after.hz - 632.5) < 20 && after.depth === before.depth + 1
+      && after.value !== before.value && /^lowpass response, 6\d\d(\.\d)? Hz, /.test(after.label),
+    before, after };
   });
 
   def('s-dock', async ({ page, size }) => {
