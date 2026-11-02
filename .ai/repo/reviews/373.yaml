@@ -41,13 +41,23 @@
 #   their fixture repositories behind; every npm run verify leaks them. On this machine on
 #   2026-11-02 they held about 24 GB of the temporary directory with the disk at 7 GiB free.
 #
-# Verdict: merge. No P0 or P1; L1 and L2 closed; L3 open, P2, pre-existing.
+# Delta at e5c8eecb (content f1573a00...fdf), against the judged 47071c9a:
+# - L3 closed: publish() removes its oscilla-release-* directory in a finally, whatever gh release
+#   create answers; the fake gh of release-publish.test.mjs reads the notes when the Release is
+#   created, since the file is gone after. The fixture repositories of release-publish
+#   (oscilla-gate-tree-) and release-record (oscilla-records-) are removed at process exit;
+#   release-record's and release-provenance's single-test directories use t.after. A new test
+#   runs a publish to the Release step under a TMPDIR it owns and finds no oscilla-release-* left.
+# - Proven here: TMPDIR=<a fresh directory> node --test tests/unit/release-*.test.mjs passes 126
+#   of 126 and leaves the directory empty.
+#
+# Verdict: merge. No P0 or P1; L1, L2 and L3 closed.
 schema: review-verdict/v1
 pr: 373
 verdict: merge
 reviewer: oscilla-dev-53 (claude-code 4fba4ca0)
-content: 272bddf8fcbd218e210c2bd4dbcb72d3e0df5af214aed68a7f199e84ce45936b
+content: f1573a007f85d6c000d61ab593f7cb3dcda9a71e7310e99f2bffc4a7a7bfffdf
 findings:
   - { id: L1, severity: P3, status: closed, title: "release-record's gh release download --output is retried after a transient failure without --clobber, so a first attempt that left a partial file can turn the retry into an 'already exists' refusal; delete the file before a retry or pass --clobber (the temporary directory is new per call)" }
   - { id: L2, severity: P3, status: closed, title: "gh run watch is restarted after a non-timeout transient failure, so the total wait can exceed --pages-timeout by up to two further attempts; the stated bound is per attempt, not for the watch as a whole" }
-  - { id: L3, severity: P2, status: open, title: "pre-existing on main: publish() never removes its mkdtemp oscilla-release-* (notes and a 2.7 MB dist copy), and the release-publish and release-record tests leave their fixture repositories in the temporary directory, so every npm run verify leaks them; remove each in a finally / t.after" }
+  - { id: L3, severity: P2, status: closed, title: "pre-existing on main: publish() never removes its mkdtemp oscilla-release-* (notes and a 2.7 MB dist copy), and the release-publish and release-record tests leave their fixture repositories in the temporary directory, so every npm run verify leaks them; remove each in a finally / t.after" }
