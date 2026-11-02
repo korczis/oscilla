@@ -459,7 +459,8 @@ async function runOne(name) {
         `ui-current: ${w.id}'s empty state hides when ${w.empty.when} stops holding`);
       check(`empty-state-${w.id}-hides`, off.ok, JSON.stringify(off.last));
       await force.on(page);
-      await page.click(`[data-osc="page.empty"][data-workspace="${w.id}"] [data-osc="page.emptyAction"]`);
+      await page.click(`[data-osc="page.empty"][data-workspace="${w.id}"] `
+        + '[data-osc="page.emptyAction"]');
       const went = await pollFor(() => page.evaluate(() => window.OSCILLA.app.workspace),
         (x) => x === w.empty.action.to, `ui-current: ${w.id}'s empty action`);
       check(`empty-state-${w.id}-action`, went.ok, `workspace ${went.last}`);

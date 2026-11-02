@@ -412,7 +412,8 @@
         class="items-center flex-none hidden gap-1 ml-auto md:flex">
         <span class="mr-1 text-sm text-gray-500 dark:text-gray-400">Related</span>
         <template x-for="r in workspaceRelated()" :key="r.key">
-          <a :href="r.href" data-osc="page.relatedLink" :data-to="r.id" :title="r.why"
+          <a :href="r.href" data-osc="page.relatedLink" :id="'osc-related-' + r.key.replace(':', '-')"
+            :data-to="r.id" :title="r.why"
             x-bind="relatedLink(r)" x-text="r.text"
             class="inline-flex items-center px-2 text-sm font-medium rounded-lg text-primary-700 min-h-8 [@media(pointer:coarse)]:min-h-11 hover:underline hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-primary-400 dark:hover:bg-gray-700"></a>
         </template>
@@ -429,6 +430,7 @@
           class="absolute right-0 z-50 py-1 mt-2 bg-white rounded-lg shadow-lg w-72 top-full dark:bg-gray-700">
           <template x-for="r in workspaceRelated()" :key="r.key">
             <a role="menuitem" :href="r.href" data-osc="page.relatedItem" :data-to="r.id"
+              :id="'osc-related-item-' + r.key.replace(':', '-')"
               x-bind="relatedLink(r)"
               class="flex flex-col justify-center w-full px-4 py-2 text-left min-h-11 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:hover:bg-gray-600">
               <span class="text-sm font-medium text-gray-900 dark:text-white" x-text="r.text"></span>
@@ -1441,10 +1443,8 @@
       <!-- ---------- Pattern sequencer ---------- -->
       <section class="osc-panel osc-p-sequencer" id="osc-panel-sequencer"
         data-osc-panel="sequencer" data-osc-modes="sequencer" aria-labelledby="osc-seq-title">
-        <div class="osc-panel-header osc-seq-head">
+        <div class="osc-panel-header osc-seq-head h-auto min-h-8">
           <h2 class="osc-panel-title" id="osc-seq-title">Pattern Sequencer</h2>
-          <span data-osc="seq.unsaved" hidden :hidden="!seqUnsaved"
-            title="Export config keeps the sequence; a reload asks first">unsaved sequence</span>
           <div class="osc-transport" role="group" aria-label="Sequencer transport">
             <button type="button" class="osc-transport-btn" id="osc-seq-play"
               data-osc="seq.play" aria-label="Play sequence" aria-pressed="false">
@@ -1461,7 +1461,12 @@
           </div>
           <!-- The workspace's links share the one flexible cell of the head grid with its spacer,
                so Tempo keeps its own cell in the first row; on a phone they take a row (A1). -->
+          <!-- The unsaved note shares that cell too: as a grid item of its own it shifted the
+               cells after it and squeezed the transport under the links (the lab is 1280 px
+               beside the sidebar). The head grows when the cell wraps. -->
           <div class="flex min-w-0 flex-wrap items-center gap-x-3 self-center max-md:col-span-full">
+            <span data-osc="seq.unsaved" hidden :hidden="!seqUnsaved"
+              title="Export config keeps the sequence; a reload asks first">unsaved sequence</span>
             <a href="#m=studio&amp;st=sweep-sequence" data-osc="seq.toStudioTemplate" hidden
               :hidden="workspace !== 'sequencer'">Open Sweep Sequence in Studio</a>
             <a href="#m=studio" data-osc="seq.toStudio" hidden :hidden="workspace !== 'sequencer'"

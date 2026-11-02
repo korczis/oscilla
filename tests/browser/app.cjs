@@ -330,6 +330,9 @@ function auditControls() {
   document.querySelectorAll('[data-osc]').forEach((el) => {
     if (!el.matches(INTERACTIVE)) return;
     if (el.id === 'osc-import-file') return; // opened by the Import menu items
+    // The phone drawer's backdrop (F002) is a pointer-only twin of the menu button and Escape
+    // (tabindex -1, aria-hidden): its keyboard and screen-reader way is the menu button.
+    if (el.dataset.osc === 'sidebar.backdrop') return;
     // The STUDIO workspace and its dialogs are audited, state by state, by
     // tests/browser/v31-studio-graph.cjs (controls-labelled); its file input is opened by the
     // Import button. The compact widget in the Playground stays in this audit.
@@ -1249,10 +1252,24 @@ function defineChecks() {
       a.exps.panel = 'detail';
       a.alerts = [];
     });
+    // Presets' empty state (lane A wave 3): the Custom tab with no saved preset.
+    await H.workspace(page, 'presets');
+    await page.evaluate(() => { window.OSCILLA.app.customPresets = []; });
+    await page.click('[data-osc="presets.tab"][data-value="custom"]');
+    await page.waitForSelector('[data-osc="page.emptyAction"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await collect();
+    await page.click('[data-osc="presets.tab"][data-value="reference"]');
     await H.workspace(page, 'playground');
     await page.setViewportSize({ width: 375, height: 800 });
     await H.workspace(page, 'measure');
     await collect();
+    // The page header's Related menu on a phone (lane A wave 3).
+    await page.click('[data-osc="page.relatedMenu"]');
+    await page.waitForSelector('[data-osc="page.relatedItem"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await collect();
+    await page.keyboard.press('Escape');
     await H.workspace(page, 'playground');
     await sleep(200);
     await page.click('#osc-sb-actions-toggle');

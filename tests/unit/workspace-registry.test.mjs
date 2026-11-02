@@ -231,11 +231,13 @@ test('the page header renders the registry: summary, Related strip and menu, act
   const header = HTML.slice(HTML.indexOf('<div data-osc="page.header"'),
     HTML.indexOf('<main'));
   assert.match(header, /data-osc="page\.summary" x-text="workspaceSummary\(\)"/);
-  assert.match(header, /<nav data-osc="page\.related"[^>]*>[\s\S]*?<template x-for="r in workspaceRelated\(\)"/);
+  assert.match(header,
+    /<nav data-osc="page\.related"[^>]*>[\s\S]*?<template x-for="r in workspaceRelated\(\)"/);
   assert.match(header, /data-osc="page\.relatedLink"[^>]*x-bind="relatedLink\(r\)"/);
   const menu = /<button\b[^>]*data-osc="page\.relatedMenu"[^>]*>/.exec(header);
   assert.ok(menu && /\bh-11\b/.test(menu[0]), 'the phone Related menu is a 44 px target');
-  assert.match(header, /role="menuitem"[^>]*data-osc="page\.relatedItem"[^>]*x-bind="relatedLink\(r\)"[^>]*class="[^"]*\bmin-h-11\b/);
+  assert.match(header, new RegExp('role="menuitem"[^>]*data-osc="page\\.relatedItem"[^>]*'
+    + 'x-bind="relatedLink\\(r\\)"[^>]*class="[^"]*\\bmin-h-11\\b'));
   assert.match(header, /data-osc="page\.actions"[\s\S]*id="osc-safety-reopen-phone"/);
   assert.equal((HTML.match(/<h1\b/g) || []).length, 1, 'the page keeps its one h1');
   const ui = createOscillaUi({ storedAnalysisTab: null });

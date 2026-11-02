@@ -35,8 +35,9 @@
 //   exits           every workspace has a way onward derived from the registry (lane A wave 3,
 //                   src/js/ui/shell.js WORKSPACE_REGISTRY related): the page header renders
 //                   exactly its related pages, at least one, each an address routeOfHash sends
-//                   to that workspace; and every workspace shows the nav and at least one in-content
-//                   control that leads to another workspace, except the ones in NO_EXIT_OK.
+//                   to that workspace; and every workspace shows the nav and at least one
+//                   in-content control that leads to another workspace, except the ones in
+//                   NO_EXIT_OK.
 //   actions         the cross-workspace controls (ACTIONS) land where their label says: the
 //                   header About, Measure → Experiments, the compact Studio and its Back, the
 //                   Filter Lab back, a Learn demo, every link of About's workspace list and
