@@ -1118,6 +1118,9 @@ const ADR_NOT_A_CAPABILITY = new Map([
   ['0081', 'a proposed decision (J001): the component contract and its Majordomus projection;'
     + ' nothing implements it yet, and G001\'s claim cites it when the catalogue ships, and this'
     + ' entry then fails as stale'],
+  ['0083', 'a proposed process decision for the owner: pull requests land through a merge queue'
+    + ' instead of racing armed auto-merges on a strict branch; landing engineering, it adds no'
+    + ' capability of the page'],
 ]);
 
 /** ADR numbers (from 0011 on) that `corpus` never cites, and exemptions it does cite. */

@@ -71,6 +71,8 @@ accepted` lists them. The rest stay `proposed`, each for a stated reason:
   yet (G001 builds the catalogue on it).
 - 0082: new and accepted on 2026-11-02 (plan issue R028): the owner chose "CI receipt for all
   releases" in the session of that day; its resolution note names the code and tests.
+- 0083: new on 2026-11-02 (landing): proposed, because branch protection is the owner's to
+  change; it measures the BEHIND races of #385 and lists what adopting a merge queue changes.
 
 On 2026-10-28 the owner ordered Flowbite Pro for the UI of every project; ADR 0061 records
 that order as an accepted decision (its acceptance note quotes it) and supersedes the bullet of
@@ -134,6 +136,7 @@ listed one is not accepted, or when a link, title, date or mark differs from the
 | [0049](0049-raw-capture-retention.md) | The raw capture lives only for its analysis; a run stores derived results | 2026-10-18 | yes |
 | [0061](0061-the-ui-is-built-on-flowbite-pro.md) | The UI is built on Flowbite Pro: Tailwind and Flowbite return at build time, inlined | 2026-10-28 | no |
 | [0082](0082-a-release-rests-on-the-ci-run-of-its-own-pull-request.md) | A release rests on the CI run of its own pull request: the CI receipt binds the merged tree, and the local gate becomes optional | 2026-11-02 | no |
+| [0083](0083-pull-requests-land-through-a-merge-queue-not-a-race-of-armed-auto-merges.md) | Pull requests land through a merge queue, not a race of armed auto-merges on a strict branch | 2026-11-02 | no |
 
 ## An exemption from the release candidate
 
