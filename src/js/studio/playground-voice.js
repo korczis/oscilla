@@ -37,6 +37,7 @@
 
 import { WAVEFORMS } from '../core/constants.js';
 import { createStudioModel } from './schema.js';
+import { filterNodeParams } from './node-params.js';
 
 export const PLAYGROUND_VOICE_TITLE = 'Playground voice';
 
@@ -154,8 +155,7 @@ export function playgroundVoiceModel(input = {}) {
   const f = lab && lab.filter;
   if (f) {
     x += 200;
-    node(ID.filter, 'filter', 'Filter', { type: f.type, frequency: f.frequency, Q: f.Q,
-      gain: finite(f.gain, 0), enabled: true }, x);
+    node(ID.filter, 'filter', 'Filter', filterNodeParams(f), x);
     connect(tail, 'audio', ID.filter, 'audio');
     tail = ID.filter;
   }
