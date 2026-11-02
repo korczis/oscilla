@@ -77,7 +77,9 @@
 //              presets; Enter on the first applies it in one undo entry and the pad takes its
 //              scale; a name and Save the XY pad as a preset save it, listed under 'xy' at once
 //   s-riffs    K149 with K102: the library's Riffs category lists the original riffs, each said
-//              as "Original, in the style of <genre> (<era>)", Insert its only way in; Enter
+//              as "Original, in the style of <genre> (<era>)", Insert its only way in; Listen
+//              is heard (RMS above -40 dB rel), Stop falls below -70 dB rel and neither adds an
+//              undo entry (an ephemeral audition, Q032); Enter
 //              inserts the first in one undo entry: an event track of its name with its clips
 //              on an Oscillator that reaches the Master Output
 //   s-mobile   390 x 844 with touch: no horizontal page scroll, every knob and jack box 44 px+,
@@ -734,6 +736,13 @@ function defineChecks() {
     const modes = await page.locator('[data-osc="library.detail"] [data-mode]')
       .evaluateAll((els) => els.map((el) => el.getAttribute('data-mode')));
     const before = await depth();
+    const listen = page.locator('[data-osc="library.listen"]');
+    await listen.click();
+    const heard = await sound(page, (q) => q.rmsDb > -40, 'Listen plays the riff');
+    const pressed = await listen.getAttribute('aria-pressed');
+    await listen.click();
+    const hushed = await sound(page, (q) => q.rmsDb < -70, 'Stop ends the audition');
+    const unsaved = (await depth()) === before;
     await list.focus();
     await page.keyboard.press('Enter');
     await until(async () => (await depth()) === before + 1, { ms: 5000,
@@ -755,7 +764,8 @@ function defineChecks() {
     }, name);
     return { ok: count >= 12 && /^Original, in the style of /.test(style)
       && JSON.stringify(modes) === '["insert"]' && added.track && added.osc === 'oscillator'
-      && added.master && added.clips > 0, count, name, style, modes, added };
+      && added.master && added.clips > 0 && pressed === 'true' && unsaved, count, name, style,
+    modes, added, heard: heard.rmsDb, hushed: hushed.rmsDb, pressed, unsaved };
   });
 
   def('s-escape', async ({ page }) => {

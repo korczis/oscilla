@@ -75,7 +75,28 @@ export function mountPatchBrowser(host, svc) {
     text: all }), ...items.map((x) => h('option', { value: x.id, text: `${x.label || x.id} (${
     x.count})`, selected: x.id === value }))]);
 
+  // A riff entry auditions (studio/riffs/audition.js): Listen, then Stop; it also ends when
+  // the riff ends, on any load and when the dialog closes, and is never saved.
+  let heard = null;
+  let ends = 0;
+  const hush = () => { if (heard) heard.ctl.stop(); heard = null; clearTimeout(ends); };
+  function listen(item) {
+    const a = item.audition;
+    if (a.ctl.playing === a.id) {
+      hush();
+      status.textContent = `Stopped ${item.name}.`;
+    } else {
+      hush();
+      const r = a.ctl.start(a.id);
+      status.textContent = r.ok ? `Listening: ${item.name}.` : r.reason;
+      svc.announce(status.textContent, { assertive: !r.ok });
+      if (r.ok) { heard = a; ends = setTimeout(() => { heard = null; render(); }, r.ms + 50); }
+    }
+    render();
+  }
+
   function load(item, mode) {
+    hush();
     const r = entryAction(svc.store.getModel(), item, mode, { target: svc.target() });
     const res = r.action ? svc.store.dispatch(r.action) : { ok: false, reason: r.reason };
     const text = res.ok ? `${MODES.find((m) => m[0] === mode)[1]}: ${item.name}.`
@@ -105,12 +126,16 @@ export function mountPatchBrowser(host, svc) {
         + 'dark:text-green-300', text: 'In use in this Studio' }) : null,
       item.reason ? h('p', { class: 'text-sm text-gray-600 dark:text-gray-300',
         'data-osc': 'library.reason', text: item.reason }) : null,
-      h('div', { class: 'flex flex-wrap gap-2' }, MODES.filter(([m]) => item.modes.includes(m))
+      h('div', { class: 'flex flex-wrap gap-2' }, [item.audition ? h('button', { type: 'button',
+        'data-osc': 'library.listen', class: SECONDARY, 'aria-pressed': String(item.audition
+          .ctl.playing === item.audition.id), text: item.audition.ctl.playing
+          === item.audition.id ? 'Stop' : 'Listen', onClick: () => listen(item) }) : null,
+      ...MODES.filter(([m]) => item.modes.includes(m))
         .map(([m, label], i) => h('button', { type: 'button', 'data-mode': m,
           'data-osc': `library.${m}`, class: i ? SECONDARY : PRIMARY, text: label,
           'aria-disabled': m === 'apply' && !item.applicable ? 'true' : null,
           onClick: () => (m === 'apply' && !item.applicable ? (status.textContent = item.reason)
-            : load(item, m)) }))),
+            : load(item, m)) }))]),
     ]);
   }
 
@@ -134,6 +159,8 @@ export function mountPatchBrowser(host, svc) {
     renderDetail(v.items.find((x) => x.id === active) || null);
   }
 
+  const dialog = host.closest && host.closest('dialog');
+  if (dialog) dialog.addEventListener('close', hush);
   search.addEventListener('input', () => { f.query = search.value; render(); });
   inst.addEventListener('change', () => { f.instrument = inst.value; render(); });
   tag.addEventListener('change', () => { f.tag = tag.value; render(); });

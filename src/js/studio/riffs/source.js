@@ -4,15 +4,21 @@
 // with the voice it was written for, one undo step. The style is said beside the name, so the
 // library never presents a riff as anything but original.
 //
-//   registerRiffSource()   idempotent: registering again replaces the source
+// Listen auditions it (audition.js) through the Studio's engine; the Studio passes its svc and
+// component so Listen first stops the other owners (svc.stopPlayback).
+//
+//   registerRiffSource(svc?, cmp?)   idempotent: registering again replaces the source
 
 import { registerPatchSource } from '../patch-catalog.js';
 import { RIFFS, riffOf } from './library.js';
 import { riffVoiceAction } from './expand.js';
+import { createRiffAudition } from './audition.js';
 
 export const RIFF_CATEGORY = 'riffs';
 
-export function registerRiffSource() {
+export function registerRiffSource(svc = {}, cmp = null) {
+  const ctl = createRiffAudition({ engine: svc.engine,
+    stopOthers: () => { if (cmp && svc.stopPlayback) svc.stopPlayback(cmp); } });
   registerPatchSource({
     id: RIFF_CATEGORY,
     label: 'Riffs',
@@ -21,6 +27,7 @@ export function registerRiffSource() {
       tags: [RIFF_CATEGORY, r.role, r.genre],
       detail: `${r.style} · ${r.tempo} BPM · ${r.key} · ${r.bars} bar${r.bars > 1 ? 's' : ''}`,
       patch: { name: r.title, category: RIFF_CATEGORY, riff: r.id, graph: { nodes: [] } },
+      audition: { id: r.id, ctl },
     })),
     load: (model, patch, mode) => {
       const riff = riffOf(patch.riff);

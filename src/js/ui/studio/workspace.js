@@ -1119,7 +1119,7 @@ export function createStudioUi(svc = {}) {
     const browserHost = libBody ? libBody.insertBefore(document.createElement('div'),
       libBody.lastElementChild) : null;
     registerSynthSources();
-    registerRiffSource();
+    registerRiffSource(svc, cmp);
     ctx.browser = browserHost ? mountPatchBrowser(browserHost, { store: ctx.handle, announce,
       userPatches: () => library().then((l) => l.patches()),
       savePatch: (p) => library().then(async (l) => l.savePatch(p, { now: new Date(),

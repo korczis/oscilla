@@ -188,3 +188,59 @@ test('the patch library lists every riff as an Insert of its own voice', async (
     .filter((n) => n.type !== 'master'), edges: [] } };
   assert.match(cat.entryAction(bare, e, 'insert').reason, /Master Output/);
 });
+
+// Audition (Q032's ephemeral preview): a riff plays as ONE finite steps plan of the engine's
+// play(), behind its output guard; nothing is written to the model. Listen stops the other
+// owners first; the guard's refusal (a measurement owns the output) is said, not swallowed.
+test('a riff auditions as one finite steps plan through the guarded engine', async () => {
+  const au = await import('../../src/js/studio/riffs/audition.js').catch(() => ({}));
+  assert.equal(typeof au.auditionPlan, 'function');
+  const riff = lib.riffOf('mirrorball-octaves');
+  const plan = au.auditionPlan(riff);
+  const beat = 60 / riff.tempo;
+  assert.equal(plan.type, 'steps');
+  assert.equal(plan.kind, 'finite');
+  assert.equal(plan.wave, riff.voice.waveform);
+  assert.equal(plan.steps.length, riff.notes.length);
+  const [step, pitch, len] = riff.notes[1];
+  assert.ok(Math.abs(plan.steps[1].t - step * beat / 4) < 1e-9);
+  assert.ok(Math.abs(plan.steps[1].dur - len * beat / 4 * 0.9) < 1e-9, 'a short gap per note');
+  assert.equal(plan.steps[1].f, noteHz(midiOf(pitch)));
+  assert.ok(Math.abs(plan.dur - riff.bars * 4 * beat) < 1e-9);
+  assert.match(plan.label, /Mirrorball Octaves/);
+  assert.equal(au.auditionPlan(riff, { transpose: 12 }).steps[1].f,
+    noteHz(midiOf(pitch) + 12));
+  assert.ok(Math.abs(au.auditionPlan(riff, { tempo: riff.tempo * 2 }).dur - plan.dur / 2) < 1e-9);
+  const log = [];
+  let refuse = false;
+  const engine = { play: (p, o) => {
+    log.push(['play', p.type]);
+    // the engine derives each step's envelope from these: absent, it computes NaN and throws
+    assert.ok(o.attackS > 0 && o.releaseS > 0 && o.limitS >= p.dur && o.mode === 'trigger');
+    return refuse ? null : { ok: true };
+  },
+    stopAll: () => log.push(['stopAll']) };
+  let clock = 0;
+  const a = au.createRiffAudition({ engine, stopOthers: () => log.push(['others']),
+    now: () => clock });
+  assert.deepEqual(a.start('mirrorball-octaves'), { ok: true, ms: Math.ceil(plan.dur * 1000) });
+  assert.equal(a.playing, 'mirrorball-octaves');
+  clock = plan.dur * 1000 + 1;
+  assert.equal(a.playing, null, 'the audition ends with its plan');
+  assert.equal(a.stop(), false);
+  clock = 0;
+  a.start('mirrorball-octaves');
+  log.length = 0;
+  log.push(['others'], ['play', 'steps']);
+  assert.equal(a.stop(), true);
+  assert.equal(a.playing, null);
+  assert.equal(a.stop(), false, 'nothing to stop');
+  assert.deepEqual(log, [['others'], ['play', 'steps'], ['stopAll']]);
+  refuse = true;
+  const r = a.start('mirrorball-octaves');
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /measurement/);
+  assert.equal(a.playing, null);
+  assert.match(a.start('no-such-riff').reason, /No riff/);
+  assert.match(au.createRiffAudition({}).start('mirrorball-octaves').reason, /no audio/i);
+});
