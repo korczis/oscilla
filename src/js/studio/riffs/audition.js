@@ -1,12 +1,14 @@
 // Audition a riff (Q032's ephemeral preview): the riff plays as ONE finite steps plan of the
 // AudioEngine's play(), the instrument's own path, so the engine's output guard decides (a
 // measurement owns the output: refused, and said). Nothing is written to the StudioModel, the
-// history or provenance; Listen stops the other owners first, and Stop, a load from the library
+// history or provenance. While a measurement runs, Listen is refused with a sentence before
+// anything is stopped (a capture is never aborted silently); otherwise it stops the ordinary
+// owners first (Hold, the sequencer, the Studio transport), and Stop, a load from the library
 // or closing its dialog ends it. The riff is monophonic, so one voice plays it; each note keeps
 // a tenth of its length as a gap, so repeated pitches are heard as separate notes.
 //
 //   auditionPlan(riff, { tempo = riff.tempo, transpose = 0 }) -> the engine's steps plan
-//   createRiffAudition({ engine, stopOthers, now }) -> { start(id, opts) -> { ok, ms } |
+//   createRiffAudition({ engine, stopOthers, measuring, now }) -> { start(id, opts) -> { ok, ms } |
 //     { ok: false, reason }, stop() -> bool, playing: the riff id until it ends | null }
 
 import { midiOf, noteHz } from '../templates/demo-song-score.js';
@@ -28,7 +30,7 @@ export function auditionPlan(riff, { tempo = riff.tempo, transpose = 0 } = {}) {
 }
 
 export function createRiffAudition({ engine = null, stopOthers = () => {},
-  now = () => Date.now() } = {}) {
+  measuring = () => false, now = () => Date.now() } = {}) {
   let playing = null;
   let until = 0;
   return {
@@ -37,6 +39,9 @@ export function createRiffAudition({ engine = null, stopOthers = () => {},
       if (!riff) return { ok: false, reason: `No riff "${String(id)}" in the library.` };
       if (!engine || typeof engine.play !== 'function') {
         return { ok: false, reason: 'No audio output: the riff cannot play here.' };
+      }
+      if (measuring()) {
+        return { ok: false, reason: 'A measurement is running: the riff plays after it.' };
       }
       stopOthers();
       const plan = auditionPlan(riff, opts);

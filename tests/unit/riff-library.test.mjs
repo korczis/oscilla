@@ -242,5 +242,19 @@ test('a riff auditions as one finite steps plan through the guarded engine', asy
   assert.match(r.reason, /measurement/);
   assert.equal(a.playing, null);
   assert.match(a.start('no-such-riff').reason, /No riff/);
+  // While a measurement owns the output, Listen is refused with a sentence BEFORE anything is
+  // stopped or played: a running capture is never aborted silently (Q032, rule C002).
+  refuse = false;
+  log.length = 0;
+  let measuring = true;
+  const m = au.createRiffAudition({ engine, stopOthers: () => log.push(['others']),
+    measuring: () => measuring });
+  const busy = m.start('mirrorball-octaves');
+  assert.equal(busy.ok, false);
+  assert.match(busy.reason, /measurement is running/);
+  assert.deepEqual(log, [], 'nothing stopped, nothing played');
+  measuring = false;
+  assert.equal(m.start('mirrorball-octaves').ok, true);
+  assert.deepEqual(log, [['others'], ['play', 'steps']]);
   assert.match(au.createRiffAudition({}).start('mirrorball-octaves').reason, /no audio/i);
 });

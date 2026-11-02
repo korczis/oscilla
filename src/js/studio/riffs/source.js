@@ -18,6 +18,8 @@ export const RIFF_CATEGORY = 'riffs';
 
 export function registerRiffSource(svc = {}, cmp = null) {
   const ctl = createRiffAudition({ engine: svc.engine,
+    measuring: () => !!(cmp && typeof cmp.measureOwnsOutput === 'function'
+      && cmp.measureOwnsOutput()),
     stopOthers: () => { if (cmp && svc.stopPlayback) svc.stopPlayback(cmp); } });
   registerPatchSource({
     id: RIFF_CATEGORY,
