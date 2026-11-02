@@ -26,12 +26,28 @@
 # - The release unit tests at the head: 78 pass, 0 fail (release-bounded, release-publish,
 #   release-record, release-cadence, verify-deploy).
 #
-# Verdict: merge. No P0, P1 or P2. Two P3 notes, neither blocking.
+# Delta at 47071c9a (content 272bddf8...36b over the same 7 paths), against the judged c5a584d5:
+# - L1 closed: release-record's gh release download passes --clobber, so a retry replaces a partial
+#   file (gh 2.98: --clobber overwrites existing files of the same name).
+# - L2 closed: boundedRunner takes opts.budgetMs; each attempt is bounded by the smaller of its own
+#   bound and what is left of the budget (the pause before a retry counts against it), and no
+#   attempt after the first starts once it is spent. The Pages watch passes --pages-timeout as the
+#   budget, so the watch is bounded by it in all.
+# - The two new release-bounded tests pin both; the release unit tests at the head: 80 of
+#   release-bounded, release-publish, release-record, release-cadence and verify-deploy pass.
+# - L3 (P2, pre-existing on main, not introduced here): publish() writes notes.md and a dist copy
+#   into a fresh mkdtemp oscilla-release-* and never removes it, and release-publish.test.mjs
+#   (fixtureRepo, oscilla-gate-tree-*) and release-record.test.mjs (oscilla-records-*) leave
+#   their fixture repositories behind; every npm run verify leaks them. On this machine on
+#   2026-11-02 they held about 24 GB of the temporary directory with the disk at 7 GiB free.
+#
+# Verdict: merge. No P0 or P1; L1 and L2 closed; L3 open, P2, pre-existing.
 schema: review-verdict/v1
 pr: 373
 verdict: merge
 reviewer: oscilla-dev-53 (claude-code 4fba4ca0)
-content: a554d491c43e2015a2255d1236ed098f3f9635323df807f1a39a0163362e06de
+content: 272bddf8fcbd218e210c2bd4dbcb72d3e0df5af214aed68a7f199e84ce45936b
 findings:
-  - { id: L1, severity: P3, status: open, title: "release-record's gh release download --output is retried after a transient failure without --clobber, so a first attempt that left a partial file can turn the retry into an 'already exists' refusal; delete the file before a retry or pass --clobber (the temporary directory is new per call)" }
-  - { id: L2, severity: P3, status: open, title: "gh run watch is restarted after a non-timeout transient failure, so the total wait can exceed --pages-timeout by up to two further attempts; the stated bound is per attempt, not for the watch as a whole" }
+  - { id: L1, severity: P3, status: closed, title: "release-record's gh release download --output is retried after a transient failure without --clobber, so a first attempt that left a partial file can turn the retry into an 'already exists' refusal; delete the file before a retry or pass --clobber (the temporary directory is new per call)" }
+  - { id: L2, severity: P3, status: closed, title: "gh run watch is restarted after a non-timeout transient failure, so the total wait can exceed --pages-timeout by up to two further attempts; the stated bound is per attempt, not for the watch as a whole" }
+  - { id: L3, severity: P2, status: open, title: "pre-existing on main: publish() never removes its mkdtemp oscilla-release-* (notes and a 2.7 MB dist copy), and the release-publish and release-record tests leave their fixture repositories in the temporary directory, so every npm run verify leaks them; remove each in a finally / t.after" }
