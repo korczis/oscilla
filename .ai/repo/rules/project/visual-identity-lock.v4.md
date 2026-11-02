@@ -89,8 +89,9 @@ can hold, and keeps every other clause of version 3 unchanged. ADR 0061's resolu
   included. The treatment is drawn only by the shared synth-theme layer (planned as plan issue
   F013: the directories `ui/synth/` and `ui/cable/` under `src/js`, with the Synth panel's
   `src/js/synth/view/`); a surface takes it by calling the layer, so its hardware vocabulary
-  (wood, brushed, anodised, screw, jack nut, sheen, cheek, `data-led`, `data-needle`,
-  `data-hw`) appears in no other source file and no skin escapes the layer's checks. And:
+  (wood, brushed, anodised, screw, jack nut, sheen, cheek, grain, knurl, bolt, bezel, metal or
+  metallic, the `hw-*` intensity classes, `data-led`, `data-needle`, `data-hw`) appears in no
+  other source file and no skin escapes the layer's checks. And:
   - **Tokens only.** Every colour is an OSCILLA token (`src/styles/tokens.css`), read at run
     time or through a Tailwind theme key that maps to a `var(--osc-*)`; the two themes differ
     only by token values. No hex, colour function, named colour, literal paint or arbitrary
@@ -170,10 +171,12 @@ is a review rejection even when every functional test passes.
     `data-needle` element names an interpolated `data-source` and state; the global
     reduced-motion guard of `src/styles/base.css` exists; every colour key of
     `tailwind.config.cjs` but `primary` maps to a `var(--osc-*)` token; the hardware
-    vocabulary appears only in the theme layer (an allow-list that only shrinks is empty at
-    version 4) and "rivet" nowhere; the colour values of `src/styles/tokens.css` equal the
-    reviewed snapshot `tests/unit/visual-identity-palette.json`; the intensity keys
-    `hw-sheen`, `hw-texture`, `hw-wood` and `hw-led` exist within their bounds;
+    vocabulary appears only in the theme layer (an allow-list that only shrinks excuses the
+    word "metal" in three sound sources, the percussion engine's `metal` layer and the "Ring
+    metal" preset, and nothing else) and "rivet" nowhere; the colour values of
+    `src/styles/tokens.css` equal the reviewed snapshot `tests/unit/visual-identity-palette.json`;
+    the intensity keys `hw-sheen`, `hw-texture`, `hw-wood` and `hw-led` exist within their
+    bounds;
   - over the theme layer (`src/js/synth/view/` now, and `ui/synth/` and `ui/cable/` under
     `src/js` once they exist): no colour literal, colour function, named colour, literal paint,
     arbitrary Tailwind colour or `url()` but an in-SVG fragment; every `var(--osc-*)` it names
@@ -206,6 +209,9 @@ is a review rejection even when every functional test passes.
   bay card, every plate label at 4.5:1 or more on its plate, a keyboard-focused jack's ring
   shown, and a card that folds with `aria-expanded`. A re-skinned surface outside the Synth
   gets a check of that style in the same change.
+
+Synonyms beyond the test's vocabulary (`HW_VOCAB`: a new word for wood, metal, a fastener
+or a finish) are for the reviewer to catch; a caught synonym joins the vocabulary.
 
 Review-only (a reviewer owns them), with this checklist line in the review of every pull
 request that re-skins a surface (the repository has no pull-request template):

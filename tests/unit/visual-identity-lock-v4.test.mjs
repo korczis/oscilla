@@ -384,11 +384,19 @@ export function themeSpl(files) {
 
 // --- where the hardware look may be drawn ---------------------------------------------------
 
-export const HW_VOCAB =
-  /wood|brushed|anodis|screw|jack-nut|sheen|cheek|data-led|data-needle|data-hw/i;
-// path -> the one reason a match outside THEME_DIRS is legitimate. Empty at v4 (nothing in src
-// matched on 2026-11-02); an entry only shrinks, and a stale one fails.
-export const HW_ALLOW = new Map();
+export const HW_VOCAB = new RegExp(String.raw`wood|brushed|anodis|screw|jack-nut|sheen|cheek`
+  + String.raw`|grain|knurl|bolt|bezel|metal(?:lic)?\b|\bhw-|data-led|data-needle|data-hw`, 'i');
+// path -> { words, why }: the words a file outside THEME_DIRS may use, and the one reason. Each
+// entry only shrinks, excuses only its words (any other match in the file still fails), and an
+// entry no longer needed fails as stale. Synonyms HW_VOCAB does not list are the reviewer's.
+export const HW_ALLOW = new Map([
+  ['src/js/studio/adapters/engines.js', { words: ['metal'],
+    why: "the percussion engine's 'metal' layer kind (a sound: high-passed inharmonic partials)" }],
+  ['src/js/synth/perc-recipes.js', { words: ['metal'],
+    why: "the hat recipes' 'metal' layer kind, a sound and not a surface" }],
+  ['src/js/synth/presets.js', { words: ['metal'],
+    why: "the preset 'Ring metal: ratio 1.41', a timbre name and not a surface" }],
+]);
 const HW_SCANNED = /\.(m?js|css|html)$/;
 
 /** The hardware vocabulary only under THEME_DIRS (outside comments), so no skin escapes. */
@@ -398,11 +406,13 @@ export function hardwareOutsideLayer(files, allow = HW_ALLOW) {
   for (const [p, raw] of files) {
     if (!HW_SCANNED.test(p) || inDirs(p, THEME_DIRS)) continue;
     const text = stripComments(raw);
-    const m = new RegExp(HW_VOCAB.source, 'gi').exec(text);
-    if (!m) continue;
-    if (allow.has(p)) { seen.add(p); continue; }
-    out.push(`${p}:${lineOf(text, m.index)}: "${m[0]}" outside the synth-theme layer `
-      + `(${THEME_DIRS.join(', ')})`);
+    const words = allow.get(p)?.words || [];
+    for (const m of text.matchAll(new RegExp(HW_VOCAB.source, 'gi'))) {
+      if (words.includes(m[0].toLowerCase())) { seen.add(p); continue; }
+      out.push(`${p}:${lineOf(text, m.index)}: "${m[0]}" outside the synth-theme layer `
+        + `(${THEME_DIRS.join(', ')})`);
+      break;
+    }
   }
   for (const p of allow.keys()) if (!seen.has(p)) out.push(`${p}: stale HW_ALLOW entry`);
   return out;
@@ -730,8 +740,10 @@ test('mutation: a needle labelled SPL without the calibration is caught', () => 
 });
 
 test('mutation: the hardware look outside the layer, and a rivet anywhere, are caught', () => {
+  // The fixtures judge without the tree's allow-list, whose entries would read as stale here.
+  const hw = (files) => hardwareOutsideLayer(files, new Map());
   const ok = f('src/js/ui/synth/plate.js', '`<div class="w-hw-wood" data-hw="cheek"></div>`');
-  assert.deepEqual(hardwareOutsideLayer(ok), [], 'inside the layer');
+  assert.deepEqual(hw(ok), [], 'inside the layer');
   for (const [p, bad] of [
     ['src/js/ui/studio/graph-view.js', '`<div class="bg-wood-grain"></div>`'],
     ['src/styles/measure.css', '.knob { --plate-sheen: 0.2; }'],
@@ -739,11 +751,28 @@ test('mutation: the hardware look outside the layer, and a rivet anywhere, are c
     ['src/js/ui/measure.js', '`<i data-led data-source="${s}" data-lit="${on}"></i>`'],
     ['src/js/ui/app.js', "const finish = 'anodised';"],
     ['src/js/ui/workbench.js', '`<i data-hw="nut"></i>`']]) {
-    caught(hardwareOutsideLayer, f(p, bad), f(p, '`<div class="rounded-lg"></div>`'));
+    caught(hw, f(p, bad), f(p, '`<div class="rounded-lg"></div>`'));
   }
-  assert.deepEqual(hardwareOutsideLayer(f('src/js/ui/app.js', '// a wood note')), [],
+  assert.deepEqual(hw(f('src/js/ui/app.js', '// a wood note')), [],
     'a comment is not a skin');
-  assert.ok(hardwareOutsideLayer([], new Map([['src/x.js', 'why']])).length > 0, 'stale allow');
+  const stale = new Map([['src/x.js', { words: ['metal'], why: 'a sound' }]]);
+  assert.ok(hardwareOutsideLayer([], stale).length > 0, 'stale allow');
+  assert.deepEqual(hardwareOutsideLayer(f('src/x.js', "kind: 'metal'"), stale), [], 'its word');
+  assert.ok(hardwareOutsideLayer(f('src/x.js', "kind: 'metal', skin: 'bolt'"), stale).length > 0,
+    'an allowed file still fails on another word');
+  for (const [p, bad] of [
+    ['src/styles/studio.css', '.osc-node-grain { opacity: 0.1; }'],
+    ['src/styles/components.css', '.osc-knurl { border-radius: 50%; }'],
+    ['src/js/ui/studio/graph-view.js', '`<i class="osc-bolt"></i>`'],
+    ['src/styles/studio.css', '.osc-metal-plate { padding: 4px; }'],
+    ['src/js/ui/measure.js', "const finish = 'metallic';"],
+    ['src/index.html', '<div class="rounded-full bezel"></div>'],
+    ['src/js/ui/studio/graph-view.js', '`<i class="shadow-hw-led"></i>`'],
+    ['src/index.html', '<span class="opacity-hw-sheen"></span>']]) {
+    caught(hw, f(p, bad), f(p, '`<div class="rounded-lg"></div>`'));
+  }
+  assert.deepEqual(hw(f('src/js/ui/synth/knob.js',
+    '`<i class="osc-knurl shadow-hw-led"></i>`')), [], 'inside the layer');
   caught(rivets, f('src/js/ui/synth/plate.js', '`<circle class="rivet"/>`'),
     f('src/js/ui/synth/plate.js', '`<circle class="screw"/>`'));
 });
