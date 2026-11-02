@@ -26,6 +26,10 @@ satisfaction:
     criterion: "A workspace with nothing stored (Experiments, Findings, Studio patches) offers a real, labelled example produced by running OSCILLA and the next step, never an empty panel alone"
     evidence: "command"
     ref: "node tests/browser/ui-current.cjs"
+  - id: "phone-whole"
+    criterion: "At 390x844 under a coarse pointer every workspace is whole on a phone: no control is covered, no text outside a zoomable domain view is under 12 px, every control is a 44 px target, and the on-screen keys show whole octaves with every white key a 44 px target and no computer-key letters where no fine pointer is attached (owner, 2026-11-02: \"musi fungovat bezchybne na mobilu i vsude\")"
+    evidence: "command"
+    ref: "node --test tests/unit/phone-whole.test.mjs"
 governance:
   - "rule:project.visual-identity-lock"
   - "rule:project.single-file-deliverable"

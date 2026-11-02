@@ -31,6 +31,32 @@ export const KEYBOARD_REFUSED = Object.freeze({
 
 const KEYS_HEIGHT = 132; // CSS px of the on-screen keys
 
+/** The narrowest white key a finger plays without its neighbour: the 44 px touch target. */
+export const TOUCH_KEY_MIN = 44;
+
+/**
+ * How many octaves the on-screen keys show in `width` CSS px (V634). A fine pointer keeps the
+ * drawing's own choice, two below 560 px and three above; a coarse one shows as many whole
+ * octaves as keep every white key (seven per octave and the top C) at least TOUCH_KEY_MIN wide,
+ * one at the least and three at the most, and the Octave buttons move them.
+ */
+export function keysOctaves(width, { coarse = false } = {}) {
+  if (!coarse) return width < 560 ? 2 : 3;
+  const whites = Math.floor(Math.max(0, width) / TOUCH_KEY_MIN);
+  return Math.max(1, Math.min(3, Math.floor((whites - 1) / 7)));
+}
+
+/**
+ * Whether the keys are touched rather than pointed at, and whether they carry the computer
+ * keys' letters: a letter names a key nobody can press where no fine pointer, and so most
+ * likely no hardware keyboard, is attached (a phone), so there the keys show only their notes.
+ */
+export function keysInput(win) {
+  const mq = (q) => Boolean(win && typeof win.matchMedia === 'function' && win.matchMedia(q).matches);
+  const coarse = mq('(pointer: coarse)');
+  return { coarse, lettered: !coarse || mq('(any-pointer: fine)') };
+}
+
 /** True when `el` takes typed keys itself: a text field, a select, an editable element. */
 export function takesText(el) {
   if (!el || !el.tagName) return false;
@@ -231,13 +257,14 @@ function mountKeys(win, doc, kb) {
   let range = visibleRange(kb.base, 3);
   const labels = {};
   const label = (note) => {
+    if (!keysInput(win).lettered) return null;
     const code = codeForNote(note, kb.base);
     return code ? (labels[code] || KEY_LABELS[code]) : null;
   };
   const view = {
     draw() {
       if (!ctx || !width) return;
-      const octaves = width < 560 ? 2 : 3;
+      const octaves = keysOctaves(width, keysInput(win));
       range = visibleRange(kb.base, octaves);
       const lit = (note) => (kb.isLit(note)
         ? kb.held.find((h) => h.note === note).sources : null);
