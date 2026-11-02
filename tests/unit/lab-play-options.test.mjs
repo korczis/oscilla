@@ -381,33 +381,35 @@ test('R-2: Envelope edits reach a held voice on the engine', { skip }, () => {
   assert.strictEqual(v1.opts.adsr.r, 0.05, 'a later restart keeps it');
   assert.strictEqual(labOpts.followEnvelopeLab(eng, labs.envelope), 'same');
 
-  // Sustain: the scheduled shape changes, so the voice is replaced click-free (same plan).
+  // Sustain (C008): the held level glides on the same voice, no restart; the options follow.
   labs.envelope.adsr = { ...labs.envelope.adsr, s: 0.1 };
+  assert.strictEqual(labOpts.followEnvelopeLab(eng, labs.envelope), 'glided');
+  assert.strictEqual(eng.voice, v1, 'no restart for a sustain change');
+  assert.strictEqual(v1.adsr.s, 0.1);
+  assert.strictEqual(v1.opts.adsr.s, 0.1, 'a later restart keeps it');
+  assert.ok(Math.abs(valueAt(v1.env, v1.t0 + 5) - 0.1) < 1e-9, 'settles at the new sustain');
+  assert.strictEqual(v1.endTime, Infinity, 'still held');
+  advance(1);
+
+  // Off (C008): the held voice glides to level 1 and takes the instrument release again.
+  labs.envelope.enabled = false;
+  assert.strictEqual(labOpts.followEnvelopeLab(eng, labs.envelope), 'glided');
+  assert.strictEqual(eng.voice, v1);
+  assert.strictEqual(v1.adsr, null);
+  assert.strictEqual(v1.opts.stepEnvelope, null);
+  assert.strictEqual(v1.release, 0.03, 'the instrument release again');
+  assert.ok(Math.abs(valueAt(v1.env, v1.t0 + 5) - 1) < 1e-9, 'level 1 with the lab off');
+  advance(1);
+
+  // On again (C007): a voice with no ADSR has nothing to glide, so it is replaced click-free
+  // (same plan) through the wrapper, which hands it the lab's ADSR.
+  labs.envelope.enabled = true;
   assert.strictEqual(labOpts.followEnvelopeLab(eng, labs.envelope), 'restarted');
   const v2 = eng.voice;
   assert.notStrictEqual(v2, v1);
   assert.strictEqual(v2.plan, v1.plan);
   assert.strictEqual(v2.adsr.s, 0.1);
-  assert.ok(Math.abs(valueAt(v2.env, v2.t0 + 0.5) - 0.1) < 0.005, 'sounds at the new sustain');
-  assert.strictEqual(v2.endTime, Infinity, 'still held');
-  advance(1);
-
-  // Off: the held voice loses the ADSR at once, without a pattern change or a new note.
-  labs.envelope.enabled = false;
-  assert.strictEqual(labOpts.followEnvelopeLab(eng, labs.envelope), 'restarted');
-  const v3 = eng.voice;
-  assert.notStrictEqual(v3, v2);
-  assert.strictEqual(v3.adsr, null);
-  assert.strictEqual(v3.opts.stepEnvelope, null);
-  assert.strictEqual(v3.release, 0.03, 'the instrument release again');
-  assert.ok(Math.abs(valueAt(v3.env, v3.t0 + 0.5) - 1) < 1e-9, 'level 1 with the lab off');
-  assert.strictEqual(seen[seen.length - 1].adsr, null, 'the restart went through the wrapper');
-  advance(1);
-
-  // On again: the ADSR comes back to the held voice.
-  labs.envelope.enabled = true;
-  assert.strictEqual(labOpts.followEnvelopeLab(eng, labs.envelope), 'restarted');
-  assert.strictEqual(eng.voice.adsr.s, 0.1);
+  assert.strictEqual(seen[seen.length - 1].adsr.s, 0.1, 'the restart went through the wrapper');
   eng.stopAll();
   advance(3);
   assert.strictEqual(eng.activeNodeCount, 0);
@@ -421,7 +423,9 @@ test('R-2: on the engine alone, setAdsr updates the voice options a restart copi
     eng.play(plan({ pattern: 'tone', frequency: 440 }), opt({ adsr,
       stepEnvelope: adsrStepEnvelope }));
     advance(0.5);
-    assert.strictEqual(eng.setAdsr(null, null), 'restarted');
+    const held = eng.voice;
+    assert.strictEqual(eng.setAdsr(null, null), 'glided', 'off glides the held level to 1 (C008)');
+    assert.strictEqual(eng.voice, held);
     assert.strictEqual(eng.voice.adsr, null);
     assert.strictEqual(eng.voice.opts.stepEnvelope, null, 'no step hook without an ADSR');
     assert.strictEqual(eng.voice.release, 0.03);
@@ -478,7 +482,7 @@ test('R-8: an attack or a decay edit restarts a held voice; a releasing voice is
 // A drag is one edit: while it settles the held voice keeps sounding (its options take the
 // values, so a later note has them), and the drag's end (the slider's 'change', the graph's
 // pointerup) restarts it once. A release change stays in place, as before.
-test('R-7: a 20-event drag restarts the held voice at most once, on the commit', { skip }, () => {
+test('R-7: a 20-event drag restarts the held voice at most once, on the commit; Sustain glides', { skip }, () => {
   const { eng, advance } = setupApp();
   const labs = makeLabs();
   labs.envelope.enabled = true;
@@ -501,17 +505,31 @@ test('R-7: a 20-event drag restarts the held voice at most once, on the commit',
     return [...answers];
   };
 
-  assert.deepStrictEqual(drag('s', 0.1), ['pending']);
-  assert.strictEqual(plays, 0, 'no restart while the Sustain drag settles');
+  // sustain (C008): every notification glides the held level, never a restart
+  const sustain = drag('s', 0.1);
+  assert.ok(sustain.every((a) => a === 'glided' || a === 'deferred'), sustain.join());
+  assert.strictEqual(plays, 0, 'no restart for a Sustain drag, settling or not');
   assert.strictEqual(eng.voice, v1);
   assert.strictEqual(eng.voices.size, 1, 'no extra voice');
-  assert.strictEqual(v1.adsr.s, 0.6, 'the sounding shape is the one that was scheduled');
   assert.strictEqual(v1.opts.adsr.s, labs.envelope.adsr.s, 'the options have the drag');
+  assert.ok(['glided', 'deferred', 'same'].includes(
+    labOpts.followEnvelopeLab(eng, labs.envelope)), 'the commit glides too');
+  advance(1);
+  assert.strictEqual(plays, 0);
+  const v2 = eng.voice;
+  assert.strictEqual(v2, v1);
+  advance(1);
+
+  // decay: one restart, on the commit
+  assert.deepStrictEqual(drag('d', 0.3), ['pending']);
+  assert.strictEqual(plays, 0, 'no restart while the Decay drag settles');
+  assert.strictEqual(eng.voice, v1);
+  assert.strictEqual(v1.adsr.d, 0.1, 'the sounding shape is the one that was scheduled');
+  assert.strictEqual(v1.opts.adsr.d, labs.envelope.adsr.d, 'the options have the drag');
   assert.strictEqual(labOpts.followEnvelopeLab(eng, labs.envelope), 'restarted', 'the commit');
   assert.strictEqual(plays, 1, 'one restart for the whole drag');
-  const v2 = eng.voice;
-  assert.ok(Math.abs(v2.adsr.s - 0.1) < 1e-9);
-  assert.ok(Math.abs(valueAt(v2.env, v2.t0 + 0.5) - 0.1) < 0.005, 'sounds at the new sustain');
+  const v1b = eng.voice;
+  assert.ok(Math.abs(v1b.adsr.d - 0.3) < 1e-9);
   assert.strictEqual(labOpts.followEnvelopeLab(eng, labs.envelope), 'same',
     'a second commit of the same values does nothing');
   assert.strictEqual(plays, 1);
@@ -521,7 +539,7 @@ test('R-7: a 20-event drag restarts the held voice at most once, on the commit',
   plays = 0;
   assert.deepStrictEqual(drag('a', 0.2), ['pending']);
   assert.strictEqual(plays, 0, 'no restart while the Attack drag settles');
-  assert.strictEqual(eng.voice, v2);
+  assert.strictEqual(eng.voice, v1b);
   assert.strictEqual(labOpts.followEnvelopeLab(eng, labs.envelope), 'restarted');
   assert.strictEqual(plays, 1);
   const v3 = eng.voice;
@@ -574,7 +592,7 @@ function mountEnvelopeLab(mount) {
   return { lab: mount(root), els };
 }
 
-test('R-7: the Envelope lab says when an edit settles; a 20-input slider drag restarts once',
+test('R-7: the Envelope lab says when an edit settles; a 20-input drag restarts once, Sustain glides',
   { skip }, async () => {
     const hadDocument = 'document' in globalThis;
     if (!hadDocument) globalThis.document = { activeElement: null };
@@ -610,15 +628,19 @@ test('R-7: the Envelope lab says when an edit settles; a 20-input slider drag re
       assert.strictEqual(eng.voices.size, 1, 'no extra voice');
       slider.dispatchEvent(new Event('change'));
       assert.strictEqual(notes[notes.length - 1], false, 'the change commits');
-      assert.strictEqual(answers[answers.length - 1], 'restarted');
-      assert.strictEqual(plays, 1, 'one restart for the drag');
-      assert.ok(Math.abs(eng.voice.adsr.s - 0.1) < 1e-9);
-      // a typed field edit is a commit of its own
+      // C008: a Sustain edit glides the held level, so the drag and its commit restart nothing
+      assert.ok(answers.every((a) => a === 'glided' || a === 'deferred' || a === 'same'),
+        answers.join());
+      assert.strictEqual(plays, 0, 'no restart for the Sustain drag');
+      assert.strictEqual(eng.voice, v1);
+      assert.ok(Math.abs(v1.opts.adsr.s - 0.1) < 1e-9);
+      // a typed field edit is a commit of its own, and glides as well
       advance(1);
       els['#osc-env-sustain-value'].value = '0.3';
       els['#osc-env-sustain-value'].dispatchEvent(new Event('change'));
       assert.strictEqual(notes[notes.length - 1], false);
-      assert.strictEqual(plays, 2);
+      assert.strictEqual(plays, 0);
+      assert.strictEqual(eng.voice, v1);
       // the Attack slider (a log slider, 0..1000): 20 inputs, then its change
       advance(1);
       const attack = els['#osc-env-attack'];
@@ -628,10 +650,10 @@ test('R-7: the Envelope lab says when an edit settles; a 20-input slider drag re
         attack.dispatchEvent(new Event('input'));
         advance(0.016);
       }
-      assert.strictEqual(plays, 2, '20 Attack inputs, no restart');
+      assert.strictEqual(plays, 0, '20 Attack inputs, no restart');
       assert.strictEqual(eng.voice, v3);
       attack.dispatchEvent(new Event('change'));
-      assert.strictEqual(plays, 3, 'one restart at the Attack change');
+      assert.strictEqual(plays, 1, 'one restart at the Attack change');
       assert.strictEqual(eng.voice.adsr.a, lab.adsr.a);
       eng.stopAll();
       advance(3);
@@ -664,7 +686,7 @@ async function heldToneOnLab() {
 // committing restarted the held voice on every arrow press and auto-repeat. While a key is
 // down on a slider its steps settle; the keyup commits once after KEY_COMMIT_MS unless another
 // keydown comes, and a blur commits at once. A pointer drag (no key) still commits on 'change'.
-test('R-9: arrow steps held or pressed on a slider restart the held voice once',
+test('R-9: arrow steps held or pressed on a slider restart the held voice once (Decay)',
   { skip }, async (t) => {
     const hadDocument = 'document' in globalThis;
     if (!hadDocument) globalThis.document = { activeElement: null };
@@ -674,7 +696,9 @@ test('R-9: arrow steps held or pressed on a slider restart the held voice once',
       // a lab without the constant (the merge base) is judged by its behaviour, not its export
       const KEY_COMMIT_MS = exported ?? 250;
       const v1 = eng.voice;
-      const slider = els['#osc-env-sustain'];
+      // Decay: an edit that restarts the voice (Sustain glides instead, C008)
+      const slider = els['#osc-env-decay'];
+      const atSlider = (n) => `${n}`;
       const step = (el, value) => {
         el.dispatchEvent(new Event('keydown'));
         el.value = value;
@@ -683,7 +707,7 @@ test('R-9: arrow steps held or pressed on a slider restart the held voice once',
       };
       // ArrowLeft held: 20 auto-repeat keydowns, each with its input and change, one keyup
       for (let i = 1; i <= 20; i++) {
-        step(slider, (0.6 - i * 0.01).toFixed(2));
+        step(slider, atSlider(400 - i * 5));
         advance(0.033);
       }
       assert.deepStrictEqual([...new Set(log.notes)], [true], 'every keyboard step settles');
@@ -698,14 +722,16 @@ test('R-9: arrow steps held or pressed on a slider restart the held voice once',
       assert.strictEqual(log.notes[log.notes.length - 1], false, 'the commit');
       assert.strictEqual(log.answers[log.answers.length - 1], 'restarted');
       assert.strictEqual(log.plays, 1, 'one restart for the held key');
-      assert.ok(Math.abs(eng.voice.adsr.s - 0.4) < 1e-9, 'at the value the key stopped on');
+      assert.strictEqual(eng.voice.adsr.d, lab.adsr.d, 'at the value the key stopped on');
+      const d1 = lab.adsr.d;
+      assert.notStrictEqual(d1, 0.1);
       t.mock.timers.tick(KEY_COMMIT_MS * 4);
       assert.strictEqual(log.plays, 1, 'the commit fires once');
       advance(1);
 
       // 20 quick presses (keydown, input, change, keyup), each within the window of the last
       for (let i = 1; i <= 20; i++) {
-        step(slider, (0.4 - i * 0.01).toFixed(2));
+        step(slider, atSlider(300 - i * 5));
         slider.dispatchEvent(new Event('keyup'));
         t.mock.timers.tick(Math.floor(KEY_COMMIT_MS / 5));
         advance(0.05);
@@ -713,30 +739,31 @@ test('R-9: arrow steps held or pressed on a slider restart the held voice once',
       assert.strictEqual(log.plays, 1, '20 presses, no restart yet');
       t.mock.timers.tick(KEY_COMMIT_MS);
       assert.strictEqual(log.plays, 2, 'one restart for the run of presses');
-      assert.ok(Math.abs(eng.voice.adsr.s - 0.2) < 1e-9);
+      assert.strictEqual(eng.voice.adsr.d, lab.adsr.d);
+      assert.notStrictEqual(lab.adsr.d, d1);
       advance(1);
 
       // a press, then the key held again within the window: the hold cancels the pending
       // commit, so nothing restarts while the key is down, however long it is held
-      step(slider, '0.21');
+      step(slider, '210');
       slider.dispatchEvent(new Event('keyup'));
       for (let i = 2; i <= 10; i++) {
-        step(slider, (0.2 + i * 0.01).toFixed(2));
+        step(slider, atSlider(200 + i * 5));
         t.mock.timers.tick(KEY_COMMIT_MS);
       }
       assert.strictEqual(log.plays, 2, 'no commit while the key is held');
       slider.dispatchEvent(new Event('keyup'));
       t.mock.timers.tick(KEY_COMMIT_MS);
       assert.strictEqual(log.plays, 3, 'one restart for press and hold');
-      assert.ok(Math.abs(eng.voice.adsr.s - 0.3) < 1e-9);
+      assert.strictEqual(eng.voice.adsr.d, lab.adsr.d);
       advance(1);
 
       // a key down and the focus leaves the slider (Tab): the blur commits at once
-      step(slider, '0.25');
+      step(slider, '255');
       assert.strictEqual(log.plays, 3);
       slider.dispatchEvent(new Event('blur'));
       assert.strictEqual(log.plays, 4, 'the blur commits');
-      assert.ok(Math.abs(eng.voice.adsr.s - 0.25) < 1e-9);
+      assert.strictEqual(eng.voice.adsr.d, lab.adsr.d);
       t.mock.timers.tick(KEY_COMMIT_MS * 2);
       slider.dispatchEvent(new Event('blur'));
       assert.strictEqual(log.plays, 4, 'nothing left to commit');
@@ -752,15 +779,25 @@ test('R-9: arrow steps held or pressed on a slider restart the held voice once',
       assert.strictEqual(eng.voice.adsr.a, lab.adsr.a);
       advance(1);
 
+      // Sustain keys (C008): every step glides the held voice; the commit is no restart
+      const sus = els['#osc-env-sustain'];
+      const before = log.plays;
+      for (let i = 1; i <= 10; i++) step(sus, (0.6 - i * 0.01).toFixed(2));
+      sus.dispatchEvent(new Event('keyup'));
+      t.mock.timers.tick(KEY_COMMIT_MS);
+      assert.strictEqual(log.plays, before, 'a held Sustain key restarts nothing');
+      assert.ok(Math.abs(eng.voice.opts.adsr.s - 0.5) < 1e-9);
+      advance(1);
+
       // a pointer drag (no key): its inputs settle and its change commits, as in R-7
       for (let i = 1; i <= 10; i++) {
-        slider.value = (0.3 + i * 0.01).toFixed(2);
+        slider.value = atSlider(260 + i * 5);
         slider.dispatchEvent(new Event('input'));
       }
       assert.strictEqual(log.plays, 5);
       slider.dispatchEvent(new Event('change'));
       assert.strictEqual(log.plays, 6, 'the pointer change commits at once');
-      assert.ok(Math.abs(eng.voice.adsr.s - 0.4) < 1e-9);
+      assert.strictEqual(eng.voice.adsr.d, lab.adsr.d);
       assert.ok(exported > 0 && exported <= 500, 'the window is a bounded constant');
       eng.stopAll();
       advance(3);
@@ -773,7 +810,7 @@ test('R-9: arrow steps held or pressed on a slider restart the held voice once',
 
 // #296 R-10: update({ enabled }) (a config import) notifies as a commit, so switching the
 // Envelope by update() during a held tone reaches the voice at once (mutant P16 settled it).
-test('R-10: update({ enabled }) during a held tone restarts the voice off and back on',
+test('R-10: update({ enabled }) during a held tone glides it off and restarts it back on',
   { skip }, async () => {
     const hadDocument = 'document' in globalThis;
     if (!hadDocument) globalThis.document = { activeElement: null };
@@ -782,16 +819,16 @@ test('R-10: update({ enabled }) during a held tone restarts the voice off and ba
       assert.strictEqual(eng.voice.adsr.s, 0.6);
       lab.update({ enabled: false });
       assert.strictEqual(log.notes[log.notes.length - 1], false, 'a commit, not settling');
-      assert.strictEqual(log.answers[log.answers.length - 1], 'restarted');
-      assert.strictEqual(log.plays, 1);
+      assert.strictEqual(log.answers[log.answers.length - 1], 'glided', 'off glides (C008)');
+      assert.strictEqual(log.plays, 0, 'the held voice is not replaced');
       assert.strictEqual(eng.voice.adsr, null, 'the voice plays without the ADSR');
       advance(1);
       lab.update({ enabled: true });
-      assert.strictEqual(log.answers[log.answers.length - 1], 'restarted');
-      assert.strictEqual(log.plays, 2);
+      assert.strictEqual(log.answers[log.answers.length - 1], 'restarted', 'on restarts (C007)');
+      assert.strictEqual(log.plays, 1);
       assert.strictEqual(eng.voice.adsr.s, 0.6, 'and with it again');
       lab.update({ enabled: true });
-      assert.strictEqual(log.plays, 2, 'no switch, no notification');
+      assert.strictEqual(log.plays, 1, 'no switch, no notification');
       eng.stopAll();
       advance(3);
       assert.strictEqual(eng.activeNodeCount, 0);

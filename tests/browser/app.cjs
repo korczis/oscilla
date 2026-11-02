@@ -1640,17 +1640,42 @@ function defineChecks() {
       await setLabRelease(`${Math.round(initial.labR * 1000)} ms`, initial.labR).catch(() => {});
       await setLab(initial.labOn).catch(() => {});
       await setSettings(initial.release).catch(() => {});
+      // Restoring the lab release types into its field (Synthesis on a phone): leave neither
+      // that focus nor that workspace to the next check.
+      await H.focusBody(page).catch(() => {});
+      if (await mode().catch(() => 'playground') !== 'playground') {
+        await H.navTo(page, 'playground').catch(() => {});
+      }
     }
     return { ok: res.settings.ok && res.lab.ok && res.limited.ok, ...res };
   });
 
   def('frequency-slider-and-fine-steps', async ({ page }) => {
+    // Held Space plays the Playground's voice only while no text field has focus (K153's
+    // dispatcher leaves Space to a field): open the Playground and wait until nothing holds focus
+    // (a field edited by an earlier check took it back once, CI #385: focus INPUT
+    // #osc-env-release-value in Synthesis).
+    if (await page.evaluate(() => window.OSCILLA.app.workspace) !== 'playground') {
+      await H.navTo(page, 'playground');
+    }
     await H.continuous(page, true);
-    await H.focusBody(page);
+    await until(async () => {
+      await H.focusBody(page);
+      return page.evaluate(() => window.OSCILLA.app.workspace === 'playground'
+        && (!document.activeElement || document.activeElement === document.body));
+    }, { ms: 8000, what: 'frequency-slider-and-fine-steps: the Playground, nothing focused' });
     await page.keyboard.down(' ');
-    // The held Space starts the engine voice; wait for it rather than for a fixed time.
-    await U.poll(() => page.evaluate(() => !!window.OSCILLA.engine.voice?.carrier),
-      (v) => v, 'held Space starts the engine voice');
+    // The held Space starts the engine voice; wait for it rather than for a fixed time. The
+    // polled value says why it did not (the output owner, a typing target or an open modal
+    // that keyGuard() honours, a suspended context) when the deadline passes.
+    await U.poll(() => page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      const el = document.activeElement;
+      return { carrier: !!window.OSCILLA.engine.voice?.carrier, playing: !!a.playing,
+        owner: a.outputOwner ?? null, ctx: window.OSCILLA.engine.ctx?.state ?? null,
+        workspace: a.workspace, focus: el ? `${el.tagName}#${el.id}` : null,
+        modal: !!document.querySelector('[data-oscilla-modal][aria-modal="true"]') };
+    }), (v) => v.carrier, 'held Space starts the engine voice');
     const read = () => page.evaluate(() => ({ app: window.OSCILLA.app.frequency,
       eng: window.OSCILLA.engine.voice?.carrier?.frequency.value,
       readout: document.querySelector('#osc-freq-value').textContent }));
@@ -3526,9 +3551,10 @@ function defineChecks() {
     return { ok, ...res };
   });
 
-  // #296 R-2: the Envelope lab has a live path. With no pattern change or new note, a held
-  // tone follows the panel: Sustain typed in its field (a click-free restart at the new level),
-  // Release alone (in place, the same voice), and the power switch (off: level 1, on: back).
+  // #296 R-2, C008: the Envelope lab has a live path. With no pattern change or new note, a held
+  // tone follows the panel: Sustain typed in its field (a glide of the held level, the same
+  // voice), Release alone (in place, the same voice), the power switch off (a glide to level
+  // 1, the same voice) and on (a click-free restart with the ADSR).
   // R-1: with the Envelope on, a continuous ping-pong sweep holds at the sustain too.
   // Run at the desktop size and at 390x844, where the panel's controls are reached by scrolling.
   const envelopeFollowsHeld = async (page) => {
@@ -3565,7 +3591,8 @@ function defineChecks() {
     res.start = await held(null, 'envelope-follows-held: held tone at sustain 0.6', 0.6);
     await page.fill('#osc-env-sustain-value', '0.1');
     await page.dispatchEvent('#osc-env-sustain-value', 'change');
-    res.sustain = await held(res.start.id, 'envelope-follows-held: Sustain 0.1 reaches it', 0.1);
+    // C008: a Sustain edit glides the held level on the same voice
+    res.sustain = await held(null, 'envelope-follows-held: Sustain 0.1 reaches it', 0.1);
     res.ratio = res.start.peak > 0 ? res.sustain.peak / res.start.peak : null;
     await page.fill('#osc-env-release-value', '50');
     await page.dispatchEvent('#osc-env-release-value', 'change');
@@ -3573,8 +3600,8 @@ function defineChecks() {
       const v = window.OSCILLA.engine.voice;
       return v && Math.abs(v.release - 0.05) < 1e-9 ? { id: v.id, r: v.adsr.r } : null;
     }), { ms: 5000, what: 'envelope-follows-held: Release 50 ms reaches the held voice' });
-    await page.click('#osc-env-enable'); // off while it sounds
-    res.off = await held(res.sustain.id, 'envelope-follows-held: Envelope off reaches it', 1);
+    await page.click('#osc-env-enable'); // off while it sounds: a glide to level 1 (C008)
+    res.off = await held(null, 'envelope-follows-held: Envelope off reaches it', 1);
     await page.click('#osc-env-enable'); // on again
     res.on = await held(res.off.id, 'envelope-follows-held: Envelope on reaches it', 0.1);
     await page.evaluate(() => window.OSCILLA.app.stopNow());
@@ -3602,6 +3629,8 @@ function defineChecks() {
     await quiet(page, 'envelope-follows-held: quiet at the end');
     await H.workspace(page, 'playground');
     const ok = res.start.adsr.s === 0.6 && res.sustain.adsr.s === 0.1
+      && res.sustain.id === res.start.id && res.off.id === res.sustain.id
+      && res.on.id !== res.off.id
       && res.sustain.viz.s === 0.1 && res.ratio > 0.1 && res.ratio < 0.25
       && res.release.id === res.sustain.id && res.release.r === 0.05
       && res.off.adsr === null && res.off.viz === null && !res.off.lab && res.off.release > 0
@@ -3620,8 +3649,9 @@ function defineChecks() {
     return { ok: Object.values(res).every((r) => r.ok), ...res };
   });
 
-  // #296 R-7: a drag is one edit. The Sustain slider dragged in 20 'input' events and the
-  // graph's S handle dragged in 20 pointer moves leave the held voice sounding (no restart, no
+  // #296 R-7: a drag is one edit. The Decay slider dragged in 20 'input' events and the
+  // graph's A handle dragged in 20 pointer moves (edits that restart the note; a Sustain drag
+  // glides it, `env-sustain-held-note`) leave the held voice sounding (no restart, no
   // extra voice) until the drag ends; its 'change' / pointerup restarts it once, at the value
   // the drag ended on. The counters are engine 'play' events and audibleVoiceCount, sampled
   // after each event's handlers have run. At the desktop size and at 390x844.
@@ -3662,17 +3692,17 @@ function defineChecks() {
       const id = window.OSCILLA.engine.voice.id;
       c.plays = 0;
       c.maxAudible = 0;
-      const el = document.querySelector('#osc-env-sustain');
+      const el = document.querySelector('#osc-env-decay');
       for (let i = 1; i <= 20; i++) {
-        el.value = (0.6 - (0.5 * i) / 20).toFixed(2);
+        el.value = String(500 + i * 10);
         el.dispatchEvent(new Event('input', { bubbles: true }));
       }
       const during = { plays: c.plays, maxAudible: c.maxAudible,
         same: window.OSCILLA.engine.voice.id === id };
       el.dispatchEvent(new Event('change', { bubbles: true }));
-      return { during, plays: c.plays, lab: window.OSCILLA.labs.envelope.adsr.s };
+      return { during, plays: c.plays, lab: window.OSCILLA.labs.envelope.adsr.d };
     });
-    res.afterSlider = await voiceAt(res.start.id, 'Sustain 0.1 after the slider drag', 0.1);
+    res.afterSlider = await voiceAt(res.start.id, 'the Decay drag restarted it at the sustain', 0.6);
     const canvas = page.locator('#osc-chart-envelope canvas');
     await canvas.scrollIntoViewIfNeeded({ timeout: 5000 });
     const at = await page.evaluate(() => {
@@ -3680,20 +3710,19 @@ function defineChecks() {
       const c = document.querySelector('#osc-chart-envelope canvas').getBoundingClientRect();
       window.__r7.plays = 0;
       window.__r7.maxAudible = 0;
-      return { x: c.left + l.handles.sustain.x, y: c.top + l.handles.sustain.y,
+      return { x: c.left + l.handles.attack.x, y: c.top + l.handles.attack.y,
         id: window.OSCILLA.engine.voice.id };
     });
     await page.mouse.move(at.x, at.y);
     await page.mouse.down();
-    await page.mouse.move(at.x, at.y - 30, { steps: 20 });
+    await page.mouse.move(at.x + 40, at.y, { steps: 20 });
     res.graphDuring = await page.evaluate((id) => ({ plays: window.__r7.plays,
       maxAudible: window.__r7.maxAudible, same: window.OSCILLA.engine.voice.id === id,
-      lab: window.OSCILLA.labs.envelope.adsr.s }), at.id);
+      lab: window.OSCILLA.labs.envelope.adsr.a }), at.id);
     await page.mouse.up();
     res.graph = await page.evaluate(() => ({ plays: window.__r7.plays,
-      lab: window.OSCILLA.labs.envelope.adsr.s }));
-    res.afterGraph = await voiceAt(at.id, 'the graph drag\'s sustain reaches the held voice',
-      res.graph.lab);
+      lab: window.OSCILLA.labs.envelope.adsr.a }));
+    res.afterGraph = await voiceAt(at.id, 'the Attack drag restarts the held voice', 0.6);
     await page.evaluate(() => {
       const c = window.__r7;
       c.off(); c.unsample(); delete window.__r7;
@@ -3706,8 +3735,8 @@ function defineChecks() {
     const s = res.slider;
     const g = res.graphDuring;
     const ok = s.during.plays === 0 && s.during.same && s.during.maxAudible === 1
-      && s.plays === 1 && Math.abs(s.lab - 0.1) < 1e-9
-      && g.plays === 0 && g.same && g.maxAudible === 1 && g.lab > 0.1 + 1e-6
+      && s.plays === 1 && Math.abs(s.lab - 0.1) > 1e-6
+      && g.plays === 0 && g.same && g.maxAudible === 1 && g.lab > 0.01 + 1e-6
       && res.graph.plays === 1;
     return { ok, ...res };
   };
@@ -3723,7 +3752,7 @@ function defineChecks() {
   });
 
   // #296 R-9: the keyboard is one edit too. A range input fires 'input' and 'change' for
-  // every arrow step, so the Sustain slider's keys settle while one is down and its keyup
+  // every arrow step, so the Decay slider's keys settle while one is down and its keyup
   // commits once after the lab's keyCommitMs. ArrowLeft held for 20 auto-repeats leaves the
   // held voice sounding (no restart, one audible voice) and restarts it once, at the value it
   // stopped on; 20 ArrowRight presses restart it once, plus one per gap between a keyup and
@@ -3749,7 +3778,7 @@ function defineChecks() {
       O.labs.envelope.update({ adsr: { a: 0.01, d: 0.1, s: 0.6, r: 0.3 }, enabled: true });
       a.holding = true; a.play('hold');
       const e = O.engine;
-      const el = document.querySelector('#osc-env-sustain');
+      const el = document.querySelector('#osc-env-decay');
       const c = { plays: 0, maxAudible: 0, downs: [], ups: [] };
       window.__r9 = c;
       c.off = e.on((t) => { if (t === 'play') c.plays++; });
@@ -3770,11 +3799,11 @@ function defineChecks() {
         return e.voice.id;
       };
       c.read = (id) => ({ plays: c.plays, maxAudible: c.maxAudible, downs: c.downs.length,
-        same: e.voice.id === id, lab: O.labs.envelope.adsr.s, slider: Number(el.value) });
+        same: e.voice.id === id, lab: O.labs.envelope.adsr.d, slider: Number(el.value) });
     });
     const res = { windowMs: await page.evaluate(() => window.OSCILLA.labs.envelope.keyCommitMs) };
     res.start = await voiceAt(null, 'held tone at sustain 0.6', 0.6);
-    const slider = page.locator('#osc-env-sustain');
+    const slider = page.locator('#osc-env-decay');
     await slider.scrollIntoViewIfNeeded({ timeout: 5000 });
     await slider.focus({ timeout: 5000 });
 
@@ -3784,7 +3813,7 @@ function defineChecks() {
     res.held = await page.evaluate((v) => window.__r9.read(v), id);
     await page.keyboard.up('ArrowLeft');
     res.heldPlays = await committed('the held keys commit', 1);
-    res.afterHeld = await voiceAt(res.start.id, 'Sustain 0.4 after the held key', 0.4);
+    res.afterHeld = await voiceAt(res.start.id, 'the held key restarted it at the sustain', 0.6);
     res.heldEnd = await page.evaluate((v) => window.__r9.read(v), id);
 
     // 20 presses of ArrowRight
@@ -3792,7 +3821,7 @@ function defineChecks() {
     for (let i = 0; i < 20; i++) await page.keyboard.press('ArrowRight');
     res.pressed = await page.evaluate((v) => window.__r9.read(v), id);
     res.pressPlays = await committed('the presses commit', 1);
-    res.afterPresses = await voiceAt(res.afterHeld.id, 'Sustain 0.6 after the presses', 0.6);
+    res.afterPresses = await voiceAt(res.afterHeld.id, 'the presses restarted it', 0.6);
     res.pressEnd = await page.evaluate((w) => {
       const c = window.__r9;
       let gaps = 0;
@@ -3811,8 +3840,7 @@ function defineChecks() {
     await page.mouse.up();
     res.dragPlays = await committed('the mouse drag commits', 1);
     res.drag = await page.evaluate((v) => window.__r9.read(v), id);
-    res.afterDrag = await voiceAt(res.afterPresses.id, 'the drag\'s sustain reaches the voice',
-      res.drag.lab);
+    res.afterDrag = await voiceAt(res.afterPresses.id, 'the drag restarted it', 0.6);
     res.dragEnd = await page.evaluate((v) => window.__r9.read(v), id);
 
     await page.evaluate(() => {
@@ -3829,10 +3857,10 @@ function defineChecks() {
     const d = res.dragDuring;
     const ok = res.windowMs > 0 && res.windowMs <= 500
       && h.downs === 20 && h.plays === 0 && h.same && h.maxAudible === 1
-      && Math.abs(h.lab - 0.4) < 1e-9 && res.heldEnd.plays === 1
+      && h.lab < 0.1 - 1e-6 && res.heldEnd.plays === 1
       && res.pressed.downs === 20 && res.pressEnd.ups === 20
       && res.pressEnd.plays >= 1 && res.pressEnd.plays <= 1 + res.pressEnd.gaps
-      && d.plays === 0 && d.same && d.maxAudible === 1 && d.lab < 0.6 - 1e-6
+      && d.plays === 0 && d.same && d.maxAudible === 1 && Math.abs(d.lab - res.heldEnd.lab) > 1e-9
       && res.dragEnd.plays === 1;
     return { ok, ...res };
   };
@@ -3953,6 +3981,103 @@ function defineChecks() {
     }, filterBefore);
     const ok = Object.values(res.sizes).every((r) => r.ok)
       && Object.values(res.plain).every((p) => p.flagged === 0 && p.polls > 1);
+    return { ok, ...res };
+  });
+
+  // ---- C008: the Envelope Lab's Sustain and power switch on a held note (one voice, a glide)
+  const C8 = {
+    db: (x) => 20 * Math.log10(Math.max(x, 1e-9)),
+    // The Envelope panel lives in Synthesis; the path is the bridge state the canvas draws.
+    open: async (page) => {
+      await H.stopAll(page);
+      await until(async () => (await H.nodes(page)) === 0,
+        { ms: 5000, what: 'C008: no voice before the check' });
+      await H.continuous(page, true);
+      await H.navTo(page, 'synthesis');
+      await until(() => page.evaluate(() => document.querySelector('#osc-app').dataset.mode
+        === 'synthesis'), { ms: 8000, what: 'C008: Synthesis workspace open' });
+      await page.evaluate(() => {
+        const a = window.OSCILLA.app;
+        if (a.source !== 'single') a.setDualSource(false);
+        a.setWaveform('sine'); a.setPattern('tone'); a.setGainPct(57); // clear of the limiter
+        window.OSCILLA.labs.filter.update({ enabled: false });
+        // The lab defaults (an earlier check may have left other times).
+        window.OSCILLA.labs.envelope.update({ adsr: { a: 0.01, d: 0.1, s: 0.6, r: 0.3 } });
+      });
+    },
+    envelope: async (page, on) => {
+      if (await page.evaluate(() => window.OSCILLA.labs.envelope.enabled) !== on) {
+        await page.click('#osc-env-enable');
+      }
+      await until(() => page.evaluate((v) => window.OSCILLA.labs.envelope.enabled === v, on),
+        { ms: 3000, what: `C008: Envelope switch ${on ? 'on' : 'off'}` });
+    },
+    type: async (page, sel, text) => {
+      await page.fill(sel, text);
+      await page.press(sel, 'Enter');
+    },
+    latch: (page) => page.evaluate(() => window.OSCILLA.app.toggleLatch()),
+    // The held level once two analyser windows in a row agree within 0.2 dB and `want` holds.
+    steady: async (page, what, want = () => true) => {
+      let prev = -Infinity;
+      return until(async () => {
+        const v = await H.peak(page);
+        const ok = v > 1e-4 && Math.abs(C8.db(v) - C8.db(prev)) < 0.2 && want(v);
+        prev = v;
+        return ok ? v : null;
+      }, { ms: 8000, what });
+    },
+    voice: (page) => page.evaluate(() => {
+      const v = window.OSCILLA.engine.voice;
+      return v && !v.ended ? { id: v.id, adsr: v.adsr ? { ...v.adsr } : null } : null;
+    }),
+    end: async (page) => {
+      await H.stopAll(page);
+      const n = await until(async () => ((await H.nodes(page)) === 0 ? 'zero' : null),
+        { ms: 5000, what: 'C008: engine.activeNodeCount returns to 0 after stop' })
+        .catch(() => 'nonzero');
+      return n === 'zero';
+    },
+  };
+
+  // dead-controls-3, control-census-3: Sustain and the power switch reach a held note.
+  def('env-sustain-held-note', async ({ page }) => {
+    const res = {};
+    await C8.open(page);
+    await page.evaluate(() => window.OSCILLA.app.setFrequency(1000));
+    // The envelope-off level of the same note is the reference.
+    await C8.envelope(page, false);
+    await C8.latch(page);
+    // The sine's peak is the master gain once the filter bypass of the earlier check has glided.
+    const gain = await page.evaluate(() => window.OSCILLA.app.gainLevel);
+    res.offRef = await C8.steady(page, 'C008: held 1 kHz note with the envelope off',
+      (v) => Math.abs(C8.db(v) - C8.db(gain)) < 1);
+    res.stop1 = await C8.end(page);
+    await C8.envelope(page, true);
+    await C8.type(page, '#osc-env-sustain-value', '0.6');
+    await C8.latch(page);
+    res.s06 = await C8.steady(page, 'C008: held note settles at sustain 0.6',
+      (v) => Math.abs(C8.db(v) - C8.db(res.offRef * 0.6)) < 1);
+    res.voice06 = await C8.voice(page);
+    await C8.type(page, '#osc-env-sustain-value', '0.1');
+    res.s01 = await C8.steady(page, 'C008: sustain 0.1 lowers the held note 14 to 17 dB', (v) => {
+      const drop = C8.db(res.s06) - C8.db(v);
+      return drop >= 14 && drop <= 17;
+    });
+    res.voice01 = await C8.voice(page);
+    await C8.envelope(page, false);
+    res.off = await C8.steady(page, 'C008: envelope off brings the held note to the off level',
+      (v) => Math.abs(C8.db(v) - C8.db(res.offRef)) <= 1);
+    res.voiceOff = await C8.voice(page);
+    res.stop2 = await C8.end(page);
+    await C8.type(page, '#osc-env-sustain-value', '0.6');
+    res.dropDb = +(C8.db(res.s06) - C8.db(res.s01)).toFixed(2);
+    res.offDb = +(C8.db(res.off) - C8.db(res.offRef)).toFixed(2);
+    const sameVoice = res.voice06 && res.voice01 && res.voiceOff
+      && res.voice06.id === res.voice01.id && res.voice01.id === res.voiceOff.id;
+    const ok = !!sameVoice && res.dropDb >= 14 && res.dropDb <= 17 && Math.abs(res.offDb) <= 1
+      && Math.abs(res.voice01.adsr.s - 0.1) < 1e-9 && res.voiceOff.adsr === null
+      && res.stop1 && res.stop2;
     return { ok, ...res };
   });
 

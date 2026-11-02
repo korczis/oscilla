@@ -119,3 +119,43 @@ test('C002: stopSequence reads the live state; it clears only a set copy', async
   await tick();
   assert.equal(changes(), 0, 'the copy was already false');
 });
+
+// ---------------------------------------------------------------- C016 (#297)
+// MEASURE's setup check reports OTHER_AUDIO for the same owners stopPlayback stops: one table in
+// createOutputOwner, so a source one of them knows and the other does not (the sequencer and
+// the Studio transport never enter engine.audibleVoiceCount) cannot come back.
+
+test('C016: outputBusy is true exactly while an owner stopPlayback stops sounds', () => {
+  for (const [id, state] of [['sequencer', { seq: true }], ['instrument', { playing: true }],
+    ['studio', { studio: true }]]) {
+    const { owner, cmp, log } = setup(state);
+    const idle = setup();
+    assert.equal(idle.owner.outputBusy(idle.cmp), false, 'nothing sounding');
+    assert.equal(owner.outputBusy(cmp), true, `${id} sounding`);
+    assert.deepEqual(log, [], 'outputBusy stops nothing');
+    owner.stopPlayback(cmp);
+    assert.equal(log.length, 1, `stopPlayback stops ${id} and nothing else: ${log}`);
+    if (id !== 'instrument') assert.equal(owner.outputBusy(cmp), false, `${id} stopped`);
+  }
+});
+
+test('C016: outputBusy reads the sequencer live, not the 150 ms seqPlaying copy', () => {
+  const { owner, cmp, editor } = setup();
+  editor.playing = true; // editor.play() has just scheduled; the poll has not run yet
+  cmp.seqPlaying = false;
+  assert.equal(owner.outputBusy(cmp), true);
+  editor.playing = false;
+  cmp.seqPlaying = true; // a stale copy of a stopped sequence
+  assert.equal(owner.outputBusy(cmp), false);
+  // No sequencer editor and no Studio: nothing to be busy.
+  const bare = createOutputOwner({ app: () => ({}), sequencer: () => null });
+  assert.equal(bare.outputBusy({}), false);
+});
+
+test('C016: outputBusy and stopPlayback name the same owners (OUTPUT_YIELDS.measure)', () => {
+  assert.deepEqual([...OUTPUT_YIELDS.measure].sort(), ['instrument', 'sequencer', 'studio']);
+  const all = setup({ playing: true, studio: true, seq: true });
+  assert.equal(all.owner.outputBusy(all.cmp), true);
+  all.owner.stopPlayback(all.cmp);
+  assert.deepEqual(all.log.sort(), ['instrument.stopNow', 'seq.stop', 'studio.stop']);
+});
