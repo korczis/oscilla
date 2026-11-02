@@ -4,8 +4,10 @@
 // signal type is the dash pattern, never colour alone, and a dash keeps its gaps at every width
 // (butt caps); a refused cable is marked by a shape as well as the refuse colour. The colour is
 // the caller's palette token (tokens.cable.palette[sourceModule % 6]); every other paint is a
-// token too (project.visual-identity-lock v3), and every shape sets its own stroke. Imports
-// nothing.
+// token too (project.visual-identity-lock v3), and every shape sets its own stroke. No number
+// here sets an opacity, an alpha or a shadow (v4): the sheen's intensity is the hw-sheen
+// Tailwind key (class opacity-hw-sheen), the shadow is an opaque underlay offset down, and the
+// hit path is hidden rather than transparent. Imports nothing.
 //
 //   CABLE_DASH                              the pattern of each signal type
 //   cableCurve(a, b, { slack })             'M … C …', a hanging cable from a to b
@@ -31,6 +33,12 @@ export const CABLE_BOW = 0.3;
 const CROSS = Object.freeze({ arm: 5, width: 2, under: 4.5 });
 /** The sheen's offset up and left, screen px. */
 const SHEEN_PX = 0.7;
+/** The shadow underlay's drop, screen px: at rest, and lifted while the cable is dragged. */
+const SHADOW_PX = Object.freeze({ rest: 1, lifted: 3 });
+/** How much wider than the stroke the shadow underlay is, graph units. */
+const SHADOW_SPREAD = 3;
+/** The intensity class of the sheen: the hw-sheen key of tailwind.config.cjs. */
+const SHEEN_CLASS = 'opacity-hw-sheen';
 const WIDTH = Object.freeze({ base: 4.5, hover: 6, selected: 7.5 });
 
 const finite = (p) => Boolean(p) && Number.isFinite(p.x) && Number.isFinite(p.y);
@@ -92,12 +100,15 @@ function needTokens(tokens, who) {
 }
 
 /**
- * One cable as '<g data-cable="id">…</g>': a soft shadow (tokens.cable.shadow), then the main
- * stroke group, the only part that takes the pointer (a wide invisible hit path of
- * CABLE_HIT_PX / zoom and the visible stroke in the caller's colour, dashed by type), then an
- * optional sheen stripe (tokens.cable.sheen; off by default). Hover and selection thicken the
- * stroke; a dashed stroke has butt caps, so its gaps stay open at every width (round caps would
- * close them), and a solid one round caps. Dragging lifts the shadow. Refused paints the stroke
+ * One cable as '<g data-cable="id">…</g>': a soft shadow (an opaque underlay in
+ * tokens.cable.shadow, SHADOW_SPREAD wider than the stroke and SHADOW_PX.rest screen px down),
+ * then the main stroke group, the only part that takes the pointer (a wide hit path of
+ * CABLE_HIT_PX / zoom, visibility="hidden", which pointer-events="stroke" still hits, and the
+ * visible stroke in the caller's colour, dashed by type), then an optional sheen stripe
+ * (tokens.cable.sheen at the hw-sheen intensity; off by default). Hover and selection thicken
+ * the stroke; a dashed stroke has butt caps, so its gaps stay open at every width (round caps
+ * would close them), and a solid one round caps. Dragging lifts the shadow (SHADOW_PX.lifted
+ * down). Refused paints the stroke
  * tokens.jack.refuse, dashed (a solid type takes REFUSED_DASH), marks the group data-refused and
  * draws a cross at the curve's middle (t = 0.5), so a refusal is a shape, not a colour alone.
  */
@@ -117,7 +128,7 @@ export function cableSvg({ id, from, to, type, colour, state = {}, tokens, slack
   const pattern = st.refused ? (CABLE_DASH[type] || REFUSED_DASH) : CABLE_DASH[type];
   const dash = pattern ? ` stroke-dasharray="${pattern}"` : '';
   const cap = pattern ? 'butt' : 'round';
-  const lift = st.dragging ? 6 : 3;
+  const drop = num((st.dragging ? SHADOW_PX.lifted : SHADOW_PX.rest) / zoom);
   const shine = tokens.cable.sheen || 'currentColor';
   const off = num(-SHEEN_PX / zoom);
   let cross = '';
@@ -136,17 +147,17 @@ export function cableSvg({ id, from, to, type, colour, state = {}, tokens, slack
   return `<g data-cable="${esc(id)}"${st.refused ? ' data-refused=""' : ''} `
     + 'pointer-events="none">'
     + `<path data-shadow="" d="${d}" fill="none" stroke="${esc(tokens.cable.shadow)}" `
-    + `stroke-opacity="0.35" stroke-width="${num(w + 3)}" stroke-linecap="round" `
-    + `transform="translate(0 ${lift})"/>`
+    + `stroke-width="${num(w + SHADOW_SPREAD)}" stroke-linecap="round" `
+    + `transform="translate(0 ${drop})"/>`
     + '<g data-main="" pointer-events="stroke">'
-    + `<path data-hit="" d="${d}" fill="none" stroke="currentColor" stroke-opacity="0" `
+    + `<path data-hit="" d="${d}" fill="none" stroke="currentColor" visibility="hidden" `
     + `stroke-width="${num(CABLE_HIT_PX / zoom)}" stroke-linecap="round"/>`
     + `<path data-stroke="" d="${d}" fill="none" stroke="${esc(paint)}" stroke-width="${w}" `
     + `stroke-linecap="${cap}"${dash}/>`
     + '</g>'
     + cross
-    + (sheen ? `<path data-sheen="" d="${d}" fill="none" stroke="${esc(shine)}" `
-      + `stroke-opacity="0.3" stroke-width="${num(w * 0.3)}" stroke-linecap="${cap}"${dash} `
+    + (sheen ? `<path data-sheen="" class="${SHEEN_CLASS}" d="${d}" fill="none" `
+      + `stroke="${esc(shine)}" stroke-width="${num(w * 0.3)}" stroke-linecap="${cap}"${dash} `
       + `transform="translate(${off} ${off})" pointer-events="none"/>` : '')
     + '</g>';
 }

@@ -12,7 +12,10 @@
  * tokens.js): a jack ring and every cable colour are graphical objects that must hold 3:1 on
  * the card in both themes, so the cable palette is the panel's six (no --osc-orange, which is
  * 1.9:1 on the light card). The cable sheen has its own role (dev-53, 2026-11-02), drawn at
- * a low opacity, so a theme can retune it without touching the control tokens.
+ * the hw-sheen intensity, so a theme can retune it without touching the control tokens. No
+ * role is an intensity: an opacity, a texture or a glow is a hw-* Tailwind key the drawing
+ * reads as a class (project.visual-identity-lock v4), and the cable shadow is an opaque token
+ * drawn as an underlay, never with an alpha.
  */
 export const SYNTH_TOKEN_NAMES = deepFreeze({
   surface: { plateHi: '--osc-surface-3', plateLo: '--osc-surface-1', card: '--osc-surface-2',

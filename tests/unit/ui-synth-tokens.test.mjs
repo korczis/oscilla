@@ -2,14 +2,15 @@
 // token API agreed 2026-11-02): synthTokens(el) reads OSCILLA's --osc-* custom properties at
 // run time into one deep-frozen set of five groups, a missing value reads currentColor, and
 // tokensFrom(lookup) is the same mapping without a DOM. The layer's sources carry no colour
-// literal and no product name (project.visual-identity-lock v3).
+// literal and no product name (project.visual-identity-lock v3), and no role is an intensity:
+// opacity is the hw-* Tailwind keys', and the cable shadow is an opaque token (v4).
 //   node --test tests/unit/ui-synth-tokens.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { SYNTH_TOKEN_NAMES, synthTokens, tokensFrom } from '../../src/js/ui/synth/tokens.js';
-import { NAMED } from './ui-synth-fixture.mjs';
+import { NAMED, intensityLiterals } from './ui-synth-fixture.mjs';
 
 const SHAPE = {
   surface: ['plateHi', 'plateLo', 'card', 'edge'],
@@ -140,4 +141,33 @@ test('src/js/ui/synth: no colour literal, no url() but #fragment, no product nam
     const named = NAMED_VALUE.exec(code);
     assert.equal(named, null, `${f}: named colour ${named && named[2]}`);
   }
+});
+
+/** The value of `name` in each theme block of tokens.css that declares it. */
+function themeValues(name) {
+  const css = tokensCss.replace(/\/\*[\s\S]*?\*\//g, '');
+  return [...css.matchAll(new RegExp(`${name}\\s*:\\s*([^;]+);`, 'g'))].map((m) => m[1].trim());
+}
+
+test('no role is an intensity; the cable shadow is an opaque colour in both themes (v4)', () => {
+  for (const [group, roles] of Object.entries(SYNTH_TOKEN_NAMES)) {
+    for (const role of Object.keys(roles)) {
+      assert.doesNotMatch(role, /opacity|alpha|blur|glow|intensity/i,
+        `${group}.${role}: an intensity is a hw-* Tailwind key, not a colour token`);
+    }
+  }
+  const shadow = themeValues(SYNTH_TOKEN_NAMES.cable.shadow);
+  assert.ok(shadow.length >= 2, `${SYNTH_TOKEN_NAMES.cable.shadow} in the dark and light theme`);
+  for (const value of shadow) {
+    assert.match(value, /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i,
+      `the shadow underlay is opaque, so it needs no opacity of its own: ${value}`);
+  }
+});
+
+test('no literal opacity, alpha or shadow in tokens.js or in the set it returns (v4)', () => {
+  const src = readFileSync(new URL('../../src/js/ui/synth/tokens.js', import.meta.url), 'utf8');
+  assert.deepEqual(intensityLiterals(src), [], 'tokens.js source');
+  const set = tokensFrom((name) => `var(${name})`);
+  assert.deepEqual(intensityLiterals(JSON.stringify(set)), [], 'the token set');
+  assert.deepEqual(intensityLiterals(JSON.stringify(synthTokens(null))), [], 'with no DOM');
 });

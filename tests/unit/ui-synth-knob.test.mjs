@@ -18,8 +18,8 @@ import {
 } from '../../src/js/ui/synth/knob.js';
 import { NODE_DEFINITIONS } from '../../src/js/studio/registry.js';
 import PANEL from '../../src/js/synth/panels/semi-mono.js';
-import { TOKENS, colourLiterals, shapesWithoutStroke, paints, tokenValues } from
-  './ui-synth-fixture.mjs';
+import { TOKENS, colourLiterals, shapesWithoutStroke, paints, tokenValues, intensityLiterals }
+  from './ui-synth-fixture.mjs';
 
 const LIN = Object.freeze({ id: 'level', label: 'Level', unit: '%', min: 0, max: 100, step: 1,
   scale: 'lin', default: 50 });
@@ -790,6 +790,35 @@ test('knob: a cap with one highlight, the value ring in control.ring, a pointer'
   assert.ok(!off.includes(`stroke="${t.ring}"`) && off.includes(`stroke="${t.disabled}"`));
   assert.ok(draw('knob', { state: { focus: true } }).includes(`stroke="${t.focus}"`));
   assert.ok(!svg.includes(`stroke="${t.focus}"`), 'no focus ring unless focused');
+});
+
+test('knob: the cap highlight reads the hw-sheen intensity key, not an opacity of its own', () => {
+  const t = TOKENS.control;
+  for (const state of [{}, { focus: true }, { disabled: true }, { dragging: true }]) {
+    const svg = draw('knob', { state });
+    const hi = new RegExp(`<ellipse [^>]*fill="${t.capHi.replace(/[()]/g, '\\$&')}"[^>]*>`)
+      .exec(svg);
+    assert.ok(hi, `${JSON.stringify(state)}: a highlight`);
+    assert.match(hi[0], /\sclass="opacity-hw-sheen"/, JSON.stringify(state));
+    assert.doesNotMatch(hi[0], /opacity="/, `${JSON.stringify(state)}: no opacity attribute`);
+  }
+});
+
+test('no literal opacity, alpha or shadow in any control, in any state, or in knob.js (v4)', () => {
+  for (const kind of KINDS) {
+    for (const state of [{}, { focus: true }, { disabled: true }, { dragging: true },
+      { focus: true, dragging: true }]) {
+      for (const zoom of [0.5, 1, 3]) {
+        for (const value of Object.values(ends(kind))) {
+          const svg = controlSvg({ kind, value, applied: ends(kind).mid, param: paramOf(kind),
+            tokens: TOKENS, state, zoom });
+          assert.deepEqual(intensityLiterals(svg), [], `${kind} ${JSON.stringify(state)}`);
+        }
+      }
+    }
+  }
+  const src = readFileSync(new URL('../../src/js/ui/synth/knob.js', import.meta.url), 'utf8');
+  assert.deepEqual(intensityLiterals(src), [], 'knob.js source');
 });
 
 test('knob: a range across zero draws its value arc from zero', () => {

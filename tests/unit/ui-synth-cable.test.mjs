@@ -11,8 +11,8 @@ import { performance } from 'node:perf_hooks';
 import {
   CABLE_DASH, CABLE_MIN_SAG, REFUSED_DASH, cableCurve, cableSvg, plugSvg,
 } from '../../src/js/ui/synth/cable.js';
-import { TOKENS, colourLiterals, shapesWithoutStroke, paints, tokenValues } from
-  './ui-synth-fixture.mjs';
+import { TOKENS, colourLiterals, shapesWithoutStroke, paints, tokenValues, intensityLiterals }
+  from './ui-synth-fixture.mjs';
 
 const NUM = '(-?\\d+(?:\\.\\d+)?(?:e[-+]?\\d+)?)';
 const CURVE = new RegExp(`^M ${NUM} ${NUM} C ${NUM} ${NUM} ${NUM} ${NUM} ${NUM} ${NUM}$`);
@@ -187,6 +187,45 @@ test('the pointer reaches the main stroke group only', () => {
     'the hit width is in screen px');
 });
 
+test('the hit path is hidden, not transparent: it takes the stroke through visibility', () => {
+  for (const state of STATES) {
+    const svg = draw({ state });
+    const hit = /<path data-hit=""[^>]*>/.exec(svg)[0];
+    assert.match(hit, /\svisibility="hidden"/, JSON.stringify(state));
+    assert.doesNotMatch(hit, /opacity/, `${JSON.stringify(state)}: no opacity on the hit path`);
+    // pointer-events="stroke" ignores visibility, so the hidden path still takes the pointer:
+    // it sits in the main group, whose pointer-events="stroke" it inherits.
+    assert.match(svg, /<g data-main="" pointer-events="stroke"><path data-hit=""/);
+    assert.doesNotMatch(hit, /pointer-events="(?!stroke)/);
+  }
+});
+
+const shadowOf = (svg) => /<path data-shadow=""[^>]*>/.exec(svg)[0];
+const dropOf = (el) => {
+  const m = /transform="translate\(([^ ]+) ([^)]+)\)"/.exec(el);
+  return m ? [Number(m[1]), Number(m[2])] : [0, 0];
+};
+
+test('the soft shadow is an opaque underlay: shadow token, wider, 1 screen px down', () => {
+  for (const state of STATES) {
+    for (const zoom of [0.5, 1, 2, 3]) {
+      const svg = draw({ state, zoom });
+      const shadow = shadowOf(svg);
+      const where = `${JSON.stringify(state)} at ${zoom}`;
+      assert.ok(shadow.includes(`stroke="${TOKENS.cable.shadow}"`), `${where}: the shadow token`);
+      assert.doesNotMatch(shadow, /opacity|filter|class=/, `${where}: opaque, no alpha`);
+      assert.ok(width(shadow) > width(mainStroke(svg)), `${where}: wider than the stroke`);
+      assert.ok(svg.indexOf('data-shadow') < svg.indexOf('data-stroke'), `${where}: under it`);
+      const [dx, dy] = dropOf(shadow);
+      assert.equal(dx, 0, `${where}: straight down`);
+      assert.ok(Math.abs(dy * zoom - (state.dragging ? 3 : 1)) < 1e-5,
+        `${where}: the offset is in screen px (${dy} graph units)`);
+    }
+  }
+  assert.ok(dropOf(shadowOf(draw({ state: { dragging: true } })))[1]
+    > dropOf(shadowOf(draw()))[1], 'dragging lifts the shadow');
+});
+
 test('the signal type is shown by the dash pattern of the main stroke', () => {
   for (const type of TYPES) {
     const main = mainStroke(draw({ type }));
@@ -291,7 +330,8 @@ test('the sheen stripe is drawn only when asked, and takes no pointer', () => {
   assert.match(sheen, /pointer-events="none"/);
   assert.ok(width(sheen) < width(mainStroke(svg)));
   assert.ok(sheen.includes(`stroke="${TOKENS.cable.sheen}"`), 'the cable.sheen token');
-  assert.match(sheen, /stroke-opacity="0.3"/);
+  assert.match(sheen, /\sclass="opacity-hw-sheen"/, 'the intensity is the hw-sheen key');
+  assert.doesNotMatch(sheen, /opacity="/, 'no opacity attribute');
   assert.match(sheen, /transform="translate\(-0.7 -0.7\)"/);
   const at2 = /<path data-sheen=""[^>]*>/.exec(draw({ sheen: true, zoom: 2 }))[0];
   assert.match(at2, /transform="translate\(-0.35 -0.35\)"/, 'the offset is in screen px');
@@ -343,6 +383,37 @@ test('plugSvg is a seated plug at its point, with the cable colour, taking no po
 });
 
 // ---------------------------------------------------------------- purity and cost
+
+test('no literal opacity, alpha or shadow in any cable, plug or cable.js itself (v4)', () => {
+  for (const type of TYPES) {
+    for (const state of STATES) {
+      for (const sheen of [false, true]) {
+        for (const zoom of [0.5, 1, 2]) {
+          const svg = draw({ type, state, sheen, zoom });
+          assert.deepEqual(intensityLiterals(svg), [], `${type} ${JSON.stringify(state)}`);
+        }
+      }
+    }
+  }
+  assert.deepEqual(intensityLiterals(plugSvg({ at: B, colour: TOKENS.cable.palette[0],
+    tokens: TOKENS })), [], 'plug');
+  const src = readFileSync(new URL('../../src/js/ui/synth/cable.js', import.meta.url), 'utf8');
+  assert.deepEqual(intensityLiterals(src), [], 'cable.js source');
+});
+
+test('the intensity scan catches what it refuses', () => {
+  for (const bad of ['stroke-opacity="0.35"', 'stroke-opacity="0"', 'fill-opacity=".6"',
+    'opacity="1"', "flood-opacity='0.2'", 'stop-opacity="0.5"', 'style="opacity: 0.3"',
+    'rgba(0, 0, 0, 0.3)', 'hsla(0 0% 0% / 0.3)', '#000', '#0a0b0c80', 'class="opacity-[0.3]"',
+    'class="bg-black/50"', 'box-shadow: 0 1px 2px', 'filter: drop-shadow(0 1px 1px)',
+    'class="shadow-[0_1px_2px]"', '<feDropShadow dx="0"/>']) {
+    assert.notDeepEqual(intensityLiterals(bad), [], bad);
+  }
+  for (const ok of ['class="opacity-hw-sheen"', 'data-shadow=""', 'visibility="hidden"',
+    `stroke="${TOKENS.cable.shadow}"`, 'url(#grain)', 'tokens.cable.shadow']) {
+    assert.deepEqual(intensityLiterals(ok), [], ok);
+  }
+});
 
 test('cable.js is pure: no import from the Synth view, no DOM, no layout', () => {
   const src = readFileSync(new URL('../../src/js/ui/synth/cable.js', import.meta.url), 'utf8')

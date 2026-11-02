@@ -9,7 +9,9 @@
 // counts key listeners), and draws controlSvg where it wants, an HTML panel or an SVG graph box
 // at any zoom. ariaAttrs is the controlAttrs shape N003 adopts (aria-valuenow a 0..1000
 // position). Every colour is a token passed in
-// (tokens.js; project.visual-identity-lock v3), so nothing here is a colour literal.
+// (tokens.js; project.visual-identity-lock v3), so nothing here is a colour literal, and no
+// number sets an opacity, an alpha or a shadow (v4): the cap highlight's intensity is the
+// hw-sheen Tailwind key (class opacity-hw-sheen).
 //
 //   clampValue, toNorm, fromNorm, quantize, defaultValue, stepOption   value mapping
 //   dragValue, pixelsPerRangeFor, wheelValue, knobKey                  gestures -> the next value
@@ -572,6 +574,8 @@ function arcPath(r, a, b) {
 const KNOB = { ring: 17, cap: 12, ringW: 3, focus: 21 };
 const FADER = { travel: FADER_TRAVEL, capW: 16, capH: 8, trackW: 4 };
 const SWITCH = { w: 14, h: 28, inset: 2, leverW: 10 };
+/** The cap highlight's intensity class: the hw-sheen key of tailwind.config.cjs. */
+const SHEEN_CLASS = 'opacity-hw-sheen';
 
 /**
  * Each kind's extent, graph units, centred on the origin: everything controlSvg draws in any
@@ -639,8 +643,8 @@ function knobShapes(value, applied, p, t, st) {
     + mark
     + `<circle cx="0" cy="0" r="${KNOB.cap}" fill="${esc(c.cap)}" `
     + `stroke="${esc(t.surface.edge)}" stroke-width="1"/>`
-    + `<ellipse cx="-3.5" cy="-4.5" rx="5" ry="3.5" fill="${esc(c.capHi)}" fill-opacity="0.6" `
-    + 'stroke="none"/>'
+    + `<ellipse class="${SHEEN_CLASS}" cx="-3.5" cy="-4.5" rx="5" ry="3.5" `
+    + `fill="${esc(c.capHi)}" stroke="none"/>`
     + `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" `
     + `stroke="${esc(dim ? c.disabled : c.pointer)}" stroke-width="2.5" stroke-linecap="round"/>`
     + (st.focus ? `<circle cx="0" cy="0" r="${KNOB.focus}" fill="none" `
