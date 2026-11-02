@@ -31,6 +31,18 @@ export const KEYBOARD_REFUSED = Object.freeze({
 
 const KEYS_HEIGHT = 132; // CSS px of the on-screen keys
 
+/** The dock's Pro buttons (one class list, bound as kbdBtn, so the markup carries it once): 44 px
+ *  on a coarse pointer (V634). */
+export const KBD_BTN = [
+  'inline-flex h-9 items-center justify-center rounded-lg border border-solid',
+  'border-gray-300 bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100',
+  'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300',
+  'aria-pressed:border-primary-600 aria-pressed:bg-primary-600 aria-pressed:text-white',
+  'dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700',
+  'dark:aria-pressed:bg-primary-500 [@media(pointer:coarse)]:min-h-11',
+  '[@media(pointer:coarse)]:min-w-11',
+].join(' ');
+
 /** The narrowest white key a finger plays without its neighbour: the 44 px touch target. */
 export const TOUCH_KEY_MIN = 44;
 
@@ -52,7 +64,8 @@ export function keysOctaves(width, { coarse = false } = {}) {
  * likely no hardware keyboard, is attached (a phone), so there the keys show only their notes.
  */
 export function keysInput(win) {
-  const mq = (q) => Boolean(win && typeof win.matchMedia === 'function' && win.matchMedia(q).matches);
+  const mq = (q) => Boolean(win && typeof win.matchMedia === 'function'
+    && win.matchMedia(q).matches);
   const coarse = mq('(pointer: coarse)');
   return { coarse, lettered: !coarse || mq('(any-pointer: fine)') };
 }
@@ -92,6 +105,7 @@ export function createKeyboardUi({ win = window } = {}) {
     // V635: on a phone the Synth's dock shows its keys and the Octave buttons; the instrument
     // row, Arm and Velocity unfold from its More button, so the dock never buries the panel.
     kbdMore: false,
+    kbdBtn: KBD_BTN,
 
     /** The view the keyboard belongs to now ('playground' | 'studio'), else null. */
     get kbdView() {

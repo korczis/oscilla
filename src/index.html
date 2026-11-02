@@ -1914,24 +1914,24 @@
       <div role="group" aria-label="Keyboard controls" aria-describedby="osc-kbd-readout"
         class="mb-2 flex flex-wrap gap-2">
         <button type="button"
-          class="inline-flex h-9 items-center justify-center rounded-lg border border-solid border-gray-300 bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 aria-pressed:border-primary-600 aria-pressed:bg-primary-600 aria-pressed:text-white dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 dark:aria-pressed:bg-primary-500 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
-          data-osc="keyboard.arm" :class="kbdView === 'synth' && !kbdMore && 'max-sm:hidden'" :aria-pressed="String(kbdArmedHere)"
+          
+          data-osc="keyboard.arm" :class="[kbdBtn, kbdView === 'synth' && !kbdMore && 'max-sm:hidden']" :aria-pressed="String(kbdArmedHere)"
           @click="kbdToggle()" x-text="kbdArmedHere ? 'Disarm keys' : 'Arm keys'">Arm keys</button>
         <button type="button"
-          class="inline-flex h-9 items-center justify-center rounded-lg border border-solid border-gray-300 bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 aria-pressed:border-primary-600 aria-pressed:bg-primary-600 aria-pressed:text-white dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 dark:aria-pressed:bg-primary-500 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
+          :class="kbdBtn"
           data-osc="keyboard.octave-down" aria-keyshortcuts="Z"
           @click="kbdControl('octave-down')">Octave −</button>
         <button type="button"
-          class="inline-flex h-9 items-center justify-center rounded-lg border border-solid border-gray-300 bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 aria-pressed:border-primary-600 aria-pressed:bg-primary-600 aria-pressed:text-white dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 dark:aria-pressed:bg-primary-500 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
+          :class="kbdBtn"
           data-osc="keyboard.octave-up" aria-keyshortcuts="X"
           @click="kbdControl('octave-up')">Octave +</button>
         <button type="button"
-          class="inline-flex h-9 items-center justify-center rounded-lg border border-solid border-gray-300 bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 aria-pressed:border-primary-600 aria-pressed:bg-primary-600 aria-pressed:text-white dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 dark:aria-pressed:bg-primary-500 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
-          data-osc="keyboard.velocity-down" :class="kbdView === 'synth' && !kbdMore && 'max-sm:hidden'" aria-keyshortcuts="C"
+          
+          data-osc="keyboard.velocity-down" :class="[kbdBtn, kbdView === 'synth' && !kbdMore && 'max-sm:hidden']" aria-keyshortcuts="C"
           @click="kbdControl('velocity-down')">Velocity −</button>
         <button type="button"
-          class="inline-flex h-9 items-center justify-center rounded-lg border border-solid border-gray-300 bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 aria-pressed:border-primary-600 aria-pressed:bg-primary-600 aria-pressed:text-white dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 dark:aria-pressed:bg-primary-500 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
-          data-osc="keyboard.velocity-up" :class="kbdView === 'synth' && !kbdMore && 'max-sm:hidden'" aria-keyshortcuts="V"
+          
+          data-osc="keyboard.velocity-up" :class="[kbdBtn, kbdView === 'synth' && !kbdMore && 'max-sm:hidden']" aria-keyshortcuts="V"
           @click="kbdControl('velocity-up')">Velocity +</button>
         <button type="button" data-osc="keyboard.more" x-show="kbdView === 'synth'"
           aria-controls="osc-synth-dock" :aria-expanded="String(kbdMore)" @click="kbdMore = !kbdMore"
