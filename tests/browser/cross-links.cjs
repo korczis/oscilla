@@ -241,7 +241,7 @@ async function runLeg(name, origin) {
       const page = await H.open(context, base);
       const skip = await H.name(page, '.osc-skip');
       const help = await H.name(page, '[data-osc="header.help"]');
-      const brand = await H.name(page, '.osc-brand');
+      const brand = await H.name(page, '[data-osc="header.brand"]');
       check(leg, 'the skip link, the "?" button and the logo say what they do',
         skip && skip.text === 'Skip to main content: Playground'
         && help && help.label === 'Keyboard shortcuts' && help.title === 'Keyboard shortcuts'
@@ -251,7 +251,7 @@ async function runLeg(name, origin) {
       const wrong = [];
       for (const input of INPUTS) {
         await H.roundTrip(page, { label: 'logo', from: 'measure', to: 'playground',
-          selector: '.osc-brand', input }, wrong);
+          selector: '[data-osc="header.brand"]', input }, wrong);
       }
       check(leg, 'the logo goes home and Back returns (pointer, keyboard, touch)',
         !wrong.length, wrong.join(' | '));

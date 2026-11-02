@@ -85,6 +85,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
+const shell = require('./lib/shell.cjs');
 const seam = require('./lib/measure-seam.cjs');
 const { until, bounded } = require('./lib/wait.cjs');
 
@@ -216,16 +217,9 @@ const H = {
     if (!stayed) await H.ready(page);
     return { dialog, stayed };
   },
-  /** Reach a workspace through the nav; a grouped one (ANALYZE, SYNTHESIS) opens its group. */
+  /** Reach a workspace through the sidebar (lib/shell.cjs: the drawer and a group as needed). */
   navTo: async (page, ws) => {
-    const item = `[data-osc="nav.${ws}"]`;
-    const group = await page.evaluate((s) => {
-      const el = document.querySelector(s);
-      const g = el && el.closest('[data-osc-nav-group]');
-      return g && el.offsetParent === null ? g.dataset.oscNavGroup : null;
-    }, item);
-    if (group) await page.click(`[data-osc="nav-group.${group}"]`);
-    await page.click(item);
+    await shell.navTo(page, ws);
     await page.waitForFunction((w) => window.OSCILLA.app.workspace === w, ws,
       { timeout: 15000 });
     await H.frames(page);
@@ -1056,9 +1050,10 @@ function defineChecks() {
         : null;
     }, sel);
     // B6: the logo goes home.
-    const logo = { name: await nameOf('.osc-brand'),
-      title: await page.getAttribute('.osc-brand', 'title') };
-    await page.click('.osc-brand');
+    const BRAND = '[data-osc="header.brand"]'; // the Pro navbar's logo (F002)
+    const logo = { name: await nameOf(BRAND),
+      title: await page.getAttribute(BRAND, 'title') };
+    await page.click(BRAND);
     logo.reached = await reach(() => page.evaluate(() => (window.OSCILLA.app.workspace
       === 'playground' ? new URLSearchParams(window.location.hash.slice(1)).get('m') : null)),
     'control-names: the logo opens the Playground');

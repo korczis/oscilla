@@ -147,7 +147,7 @@ test('the header and Measure name what their links and buttons do (B2, B6, B7, B
   // The skip link's label names the workspace shown (H004 B7, ui/app.js syncSkipLink).
   assert.match(PAGE, /<a class="osc-skip" href="#osc-main">Skip to main content: Playground<\/a>/);
   // The logo keeps the product's name (positioning-consistency) and says where it goes (H004 B6).
-  assert.match(PAGE, /<a class="osc-brand" href="#m=playground" x-bind="homeLink\(\)"\s+aria-label="OSCILLA · Interactive Sound &amp; Frequency Lab" title="Open the Playground">/);
+  assert.match(PAGE, /<a href="#m=playground" x-bind="homeLink\(\)" data-osc="header\.brand" title="Open the Playground"\s+aria-label="OSCILLA · Interactive Sound &amp; Frequency Lab"/);
   assert.ok(tagOf('header.help').includes('aria-label="Keyboard shortcuts"'));
   const toExp = tagOf('measure.toExperiments');
   assert.ok(toExp.includes(`@click="setWorkspace('experiments', { focusHeading: true })"`),

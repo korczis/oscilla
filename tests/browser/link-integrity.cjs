@@ -192,8 +192,8 @@ const H = {
   state: (page) => page.evaluate(() => {
     const a = window.OSCILLA.app;
     const el = document.activeElement;
-    const cur = document.querySelector('.osc-nav [aria-current="page"]');
-    const nav = document.querySelector('.osc-nav');
+    const cur = document.querySelector('#osc-nav [aria-current="page"]');
+    const nav = document.querySelector('#osc-nav');
     return { workspace: a.workspace, hash: location.hash, href: location.href,
       current: cur ? cur.dataset.osc : null, histLen: history.length,
       navVisible: !!nav && nav.getClientRects().length > 0,

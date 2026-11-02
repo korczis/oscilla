@@ -9,7 +9,7 @@
 //   var(--osc-fs-floor)), and every Tailwind text-[<n>px] under 12 px in src/index.html and
 //   src/js is listed debt (SMALL_FONT_DEBT, SMALL_TEXT_CLASS_DEBT: each entry names its owner,
 //   is still small, and the lists only shrink).
-// - Own panels first (responsive.css, below 1280 px): a workspace other than the Playground
+// - Own panels first (responsive.css, below 1536 px): a workspace other than the Playground
 //   shows only the panels it lists in data-osc-modes, each lab workspace of src/index.html is
 //   in the rule that shows them, and Source & Pattern and Signal analysis are ordered after
 //   every other panel there; no rule shows them in every workspace.
@@ -175,7 +175,7 @@ test('no Tailwind text-[<n>px] under 12 px in the markup or scripts, but listed 
 
 // ---------------------------------------------------------------------------- own panels first
 const responsive = stripComments(read('src/styles/responsive.css'));
-const below1280 = rules(mediaBlock(responsive, '(max-width: 1279.98px)'));
+const below1536 = rules(mediaBlock(responsive, '(max-width: 1535.98px)'));
 const PLAYGROUND_PANELS = ['.osc-p-source', '.osc-p-analysis'];
 
 /** The lab workspaces: the data-osc-modes of the panels of src/index.html, but the Playground. */
@@ -188,10 +188,10 @@ function labWorkspaces() {
   return [...modes].sort();
 }
 
-test('below 1280 px a workspace but the Playground shows only its marked panels, no list', () => {
-  const hide = below1280.find((r) => r.decls.display === 'none' && r.selectors.includes(
+test('below 1536 px a workspace but the Playground shows only its marked panels, no list', () => {
+  const hide = below1536.find((r) => r.decls.display === 'none' && r.selectors.includes(
     '.osc-app:not([data-mode="playground"]) .osc-panel[data-osc-modes]:not(.is-focused)'));
-  assert.ok(hide, 'no rule hides the unmarked panels outside the Playground below 1280 px');
+  assert.ok(hide, 'no rule hides the unmarked panels outside the Playground below 1536 px');
   // No hand-kept copy of the workspace list: no rule names a lab workspace's data-osc-modes.
   const named = [...responsive.matchAll(/data-osc-modes~="([\w-]+)"/g)].map((m) => m[1])
     .filter((w) => w !== 'playground');
@@ -273,13 +273,13 @@ function applies(selector, w, c) {
   return rest === `.${c}`;
 }
 
-test('768-1279 px: no lab workspace leaves a half-width panel alone in its row', () => {
+test('768-1535 px: no lab workspace leaves a half-width panel alone in its row', () => {
   const html = read('src/index.html');
   const panels = [...html.matchAll(
     /<section class="osc-panel (osc-p-[\w-]+)[^"]*"[^>]*?data-osc-modes="([^"]+)"/g)]
     .map((m, i) => ({ c: m[1], modes: m[2].split(/\s+/), dom: i }));
-  const sheet = [...below1280, ...mediaRules(stripComments(read('src/styles/studio.css')),
-    '(max-width: 1279.98px)')];
+  const sheet = [...below1536, ...mediaRules(stripComments(read('src/styles/studio.css')),
+    '(max-width: 1535.98px)')];
   const last = (w, c, prop) => {
     let v;
     for (const r of sheet) {
@@ -307,29 +307,28 @@ test('768-1279 px: no lab workspace leaves a half-width panel alone in its row',
   assert.deepEqual(alone, [], 'span the row (grid-column: 1 / -1) where it has no partner');
 });
 
-test('the safety notice reopens from the header below 1280 px, on every workspace', () => {
+test('the safety notice reopens from the page header below 1536 px, on every workspace', () => {
   const html = read('src/index.html');
-  const header = /<header class="osc-header"[\s\S]*?<\/header>/.exec(html);
-  assert.ok(header, 'no page header');
+  const header = /<div data-osc="page\.header"[\s\S]*?data-osc="page\.actions"[\s\S]*?<\/div>/
+    .exec(html);
+  assert.ok(header, 'no page header with an actions slot');
   const reopen = /<button\b[^>]*\bid="osc-safety-reopen-phone"[^>]*>/.exec(header[0]);
-  assert.ok(reopen, 'the header holds no reopen control (#osc-safety-reopen-phone)');
+  assert.ok(reopen, 'the page header holds no reopen control (#osc-safety-reopen-phone)');
   assert.match(reopen[0], /data-osc="safety\.reopen"/);
   assert.match(reopen[0], /@click="reopenSafety\(\)"/);
+  assert.match(reopen[0], /class="[^"]*\binline-flex\b[^"]*\b2xl:hidden\b/,
+    'the page header control shows below 1536 px and hides from it (Tailwind 2xl)');
   assert.equal([...html.matchAll(/data-osc="safety\.reopen"/g)].length, 2,
-    'one reopen control per layout: the header\'s and Device & Limits\'');
-  const integration = stripComments(read('src/styles/integration.css'));
-  const below = mediaRules(integration, '(max-width: 1279.98px)');
-  assert.ok(below.some((r) => r.selectors.includes('.osc-safety-reopen--phone')
-    && r.decls.display === 'inline-flex'), 'the header control is not shown below 1280 px');
+    'one reopen control per layout: the page header\'s and Device & Limits\'');
   const device = /<button\b[^>]*\bid="osc-safety-reopen"[^>]*>/.exec(html);
-  assert.ok(device && /class="[^"]*\bmax-xl:hidden\b/.test(device[0]),
-    'Device & Limits\' control must hide below 1280 px, where the header carries it');
+  assert.ok(device && /class="[^"]*\bmax-2xl:hidden\b/.test(device[0]),
+    'Device & Limits\' control must hide below 1536 px, where the page header carries it');
 });
 
-test('below 1280 px the Playground panels follow every workspace panel outside the Playground',
+test('below 1536 px the Playground panels follow every workspace panel outside the Playground',
   () => {
     const orders = [];
-    for (const r of below1280) {
+    for (const r of below1536) {
       if (r.decls.order === undefined) continue;
       for (const s of r.selectors) orders.push({ s, order: Number(r.decls.order) });
     }

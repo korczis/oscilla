@@ -328,7 +328,7 @@ export function createNavigation(svc = {}) {
     if (st && !(st.owner && results[st.owner] === false) && st.workspace !== cmp.workspace) {
       if (origin === 'load') {
         // A load opens the workspace in place (no focus move, no scroll), but marks its panels
-        // in this same synchronous step: below 1280 px the mark decides which panels show, so
+        // in this same synchronous step: below 1536 px the mark decides which panels show, so
         // a deep link paints its own panels first and never the Playground's.
         cmp.workspace = st.workspace;
         if (typeof cmp.markWorkspace === 'function') cmp.markWorkspace(st.workspace);

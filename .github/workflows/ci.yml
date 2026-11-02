@@ -277,6 +277,8 @@ jobs:
           pulseaudio --start --exit-idle-time=-1
           pactl load-module module-null-sink sink_name=ci_null
           pactl set-default-sink ci_null
+      # Every suite of test:browser runs, whatever the one before returned (review #330 F5,
+      # tests/browser/lib/run-suites.cjs); an && chain stopped at the first failure.
       - name: dist from file:// and the /oscilla/ sub-path; layout, touch targets, stop
         # The train's browser suites (cross-links, first-screen, surface-census) take the chain
         # past 15 min on a hosted runner (~20 min measured, run 41333897971); the job bounds 45.

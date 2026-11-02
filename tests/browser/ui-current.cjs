@@ -180,6 +180,9 @@ function phoneWhole({ ws, gap, touchMin }) {
     + '[role=switch], [role=menuitem], [role=checkbox], [role=slider]';
   const scrollTop = main.scrollTop;
   const pageTop = document.scrollingElement.scrollTop;
+  // scrollIntoView centres a control by scrolling every ancestor, the app root too (its
+  // overflow is hidden, not clip, so a script can scroll it): restored with the others below.
+  const appTop = app.scrollTop;
   const hits = (el, x, y) => {
     const hit = document.elementFromPoint(x, y);
     if (!hit) return false;
@@ -232,6 +235,7 @@ function phoneWhole({ ws, gap, touchMin }) {
   }
   main.scrollTop = scrollTop;
   document.scrollingElement.scrollTop = pageTop;
+  app.scrollTop = appTop;
   // labels: every Pattern Sequencer block's name reads whole (no ellipsis) where it is shown
   const cut = [...document.querySelectorAll('.osc-p-sequencer .osc-block-name')]
     .filter((el) => shown(el) && el.textContent.trim() && el.scrollWidth > el.clientWidth + 1)
@@ -272,7 +276,7 @@ function phoneVerdicts(m, ws) {
  */
 function emptyArea() {
   const STEP = 24;
-  const header = document.querySelector('.osc-header');
+  const header = document.querySelector('[data-osc="header"]');
   const status = document.querySelector('.osc-statusbar');
   const app = document.getElementById('osc-app');
   const top = header.getBoundingClientRect().bottom;

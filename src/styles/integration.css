@@ -227,7 +227,7 @@
   overflow: auto;
   overscroll-behavior: contain;
   /* .osc-main is a fixed-height scroller and panels carry min-height: 0, so implicit auto rows
-     would share its height and squash panels onto each other below 1280 px. */
+     would share its height and squash panels onto each other below the desktop grid. */
   grid-auto-rows: max-content;
 }
 
@@ -564,7 +564,7 @@
  * (wrappers become display: contents) into a 12-column grid that enlarges the panels the
  * workspace is about; panels it does not list are hidden.
  */
-@media (min-width: 1280px) {
+@media (min-width: 1536px) {
   .osc-app:is([data-mode="sequencer"], [data-mode="analyzer"], [data-mode="filter"],
     [data-mode="synthesis"], [data-mode="compare"]) .osc-main {
     grid-template-rows: none;
@@ -814,12 +814,14 @@
   }
 }
 
-/* Between 1280 and 1535 px the lab keeps the reference arrangement, but panels are narrower than
-   the 1536 px reference, so their text wraps taller than the reference's fixed row heights. Let
-   the rows follow the content there; from 1536 px the exact reference geometry applies. The
-   first row (.osc-top, P002) follows its content too, or the analysis foot and, under a coarse
-   pointer, HOLD TO PLAY would sit under the measurement row (responsive.css, Touch). */
-@media (min-width: 1280px) and (max-width: 1535.98px) {
+/* Between 1536 and 1791 px of window (1280-1535 px of lab beside the sidebar, F002) the lab
+   keeps the reference arrangement, but panels are narrower than the 1536 px reference, so their
+   text wraps taller than the reference's fixed row heights. Let the rows follow the content
+   there; from 1792 px of window the exact reference geometry applies. The first row (.osc-top,
+   P002) follows its content too, or the analysis foot and, under a coarse pointer, HOLD TO PLAY
+   would sit under the measurement row (responsive.css, Touch); being one row, its panels end on
+   one line whatever one column's fonts wrap. */
+@media (min-width: 1536px) and (max-width: 1791.98px) {
   .osc-app[data-mode="playground"] .osc-main {
     grid-template-rows: max-content max-content;
   }
@@ -829,14 +831,3 @@
   }
 }
 
-/* Below 1280 px the notice reopens from the header on every workspace; from 1280 px Device &
-   Limits carries the control (its own copy is hidden below 1280 px, max-xl:hidden). */
-.osc-safety-reopen--phone {
-  display: none;
-}
-
-@media (max-width: 1279.98px) {
-  .osc-safety-reopen--phone {
-    display: inline-flex;
-  }
-}

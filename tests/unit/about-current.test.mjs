@@ -19,6 +19,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { WORKSPACES } from '../../src/js/ui/app.js';
+import { WORKSPACE_REGISTRY } from '../../src/js/ui/shell.js';
 
 const root = new URL('../../', import.meta.url);
 const read = (p) => readFileSync(new URL(p, root), 'utf8');
@@ -42,11 +43,13 @@ function text(markup) {
     .trim();
 }
 
-/** The navigation's workspaces, in order: { id, label } of each data-osc="nav.<id>" link. */
-export function navWorkspaces(markup) {
-  const nav = markup.slice(markup.indexOf('id="osc-nav"'), markup.indexOf('</nav>'));
-  return [...nav.matchAll(/<a\b[^>]*\bdata-osc="nav\.([a-z]+)"[^>]*>([^<]+)<\/a>/g)]
-    .map(([, id, label]) => ({ id, label: label.trim() }));
+/**
+ * The navigation's workspaces, in order: { id, label } of each sidebar entry. Since F002 the
+ * sidebar renders its entries from shell.js WORKSPACE_REGISTRY (an x-for, held by
+ * ui-flowbite-pro-shell.test.mjs), so the registry is what the navigation shows.
+ */
+export function navWorkspaces() {
+  return WORKSPACE_REGISTRY.map(({ id, label }) => ({ id, label }));
 }
 
 /** The first night, in any of the words the old headline used. */
