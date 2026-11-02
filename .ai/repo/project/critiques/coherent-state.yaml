@@ -1,0 +1,175 @@
+intent: coherent-state
+reviewed_at: "2931af343905d0a432bd8711f18face5d703dd3a"
+reviewed_by: "claude-opus-5.5 (independent critic for oscilla-b0, 2026-11-03); the findings are the critic's. An earlier critique (origin/chore/coherent-state-is-critiqued 80c23e3a, reviewed at e786886d) never landed; it was re-judged against main 2931af34, where C001-C017, C019 and C020 have merged (C008 and C016 through the #385 train), and its findings were kept, narrowed, downgraded or dropped on that evidence."
+findings:
+  - id: c008-record-names-a-check-the-train-dropped
+    class: delivery_verification
+    subject: "C008"
+    finding: "C008's title says 'the Signal Path shows the envelope that sounds', and an acceptance criterion requires the browser check `signal-path-sounding-envelope` in tests/browser/app.cjs: an attack edit on a sounding note keeps the envelope stage at the voice's values with a 'next note' annotation. That check is in no file on main (it exists only on the closed branch origin/fix/c008-envelope-held-note, PR #310). The reconcile commit 10c03edc that brought C008 to main through #385 says so: 'The parallel setEnvelopeSustain, the \"next note\" Signal Path annotation and its envelope resync are not carried over: every lab edit now reaches the sounding voice, so there is nothing to mark.' The reason may be sound (C007 restarts the held note on an attack or decay edit, so the drawn and the sounding envelope agree), but the issue record was not amended. A done record for C008 would claim an acceptance criterion whose check does not exist, and nothing on main asserts that the Signal Path's envelope stage matches the sounding voice."
+    blocking: true
+    resolution:
+      state: open
+      issue: "C008"
+      because: "Before C008 is recorded done, amend its title and acceptance criteria: strike `signal-path-sounding-envelope` and the 'next note' annotation, citing 10c03edc, and replace them with the claim main now makes (every Envelope edit reaches the sounding voice, so the drawn stage is the sounding one). Either name an existing check that reads the Signal Path's envelope stage against engine.voice.adsr after a live attack edit, or add one to tests/browser/app.cjs. Then set this finding planned to C008."
+  - id: c022-duplicates-g018-and-its-evidence-cannot-prove-the-criterion
+    class: unnecessary_work
+    subject: "C022"
+    finding: "C022 (M090) and G018 (M087, intent component-system) both make every Playground-family and Studio control tested by name. G018: 'a hook that no test names gets a test that does'. C022: drive each of the 94 keys left in tests/unit/control-drive-baseline.json until it is empty. They work on the same controls and the same tests/browser suites. Neither names the other, and neither intent's non_goals covers the overlap (coherent-state's non_goals name K001-K057 and F001-F012, not G). C022's only gate is also the lexical ratchet (see ratchet-proves-a-lexical-drive-not-an-effect). That ratchet cannot see the 'asserts its effect at its subsystem and at a view' that C022's second acceptance criterion requires, so 94 drives would be judged by a reviewer's reading alone. Started as written, C022 duplicates G018, and its result could not show the criterion it serves."
+    blocking: true
+    resolution:
+      state: open
+      issue: ""
+      because: "Before C022 starts, decide one owner per control: G018 owns 'named by a test', and C022 owns 'asserts its subsystem and view effect', or the other way round. Record the split in both issues and in coherent-state's non_goals. Re-base C022's evidence on a census that can decide its criterion (one row per control naming the subsystem read-back, the view read-back and the check that asserts both, with a unit test that each named check exists). This finding does not bear on C001-C021: their records may be made on their own evidence."
+  - id: ratchet-proves-a-lexical-drive-not-an-effect
+    class: delivery_verification
+    subject: "coherent-state#every-control-reaches-its-subsystem"
+    finding: "The criterion's only ref, tests/unit/control-drive-baseline.test.mjs, proves that an action token sits on or next to the line that names a control's key. Its own header says 'What it does not decide: that the action asserts the control's effect'. Its DRIVE list accepts focus, hover, dispatchEvent, a value assignment and synthetic events, none of which proves a pointer reaches the control. One static data-osc key stands for every element that shares it: seq.addType covers the ten Add-menu items, and dual.route covers both the Mono and the Stereo buttons. So a green ratchet proves neither the criterion's 'asserts its effect at its subsystem and at a view that reflects it' nor its 'cannot be clicked' leg. M090's 'ratchet green in Chromium, Firefox and WebKit' is meaningless for a node-only test. Downgraded from the earlier critique's blocking: C020 delivered the ratchet its own criteria describe, so its record may be made. The weakness bites only when the criterion is judged met, at C022 and at the milestone's close."
+    blocking: false
+    resolution:
+      state: open
+      issue: ""
+      because: "Back the criterion with evidence that can decide it. Restrict DRIVE to user-input actions (click, fill, selectOption, press, check, tap, dragTo, keyboard., mouse.). Key a shared data-osc per element (data-osc plus data-value). Add the per-control census of c022-duplicates-g018-and-its-evidence-cannot-prove-the-criterion, and a pointer-reachability sweep (elementFromPoint at each visible control's centre, per workspace, at the gate viewports) for the 'cannot be clicked' leg. Name those suites in the criterion's ref, and drop the three-browser wording for the node test from M090."
+  - id: census-blind-to-module-rendered-and-unkeyed-controls
+    class: missed_requirement
+    subject: "coherent-state#every-control-reaches-its-subsystem"
+    finding: "The ratchet scans only start tags in src/index.html that carry a static id or data-osc. Controls rendered from modules are never judged: the Studio Inspector (src/js/ui/studio/inspector.js), the compact widget, the graph editor and picker, the sequencer block fields (src/js/labs/sequencer-panel.js), the mic lab and the MEASURE and Experiments rows. Unkeyed controls in index.html are skipped. The Studio Inspector waveform select (dead-controls-9, H001) is such a control. A control moved from markup into a module drops out of the census as 'gone', so the baseline can reach empty without that control ever being driven. U063's runtime surface census (tests/browser/surface-census.cjs, intent ui-current) already walks every workspace on the running page and could carry the control rows, but it counts surfaces, not controls."
+    blocking: false
+    resolution:
+      state: open
+      issue: ""
+      because: "Either extend a runtime census to controls in every workspace, refusing unkeyed ones and keying module-rendered ones (for example Inspector param keys), and make C022 (or whichever issue owns 'driven' after the G018 split) done only when both the static baseline and the runtime census are empty; or narrow the criterion's wording to 'every keyed control of src/index.html' and list the JavaScript-rendered families as out of scope with a reason."
+  - id: instrument-yields-the-studio-through-a-second-mechanism
+    class: regression_risk
+    subject: "coherent-state#one-output-owner"
+    finding: "ADR 0063 decision 1 says the claim 'becomes the one claim every player makes' and 'no second mechanism is built beside them'. On main, OUTPUT_YIELDS.instrument is ['sequencer'] only (src/js/ui/output-owner.js:16-22, commented 'A playing Studio stops on its own watch of app.playing'). The Studio leaves for an instrument voice through the reactive $watch('playing') in src/js/ui/studio/workspace.js:1209, not through the claim. Exclusivity holds eventually: tests/browser/v31-studio-graph.cjs:1817 and the claimOverStudio leg of tests/browser/v31-studio-transport.cjs (around line 412) check it. The latter shows the Studio still playing in the same task as the click, and it waits up to 10 s for the stop. The criterion's own check `one-output-owner` (tests/browser/app.cjs:5028) has legs for instrument with sequencer and for sequencer with Studio, never for instrument with Studio. The earlier critique held this blocking as a missing behaviour. Main shows the behaviour exists, so it is downgraded to an unrecorded exception to decision 1 and a missing leg. C002's record may be made."
+    blocking: false
+    resolution:
+      state: open
+      issue: ""
+      because: "Either add 'studio' to OUTPUT_YIELDS.instrument, so the instrument claim stops a playing Studio click-free (cmp.studioStop) in the same event, and retire the $watch('playing') stop; or record the watch as a stated exception in ADR 0063 decision 1. Either way, add instrument-then-Studio and Studio-then-instrument legs, read in one evaluate, to `one-output-owner`."
+  - id: loopback-exception-has-no-test
+    class: missed_requirement
+    subject: "coherent-state#one-output-owner"
+    finding: "ADR 0063's Consequences require 'a unit test of the claim's transitions, the loopback exception included'. tests/unit/output-owner.test.mjs tests refusal during a measurement, the sequencer taking the output, live reads and outputBusy. Nothing tests the exception: a loopback TEST CONTEXT keeps the instrument sounding as its reference. The exception lives only in Check setup (src/js/ui/measure/calibration.js:55, `if (ctx.ioKind !== 'loopback') svc.stopPlayback(cmp)`), while runMeasure always calls stopPlayback (src/js/ui/measure/run.js:72). Whether a loopback run still has its instrument reference is therefore neither stated nor tested. It is the one negative case the ADR names."
+    blocking: false
+    resolution:
+      state: open
+      issue: ""
+      because: "Add the transition test the ADR names: a loopback Check setup leaves a playing instrument playing, a non-loopback one stops it, and the run's own behaviour in loopback is stated and asserted. If runMeasure must also spare the reference, fix it under C016's successor and say so in ADR 0063."
+  - id: tempo-asserted-at-the-model-only
+    class: delivery_verification
+    subject: "C020"
+    finding: "The earlier critique's blocking finding (Tempo reaches nothing) no longer holds. K002 (M059) landed (7f1272db): the reference sequence's blocks are tempo-locked (src/js/sequencer/model.js:464-500), and K002's unit test shows that a tempo change changes the render length. C020's own browser step still asserts Tempo only at the model and at the select's own value (tests/browser/sequencer.cjs:446-452), and its comment still says millisecond blocks keep their length (control-census-1). C020's second acceptance criterion requires 'a view that reflects it', and a control's own value is not such a view. The done record was dropped pending this critique (68c7be6c). persist-5 (Tempo shown after an import) stays with K017, which has not landed."
+    blocking: false
+    resolution:
+      state: open
+      issue: "C020"
+      because: "Record C020 done citing K002's unit test as the subsystem evidence for Tempo (coherent-state's non_goals allow the second issue to record a shared criterion as met), and update the stale comment. Add, in C020 or C021, a browser leg in which a Tempo change alters the scheduled pass length and the status duration. Define 'a view that reflects it' so that it excludes the control itself."
+  - id: criterion-refs-omit-the-checks-their-issues-place
+    class: delivery_verification
+    subject: "M090"
+    finding: "Several criterion refs do not run the checks that prove their criterion, so a green ref does not decide it. On main: one-output-owner runs sequencer-editor.test.mjs and v3-measure.cjs, but `one-output-owner` and `seq-refused-during-measure` are in tests/browser/app.cjs and the claim's unit tests in tests/unit/output-owner.test.mjs. live-edits-reach-the-voice runs app.cjs and engine-v1port.cjs, but `seq-loop-cap` is in sequencer.cjs, `phase-stereo-import-sync` in labs.cjs, and the held-note unit tests in envelope-held-note.test.mjs, dual-router-live.test.mjs and c011-safety-limits.test.mjs. views-describe-what-sounds omits sequencer.cjs (`seq-playhead-after-edit`). saved-state-is-honest runs only navigation.cjs, but `import-names-limits` and the H002 restore check are in app.cjs, and config-import-limits.test.mjs is a unit test. sequence-state-one-owner omits app.cjs (`seq-waveform-one-owner`) and qa-regressions.cjs (`seq-status-duration-follows-edits`). current-lab-state-wins omits lab-play-options.test.mjs and app.cjs (`additive-skips-dual`, `adsr-reaches-programmed`)."
+    blocking: false
+    resolution:
+      state: open
+      issue: ""
+      because: "Set each satisfaction ref to the union of the validation commands of the issues that serve it (at least the files named above), and add a plan-validate check that every check an issue names is reachable from the ref of a criterion it serves."
+  - id: defect-register-not-in-the-tree
+    class: delivery_verification
+    subject: "M090"
+    finding: "The intent's '35 defects in eight classes' cannot be checked against the plan, because the register lives only in scratchpad files. The records name seven class prefixes (engine-sync, coupling, dup-stale, dead-controls, control-census, vis-divergence, persist), and the eighth is never named. dead-controls-1, dead-controls-5 and dup-stale-1 appear in no record. dead-controls-9 and persist-2 sit in M079 (H001, H002), and persist-5 sits in K017. Whether every confirmed defect has an owner cannot be proven."
+    blocking: false
+    resolution:
+      state: open
+      issue: ""
+      because: "Commit the register (for example .ai/repo/project/audits/pack-03.yaml), giving each finding id its class, the skeptic's verdict and its disposition (fixed-by <issue>, duplicate-of, or out of scope with a reason). Name the eighth class, reconcile the count, and add a plan check that every confirmed id resolves to exactly one issue or disposition."
+  - id: defects-fixed-under-other-intents
+    class: missed_requirement
+    subject: "coherent-state#saved-state-is-honest"
+    finding: "Three defects inside this intent's criteria are fixed only by records that serve other intents. persist-2 (a continuous repeat restores as once with no word) is H002, which serves v2-laboratory; its check `continuous-repeat-restore-named` is on main in tests/browser/app.cjs, but H002 is not recorded done. dead-controls-9 (a Studio Inspector waveform edit silences the oscillator) is H001, which serves v31-studio and is READY. persist-5 is K017, in M059. ADR 0063's Consequences assign H002 to decision 3 alongside C017-C019. The intent lists only M090, so its criteria could be judged met while these remain open."
+    blocking: false
+    resolution:
+      state: open
+      issue: ""
+      because: "Add coherent-state#saved-state-is-honest to H002's serves and coherent-state#live-edits-reach-the-voice to H001's, or make C021 depend on H001, H002 and K017. Either way, list the dependency in M090's risks."
+  - id: import-limits-cover-three-labs
+    class: insufficient_work
+    subject: "coherent-state#saved-state-is-honest"
+    finding: "The criterion says config import names every value it limited or rejected. C017 met its own, narrower criteria: IMPORT_LIMIT_FIELDS (src/js/ui/config-file.js:203-212) compares eight fields (filter frequency, Q and gain; envelope a, d, s and r; phase pan; pan goes beyond C017's scope). Additive gains and phases, the Phase & Stereo phaseDeg and frequencies, the dual fields and the instrument fields that the validators clamp are never compared. A file that clamps only those still toasts 'All settings were restored.'. That is a no-fake-science and typed-ports defect inside the criterion. The Reset test covers only customMinText, customMaxText and rangeError. C017's record may be made. The criterion is not met by it."
+    blocking: false
+    resolution:
+      state: open
+      issue: ""
+      because: "Add an issue (or widen C021's J5) that derives the compared fields from every section applyImport writes, instrument included, rather than a hand list, and a Reset test that enumerates every field resetDefaults restores and asserts its displayed value."
+  - id: offline-render-after-a-lab-is-off-untested
+    class: insufficient_work
+    subject: "coherent-state#current-lab-state-wins"
+    finding: "Narrowed from the earlier critique. renderWav now builds its options through v2PlayOptions, and so through labPlayOptions (src/js/main.js:207-219, 353-375). tests/unit/lab-play-options.test.mjs:325 renders a WAV through renderPlanToWav with the Envelope on and reads the sustain level. Still untested: a render made after Additive or the Envelope was switched on and then off (the criterion's 'a lab switched off stays off' for the offline path). The only render test runs on the mock context, with no browser render that reads a rendered buffer."
+    blocking: false
+    resolution:
+      state: open
+      issue: ""
+      because: "Add a render leg: after Additive and the Envelope are switched on and then off, the pattern WAV matches the labs-off render (level and the second harmonic at the oscillator's baseline). Add it to the criterion's ref."
+  - id: signal-path-caption-ignores-the-owner
+    class: missed_requirement
+    subject: "coherent-state#views-describe-what-sounds"
+    finding: "The criterion requires the Signal Path to describe 'the signal that actually sounds and its owner', and ADR 0063 decision 2 requires every view to name its class and subject. On main the Signal Path caption is still the fixed 'Active Web Audio processing graph' (src/js/ui/workbench.js:272-274, src/js/core/instrument.js:1201), whether the instrument, the sequencer, the Studio or nothing sounds. The scope's caption a few lines below does follow outputOwner (C013). With C008's Signal Path check dropped (see c008-record-names-a-check-the-train-dropped), no check on main asserts anything about the Signal Path's subject or class."
+    blocking: false
+    resolution:
+      state: open
+      issue: ""
+      because: "Add an issue (or widen C013's successor) so that the Signal Path names its subject (the output owner, or 'instrument setpoint' when idle) and its class (configured or sounding), and draws no instrument stage while only the sequencer or the Studio sounds. Add a check `signal-path-follows-owner` driven through the controls in app.cjs."
+  - id: dual-route-applies-next-note-unsaid
+    class: missed_requirement
+    subject: "coherent-state#live-edits-reach-the-voice"
+    finding: "Mono mix and Stereo split (#osc-dual-mono, #osc-dual-stereo, src/index.html:1843) chosen while a dual note sounds reach only the next note. The browser check accepts that ('The route is taken when a note starts ... a route chosen while a note sounds is judged on the next one', tests/browser/app.cjs around line 2893). The control does not say so. ADR 0063 decision 4 requires such an exception to be stated where the control is. The criterion lists pan but not the route, and the ratchet counts dual.route as driven, so C022's 'a control that reaches nothing becomes a fix issue' never triggers."
+    blocking: false
+    resolution:
+      state: open
+      issue: ""
+      because: "Either restart the sounding dual voice click-free on a route change (the setDualRouter path C010 added for pan already does this for a router flip), or state 'applies from the next note' at the control and in its accessible description. Add the route to the criterion's list either way."
+  - id: owner-questions-open-under-hard-criteria
+    class: unproven_assumption
+    subject: "C018"
+    finding: "ADR 0063 is still 'proposed', with Q-a (the newest action wins, or a second Play is refused) and Q-b (presets and History carry the lab settings, or say 'instrument settings only') open and no resolution notes. adr:adr-0063 is not in the intent's governance. C002 has already landed the Q-a recommendation. C018 (open PR #314, now CONFLICTING) implements the larger Q-b answer, a new lab= hash domain and a labs sibling on preset records, where 'instrument settings only' would also satisfy 'restore what they claim', while the intent says 'implementing only evidenced improvements'."
+    blocking: false
+    resolution:
+      state: open
+      issue: ""
+      because: "Record the owner's answers to Q-a and Q-b in ADR 0063 (accepted, with resolution notes) before C018 merges, and add adr:adr-0063 to the intent's governance. If Q-b is answered 'instrument settings only', shrink C018 to an honest scope label."
+  - id: expected-failure-marks-let-journeys-pass-vacuously
+    class: delivery_verification
+    subject: "C021"
+    finding: "The C021 delivery (PR #331, open and CONFLICTING since 2026-11-01) marks the journey and census rows whose fix has not landed as expected failures: XFAIL is on 21 lines of tests/browser/journeys.cjs and 11 lines of tests/browser/control-census.cjs at its head ca140088. A suite with open XFAIL rows exits green, so 'the six user journeys pass' and C021's 'each failing when the behaviour its fix restored is reverted' cannot be decided for those rows."
+    blocking: false
+    resolution:
+      state: open
+      issue: ""
+      because: "Add to the user-journeys-hold criterion and to C021: no expected-failure mark remains at milestone close, enforced by a unit test. Each XFAIL row names the issue whose landing removes it."
+  - id: c021-delivery-lands-src-fixes-outside-its-scope
+    class: regression_risk
+    subject: "C021"
+    finding: "C021's scope is tests, package.json and the README, but #331 changes src/js/labs/dom.js, src/js/measurement/views/measure-flow.js, src/js/ui/measure/run.js, src/js/ui/measure/session.js and src/styles/instrument.css. The dom.js change narrows setField's focused-field rule, which C010's import sync relies on, and the stylesheet opens the Add menu downward, which is C005's fix (C005 landed separately as #292). No plan issue owns these behaviour changes or their fail-first tests."
+    blocking: false
+    resolution:
+      state: open
+      issue: ""
+      because: "Split the src fixes into their own M090 issues (setField commit write-back; the MEASURE blocked-step reason), each with a fail-first test, and drop from #331 any part that C005 already landed. Alternatively widen C021's scope explicitly. Re-run C010's `phase-stereo-import-sync` against the new setField rule."
+  - id: c022-unbounded-and-serialised
+    class: insufficient_work
+    subject: "C022"
+    finding: "C022 is one p2 issue that must drive the 94 keys left in the baseline (MEASURE, Experiments, Findings, Studio, Learn, Presets, Analyzer, Compare, the menus and the action bar), each with a subsystem and a view assertion. It may also spawn fix issues, so the milestone has no fixed end. It depends on C021, although driving controls needs nothing from the journeys, and that puts the criterion's 'ends empty' behind every fix issue. U011 (ui-current) also removes baseline keys by deleting duplicate controls, so 'empty' can be reached partly by deletion."
+    blocking: false
+    resolution:
+      state: open
+      issue: ""
+      because: "After the G018 split, divide C022 per workspace, each issue naming its baseline keys. Drop the C021 dependency, and say in each issue that a key removed by U011 counts as resolved by deletion, not by a drive."
+  - id: labs-off-changes-and-skippable-unit-tests
+    class: regression_risk
+    subject: "coherent-state#current-lab-state-wins"
+    finding: "The invariant 'V1 behaviour with the labs off is unchanged, as the freeze golden vectors pin it' is stronger than the vectors. They pin plans, while C001 (the status key), C009 (release fades over noteOff), C011 (a tightened limit reschedules a release) and C012 (ensureAudio no longer rewrites the master) deliberately change labs-off live behaviour. Separately, the unit tests that prove C007-C011, C015 and C016 (lab-play-options, envelope-held-note, dual-router-live, c011-safety-limits, mic-detach-on-close, preflight-own-output) skip when tests/freeze/extract.cjs is absent or OSCILLA_FREEZE_DIR points elsewhere. tests/unit/freeze-guard.test.mjs turns that skip into a CI failure only for freeze.test.mjs. The files are tracked, so the risk is a misconfigured run, not today's CI."
+    blocking: false
+    resolution:
+      state: open
+      issue: ""
+      because: "Restate the invariant as 'V1 plans and golden vectors are unchanged', and list the deliberate labs-off live changes (C001, C009, C011, C012) with their ADR 0005 or 0014 note. Extend freeze-guard to every unit test that gates on the mock context, so that a skip fails under CI."
