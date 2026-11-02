@@ -261,7 +261,7 @@
       <span class="osc-safety-more" id="osc-safety-more" :class="{ 'is-open': safetyExpanded }">
         Perceived loudness is not a reliable measure of acoustic output. Digital signal generation
         does not guarantee that your hardware reproduces the requested frequency.</span>
-      <button type="button" class="osc-safety-toggle" aria-controls="osc-safety"
+      <button type="button" class="osc-safety-toggle [@media(pointer:coarse)]:!inline-flex [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11 [@media(pointer:coarse)]:items-center [@media(pointer:coarse)]:justify-center [@media(pointer:coarse)]:align-middle" aria-controls="osc-safety"
         aria-expanded="false" :aria-expanded="String(safetyExpanded)"
         @click="safetyExpanded = !safetyExpanded" x-text="safetyExpanded ? 'Less' : 'More'">More</button>
     </p>
