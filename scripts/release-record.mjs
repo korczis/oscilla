@@ -464,7 +464,9 @@ export function defaultIo(root = ROOT, o = {}) {
     const dir = mkdtempSync(path.join(os.tmpdir(), 'oscilla-record-'));
     try {
       const file = path.join(dir, name);
-      const args = ['release', 'download', tag, '-R', REPO, '--pattern', name, '--output', file];
+      // --clobber: a retry after a timed-out attempt replaces its partial file (review 373 L1).
+      const args = ['release', 'download', tag, '-R', REPO, '--pattern', name, '--output', file,
+        '--clobber'];
       const r = run('gh', args);
       if (r.status !== 0) throw new Error(failure('gh', args, r));
       return readFileSync(file);

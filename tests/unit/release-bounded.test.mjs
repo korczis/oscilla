@@ -6,6 +6,7 @@
 // Every runner here is injected except one real child process that never exits, stopped at
 // a bound of a few hundred milliseconds.
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
   FETCH_TIMEOUT_MS, LOCAL_CALL_TIMEOUT_MS, NET_ATTEMPTS, NET_CALL_TIMEOUT_MS, NET_RETRY_DELAY_MS,
@@ -123,6 +124,31 @@ test('a watch whose bound is its whole budget is not started again', () => {
   assert.equal(r.spawned[0].opts.timeout, 30 * 60_000);
   assert.deepEqual(r.spawned[0].opts.stdio, ['ignore', 'inherit', 'pipe'],
     'stdout reaches the terminal, stderr is read to classify the failure');
+});
+
+test('a budget bounds all attempts together: a retry gets only what is left (review 373 L2)',
+  () => {
+    // Each failed attempt takes 40 ms of real time; the whole watch has 100 ms.
+    const slow = () => {
+      const until = Date.now() + 40;
+      while (Date.now() < until) { /* the attempt runs */ }
+      return { status: 1, stdout: '', stderr: PORTS };
+    };
+    const r = scripted([slow]);
+    const out = r.sh('gh', ['run', 'watch', '7004', '--exit-status'],
+      { timeoutMs: 30 * 60_000, budgetMs: 100, retryTimedOut: false, attempts: 10 });
+    const bounds = r.spawned.map((s) => s.opts.timeout);
+    assert.ok(bounds.every((b) => b <= 100), `every attempt within the budget: ${bounds}`);
+    assert.ok(bounds.every((b, i) => i === 0 || b < bounds[i - 1]),
+      `each retry gets less than the one before: ${bounds}`);
+    assert.ok(out.attempts < 10, `attempts stop once the budget is spent: ${out.attempts}`);
+  });
+
+test('release:record downloads with --clobber, so a retry replaces a partial file (L1)', () => {
+  const src = readFileSync(new URL('../../scripts/release-record.mjs', import.meta.url), 'utf8');
+  const call = src.match(/\['release', 'download'[^\]]*\]/s);
+  assert.ok(call, 'release-record.mjs calls gh release download');
+  assert.match(call[0], /'--clobber'/);
 });
 
 test('a real child that never exits is stopped at its bound', () => {

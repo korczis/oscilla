@@ -108,6 +108,8 @@ function blockingSleepMs(ms) {
  *                  for any other)
  *   opts.retryTimedOut  false: an attempt stopped at its bound is not repeated (a watch whose
  *                  bound is the whole budget)
+ *   opts.budgetMs  the bound of all attempts together: each attempt gets what is left of it,
+ *                  and none starts once it is spent (review 373 L2)
  * @param {{ cwd?: string, spawn?: Function, sleepMs?: (ms: number) => void,
  *   echo?: (text: string) => void, note?: (line: string) => void }} [o]  spawn: spawnSync's
  *   signature (tests inject one that hangs or fails); note: one line per retry
@@ -140,9 +142,12 @@ export function boundedRunner({
   return (cmd, args, opts = {}) => {
     const timeoutMs = opts.timeoutMs ?? defaultTimeoutMs(cmd, args);
     const max = opts.attempts ?? (isNetworkCall(cmd, args) ? NET_ATTEMPTS : 1);
+    const deadline = opts.budgetMs ? Date.now() + opts.budgetMs : null;
     let r;
     for (let n = 1; n <= max; n++) {
-      r = { ...once(cmd, args, { ...opts, timeoutMs }), attempts: n };
+      const left = deadline === null ? timeoutMs : Math.min(timeoutMs, deadline - Date.now());
+      if (n > 1 && left <= 0) break;
+      r = { ...once(cmd, args, { ...opts, timeoutMs: Math.max(1, left) }), attempts: n };
       const kind = transientKind(r);
       if (!kind || n === max || (kind !== 'connect' && actsOnce(cmd, args))
         || (r.timedOut && opts.retryTimedOut === false)) break;

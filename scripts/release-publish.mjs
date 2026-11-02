@@ -493,10 +493,12 @@ export async function publish({
             + `started after ${pagesTimeoutMin} min`
           : `no Pages run for ${head} within ${pagesTimeoutMin} min${lastListFailure()}`);
       }
-      // gh run watch has no timeout of its own: it is bounded by --pages-timeout, and a watch
-      // stopped there is not started again.
+      // gh run watch has no timeout of its own: it is bounded by --pages-timeout in all, a
+      // retry after a transient error gets only what is left, and a watch stopped at the
+      // bound is not started again.
       must('gh', ['run', 'watch', runId, '--exit-status'], `Pages run ${runId}`,
-        { timeoutMs: pagesTimeoutMin * 60_000, retryTimedOut: false });
+        { timeoutMs: pagesTimeoutMin * 60_000, budgetMs: pagesTimeoutMin * 60_000,
+          retryTimedOut: false });
     }
     // A resumed publish whose live page already says tagged for HEAD needs no redeploy.
     let redeployed = false;
