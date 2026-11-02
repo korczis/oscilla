@@ -108,24 +108,30 @@ export function headlineProblems(view) {
   return problems;
 }
 
+/** An entry of the workspace list: its id, the link's attributes, the name, the purpose. */
+const WORKSPACE_ITEM = new RegExp('<li\\b[^>]*\\bdata-osc="about\\.workspace\\.([a-z]+)"[^>]*>'
+  + '\\s*(?:<a\\s([^>]*)>\\s*)?<b>([^<]*)<\\/b>\\s*(<\\/a>)?([\\s\\S]*?)<\\/li>', 'g');
+
 /**
  * The problems of About's workspace list against the navigation, one string each: a workspace
- * of the navigation missing or out of order, a name that is not its navigation label, an entry
- * that says nothing of what it is for, or an entry that is no workspace.
+ * of the navigation missing or out of order, a name that is not its navigation label, a name
+ * that is not a link to its workspace (A1 connect; About's own entry is this page and links
+ * nowhere), an entry that says nothing of what it is for, or an entry that is no workspace.
  */
 export function workspaceProblems(markup) {
   const view = aboutView(markup);
   const at = view.indexOf('data-osc="about.workspaces"');
   if (at < 0) return ['About has no workspace list (data-osc="about.workspaces")'];
   const list = view.slice(at, view.indexOf('</ul>', at));
-  const items = [...list.matchAll(
-    /<li\b[^>]*\bdata-osc="about\.workspace\.([a-z]+)"[^>]*>\s*<b>([^<]*)<\/b>([\s\S]*?)<\/li>/g)]
-    .map(([, id, name, rest]) => ({ id, name: name.trim(), purpose: text(rest) }));
+  const items = [...list.matchAll(WORKSPACE_ITEM)].map(([, id, link, name, close, rest]) => ({
+    id, name: name.trim(), purpose: text(rest),
+    link: link && close ? Object.fromEntries([...link.matchAll(/([\w.:@-]+)="([^"]*)"/g)]
+      .map(([, k, v]) => [k, v])) : null }));
   const nav = navWorkspaces(markup);
   const problems = [];
   if (list.split('<li').length - 1 !== items.length) {
     problems.push('an entry of the workspace list is not '
-      + '<li data-osc="about.workspace.<id>"><b>name</b> purpose');
+      + '<li data-osc="about.workspace.<id>"><a href="#m=<id>"><b>name</b></a> purpose');
   }
   for (const ws of nav) {
     const item = items.find((i) => i.id === ws.id);
@@ -137,6 +143,13 @@ export function workspaceProblems(markup) {
       problems.push(`workspace ${ws.id} is named "${item.name}", `
         + `the navigation says "${ws.label}"`);
     }
+    const self = ws.id === 'about';
+    if (!self && (!item.link || item.link.href !== `#m=${ws.id}`
+      || item.link['data-osc'] !== `about.open.${ws.id}`)) {
+      problems.push(`workspace ${ws.id} is not a link to #m=${ws.id} `
+        + `(data-osc="about.open.${ws.id}"): ${JSON.stringify(item.link)}`);
+    }
+    if (self && item.link) problems.push('About\'s own entry links to the page it is on');
     if (item.purpose.split(' ').length < 4) {
       problems.push(`workspace ${ws.id} does not say what it is for: "${item.purpose}"`);
     }
@@ -203,8 +216,9 @@ test('mutation: a missing, renamed, unexplained or foreign workspace entry is na
     ['workspace filter of the navigation is missing from About\'s workspace list']);
   assert.deepEqual(swap('<b>Filter Lab</b>', '<b>Filters</b>'),
     ['workspace filter is named "Filters", the navigation says "Filter Lab"']);
-  assert.deepEqual(swap(filter[0], '<li data-osc="about.workspace.filter"><b>Filter Lab</b> '
-    + 'Filters.</li>\n'), ['workspace filter does not say what it is for: "Filters."']);
+  assert.deepEqual(swap(filter[0], '<li data-osc="about.workspace.filter"><a href="#m=filter" '
+    + 'data-osc="about.open.filter"><b>Filter Lab</b></a> Filters.</li>\n'),
+  ['workspace filter does not say what it is for: "Filters."']);
   assert.deepEqual(swap(filter[0], `${filter[0]}<li data-osc="about.workspace.mixer"><b>Mixer`
     + '</b> A mixer for every channel.</li>\n'),
   ['About lists mixer, which is not a workspace of the navigation']);
@@ -212,6 +226,51 @@ test('mutation: a missing, renamed, unexplained or foreign workspace entry is na
   assert.deepEqual(swap(studio[0], '').length, 1);
   const moved = html.replace(studio[0], '').replace(filter[0], `${studio[0]}${filter[0]}`);
   assert.ok(workspaceProblems(moved).some((p) => p.startsWith('the workspace list is not in')));
+});
+
+test('A1: each workspace of About\'s list is a link to its workspace, About\'s own is not', () => {
+  const swap = (from, to) => {
+    const v = html.replace(from, to);
+    assert.notEqual(v, html, `${from} is in the shell`);
+    return workspaceProblems(v);
+  };
+  const filterLink = '<a href="#m=filter"\n              data-osc="about.open.filter">'
+    + '<b>Filter Lab</b></a>';
+  const unlinked = swap(filterLink, '<b>Filter Lab</b>');
+  assert.equal(unlinked.length, 1, unlinked.join('; '));
+  assert.match(unlinked[0], /^workspace filter is not a link to #m=filter/);
+  assert.match(swap(filterLink, filterLink.replace('#m=filter', '#m=compare')).join(),
+    /^workspace filter is not a link to #m=filter/);
+  assert.deepEqual(swap('<b>About</b>',
+    '<a href="#m=about" data-osc="about.open.about"><b>About</b></a>'),
+  ['About\'s own entry links to the page it is on']);
+});
+
+/** The workspaces the compact Studio panel is shown in (its data-osc-modes). */
+function compactStudioModes(markup) {
+  const tag = /<section\b[^>]*\bdata-osc="studio\.compact"[^>]*>/.exec(markup);
+  assert.ok(tag, 'the shell has the compact Studio panel');
+  return /data-osc-modes="([^"]*)"/.exec(tag[0])[1].split(/\s+/);
+}
+
+/** About's workspace entries that say the compact Studio is beside them but is not shown. */
+function compactStudioClaims(markup) {
+  const modes = compactStudioModes(markup);
+  const view = aboutView(markup);
+  const at = view.indexOf('data-osc="about.workspaces"');
+  const list = view.slice(at, view.indexOf('</ul>', at));
+  return [...list.matchAll(WORKSPACE_ITEM)]
+    .filter(([, id, , , , rest]) => /compact Studio/.test(text(rest)) && !modes.includes(id))
+    .map(([, id]) => id);
+}
+
+test('A1: About says a workspace has the compact Studio only where the panel is shown', () => {
+  assert.deepEqual(compactStudioClaims(html), [],
+    'an About entry names the compact Studio in a workspace that does not show it');
+  const synthesis = html.match(/<li data-osc="about\.workspace\.synthesis">[\s\S]*?<\/li>/)[0];
+  const claimed = html.replace(synthesis,
+    synthesis.replace('</li>', ' With the compact Studio.</li>'));
+  assert.deepEqual(compactStudioClaims(claimed), ['synthesis']);
 });
 
 // ------------------------------------------------------------------------- A15: what comes next

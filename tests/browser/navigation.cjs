@@ -914,7 +914,8 @@ function defineChecks() {
       focusedLinkKeepsSpace: onLink.heard === 'none' && !onLink.claimed }), wrong, got, onLink };
   });
 
-  // Review of #159: Presets says "Press TRIGGER (or Space) to play it" after Load and stays in
+  // Review of #159: Presets says "Press Space to play it here" after Load (A1: and links to the
+  // workspace whose TRIGGER plays it, never "Press TRIGGER" on a page without one) and stays in
   // Presets, where no Play control is shown at this width. Space must do what the notice says.
   def('space-after-preset-load', async (ctx) => {
     const page = await H.open(ctx, ctx.baseUrl);

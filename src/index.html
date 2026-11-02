@@ -1290,6 +1290,8 @@
             :hidden="workspace !== 'sequencer'">Open Sweep Sequence in Studio</a>
           <a href="#m=studio" data-osc="seq.toStudio" hidden :hidden="workspace !== 'sequencer'"
             @click="studioOpenSequence($event)">Open this pattern in Studio</a>
+          <a href="#m=synth" data-osc="seq.toSynth" hidden :hidden="workspace !== 'sequencer'"
+            x-bind="counterpartLink('synth')">Open the Synth</a>
           <span class="osc-spacer"></span>
           <label class="osc-label osc-seq-tempo-label" for="osc-seq-tempo">Tempo</label>
           <div class="osc-select osc-seq-tempo">
@@ -1429,6 +1431,8 @@
           <span class="osc-spacer"></span>
           <a href="#m=studio&amp;st=filter-automation" data-osc="filter.toStudio" hidden
             :hidden="workspace !== 'filter'">Open Filter Automation in Studio</a>
+          <a href="#m=synth" data-osc="filter.toSynth" hidden :hidden="workspace !== 'filter'"
+            x-bind="counterpartLink('synth')">Open the Synth</a>
           <button type="button" class="osc-icon-btn osc-icon-btn--sm osc-panel-fs" id="osc-filter-fullscreen"
             data-osc="filter.fullscreen" aria-label="Open the Filter Lab page"
             title="Open the Filter Lab page" :aria-label="filterLabToggle().label"
@@ -1742,6 +1746,8 @@
           <h2 class="osc-panel-title" id="osc-dual-title">Dual Oscillator</h2>
           <a href="#m=studio&amp;st=stereo-beat" data-osc="dual.toStudio" hidden
             :hidden="workspace !== 'synthesis'">Open Stereo Beat in Studio</a>
+          <a href="#m=synth" data-osc="dual.toSynth" hidden :hidden="workspace !== 'synthesis'"
+            x-bind="counterpartLink('synth')">Open the Synth</a>
           <span class="osc-spacer"></span>
           <output class="osc-dual-beat osc-num osc-muted" id="osc-dual-beat"
             data-osc="dual.beat" aria-label="Difference frequency" x-text="beatText">Δ —</output>
@@ -2345,6 +2351,8 @@
           <button type="button" class="osc-btn osc-btn-secondary" data-osc="presets.reset" @click="resetDefaults()">Reset to defaults</button>
           <button type="button" class="osc-btn osc-btn-secondary" data-osc="presets.clearHistory"
             x-show="presetTab === 'history'" @click="clearHistory()">Clear history</button>
+          <a href="#m=synth" class="self-center" data-osc="presets.toSynth" hidden
+            :hidden="workspace !== 'presets'" x-bind="counterpartLink('synth')">Open the Synth</a>
         </div>
         <div role="tabpanel" :aria-labelledby="'osc-ptab-cat-' + presetTab">
           <template x-if="presetTab !== 'history'">
@@ -2792,36 +2800,55 @@
           <h3 class="osc-about-h" id="osc-about-ws"><span class="osc-num">A</span> Workspaces</h3>
           <p>Every workspace of the navigation, in its order, and what it is for.</p>
           <ul role="list" aria-label="Workspaces" data-osc="about.workspaces">
-            <li data-osc="about.workspace.playground"><b>Playground</b> The instrument on one
-              screen: generator, waveform, spectrum, spectrogram, microphone analyzer, pattern
-              sequencer and the labs.</li>
-            <li data-osc="about.workspace.measure"><b>Measure</b> A guided measurement of the
-              speaker, room and microphone chain: frequency response, impulse response and RTA,
-              each run rated for quality.</li>
-            <li data-osc="about.workspace.experiments"><b>Experiments</b> Saved measurements as
-              experiments: their definitions, a comparison against a baseline, and the findings
-              that cite them.</li>
-            <li data-osc="about.workspace.analyzer"><b>Analyzer</b> The microphone's live spectrum
-              and spectrogram: a live view, not a calibrated measurement.</li>
-            <li data-osc="about.workspace.filter"><b>Filter Lab</b> A biquad filter and the
-              response the browser computes for it, set by type, cutoff and Q.</li>
-            <li data-osc="about.workspace.compare"><b>Compare</b> The microphone analyzer beside
-              the bioacoustics hearing ranges and the phase and stereo views.</li>
-            <li data-osc="about.workspace.synthesis"><b>Synthesis</b> Additive harmonics, the ADSR
-              envelope and the dual oscillator, with the compact Studio.</li>
-            <li data-osc="about.workspace.sequencer"><b>Sequencer</b> Block sequences of tones,
-              sweeps, pulses and modulation, beside the compact Studio.</li>
-            <li data-osc="about.workspace.presets"><b>Presets</b> Built-in and saved instrument
-              settings, and the history of what was played.</li>
-            <li data-osc="about.workspace.learn"><b>Learn</b> Concept cards from frequency to
-              speaker limitations, most with a demo to play.</li>
-            <li data-osc="about.workspace.studio"><b>Studio</b> A signal graph you patch, with a
-              timeline, transport and automation, run on Web Audio.</li>
-            <li data-osc="about.workspace.synth"><b>Synth</b> A semi-modular mono voice on the Studio
-              model with a patch bay and docked keys, and an Engines tab of additive, FM, AM and
-              ring, wavetable, hard-sync and percussion voices.</li>
-            <li data-osc="about.workspace.about"><b>About</b> This page: what OSCILLA is, how it
-              got here and what comes next.</li>
+            <li data-osc="about.workspace.playground"><a href="#m=playground"
+              data-osc="about.open.playground"><b>Playground</b></a>
+              The instrument on one screen: generator, waveform, spectrum, spectrogram, microphone
+              analyzer, pattern sequencer and the labs.</li>
+            <li data-osc="about.workspace.measure"><a href="#m=measure"
+              data-osc="about.open.measure"><b>Measure</b></a>
+              A guided measurement of the speaker, room and microphone chain: frequency response,
+              impulse response and RTA, each run rated for quality.</li>
+            <li data-osc="about.workspace.experiments"><a href="#m=experiments"
+              data-osc="about.open.experiments"><b>Experiments</b></a>
+              Saved measurements as experiments: their definitions, a comparison against a baseline,
+              and the findings that cite them.</li>
+            <li data-osc="about.workspace.analyzer"><a href="#m=analyzer"
+              data-osc="about.open.analyzer"><b>Analyzer</b></a>
+              The microphone's live spectrum and spectrogram: a live view, not a calibrated
+              measurement.</li>
+            <li data-osc="about.workspace.filter"><a href="#m=filter"
+              data-osc="about.open.filter"><b>Filter Lab</b></a>
+              A biquad filter and the response the browser computes for it, set by type, cutoff and
+              Q.</li>
+            <li data-osc="about.workspace.compare"><a href="#m=compare"
+              data-osc="about.open.compare"><b>Compare</b></a>
+              The microphone analyzer beside the bioacoustics hearing ranges and the phase and
+              stereo views.</li>
+            <li data-osc="about.workspace.synthesis"><a href="#m=synthesis"
+              data-osc="about.open.synthesis"><b>Synthesis</b></a>
+              Additive harmonics, the ADSR envelope, the phase and stereo views and the dual
+              oscillator, beside the generator and its analysis.</li>
+            <li data-osc="about.workspace.sequencer"><a href="#m=sequencer"
+              data-osc="about.open.sequencer"><b>Sequencer</b></a>
+              Block sequences of tones, sweeps, pulses and modulation, beside the compact
+              Studio.</li>
+            <li data-osc="about.workspace.presets"><a href="#m=presets"
+              data-osc="about.open.presets"><b>Presets</b></a>
+              Built-in and saved instrument settings, and the history of what was played.</li>
+            <li data-osc="about.workspace.learn"><a href="#m=learn"
+              data-osc="about.open.learn"><b>Learn</b></a>
+              Concept cards from frequency to speaker limitations, most with a demo to play.</li>
+            <li data-osc="about.workspace.studio"><a href="#m=studio"
+              data-osc="about.open.studio"><b>Studio</b></a>
+              A signal graph you patch, with a timeline, transport and automation, run on Web
+              Audio.</li>
+            <li data-osc="about.workspace.synth"><a href="#m=synth"
+              data-osc="about.open.synth"><b>Synth</b></a>
+              A semi-modular mono voice on the Studio model with a patch bay and docked keys, and an
+              Engines tab of additive, FM, AM and ring, wavetable, hard-sync and percussion
+              voices.</li>
+            <li data-osc="about.workspace.about"><b>About</b>
+              This page: what OSCILLA is, how it got here and what comes next.</li>
           </ul>
         </section>
 

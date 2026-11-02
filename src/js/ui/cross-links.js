@@ -41,17 +41,36 @@ export function studioTemplateText(link) {
 }
 
 /**
- * The workspace where each Learn topic's subject is the real tool, not a demo (P5). A topic
- * without an entry has none beyond its demo.
+ * The workspace where each Learn topic's subject is the real tool, not a demo (P5; A1 connect:
+ * every topic that teaches a tool links to it). A topic is either here or in LEARN_NO_TOOL with
+ * the reason it has none beyond its demo (tests/unit/cross-links.test.mjs holds the two tables
+ * to LEARN_TOPICS).
  */
 export const LEARN_TOOLS = Object.freeze({
+  waveform: 'analyzer',
   harmonic: 'analyzer',
+  nyquist: 'analyzer',
   samplerate: 'filter',
-  fm: 'analyzer',
+  aliasing: 'analyzer',
+  modulation: 'synth',
+  am: 'synth',
+  fm: 'synth',
   interference: 'synthesis',
   beating: 'synthesis',
+  logscale: 'measure',
   hearing: 'compare',
+  ultrasound: 'compare',
   speakers: 'measure',
+});
+
+/** The Learn topics without a tool link, each with the reason. */
+export const LEARN_NO_TOOL = Object.freeze({
+  frequency: 'a quantity the demo plays; every tool shows it',
+  period: 'a quantity the demo shows; every tool shows it',
+  wavelength: 'a property of sound in air, which no tool here computes',
+  amplitude: 'a relative digital level the demo shows, not a calibrated one',
+  'semi-modular-voice': 'its demo opens the Synth itself',
+  'synthesis-engines': 'its demo opens the Synth\'s Engines tab itself',
 });
 
 /** { workspace, href, text } of a Learn topic's tool link, or null. */
