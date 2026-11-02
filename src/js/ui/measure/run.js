@@ -41,7 +41,10 @@ export function createRun(ctx, svc, ops) {
     cmp.meas.savedId = null;
     ops.rebuildAll();
     try {
-      ctx.pending = me.preflight(ops.recipeNow(), { calibration: ops.calibrationInput() });
+      // The setup check stops nothing: a probe of the output owners, read by the io where it
+      // reads the input level (C016), makes a sounding sequencer or Studio OTHER_AUDIO.
+      ctx.pending = me.preflight(ops.recipeNow(), { calibration: ops.calibrationInput(),
+        otherAudio: () => typeof svc.outputBusy === 'function' && !!svc.outputBusy(cmp) });
       await ctx.pending;
     } catch (e) {
       if (!(e && e.code === 'ABORTED')) {

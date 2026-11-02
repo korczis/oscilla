@@ -1,7 +1,8 @@
 // Studio node types of the Synth panel (plan K059, K060; design synth-design.md §1, §4): Keys
 // (the note source the keyboard, MIDI and the panel's gate fan-out drive), VCO (an oscillator
 // whose pitch is a linear octave input, so a keyboard tracks it exactly) and Ring (ring and
-// amplitude modulation of two audio signals). New types only: no existing definition changes,
+// amplitude modulation of two audio signals), and the XY Pad (plan K097: X, Y and a pitch
+// quantised to a scale of core/music.js, gated while touched). New types only: no existing definition changes,
 // so every pinned template hash and saved studioHash stays as it is (design D2).
 //
 // Pitch is "requested digital frequency" (project.no-fake-science): a VCO's pitch and FM inputs
@@ -9,6 +10,7 @@
 // frequency never exceeds 0.95 × Nyquist of the running context (adapters/instrument.js).
 
 import { SAFE_NYQUIST_FACTOR_TEXT } from '../../core/constants.js';
+import { NOTE_NAMES, SCALE_LABELS, SCALE_MODES, midiToName, scaleNote } from '../../core/music.js';
 import { definePort } from '../ports.js';
 import {
   CATEGORIES, defineNode, enumParam, integerParam, numberParam, optionLabel, parts, secondsParam,
@@ -132,4 +134,55 @@ export const ring = defineNode({
   },
 });
 
-export default [keys, vco, ring];
+/**
+ * The XY pad's pitch under x (0..1, plan K097): the span's scale steps (and the top key) in
+ * equal cells, low to high -> { index, steps, degree, note, name, pitch (octaves from A4) }.
+ */
+export function xyDegree(x, p) {
+  const steps = p.span * (SCALE_MODES[p.mode] || SCALE_MODES.major).length + 1;
+  const index = Math.min(steps - 1, Math.max(0, Math.floor((Number(x) || 0) * steps)));
+  const s = scaleNote(index, p);
+  const [lo, hi] = KEYS_PITCH_RANGE;
+  return { index, steps, degree: s.degree, note: s.note, name: midiToName(s.note),
+    pitch: Math.min(hi, Math.max(lo, (s.note - 69) / 12)) };
+}
+
+export const xyPad = defineNode({
+  type: 'xy-pad',
+  displayName: 'XY Pad',
+  idPrefix: 'xypad',
+  category: CATEGORIES.MODULATION,
+  aliases: ['xy', 'performance pad', 'touch pad', 'scale', 'quantiser', 'quantizer', 'x y'],
+  outputs: [
+    definePort({ id: 'x', direction: 'out', type: 'CONTROL', label: 'X' }),
+    definePort({ id: 'y', direction: 'out', type: 'CONTROL', label: 'Y' }),
+    definePort({ id: 'pitch', direction: 'out', type: 'CONTROL', label: 'Pitch' }),
+    definePort({ id: 'gate', direction: 'out', type: 'TRIGGER', label: 'Gate' }),
+  ],
+  params: [
+    enumParam('mode', 'Scale', Object.keys(SCALE_MODES).map((m) => [m, SCALE_LABELS[m]]),
+      'minor-pentatonic'),
+    enumParam('key', 'Key', NOTE_NAMES.map((n) => [n, n]), 'C'),
+    integerParam('octave', 'Octave', { min: 1, max: 5, default: 3 }),
+    integerParam('span', 'Span', { min: 1, max: 4, unit: 'oct', default: 2 }),
+    secondsParam('glide', 'Glide', 0, 0, 2, { step: 0.01 }),
+  ],
+  summary(p) {
+    return parts(`${p.key} ${optionLabel(xyPad, 'mode', p.mode)}`, `${p.span} oct from ${p.key}`
+      + `${p.octave}`, p.glide > 0 ? `glide ${secs(p.glide)}` : null);
+  },
+  capabilities: { realtime: true, offline: true, notes: true },
+  compiler: 'audio/audio-engine.js#AudioEngine',
+  help: {
+    what: 'A two-axis performance surface: X picks a step of the scale, Y is a free control, '
+      + 'and the gate is open while the pad is touched.',
+    inputs: 'None: the Synth workspace XY tab plays it while the Synth is armed.',
+    outputs: 'X and Y, 0 to 1; Pitch, in octaves from A4, the scale step under X (equal-'
+      + 'tempered, 1.00 oct per octave); Gate, opened at a touch and released when it ends.',
+    constraints: 'X is quantised to the steps of the scale over Span octaves from the key in '
+      + 'Octave; the top key closes the span. Glide moves the pitch between steps of one touch '
+      + 'with a time constant of Glide / 3.',
+  },
+});
+
+export default [keys, vco, ring, xyPad];

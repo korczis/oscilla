@@ -32,4 +32,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-01T05:20:29Z
+started_at: 2026-11-01T05:20:10Z
+started_event: sha256:e624d897135db29cb1ca91e4691abed8547048784f7c632a6e5e35a6c6f08c44
+completed_at: 2026-11-01T05:20:29Z
+completed_event: sha256:13d55bf4c05d0932dfa3d729e86c9b02dd3b252e2555ca304447f539f300a562
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/control-names.test.mjs; node tests/browser/navigation.cjs (CI run 41096297683)"
+    result: "control-names # pass 7 # fail 0  at main 60103776; landed in #346 (36dd6136); navigation.cjs and npm test green in #346's CI run 41096297683 on head ac1eeaef in every gate browser"
+    artifact: "tests/unit/control-names.test.mjs"
+    commit: 601037765762decdf19392fce84055bc7fa35434
+    recorded_at: 2026-11-01T05:20:23Z

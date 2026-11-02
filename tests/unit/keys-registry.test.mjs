@@ -204,3 +204,63 @@ test('focus "*" and prevent: false: a page-wide stop acts in any focus and keeps
     'an exact focus beats focus *');
   assert.equal(keys.list().find((b) => b.id === 'stop').prevent, false);
 });
+
+
+// Roving focus (src/js/ui/keys/roving.js): the one key listener a widget (menu, listbox,
+// radiogroup) holds, because the dispatcher leaves arrows, Home, End, Enter and Escape to it.
+const rov = await import('../../src/js/ui/keys/roving.js').catch(() => ({}));
+
+test('roving: arrows, Home and End move; Enter activates; Escape closes; handled keys stop', () => {
+  assert.equal(typeof rov.roving, 'function', 'src/js/ui/keys/roving.js exports roving()');
+  assert.equal(rov.rovingNext('ArrowDown', 2, 3), 0, 'wraps by default');
+  assert.equal(rov.rovingNext('ArrowDown', 2, 3, { wrap: false }), 2, 'clamps without wrap');
+  assert.equal(rov.rovingNext('ArrowUp', -1, 3), 2, 'up from nothing goes to the last item');
+  assert.equal(rov.rovingNext('ArrowRight', 0, 3), null, 'vertical ignores the side arrows');
+  assert.equal(rov.rovingNext('End', 0, 3, { orientation: 'horizontal' }), 2);
+  let listener = null;
+  const box = { addEventListener: (t, f) => { listener = f; }, removeEventListener: () => {
+    listener = null; } };
+  let at = 0;
+  const log = [];
+  let closed = true;
+  const detach = rov.roving(box, { count: () => 3, index: () => at,
+    move: (i) => { at = i; log.push(`move ${i}`); }, activate: (i) => log.push(`activate ${i}`),
+    escape: () => (closed ? false : (log.push('escape'), true)) });
+  const key = (k, extra = {}) => {
+    const e = { key: k, prevented: false, stopped: false, target: null, ...extra,
+      preventDefault() { this.prevented = true; }, stopPropagation() { this.stopped = true; } };
+    listener(e);
+    return e;
+  };
+  assert.deepEqual([key('ArrowDown').stopped, key('End').stopped], [true, true]);
+  assert.equal(at, 2);
+  assert.equal(key('Enter').prevented, true);
+  const esc = key('Escape');
+  assert.equal(esc.stopped, false, 'a closed widget leaves Escape to the page');
+  closed = false;
+  assert.equal(key('Escape').stopped, true, 'an open one owns it');
+  const letter = key('a');
+  assert.equal(letter.prevented || letter.stopped, false, 'an unhandled key bubbles untouched');
+  assert.equal(key('ArrowDown', { ctrlKey: true }).prevented, false, 'never a Ctrl chord');
+  const input = { tagName: 'INPUT', getAttribute: () => 'search' };
+  assert.equal(key('Home', { target: input }).prevented, false, 'Home stays the input\'s');
+  assert.equal(key('Enter', { target: input }).prevented, false, 'Enter stays the input\'s');
+  assert.equal(key('ArrowDown', { target: input }).stopped, true, 'ArrowDown leaves the input');
+  assert.deepEqual(log, ['move 1', 'move 2', 'activate 2', 'escape', 'move 0']);
+  detach();
+  assert.equal(listener, null);
+});
+
+test('Synth and library menus and listboxes use roving(), with no key listener', () => {
+  for (const p of ['src/js/ui/patch-browser.js', 'src/js/ui/studio/node-preset-menu.js',
+    'src/js/synth/dock.js']) {
+    const src = readFileSync(join(ROOT, p), 'utf8');
+    assert.match(src, /import \{ roving \} from '[./]+(?:ui\/)?keys\/roving\.js'/,
+      `${p} imports roving`);
+    assert.equal((src.match(/addEventListener\(\s*'key(?:down|up)'/g) || []).length, 0,
+      `${p} adds no key listener of its own`);
+  }
+  const html = readFileSync(join(ROOT, 'src/index.html'), 'utf8');
+  assert.equal((html.match(/synthDockRoving\(\$el/g) || []).length, 2,
+    'the dock picker and its radio groups start roving()');
+});
