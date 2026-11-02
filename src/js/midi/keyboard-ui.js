@@ -89,6 +89,9 @@ export function createKeyboardUi({ win = window } = {}) {
     kbdHeld: '',
     kbdSounding: false,
     kbdRange: '',
+    // V635: on a phone the Synth's dock shows its keys and the Octave buttons; the instrument
+    // row, Arm and Velocity unfold from its More button, so the dock never buries the panel.
+    kbdMore: false,
 
     /** The view the keyboard belongs to now ('playground' | 'studio'), else null. */
     get kbdView() {
@@ -250,6 +253,15 @@ function mountKeys(win, doc, kb) {
   if (box && box.style) {
     box.style.order = '14';
     box.style.gridColumn = '1 / -1';
+  }
+  // The Synth's dock is fixed over the bottom of the view: its height is published as
+  // --osc-kbd-h, which the view's bottom padding reads, so the last control scrolls clear of
+  // it at every width and whatever the dock holds (V635).
+  if (box && typeof win.ResizeObserver === 'function' && doc.documentElement && doc.documentElement.style) {
+    new win.ResizeObserver(() => {
+      const h = Math.ceil(box.getBoundingClientRect().height || 0);
+      doc.documentElement.style.setProperty('--osc-kbd-h', `${h}px`);
+    }).observe(box);
   }
   const ctx = canvas.getContext('2d');
   let width = 0;

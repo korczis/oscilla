@@ -1871,11 +1871,12 @@
     <div id="osc-keyboard" data-osc="keyboard" role="group" aria-labelledby="osc-kbd-title"
       x-show="kbdView" x-cloak
       :class="kbdView === 'synth' ? 'fixed inset-x-0 bottom-[var(--osc-statusbar-h)] z-30 max-h-[45vh] overflow-y-auto border-t border-solid border-gray-200 bg-white px-4 py-2 shadow dark:border-gray-700 dark:bg-gray-800' : ''">
-      <h2 id="osc-kbd-title">Keyboard</h2>
+      <h2 id="osc-kbd-title" :class="kbdView === 'synth' && 'sr-only sm:not-sr-only'">Keyboard</h2>
       <!-- K066, beside the piano in the Synth: a Pro dropdown of what the keys play, a Pro button
            group of the waveform, the quick presets (src/js/synth/picker.js, presets.js). -->
-      <div class="mb-2 flex items-center gap-2" data-osc="synth.dock"
-        x-show="kbdView === 'synth'" role="group" aria-label="Instrument">
+      <div class="mb-2 flex items-center gap-2" data-osc="synth.dock" id="osc-synth-dock"
+        x-show="kbdView === 'synth'" role="group" aria-label="Instrument"
+        :class="!kbdMore && 'max-sm:hidden'">
         <div class="relative" @keydown.escape.stop="synth.dock.open = false; $refs.pick.focus()">
           <button type="button" id="osc-synth-pick" x-ref="pick" data-osc="synth.pick"
             @click.outside="synth.dock.open = false"
@@ -1914,7 +1915,7 @@
         class="mb-2 flex flex-wrap gap-2">
         <button type="button"
           class="inline-flex h-9 items-center justify-center rounded-lg border border-solid border-gray-300 bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 aria-pressed:border-primary-600 aria-pressed:bg-primary-600 aria-pressed:text-white dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 dark:aria-pressed:bg-primary-500 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
-          data-osc="keyboard.arm" :aria-pressed="String(kbdArmedHere)"
+          data-osc="keyboard.arm" :class="kbdView === 'synth' && !kbdMore && 'max-sm:hidden'" :aria-pressed="String(kbdArmedHere)"
           @click="kbdToggle()" x-text="kbdArmedHere ? 'Disarm keys' : 'Arm keys'">Arm keys</button>
         <button type="button"
           class="inline-flex h-9 items-center justify-center rounded-lg border border-solid border-gray-300 bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 aria-pressed:border-primary-600 aria-pressed:bg-primary-600 aria-pressed:text-white dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 dark:aria-pressed:bg-primary-500 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
@@ -1926,12 +1927,16 @@
           @click="kbdControl('octave-up')">Octave +</button>
         <button type="button"
           class="inline-flex h-9 items-center justify-center rounded-lg border border-solid border-gray-300 bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 aria-pressed:border-primary-600 aria-pressed:bg-primary-600 aria-pressed:text-white dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 dark:aria-pressed:bg-primary-500 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
-          data-osc="keyboard.velocity-down" aria-keyshortcuts="C"
+          data-osc="keyboard.velocity-down" :class="kbdView === 'synth' && !kbdMore && 'max-sm:hidden'" aria-keyshortcuts="C"
           @click="kbdControl('velocity-down')">Velocity −</button>
         <button type="button"
           class="inline-flex h-9 items-center justify-center rounded-lg border border-solid border-gray-300 bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 aria-pressed:border-primary-600 aria-pressed:bg-primary-600 aria-pressed:text-white dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 dark:aria-pressed:bg-primary-500 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
-          data-osc="keyboard.velocity-up" aria-keyshortcuts="V"
+          data-osc="keyboard.velocity-up" :class="kbdView === 'synth' && !kbdMore && 'max-sm:hidden'" aria-keyshortcuts="V"
           @click="kbdControl('velocity-up')">Velocity +</button>
+        <button type="button" data-osc="keyboard.more" x-show="kbdView === 'synth'"
+          aria-controls="osc-synth-dock" :aria-expanded="String(kbdMore)" @click="kbdMore = !kbdMore"
+          x-text="kbdMore ? 'Fewer' : 'More'"
+          class="inline-flex h-9 items-center justify-center rounded-lg border border-solid border-gray-300 bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 sm:hidden dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11">More</button>
       </div>
       <p id="osc-kbd-readout" data-osc="keyboard.readout" role="status" x-text="kbdReadout"
         :class="kbdView === 'synth' && 'sr-only sm:not-sr-only'"></p>
@@ -2434,7 +2439,7 @@
          src/js/ui/studio/workspace.js): every module plate, knob, switch and jack is generated
          from src/js/synth/panels/semi-mono.js and the registry's node descriptors. The keyboard
          docks at the bottom here and plays the panel. -->
-    <section class="px-4 pt-6 pb-80" id="osc-view-synth" data-osc="synth-view"
+    <section class="px-4 pt-6 pb-[calc(var(--osc-kbd-h,20rem)+1rem)]" id="osc-view-synth" data-osc="synth-view"
       data-osc-modes="synth" hidden :hidden="workspace !== 'synth'"
       aria-labelledby="osc-synth-title" tabindex="-1">
       <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">

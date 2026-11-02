@@ -525,6 +525,13 @@ function defineChecks() {
     const d0 = await dbg(page);
     const fm = d0.nodes.fm;
     const pick = page.locator('#osc-synth-pick');
+    // V635: on a phone the instrument row is folded behind the dock's More button.
+    const more = page.locator('[data-osc="keyboard.more"]');
+    if (await more.isVisible()) {
+      await more.click();
+      await until(() => pick.isVisible(), { ms: 5000, what: 'More unfolds the instrument row' });
+      out.unfolded = await more.getAttribute('aria-expanded');
+    }
     await pick.focus();
     await page.keyboard.press('Enter');
     const menu = page.locator('[data-osc="synth.pick.menu"]');

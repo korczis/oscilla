@@ -57,7 +57,7 @@ export function controlValue(control, node, model, panel) {
 
 // Labels sit on the plate gradient (surface-3 to surface-1): gray-600 is 6.2:1 on its light top,
 // gray-400 5.8:1 or more on the dark one (4.5:1 for small text).
-const LABEL = 'text-[11px] font-semibold uppercase tracking-wide text-gray-600 '
+const LABEL = 'text-xs xl:text-[11px] font-semibold uppercase tracking-wide text-gray-600 '
   + 'dark:text-gray-400';
 const VALUE = 'font-mono text-xs tabular-nums text-gray-900 dark:text-white';
 
@@ -113,7 +113,7 @@ function toggleHtml(cid, c, value, reason) {
  */
 function factsHtml(m, node) {
   if (typeof m.def.facts !== 'function') return '';
-  return '<p class="relative px-3 pb-3 text-[11px] leading-snug text-gray-600 '
+  return '<p class="relative px-3 pb-3 text-xs xl:text-[11px] leading-snug text-gray-600 '
     + `dark:text-gray-300" data-facts="${m.id}"><span class="font-semibold">Computed from the `
     + `settings:</span> ${esc(m.def.facts(node.params))}</p>`;
 }
@@ -133,7 +133,7 @@ export function plateHtml({ panel, module: m, node, model, tokens, collapsed = f
     + `aria-controls="${bid}" class="flex h-11 items-center gap-2 rounded-lg px-2 `
     + 'tracking-widest focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500">'
     + `<span aria-hidden="true" class="text-xs">${collapsed ? '▸' : '▾'}</span>${esc(m.label)}`
-    + '</button></h3><span class="px-2 text-[11px] text-gray-600 dark:text-gray-400">'
+    + '</button></h3><span class="px-2 text-xs xl:text-[11px] text-gray-600 dark:text-gray-400">'
     + `${esc(m.def.displayName)}</span></header>`;
   const bg = '<svg class="absolute inset-0 h-full w-full" preserveAspectRatio="none" '
     + 'aria-hidden="true" focusable="false"><defs>'
@@ -173,7 +173,7 @@ export function plateHtml({ panel, module: m, node, model, tokens, collapsed = f
     const p = m.params.find((x) => x.key === f.key);
     const shown = p.type === 'enum' ? (p.options.find((o) => o[0] === f.value) || [0, f.value])[1]
       : knobModel(p).format(f.value);
-    return `<span class="rounded bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600 `
+    return `<span class="rounded bg-gray-100 px-2 py-0.5 text-xs xl:text-[11px] text-gray-600 `
       + `dark:bg-gray-700 dark:text-gray-300" title="Fixed by the panel">${esc(f.label)} `
       + `${esc(shown)}</span>`;
   }).join('');
@@ -182,7 +182,7 @@ export function plateHtml({ panel, module: m, node, model, tokens, collapsed = f
     + `<div class="relative flex flex-wrap items-start gap-x-2 gap-y-3 px-3 pb-3 pt-2">`
     + `${controls}</div>`
     + (fixed || m.note ? `<div class="relative flex flex-wrap items-center gap-1 px-3 pb-3">`
-      + `${fixed}${m.note ? `<span class="text-[11px] text-gray-600 dark:text-gray-400">`
+      + `${fixed}${m.note ? `<span class="text-xs xl:text-[11px] text-gray-600 dark:text-gray-400">`
       + `${esc(m.note)}</span>` : ''}</div>` : '')
     + factsHtml(m, node)
     + '</div></section>';
