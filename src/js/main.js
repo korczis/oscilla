@@ -657,10 +657,20 @@ function integrationInit() {
       + 'API, so OSCILLA cannot generate sound here.');
   }
 
-  // first gesture creates/resumes the context inside the gesture
+  // first gesture creates/resumes the context inside the gesture. A touch is a user activation
+  // only at its end (HTML: pointerup, touchend, click; a mouse and a key at their start), so a
+  // phone also unlocks there (owner report 2026-11-02: no sound on the phone).
   const unlock = () => { if (engine.isSupported()) cmp.ensureAudio(); };
-  window.addEventListener('pointerdown', unlock, { capture: true });
-  window.addEventListener('keydown', unlock, { capture: true });
+  for (const type of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) {
+    window.addEventListener(type, unlock, { capture: true });
+  }
+  // iOS (Safari 17+): Web Audio follows the ringer switch unless the page is a playback app.
+  // An instrument is one, so a phone set to silent still sounds (tests/browser/touch-audio.cjs).
+  try {
+    if (navigator.audioSession && navigator.audioSession.type !== 'playback') {
+      navigator.audioSession.type = 'playback';
+    }
+  } catch (e) { /* the browser refuses the session type: Web Audio keeps its default */ }
   const stopSequencer = () => stopSequence(cmp); // the editor's live state (C001, C002)
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
