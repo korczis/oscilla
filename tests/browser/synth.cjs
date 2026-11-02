@@ -76,6 +76,10 @@
 //   s-libxy    K102 with K097: the library's tag filter 'xy' lists the XY pad's four built-in
 //              presets; Enter on the first applies it in one undo entry and the pad takes its
 //              scale; a name and Save the XY pad as a preset save it, listed under 'xy' at once
+//   s-riffs    K149 with K102: the library's Riffs category lists the original riffs, each said
+//              as "Original, in the style of <genre> (<era>)", Insert its only way in; Enter
+//              inserts the first in one undo entry: an event track of its name with its clips
+//              on an Oscillator that reaches the Master Output
 //   s-mobile   390 x 844 with touch: no horizontal page scroll, every knob and jack box 44 px+,
 //              a section chip lands its plate's heading below the sticky chip bar, the docked
 //              keys are visible and a tap on them sounds
@@ -712,6 +716,46 @@ function defineChecks() {
       && /Night drive/.test(await list.textContent()), { ms: 10000,
       what: 'the saved XY preset is listed under xy' });
     return { ok: built === 4 && p.mode === 'minor-pentatonic', built, mode: p.mode };
+  });
+
+  def('s-riffs', async ({ page }) => {
+    const depth = () => page.evaluate(() => window.OSCILLA.studio.store.debugInfo().undoDepth);
+    await page.locator('[data-osc="synth.library"]').click();
+    const list = page.locator('[data-osc="library.list"]');
+    await until(() => list.isVisible(), { ms: 10000, what: 'the patch library opens' });
+    const inst = page.locator('[data-osc="library.instrument"]');
+    await until(async () => (await inst.locator('option[value="riffs"]').count()) === 1,
+      { ms: 10000, what: 'the Riffs category is offered' });
+    await inst.selectOption('riffs');
+    const options = list.locator('[role="option"]');
+    const count = await options.count();
+    const name = await page.locator('[data-osc="library.name"]').textContent();
+    const style = await page.locator('[data-osc="library.detail.text"]').textContent();
+    const modes = await page.locator('[data-osc="library.detail"] [data-mode]')
+      .evaluateAll((els) => els.map((el) => el.getAttribute('data-mode')));
+    const before = await depth();
+    await list.focus();
+    await page.keyboard.press('Enter');
+    await until(async () => (await depth()) === before + 1, { ms: 5000,
+      what: 'Enter inserts the first riff in one undo entry' });
+    const added = await page.evaluate((title) => {
+      const m = window.OSCILLA.studio.model;
+      const track = m.timeline.tracks.find((t) => t.name === title);
+      const osc = track && m.graph.nodes.find((n) => n.id === track.target);
+      const master = m.graph.nodes.find((n) => n.type === 'master');
+      const reach = new Set(osc ? [osc.id] : []);
+      for (let grew = true; grew;) {
+        grew = false;
+        for (const e of m.graph.edges) {
+          if (reach.has(e.from.node) && !reach.has(e.to.node)) grew = !!reach.add(e.to.node);
+        }
+      }
+      return { track: !!track, osc: osc ? osc.type : null, master: !!master && reach.has(master.id),
+        clips: track ? m.timeline.clips.filter((c) => c.trackId === track.id).length : 0 };
+    }, name);
+    return { ok: count >= 12 && /^Original, in the style of /.test(style)
+      && JSON.stringify(modes) === '["insert"]' && added.track && added.osc === 'oscillator'
+      && added.master && added.clips > 0, count, name, style, modes, added };
   });
 
   def('s-escape', async ({ page }) => {

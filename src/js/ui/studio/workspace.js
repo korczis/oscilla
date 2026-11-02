@@ -100,6 +100,7 @@ import { compactTime, mountCompact } from './compact.js';
 import { STUDIO_STORE_FALLBACK_TEXT, mountPatches, recordId } from './patches-panel.js';
 import { mountPatchBrowser } from '../patch-browser.js';
 import { registerSynthSources } from '../../synth/library.js';
+import { registerRiffSource } from '../../studio/riffs/source.js';
 import { mountStudioTimeline } from './timeline-editor.js';
 import { studioBackTarget, workspacePhrase } from '../cross-links.js';
 import { WORKSPACE_LABELS } from '../shortcuts.js';
@@ -1118,6 +1119,7 @@ export function createStudioUi(svc = {}) {
     const browserHost = libBody ? libBody.insertBefore(document.createElement('div'),
       libBody.lastElementChild) : null;
     registerSynthSources();
+    registerRiffSource();
     ctx.browser = browserHost ? mountPatchBrowser(browserHost, { store: ctx.handle, announce,
       userPatches: () => library().then((l) => l.patches()),
       savePatch: (p) => library().then(async (l) => l.savePatch(p, { now: new Date(),

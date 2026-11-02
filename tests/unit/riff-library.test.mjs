@@ -145,3 +145,40 @@ test('Insert with its voice adds Oscillator, Filter, wiring, track and clips as 
     assert.deepEqual(store.getModel().timeline, m0.timeline);
   }
 });
+
+// The riffs in the one patch library (K102): a category of studio/patch-catalog.js, listed
+// with the role and the genre as tags, the style said beside the name, Insert only (a riff
+// has no parameters to apply), never shown as in use, and each Insert is riffVoiceAction.
+test('the patch library lists every riff as an Insert of its own voice', async () => {
+  const src = await import('../../src/js/studio/riffs/source.js').catch(() => ({}));
+  const cat = await import('../../src/js/studio/patch-catalog.js');
+  assert.equal(typeof src.registerRiffSource, 'function');
+  src.registerRiffSource();
+  src.registerRiffSource(); // idempotent
+  const model = templateModel('demo-song');
+  const entries = cat.catalogEntries({ model }).filter((e) => e.instrument === 'riffs');
+  assert.equal(entries.length, lib.RIFFS.length, 'one entry per riff, registered once');
+  const view = cat.browseView(cat.catalogEntries({ model }), model, { instrument: 'riffs' });
+  assert.equal(view.items.length, lib.RIFFS.length);
+  for (const r of lib.RIFFS) {
+    const e = view.items.find((x) => x.id === `riff-${r.id}`);
+    assert.ok(e, r.id);
+    assert.equal(e.name, r.title);
+    assert.deepEqual(e.modes, ['insert']);
+    assert.ok(e.tags.includes('riffs') && e.tags.includes(r.role) && e.tags.includes(r.genre));
+    assert.ok(e.detail.startsWith(r.style) && e.detail.includes(`${r.tempo} BPM`), e.detail);
+    assert.equal(e.inUse, false, `${r.id} is never "in use"`);
+  }
+  assert.ok(view.tags.some((t) => t.id === 'bass') && view.tags.some((t) => t.id === 'disco'));
+  const store = createStudioStore(model, { idGenerator: createIdGenerator(model) });
+  const e = view.items.find((x) => x.id === 'riff-mirrorball-octaves');
+  const res = cat.entryAction(store.getModel(), e, 'insert');
+  assert.equal(res.action.type, 'BATCH');
+  assert.deepEqual(res.action,
+    ex.riffVoiceAction(store.getModel(), lib.riffOf('mirrorball-octaves')).action);
+  assert.equal(store.dispatch(res.action).ok, true);
+  assert.match(cat.entryAction(store.getModel(), e, 'apply').reason, /cannot be loaded/);
+  const bare = { ...model, graph: { ...model.graph, nodes: model.graph.nodes
+    .filter((n) => n.type !== 'master'), edges: [] } };
+  assert.match(cat.entryAction(bare, e, 'insert').reason, /Master Output/);
+});

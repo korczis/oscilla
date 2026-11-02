@@ -98,6 +98,8 @@ export function mountPatchBrowser(host, svc) {
         'data-osc': 'library.name' }),
       h('p', { class: 'text-sm text-gray-600 dark:text-gray-300', text: `${item.instrumentLabel}`
         + ` · ${item.source === 'user' ? 'Saved' : 'Factory'} · ${item.tags.join(', ')}` }),
+      item.detail ? h('p', { class: 'text-sm text-gray-600 dark:text-gray-300',
+        'data-osc': 'library.detail.text', text: item.detail }) : null,
       item.inUse ? h('p', { 'data-osc': 'library.inUse', class: 'w-fit rounded bg-green-100 '
         + 'px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900 '
         + 'dark:text-green-300', text: 'In use in this Studio' }) : null,
