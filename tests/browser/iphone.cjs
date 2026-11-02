@@ -24,6 +24,10 @@
 //                    switch sends it) with a held control's finger still down: within HIDE_MS
 //                    the engine is left with no active source and no surface still claims to
 //                    play (journey 21; not TRIGGER, whose note ends that soon by itself)
+//   denied-mic / denied-midi / denied-storage  with storage, MIDI and the microphone all
+//                    refused (journey 22): Use microphone says "permission denied" and shows no
+//                    detected frequency, Connect MIDI ends `denied`, Experiments says its
+//                    records last for this page view only, and the page raises no error
 //
 // Every wait is a condition poll with a named wall-clock deadline (tests/browser/lib/wait.cjs).
 //
@@ -170,14 +174,103 @@ const SOUNDS = [
     at: { x: 0.06, y: 0.85 } },
 ];
 
-async function openAt(browser, engine, device, hash) {
+async function openAt(browser, engine, device, hash, init = null) {
   const context = await browser.newContext(contextOptions(engine, device));
+  if (init) await context.addInitScript(init);
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message.slice(0, 200)));
   await page.goto(`${URL}${hash}`);
   await page.waitForFunction(() => window.OSCILLA && window.OSCILLA.app, null, { timeout: 15000 });
   return { context, page, errors };
+}
+
+/**
+ * In-page, before any script (journey 22): a phone that grants nothing. Reading localStorage,
+ * sessionStorage or indexedDB throws a SecurityError, and the MIDI and microphone requests are
+ * refused with NotAllowedError, as a private tab or a denied prompt does.
+ */
+function denyCapabilities() {
+  const refused = (name) => () => Promise.reject(new DOMException(`${name} in the phone check`,
+    name));
+  for (const key of ['localStorage', 'sessionStorage', 'indexedDB']) {
+    try {
+      Object.defineProperty(window, key, { configurable: true,
+        get() { throw new DOMException(`${key} is denied`, 'SecurityError'); } });
+    } catch { /* a browser that will not redefine it keeps its own */ }
+  }
+  navigator.requestMIDIAccess = refused('NotAllowedError');
+  if (navigator.mediaDevices) navigator.mediaDevices.getUserMedia = refused('NotAllowedError');
+  else {
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true,
+      value: { getUserMedia: refused('NotAllowedError') } });
+  }
+}
+
+/** Journey 22: each denied capability says so where it is offered, and nothing invents data. */
+async function deniedJourney(browser, engine, device, phone, check) {
+  // the microphone: the readout states the denial, never a detected frequency
+  {
+    const { context, page, errors } = await openAt(browser, engine, device, '#m=analyzer',
+      denyCapabilities);
+    try {
+      const spot = await page.evaluate(inertSpot);
+      if (spot) await page.touchscreen.tap(spot.x, spot.y);
+      const toggle = page.locator('#osc-mic-toggle').locator('visible=true').first();
+      let mic = { ok: false, last: 'no visible Use microphone' };
+      if (await toggle.count()) {
+        await toggle.scrollIntoViewIfNeeded({ timeout: 5000 });
+        await toggle.tap({ timeout: 5000 });
+        mic = await pollFor(() => page.evaluate(() => ({
+          text: document.getElementById('osc-mic-detected').textContent.trim(),
+          pressed: document.getElementById('osc-mic-toggle').getAttribute('aria-pressed'),
+        })), (v) => /permission denied/.test(v.text), `iphone: the denied microphone says so`);
+      }
+      check(`denied-mic@${phone}`, mic.ok && mic.last.pressed === 'false'
+        && !/\d\s*Hz/.test(mic.last.text) && errors.length === 0,
+        `${JSON.stringify(mic.last)} ${errors.join(' | ')}`);
+      // MIDI: Connect MIDI, the explicit action, ends denied and raises no error
+      // on a phone Settings sits in the status bar's Actions menu: open it the way a finger does
+      const settings = page.locator('[data-osc="action.settings"]').locator('visible=true');
+      if (!(await settings.count())) {
+        await page.locator('[data-osc="status.actionsMenu"]').locator('visible=true').first()
+          .tap({ timeout: 5000 });
+      }
+      await settings.first().tap({ timeout: 5000 });
+      const connect = page.locator('[data-osc="midi.connect"]').locator('visible=true').first();
+      let midi = { ok: false, last: 'no visible Connect MIDI' };
+      if (await connect.count()) {
+        await connect.scrollIntoViewIfNeeded({ timeout: 5000 });
+        await connect.tap({ timeout: 5000 });
+        midi = await pollFor(() => page.evaluate(() => {
+          const el = document.querySelector('[data-osc="midi.status"]');
+          return { state: el.dataset.midiState || null, text: el.textContent.trim() };
+        }), (v) => v.state === 'denied', 'iphone: the denied MIDI request says so');
+      }
+      check(`denied-midi@${phone}`, midi.ok && errors.length === 0,
+        `${JSON.stringify(midi.last)} ${errors.join(' | ')}`);
+    } catch (error) {
+      check(`denied-midi@${phone}`, false, `the journey stopped: ${error.message.split('\n')[0]}`);
+    } finally {
+      await context.close();
+    }
+  }
+  // storage: Experiments says its records last for this page view only, and nothing throws
+  {
+    const { context, page, errors } = await openAt(browser, engine, device, '#m=experiments',
+      denyCapabilities);
+    try {
+      const note = await pollFor(() => page.evaluate(() => {
+        const el = document.querySelector('.osc-x-store');
+        return el ? { shown: el.offsetParent !== null, text: el.textContent.trim() } : null;
+      }), (v) => !!v && v.shown && /in memory for this page view only/.test(v.text),
+      'iphone: Experiments says its records last for this page view');
+      check(`denied-storage@${phone}`, note.ok && errors.length === 0,
+        `${JSON.stringify(note.last)} ${errors.join(' | ')}`);
+    } finally {
+      await context.close();
+    }
+  }
 }
 
 async function runOne(engine, baseline, recorded) {
@@ -266,6 +359,7 @@ async function runOne(engine, baseline, recorded) {
         if (lift) await lift().catch(() => {});
         await context.close();
       }
+      await deniedJourney(browser, engine, device, phone, check);
     }
   } finally {
     await browser.close();
