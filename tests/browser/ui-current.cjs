@@ -123,6 +123,8 @@ const PHONE_WHOLE_DEBT = new Map([
     + '(synth.arm, synth.studio, synth.copy-link, the tabs): the Synth lane, #385 and V635'],
   ['@320:synth:overlap', 'the keyboard dock\'s arm, octave and velocity buttons overlap the Synth '
     + 'panel\'s header controls: the Synth lane, #385 and V635'],
+  ['@375:synth:overlap', 'the Synth picker (osc-synth-pick) and the docked keyboard\'s buttons '
+    + 'overlap the Synth tabs at 375 px since #385\'s train: the Synth lane, #385 and V635'],
   ['@390:synth:overlap', 'the keyboard dock\'s arm and octave buttons overlap the Synth\'s mobile '
     + 'keys toggle (synth-m-keys): the Synth lane, #385 and V635'],
   ['firefox@375:synth:covered', 'in Firefox the docked keyboard covers the Synth bay\'s SVG '
