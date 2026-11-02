@@ -13,10 +13,17 @@
 //   claimOutput()         the sequencer started playing: the Playground gain is the output level
 //   openSequencerStage()  → the engine's counted stage chain the sequencer plays through
 //                           (AudioEngine.stageChain with the Filter Lab's insert, C003)
+//   claimSequencerOutput() → true, or a reason string: the sequencer asks before it schedules
+//                           (and before each loop pass); a reason refuses (C002)
 //   getStereoRouter()     → audio/stereo.js router while stereo plays (Phase & Stereo live data)
 //   ensureContext()       → Promise<AudioContext> created in the current user gesture (mic)
 //   attachMicrophone(stream) → AnalyserNode, detachMicrophone()   engine-owned mic graph
+//   onMicDetached(fn)     → unsubscribe; fn({ reason, analyser }) when the engine detaches a
+//                           mic graph ('user' | 'replaced' | 'closed': it discarded a closed
+//                           context). The mic lab stops when the analyser is its own.
 //   getA4()               → A4 tuning in Hz (octave-C markers of the spectrum; default 440)
+//   sequencerAccounting   → { track, source, untrack } of the engine (AudioEngine
+//                           stageAccounting()), so V2 playback counts in the engine's node census
 //
 // Controllers share state with Alpine only through plain objects and the shell's `osc:ui`
 // events; each exposes { update(state), dispose() } plus its own API.

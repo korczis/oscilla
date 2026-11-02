@@ -38,8 +38,11 @@
 //                        100 node cards and 200 cables within BROWSER_BUDGETS.importMs; one edit
 //                        (store dispatch + every projection) and Frame All within
 //                        BROWSER_BUDGETS.editMs (median of 9; tests/unit/fixtures/
-//                        v31-large-studio.mjs, docs/v31/performance.md); the numbers are printed
-//                        (V431)
+//                        v31-large-studio.mjs, docs/v31/performance.md); L (tidy all 100 nodes,
+//                        median of 5) within it too; L and M (8 selected cables, then all 200)
+//                        each reach the projections as one store event (K009); M is printed,
+//                        not budgeted: it is one validated store action per cable; the numbers
+//                        are printed (V431)
 //   sequence-import      a configuration saved with Export config opens through the Studio
 //                        Import button as one event track of N pattern clips (one per block of
 //                        its sequence) playing a Sequence node, clean, and announced; a damaged
@@ -776,18 +779,55 @@ function defineChecks(fx) {
         s.editor.frameAll();
         frame.push(performance.now() - t1);
       }
+      // K009: L moves every node, M mutes the selected cables; one store event each.
+      let events = 0;
+      const off = s.store.subscribe(() => { events += 1; });
+      const counted = (fn) => {
+        events = 0;
+        const t2 = performance.now();
+        fn();
+        return { ms: performance.now() - t2, events };
+      };
+      // L median of 5 (undone between, untimed), as the edits above are medians.
+      const tidies = [];
+      let tidied = true;
+      for (let i = 0; i < 5; i++) {
+        tidies.push(counted(() => s.editor.tidy()));
+        tidied = tidied && s.store.debugInfo().lastAction.label === 'Tidy the graph';
+        if (i < 4) s.store.undo();
+      }
+      const tidy = { ms: med(tidies.map((x) => x.ms)),
+        events: Math.max(...tidies.map((x) => x.events)) };
+      const edges = s.store.getModel().graph.edges.map((e) => e.id);
+      const pick = edges.filter((_, i) => i % 25 === 0);
+      s.store.dispatch({ type: 'SELECTION_CHANGE', selection: { edges: pick } });
+      const mute = counted(() => s.editor.toggleMute());
+      const muted = s.store.getModel().graph.edges.filter((e) => e.props.muted).length;
+      s.store.dispatch({ type: 'SELECTION_CHANGE', selection: { edges } });
+      const muteAll = counted(() => s.editor.toggleMute());
+      off();
+      const tidyMs = tidy.ms;
+      const muteMs = mute.ms;
+      const muteAllMs = muteAll.ms;
+      const oneEvent = [tidy, mute, muteAll].every((x) => x.events === 1);
       return { ok: r.ok, importMs, nodes: info.nodes, edges: info.edges, cards, cables,
-        editMs: med(edit), moveMs: med(move), frameMs: med(frame) };
+        editMs: med(edit), moveMs: med(move), frameMs: med(frame), tidied, tidyMs,
+        picked: pick.length, muted, muteMs, muteAllMs, oneEvent };
     }, fx.largeText);
     console.log(`   ${browserName} 100 nodes / 200 edges: import+render `
       + `${t.importMs.toFixed(1)} ms, `
       + `edit ${t.editMs.toFixed(2)} ms, move ${t.moveMs.toFixed(2)} ms, frame all `
-      + `${t.frameMs.toFixed(2)} ms (median of 9)`);
+      + `${t.frameMs.toFixed(2)} ms (median of 9); L ${t.tidyMs.toFixed(1)} ms (median of 5), M on `
+      + `${t.picked} cables ${t.muteMs.toFixed(1)} ms, on all ${t.edges} `
+      + `${t.muteAllMs.toFixed(1)} ms`);
     return { ...H.verdict({
       imported: t.ok && t.nodes === 100 && t.edges === 200 && t.cards === 100 && t.cables === 200,
       importBudget: t.importMs <= fx.budgets.importMs,
       editBudget: t.editMs <= fx.budgets.editMs && t.moveMs <= fx.budgets.editMs
         && t.frameMs <= fx.budgets.editMs,
+      tidyBudget: t.tidied === true && t.tidyMs <= fx.budgets.editMs,
+      muteSelected: t.picked === 8 && t.muted === 8,
+      oneProjectionUpdate: t.oneEvent === true,
     }), t };
   });
 

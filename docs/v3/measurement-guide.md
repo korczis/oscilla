@@ -208,6 +208,11 @@ Exported CSV files contain the raw data unless you choose a labelled derived vie
   name, such as clipping, an empty capture or a dropout during the sweep, and measure again.
 - The quality bar during the run (INPUT, NOISE, CLIPPING, SIGNAL, CAPTURE) is a warning while
   you measure. The quality status after the analysis is what counts.
+  CLIPPING NONE says only that no sample reached 0.98 of digital full scale. AT RAIL means the
+  peak reached it without three rail samples within 1 ms: brief clipping at high sweep
+  frequencies is not excluded, and the quality status says so too. NOT CHECKED means the run
+  did not report its peak. Clipping before the converter, in a preamp or by automatic gain,
+  cannot be seen.
 
 ## Live RTA
 

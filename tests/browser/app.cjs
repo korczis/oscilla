@@ -79,6 +79,44 @@ function parseWavHeader(buf) {
     riffSize: buf.readUInt32LE(4), fileSize: buf.length };
 }
 
+/**
+ * Harmonics of a steady tone of `f0` Hz in a 16-bit PCM WAV (first channel): Goertzel with a
+ * Hann window over the middle half of the span where the signal exceeds half its peak, at the
+ * file's own rate. Returns { h2, h3 } in dB relative to the fundamental.
+ */
+function toneHarmonicsDb(buf, f0) {
+  const h = parseWavHeader(buf);
+  let off = 12;
+  while (buf.toString('ascii', off, off + 4) !== 'data') off += 8 + buf.readUInt32LE(off + 4);
+  const step = h.channels * 2;
+  const x = new Float64Array(h.frames);
+  for (let i = 0; i < h.frames; i++) x[i] = buf.readInt16LE(off + 8 + i * step) / 32768;
+  let first = -1;
+  let last = -1;
+  for (let i = 0; i < x.length; i++) {
+    if (Math.abs(x[i]) > h.peak / 2) { if (first < 0) first = i; last = i; }
+  }
+  const span = last - first;
+  const a = first + Math.floor(span / 4);
+  const n = Math.floor(span / 2);
+  const power = (f) => {
+    const w = (2 * Math.PI * f) / h.sampleRate;
+    const c = 2 * Math.cos(w);
+    let s1 = 0;
+    let s2 = 0;
+    for (let i = 0; i < n; i++) {
+      const win = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (n - 1));
+      const s0 = x[a + i] * win + c * s1 - s2;
+      s2 = s1;
+      s1 = s0;
+    }
+    return s1 * s1 + s2 * s2 - c * s1 * s2;
+  };
+  const p1 = power(f0);
+  const db = (p) => 10 * Math.log10(Math.max(p, 1e-30) / p1);
+  return { h2: +db(power(2 * f0)).toFixed(1), h3: +db(power(3 * f0)).toFixed(1), frames: n };
+}
+
 // ------------------------------------------------------------------------------ page helpers
 const H = {
   ready: (page) => page.waitForSelector('html[data-ready="true"]', { timeout: 15000 }),
@@ -323,7 +361,10 @@ const SETTLED_OBSCURED = 'new Promise((r) => requestAnimationFrame(() => '
 function focusObscured() {
   const el = document.activeElement;
   if (!el || el === document.body) return { body: true };
-  const key = el.id || el.dataset.osc || el.outerHTML.slice(0, 60);
+  // Repeated controls (the compact Studio's node and clip chips) share a data-osc: their
+  // node or clip id tells them apart, so a walk does not stop at the second chip.
+  const key = el.id || (el.dataset.osc ? [el.dataset.osc, el.dataset.nodeId, el.dataset.clipId]
+    .filter(Boolean).join(':') : el.outerHTML.slice(0, 60));
   const r = el.getBoundingClientRect();
   const ix = Math.min(2, r.width / 4);
   const iy = Math.min(2, r.height / 4);
@@ -389,6 +430,35 @@ function installPendingMic() {
     gum.restore = () => { delete navigator.mediaDevices; };
   }
   window.__oscGum = gum;
+}
+
+/**
+ * In-page: a fake media device that every engine has (WebKit has no fake capture device):
+ * getUserMedia answers with a fresh stream of a MediaStreamDestination of a context the test
+ * owns, never connected to OSCILLA's output. window.__oscSynthMic.restore() puts the original
+ * getUserMedia back and closes that context.
+ */
+function installSynthMic() {
+  const md = navigator.mediaDevices;
+  const orig = md && typeof md.getUserMedia === 'function' ? md.getUserMedia : null;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  const ctx = new AC();
+  const gum = () => {
+    const dst = ctx.createMediaStreamDestination();
+    return Promise.resolve(dst.stream);
+  };
+  const mic = { restore: () => {} };
+  if (md) {
+    md.getUserMedia = gum;
+    mic.restore = () => { if (orig) md.getUserMedia = orig; else delete md.getUserMedia; };
+  } else {
+    Object.defineProperty(navigator, 'mediaDevices', { value: { getUserMedia: gum },
+      configurable: true });
+    mic.restore = () => { delete navigator.mediaDevices; };
+  }
+  const restore = mic.restore;
+  mic.restore = () => { restore(); ctx.close().catch(() => {}); };
+  window.__oscSynthMic = mic;
 }
 
 /** In-page: phone header and status bar geometry (rows, overlaps, clipping, scrolling). */
@@ -941,15 +1011,22 @@ function defineChecks() {
     await sleep(80);
     await collect();
     await page.evaluate(() => { window.OSCILLA.app.explore = false; });
+    // From 1280 px the Playground leaves Phase & Stereo and Filter Lab to their workspaces
+    // (P002, Q004 option A): their tabs are pressed there.
+    await H.workspace(page, 'compare');
     await page.click('#osc-ptab-stereo');
     await collect();
     await page.click('#osc-ptab-phase');
     await page.click('#osc-mtab-compare');
     await collect();
     await page.click('#osc-mtab-live');
+    await H.workspace(page, 'filter');
     await page.click('#osc-ftype-peaking');
     await collect();
     await page.click('#osc-ftype-lowpass');
+    await H.workspace(page, 'analyzer'); // the Spectrogram panel's own controls
+    await collect();
+    await H.workspace(page, 'playground');
     for (const id of ['saveModal', 'headphonesModal', 'copyModal', 'settings', 'help',
       'osc-dlg-mic', 'osc-dlg-recipe-link']) {
       await page.evaluate((d) => window.OSCILLA.app.openModal(d), id);
@@ -962,7 +1039,8 @@ function defineChecks() {
       a.customPresets = [{ version: 1, id: 'gate', name: 'gate', created: 0,
         cfg: a.serializeConfig() }];
     });
-    for (const ws of ['synthesis', 'learn', 'presets']) {
+    // Compare shows the microphone analyzer's counterpart links (U005), as the Analyzer does.
+    for (const ws of ['synthesis', 'compare', 'learn', 'presets']) {
       await H.workspace(page, ws);
       await collect();
     }
@@ -973,6 +1051,19 @@ function defineChecks() {
     await sleep(80);
     await collect();
     await page.evaluate(() => { window.OSCILLA.app.customPresets = []; window.OSCILLA.app.presetTab = 'reference'; });
+    // The cross-links shown in one workspace only (U010): the Sequencer's and Filter Lab's
+    // Studio links, and Experiments before anything is saved (its empty list leads to Measure).
+    for (const ws of ['sequencer', 'filter', 'experiments']) {
+      await H.workspace(page, ws);
+      if (ws === 'experiments') {
+        await page.waitForFunction(() => window.OSCILLA.app.exps.loaded, null,
+          { timeout: 10000 }).catch(() => {});
+      }
+      await collect();
+    }
+    // The Synth workspace (#329): its header controls (preset, Arm keys, Studio, copy link).
+    await H.workspace(page, 'synth');
+    await collect();
     await H.workspace(page, 'about');
     await collect();
     // MEASURE and EXPERIMENTS: every state that shows a control. A TEST CONTEXT loopback
@@ -1242,26 +1333,342 @@ function defineChecks() {
     return { ok, before, after, crest: +crest.toFixed(3), zeroAfter: zero };
   });
 
+  // C013 (finding vis-divergence-1): the scope and its canvas label follow the output owner.
+  // Sequencer Play and the Playground's compact Studio Play each sound through the one output
+  // analyser; the scope then draws the live trace named after that owner, the aria label says
+  // the same, and with reduced motion on the loop keeps drawing (several frames, not one redraw).
+  def('scope-follows-owner', async ({ page }) => {
+    const owner = () => page.evaluate(() => window.OSCILLA.viz.state.outputOwner);
+    await page.evaluate(() => window.OSCILLA.app.ensureAudio());
+    await H.navTo(page, 'playground');
+    await until(() => page.evaluate(() => window.OSCILLA.app.workspace === 'playground'),
+      { ms: 8000, what: 'scope-follows-owner: the Playground is open' });
+    await page.click('#osc-atab-waveform');
+    await page.evaluate(() => {
+      const ctx = window.OSCILLA.host.p5.drawingContext;
+      window.__c013Drawn = [];
+      if (!ctx.__c013) {
+        const orig = ctx.fillText.bind(ctx);
+        ctx.fillText = (t, ...rest) => {
+          if (window.__c013Drawn) window.__c013Drawn.push(String(t));
+          return orig(t, ...rest);
+        };
+        ctx.__c013 = true;
+      }
+      const v = window.OSCILLA.viz;
+      v.state.reducedMotion = true; // prefers-reduced-motion as the bridge reads it at start
+      v.updateLoop();
+    });
+    const read = () => page.evaluate(() => {
+      const drawn = window.__c013Drawn.splice(0);
+      return {
+        live: drawn.filter((t) => t.startsWith('output analyser')),
+        idle: drawn.filter((t) => /not playing/.test(t)).length,
+        aria: document.getElementById('osc-chart-waveform').getAttribute('aria-label'),
+        looping: window.OSCILLA.viz.looping,
+      };
+    });
+    // One leg: wait for the owner's label and aria label, then count the frames drawn after it.
+    const leg = async (name, re, ariaRe) => {
+      const first = await until(async () => {
+        const r = await read();
+        return r.live.some((t) => re.test(t)) && ariaRe.test(r.aria) ? r : null;
+      }, { ms: 6000, what: `scope-follows-owner: ${name}: live scope and aria label` });
+      let idle = 0;
+      let drawn = 0;
+      const later = await until(async () => {
+        const r = await read();
+        idle += r.idle;
+        drawn += r.live.filter((t) => re.test(t)).length;
+        return drawn >= 3 ? r : null;
+      }, { ms: 6000, what: `scope-follows-owner: ${name}: the scope keeps drawing` });
+      return { label: first.live[0], aria: first.aria, looping: later.looping, idle };
+    };
+    const out = {};
+    try {
+      out.reducedLoopIdle = (await read()).looping;
+      out.loopWas = await page.evaluate(() => {
+        const ed = window.OSCILLA.labs.sequencer.editor;
+        const was = !!ed.model.loop;
+        if (!was) ed.setLoop(true); // the sequence still sounds when a loaded host is slow
+        return was;
+      });
+      await page.click('#osc-seq-play');
+      out.seq = await leg('sequencer', /^output analyser · sequencer/,
+        /^Live output analyser waveform \(sequencer\)/);
+      out.seqOwner = await owner();
+      await page.evaluate((was) => {
+        const ed = window.OSCILLA.labs.sequencer.editor;
+        ed.stop();
+        if (!was) ed.setLoop(false);
+      }, out.loopWas);
+      out.seqStopped = await until(() => page.evaluate(() => {
+        const ed = window.OSCILLA.labs.sequencer.editor;
+        return !ed.playing && ed.stats().activeNodeCount === 0
+          && window.OSCILLA.viz.state.outputOwner === null;
+      }), { ms: 4000, what: 'scope-follows-owner: the sequencer stops and frees its nodes' });
+      await page.click('[data-osc="studio.compact.play"]');
+      out.studio = await leg('Studio', /^output analyser · Studio/,
+        /^Live output analyser waveform \(Studio\)/);
+      out.studioOwner = await owner();
+    } finally {
+      await page.evaluate((was) => {
+        const ed = window.OSCILLA.labs.sequencer.editor;
+        if (ed.playing) ed.stop();
+        if (was === false) ed.setLoop(false);
+        const s = window.OSCILLA.studio;
+        if (s && s.counts().playing) window.OSCILLA.app.studioStop();
+      }, out.loopWas);
+      out.studioStopped = await until(() => page.evaluate(() => !window.OSCILLA.studio.counts()
+        .playing && !window.OSCILLA.viz.state.outputOwner),
+      { ms: 4000, what: 'scope-follows-owner: the Studio stops' });
+      out.idleAria = (await read()).aria;
+      await page.evaluate(() => {
+        window.__c013Drawn = null;
+        const v = window.OSCILLA.viz;
+        let rm = false;
+        try { rm = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { /* */ }
+        v.state.reducedMotion = rm;
+        v.updateLoop();
+      });
+    }
+    out.zeroAfter = await H.waitNodes0(page, 3000);
+    const ok = out.reducedLoopIdle === false
+      && out.seq.looping && out.seq.idle === 0 && out.seqOwner === 'sequencer' && out.seqStopped
+      && out.studio.looping && out.studio.idle === 0 && out.studioOwner === 'studio'
+      && out.studioStopped && /^Waveform, not playing/.test(out.idleAria) && out.zeroAfter;
+    return { ok, ...out };
+  });
+
+  // C013 (finding vis-divergence-4): the Spectrum's requested marker follows the sequence while
+  // only the sequencer sounds: the instrument at 250 Hz is not played, block 0 (Tone 440 Hz)
+  // marks 440 Hz, and the Silence block (a gap) hides the marker and its level chip.
+  def('spectrum-marker-follows-sequence', async ({ page }) => {
+    await page.evaluate(() => window.OSCILLA.app.ensureAudio());
+    await H.navTo(page, 'playground');
+    await until(() => page.evaluate(() => window.OSCILLA.app.workspace === 'playground'),
+      { ms: 8000, what: 'spectrum-marker-follows-sequence: the Playground is open' });
+    const loopWas = await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.setFrequency(250);
+      const ed = window.OSCILLA.labs.sequencer.editor;
+      const was = !!ed.model.loop;
+      if (!was) ed.setLoop(true); // the gap comes round again on a loaded machine
+      return was;
+    });
+    const read = () => page.evaluate(() => {
+      const ed = window.OSCILLA.labs.sequencer.editor;
+      const chart = window.OSCILLA.labs.analysis.chart;
+      return { block: ed.activeBlockIndex(), cur: ed.currentFrequency(),
+        req: chart.options.requested, inst: window.OSCILLA.app.playing,
+        shown: document.getElementById('osc-chart-spectrum').offsetParent !== null };
+    });
+    const out = {};
+    try {
+      await page.click('#osc-seq-play');
+      out.tone = await until(async () => {
+        const r = await read();
+        return r.block === 0 && r.cur === 440 && r.req === 440 ? r : null;
+      }, { ms: 6000, what: 'spectrum-marker-follows-sequence: block 0 marks 440 Hz' });
+      out.gap = await until(async () => {
+        const r = await read();
+        return r.block === 2 && r.cur === null && r.req === null ? r : null;
+      }, { ms: 8000, what: 'spectrum-marker-follows-sequence: the Silence block hides it' });
+    } finally {
+      await page.evaluate((was) => {
+        const ed = window.OSCILLA.labs.sequencer.editor;
+        ed.stop();
+        if (!was) ed.setLoop(false);
+      }, loopWas);
+    }
+    out.idle = await until(async () => {
+      const r = await read();
+      return r.req === 250 ? r : null;
+    }, { ms: 4000, what: 'spectrum-marker-follows-sequence: stopped, the instrument marker' });
+    out.zeroAfter = await until(() => page.evaluate(() => window.OSCILLA.labs.sequencer.editor
+      .stats().activeNodeCount === 0), { ms: 4000,
+      what: 'spectrum-marker-follows-sequence: the sequencer frees its nodes' });
+    const ok = out.tone.shown && !out.tone.inst && !!out.gap && out.idle.req === 250
+      && out.zeroAfter;
+    return { ok, ...out };
+  });
+
+  // C009 (findings engine-sync-9, dead-controls-8): a release edited from 30 ms to 2 s while a
+  // note is held is the one letting go uses, through the Settings field with the Envelope lab
+  // off and through the lab's Release field with it on. 300 ms after letting go a 2 s linear
+  // fade is still above 30 % of the held level; the 30 ms one it started with is silent. Every
+  // reading is taken by a condition poll on the audio clock, windowed at the context's rate.
+  // Review F1/F2: the same edit in the app's default (continuous off, the 2 s hard limit), where
+  // 2 s cannot fit: letting go still starts a fade (RELEASING), shortened to end before the
+  // limit, so halfway through it the level is between 20 % and 80 % of the held one (a let-go
+  // that did nothing stays near 100 % until the limit).
+  def('release-edit-while-held', async ({ page }) => {
+    const mode = () => page.evaluate(() => document.querySelector('#osc-app').dataset.mode);
+    if (await mode() !== 'playground') {
+      await H.navTo(page, 'playground');
+      await page.waitForFunction(() => document.querySelector('#osc-app').dataset.mode
+        === 'playground', null, { timeout: 8000 });
+    }
+    await H.continuous(page, true); // an unlimited hold: no hard-limit end to refuse the fade
+    const initial = await page.evaluate(() => ({ release: window.OSCILLA.app.release,
+      labR: window.OSCILLA.labs.envelope.adsr.r, labOn: window.OSCILLA.labs.envelope.enabled }));
+    // At phone width the Envelope panel is shown only in its own workspace (Synthesis).
+    const showLab = async () => {
+      if (await page.isVisible('#osc-env-enable')) return;
+      await H.navTo(page, 'synthesis');
+      await page.waitForFunction(() => document.querySelector('#osc-app').dataset.mode
+        === 'synthesis', null, { timeout: 8000 });
+    };
+    const setLab = async (on) => {
+      if (await page.evaluate(() => window.OSCILLA.labs.envelope.enabled) !== on) {
+        await showLab();
+        await page.click('#osc-env-enable');
+      }
+      return until(() => page.evaluate((v) => window.OSCILLA.labs.envelope.enabled === v, on),
+        { ms: 3000, what: `release-edit-while-held: Envelope lab ${on ? 'on' : 'off'}` });
+    };
+    const setSettings = async (ms) => {
+      await page.evaluate(() => window.OSCILLA.app.openDialog('settings'));
+      await page.waitForSelector('#osc-set-release', { state: 'visible', timeout: 8000 });
+      await page.fill('#osc-set-release', String(ms));
+      await page.press('#osc-set-release', 'Tab'); // commits (change event)
+      await page.evaluate(() => window.OSCILLA.app.closeDialog('settings'));
+      return until(() => page.evaluate((v) => window.OSCILLA.app.release === v, ms),
+        { ms: 3000, what: `release-edit-while-held: Settings release ${ms} ms` });
+    };
+    const setLabRelease = async (text, s) => {
+      await showLab();
+      await page.fill('#osc-env-release-value', text);
+      await page.press('#osc-env-release-value', 'Enter');
+      return until(() => page.evaluate((v) => Math.abs(window.OSCILLA.labs.envelope.adsr.r - v)
+        < 1e-9, s), { ms: 3000, what: `release-edit-while-held: lab release ${text}` });
+    };
+    // RMS of the analyser window once the audio clock has passed `t` plus that window, so the
+    // whole window lies after `t`; null (poll again) before.
+    const rmsAfter = (t, what) => until(() => page.evaluate((at) => {
+      const e = window.OSCILLA.engine;
+      const an = e.analyser;
+      if (!e.ctx || e.ctx.currentTime < at + an.fftSize / e.ctx.sampleRate) return null;
+      const d = new Float32Array(an.fftSize);
+      an.getFloatTimeDomainData(d);
+      let s = 0;
+      for (const x of d) s += x * x;
+      return { rms: Math.sqrt(s / d.length) };
+    }, t), { ms: 10000, what }).then((r) => r.rms);
+    const leg = async (name, edit) => {
+      const t0 = await page.evaluate(() => {
+        const a = window.OSCILLA.app;
+        a.source = 'single';
+        a.setPattern('tone');
+        a.setWaveform('sine');
+        a.setFrequency(440);
+        a.holding = true;
+        a.play('hold');
+        const v = window.OSCILLA.engine.voice;
+        return v ? v.t0 : null;
+      });
+      const held = await rmsAfter(t0 + 0.1, `release-edit-while-held: ${name} held level`);
+      await edit();
+      const voice = await page.evaluate(() => {
+        const v = window.OSCILLA.engine.voice;
+        return v ? { release: v.release, noteOff: v.noteOff ?? null, endTime: v.endTime } : null;
+      });
+      const tRel = await page.evaluate(() => {
+        window.OSCILLA.app.releaseHold(); // what letting go of Hold to Play does
+        return window.OSCILLA.engine.ctx.currentTime;
+      });
+      const after = await rmsAfter(tRel + 0.3, `release-edit-while-held: ${name} 300 ms after`);
+      await page.evaluate(() => window.OSCILLA.app.stopNow());
+      const zero = await until(async () => await H.nodes(page) === 0,
+        { ms: 5000, what: `release-edit-while-held: ${name} nodes freed` }).catch(() => false);
+      const ratio = held > 0 ? after / held : 0;
+      return { ok: held > 0.01 && ratio > 0.3 && zero, held: +held.toFixed(4),
+        after: +after.toFixed(4), ratio: +ratio.toFixed(3), voice, zero };
+    };
+    // Review F1: the hard-limited default. The fade's end is the voice's end after the let-go.
+    const limitedLeg = async () => {
+      const t0 = await page.evaluate(() => {
+        const a = window.OSCILLA.app;
+        a.source = 'single';
+        a.setPattern('tone');
+        a.setWaveform('sine');
+        a.setFrequency(440);
+        a.holding = true;
+        a.play('hold');
+        const v = window.OSCILLA.engine.voice;
+        return v ? v.t0 : null;
+      });
+      const name = 'Settings, 2 s limit';
+      const held = await rmsAfter(t0 + 0.1, `release-edit-while-held: ${name} held level`);
+      const limitEnd = await page.evaluate(() => window.OSCILLA.engine.voice?.endTime ?? null);
+      await setSettings(2000);
+      const off = await page.evaluate(() => {
+        const e = window.OSCILLA.engine;
+        const v = e.voice;
+        window.OSCILLA.app.releaseHold();
+        return { t: e.ctx.currentTime, releasing: !!(v && v.releasing),
+          end: v ? v.endTime : null, limited: !!(v && v.limited), noteOff: v ? v.noteOff : null,
+          status: window.OSCILLA.app.status }; // the engine's release event is synchronous
+      });
+      const room = off.end != null ? off.end - off.t : 0;
+      const mid = room > 0.2 ? await rmsAfter(off.t + room / 2,
+        `release-edit-while-held: ${name} halfway through the fade`) : null;
+      await page.evaluate(() => window.OSCILLA.app.stopNow());
+      const zero = await until(async () => await H.nodes(page) === 0,
+        { ms: 5000, what: `release-edit-while-held: ${name} nodes freed` }).catch(() => false);
+      const ratio = held > 0 && mid != null ? mid / held : null;
+      return { ok: held > 0.01 && off.limited && off.releasing && off.status === 'RELEASING'
+        && off.end <= limitEnd && ratio != null && ratio > 0.2 && ratio < 0.8 && zero,
+      held: +held.toFixed(4), ratio: ratio == null ? null : +ratio.toFixed(3),
+      room: +room.toFixed(3), limitEnd, off, zero };
+    };
+    const res = {};
+    try {
+      await setLab(false);
+      await setSettings(30);
+      res.settings = await leg('Settings', () => setSettings(2000));
+      await setLab(true);
+      await setLabRelease('30 ms', 0.03);
+      res.lab = await leg('Envelope lab', () => setLabRelease('2 s', 2));
+      await setLab(false);
+      await setSettings(30);
+      await H.continuous(page, false);
+      res.limited = await limitedLeg();
+    } finally {
+      await page.evaluate(() => window.OSCILLA.app.stopNow());
+      await H.continuous(page, true).catch(() => {});
+      await setLabRelease(`${Math.round(initial.labR * 1000)} ms`, initial.labR).catch(() => {});
+      await setLab(initial.labOn).catch(() => {});
+      await setSettings(initial.release).catch(() => {});
+    }
+    return { ok: res.settings.ok && res.lab.ok && res.limited.ok, ...res };
+  });
+
   def('frequency-slider-and-fine-steps', async ({ page }) => {
     await H.continuous(page, true);
     await H.focusBody(page);
     await page.keyboard.down(' ');
-    await sleep(200);
-    await page.locator('#osc-freq-slider').fill('700');
-    await sleep(250);
-    const s1 = await page.evaluate(() => ({ app: window.OSCILLA.app.frequency,
-      eng: window.OSCILLA.engine.voice?.carrier?.frequency.value }));
-    await page.click('#osc-step-oct-up');
-    await sleep(250);
-    const s2 = await page.evaluate(() => ({ app: window.OSCILLA.app.frequency,
-      eng: window.OSCILLA.engine.voice?.carrier?.frequency.value }));
-    await page.click('#osc-step-10-down');
-    await page.click('#osc-step-st-up');
-    await sleep(250);
-    const s3 = await page.evaluate(() => ({ app: window.OSCILLA.app.frequency,
+    // The held Space starts the engine voice; wait for it rather than for a fixed time.
+    await U.poll(() => page.evaluate(() => !!window.OSCILLA.engine.voice?.carrier),
+      (v) => v, 'held Space starts the engine voice');
+    const read = () => page.evaluate(() => ({ app: window.OSCILLA.app.frequency,
       eng: window.OSCILLA.engine.voice?.carrier?.frequency.value,
       readout: document.querySelector('#osc-freq-value').textContent }));
-    const fft = await H.peakHz(page);
+    const sounding = (v) => Number.isFinite(v.eng) && Math.abs(v.eng - v.app) <= 0.01 * v.app;
+    await page.locator('#osc-freq-slider').fill('700');
+    const s1 = await U.poll(read, (v) => v.app !== 440 && sounding(v),
+      'slider reaches the voice');
+    await page.click('#osc-step-oct-up');
+    const s2 = await U.poll(read, (v) => v.app !== s1.app && sounding(v),
+      'octave step reaches the voice');
+    await page.click('#osc-step-10-down');
+    await page.click('#osc-step-st-up');
+    const expectS3 = (s2.app - 10) * 2 ** (1 / 12);
+    const s3 = await U.poll(read, (v) => Math.abs(v.app - expectS3) <= 0.01 * expectS3
+      && sounding(v), 'fine steps reach the voice');
+    // The analyser's peak follows the voice a few blocks later; poll it, never a fixed wait.
+    const fft = await U.poll(() => H.peakHz(page),
+      (f) => Math.abs(f.hz - s3.app) <= 0.02 * s3.app, 'the analyser peak follows the voice');
     await page.keyboard.up(' ');
     await H.waitNodes0(page);
     const expect3 = (s2.app - 10) * 2 ** (1 / 12);
@@ -1301,6 +1708,78 @@ function defineChecks() {
     await page.click('#osc-source-osc');
     return { ok, fields, instA: a && +a.toFixed(1), instB: b && +b.toFixed(1), fftA: fa.hz,
       fftB: fb.hz, status, zeroAfter: zero };
+  });
+
+  // T003 (truth-table GEN-04): a clamped or unparsable sweep value shows its error on the field,
+  // tied to the input, at desktop size and at 390x844; a limit from the provisional rate says so.
+  def('sweep-field-errors-inline', async ({ page }) => {
+    const END = '#sw-end';
+    const view = () => page.evaluate(() => {
+      const input = document.querySelector('#sw-end');
+      const alert = document.querySelector('#sw-end-error');
+      const box = alert ? alert.getBoundingClientRect() : null;
+      return {
+        value: input ? input.value : null,
+        invalid: input ? input.getAttribute('aria-invalid') : null,
+        describedBy: input ? input.getAttribute('aria-describedby') : null,
+        text: alert ? alert.textContent.trim() : null,
+        role: alert ? alert.getAttribute('role') : null,
+        inParams: !!(alert && alert.closest('#osc-pattern-params')),
+        shown: !!(box && box.width > 0 && box.height > 0),
+        inside: !!(box && box.left >= 0 && box.right <= window.innerWidth + 0.5),
+        scroll: document.documentElement.scrollWidth > window.innerWidth,
+        provisional: window.OSCILLA.app.provisional,
+      };
+    });
+    const type = async (sel, text) => {
+      await page.fill(sel, text);
+      await page.press(sel, 'Enter');
+    };
+    const seen = (w, h, what, pred) => until(async () => {
+      const v = await view();
+      return pred(v) ? v : null;
+    }, { ms: 5000, what: `sweep-field-errors-inline ${w}x${h}: ${what}` });
+    const res = {};
+    await page.click('#osc-source-pattern');
+    await page.evaluate(() => { window.OSCILLA.app.source = 'sweep'; });
+    await page.waitForSelector(END, { state: 'visible', timeout: 8000 });
+    for (const [w, h] of [[1536, 1024], [390, 844]]) {
+      await page.setViewportSize({ width: w, height: h });
+      await type(END, '30000');
+      const over = await seen(w, h, 'the End error is shown', (v) => v.shown && !!v.text);
+      await type(END, '10000');
+      const fine = await seen(w, h, 'the End error clears', (v) => !v.shown
+        && v.invalid === 'false');
+      await type(END, 'abc');
+      const parse = await seen(w, h, 'the parse error is shown', (v) => v.shown
+        && /is not a frequency/.test(v.text));
+      await type(END, '10000');
+      await seen(w, h, 'the parse error clears', (v) => !v.shown);
+      res[`${w}x${h}`] = { over, fine, parse };
+    }
+    // A sweep value a preset or link applies replaces the typed one: its error goes with it.
+    await type(END, '30000');
+    await seen(390, 844, 'the End error is shown before the preset', (v) => v.shown);
+    await page.evaluate(() => window.OSCILLA.app.applyConfig({ v: 1, source: 'sweep',
+      sweep: { end: 10000 } }, 'preset'));
+    const preset = await seen(390, 844, 'a preset clears the End error', (v) => !v.shown
+      && v.value === '10.00 kHz');
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    await page.evaluate(() => { window.OSCILLA.app.source = 'single'; });
+    await page.selectOption('#osc-pattern-select', 'tone');
+    await page.click('#osc-source-osc');
+    // The clamped value is the limit the message names, and "provisional" appears exactly
+    // while no AudioContext has given the real rate.
+    const good = ({ over, fine, parse }) => over.role === 'alert' && over.inParams
+      && over.inside && !over.scroll && over.invalid === 'true'
+      && over.describedBy === 'sw-end-error' && /kHz$/.test(over.value)
+      && over.text.includes(`digital limit ${over.value}`)
+      && /provisional/.test(over.text) === over.provisional
+      && fine.value === '10.00 kHz' && fine.describedBy === null
+      && parse.invalid === 'true' && parse.inside;
+    const bad = Object.entries(res).filter(([, r]) => !good(r));
+    const cleared = preset.invalid === 'false' && preset.describedBy === null;
+    return { ok: !bad.length && cleared, res, preset };
   });
 
   def('presets-save-load', async ({ page }) => {
@@ -1371,8 +1850,12 @@ function defineChecks() {
       a.setWaveform('square');
       a.dual.a.freq = 300;
     });
+    // Filter Lab is pressed in its own workspace: from 1280 px the Playground leaves it there
+    // (P002, Q004 option A). The export and the import run from the Playground, as before.
+    await H.workspace(page, 'filter');
     await page.click('#osc-ftype-highpass');
     await page.click('#osc-filter-enable');
+    await H.workspace(page, 'playground');
     await page.click('#osc-export');
     const [dl] = await Promise.all([
       page.waitForEvent('download', { timeout: 10000 }),
@@ -1388,8 +1871,10 @@ function defineChecks() {
       a.setWaveform('sine');
       a.dual.a.freq = 999;
     });
+    await H.workspace(page, 'filter');
     await page.click('#osc-ftype-lowpass');
     await page.click('#osc-filter-enable');
+    await H.workspace(page, 'playground');
     await page.setInputFiles('#osc-import-file', { name: 'cfg.json', mimeType: 'application/json',
       buffer: Buffer.from(text) });
     await sleep(400);
@@ -1403,12 +1888,58 @@ function defineChecks() {
     const missing = keys.filter((k) => !(k in doc));
     // reset
     await page.evaluate(() => { window.OSCILLA.app.setFrequency(440); window.OSCILLA.app.setWaveform('sine'); });
+    await H.workspace(page, 'filter');
     await page.click('#osc-ftype-lowpass');
     if (after.filter.enabled) await page.click('#osc-filter-enable');
+    await H.workspace(page, 'playground');
     const ok = !missing.length && doc.version === 1 && Math.abs(after.f - 3210) < 0.01
       && after.w === 'square' && Math.abs(after.dualA - 300) < 0.01
       && after.filter.type === 'highpass' && after.filter.enabled === true && bad === false;
     return { ok, missing, file: path.basename(dl.suggestedFilename()), after, rejectsBadVersion: !bad };
+  });
+
+  // C017 (finding persist-4): the parser accepts filter Q 50 and attack 10 s, the labs clamp
+  // them. The import names each limited value instead of "All settings were restored.", and
+  // keeps them apart from the invalid ones. The filter's top (20 kHz here) holds at 44.1 and
+  // 48 kHz alike: min(20000, sampleRate * 0.475).
+  def('import-names-limits', async ({ page }) => {
+    const got = await page.evaluate(() => {
+      const O = window.OSCILLA;
+      const a = O.app;
+      const before = { filter: O.labs.filter.config, adsr: O.labs.envelope.adsr,
+        envEnabled: O.labs.envelope.enabled };
+      a.alerts = [];
+      const doc = { version: 1,
+        filter: { enabled: before.filter.enabled, type: before.filter.type, frequency: 21000,
+          Q: 50, gain: 0 },
+        envelope: { adsr: { enabled: before.envEnabled, a: 10, d: 0.1, s: 0.5, r: 20 } } };
+      const applied = a.importConfigText(JSON.stringify(doc));
+      const after = { filter: O.labs.filter.config, adsr: O.labs.envelope.adsr };
+      const toast = a.alerts.find((t) => t.title === 'Config imported') || null;
+      // sane values back, then the previous state, so the next check starts where it was
+      a.alerts = [];
+      const clean = a.importConfigText(JSON.stringify({ version: 1,
+        filter: { enabled: before.filter.enabled, type: before.filter.type, frequency: 1000,
+          Q: 1, gain: 0 },
+        envelope: { adsr: { enabled: before.envEnabled, a: 0.01, d: 0.1, s: 0.5, r: 0.2 } } }));
+      const cleanToast = a.alerts.find((t) => t.title === 'Config imported') || null;
+      O.labs.filter.update(before.filter);
+      O.labs.envelope.update({ adsr: before.adsr });
+      a.alerts = [];
+      return { applied, after, toast, clean, cleanToast };
+    });
+    const msg = (got.toast && got.toast.message) || '';
+    const named = ['filter frequency limited to 20000 Hz (file: 21000 Hz)',
+      'filter Q limited to 30 (file: 50)', 'envelope attack limited to 2 s (file: 10 s)',
+      'envelope release limited to 5 s (file: 20 s)'];
+    const missing = named.filter((n) => !msg.includes(n));
+    const ok = got.applied === true && got.toast && got.toast.level === 'warning'
+      && !missing.length && !/invalid/.test(msg) && !/All settings were restored/.test(msg)
+      && got.after.filter.Q === 30 && got.after.filter.frequency === 20000
+      && got.after.adsr.a === 2 && got.after.adsr.r === 5
+      && got.clean === true && got.cleanToast && got.cleanToast.level === 'success'
+      && got.cleanToast.message === 'All settings were restored.';
+    return { ok, missing, toast: got.toast, after: got.after, cleanToast: got.cleanToast };
   });
 
   // H002: a continuous sweep saved as a preset, a History entry, a config file and a link
@@ -1563,6 +2094,96 @@ function defineChecks() {
     return { ok, tone: wav, sequence: seq, names: [dl.suggestedFilename(), dl2.suggestedFilename()] };
   });
 
+  // C004 (findings dup-stale-3, persist-6): the instrument owns the sequence waveform. A file
+  // whose instrument waveform is the current one (sine) and whose sequencer.waveform is square
+  // fires no instrument change, yet every answer must still be sine: the realtime sequence's
+  // oscillators, the sequence WAV (Goertzel h2 and h3 below -60 dB of the fundamental), the
+  // status readout and the derived waveform the sequence writes back. The import says that the
+  // file's square was not applied instead of "All settings were restored."
+  def('seq-waveform-one-owner', async ({ page }) => {
+    const what = (s) => `seq-waveform-one-owner: ${s}`;
+    await page.mouse.click(2, 2); // a gesture builds and resumes the context (WebKit)
+    await page.evaluate(() => {
+      window.OSCILLA.app.ensureAudio();
+      return window.OSCILLA.engine.resume();
+    });
+    await until(() => page.evaluate(() => window.OSCILLA.engine.state === 'running'),
+      { ms: 10000, what: what('the AudioContext runs') });
+    const saved = await page.evaluate(() => {
+      const O = window.OSCILLA;
+      O.app.setWaveform('sine');
+      // Record every OscillatorNode type the page sets, realtime and offline.
+      const d = Object.getOwnPropertyDescriptor(OscillatorNode.prototype, 'type');
+      window.__c004 = { d, types: [] };
+      Object.defineProperty(OscillatorNode.prototype, 'type', {
+        configurable: true,
+        get() { return d.get.call(this); },
+        set(v) {
+          const offline = typeof this.context.startRendering === 'function';
+          window.__c004.types.push({ v, offline });
+          d.set.call(this, v);
+        },
+      });
+      return O.labs.sequencer.editor.serialize();
+    });
+    try {
+      await until(() => page.evaluate(() => window.OSCILLA.labs.sequencer.editor.model.waveform
+        === 'sine'), { ms: 5000, what: what('the sequence follows the instrument (sine)') });
+      const doc = await page.evaluate(() => window.OSCILLA.app.exportConfig());
+      doc.waveform = 'sine';
+      doc.sequencer = { ...doc.sequencer, waveform: 'square', loop: false,
+        blocks: [{ id: 'b1', type: 'tone', durationMs: 600, params: { freq: 440 } }] };
+      await page.setInputFiles('#osc-import-file', { name: 'cfg.json',
+        mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(doc)) });
+      const message = await until(() => page.evaluate(() => {
+        const a = window.OSCILLA.app.alerts.find((x) => x.title === 'Config imported');
+        return a ? a.message : '';
+      }), { ms: 8000, what: what('the import is reported') });
+      await H.navTo(page, 'sequencer');
+      await until(() => page.evaluate(() => document.querySelector('#osc-app').dataset.mode
+        === 'sequencer'), { ms: 8000, what: what('the Sequencer workspace opens') });
+      await page.evaluate(() => { window.__c004.types.length = 0; });
+      await page.click('#osc-seq-play');
+      const live = await until(() => page.evaluate(() => {
+        const O = window.OSCILLA;
+        const realtime = window.__c004.types.filter((t) => !t.offline).map((t) => t.v);
+        if (!O.app.seqPlaying || !realtime.length) return null;
+        return { realtime, status: document.querySelector('[data-osc="status.waveform"]')
+          .textContent.trim(), model: O.labs.sequencer.editor.model.waveform,
+        written: O.labs.sequencer.editor.serialize().waveform };
+      }), { ms: 8000, what: what('the sequence plays') });
+      await page.click('#osc-seq-stop');
+      await until(() => page.evaluate(() => !window.OSCILLA.labs.sequencer.editor.playing),
+        { ms: 8000, what: what('the sequence stops') });
+      await page.evaluate(() => { window.__c004.types.length = 0; });
+      await page.click('#osc-export');
+      const [dl] = await Promise.all([
+        page.waitForEvent('download', { timeout: 20000 }),
+        page.click('[data-osc="export.seqWav"]'),
+      ]);
+      const buf = fs.readFileSync(await dl.path());
+      const offline = await page.evaluate(() => window.__c004.types.filter((t) => t.offline)
+        .map((t) => t.v));
+      const wav = parseWavHeader(buf);
+      const harm = wav.ok ? toneHarmonicsDb(buf, 440) : null;
+      const ok = live.realtime.every((v) => v === 'sine') && live.status === 'Sine'
+        && live.model === 'sine' && live.written === 'sine'
+        && offline.length > 0 && offline.every((v) => v === 'sine')
+        && !!harm && harm.h2 < -60 && harm.h3 < -60
+        && /follows the instrument waveform \(sine\); the file's square was not applied/
+          .test(message);
+      return { ok, message, live: { ...live, realtime: [...new Set(live.realtime)] },
+        offline: [...new Set(offline)], harm };
+    } finally {
+      await page.evaluate((seq) => {
+        const w = window.__c004;
+        if (w) Object.defineProperty(OscillatorNode.prototype, 'type', w.d);
+        delete window.__c004;
+        window.OSCILLA.labs.sequencer.update({ sequence: seq });
+      }, saved);
+    }
+  });
+
   def('nav-workspaces-switch', async ({ page }) => {
     const expect = {
       sequencer: ['#osc-panel-sequencer'], analyzer: ['#osc-panel-mic', '#osc-panel-spectrogram'],
@@ -1592,8 +2213,9 @@ function defineChecks() {
   // (page) and its group (true), Escape and a click outside close a group, focus never drops,
   // and the dropdown stays inside the viewport at desktop and phone widths.
   def('nav-groups-keyboard', async ({ page, browserName }) => {
-    const TOP = ['nav.playground', 'nav.measure', 'nav.experiments', 'nav-group.analyze',
-      'nav-group.synthesis', 'nav.learn', 'nav.studio', 'nav.about'];
+    // The navigation's own order (ui/app.js navTopLevel; Synth after Studio, Q019).
+    const TOP = (await import(pathToFileURL(path.join(__dirname, '..', '..', 'src', 'js', 'ui',
+        'app.js')).href)).navTopLevel();
     const GROUPS = { analyze: ['analyzer', 'filter', 'compare'],
       synthesis: ['synthesis', 'sequencer', 'presets'] };
     const state = () => page.evaluate(() => {
@@ -1776,6 +2398,102 @@ function defineChecks() {
     return { ok, res, timeWindow: tw, fullscreenOn: fs1, fullscreenOff: !fs2 };
   });
 
+  // C014 (finding vis-divergence-2): the Analyzer spectrogram writes nothing for a paused or
+  // hidden interval. A 1 kHz tone sounds through GAP_S seconds of the audio clock while the
+  // frame loop is paused (leg pause: the Pause animation button) or the document reads hidden
+  // (leg hidden: the document.hidden getter the frame loop reads, without the visibilitychange
+  // event that would release the voice). After the resume, the tone may cover only the time
+  // since the resume; before the fix the first frame painted the whole gap with one spectrum.
+  def('spectrogram-no-backfill', async ({ page }) => {
+    const TONE_HZ = 1000;
+    const GAP_S = 3;
+    // The checks after this one expect the workspace it started in.
+    const startMode = await page.evaluate(() => document.querySelector('#osc-app').dataset.mode);
+    await H.navTo(page, 'analyzer');
+    await page.waitForFunction(() => document.querySelector('#osc-app').dataset.mode
+      === 'analyzer', null, { timeout: 8000 });
+    await page.evaluate(() => window.OSCILLA.app.ensureAudio());
+    await until(() => page.evaluate(() => {
+      const v = window.OSCILLA.labs.spectrogram.view;
+      return !!(v && v.spectrogram && v.spectrogram.rowMap && v.plotCanvas.width > 1);
+    }), { ms: 10000, what: 'spectrogram-no-backfill: the Analyzer spectrogram has its axis' });
+    const readRow = () => page.evaluate((f) => {
+      const v = window.OSCILLA.labs.spectrogram.view;
+      const spg = v.spectrogram;
+      const c = v.plotCanvas;
+      const y = Math.round(spg.yForFrequency(f));
+      const row = c.getContext('2d').getImageData(0, y, c.width, 1).data;
+      const lut = spg.lut;
+      let bright = 0;
+      for (let x = 0; x < c.width; x++) {
+        const d = Math.abs(row[x * 4] - lut[0]) + Math.abs(row[x * 4 + 1] - lut[1])
+          + Math.abs(row[x * 4 + 2] - lut[2]);
+        if (d > 60) bright++;
+      }
+      return { width: c.width, spanS: spg.options.timeSpanS, bright };
+    }, TONE_HZ);
+    const leg = async (name, enter, leave) => {
+      await page.evaluate((f) => {
+        window.OSCILLA.labs.spectrogram.view.spectrogram.clear();
+        const a = window.OSCILLA.app;
+        a.setContinuous(true);
+        a.setWaveform('sine');
+        a.setFrequency(f);
+        if (!a.playing) a.toggleLatch();
+      }, TONE_HZ);
+      // The renderer is running (its clock is set) when the tone is already on the canvas.
+      await until(async () => (await readRow()).bright > 0,
+        { ms: 10000, what: `spectrogram-no-backfill ${name}: the tone is painted before` });
+      await enter();
+      const before = await readRow();
+      const t0 = await page.evaluate(() => window.OSCILLA.engine.ctx.currentTime);
+      // The gap is GAP_S seconds of the audio clock with the tone at the analyser.
+      await until(() => page.evaluate(({ f, end }) => {
+        const e = window.OSCILLA.engine;
+        if (!e.analyser || e.ctx.currentTime < end) return false;
+        const d = new Float32Array(e.analyser.frequencyBinCount);
+        e.analyser.getFloatFrequencyData(d);
+        let k = 1;
+        for (let i = 2; i < d.length; i++) if (d[i] > d[k]) k = i;
+        const hz = (k * e.ctx.sampleRate) / e.analyser.fftSize;
+        return Math.abs(hz - f) < 20 && d[k] > -80;
+      }, { f: TONE_HZ, end: t0 + GAP_S }), { ms: GAP_S * 1000 + 15000,
+        what: `spectrogram-no-backfill ${name}: ${GAP_S} s of the audio clock with the tone` });
+      const still = await readRow();
+      const tResume = Date.now();
+      await leave();
+      const after = await until(async () => {
+        const r = await readRow();
+        return r.bright > before.bright ? { ...r, tRead: Date.now() } : null;
+      }, { ms: 10000, what: `spectrogram-no-backfill ${name}: the tone is painted after resume` });
+      const perS = after.width / after.spanS;
+      const honestMax = Math.ceil(((after.tRead - tResume) / 1000 + 0.3) * perS);
+      const gapColumns = Math.floor(GAP_S * perS);
+      const added = after.bright - before.bright;
+      return { before: before.bright, duringGap: still.bright - before.bright, added, honestMax,
+        gapColumns, width: after.width,
+        ok: still.bright === before.bright && added <= honestMax && honestMax < gapColumns };
+    };
+    const res = {};
+    res.pause = await leg('pause', () => page.click('#osc-viz-pause'),
+      () => page.click('#osc-viz-pause'));
+    const setHidden = (on) => page.evaluate((h) => {
+      if (h) Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+      else delete document.hidden;
+    }, on);
+    try {
+      res.hidden = await leg('hidden', () => setHidden(true), () => setHidden(false));
+    } finally {
+      await setHidden(false);
+    }
+    const paused = await page.evaluate(() => window.OSCILLA.app.vizPaused);
+    await H.stopAll(page);
+    await H.navTo(page, startMode);
+    await page.waitForFunction((w) => document.querySelector('#osc-app').dataset.mode === w,
+      startMode, { timeout: 8000 });
+    return { ok: res.pause.ok && res.hidden.ok && paused === false, paused, startMode, ...res };
+  });
+
   def('labs-basic', async ({ page }) => {
     await H.continuous(page, true);
     const out = {};
@@ -1816,7 +2534,9 @@ function defineChecks() {
     out.adsrPeak = await held((p) => Math.abs(p - gain * 0.5) < 0.012,
       'labs-basic: the held note settles at the typed sustain of 0.5');
     await page.click('#osc-env-enable');
-    // additive: enabled -> PeriodicWave on the carrier
+    // additive: enabled -> PeriodicWave on the carrier. Additive Synthesis is pressed in
+    // Synthesis: from 1280 px the Playground leaves it there (P002, Q004 option A).
+    await H.workspace(page, 'synthesis');
     await page.click('#osc-add-enable');
     await H.spaceDown(page);
     out.additiveCarrier = await U.poll(() => page.evaluate(() => window.OSCILLA.engine.voice
@@ -1825,6 +2545,7 @@ function defineChecks() {
     await page.keyboard.up(' ');
     await H.waitNodes0(page);
     await page.click('#osc-add-enable');
+    await H.workspace(page, 'playground');
     // sequencer: play / stop
     await H.workspace(page, 'sequencer');
     await page.click('#osc-seq-play');
@@ -2446,6 +3167,795 @@ function defineChecks() {
     return { ok: true, ...out };
   });
 
+  // K001 and K003 on the composed page, through main.js's wiring rather than the editor alone:
+  // the V2 sequencer plays inside the engine's node accounting (engine.activeNodeCount rises
+  // while it plays, with no instrument voice, and is 0 after STOP); the waveform the Sequencer
+  // follows from the instrument is no undo step and survives an undo; undo and redo of a tempo
+  // change move the Tempo select with the sequence.
+  def('sequencer-engine-census-and-history', async ({ page }) => {
+    await H.stopAll(page);
+    const inMode = (w) => until(() => page.evaluate((x) =>
+      document.querySelector('#osc-app').dataset.mode === x, w),
+    { ms: 8000, what: `the ${w} workspace is shown` });
+    const read = () => page.evaluate(() => {
+      const e = window.OSCILLA.engine;
+      const ed = window.OSCILLA.labs.sequencer.editor;
+      return { playing: ed.playing, seqNodes: ed.stats().activeNodeCount,
+        nodes: e.activeNodeCount, sources: e.activeSourceCount, voice: !!e.voice,
+        tempo: ed.model.tempoBpm, select: document.querySelector('#osc-seq-tempo').value,
+        waveform: ed.model.waveform, appWaveform: window.OSCILLA.app.waveform,
+        depth: ed.historyDepth };
+    });
+    const when = (test, what, ms = 10000) => until(async () => {
+      const v = await read();
+      return test(v) ? v : null;
+    }, { ms, what });
+    const out = {};
+    await H.navTo(page, 'sequencer');
+    await inMode('sequencer');
+    out.idle = await when((v) => !v.playing && v.nodes === 0 && v.sources === 0,
+      'the engine is idle before the sequencer census');
+    // Looped, so the sequence is still sounding whenever the poll first reads it.
+    await page.evaluate(() => window.OSCILLA.labs.sequencer.editor.setLoop(true));
+    await page.click('#osc-seq-play');
+    out.playing = await when((v) => v.playing && v.seqNodes > 0 && !v.voice && v.nodes > 0
+      && v.sources > 0, 'the engine counts the nodes of the playing sequence');
+    await page.click('#osc-seq-stop');
+    out.stopped = await when((v) => !v.playing && v.nodes === 0 && v.sources === 0,
+      'the engine count is 0 after the sequencer STOP');
+    await page.evaluate(() => window.OSCILLA.labs.sequencer.editor.setLoop(false));
+    // The instrument's waveform, mirrored into the Sequencer: no undo step.
+    const w0 = out.stopped.appWaveform;
+    const w1 = w0 === 'square' ? 'triangle' : 'square';
+    const depth0 = (await read()).depth;
+    await page.evaluate((w) => window.OSCILLA.app.setWaveform(w), w1);
+    out.mirrored = await when((v) => v.waveform === w1, 'the Sequencer follows the waveform');
+    await page.selectOption('#osc-seq-tempo', '60');
+    out.tempo60 = await when((v) => v.tempo === 60 && v.select === '60', 'tempo 60 applied');
+    await page.focus('#osc-seq-timeline');
+    await page.keyboard.press('Control+z');
+    out.undone = await when((v) => v.tempo !== 60, 'Ctrl+Z undoes the tempo change');
+    await page.keyboard.press('Shift+Control+z');
+    out.redone = await when((v) => v.tempo === 60, 'Shift+Ctrl+Z redoes the tempo change');
+    await page.keyboard.press('Control+z');
+    out.back = await when((v) => v.tempo !== 60, 'Ctrl+Z undoes the tempo change again');
+    await page.evaluate((w) => window.OSCILLA.app.setWaveform(w), w0);
+    await H.navTo(page, 'playground');
+    await inMode('playground');
+    const tempo0 = out.idle.tempo;
+    const ok = out.idle.nodes === 0 && out.playing.nodes > 0 && out.stopped.nodes === 0
+      && out.stopped.sources === 0 && out.mirrored.depth === depth0
+      && out.undone.tempo === tempo0 && out.undone.select === String(tempo0)
+      && out.undone.waveform === w1 && out.undone.appWaveform === w1
+      && out.redone.select === '60' && out.back.select === String(tempo0);
+    return { ok, ...out };
+  });
+
+  // ---- C001: every stop path reads the sequencer's live state, not the 150 ms seqPlaying copy.
+  // In-page probe: start the looped sequence and fire `how` in the SAME task, so the poll that
+  // copies editor.playing into app.seqPlaying cannot have run (the window a fast Escape or a
+  // backgrounded tab falls into). Returns the state read straight after the event.
+  const seqPollWindow = (page, how) => page.evaluate((h) => {
+    const a = window.OSCILLA.app;
+    const ed = window.OSCILLA.labs.sequencer.editor;
+    const played = ed.play();
+    const at = { mirror: a.seqPlaying, editor: ed.playing };
+    if (h === 'escape') {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    } else if (h === 'pagehide') {
+      window.dispatchEvent(new Event('pagehide'));
+    } else if (h === 'visibilitychange') {
+      // A hidden document without hiding the test's page: shadow the getter for one dispatch.
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+      try {
+        document.dispatchEvent(new Event('visibilitychange'));
+      } finally {
+        delete document.hidden;
+      }
+    } else if (h === 'status-key') {
+      document.querySelector('#osc-sb-play').click();
+    }
+    const after = { editor: ed.playing, mirror: a.seqPlaying, instrument: a.playing,
+      voice: !!(window.OSCILLA.engine.voice && !window.OSCILLA.engine.voice.ended) };
+    return { played, at, after };
+  }, how);
+  // The stopped sequence's voices drain (they fade, then release every node) and it stays off.
+  const seqDrained = (page, what) => until(() => page.evaluate(() => {
+    const ed = window.OSCILLA.labs.sequencer.editor;
+    const st = ed.stats();
+    return !ed.playing && !window.OSCILLA.app.seqPlaying && st.activeSourceCount === 0
+      && st.activeNodeCount === 0 ? st : null;
+  }), { ms: 6000, what });
+  // The probes loop the sequence (so a missed stop keeps sounding) on a running context.
+  const seqReady = async (page) => {
+    await page.evaluate(() => window.OSCILLA.app.setWorkspace('sequencer'));
+    await page.waitForSelector('#osc-seq-play', { state: 'visible', timeout: 8000 });
+    await page.evaluate(() => window.OSCILLA.app.ensureAudio());
+    await until(() => page.evaluate(() => {
+      const ctx = window.OSCILLA.engine.ctx;
+      return !!ctx && ctx.state === 'running';
+    }), { ms: 8000, what: 'the audio context runs before the sequence probes' });
+    await page.evaluate(() => window.OSCILLA.labs.sequencer.editor.setLoop(true));
+  };
+  const seqDone = (page) => page.evaluate(() => {
+    window.OSCILLA.labs.sequencer.editor.setLoop(false);
+    window.OSCILLA.app.setWorkspace('playground');
+  });
+
+  def('seq-stop-in-poll-window', async ({ page }) => {
+    const res = {};
+    try {
+      await seqReady(page);
+      for (const how of ['escape', 'pagehide', 'visibilitychange']) {
+        const r = await seqPollWindow(page, how);
+        res[how] = r;
+        r.drained = await seqDrained(page, `${how} in the poll window: the sequence drains`);
+      }
+    } finally {
+      await seqDone(page);
+    }
+    // Since C002 (#305) the sequencer's claim sets the seqPlaying mirror in the play itself, so
+    // the 150 ms lag C001 probed may be gone (r.at.mirror true); what C001 requires stays: every
+    // stop path stops the playing editor and leaves the mirror off.
+    const ok = Object.values(res).every((r) => r.played && r.at.editor
+      && !r.after.editor && !r.after.mirror && !!r.drained);
+    return { ok, ...res };
+  });
+
+  // The status-bar transport key (shown below 768 px) reads "Stop playback" while the sequence
+  // plays: one press (click or Enter) stops it and starts no instrument voice. Pressed inside
+  // the poll window it still stops the sequence (the live state); its label returns to Play.
+  def('status-key-stops-only', async ({ page }) => {
+    const res = {};
+    const st = () => page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      const e = window.OSCILLA.engine;
+      return { editor: window.OSCILLA.labs.sequencer.editor.playing, mirror: a.seqPlaying,
+        instrument: a.playing, voice: !!(e.voice && !e.voice.ended), nodes: e.activeNodeCount,
+        label: document.querySelector('#osc-sb-play').getAttribute('aria-label') };
+    });
+    const quiet = (what) => until(async () => {
+      const s = await st();
+      return !s.editor && !s.mirror && !s.instrument && !s.voice && s.nodes === 0
+        && s.label !== 'Stop playback' ? s : null;
+    }, { ms: 6000, what });
+    await page.setViewportSize({ width: 390, height: 844 });
+    try {
+      await seqReady(page);
+      await page.waitForSelector('#osc-sb-play', { state: 'visible', timeout: 8000 });
+      for (const how of ['click', 'enter']) {
+        await page.click('#osc-seq-play');
+        const before = await until(async () => {
+          const s = await st();
+          return s.label === 'Stop playback' && s.editor ? s : null;
+        }, { ms: 6000, what: `status key (${how}) reads Stop playback while the sequence plays` });
+        res[how] = { before };
+        if (how === 'click') {
+          await page.click('#osc-sb-play');
+        } else {
+          await page.focus('#osc-sb-play');
+          await page.keyboard.press('Enter');
+        }
+        res[how].after = await st();
+        res[how].quiet = await quiet(`status key (${how}): nothing sounds after Stop playback`);
+      }
+      res.pollWindow = await seqPollWindow(page, 'status-key');
+      res.pollWindow.quiet = await quiet('status key in the poll window: nothing sounds');
+    } finally {
+      await page.setViewportSize({ width: 1536, height: 1024 });
+      await seqDone(page);
+    }
+    const pressed = (r) => r.before.label === 'Stop playback' && !r.after.editor
+      && !r.after.instrument && !r.after.voice && !!r.quiet;
+    const pw = res.pollWindow;
+    // pw.at.mirror may already be true: C002's claim sets the mirror in the play (see above).
+    const ok = pressed(res.click) && pressed(res.enter) && pw.played && pw.at.editor
+      && !pw.after.editor && !pw.after.instrument && !pw.after.voice && !!pw.quiet;
+    return { ok, ...res };
+  });
+
+  // ---- C007: the labs' play options are built in one place and the current lab state wins
+  // (src/js/audio/lab-play-options.js). Each check is a finding's reproduction (PACK 03
+  // engine-sync-1, -6, -7) and judges engine state the views also read, not a fixed delay.
+  const quiet = (page, what) => until(() => H.nodes(page).then((n) => n === 0),
+    { ms: 8000, what });
+  const newVoice = (page, id, what) => until(() => page.evaluate((old) => {
+    const e = window.OSCILLA.engine;
+    const v = e.voice;
+    return v && !v.ended && v.id !== old ? { id: v.id } : null;
+  }, id), { ms: 10000, what });
+
+  // engine-sync-1: a pattern change restarts the voice with a copy of its options; a lab
+  // switched off while it sounded must stay off on the restarted voice.
+  def('restart-follows-labs', async ({ page }) => {
+    // The Additive lab is the Synthesis workspace's (#278: the lighter Playground shows no lab).
+    await H.workspace(page, 'synthesis');
+    await H.continuous(page, true);
+    const res = {};
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.setWaveform('sine'); a.setPattern('tone'); a.setFrequency(440);
+    });
+    await page.click('#osc-add-enable');
+    await page.evaluate(() => { const a = window.OSCILLA.app; a.holding = true; a.play('hold'); });
+    const v1 = await newVoice(page, 0, 'restart-follows-labs: held tone with Additive');
+    res.withAdditive = await page.evaluate(() => window.OSCILLA.engine.voice.carrier.type);
+    await page.click('#osc-add-enable'); // Additive off while it sounds
+    await until(() => page.evaluate(() => {
+      const v = window.OSCILLA.engine.voice;
+      return v && !v.periodicWave && v.carrier.type === 'sine';
+    }), { ms: 5000, what: 'restart-follows-labs: Additive off reaches the sounding carrier' });
+    await page.evaluate(() => window.OSCILLA.app.setPattern('finite')); // a restart
+    const v2 = await newVoice(page, v1.id, 'restart-follows-labs: voice restarted (Additive)');
+    res.afterAdditive = await page.evaluate(() => {
+      const v = window.OSCILLA.engine.voice;
+      return { lab: window.OSCILLA.labs.additive.enabled, pw: !!v.periodicWave,
+        carrier: v.carrier.type };
+    });
+    await page.evaluate(() => window.OSCILLA.app.stopNow());
+    await quiet(page, 'restart-follows-labs: quiet after the Additive case');
+    await page.evaluate(() => {
+      window.OSCILLA.app.setPattern('tone');
+      window.OSCILLA.labs.envelope.update({ adsr: { a: 0.01, d: 0.1, s: 0.6, r: 0.3 },
+        enabled: true });
+      const a = window.OSCILLA.app; a.holding = true; a.play('hold');
+    });
+    const v3 = await newVoice(page, v2.id, 'restart-follows-labs: held tone with the Envelope');
+    res.withEnvelope = await page.evaluate(() => window.OSCILLA.engine.voice.adsr);
+    await page.evaluate(() => {
+      window.OSCILLA.labs.envelope.update({ enabled: false }); // Envelope off while it sounds
+      window.OSCILLA.app.setPattern('finite');
+    });
+    await newVoice(page, v3.id, 'restart-follows-labs: voice restarted (Envelope)');
+    res.afterEnvelope = await page.evaluate(() => {
+      const v = window.OSCILLA.engine.voice;
+      return { lab: window.OSCILLA.labs.envelope.enabled, adsr: v.adsr,
+        stepEnvelope: typeof v.opts.stepEnvelope, viz: window.OSCILLA.viz.labInputs(v.plan).adsr };
+    });
+    await page.evaluate(() => { window.OSCILLA.app.stopNow(); window.OSCILLA.app.setPattern('tone'); });
+    await quiet(page, 'restart-follows-labs: quiet at the end');
+    const ok = res.withAdditive === 'custom' && !res.afterAdditive.lab && !res.afterAdditive.pw
+      && res.afterAdditive.carrier === 'sine' && !!res.withEnvelope && !res.afterEnvelope.lab
+      && res.afterEnvelope.adsr === null && res.afterEnvelope.stepEnvelope !== 'function'
+      && res.afterEnvelope.viz === null;
+    await H.workspace(page, 'playground');
+    return { ok, ...res };
+  });
+
+  // engine-sync-6: Additive does not apply to a dual plan, live included: switching it on while
+  // a dual voice sounds leaves both oscillators as a fresh dual voice has them.
+  def('additive-skips-dual', async ({ page }) => {
+    // The Additive lab is the Synthesis workspace's (#278: the lighter Playground shows no lab).
+    await H.workspace(page, 'synthesis');
+    await H.continuous(page, true);
+    const res = {};
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.source = 'dual'; a.setStereo(false); a.setDualFreq('a', '300'); a.setDualFreq('b', '1111');
+      // an earlier check (ui-dual-phase-stereo-controls) leaves A square and B triangle
+      a.dual.a.wave = 'sine'; a.dual.b.wave = 'sine';
+      a.holding = true; a.play('hold');
+    });
+    await until(() => page.evaluate(() => {
+      const v = window.OSCILLA.engine.voice;
+      return !!(v && !v.ended && v.plan.type === 'dual');
+    }), { ms: 10000, what: 'additive-skips-dual: dual voice sounding' });
+    res.before = await page.evaluate(() => {
+      const v = window.OSCILLA.engine.voice;
+      return [v.live.A.osc.type, v.live.B.osc.type];
+    });
+    await page.click('#osc-add-enable'); // Additive on while the dual voice sounds
+    res.live = await until(() => page.evaluate(() => {
+      const O = window.OSCILLA;
+      const v = O.engine.voice;
+      if (!O.labs.additive.enabled || !v) return null;
+      return { types: [v.live.A.osc.type, v.live.B.osc.type], pw: !!v.periodicWave,
+        viz: O.viz.labInputs(v.plan).additive,
+        refused: O.engine.setPeriodicWave(O.labs.additive.periodicWave(O.engine.ctx)) === false };
+    }), { ms: 5000, what: 'additive-skips-dual: Additive on reached the lab' });
+    await page.evaluate(() => window.OSCILLA.app.stopNow());
+    await quiet(page, 'additive-skips-dual: quiet');
+    await page.click('#osc-add-enable');
+    await page.evaluate(() => { window.OSCILLA.app.source = 'single'; });
+    const ok = res.before.join() === 'sine,sine' && res.live.types.join() === 'sine,sine'
+      && !res.live.pw && res.live.viz === null && res.live.refused;
+    await H.workspace(page, 'playground');
+    return { ok, ...res };
+  });
+
+  // engine-sync-7: with the Envelope on, a finite tone and a steps pattern take the whole ADSR
+  // (decay and sustain included), as a held tone does, and the views say so.
+  def('adsr-reaches-programmed', async ({ page }) => {
+    await H.continuous(page, true);
+    const res = {};
+    const duration = await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      const was = a.duration;
+      a.setWaveform('sine'); a.setFrequency(440); a.duration = 5000; a.setPattern('finite');
+      return was;
+    });
+    const midNote = async (on, what) => {
+      await page.evaluate((env) => {
+        window.OSCILLA.labs.envelope.update({ adsr: { a: 0.01, d: 0.1, s: 0.1, r: 0.3 },
+          enabled: env });
+        window.OSCILLA.app.trigger();
+      }, on);
+      // the analyser reads the last ~40 ms: anywhere between 0.5 s and 4 s is mid-note
+      const got = await until(() => page.evaluate(() => {
+        const e = window.OSCILLA.engine;
+        const v = e.voice;
+        if (!v || v.ended) return null;
+        const t = e.ctx.currentTime - v.t0;
+        if (t < 0.5 || t > 4) return null;
+        const d = new Float32Array(e.analyser.fftSize);
+        e.analyser.getFloatTimeDomainData(d);
+        let pk = 0;
+        for (let i = 0; i < d.length; i++) pk = Math.max(pk, Math.abs(d[i]));
+        return { peak: pk, adsr: v.adsr, env: e._valueAt(v.env, e.ctx.currentTime),
+          viz: window.OSCILLA.viz.labInputs(v.plan).adsr };
+      }), { ms: 15000, what });
+      await page.evaluate(() => window.OSCILLA.app.stopNow());
+      await quiet(page, `${what}: quiet`);
+      return got;
+    };
+    res.off = await midNote(false, 'adsr-reaches-programmed: finite tone, Envelope off');
+    res.on = await midNote(true, 'adsr-reaches-programmed: finite tone, Envelope on');
+    res.ratio = res.off.peak > 0 ? res.on.peak / res.off.peak : null;
+    // steps: every step holds at the sustain after its attack and decay
+    res.steps = await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.setPattern('sequence');
+      a.trigger();
+      const e = window.OSCILLA.engine;
+      const v = e.voice;
+      const levels = v.plan.steps.filter((s) => s.dur > 0.24)
+        .map((s) => e._valueAt(v.env, v.t0 + s.t + 0.12));
+      return { type: v.plan.type, levels, viz: window.OSCILLA.viz.labInputs(v.plan).adsr };
+    });
+    await page.evaluate((was) => {
+      const a = window.OSCILLA.app;
+      a.stopNow(); a.duration = was; a.setPattern('tone');
+      window.OSCILLA.labs.envelope.update({ enabled: false });
+    }, duration);
+    await quiet(page, 'adsr-reaches-programmed: quiet at the end');
+    const near = (x, want) => Math.abs(x - want) < 0.01;
+    const ok = !res.off.adsr && near(res.off.env, 1) && !!res.on.adsr && near(res.on.env, 0.1)
+      && !!res.on.viz && res.ratio !== null && res.ratio < 0.2 && res.ratio > 0.05
+      && res.steps.type === 'steps' && res.steps.levels.length > 0
+      && res.steps.levels.every((l) => near(l, 0.1)) && !!res.steps.viz;
+    return { ok, ...res };
+  });
+
+  // #296 R-2: the Envelope lab has a live path. With no pattern change or new note, a held
+  // tone follows the panel: Sustain typed in its field (a click-free restart at the new level),
+  // Release alone (in place, the same voice), and the power switch (off: level 1, on: back).
+  // R-1: with the Envelope on, a continuous ping-pong sweep holds at the sustain too.
+  // Run at the desktop size and at 390x844, where the panel's controls are reached by scrolling.
+  const envelopeFollowsHeld = async (page) => {
+    await H.continuous(page, true);
+    await H.workspace(page, 'synthesis'); // the Envelope panel is on this workspace
+    const res = {};
+    // the voice's envelope level and the analyser's peak, once the note is past a + d
+    const held = (old, what, want) => until(() => page.evaluate(([prev, w]) => {
+      const O = window.OSCILLA;
+      const e = O.engine;
+      const v = e.voice;
+      if (!v || v.ended || v.releasing || (prev != null && v.id === prev)) return null;
+      if (e.ctx.currentTime - v.t0 < 0.4) return null;
+      const env = e._valueAt(v.env, e.ctx.currentTime);
+      if (w != null && Math.abs(env - w) > 0.01) return null;
+      const d = new Float32Array(e.analyser.fftSize);
+      e.analyser.getFloatTimeDomainData(d);
+      let pk = 0;
+      for (let i = 0; i < d.length; i++) pk = Math.max(pk, Math.abs(d[i]));
+      // the analyser's window may still hold the attack (Firefox under load): wait until the
+      // output is at the envelope's level (the instrument level times the sustain), +-25 %
+      const out = O.app.gainLevel * (w == null ? env : w);
+      if (Math.abs(pk - out) > out * 0.25) return null;
+      return { id: v.id, adsr: v.adsr, release: v.release, env, peak: pk,
+        viz: O.viz.labInputs(v.plan).adsr, lab: O.labs.envelope.enabled };
+    }, [old, want]), { ms: 10000, what });
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.setWaveform('sine'); a.setPattern('tone'); a.setFrequency(440);
+      window.OSCILLA.labs.envelope.update({ adsr: { a: 0.01, d: 0.1, s: 0.6, r: 0.3 },
+        enabled: true });
+      a.holding = true; a.play('hold');
+    });
+    res.start = await held(null, 'envelope-follows-held: held tone at sustain 0.6', 0.6);
+    await page.fill('#osc-env-sustain-value', '0.1');
+    await page.dispatchEvent('#osc-env-sustain-value', 'change');
+    res.sustain = await held(res.start.id, 'envelope-follows-held: Sustain 0.1 reaches it', 0.1);
+    res.ratio = res.start.peak > 0 ? res.sustain.peak / res.start.peak : null;
+    await page.fill('#osc-env-release-value', '50');
+    await page.dispatchEvent('#osc-env-release-value', 'change');
+    res.release = await until(() => page.evaluate(() => {
+      const v = window.OSCILLA.engine.voice;
+      return v && Math.abs(v.release - 0.05) < 1e-9 ? { id: v.id, r: v.adsr.r } : null;
+    }), { ms: 5000, what: 'envelope-follows-held: Release 50 ms reaches the held voice' });
+    await page.click('#osc-env-enable'); // off while it sounds
+    res.off = await held(res.sustain.id, 'envelope-follows-held: Envelope off reaches it', 1);
+    await page.click('#osc-env-enable'); // on again
+    res.on = await held(res.off.id, 'envelope-follows-held: Envelope on reaches it', 0.1);
+    await page.evaluate(() => window.OSCILLA.app.stopNow());
+    await quiet(page, 'envelope-follows-held: quiet after the held tone');
+    const was = await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      const keep = { source: a.source, sweep: JSON.parse(JSON.stringify(a.sweep)) };
+      a.source = 'sweep';
+      Object.assign(a.sweep, { start: 200, end: 2000, durationMs: 1000, direction: 'pingpong' });
+      a.setSweepRepeat('continuous');
+      a.holding = true; a.play('hold');
+      return keep;
+    });
+    res.sweep = await held(res.on.id, 'envelope-follows-held: ping-pong sweep at sustain', 0.1);
+    res.sweepPlan = await page.evaluate(() => {
+      const p = window.OSCILLA.engine.voice.plan;
+      return { kind: p.kind, envelope: p.envelope };
+    });
+    await page.evaluate((keep) => {
+      const a = window.OSCILLA.app;
+      a.stopNow(); a.source = keep.source; Object.assign(a.sweep, keep.sweep);
+      window.OSCILLA.labs.envelope.update({ adsr: { a: 0.01, d: 0.1, s: 0.6, r: 0.3 },
+        enabled: false });
+    }, was);
+    await quiet(page, 'envelope-follows-held: quiet at the end');
+    await H.workspace(page, 'playground');
+    const ok = res.start.adsr.s === 0.6 && res.sustain.adsr.s === 0.1
+      && res.sustain.viz.s === 0.1 && res.ratio > 0.1 && res.ratio < 0.25
+      && res.release.id === res.sustain.id && res.release.r === 0.05
+      && res.off.adsr === null && res.off.viz === null && !res.off.lab && res.off.release > 0
+      && res.on.adsr && res.on.adsr.s === 0.1 && res.on.lab
+      && res.sweepPlan.kind === 'continuous' && res.sweepPlan.envelope === 'whole'
+      && res.sweep.adsr && res.sweep.adsr.s === 0.1;
+    return { ok, ...res };
+  };
+  def('envelope-follows-held', async ({ page }) => {
+    const res = {};
+    for (const [width, height] of [[1536, 1024], [390, 844]]) {
+      await page.setViewportSize({ width, height });
+      res[`${width}x${height}`] = await envelopeFollowsHeld(page);
+    }
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    return { ok: Object.values(res).every((r) => r.ok), ...res };
+  });
+
+  // #296 R-7: a drag is one edit. The Sustain slider dragged in 20 'input' events and the
+  // graph's S handle dragged in 20 pointer moves leave the held voice sounding (no restart, no
+  // extra voice) until the drag ends; its 'change' / pointerup restarts it once, at the value
+  // the drag ended on. The counters are engine 'play' events and audibleVoiceCount, sampled
+  // after each event's handlers have run. At the desktop size and at 390x844.
+  const envelopeDragOneRestart = async (page, what) => {
+    await H.continuous(page, true);
+    await H.workspace(page, 'synthesis');
+    const voiceAt = (old, label, want) => until(() => page.evaluate(([prev, w]) => {
+      const e = window.OSCILLA.engine;
+      const v = e.voice;
+      if (!v || v.ended || v.releasing || v.id === prev || !v.adsr) return null;
+      if (e.ctx.currentTime - v.t0 < 0.4) return null;
+      const env = e._valueAt(v.env, e.ctx.currentTime);
+      return Math.abs(env - w) < 0.01 && Math.abs(v.adsr.s - w) < 1e-9 ? { id: v.id, env } : null;
+    }, [old, want]), { ms: 10000, what: `${what}: ${label}` });
+    await page.evaluate(() => {
+      const O = window.OSCILLA;
+      const a = O.app;
+      a.setWaveform('sine'); a.setPattern('tone'); a.setFrequency(440);
+      O.labs.envelope.update({ adsr: { a: 0.01, d: 0.1, s: 0.6, r: 0.3 }, enabled: true });
+      a.holding = true; a.play('hold');
+      const e = O.engine;
+      const c = { plays: 0, maxAudible: 0 };
+      window.__r7 = c;
+      c.off = e.on((t) => { if (t === 'play') c.plays++; });
+      // bubbling listeners on window run after the controls' own handlers
+      const sample = () => { c.maxAudible = Math.max(c.maxAudible, e.audibleVoiceCount); };
+      window.addEventListener('input', sample);
+      window.addEventListener('pointermove', sample);
+      c.unsample = () => {
+        window.removeEventListener('input', sample);
+        window.removeEventListener('pointermove', sample);
+      };
+    });
+    const res = {};
+    res.start = await voiceAt(null, 'held tone at sustain 0.6', 0.6);
+    res.slider = await page.evaluate(() => {
+      const c = window.__r7;
+      const id = window.OSCILLA.engine.voice.id;
+      c.plays = 0;
+      c.maxAudible = 0;
+      const el = document.querySelector('#osc-env-sustain');
+      for (let i = 1; i <= 20; i++) {
+        el.value = (0.6 - (0.5 * i) / 20).toFixed(2);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      const during = { plays: c.plays, maxAudible: c.maxAudible,
+        same: window.OSCILLA.engine.voice.id === id };
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      return { during, plays: c.plays, lab: window.OSCILLA.labs.envelope.adsr.s };
+    });
+    res.afterSlider = await voiceAt(res.start.id, 'Sustain 0.1 after the slider drag', 0.1);
+    const canvas = page.locator('#osc-chart-envelope canvas');
+    await canvas.scrollIntoViewIfNeeded({ timeout: 5000 });
+    const at = await page.evaluate(() => {
+      const l = window.OSCILLA.labs.envelope.graph.getLayout();
+      const c = document.querySelector('#osc-chart-envelope canvas').getBoundingClientRect();
+      window.__r7.plays = 0;
+      window.__r7.maxAudible = 0;
+      return { x: c.left + l.handles.sustain.x, y: c.top + l.handles.sustain.y,
+        id: window.OSCILLA.engine.voice.id };
+    });
+    await page.mouse.move(at.x, at.y);
+    await page.mouse.down();
+    await page.mouse.move(at.x, at.y - 30, { steps: 20 });
+    res.graphDuring = await page.evaluate((id) => ({ plays: window.__r7.plays,
+      maxAudible: window.__r7.maxAudible, same: window.OSCILLA.engine.voice.id === id,
+      lab: window.OSCILLA.labs.envelope.adsr.s }), at.id);
+    await page.mouse.up();
+    res.graph = await page.evaluate(() => ({ plays: window.__r7.plays,
+      lab: window.OSCILLA.labs.envelope.adsr.s }));
+    res.afterGraph = await voiceAt(at.id, 'the graph drag\'s sustain reaches the held voice',
+      res.graph.lab);
+    await page.evaluate(() => {
+      const c = window.__r7;
+      c.off(); c.unsample(); delete window.__r7;
+      window.OSCILLA.app.stopNow();
+      window.OSCILLA.labs.envelope.update({ adsr: { a: 0.01, d: 0.1, s: 0.6, r: 0.3 },
+        enabled: false });
+    });
+    await quiet(page, `${what}: quiet at the end`);
+    await H.workspace(page, 'playground');
+    const s = res.slider;
+    const g = res.graphDuring;
+    const ok = s.during.plays === 0 && s.during.same && s.during.maxAudible === 1
+      && s.plays === 1 && Math.abs(s.lab - 0.1) < 1e-9
+      && g.plays === 0 && g.same && g.maxAudible === 1 && g.lab > 0.1 + 1e-6
+      && res.graph.plays === 1;
+    return { ok, ...res };
+  };
+  def('envelope-drag-one-restart', async ({ page }) => {
+    const res = {};
+    for (const [width, height] of [[1536, 1024], [390, 844]]) {
+      await page.setViewportSize({ width, height });
+      const size = `${width}x${height}`;
+      res[size] = await envelopeDragOneRestart(page, `envelope-drag-one-restart ${size}`);
+    }
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    return { ok: Object.values(res).every((r) => r.ok), ...res };
+  });
+
+  // #296 R-9: the keyboard is one edit too. A range input fires 'input' and 'change' for
+  // every arrow step, so the Sustain slider's keys settle while one is down and its keyup
+  // commits once after the lab's keyCommitMs. ArrowLeft held for 20 auto-repeats leaves the
+  // held voice sounding (no restart, one audible voice) and restarts it once, at the value it
+  // stopped on; 20 ArrowRight presses restart it once, plus one per gap between a keyup and
+  // the next keydown longer than the window (measured in the page, so a slow host is not
+  // a failure); a real mouse drag of the slider still restarts it once, at the release.
+  const envelopeKeysOneRestart = async (page, what) => {
+    await H.continuous(page, true);
+    await H.workspace(page, 'synthesis');
+    const voiceAt = (old, label, want) => until(() => page.evaluate(([prev, w]) => {
+      const e = window.OSCILLA.engine;
+      const v = e.voice;
+      if (!v || v.ended || v.releasing || v.id === prev || !v.adsr) return null;
+      if (e.ctx.currentTime - v.t0 < 0.4) return null;
+      const env = e._valueAt(v.env, e.ctx.currentTime);
+      return Math.abs(env - w) < 0.01 && Math.abs(v.adsr.s - w) < 1e-9 ? { id: v.id, env } : null;
+    }, [old, want]), { ms: 10000, what: `${what}: ${label}` });
+    const committed = (label, n) => until(() => page.evaluate((k) => (window.__r9.plays >= k
+      ? window.__r9.plays : null), n), { ms: 5000, what: `${what}: ${label}` });
+    await page.evaluate(() => {
+      const O = window.OSCILLA;
+      const a = O.app;
+      a.setWaveform('sine'); a.setPattern('tone'); a.setFrequency(440);
+      O.labs.envelope.update({ adsr: { a: 0.01, d: 0.1, s: 0.6, r: 0.3 }, enabled: true });
+      a.holding = true; a.play('hold');
+      const e = O.engine;
+      const el = document.querySelector('#osc-env-sustain');
+      const c = { plays: 0, maxAudible: 0, downs: [], ups: [] };
+      window.__r9 = c;
+      c.off = e.on((t) => { if (t === 'play') c.plays++; });
+      // bubbling listeners on window run after the slider's own handlers
+      const sample = () => { c.maxAudible = Math.max(c.maxAudible, e.audibleVoiceCount); };
+      const down = (ev) => { if (ev.target === el) c.downs.push(performance.now()); };
+      const up = (ev) => { if (ev.target === el) c.ups.push(performance.now()); };
+      for (const t of ['input', 'change', 'pointermove']) window.addEventListener(t, sample);
+      window.addEventListener('keydown', down);
+      window.addEventListener('keyup', up);
+      c.unsample = () => {
+        for (const t of ['input', 'change', 'pointermove']) window.removeEventListener(t, sample);
+        window.removeEventListener('keydown', down);
+        window.removeEventListener('keyup', up);
+      };
+      c.reset = () => {
+        c.plays = 0; c.maxAudible = 0; c.downs = []; c.ups = [];
+        return e.voice.id;
+      };
+      c.read = (id) => ({ plays: c.plays, maxAudible: c.maxAudible, downs: c.downs.length,
+        same: e.voice.id === id, lab: O.labs.envelope.adsr.s, slider: Number(el.value) });
+    });
+    const res = { windowMs: await page.evaluate(() => window.OSCILLA.labs.envelope.keyCommitMs) };
+    res.start = await voiceAt(null, 'held tone at sustain 0.6', 0.6);
+    const slider = page.locator('#osc-env-sustain');
+    await slider.scrollIntoViewIfNeeded({ timeout: 5000 });
+    await slider.focus({ timeout: 5000 });
+
+    // ArrowLeft held: one keydown, 19 auto-repeats, then the keyup
+    let id = await page.evaluate(() => window.__r9.reset());
+    for (let i = 0; i < 20; i++) await page.keyboard.down('ArrowLeft');
+    res.held = await page.evaluate((v) => window.__r9.read(v), id);
+    await page.keyboard.up('ArrowLeft');
+    res.heldPlays = await committed('the held keys commit', 1);
+    res.afterHeld = await voiceAt(res.start.id, 'Sustain 0.4 after the held key', 0.4);
+    res.heldEnd = await page.evaluate((v) => window.__r9.read(v), id);
+
+    // 20 presses of ArrowRight
+    id = await page.evaluate(() => window.__r9.reset());
+    for (let i = 0; i < 20; i++) await page.keyboard.press('ArrowRight');
+    res.pressed = await page.evaluate((v) => window.__r9.read(v), id);
+    res.pressPlays = await committed('the presses commit', 1);
+    res.afterPresses = await voiceAt(res.afterHeld.id, 'Sustain 0.6 after the presses', 0.6);
+    res.pressEnd = await page.evaluate((w) => {
+      const c = window.__r9;
+      let gaps = 0;
+      for (let i = 1; i < c.downs.length; i++) if (c.downs[i] - c.ups[i - 1] > w) gaps++;
+      return { plays: c.plays, gaps, downs: c.downs.length, ups: c.ups.length };
+    }, res.windowMs);
+
+    // a real mouse drag of the slider: no key, so its inputs settle and its change commits
+    const box = await slider.boundingBox();
+    id = await page.evaluate(() => window.__r9.reset());
+    const y = box.y + box.height / 2;
+    await page.mouse.move(box.x + box.width * 0.6, y);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.2, y, { steps: 20 });
+    res.dragDuring = await page.evaluate((v) => window.__r9.read(v), id);
+    await page.mouse.up();
+    res.dragPlays = await committed('the mouse drag commits', 1);
+    res.drag = await page.evaluate((v) => window.__r9.read(v), id);
+    res.afterDrag = await voiceAt(res.afterPresses.id, 'the drag\'s sustain reaches the voice',
+      res.drag.lab);
+    res.dragEnd = await page.evaluate((v) => window.__r9.read(v), id);
+
+    await page.evaluate(() => {
+      const c = window.__r9;
+      c.off(); c.unsample(); delete window.__r9;
+      document.activeElement.blur();
+      window.OSCILLA.app.stopNow();
+      window.OSCILLA.labs.envelope.update({ adsr: { a: 0.01, d: 0.1, s: 0.6, r: 0.3 },
+        enabled: false });
+    });
+    await quiet(page, `${what}: quiet at the end`);
+    await H.workspace(page, 'playground');
+    const h = res.held;
+    const d = res.dragDuring;
+    const ok = res.windowMs > 0 && res.windowMs <= 500
+      && h.downs === 20 && h.plays === 0 && h.same && h.maxAudible === 1
+      && Math.abs(h.lab - 0.4) < 1e-9 && res.heldEnd.plays === 1
+      && res.pressed.downs === 20 && res.pressEnd.ups === 20
+      && res.pressEnd.plays >= 1 && res.pressEnd.plays <= 1 + res.pressEnd.gaps
+      && d.plays === 0 && d.same && d.maxAudible === 1 && d.lab < 0.6 - 1e-6
+      && res.dragEnd.plays === 1;
+    return { ok, ...res };
+  };
+  def('envelope-keys-one-restart', async ({ page }) => {
+    const res = {};
+    for (const [width, height] of [[1536, 1024], [390, 844]]) {
+      await page.setViewportSize({ width, height });
+      const size = `${width}x${height}`;
+      res[size] = await envelopeKeysOneRestart(page, `envelope-keys-one-restart ${size}`);
+    }
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    return { ok: Object.values(res).every((r) => r.ok), ...res };
+  });
+
+  // T001 (truth-table row GEN-01, ADR 0002): the output says when the safety ceiling acts. The
+  // audit probe's path (continuous, 1 kHz, latch, Filter Lab peaking 1 kHz Q 1 +24 dB at the
+  // default gain) shows the state in the source panel and in the status bar, unclipped by the
+  // bar, at 1536x1024 and 390x844; it clears within a named deadline once the boost is removed;
+  // the same path without the boost, idle, and sine, square and sawtooth at 100 % gain with no
+  // insert show nothing. The pure judgement is tests/unit/readout-states-ceiling.test.mjs.
+  def('output-ceiling-indicator', async ({ page }) => {
+    const res = { sizes: {}, plain: {} };
+    const view = () => page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      const bar = document.querySelector('[data-osc="status.state"]').parentElement;
+      const box = (sel) => {
+        const el = document.querySelector(sel);
+        const b = el.getBoundingClientRect();
+        const p = bar.getBoundingClientRect();
+        return { shown: getComputedStyle(el).display !== 'none' && b.width > 0,
+          inBar: b.left >= p.left - 0.5 && b.right <= p.right + 0.5,
+          inView: b.left >= -0.5 && b.right <= window.innerWidth + 0.5,
+          text: el.textContent.replace(/\s+/g, ' ').trim() };
+      };
+      const ctx = window.OSCILLA.engine.ctx;
+      return { flag: a.outputAtCeiling, acting: a.ceilingActing, playing: a.playing,
+        source: box('[data-osc="source.ceiling"]'), status: box('[data-osc="status.ceiling"]'),
+        label: box('[data-osc="status.label"]'), title: document.querySelector('#osc-gain-value').title,
+        fraction: window.OSCILLA.viz.ceiling.fraction, time: ctx ? ctx.currentTime : 0,
+        width: window.innerWidth, scroll: document.documentElement.scrollWidth };
+    });
+    const none = (v) => !v.flag && !v.acting && !v.source.shown && !v.status.shown;
+    // Sound on, without the indicator, for 0.6 s of audio time: every poll is recorded.
+    const holdQuiet = async (what) => {
+      const seen = [];
+      const t0 = (await view()).time;
+      await until(async () => {
+        const v = await view();
+        seen.push(v);
+        return v.playing && v.time >= t0 + 0.6;
+      }, { ms: 5000, what });
+      return { polls: seen.length, flagged: seen.filter((v) => !none(v)).length };
+    };
+    const filterBefore = await page.evaluate(() => ({ ...window.OSCILLA.labs.filter.config }));
+    await H.continuous(page, true);
+    for (const [w, h] of [[1536, 1024], [390, 844]]) {
+      await page.setViewportSize({ width: w, height: h });
+      const r = {};
+      r.idle = none(await view());
+      await page.evaluate(() => {
+        const a = window.OSCILLA.app;
+        a.setGainPct(57);
+        a.setWaveform('sine');
+        a.setFrequency(1000);
+        window.OSCILLA.labs.filter.update({ type: 'peaking', frequency: 1000, Q: 1, gain: 24,
+          enabled: true });
+        a.toggleLatch();
+      });
+      const on = await until(async () => {
+        const v = await view();
+        // The window fills over 0.17 s while the filter glides in: wait for a full one.
+        return v.acting && v.source.shown && v.status.shown && v.fraction > 0.5 ? v : null;
+      }, { ms: 5000, what: `the ceiling indicator shows under a +24 dB boost at ${w}x${h}` });
+      r.on = { status: on.status, source: on.source, labelHidden: !on.label.shown,
+        fraction: +on.fraction.toFixed(3), setpointTitle: /setpoint/.test(on.title)
+          && /OUTPUT AT CEILING \(clipped\)/.test(on.title), scroll: on.scroll <= on.width };
+      await page.evaluate(() => window.OSCILLA.labs.filter.update({ enabled: false }));
+      const off = await until(async () => {
+        const v = await view();
+        return none(v) && v.label.shown ? v : null;
+      }, { ms: 2000, what: `the ceiling indicator clears within 2 s of the boost removed (${w})` });
+      r.cleared = off.playing && !/clipped/.test(off.title);
+      r.unboosted = await holdQuiet(`the unboosted 1 kHz sine sounds 0.6 s at ${w}`);
+      await page.evaluate(() => window.OSCILLA.app.stopNow());
+      await until(async () => {
+        const v = await view();
+        return !v.playing && none(v);
+      }, { ms: 3000, what: `idle after the stop shows no ceiling state (${w})` });
+      r.idleAfter = true;
+      r.ok = r.idle && r.idleAfter && r.cleared && r.on.status.inBar && r.on.status.inView
+        && r.on.source.inView && r.on.labelHidden && r.on.setpointTitle && r.on.scroll
+        && r.on.status.text === '\u26A0\uFE0E OUTPUT AT CEILING (clipped)'
+        && r.on.source.text === r.on.status.text && r.on.fraction > 0.5
+        && r.unboosted.flagged === 0 && r.unboosted.polls > 1;
+      res.sizes[`${w}x${h}`] = r;
+    }
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    // 100 % gain, no insert: the pre-ceiling peak is at or below the cap (P05 audit: sine
+    // -12.04, square -12.45, sawtooth -12.70 dBFS).
+    for (const wave of ['sine', 'square', 'sawtooth']) {
+      await page.evaluate((wv) => {
+        const a = window.OSCILLA.app;
+        a.setGainPct(100);
+        a.setWaveform(wv);
+        a.toggleLatch();
+      }, wave);
+      res.plain[wave] = await holdQuiet(`${wave} at 100 % gain sounds 0.6 s with no insert`);
+      await page.evaluate(() => window.OSCILLA.app.stopNow());
+      await until(() => page.evaluate(() => !window.OSCILLA.app.playing
+        && window.OSCILLA.engine.activeNodeCount === 0),
+      { ms: 3000, what: `the ${wave} voice is freed` });
+    }
+    await page.evaluate((cfg) => {
+      const a = window.OSCILLA.app;
+      a.setGainPct(57);
+      a.setWaveform('sine');
+      window.OSCILLA.labs.filter.update(cfg);
+    }, filterBefore);
+    const ok = Object.values(res.sizes).every((r) => r.ok)
+      && Object.values(res.plain).every((p) => p.flagged === 0 && p.polls > 1);
+    return { ok, ...res };
+  });
+
   // C010: the Phase & Stereo pan reaches the sounding dual voice. A mono dual voice started
   // centred has no stereo router; moving #osc-stereo-pan while it sounds restarts it once,
   // click-free, with one (L/R balance from the router's own analysers), and the router stays:
@@ -2620,7 +4130,9 @@ function defineChecks() {
         const r = await page.evaluate(() => {
           const a = document.activeElement;
           if (!a || a === document.body) return { body: true };
-          const key = a.id || a.dataset.osc || a.outerHTML.slice(0, 60);
+          // The compact Studio's chips share a data-osc; their node or clip id tells them apart.
+          const key = a.id || (a.dataset.osc ? [a.dataset.osc, a.dataset.nodeId,
+            a.dataset.clipId].filter(Boolean).join(':') : a.outerHTML.slice(0, 60));
           const box = a.getBoundingClientRect();
           const region = document.querySelector('[data-osc="alerts"]');
           const inAlert = region.contains(a);
@@ -3023,6 +4535,100 @@ function defineChecks() {
     return { ok, realStream: real, ...out };
   });
 
+  // C015 (finding engine-sync-3): a context closed from outside makes the engine discard it and
+  // detach the microphone graph, stopping its tracks. A stopped track dispatches no 'ended', so
+  // the lab learns of it only from the engine's detach event (adapter.onMicDetached). It must
+  // then report off, reset its button and say why, and the next start must read the new
+  // context, not the analyser of the dead one. The stream comes from installSynthMic, so all
+  // three engines run every step.
+  def('mic-detach-on-close', async ({ page, errors }) => {
+    const errorsBefore = errors.length;
+    const shows = (ws) => page.waitForFunction(
+      (w) => document.querySelector('#osc-app').dataset.mode === w, ws, { timeout: 8000 });
+    await page.evaluate(installSynthMic);
+    await H.navTo(page, 'analyzer');
+    await shows('analyzer');
+    const state = () => page.evaluate(() => {
+      const e = window.OSCILLA.engine;
+      const m = window.OSCILLA.labs.mic;
+      const b = document.getElementById('osc-mic-toggle');
+      const an = m.analyser;
+      return { active: m.active, error: m.error, hasAnalyser: !!an,
+        analyserOnEngineCtx: !!(an && e.ctx && an.context === e.ctx),
+        engineCtx: !!e.ctx, newCtx: !!(e.ctx && e.ctx !== window.__oscOldCtx),
+        engineMicNodes: e.micNodeCount, engineAttachment: !!e.micAttachment,
+        pressed: b.getAttribute('aria-pressed'), label: b.textContent.trim(),
+        detected: document.getElementById('osc-mic-detected').textContent.trim() };
+    });
+    const out = {};
+    try {
+      await page.click('#osc-mic-toggle');
+      out.live = await until(async () => {
+        const s = await state();
+        return s.active && s.engineMicNodes > 0 && s.analyserOnEngineCtx && s;
+      }, { ms: 10000, what: 'mic-detach-on-close: the mic lab is live on the engine context' });
+      out.liveTracks = await page.evaluate(() => {
+        window.__oscLabStream = window.OSCILLA.labs.mic.stream;
+        return window.__oscLabStream.getTracks().map((t) => t.readyState);
+      });
+      await page.evaluate(() => {
+        window.__oscOldCtx = window.OSCILLA.engine.ctx;
+        return window.__oscOldCtx.close();
+      });
+      // The engine discards the context and emits the detach in one onstatechange call, so the
+      // lab's state is final once the engine has dropped the context.
+      await until(() => page.evaluate(() => window.OSCILLA.engine.ctx === null),
+        { ms: 10000, what: 'mic-detach-on-close: the engine discards the closed context' });
+      out.closed = await state();
+      out.closedTracks = await page.evaluate(
+        () => window.__oscLabStream.getTracks().map((t) => t.readyState));
+      // The next press starts the microphone again on a context the engine rebuilds. A lab
+      // that still reports live (the defect) would take that press as a stop: not pressed.
+      if (!out.closed.active) {
+        await page.click('#osc-mic-toggle');
+        out.restarted = await until(async () => {
+          const s = await state();
+          return (s.active || s.error) && s;
+        }, { ms: 10000, what: 'mic-detach-on-close: the second start settles' });
+        await page.click('#osc-mic-toggle');
+        out.stopped = await state();
+      }
+    } finally {
+      await page.evaluate(() => {
+        const m = window.OSCILLA.labs.mic;
+        if (m.active) m.stop();
+        if (window.__oscSynthMic) window.__oscSynthMic.restore();
+        delete window.__oscOldCtx;
+        delete window.__oscLabStream;
+        window.OSCILLA.app.alerts = [];
+      });
+      await H.navTo(page, 'playground');
+      await shows('playground');
+    }
+    const c = out.closed;
+    const r = out.restarted || {};
+    const st = out.stopped || {};
+    const v = {
+      setupLive: out.live.pressed === 'true' && out.liveTracks.every((t) => t === 'live'),
+      engineDetached: !c.engineCtx && c.engineMicNodes === 0 && !c.engineAttachment,
+      tracksEnded: out.closedTracks.length > 0 && out.closedTracks.every((t) => t === 'ended'),
+      labOffAfterClose: c.active === false && c.hasAnalyser === false,
+      buttonOffAfterClose: c.pressed === 'false' && c.label === 'Use microphone',
+      reasonStated: /audio context was closed/.test(c.error) && c.detected === c.error,
+      restartOnNewContext: r.active === true && r.newCtx && r.analyserOnEngineCtx
+        && r.pressed === 'true' && r.error === '',
+      // The user's own Stop states no engine loss (review F1 of #289): the engine emits its
+      // 'user' detach inside the lab's stop(), so a lab that released its analyser after the
+      // call would read "The audio engine disconnected the microphone" here.
+      stopAfterRestart: st.active === false && st.pressed === 'false'
+        && st.engineMicNodes === 0 && st.error === ''
+        && st.detected === 'UNAVAILABLE (microphone off)',
+      noPageErrors: errors.length === errorsBefore,
+    };
+    const ok = Object.values(v).every(Boolean);
+    return { ok, v, ...out, errors: errors.slice(errorsBefore, errorsBefore + 5) };
+  });
+
   // §49 (c): dismissing a notification whose Dismiss button has focus moves focus to the next
   // notification's Dismiss (the previous one after the last), and to the main region after the
   // only one — also when the info/success auto-dismiss timer removes it (dismissAlert(id)).
@@ -3167,9 +4773,11 @@ function defineChecks() {
       const items = [...document.querySelectorAll('#osc-nav > li > a')].map((a) => a.dataset.osc);
       return { last: items.at(-1), count: items.length };
     });
-    // Tab order: Studio -> About (Safari/WebKit skips links on Tab unless the user opts in).
-    // V3.1: Studio is the last workspace before About (spec §198).
-    await page.focus('[data-osc="nav.studio"]');
+    // Tab order: the entry before About -> About (Safari/WebKit skips links on Tab unless the
+    // user opts in). V3.1 put Studio last before About (spec §198); Synth follows Studio (Q019).
+    const beforeAbout = (await import(pathToFileURL(path.join(__dirname, '..', '..', 'src', 'js',
+      'ui', 'app.js')).href)).navTopLevel().slice(-2)[0];
+    await page.focus(`[data-osc="${beforeAbout}"]`);
     await page.keyboard.press('Tab');
     res.tabbedTo = await page.evaluate(() => document.activeElement && document.activeElement.dataset.osc);
     await page.focus('[data-osc="nav.about"]');
@@ -3191,11 +4799,28 @@ function defineChecks() {
           .filter((t) => !text.includes(t)),
         source: link('about.source'), majordomus: link('about.majordomus'), email: link('about.email'),
         traceHidden: q('.osc-about-trace').getAttribute('aria-hidden') === 'true',
+        // U002: the headline is the release line, the workspaces of the navigation are listed
+        // in its order, and What comes next renders the bundled roadmap.
+        headline: q('#osc-about-line-title').textContent.replace(/\s+/g, ' ').trim(),
+        navIds: [...document.querySelectorAll('#osc-nav a[data-osc^="nav."]')]
+          .map((a) => a.dataset.osc.slice('nav.'.length)),
+        workspaceIds: [...view.querySelectorAll('[data-osc="about.workspaces"] > li')]
+          .filter(shown).map((li) => li.dataset.osc.slice('about.workspace.'.length)),
+        next: [...view.querySelectorAll('[data-osc="about.next"] > li')].filter(shown)
+          .map((li) => ({ id: li.dataset.milestone,
+            text: li.textContent.replace(/\s+/g, ' ').trim() })),
         othersHidden: ['#osc-view-learn', '#osc-view-presets', '#osc-panel-source', '#osc-panel-analysis']
           .every((s) => !shown(q(s))),
       };
     });
     const v = res.view;
+    const roadmap = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'data',
+      'roadmap.json'), 'utf8')).milestones;
+    res.roadmapOk = roadmap.length > 0 && v.next.length === roadmap.length
+      && roadmap.every((m, i) => v.next[i].id === m.id && v.next[i].text.includes(m.title)
+        && v.next[i].text.includes(`${m.done} of ${m.required} done`));
+    res.workspacesOk = v.navIds.length > 0 && v.workspaceIds.join() === v.navIds.join();
+    res.headlineOk = !!v.headline && !/\bone night\b|\bthrowaway\b/i.test(v.headline);
     // Reduced motion: the one-shot trace draw collapses to (near) zero duration.
     await page.emulateMedia({ reducedMotion: 'reduce' });
     res.reducedMotionS = await page.evaluate(() => parseFloat(getComputedStyle(document.querySelector('.osc-about-trace')).animationDuration));
@@ -3266,8 +4891,204 @@ function defineChecks() {
       && v.email && v.email.href === 'mailto:korczis@gmail.com'
       && res.reducedMotionS < 0.01
       && Object.values(res.widths).every((b) => !b.length)
-      && res.menuMode === 'about' && !/About/.test(res.baseTitle);
+      && res.menuMode === 'about' && !/About/.test(res.baseTitle)
+      && res.roadmapOk && res.workspacesOk && res.headlineOk;
     return { ok, ...res };
+  });
+
+  // C002 (findings coupling-1, -2, -3): one output owner at a time. The instrument, the
+  // sequencer and the Studio hand the output over in the action itself, read from each owner's
+  // own state in the same evaluate (not after the 150 ms seqPlaying poll), and the newer action
+  // wins. On its own page, so that the Studio document is the default one.
+  def('one-output-owner', async ({ context, baseUrl }) => {
+    const p = await context.newPage();
+    const errs = [];
+    p.on('pageerror', (e) => errs.push(e.message));
+    const res = {};
+    const inPage = (fn, arg) => p.evaluate(fn, arg);
+    /** Every owner's state now, from the owner itself. */
+    const install = () => inPage(() => {
+      window.__c002 = () => {
+        const O = window.OSCILLA;
+        const a = O.app;
+        return { instrument: !!a.playing && !a.releasing, instrumentPlaying: !!a.playing,
+          seq: !!O.labs.sequencer.editor.playing, seqFlag: !!a.seqPlaying,
+          studio: !!a.studioOwnsOutput(), t: O.engine.ctx ? O.engine.ctx.currentTime : null };
+      };
+    });
+    const silent = (label) => until(() => inPage(() => {
+      const O = window.OSCILLA;
+      const st = O.labs.sequencer.editor.stats();
+      return O.engine.activeNodeCount === 0 && st.activeSourceCount === 0 && !O.app.playing
+        && !O.app.studioOwnsOutput() ? { nodes: 0, seqSources: 0 } : null;
+    }), { ms: 8000, what: `one-output-owner: every node released after ${label}` });
+    const stopEverything = () => inPage(() => {
+      const O = window.OSCILLA;
+      O.labs.sequencer.editor.stop();
+      if (O.app.studioOwnsOutput()) O.app.studioStop();
+      O.app.stopNow();
+      O.app.alerts = [];
+    });
+    /** The audio clock has run `s` past `t0` (the 150 ms poll and Studio's watch had time). */
+    const later = (t0, s, label) => until(() => inPage((x) => {
+      const now = window.__c002();
+      return now.t !== null && now.t - x.t0 >= x.s ? now : null;
+    }, { t0, s }), { ms: 8000, what: `one-output-owner: ${label} still holds ${s} s later` });
+    try {
+      await p.goto(baseUrl, { waitUntil: 'load' });
+      await H.ready(p);
+      await inPage(() => {
+        window.OSCILLA.app.setWorkspace('sequencer');
+        window.OSCILLA.app.setContinuous(true); // the latched tone below outlives the 2 s limit
+      });
+      await until(() => inPage(() => document.querySelector('#osc-app').dataset.mode
+        === 'sequencer'), { ms: 8000, what: 'one-output-owner: the Sequencer workspace opens' });
+      await install();
+      // (a) sequencer, then the instrument: the voice takes the output, the sequence stops.
+      await p.click('#osc-seq-play');
+      await until(() => inPage(() => window.__c002().seq),
+        { ms: 5000, what: 'one-output-owner: the sequence plays' });
+      res.seqThenInstrument = await inPage(() => {
+        window.OSCILLA.app.trigger();
+        return window.__c002();
+      });
+      res.seqThenInstrumentSettled = await until(() => inPage(() => {
+        const s = window.__c002();
+        return s.instrumentPlaying ? s : null;
+      }), { ms: 5000, what: 'one-output-owner: the instrument plays after the sequence' });
+      await stopEverything();
+      res.afterA = await silent('instrument after sequencer');
+      // (b) the instrument (latched), then the sequencer: the voice is released at the click.
+      await inPage(() => window.OSCILLA.app.toggleLatch());
+      await until(() => inPage(() => window.__c002().instrument),
+        { ms: 5000, what: 'one-output-owner: the latched tone plays' });
+      res.instrumentThenSeq = await inPage(() => {
+        document.querySelector('#osc-seq-play').click();
+        return window.__c002();
+      });
+      res.instrumentThenSeqSettled = await until(() => inPage(() => {
+        const s = window.__c002();
+        return !s.instrumentPlaying ? s : null;
+      }), { ms: 5000, what: 'one-output-owner: the released tone ends while the sequence plays' });
+      await stopEverything();
+      res.afterB = await silent('sequencer after instrument');
+      // (c) the Studio plays, then sequencer Play: the Studio stops in the same click.
+      await p.click('[data-osc="studio.compact.play"]');
+      await until(() => inPage(() => window.__c002().studio),
+        { ms: 8000, what: 'one-output-owner: the Studio plays' });
+      res.studioThenSeq = await inPage(() => {
+        document.querySelector('#osc-seq-play').click();
+        return window.__c002();
+      });
+      res.studioThenSeqLater = await later(res.studioThenSeq.t, 0.5, 'sequencer over Studio');
+      await stopEverything();
+      res.afterC = await silent('sequencer after Studio');
+      // (d) sequencer Play, then Studio PLAY in the same task: the newer action (Studio) wins,
+      // and neither the poll nor Studio's seqPlaying watch takes it back.
+      res.seqThenStudio = await inPage(() => {
+        document.querySelector('#osc-seq-play').click();
+        window.OSCILLA.app.studioPlay();
+        return window.__c002();
+      });
+      res.seqThenStudioLater = await later(res.seqThenStudio.t, 0.5, 'Studio over sequencer');
+      await stopEverything();
+      res.afterD = await silent('Studio after sequencer');
+      // (e) Studio PLAY, then sequencer Play in the same task: the sequencer wins.
+      res.studioThenSeqSameTask = await inPage(() => {
+        window.OSCILLA.app.studioPlay();
+        document.querySelector('#osc-seq-play').click();
+        return window.__c002();
+      });
+      res.studioThenSeqSameTaskLater = await later(res.studioThenSeqSameTask.t, 0.5,
+        'sequencer over Studio (same task)');
+      await stopEverything();
+      res.afterE = await silent('sequencer after Studio (same task)');
+      const only = (s, owner) => ['instrument', 'seq', 'studio']
+        .every((k) => s[k] === (k === owner));
+      const v = {
+        a: !res.seqThenInstrument.seq && !res.seqThenInstrument.seqFlag
+          && only(res.seqThenInstrumentSettled, 'instrument'),
+        b: res.instrumentThenSeq.seq && res.instrumentThenSeq.seqFlag
+          && !res.instrumentThenSeq.instrument && only(res.instrumentThenSeqSettled, 'seq'),
+        c: only(res.studioThenSeq, 'seq') && only(res.studioThenSeqLater, 'seq'),
+        d: only(res.seqThenStudio, 'studio') && !res.seqThenStudio.seqFlag
+          && only(res.seqThenStudioLater, 'studio'),
+        e: only(res.studioThenSeqSameTask, 'seq') && only(res.studioThenSeqSameTaskLater, 'seq'),
+        noPageErrors: errs.length === 0,
+      };
+      const failed = Object.keys(v).filter((k) => !v[k]);
+      return { ok: failed.length === 0, failed, errs, ...res };
+    } finally {
+      await p.close({ runBeforeUnload: false }).catch(() => {});
+    }
+  });
+
+  // C002 (finding coupling-1): while a measurement owns the output the sequencer is refused
+  // exactly like the instrument, with the same notice, and the measurement goes on. The Studio
+  // template Measurement Sweep hands the output to MEASURE from the Sequencer workspace, where
+  // the sequencer's Play is on screen (TEST CONTEXT loopback, so no microphone is opened).
+  def('seq-refused-during-measure', async ({ context, baseUrl }) => {
+    const p = await context.newPage();
+    const errs = [];
+    p.on('pageerror', (e) => errs.push(e.message));
+    const inPage = (fn, arg) => p.evaluate(fn, arg);
+    const res = {};
+    try {
+      await p.goto(`${baseUrl}?measure=loopback`, { waitUntil: 'load' });
+      await H.ready(p);
+      res.opened = await inPage(() => {
+        const a = window.OSCILLA.app;
+        const ok = a.studioLoadTemplate('measurement-sweep');
+        a.setWorkspace('sequencer');
+        return ok;
+      });
+      await until(() => inPage(() => document.querySelector('#osc-app').dataset.mode
+        === 'sequencer'), { ms: 8000, what: 'seq-refused-during-measure: the Sequencer opens' });
+      await p.click('[data-osc="studio.compact.play"]');
+      res.owns = await until(() => inPage(() => window.OSCILLA.app.measureOwnsOutput()),
+        { ms: 20000, what: 'seq-refused-during-measure: the measurement owns the output' });
+      await inPage(() => { window.OSCILLA.app.alerts = []; });
+      await p.click('#osc-seq-play');
+      res.after = await inPage(() => {
+        const O = window.OSCILLA;
+        const ed = O.labs.sequencer.editor;
+        return { seqPlaying: !!ed.playing, seqFlag: !!O.app.seqPlaying, error: ed.error,
+          title: document.querySelector('#osc-seq-play').getAttribute('title'),
+          alerts: O.app.alerts.map((x) => x.title), owns: O.app.measureOwnsOutput(),
+          state: O.measure.state };
+      });
+      // Contrast: the instrument meets the same refusal.
+      res.instrument = await inPage(() => {
+        const a = window.OSCILLA.app;
+        a.trigger();
+        return { playing: !!a.playing };
+      });
+      await inPage(() => {
+        const a = window.OSCILLA.app;
+        a.measureAbort('user');
+        if (a.studioOwnsOutput()) a.studioStop();
+      });
+      res.released = await until(() => inPage(() => {
+        const O = window.OSCILLA;
+        return O.engine.activeNodeCount === 0 && !O.app.measureOwnsOutput()
+          && O.labs.sequencer.editor.stats().activeSourceCount === 0 ? true : null;
+      }), { ms: 10000, what: 'seq-refused-during-measure: every node released after the abort' });
+      const REFUSAL = /^The output belongs to the measurement/;
+      const v = {
+        opened: res.opened === true,
+        owns: res.owns === true,
+        refused: !res.after.seqPlaying && !res.after.seqFlag,
+        said: REFUSAL.test(res.after.error) && REFUSAL.test(res.after.title || '')
+          && res.after.alerts.includes('Measurement in progress'),
+        measurementGoesOn: res.after.owns === true,
+        instrumentRefused: !res.instrument.playing,
+        noPageErrors: errs.length === 0,
+      };
+      const failed = Object.keys(v).filter((k) => !v[k]);
+      return { ok: failed.length === 0, failed, errs, ...res };
+    } finally {
+      await p.close({ runBeforeUnload: false }).catch(() => {});
+    }
   });
 
   def('no-console-errors-after-run', async ({ errors }) => ({ ok: errors.length === 0,

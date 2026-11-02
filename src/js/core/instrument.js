@@ -65,6 +65,18 @@ import { LEARN_TOPICS } from '../data/learn.js';
 
 let alertSeq = 0;
 
+/** How long a success or info notice stays (ms); one that carries a link stays longer. */
+export const NOTICE_MS = 6000;
+export const ACTION_NOTICE_MS = 15000;
+
+/** True while the pointer is over the notifications region or focus is inside it. */
+function noticesInUse() {
+  const doc = typeof document === 'undefined' ? null : document;
+  const region = doc && doc.querySelector('[data-osc="alerts"]');
+  if (!region) return false;
+  return region.matches(':hover') || region.contains(doc.activeElement);
+}
+
 /** An engine stand-in when none is given: the instrument works, nothing sounds. */
 function nullEngine() {
   return {
@@ -74,7 +86,7 @@ function nullEngine() {
     play: () => null, release: () => false, stopAll() {}, setMasterGain() {},
     updateLive: () => false, instantaneousFrequency: () => null, on: () => () => {},
     startMic: () => Promise.reject(new Error('Audio could not start.')), stopMic() {},
-    running: false, mic: null, revokeContinuous: () => 0,
+    running: false, mic: null, revokeContinuous: () => 0, tightenLimit: () => 0,
   };
 }
 
@@ -96,6 +108,16 @@ export function createInstrument(deps = {}) {
   const setInterval = (fn, ms) => timers.setInterval(fn, ms);
   const clearInterval = (id) => timers.clearInterval(id);
   const keyGuard = deps.keyGuard || (() => false);
+  // C011: told every time the continuous permission changes, so what else plays (the sequencer's
+  // loop and its Loop control) follows it; Reset included.
+  const continuousChanged = (allowed) => {
+    if (typeof deps.onContinuousChange !== 'function') return;
+    try {
+      deps.onContinuousChange(allowed);
+    } catch (e) {
+      /* theirs */
+    }
+  };
   const AudioEngine = { isSupported: () => engine.isSupported() };
   const env = (cmp) => ({ sampleRate: cmp.sampleRate, continuousAllowed: cmp.continuousAllowed });
 
@@ -522,6 +544,7 @@ export function createInstrument(deps = {}) {
     },
     setContinuous(on) {
       this.continuousAllowed = !!on;
+      continuousChanged(this.continuousAllowed);
       if (on) return;
       // Withdrawn: every voice the permission lengthened (latched, unlimited hold, continuous
       // sweep, finite tone beyond the limit) fades out now — before the sweep repeat is reset,
@@ -529,6 +552,23 @@ export function createInstrument(deps = {}) {
       engine.revokeContinuous();
       this.latched = false;
       if (this.sweep.repeat === 'continuous') this.sweep.repeat = 'once';
+    },
+    /**
+     * The Device & Limits hard limit (one of SAFETY_LIMIT_OPTIONS). C011: a lower limit reaches
+     * what sounds now: the engine shortens every voice the limit governs (hold, trigger, latch,
+     * the finite tone) to its start plus the new limit, on the audio clock
+     * (engine.tightenLimit). A higher limit applies from the next note and never lengthens a
+     * sounding one. Returns false for a value that is not an option.
+     */
+    setSafetyLimit(raw) {
+      const v = Number(raw);
+      if (!SAFETY_LIMIT_OPTIONS.includes(v)) return false;
+      const lower = v < this.safetyLimit;
+      this.safetyLimit = v;
+      if (lower && !this.continuousAllowed && typeof engine.tightenLimit === 'function') {
+        engine.tightenLimit(v);
+      }
+      return true;
     },
 
     onEngine(type, d) {
@@ -764,7 +804,23 @@ export function createInstrument(deps = {}) {
       const r = parseFrequency(raw);
       if (!r.ok) { this.setParamError(`sweep-${key}`, r.error); return; }
       this.sweep[key] = round(clamp(r.value, MIN_FREQUENCY, this.safeMax), 3);
-      this.setParamError(`sweep-${key}`, r.value > this.safeMax ? `Limited to the digital limit ${formatFrequency(this.safeMax)}.` : '');
+      // Before audio starts the limit comes from the assumed 44.1 kHz rate: say so (T003).
+      const provisional = this.provisional ? ' (provisional until audio starts)' : '';
+      let msg = '';
+      if (r.value > this.safeMax) {
+        msg = `Limited to the digital limit ${formatFrequency(this.safeMax)}${provisional}.`;
+      } else if (r.value < MIN_FREQUENCY) {
+        msg = `Raised to the minimum ${formatFrequency(MIN_FREQUENCY)}.`;
+      }
+      this.setParamError(`sweep-${key}`, msg);
+    },
+    /** A sweep value a preset, link or file set replaces what was typed there: its error goes. */
+    dropSupersededSweepErrors(before) {
+      for (const [key, id] of [['start', 'sweep-start'], ['end', 'sweep-end'],
+        ['durationMs', 'sweep-duration']]) {
+        if ((this.sweep || {})[key] === before[key]) continue;
+        this.setParamError(id, '');
+      }
     },
     sweepSlider(key) { return Math.round(frequencyToNormalized(this.sweep[key], 10, this.safeMax) * 1000); },
     setSweepSlider(key, v) { this.sweep[key] = round(normalizedToFrequency(Number(v) / 1000, 10, this.safeMax), 2); },
@@ -920,7 +976,12 @@ export function createInstrument(deps = {}) {
       const gain = this.gainLevel;
       this.stopNow();
       Object.assign(this, defaultInstrumentState());
+      // The Custom range fields follow the restored bounds, as applyConfig keeps them (C017).
+      this.customMinText = formatFrequency(this.customMin);
+      this.customMaxText = formatFrequency(this.customMax);
+      this.rangeError = '';
       this.continuousAllowed = false;
+      continuousChanged(false); // C011: the sequencer's loop follows (a loop past its cap stops)
       this.safetyLimit = 2;
       this.noteMode = false;
       this.loadedLabel = '';
@@ -963,12 +1024,20 @@ export function createInstrument(deps = {}) {
     // V1: oscillaApp.serializeConfig, serializeHash, restoreFromHash -> url-state.js
     serializeConfig() { return urlState.serializeConfig(this); },
     serializeHash() { return urlState.serializeHash(this, this.mode); },
+    /**
+     * The `instrument` domain of the hash dispatcher (ui/navigation.js): null (no configuration
+     * in the hash), false (it could not be read: defaults kept, its keys leave the address),
+     * 'partial' (some values were replaced by defaults: the address is rewritten to the state
+     * restored, unless a value waits for the real sample rate) or true (restored).
+     */
     restoreFromHash() {
       const r = urlState.restoreFromHashOn(this, location.hash, env(this));
-      if (!r.handled) return;
+      if (!r.handled) return null;
       if (r.pendingHashConfig) this.pendingHashConfig = r.pendingHashConfig;
       if (r.mode) this.mode = r.mode;
       for (const n of r.notices) this.notify(n.level, n.title, n.message);
+      if (r.malformed) return false;
+      return r.issues && !r.pendingHashConfig ? 'partial' : true;
     },
     /**
      * The hash Copy config URL writes: V1 wrote the instrument hash alone; V2 (ui/navigation.js)
@@ -1004,7 +1073,9 @@ export function createInstrument(deps = {}) {
      * notice is shown, so a continuous repeat restored as once is named on every path.
      */
     restoreConfig(cfg, origin) {
+      const before = { ...this.sweep };
       const r = applyConfigTo(this, cfg, origin, env(this));
+      this.dropSupersededSweepErrors(before);
       for (const n of r.notices) this.notify(n.level, n.title, n.message);
       return r;
     },
@@ -1020,24 +1091,36 @@ export function createInstrument(deps = {}) {
       if (m === 'dual') { this.source = 'dual'; if (this.vizMode !== 'spectrum') this.vizMode = 'interference'; }
     },
     // V1: oscillaApp: runDemo (index.html@a7b7a23)
-    runDemo(topic) {
+    /** opts.action: a link the demo's notice carries ({ href, text }, e.g. back to the lesson). */
+    runDemo(topic, { action = null } = {}) {
       const d = topic.demo;
       // A demo that needs another mode's source sets it fully, so earlier settings cannot skew it.
       if (d.cfg && d.cfg.source === 'dual') this.source = 'dual';
       this.applyConfig(d.cfg, 'learn');
       if (d.viz) this.vizMode = d.viz;
       this.loadedLabel = d.label;
-      this.notify('success', `Demo ready: ${d.label}`, this.isProgrammed ? 'Press TRIGGER (or Space) to hear it.' : 'Press and hold HOLD TO PLAY.');
+      this.notify('success', `Demo ready: ${d.label}`, this.isProgrammed ? 'Press TRIGGER (or Space) to hear it.' : 'Press and hold HOLD TO PLAY.', { action });
     },
 
 
     // ============================== alerts, dialogs, microphone
     // V1: oscillaApp: notify, dismissAlert (index.html@a7b7a23)
-    notify(level, title, message) {
+    // V2: opts.action { href, text } adds a link to the notice (a way back, U010). The notices
+    // are in flow, so a success or info notice still closes on its own (it would otherwise push
+    // the page down until dismissed): one with a link after ACTION_NOTICE_MS, and never while
+    // the pointer is over the notices or focus is in them (it waits NOTICE_MS more), so the
+    // link does not vanish under the pointer.
+    notify(level, title, message, { action = null } = {}) {
       if (this.alerts.some((a) => a.title === title && a.message === message)) return;
       const id = ++alertSeq;
-      this.alerts = [...this.alerts, { id, level, title, message }].slice(-4);
-      if (level === 'success' || level === 'info') setTimeout(() => this.dismissAlert(id), 6000);
+      this.alerts = [...this.alerts, { id, level, title, message, action }].slice(-4);
+      if (level === 'success' || level === 'info') {
+        const expire = () => {
+          if (action && noticesInUse()) setTimeout(expire, NOTICE_MS);
+          else this.dismissAlert(id);
+        };
+        setTimeout(expire, action ? ACTION_NOTICE_MS : NOTICE_MS);
+      }
       if (level === 'error') engine.lastError = { message: `${title}: ${message}`, context: 'ui' };
     },
     dismissAlert(id) { this.alerts = this.alerts.filter((a) => a.id !== id); },

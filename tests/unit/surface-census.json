@@ -213,6 +213,25 @@
       ]
     },
     {
+      "id": "synth",
+      "kind": "workspace",
+      "reachedFrom": [
+        "synth"
+      ],
+      "purpose": "The Synth: a semi-modular mono voice with a patch bay and polyphonic engines, played by the docked keys",
+      "state": "src/js/synth/ui.js",
+      "evidence": "none",
+      "deepLink": "#m=synth",
+      "tests": [
+        "tests/browser/synth.cjs",
+        "tests/browser/synth-engines.cjs"
+      ],
+      "plan": [
+        "K062",
+        "Q019"
+      ]
+    },
+    {
       "id": "about",
       "kind": "workspace",
       "reachedFrom": [
@@ -291,7 +310,7 @@
       "deepLink": "#m=analyzer",
       "tests": [
         "tests/browser/app.cjs",
-        "tests/browser/live-smoke.cjs"
+        "tests/browser/first-screen.cjs"
       ],
       "plan": [
         "F006",
@@ -423,7 +442,7 @@
       "evidence": "derived",
       "deepLink": "#m=synthesis",
       "tests": [
-        "tests/browser/live-smoke.cjs",
+        "tests/browser/first-screen.cjs",
         "tests/browser/qa-regressions.cjs"
       ],
       "plan": [
@@ -446,7 +465,7 @@
       "evidence": "derived",
       "deepLink": "#m=compare",
       "tests": [
-        "tests/browser/live-smoke.cjs"
+        "tests/browser/first-screen.cjs"
       ],
       "plan": [
         "F006",
@@ -469,7 +488,7 @@
       "deepLink": "#m=compare",
       "tests": [
         "tests/browser/app.cjs",
-        "tests/browser/live-smoke.cjs"
+        "tests/browser/first-screen.cjs"
       ],
       "plan": [
         "F006",
@@ -628,6 +647,25 @@
       ],
       "plan": [
         "F008"
+      ],
+      "charts": []
+    },
+    {
+      "id": "osc-view-synth",
+      "kind": "panel",
+      "reachedFrom": [
+        "synth"
+      ],
+      "purpose": "The Synth view: preset, arm, Open in Studio and Copy link, the Panel and Engines tabs and the generated panel",
+      "state": "src/js/synth/ui.js",
+      "evidence": "none",
+      "deepLink": "#m=synth",
+      "tests": [
+        "tests/browser/synth.cjs",
+        "tests/unit/synth-wording.test.mjs"
+      ],
+      "plan": [
+        "K062"
       ],
       "charts": []
     },
@@ -1152,6 +1190,42 @@
       ],
       "plan": [
         "K048"
+      ]
+    },
+    {
+      "id": "synth.tab:panel",
+      "kind": "subview",
+      "reachedFrom": [
+        "synth"
+      ],
+      "purpose": "The Panel tab: the semi-modular mono voice, its module plates, knobs and patch bay",
+      "state": "src/js/synth/panels/semi-mono.js",
+      "evidence": "none",
+      "deepLink": "#m=synth&yt=panel",
+      "tests": [
+        "tests/browser/synth-engines.cjs"
+      ],
+      "plan": [
+        "K062",
+        "Q019"
+      ]
+    },
+    {
+      "id": "synth.tab:engines",
+      "kind": "subview",
+      "reachedFrom": [
+        "synth"
+      ],
+      "purpose": "The Engines tab: the polyphonic engines the keys play, one chosen at a time",
+      "state": "src/js/synth/panels/engines.js",
+      "evidence": "none",
+      "deepLink": "#m=synth&yt=engines",
+      "tests": [
+        "tests/browser/synth-engines.cjs"
+      ],
+      "plan": [
+        "K090",
+        "Q019"
       ]
     },
     {
@@ -1699,6 +1773,43 @@
         "tests/browser/navigation.cjs"
       ],
       "plan": []
+    },
+    {
+      "id": "keyboard",
+      "kind": "route",
+      "reachedFrom": [
+        "playground",
+        "studio",
+        "synth"
+      ],
+      "purpose": "Whether the computer keyboard is armed in the view the link opens (kbd=1 arms, kbd=0 disarms)",
+      "state": "src/js/midi/keyboard-ui.js",
+      "evidence": "none",
+      "deepLink": "#m=playground&kbd=1",
+      "tests": [
+        "tests/browser/navigation.cjs"
+      ],
+      "plan": [
+        "K026"
+      ]
+    },
+    {
+      "id": "synth",
+      "kind": "route",
+      "reachedFrom": [
+        "synth"
+      ],
+      "purpose": "The Synth tab, engine, preset, changed values and cables in the address, applied without playing",
+      "state": "src/js/core/url-state-synth.js",
+      "evidence": "none",
+      "deepLink": "#m=synth&yp=bass",
+      "tests": [
+        "tests/browser/synth.cjs",
+        "tests/unit/synth-link.test.mjs"
+      ],
+      "plan": [
+        "K106"
+      ]
     },
     {
       "id": "records",

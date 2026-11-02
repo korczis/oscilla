@@ -26,22 +26,53 @@
   },
   "caps": {
     "src/index.html": 281000,
-    "src/js/audio/audio-engine.js": 51000,
-    "src/js/core/instrument.js": 61000,
+    "src/js/audio/audio-engine.js": 73000,
+    "src/js/core/instrument.js": 62000,
     "src/js/experiments/validate.js": 64000,
+    "src/js/main.js": 52000,
     "src/js/measurement/capture.js": 55000,
     "src/js/measurement/engine.js": 79000,
     "src/js/measurement/quality.js": 73000,
+    "src/js/sequencer/compiler.js": 46000,
     "src/js/studio/actions.js": 50000,
-    "src/js/studio/adapters/nodes.js": 45000,
     "src/js/studio/runtime.js": 58000,
-    "src/js/studio/transport.js": 80000,
+    "src/js/studio/transport.js": 92000,
     "src/js/studio/validate.js": 49000,
     "src/js/ui/experiments.js": 53000,
-    "src/js/ui/studio/graph-editor.js": 54000,
     "src/js/ui/studio/inspector.js": 81000,
     "src/js/ui/studio/timeline-editor.js": 53000,
     "src/js/ui/studio/workspace.js": 86000
   },
-  "raises": []
+  "raises": [
+    {
+      "file": "src/js/audio/audio-engine.js",
+      "cap": 73000,
+      "pr": 261,
+      "reason": "the feature train 2026-10-31 adds the MIDI note voices (#261 V502), the sequencer stage accounting (#266 K001), the lab-envelope live path (#296 C007), the held-note release (#301 C009) and the output-ceiling tap (#321 T001) to the one AudioEngine"
+    },
+    {
+      "file": "src/js/main.js",
+      "cap": 52000,
+      "pr": 305,
+      "reason": "the feature train 2026-10-31 wires the Synth workspace, MIDI keys, the one output owner (#305 C002), the import limits (#312), cross-links (#294) and the lab play options (#296) in the composition root"
+    },
+    {
+      "file": "src/js/sequencer/compiler.js",
+      "cap": 46000,
+      "pr": 320,
+      "reason": "the feature train 2026-10-31 adds the late-voice grid join (#276) and the continued voice from an offset with phased modulators (#320 H001) to compileSequence"
+    },
+    {
+      "file": "src/js/studio/transport.js",
+      "cap": 92000,
+      "pr": 320,
+      "reason": "the feature train 2026-10-31 adds the continued pattern voice on a rebuilt node (#320 H001) and the late-voice grid join (#276) to the Studio transport"
+    },
+    {
+      "file": "src/js/core/instrument.js",
+      "cap": 62000,
+      "pr": 367,
+      "reason": "merging C-line train B (#380) into the feature train 2026-10-31 (#367) adds main's restoreConfig and its whole restore report (#345 H002) to the instrument beside the train's superseded-sweep-error handling"
+    }
+  ]
 }

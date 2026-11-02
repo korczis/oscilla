@@ -13,6 +13,8 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 import { AudioEngine } from '../../src/js/audio/audio-engine.js';
+import { glideStart } from '../../src/js/audio/clock.js';
+import { RENDER_QUANTUM, START_OFFSET_S } from '../../src/js/core/constants.js';
 import {
   coherentTime, freezeParam, makeAdsrEnvelope, recordEvent, trackParam, v1OpenEnvelope, valueAt,
 } from '../../src/js/audio/voice.js';
@@ -182,6 +184,26 @@ test('periodicWave: carrier only, kept by updateLive (no wave dip), swappable', 
   assert.strictEqual(v.carrier.type, 'custom');
   assert.strictEqual(eng.setPeriodicWave({ id: 'B' }), true);
   assert.strictEqual(v.carrier.wave.id, 'B');
+});
+
+test('setPeriodicWave refuses a dual voice: A and B keep their waves (C007)', { skip }, () => {
+  const { eng, audio, advance } = setup();
+  withPeriodicWave(audio);
+  const st = defaultInstrumentState();
+  const dual = buildPlan({ ...st, source: 'dual' }, ENV_S).plan;
+  assert.strictEqual(dual.type, 'dual');
+  eng.play(dual, opt());
+  const v = eng.voice;
+  const types = () => [v.live.A.osc.type, v.live.B.osc.type];
+  const before = types();
+  assert.strictEqual(eng.setPeriodicWave({ id: 'additive' }), false, 'refused');
+  assert.strictEqual(v.periodicWave, null);
+  assert.deepStrictEqual(types(), before, 'neither oscillator changed');
+  assert.strictEqual(v.live.A.osc.wave, undefined);
+  assert.strictEqual(eng.clearPeriodicWave(), false, 'nothing to clear on a dual voice');
+  eng.stopAll();
+  advance(3);
+  assert.strictEqual(eng.activeNodeCount, 0);
 });
 
 test('clearPeriodicWave: back to plan.wave through the click-free dip', { skip }, () => {
@@ -692,6 +714,34 @@ test('limiter feed: constant 0 into the limiter for the context lifetime, gone o
     assert.deepStrictEqual(created[1].out, [`node:${eng.limiter.id}`]);
   });
 
+// V502: Gecko starts a setTargetAtTime at time 0 (a gain whose input is still silent) from the
+// param's default 1, not from its value, so the first sound of a page played up to 12.5 x the
+// level for about 100 ms in Firefox. On a context that has rendered nothing the master glide
+// starts at the end of the first render quantum, before any voice can start.
+test('V502: the master glide on a context that has rendered nothing starts after one quantum',
+  { skip }, () => {
+    for (const sampleRate of [22050, 44100, 48000]) {
+      const { eng, advance } = setup({ sampleRate });
+      assert.ok(eng.init());
+      const q = RENDER_QUANTUM / sampleRate;
+      assert.strictEqual(eng.ctx.currentTime, 0);
+      assert.strictEqual(glideStart(eng.ctx), q);
+      eng.setMasterGain(0.2);
+      assert.deepStrictEqual(eng.master.gain.events, [['target', 0.2, q, 0.02]],
+        `${sampleRate} Hz: the glide starts after the first quantum, never at 0`);
+      assert.ok(q < START_OFFSET_S, `${sampleRate} Hz: a quantum ends before any voice starts`);
+      const info = eng.play(plan({ pattern: 'tone', frequency: 440 }), opt());
+      assert.ok(info && info.ok !== false && eng.voice.t0 > q,
+        `${sampleRate} Hz: the voice starts after the glide does`);
+      // Once the context has rendered, a glide starts at currentTime, as in V1.
+      advance(0.25);
+      assert.strictEqual(glideStart(eng.ctx), 0.25);
+      eng.setMasterGain(0.1);
+      assert.deepStrictEqual(eng.master.gain.events.at(-1), ['target', 0.1, 0.25, 0.02]);
+      eng.stopAll();
+    }
+  });
+
 test('limiter feed: none where the context has no ConstantSourceNode', { skip }, () => {
   const { eng } = setup();
   assert.ok(eng.init());
@@ -921,3 +971,150 @@ test('V251: coherentTime keeps the call order of events an ulp apart, nothing el
   assert.strictEqual(coherentTime(p, 2), 2);
   assert.strictEqual(coherentTime({}, 1.468), 1.468, 'per param');
 });
+
+// C009 (findings engine-sync-9, dead-controls-8): a release time edited while a note is held is
+// the one letting go uses. play() copies the release into v.release at the note start; the
+// note-off time is a separate stored number, so the step envelopes keep their play-time value
+// and no AudioParam is written while the note is held (V249).
+test('C009: setNoteOffRelease: a held note fades over the edited release when let go', { skip },
+  () => {
+    const { eng, advance } = setup();
+    eng.play(plan({ pattern: 'tone' }), opt({ releaseS: 0.03 }));
+    const v = eng.voice;
+    advance(0.3);
+    const before = JSON.stringify(v.nodes.map((n) => (n.gain ? n.gain.events : null)));
+    assert.strictEqual(eng.setNoteOffRelease(2), true);
+    assert.strictEqual(JSON.stringify(v.nodes.map((n) => (n.gain ? n.gain.events : null))), before,
+      'no AudioParam is written while the note is held');
+    assert.strictEqual(v.release, 0.03, 'the play-time release stays for the step envelopes');
+    assert.strictEqual(eng.release(), true);
+    const q = 128 / SR;
+    const t = Math.ceil((0.3 + 0.02) / q) * q;
+    const fade = v.nodes[2].gain.events;
+    assert.deepStrictEqual(fade, [['set', 1, t], ['linear', 1e-4, t + 2]], 'the fade ends at t + 2');
+    assert.ok(Math.abs(v.endTime - (t + 2 + 0.01)) < 1e-9);
+    assert.strictEqual(eng.setNoteOffRelease(0.5), false, 'a release that started keeps its time');
+    advance(3);
+    assert.strictEqual(eng.activeNodeCount, 0);
+    assert.strictEqual(eng.setNoteOffRelease(1), false, 'no voice: refused');
+  });
+
+test('C009: the edited release survives a restart; step envelopes keep the play-time one',
+  { skip }, () => {
+    const { eng, advance, flush } = setup();
+    const later = (dt) => advance(eng.ctx.currentTime + dt); // advance() takes absolute time
+    const rs = [];
+    const stepEnvelope = (eg, t, dur, a, r) => {
+      rs.push(r);
+      eg.setValueAtTime(1e-4, t);
+      eg.linearRampToValueAtTime(1, t + Math.min(a, dur / 2));
+      eg.exponentialRampToValueAtTime(1e-4, t + dur);
+    };
+    const p = buildPlan({
+      ...defaultInstrumentState(), source: 'sweep',
+      sweep: {
+        start: 200, end: 2000, durationMs: 500, curve: 'log', direction: 'up', repeat: 'continuous',
+      },
+    }, ENV_S).plan;
+    eng.play(p, opt({ releaseS: 0.03, stepEnvelope }));
+    const first = rs.length;
+    assert.ok(first > 0 && rs.every((r) => r === 0.03));
+    assert.strictEqual(eng.setNoteOffRelease(2), true);
+    later(5);
+    flush();
+    assert.ok(rs.length > first, 'topped up');
+    assert.ok(rs.every((r) => r === 0.03), 'top-ups keep the play-time step release');
+    eng.stopAll();
+    later(1);
+    // A pattern-type change while held restarts the voice from its options: the edit is kept,
+    // for the Settings release and for an ADSR release (copied, not the caller's object).
+    for (const extra of [{}, { adsr: { a: 0.01, d: 0.1, s: 0.6, r: 0.3 } }]) {
+      eng.play(plan({ pattern: 'tone' }), opt({ releaseS: 0.03, ...extra }));
+      later(0.2);
+      assert.strictEqual(eng.setNoteOffRelease(2), true);
+      assert.strictEqual(eng.updateLive(plan({ pattern: 'am' })), 'restarted');
+      assert.strictEqual(eng.voice.release, 2, 'the replacement voice takes the edited release');
+      if (extra.adsr) assert.strictEqual(extra.adsr.r, 0.3, 'the caller\'s adsr is not edited');
+      later(0.2);
+      const v = eng.voice;
+      assert.strictEqual(eng.release(), true);
+      const fade = v.nodes[2].gain.events;
+      assert.ok(Math.abs(fade[1][2] - fade[0][2] - 2) < 1e-9, 'it fades over 2 s');
+      eng.stopAll();
+      later(3);
+    }
+    assert.strictEqual(eng.activeNodeCount, 0);
+  });
+
+// C009 review F1 (P1): in the app's default (continuous off, 2 s hard limit) a release edited
+// upward while the note is held must not turn letting go into nothing. The fade that does not
+// fit before the limited voice's own end is shortened to end before it: the let-go always starts
+// a fade (and a 'release' event), and the voice never ends later than the hard limit.
+test('C009: a release edited past a limited voice\'s end still fades it out when let go',
+  { skip }, () => {
+    const { eng, advance } = setup();
+    const events = [];
+    eng.on((type, d) => events.push([type, d]));
+    const info = eng.play(plan({ pattern: 'tone' }), opt({ continuous: false, limitS: 2 }));
+    assert.strictEqual(info.limited, true);
+    const v = eng.voice;
+    const end = v.endTime;
+    advance(0.5);
+    assert.strictEqual(eng.setNoteOffRelease(1), true);
+    advance(1.2);
+    assert.strictEqual(eng.release(), true, 'letting go starts a fade');
+    assert.deepStrictEqual(events.filter(([type]) => type === 'release').map(([, d]) => d.natural),
+      [false], 'the let-go is announced (RELEASING)');
+    const q = 128 / SR;
+    const t = Math.ceil((1.2 + 0.02) / q) * q;
+    const fade = v.nodes[2].gain.events;
+    assert.strictEqual(fade.length, 2);
+    assert.deepStrictEqual(fade[0], ['set', 1, t], 'the fade starts at the let-go');
+    assert.strictEqual(fade[1][0], 'linear');
+    assert.ok(fade[1][2] - t > 0.5, 'over the time the limit leaves, not a click');
+    assert.ok(fade[1][2] - t < 1, 'shorter than the 1 s edit, which does not fit');
+    assert.ok(v.endTime < end, 'it never ends later than the hard limit');
+    assert.ok(fade[1][2] < v.endTime);
+    advance(3);
+    assert.strictEqual(eng.activeNodeCount, 0);
+
+    // An edit that fits is used as it is.
+    const { eng: e2, advance: adv2 } = setup();
+    e2.play(plan({ pattern: 'tone' }), opt({ continuous: false, limitS: 2 }));
+    const v2 = e2.voice;
+    adv2(0.5);
+    assert.strictEqual(e2.setNoteOffRelease(0.4), true);
+    adv2(0.6);
+    assert.strictEqual(e2.release(), true);
+    const f2 = v2.nodes[2].gain.events;
+    assert.ok(Math.abs(f2[1][2] - f2[0][2] - 0.4) < 1e-9, 'it fades over the edited 0.4 s');
+  });
+
+// C009 review F7 (P2): the same holds for any voice with a finite end of its own, continuous on
+// included: a held programmed pattern (a sweep played once) let go after a release edit longer
+// than what is left of it fades from the let-go, not at full level to its own end.
+test('C009: a held programmed pattern let go after a long release edit fades from the let-go',
+  { skip }, () => {
+    const { eng, advance } = setup();
+    const p = buildPlan({
+      ...defaultInstrumentState(), source: 'sweep',
+      sweep: {
+        start: 200, end: 2000, durationMs: 3000, curve: 'log', direction: 'up', repeat: 'once',
+      },
+    }, ENV_S).plan;
+    eng.play(p, opt({ continuous: true }));
+    const v = eng.voice;
+    const end = v.endTime;
+    assert.ok(Number.isFinite(end) && end > 2.9, 'a programmed end of its own');
+    advance(0.2);
+    assert.strictEqual(eng.setNoteOffRelease(2), true);
+    advance(1.5);
+    assert.strictEqual(eng.release(), true, 'letting go starts a fade');
+    const fade = v.nodes[2].gain.events;
+    assert.strictEqual(fade.length, 2);
+    const q = 128 / SR;
+    assert.deepStrictEqual(fade[0], ['set', 1, Math.ceil((1.5 + 0.02) / q) * q]);
+    assert.ok(fade[1][2] < v.endTime && v.endTime < end, 'it ends before the pattern would');
+    advance(4);
+    assert.strictEqual(eng.activeNodeCount, 0);
+  });

@@ -7,6 +7,7 @@
 // are absolute seconds. Everything here converts between the two or describes model objects in
 // words for the screen and for screen readers (§143: names, kinds, times; never coordinates).
 
+import { formatClock, formatSeconds as formatSecondsText } from '../../core/frequency.js';
 import { BLOCK_SCHEMA, BLOCK_TYPES, describeBlock } from '../../sequencer/model.js';
 import { clipTarget } from '../../studio/clip-targets.js';
 import { NODE_REGISTRY } from '../../studio/registry.js';
@@ -179,26 +180,14 @@ export function followScroll(x, scrollX, widthPx, marginPx = 24) {
 
 // ---------------------------------------------------------------- time readouts
 
-/** "01:04.210": minutes, seconds and milliseconds (the transport clock, §127). */
-export function formatClock(seconds) {
-  const s = Math.max(0, finite(seconds) ? seconds : 0);
-  const ms = Math.floor(s * 1000 + 1e-6);
-  const m = Math.floor(ms / 60000);
-  const rest = ms - m * 60000;
-  const sec = Math.floor(rest / 1000);
-  return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}.`
-    + `${String(rest % 1000).padStart(3, '0')}`;
-}
+// "01:04.210" (the transport clock, §127) and "1.250 s" (fields and announcements, millisecond
+// resolution) are core/frequency.js's formatClock and formatSeconds (G002, the one units module).
+export { formatClock, formatSecondsText };
 
 /** The transport readout in the model's time mode: clock (seconds) or bar.beat.thousandths. */
 export function formatTransportTime(seconds, transport) {
   return transport && transport.timeMode === 'musical'
     ? formatMusicalPosition(Math.max(0, seconds), transport) : formatClock(seconds);
-}
-
-/** "1.250 s" for fields and announcements (millisecond resolution). */
-export function formatSecondsText(seconds) {
-  return `${(finite(seconds) ? seconds : 0).toFixed(3)} s`;
 }
 
 /** A time in the model's mode for words: "1.250 s" or "bar 2 beat 1 (1.250 s)". */

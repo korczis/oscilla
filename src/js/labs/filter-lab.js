@@ -14,8 +14,6 @@
 import { createFilterStage, normalizeFilter, FILTER_TYPES, usesGain } from '../audio/filters.js';
 import { createFilterChart } from '../charts/filter-chart.js';
 import {
-  formatHz,
-  parseFrequency,
   parseNumber,
   logSliderToValue,
   valueToLogSlider,
@@ -24,6 +22,7 @@ import {
 import { FILTER_DRAG } from '../charts/drag-math.js';
 import { on, onUi, bindSwitch, setSlider, setField, activeValue, onAdapterChange } from './dom.js';
 import { FILTER_PREVIEW_SAMPLE_RATE } from '../core/constants.js';
+import { formatFrequency, parseFrequency } from '../core/frequency.js';
 
 export const FILTER_DEFAULTS = Object.freeze({
   type: 'lowpass',
@@ -108,9 +107,10 @@ export function mount(rootEl, adapter) {
     : null;
 
   function syncInputs() {
-    setField(el.cutoffText, formatHz(config.frequency));
+    // The cutoff reads the Playground's frequency text (G002: one text per quantity).
+    setField(el.cutoffText, formatFrequency(config.frequency));
     setSlider(el.cutoff, valueToLogSlider(config.frequency, FILTER_DRAG.minHz, FILTER_DRAG.maxHz),
-      formatHz(config.frequency));
+      formatFrequency(config.frequency));
     setField(el.qText, formatQ(config.Q));
     setSlider(el.q, valueToLogSlider(config.Q, FILTER_DRAG.qMin, FILTER_DRAG.qMax),
       formatQ(config.Q));
@@ -138,9 +138,10 @@ export function mount(rootEl, adapter) {
   const offs = [
     enable.dispose,
     on(el.cutoffText, 'change', () => {
-      const f = parseFrequency(el.cutoffText.value);
-      if (f > 0) set({ frequency: f });
-      else setField(el.cutoffText, formatHz(config.frequency));
+      // The one frequency grammar (core/frequency.js); a refused entry restores the value.
+      const r = parseFrequency(el.cutoffText.value);
+      if (r.ok) set({ frequency: r.value });
+      else setField(el.cutoffText, formatFrequency(config.frequency));
     }),
     on(el.cutoff, 'input', () => set({
       frequency: logSliderToValue(Number(el.cutoff.value), FILTER_DRAG.minHz, FILTER_DRAG.maxHz),

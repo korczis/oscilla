@@ -268,7 +268,11 @@ test('T023 review: a lane-owned base and a not-yet-applied edit claim no lowered
 
 // ---------------------------------------------------------------- review of #342, round 2
 
-/** Oscillator -> Master, LFO 1 into its frequency, LFO 2 into LFO 1's Rate (`props`). */
+/**
+ * Oscillator -> Master, Random 1 into its frequency, LFO 1 into Random 1's Rate (`props`).
+ * Random's Rate keeps the 100 Hz range; the LFO's reaches audio rate since K010 (its cap is
+ * 0.95 x Nyquist), so the rate held by its own range is a Random's here.
+ */
 function rateRig(sampleRate, rate, props) {
   const fx = createFakeAudioEnv({ sampleRate });
   const engine = new AudioEngine({ env: fx.env });
@@ -284,32 +288,33 @@ function rateRig(sampleRate, rate, props) {
   const osc = add('oscillator', { params: { frequency: 440 } });
   const master = add('master');
   connect(osc, 'audio', master, 'audio');
-  const lfo1 = add('lfo', { params: { rate } });
-  connect(lfo1, 'control', osc, 'frequency', { depth: 10 });
-  const lfo2 = add('lfo', { params: { rate: 1 } });
-  const edge = connect(lfo2, 'control', lfo1, 'rate', props);
-  const s = { fx, engine, runtime, store, osc: lfo1, lfo1, lfo2, edge };
+  const rnd = add('random', { params: { rate } });
+  connect(rnd, 'control', osc, 'frequency', { depth: 10 });
+  const lfo = add('lfo', { params: { rate: 1 } });
+  const edge = connect(lfo, 'control', rnd, 'rate', props);
+  const s = { fx, engine, runtime, store, osc: rnd, rnd, lfo, edge };
   ok(runtime.apply(store.getModel(), { revision: store.getRevision() }));
   s.started = ok(runtime.start());
   return s;
 }
 
-// R1 (P1): an LFO's Rate is capped by its own range (100 Hz), not by 0.95 x Nyquist; the
+// R1 (P1): a Random's Rate is capped by its own range (100 Hz), not by 0.95 x Nyquist; the
 // reason, the bound and the parameter named must say so.
 test('T023 review R1: a Rate capped by its range names the range, not 0.95 x Nyquist', () => {
   const s = rateRig(48000, 80, { depth: 1, offset: 50 });
   const got = limits(s.runtime.debugInfo().diagnostics).filter((d) => d.entity.kind === 'node');
   assert.equal(got.length, 1, JSON.stringify(s.runtime.debugInfo().diagnostics));
   const d = got[0];
-  assert.deepEqual(d.entity, { kind: 'node', id: s.lfo1 });
-  assert.equal(d.message, 'LFO 1 Rate is 80 Hz, 130 Hz with its cables\' constant offset, but '
-    + 'plays 100 Hz: the Studio keeps LFO 1 Rate at or below 100 Hz, the top of its range.');
+  assert.deepEqual(d.entity, { kind: 'node', id: s.rnd });
+  assert.equal(d.message, 'Random 1 Rate is 80 Hz, 130 Hz with its cables\' constant offset, '
+    + 'but plays 100 Hz: the Studio keeps Random 1 Rate at or below 100 Hz, the top of its '
+    + 'range.');
   assert.equal(d.details.param, 'rate');
   assert.equal(d.details.target, 'rate');
   assert.equal(d.details.bound, 'range');
   assert.equal(d.details.cap, 100);
   assert.ok(close(d.details.played, 100), `played ${d.details.played}`);
-  const f = inspector.inspectorView(s.store.getModel(), { nodes: [s.lfo1] },
+  const f = inspector.inspectorView(s.store.getModel(), { nodes: [s.rnd] },
     { truth: truthOf(s) }).fields.find((x) => x.key === 'rate');
   assert.equal(f.readout, '80 Hz (130 Hz with cables), plays 100 Hz');
   assert.equal(f.limitNote, 'Plays 100 Hz, its cables\' constant 50 Hz included: the Studio '
@@ -325,8 +330,8 @@ test('T023 review R1: a cable into a Rate names the Rate and its range', () => {
   assert.equal(got.length, 1, JSON.stringify(s.started.warnings));
   const d = got[0];
   assert.deepEqual(d.entity, { kind: 'edge', id: s.edge });
-  assert.equal(d.message, 'The cable LFO 2 → LFO 1 Rate plays 63% of its depth (50 Hz of '
-    + '80 Hz): the Studio keeps LFO 1 Rate at or below 100 Hz, the top of its range.');
+  assert.equal(d.message, 'The cable LFO 1 → Random 1 Rate plays 63% of its depth (50 Hz of '
+    + '80 Hz): the Studio keeps Random 1 Rate at or below 100 Hz, the top of its range.');
   assert.equal(d.details.param, 'rate');
   assert.equal(d.details.target, 'rate');
   assert.equal(d.details.bound, 'range');

@@ -22,10 +22,14 @@
 //        ADR, accepted or not, is refused (convention: .ai/repo/adrs/README.md).
 //   3. bump package.json + package-lock.json ONCE (npm version --no-git-tag-version), or
 //      confirm the untagged version package.json already carries
-//   4. rebuild dist/index.html, then npm run version:check, npm run release-gate and
-//      majordomus doctor
-//   5. on any failure restore package.json, package-lock.json and dist/index.html from HEAD
-//      (the tree was clean, so that is exact) and exit non-zero, loudly
+//   4. refresh src/data/roadmap.json from the plan (scripts/roadmap.mjs, U002: the open
+//      milestones About's "What comes next" shows), rebuild dist/index.html, then npm run
+//      version:check, npm run release-gate and majordomus doctor; the gate runs with
+//      OSC_ROADMAP_CHECK=1, so tests/unit/about-current.test.mjs refuses a roadmap that
+//      differs from the plan
+//   5. on any failure restore package.json, package-lock.json, src/data/roadmap.json and
+//      dist/index.html from HEAD (the tree was clean, so that is exact) and exit non-zero,
+//      loudly
 //   6. on success write the gate receipt into the git directory (never a tracked file, so the
 //      tree stays clean) for release:publish: version, source digest, dist sha256 and the gate
 //      tree (rule project.release-receipt-binds-gate) at the time the gate passed. Any later
@@ -50,10 +54,14 @@ import {
   RECORDS_DIR, hasRecordFile, missingRecords, needsRecord, parseRecord,
 } from './release-record.mjs';
 import { parseYaml } from './yaml-subset.mjs';
+import { ROADMAP_REL } from './roadmap.mjs';
 
 export const RECEIPT_NAME = 'oscilla-release-gate.json';
-export const RESTORE_PATHS = ['package.json', 'package-lock.json', 'dist/index.html'];
+export const RESTORE_PATHS = [
+  'package.json', 'package-lock.json', ROADMAP_REL, 'dist/index.html',
+];
 export const GATE_COMMANDS = [
+  ['node', ['scripts/roadmap.mjs']],
   ['npm', ['run', 'build']],
   ['npm', ['run', 'version:check']],
   ['npm', ['run', 'release-gate']],
@@ -134,9 +142,10 @@ export function gateEnvProblems(env = process.env) {
     + '(OSC_LOAD_MAX and OSC_LOAD_WAIT_MS stay allowed)');
 }
 
-/** The environment the gate commands run in: `env` with CI's skip semantics. */
+/** The environment the gate commands run in: `env` with CI's skip semantics, and the
+ *  committed roadmap judged against the plan (tests/unit/about-current.test.mjs). */
 export function gateEnv(env = process.env) {
-  const out = { ...env, OSC_STRICT_SKIPS: '1' };
+  const out = { ...env, OSC_STRICT_SKIPS: '1', OSC_ROADMAP_CHECK: '1' };
   for (const k of NARROWING_ENV) delete out[k];
   return out;
 }
