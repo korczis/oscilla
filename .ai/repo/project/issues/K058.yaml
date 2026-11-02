@@ -13,6 +13,9 @@ scope:
   - "tests/unit/ui-flowbite-pro-baseline.json"
   - "tests/unit/knob.test.mjs"
   - "tests/browser/knob.cjs"
+  - "src/js/ui/synth/knob.js"
+  - "tests/unit/ui-synth-knob.test.mjs"
+  - "tests/unit/ui-synth-fixture.mjs"
   - "tests/README.md"
   - "dist"
 depends_on:
