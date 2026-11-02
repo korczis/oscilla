@@ -67,6 +67,7 @@ export const CONTENT_LINKS = Object.freeze([
   { osc: 'def.toMeasure', from: ['experiments'], to: 'measure' },
   { osc: 'exp.toMeasure', from: ['experiments'], to: 'measure' },
   { osc: 'presets.toPlayground', from: ['presets'], to: 'playground' },
+  { osc: 'presets.altPlayground', from: ['presets'], to: 'playground' },
 ].map((l) => Object.freeze({ ...l, from: Object.freeze([...l.from]) })));
 
 /** The panel links whose every workspace relates to their target in the registry. */

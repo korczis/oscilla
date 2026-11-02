@@ -233,8 +233,8 @@
           <div id="osc-export-menu" role="menu" hidden aria-labelledby="osc-export"
             x-bind="menuPanel('export')"
             class="absolute right-0 z-50 py-1 mt-2 text-base list-none bg-white rounded-lg shadow-lg w-72 top-full dark:bg-gray-700">
-            <button type="button" role="menuitem" data-osc="export.wav" @click="exportAudio('pattern')" :aria-disabled="String(exportBusy)" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Export tone / pattern (WAV)</button>
-            <button type="button" role="menuitem" data-osc="export.seqWav" @click="exportAudio('sequence')" :aria-disabled="String(exportBusy)" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Export sequence (WAV)</button>
+            <button type="button" role="menuitem" data-osc="export.wav" @click="exportAudio('pattern')" :aria-disabled="String(exportBusy)" :title="exportBusy ? 'An export is running: this one is offered again when it ends' : null" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Export tone / pattern (WAV)<span class="ml-1 text-xs text-gray-500 dark:text-gray-300" data-osc-reason x-show="exportBusy" x-cloak>(an export is running)</span></button>
+            <button type="button" role="menuitem" data-osc="export.seqWav" @click="exportAudio('sequence')" :aria-disabled="String(exportBusy)" :title="exportBusy ? 'An export is running: this one is offered again when it ends' : null" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Export sequence (WAV)<span class="ml-1 text-xs text-gray-500 dark:text-gray-300" data-osc-reason x-show="exportBusy" x-cloak>(an export is running)</span></button>
             <button type="button" role="menuitem" data-osc="export.png" @click="screenshot()" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Export graph (PNG)</button>
             <button type="button" role="menuitem" data-osc="export.config" @click="exportConfig()" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Export config (JSON)</button>
             <button type="button" role="menuitem" data-osc="export.url" @click="copyConfigUrl()" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Copy config URL</button>
@@ -2546,11 +2546,14 @@
                     <span class="osc-preset-name" x-text="p.name"></span>
                     <span class="osc-preset-desc" x-text="p.desc"></span>
                     <span class="osc-preset-params osc-num" x-text="presetParams(p)"></span>
-                    <span class="osc-preset-disabled" x-show="presetDisabled(p)" x-text="presetDisabledReason(p)"></span>
+                    <span class="osc-preset-disabled" x-show="presetDisabled(p)" :id="'osc-preset-why-' + p.id" x-text="presetDisabledReason(p)"></span>
+                    <a href="#m=playground" data-osc="presets.altPlayground" x-show="presetDisabled(p)"
+                      class="self-start text-sm font-medium text-primary-700 hover:underline [@media(pointer:coarse)]:inline-flex [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:items-center dark:text-primary-400">Set a tone within the limit in the Playground</a>
                   </div>
                   <div class="osc-preset-actions">
                     <button type="button" class="osc-btn osc-btn-primary" data-osc="presets.load"
                       :disabled="presetDisabled(p)" @click="loadPresetFromView(p)"
+                      :aria-describedby="presetDisabled(p) ? 'osc-preset-why-' + p.id : null"
                       :aria-label="'Load preset ' + p.name">Load</button>
                     <button type="button" class="osc-btn osc-btn-secondary" data-osc="presets.delete"
                       x-show="p.custom" @click="deletePresetFocus(p, $event)" @blur="cancelDelete(p.id)"
@@ -3188,8 +3191,8 @@
         </button>
         <button type="button" class="osc-sb-action" id="osc-act-export-audio" data-osc="action.exportAudio"
           @click="exportAudio()" :aria-disabled="String(exportBusy)" :aria-busy="String(exportBusy)"
-          aria-label="Export audio (WAV)">
-          <svg aria-hidden="true"><use href="#i-upload"/></svg><span>Export Audio</span>
+          :title="exportBusy ? 'An export is running: this one is offered again when it ends' : null" aria-label="Export audio (WAV)">
+          <svg aria-hidden="true"><use href="#i-upload"/></svg><span data-osc-reason x-text="exportBusy ? 'Exporting…' : 'Export Audio'">Export Audio</span>
         </button>
         <button type="button" class="osc-sb-action" id="osc-act-save-preset" data-osc="action.savePreset" @click="openSave()"
           aria-label="Save preset">

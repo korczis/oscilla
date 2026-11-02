@@ -42,6 +42,28 @@
 //                   header About, Measure → Experiments, the compact Studio and its Back, the
 //                   Filter Lab back, a Learn demo, every link of About's workspace list and
 //                   every Synth link of Filter Lab, Synthesis, the Sequencer and Presets.
+//   related-census  P07 (lane A wave 3): every route of the registry's related pages and of
+//                   the panel and content links (counterparts.js PANEL_LINKS, CONTENT_LINKS),
+//                   from each workspace that shows it: the visible link is enabled and named,
+//                   activating it opens an initialized target (the workspace, ready; a Studio
+//                   template applied) with focus on its heading or inside its view, Back
+//                   returns to the source and Forward to the target, and a fresh page at the
+//                   address (a deep link) opens the target too; no AudioContext is created and
+//                   no getUserMedia called (the link is activated by script, without the pointer
+//                   that unlocks audio, main.js), and no voice sounds. Keyboard activation (Enter
+//                   on the first strip link) opens its target without sound or microphone.
+//   journey-18      (pack G 18) every Learn concept's tool link opens its working workspace,
+//                   initialized, with no AudioContext created, no getUserMedia and no voice;
+//                   one link per topic of cross-links.js LEARN_TOOLS, none dead.
+//   journey-19      (pack G 19) About's version is package.json's (the build's BUILD.label) and
+//                   its "What comes next" lists src/data/roadmap.json's milestones in order with
+//                   their done and required counts.
+//   journey-20      (pack G 20) on lane A's pages (Filter Lab, Synthesis, Sequencer, Presets,
+//                   Learn, About) and the shell, at 1536x1024 and 390x844, in their states (every
+//                   Presets category, an export running), every shown disabled control states a
+//                   visible reason (aria-describedby to shown text, or a shown [data-osc-reason]
+//                   inside it) and sits beside an enabled way onward (a shown link or button in
+//                   its row or menu).
 //   no-console-errors
 //
 // Waits are condition polls through lib/wait.cjs with a named wall-clock deadline (rule
@@ -51,6 +73,7 @@
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
+const fs = require('node:fs');
 const { serveDist } = require('./lib/serve.cjs');
 const { until } = require('./lib/wait.cjs');
 
@@ -131,7 +154,25 @@ async function loadModel() {
       }
     }
   }
-  const { COUNTERPARTS } = await import(src('ui', 'counterparts.js'));
+  const { COUNTERPARTS, PANEL_LINKS, CONTENT_LINKS } = await import(src('ui', 'counterparts.js'));
+  JOURNEY.learnTools = (await import(src('ui', 'cross-links.js'))).LEARN_TOOLS;
+  JOURNEY.version = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
+  JOURNEY.roadmap = JSON.parse(fs.readFileSync(path.join(ROOT, 'src', 'data', 'roadmap.json'),
+    'utf8')).milestones.map((m) => [m.id, `${m.done} of ${m.required} done`]);
+  {
+    const rows = new Map();
+    const add = (from, ref) => {
+      const href = `#m=${ref}`;
+      const route = routeOfHash(href);
+      const tpl = /&st=([a-z0-9-]+)/.exec(ref);
+      rows.set(`${from} ${href}`, [from, href, route && route.workspace, tpl ? tpl[1] : null]);
+    };
+    for (const w of WORKSPACE_REGISTRY) {
+      for (const r of w.related || []) add(w.id, relatedHref(r).slice(3));
+    }
+    for (const l of [...PANEL_LINKS, ...CONTENT_LINKS]) for (const f of l.from) add(f, l.to);
+    CENSUS.push(...rows.values());
+  }
   for (const c of COUNTERPARTS.filter((x) => x.osc)) {
     for (const w of c.from) {
       ACTIONS.push([`${w} → ${c.workspace}`, w, `[data-osc="${c.osc[w]}"]`, c.workspace]);
@@ -166,6 +207,11 @@ const GARBAGE = [
   ['%E0%A4%A', 'playground', [], null],
   [`m=${'a'.repeat(5000)}`, 'playground', [], 'm=playground', [PAGE]],
 ];
+// P07 census rows, [from, href, target workspace, template or null], read at start.
+const CENSUS = [];
+// Pack G journeys: the Learn tools (cross-links.js LEARN_TOOLS), the package version and the
+// committed roadmap, read at start.
+const JOURNEY = { learnTools: {}, version: null, roadmap: [] };
 // The registry's related addresses per workspace, and the ones that do not route there.
 const RELATED = {};
 const REGISTRY_RELATED = {};
@@ -270,6 +316,11 @@ const H = {
   /** The warnings shown now (the notice stack, core/instrument.js notify). */
   warnings: (page) => page.evaluate(() => window.OSCILLA.app.alerts
     .filter((a) => a.level === 'warning' || a.level === 'error').map((a) => a.title)),
+  /** Let n animation frames pass (Alpine applies a change, the layout settles). */
+  frames: (page, n = 2) => page.evaluate((k) => new Promise((r) => {
+    const step = (i) => (i ? requestAnimationFrame(() => step(i - 1)) : r());
+    step(k);
+  }), n),
   async setWorkspace(page, w) {
     await page.evaluate((x) => window.OSCILLA.app.setWorkspace(x), w);
     return H.at(page, w, `setWorkspace(${w})`);
@@ -324,6 +375,26 @@ async function runLeg(name, origin) {
     p.on('console', (m) => { if (m.type() === 'error') errors.push(`console: ${m.text()}`); });
   });
   console.log(`\n${leg} (${browser.version()})`);
+  const probe = () => {
+    // Count what could start sound or the microphone (installed before the app loads).
+    window.__oscAudit = { ctx: 0, gum: 0 };
+    const wrap = (name) => {
+      const C = window[name];
+      if (!C) return;
+      window[name] = class extends C {
+        constructor(...a) { super(...a); window.__oscAudit.ctx += 1; }
+      };
+    };
+    wrap('AudioContext');
+    wrap('webkitAudioContext');
+    const md = navigator.mediaDevices;
+    if (md && md.getUserMedia) {
+      const g = md.getUserMedia.bind(md);
+      md.getUserMedia = (...a) => { window.__oscAudit.gum += 1; return g(...a); };
+    }
+  };
+  await context.addInitScript(probe);
+
   try {
     if (want('hrefs') || want('nav-hrefs') || want('exits')) {
       const page = await H.open(context, base, '');
@@ -576,6 +647,195 @@ async function runLeg(name, origin) {
         && JSON.stringify(fwd) === JSON.stringify(WORKSPACES.slice(1)),
         JSON.stringify({ back, fwd }));
       await page.close();
+    }
+
+    if (want('related-census')) {
+      const bad = [];
+      const read = (page) => page.evaluate(() => {
+        const a = window.OSCILLA.app;
+        const el = document.activeElement;
+        return { workspace: a.workspace, ready: document.documentElement.dataset.ready,
+          studio: !!(a.studio && a.studio.ready), audit: window.__oscAudit,
+          voice: !!window.OSCILLA.engine.voice, playing: !!a.playing,
+          focus: el ? (el.id || el.dataset.osc || el.tagName) : null,
+          focusOk: !!el && (/^H[1-4]$/.test(el.tagName)
+            || !!el.closest('[data-osc-modes], main section')) };
+      });
+      for (const [from, href, to, tpl] of CENSUS) {
+        const page = await H.open(context, base, `m=${from}`);
+        try {
+          const link = await until(() => page.evaluate((h) => {
+            const a = [...document.querySelectorAll(`a[href="${h}"]`)].find((x) => x
+              .getClientRects().length > 0 && !x.closest('#osc-sidebar'));
+            if (!a) return null;
+            a.dataset.oscCensus = '1';
+            return { name: (a.getAttribute('aria-label') || a.textContent).trim(),
+              disabled: a.getAttribute('aria-disabled') === 'true' || a.hasAttribute('disabled') };
+          }, href), { ms: NAV_MS, what: `census: ${from} shows ${href}` }).catch(() => null);
+          if (!link) { bad.push(`${from} ${href}: no visible link`); continue; }
+          if (link.disabled || link.name.length < 3) {
+            bad.push(`${from} ${href}: ${JSON.stringify(link)}`);
+          }
+          await page.evaluate(() => document.querySelector('[data-osc-census="1"]').click());
+          const at = await until(async () => {
+            const r = await read(page);
+            return r.workspace === to && r.ready === 'true' && (!tpl || r.studio) ? r : null;
+          }, { ms: NAV_MS, what: `census: ${from} ${href} opens ${to}` }).catch(() => null);
+          if (!at) { bad.push(`${from} ${href}: did not open ${to}`); continue; }
+          const settled = await until(async () => {
+            const r = await read(page);
+            return r.focusOk ? r : null;
+          }, { ms: NAV_MS, what: `census: focus after ${href}` }).catch(() => read(page));
+          if (!settled.focusOk) bad.push(`${from} ${href}: focus on ${settled.focus}`);
+          if (settled.audit.ctx || settled.audit.gum || settled.voice || settled.playing) {
+            bad.push(`${from} ${href}: sound or microphone ${JSON.stringify(settled)}`);
+          }
+          await page.evaluate(() => history.back());
+          const back = await H.at(page, from, `census: Back to ${from}`).catch(() => null);
+          await page.evaluate(() => history.forward());
+          const fwd = back ? await H.at(page, to, `census: Forward to ${to}`).catch(() => null)
+            : null;
+          if (!back || !fwd) bad.push(`${from} ${href}: Back ${!!back} Forward ${!!fwd}`);
+        } finally {
+          await page.close();
+        }
+      }
+      // Deep links: a fresh page at each address opens its target.
+      for (const href of [...new Set(CENSUS.map((c) => c[1]))]) {
+        const to = CENSUS.find((c) => c[1] === href)[2];
+        const page = await H.open(context, base, href.slice(1));
+        const r = await read(page);
+        if (r.workspace !== to || r.audit.ctx || r.audit.gum) {
+          bad.push(`deep link ${href}: ${JSON.stringify(r)}`);
+        }
+        await page.close();
+      }
+      // Keyboard: Enter on the first strip link of the Playground.
+      {
+        const page = await H.open(context, base, 'm=playground');
+        const first = page.locator('[data-osc="page.relatedLink"]').first();
+        const to = (await first.getAttribute('data-to'));
+        await first.focus();
+        await page.keyboard.press('Enter');
+        const r = await H.at(page, to, `census: Enter opens ${to}`).catch(() => null);
+        const after = await read(page);
+        if (!r || after.audit.gum || after.voice || after.playing) {
+          bad.push(`keyboard Enter on ${to}: ${JSON.stringify(after)}`);
+        }
+        await page.close();
+      }
+      check(leg, `related-census: ${CENSUS.length} related and panel links open an initialized `
+        + 'target, focused, '
+        + 'with Back and Forward, as deep links too, and start no sound or microphone',
+      !bad.length, bad.slice(0, 8).join(' | '));
+    }
+
+    if (want('journey-18')) {
+      const bad = [];
+      const page0 = await H.open(context, base, 'm=learn');
+      const links = await page0.evaluate(() => [...document.querySelectorAll(
+        '[data-osc="learn.tool"]')].filter((a) => a.getClientRects().length > 0)
+        .map((a) => ({ href: a.getAttribute('href'), text: a.textContent.trim() })));
+      await page0.close();
+      const want18 = Object.keys(JOURNEY.learnTools).length;
+      if (links.length !== want18) {
+        bad.push(`${links.length} tool links, LEARN_TOOLS has ${want18}`);
+      }
+      for (const [i, l] of links.entries()) {
+        const to = l.href.replace('#m=', '');
+        const page = await H.open(context, base, 'm=learn');
+        await page.evaluate((k) => document.querySelectorAll('[data-osc="learn.tool"]')[k]
+          .click(), i);
+        const r = await until(async () => {
+          const v = await page.evaluate(() => ({ ws: window.OSCILLA.app.workspace,
+            ready: document.documentElement.dataset.ready, audit: window.__oscAudit,
+            voice: !!window.OSCILLA.engine.voice, playing: !!window.OSCILLA.app.playing }));
+          return v.ws === to && v.ready === 'true' ? v : null;
+        }, { ms: NAV_MS, what: `journey-18: ${l.text}` }).catch(() => null);
+        if (!r) bad.push(`${l.text} (${l.href}) is dead`);
+        else if ((r.audit && (r.audit.ctx || r.audit.gum)) || r.voice || r.playing) {
+          bad.push(`${l.text}: sound or microphone ${JSON.stringify(r)}`);
+        }
+        await page.close();
+      }
+      check(leg, `journey-18: ${links.length} Learn tool links open their working workspace, `
+        + 'none dead, no sound or microphone', !bad.length, bad.slice(0, 6).join(' | '));
+    }
+
+    if (want('journey-19')) {
+      const page = await H.open(context, base, 'm=about');
+      const r = await until(() => page.evaluate(() => {
+        const v = document.querySelector('[data-osc="about.version"]');
+        const ms = [...document.querySelectorAll('[data-osc="about.next.milestone"]')]
+          .map((li) => [li.dataset.milestone, li.querySelector('b').textContent.trim()]);
+        const version = v && v.textContent.trim();
+        return version && ms.length ? { version, ms } : null;
+      }), { ms: NAV_MS, what: 'journey-19: About rendered' }).catch(() => null);
+      await page.close();
+      const ok = !!r && r.version.includes(JOURNEY.version)
+        && JSON.stringify(r.ms) === JSON.stringify(JOURNEY.roadmap);
+      check(leg, `journey-19: About shows version ${JOURNEY.version} (package.json) and the `
+        + `${JOURNEY.roadmap.length} milestones of src/data/roadmap.json`, ok, JSON.stringify(r));
+    }
+
+    if (want('journey-20')) {
+      const bad = [];
+      let seen = 0;
+      const audit = (page, where) => page.evaluate((w) => {
+        const shown = (el) => !!el && el.getClientRects().length > 0
+          && getComputedStyle(el).visibility !== 'hidden' && !el.closest('[hidden]');
+        const ws = window.OSCILLA.app.workspace;
+        const inScope = (el) => !el.closest('main') || !!el.closest(
+          `[data-osc-modes~="${ws}"]:not(.osc-p-source):not(.osc-p-analysis)`);
+        const out = [];
+        for (const el of document.querySelectorAll('button, input, select, textarea, [role]')) {
+          if (!(el.disabled || el.getAttribute('aria-disabled') === 'true')) continue;
+          if (!shown(el) || !inScope(el)) continue;
+          const by = el.getAttribute('aria-describedby');
+          const desc = by && document.getElementById(by);
+          const reason = (shown(desc) && desc.textContent.trim().length >= 8)
+            || [...el.querySelectorAll('[data-osc-reason]')].some(shown);
+          const row = el.closest('li, [role="menu"], .osc-sb-actions, .osc-panel-header, form')
+            || el.parentElement;
+          const alt = [...row.querySelectorAll('a[href], button')].some((x) => x !== el
+            && shown(x) && !x.disabled && x.getAttribute('aria-disabled') !== 'true');
+          out.push({ where: w, osc: el.dataset.osc || el.id, reason, alt });
+        }
+        return out;
+      }, where);
+      for (const vp of [{ width: 1536, height: 1024 }, { width: 390, height: 844 }]) {
+        const page = await H.open(context, base, '');
+        await page.setViewportSize(vp);
+        const results = [];
+        for (const w of ['filter', 'synthesis', 'sequencer', 'presets', 'learn', 'about']) {
+          await H.setWorkspace(page, w);
+          results.push(...await audit(page, `${w}@${vp.width}`));
+          if (w === 'presets') {
+            for (const c of await page.evaluate(() => window.OSCILLA.app.PRESET_CATEGORIES
+              .map((x) => x.id))) {
+              await page.evaluate((id) => { window.OSCILLA.app.presetTab = id; }, c);
+              await H.frames(page);
+              results.push(...await audit(page, `presets/${c}@${vp.width}`));
+            }
+          }
+        }
+        // The shell's export actions while an export runs.
+        await page.evaluate(() => { window.OSCILLA.app.exportBusy = true; });
+        if (vp.width > 600) {
+          await page.click('[data-osc="header.export"]');
+          await H.frames(page);
+          results.push(...await audit(page, `export menu busy@${vp.width}`));
+          await page.keyboard.press('Escape');
+        }
+        results.push(...await audit(page, `status bar busy@${vp.width}`));
+        await page.evaluate(() => { window.OSCILLA.app.exportBusy = false; });
+        seen += results.length;
+        for (const x of results) if (!x.reason || !x.alt) bad.push(JSON.stringify(x));
+        await page.close();
+      }
+      check(leg, `journey-20: ${seen} disabled controls on lane A's pages and the shell state a `
+        + 'visible reason beside a way onward', seen > 0 && !bad.length,
+      bad.slice(0, 6).join(' | '));
     }
 
     if (want('actions')) {
