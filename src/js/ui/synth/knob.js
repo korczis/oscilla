@@ -37,9 +37,12 @@ export const FADER_TRAVEL = 64;
  * decades. No measurement argued for a change.
  */
 export const LOG_STEPS = 200;
-/** One wheel notch, px; a line (deltaMode 1) is WHEEL_LINE_PX px, a page (2) WHEEL_NOTCH_PX. */
+/** One wheel notch, px; a line (deltaMode 1) is WHEEL_LINE_PX px, so a line-mode wheel's
+ *  detent of 3 lines is exactly one notch; a page (2) is WHEEL_NOTCH_PX. */
 export const WHEEL_NOTCH_PX = 100;
-export const WHEEL_LINE_PX = 16;
+export const WHEEL_LINE_PX = 100 / 3;
+/** An opposite wheel delta drops the carried rest only from this many px: less is jitter. */
+const WHEEL_TURN_PX = 4;
 /** A stepless linear range moves 1/KEY_DIVS of itself per key; PageUp/PageDown PAGE_STEPS. */
 const KEY_DIVS = 100;
 const PAGE_STEPS = 10;
@@ -202,10 +205,15 @@ function nudge(value, p, steps, fine) {
   return out;
 }
 
-/** PageUp/PageDown: 10 % of the (norm) range, on the grid, as K058 states; a choice one option. */
+/** PageUp/PageDown: 10 % of the (norm) range, on the grid, as K058 states; a page the grid
+ *  would swallow moves one grid unit, as a key does. A choice moves one option. */
 function page(value, p, dir) {
   if (choicesOf(p)) return stepOption(p, clampValue(value, p), dir);
-  return quantize(fromNorm(toNorm(value, p) + dir / PAGE_STEPS, p), p);
+  const v = clampValue(value, p);
+  const out = quantize(fromNorm(toNorm(v, p) + dir / PAGE_STEPS, p), p);
+  const q = quantumAt(v, p, false);
+  if (q && out === quantize(v, p)) return quantize(v + dir * q, p);
+  return out;
 }
 
 // ---------------------------------------------------------------- gestures
@@ -247,28 +255,31 @@ export function pixelsPerRangeFor(kind, zoom = 1, param) {
 /**
  * The value after a wheel event, and the px the host keeps for the next one: pixels are deltaY
  * × (deltaMode 1: WHEEL_LINE_PX, 2: WHEEL_NOTCH_PX, else 1) plus the carried `rest`, and every
- * WHEEL_NOTCH_PX of them is one notch (up, deltaY < 0, increases); a line- or page-mode event is
- * always at least one notch (one detent of such a wheel is 3 lines, 48 px). The rest is dropped
- * when the wheel turns back (its sign differs from deltaY's) and when the value is held at
- * min or max, so the first notch back always moves. Under a notch the value comes back as it
- * was, only clamped. A notch is one key step, but never less than 1 % of the norm range (fine:
- * 0.1 %), so a tiny step never makes the wheel glacial; an integer range of more than 10 000
- * steps is exempt (a seed is an identifier: one notch, one step), and a choice moves one option
- * per notch. The arrow keys are exempt from that floor: they are the precise path (one step, or
- * 1/LOG_STEPS, per press), PageUp/PageDown the coarse one.
+ * WHEEL_NOTCH_PX of them is one notch (up, deltaY < 0, increases); a line-mode detent of 3
+ * lines is one notch, and fractional lines accumulate through the rest. The rest is dropped
+ * when the wheel turns back by WHEEL_TURN_PX or more (a smaller opposite delta is jitter and
+ * only subtracts) and when the value is held at min or max, so the first notch back moves.
+ * Under a notch the value comes back as it was, only clamped. A notch is one key step, but
+ * never less than 1 % of the norm range (fine: 0.1 %), so a tiny step never makes the wheel
+ * glacial; an integer range of more than 10 000 steps is exempt (a seed is an identifier: one
+ * notch, one step), and a choice moves one option per notch. The arrow keys are exempt from that
+ * floor: they are the precise path (one step, or 1/LOG_STEPS, per press), PageUp/PageDown the
+ * coarse one.
  */
 export function wheelValue(value, deltaY, p, { fine = false, deltaMode = 0, rest = 0 } = {}) {
   const scale = deltaMode === 1 ? WHEEL_LINE_PX : (deltaMode === 2 ? WHEEL_NOTCH_PX : 1);
   const d = Number.isFinite(deltaY) ? deltaY * scale : 0;
   let carried = Number.isFinite(rest) ? rest : 0;
-  if (d !== 0 && carried !== 0 && Math.sign(d) !== Math.sign(carried)) carried = 0;
-  const px = d + carried;
-  let notches = Math.trunc(px / WHEEL_NOTCH_PX);
-  let left = clean(px - notches * WHEEL_NOTCH_PX);
-  if (notches === 0 && d !== 0 && (deltaMode === 1 || deltaMode === 2)) {
-    notches = Math.sign(d);
-    left = 0;
+  if (carried !== 0 && Math.sign(d) === -Math.sign(carried) && Math.abs(d) >= WHEEL_TURN_PX) {
+    carried = 0;
   }
+  const px = d + carried;
+  // Fractions of a line (100/3 px) accumulate with float error: a sum within 1e-9 of a notch
+  // is that notch, and a rest within 1e-9 of nothing is nothing.
+  const n = px / WHEEL_NOTCH_PX;
+  const notches = Math.trunc(n + Math.sign(n) * 1e-9);
+  const raw = px - notches * WHEEL_NOTCH_PX;
+  const left = Math.abs(raw) < 1e-6 ? 0 : clean(raw);
   const v0 = clampValue(value, p);
   const dir = -Math.sign(px);
   const held = (v) => (dir > 0 && toNorm(v, p) >= 1) || (dir < 0 && toNorm(v, p) <= 0);
@@ -322,13 +333,49 @@ export function knobKey(e, { value, param, fine = false } = {}) {
 
 const NUMBER_TEXT = /^([-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?)\s*(k)?\s*(.*)$/i;
 
-/** Typed text made plain: a Unicode minus is '-', a thin, narrow or normal space between digit
- *  groups of three is a thousands separator, and a comma is the decimal mark when the text has
- *  no dot (the owner's locale writes 1,5). */
+const SPACES = /[ \u00a0\u2009\u202f]+/;
+
+/**
+ * Typed text made plain, or the reason it is refused: a leading minus sign (U+2212) or en dash
+ * (U+2013) is '-'; a thin, narrow or normal space groups thousands only when the first group has
+ * 1-3 digits and every later one exactly 3 (4 294 967 295), else the number is malformed; a
+ * single comma with no dot is the decimal mark (the owner's locale writes 1,5), except where it
+ * could be a thousands separator (1-3 digits not starting with 0, then exactly three): "1,000"
+ * is ambiguous and refused, so neither 1000 nor 1.0 is guessed.
+ */
 function plainNumber(raw) {
-  let t = raw.replace(/\u2212/g, '-').replace(/(\d)[ \u00a0\u2009\u202f](?=\d{3}(?!\d))/g, '$1');
-  if (!t.includes('.')) t = t.replace(/^([-+]?\d*),(\d)/, '$1.$2');
-  return t;
+  const t = raw.replace(/^[\u2212\u2013]/, '-').replace(/\u2212/g, '-');
+  const m = /^([-+]?)([\d.,][\d., \u00a0\u2009\u202f]*)(.*)$/.exec(t);
+  if (!m) return { text: t };
+  const [, sign, body, tail] = m;
+  const head = body.replace(/[ \u00a0\u2009\u202f]+$/, '');
+  const unitGap = body.slice(head.length);
+  let num = head;
+  if (SPACES.test(num)) {
+    const groups = num.split(SPACES);
+    const last = groups.length - 1;
+    const ok = /^\d{1,3}$/.test(groups[0])
+      && groups.slice(1).every((g, i) => (i + 1 === last ? /^\d{3}(?:[.,]\d+)?$/ : /^\d{3}$/)
+        .test(g));
+    if (!ok) {
+      return { error: `"${raw.slice(0, 24)}" is malformed: group thousands by three `
+        + '(1 000 000) or write the digits together.' };
+    }
+    num = groups.join('');
+  }
+  const commas = (num.match(/,/g) || []).length;
+  if (commas > 0) {
+    if (commas > 1 || num.includes('.')) {
+      return { error: `"${raw.slice(0, 24)}" is not a number: use one decimal mark.` };
+    }
+    if (/^[1-9]\d{0,2},\d{3}$/.test(num)) {
+      const [whole, part] = num.split(',');
+      return { error: `"${raw.slice(0, 24)}" is ambiguous: write ${whole}${part} or `
+        + `${whole}.${part.replace(/0+$/, '') || '0'}.` };
+    }
+    num = num.replace(',', '.');
+  }
+  return { text: `${sign}${num}${unitGap}${tail}` };
 }
 
 /** The units a typed value may carry for `p`, each with its factor to the parameter's unit. */
@@ -361,7 +408,9 @@ export function parseValue(text, p) {
     return hit ? { ok: true, value: hit[0] }
       : { ok: false, reason: `${labelOf(p)} must be one of ${opts.map((o) => o[1]).join(', ')}.` };
   }
-  const m = NUMBER_TEXT.exec(plainNumber(raw));
+  const plain = plainNumber(raw);
+  if (plain.error) return { ok: false, reason: plain.error };
+  const m = NUMBER_TEXT.exec(plain.text);
   if (!m) return { ok: false, reason: `"${raw.slice(0, 24)}" is not a number.` };
   const units = unitsFor(p);
   const unit = m[3].trim().toLowerCase();
@@ -495,7 +544,8 @@ export function ariaAttrs(value, p, format) {
   else v = typeof value === 'number' && Number.isFinite(value) ? value : clampValue(value, p);
   const custom = typeof format === 'function';
   let text = custom ? String(format(v, p)) : formatValue(v, p);
-  if (!opts && custom && p.unit && !endsWithUnit(text, p.unit)) {
+  // A number's own text carries its unit; a custom text or an enum label gets it when it lacks it.
+  if ((custom || (opts && p.type === 'enum')) && p.unit && !endsWithUnit(text, p.unit)) {
     text = `${text} ${unitSpellings(p.unit)[0]}`;
   }
   return { role: 'slider', 'aria-valuemin': 0, 'aria-valuemax': ARIA_POSITIONS,

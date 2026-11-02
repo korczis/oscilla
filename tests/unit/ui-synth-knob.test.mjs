@@ -168,7 +168,7 @@ test('drag: fine (Shift) moves ten times less over the same distance', () => {
 
 test('wheel: 100 px is a notch, up one step, down one step, fine a tenth', () => {
   assert.equal(WHEEL_NOTCH_PX, 100);
-  assert.equal(WHEEL_LINE_PX, 16);
+  near(WHEEL_LINE_PX, 100 / 3, 1e-12);
   assert.deepEqual(wheelValue(50, -100, LIN), { value: 51, rest: 0 });
   assert.deepEqual(wheelValue(50, 100, LIN), { value: 49, rest: 0 });
   assert.deepEqual(wheelValue(50, -300, LIN), { value: 53, rest: 0 }, 'three notches at once');
@@ -181,10 +181,23 @@ test('wheel: 100 px is a notch, up one step, down one step, fine a tenth', () =>
 
 test('wheel: lines and pages are scaled to px, and the host keeps the rest', () => {
   assert.deepEqual(wheelValue(50, -3, LIN, { deltaMode: 1 }), { value: 51, rest: 0 },
-    'a three-line event (one notch of a line-mode wheel) is a notch');
-  assert.deepEqual(wheelValue(50, -1, LIN, { deltaMode: 1 }), { value: 51, rest: 0 },
-    'every line-mode event is at least a notch');
-  assert.deepEqual(wheelValue(50, -7, LIN, { deltaMode: 1 }), { value: 51, rest: -12 });
+    'one three-line detent is exactly one notch');
+  assert.deepEqual(wheelValue(50, 6, LIN, { deltaMode: 1 }), { value: 48, rest: 0 },
+    'six lines are two notches');
+  let r = { value: 50, rest: 0 };
+  for (let i = 0; i < 5; i++) r = wheelValue(r.value, -0.1, LIN, { deltaMode: 1, rest: r.rest });
+  assert.equal(r.value, 50, 'fractional lines move nothing yet');
+  near(r.rest, -50 / 3, 1e-6);
+  r = { value: 50, rest: 0 };
+  for (let i = 0; i < 8; i++) r = wheelValue(r.value, 0.375, LIN, { deltaMode: 1, rest: r.rest });
+  assert.deepEqual(r, { value: 49, rest: 0 }, 'eight 0.375-line events are one step');
+  r = { value: 50, rest: 0 };
+  for (let i = 0; i < 3; i++) r = wheelValue(r.value, -1, LIN, { deltaMode: 1, rest: r.rest });
+  assert.deepEqual(r, { value: 51, rest: 0 }, 'three single lines are one notch');
+  r = { value: 50, rest: 0 };
+  for (let i = 0; i < 30; i++) r = wheelValue(r.value, -0.1, LIN, { deltaMode: 1, rest: r.rest });
+  assert.equal(r.value, 51, 'thirty tenths of a line are one notch');
+  near(r.rest, 0, 1e-6);
   assert.deepEqual(wheelValue(50, 1, LIN, { deltaMode: 2 }), { value: 49, rest: 0 }, 'a page');
   assert.deepEqual(wheelValue(50, -60, LIN, { rest: -60 }), { value: 51, rest: -20 },
     'the rest carried in counts');
@@ -218,6 +231,12 @@ test('wheel: a trackpad\'s many small deltas move what their sum says, no more',
   assert.deepEqual(state, { value: 50, rest: -80 }, '80 px: still under a notch');
   for (let i = 0; i < 60; i++) state = wheelValue(state.value, -2, LIN, { rest: state.rest });
   assert.deepEqual(state, { value: 52, rest: 0 }, '200 px: two notches');
+  let j = { value: 50, rest: 0 };
+  for (let i = 0; i < 40; i++) j = wheelValue(j.value, -2, LIN, { rest: j.rest });
+  j = wheelValue(j.value, 0.5, LIN, { rest: j.rest });
+  assert.deepEqual(j, { value: 50, rest: -79.5 }, 'a jitter under 4 px back only subtracts');
+  assert.deepEqual(wheelValue(50, 4, LIN, { rest: -80 }), { value: 50, rest: 4 },
+    'a turn of 4 px or more drops the rest');
 });
 
 test('wheel: a notch is never less than 1 % of the (norm) range', () => {
@@ -273,6 +292,15 @@ test('knobKey: a log range moves 1/LOG_STEPS in norm space and never stalls on i
   assert.equal(knobKey(key('ArrowUp', { shiftKey: true }), { value: 20, param: LOG }), 20.069,
     'a fine step at the bottom of a log range is relative, not a tenth of the step');
   assert.ok(knobKey(key('ArrowDown'), { value: 20000, param: LOG }) < 20000);
+});
+
+test('knobKey: PageUp and PageDown never stall on a coarse grid', () => {
+  const SMALL = { key: 'n', type: 'integer', min: -2, max: 2, step: 1 };
+  assert.equal(knobKey(key('PageUp'), { value: 1, param: SMALL }), 2);
+  assert.equal(knobKey(key('PageDown'), { value: -1, param: SMALL }), -2);
+  const HALF = { key: 'h', min: 0, max: 1, step: 0.5 };
+  assert.equal(knobKey(key('PageUp'), { value: 0, param: HALF }), 0.5);
+  assert.equal(knobKey(key('PageUp'), { value: 1, param: HALF }), 1, 'held at max');
 });
 
 test('knobKey: PageUp and PageDown move 10 % of the (norm) range, on the grid', () => {
@@ -452,7 +480,44 @@ test('parseValue: a decimal comma, a Unicode minus, a spaced thousands', () => {
   assert.deepEqual(parseValue('12\u2009000 Hz', LOG), { ok: true, value: 12000 });
   assert.deepEqual(parseValue('1\u202f500', LOG), { ok: true, value: 1500 });
   assert.equal(parseValue('1,000.5', LOG).ok, false, 'a comma with a dot is not a decimal comma');
+  assert.equal(parseValue('1,000,000', LOG).ok, false);
   assert.equal(parseValue('12 5', LOG).ok, false, 'a space is a separator only before three');
+});
+
+test('parseValue: a comma before exactly three digits is ambiguous, and refused', () => {
+  const ATT = { key: 'attack', label: 'Attack', type: 'number', unit: 's', min: 0.001, max: 10,
+    step: 0.001 };
+  for (const [text, p] of [['1,000', LOG], ['1,000 Hz', LOG], ['1,000 ms', ATT],
+    ['12,345', LOG]]) {
+    const r = parseValue(text, p);
+    assert.equal(r.ok, false, text);
+    assert.match(r.reason, /is ambiguous: write \d+ or [\d.]+/, text);
+  }
+  assert.equal(parseValue('1,000', LOG).reason, '"1,000" is ambiguous: write 1000 or 1.0.');
+  const Q = { key: 'Q', label: 'Q', type: 'number', min: 0.0001, max: 1000, scale: 'log' };
+  assert.deepEqual(parseValue('1,5', Q), { ok: true, value: 1.5 });
+  assert.deepEqual(parseValue('0,707', Q), { ok: true, value: 0.707 }, 'a leading 0 is a decimal');
+  assert.deepEqual(parseValue('2,5 ms', ATT), { ok: true, value: 0.0025 });
+  assert.match(parseValue('1234,567', Q).reason, /between/,
+    'four digits before the comma are no grouping: a decimal, out of range for Q');
+  const WIDE = { key: 'w', label: 'W', type: 'number', min: 0, max: 5000, step: 0.001 };
+  assert.deepEqual(parseValue('1234,567', WIDE), { ok: true, value: 1234.567 });
+});
+
+test('parseValue: a dash or minus leads a negative; spaced groups must be groups of three', () => {
+  const GAIN = { key: 'g', label: 'Gain', type: 'number', unit: 'dB', min: -40, max: 40,
+    step: 0.1 };
+  assert.deepEqual(parseValue('\u20136 dB', GAIN), { ok: true, value: -6 }, 'an en dash');
+  assert.deepEqual(parseValue('\u22126 dB', GAIN), { ok: true, value: -6 }, 'a minus sign');
+  const SEED = { key: 'seed', label: 'Seed', type: 'integer', min: 0, max: 4294967295, step: 1 };
+  assert.deepEqual(parseValue('4 294 967 295', SEED), { ok: true, value: 4294967295 });
+  assert.deepEqual(parseValue('10\u2009000\u2009000', SEED), { ok: true, value: 10000000 });
+  for (const text of ['1 00', '1 0000', '12 34', '1234 567', '1 000 00']) {
+    const r = parseValue(text, SEED);
+    assert.equal(r.ok, false, text);
+    assert.match(r.reason, /malformed/, text);
+  }
+  assert.equal(parseValue('440 100', LOG).ok, false, '440100 Hz is out of range');
 });
 
 test('parseValue stores what the readout shows', () => {
@@ -554,6 +619,14 @@ test('enum and boolean ARIA: the position of the option index, the label as text
     'aria-valuemax': 1000, 'aria-valuenow': 1000, 'aria-valuetext': 'On' });
   assert.equal(ariaAttrs(false, BOOL)['aria-valuenow'], 0);
   assert.equal(ariaAttrs('x', BOOL)['aria-valuenow'], 1000, 'the default');
+  const FFT = { key: 'fftSize', label: 'Window', type: 'enum', unit: 'samples', default: 8192,
+    options: [[2048, '2048'], [8192, '8192']] };
+  assert.equal(ariaAttrs(8192, FFT)['aria-valuetext'], '8192 samples',
+    'an enum label gets its unit');
+  const SR = { key: 'sr', label: 'Rate', type: 'enum', unit: 'Hz', default: 48000,
+    options: [[44100, '44.1 kHz'], [48000, '48 kHz']] };
+  assert.equal(ariaAttrs(48000, SR)['aria-valuetext'], '48 kHz', 'a label with its unit keeps it');
+  assert.equal(ariaAttrs('sine', ENUM)['aria-valuetext'], 'Sine', 'no unit, no suffix');
 });
 
 // ---------------------------------------------------------------- controlSvg
