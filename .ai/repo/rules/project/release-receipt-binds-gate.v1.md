@@ -5,13 +5,17 @@ kind: rule
 title: The release-gate receipt binds everything the verdict depended on
 description: The receipt release:prepare writes binds the version, the dist sha256, the source digest and a digest of every tracked file except the release record files, so any change on main between prepare and publish makes release:publish refuse until the gate is re-run.
 statement: The release-gate receipt binds the version, the source digest, the sha256 of dist/index.html and gateTree, a digest of every tracked file except the release records .ai/repo/releases/v*.yaml and .ai/local/. release:publish refuses while any of the four differs from the checkout it runs in or is absent from the receipt or from the current fingerprint, so a change to tests, package.json, scripts, workflows, the .ai layer or source after the gate passed needs the full gate again before a tag is created. The receipt also binds how the gate ran: release:prepare refuses to start while OSC_BROWSERS or OSC_ORIGINS is set, runs the gate with OSC_STRICT_SKIPS=1 (an undeclared skip fails, as under CI) and records browsers chromium,firefox,webkit, origins file,http and skips declared-only, and release:publish refuses a receipt that records anything else or nothing.
-status: active
+status: deprecated
 class: blocking
 depends_on: [project.single-file-deliverable@2]
 tags: [release, gate, provenance]
 x-majordomus:
   tests: [tests/unit/release-publish.test.mjs, tests/unit/release-gate-env.test.mjs]
 ---
+
+> Deprecated on 2026-11-02: superseded by `release-receipt-binds-gate.v2.md` (ADR 0082, owner
+> decision of 2026-11-02: the CI run of the release pull request is a gate verdict too). Kept
+> unchanged below as the record of version 1.
 
 # Rationale
 

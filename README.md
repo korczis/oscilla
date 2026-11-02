@@ -852,7 +852,7 @@ from the background, or hold-to-play by touch. The owner declined real-device ch
 | --- | --- | --- |
 | Unit | `tests/unit/` | Pure modules (DSP, analysis, sequencer, charts), the packer, the artifact rules and the release tooling, all under `node --test` |
 | V1 freeze | `tests/freeze/` | Golden vectors that pin V1 behaviour ([ADR 0014](.ai/repo/adrs/0014-v1-behaviour-frozen-by-golden-vectors.md)) |
-| Browser | `npm run test:browser`, `test:engine`, `test:dsp`, `test:labs`, `test:sequencer` | Playwright suites on the built page: the app gate (`tests/browser/app.cjs`), layout (`tests/browser/layout.cjs`), the V2 final-QA regressions (`tests/browser/qa-regressions.cjs`), navigation history and unsaved work (`tests/browser/navigation.cjs`), link integrity and route hygiene (`tests/browser/link-integrity.cjs`), the MIDI support state, MIDI notes and the keyboard (`tests/browser/midi.cjs`), the workspaces against the interface audit (`tests/browser/ui-current.cjs`), the demo song journey (`tests/browser/demo-song.cjs`), the cross-links between workspaces as round trips (`tests/browser/cross-links.cjs`), the first-screen entry-path inventory (`tests/browser/first-screen.cjs`), the navigable-surface census against its contract (`tests/browser/surface-census.cjs`, held statically by `tests/unit/surface-census.test.mjs`), the V1 engine port (`tests/browser/engine-v1port.cjs`), DSP (`tests/browser/dsp.cjs`), labs (`tests/browser/labs.cjs`) and the sequencer (`tests/browser/sequencer.cjs`) |
+| Browser | `npm run test:browser`, `test:engine`, `test:dsp`, `test:labs`, `test:sequencer` | Playwright suites on the built page: the app gate (`tests/browser/app.cjs`), layout (`tests/browser/layout.cjs`), the V2 final-QA regressions (`tests/browser/qa-regressions.cjs`), navigation history and unsaved work (`tests/browser/navigation.cjs`), link integrity and route hygiene (`tests/browser/link-integrity.cjs`), the MIDI support state, MIDI notes and the keyboard (`tests/browser/midi.cjs`), the workspaces against the interface audit (`tests/browser/ui-current.cjs`), a phone's audio unlock and playback session (`tests/browser/touch-audio.cjs`), the demo song journey (`tests/browser/demo-song.cjs`), the cross-links between workspaces as round trips (`tests/browser/cross-links.cjs`), the first-screen entry-path inventory (`tests/browser/first-screen.cjs`), the navigable-surface census against its contract (`tests/browser/surface-census.cjs`, held statically by `tests/unit/surface-census.test.mjs`), the V1 engine port (`tests/browser/engine-v1port.cjs`), DSP (`tests/browser/dsp.cjs`), labs (`tests/browser/labs.cjs`) and the sequencer (`tests/browser/sequencer.cjs`) |
 | Visual | `scripts/visual-gate.mjs`, `tests/visual/` | The 1536x1024 reference and named regions, compared region by region with thresholds measured from run-to-run variance ([ADR 0029](.ai/repo/adrs/0029-visual-regression-in-the-release-gate.md)) |
 | V3 unit | `tests/unit/v3-*.test.mjs` | Measurement core, transfer and impulse response on synthetic systems with known answers, RTA and aggregation, calibration, quality, experiments (schema, round trip, corrupt imports, store), goldens per algorithm ID, the engine on a fake io and the view models, all in `npm test` |
 | V3 browser | `npm run test:measure` | `tests/browser/v3-measure.cjs`: the measurement engine on real Web Audio, a recovered digital loopback response, limiter transparency, 0 nodes after finish and abort. `tests/browser/analysis-worker.cjs`: the offline analysis in its Worker against the inline run, identical results, no inline fallback, abort. `tests/browser/v3-ui.cjs`: Measure and Experiments of the built page, guided flow, abort at every stage, calibration, experiment import, compare and export, and no "SPL" without a level calibration. All run in Chromium, Firefox and WebKit, from `file://` and `/oscilla/` |
@@ -899,16 +899,21 @@ run it alone.
      proposes the level, with a reason for each commit.
   2. `npm run release:prepare` starts from a clean tree. It bumps `package.json` once (or
      confirms an untagged version), refreshes `src/data/roadmap.json` from the plan, rebuilds,
-     and runs `version:check`, the release gate (with `OSC_ROADMAP_CHECK=1`, so a roadmap that
-     differs from the plan fails it) and `majordomus doctor`. If anything fails, it restores
-     the files. It never tags. Land the
-     result on `main` through a pull request. It refuses to start while the newest release has
+     and runs `version:check` and `npm run verify` (with `OSC_ROADMAP_CHECK=1`, so a roadmap
+     that differs from the plan fails it). If anything fails, it restores the files. It never
+     tags. Land the result on `main` through a pull request, by merge commit: the CI run of
+     that pull request is the release's gate verdict (the CI receipt,
+     [ADR 0082](.ai/repo/adrs/0082-a-release-rests-on-the-ci-run-of-its-own-pull-request.md)).
+     `-- --local-gate` instead runs the full release gate and `majordomus doctor` here and
+     writes a local gate receipt. It refuses to start while the newest release has
      no record (step 4), and it refuses the first stable release of a new major (`X.0.0`, and
      equally `X.0.1` or `X.1.0` typed into `package.json`) that no published `X.0.0-rc.N`
      preceded (`npm run release:prepare -- --prerelease` cuts the candidate;
      [ADR 0047](.ai/repo/adrs/0047-a-major-release-is-preceded-by-a-release-candidate-v3-0-0-wa.md)).
-     The gate receipt it writes binds every tracked file except the release records, so any
-     other pull request merged before the publish means running it again
+     Either verdict binds the whole tree (the CI receipt: main's HEAD is the merge of the
+     release pull request with the tree its newest green CI run tested, every job `ci.yml`
+     declares green; the local receipt: every tracked file except the release records), so
+     any other pull request merged before the publish means a new verdict
      (rule `project.release-receipt-binds-gate`).
   3. `npm run release:publish` is a dry run by default. With `-- --yes`, on `main`, it creates
      the annotated tag `vX.Y.Z`, pushes it, waits for the Pages deployment, verifies it, and
