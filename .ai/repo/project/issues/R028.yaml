@@ -49,5 +49,5 @@ evidence:
     command: "CI run 41497867387 on #389 head 17ecab7a; node scripts/review-verdict.mjs --pr 389; npm run release:publish (v3.16.0)"
     result: "All checks green on #389; review verdict .ai/repo/reviews/389.yaml (merge, oscilla-21, content af63e2b7) accepted; landed as 09d58907; v3.16.0 then published through the CI receipt (run 41525674355 on #393 head 7dba191, gate verdict accepted, verify-deploy PASS at 2fe68de1)"
     artifact: ".ai/repo/reviews/389.yaml"
-    commit: 9565dd47660207056b02065ddfafa4ddd1e01de2
+    commit: 09d589072f99b4aaf3d75fb1131e348c73fd0df9
     recorded_at: 2026-11-02T21:59:58Z
