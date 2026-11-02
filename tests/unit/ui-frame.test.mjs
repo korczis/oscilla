@@ -27,8 +27,9 @@ import { CATALOG, createCatalog } from '../../src/js/ui/catalog/registry.js';
 import { defineComponent, declarationProblems, frameHooksOf, FRAME_CONTROL_KINDS }
   from '../../src/js/ui/catalog/define.js';
 import { VISUAL_CATALOG } from '../../src/js/ui/catalog/visuals.js';
-import { FRAME_SIZES, frameSizeOf, frameSlug, frameView, fullscreenModeOf }
+import { FRAME_SIZES, frameKeyBindings, frameSizeOf, frameSlug, frameView, fullscreenModeOf }
   from '../../src/js/ui/catalog/frame.js';
+import { createKeyRegistry } from '../../src/js/ui/keys/registry.js';
 import * as sources from '../../src/js/ui/catalog/sources.js';
 import { scanSources, stringLiteralsOf } from '../../scripts/ui-catalog/scan.mjs';
 import { checkCatalog, FRAME_MODULE, reader, visualSurfaces }
@@ -278,5 +279,47 @@ test('no view keeps a full-screen control of its own', () => {
     const at = page.indexOf(`data-osc="${id}"`);
     assert.ok(at > 0, id);
     assert.ok(page.indexOf('data-osc-frame-slot', at) > at, `${id} has a frame slot`);
+  }
+});
+
+// ------------------------------------------------------------------------------ Escape (K153)
+test('frame Escape beside a page-wide Escape: no throw, the frame wins while open', () => {
+  const keys = createKeyRegistry();
+  let open = false;
+  let inside = false;
+  let escaped = 0;
+  for (const b of frameKeyBindings({ open: () => open, inside: () => inside,
+    escape: () => { escaped += 1; } })) keys.bind(b);
+  // K153's next PR binds the page's Escape with focus '*'. A registry that does not know focus
+  // '*' yet refuses it as an unknown focus (never as a conflict); the stand-in then takes the
+  // one exact focus the frame leaves free, so the frame's bindings are still judged beside it.
+  const page = { id: 'page.escape', keys: ['Escape'], label: 'Page Escape', run() {} };
+  let star = true;
+  try {
+    keys.bind({ ...page, scope: { workspace: '*', focus: '*' } });
+  } catch (e) {
+    assert.doesNotMatch(e.message, /owned by/, 'never a conflict with the frame');
+    assert.match(e.message, /unknown focus "\*"/);
+    star = false;
+    assert.doesNotThrow(() => keys.bind({ ...page, scope: { workspace: '*', focus: 'dialog' } }));
+  }
+  const at = (focus) => keys.resolve('Escape', { workspace: 'analyzer', focus });
+  open = true;
+  assert.equal(at('none').id, 'frame.escape', 'the frame wins while a frame is open');
+  inside = true;
+  assert.equal(at('text').id, 'frame.escape.text', 'a field inside the full-screen frame too');
+  inside = false;
+  assert.notEqual(at('text') && at('text').id, 'frame.escape.text', 'not a field outside it');
+  assert.notEqual(at('dialog') && at('dialog').id, 'frame.escape', 'never in a modal');
+  at('none').run({ code: 'Escape' });
+  assert.equal(escaped, 1);
+  open = false;
+  const closed = at('none');
+  assert.ok(!closed || closed.id === 'page.escape', 'closed, the frame steps aside');
+  if (star) assert.equal(closed.id, 'page.escape');
+  for (const b of frameKeyBindings({ open: () => true, inside: () => true, escape() {} })) {
+    assert.equal(b.scope.workspace, '*');
+    assert.ok(['none', 'text'].includes(b.scope.focus), 'an exact focus, never \'*\'');
+    assert.equal(typeof b.when, 'function');
   }
 });

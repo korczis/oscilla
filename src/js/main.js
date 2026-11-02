@@ -634,8 +634,6 @@ function compose(...parts) {
  * the catalogue gets its full screen and menu. A change of workspace leaves full screen; a
  * change of a frame relayouts the charts, as the panel fullscreen did before it.
  */
-let pageFrames = null; // the frames of the page, for the key dispatcher's view
-
 function mountFrames(cmp) {
   const frames = createFrames({
     catalog: VISUAL_CATALOG,
@@ -649,7 +647,6 @@ function mountFrames(cmp) {
   });
   cmp.$nextTick(() => frames.scan(document));
   cmp.$watch('workspace', () => frames.exitAll());
-  pageFrames = frames;
 }
 
 function integrationInit() {
@@ -918,8 +915,7 @@ function createOscillaComponent(ui) {
   // expected to own this instance, and the peeper's bind (ui/peeper/ui.js) moves with it.
   const keyRegistry = createKeyRegistry();
   const keyDispatcher = createKeyDispatcher({ registry: keyRegistry,
-    context: () => ({ workspace: app ? app.workspace : null,
-      view: pageFrames ? pageFrames.keyView() : null }) });
+    context: () => ({ workspace: app ? app.workspace : null }) });
   keyDispatcher.attach(document, window);
   const peeper = createPeeperUi({ probe: createProbeStub(),
     storage: localStore.available() ? window.localStorage : null });

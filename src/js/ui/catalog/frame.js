@@ -15,8 +15,8 @@
 //                                     '-fullscreen', as the panels' buttons were named)
 //   frameView(decl, { full, mode }) -> { trigger, menu, controls }  what the frame shows (pure)
 //   createFrames({ doc, win, catalog, controls, keys, onChange }) -> { scan(root), enter(id),
-//     exit(id), state(id), keyView(), destroy() }   keys: the page's key registry (K153); the
-//     dispatcher's context asks keyView() for the frame's view ('frame-menu' | 'fullscreen')
+//     exit(id), state(id), destroy() }   keys: the page's key registry (K153)
+//   frameKeyBindings({ open, inside, escape }) -> [binding]   the frame's Escape (see there)
 //
 // Sizes come from the frame's own box (a ResizeObserver), never from the device: the same
 // component is 'phone' in a narrow column of a large monitor. The frame writes
@@ -72,6 +72,24 @@ export function frameView(decl, { full = false, mode = 'api' } = {}) {
       : null,
     controls: full ? controls : [],
   };
+}
+
+/**
+ * The frame's Escape for the page's one key registry (K153). The scope is exact: focus 'none'
+ * (nothing that owns keys is focused) and focus 'text' for a field inside the full-screen frame,
+ * each with when(), so an exact focus beats a page-wide Escape bound with focus '*' (K153's
+ * page.escape) while a frame menu is open or a frame is full screen, and steps aside otherwise.
+ * Never in a modal dialog (focus 'dialog'). open(): a menu is open or a frame is full screen;
+ * inside(): focus is inside the full-screen frame; escape(): close the menu, else leave.
+ */
+export function frameKeyBindings({ open, inside, escape }) {
+  const common = { keys: ['Escape'], label: 'Close the frame menu, or leave full screen',
+    group: 'View', run: () => escape() };
+  return [
+    { ...common, id: 'frame.escape', scope: { workspace: '*', focus: 'none' }, when: open },
+    { ...common, id: 'frame.escape.text', scope: { workspace: '*', focus: 'text' },
+      when: () => open() && inside() },
+  ];
 }
 
 // Flowbite Pro classes (the icon button of the admin navbar, the dropdown of section 4).
@@ -356,20 +374,23 @@ export function createFrames({ doc = document, win = window, catalog, controls =
   const fullFrame = () => [...frames.values()].find((x) => x.state === 'full') || null;
   const openMenu = () => [...frames.values()].find((x) => x.parts && x.parts.menu
     && !x.parts.menu.hidden) || null;
-  /** The frame's key view for the dispatcher's context: 'frame-menu', 'fullscreen' or null. */
-  const keyView = () => (openMenu() ? 'frame-menu' : fullFrame() ? 'fullscreen' : null);
-  // Escape through the page's one key registry (K153, src/js/ui/keys), in the frame's own
-  // views, so it never takes Escape from a workspace: it closes an open frame menu (focus back
-  // on its button), else leaves full screen. Focus 'none' (the default) never fires in a text
-  // field or a modal dialog. Tab and the items' own Enter and Space move through the menu.
+  // Escape through the page's one key registry (K153, src/js/ui/keys): frameKeyBindings.
   const unbind = [];
   if (keys && typeof keys.bind === 'function') {
-    unbind.push(keys.bind({ id: 'frame.menu.close', keys: ['Escape'],
-      scope: { workspace: '*', view: 'frame-menu' }, label: 'Close the frame menu',
-      group: 'View', run: () => { const f = openMenu(); if (f) closeMenu(f, true); } }));
-    unbind.push(keys.bind({ id: 'frame.fullscreen.exit', keys: ['Escape'],
-      scope: { workspace: '*', view: 'fullscreen' }, label: 'Leave full screen', group: 'View',
-      run: () => { const f = fullFrame(); if (f) exit(f.decl.id); } }));
+    const bindings = frameKeyBindings({
+      open: () => !!(openMenu() || fullFrame()),
+      inside: () => {
+        const f = fullFrame();
+        return !!(f && doc.activeElement && f.el.contains(doc.activeElement));
+      },
+      escape: () => {
+        const m = openMenu();
+        if (m) { closeMenu(m, true); return; }
+        const f = fullFrame();
+        if (f) exit(f.decl.id);
+      },
+    });
+    for (const b of bindings) unbind.push(keys.bind(b));
   }
   const onFsChange = () => {
     const fsEl = doc.fullscreenElement || doc.webkitFullscreenElement;
@@ -411,7 +432,6 @@ export function createFrames({ doc = document, win = window, catalog, controls =
     state: (id) => (frames.has(id) ? frames.get(id).state : null),
     mode: (id) => (frames.has(id) ? frames.get(id).mode : null),
     ids: () => [...frames.keys()],
-    keyView,
     /** Leave full screen wherever it is (a route change). */
     exitAll() {
       for (const f of frames.values()) if (f.state === 'full') exit(f.decl.id);
