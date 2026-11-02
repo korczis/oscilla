@@ -5,11 +5,15 @@ kind: rule
 title: Every CI job and network step is bounded, pinned and retried
 description: Every workflow job and every step that installs, downloads or runs a browser suite has its own time limit; installs go through one bounded wrapper, downloads retry, are digest-checked and are never executed, nothing is made non-fatal, gate needs every job, and ci.yml starts on a pull request only.
 statement: Every job in .github/workflows/*.yml declares timeout-minutes, and so does every step that installs through .github/scripts/ci-install.sh, runs curl, wget or gh, or runs a browser suite; browser and apt installs go only through .github/scripts/ci-install.sh; every curl carries --retry and --connect-timeout (wget --tries and --connect-timeout); every download whose output is not discarded to /dev/null is checked with sha256sum -c against a digest pinned in the workflow, and none is piped into an interpreter, substituted into a command or fetched in a step that uses eval; every action is pinned to a version tag or commit and every container image to a tag; no job or step sets continue-on-error and no install, download or browser suite is followed by `|| true`; the gate job's needs list every other job of ci.yml; and a workflow with a gate job is started by pull_request only.
-status: active
+status: deprecated
 class: blocking
 depends_on: []
 tags: [ci, process, reliability]
 ---
+
+> Deprecated on 2026-11-02: superseded by `ci-bounded.v2.md` (ADR 0083, owner decision of
+> 2026-11-02: pull requests land through a merge queue, so ci.yml also starts on merge_group).
+> Kept unchanged below as the record of version 1.
 
 # Rationale
 

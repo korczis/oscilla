@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0083
 kind: adr
 title: "Pull requests land through a merge queue, not a race of armed auto-merges on a strict branch"
-status: proposed
+status: accepted
 date: 2026-11-02
 tags:
   - ci
@@ -20,8 +20,11 @@ related:
 
 # 83. Pull requests land through a merge queue, not a race of armed auto-merges on a strict branch
 
-Status: proposed. Protection of `main` is the owner's to change; nothing here is applied until
-the owner accepts it.
+Status: accepted by the owner on 2026-11-02 (AskUserQuestion in the session of oscilla-b0, about
+22:35Z; the choice, verbatim: "Yes, implement it (Recommended)"; its text: "Accept ADR 0083; 26
+implements the workflow and script changes in a PR, af reviews, and then you switch the ruleset
+to require the queue"). Plan issue E045 implements it; switching the ruleset to require the
+queue is the owner's act after that pull request lands.
 
 ## Context
 
@@ -70,16 +73,20 @@ Strictness is kept, by construction: what lands is exactly the tree the queue te
   stay off for `merge_group` refs (a cancelled group would drop out of the queue).
 - `fail-first` and `review-verdict` judge a pull request. On `merge_group` the pull request is
   the queue ref's own (`github.event.merge_group.head_ref` names it, `pr-N`); the jobs read N from
-  it and judge that pull request's head against its base through the base copy, exactly as on
-  `pull_request` (`.github/scripts/base-rule.sh`). They must not rejudge the whole group.
+  it through `.github/scripts/queued-pr.sh` and judge that pull request through the base copy,
+  exactly as on `pull_request` (`.github/scripts/base-rule.sh`). They must not rejudge the whole
+  group: review-verdict measures `HEAD^1..HEAD`, the queue's merge of that one pull request onto
+  main plus the pull requests ahead of it, as a pull_request run measures its merge commit.
 - `project.ci-bounded`: its triggers clause names `pull_request` only; it gains `merge_group`,
   with the same bounds.
 - `main-checks.yml` stays as it is (push to `main`): it still names the merge that turned `main`
   red, now one per queue landing.
-- R028's CI receipt (`scripts/release-ci-receipt.mjs`) accepts runs of event `pull_request` on
-  the release pull request's head. A queued release pull request lands on its `merge_group`
-  run; the receipt must accept that run when its tree equals the merged tree (or the release pull
-  request lands outside the queue, as the one exception the release flow names).
+- R028's CI receipt (`scripts/release-ci-receipt.mjs`, rule v3) accepts, beside the release
+  pull request's own run, the newest `merge_group` run whose head is main's HEAD itself (the
+  queue commit main fast-forwarded to) from the queue ref of that same pull request (review of
+  oscilla-af): a run on another sha, from another pull request's queue ref, a queue group of more
+  than one pull request (HEAD^1 not in the pull request head) and a skipped or missing job each
+  refuse; both events run the same jobs, so none is excused.
 - The release flow (`project.release-flow-complete`): "nothing else merges until the publish"
   becomes "the release pull request is alone in the queue": queue entry is paused (or the queue
   is emptied) while a receipt waits for its publish.

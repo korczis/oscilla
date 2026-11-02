@@ -348,14 +348,19 @@ test('a job that calls a reusable workflow carries no limit of its own, but is p
   assert.deepEqual(rules(ci(job('octo/shared/.github/workflows/x.yml@main'))), ['pinned@reuse']);
 });
 
-test('mutation: ci.yml started by anything but a pull request', () => {
-  assert.deepEqual(Object.keys(parse(CI).on), ['pull_request']);
-  const manual = mutate(CI, '\non:\n  pull_request:\n',
-    '\non:\n  pull_request:\n  workflow_dispatch:\n');
+test('mutation: ci.yml started by anything but a pull request and its merge queue', () => {
+  assert.deepEqual(Object.keys(parse(CI).on), ['pull_request', 'merge_group']);
+  const manual = mutate(CI, '\non:\n  pull_request:\n  merge_group:\n',
+    '\non:\n  pull_request:\n  merge_group:\n  workflow_dispatch:\n');
   assert.deepEqual(rules(ci(manual)), ['triggers@-']);
-  assert.match(ci(manual)[0].message, /not by: pull_request, workflow_dispatch/);
-  const push = mutate(CI, '\non:\n  pull_request:\n', '\non: [push]\n');
+  assert.match(ci(manual)[0].message, /not by: pull_request, merge_group, workflow_dispatch/);
+  const push = mutate(CI, '\non:\n  pull_request:\n  merge_group:\n', '\non: [push]\n');
   assert.deepEqual(rules(ci(push)), ['triggers@-']);
+  const queueOnly = mutate(CI, '\non:\n  pull_request:\n  merge_group:\n',
+    '\non:\n  merge_group:\n');
+  assert.deepEqual(rules(ci(queueOnly)), ['triggers@-'], 'the queue alone judges no pull request');
+  const prOnly = mutate(CI, '\non:\n  pull_request:\n  merge_group:\n', '\non:\n  pull_request:\n');
+  assert.deepEqual(rules(ci(prOnly)), [], 'without the queue (ADR 0083 not yet switched on)');
   // pages.yml has no gate: it deploys main and may be started by hand
   assert.deepEqual(checkWorkflow('pages.yml', PAGES, SUITES), []);
 });
@@ -371,7 +376,8 @@ function problemsOfSizeStep(text) {
   if (!(Number(step['timeout-minutes']) > 0)) out.push('no timeout-minutes');
   if (step['continue-on-error'] !== undefined) out.push('continue-on-error');
   // it only reports: the program and its tee into the summary, nothing that gates on a size
-  const run = 'node scripts/size-report.mjs --base-branch "origin/$GITHUB_BASE_REF" \\\n'
+  const run = 'node scripts/size-report.mjs --base-branch'
+    + ' "origin/${GITHUB_BASE_REF:-${QUEUE_BASE#refs/heads/}}" \\\n'
     + '  | tee -a "$GITHUB_STEP_SUMMARY"\n';
   if (step.run !== run) out.push(`run is ${JSON.stringify(step.run)}`);
   return out;
@@ -402,12 +408,12 @@ test('E022: the size step reports a pull request over the budget, bounded and ne
 test('the pull-request rules are judged by the base branch\'s programs, and need a PR', () => {
   const jobs = parse(CI).jobs;
   for (const [job, call] of [
-    ['fail-first', '.github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF" scripts/fail-first.mjs'
+    ['fail-first', '.github/scripts/base-rule.sh "origin/$BASE" scripts/fail-first.mjs'
       + ' --pr-json "$RUNNER_TEMP/pr.json" --head "$HEAD_SHA"'
-      + ' --base-branch "origin/$GITHUB_BASE_REF"'],
-    ['review-verdict', '.github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF"'
+      + ' --base-branch "origin/$BASE"'],
+    ['review-verdict', '.github/scripts/base-rule.sh "origin/$BASE"'
       + ' scripts/review-verdict.mjs --pr "$PR" --head HEAD'
-      + ' --base-branch "origin/$GITHUB_BASE_REF"'],
+      + ' --base-branch "$DIFF_BASE"'],
   ]) {
     assert.deepEqual(problemsOfRuleJob(jobs[job], call), [], job);
   }
@@ -440,12 +446,19 @@ function problemsOfRuleJob(job, call) {
   if (last.env?.PR !== '${{ github.event.pull_request.number }}') {
     out.push('PR is not the event\'s');
   }
+  // ADR 0083: in the merge queue the pull request is the one the queue ref names
+  if (last.env?.QUEUE_REF !== '${{ github.event.merge_group.head_ref }}') {
+    out.push('QUEUE_REF is not the merge group\'s');
+  }
   if (last.shell !== undefined) out.push('the step sets its own shell');
   const run = logicalLines(last.run).map((l) => l.replace(/\s+/g, ' '));
   // the whole line: no `|| true`, no `;`, no `if` around it, no other arguments
   if (run.at(-1) !== call) out.push(`the last command is not the call: ${run.at(-1)}`);
   if (!run.some((l) => /^if \[ -z "\$PR" \]; then .*exit 1; fi$/.test(l))) {
     out.push('it does not fail when there is no pull request');
+  }
+  if (!run.some((l) => l === 'eval "$(.github/scripts/queued-pr.sh)"')) {
+    out.push('it does not read the queued pull request');
   }
   if (run.some((l) => /\bexit 0\b|\bset \+e\b/.test(l))) out.push('an early success');
   return out;
@@ -456,17 +469,20 @@ test('mutation: a rule job whose call can no longer refuse', () => {
   const call = logicalLines(real.steps.at(-1).run).at(-1).replace(/\s+/g, ' ');
   assert.deepEqual(problemsOfRuleJob(real, call), []);
   const edited = (from, to) => parse(mutate(CI, from, to)).jobs['review-verdict'];
-  const tail = '--pr "$PR" --head HEAD --base-branch "origin/$GITHUB_BASE_REF"\n';
+  const tail = '--pr "$PR" --head HEAD --base-branch "$DIFF_BASE"\n';
   for (const [name, job] of [
     ['|| true', edited(tail, `${tail.trimEnd()} || true\n`)],
     ['judges the base against itself', edited('--head HEAD --base-branch',
-      '--head "origin/$GITHUB_BASE_REF" --base-branch')],
-    ['another base', edited(tail, tail.replace('--base-branch "origin/$GITHUB_BASE_REF"',
+      '--head "origin/$BASE" --base-branch')],
+    ['another base', edited(tail, tail.replace('--base-branch "$DIFF_BASE"',
       '--base HEAD'))],
+    ['no queued pull request', edited('          eval "$(.github/scripts/queued-pr.sh)"\n'
+      + '          if [ -z "$PR" ]; then echo "::error::review-verdict',
+      '          if [ -z "$PR" ]; then echo "::error::review-verdict')],
     ['a command after it', edited(tail, `${tail}          echo done\n`)],
-    ['wrapped in if', edited('          .github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF"'
+    ['wrapped in if', edited('          .github/scripts/base-rule.sh "origin/$BASE"'
       + ' scripts/review-verdict.mjs', '          if true; then exit 0; fi\n'
-      + '          .github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF"'
+      + '          .github/scripts/base-rule.sh "origin/$BASE"'
       + ' scripts/review-verdict.mjs')],
     ['conditional job', edited('    name: review-verdict (guarded paths need a recorded review)\n',
       '    name: review-verdict (guarded paths need a recorded review)\n'
@@ -475,7 +491,7 @@ test('mutation: a rule job whose call can no longer refuse', () => {
       '      - name: A guarded change carries a verdict for the content it changes\n',
       '      - name: A guarded change carries a verdict for the content it changes\n'
       + '        if: false\n')],
-    ['own copy', edited('.github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF" scripts/review',
+    ['own copy', edited('.github/scripts/base-rule.sh "origin/$BASE" scripts/review',
       'node scripts/review')],
   ]) {
     assert.notDeepEqual(problemsOfRuleJob(job, call), [], name);

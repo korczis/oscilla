@@ -13,7 +13,9 @@
 #     and repository programs as the job's steps, a leg narrowed with OSC_BROWSERS as the
 #     job's env narrows it. Setup (npm ci, browser and PulseAudio installs, artifact upload)
 #     is not part of a gate;
-#   - ci.yml starts on every pull request and filters no path, and no job is conditional
+#   - ci.yml starts on every pull request, and again on its merge-queue entry (merge_group,
+#     ADR 0083: the same jobs on main plus the queued pull requests ahead), and filters no path,
+#     and no job is conditional
 #     except the aggregate's `if: always()`, so every gate is `always: true`: every plan
 #     selects it, and any changed file can make a recorded run of it stale. The one path class
 #     covers the whole tree and names no gate, so a plan reads "affected" with every gate
@@ -150,13 +152,13 @@ gates:
   - id: fail-first
     job: fail-first
     always: true
-    runs: .github/scripts/base-rule.sh origin/<base> scripts/fail-first.mjs --pr-json <pr.json> --head <head> --base-branch origin/<base>
+    runs: eval "$(PR=<pr> GITHUB_BASE_REF=<base> .github/scripts/queued-pr.sh)" && .github/scripts/base-rule.sh origin/<base> scripts/fail-first.mjs --pr-json <pr.json> --head <head> --base-branch origin/<base>
     summary: a feat or fix pull request's added or changed unit tests fail on the merge base and pass on the head, or its body says fail-first n/a with a reason (project.fail-first)
 
   - id: review-verdict
     job: review-verdict
     always: true
-    runs: .github/scripts/base-rule.sh origin/<base> scripts/review-verdict.mjs --pr <pr> --head HEAD --base-branch origin/<base>
+    runs: eval "$(PR=<pr> GITHUB_BASE_REF=<base> .github/scripts/queued-pr.sh)" && .github/scripts/base-rule.sh origin/<base> scripts/review-verdict.mjs --pr <pr> --head HEAD --base-branch <diff-base>
     summary: a pull request that changes a guarded path carries a reviewer's verdict for the content it changes (project.review-verdict)
 
   - id: gate

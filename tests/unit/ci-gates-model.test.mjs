@@ -96,15 +96,19 @@ export function compare(ciText, modelText) {
     if (!want.has(id)) found.push(`job set: gate ${id} is no job or matrix leg of ci.yml`);
   }
 
-  // the selection: every job runs on every pull request
+  // the selection: every job runs on every pull request, and again in its merge queue (ADR 0083)
   const on = ci.on ?? {};
   const triggers = Object.keys(on);
-  if (triggers.join() !== 'pull_request') {
-    found.push(`selection: ci.yml starts on ${triggers.join(', ')}, not pull_request alone`);
+  if (!triggers.includes('pull_request')
+    || triggers.some((t) => !['pull_request', 'merge_group'].includes(t))) {
+    found.push(`selection: ci.yml starts on ${triggers.join(', ')}, not on pull_request and its`
+      + ' merge queue alone');
   }
-  for (const filter of ['paths', 'paths-ignore']) {
-    if (on.pull_request && on.pull_request[filter] !== undefined) {
-      found.push(`selection: ci.yml filters pull_request by ${filter}; the model selects every gate`);
+  for (const event of ['pull_request', 'merge_group']) {
+    for (const filter of ['paths', 'paths-ignore']) {
+      if (on[event] && on[event][filter] !== undefined) {
+        found.push(`selection: ci.yml filters ${event} by ${filter}; the model selects every gate`);
+      }
     }
   }
   for (const [key, job] of Object.entries(ci.jobs ?? {})) {

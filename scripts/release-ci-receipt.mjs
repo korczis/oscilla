@@ -10,11 +10,19 @@
 //   - the tree of HEAD is the tree of H, and B is an ancestor of H: H contained every base
 //     the CI run could have merged it with (the base only moves forward), so the merge CI
 //     tested has H's tree, which is HEAD's tree;
-//   - the newest CI run (workflow `name:` of ci.yml, event pull_request) on H has completed
-//     with success: an older green run, or a run whose latest attempt is red, does not count;
-//   - every job ci.yml declares (a matrix job once per value) is in that run's latest jobs,
-//     on H, and succeeded: a missing, skipped or cancelled job, or a job no ci.yml declares,
-//     refuses;
+//   - one CI run judged the tree that landed, its newest attempt completed with success:
+//       pull_request  the newest run of event pull_request on H from its head branch (CI tested
+//                     refs/pull/<n>/merge, whose tree is H's by the two facts above); or
+//       merge_group   (ADR 0083, review of af) the newest run of event merge_group whose head is
+//                     HEAD itself, the queue's merge commit that main fast-forwarded to, from
+//                     the queue ref gh-readonly-queue/main/pr-<N>-... of that same pull request N;
+//                     a queue group of more than one pull request fails the base-in-head fact,
+//                     since HEAD^1 is then another pull request's queue commit;
+//     an older green run, or a run whose latest attempt is red, does not count;
+//   - every job ci.yml declares (a matrix job once per value) is in that run's latest jobs, on
+//     the run's head, and succeeded: a missing, skipped or cancelled job, or a job no ci.yml
+//     declares, refuses. Both events run the same jobs (ci.yml has no job that skips on
+//     either), so no job is excused;
 //   - the committed roadmap matches the plan (tests/unit/about-current.test.mjs with
 //     OSC_ROADMAP_CHECK=1, the one check the local gate ran that CI does not).
 // Each fact that cannot be read is a problem of its own, never an empty answer.
@@ -110,35 +118,71 @@ export function ciReceiptProblems(f) {
     problems.push('the committed roadmap does not match the plan (OSC_ROADMAP_CHECK=1 node '
       + '--test tests/unit/about-current.test.mjs)');
   }
-  if (!Array.isArray(f.runs)) return [...problems, `the CI runs of ${short(pr)} could not be read`];
-  const runs = f.runs
-    .filter((r) => r.name === f.workflow?.name && r.event === 'pull_request' && r.head_sha === pr
-      && (branch === null || r.head_branch === branch))
+  // One of the two runs must verify (ADR 0083): the pull request's own, or its merge-queue run.
+  const viaPr = runProblems(f, 'pull_request', f.runs, f.jobs);
+  if (!viaPr.length) return problems;
+  if (f.queueRuns === undefined) return [...problems, ...viaPr];
+  const viaQueue = runProblems(f, 'merge_group', f.queueRuns, f.queueJobs);
+  if (!viaQueue.length) return problems;
+  return [...problems, ...viaPr.map((p) => `pull_request: ${p}`),
+    ...viaQueue.map((p) => `merge_group: ${p}`)];
+}
+
+/** The pull request HEAD merges, when exactly one has its head. */
+function pullOf(f) {
+  const pr = f.parents?.[1];
+  const pulls = Array.isArray(f.pulls) ? f.pulls.filter((p) => p?.head?.sha === pr) : [];
+  return pulls.length === 1 ? pulls[0] : null;
+}
+
+/** The runs of `event` that may judge HEAD, newest first. */
+function candidateRuns(f, event, runs) {
+  const pr = f.parents?.[1];
+  const pull = pullOf(f);
+  const queueRef = pull ? new RegExp(`^gh-readonly-queue/${TRUNK}/pr-${pull.number}-[0-9a-f]+$`)
+    : null;
+  return (runs || []).filter((r) => r.name === f.workflow?.name && r.event === event
+    && (event === 'pull_request'
+      ? r.head_sha === pr && (pull === null || r.head_branch === pull.head.ref)
+      : r.head_sha === f.head && queueRef !== null && queueRef.test(String(r.head_branch))))
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || b.id - a.id);
+}
+
+/** What keeps the newest run of `event` from standing for HEAD's tree ([] = it does). */
+function runProblems(f, event, allRuns, allJobs) {
+  const short = (s) => String(s || '?').slice(0, 7);
+  const pr = f.parents?.[1];
+  const sha = event === 'pull_request' ? pr : f.head;
+  if (!Array.isArray(allRuns)) return [`the ${event} runs of ${short(sha)} could not be read`];
+  const runs = candidateRuns(f, event, allRuns);
   if (!runs.length) {
-    return [...problems, `no ${f.workflow?.name} pull_request run on ${short(pr)}`
-      + (branch ? ` from ${branch}` : '')];
+    const pull = pullOf(f);
+    return [`no ${f.workflow?.name} ${event} run on ${short(sha)}`
+      + (event === 'pull_request' && pull ? ` from ${pull.head.ref}` : '')
+      + (event === 'merge_group' && pull ? ` from gh-readonly-queue/${TRUNK}/pr-${pull.number}-`
+        : '')];
   }
+  const problems = [];
   const newest = runs[0];
   if (newest.status !== 'completed' || newest.conclusion !== 'success') {
-    problems.push(`the newest ${f.workflow.name} run ${newest.id} on ${short(pr)} (attempt `
+    problems.push(`the newest ${f.workflow.name} run ${newest.id} on ${short(sha)} (attempt `
       + `${newest.run_attempt}) is ${newest.status}/${newest.conclusion}`);
   }
-  if (!Array.isArray(f.jobs)) {
+  if (!Array.isArray(allJobs)) {
     return [...problems, `the jobs of run ${newest.id} could not be read`];
   }
-  const byName = new Map(f.jobs.map((j) => [j.name, j]));
+  const byName = new Map(allJobs.map((j) => [j.name, j]));
   for (const name of f.workflow.jobs) {
     const j = byName.get(name);
     if (!j) problems.push(`run ${newest.id} has no job "${name}" (${CI_WORKFLOW} declares it)`);
-    else if (j.run_id !== newest.id || j.head_sha !== pr) {
+    else if (j.run_id !== newest.id || j.head_sha !== sha) {
       problems.push(`job "${name}" ran on ${short(j.head_sha)} in run ${j.run_id}, not on `
-        + `${short(pr)} in run ${newest.id}`);
+        + `${short(sha)} in run ${newest.id}`);
     } else if (j.status !== 'completed' || j.conclusion !== 'success') {
       problems.push(`job "${name}" of run ${newest.id} is ${j.status}/${j.conclusion}`);
     }
   }
-  for (const j of f.jobs) {
+  for (const j of allJobs) {
     if (!f.workflow.jobs.includes(j.name)) {
       problems.push(`run ${newest.id} has a job "${j.name}" that ${CI_WORKFLOW} does not declare`);
     }
@@ -146,14 +190,13 @@ export function ciReceiptProblems(f) {
   return problems;
 }
 
-/** The run judged, for the log line of a verified receipt. */
+/** The run judged, for the log line of a verified receipt: the pull request's, else the queue's. */
 export function judgedRun(f) {
-  const pr = f.parents?.[1];
-  const pulls = (f.pulls || []).filter((p) => p?.head?.sha === pr);
-  const branch = pulls.length === 1 ? pulls[0].head.ref : null;
-  return (f.runs || []).filter((r) => r.name === f.workflow?.name && r.head_sha === pr
-    && r.event === 'pull_request' && (branch === null || r.head_branch === branch))
-    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || b.id - a.id)[0] || null;
+  if (!runProblems(f, 'pull_request', f.runs, f.jobs).length) {
+    return candidateRuns(f, 'pull_request', f.runs)[0] || null;
+  }
+  return candidateRuns(f, 'merge_group', f.queueRuns)[0]
+    || candidateRuns(f, 'pull_request', f.runs)[0] || null;
 }
 
 const json = (r) => {
@@ -200,11 +243,19 @@ export function gatherCiReceipt({ sh, root, head }) {
   const runs = ghJson(sh,
     `repos/${REPO_SLUG}/actions/runs?head_sha=${pr}&event=pull_request&per_page=100`);
   facts.runs = Array.isArray(runs?.workflow_runs) ? runs.workflow_runs : null;
-  const newest = judgedRun(facts);
-  if (newest) {
-    const jobs = ghJson(sh,
-      `repos/${REPO_SLUG}/actions/runs/${newest.id}/jobs?filter=latest&per_page=100`);
-    facts.jobs = Array.isArray(jobs?.jobs) ? jobs.jobs : null;
+  const jobsOf = (run) => {
+    if (!run) return null;
+    const j = ghJson(sh, `repos/${REPO_SLUG}/actions/runs/${run.id}/jobs?filter=latest&per_page=100`);
+    return Array.isArray(j?.jobs) ? j.jobs : null;
+  };
+  facts.jobs = jobsOf(candidateRuns(facts, 'pull_request', facts.runs)[0]);
+  // The merge queue's run on HEAD itself (ADR 0083), read only when the pull request's own run
+  // does not verify, so a release outside the queue costs no extra read.
+  if (runProblems(facts, 'pull_request', facts.runs, facts.jobs).length) {
+    const q = ghJson(sh,
+      `repos/${REPO_SLUG}/actions/runs?head_sha=${head}&event=merge_group&per_page=100`);
+    facts.queueRuns = Array.isArray(q?.workflow_runs) ? q.workflow_runs : null;
+    facts.queueJobs = jobsOf(candidateRuns(facts, 'merge_group', facts.queueRuns)[0]);
   }
   return facts;
 }

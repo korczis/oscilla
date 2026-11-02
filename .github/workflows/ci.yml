@@ -22,11 +22,15 @@
 # its own step, and the engine suite names a stalled check itself well before either.
 name: CI
 
-# pull_request only (project.ci-bounded, `triggers`): the fail-first and review-verdict jobs
-# judge a pull request, and a manual run on a PR's branch would have none to judge while its
-# `gate` landed on the same commit as the required check.
+# pull_request and merge_group only (project.ci-bounded v2, `triggers`; ADR 0083): a pull
+# request is judged on its own branch, then again in the merge queue on main plus the pull
+# requests ahead of it, which is the tree that lands. The fail-first and review-verdict jobs
+# judge a pull request in both: on merge_group the one the queue ref names
+# (gh-readonly-queue/main/pr-<N>-<sha>). A manual run would have none to judge while its `gate`
+# landed on the same commit as the required check, so it stays excluded.
 on:
   pull_request:
+  merge_group:
 
 permissions:
   contents: read
@@ -36,9 +40,11 @@ defaults:
   run:
     shell: bash
 
+# A newer push to a pull request cancels its older run; a merge-queue run is never cancelled (a
+# cancelled group drops out of the queue), and every queue entry has its own ref.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   unit:
@@ -73,9 +79,11 @@ jobs:
       # pull request over the budget, failing on verify-dist, still gets its size summary.
       - name: Size of dist/index.html against the budget and the merge base (step summary)
         if: ${{ !cancelled() }}
+        env:
+          QUEUE_BASE: ${{ github.event.merge_group.base_ref }}
         timeout-minutes: 2
         run: |
-          node scripts/size-report.mjs --base-branch "origin/$GITHUB_BASE_REF" \
+          node scripts/size-report.mjs --base-branch "origin/${GITHUB_BASE_REF:-${QUEUE_BASE#refs/heads/}}" \
             | tee -a "$GITHUB_STEP_SUMMARY"
 
   engine:
@@ -398,16 +406,21 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          QUEUE_REF: ${{ github.event.merge_group.head_ref }}
+          QUEUE_BASE: ${{ github.event.merge_group.base_ref }}
         run: |
+          # In the merge queue the pull request is the one the queue ref names (pr-<N>-<sha>).
+          eval "$(.github/scripts/queued-pr.sh)"
           if [ -z "$PR" ]; then echo "::error::fail-first: no pull request to judge"; exit 1; fi
           n=0
-          until gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body,headRefName > "$RUNNER_TEMP/pr.json"; do
+          until gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body,headRefName,headRefOid > "$RUNNER_TEMP/pr.json"; do
             n=$((n + 1)); [ "$n" -lt 3 ] || { echo "::error::could not read PR $PR"; exit 1; }
             sleep 10
           done
-          .github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF" scripts/fail-first.mjs \
+          [ -n "$HEAD_SHA" ] || HEAD_SHA="$(jq -r .headRefOid "$RUNNER_TEMP/pr.json")"
+          .github/scripts/base-rule.sh "origin/$BASE" scripts/fail-first.mjs \
             --pr-json "$RUNNER_TEMP/pr.json" --head "$HEAD_SHA" \
-            --base-branch "origin/$GITHUB_BASE_REF"
+            --base-branch "origin/$BASE"
 
   review-verdict:
     # project.review-verdict: a PR that changes a guarded path (the audio, analysis, experiments
@@ -437,10 +450,16 @@ jobs:
       - name: A guarded change carries a verdict for the content it changes
         env:
           PR: ${{ github.event.pull_request.number }}
+          QUEUE_REF: ${{ github.event.merge_group.head_ref }}
+          QUEUE_BASE: ${{ github.event.merge_group.base_ref }}
         run: |
+          # In the merge queue the pull request is the one the queue ref names (pr-<N>-<sha>);
+          # HEAD is the queue's merge of it onto HEAD^1 (main plus the pull requests ahead), so
+          # the content judged is HEAD^1..HEAD, as a pull_request run judges its merge commit.
+          eval "$(.github/scripts/queued-pr.sh)"
           if [ -z "$PR" ]; then echo "::error::review-verdict: no pull request to judge"; exit 1; fi
-          .github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF" scripts/review-verdict.mjs \
-            --pr "$PR" --head HEAD --base-branch "origin/$GITHUB_BASE_REF"
+          .github/scripts/base-rule.sh "origin/$BASE" scripts/review-verdict.mjs \
+            --pr "$PR" --head HEAD --base-branch "$DIFF_BASE"
 
   gate:
     name: gate

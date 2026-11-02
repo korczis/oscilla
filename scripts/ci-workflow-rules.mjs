@@ -349,15 +349,17 @@ export function checkWorkflow(file, text, suites, actions = new Map()) {
     if (String(gate.if || '').replace(/\s/g, '') !== 'always()') {
       add('gate-needs', 'gate', null, 'gate must run with `if: always()` to report a failed job');
     }
-    // The gate is the required check, and two of its jobs judge the pull request itself. A run
-    // without a pull request (a manual dispatch on the PR's branch) would give them nothing to
-    // judge and still put a green `gate` on the same commit.
+    // The gate is the required check, and two of its jobs judge the pull request itself: on a
+    // pull_request run the event's, on a merge_group run the one the queue ref names (ADR 0083).
+    // A run without a pull request (a manual dispatch or a push on the PR's branch) would give
+    // them nothing to judge and still put a green `gate` on the same commit.
     const { on } = doc;
     const triggers = typeof on === 'string' ? [on]
       : Array.isArray(on) ? on.map(String) : Object.keys(on || {});
-    if (triggers.length !== 1 || triggers[0] !== 'pull_request') {
-      add('triggers', null, null, 'a workflow with a gate job is started by pull_request only,'
-        + ` not by: ${triggers.join(', ') || '(nothing)'}`);
+    const allowed = ['pull_request', 'merge_group'];
+    if (!triggers.includes('pull_request') || triggers.some((t) => !allowed.includes(t))) {
+      add('triggers', null, null, 'a workflow with a gate job is started by pull_request and'
+        + ` merge_group only, not by: ${triggers.join(', ') || '(nothing)'}`);
     }
   }
   return out;

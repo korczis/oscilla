@@ -100,7 +100,7 @@ test('the run is on another sha, or none: refuses', () => {
   only(facts({ runs: [run({ head_sha: HEAD })] }), /no CI pull_request run on ccccccc/);
   only(facts({ runs: [run({ event: 'push' })] }), /no CI pull_request run/);
   only(facts({ runs: [run({ name: 'Pages' })] }), /no CI pull_request run/);
-  only(facts({ runs: null }), /CI runs of ccccccc could not be read/);
+  only(facts({ runs: null }), /pull_request runs of ccccccc could not be read/);
 });
 
 test('only the newest run counts, on its latest attempt', () => {
@@ -204,13 +204,80 @@ test('gatherCiReceipt reads parents, trees, ancestry, the runs and the latest jo
     return { status: 127, stdout: '' };
   }, root, head: HEAD });
   assert.match(ciReceiptProblems(broken).join(), /could not be read/);
-  assert.equal(tries, 2 * GH_ATTEMPTS, 'pulls and runs, each tried twice; no run, no jobs read');
+  assert.equal(tries, 3 * GH_ATTEMPTS,
+    'pulls, runs and the queue\'s runs (no pull request run verified), each tried twice');
   // a shape that is not the API's is unreadable too
   const odd = gatherCiReceipt({ sh: (c, a, o) => (a[0] === 'api'
     ? { status: 0, stdout: JSON.stringify({ workflow_runs: 'x', jobs: 'x' }) } : sh(c, a, o)),
   root, head: HEAD });
   assert.equal(odd.runs, null);
   assert.equal(odd.pulls, null);
+});
+
+// ADR 0083: a pull request that landed through the merge queue. main fast-forwarded to the
+// queue's merge commit HEAD (parents: the earlier main BASE and the pull request head PR), and
+// the queue's merge_group run tested HEAD itself (review of af, points 1-5).
+const QREF = 'gh-readonly-queue/main/pr-382-cccccccccccccccccccccccccccccccccccccccc';
+const qrun = (over = {}) => run({ id: 950, event: 'merge_group', head_sha: HEAD, head_branch: QREF,
+  created_at: '2026-11-02T12:00:00Z', ...over });
+const qjobs = (r, over = {}) => WORKFLOW.jobs.map((name, i) => ({ id: 100 + i, name, run_id: r.id,
+  head_sha: r.head_sha, status: 'completed', conclusion: 'success', run_attempt: r.run_attempt,
+  ...over }));
+const queued = (over = {}) => {
+  const q = qrun();
+  return facts({ runs: [], jobs: null, queueRuns: [q], queueJobs: qjobs(q), ...over });
+};
+
+test('ADR 0083: a green merge_group run on HEAD itself, from the queue ref of that pull request,'
+  + ' verifies', () => {
+  assert.deepEqual(ciReceiptProblems(queued()), []);
+  assert.equal(judgedRun(queued()).id, 950);
+  // the pull request's own green run still verifies alone (a release outside the queue)
+  assert.deepEqual(ciReceiptProblems(facts()), []);
+});
+
+test('ADR 0083 mutation: a merge_group run on another sha, or from another pull request\'s queue'
+  + ' ref, refuses', () => {
+  const other = qrun({ head_sha: 'e'.repeat(40) });
+  assert.match(ciReceiptProblems(queued({ queueRuns: [other], queueJobs: qjobs(other) })).join(),
+    /merge_group: no CI merge_group run on aaaaaaa/);
+  const foreign = qrun({ head_branch: 'gh-readonly-queue/main/pr-999-cccc' });
+  assert.match(ciReceiptProblems(queued({ queueRuns: [foreign], queueJobs: qjobs(foreign) }))
+    .join(), /no CI merge_group run/);
+  const red = qrun({ conclusion: 'failure' });
+  assert.match(ciReceiptProblems(queued({ queueRuns: [red], queueJobs: qjobs(red) })).join(),
+    /newest CI run 950 .* is completed\/failure/);
+  // the newest queue run counts, on its latest attempt: an older green one does not stand in
+  const older = qrun({ id: 940, created_at: '2026-11-02T11:00:00Z' });
+  const newerRed = qrun({ id: 960, created_at: '2026-11-02T13:00:00Z', conclusion: 'failure' });
+  assert.match(ciReceiptProblems(queued({ queueRuns: [older, newerRed],
+    queueJobs: qjobs(newerRed) })).join(), /newest CI run 960/);
+});
+
+test('ADR 0083 mutation: a queue group of two refuses (HEAD^1 is another pull request\'s queue'
+  + ' commit)', () => {
+  // the release pull request queued behind another: its queue commit's first parent is that
+  // other pull request's queue commit, which the release head does not contain
+  const problems = ciReceiptProblems(queued({ baseInPr: false, prTree: 'f'.repeat(40) }));
+  assert.ok(problems.some((p) => /does not contain the base/.test(p)), problems.join('\n'));
+  assert.ok(problems.some((p) => /main holds more than CI tested/.test(p)), problems.join('\n'));
+});
+
+test('ADR 0083 mutation: a skipped or missing job of the queue run refuses; none is excused', () => {
+  const q = qrun();
+  const skipped = qjobs(q).map((j) => (j.name === 'review-verdict (guarded paths need a recorded'
+    + ' review)' ? { ...j, conclusion: 'skipped' } : j));
+  assert.match(ciReceiptProblems(queued({ queueJobs: skipped })).join(),
+    /job "review-verdict .*" of run 950 is completed\/skipped/);
+  const missing = qjobs(q).filter((j) => !j.name.startsWith('fail-first'));
+  assert.match(ciReceiptProblems(queued({ queueJobs: missing })).join(),
+    /run 950 has no job "fail-first/);
+});
+
+test('ADR 0083 mutation: a pull_request run does not stand in when the queue commit\'s tree'
+  + ' differs from the pull request head\'s', () => {
+  assert.match(ciReceiptProblems(facts({ prTree: 'f'.repeat(40) })).join(),
+    /main holds more than CI tested/);
 });
 
 test('release:prepare defaults to the CI path and keeps the full gate behind --local-gate', () => {
