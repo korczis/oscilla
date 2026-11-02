@@ -307,3 +307,21 @@ test('#330 F6: the sidebar and the workspace list are two distinct landmarks by 
   const norm = (s) => s.toLowerCase().replace(/s$/, '');
   assert.notEqual(norm(asideName), norm(navName), 'not the same name but for a plural s');
 });
+
+test('K153: the shell binds its keys through roving(), and Escape decides as before', async () => {
+  const { shellEscape } = await import('../../src/js/ui/shell.js');
+  const src = readFileSync(new URL('../../src/js/ui/shell.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(src, /addEventListener\(\s*'key/, 'no key listener of its own');
+  assert.match(src, /import \{ roving \} from '\.\/keys\/roving\.js'/);
+  assert.doesNotMatch(html, /navSearchKeydown|@keydown="nav/, 'the searches hold no @keydown');
+  // A search with a query empties it, whether or not the drawer is open (the drawer stays).
+  assert.equal(shellEscape({ search: true, query: 'fil', drawerOpen: true }), 'clear');
+  assert.equal(shellEscape({ search: true, query: 'fil' }), 'clear');
+  // An empty search, or any entry, in the open drawer closes it.
+  assert.equal(shellEscape({ search: true, query: '', drawerOpen: true }), 'close');
+  assert.equal(shellEscape({ drawerOpen: true, inGroup: true }), 'close');
+  // On the desktop sidebar, a group's list collapses its group; elsewhere Escape is the page's.
+  assert.equal(shellEscape({ inGroup: true }), 'collapse');
+  assert.equal(shellEscape({}), null);
+  assert.equal(shellEscape({ search: true, query: '' }), null);
+});

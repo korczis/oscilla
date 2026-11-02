@@ -28,6 +28,8 @@
 //            the predicate `when` (registered by its adapter, ui/empty-states.js) is true;
 //            action.to is a registry id.
 
+import { roving } from './keys/roving.js';
+
 /** The workspaces, in navigation order. group: the sidebar group holding it, or none. */
 export const WORKSPACE_REGISTRY = Object.freeze([
   { id: 'playground', label: 'Playground', words: 'instrument tone oscillator play hold',
@@ -290,6 +292,26 @@ function sidebarEntries(root) {
 }
 
 /**
+ * What Escape does in the shell's widgets (a pure decision, applied by createShell):
+ *   'clear'     a workspace search holding a query empties it (the drawer stays open);
+ *   'close'     anywhere else in the open phone drawer, the drawer closes and focus returns to
+ *               the menu button;
+ *   'collapse'  in an expanded group's list on the desktop sidebar, the group collapses and
+ *               focus returns to its button;
+ *   null        not the shell's: the key goes on to the page.
+ * search: the key came from a workspace search field; query: its text; inGroup: the focus is
+ * inside a group's list.
+ */
+export function shellEscape({ search = false, query = '', drawerOpen = false, inGroup = false }) {
+  if (search && query) return 'clear';
+  if (drawerOpen) return 'close';
+  if (!search && inGroup) return 'collapse';
+  return null;
+}
+
+let detachShellKeys = [];
+
+/**
  * The shell part. Its state is UI-only (never audio) and every change it makes to what is shown
  * goes through Alpine bindings in src/index.html; the classes those bindings name are Tailwind
  * classes, written out here in full so the build's content scan compiles them.
@@ -312,13 +334,54 @@ export function createShell({ get = storageGet, set = storageSet } = {}) {
       const desktop = window.matchMedia(DESKTOP_QUERY);
       const leaveDrawer = () => { if (desktop.matches && this.drawerOpen) this.closeDrawer(); };
       if (desktop.addEventListener) desktop.addEventListener('change', leaveDrawer);
-      document.addEventListener('keydown', (e) => {
-        if (e.key !== 'Escape' || !this.drawerOpen || document.querySelector('dialog[open]')) {
-          return;
+      this.shellKeys();
+    },
+
+    /**
+     * The shell's keys, through the one widget key helper (ui/keys/roving.js, K153): in the
+     * sidebar's list ArrowUp and ArrowDown walk the shown entries, wrapping, Home and End go to
+     * the first and last; in either workspace search ArrowDown moves into the list; Escape is
+     * shellEscape's everywhere in them (it closes the drawer from inside it, as the page-level
+     * listener did). Attached once per page (a second call detaches the first).
+     */
+    shellKeys() {
+      for (const d of detachShellKeys) d();
+      detachShellKeys = [];
+      const root = this.$root;
+      const entries = () => sidebarEntries(root);
+      const escape = (e) => {
+        const t = e.target;
+        const search = !!(t && t.matches && t.matches('input[type="search"]'));
+        const list = t && t.closest ? t.closest('[data-osc-nav-panel]') : null;
+        const what = shellEscape({ search, query: this.navQuery, drawerOpen: this.drawerOpen,
+          inGroup: !!list });
+        if (what === 'clear') this.navQuery = '';
+        else if (what === 'close') this.closeDrawer(true);
+        else if (what === 'collapse') {
+          const group = list.dataset.oscNavPanel;
+          this.toggleNavGroup(group, false);
+          const btn = root.querySelector(`[data-osc="nav-group.${group}"]`);
+          if (btn) btn.focus();
         }
-        e.preventDefault();
-        this.closeDrawer(true);
-      });
+        return what !== null;
+      };
+      // The entries: the arrows walk them, wrapping; Home and End.
+      const list = root.querySelector('#osc-nav');
+      if (list) {
+        detachShellKeys.push(roving(list, { count: () => entries().length,
+          index: () => entries().indexOf(document.activeElement),
+          move: (i) => { const el = entries()[i]; if (el) el.focus(); },
+          orientation: 'vertical', wrap: true, escape }));
+      }
+      // Each search is item 0 before the entries: ArrowDown enters the list, every other key
+      // but Escape stays the field's (roving leaves a text field Home, End and letters).
+      for (const input of root.querySelectorAll('#osc-nav-search, #osc-nav-search-drawer')) {
+        detachShellKeys.push(roving(input.parentElement, {
+          count: () => entries().length + 1,
+          index: () => (document.activeElement === input ? 0 : -1),
+          move: (i) => { const el = i > 0 ? entries()[i - 1] : null; if (el) el.focus(); },
+          orientation: 'vertical', wrap: false, escape }));
+      }
     },
 
     // ---- phone drawer ----
@@ -378,7 +441,6 @@ export function createShell({ get = storageGet, set = storageSet } = {}) {
         '@mouseleave'(e) { this.sidebarPeekOff(e); },
         '@focusin'() { this.sidebarPeekOn(); },
         '@focusout'(e) { this.sidebarPeekOff(e); },
-        '@keydown'(e) { this.sidebarKeydown(e); },
       };
     },
     /** A label of the sidebar: visually hidden (still named) while it shows icons only. */
@@ -426,45 +488,6 @@ export function createShell({ get = storageGet, set = storageSet } = {}) {
       this.navQuery = '';
       if (this.drawerOpen) this.closeDrawer();
       this.setWorkspace(first, { focusHeading: true });
-    },
-    navSearchKeydown(e) {
-      if (e.key === 'Escape' && this.navQuery) {
-        e.preventDefault();
-        e.stopPropagation();
-        this.navQuery = '';
-      } else if (e.key === 'ArrowDown') {
-        const [first] = sidebarEntries(this.$root);
-        if (first) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
-    },
-
-    // ---- keyboard in the sidebar: the arrows walk its entries, Escape steps back ----
-    sidebarKeydown(e) {
-      const keys = ['ArrowDown', 'ArrowUp', 'Home', 'End'];
-      const entries = sidebarEntries(this.$root);
-      const i = entries.indexOf(document.activeElement);
-      if (keys.includes(e.key) && i >= 0) {
-        e.preventDefault();
-        let n = 0;
-        if (e.key === 'End') n = entries.length - 1;
-        else if (e.key === 'ArrowDown') n = (i + 1) % entries.length;
-        else if (e.key === 'ArrowUp') n = (i - 1 + entries.length) % entries.length;
-        entries[n].focus();
-        return;
-      }
-      if (e.key !== 'Escape' || this.drawerOpen) return;
-      // In an expanded group's list, Escape collapses the group and focus returns to its button.
-      const list = document.activeElement && document.activeElement.closest
-        ? document.activeElement.closest('[data-osc-nav-panel]') : null;
-      if (!list) return;
-      e.preventDefault();
-      const group = list.dataset.oscNavPanel;
-      this.toggleNavGroup(group, false);
-      const btn = this.$root.querySelector(`[data-osc="nav-group.${group}"]`);
-      if (btn) btn.focus();
     },
   };
 }

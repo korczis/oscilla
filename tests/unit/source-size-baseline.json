@@ -25,7 +25,7 @@
     }
   },
   "caps": {
-    "src/index.html": 295000,
+    "src/index.html": 299000,
     "src/js/audio/audio-engine.js": 73000,
     "src/js/core/instrument.js": 62000,
     "src/js/experiments/validate.js": 64000,
@@ -103,6 +103,12 @@
       "cap": 282000,
       "pr": 375,
       "reason": "the K066/K102 presets and patch library markup meets the K097 XY tab and the feature train's Synth tabs in the shell, one byte past the 281 000 cap"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 299000,
+      "pr": 386,
+      "reason": "merging main's synth train (#385: K066/K102 presets and patch library, the XY tab, the docked keyboard) into lane A's shell, page header and registry-driven page parts (#386)"
     }
   ]
 }

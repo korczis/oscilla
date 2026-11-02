@@ -48,9 +48,11 @@ const SMALL_FONT_DEBT = new Set([
   'src/styles/studio-timeline.css .osc-stl-flag',
 ]);
 
-// Tailwind text-[<n>px] classes under 12 px, by file: the Synth panel faces (the Synth lane).
+// Tailwind text-[<n>px] classes under 12 px, by file: the Synth panel faces and the XY pad's
+// axis labels (text-[10px], main's #385, merged in after this floor landed): the Synth lane.
 // Only shrinks, as above.
-const SMALL_TEXT_CLASS_DEBT = new Set(['src/js/synth/view/face.js']);
+const SMALL_TEXT_CLASS_DEBT = new Set(['src/js/synth/view/face.js',
+  'src/js/ui/kinds/xy-pad.js']);
 
 /** The body of the first `@media <query> {` block of `css`, braces matched. */
 function mediaBlock(css, query) {
