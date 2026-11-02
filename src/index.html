@@ -2358,7 +2358,9 @@
           <button type="button" class="osc-btn osc-btn-secondary" data-osc="presets.reset" @click="resetDefaults()">Reset to defaults</button>
           <button type="button" class="osc-btn osc-btn-secondary" data-osc="presets.clearHistory"
             x-show="presetTab === 'history'" @click="clearHistory()">Clear history</button>
-          <a href="#m=synth" class="self-center" data-osc="presets.toSynth" hidden
+          <a href="#m=synth" data-osc="presets.toSynth" hidden
+            class="self-center [@media(pointer:coarse)]:inline-flex [@media(pointer:coarse)]:min-h-11
+              [@media(pointer:coarse)]:items-center"
             :hidden="workspace !== 'presets'" x-bind="counterpartLink('synth')">Open the Synth</a>
         </div>
         <div role="tabpanel" :aria-labelledby="'osc-ptab-cat-' + presetTab">
