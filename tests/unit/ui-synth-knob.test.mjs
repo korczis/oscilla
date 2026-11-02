@@ -686,6 +686,19 @@ function drawingBox(svg) {
     box = [Math.min(box[0], x0), Math.min(box[1], y0), Math.max(box[2], x1),
       Math.max(box[3], y1)];
   };
+  // A straight stroke: a round cap is a disc of the stroke at each end; the default (butt)
+  // stops at the end points, so its corners are the ends moved across the stroke.
+  const segment = (x1, y1, x2, y2, sw, el) => {
+    if (/stroke-linecap="round"/.test(el)) {
+      grow(Math.min(x1, x2) - sw, Math.min(y1, y2) - sw, Math.max(x1, x2) + sw,
+        Math.max(y1, y2) + sw);
+      return;
+    }
+    const len = Math.hypot(x2 - x1, y2 - y1) || 1;
+    const [nx, ny] = [(-(y2 - y1) / len) * sw, ((x2 - x1) / len) * sw];
+    for (const [x, y] of [[x1 + nx, y1 + ny], [x1 - nx, y1 - ny], [x2 + nx, y2 + ny],
+      [x2 - nx, y2 - ny]]) grow(x, y, x, y);
+  };
   for (const [el, tag] of inner.matchAll(/<(\w+)\b[^>]*>/g)) {
     const sw = /stroke="none"/.test(el) ? 0 : n(el, 'stroke-width') / 2;
     if (tag === 'circle') {
@@ -698,24 +711,28 @@ function drawingBox(svg) {
       grow(n(el, 'x') - sw, n(el, 'y') - sw, n(el, 'x') + n(el, 'width') + sw,
         n(el, 'y') + n(el, 'height') + sw);
     } else if (tag === 'line') {
-      grow(Math.min(n(el, 'x1'), n(el, 'x2')) - sw, Math.min(n(el, 'y1'), n(el, 'y2')) - sw,
-        Math.max(n(el, 'x1'), n(el, 'x2')) + sw, Math.max(n(el, 'y1'), n(el, 'y2')) + sw);
+      segment(n(el, 'x1'), n(el, 'y1'), n(el, 'x2'), n(el, 'y2'), sw, el);
     } else if (tag === 'path') {
       const arc = /\bA ([\d.]+) /.exec(el);
-      assert.ok(arc, `a path the box check knows: ${el}`);
-      const r = Number(arc[1]) + sw;
-      grow(-r, -r, r, r);
+      const lines = [...el.matchAll(/M ([-\d.]+) ([-\d.]+) L ([-\d.]+) ([-\d.]+)/g)];
+      assert.ok(arc || lines.length, `a path the box check knows: ${el}`);
+      if (arc) {
+        const r = Number(arc[1]) + sw;
+        grow(-r, -r, r, r);
+      }
+      for (const m of lines) segment(...m.slice(1, 5).map(Number), sw, el);
     }
   }
   return box;
 }
 
 test('at zoom 2 and 3 the hit still holds the whole drawing, in every state', () => {
-  const states = [{}, { focus: true }, { dragging: true }, { focus: true, dragging: true }];
+  const states = [{}, { focus: true }, { dragging: true }, { focus: true, dragging: true },
+    { hover: true, disabled: true, focus: true }];
   for (const kind of KINDS) {
     const param = paramOf(kind);
     const e = ends(kind);
-    for (const zoom of [1, 2, 3]) {
+    for (const zoom of [1, 1.25, 2, 3]) {
       for (const state of states) {
         for (const value of [e.lo, e.hi, e.mid]) {
           for (const applied of [undefined, e.lo, e.hi]) {
@@ -829,6 +846,206 @@ test('knob: a range across zero draws its value arc from zero', () => {
   assert.equal(ring(controlSvg({ kind: 'knob', value: 25, param: bi, tokens: TOKENS })).length, 1);
 });
 
+// ---------------------------------------------------------------- the knob's hardware geometry
+
+/** The first element carrying `attr` (a data-* flag), or null. */
+const part = (svg, attr) => (new RegExp(`<\\w+\\b[^>]*\\s${attr}=""[^>]*>`).exec(svg) || [null])[0];
+const attrOf = (e, a) => (new RegExp(`\\s${a}="([^"]*)"`).exec(e) || [])[1];
+const numOf = (e, a) => Number(attrOf(e, a));
+/** Degrees, 0 up, clockwise (as the knob draws them). */
+const angleAt = (x, y) => (Math.atan2(x, -y) * 180) / Math.PI;
+/** An arc path's radius and the angles of its two ends. */
+function arcOf(e) {
+  const m = /M (\S+) (\S+) A (\S+) \S+ 0 [01] 1 (\S+) (\S+)/.exec(attrOf(e, 'd'));
+  assert.ok(m, `an arc: ${e}`);
+  const [x0, y0, r, x1, y1] = m.slice(1).map(Number);
+  near(Math.hypot(x0, y0), r, 0.02);
+  near(Math.hypot(x1, y1), r, 0.02);
+  return { r, from: angleAt(x0, y0), to: angleAt(x1, y1) };
+}
+/** Every 'M x y L x y' of a path as [inner radius, outer radius, angle]; each one is radial. */
+const radials = (e) => [...attrOf(e, 'd').matchAll(/M (\S+) (\S+) L (\S+) (\S+)/g)]
+  .map((m) => m.slice(1).map(Number)).map(([x0, y0, x1, y1]) => {
+    near(angleAt(x0, y0), angleAt(x1, y1), 0.1);
+    return [Math.hypot(x0, y0), Math.hypot(x1, y1), angleAt(x1, y1)];
+  });
+const knobAngle = (v, p = LIN) => -135 + 270 * toNorm(v, p);
+
+test('knob: the unlit arc and the value arc are r 19, width 3, over 270°; the skirt Ø32', () => {
+  const t = TOKENS.control;
+  for (const state of [{}, { dragging: true }]) {
+    for (const zoom of [1, 3]) {
+      const svg = draw('knob', { state, zoom });
+      const track = part(svg, 'data-track');
+      const a = arcOf(track);
+      assert.equal(a.r, 19);
+      near(a.from, -135, 0.05);
+      near(a.to, 135, 0.05);
+      assert.equal(attrOf(track, 'stroke'), t.track);
+      assert.equal(numOf(track, 'stroke-width'), 3);
+      const ring = part(svg, 'data-ring');
+      const v = arcOf(ring);
+      assert.equal(v.r, 19);
+      near(v.from, -135, 0.05);
+      near(v.to, knobAngle(70), 0.05);
+      assert.equal(attrOf(ring, 'stroke'), t.ring);
+      assert.equal(numOf(ring, 'stroke-width'), 3, `${JSON.stringify(state)}: never thicker`);
+      const skirt = part(svg, 'data-skirt');
+      assert.match(skirt, /^<circle /);
+      assert.equal(numOf(skirt, 'r'), 16, 'Ø32');
+      assert.equal(attrOf(skirt, 'stroke'), t.edge);
+      assert.equal(numOf(skirt, 'stroke-width'), 1.5);
+      const cap = part(svg, 'data-cap');
+      assert.match(cap, /^<circle /);
+      assert.equal(numOf(cap, 'r'), 12, 'Ø24');
+      assert.equal(attrOf(cap, 'fill'), t.cap);
+    }
+  }
+});
+
+test('knob: 24 knurl ticks from r 14.5 to 16, evenly spaced, in the decorative knurl', () => {
+  const knurl = part(draw('knob'), 'data-knurl');
+  assert.equal(attrOf(knurl, 'stroke'), TOKENS.control.knurl);
+  const ticks = radials(knurl);
+  assert.equal(ticks.length, 24);
+  ticks.forEach(([r0, r1, deg], i) => {
+    near(r0, 14.5, 0.02);
+    near(r1, 16, 0.02);
+    near(((deg - ticks[0][2] + 360) % 360), i * 15, 0.1);
+  });
+});
+
+test('knob: the pointer runs from r 4 to r 11, 2.5 wide and round, at the value\'s angle', () => {
+  const t = TOKENS.control;
+  for (const value of [0, 25, 50, 100]) {
+    const ptr = part(draw('knob', { value }), 'data-pointer');
+    assert.match(ptr, /^<line /);
+    const [x1, y1, x2, y2] = ['x1', 'y1', 'x2', 'y2'].map((a) => numOf(ptr, a));
+    near(Math.hypot(x1, y1), 4, 0.02);
+    near(Math.hypot(x2, y2), 11, 0.02);
+    near(angleAt(x2, y2), knobAngle(value), 0.1);
+    assert.equal(attrOf(ptr, 'stroke'), t.pointer);
+    assert.equal(numOf(ptr, 'stroke-width'), 2.5);
+    assert.equal(attrOf(ptr, 'stroke-linecap'), 'round');
+  }
+});
+
+test('knob: hover lights the skirt edge in control.pointer', () => {
+  const t = TOKENS.control;
+  assert.equal(attrOf(part(draw('knob'), 'data-skirt'), 'stroke'), t.edge);
+  assert.equal(attrOf(part(draw('knob', { state: { hover: true } }), 'data-skirt'), 'stroke'),
+    t.pointer);
+});
+
+test('knob: the cap shadow is hw-shadow in surface.edge, 1 down, 2 while dragged', () => {
+  for (const [state, dy] of [[{}, 1], [{ dragging: true }, 2], [{ focus: true }, 1]]) {
+    const svg = draw('knob', { state });
+    const sh = part(svg, 'data-shadow');
+    assert.ok(sh, JSON.stringify(state));
+    assert.match(sh, /^<circle /);
+    assert.match(sh, /\sclass="opacity-hw-shadow"/);
+    assert.doesNotMatch(sh, /opacity="/);
+    assert.equal(attrOf(sh, 'fill'), TOKENS.surface.edge);
+    assert.equal(attrOf(sh, 'stroke'), 'none');
+    assert.deepEqual([numOf(sh, 'cx'), numOf(sh, 'cy'), numOf(sh, 'r')], [0, dy, 12]);
+    assert.ok(svg.indexOf(sh) < svg.indexOf(part(svg, 'data-cap')), 'under the cap');
+  }
+});
+
+test('knob: 11 scale ticks from r 20.5 to 22, only at zoom 1.25 or more', () => {
+  for (const zoom of [0.5, 1, 1.2]) assert.equal(part(draw('knob', { zoom }), 'data-ticks'), null);
+  for (const zoom of [1.25, 2, 3]) {
+    const ticks = part(draw('knob', { zoom }), 'data-ticks');
+    assert.ok(ticks, `zoom ${zoom}`);
+    assert.equal(attrOf(ticks, 'stroke'), TOKENS.control.track);
+    assert.doesNotMatch(ticks, /stroke-linecap="round"/, 'butt ends stay inside the box');
+    const r = radials(ticks);
+    assert.equal(r.length, 11);
+    r.forEach(([r0, r1, deg], i) => {
+      near(r0, 20.5, 0.02);
+      near(r1, 22, 0.02);
+      near(deg, -135 + i * 27, 0.1);
+    });
+  }
+});
+
+test('knob: the focus ring is r 21.5 in control.focus, inside the 44 box', () => {
+  const f = part(draw('knob', { state: { focus: true } }), 'data-focus');
+  assert.match(f, /^<circle /);
+  assert.equal(numOf(f, 'r'), 21.5);
+  assert.equal(attrOf(f, 'stroke'), TOKENS.control.focus);
+  assert.ok(numOf(f, 'r') + numOf(f, 'stroke-width') / 2 <= 22);
+  assert.equal(part(draw('knob'), 'data-focus'), null);
+});
+
+test('knob: a range across zero starts its arc at 12 o\'clock, with a detent tick there', () => {
+  const t = TOKENS.control;
+  const bi = { ...LIN, min: -50, max: 50, default: 0 };
+  for (const [value, from, to] of [[25, 0, 67.5], [-25, -67.5, 0], [50, 0, 135]]) {
+    const svg = controlSvg({ kind: 'knob', value, param: bi, tokens: TOKENS });
+    const a = arcOf(part(svg, 'data-ring'));
+    near(a.from, from, 0.05);
+    near(a.to, to, 0.05);
+  }
+  for (const value of [0, 25]) {
+    const d = part(controlSvg({ kind: 'knob', value, param: bi, tokens: TOKENS }), 'data-detent');
+    assert.match(d, /^<line /);
+    const [x1, y1, x2, y2] = ['x1', 'y1', 'x2', 'y2'].map((k) => numOf(d, k));
+    near(Math.hypot(x1, y1), 20.5, 0.02);
+    near(Math.hypot(x2, y2), 21.75, 0.02, 'its butt corners stay inside r 22 at any angle');
+    near(angleAt(x2, y2), 0, 0.05);
+    assert.equal(attrOf(d, 'stroke'), t.track);
+  }
+  assert.equal(part(draw('knob'), 'data-detent'), null, 'a range from min has no detent');
+});
+
+test('knob: the applied value is an arc at r 16.5 in control.applied, from the origin', () => {
+  const t = TOKENS.control;
+  const ap = (value, applied, param = LIN) => part(controlSvg({ kind: 'knob', value, applied,
+    param, tokens: TOKENS }), 'data-applied');
+  const a = ap(70, 30);
+  assert.match(a, /^<path /);
+  assert.equal(attrOf(a, 'stroke'), t.applied);
+  assert.ok(numOf(a, 'stroke-width') < 2.5, 'thinner than the pointer');
+  const arc = arcOf(a);
+  assert.equal(arc.r, 16.5);
+  near(arc.from, -135, 0.05);
+  near(arc.to, knobAngle(30), 0.05);
+  const atOrigin = arcOf(ap(70, 0));
+  assert.ok(atOrigin.to - atOrigin.from >= 4, `still seen at the origin: ${atOrigin.from}..${
+    atOrigin.to}`);
+  near((atOrigin.from + atOrigin.to) / 2, -135, 0.05);
+  const bi = { ...LIN, min: -50, max: 50, default: 0 };
+  const b = arcOf(ap(25, -25, bi));
+  near(b.from, -67.5, 0.05);
+  near(b.to, 0, 0.05);
+  assert.equal(ap(70, 70), null, 'none when the engine applies the value');
+});
+
+test('knob: disabled is a dashed value arc and a dim pointer, over a faint track', () => {
+  const t = TOKENS.control;
+  const off = draw('knob', { state: { disabled: true } });
+  const ring = part(off, 'data-ring');
+  assert.equal(attrOf(ring, 'stroke'), t.disabled);
+  assert.equal(attrOf(ring, 'stroke-dasharray'), '2 3');
+  assert.notEqual(attrOf(ring, 'stroke-linecap'), 'round', 'round ends would close a 3 gap');
+  assert.equal(attrOf(part(off, 'data-pointer'), 'stroke'), t.disabled);
+  assert.equal(attrOf(part(off, 'data-track'), 'stroke'), t.knurl,
+    'the dashes are not drawn over a track of their own colour');
+  assert.ok(!off.includes(`stroke="${t.ring}"`));
+  assert.equal(attrOf(part(draw('knob'), 'data-ring'), 'stroke-dasharray'), undefined);
+});
+
+test('fader and switch: the slot and the body are outlined in control.track (3:1)', () => {
+  const t = TOKENS;
+  const slot = /<g pointer-events="none"><rect [^>]*>/.exec(draw('fader'))[0];
+  assert.equal(attrOf(slot, 'stroke'), t.control.track);
+  assert.equal(attrOf(slot, 'fill'), t.surface.edge);
+  const body = /<g pointer-events="none"><rect [^>]*>/.exec(draw('switch'))[0];
+  assert.equal(attrOf(body, 'stroke'), t.control.track);
+  assert.equal(attrOf(body, 'fill'), t.surface.edge);
+});
+
 test('fader: the cap tracks the pointer one to one at any zoom', () => {
   assert.ok(FADER_TRAVEL >= 64, `travel ${FADER_TRAVEL}`);
   assert.equal(pixelsPerRangeFor('knob'), DRAG_PX_PER_RANGE);
@@ -925,8 +1142,9 @@ test('switch: an enum draws one position per option, a boolean two', () => {
   }
 });
 
-test('applied: a second, thin marker in control.pointer where the applied value differs', () => {
+test('applied: a second, thin marker where the applied value differs (knob: an arc)', () => {
   const t = TOKENS.control;
+  const MARK = /<(?:line|path)\b[^>]*\sdata-applied=""[^>]*>/;
   for (const kind of KINDS) {
     const param = paramOf(kind);
     const e = ends(kind);
@@ -935,14 +1153,15 @@ test('applied: a second, thin marker in control.pointer where the applied value 
     const split = controlSvg({ kind, value: e.hi, applied: e.lo, param, tokens: TOKENS });
     assert.equal(same, plain, `${kind}: no marker when applied equals the value`);
     assert.doesNotMatch(plain, /data-applied/);
-    const m = /<line data-applied=""[^>]*>/.exec(split);
+    const m = MARK.exec(split);
     assert.ok(m, `${kind}: a marker`);
-    assert.ok(m[0].includes(`stroke="${t.pointer}"`), `${kind}: in control.pointer`);
+    const paint = kind === 'knob' ? t.applied : t.pointer;
+    assert.ok(m[0].includes(`stroke="${paint}"`), `${kind}: in ${paint}`);
     const others = /<line (?!data-applied)[^>]*stroke-width="([^"]+)"/g;
     const pointerW = Math.max(...[...split.matchAll(others)].map((x) => Number(x[1])));
     assert.ok(Number(/stroke-width="([^"]+)"/.exec(m[0])[1]) < pointerW, `${kind}: thinner`);
     const other = controlSvg({ kind, value: e.hi, applied: e.mid, param, tokens: TOKENS });
-    assert.notEqual(/<line data-applied=""[^>]*>/.exec(other)[0], m[0], `${kind}: it moves`);
+    assert.notEqual(MARK.exec(other)[0], m[0], `${kind}: it moves`);
   }
 });
 
