@@ -467,6 +467,7 @@ export function paletteDiff(snapshot, now) {
 export const HW_BOUNDS = [
   { scope: 'opacity', key: 'hw-sheen', max: 0.25, unit: '' },
   { scope: 'opacity', key: 'hw-texture', max: 0.08, unit: '' },
+  { scope: 'opacity', key: 'hw-shadow', max: 0.4, unit: '' },
   { scope: 'width', key: 'hw-wood', max: 16, unit: 'px' },
   { scope: 'boxShadow', key: 'hw-led', max: GLOW_MAX_PX, unit: 'glow px' },
 ];
@@ -490,15 +491,22 @@ export function hwIntensity(configText) {
   return out;
 }
 
+// A literal intensity: an arbitrary Tailwind opacity, alpha, shadow or width; a CSS opacity
+// (fill-opacity: and the rest included) below 1; an SVG opacity attribute (opacity, stroke-,
+// fill-, flood-, stop-opacity) below 1 or exactly 0. A fully opaque "1" says nothing, and a
+// hidden hit path is written visibility="hidden", so both stay allowed.
+export const INTENSITY_LITERAL = new RegExp(
+  String.raw`\b(?:bg-|text-|border-)?opacity-\[|\/\[0?\.\d`
+  + String.raw`|\b(?:drop-)?shadow-\[|\bopacity\s*:\s*0?\.\d|box-shadow\s*:|\bw-\[`
+  + String.raw`|\b(?:stroke-|fill-|flood-|stop-)?opacity\s*=\s*["']?(?:0?\.\d|0(?![.\d]))`);
+
 /** In the layer's own directories, no literal opacity, alpha or shadow: the keys are read. */
 export function layerIntensityLiterals(files) {
   const out = [];
   for (const [p, raw] of files) {
     if (!inDirs(p, LAYER_DIRS)) continue;
     const text = stripComments(raw);
-    const m = new RegExp(String.raw`\b(?:bg-|text-|border-)?opacity-\[|\/\[0?\.\d`
-      + String.raw`|\b(?:drop-)?shadow-\[|\bopacity\s*:\s*0?\.\d|box-shadow\s*:|\bw-\[`)
-      .exec(text);
+    const m = INTENSITY_LITERAL.exec(text);
     if (m) out.push(`${p}:${lineOf(text, m.index)}: a literal intensity (${m[0]}), not a hw-* key`);
   }
   return out;
@@ -786,11 +794,13 @@ test('mutation: a palette change and an intensity beyond its bound are caught', 
   assert.deepEqual(paletteDiff(snap, palette(css)), []);
   assert.equal(paletteDiff(snap, palette(css.replace('#0b1220', '#8b5a2b'))).length, 1);
   assert.equal(paletteDiff(snap, palette(`${css}:root { --osc-wood: #8b5a2b; }`)).length, 1);
-  const cfg = (o) => `opacity: { 'hw-sheen': '${o.sheen ?? '0.12'}', 'hw-texture': '0.04' },\n`
+  const cfg = (o) => `opacity: { 'hw-sheen': '${o.sheen ?? '0.12'}', 'hw-texture': '0.04', `
+    + `'hw-shadow': '${o.shadow ?? '0.3'}' },\n`
     + `width: { 'hw-wood': '0.75rem' },\n`
     + `boxShadow: { 'hw-led': '${o.led ?? '0 0 4px currentColor'}' },`;
   assert.deepEqual(hwIntensity(cfg({})), []);
   assert.ok(hwIntensity(cfg({ sheen: '0.6' })).length > 0, 'sheen 0.6');
+  assert.ok(hwIntensity(cfg({ shadow: '0.7' })).length > 0, 'cable shadow 0.7');
   assert.ok(hwIntensity(cfg({ led: '0 0 14px currentColor' })).length > 0, 'glow 14 px');
   assert.ok(hwIntensity(cfg({ led: '0 0 4px #39ff14' })).length > 0, 'a neon literal');
   assert.ok(hwIntensity("opacity: { 'hw-sheen': '0.1' }").length > 0, 'a missing key');
@@ -799,4 +809,15 @@ test('mutation: a palette change and an intensity beyond its bound are caught', 
   caught(layerIntensityLiterals,
     f('src/js/ui/cable/cable.js', '`<i class="shadow-[0_0_20px_var(--osc-cyan)]"></i>`'),
     f('src/js/ui/cable/cable.js', '`<i class="shadow-hw-led text-osc-green"></i>`'));
+});
+
+test('mutation: a literal SVG opacity in the layer is caught; opaque, hidden stay allowed', () => {
+  const at = 'src/js/ui/cable/cable.js';
+  const ok = f(at, '`<path class="opacity-hw-shadow" d="${d}"/>`'
+    + '`<path opacity="1" visibility="hidden" stroke-opacity="${o}" d="${hit}"/>`');
+  assert.deepEqual(layerIntensityLiterals(ok), []);
+  for (const bad of ['stroke-opacity="0.35"', 'fill-opacity=".2"', 'opacity="0.5"',
+    'flood-opacity="0.6"', "stop-opacity='0.3'", 'opacity="0"', 'fill-opacity: 0.2;']) {
+    caught(layerIntensityLiterals, f(at, `\`<path ${bad} d="\${d}"/>\``), ok);
+  }
 });

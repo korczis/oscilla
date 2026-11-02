@@ -104,10 +104,12 @@ can hold, and keeps every other clause of version 3 unchanged. ADR 0061's resolu
     filter), no animated gradient, no gradient text, no neon over-glow: a glow (a shadow with
     no offset) is drawn only on an LED (`data-led`) and spreads at most 6 px, and text never
     glows; the one glow recorded before this version (the shell's status lamp) only shrinks.
-    Intensity is bounded: sheen, texture, the wooden cheek's width and the LED glow are the
-    Tailwind keys `hw-sheen` (opacity at most 0.25), `hw-texture` (at most 0.08), `hw-wood`
-    (at most 16 px) and `hw-led` (a token-coloured glow of at most 6 px), and the layer reads
-    them, never a literal opacity, alpha or shadow (`src/styles/tokens.css` cannot gain a
+    Intensity is bounded: sheen, texture, the cable's soft shadow, the wooden cheek's width
+    and the LED glow are the Tailwind keys `hw-sheen` (opacity at most 0.25), `hw-texture` (at
+    most 0.08), `hw-shadow` (at most 0.4), `hw-wood` (at most 16 px) and `hw-led` (a
+    token-coloured glow of at most 6 px), and the layer reads them by class, never a literal
+    opacity, alpha or shadow, in CSS or as an SVG `opacity`, `stroke-opacity`, `fill-opacity`,
+    `flood-opacity` or `stop-opacity` attribute (`src/styles/tokens.css` cannot gain a
     declaration under the ratchet of `project.ui-uses-flowbite-pro`). The palette of
     `tokens.css` changes only in a reviewed commit that rewrites its snapshot, so no product's
     colourway slips in as a token. Motion is restrained: the global `prefers-reduced-motion`
@@ -175,15 +177,16 @@ is a review rejection even when every functional test passes.
     word "metal" in three sound sources, the percussion engine's `metal` layer and the "Ring
     metal" preset, and nothing else) and "rivet" nowhere; the colour values of
     `src/styles/tokens.css` equal the reviewed snapshot `tests/unit/visual-identity-palette.json`;
-    the intensity keys `hw-sheen`, `hw-texture`, `hw-wood` and `hw-led` exist within their
-    bounds;
+    the intensity keys `hw-sheen`, `hw-texture`, `hw-shadow`, `hw-wood` and `hw-led` exist
+    within their bounds;
   - over the theme layer (`src/js/synth/view/` now, and `ui/synth/` and `ui/cable/` under
     `src/js` once they exist): no colour literal, colour function, named colour, literal paint,
     arbitrary Tailwind colour or `url()` but an in-SVG fragment; every `var(--osc-*)` it names
     is defined by `src/styles/tokens.css`; `animate-*` only behind `motion-safe:`; a script or
     SVG animation only in a file that checks `prefers-reduced-motion`; "SPL" only in a file
     that reads the calibration state; in the layer's own directories no literal opacity,
-    alpha or shadow.
+    alpha or shadow, CSS or SVG attribute (below 1, or exactly 0; a fully opaque `1` and a hit
+    path hidden with `visibility="hidden"` stay allowed).
   While `ui/synth/` and `ui/cable/` under `src/js` do not exist the theme-layer guards judge
   only `src/js/synth/view/`, and the test prints that the layer's directories, and the
   intensity-literal guard, pass vacuously; once either directory exists it must hold a `.js`

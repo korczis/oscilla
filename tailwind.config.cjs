@@ -81,10 +81,12 @@ module.exports = {
       },
       // The hardware treatment's intensity (project.visual-identity-lock v4, "decent"): the
       // synth-theme layer reads these keys, never a literal; tests/unit/visual-identity-lock-v4
-      // holds their bounds (sheen <= 0.25, texture <= 0.08, wood <= 16px, LED glow <= 6px).
+      // holds their bounds (sheen <= 0.25, texture <= 0.08, cable shadow <= 0.4, wood <= 16px,
+      // LED glow <= 6px).
       opacity: {
         'hw-sheen': '0.12',
         'hw-texture': '0.04',
+        'hw-shadow': '0.3',
       },
       width: {
         'hw-wood': '0.75rem',
