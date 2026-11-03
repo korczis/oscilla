@@ -630,7 +630,6 @@ test('no sheen on the puck in any state: the relief is skirt, face and rim', asy
   // The header says why, and the reason holds in tokens.css.
   assert.match(SRC, /no neutral role is lighter than the face in both themes/);
   assert.match(SRC, /the palette is locked/);
-  assert.match(SRC, /relief comes from the skirt, the face and the rim/);
   const themes = await tokenThemes();
   const roles = [...new Set(tokenValues().map(varName).filter(Boolean))];
   const neutral = roles.filter(neutralIn(themes));
@@ -780,6 +779,159 @@ test('each axis fader travels as far as the puck, its cap beside or under the pu
       }
     }
   }
+});
+
+// ---------------------------------------------------------------- F013 S10 review round 3
+
+/** The element children of `el`'s root element, in order, each as its tag and its first data-*
+ *  attribute ('circle data-puck-face=""'), nested elements skipped. */
+function children(el) {
+  const out = [];
+  let depth = 0;
+  for (const t of el.matchAll(/<(\/?)(\w+)\b([^>]*?)(\/?)>/g)) {
+    const [, closing, tag, attrs, self] = t;
+    if (closing) { depth -= 1; continue; }
+    if (depth === 1) {
+      const d = /\s(data-[\w-]+="[^"]*")/.exec(attrs);
+      out.push({ key: `${tag} ${d ? d[1] : '-'}`, tag: t[0] });
+    }
+    if (!self) depth += 1;
+  }
+  return out;
+}
+/** Every attribute name of an open tag, sorted. */
+const attrNames = (el) => [...el.matchAll(/\s([\w:-]+)="/g)].map((m) => m[1]).sort();
+/** The header, its comment prefixes off and its lines joined, so a phrase may wrap. */
+const HEADER = SRC.slice(0, SRC.indexOf('\nimport ')).split('\n')
+  .map((l) => l.replace(/^\/\/ ?/, '')).join(' ').replace(/\s+/g, ' ');
+const STATES = Object.freeze([['idle', {}], ['touched', { gate: true, state: { touched: true } }],
+  ['focus pad', { state: { focus: 'pad' } }], ['focus x', { state: { focus: 'x' } }],
+  ['focus y', { state: { focus: 'y' } }], ['disabled', { state: { disabled: true } }],
+  ['disabled+touched', { gate: true, state: { disabled: true, touched: true } }],
+  ['disabled+focus pad', { state: { disabled: true, focus: 'pad' } }]]);
+const PUCK_PARTS = Object.freeze([
+  ['circle data-puck-shadow=""', ['class', 'cx', 'cy', 'data-puck-shadow', 'fill', 'r', 'stroke']],
+  ['circle data-puck-cap=""',
+    ['cx', 'cy', 'data-puck-cap', 'fill', 'r', 'stroke', 'stroke-width']],
+  ['circle data-puck-face=""', ['cx', 'cy', 'data-puck-face', 'fill', 'r', 'stroke']],
+  ['path data-notch=""',
+    ['d', 'data-notch', 'fill', 'stroke', 'stroke-linecap', 'stroke-width']]]);
+
+test('the pad draws exactly its parts, in order, in every state at zoom 0.25 to 2.5: no sheen',
+  () => {
+    const surface = ['rect data-surface=""', 'path data-recess=""', 'path data-grid=""',
+      'path data-guide=""'];
+    for (const zoom of [0.25, 0.5, 0.73, 1, 1.45, 2, 2.5]) {
+      for (const [what, extra] of STATES) {
+        const at = `zoom ${zoom} ${what}`;
+        const svg = SVG({ zoom, ...extra });
+        const ring = extra.state?.focus === 'pad' ? ['rect data-focus=""'] : [];
+        const pad = children(slice(svg, 'data-xy-pad=""'));
+        // Shadow, cap (its skirt and rim), face, notch: the puck, and nothing else on the pad.
+        assert.deepEqual(pad.map((p) => p.key),
+          [...surface, ...PUCK_PARTS.map(([k]) => k), ...ring], `${at}: the pad's parts`);
+        const puck = pad.slice(surface.length, surface.length + PUCK_PARTS.length);
+        PUCK_PARTS.forEach(([k, names], i) => {
+          assert.deepEqual(attrNames(puck[i].tag), names, `${at}: ${k}'s attributes and no other`);
+        });
+        // The cap's skirt, its face and its shadow are concentric circles (the shadow dropped).
+        const [shadow, cap, face] = puck.map((p) => p.tag);
+        for (const el of [shadow, face]) assert.equal(attrOf(el, 'cx'), attrOf(cap, 'cx'), at);
+        assert.equal(attrOf(face, 'cy'), attrOf(cap, 'cy'), at);
+      }
+    }
+  });
+
+test('disabled, touched or not: a blank face, the rim and the notch dimmed, the frame dashed',
+  () => {
+    for (const zoom of [0.25, 1, 2.5]) {
+      for (const [what, extra] of STATES.filter(([w]) => w.startsWith('disabled'))) {
+        const at = `zoom ${zoom} ${what}`;
+        const svg = SVG({ zoom, ...extra });
+        assert.equal(attrOf(part(svg, 'data-puck-face'), 'fill'), TOKENS.control.cap,
+          `${at}: the face blank in control.cap`);
+        assert.equal(attrOf(part(svg, 'data-puck-cap'), 'stroke'), TOKENS.control.disabled,
+          `${at}: the rim in control.disabled`);
+        assert.equal(attrOf(part(svg, 'data-notch'), 'stroke'), TOKENS.control.disabled,
+          `${at}: the notch in control.disabled`);
+        const frame = part(svg, 'data-surface');
+        assert.equal(attrOf(frame, 'stroke'), TOKENS.control.disabled, `${at}: the frame`);
+        assert.equal(attrOf(frame, 'stroke-dasharray'), xy.XY.dash, `${at}: the frame dashed`);
+      }
+      // Enabled, touched or not, the face is control.edge, the rim text.value, the notch the
+      // pointer, the frame solid: the disabled look is the state's, not the press's.
+      for (const extra of [{}, { gate: true, state: { touched: true } }]) {
+        const svg = SVG({ zoom, ...extra });
+        const at = `zoom ${zoom} ${JSON.stringify(extra)}`;
+        assert.equal(attrOf(part(svg, 'data-puck-face'), 'fill'), TOKENS.control.edge, at);
+        assert.equal(attrOf(part(svg, 'data-puck-cap'), 'stroke'), TOKENS.text.value, at);
+        assert.equal(attrOf(part(svg, 'data-notch'), 'stroke'), TOKENS.control.pointer, at);
+        assert.equal(attrOf(part(svg, 'data-surface'), 'stroke-dasharray'), undefined, at);
+      }
+    }
+  });
+
+test('the header tells the relief as tokens.css draws it, theme by theme', async () => {
+  assert.doesNotMatch(HEADER, /relief comes from the skirt/, 'not true in dark');
+  assert.match(HEADER, /in dark the collar reads recessed and the rim carries the edge/);
+  assert.match(HEADER, /in light the skirt reads raised/);
+  assert.match(HEADER, /pressed cue \(the face Ø20 to Ø17[^)]*\) is the same in both/);
+  assert.match(HEADER, /--osc-hw-shade/);
+  assert.match(HEADER, /--osc-hw-highlight/);
+  assert.match(HEADER, /palette owner/);
+  assert.match(HEADER, /symmetric relief/);
+  // What the words claim: the skirt is darker than the surface in dark, lighter in light.
+  const themes = await tokenThemes();
+  const svg = SVG();
+  const skirt = varName(attrOf(part(svg, 'data-puck-cap'), 'fill'));
+  const surface = varName(attrOf(part(svg, 'data-surface'), 'fill'));
+  const L = (t, n) => lum(tokenHex(themes[t], n));
+  assert.ok(L('dark', skirt) < L('dark', surface), `dark: ${skirt} under ${surface}, recessed`);
+  assert.ok(L('light', skirt) > L('light', surface), `light: ${skirt} over ${surface}, raised`);
+  for (const role of ['--osc-hw-shade', '--osc-hw-highlight']) {
+    for (const t of ['dark', 'light']) {
+      assert.equal(themes[t][role], undefined, `${t}: ${role} is a proposal, not yet a token`);
+    }
+  }
+  // The pressed cue is geometry, so it is the same in both themes: Ø20 to Ø17 at zoom 1.
+  assert.equal(faceR(svg) * 2, 20);
+  assert.equal(faceR(SVG({ gate: true, state: { touched: true } })) * 2, 17);
+});
+
+test('the pad names its gate LED: aria-describedby to the LED\'s stable id, no aria-live', () => {
+  const sources = ['node.xy.gate', 'node-xy-gate', 'node_xy_gate', 'xy "gate" <b>& 1', 'Ü/ü'];
+  const ids = new Set();
+  for (const source of sources) {
+    for (const extra of [{}, { gate: true, state: { touched: true } },
+      { state: { disabled: true } }]) {
+      const at = `${JSON.stringify(source)} ${JSON.stringify(extra)}`;
+      const svg = SVG({ source, ...extra });
+      const hit = /<rect\b[^>]*\sdata-xy-hit="pad"[^>]*>/.exec(svg)[0];
+      const ref = attrOf(hit, 'aria-describedby');
+      assert.ok(ref, `${at}: the pad hit is described`);
+      assert.match(ref, /^[A-Za-z][\w-]*$/, `${at}: one IDREF, a valid id (${ref})`);
+      const owners = [...svg.matchAll(/\sid="([^"]*)"/g)].map((m) => m[1]);
+      assert.deepEqual(owners.filter((i) => i === ref), [ref], `${at}: one element has it`);
+      const gate = slice(svg, `id="${ref}"`);
+      const led = open(slice(gate, 'data-led=""'));
+      assert.equal(attrOf(led, 'role'), 'img', `${at}: it holds the labelled LED`);
+      assert.equal(attrOf(led, 'aria-label'), `Gate: ${extra.gate ? 'on' : 'off'}`, at);
+      assert.equal(attrOf(led, 'data-source'), attrOf(open(slice(svg, 'data-led=""')),
+        'data-source'), at);
+      assert.equal(ref, attrOf(SVG({ source }).match(/<rect\b[^>]*\sdata-xy-hit="pad"[^>]*>/)[0],
+        'aria-describedby'), `${at}: stable, whatever the state`);
+      assert.doesNotMatch(svg, /aria-live/, `${at}: the host owns announcements`);
+      // The pad's group: the drawing, the hit, the two faders and the gate LED, nothing else.
+      assert.deepEqual(children(svg).map((p) => p.key), ['g data-xy-pad=""',
+        'rect data-hit=""', 'g data-xy-axis="x"', 'g data-xy-axis="y"', 'g data-xy-gate=""'],
+      `${at}: the pad's group`);
+      if (!extra.state) ids.add(ref);
+    }
+  }
+  assert.equal(ids.size, sources.length, 'a different source names a different LED');
+  assert.match(HEADER, /aria-describedby/);
+  assert.match(HEADER, /no aria-live/);
+  assert.match(HEADER, /the host owns (?:the )?announcements/);
 });
 
 test('xy.js and this test keep to 100 columns', () => {

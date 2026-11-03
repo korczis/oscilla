@@ -18,15 +18,19 @@
 // surface.edge at hw-shadow, PUCK.shadow (1.25 down, r 14) below the cap in every state. The
 // puck has no sheen: no neutral role is lighter than the face in both themes, and
 // the palette is locked, so a sheen would read convex in one theme and dished in the other. The
-// relief comes from the skirt, the face and the rim, never from a tint: surface.edge (--osc-bg),
-// the one role darker than the surface in both themes, composites to 1.04:1 dark and 1.01:1
-// light at hw-shadow, so the shadow is decoration and never moves. Touched, the cap is pressed
-// by geometry, alike in both themes: the face sinks by PUCK.sink graph units and by at least
-// PUCK.sink screen px from zoom 0.3 up (rounded up to 0.02, never past half the face; Ø20 to
-// Ø17 at zoom 1), so more skirt shows, and the notch shortens with it. The rim stays text.value
-// (cyan is the gate LED's and a selection's colour): the gate shows on its LED. The centre
-// travels over the surface inset by XY.inset, so neither the cap, its rim nor its shadow
-// crosses the frame.
+// relief differs by theme: the skirt is control.cap (--osc-surface-1), darker than the surface
+// in dark and lighter in light, so in dark the collar reads recessed and the rim carries the
+// edge, and in light the skirt reads raised. The pressed cue (the face Ø20 to Ø17 at zoom 1) is
+// the same in both. The route to symmetric relief is an open palette proposal, sent to the
+// palette owner: theme-aware --osc-hw-shade and --osc-hw-highlight roles. Until they land no
+// tint is drawn: surface.edge (--osc-bg), the one role darker than the surface in both themes,
+// composites to 1.04:1 dark and 1.01:1 light at hw-shadow, so the shadow is decoration and
+// never moves. Touched, the cap is pressed by geometry, alike in both themes: the face sinks by
+// PUCK.sink graph units and by at least PUCK.sink screen px from zoom 0.3 up (rounded up to
+// 0.02, never past half the face; Ø20 to Ø17 at zoom 1), so more skirt shows, and the notch
+// shortens with it. The rim stays text.value (cyan is the gate LED's and a selection's colour):
+// the gate shows on its LED. The centre travels over the surface inset by XY.inset, so neither
+// the cap, its rim nor its shadow crosses the frame.
 //
 // The axis faders are knob.js's controlSvg (kind 'fader', orientation 'horizontal' for X,
 // 'vertical' for Y) at controlBox, with the puck's travel (the layout's travel), so they look,
@@ -54,12 +58,16 @@
 // tabindex 0 (-1 while disabled), role="application", aria-roledescription "XY pad", the
 // group's aria-label, aria-keyshortcuts the keys below, aria-disabled while disabled, and
 // data-gate the gate's boolean for hosts. The gate is not aria-pressed, which ARIA 1.2 does not
-// allow on role="application" (axe aria-allowed-attr): assistive technology reads it from the
+// allow on role="application" (axe aria-allowed-attr): the hit's aria-describedby names the
 // gate LED, led.js's labelled LED (role="img", aria-label "Gate: on" or "Gate: off") outside
-// the hidden drawing. The host owns the keys, from its own delegated listener as xy-pad.js does
-// today (this core adds none): on the surface the arrows move the puck (Left/Right and
-// Home/End along X, Up/Down and PageUp/PageDown along Y, Shift fine, each axis through knobKey),
-// Enter held opens the gate and its keyup closes it, Escape ends the gesture. The puck is
+// the hidden drawing, in a group (data-xy-gate) whose id is the caller's source made an id:
+// 'xy-gate-' and the source, each character outside A-Z, a-z, 0-9 and '-' written _<hex>_, so
+// it is stable, valid and one per source. There is no aria-live: the host owns announcements,
+// so the core never speaks a gate change. The host owns the keys, from its own delegated
+// listener as xy-pad.js does today (this core adds none): on the surface
+// the arrows move the puck (Left/Right and Home/End along X, Up/Down and PageUp/PageDown along
+// Y, Shift fine, each axis through knobKey), Enter held opens the gate and its keyup closes it,
+// Escape ends the gesture. The puck is
 // not a second accessible slider: the two axis faders are the sliders, each role="slider" with
 // tabindex 0, an aria-label, an aria-orientation and N003's ariaAttrs (aria-valuenow the 0..1000
 // position, aria-valuetext the value with its unit), so a screen reader moves X and Y one at a
@@ -122,6 +130,10 @@ const fine = (x) => Number(x.toFixed(9)) + 0;
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
   .replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const rect = (x, y, width, height) => Object.freeze({ x, y, width, height });
+/** The gate LED's id from its source: every character outside [A-Za-z0-9-] as _<hex>_, so two
+ *  sources never share an id and the id is valid whatever the source holds. */
+const gateId = (source) => `xy-gate-${[...source].map((ch) => (/[A-Za-z0-9-]/.test(ch) ? ch
+  : `_${ch.codePointAt(0).toString(16)}_`)).join('')}`;
 const labelOf = (p) => (p.label ? p.label : p.id ?? p.key ?? 'param');
 
 function checkZoom(zoom, who) {
@@ -364,6 +376,7 @@ export function xySvg({ x, y, gate, source, params, tokens, zoom = 1, size = XY.
   const name = label !== undefined && label !== null && label !== '' ? label
     : `XY pad: X ${labelOf(px)}, Y ${labelOf(py)}`;
   const led = ledSvg({ at: L.led.at, lit: gate, source, tokens, zoom, label: XY.ledLabel });
+  const id = gateId(source);
   const h = L.hits.pad;
   return `<g data-xy="" role="group" aria-label="${esc(name)}"`
     + `${st.disabled ? ' aria-disabled="true"' : ''}>`
@@ -372,10 +385,11 @@ export function xySvg({ x, y, gate, source, params, tokens, zoom = 1, size = XY.
     + `<rect data-hit="" data-xy-hit="pad" x="${h.x}" y="${h.y}" width="${h.width}" `
     + `height="${h.height}" fill="none" stroke="none" pointer-events="all" `
     + `tabindex="${st.disabled ? -1 : 0}" role="application" aria-roledescription="XY pad" `
-    + `aria-label="${esc(name)}" data-gate="${gate}" aria-keyshortcuts="${KEYS}"`
+    + `aria-label="${esc(name)}" aria-describedby="${id}" data-gate="${gate}" `
+    + `aria-keyshortcuts="${KEYS}"`
     + `${st.disabled ? ' aria-disabled="true"' : ''}/>`
     + faderGroup('x', x, px, L, tokens, zoom, st, format.x)
     + faderGroup('y', y, py, L, tokens, zoom, st, format.y)
-    + led
+    + `<g data-xy-gate="" id="${id}">${led}</g>`
     + '</g>';
 }
