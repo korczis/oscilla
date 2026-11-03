@@ -31,7 +31,7 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-11-02T23:41:53Z
+updated_at: 2026-11-03T00:18:36Z
 started_at: 2026-11-02T23:41:25Z
 started_event: sha256:f2479b0d78d3e94dfb9658c047aede31b46e40c80de81ada6d372f950a03ced3
 completed_at: 2026-11-02T23:41:53Z
@@ -44,3 +44,10 @@ evidence:
     artifact: "tests/unit/studio-adapters-headroom.test.mjs"
     commit: 2931af343905d0a432bd8711f18face5d703dd3a
     recorded_at: 2026-11-02T23:41:46Z
+  - covers: verified
+    type: ci
+    command: "node scripts/review-verdict.mjs --pr 267 (base copy); node --test tests/unit/studio-adapters-headroom.test.mjs"
+    result: "The split landed as member #267 of train #367 (main merge commit 11cc9fbc), reviewed: verdict .ai/repo/reviews/267.yaml (merge) and the train verdict .ai/repo/reviews/367.yaml (merge); E017."
+    artifact: ".ai/repo/reviews/267.yaml"
+    commit: 2931af343905d0a432bd8711f18face5d703dd3a
+    recorded_at: 2026-11-03T00:18:36Z

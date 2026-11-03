@@ -42,4 +42,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-03T00:13:16Z
+started_at: 2026-11-03T00:12:46Z
+started_event: sha256:898a3188cffb21a410c2c557cf0f5f95f7e460b396093c67757bd7c766713f81
+completed_at: 2026-11-03T00:13:16Z
+completed_event: sha256:488c0a0351f200521fa5440bc35b7870ea699ebadcf554cbe0b33f12c609adc4
+evidence:
+  - covers: verified
+    type: ci
+    command: "node --test tests/unit/sequencer-editor.test.mjs; node tests/browser/sequencer.cjs"
+    result: "landed directly as #295 (main merge commit dcbff520): the sequencer plays through the engine's counted Filter stage, Envelope and Additive say instrument-only; review verdict .ai/repo/reviews/295.yaml (merge)"
+    artifact: ".ai/repo/reviews/295.yaml"
+    commit: 2931af343905d0a432bd8711f18face5d703dd3a
+    recorded_at: 2026-11-03T00:13:06Z

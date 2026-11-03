@@ -32,4 +32,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-03T00:08:32Z
+started_at: 2026-11-03T00:07:43Z
+started_event: sha256:37c4eb00e6f48f1dc67706731d0fbc03f4bada6339ca61a393061f83597a86cd
+completed_at: 2026-11-03T00:08:32Z
+completed_event: sha256:91c5cdd66d1196eac7cbb0b3998d92318a4bfaec47041b0828675b46f6152564
+evidence:
+  - covers: verified
+    type: ci
+    command: "node --test tests/unit/config-import-limits.test.mjs tests/unit/core.test.mjs; node tests/browser/app.cjs"
+    result: "landed in #367 (main merge commit 11cc9fbc, member #312); config-import-limits.test.mjs names filter.frequency, filter.Q, envelope.a, envelope.r; the resetDefaults custom-range test in core.test.mjs; import-names-limits in tests/browser/app.cjs; CI run 41357644373 green on the train head c2a6f6c5; Main checks run 41372186924 green on 11cc9fbc; review verdict .ai/repo/reviews/367.yaml (merge)"
+    artifact: ".ai/repo/reviews/367.yaml"
+    commit: 2931af343905d0a432bd8711f18face5d703dd3a
+    recorded_at: 2026-11-03T00:08:21Z

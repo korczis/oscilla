@@ -8,18 +8,18 @@ findings:
     finding: "C008's title says 'the Signal Path shows the envelope that sounds', and an acceptance criterion requires the browser check `signal-path-sounding-envelope` in tests/browser/app.cjs: an attack edit on a sounding note keeps the envelope stage at the voice's values with a 'next note' annotation. That check is in no file on main (it exists only on the closed branch origin/fix/c008-envelope-held-note, PR #310). The reconcile commit 10c03edc that brought C008 to main through #385 says so: 'The parallel setEnvelopeSustain, the \"next note\" Signal Path annotation and its envelope resync are not carried over: every lab edit now reaches the sounding voice, so there is nothing to mark.' The reason may be sound (C007 restarts the held note on an attack or decay edit, so the drawn and the sounding envelope agree), but the issue record was not amended. A done record for C008 would claim an acceptance criterion whose check does not exist, and nothing on main asserts that the Signal Path's envelope stage matches the sounding voice."
     blocking: true
     resolution:
-      state: open
+      state: planned
       issue: "C008"
-      because: "Before C008 is recorded done, amend its title and acceptance criteria: strike `signal-path-sounding-envelope` and the 'next note' annotation, citing 10c03edc, and replace them with the claim main now makes (every Envelope edit reaches the sounding voice, so the drawn stage is the sounding one). Either name an existing check that reads the Signal Path's envelope stage against engine.voice.adsr after a live attack edit, or add one to tests/browser/app.cjs. Then set this finding planned to C008."
+      because: "C008's title and acceptance criteria are amended (2026-11-03): the dropped check and annotation are struck citing 10c03edc, and `envelope-follows-held` in tests/browser/app.cjs is named as the check that holds the view's envelope input to engine.voice.adsr after live edits."
   - id: c022-duplicates-g018-and-its-evidence-cannot-prove-the-criterion
     class: unnecessary_work
     subject: "C022"
     finding: "C022 (M090) and G018 (M087, intent component-system) both make every Playground-family and Studio control tested by name. G018: 'a hook that no test names gets a test that does'. C022: drive each of the 94 keys left in tests/unit/control-drive-baseline.json until it is empty. They work on the same controls and the same tests/browser suites. Neither names the other, and neither intent's non_goals covers the overlap (coherent-state's non_goals name K001-K057 and F001-F012, not G). C022's only gate is also the lexical ratchet (see ratchet-proves-a-lexical-drive-not-an-effect). That ratchet cannot see the 'asserts its effect at its subsystem and at a view' that C022's second acceptance criterion requires, so 94 drives would be judged by a reviewer's reading alone. Started as written, C022 duplicates G018, and its result could not show the criterion it serves."
     blocking: true
     resolution:
-      state: open
-      issue: ""
-      because: "Before C022 starts, decide one owner per control: G018 owns 'named by a test', and C022 owns 'asserts its subsystem and view effect', or the other way round. Record the split in both issues and in coherent-state's non_goals. Re-base C022's evidence on a census that can decide its criterion (one row per control naming the subsystem read-back, the view read-back and the check that asserts both, with a unit test that each named check exists). This finding does not bear on C001-C021: their records may be made on their own evidence."
+      state: planned
+      issue: "C022"
+      because: "The ownership split is recorded in C022, in G018 and in coherent-state's non_goals (2026-11-03): G018 owns 'named by a test', C022 owns 'asserts its subsystem and view effect' with evidence re-based on a per-control census whose named checks a unit test proves exist."
   - id: ratchet-proves-a-lexical-drive-not-an-effect
     class: delivery_verification
     subject: "coherent-state#every-control-reaches-its-subsystem"
