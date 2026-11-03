@@ -36,4 +36,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-03T00:05:14Z
+started_at: 2026-11-03T00:04:57Z
+started_event: sha256:6491600568f12bcf646802c4e72a9ed7961a9d5a764959a65a2c73ba8634f00e
+completed_at: 2026-11-03T00:05:14Z
+completed_event: sha256:3fba586217d401fc85288e927a6546d3da44063c82bacb1508523a33d8d1d67c
+evidence:
+  - covers: verified
+    type: ci
+    command: "node --test tests/unit/lab-play-options.test.mjs tests/unit/engine.test.mjs tests/unit/freeze.test.mjs; node tests/browser/app.cjs"
+    result: "landed in #367 (main merge commit 11cc9fbc, member #296); one lab-play-options module (src/js/audio/lab-play-options.js), scheduleAdsrStep, setPeriodicWave refuses dual voices; restart-follows-labs, additive-skips-dual and adsr-reaches-programmed in tests/browser/app.cjs; freeze unchanged; CI run 41357644373 green on the train head c2a6f6c5; Main checks run 41372186924 green on 11cc9fbc; review verdict .ai/repo/reviews/367.yaml (merge), member verdict .ai/repo/reviews/296.yaml"
+    artifact: ".ai/repo/reviews/367.yaml"
+    commit: 2931af343905d0a432bd8711f18face5d703dd3a
+    recorded_at: 2026-11-03T00:05:08Z

@@ -35,4 +35,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-03T00:04:41Z
+started_at: 2026-11-03T00:04:24Z
+started_event: sha256:b6b798a15464c72fa515a2acbb84531bee1010f5af38831b504f6e089c9ff4f9
+completed_at: 2026-11-03T00:04:41Z
+completed_event: sha256:3eb8ce68a8a212833b384dd8b2d2945e536015c98fd0cd17c386687a1f02bdbe
+evidence:
+  - covers: verified
+    type: ci
+    command: "node --test tests/unit/sequencer-chrome-c005.test.mjs tests/unit/ui-flowbite-pro.test.mjs; node tests/browser/sequencer.cjs"
+    result: "landed in #367 (main merge commit 11cc9fbc, member #292); Loop drawn as a loop (sequencer-chrome-c005.test.mjs) and seq-add-menu-pointer in tests/browser/sequencer.cjs; CI run 41357644373 green on the train head c2a6f6c5; Main checks run 41372186924 green on 11cc9fbc; review verdict .ai/repo/reviews/367.yaml (merge)"
+    artifact: ".ai/repo/reviews/367.yaml"
+    commit: 2931af343905d0a432bd8711f18face5d703dd3a
+    recorded_at: 2026-11-03T00:04:36Z
