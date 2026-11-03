@@ -60,6 +60,16 @@ test('a PR changing the audio engine with no verdict file is refused', (t) => {
   assert.ok(r.out.includes(`content: ${content(repo)}`), 'the refusal names the digest to record');
 });
 
+// project.review-verdict v2 (K060): the Synth's code is guarded like the Studio it drives.
+test('a PR changing the Synth with no verdict file is refused', (t) => {
+  const repo = fixture({ 'src/js/synth/ui.js': 'export const panel = 1;\n' });
+  t.after(() => repo.dispose());
+  const r = check(repo);
+  assert.equal(r.status, 1, r.out);
+  assert.match(r.out, /src\/js\/synth\/ui\.js/);
+  assert.match(r.out, /REFUSED: \.ai\/repo\/reviews\/42\.yaml is not in the head commit/);
+});
+
 test('a verdict for the head\'s content with every finding closed is accepted', (t) => {
   const repo = fixture();
   t.after(() => repo.dispose());
@@ -148,7 +158,8 @@ test('a deleted guarded file needs a verdict too', (t) => {
 
 test('the guarded paths are the rule\'s list', () => {
   assert.deepEqual(GUARDED, ['src/js/audio/*', 'src/js/analysis/*', 'src/js/experiments/*',
-    'src/js/studio/*', 'src/js/measurement/*', 'src/js/calibration/*', 'src/js/core/storage*',
+    'src/js/studio/*', 'src/js/synth/*', 'src/js/measurement/*', 'src/js/calibration/*',
+    'src/js/core/storage*',
     'src/js/core/safety*', 'src/js/ui/measure.js', 'src/js/ui/measure/*',
     'src/js/ui/experiments.js', 'src/js/ui/findings.js',
     'scripts/release-*', 'scripts/build*', 'scripts/pack-single-file.mjs',

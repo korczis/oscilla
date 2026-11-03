@@ -61,6 +61,7 @@ export const GUARDED = [
   'src/js/analysis/*',
   'src/js/experiments/*',
   'src/js/studio/*',
+  'src/js/synth/*',
   'src/js/measurement/*',
   'src/js/calibration/*',
   'src/js/core/storage*',
