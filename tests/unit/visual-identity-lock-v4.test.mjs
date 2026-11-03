@@ -637,8 +637,17 @@ test('an SVG LED\'s halo glows within 6 screen px of its lens at every zoom, at 
       halos += (svg.match(/\sdata-halo=/g) || []).length;
       assert.deepEqual(svgHalos(svg, zoom, 'toggle'), []);
     }
-    assert.equal(halos, zooms.length * (LED_COLOURS.length * 3 + 1),
-      'every lit LED drew its halo, a toggle\'s included');
+    // So is the XY pad's gate LED (xy.js, S10), lit while the pad is touched.
+    const { xySvg } = await import('../../src/js/ui/synth/xy.js');
+    const axis = (key) => ({ key, label: key, type: 'number', min: 0, max: 1, default: 0.5 });
+    for (const zoom of zooms) {
+      const svg = xySvg({ x: 0.5, y: 0.5, gate: true, source: 'node.xy.gate', tokens: TOKENS,
+        params: { x: axis('x'), y: axis('y') }, zoom, state: { touched: true } });
+      halos += (svg.match(/\sdata-halo=/g) || []).length;
+      assert.deepEqual(svgHalos(svg, zoom, 'xy gate'), []);
+    }
+    assert.equal(halos, zooms.length * (LED_COLOURS.length * 3 + 2),
+      'every lit LED drew its halo, a toggle\'s and the XY gate\'s included');
   });
 
 test('every LED and needle names its state source and binds its state', () => {
