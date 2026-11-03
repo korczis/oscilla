@@ -6,7 +6,7 @@ title: "One declaration per node: face sections in defineNode and a generated no
 slug: one-declaration-per-node-face-sections-in-definenode-and-a
 priority: p2
 profile: implementation
-objective: "P04 slice A (model invariants and round-trip). defineNode (src/js/studio/nodes/common.js) accepts face: { sections: [{ label, params: [parameter ids] }], primary: [ids shown while collapsed], view: 'level' | 'waveform' | 'response' | 'spectrum' | 'scope' | 'none' }; every parameter of the type is in exactly one section (owner decision Q031 of 2026-10-29: every parameter is on the face), primary lists at most three, and the registry refuses a face that misses or repeats a parameter. Every shipped node type declares one; the face is drawn by V622 and V620. scripts/studio-node-reference.mjs writes docs/v31/node-reference.md from NODE_REGISTRY (category, aliases, ports with type and role, parameters with unit, range, default and flags, face sections, help); npm run docs:nodes writes it and --check, run by npm test, fails when it is stale. tests/unit/studio-face-declaration.test.mjs is table-driven over the registry for the face, help and aliases; the contract over every parameter (unit, range, mapping, automatable, modulatable, deep-link address) is synth K105's and is not repeated here. The registry is not in the model, so no studioHash changes."
+objective: "P04 slice A (model invariants and round-trip). defineNode (src/js/studio/nodes/common.js) accepts face: { sections: [{ label, params: [parameter ids] }], primary: [ids shown while collapsed], view: 'level' | 'waveform' | 'response' | 'spectrum' | 'scope' | 'none' }; every parameter of the type is in exactly one section (owner decision Q031 of 2026-10-29: every parameter is on the face), primary lists at most three, and the registry refuses a face that misses or repeats a parameter. Every shipped node type declares one; the face is drawn by V622 and V620. scripts/studio-node-reference.mjs writes docs/v31/node-reference.md from NODE_REGISTRY (category, aliases, ports with type and role, parameters with unit, range, default and flags, face sections, help); npm run docs:nodes writes it and --check, run by npm test, fails when it is stale. tests/unit/studio-face-declaration.test.mjs is table-driven over the registry for the face, help and aliases; the contract over every parameter (unit, range, mapping, automatable, modulatable, deep-link address) is synth K105's and is not repeated here. The registry is not in the model, so no studioHash changes. Program B (the patch bay contract, owner programs of 2026-11-03, with dev-53's K164 matrix): defineNode and src/js/studio/ports.js also declare (1) PORT_KINDS per port type: channels, rate (audio | control | event), unconnected behaviour (silent | default value | normalled), default cardinality, monitor and compact eligibility and a version; (2) CABLE_KINDS: shape, dash, noun and the configurable fields (amount, polarity, offset, smoothing) one table the bay and the graph draw from; (3) a declared label on every port; (4) a parameter `live` rule, immediate | note | step | block | apply, derived per adapter from what runtime.js does (an AudioParam it sets without a rebuild is immediate, a value a voice reads at note-on is note, a change that rebuilds the node in the runtime transaction is block) and written where it is derived into the port's or parameter's `defaulted: [...]` list, so K164's matrix counts it as defaulted, not missing. The four are registry declarations, not model fields, so no studioHash changes."
 why: "Owner direction of 2026-10-29, relayed in Czech by the coordinator: \"polish Studio and the signal generator lab, make it the best it can be\" and \"make wiring the boxes much better, and their features, their options, knobs and so on, ergonomics, UI/UX/DX\". Findings and design: the Studio and signal generator design draft of 2026-10-29 (findings S1-S14 measured on origin/main b67d1e58)."
 scope:
 - src/js/studio/nodes
@@ -14,7 +14,11 @@ scope:
 - scripts/studio-node-reference.mjs
 - docs/v31/node-reference.md
 - package.json
+- src/js/studio/ports.js
+- src/js/studio/runtime.js
 - tests/unit/studio-face-declaration.test.mjs
+- tests/unit/studio-port-contract.test.mjs
+- scripts/patch-contract.mjs
 - tests/unit/studio-node-reference.test.mjs
 - tests/browser/qa-regressions.cjs
 - tests/unit/source-size-baseline.json
@@ -24,6 +28,9 @@ acceptance_criteria:
 - "Before: VERIFIED: defineNode declares ports, parameters, summary, help and aliases; nothing declares a face, and no reference is generated from the registry."
 - "After: every node type declares face sections holding all its parameters; docs/v31/node-reference.md is generated and checked; a face-declaration test covers every type."
 - "Negative cases: a face that misses, repeats or invents a parameter, more than three primary parameters, or a missing help field is refused with the type's name."
+- "Program B contract (K165 and K166 depend on it): every port of every registered type resolves to a PORT_KINDS entry with channels, rate, unconnected (inputs), cardinality, monitor, compact and version, and carries a declared label; every edge kind resolves to a CABLE_KINDS entry with shape, dash, noun and its configurable fields; every parameter has a `live` rule. scripts/patch-contract.mjs (K164) reports none of those fields missing on any port or parameter, and tests/unit/studio-port-contract.test.mjs, failing on the merge base, asserts it over NODE_REGISTRY."
+- "Program B refusals: validateNodeDefinition refuses, with a message naming the type and the field, an unknown port kind, an unknown cable kind, an unknown or misspelt contract field, a port without a label, and a `live` value outside immediate | note | step | block | apply; a fixture type shows each refusal."
+- "Program B derivation: the `live` rule a parameter gets by default is the one runtime.js applies; a test mutates one adapter from setting an AudioParam to rebuilding the node and the derived rule changes from immediate to block."
 - "Rollback: revert the merge commit. Nothing changes the schema, a studioHash or a stored record, so documents saved while it was live load unchanged after the revert."
 - "tests/unit/studio-face-declaration.test.mjs and tests/unit/studio-node-reference.test.mjs fail on the merge base (no face, no reference); a fixture node whose face misses a parameter, repeats one, lists four primary parameters, or lacks a help field is refused with a message naming the type."
 - "Adding a node type is one declaration in src/js/studio/nodes/<category>.js: the registry, the reference, the contract test and the no-inert-surfaces walk of tests/browser/qa-regressions.cjs pick it up without another edit (shown by a fixture type in the test)."
@@ -43,4 +50,4 @@ validation:
 evidence_required:
 - verified
 created_at: '2026-10-29'
-updated_at: '2026-10-29'
+updated_at: '2026-11-03'
