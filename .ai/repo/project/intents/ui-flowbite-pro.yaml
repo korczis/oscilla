@@ -51,10 +51,10 @@ governance:
   - "adr:adr-0061"
 non_goals:
   - "Replacing p5 (ADR 0013) or any other domain library; the Pro migration does not touch drawing or audio code"
-  - "Changing what the Studio graph, timeline, Signal Path or the charts show; they are restyled only as far as their containers, controls and typography"
+  - "Changing what the Studio graph, timeline, Signal Path or the charts show; they are restyled only as far as their containers, controls and typography, and, as amended on 2026-11-02 by the owner's decision Q071 ('Celá appka jako synth', AskUserQuestion in session oscilla-21; project.visual-identity-lock v4), the domain views' cables, plates, knobs and meters may take the app-wide old-school modular hardware treatment through the one synth-theme layer (F013) and no other; their meaning, the Signal Path grammar and the dataviz rules are unchanged, and the measurement-truth rules (project.no-fake-science) still apply"
   - "Choosing the first screen's layout (Q004, M050); F003 rebuilds today's Playground arrangement on Pro components and P002 later builds the chosen one on the same shell"
   - "Flowbite React or Next.js: OSCILLA is Alpine.js on plain HTML, so the HTML Admin Dashboard is the source template"
   - "Re-planning the content work of ui-current (M054): its issues keep their objectives and are built on the Pro shell"
   - "A system theme state (following prefers-color-scheme): OSCILLA's theme is two-state today (resolveTheme returns light or dark) and the Pro migration keeps it; adding a third state is a separate owner decision"
 created_at: 2026-10-28
-updated_at: 2026-10-29
+updated_at: 2026-11-02

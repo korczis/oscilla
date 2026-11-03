@@ -258,3 +258,22 @@ draws a cap with one highlight. K058's own component (`src/js/ui/kinds/param/kno
 range-input control and its aria-valuenow position of 0..1000 (N003) are unchanged by this
 note and remain planned work; the Synth panel's knob is a panel-local view until K058 lands
 and replaces it. The status of this record is unchanged.
+
+### 2026-11-02: the hardware treatment is app-wide, with the elements the owner chose
+
+On 2026-11-02 the owner answered two questions in session oscilla-21 (AskUserQuestion; plan
+issue Q071 records them verbatim). Asked how the "real synth, cables as cables, Arturia
+inspiration" look should apply, the owner chose "Celá appka jako synth" (the whole app as a
+synth) over "Jen Synth + kabely" and "Synth + Studio uzly". Asked which hardware elements, the
+owner chose all four: jacks and plugs, cables with sag and sheen, screws and wooden cheeks,
+brushed or anodised metal with texture and LED glow, with the note `keep it decent, but real
+(no gen z fancy frills), old school modulars like ""`. Rule `project.visual-identity-lock`
+version 4 lifts the narrowing of version 3 from the Synth panel surface to every surface and
+allows those elements, under limits a check holds: every colour an OSCILLA token, textures
+procedural and never a bitmap, no glassmorphism, animated gradient or neon over-glow, a glow
+only on an LED, motion behind `prefers-reduced-motion`, and an LED or a needle bound to a named
+state source (`tests/unit/visual-identity-lock-v4.test.mjs`). Decision 3 of this record stands:
+the hardware treatment is a skin of the domain views and of Pro components, it replaces no Pro
+component, adds no UI kit and no legacy selector, and the ratchet only falls. No product's
+mark, name, colourway, layout or face is imported on any surface. The status of this record
+is unchanged.
