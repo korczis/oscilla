@@ -96,20 +96,20 @@ gates:
   - id: studio-chromium
     job: studio
     always: true
-    runs: OSC_BROWSERS=chromium npm run test:studio
-    summary: the V3.1 STUDIO workspace, graph and timeline editors, transport and automation of dist, file:// and /oscilla/, in Chromium
+    runs: OSC_BROWSERS=chromium npm run test:studio && OSC_BROWSERS=chromium npm run test:synth
+    summary: the V3.1 STUDIO workspace, graph and timeline editors, transport and automation, then the integration map and the synth line (Synth, engines, XY pad, MIDI) of dist, file:// and /oscilla/, in Chromium
 
   - id: studio-firefox
     job: studio
     always: true
-    runs: OSC_BROWSERS=firefox npm run test:studio
-    summary: the V3.1 STUDIO workspace, graph and timeline editors, transport and automation of dist, file:// and /oscilla/, in Firefox
+    runs: OSC_BROWSERS=firefox npm run test:studio && OSC_BROWSERS=firefox npm run test:synth
+    summary: the V3.1 STUDIO workspace, graph and timeline editors, transport and automation, then the integration map and the synth line (Synth, engines, XY pad, MIDI) of dist, file:// and /oscilla/, in Firefox
 
   - id: studio-webkit
     job: studio
     always: true
-    runs: OSC_BROWSERS=webkit npm run test:studio
-    summary: the V3.1 STUDIO workspace, graph and timeline editors, transport and automation of dist, file:// and /oscilla/, in WebKit
+    runs: OSC_BROWSERS=webkit npm run test:studio && OSC_BROWSERS=webkit npm run test:synth
+    summary: the V3.1 STUDIO workspace, graph and timeline editors, transport and automation, then the integration map and the synth line (Synth, engines, XY pad, MIDI) of dist, file:// and /oscilla/, in WebKit
 
   - id: browser-chromium
     job: browser
