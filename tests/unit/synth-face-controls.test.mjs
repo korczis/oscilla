@@ -203,7 +203,7 @@ test('its legends are silk-screened panel text at the layout\'s positions, 12 px
       assert.equal(num(x), num(o.legend.x), `${cid} ${label} x`);
       assert.equal(num(y), num(o.legend.y), `${cid} ${label} y`);
       assert.equal(Number(size), 12, `${cid} ${label}: 12 px`);
-      assert.equal(label, String(o.label).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      assert.equal(label, String(o.legend.text).replace(/&/g, '&amp;').replace(/</g, '&lt;')
         .replace(/>/g, '&gt;'), cid);
       assert.equal(fill, o.value === value ? 'var(--osc-text)' : 'var(--osc-text-muted)',
         `${cid} ${label}: the plate's text tokens`);
@@ -233,8 +233,8 @@ test('each option is an invisible 44 px radio over its legend at the layout\'s h
     const { radios } = choiceParts(cid);
     const L = choiceLayout(c.param);
     assert.equal(radios.length, L.options.length, `${cid}: a radio per option`);
-    L.options.forEach((o, i) => {
-      const r = radios[i];
+    L.options.forEach((o) => {
+      const r = radios.find((x) => x.tag.includes(` data-v="${esc(o.value)}" `));
       assert.deepEqual([r.x, r.y, r.width, r.height].map(num),
         [o.hit.x, o.hit.y, o.hit.width, o.hit.height].map(num), `${cid} ${o.label}: its hit box`);
       assert.ok(r.width >= 44 && r.height >= 44, `${cid} ${o.label}: 44 px`);
@@ -256,7 +256,7 @@ test('each option is an invisible 44 px radio over its legend at the layout\'s h
       assert.ok(cls.includes(reason ? 'cursor-not-allowed' : 'cursor-pointer'), cid);
       assert.ok(!cls.some((k) => /^(?:dark:)?(?:bg|text)-(?!transparent|xs)/.test(k)),
         `${cid}: no visible fill or text colour: ${cls.join(' ')}`);
-      assert.equal(r.inner, `<span class="sr-only">${esc(o.label)}</span>`, cid);
+      assert.equal(r.inner, `<span class="sr-only">${esc(o.legend.text)}</span>`, cid);
     });
     for (let i = 0; i < radios.length; i++) {
       for (let j = i + 1; j < radios.length; j++) {
@@ -268,6 +268,144 @@ test('each option is an invisible 44 px radio over its legend at the layout\'s h
     }
     assert.equal(radios.filter((r) => r.tag.includes('aria-checked="true"')).length, 1, cid);
   }
+});
+
+/** A choice's block with its parameter set to `v` (every other parameter of the node kept). */
+function blockAt(cid, v) {
+  const [mid, key] = cid.split('.');
+  const m = PANEL.modules.find((x) => x.id === mid);
+  const node = nodes.get(mid);
+  const html = plateHtml({ panel: PANEL, module: m, node: { ...node, params: { ...node.params,
+    [key]: v } }, model, tokens: T });
+  const own = html.split(/(?=<div [^>]*data-control="[\w-]+\.[\w-]+")/)
+    .find((p) => p.startsWith('<div') && p.includes(`data-control="${cid}"`));
+  assert.ok(own, `${cid} at ${v}`);
+  return own;
+}
+const radiosOf = (b) => [...b.matchAll(new RegExp(String.raw`<foreignObject x="([-\d.]+)" `
+  + String.raw`y="([-\d.]+)" width="([\d.]+)" height="([\d.]+)">(<button [^>]*>)`, 'g'))]
+  .map((m) => ({ y: +m[2], height: +m[4], tag: m[5], v: /data-v="([^"]*)"/.exec(m[5])[1],
+    tabindex: (/\stabindex="(-?\d+)"/.exec(m[5]) || [])[1] ?? null,
+    checked: m[5].includes('aria-checked="true"') }));
+const SEG_RE = /M ([-\d.]+) ([-\d.]+) L ([-\d.]+) ([-\d.]+)/g;
+const reEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Review of W1c, finding 1: a lever's and a slide's radios ran bottom to top in the DOM (option
+// 0 is drawn at the bottom), so Tab and a screen reader met the bottom legend first. They run in
+// the drawn order now, top to bottom; a dial's run clockwise (a packed grid, row by row), its
+// option order.
+test('a lever\'s and a slide\'s radios run top to bottom in the DOM, as drawn', () => {
+  const styles = new Set();
+  for (const { cid, c } of switches) {
+    const L = choiceLayout(c.param);
+    styles.add(L.style);
+    const radios = radiosOf(block(cid));
+    const ys = radios.map((r) => r.y);
+    if (L.style === 'toggle' || L.style === 'slide') {
+      for (let i = 1; i < ys.length; i++) {
+        assert.ok(ys[i] > ys[i - 1], `${cid}: radio ${i} (${radios[i].v}) at y ${ys[i]} is `
+          + `drawn below radio ${i - 1} (${radios[i - 1].v}) at y ${ys[i - 1]}`);
+      }
+    } else {
+      assert.deepEqual(radios.map((r) => r.v), L.options.map((o) => esc(o.value)),
+        `${cid}: a dial's radios in its option order`);
+    }
+  }
+  assert.ok(styles.has('toggle') && styles.has('slide'), [...styles].join(' '));
+});
+
+// Review of W1c, finding 2: every radio was a tab stop (XY KEY had 12). A radio group is one:
+// the checked radio has tabindex 0, every other -1 (choiceKey moves focus to the newly checked
+// one), at every value of every choice.
+test('roving tabindex: the checked radio is the group\'s one tab stop, at every value', () => {
+  for (const { cid, c } of switches) {
+    for (const [v] of c.param.options) {
+      const radios = radiosOf(blockAt(cid, v));
+      assert.ok(radios.every((r) => r.tabindex !== null), `${cid} at ${v}: each sets tabindex`);
+      const stops = radios.filter((r) => r.tabindex === '0');
+      assert.equal(stops.length, 1, `${cid} at ${v}: one tab stop`);
+      assert.ok(stops[0].checked && stops[0].v === esc(v), `${cid} at ${v}: the checked one`);
+      assert.ok(radios.filter((r) => r !== stops[0]).every((r) => r.tabindex === '-1'),
+        `${cid} at ${v}: every other radio -1`);
+    }
+  }
+});
+
+// Review of W1c, finding 3: FM's algorithm (7) and the XY key (12) are packed dials whose
+// detents carried no mark. The core numbers a dial's detents from 7 (switchLayout number,
+// numeral); the panel prints a packed grid as an algorithm chart, each legend "n · label", and
+// a radio's name is the legend it covers (label in name).
+test('a packed dial numbers its detents and prints its legend grid as "n · label"', () => {
+  const packed = switches.filter(({ c }) => choiceLayout(c.param).packed);
+  assert.deepEqual(packed.map((x) => x.cid).sort(), ['fm.algorithm', 'xy.key']);
+  for (const { cid, c } of packed) {
+    const L = choiceLayout(c.param);
+    const b = block(cid);
+    const nums = [...b.matchAll(new RegExp('<text data-number="" data-index="(\\d+)" '
+      + String.raw`x="([-\d.]+)" y="([-\d.]+)"[^>]*>(\d+)</text>`, 'g'))];
+    assert.equal(nums.length, c.param.options.length, `${cid}: a numeral per detent`);
+    for (const [, i, x, y, text] of nums) {
+      assert.equal(text, String(Number(i) + 1), `${cid}: detent ${i} reads ${text}`);
+      assert.deepEqual([num(x), num(y)], [L.options[i].numeral.x, L.options[i].numeral.y]);
+    }
+    const legends = [...b.matchAll(
+      /<text data-legend="" data-index="(\d+)"[^>]*>([^<]*)<\/text>/g)];
+    assert.equal(legends.length, c.param.options.length, cid);
+    for (const [, i, text] of legends) {
+      const want = `${Number(i) + 1} · ${c.param.options[i][1]}`;
+      assert.equal(text, want.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;'), `${cid}: legend ${i}`);
+      assert.equal(L.options[i].legend.text, want, `${cid}: the layout's text`);
+    }
+    for (const r of radiosOf(b)) {
+      const o = L.options.find((x) => esc(x.value) === r.v);
+      const inner = new RegExp(`data-v="${reEsc(r.v)}"[^>]*><span class="sr-only">([^<]*)`
+        + '</span>').exec(b);
+      assert.equal(inner[1], esc(o.legend.text), `${cid} ${o.value}: its name is its legend`);
+    }
+    // No numeral lies in a cell: the grid starts below the numbered dial.
+    for (const o of L.options) {
+      const m = o.numeral;
+      for (const q of L.options) {
+        assert.ok(m.y + m.size / 2 <= q.hit.y + 0.01 || m.x + m.width / 2 <= q.hit.x
+          || m.x - m.width / 2 >= q.hit.x + q.hit.width, `${cid}: numeral ${o.number} in a cell`);
+      }
+    }
+  }
+});
+
+// Review of W1c, finding 4: the WAVE dial's skirt was r 17 (34 px) beside the 64 px knobs, and
+// its knurl a dashed ring the panel drew on it. A dial is the core's knob face at the panel's
+// knob size: its skirt the knob's skirt on screen (16 x 64/44), the core's own 24-ridge knurl
+// (data-knurl), no overlay of the panel's.
+test('a rotary selector is knob-sized: the knob\'s skirt and knurl on screen', () => {
+  const knob = knobSvg({ value: 0.5, param: { key: 'k', type: 'number', min: 0, max: 1,
+    default: 0.5 }, tokens: T });
+  const z = 64 / 44;
+  const skirtOf = (s) => Number(/<circle data-skirt="" cx="0" cy="0" r="([\d.]+)"/.exec(s)[1]);
+  const knobSkirt = skirtOf(knob) * z;
+  let dials = 0;
+  for (const { cid, c } of switches) {
+    const style = switchStyle(c.param);
+    if (style !== 'rotary' && style !== 'window') continue;
+    dials += 1;
+    const b = block(cid);
+    // The choice is drawn at 1:1, so its skirt's r is its on-screen radius.
+    const r = skirtOf(b);
+    assert.ok(Math.abs(r - knobSkirt) < 0.02, `${cid}: skirt r ${r} px, a knob's ${knobSkirt}`);
+    const knurl = new RegExp('<path d="([^"]*)" data-knurl="" fill="none" stroke="([^"]*)" '
+      + String.raw`stroke-width="([\d.]+)"/>`).exec(b);
+    assert.ok(knurl, `${cid}: the core's knurl`);
+    assert.equal(knurl[2], 'var(--osc-border)', `${cid}: the knob's knurl role`);
+    assert.equal(Number(knurl[3]), num(z), `${cid}: a knob ridge's width on screen`);
+    assert.equal(count(knurl[1], /M /g), 24, `${cid}: 24 ridges`);
+    for (const [, x0, y0, x1, y1] of knurl[1].matchAll(SEG_RE)) {
+      assert.ok(Math.abs(Math.hypot(x0, y0) - 14.5 * z) < 0.03
+        && Math.abs(Math.hypot(x1, y1) - 16 * z) < 0.03, `${cid}: a knob's ridge on screen`);
+    }
+    assert.doesNotMatch(b, /data-ridges=""/, `${cid}: no knurl drawn over the core's`);
+  }
+  assert.ok(dials >= 4, `${dials} dials`);
 });
 
 test('no legend group wraps: the legends sit round the control (V9)', () => {
@@ -287,7 +425,8 @@ test('every choice fits the narrowest plate: a wide dial packs its legends below
   assert.equal(CHOICE_MAX_PX, 234);
   const packed = [];
   for (const { cid, c } of switches) {
-    const core = switchLayout(c.param);
+    // The core's at the panel's knob size: a dial is the 64 px knob's face.
+    const core = switchLayout(c.param, { knob: 64 });
     const L = choiceLayout(c.param);
     assert.ok(L.box.width <= CHOICE_MAX_PX, `${cid}: ${L.box.width} px`);
     if (core.box.width <= CHOICE_MAX_PX) {
@@ -301,7 +440,7 @@ test('every choice fits the narrowest plate: a wide dial packs its legends below
     assert.deepEqual(L.window, core.window, `${cid}: a window keeps its frame`);
     assert.ok(Object.isFrozen(L) && Object.isFrozen(L.options[0].hit), cid);
     const top = L.options[0].hit.y;
-    assert.ok(top >= 33, `${cid}: the grid is below the dial's detents, as the core's window's`);
+    assert.ok(top >= L.dial.extent, `${cid}: the grid is below the dial and its numerals`);
     const b = block(cid);
     assert.equal(count(b, /data-leader=""/g), 0, `${cid}: no leader points at a ring`);
     assert.equal(count(b, /data-selected=""/g), 1, `${cid}: the selected legend's bar`);
@@ -309,7 +448,8 @@ test('every choice fits the narrowest plate: a wide dial packs its legends below
       assert.equal(o.value, core.options[i].value, cid);
       assert.equal(o.legend.anchor, 'middle', cid);
       assert.ok(o.hit.width >= 44 && o.hit.height >= 44, `${cid} ${o.label}: 44 px`);
-      assert.ok(o.legend.width + 12 <= o.hit.width + 0.01, `${cid} ${o.label}: fits its cell`);
+      // A pad each side: the core's 6 where the grid fits with it, never under 2.
+      assert.ok(o.legend.width + 4 <= o.hit.width + 0.01, `${cid} ${o.label}: fits its cell`);
       assert.ok(o.hit.x >= L.box.x - 0.01 && o.hit.x + o.hit.width <= L.box.x + L.box.width
         + 0.01 && o.hit.y + o.hit.height <= L.box.y + L.box.height + 0.01, `${cid}: in its box`);
     });
@@ -318,37 +458,27 @@ test('every choice fits the narrowest plate: a wide dial packs its legends below
     'the two wider than a column: FM\'s algorithm and the XY key');
 });
 
-test('a rotary has the knobs\' ridged skirt and its detents (V10)', () => {
+test('a rotary has the knobs\' knurled skirt and its detents (V10)', () => {
   for (const { cid, c } of switches) {
     const { b } = choiceParts(cid);
     const style = switchStyle(c.param);
-    const ridges = new RegExp('<path d="([^"]*)" data-ridges="" fill="none" stroke="([^"]*)" '
-      + 'stroke-width="([\\d.]+)"/>').exec(b);
+    const knurl = /<path d="[^"]*" data-knurl="" fill="none" stroke="([^"]*)"/.exec(b);
     if (style !== 'rotary' && style !== 'window') {
-      assert.equal(ridges, null, `${cid}: a ${style} has no skirt`);
+      assert.equal(knurl, null, `${cid}: a ${style} has no skirt`);
       continue;
     }
-    assert.ok(ridges, `${cid}: the ridged skirt`);
-    assert.equal(ridges[2], panelControlTokens(T).control.knurl, `${cid}: the knob's knurl role`);
-    assert.equal(ridges[2], 'var(--osc-border)', cid);
-    // As a knob's knurl on screen: 1 unit wide and 1.5 long at the knob's 64/44 zoom.
-    assert.equal(Number(ridges[3]), num(64 / 44), `${cid}: as wide as a knob's`);
-    assert.equal(count(ridges[1], /M /g), 24, `${cid}: 24 ridges, as a knob's`);
+    assert.ok(knurl, `${cid}: the knurled skirt`);
+    assert.equal(knurl[1], panelControlTokens(T).control.knurl, `${cid}: the knob's knurl role`);
     // Over the skirt, under the cap: drawn after the skirt circle and before the cap.
-    assert.ok(b.indexOf('data-skirt=""') < b.indexOf('data-ridges=""')
-      && b.indexOf('data-ridges=""') < b.indexOf('data-cap=""'), cid);
-    const SEG_RE = /M ([-\d.]+) ([-\d.]+) L ([-\d.]+) ([-\d.]+)/g;
-    for (const [, x0, y0, x1, y1] of ridges[1].matchAll(SEG_RE)) {
-      assert.ok(Math.abs(Math.hypot(x0, y0) - (17 - 1.5 * 64 / 44)) < 0.02
-        && Math.abs(Math.hypot(x1, y1) - 17) < 0.02, `${cid}: a ridge as long as a knob's`);
-    }
+    assert.ok(b.indexOf('data-skirt=""') < b.indexOf('data-knurl=""')
+      && b.indexOf('data-knurl=""') < b.indexOf('data-cap=""'), cid);
     assert.equal(count(b, /data-detent=""/g), c.param.options.length, `${cid}: a detent each`);
   }
 });
 
 test('a window shows the selected option\'s name in its frame', () => {
   for (const { cid, c, value } of switches.filter((x) => switchStyle(x.c.param) === 'window')) {
-    const L = switchLayout(c.param);
+    const L = choiceLayout(c.param);
     const w = L.window;
     const name = c.param.options.find((o) => o[0] === value)[1];
     const m = new RegExp(String.raw`<text data-window-text="" x="([-\d.]+)" y="([-\d.]+)" `

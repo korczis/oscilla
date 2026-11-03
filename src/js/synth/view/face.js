@@ -108,16 +108,24 @@ const RADIO = 'block h-full w-full rounded-md border-0 bg-transparent p-0 text-x
  *  a window for nine to twelve), drawn at 1:1 with its legends round it as panel text, so no
  *  legend group can wrap (V9). A dial wider than the narrowest plate (CHOICE_MAX_PX) has its
  *  legends packed below it (view/knob.js choiceLayout), so every choice fits every plate at
- *  every width. Each option is a radio button over its legend at the layout's 44 px hit box;
- *  the drawing itself takes no press. */
+ *  every width. Each option is a radio button over its legend at the layout's 44 px hit box,
+ *  named by that legend (a packed grid's "n · label"); the drawing itself takes no press.
+ *  The radios run in the drawn order (review of W1c, finding 1): a lever's and a slide's top
+ *  to bottom (the core draws option 0 at the bottom), a dial's clockwise, a grid's row by row,
+ *  so Tab and a screen reader meet the top legend first. The group is one tab stop (finding
+ *  2): the checked radio has tabindex 0, every other -1 (or the first drawn, if none is). */
 function switchHtml(cid, c, value, reason, tokens) {
   const L = choiceLayout(c.param);
   const b = L.box;
-  const radios = L.options.map((o) => `<foreignObject x="${o.hit.x}" y="${o.hit.y}" `
+  const drawn = L.style === 'toggle' || L.style === 'slide'
+    ? [...L.options].sort((p, q) => p.legend.y - q.legend.y) : L.options;
+  const stop = drawn.find((o) => o.value === value) || drawn[0];
+  const radios = drawn.map((o) => `<foreignObject x="${o.hit.x}" y="${o.hit.y}" `
     + `width="${o.hit.width}" height="${o.hit.height}"><button type="button" role="radio" `
     + `aria-checked="${o.value === value}" data-option="${cid}" data-v="${esc(o.value)}" `
+    + `tabindex="${o === stop ? 0 : -1}" `
     + `class="${RADIO} ${reason ? 'cursor-not-allowed' : 'cursor-pointer'}">`
-    + `<span class="sr-only">${esc(o.label)}</span></button></foreignObject>`).join('');
+    + `<span class="sr-only">${esc(o.legend.text)}</span></button></foreignObject>`).join('');
   return `<div class="flex flex-col gap-1" data-control="${cid}">`
     + `<span class="${LABEL}" id="${cid}-label">${esc(c.label)}</span>`
     + `<svg viewBox="${b.x} ${b.y} ${b.width} ${b.height}" width="${b.width}" height="${b.height}" `

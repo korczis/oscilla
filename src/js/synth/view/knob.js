@@ -14,12 +14,15 @@
 //   selectorSvg({ value, param, tokens, disabled }) -> '<svg>' of a switch (an enum of up to
 //     four options, or a boolean) or a rotary selector (the core's knob on a longer enum); the
 //     panel draws only a toggle's lever with it since W1c
-//   choiceLayout(param) -> the core's switchLayout at zoom 1 (graph units are CSS px), or, for a
-//     dial wider than CHOICE_MAX_PX, the same dial with its legends packed into a grid below it
-//     (packed: true), so no choice is wider than the narrowest plate
+//   choiceLayout(param) -> the core's switchLayout at zoom 1 (graph units are CSS px) beside the
+//     panel's 64 px knob (a dial is the knob's face at its size), or, for a dial wider than
+//     CHOICE_MAX_PX, the same dial with its legends packed into a grid below it (packed: true),
+//     a numbered dial's (7+ detents) legends "n · label", so no choice is wider than the
+//     narrowest plate
 //   choiceSvg({ value, param, tokens, disabled }) -> the inner markup of a choice's one drawing:
 //     the core's switch (lever, slide, detented rotary, rotary with a window) with its legends
-//     silk-screened at 12 px, a rotary's skirt knurled as a knob's, a window's selected name
+//     silk-screened at 12 px, a dial knob-sized and knurled by the core, its detents numbered
+//     from 7, a window's selected name
 //   CHOICE_MAX_PX -> the widest a choice is drawn, px
 //   panelControlTokens(t) -> the core's token set from the panel's
 //   stepOption(param, v, dir) -> the core's
@@ -131,77 +134,88 @@ export function selectorSvg({ value, param, tokens, disabled = false }) {
  * narrow phone (review of W1c, finding 1).
  */
 export const CHOICE_MAX_PX = 234;
-/** Round a legend inside its cell, graph units: the core's PAD. */
-const CELL_PAD = 6;
-/** The dial's extent each side of its centre: its detents end at r 23, its box at 24. */
-const DIAL_R = 24;
+/** Round a legend inside its cell, each side, graph units: the core's PAD (6) where the grid
+ *  fits with it, else less, never under 2 (the numbered FM chart fits two columns at 2). */
+const CELL_PADS = Object.freeze([6, 4, 2]);
+/** The core's options for a choice: a dial at the size of the panel's knob (knobSvg). */
+const CHOICE_OPTS = Object.freeze({ knob: KNOB_PX });
+/** ... and for a packed legend grid under a dial: its legends "n · label" (a dial of 7+
+ *  detents numbers them; under that the core keeps the label), an algorithm chart. */
+const GRID_OPTS = Object.freeze({ ...CHOICE_OPTS, numberLegends: true });
 const r2 = (x) => Number(x.toFixed(2));
 const up = (x) => Math.ceil(x * 50 - 1e-9) / 50;
 const rect = (x, y, width, height) => ({ x: r2(x), y: r2(y), width: r2(width),
   height: r2(height) });
-/** The top of a legend grid under a dial, the core's own: a window layout's first cell. */
-const GRID_TOP = switchLayout({ id: 'grid', type: 'enum',
-  options: Array.from({ length: 9 }, (_, i) => [i, String(i)]) }).options[0].hit.y;
+/** The gap between a dial and a legend grid under it, the core's own: a window layout's first
+ *  cell below its dial's extent. */
+const GRID_GAP = (() => {
+  const W = switchLayout({ id: 'grid', type: 'enum',
+    options: Array.from({ length: 9 }, (_, i) => [i, String(i)]) }, CHOICE_OPTS);
+  return W.options[0].hit.y - W.dial.extent;
+})();
 
 function deepFreeze(o) {
   for (const v of Object.values(o)) if (v && typeof v === 'object') deepFreeze(v);
   return Object.freeze(o);
 }
 
-/** A dial's layout `L` with its legends packed into a grid of equal 44 px+ cells below it, as
- *  many columns as CHOICE_MAX_PX holds, rows centred: a rotary loses its leaders (radius null),
- *  a window keeps its frame. Each cell is its option's hit box and holds its legend. */
+/** A dial's layout `L` with its legends packed into a grid of 44 px+ cells below it and its
+ *  numerals, rows centred: a rotary loses its leaders (radius null), a window keeps its frame.
+ *  Each column is as wide as its widest legend and a pad each side; the grid takes the fewest
+ *  rows CHOICE_MAX_PX allows, then the widest pad (CELL_PADS). Each cell is its option's hit box
+ *  and holds its legend (the layout's text: "n · label" on a numbered dial). */
 function packed(L) {
   const n = L.options.length;
-  const widest = Math.max(...L.options.map((o) => o.legend.width));
-  const cellW = up(Math.max(HIT_PX, widest + 2 * CELL_PAD));
-  const cellH = up(Math.max(HIT_PX, L.legendPx + 2 * CELL_PAD));
-  const cols = Math.max(1, Math.min(n, Math.floor(CHOICE_MAX_PX / cellW + 1e-9)));
-  const top = L.window ? L.options[0].hit.y : GRID_TOP;
+  const cellH = up(Math.max(HIT_PX, L.legendPx + 2 * CELL_PADS[0]));
+  const widthsAt = (cols, pad) => Array.from({ length: cols }, (_, j) => up(Math.max(HIT_PX,
+    ...L.options.filter((o, i) => i % cols === j).map((o) => o.legend.width + 2 * pad))));
+  let grid = { cols: 1, widths: widthsAt(1, CELL_PADS[CELL_PADS.length - 1]) };
+  search: for (let cols = n; cols >= 1; cols--) {
+    for (const pad of CELL_PADS) {
+      const widths = widthsAt(cols, pad);
+      if (widths.reduce((a, b) => a + b, 0) <= CHOICE_MAX_PX + 1e-9) {
+        grid = { cols, widths };
+        break search;
+      }
+    }
+  }
+  const { cols, widths } = grid;
+  const R = L.dial.extent;
+  const top = L.window ? L.options[0].hit.y : r2(R + GRID_GAP);
   const options = L.options.map((o, i) => {
     const row = Math.floor(i / cols);
     const inRow = Math.min(cols, n - row * cols);
-    const x = -(inRow * cellW) / 2 + (i % cols) * cellW;
+    const ws = widths.slice(0, inRow);
+    const j = i % cols;
+    const x = -ws.reduce((a, b) => a + b, 0) / 2 + ws.slice(0, j).reduce((a, b) => a + b, 0);
     const y = top + row * cellH;
-    return { ...o, legend: { ...o.legend, x: r2(x + cellW / 2), y: r2(y + cellH / 2),
-      anchor: 'middle' }, hit: rect(x, y, cellW, cellH) };
+    return { ...o, legend: { ...o.legend, x: r2(x + ws[j] / 2), y: r2(y + cellH / 2),
+      anchor: 'middle' }, hit: rect(x, y, ws[j], cellH) };
   });
   const w = L.window;
-  const x0 = Math.min(-DIAL_R, ...options.map((o) => o.hit.x), w ? w.x - 0.5 : 0);
-  const x1 = Math.max(DIAL_R, ...options.map((o) => o.hit.x + o.hit.width),
+  const x0 = Math.min(-R, ...options.map((o) => o.hit.x), w ? w.x - 0.5 : 0);
+  const x1 = Math.max(R, ...options.map((o) => o.hit.x + o.hit.width),
     w ? w.x + w.width + 0.5 : 0);
-  const y0 = Math.min(-DIAL_R, w ? w.y - 0.5 : 0);
+  const y0 = Math.min(-R, w ? w.y - 0.5 : 0);
   const y1 = Math.max(...options.map((o) => o.hit.y + o.hit.height));
   return deepFreeze({ ...L, radius: null, box: rect(x0, y0, x1 - x0, y1 - y0), options,
     packed: true });
 }
 
 /** A choice's layout at zoom 1: one graph unit is one CSS px, so its legends are 12 px on
- *  screen and every hit box at least 44 px a side. The core's, unless a dial's is wider than
- *  CHOICE_MAX_PX: then its legends are packed below it (packed). */
+ *  screen and every hit box at least 44 px a side, a dial the size of the panel's knob. The
+ *  core's, unless a dial's is wider than CHOICE_MAX_PX: then its legends are packed below it
+ *  (packed), and a numbered dial's packed grid reads "n · label", an algorithm chart under its
+ *  numerals. */
 export function choiceLayout(param) {
-  const L = switchLayout(param);
+  const L = switchLayout(param, CHOICE_OPTS);
   if (L.box.width <= CHOICE_MAX_PX || (L.style !== 'rotary' && L.style !== 'window')) return L;
-  return packed(L);
+  return packed(switchLayout(param, GRID_OPTS));
 }
 
-/** A rotary's knurled skirt, as a knob's on screen: the knob's 24 ridges, 1.5 units long and 1
- *  wide on its 16 skirt, drawn at 64/44 (knobSvg), so here 1.5 x 64/44 long from the dial's
- *  skirt edge (r 17) inward and 64/44 wide, in the knob's knurl role. */
-const KNOB_ZOOM = KNOB_PX / CONTROL_BOX.knob.width;
-const KNURL = Object.freeze({ count: 24, rOut: 17, rIn: r2(17 - 1.5 * KNOB_ZOOM),
-  width: r2(KNOB_ZOOM) });
-function knurlPath() {
-  let d = '';
-  for (let i = 0; i < KNURL.count; i++) {
-    const a = (i * 2 * Math.PI) / KNURL.count;
-    const [s, c] = [Math.sin(a), -Math.cos(a)];
-    d += `${d ? ' ' : ''}M ${r2(KNURL.rIn * s)} ${r2(KNURL.rIn * c)} `
-      + `L ${r2(KNURL.rOut * s)} ${r2(KNURL.rOut * c)}`;
-  }
-  return d;
-}
-const KNURL_D = knurlPath();
+/** The core's options a choice's drawing takes: the layout's knob, and numbered legends when
+ *  its grid is packed. */
+const drawOpts = (L) => (L.packed ? GRID_OPTS : CHOICE_OPTS);
 
 /** A packed layout's legends, as the core draws a window grid's: the selected one in the
  *  plate's text at weight 600 over a 2 unit bar in the ring colour, the others in its label,
@@ -215,7 +229,7 @@ function packedLegends(L, value, ct, disabled) {
       + `font-size="${r2(lg.size)}" text-anchor="middle" dominant-baseline="central" `
       + `font-weight="${sel ? 600 : 400}" `
       + `fill="${disabled ? tx.dim : (sel ? tx.value : tx.label)}" stroke="none">`
-      + `${escText(o.label)}</text>`;
+      + `${escText(lg.text)}</text>`;
     if (sel) {
       const y = r2(lg.y + lg.size / 2 + 2);
       out += `<line data-selected="" x1="${r2(lg.x - lg.width / 2)}" y1="${y}" `
@@ -229,22 +243,20 @@ function packedLegends(L, value, ct, disabled) {
 /**
  * A choice's one drawing, the inner markup of its svg (viewBox choiceLayout(param).box at 1:1):
  * the core's switch at `value` (aria-hidden, pointer-events none) with its legends as panel
- * text, a rotary's skirt knurled as a knob's (V10), and a window's frame holding the selected
- * option's name. A packed layout's legends are drawn here, in the core's group, and its dial
- * keeps no leader. The options' radio buttons are the caller's, at the layout's hit boxes.
+ * text, a dial the knob's face at the panel's knob size, knurled by the core (V10, review of W1c
+ * finding 4), its detents numbered from 7, and a window's frame holding the selected option's
+ * name. A packed layout's legends are drawn here, in the core's group, and its dial keeps no
+ * leader. The options' radio buttons are the caller's, at the layout's hit boxes.
  */
 export function choiceSvg({ value, param, tokens, disabled = false }) {
   const ct = panelControlTokens(tokens);
   const L = choiceLayout(param);
   const v = (param.options.find((o) => o[0] === value) || param.options[0])[0];
-  let g = switchSvg({ value, param, tokens: ct, state: { disabled }, legends: !L.packed });
+  let g = switchSvg({ value, param, tokens: ct, state: { disabled }, legends: !L.packed,
+    ...drawOpts(L) });
   if (L.packed) {
     g = `${g.replace(/<line data-leader=""[^>]*\/>/g, '').slice(0, -'</g>'.length)}`
       + `${packedLegends(L, v, ct, disabled)}</g>`;
-  }
-  if (L.style === 'rotary' || L.style === 'window') {
-    g = g.replace(/(<circle data-skirt=""[^>]*\/>)/, `$1<path d="${KNURL_D}" data-ridges="" `
-      + `fill="none" stroke="${ct.control.knurl}" stroke-width="${KNURL.width}"/>`);
   }
   const w = L.window;
   if (!w) return g;
