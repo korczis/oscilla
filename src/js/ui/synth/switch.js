@@ -17,7 +17,8 @@
 //   9-12   window   the same dial with a display-window frame above it for the selected name
 //                   (the frame only: its text is the caller's, at layout.window) and a legend
 //                   grid of 44 px cells below it
-// A dial of NUMBERED_MIN (7) or more detents numbers them 1..n, each numeral at its detent
+// A dial of NUMBERED_MIN (7) or more detents numbers them 1..n (`numbers`: true numbers any
+// dial, false none), each numeral at its detent
 // outside the ticks (layout option.number, option.numeral), the selected one lit; with
 // `numberLegends` each legend reads "n · label" (legend.text), as a hardware algorithm chart.
 // The drawing is aria-hidden and takes no pointer: the caller keeps each option a
@@ -37,13 +38,13 @@
 // a control.edge ring off; both 3:1). A setpoint: nothing moves, so no reduced-motion check.
 //
 //   switchStyle(param)                       'toggle' | 'slide' | 'rotary' | 'window'
-//   switchLayout(param, { zoom, led, knob, numberLegends })   frozen { style, positions, zoom,
-//                                            knob, legendPx, radius, pitch, dial, box, options,
-//                                            window, led } (graph units)
+//   switchLayout(param, { zoom, led, knob, numbers, numberLegends })   frozen { style, positions,
+//                                            zoom, knob, legendPx, radius, pitch, dial, box,
+//                                            options, window, led } (graph units)
 //   switchOptions(param, opts)               layout.options: per option { index, value, label,
 //                                            legend: { x, y, anchor, size, width, text }, hit,
 //                                            number, numeral }
-//   switchSvg({ value, param, tokens, zoom, state, led, legends, knob, numberLegends })
+//   switchSvg({ value, param, tokens, zoom, state, led, legends, knob, numbers, numberLegends })
 //                                            the drawing, an SVG <g>
 //   SWITCH_STYLES, LEGEND_PX, NUMBERED_MIN, legendWidth
 
@@ -205,16 +206,16 @@ const grown = (r, d) => ({ x: r.x - d, y: r.y - d, width: r.width + 2 * d,
 
 /**
  * The dial of n detents beside a knob `knob` units wide, legends F units: its scale, skirt and
- * tick radius; the numerals when n >= NUMBERED_MIN (the least radius, from the ticks outward,
+ * tick radius; the numerals when `numbers` (the least radius, from the ticks outward,
  * at which every numeral clears the ticks by RING.numberGap and its neighbours by
  * RING.numberApart); `radius`, the circle that holds the dial and its numerals; `extent`, the
  * half side of the square that does; and `leaderIn`, where a leader may start.
  */
-function dialOf(n, knob, F) {
+function dialOf(n, knob, F, numbers) {
   const k = knob / CONTROL_BOX.knob.width;
   const tickOut = DIAL.tickOut * k;
   const base = (CONTROL_BOX.knob.width / 2) * k + RING.margin;
-  if (n < NUMBERED_MIN) {
+  if (!numbers) {
     return { scale: k, skirt: num(KNOB_FACE.skirt * k), tickOut: num(tickOut), numerals: null,
       radius: num(base), extent: num(base), leaderIn: num(base + RING.leaderGap - RING.margin) };
   }
@@ -317,19 +318,24 @@ function deepFreeze(o) {
  * anchor: 'start' | 'middle' | 'end', size, width, text }: text the label, or "n · label" with
  * `numberLegends` on a numbered dial) and its hit box (at least HIT_PX / zoom a side, holding the
  * legend, never overlapping another, clear of a dial and its numerals), its detent's number
- * (1..n on a dial of NUMBERED_MIN or more detents, else null) and that numeral's place ({ x, y,
- * anchor: 'middle', size, width } or null), the window's frame (the caller's text goes there),
+ * (1..n on a dial of NUMBERED_MIN or more detents, or as `numbers` says; else null) and that
+ * numeral's place ({ x, y, anchor: 'middle', size, width } or null), the window's frame (the
+ * caller's text goes there),
  * the LED's circle when `led` asks for one (a toggle's alone) and the box that holds all of it.
  * Deep-frozen.
  */
 export function switchLayout(param, { zoom = 1, led = false, knob = CONTROL_BOX.knob.width,
-  numberLegends = false } = {}) {
+  numberLegends = false, numbers } = {}) {
   if (!(Number.isFinite(zoom) && zoom > 0)) {
     throw new RangeError(`switchLayout: zoom must be a finite number above 0, not ${zoom}.`);
   }
   if (!(typeof knob === 'number' && Number.isFinite(knob) && knob > 0)) {
     throw new RangeError('switchLayout: knob is the width of the knob beside the switch, graph '
       + `units, a finite number above 0, not ${knob}.`);
+  }
+  if (numbers !== undefined && typeof numbers !== 'boolean') {
+    throw new TypeError('switchLayout: numbers is true, false or left out (a dial of '
+      + `${NUMBERED_MIN} or more detents), not ${numbers}.`);
   }
   const style = switchStyle(param);
   const base = optionsOf(param);
@@ -339,7 +345,8 @@ export function switchLayout(param, { zoom = 1, led = false, knob = CONTROL_BOX.
   const H = up(HIT_PX / zoom);
   const F = up(Math.max(LEGEND_PX, LEGEND_PX / zoom));
   const isDial = style === 'rotary' || style === 'window';
-  const dial = isDial ? dialOf(base.length, knob, F) : null;
+  const dial = isDial ? dialOf(base.length, knob, F, numbers ?? base.length >= NUMBERED_MIN)
+    : null;
   const numbered = Boolean(dial && dial.numerals);
   const opts = base.map(([v, label], i) => [v, label, numbered && numberLegends
     ? `${i + 1} · ${label}` : String(label)]);
@@ -531,19 +538,19 @@ function checkLed(led, id) {
  * (text.dim) and marks the group data-disabled (the caller's buttons carry aria-disabled and
  * the reason). The selected option's legend is text.value at weight 600; in a window grid a bar
  * in control.ring underlines it. `led` ({ source, lit }, a toggle's alone) draws the LED;
- * `legends: false` leaves the legends to the caller; `knob` and `numberLegends` are
+ * `legends: false` leaves the legends to the caller; `knob`, `numbers` and `numberLegends` are
  * switchLayout's (a dial at the size of the knob beside it; "n · label" legends on a numbered
  * dial), and a numbered dial's numerals are drawn at their detents, the selected one lit as its
  * legend is. A setpoint: no animation.
  */
 export function switchSvg({ value, param, tokens, zoom = 1, state = {}, led = null,
-  legends = true, knob = CONTROL_BOX.knob.width, numberLegends = false } = {}) {
+  legends = true, knob = CONTROL_BOX.knob.width, numberLegends = false, numbers } = {}) {
   if (!tokens || !tokens.control || !tokens.surface || !tokens.text) {
     throw new TypeError('switchSvg needs the synth tokens (synthTokens(el)).');
   }
   const id = idOf(param);
   const L = switchLayout(param, { zoom, led: led !== null && led !== undefined, knob,
-    numberLegends });
+    numberLegends, numbers });
   if (led !== null && led !== undefined) checkLed(led, id);
   const opts = optionsOf(param);
   const v = clampValue(value, param);
