@@ -50,7 +50,9 @@
 //              850.3 Hz)
 //   s-look     the rendered panel: no legacy svg stroke on a jack or a plate, every jack ring and
 //              cable colour 3:1+ and every plate label 4.5:1+ on its background in the dark and
-//              light themes, a focused jack shows its focus ring, a card folds (aria-expanded)
+//              light themes (read from the layer's [data-ring] and [data-stroke] hooks), a nut
+//              under every jack, a plug on each cable end and two screws on every plate (F013
+//              W1), a focused jack shows its focus ring, a card folds (aria-expanded)
 //   s-connect  Enter on a jack opens the connection list (targets, refused ones with reasons);
 //              choosing a target patches; the jack names say which can take the cable
 //   s-dock     K066, beside the piano: the instrument picker is a menu button whose role=menu
