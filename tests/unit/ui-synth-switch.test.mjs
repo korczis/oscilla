@@ -7,7 +7,8 @@
 // and 3; 3:1 for the edges, lever and ticks against surface-2 and surface-3 and 4.5:1 for the
 // legends, in both themes, computed from tokens.css; 12 px legends; 44 px hit boxes that never
 // overlap for every enum and boolean of NODE_REGISTRY.list(); no literal intensity; the LED
-// rule (data-source and data-lit interpolated from the caller, the glow only shadow-hw-led);
+// rule (data-source and data-lit interpolated from the caller), the LED drawn by led.js's ledSvg
+// so a toggle's LED is the layer's LED (its bezel, its lens and, lit, its halo);
 // controlSvg's switch kept, its refusal of more than four options pointing to switchSvg.
 //   node --test tests/unit/ui-synth-switch.test.mjs
 import test from 'node:test';
@@ -17,6 +18,7 @@ import {
   switchSvg, switchLayout, switchOptions, switchStyle, SWITCH_STYLES, LEGEND_PX, legendWidth,
 } from '../../src/js/ui/synth/switch.js';
 import { CONTROL_BOX, controlSvg, HIT_PX } from '../../src/js/ui/synth/knob.js';
+import { ledSvg, ledBox, LED } from '../../src/js/ui/synth/led.js';
 import { NODE_REGISTRY } from '../../src/js/studio/registry.js';
 import { SYNTH_TOKEN_NAMES } from '../../src/js/ui/synth/tokens.js';
 import {
@@ -599,7 +601,7 @@ test('edges, lever, ticks and LED hold 3:1 on surface-2 and surface-3, legends 4
   const svg = draw(BOOL, { led: { source: 'x', lit: false } });
   assert.equal(attrOf(part(svg, 'data-housing'), 'stroke'), TOKENS.control.edge);
   assert.equal(attrOf(part(svg, 'data-lever'), 'fill'), TOKENS.control.pointer);
-  assert.equal(attrOf(part(svg, 'data-led'), 'stroke'), TOKENS.control.edge);
+  assert.equal(attrOf(part(svg, 'data-lens'), 'stroke'), TOKENS.control.edge);
   for (const d of parts(draw(WAVE), 'data-detent')) {
     assert.ok([TOKENS.control.track, TOKENS.control.ring].includes(attrOf(d, 'stroke')));
   }
@@ -715,22 +717,24 @@ test('no literal opacity, alpha or shadow in any output or in switch.js (v4)', (
       assert.deepEqual(intensityLiterals(svg), [], `${p.key} ${JSON.stringify(state)}`);
       assert.deepEqual(colourLiterals(svg), [], p.key);
       for (const cls of svg.matchAll(/\sclass="([^"]*)"/g)) {
-        assert.match(cls[1], /^(?:opacity-hw-(?:sheen|shadow)|shadow-hw-led)$/, cls[1]);
+        assert.match(cls[1], /^opacity-hw-(?:sheen|shadow)$/, cls[1]);
       }
     }
   }
 });
 
-test('the LED: data-source and data-lit from the caller, the glow only shadow-hw-led', () => {
+test('the LED: data-source and data-lit from the caller, the glow only its halo', () => {
   for (const lit of [true, false]) {
     const svg = draw(BOOL, { led: { source: 'filter.enabled "x"', lit } });
     const led = part(svg, 'data-led');
     assert.ok(led, 'an LED');
     assert.equal(attrOf(led, 'data-source'), 'filter.enabled &quot;x&quot;', 'escaped');
     assert.equal(attrOf(led, 'data-lit'), String(lit));
-    assert.equal(attrOf(led, 'class'), lit ? 'shadow-hw-led' : undefined, 'glow only when lit');
-    assert.equal(attrOf(led, 'fill'), lit ? TOKENS.control.ring : TOKENS.surface.card);
-    assert.equal(n(led, 'r'), 3, 'Ø6');
+    const lens = part(svg, 'data-lens');
+    assert.equal(attrOf(lens, 'fill'), lit ? TOKENS.control.ring : TOKENS.surface.card);
+    assert.equal(n(lens, 'r'), 3, 'Ø6');
+    assert.equal(parts(svg, 'data-halo').length, lit ? 1 : 0, 'the glow only when lit');
+    if (lit) assert.equal(attrOf(part(svg, 'data-halo'), 'class'), 'opacity-hw-sheen');
     assert.equal(parts(svg, 'data-led').length, 1);
   }
   assert.doesNotMatch(draw(BOOL), /data-led/, 'no LED unless the caller binds one');
@@ -742,24 +746,43 @@ test('the LED: data-source and data-lit from the caller, the glow only shadow-hw
   }
   assert.throws(() => draw(WAVE, { led: { source: 'x', lit: true } }), /LED.*toggle/);
   // The source binds both, as v4's unboundIndicators reads them: no literal state anywhere.
+  // switch.js draws no LED of its own: it passes the caller's { source, lit } to ledSvg, whose
+  // source binds both (ui-synth-led.test.mjs and v4's unboundIndicators read it).
   const code = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-  const tags = [...code.matchAll(/(?<=\s)data-led(?![\w-])/g)];
-  assert.ok(tags.length >= 1, 'switch.js draws data-led');
-  for (const m of tags) {
-    const lt = code.lastIndexOf('<', m.index);
-    const tag = code.slice(lt, code.indexOf('>', m.index) + 1);
-    assert.match(tag, /\sdata-source="\$\{/, 'data-source is interpolated');
-    assert.match(tag, /\sdata-lit="\$\{/, 'data-lit is interpolated');
-  }
+  assert.doesNotMatch(code, /(?<=\s)data-led(?![\w-])/, 'no data-led markup of its own');
+  assert.match(code, /ledSvg\(\{[^}]*\bsource: led\.source\b[^}]*\blit: led\.lit\b/,
+    'the caller\'s state, passed through');
   assert.doesNotMatch(code, /box-shadow|drop-shadow|feDropShadow|text-shadow/, 'no other glow');
 });
+
+test('a toggle\'s LED is led.js\'s LED: the same bezel, lens and halo, at the layout\'s place',
+  () => {
+    for (const zoom of [1, 2]) {
+      for (const lit of [true, false]) {
+        const L = switchLayout(BOOL, { zoom, led: true });
+        const svg = draw(BOOL, { zoom, led: { source: 'node.enabled', lit } });
+        const want = ledSvg({ at: { x: L.led.cx, y: L.led.cy }, lit, source: 'node.enabled',
+          tokens: TOKENS });
+        assert.ok(svg.includes(want), `zoom ${zoom} lit ${lit}: ledSvg's markup, whole`);
+        assert.equal(parts(svg, 'data-bezel').length, 1, 'a bezel');
+        assert.equal(parts(svg, 'data-lens').length, 1, 'a lens');
+        assert.match(want, /^<g data-led=""/, 'data-led is the LED\'s group');
+        const housing = part(svg, 'data-housing');
+        const right = n(housing, 'x') + n(housing, 'width') + n(housing, 'stroke-width') / 2;
+        const box = ledBox({ at: { x: L.led.cx, y: L.led.cy } });
+        assert.ok(L.led.cx - LED.bezel - LED.bezelW / 2 >= right + 2,
+          'the bezel clears the housing');
+        assert.ok(box.x + box.width <= L.box.x + L.box.width + 1e-6, 'the halo in the box');
+      }
+    }
+  });
 
 test('a setpoint: no animation, no listener, no document; it imports only the layer', () => {
   const code = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
   assert.doesNotMatch(code, /<animate|\.animate\(|requestAnimationFrame|transition|setTimeout/);
   assert.doesNotMatch(code, /addEventListener|(?<![\w.])(?:document|window)\.|getComputedStyle/);
   const imports = [...SRC.matchAll(/^import .* from '([^']+)';$/gm)].map((m) => m[1]);
-  assert.deepEqual(imports, ['./knob.js']);
+  assert.deepEqual(imports, ['./knob.js', './legend.js', './led.js']);
 });
 
 // ---------------------------------------------------------------- controlSvg, kept

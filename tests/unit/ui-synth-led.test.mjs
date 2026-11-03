@@ -2,9 +2,11 @@
 // 9, slice S9; project.visual-identity-lock v4 "Indicators bind to state" and "Measurement
 // truth"): pure string renderers, no DOM, no listener, no timer. Checked here: an LED cannot be
 // drawn without a real state source (a missing source and a non-boolean lit throw); data-source,
-// data-lit and data-value are the caller's values, never constants; the glow is the class
-// shadow-hw-led alone, only while lit, and never on text; the unlit ring holds 3:1 on surface-1
-// (the bezel), surface-2 and surface-3 in both themes and every lit colour too, computed from
+// data-lit and data-value are the caller's values, never constants; the glow is an SVG halo (a
+// circle in the lens's token, at most 6 px past it, at the hw-sheen intensity by class), only
+// while lit, inside the LED and never on text; the bezel is told from the plate in both themes
+// (its ring the strongest neutral the palette has); the unlit ring holds 3:1 on the bezel,
+// surface-1, surface-2 and surface-3 in both themes and every lit colour too, computed from
 // tokens.css; a label is 12 screen px at any zoom; a meter refuses 'calibrated' without the
 // calibration and a unit, draws no unit on a relative scale, pins an out-of-range value with
 // data-pinned; nothing takes the pointer unless asked, and then through a 44 px hit; no literal
@@ -75,13 +77,13 @@ test('data-source and data-lit are the caller\'s values, interpolated, never con
   assert.doesNotMatch(SRC, /data-(?:lit|value|source)="(?!\$\{)/, 'no literal state');
 });
 
-test('lit: the chosen state token with shadow-hw-led on the lens; unlit: surface-2, text-dim ring',
+test('lit: the chosen state token on the lens, under its halo; unlit: surface-2, text-dim ring',
   () => {
     const on = LED();
     const lens = part(on, 'data-lens');
     assert.ok(lens, 'a lens');
     assert.equal(attrOf(lens, 'fill'), TOKENS.control.ring, 'control.ring by default');
-    assert.equal(attrOf(lens, 'class'), 'shadow-hw-led');
+    assert.equal(attrOf(lens, 'class'), undefined, 'a box-shadow class paints no SVG element');
     assert.equal(Number(attrOf(lens, 'r')), 3, 'Ø6');
     for (const colour of led.LED_COLOURS) {
       const [g, r] = colour.split('.');
@@ -90,26 +92,66 @@ test('lit: the chosen state token with shadow-hw-led on the lens; unlit: surface
     for (const colour of ['#00ff00', 'red', 'var(--osc-green)', 'cable.palette.3', 'text.label']) {
       assert.throws(() => LED({ colour }), TypeError, `${colour}: not a state token role`);
     }
+    assert.equal(attrOf(lens, 'stroke'), TOKENS.surface.edge, 'lit: seated in surface.edge');
     const off = LED({ lit: false });
     const dark = part(off, 'data-lens');
     assert.equal(attrOf(dark, 'fill'), TOKENS.surface.card, 'surface-2 body');
     assert.equal(attrOf(dark, 'stroke'), TOKENS.control.edge, 'text-dim ring');
     assert.equal(TOKENS.control.edge, 'var(--osc-text-dim)');
     assert.equal(TOKENS.surface.card, 'var(--osc-surface-2)');
-    assert.doesNotMatch(off, /shadow-hw-led/, 'no glow while unlit');
+    assert.doesNotMatch(off, /shadow-hw-led|data-halo/, 'no glow while unlit');
     const bezel = part(on, 'data-bezel');
     assert.ok(bezel && Number(attrOf(bezel, 'r')) > 3, 'a bezel ring around the lens');
+  });
+
+test('a lit LED glows by an SVG halo: one circle behind the lens, its token, <= 6 px past it',
+  () => {
+    for (const zoom of [0.5, 1, 2]) {
+      for (const colour of led.LED_COLOURS) {
+        for (const extra of [{}, { label: 'Arm' }, { interactive: true }]) {
+          const svg = LED({ colour, zoom, ...extra });
+          const where = `${colour} zoom ${zoom} ${JSON.stringify(extra)}`;
+          const halos = svg.match(/<\w+\b[^>]*\sdata-halo=""[^>]*>/g) || [];
+          assert.equal(halos.length, 1, `${where}: one halo`);
+          const [halo] = halos;
+          const lens = part(svg, 'data-lens');
+          assert.match(halo, /^<circle\b/, `${where}: a circle`);
+          const reach = Number(attrOf(halo, 'r')) - Number(attrOf(lens, 'r'));
+          assert.ok(reach > 0 && reach <= 6, `${where}: ${reach} past the lens, in (0, 6]`);
+          assert.equal(attrOf(halo, 'r'), String(led.LED.lens + led.LED.halo), 'graph units');
+          assert.equal(attrOf(halo, 'cx'), attrOf(lens, 'cx'), `${where}: centred on the lens`);
+          assert.equal(attrOf(halo, 'cy'), attrOf(lens, 'cy'), `${where}: centred on the lens`);
+          assert.equal(attrOf(halo, 'class'), 'opacity-hw-sheen', `${where}: the hw-sheen key`);
+          assert.equal(attrOf(halo, 'fill'), attrOf(lens, 'fill'), `${where}: the lens's colour`);
+          assert.match(attrOf(halo, 'fill'), /^var\(--osc-[\w-]+\)$/, `${where}: a token`);
+          assert.equal(attrOf(halo, 'stroke'), 'none');
+          assert.equal(attrOf(halo, 'aria-hidden'), 'true', `${where}: aria-hidden`);
+          assert.equal(attrOf(halo, 'pointer-events'), 'none', `${where}: takes no pointer`);
+          assert.ok(svg.indexOf(halo) < svg.indexOf(lens), `${where}: behind the lens`);
+          assert.ok(svg.indexOf(part(svg, 'data-bezel')) < svg.indexOf(halo),
+            `${where}: over the bezel, which a lit LED lights`);
+          // Inside the data-led element: the LED's group closes after the halo.
+          assert.ok(svg.indexOf(halo) > svg.indexOf('data-led=""')
+            && svg.lastIndexOf('</g>') > svg.indexOf(halo), `${where}: inside data-led`);
+          assert.doesNotMatch(svg, /\s(?:fill-|stroke-|flood-|stop-)?opacity=/,
+            `${where}: no literal opacity attribute`);
+        }
+      }
+      assert.doesNotMatch(LED({ lit: false, zoom }), /data-halo/, 'unlit: no halo');
+    }
   });
 
 test('the glow is never on text and never on the group that holds the label', () => {
   for (const lit of [true, false]) {
     const svg = LED({ lit, label: 'Arm' });
     assert.ok(/<text\b/.test(svg), 'a label');
-    for (const t of svg.match(/<text\b[^>]*>/g)) assert.doesNotMatch(t, /shadow/, 'text glows');
-    assert.doesNotMatch(open(svg), /shadow/, 'the group with the text does not glow');
-    const glowing = svg.match(/<\w+\b[^>]*shadow-hw-led[^>]*>/g) || [];
+    for (const t of svg.match(/<text\b[^>]*>/g)) {
+      assert.doesNotMatch(t, /shadow|class=/, 'text glows');
+    }
+    assert.doesNotMatch(open(svg), /shadow|class=/, 'the group with the text does not glow');
+    const glowing = svg.match(/<\w+\b[^>]*\sclass="[^"]*"[^>]*>/g) || [];
     assert.equal(glowing.length, lit ? 1 : 0);
-    if (lit) assert.match(glowing[0], /^<circle\b[^>]*data-lens=""/, 'only the lens');
+    if (lit) assert.match(glowing[0], /^<circle\b[^>]*data-halo=""/, 'only the halo');
   }
 });
 
@@ -180,24 +222,83 @@ test('the unlit ring and every lit colour hold 3:1 on the bezel, surface-2 and s
   const themes = await tokenThemes();
   const N = SYNTH_TOKEN_NAMES;
   const name = (role) => { const [g, r] = role.split('.'); return N[g][r]; };
-  const grounds = [['bezel', N.control.cap], ['plate low', N.surface.plateLo],
+  // A lit lens sits in its seat (a surface.edge ring), so its colour meets the seat, not the
+  // bezel's body: light --osc-red is 2.94:1 on the surface-4 body and 3.33:1 on the seat.
+  const grounds = [['bezel', N.control.capHi], ['plate low', N.surface.plateLo],
     ['card', N.surface.card], ['plate high', N.surface.plateHi]];
-  assert.equal(N.control.cap, '--osc-surface-1');
+  const seat = ['seat', N.surface.edge];
+  assert.equal(N.control.capHi, '--osc-surface-4');
+  assert.equal(N.surface.plateLo, '--osc-surface-1');
   assert.equal(N.surface.card, '--osc-surface-2');
   assert.equal(N.surface.plateHi, '--osc-surface-3');
-  const marks = [['unlit ring', N.control.edge], ['meter scale', N.control.track],
-    ['needle', N.control.pointer], ...led.LED_COLOURS.map((c) => [`lit ${c}`, name(c)])];
+  assert.equal(N.surface.edge, '--osc-bg');
+  const marks = [['unlit ring', N.control.edge, grounds], ['meter scale', N.control.track, grounds],
+    ['needle', N.control.pointer, grounds],
+    ...led.LED_COLOURS.map((c) => [`lit ${c}`, name(c), [seat, ...grounds.slice(1)]])];
   for (const [theme, t] of Object.entries(themes)) {
-    for (const [what, fg] of marks) {
-      for (const [where, bg] of grounds) {
+    for (const [what, fg, on] of marks) {
+      for (const [where, bg] of on) {
         const ratio = contrastOf(tokenHex(t, fg), tokenHex(t, bg));
         assert.ok(ratio >= 3, `${theme}: ${what} (${fg}) on the ${where} (${bg}) ${ratio.toFixed(2)}`);
       }
     }
-    const unit = contrastOf(tokenHex(t, N.text.label), tokenHex(t, N.surface.card));
-    assert.ok(unit >= 4.5, `${theme}: the meter's unit text on its face ${unit.toFixed(2)}`);
+    // The unit is drawn below the face, on the host's plate: surface-1, -2 or -3.
+    for (const [where, bg] of grounds.slice(1)) {
+      const unit = contrastOf(tokenHex(t, N.text.label), tokenHex(t, bg));
+      assert.ok(unit >= 4.5, `${theme}: the meter's unit text (${N.text.label}) on the ${where} `
+        + `(${bg}) ${unit.toFixed(2)}`);
+    }
   }
+  // As drawn: the unit's text sits below the face, outside it.
+  const svg = METER({ scale: 'calibrated', calibrated: true, unit: 'dB SPL' });
+  const face = part(svg, 'data-face');
+  const t = /<text\b[^>]*>/.exec(svg)[0];
+  assert.ok(Number(attrOf(t, 'y')) - 12 >= Number(attrOf(face, 'y'))
+    + Number(attrOf(face, 'height')), 'the unit is below the face, on the plate');
+  assert.equal(attrOf(t, 'fill'), TOKENS.text.label);
 });
+
+// The strongest neutral (border, surface or page) the palette has against the plate surfaces
+// in both themes, a token the bezel may use; the marking tokens (text-*) are the lens's.
+const NEUTRALS = ['--osc-border', '--osc-border-strong', '--osc-border-soft', '--osc-bg',
+  '--osc-surface-0', '--osc-surface-1', '--osc-surface-2', '--osc-surface-3', '--osc-surface-4'];
+/** Measured from tokens.css (dark, the weakest theme): --osc-border-strong on surface-1, -2, -3
+ *  is 1.30, 1.20 and 1.10; light 1.61, 1.43 and 1.33. No neutral reaches 1.3 on surface-3 in
+ *  dark (the palette's best is 1.10), so the bezel's ring is that best, and 1.3 where it can. */
+const BEZEL_RING_MIN = 1.1;
+
+test('the bezel is told from the plate: a surface-4 body, a border-strong ring, both themes',
+  async () => {
+    const themes = await tokenThemes();
+    const N = SYNTH_TOKEN_NAMES;
+    assert.equal(N.control.bezel, '--osc-border-strong', 'a dedicated bezel role');
+    for (const lit of [true, false]) {
+      const bezel = part(LED({ lit }), 'data-bezel');
+      assert.equal(attrOf(bezel, 'fill'), TOKENS.control.capHi, 'the body is control.capHi');
+      assert.equal(attrOf(bezel, 'stroke'), TOKENS.control.bezel, 'the ring is control.bezel');
+    }
+    const plates = [N.surface.plateLo, N.surface.card, N.surface.plateHi];
+    const worst = (fg) => Math.min(...Object.values(themes).flatMap((t) => plates
+      .map((bg) => contrastOf(tokenHex(t, fg), tokenHex(t, bg)))));
+    const ring = worst(N.control.bezel);
+    const best = Math.max(...NEUTRALS.map(worst));
+    assert.ok(ring >= best - 1e-9,
+      `the ring ${ring.toFixed(2)} is the best neutral, ${best.toFixed(2)}`);
+    assert.ok(ring >= BEZEL_RING_MIN, `the ring ${ring.toFixed(2)} >= ${BEZEL_RING_MIN}`);
+    // 1.3:1 on every plate but the two dark ones no neutral ring reaches it on, stated.
+    const short = [];
+    for (const [theme, t] of Object.entries(themes)) {
+      for (const bg of plates) {
+        const r = contrastOf(tokenHex(t, N.control.bezel), tokenHex(t, bg));
+        if (r < 1.3) short.push(`${theme} ${bg} ${r.toFixed(2)}`);
+      }
+      const body = tokenHex(t, N.control.capHi);
+      assert.notEqual(body, tokenHex(t, N.surface.plateLo), `${theme}: the body is not surface-1`);
+      assert.ok(contrastOf(body, tokenHex(t, N.surface.plateLo)) >= 1.3,
+        `${theme}: the body on surface-1`);
+    }
+    assert.deepEqual(short, ['dark --osc-surface-2 1.20', 'dark --osc-surface-3 1.10']);
+  });
 
 // ---------------------------------------------------------------- the meter tells the truth
 
@@ -279,12 +380,19 @@ test('no literal colour, opacity, alpha or shadow; every paint a token; every sh
     assert.deepEqual(shapesWithoutStroke(svg), [], 'every shape sets its stroke');
     for (const p of paints(svg)) assert.ok(tokens.has(p), `${p} is a token`);
     for (const c of svg.match(/class="([^"]*)"/g) || []) {
-      assert.match(c, /^class="shadow-hw-led"$/, `${c}: the only class is the LED glow`);
+      assert.match(c, /^class="opacity-hw-sheen"$/, `${c}: the only class is the halo's`);
     }
   }
   assert.ok(SRC.length > 0, 'led.js exists');
   assert.deepEqual(colourLiterals(SRC.replace(/^\s*(?:\/\/|\*).*$/gm, '')), []);
   assert.deepEqual(intensityLiterals(SRC), []);
+});
+
+test('the header says an interactive indicator\'s host supplies its role, focus and value', () => {
+  const header = SRC.slice(0, SRC.indexOf('import '));
+  assert.match(header, /interactive[\s\S]*host supplies[\s\S]*role[\s\S]*focus ring[\s\S]*value/,
+    'the switch.js contract, stated');
+  assert.match(header, /switch\.js/, 'naming the contract it matches');
 });
 
 test('pure: no DOM, no listener, no timer, no animation in the renderer', () => {

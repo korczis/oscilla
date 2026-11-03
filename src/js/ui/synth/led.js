@@ -9,15 +9,21 @@
 // no LED is ever lit by a constant, a timer or a random value. Which state a source names is the
 // reviewer's to check (the rule's review-only list).
 //
-// The LED: a 6 across lens (graph units: 1 is 1 CSS px at zoom 1) in a bezel ring. Lit, the lens
-// is the state token the caller chose by role (LED_COLOURS, control.ring by default) and carries
-// the glow, the class shadow-hw-led (the hw-led key: a token glow of at most 6 px), on the lens
-// alone, never on the group or on text. A box-shadow paints no SVG element, so where an SVG host
-// draws the LED its state is told by the fill alone, as in switch.js. Unlit, the lens is
-// surface.card (--osc-surface-2) with a control.edge (--osc-text-dim) ring, 3:1 on the bezel
-// and on either plate surface in both themes (ui-synth-led.test.mjs computes it from tokens.css).
-// An optional label is 12 screen px at any zoom, in text.label, and names the LED to assistive
-// technology ("Arm: on"); an unnamed LED is aria-hidden.
+// The LED: a 6 across lens (graph units: 1 is 1 CSS px at zoom 1, scaled with the drawing) in a
+// bezel: a control.capHi (--osc-surface-4) body ringed in control.bezel (--osc-border-strong),
+// the strongest neutral the palette has against the plates (dark 1.30, 1.20 and 1.10:1 on
+// surface-1, -2 and -3; light 1.61, 1.43 and 1.33; the lens tells the state, so the bezel only
+// decorates). Lit, the lens is the state token the caller chose by role (LED_COLOURS,
+// control.ring by default), seated in a surface.edge ring (every lit colour 3:1 on it in both
+// themes; light --osc-red is 2.94:1 on the bezel's body), and glows: a box-shadow paints no SVG
+// element, so the glow is an SVG halo, one circle in the lens's colour LED.halo (4, at most 6)
+// past the lens, over the bezel and under the lens, at the hw-sheen intensity by its class
+// opacity-hw-sheen (never a literal opacity), aria-hidden and taking no pointer; never on the
+// group or on text. Unlit, there is no halo and the lens is surface.card (--osc-surface-2) with
+// a control.edge (--osc-text-dim) ring, 3:1 on the bezel and on either plate surface in both
+// themes (ui-synth-led.test.mjs computes it from tokens.css). switch.js draws a toggle's LED
+// through ledSvg. An optional label is 12 screen px at any zoom, in text.label, and names the
+// LED to assistive technology ("Arm: on"); an unnamed LED is aria-hidden.
 //
 // The meter: a recessed face (surface.card, control.edge), an arc scale in control.track with
 // ticks, a needle in control.pointer and a pivot cap. Measurement truth (project.no-fake-science):
@@ -30,7 +36,10 @@
 //
 // Neither takes the pointer by default (pointer-events none). With `interactive`, a hit rect of
 // at least HIT_PX screen px a side at the given zoom, centred on the drawing's box, takes it and
-// the drawing takes none, as controlSvg's knob.
+// the drawing takes none, as controlSvg's knob. The hit only takes the pointer: as with
+// switch.js's drawing, whose caller keeps each option a radio button, the host supplies the
+// control's role, its keyboard focus and focus ring, and its value (aria-pressed, aria-checked
+// or aria-valuenow) on its own element; ledSvg and meterSvg draw none of them.
 //
 //   ledSvg({ at, lit, source, tokens, colour, zoom, label, interactive })  '<g data-led …>…</g>'
 //   ledBox({ at, zoom, label })                                           the LED's extent
@@ -40,11 +49,12 @@
 //   LED, LED_COLOURS, METER, METER_BOX, LABEL_PX
 
 import { HIT_PX } from './knob.js';
-import { legendWidth } from './switch.js';
+import { legendWidth } from './legend.js';
 
-/** The LED's geometry, graph units: the lens radius (6 across), the bezel's, their strokes and
- *  the gap to the label. */
-export const LED = Object.freeze({ lens: 3, bezel: 4.5, ringW: 1, bezelW: 1, labelGap: 3 });
+/** The LED's geometry, graph units: the lens radius (6 across), the bezel's, their strokes, the
+ *  lit halo's reach past the lens (at most 6, the v4 glow bound) and the gap to the label. */
+export const LED = Object.freeze({ lens: 3, bezel: 4.5, ringW: 1, bezelW: 1, halo: 4,
+  labelGap: 3 });
 /** The token roles an LED may light in: each holds 3:1 on the bezel and both plate surfaces in
  *  both themes (the test computes it); a role elsewhere, a literal or a raw var() is refused. */
 export const LED_COLOURS = Object.freeze(['control.ring', 'control.applied', 'jack.refuse']);
@@ -113,9 +123,12 @@ function wrap(open, box, zoom, interactive, drawing) {
 
 // ---------------------------------------------------------------- the LED
 
-const LED_HALF = LED.bezel + LED.bezelW / 2;
+/** Half the LED's extent: the bezel's outer edge or the lit halo, whichever reaches further, so
+ *  the box is the same lit and unlit. */
+const LED_HALF = Math.max(LED.bezel + LED.bezelW / 2, LED.lens + LED.halo);
 
-/** The LED's extent, graph units: the bezel, and the label below it when there is one. */
+/** The LED's extent, graph units: the bezel and the lit halo, and the label below them when there
+ *  is one. */
 export function ledBox({ at, zoom = 1, label } = {}) {
   checkZoom(zoom, 'ledBox');
   const { x, y } = pointOf(at, 'ledBox');
@@ -149,21 +162,27 @@ export function ledSvg({ at, lit, source, tokens, colour = 'control.ring', zoom 
     throw new TypeError(`ledSvg: lit is the state's boolean, not ${typeof lit}.`);
   }
   checkTokens(tokens, 'ledSvg');
+  if (typeof tokens.control.bezel !== 'string' || !tokens.control.bezel) {
+    throw new TypeError('ledSvg: the tokens have no control.bezel (synthTokens(el)).');
+  }
   checkZoom(zoom, 'ledSvg');
   const { x, y } = pointOf(at, 'ledSvg');
   const t = tokens;
   const paint = lit ? colourOf(t, colour) : t.surface.card;
-  const ring = lit ? paint : t.control.edge;
-  const glow = lit ? ' class="shadow-hw-led"' : '';
+  const ring = lit ? t.surface.edge : t.control.edge;
+  const halo = lit ? `<circle data-halo="" class="opacity-hw-sheen" aria-hidden="true" `
+    + `pointer-events="none" cx="${num(x)}" cy="${num(y)}" r="${LED.lens + LED.halo}" `
+    + `fill="${esc(paint)}" stroke="none"/>` : '';
   const named = label !== undefined && label !== null && label !== '';
   const a11y = named ? ` role="img" aria-label="${esc(label)}: ${lit ? 'on' : 'off'}"`
     : ' aria-hidden="true"';
   const open = `<g data-led="" data-source="${esc(source)}" data-lit="${String(lit)}"${a11y}`;
   const size = LABEL_PX / zoom;
   const drawing = `<circle data-bezel="" cx="${num(x)}" cy="${num(y)}" r="${LED.bezel}" `
-    + `fill="${esc(t.control.cap)}" stroke="${esc(t.control.knurl)}" `
+    + `fill="${esc(t.control.capHi)}" stroke="${esc(t.control.bezel)}" `
     + `stroke-width="${LED.bezelW}"/>`
-    + `<circle data-lens=""${glow} cx="${num(x)}" cy="${num(y)}" r="${LED.lens}" `
+    + halo
+    + `<circle data-lens="" cx="${num(x)}" cy="${num(y)}" r="${LED.lens}" `
     + `fill="${esc(paint)}" stroke="${esc(ring)}" stroke-width="${LED.ringW}"/>`
     + (named ? `<text x="${num(x)}" y="${num(y + LED_HALF + LED.labelGap + size)}" `
       + `font-size="${num(size)}" text-anchor="middle" fill="${esc(t.text.label)}" `

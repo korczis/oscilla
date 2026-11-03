@@ -31,11 +31,12 @@
 // one in text.value at weight 600, text.dim while disabled; their width is an estimate from the
 // glyphs (legendWidth), used only to lay the boxes out. Colours are tokens passed in
 // (synthTokens; project.visual-identity-lock) and no number sets an intensity (v4): a shadow is
-// class opacity-hw-shadow, the cap highlight opacity-hw-sheen, an LED's glow shadow-hw-led
-// alone, and an LED binds data-source and data-lit interpolated from the caller's { source, lit }
-// (the parameter's real state, never a literal). A box-shadow paints no SVG element, so where an
-// SVG host draws the LED its state is told by its fill alone (control.ring lit, surface.card with
-// a control.edge ring off; both 3:1). A setpoint: nothing moves, so no reduced-motion check.
+// class opacity-hw-shadow, the cap highlight opacity-hw-sheen, and a toggle's LED is led.js's
+// (ledSvg: its bezel, its lens in control.ring lit or surface.card with a control.edge ring off,
+// both 3:1, and lit its SVG halo at the hw-sheen intensity), so every LED of the layer looks
+// alike; the caller's { source, lit } is passed through, and ledSvg binds data-source and
+// data-lit from it (the parameter's real state, never a literal). A setpoint: nothing moves, so
+// no reduced-motion check.
 //
 //   switchStyle(param)                       'toggle' | 'slide' | 'rotary' | 'window'
 //   switchLayout(param, { zoom, led, knob, numbers, numberLegends })   frozen { style, positions,
@@ -49,6 +50,11 @@
 //   SWITCH_STYLES, LEGEND_PX, NUMBERED_MIN, legendWidth
 
 import { CONTROL_BOX, clampValue, formatValue, HIT_PX } from './knob.js';
+import { legendWidth } from './legend.js';
+import { LED, ledBox, ledSvg } from './led.js';
+
+/** legendWidth is legend.js's, which led.js reads too. */
+export { legendWidth };
 
 /** Each style's position counts, inclusive. */
 export const SWITCH_STYLES = Object.freeze({
@@ -63,7 +69,7 @@ const MAX_POSITIONS = 12;
 /** Around a legend inside its hit box, graph units. */
 const PAD = 6;
 const TOGGLE = Object.freeze({ w: 18, h: 30, rx: 4, edgeW: 1.5, leverW: 8, leverH: 14,
-  bushing: 5.5, gap: 4, ledR: 3, ledGap: 3.5, shadowDy: 1, shadowDragDy: 2 });
+  bushing: 5.5, gap: 4, ledGap: 3.5, shadowDy: 1, shadowDragDy: 2 });
 const SLIDE = Object.freeze({ slotW: 4, capW: 16, capH: 12, tickIn: -13, tickOut: -10,
   legendX: 14, pitchPad: 8, gripW: 2 });
 /** The knob's face in its CONTROL_BOX.knob units, as knob.js draws it (its KNOB: the skirt and
@@ -87,7 +93,6 @@ const WINDOW = Object.freeze({ minW: 88, pad: 10, gap: 8, gridGap: 10, gridMaxW:
   barW: 2 });
 const SHADOW_CLASS = 'opacity-hw-shadow';
 const SHEEN_CLASS = 'opacity-hw-sheen';
-const LED_CLASS = 'shadow-hw-led';
 
 const num = (x) => Number(x.toFixed(2)) + 0; // + 0: never -0
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
@@ -121,19 +126,6 @@ export function switchStyle(param) {
     + 'pick the value from a list.');
 }
 
-const NARROW = /[ .,:;'|!()[\]/\-iIjlft]/;
-const WIDE = /[MWmw@%→←·]/;
-/** An estimate of a label's width at `size`: a glyph-class sum, on the generous side. */
-export function legendWidth(label, size = LEGEND_PX) {
-  let em = 0;
-  for (const ch of String(label)) {
-    if (NARROW.test(ch)) em += 0.34;
-    else if (WIDE.test(ch)) em += 0.92;
-    else if (/[A-Z0-9#&]/.test(ch)) em += 0.68;
-    else em += 0.57;
-  }
-  return num(em * size);
-}
 
 // ---------------------------------------------------------------- the layout
 
@@ -361,8 +353,12 @@ export function switchLayout(param, { zoom = 1, led = false, knob = CONTROL_BOX.
   const b = [...L.mech];
   if (led) {
     const T = TOGGLE;
-    ledAt = { cx: T.w / 2 + T.ledGap + T.ledR, cy: 0, r: T.ledR };
-    b[2] = Math.max(b[2], ledAt.cx + T.ledR + 0.5);
+    // The bezel's outer edge T.ledGap past the housing; the box holds the halo (ledBox).
+    ledAt = { cx: T.w / 2 + T.ledGap + LED.bezel + LED.bezelW / 2, cy: 0, r: LED.lens };
+    const lb = ledBox({ at: { x: ledAt.cx, y: ledAt.cy } });
+    b[1] = Math.min(b[1], lb.y);
+    b[2] = Math.max(b[2], lb.x + lb.width);
+    b[3] = Math.max(b[3], lb.y + lb.height);
   }
   const grow = (r) => {
     b[0] = Math.min(b[0], r.x);
@@ -506,15 +502,9 @@ function stateIndex(x, sel, opts) {
   return opts.findIndex((o) => o[0] === x.option);
 }
 
-/** The LED's circle: its state bound to the caller's { source, lit }, glowing only when lit. */
+/** The LED: led.js's, its state the caller's { source, lit }, at the layout's place. */
 function ledShape(at, led, t) {
-  const lit = led.lit;
-  const paint = lit ? t.control.ring : t.surface.card;
-  const ring = lit ? t.control.ring : t.control.edge;
-  const glow = lit ? ` class="${LED_CLASS}"` : '';
-  return `<circle data-led="" data-source="${esc(led.source)}" data-lit="${String(lit)}"${glow} `
-    + `cx="${num(at.cx)}" cy="${at.cy}" r="${at.r}" fill="${esc(paint)}" stroke="${esc(ring)}" `
-    + 'stroke-width="1"/>';
+  return ledSvg({ source: led.source, lit: led.lit, at: { x: at.cx, y: at.cy }, tokens: t });
 }
 
 function checkLed(led, id) {
