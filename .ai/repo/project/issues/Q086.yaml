@@ -7,7 +7,7 @@ profile: routine
 owner: "repository owner"
 objective: "Is a learner's practice progress (attempts, results, completed exercises) stored, and if so where: (a) locally only, through the existing local-first persistence (src/js/core/storage.js), never transmitted; or (b) not at all, each session starting fresh. The proposal says 'Reuse existing local-first persistence only where appropriate and accepted' and 'Do not add accounts, servers, analytics transmission, or runtime network dependencies'; it keeps 'authored lesson content distinguishable from calculated runtime feedback and user progress'."
 why: "The owner's proposal 'Interactive learning and musical practice' (pasted into the af session at 2026-11-03T01:34Z, marked 'Status: PROPOSAL') is recorded as the proposed intent musical-practice, which names no milestone and no criterion; .ai/repo/project/README.md: only the owner, or a session the owner delegated to, answers a Q issue."
-current_state: "Open on 2026-11-03. The plan offers no answer and no recommendation; the slices of musical-practice that wait on it name this issue in depends_on once the intent is planned."
+current_state: "Answered by the owner on 2026-11-03 (~19:3xZ, AskUserQuestion in the oscilla-af session): 'Locally, clearable'. Progress is kept only in this browser (the existing local storage), never sent anywhere, and the learner can clear it. The owner_decision evidence is recorded once this plan is on main."
 scope:
   - ".ai/repo/project/issues/Q086.yaml"
 acceptance_criteria:
