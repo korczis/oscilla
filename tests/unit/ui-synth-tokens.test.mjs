@@ -237,3 +237,23 @@ test('every graphic role of the knob, fader and switch holds 3:1 on the plate, t
     assert.ok(graphic.includes(role), `control.${role} is a graphic role`);
   }
 });
+
+// A part is seen against what it is drawn over, not only against the plate (review of S2,
+// finding 1): the knob's applied arc lies on the skirt face (surface.card), the pointer, lit or
+// disabled, on the cap. The value arc over the unlit arc is told apart by width, not colour
+// (ui-synth-knob.test.mjs), because no existing token pair holds 3:1 there in both themes.
+test('every knob part holds 3:1 on the part it is drawn over, in both themes', () => {
+  const N = SYNTH_TOKEN_NAMES;
+  const pairs = [['control.applied on surface.card', N.control.applied, N.surface.card],
+    ['control.pointer on control.cap', N.control.pointer, N.control.cap],
+    ['control.disabled on control.cap', N.control.disabled, N.control.cap],
+    ['control.focus on surface.plateLo', N.control.focus, N.surface.plateLo]];
+  const short = [];
+  for (const [theme, t] of Object.entries(themes())) {
+    for (const [what, fg, bg] of pairs) {
+      const ratio = contrast(hexOf(t, fg), hexOf(t, bg));
+      if (ratio < 3) short.push(`${theme} ${what}: ${ratio.toFixed(2)}`);
+    }
+  }
+  assert.deepEqual(short, [], 'under 3:1 against the part beneath');
+});
