@@ -145,7 +145,7 @@ restore earlier snapshots (`src/js/studio/actions.js`, `src/js/studio/history.js
 | measurement-sweep | Measurement Sweep | measurement |
 | first-patch | First Patch | synthesis |
 | filter-envelope-synth | Filter Envelope Synth | synthesis |
-| fm-bell | FM Bell | synthesis |
+| fm-chime | FM Chime | synthesis |
 | ring-mod | Ring Mod | synthesis |
 | drive-lead | Drive Lead | synthesis |
 | macro-pad | Macro Pad | synthesis |

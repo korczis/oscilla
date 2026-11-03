@@ -34,7 +34,7 @@ import measurementSweep from './measurement-sweep.js';
 import demoSong from './demo-song.js';
 import firstPatch from './first-patch.js';
 import filterEnvelopeSynth from './filter-envelope-synth.js';
-import fmBell from './fm-bell.js';
+import fmChime from './fm-chime.js';
 import ringMod from './ring-mod.js';
 import driveLead from './drive-lead.js';
 import macroPad from './macro-pad.js';
@@ -46,7 +46,7 @@ export const TEMPLATE_CATEGORIES = Object.freeze(['synthesis', 'measurement']);
 export const LEARN_LIMITS = Object.freeze({ summaryChars: 200, points: 4, pointChars: 200 });
 
 /** The synthesis template pack of plan issue K014, in library order (before the Demo song). */
-const TEMPLATE_PACK = [filterEnvelopeSynth, fmBell, ringMod, driveLead, macroPad, stepBass];
+const TEMPLATE_PACK = [filterEnvelopeSynth, fmChime, ringMod, driveLead, macroPad, stepBass];
 export const TEMPLATE_PACK_IDS = Object.freeze(TEMPLATE_PACK.map((t) => t.id));
 
 export const STUDIO_TEMPLATES = Object.freeze([basicTone, subtractiveSynth, sweepSequence,

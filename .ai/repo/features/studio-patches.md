@@ -32,7 +32,7 @@ back. Opening a project replaces the document; inserting a patch adds it with ne
 undo step; nothing saved is overwritten silently, and a malformed, hostile or newer-schema
 file is refused with the reason. Dirty state follows semantic content only. Fourteen templates
 (Basic Tone, Subtractive Synth, Sweep Sequence, Stereo Beat, Filter Automation, Measurement
-Sweep, First Patch, Filter Envelope Synth, FM Bell, Ring Mod, Drive Lead, Macro Pad, Step Bass,
+Sweep, First Patch, Filter Envelope Synth, FM Chime, Ring Mod, Drive Lead, Macro Pad, Step Bass,
 Demo song: Lantern in the Slag Yard) start a document, each pinned by its hash.
 
 Proven by `npm test` (`tests/unit/v31-studio-patches.test.mjs`,

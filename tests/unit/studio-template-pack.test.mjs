@@ -1,4 +1,4 @@
-// The synthesis template pack of plan issue K014: filter-envelope synth, FM bell, ring-mod,
+// The synthesis template pack of plan issue K014: filter-envelope synth, FM chime, ring-mod,
 // drive lead, macro pad and step-modulator bass (src/js/studio/templates/). Each validates with
 // a pinned studioHash, uses the node and edge its sound depends on, renders every clip and lane
 // offline (planOfflineRender), opens from its Studio link, and names no commercial product and
@@ -24,7 +24,7 @@ import { SAFE_NYQUIST_FACTOR } from '../../src/js/core/constants.js';
 /** The pack, id to title, in library order. */
 const PACK = {
   'filter-envelope-synth': 'Filter Envelope Synth',
-  'fm-bell': 'FM Bell',
+  'fm-chime': 'FM Chime',
   'ring-mod': 'Ring Mod',
   'drive-lead': 'Drive Lead',
   'macro-pad': 'Macro Pad',
@@ -140,8 +140,8 @@ test('K014 filter-envelope-synth: the Envelope CONTROL output moves the filter c
     'one gate per note');
 });
 
-test('K014 fm-bell: an audio-rate LFO modulates the carrier frequency at a non-integer ratio', () => {
-  const m = templateModel('fm-bell');
+test('K014 fm-chime: an audio-rate LFO modulates the carrier frequency at a non-integer ratio', () => {
+  const m = templateModel('fm-chime');
   const mod = edgesFrom(m, 'lfo', 'control').filter((e) => typeOf(m, e.to.node) === 'oscillator'
     && e.to.port === 'frequency');
   assert.equal(mod.length, 1);

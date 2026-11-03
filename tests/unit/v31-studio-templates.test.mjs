@@ -63,11 +63,11 @@ const e = (id, from, fromPort, to, toPort, props) => ({ id, from: { node: from, 
 test('§195 the templates exist, in library order, with unique ids', () => {
   assert.deepStrictEqual(STUDIO_TEMPLATES.map((t) => t.id), ['basic-tone', 'subtractive-synth',
     'sweep-sequence', 'stereo-beat', 'filter-automation', 'measurement-sweep', 'first-patch',
-    'filter-envelope-synth', 'fm-bell', 'ring-mod', 'drive-lead', 'macro-pad', 'step-bass',
+    'filter-envelope-synth', 'fm-chime', 'ring-mod', 'drive-lead', 'macro-pad', 'step-bass',
     'demo-song']);
   assert.deepStrictEqual(listTemplates().map((t) => t.title), ['Basic Tone',
     'Subtractive Synth', 'Sweep Sequence', 'Stereo Beat', 'Filter Automation',
-    'Measurement Sweep', 'First Patch', 'Filter Envelope Synth', 'FM Bell', 'Ring Mod',
+    'Measurement Sweep', 'First Patch', 'Filter Envelope Synth', 'FM Chime', 'Ring Mod',
     'Drive Lead', 'Macro Pad', 'Step Bass', 'Demo song: Lantern in the Slag Yard']);
   assert.strictEqual(getTemplate('nope'), null);
   assert.throws(() => templateModel('nope'), RangeError);
@@ -133,7 +133,7 @@ const PINNED = {
   'measurement-sweep': '6b7754b60524614f71cb4d32b3dd77e0f3da793ffb6da976f36b42242e3c9a84',
   'first-patch': '847a4cfd83a66ea94bcdccff48fdcfbf2c72f2697aa7b0840bbb6d69d5cffa2c',
   'filter-envelope-synth': '00e35c1e1c620dbe754737bf81f27138a5c6d7dbfe166948652ecaef8b8b5779',
-  'fm-bell': '769f2b8653d020e4ce0376848a097aa0216ea1c30ec18e856563b88e7aeae237',
+  'fm-chime': '769f2b8653d020e4ce0376848a097aa0216ea1c30ec18e856563b88e7aeae237',
   'ring-mod': '8df8b92b54ca3aeec049565352b0125ab8f9d4f62fbb983e7805ee707831fede',
   'drive-lead': '24725ac1da7d547cd57e4a68e2c955dcf5893d6a10163b4eb33bfa6ebf298521',
   'macro-pad': '915a0e756f4a78226d903c349b6bc5e522812168f0a6d97cc8713702fcd4dbaf',
