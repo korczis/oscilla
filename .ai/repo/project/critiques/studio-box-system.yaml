@@ -130,8 +130,9 @@ findings:
     finding: "(oscilla-af's critique of K164-K166 at 3944784e, 2026-11-03, transcribed by their author dev-53, who wrote the resolution.) V619 on main declares face sections only; no copy of it names PORT_KINDS, CABLE_KINDS, a port label field or a parameter live rule, and the src tree has neither PORT_KINDS nor CABLE_KINDS, so K165 and K166 depend on a provider that promises none of what they render, and K166's negative case 'refused by the registry (V619)' has no owner."
     blocking: true
     resolution:
-      state: open
-      because: "Asked of oscilla-26 on 2026-11-03: amend V619's objective and acceptance criteria to declare PORT_KINDS (channels, rate, unconnected, cardinality default, monitor and compact eligibility, version), CABLE_KINDS (shape, dash, noun, configurable fields), the port's declared label and the parameter live rule (immediate | note | step | block | apply, derived per adapter), each with a refusal of the unknown, or name a new declaration issue that K165 and K166 then depend on. It stays open until that record lands; K164 does not depend on it."
+      state: planned
+      issue: "V619"
+      because: "Answered by oscilla-26 on 2026-11-03 in #400 (chore/plan-done-385, 2f85d6c3, 'chore(plan): V619 declares the patch bay contract'): V619 now declares PORT_KINDS, CABLE_KINDS, a declared label on every port and the parameter live rule derived from runtime.js and listed as defaulted, with named refusals in validateNodeDefinition and a mutation test that flips a derived live rule; K165 and K166 depend on V619. Earlier text of this resolution: asked of oscilla-26 on 2026-11-03: amend V619's objective and acceptance criteria to declare PORT_KINDS (channels, rate, unconnected, cardinality default, monitor and compact eligibility, version), CABLE_KINDS (shape, dash, noun, configurable fields), the port's declared label and the parameter live rule (immediate | note | step | block | apply, derived per adapter), each with a refusal of the unknown, or name a new declaration issue that K165 and K166 then depend on. It stays open until that record lands; K164 does not depend on it."
   - id: k166-label-must-be-true
     class: missed_requirement
     subject: "K166"
