@@ -31,11 +31,14 @@ const LABEL_H = 18;
  *  smallest text a phone shows (V634, criterion ui-current#phone-whole). */
 export const BAY_TEXT = 12;
 /** The widest jack label that fits its 52 px pitch at BAY_TEXT, counted with an output's " ▸":
+ *  a word a panel abbreviates is printed so (LABEL_ABBREV, as hardware prints VEL, MOD, CV);
  *  longer labels keep their head and end in an ellipsis; the jack's accessible name carries the
  *  whole label. */
 export const LABEL_MAX = 8;
+export const LABEL_ABBREV = Object.freeze({ Velocity: 'Vel', Modulator: 'Mod', Control: 'CV',
+  Frequency: 'Freq', Resonance: 'Res', Envelope: 'Env', Modulation: 'Mod' });
 export function shortLabel(label, direction = 'in') {
-  const s = String(label);
+  const s = String(label).replace(/[A-Z][a-z]+/g, (w) => LABEL_ABBREV[w] || w);
   const room = direction === 'out' ? LABEL_MAX - 2 : LABEL_MAX;
   const text = s.length > room ? `${s.slice(0, room - 1)}…` : s;
   return direction === 'out' ? `${text} ▸` : text;
@@ -120,9 +123,12 @@ export function patchSvg({ source, layout, cables = [], states = new Map(), pend
   const plateFill = '<defs><linearGradient id="bay-plate" x1="0" y1="0" x2="0" y2="1">'
     + `<stop offset="0" stop-color="${t.plateHi}"/><stop offset="1" stop-color="${t.plateLo}"/>`
     + '</linearGradient></defs>';
+  // A module's title stays on its plate: one too wide for a narrow plate (OUTPUT over one jack)
+  // is held to the plate's width (p2's W1b review, V4).
   const groups = layout.groups.map((g) => `<text x="${g.x + 2}" y="${g.y + 12}" `
     + `font-size="${BAY_TEXT}" font-weight="700" letter-spacing="1" stroke="none" `
-    + `fill="${t.label}">${esc(g.label)}`
+    + `fill="${t.label}"${String(g.label).length * 9.5 > g.w ? ` textLength="${g.w}" `
+      + 'lengthAdjust="spacingAndGlyphs"' : ''}>${esc(g.label)}`
     + '</text>').join('');
   const nuts = [...layout.jacks.values()].map(({ x, y }) => nutSvg({ x, y, tokens: t }))
     .join('');

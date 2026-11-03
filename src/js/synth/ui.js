@@ -38,6 +38,7 @@ import { ENGINE_BLOCKED } from './panels/engines.js';
 import { CHIP, droppedText, enginePickerHtml } from './view/engines.js';
 import { createXyTab } from './view/xy-tab.js';
 import { createStudioSink } from './studio-sink.js';
+import { BTN } from '../ui/synth/label.js';
 import { applyFace, faceChips, faceClass } from './view/faces.js';
 
 export const SYNTH_PANEL = SEMI_MONO;
@@ -226,9 +227,6 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
   const ITEM = 'flex items-center justify-between gap-2 py-1 text-xs text-gray-700 '
     + 'dark:text-gray-300';
-  const BTN = 'rounded-lg px-3 h-11 text-xs font-medium text-primary-700 border border-solid '
-    + 'border-primary-600 hover:bg-primary-50 focus:outline-none focus-visible:ring-2 '
-    + 'focus-visible:ring-primary-500 dark:text-primary-400 dark:hover:bg-gray-700';
 
   /**
    * The connection list of a pending jack (K063): the jacks that can take the cable, then the
