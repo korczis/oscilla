@@ -1942,7 +1942,8 @@
         :class="kbdDocked && 'sr-only sm:not-sr-only'"></p>
       <p data-osc="keyboard.held" x-text="'Holding: ' + (kbdHeld || 'nothing')"
         :class="kbdDocked && 'hidden sm:block'"></p>
-      <canvas data-osc="keyboard.keys" role="img" :aria-label="kbdLabel" height="132"></canvas>
+      <div x-show="kbdKeysShown"><canvas data-osc="keyboard.keys" role="img"
+        :aria-label="kbdLabel" height="132"></canvas></div>
     </div>
 
     <!-- Studio announcements (outside the views: the compact widget announces too). A modal
@@ -2504,7 +2505,7 @@
          editor, node library, Inspector and compact widget are rendered by their modules from
          the ONE Studio store; the timeline region belongs to src/js/ui/studio/timeline-editor.js
          (spec §131-§136). Below 768 px one of GRAPH / TIMELINE / INSPECTOR is shown at a time. -->
-    <section class="osc-view osc-view--studio box-border !pb-[var(--osc-dock-h,0px)]" id="osc-view-studio" data-osc="studio-view"
+    <section class="osc-view osc-view--studio box-border !pb-[max(0px,calc(var(--osc-dock-h,0px)_-_var(--osc-statusbar-h)))]" id="osc-view-studio" data-osc="studio-view"
       data-osc-modes="studio" hidden :hidden="workspace !== 'studio'" :data-subview="studio.subview"
       aria-labelledby="osc-studio-title" tabindex="-1">
       <h2 class="osc-sr-only" id="osc-studio-title">Studio</h2>

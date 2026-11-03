@@ -923,6 +923,38 @@ async function keyboardEverywhere(browser, b, origin, url) {
     check(leg, id, 'the same A plays the Studio graph (its Keys node, the transport armed), not '
       + 'the Playground voice, the keys docked as in the Synth',
     !st.timedOut && st.armed && st.notes === 0 && st.docked === 'fixed', JSON.stringify(st));
+    // Disarmed in the Studio, the dock is one row and the keys hide, so the graph keeps its
+    // height (the owner's 'a third of the height'; demo-song's node selection in Train 4).
+    const dock = () => page.evaluate(() => ({
+      h: Math.round(document.getElementById('osc-keyboard').getBoundingClientRect().height),
+      keys: document.querySelector('[data-osc="keyboard.keys"]').getBoundingClientRect().height,
+      armed: window.OSCILLA.app.kbdArmedHere }));
+    const armedDock = await until(async () => { const d = await dock(); return d.keys > 0 && d; },
+      { ms: STEP_MS, what: `${leg}: the armed Studio shows its keys` }).catch(dock);
+    await page.locator('[data-osc="keyboard.arm"]').click();
+    let off = null;
+    try {
+      off = await until(async () => { const d = await dock(); return !d.armed && !d.keys && d; },
+        { ms: STEP_MS, what: `${leg}: the Studio keys disarm and hide` });
+    } catch (e) { off = { ...await dock(), timedOut: String(e && e.message) }; }
+    // The Studio's content ends at the dock, not under it and not 55 px above it (the status
+    // bar counted once): the view's content box bottom (its bottom less its padding) is at most
+    // the dock's top and within 16 px of it (#osc-main's own padding), armed and disarmed.
+    const fit = () => page.evaluate(() => {
+      const v = document.getElementById('osc-view-studio');
+      const pad = parseFloat(getComputedStyle(v).paddingBottom);
+      return { content: Math.round(v.getBoundingClientRect().bottom - pad),
+        dock: Math.round(document.getElementById('osc-keyboard').getBoundingClientRect().top) };
+    });
+    const fits = (f) => f.content <= f.dock + 1 && f.dock - f.content <= 16;
+    const fitArmed = await fit();
+    check(leg, id, 'disarmed in the Studio the keys hide and the dock is one row; armed they show',
+      armedDock.keys > 0 && off.keys === 0 && off.h <= 120 && off.h < armedDock.h,
+      JSON.stringify({ armedDock, off }));
+    const fitOff = await fit();
+    check(leg, id, 'the Studio content ends at the docked keys, armed and disarmed (nothing under '
+      + 'the dock, the status bar counted once)', fits(fitArmed) && fits(fitOff),
+    JSON.stringify({ fitArmed, fitOff }));
     check(leg, id, 'no page error', errors.length === 0, JSON.stringify(errors));
   } finally {
     await context.close();
