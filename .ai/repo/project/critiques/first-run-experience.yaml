@@ -121,3 +121,40 @@ findings:
       state: planned
       issue: "Q089"
       because: "Q089 states it is not DONE until its evidence is on main, and the criterion's command reads the derived DONE status, which only evidence on main produces (2026-11-03)."
+  # af's critique of P013 (chore/plan-live-landing @21162ede, 2026-11-03)
+  - id: how-a-patch-plays-without-the-document
+    class: unproven_assumption
+    subject: "P013"
+    finding: "K149's audition plays a steps plan through engine.play on the instrument path; an XY preset is a panel patch (nodes and CONTROL edges), so 'the one compiler through K149's audition' named two different mechanisms, and only the Studio runtime runs a graph, on the store's model."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "P013"
+      because: "Option (a): the one Studio runtime gains a detached-patch mode that compiles a plain-data model passing the store's validate and normalize, never put in the store, under the runtime's claim with owner 'landing'; its nodes count in the live census and leave it on every release path; K149 contributes only its owner-mark and riff-id conventions (2026-11-03)."
+  - id: synth-path-guarded
+    class: missed_requirement
+    subject: "P013"
+    finding: "src/js/synth becomes guarded under project.review-verdict v2."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "P013"
+      because: "A non-builder's verdict is an acceptance criterion (2026-11-03)."
+  - id: hero-audio-discipline
+    class: missed_requirement
+    subject: "P013"
+    finding: "Click-free envelopes, 0.95 x Nyquist, the output ceiling, census back to idle, and the first tap in WebKit iPhone were not criteria."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "P013"
+      because: "All are acceptance criteria (2026-11-03)."
+  - id: p013-standard-criteria
+    class: missed_requirement
+    subject: "P013"
+    finding: "Size report, wording test, Pro button and tests/README rows were missing."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "P013"
+      because: "Added as one acceptance criterion (2026-11-03)."
