@@ -584,19 +584,29 @@ function defineChecks() {
     await act.click(page, '#osc-seq-play');
     await waitSnap(page, (x) => x.seq.playing, 'the sequencer plays');
     try {
-      return await defectUntil(() => page.evaluate(() => ({
-        playing: window.OSCILLA.viz.state.playing,
-        label: window.OSCILLA.viz.state.labels.requested,
-        plan: window.OSCILLA.viz.state.plan ? window.OSCILLA.viz.state.plan.type : null })),
-      (v) => v.playing === true, 'the scope and Spectrum report the sequencer as what sounds');
+      // C013 (#298): what sounds through the output analyser is reported as its owner, not
+      // through the instrument's own flag; the scope's aria label names the same owner (as
+      // app.cjs scope-follows-owner reads it).
+      const v = await until(() => page.evaluate(() => ({
+        owner: window.OSCILLA.viz.state.outputOwner,
+        instrumentPlaying: window.OSCILLA.viz.state.playing,
+        seqPlaying: window.OSCILLA.labs.sequencer.editor.playing,
+        aria: document.getElementById('osc-chart-waveform').getAttribute('aria-label') }))
+        .then((r) => (r.owner === 'sequencer'
+          && /^Live output analyser waveform \(sequencer\)/.test(r.aria || '') ? r : null)),
+      { ms: STEP_MS, what: 'journey-3: the output owner and the scope aria label name the '
+        + 'sequencer while it plays' });
+      must(v.seqPlaying && !v.instrumentPlaying, 'the sequencer plays, not the instrument', v);
+      return { owner: v.owner, aria: v.aria };
     } finally { await act.click(page, '#osc-seq-stop'); }
-  }, { xfail: { finding: 'vis-divergence-1', issue: 'C013', pr: 298 } });
+  });
 
   def('journey-3-views:studio-master', async ({ page }) => {
     await op.navTo(page, 'studio');
     const m = await page.evaluate(() => window.OSCILLA.studio.model.graph.nodes
       .find((n) => n.type === 'master'));
     must(m, 'the document has a Master Output node');
+    const playground = await page.evaluate(() => window.OSCILLA.app.gainLevel);
     await page.click('[data-osc="studio.loop"]');
     await page.click('[data-osc="studio.play"]');
     await waitSnap(page, (x) => x.studio.playing, 'the Studio plays');
@@ -605,12 +615,27 @@ function defineChecks() {
     await waitSnap(page, (x) => near(x.engine.gain, 0.03, 1e-4),
       'the Master Output level reaches the engine output');
     try {
-      return await defectUntil(() => page.evaluate(() => ({
-        engine: window.OSCILLA.engine.gainLevel, shown: window.OSCILLA.app.gainLevel })),
-      (v) => near(v.engine, v.shown, 1e-6), 'the Playground gain shows the level the Studio '
-        + 'plays at');
+      // C012 (#290): the Studio's master level is mirrored in cmp.studio.masterLevel and shown
+      // as "Master <dB>" (workbench statusGainText: gainLevelDb, one decimal); it is never
+      // written into the Playground gain.
+      const v = await until(() => page.evaluate(() => {
+        const engine = window.OSCILLA.engine.gainLevel;
+        const db = engine > 0 ? 20 * Math.log10(engine) : -Infinity;
+        const el = document.querySelector('[data-osc="status.gain"]');
+        return { engine, mirrored: window.OSCILLA.app.studio.masterLevel,
+          shown: el ? el.textContent.trim() : null,
+          expect: `Master ${Number.isFinite(db) ? `${db.toFixed(1)} dB` : '-∞ dB'}`,
+          gainLevel: window.OSCILLA.app.gainLevel };
+      }).then((r) => (r.shown === r.expect ? r : null)),
+      { ms: STEP_MS, what: 'journey-3: the status bar shows the Studio master level as Master '
+        + '<dB>' });
+      must(near(v.mirrored, v.engine, 1e-4), 'app.studio.masterLevel mirrors the engine master '
+        + 'level', v);
+      must(near(v.gainLevel, playground, 1e-9), 'the Playground gain keeps its own value', {
+        ...v, playground });
+      return { shown: v.shown, engine: v.engine, mirrored: v.mirrored, playground };
     } finally { await page.click('[data-osc="studio.stop"]'); }
-  }, { xfail: { finding: 'dup-stale-4', issue: 'C012', pr: 290 } });
+  });
 
   // ============================================================== 4. stop and restart
   def('journey-4-restart:instrument', async ({ page }) => {
