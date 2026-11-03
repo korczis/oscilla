@@ -39,6 +39,8 @@ const WAVE = Object.freeze({ key: 'waveform', label: 'Waveform', type: 'enum', d
 const SAMPLES = [BOOL, TWO, ENUM(3), WAVE, ENUM(5), ENUM(7, true), ENUM(8), ENUM(9), ENUM(10, true),
   ENUM(12)];
 const ZOOMS = [1, 2, 3];
+/** The Studio graph's lowest zooms (ZOOM_MIN 0.25 in studio/graph-geometry.js, and below). */
+const LOW_ZOOMS = [0.25, 0.15];
 
 const attrOf = (el, a) => (new RegExp(`\\s${a}="([^"]*)"`).exec(el) || [])[1];
 const n = (el, a) => Number(attrOf(el, a) || 0);
@@ -51,6 +53,13 @@ const overlap = (a, b) => a.x < b.x + b.width - 1e-9 && b.x < a.x + a.width - 1e
   && a.y < b.y + b.height - 1e-9 && b.y < a.y + a.height - 1e-9;
 const inside = (r, box, eps = 1e-6) => r.x >= box.x - eps && r.y >= box.y - eps
   && r.x + r.width <= box.x + box.width + eps && r.y + r.height <= box.y + box.height + eps;
+
+/** A legend's text box, from its anchor point and its estimated width. */
+const legendBox = (lg) => ({ x: lg.anchor === 'start' ? lg.x : lg.anchor === 'end'
+  ? lg.x - lg.width : lg.x - lg.width / 2, y: lg.y - lg.size / 2, width: lg.width,
+height: lg.size });
+/** The name of the --osc-* token a var() paint refers to. */
+const tokenName = (paint) => /^var\((--osc-[\w-]+)\)$/.exec(paint)[1];
 
 /** Every shape's drawn extent, strokes included: [x0, y0, x1, y1] (text: its anchor point). */
 function extents(svg) {
@@ -251,9 +260,16 @@ test('legends are 12 px on screen at every zoom, in the label token, the selecte
     for (const zoom of [0.5, ...ZOOMS]) {
       const svg = draw(p, { zoom });
       const texts = parts(svg, 'data-legend');
-      assert.equal(texts.length, switchLayout(p).options.length, `${p.key}: one legend each`);
+      const L = switchLayout(p, { zoom });
+      assert.equal(texts.length, L.options.length, `${p.key}: one legend each`);
       for (const t of texts) {
         assert.ok(n(t, 'font-size') * zoom >= LEGEND_PX - 1e-9, `${p.key} at ${zoom}`);
+        // The drawn legend is the laid-out one: its size, and so the box its hit box holds.
+        const lg = L.options[Number(attrOf(t, 'data-index'))].legend;
+        assert.equal(n(t, 'font-size'), lg.size, `${p.key} at ${zoom}: the layout's size`);
+        assert.equal(lg.size, L.legendPx, `${p.key} at ${zoom}: layout.legendPx`);
+        assert.deepEqual([n(t, 'x'), n(t, 'y'), attrOf(t, 'text-anchor')],
+          [lg.x + 0, lg.y + 0, lg.anchor], `${p.key} at ${zoom}: the layout's place`);
         assert.equal(attrOf(t, 'stroke'), 'none', 'a legend sets its own stroke');
         assert.ok([TOKENS.text.label, TOKENS.text.value].includes(attrOf(t, 'fill')));
       }
@@ -276,7 +292,7 @@ test('every registry enum and boolean: 44 px hit boxes that never overlap, insid
   const styles = new Set();
   for (const { where, p } of REGISTRY_CHOICES) {
     styles.add(switchStyle(p));
-    for (const zoom of [...ZOOMS, 1.45]) {
+    for (const zoom of [...ZOOMS, 1.45, ...LOW_ZOOMS]) {
       const L = switchLayout(p, { zoom });
       const hits = switchOptions(p, { zoom }).map((o) => o.hit);
       assert.equal(hits.length, p.type === 'boolean' ? 2 : p.options.length, where);
@@ -308,6 +324,47 @@ test('every registry enum and boolean: 44 px hit boxes that never overlap, insid
   }
   assert.deepEqual([...styles].sort(), ['rotary', 'slide', 'toggle', 'window'],
     'the registry needs every style');
+});
+
+test('F1: every registry enum and boolean lays out at the Studio graph\'s zooms, 0.15 to 3', () => {
+  for (const { where, p } of REGISTRY_CHOICES) {
+    for (const zoom of [0.15, 0.2, 0.25, 0.3, 0.35, 0.5, 0.75, 1, 1.45, 2, 3]) {
+      const L = switchLayout(p, { zoom });
+      const svg = switchSvg({ value: p.default, param: p, tokens: TOKENS, zoom,
+        state: { focus: true, hover: true } });
+      const b = L.box;
+      if (L.style === 'window' && zoom < 1) {
+        const cols = (layout) => new Set(layout.options.map((o) => o.legend.x)).size;
+        assert.equal(cols(L), cols(switchLayout(p)), `${where} at ${zoom}: the zoom 1 grid`);
+      }
+      for (const [x0, y0, x1, y1] of extents(svg)) {
+        assert.ok(x0 >= b.x - 1e-6 && y0 >= b.y - 1e-6 && x1 <= b.x + b.width + 1e-6
+          && y1 <= b.y + b.height + 1e-6, `${where} at ${zoom}: [${x0}, ${y0}, ${x1}, ${y1}] `
+          + `outside ${JSON.stringify(b)}`);
+      }
+      for (const o of L.options) {
+        assert.ok(inside(legendBox(o.legend), o.hit), `${where} at ${zoom}: ${o.value}'s legend`);
+        for (const q of L.options) {
+          if (q !== o) {
+            assert.ok(!overlap(legendBox(o.legend), q.hit),
+              `${where} at ${zoom}: ${o.value}'s legend in ${q.value}'s box`);
+          }
+        }
+      }
+    }
+  }
+});
+
+test('F1: only a rotary that cannot be laid out is refused, and the refusal names the zoom', () => {
+  const wide = Object.freeze({ key: 'wide', type: 'enum', default: 'o0',
+    options: Array.from({ length: 8 }, (_, i) => [`o${i}`, `${'W'.repeat(60)}${i}`]) });
+  for (const zoom of [1, 0.25, 0.15]) {
+    assert.throws(() => switchLayout(wide, { zoom }),
+      new RegExp(`^Error: wide: at zoom ${zoom}, .*rotary selector`), String(zoom));
+  }
+  for (const zoom of [0.15, 0.25, 1]) {
+    assert.equal(switchLayout(ENUM(8, true), { zoom }).style, 'rotary', 'a long one still fits');
+  }
 });
 
 test('switchOptions is switchLayout\'s options: frozen, one per option, value and label', () => {
@@ -351,6 +408,61 @@ test('edges, lever, ticks and LED hold 3:1 on surface-2 and surface-3, legends 4
   assert.equal(attrOf(part(svg, 'data-led'), 'stroke'), TOKENS.control.edge);
   for (const d of parts(draw(WAVE), 'data-detent')) {
     assert.ok([TOKENS.control.track, TOKENS.control.ring].includes(attrOf(d, 'stroke')));
+  }
+});
+
+test('the window frame and the toggle\'s bushing are control.edge, 3:1 on what they sit on',
+  async () => {
+    const themes = await tokenThemes();
+    const ratio = (t, a, b) => contrastOf(tokenHex(t, tokenName(a)), tokenHex(t, tokenName(b)));
+    for (const p of [BOOL, TWO]) {
+      const svg = draw(p);
+      const bushing = part(svg, 'data-bushing');
+      assert.equal(attrOf(bushing, 'stroke'), TOKENS.control.edge, `${p.key}: the bushing edge`);
+      const housing = attrOf(part(svg, 'data-housing'), 'fill');
+      for (const [theme, t] of Object.entries(themes)) {
+        const r = ratio(t, attrOf(bushing, 'stroke'), housing);
+        assert.ok(r >= 3, `${theme} ${p.key}: the bushing edge on its housing ${r.toFixed(2)}`);
+      }
+    }
+    for (const p of [ENUM(9), ENUM(10, true), ENUM(12)]) {
+      for (const state of [{}, { hover: true }, { disabled: true }]) {
+        const frame = part(draw(p, { state }), 'data-window');
+        assert.equal(attrOf(frame, 'stroke'), TOKENS.control.edge, `${p.key}: the window edge`);
+        for (const [theme, t] of Object.entries(themes)) {
+          for (const ground of [TOKENS.surface.card, TOKENS.surface.plateHi]) {
+            const r = ratio(t, attrOf(frame, 'stroke'), ground);
+            assert.ok(r >= 3, `${theme} ${p.key}: the window edge on ${ground} ${r.toFixed(2)}`);
+          }
+        }
+      }
+    }
+  });
+
+test('a rotary\'s leader lines run from the dial and end before every legend\'s text', () => {
+  const rotaries = [ENUM(5), ENUM(7, true), ENUM(8), ...REGISTRY_CHOICES
+    .filter(({ p }) => switchStyle(p) === 'rotary').map(({ p }) => p)];
+  for (const p of rotaries) {
+    for (const zoom of [...ZOOMS, ...LOW_ZOOMS]) {
+      const L = switchLayout(p, { zoom });
+      const leaders = parts(draw(p, { zoom }), 'data-leader');
+      assert.equal(leaders.length, L.options.length, `${p.key}: a leader per position`);
+      for (const [i, el] of leaders.entries()) {
+        const [x1, y1, x2, y2] = ['x1', 'y1', 'x2', 'y2'].map((a) => n(el, a));
+        const half = n(el, 'stroke-width') / 2;
+        assert.ok(Math.hypot(x1, y1) < Math.hypot(x2, y2), `${p.key}: leader ${i} runs outward`);
+        for (let k = 0; k <= 64; k++) {
+          const x = x1 + ((x2 - x1) * k) / 64;
+          const y = y1 + ((y2 - y1) * k) / 64;
+          for (const o of L.options) {
+            const t = legendBox(o.legend);
+            assert.ok(!(x + half > t.x && x - half < t.x + t.width && y + half > t.y
+              && y - half < t.y + t.height), `${p.key} at ${zoom}: leader ${i} enters `
+              + `${o.value}'s legend at (${x.toFixed(2)}, ${y.toFixed(2)})`);
+          }
+        }
+      }
+    }
   }
 });
 

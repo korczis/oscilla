@@ -9,7 +9,8 @@
 //   5-8    rotary   a detented rotary selector: the knob face (skirt, cap with its shadow and
 //                   highlight, pointer) with a detent per position over 270°, the selected one
 //                   lit, and the legends around it at r >= 60, the radius the least that keeps
-//                   every 44 px hit box apart
+//                   every 44 px hit box apart (searched to 240, scaled by the hit box below
+//                   zoom 1; only legends too long for that are refused, naming the zoom)
 //   9-12   window   the same dial with a display-window frame above it for the selected name
 //                   (the frame only: its text is the caller's, at layout.window) and a legend
 //                   grid of 44 px cells below it
@@ -181,8 +182,15 @@ function ringAt(opts, R, H, F) {
   });
 }
 
-function rotaryLayout(opts, H, F, id) {
-  for (let R = DIAL.radius; R <= DIAL.radiusMax; R += DIAL.radiusStep) {
+/**
+ * The least radius from DIAL.radius at which the ring's hit boxes lie apart and clear of the
+ * dial. The search stops at DIAL.radiusMax scaled by the hit box (H / HIT_PX, at least 1): below
+ * zoom 1 the boxes and legends grow by 1 / zoom while the dial does not, so a ring that fits at
+ * zoom 1 fits at any lower zoom within that limit. Only legends too long for it are refused.
+ */
+function rotaryLayout(opts, H, F, id, zoom) {
+  const limit = num(DIAL.radiusMax * Math.max(1, H / HIT_PX));
+  for (let R = DIAL.radius; R <= limit; R += DIAL.radiusStep) {
     const options = ringAt(opts, R, H, F);
     const apart = options.every((a, i) => options.slice(i + 1).every((b) => !overlaps(a.hit,
       b.hit)));
@@ -190,7 +198,8 @@ function rotaryLayout(opts, H, F, id) {
       return { options, radius: R, mech: DIAL_MECH };
     }
   }
-  throw new Error(`${id}: the legends do not fit round a rotary selector; shorten them.`);
+  throw new Error(`${id}: at zoom ${zoom}, the legends do not fit round a rotary selector within `
+    + `radius ${limit} (${num(H)} unit hit boxes); shorten them.`);
 }
 
 function windowLayout(opts, H, F) {
@@ -198,8 +207,10 @@ function windowLayout(opts, H, F) {
   const widest = Math.max(...opts.map((o) => legendWidth(o[1], F)));
   const cellW = up(Math.max(H, widest + 2 * PAD));
   const cellH = up(Math.max(H, F + 2 * PAD));
-  const cols = Math.min(n, Math.max(1, Math.floor(WINDOW.gridMaxW / Math.max(HIT_PX,
-    widest + 2 * PAD))));
+  // The grid's width limit grows with the boxes below zoom 1, so it keeps its zoom 1 columns.
+  const s = Math.max(1, H / HIT_PX);
+  const cols = Math.min(n, Math.max(1, Math.floor((WINDOW.gridMaxW * s) / Math.max(HIT_PX * s,
+    widest + 2 * PAD) + 1e-9)));
   const top = DIAL.tickOut + WINDOW.gridGap;
   const options = opts.map((o, i) => {
     const row = Math.floor(i / cols);
@@ -243,7 +254,7 @@ export function switchLayout(param, { zoom = 1, led = false } = {}) {
   }
   const H = up(HIT_PX / zoom);
   const F = up(Math.max(LEGEND_PX, LEGEND_PX / zoom));
-  const L = LAYOUTS[style](opts, H, F, idOf(param));
+  const L = LAYOUTS[style](opts, H, F, idOf(param), zoom);
   let ledAt = null;
   const b = [...L.mech];
   if (led) {
