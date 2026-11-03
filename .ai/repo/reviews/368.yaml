@@ -1,3 +1,52 @@
+# Delta review at head b471b4d2 (oscilla-b0 independent reviewer subagent; it built, merged and
+# edited none of this change and wrote only this file). The verdict below this block, at head
+# 64e36573, was oscilla-21's; its findings V1 and V2 are kept as they were.
+#
+# The delta: ecb5bb6f, the merge of main c73d27b4 ("filter aliases and registry.js keep both
+# sides"), and b471b4d2, "fix(studio): rank a name's letters from its first letter above
+# letters mid-name". main has since moved to 117c755c (the v3.17.0 release: about, roadmap,
+# index.html, dist), which did not touch the guarded paths after c73d27b4.
+#
+# The digest: scripts/review-verdict.mjs (identical on the head and on origin/main) with
+# `--content --list --head HEAD --base-branch origin/main`: e315e637...67bd7 over
+# src/js/studio/nodes/modulation.js, src/js/studio/nodes/processing.js and
+# src/js/studio/registry.js.
+#
+# (1) #368's guarded change survived the merge. git diff b9dc5e67 64e36573 and git diff
+# origin/main HEAD over the guarded paths differ in exactly two places. The Filter alias list:
+# main added 'shelf', 'low-shelf', 'high-shelf', 'all-pass', 'allpass', 'phase' and the merge
+# kept them beside #368's 'lp', 'hp', 'bp' (a resolution choice keeping both sides). The
+# letters-in-order tier: split in two by b471b4d2 (below). The Envelope alias 'vca envelope',
+# rankSearch, norm, the registry.search projection and the searchNodeTypes comment are as
+# reviewed at 64e36573.
+# (2) The resolutions in ecb5bb6f (git show --cc): processing.js is the alias union above;
+# registry.js keeps main's playsNotes (K066) and #368's searchNodeTypes comment; main's
+# instrument and engines imports, NODE_DEFINITIONS spread and laneRange check merged cleanly;
+# modulation.js merged without conflict and differs from main only by 'vca envelope'. On the
+# head 36 node types, 36 unique, none of main's 36 missing, and no node has a repeated alias.
+# (3) b471b4d2 is correct: after main's five engines ("Additive engine" and the rest) landed,
+# 'gn' tied Gain with the engines at the letters-in-order tier and category order put the
+# engines first. The tier is now two scores, letters from the name's first letter (5) before
+# letters anywhere (6), a part of an alias moves to 7, TIER has 8 entries and all three stay
+# public tier 4, so the documented 0-4 contract holds. The greedy inOrder with
+# n.startsWith(t[0]) is a subsequence anchored at the first letter. Fail-first holds: with
+# ecb5bb6f's registry.js the new test fails ("gn" lists additive-voice, fm-voice, am-voice,
+# wavetable-voice, perc-voice, gain, noise). The merge itself left the old test red twice
+# ('gn', and 'vco' now naming main's VCO type, K059); the vco expectation change is honest
+# (exact name VCO before the Oscillator alias, which is still asserted). A 46-query probe of
+# searchNodeTypes on ecb5bb6f and the head differs only in 'gn'; against origin/main's src the
+# differences are #368's intended ones (lp, bp, flt, fltr, filtr, mixr find; vca ranks Gain
+# first) plus lowest-tier additions (R1).
+# (4) Unit: the studio, v31, synth, engine, k010-k013, v40 and keys-registry tests 811 pass,
+# 0 fail. Full `npm test` (GITHUB_BASE_REF=main, private TMPDIR): 4126 tests, 4124 pass,
+# 1 skipped, 1 fail, about.test.mjs "release line 3.17 (v3.17.0) has a station" (R2, not in
+# this change). build:check and verify-dist pass on the head.
+# (5) Rules: studio-model-is-canonical, the search is a pure read of the registry and dispatches
+# nothing; typed-ports, no port, type or role changed; no-inert-surfaces, no new copy beyond
+# alias strings, none placeholder. Browser suites were not run by this reviewer.
+#
+# Verdict: merge. No P0, P1 or P2; two new P3s.
+#
 # Review verdict for pull request #368, V610: one ranking of every Studio search (rankSearch in
 # registry.js), fuzzy letters-in-order matching, and honest short aliases (Filter lp/hp/bp,
 # Envelope "vca envelope" so a bare "vca" ranks Gain first) (branch feat/v610-studio-fuzzy-search).
@@ -32,8 +81,10 @@
 schema: review-verdict/v1
 pr: 368
 verdict: merge
-reviewer: oscilla-21 reviewer (claude-code af63bcf2)
-content: ce3c02a00d277887ee08fabfafc01e727334ac8004d218817a20dc3ff83d7041
+reviewer: "oscilla-b0 independent reviewer subagent (delta at b471b4d2); did not build, merge or edit this change; wrote only this file. Original verdict at 64e36573: oscilla-21 reviewer (claude-code af63bcf2)"
+content: e315e637bbf5e210983b0ae392240036fdc3e680545a82c005bc3a50cd667bd7
 findings:
   - { id: V1, severity: P3, status: open, title: "registry.js inOrder: two- and three-letter queries pick up subsequence noise at the lowest tier: 'lp' also lists Envelope (e-n-v-e-l-o-p-e) and 'out' lists Step Modulator (mod-u-la-t-or); consider requiring the first letter to start a word, or a minimum query length of 4 for the letters-in-order tier" }
   - { id: V2, severity: P3, status: open, title: "registry.js norm no longer keeps '/', '(' and ')' (the old fold kept them), so a query like 'recorder/export' is two terms; it still finds Recorder/Export, so this is a note for the rule's comment, not a defect" }
+  - { id: R1, severity: P3, status: open, title: "registry.js: with main's engines and Percussion engine in the library, the letters-anywhere tier (score 6, public tier 4) reaches four-letter words too: 'sine' lists Percussion engine, 'step' lists Master Output, 'gn' lists all five engines, and 'out' now lists Step Modulator above Stereo Split (an alias part, 'stereo router'), which main listed second; every right answer still ranks first, so this extends V1 rather than displacing one" }
+  - { id: R2, severity: P3, status: open, title: "the branch is behind main 117c755c (v3.17.0): on the head, about.test.mjs fails because the tag v3.17.0 exists and the 3.17 station (9a4c17f5) is not in the branch; merging main conflicts only in dist/index.html (rebuild), and main did not change the guarded paths after c73d27b4, so the digest is unchanged by that merge" }
