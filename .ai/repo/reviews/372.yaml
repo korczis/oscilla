@@ -1,0 +1,84 @@
+# Review verdict for pull request #372, K097: the owner's XY performance pad (the xy-pad Studio
+# node type, its adapter, its live events, the XY tab of the Synth as a panel module, the XY pad
+# kind, and XY presets as ordinary patches) (branch feat/k097-xy-performance-pad, base the
+# feature train feat/train-2026-10-31-features). Reviewed head 61c0863b, merge base 3a840b66.
+# The train has since moved to 3747e7d2; it changed none of the five guarded files, and the head
+# merges with it with one conflict, the rebuilt dist/index.html. Another session built it; this
+# reviewer built none of #372, #329, #332 or the train #367.
+#
+# The digest: the base program (`git archive origin/main scripts`) with --repo on this worktree,
+# `--content --list --base-branch origin/feat/train-2026-10-31-features`: 0ee7f642...d785 over
+# src/js/studio/adapters/instrument.js, adapters/nodes.js, live-notes.js, nodes/instrument.js and
+# patches.js. That is the digest the PR body states.
+#
+# How it was reviewed: read the guarded diff against the merge base. Also read the composing
+# code the guarded files serve: synth/xy.js, synth/view/xy-tab.js, ui/kinds/xy-pad.js,
+# synth/panels/xy.js, the synth/ui.js wiring, core/music.js, drag-math.js and
+# tests/browser/xy-pad.cjs, against the rules studio-model-is-canonical, typed-ports,
+# audio-engine-discipline, no-inert-surfaces, no-fake-science, bounded-test-timing and
+# suite-harness.
+# Independent Node probes:
+#   (1) For each of the four XY recipes, three patches compare equal on node params, edge
+#       endpoints and props, scale and category: xyPresetPatch, the same linkAction reduced by
+#       the real store and read back by xyPatchOf, and the preset loaded through xyPatchAction
+#       and read back. All four agree.
+#   (2) live-notes edge cases. An 'off' after the pad's handle is gone still releases both
+#       envelopes. A second 'on' while held opens no second gate. allOff empties held(). An old
+#       document without the xy module reports no broken normals. A degraded or missing pad
+#       handle refuses under the Keys sentence (V2).
+# Unit: 757 tests in the studio, synth, v31, v4, xy, live, patch, music, drag, url-state,
+# no-inert, no-fake-science, browser-suite-contract and timing files: all pass. npm test on the
+# head: 3944 tests, 3933 pass, 9 fail, 2 skipped. The 9 are the base's own:
+#   - control-drive 320, 321 and 327, the surface census 1383 and 1385, and the visual bound
+#     2799 fail on 3a840b66 with the same messages;
+#   - the Flowbite record 1525, 1526 and 1529 is osc-sc-clip and osc-sc-node in
+#     ui/studio/compact.js, from train commit fe49e14b (an ancestor of the merge base, a file
+#     this PR does not touch).
+# The diff adds no osc-* token and no inline style. build:check: dist is the build of the
+# sources.
+# CI at the head: fail-first passes (xy-pad.test.mjs fails on the merge base, module-not-found).
+# review-verdict failed for want of this file. The other failing jobs fail on the train's own
+# checks:
+#   - synth s-relink (fixed on the train by 3747e7d2);
+#   - the keyboard dock's 22 px touch targets (fixed by 1696059b);
+#   - seq-filter-reaches-sequence (a13e11aa);
+#   - controls-labelled studio.task.abort;
+#   - the visual gate.
+# None names the XY tab. Because the && chain stops at the first failure, xy-pad.cjs ran in CI
+# only in Firefox: desktop x-link, x-pointer and x-keys 3/3, with the LPF opened 10.9 dB by Y.
+# Browser suites were not run here: the shared machine's 1-minute load was 22-25, above 12.
+#
+# What holds:
+#   - One registry and one adapter table. xy-pad adds a type and changes no existing
+#     definition, so pinned studioHash values stay as they are.
+#   - Ports are declared and typed: X, Y and Pitch are CONTROL, Gate is TRIGGER. Every cable is
+#     a patchCable/canConnect step of a store BATCH, and each edit is one undo entry.
+#   - The pad's position is performance state (the kind's model and xy-tab's `pos`), never the
+#     model. The runtime offsets move only through transport.live, as the Keys path does.
+#   - The adapter makes its three ConstantSources through acct.track/acct.source and stops
+#     them. The census is 0 after stop at 44.1 and 48 kHz. X and Y glide with tau 15 ms. The
+#     pitch is clipped to KEYS_PITCH_RANGE: the widest setting, B5 with a span of 4, is +5.17
+#     oct. The VCO's existing pitch clip holds 0.95 x Nyquist.
+#   - The gate fans out through the same gateTargets as Keys. The arm's closed envelopes and
+#     the armed model include the pad. allOff and Escape release it.
+#   - The patch envelope's new category and scale are optional, strictly validated (pattern,
+#     SCALE_MODES, NOTE_NAMES, no extra keys) and round-trip. A registry without the type
+#     refuses the document by name.
+#   - Input: the surface is reachable by pointer, keyboard (Tab, arrows, Shift, PageUp/PageDown,
+#     Home/End, Enter held, Escape) and touch (touch-action none on the pad only). Each axis is
+#     a role=slider with aria-valuetext. The disabled state says why.
+#   - The labels claim nothing beyond requested pitch and equal temperament. The browser suite
+#     waits through until() and bounded() with named deadlines, and assumes no sample rate.
+#
+# Verdict: merge. No P0 or P1. One P2 on the browser suite's skip accounting, and four P3s.
+schema: review-verdict/v1
+pr: 372
+verdict: merge
+reviewer: "oscilla-21 reviewer (claude-code af63bcf2)"
+content: 0ee7f642bd4c04db04fd01a8d9e57056c3e5795fd95a7633604a98d95b15d785
+findings:
+  - { id: V1, severity: P2, status: open, title: "tests/browser/xy-pad.cjs:256-257 and 340-341 a skip is counted as a check, against project.suite-harness ('a skip never counts as a check'): on firefox and webkit the phone leg's only check, x-touch, calls RUN.skip and returns { ok: true, skipped: true }; runLeg keeps it in results, so reportLeg({ checks: names.length }) reports 1 and the leg prints PASS .../phone/xy-pad: 1/1 (CI run 41259978364, V3.1 Studio UI (firefox)), where the leg should report 0 checks and be refused; also, RUN.skip names the leg '<browser>/phone' while reportLeg names '<browser>/<origin>/phone'. Fix: do not run the phone size outside chromium, or leave skipped entries out of the count" }
+  - { id: V2, severity: P3, status: open, title: "live-notes.js:154-166 a pad whose handle has no move (degraded: no ConstantSourceNode, adapters/instrument.js:197 inertHandle) or no handle falls through to the Keys path and refuses with 'The Keys node is not running.'; probe: createLiveNotes with handleOf(pad) = an inertHandle-shaped object, event(pad, { kind: 'on', x: 0.5, y: 0.5 }) -> { ok: false, reason: 'The Keys node is not running.' }; nothing is held and no gate opens (safe), but the sentence names the wrong node and xy-tab.js live() shows no reason; route an xy-pad id to padEvent by node type and name the pad" }
+  - { id: V3, severity: P3, status: open, title: "synth/ui.js:421-427 with view/xy-tab.js:71-72 and ui/kinds/xy-pad.js:220-221 (by reading, not reproduced in a browser): every store change outside a knob or cable drag runs renderAll, which remounts the pad; destroy() ends a held gesture with 'hide', so a note held with one finger is released when a second finger changes the XY PAD plate's Scale, Key, Span or Glide or the Y-drives target, and the first finger's further moves are ignored until it is lifted and touches again. It fails safe (release, never a stuck gate), but a performance pad would keep the gesture across a re-render or at least say why it stopped" }
+  - { id: V4, severity: P3, status: open, title: "view/xy-tab.js:99 the readout and aria-valuetext name the pad's pitch step, not the sounding note: the XY bass preset (VCO 1 at 16', pad octave 2, D Dorian) reads 'D2 · degree 1 of D Dorian' while VCO 1 sounds 220 x 2^((38 - 69) / 12) = 36.7 Hz, D1; XY bell (VCO 1 at 4') sounds an octave above its readout. This is the keyboard's footage convention and not a false claim, but the readout could say 'pitch D2' or name the footage so it does not read as the sounding frequency" }
+  - { id: V5, severity: P3, status: open, title: "ui/kinds/xy-pad.js:165 aria-pressed is set on the role=application surface; WAI-ARIA defines aria-pressed for buttons only, so assistive technology ignores the gate state there; announce the gate through the description or a live region (the readout p could be aria-live=polite). Note, not a defect: synth/xy.js:85 afterSteps hand-reduces four BATCH step types outside the store to build a preset's patch; it never commits, and probe (1) shows it equals the store's reduction for all four recipes, but no test pins that equality" }

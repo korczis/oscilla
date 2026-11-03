@@ -3,7 +3,7 @@
 //
 //   NODE_PATH=<checkout>/tests/node_modules node tests/browser/sequencer.cjs
 //   node tests/browser/sequencer.cjs --browser firefox     # chromium | firefox | webkit (default: all)
-//   node tests/browser/sequencer.cjs --dist <path/to/index.html>   # the app of check (e)
+//   node tests/browser/sequencer.cjs --dist <path/to/index.html>   # the app of (e), (f), C005, C006
 //   (stop and teardown checks poll against a deadline; no fixed sleep precedes an assertion)
 //
 // The fixture (tests/browser/fixtures/sequencer-fixture.js) is bundled in memory with esbuild
@@ -27,6 +27,18 @@
 //       a cutoff edit during playback applies to the next reading; the engine counts the
 //       sequencer's nodes while it sounds and holds 0 after Stop and after Escape; the exported
 //       WAV of the sequence (OfflineAudioContext) is attenuated by more than 20 dB as well.
+//   seq-add-menu-pointer (C005, finding control-census-6): in the built app (dist/index.html
+//       from file://), at 1536x1024, 1920x1080 and 1280x800 and with the safety notice shown
+//       and dismissed, the point under the centre of every Add block menu item is that item and
+//       a real mouse click there adds a block of that type (the upward grid menu was clipped
+//       by the scrolling .osc-main, so Tone and Silence could not be clicked).
+//   seq-playhead-after-edit (C006) on the built dist/index.html (file://): Duration 3000 ms
+//       typed into the first block while pass 1 plays; while the Pulse 1.2 kHz sounds the
+//       playhead is over the Pulse block, which is marked, the pass was not restarted, the
+//       message says the changes apply from the next pass and the status bar shows both lengths.
+//   (g) seq-loop-cap (C011): without "Allow continuous playback" a looped sequence keeps to the
+//       30 s cap (ADR 0005): a 36 s first pass is cut at it on its nodes' own stop times; a 12 s
+//       loop's end is the editor's forecast; the cap is on the Loop control.
 // Exit code 0 only when every check passes in every browser.
 'use strict';
 
@@ -35,6 +47,7 @@ const { pathToFileURL } = require('url');
 const esbuild = require('esbuild');
 const suite = require('./lib/suite.cjs');
 const { until, WaitTimeout } = require('./lib/wait.cjs');
+const { openWorkspace } = require('./lib/navigate.cjs');
 
 const args = process.argv.slice(2);
 const only = args.includes('--browser') ? args[args.indexOf('--browser') + 1] : null;
@@ -44,6 +57,8 @@ const ENGINES = RUN.browsers;
 const FIXTURE = path.join(__dirname, 'fixtures', 'sequencer-fixture.js');
 const DIST = path.resolve(args.includes('--dist') ? args[args.indexOf('--dist') + 1]
   : path.join(__dirname, '..', '..', 'dist', 'index.html'));
+// The visual reference size and two common desktop sizes (C005).
+const ADD_MENU_VIEWPORTS = [[1536, 1024], [1920, 1080], [1280, 800]];
 // timing-allow: the OfflineAudioContext render rate of the reference renders
 const SR = 48000;
 // The spec's shortest allowed edge ramp (2-5 ms). Bounds use this fixed value, never the
@@ -577,6 +592,9 @@ async function runApp(engine, browser) {
         `${C}: the cutoff field sets ${hz} Hz`);
     };
 
+    // #278: the Filter Lab and the Sequencer each show only in their own workspace.
+    const ws = (name) => openWorkspace(page, name, C);
+    await ws('filter');
     await page.click('#osc-ftype-lowpass');
     await setFilter(false);
     const cut = await setCutoff(200);
@@ -586,6 +604,7 @@ async function runApp(engine, browser) {
     // Filter off: the reference level of the sounding sequence.
     // The reading is taken once two successive analyser windows agree within 0.5 dB, so the
     // reference is the steady tone and not a window that still holds the start.
+    await ws('sequencer');
     await page.click('#osc-seq-play');
     let prev = 0;
     const off = await settle(state, (s) => {
@@ -600,6 +619,7 @@ async function runApp(engine, browser) {
     const ref = off.value ? off.value.rms : 0;
 
     // Filter on while it plays: more than 20 dB down.
+    await ws('filter');
     await setFilter(true);
     const on = await settle(state, (s) => dB(s.rms) < dB(ref) - FILTER_DROP_DB, 4000,
       `${C}: the 200 Hz low-pass attenuates the sequence`);
@@ -621,6 +641,7 @@ async function runApp(engine, browser) {
         + `200 Hz ${(dB(shut.value.rms) - dB(ref)).toFixed(1)} dB`);
 
     // Stop: the census returns to zero.
+    await ws('sequencer');
     await page.click('#osc-seq-stop');
     const stopped = await settle(state, (s) => !s.playing && s.nodes === 0 && s.sources === 0,
       4000, `${C}: engine census 0 after Stop`);
@@ -641,6 +662,7 @@ async function runApp(engine, browser) {
         + `sources ${escaped.value.sources}`);
 
     // The exported WAV of the sequence goes through the same Filter stage (offline).
+    await ws('filter');
     const wavRms = async (enabled) => {
       await setFilter(enabled);
       return page.evaluate(async () => {
@@ -666,7 +688,200 @@ async function runApp(engine, browser) {
   }
 }
 
+// ---------------------------------------------------------------- Add block menu (C005)
+
+/** Open the Add block menu, hit-test one item's centre and click it with the mouse. */
+async function clickAddItem(page, type) {
+  const item = `[data-osc="seq.addType"][data-value="${type}"]`;
+  await page.click('#osc-seq-add');
+  await until(() => page.evaluate((s) => {
+    const e = document.querySelector(s);
+    return !!e && e.offsetParent !== null && e.getBoundingClientRect().height > 0;
+  }, item), { ms: 5000, what: `seq-add-menu-pointer: the ${type} item is shown` });
+  const at = await page.evaluate((s) => {
+    const e = document.querySelector(s);
+    const b = e.getBoundingClientRect();
+    const x = b.x + b.width / 2;
+    const y = b.y + b.height / 2;
+    const hit = document.elementFromPoint(x, y);
+    const ed = window.OSCILLA.labs.sequencer.editor;
+    const name = (h) => `${h.tagName.toLowerCase()}${h.id ? `#${h.id}` : ''}.${h.className}`;
+    const under = hit === e ? 'the item' : hit ? name(hit) : 'nothing';
+    return { x, y, under, n: ed.model.blocks.length };
+  }, item);
+  await page.mouse.click(at.x, at.y);
+  const read = () => page.evaluate(() => {
+    const ed = window.OSCILLA.labs.sequencer.editor;
+    const b = ed.model.blocks.find((x) => x.id === ed.selectedId);
+    const menu = document.querySelector('#osc-seq-add-menu');
+    return { n: ed.model.blocks.length, type: b ? b.type : null, open: !menu.hidden };
+  });
+  let after = await read();
+  if (at.under === 'the item') {
+    after = await until(async () => {
+      const r = await read();
+      return r.n === at.n + 1 && !r.open ? r : null;
+    }, { ms: 5000, what: `seq-add-menu-pointer: a click on ${type} adds a block` })
+      .catch(() => read());
+  }
+  // A click that missed the item leaves the menu open (or opens nothing); close it either way.
+  if (after.open) await page.keyboard.press('Escape');
+  return {
+    under: at.under,
+    added: at.under === 'the item' && after.n === at.n + 1 && after.type === type,
+    y: Math.round(at.y),
+  };
+}
+
+async function checkAddMenuPointer(engine, browser) {
+  for (const [width, height] of ADD_MENU_VIEWPORTS) {
+    const context = await browser.newContext({ viewport: { width, height } });
+    const page = await context.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(String(e)));
+    try {
+      await page.goto(`${pathToFileURL(DIST).href}#m=sequencer`, { waitUntil: 'load' });
+      await page.waitForSelector('html[data-ready="true"]', { timeout: 30000 });
+      await until(() => page.evaluate(() => {
+        const app = document.querySelector('#osc-app');
+        return !!(app && app.dataset.mode === 'sequencer' && window.OSCILLA
+          && window.OSCILLA.labs && window.OSCILLA.labs.sequencer);
+      }), { ms: 10000, what: 'seq-add-menu-pointer: the Sequencer workspace is shown' });
+      const types = await page.evaluate(() => [...document
+        .querySelectorAll('[data-osc="seq.addType"]')].map((b) => b.dataset.value));
+      const missed = [];
+      // The safety notice is shown on a first run; every item is tried with it shown.
+      const miss = (type, r, notice) =>
+        `${type} (notice ${notice}; under the pointer: ${r.under}, y ${r.y})`;
+      for (const type of types) {
+        const r = await clickAddItem(page, type);
+        if (!r.added) missed.push(miss(type, r, 'shown'));
+      }
+      // Dismissed, the header moves up; the first row (Tone, Silence) is tried again.
+      const dismiss = await page.$('#osc-safety-dismiss');
+      if (dismiss && (await dismiss.isVisible())) {
+        await dismiss.click();
+        for (const type of types.slice(0, 2)) {
+          const r = await clickAddItem(page, type);
+          if (!r.added) missed.push(miss(type, r, 'dismissed'));
+        }
+      }
+      check(
+        engine,
+        `seq-add-menu-pointer ${width}x${height}: a mouse click on every Add block item adds it`,
+        types.length === 10 && missed.length === 0 && errors.length === 0,
+        missed.length || errors.length
+          ? [...missed, ...errors.slice(0, 2).map((e) => `page error: ${e}`)].join('; ')
+          : `${types.join(', ')} each added by a pointer click`,
+      );
+    } finally {
+      await context.close();
+    }
+  }
+}
+
 // ---------------------------------------------------------------- run
+
+// ---------------------------------------------------------------- seq-playhead-after-edit
+
+/**
+ * C006 (finding vis-divergence-3). Edits during playback apply from the next pass; the lane
+ * shows the edited model. Before the fix the sounding pass's clock was drawn linearly on the
+ * edited lane, so after the first Tone was lengthened the playhead sat in another block while
+ * the Pulse sounded. Setup (before Play): Silence 3000 ms and Pulse 2000 ms, so the typed edit
+ * lands inside pass 1 (Pulse from 4.0 s) on a loaded host and the Pulse has many 1.2 kHz
+ * windows. The pass is never looped, so pass 1 is the only pass.
+ */
+async function checkPlayheadAfterEdit(engine, browser) {
+  const name = 'seq-playhead-after-edit';
+  const context = await browser.newContext({ viewport: { width: 1536, height: 1024 } });
+  const errors = [];
+  try {
+    const page = await context.newPage();
+    page.setDefaultTimeout(15000);
+    page.on('pageerror', (e) => errors.push(String(e)));
+    await page.goto(pathToFileURL(DIST).href, { waitUntil: 'load' });
+    await until(() => page.evaluate(() => document.documentElement.dataset.ready === 'true'),
+      { ms: 30000, what: `${name}: the app is ready` });
+    await page.mouse.click(5, 5); // the first gesture creates the AudioContext
+    const group = await page.evaluate(() => {
+      const el = document.querySelector('[data-osc="nav.sequencer"]');
+      const g = el && el.closest('[data-osc-nav-group]');
+      return g && el.offsetParent === null ? g.dataset.oscNavGroup : null;
+    });
+    if (group) await page.click(`[data-osc="nav-group.${group}"]`);
+    await page.click('[data-osc="nav.sequencer"]');
+    await until(() => page.evaluate(() => window.OSCILLA.app.workspace === 'sequencer'
+      && !!window.OSCILLA.engine.ctx), { ms: 10000, what: `${name}: the Sequencer is shown` });
+    await page.evaluate(() => {
+      const lab = window.OSCILLA.labs.sequencer;
+      lab.editor.selectBlock('b3');
+      lab.editor.updateParam('durationMs', 3000);
+      lab.editor.selectBlock('b4');
+      lab.editor.updateParam('durationMs', 2000);
+      lab.editor.setLoop(false);
+      lab.render();
+    });
+    const PULSE_START_S = 0.5 + 0.5 + 3; // Tone, Sweep, Silence of the sounding pass
+    await page.click('#osc-seq-block-b1'); // Tone 440 Hz, 500 ms
+    await page.click('#osc-seq-play');
+    const start = await until(() => page.evaluate(() => {
+      const ed = window.OSCILLA.labs.sequencer.editor;
+      const t = ed.playing && ed.currentPassTiming();
+      return t && window.OSCILLA.engine.ctx.state === 'running' ? t : null;
+    }), { ms: 10000, what: `${name}: the sequence plays after Play` });
+    await page.fill('#osc-seq-duration', '3000'); // edit while pass 1 plays
+    await page.press('#osc-seq-duration', 'Tab'); // change -> editor.updateParam
+    const edit = await page.evaluate(() => {
+      const ed = window.OSCILLA.labs.sequencer.editor;
+      return { durationMs: ed.model.blocks[0].durationMs, at: ed.playheadTime() };
+    });
+    check(engine, `${name}: the edit landed in pass 1 before the Pulse`,
+      edit.durationMs === 3000 && edit.at !== null && edit.at < PULSE_START_S,
+      `block 1 ${edit.durationMs} ms, typed at ${edit.at === null ? 'stopped' : edit.at.toFixed(3)} s`);
+    // The condition the assertions judge: the Pulse requests 1.2 kHz, at least 150 ms into it
+    // (several frames, so the lane has drawn the head for this pass time).
+    const snap = await until(() => page.evaluate((pulseStart) => {
+      const ed = window.OSCILLA.labs.sequencer.editor;
+      const t = ed.playheadTime();
+      if (ed.currentFrequency() !== 1200 || !(t >= pulseStart + 0.15)) return null;
+      const lane = document.getElementById('osc-seq-timeline');
+      const ph = [...lane.children].find((c) => !c.dataset.blockId && c.style.zIndex === '2');
+      const m = /translateX\((-?\d+)px\)/.exec((ph && ph.style.transform) || '');
+      const x = m ? Number(m[1]) : null;
+      const blocks = [...lane.querySelectorAll('[data-block-id]')].map((b) => ({
+        id: b.dataset.blockId, x0: parseFloat(b.style.left),
+        x1: parseFloat(b.style.left) + parseFloat(b.style.width),
+        current: b.getAttribute('aria-current') === 'true' }));
+      const under = blocks.find((b) => x !== null && x >= b.x0 && x < b.x1);
+      const status = document.querySelector('[data-osc="status.duration"]');
+      const msg = document.querySelector('[data-osc="seq.message"]');
+      return { t, x, visible: !!ph && !ph.hidden, ghost: !!ph && ph.dataset.ghost === 'true',
+        under: under ? under.id : null, sounding: ed.model.blocks[ed.activeBlockIndex()].id,
+        marked: blocks.filter((b) => b.current).map((b) => b.id),
+        passT0: ed.currentPassTiming().t0, status: status ? status.textContent : null,
+        msg: msg ? msg.textContent : null };
+    }, PULSE_START_S), { ms: 10000, what: `${name}: the Pulse 1.2 kHz sounds in pass 1` });
+    check(engine, `${name}: the playhead is over the block that sounds`,
+      snap.visible && !snap.ghost && snap.sounding === 'b4' && snap.under === 'b4',
+      `pass ${snap.t.toFixed(3)} s, 1200 Hz, sounding ${snap.sounding}, playhead x ${snap.x} `
+        + `over ${snap.under}${snap.ghost ? ' (ghost)' : ''}`);
+    check(engine, `${name}: the sounding block is marked`,
+      snap.marked.length === 1 && snap.marked[0] === 'b4', `aria-current: ${snap.marked}`);
+    check(engine, `${name}: the pass was not restarted`, snap.passT0 === start.t0,
+      `pass t0 ${start.t0} -> ${snap.passT0}`);
+    check(engine, `${name}: the message and the status bar describe what sounds`,
+      /Changes apply from the next pass\./.test(snap.msg || '')
+        && snap.status === '6.5 s now, next 9 s',
+      `message "${snap.msg}", status "${snap.status}"`);
+    await page.click('#osc-seq-stop');
+    await until(() => page.evaluate(() => !window.OSCILLA.labs.sequencer.editor.playing),
+      { ms: 5000, what: `${name}: Stop ends the sequence` });
+    check(engine, `${name}: no page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  } finally {
+    await context.close();
+  }
+}
 
 async function runEngine(engine, bundle) {
   console.log(`\n${engine}`);
@@ -800,6 +1015,76 @@ async function runEngine(engine, bundle) {
         `started ${many.after.started}, ended ${many.after.ended}, live after ${many.after.live} ` +
         `(${many.after.waitedMs} ms)`,
     );
+    // (g) seq-loop-cap (C011). A 36 s pass (two 18 s blocks) is longer than the 30 s cap: play()
+    // cuts it, so its oscillators are told to stop by t0 + 30 s (+ the 10 ms stop pad) at once.
+    const CAP_S = 30;
+    const longRun = await page.evaluate(() => window.seqFixture.loopCapStart([18000, 18000]));
+    const lsc = longRun.schedule;
+    check(
+      engine,
+      '(g) seq-loop-cap: a looped 36 s first pass is cut at t0 + 30 s on its oscillators (scheduler)',
+      longRun.played && longRun.loop && Math.abs(longRun.passS - 36) < 1e-6 && longRun.live >= 1 &&
+        longRun.nodeStopMax !== null && longRun.nodeStopMax <= lsc.t0 + CAP_S + 0.011 &&
+        longRun.nodeStopMax > lsc.t0 + CAP_S - 0.1 && /capped at 30 s/.test(longRun.notice) &&
+        longRun.message === longRun.notice,
+      JSON.stringify({ t0: lsc.t0, nodeStopMax: longRun.nodeStopMax, notice: longRun.notice,
+        message: longRun.message, live: longRun.live }),
+    );
+    await page.evaluate(() => window.seqFixture.loopCapStop());
+    const longTorn = await until(
+      () => page.evaluate(() => {
+        const r = window.seqFixture.loopCapTorn();
+        return r && r.torn ? r : null;
+      }),
+      { ms: 5000, what: 'seq-loop-cap: the cut 36 s pass torn down after stop' },
+    ).catch((e) => ({ torn: false, error: e.message }));
+    check(engine, '(g) seq-loop-cap: the cut pass stops with 0 sources and 0 nodes', longTorn.torn,
+      JSON.stringify(longTorn));
+    await page.evaluate(() => window.seqFixture.loopCapDispose());
+    // A 12 s pass: two passes (24 s) fit the 30 s cap, a third does not. This reads the editor's
+    // forecast (loopSchedule), not the scheduler; the unit test drives the pump on a fake clock.
+    const capRun = await page.evaluate(() => window.seqFixture.loopCapStart([12000]));
+    const sc = capRun.schedule;
+    check(
+      engine,
+      '(g) seq-loop-cap: the forecast ends a 12 s loop after two passes, within t0 + 30 s',
+      capRun.played && capRun.loop && capRun.offAfterClick === false && sc.capped &&
+        sc.capS === CAP_S && sc.lastScheduledEnd <= sc.t0 + CAP_S &&
+        Math.abs(sc.endsAt - (sc.t0 + 2 * capRun.passS)) < 1e-6 &&
+        sc.endsAt + capRun.passS > sc.t0 + CAP_S && capRun.live >= 1,
+      JSON.stringify({ ...sc, passS: capRun.passS, live: capRun.live }),
+    );
+    check(
+      engine,
+      '(g) seq-loop-cap: the cap is stated on the Loop control, which stays usable',
+      capRun.pressed === 'true' && /stops at 30 s/.test(capRun.title || '') &&
+        /continuous playback/.test(capRun.title || ''),
+      JSON.stringify({ title: capRun.title, pressed: capRun.pressed }),
+    );
+    const capStop = await page.evaluate(() => window.seqFixture.loopCapStop());
+    check(
+      engine,
+      '(g) seq-loop-cap: the Loop control and schedule follow the permission',
+      !capStop.allowed.schedule.capped && capStop.allowed.schedule.endsAt === null &&
+        /until stopped/.test(capStop.allowed.title || '') && capStop.withdrawn.playing &&
+        capStop.withdrawn.schedule.capped && /stops at 30 s/.test(capStop.withdrawn.title || ''),
+      JSON.stringify(capStop),
+    );
+    const capTorn = await until(
+      () => page.evaluate(() => {
+        const r = window.seqFixture.loopCapTorn();
+        return r && r.torn ? r : null;
+      }),
+      { ms: 5000, what: 'seq-loop-cap: the looped sequence torn down after stop' },
+    ).catch((e) => ({ torn: false, error: e.message }));
+    check(
+      engine,
+      '(g) seq-loop-cap: stop leaves 0 live sources and 0 nodes',
+      capTorn.torn,
+      JSON.stringify(capTorn),
+    );
+    await page.evaluate(() => window.seqFixture.loopCapDispose());
+
     const final = await page.evaluate(() => window.seqFixture.realtimeTeardown());
     check(engine, 'no live sources after teardown', final.live === 0, JSON.stringify(final));
     check(engine, 'no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
@@ -811,6 +1096,12 @@ async function runEngine(engine, bundle) {
       await runApp(engine, browser);
     } catch (e) {
       check(engine, 'seq-filter-reaches-sequence: run', false, String(e && e.stack ? e.stack : e));
+    }
+    await checkAddMenuPointer(engine, browser);
+    try {
+      await checkPlayheadAfterEdit(engine, browser);
+    } catch (e) {
+      check(engine, 'seq-playhead-after-edit', false, String(e && e.message ? e.message : e));
     }
   } finally {
     await browser.close();

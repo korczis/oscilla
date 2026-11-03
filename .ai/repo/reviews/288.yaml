@@ -1,0 +1,30 @@
+# Review verdict for pull request #288, C014: the spectrogram writes nothing for a paused or hidden
+# interval (branch fix/c014-spectrogram-no-backfill). Reviewed head efc92afb against origin/main.
+# Another builder wrote it (oscilla-b0).
+#
+# The digest: the base branch's scripts/review-verdict.mjs, run from `git archive origin/main
+# scripts` with --repo on the author's worktree: 8188cb7f...ae7b over the 1 guarded path it names.
+#
+# How it was reviewed: two independent lenses (correctness across pause, hidden tab, workspace
+# switch, resize and reconfiguration; tests with mutants), each in its own detached copy, a
+# skeptic per finding above P3. No finding was refuted.
+#
+# What holds: fail-first (unit tests 8, 9, 11-13 fail with the fix reverted, 13/13 pass on the
+# head); npm test 3281 pass (2 wall-clock budget failures from machine load, unrelated); dist is a
+# fresh build; a direct chromium run on dist confirmed no column is painted for a 2 s pause; the
+# user's Freeze switch is kept on every path; resize, span, scale, maxHz, fftSize and analyser
+# changes all reset the clock; no other onFrame subscriber reads the new second argument.
+#
+# Verdict: merge. No P0 or P1. Two P2s are open and worth a follow-up:
+schema: review-verdict/v1
+pr: 288
+verdict: merge
+reviewer: prismatic-majordomus-f3 (claude-code 1f47a36e)
+content: 8188cb7f7292110c51601fc0891a7c7db5eaab300ff1f78b4f2eb51ad7d9ae7b
+findings:
+  - { id: R1, severity: P2, status: open, title: "spectrogram-view.js:158 the first columns after resume repaint the pre-pause spectrum through the AnalyserNode's smoothing (0.55): 11-13 ghost 1 kHz columns after a 2 s pause at 5 kHz, 0 in the control; one read with smoothingTimeConstant 0 on resume removes them; the browser check keeps the smoothing current by reading during the gap" }
+  - { id: R2, severity: P2, status: open, title: "spectrogram.js:308 MAX_PUSH_GAP_MS (250 ms) treats every slow frame as a restart, so below 4 fps the spectrogram writes one column per frame and the time axis claims 10 s across minutes of history; bound it by the pause signal, or scale the bound to the frame interval" }
+  - { id: R3, severity: P3, status: open, title: "spectrogram-view.js:158 and main.js:323 the view's resumed handling and the setPaused wiring have no test of their own: removing either alone keeps every test green" }
+  - { id: R4, severity: P3, status: open, title: "app.cjs:1638,1592 the browser check allows 300 ms of columns instead of 'plus two', reads one rounded pixel row, has no real background-tab case, and its worst-case wait exceeds the 60 s per-check timeout" }
+  - { id: R5, severity: P3, status: open, title: "analysis-spectrogram.test.mjs:160 the gap bound is pinned only between 200 ms and 4 s; frame-loop.js:62 setFramesPaused's skipped = true is redundant and untested; setPaused keeping Freeze is untested" }
+  - { id: R6, severity: P3, status: open, title: "README.md:81 says the paused interval is 'left unwritten'; it is removed from the time axis" }

@@ -52,7 +52,8 @@
 //     the capture, ever less of y is correlated and the deconvolved noise falls away (−159 dB
 //     at the end of a 2 s sweep's causal window against a true −100 dB floor, review probe p4).
 //     The full-overlap span after the peak is ≈ the post-roll minus the latency, so with a
-//     decay longer than the post-roll the figure is an upper bound (decay, not noise). null
+//     decay longer than the post-roll the figure is an upper bound (decay, not noise), as the
+//     IR view states with the span it was read over (irNoiseFloorWindow, T019). null
 //     with noiseFloorMethod 'none' when fewer than IR_NOISE_MIN_SAMPLES full-overlap lags
 //     follow the peak (no place to read the noise).
 //   v1: the last 10 % of the whole causal window after the peak (no noiseFloorMethod field),
@@ -307,17 +308,44 @@ export function computeTransferAndIr({
   return { transfer, ir };
 }
 
-/** v2: mean h²/h_peak² over the last IR_TAIL_FRACTION of (peakIndex, fullEnd]; null when that
- *  span has fewer than IR_NOISE_MIN_SAMPLES samples. */
-function fullOverlapFloorDb(samples, peakIndex, fullEnd) {
+/** v2: the samples [first, last = fullEnd] the floor averages (the last IR_TAIL_FRACTION of
+ *  (peakIndex, fullEnd]), or null when that span has fewer than IR_NOISE_MIN_SAMPLES. */
+function fullOverlapTail(peakIndex, fullEnd) {
   const span = fullEnd - peakIndex;
   if (!(span >= IR_NOISE_MIN_SAMPLES)) return null;
+  const count = Math.max(IR_NOISE_MIN_SAMPLES, Math.floor(span * IR_TAIL_FRACTION));
+  return { first: fullEnd - count + 1, last: fullEnd, count };
+}
+
+/** v2: mean h²/h_peak² over fullOverlapTail(peakIndex, fullEnd); null without one. */
+function fullOverlapFloorDb(samples, peakIndex, fullEnd) {
+  const tail = fullOverlapTail(peakIndex, fullEnd);
+  if (!tail) return null;
   const peak = Math.abs(samples[peakIndex]);
   if (!(peak > 0)) return ZERO_POWER_DB;
-  const count = Math.max(IR_NOISE_MIN_SAMPLES, Math.floor(span * IR_TAIL_FRACTION));
   let s = 0;
-  for (let i = fullEnd - count + 1; i <= fullEnd; i++) s += samples[i] * samples[i];
-  return powerToDb(s / count / (peak * peak));
+  for (let i = tail.first; i <= tail.last; i++) s += samples[i] * samples[i];
+  return powerToDb(s / tail.count / (peak * peak));
+}
+
+/**
+ * irNoiseFloorWindow(ir, stimulusFrames) → [fromS, toS] | null (T019)
+ * The span, in seconds after the direct peak, that a 'full-overlap-tail' noiseFloorDb was read
+ * over (both ends included). The IrResult does not keep the stimulus length, so the caller
+ * gives it: the last full-overlap lag is the full causal length minus the stimulus length. A
+ * capped IR (analysis-task.js capIrLength) is judged on the full IR its floor was read on.
+ * null for any other noiseFloorMethod (v1 has none, 'none' has no floor) or a stimulus length
+ * that leaves too few full-overlap lags after the peak.
+ */
+export function irNoiseFloorWindow(ir, stimulusFrames) {
+  if (!ir || ir.noiseFloorMethod !== 'full-overlap-tail' || !(ir.sampleRate > 0)) return null;
+  if (!Number.isInteger(stimulusFrames) || stimulusFrames < 1) return null;
+  const t = ir.truncation;
+  const length = t ? t.fullLength : ir.samples.length;
+  const peakIndex = ir.peakIndex + (t ? t.startIndex : 0);
+  const tail = fullOverlapTail(peakIndex, Math.min(length - 1, length - stimulusFrames));
+  if (!tail) return null;
+  return [(tail.first - peakIndex) / ir.sampleRate, (tail.last - peakIndex) / ir.sampleRate];
 }
 
 /** v1: mean h²/h_peak² over the last IR_TAIL_FRACTION of the samples after the peak. */

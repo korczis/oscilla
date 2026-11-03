@@ -443,8 +443,7 @@
 /* ---------- Touch: 44px targets ---------- */
 @media (pointer: coarse) {
   .osc-main,
-  .osc-top-left,
-  .osc-top-right {
+  .osc-top {
     grid-template-rows: none;
   }
 
@@ -600,8 +599,10 @@
     min-height: 44px;
   }
 
-  /* The source links grow in the list's flow (it scrolls), so they cannot cover each other. */
-  .osc-bio-source-list a {
+  /* The text links grow in their flow (the sources list scrolls), so they cannot cover each
+     other. */
+  :is(.osc-bio-source-list, .osc-panel-header, .osc-m-btnrow, .osc-x-empty, .osc-preset-empty,
+    .osc-learn-actions, .osc-toast-text) a:not([class], [hidden]) {
     display: inline-flex;
     align-items: center;
     max-width: 100%;

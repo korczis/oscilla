@@ -33,12 +33,22 @@ so on its own it would pass a build twice as slow. The build's CPU time may be a
 `BUILD_REFERENCE_RATIO` times the CPU time of `referenceWork()`, a fixed workload of no product
 code in the build's shape (300 steps growing a 100-node / 200-edge graph of plain objects, each
 followed by a JSON round trip and a check of the whole graph), measured first in the same
-process on the same clock. The test also asserts that twice the measured build is over the
-bound, so a bound that a faster build left loose fails and names the ratio to lower it to.
+process on the same clock.
+
+The ratio is not the same on every machine (table below), so a fixed multiple of the reference
+cannot both pass the build and fail it twice as slow everywhere: at 3.78 a doubled build is
+7.56 times the reference, within 9 (CI run 41190815003 failed the old self-check on that,
+with nothing regressed). The budget is derived from the ratio r measured in the run:
+`min(1000 ms, min(9, max(2, 1.9 r)) x reference)`. It passes the measured build whenever r is
+at most 9, and twice the measured build is over it whenever r is above 1, which the test
+asserts (and skips, saying why, at r <= 1, where the reference does not measure the build). A
+build slowed by a change is still judged by the bound of 9: on the M5 Pro a 2x slower build
+fails, on the GitHub runner only one more than 2.38x slower does.
 
 | Where | build / reference |
 | --- | --- |
 | Apple M5 Pro (arm64), Node 22.20.0, loads 79-112, 2026-10-29 | 5.5-6.5 |
+| GitHub Actions `ubuntu-latest`, Node 22, CI run 41190815003, 2026-10-31 | 3.78 |
 
 An operation whose fastest repeat is over its budget is re-measured in further batches,
 keeping the running minimum, until it is within budget or `REMEASURE_DEADLINE_MS` (20 s, wall
@@ -106,6 +116,23 @@ median of 9:
 | Chromium | 55-115 ms | 4.5-8.5 ms | 3.5-6.7 ms | 0.2-0.4 ms |
 | Firefox | 78-141 ms | 6-11 ms | 4-9 ms | 1 ms |
 | WebKit | 250-850 ms | 6-13 ms | 5-10 ms | ≤ 1 ms |
+
+The graph commands of plan K009 run many store actions as one undo step, and the store
+handle's `hold` (`src/js/ui/studio/workspace.js`) delivers them to the projections as one store
+event, so the sync, compile and render run once. Measured in the same check at a load of about
+25 (one run each):
+
+| Browser | L, all 100 nodes (median of 5) | M, 8 cables | M, all 200 cables |
+| --- | --- | --- | --- |
+| Chromium | 11 ms | 27-29 ms | 290-320 ms |
+| Firefox | 19 ms | 34-63 ms | 495-1020 ms |
+| WebKit | 20 ms | 46 ms | 480 ms |
+
+L is held to `editMs`. M is not: it dispatches one EDGE_UPDATE per cable, and the store validates
+the whole model on each (about 1.9 ms in Node and 4-6 ms in these browsers on this fixture), so
+its time grows with the selection. Before `hold`, one L took 614 ms and M on all 200 cables
+1,528 ms (Chromium, at a load of about 24). One store action for several cables would need a
+multi-edge EDGE_UPDATE in `src/js/studio/actions.js`; that has not been built.
 
 Ranges are separate runs; WebKit's first render is slowest after the rest of the suite has run
 (250 ms on a fresh page). A node drag never dispatches before the gesture ends and moves only

@@ -21,7 +21,7 @@
 //                     no notification is raised, a changed instrument setting and unsaved Studio
 //                     changes survive Back / Forward, and the guard asks nothing for them; a
 //                     reload reopens the workspace the address names
-//   open-every-workspace  a fresh page at `#m=<id>` opens each of the twelve workspaces; the
+//   open-every-workspace  a fresh page at `#m=<id>` opens each of the thirteen workspaces; the
 //                     Experiments list loads, About sets its title
 //   hashchange-mode   a hash set after load moves the workspace AND the V1 mode together
 //                     (`m=learn` → Learn, `m=dual` → Synthesis/dual, `m=sweep` → Playground/sweep)
@@ -34,6 +34,14 @@
 //                     notes" and a rename being typed in Experiments each arm the guard
 //   guard-memory-store    with IndexedDB refused, a saved experiment and a saved Studio project
 //                     (page memory only) arm the guard and a reload asks
+//   seq-unsaved-guard  (C019, finding persist-7) a fresh page and a lab-only edit (Filter,
+//                     Envelope, the instrument waveform the sequence follows) arm nothing; a
+//                     block added through the Add menu arms the guard with "sequencer: Unsaved
+//                     sequence", shows "unsaved sequence" in the panel, and a reload asks and
+//                     keeps the block; Export config disarms it, a reload asks nothing, and the
+//                     exported file imported back restores the sequence with the guard quiet; a
+//                     Tempo change through its select arms it again, and choosing the saved tempo
+//                     again disarms it
 //   refused-link-not-in-history  a refused Studio or recipe link (as a new hash or at load) is
 //                     replaced in the address: Back never opens it
 //   nav-links         each nav href is `#m=<id>` and opens that workspace on a fresh page; a
@@ -64,6 +72,11 @@
 //                     config…" opens the file picker
 //   experiment-row-keyboard  (H004 B14) a saved experiment's row body is a focusable button:
 //                     Enter opens the record in the detail, Space opens it too
+//   keyboard-link     (K026) the link key `kbd` arms the keyboard of the view a link opens:
+//                     `#m=playground&kbd=1` arms the Playground only (Arm keys pressed, the keys
+//                     shown) and the key leaves the address with the first workspace change;
+//                     `#m=studio&kbd=1` arms the Studio only, and a link set in the page arms
+//                     the Playground beside it; `#m=measure&kbd=1` arms nothing and shows no keys
 //   no-console-errors
 'use strict';
 const { serveDist } = require('./lib/serve.cjs');
@@ -73,7 +86,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
 const seam = require('./lib/measure-seam.cjs');
-const { until } = require('./lib/wait.cjs');
+const { until, bounded } = require('./lib/wait.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -620,6 +633,121 @@ function defineChecks() {
     }
   });
 
+  def('seq-unsaved-guard', async (ctx) => {
+    const MS = 10000;
+    const seqState = (page) => page.evaluate(() => {
+      // whatWouldBeLost() re-reads the sources first, so the listener count is current.
+      const lost = window.OSCILLA.unsaved.whatWouldBeLost().map((x) => `${x.domain}: ${x.label}`);
+      const m = window.OSCILLA.labs.sequencer.editor.model;
+      const el = document.querySelector('[data-osc="seq.unsaved"]');
+      return { lost, listeners: window.__oscBeforeUnload(), armed: window.OSCILLA.unsaved.armed,
+        blocks: m.blocks.length, types: m.blocks.map((b) => b.type).join(','),
+        tempoBpm: m.tempoBpm, indicator: !!el && el.getClientRects().length > 0,
+        indicatorText: el ? el.textContent.trim() : null };
+    });
+    const SEQ = 'sequencer: Unsaved sequence';
+    const armedSeq = (s) => s.lost.includes(SEQ) && s.listeners === 1 && s.armed && s.indicator;
+    const quiet = (s) => s.lost.length === 0 && s.listeners === 0 && !s.armed && !s.indicator;
+    // A reload: the browser's beforeunload dialog (dismissed: the page stays) or a new page.
+    const reload = async (page, what) => {
+      let dialog = null;
+      const onDialog = (d) => { dialog = d.type(); d.dismiss().catch(() => {}); };
+      page.on('dialog', onDialog);
+      await page.evaluate(() => { window.__oscSamePage = true; });
+      await page.reload({ waitUntil: 'load', timeout: 3000 }).catch(() => {});
+      page.off('dialog', onDialog);
+      const stayed = await bounded(page.evaluate(() => window.__oscSamePage === true),
+        { ms: MS, what: `${what}: read the page after the reload` }).catch(() => false);
+      if (!stayed) {
+        await until(() => page.evaluate(() => document.documentElement.dataset.ready === 'true'
+          && !!(window.OSCILLA.labs && window.OSCILLA.labs.sequencer)).catch(() => false),
+        { ms: 15000, what: `${what}: the reloaded page is ready` });
+      }
+      return { dialog, stayed };
+    };
+    const page = await H.open(ctx, ctx.baseUrl);
+    const clean = await seqState(page);
+    // Lab and instrument settings are configuration, kept by an explicit save (ADR 0045).
+    await page.evaluate(() => {
+      const O = window.OSCILLA;
+      O.labs.filter.update({ enabled: true, frequency: 300 });
+      O.labs.envelope.update({ enabled: true });
+      O.app.setWaveform('square');
+    });
+    const labOnly = await seqState(page);
+    await H.navTo(page, 'sequencer');
+    await page.click('[data-osc="seq.add"]');
+    // An item below the menu's first row, which the scroll area clips until C005 lands.
+    await page.click('[data-osc="seq.addType"][data-value="burst"]');
+    const added = await until(async () => {
+      const s = await seqState(page);
+      return armedSeq(s) ? s : null;
+    }, { ms: MS, what: 'seq-unsaved-guard: an added block arms the guard' }).catch(() => null);
+    const addedNow = added || await seqState(page);
+    const askReload = await reload(page, 'seq-unsaved-guard (unsaved)');
+    const afterAsk = await seqState(page);
+    // Export config is the save: the file holds the sequence.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oscilla-nav-seq-'));
+    const file = path.join(dir, 'config.json');
+    await page.click('[data-osc="header.export"]');
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: MS }),
+      page.click('[data-osc="export.config"]'),
+    ]);
+    await bounded(download.saveAs(file), { ms: MS, what: 'seq-unsaved-guard: save the export' });
+    const exported = await until(async () => {
+      const s = await seqState(page);
+      return quiet(s) ? s : null;
+    }, { ms: MS, what: 'seq-unsaved-guard: Export config disarms the guard' })
+      .catch(() => null);
+    const exportedNow = exported || await seqState(page);
+    const doc = JSON.parse(fs.readFileSync(file, 'utf8'));
+    await page.mouse.click(3, 1000);
+    const quietReload = await reload(page, 'seq-unsaved-guard (exported)');
+    await page.mouse.click(3, 1000);
+    const fresh = await seqState(page);
+    // The exported file restores the sequence; an imported sequence is saved work.
+    await H.navTo(page, 'sequencer');
+    await page.setInputFiles('#osc-import-file', file);
+    const imported = await until(async () => {
+      const s = await seqState(page);
+      return s.blocks === addedNow.blocks && s.types === addedNow.types ? s : null;
+    }, { ms: MS, what: 'seq-unsaved-guard: the exported file restores the sequence' })
+      .catch(() => null);
+    const importedNow = imported || await seqState(page);
+    await page.selectOption('[data-osc="seq.tempo"]', '90');
+    const tempo = await until(async () => {
+      const s = await seqState(page);
+      return armedSeq(s) ? s : null;
+    }, { ms: MS, what: 'seq-unsaved-guard: a Tempo change arms the guard' }).catch(() => null);
+    const tempoNow = tempo || await seqState(page);
+    await page.selectOption('[data-osc="seq.tempo"]', String(importedNow.tempoBpm));
+    const back = await until(async () => {
+      const s = await seqState(page);
+      return quiet(s) ? s : null;
+    }, { ms: MS, what: 'seq-unsaved-guard: the saved tempo again disarms the guard' })
+      .catch(() => null);
+    const backNow = back || await seqState(page);
+    await page.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+    return { ...H.verdict({
+      cleanQuiet: quiet(clean),
+      labOnlyQuiet: quiet(labOnly),
+      addArms: !!added && added.blocks === clean.blocks + 1
+        && added.indicatorText === 'unsaved sequence',
+      reloadAsks: askReload.dialog === 'beforeunload' && askReload.stayed
+        && afterAsk.blocks === addedNow.blocks && armedSeq(afterAsk),
+      exportDisarms: !!exported && Array.isArray(doc.sequencer && doc.sequencer.blocks)
+        && doc.sequencer.blocks.length === addedNow.blocks,
+      exportedReloads: quietReload.dialog === null && !quietReload.stayed && quiet(fresh)
+        && fresh.blocks === clean.blocks,
+      importRestoresQuiet: !!imported && quiet(importedNow),
+      tempoArms: !!tempo && tempo.tempoBpm === 90,
+      savedTempoQuiet: !!back && back.tempoBpm === importedNow.tempoBpm,
+    }), clean, labOnly, added: addedNow, askReload, afterAsk, exported: exportedNow, quietReload,
+    fresh, imported: importedNow, tempo: tempoNow, back: backNow };
+  });
+
   def('refused-link-not-in-history', async (ctx) => {
     // A refused link changes nothing, and nothing brings it back: not Back, not a reload.
     const bad = Buffer.from(JSON.stringify({ v: 1, f1: -1 })).toString('base64url');
@@ -680,7 +808,8 @@ function defineChecks() {
       await p.close();
     }
     return { ...H.verdict({
-      twelve: links.length === 12,
+      // Synth (#329, owner Q019: top-level after Studio) is the thirteenth workspace.
+      thirteen: links.length === 13,
       hrefs: links.every((l) => l.href === `#m=${l.id}`),
       landed: landed.every((l) => l.workspace === l.id),
       modifiedLeftToBrowser: modified.prevented === false && modified.workspace === 'playground',
@@ -1035,6 +1164,40 @@ function defineChecks() {
       enterOpens: !!enter && enter[0] === id,
       spaceOpens: !!space && space[1] === id,
     }), row, enter, space };
+  });
+
+  def('keyboard-link', async (ctx) => {
+    const read = (page) => page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      const el = document.querySelector('[data-osc="keyboard"]');
+      const arm = document.querySelector('[data-osc="keyboard.arm"]');
+      return { workspace: a.workspace, armed: { ...a.kbdArmed }, here: a.kbdArmedHere,
+        shown: !!el && el.getClientRects().length > 0,
+        pressed: arm ? arm.getAttribute('aria-pressed') : null, hash: window.location.hash };
+    });
+    const play = await H.open(ctx, `${ctx.baseUrl}#m=playground&kbd=1`);
+    const p1 = await read(play);
+    await H.navTo(play, 'measure');
+    const away = await H.until(() => read(play), (s) => s.workspace === 'measure');
+    await play.close();
+    const studio = await H.open(ctx, `${ctx.baseUrl}#m=studio&kbd=1`);
+    const s1 = await read(studio);
+    await studio.evaluate(() => { window.location.hash = 'm=playground&kbd=1'; });
+    const s2 = await H.until(() => read(studio), (s) => s.workspace === 'playground');
+    await studio.close();
+    const none = await H.open(ctx, `${ctx.baseUrl}#m=measure&kbd=1`);
+    const m1 = await read(none);
+    await none.close();
+    return { ...H.verdict({
+      playgroundArmed: p1.workspace === 'playground' && p1.here && p1.shown
+        && p1.pressed === 'true' && !p1.armed.studio,
+      leavesTheAddress: away.workspace === 'measure' && !/kbd=/.test(away.hash) && !away.shown,
+      studioArmed: s1.workspace === 'studio' && s1.here && s1.armed.studio
+        && !s1.armed.playground && s1.shown,
+      linkInPage: s2.workspace === 'playground' && s2.armed.playground && s2.armed.studio,
+      measureNone: m1.workspace === 'measure' && !m1.here && !m1.armed.playground
+        && !m1.armed.studio && !m1.shown,
+    }), p1, away, s1, s2, m1 };
   });
 
   def('no-console-errors', async (ctx) => ({ ok: ctx.errors.length === 0,

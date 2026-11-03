@@ -2,7 +2,7 @@
   "note": "Findings of tests/browser/lib/timing-scan.cjs that predate rule project.bounded-test-timing, as a count per file and kind. tests/unit/browser-timing.test.mjs fails when a count rises above its record. The record only goes down: node tests/browser/lib/timing-scan.cjs --write-baseline.",
   "debt": {
     "tests/browser/app.cjs": {
-      "timer-sleep": 67,
+      "timer-sleep": 63,
       "counted-poll": 1
     },
     "tests/browser/engine-v1port.cjs": {
@@ -23,8 +23,8 @@
       "timer-sleep": 3
     },
     "tests/browser/qa-regressions.cjs": {
-      "timer-sleep": 28,
       "counted-poll": 3,
+      "timer-sleep": 24,
       "fixed-rate": 1
     },
     "tests/browser/v3-ui.cjs": {
@@ -34,7 +34,7 @@
       "fixed-frame-window": 1
     },
     "tests/browser/v31-studio-graph.cjs": {
-      "timer-sleep": 24
+      "timer-sleep": 23
     },
     "tests/browser/v31-studio-links.cjs": {
       "timer-sleep": 1

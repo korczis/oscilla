@@ -2,7 +2,6 @@
   "note": "Controls of src/index.html that no tests/browser file drives (an action on the line that names the control's id or data-osc value, or on the line next to it), recorded when the control-drive ratchet landed (C020, PACK 03 finding control-census-5). tests/unit/control-drive-baseline.test.mjs fails when the tree holds an undriven control this list does not name, when a listed control is driven or gone, and when the list grows against an earlier commit. Drive a control in the suite that owns its behaviour and remove its key; never add one.",
   "undriven": [
     "#osc-atab-signalpath",
-    "#osc-atab-waveform",
     "#osc-bio-collapse",
     "#osc-btab-ranges",
     "#osc-chart-additive",
@@ -50,7 +49,6 @@
     "measure.switch",
     "mic.freeze",
     "seq.fieldStep",
-    "studio.frameAll",
     "studio.task.abort"
   ]
 }

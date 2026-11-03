@@ -183,8 +183,18 @@ checks are in `tests/unit/navigation.test.mjs`.
   - an update that failed, where the run stays stored and the edit stays pending;
   - a rename being typed in Experiments.
 
-  Check: `guard-saved-metadata`. Sequencer patterns are not guarded. The editor has no dirty
-  flag and its state is not reactive, so this is left as a follow-up.
+  Check: `guard-saved-metadata`. Sequencer patterns were not guarded: the editor had no dirty
+  flag and its state is not reactive, so this was left as a follow-up. It is closed by C019
+  (finding persist-7 of OSCILLA PACK 03): the editor names every change of its model
+  (`onChange`), and `sequenceDigest` (`src/js/sequencer/editor.js`) is the sequence's content
+  without the waveform, which follows the instrument. main.js keeps the digest in the reactive
+  `seqDigest`, so the guard's effect re-runs; `seqSavedDigest` is set at boot (the sequence
+  the page opens with is not work), after an import and after a successful Export config, the
+  one path that saves a sequence. While the two differ the fifth source reports
+  "Unsaved sequence" and the Sequencer panel shows "unsaved sequence". There is no
+  localStorage draft: it would be a second copy of the sequence beside the export. Lab and
+  instrument settings stay unguarded: they are configuration, kept by an explicit save.
+  Check: `seq-unsaved-guard`.
 - **A refused link no longer stays in history.** On load and for a new hash, a refused link's
   entry is replaced by `hashAfterRefusal`: the refused domain's keys are removed and `m` names
   the workspace the user stays in. Check: `refused-link-not-in-history`.
