@@ -148,8 +148,10 @@ export function plateHtml({ panel, module: m, node, model, tokens, collapsed = f
   const head = `<header class="relative flex items-center justify-between gap-2 px-1 pt-1">`
     + `<h3 id="${hid}" class="text-sm font-bold tracking-widest text-gray-900 dark:text-white">`
     + `<button type="button" data-collapse="${m.id}" aria-expanded="${!collapsed}" `
-    + `aria-controls="${bid}" class="flex h-11 items-center gap-2 rounded-lg px-2 `
-    + 'tracking-widest focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500">'
+    + `aria-controls="${bid}" class="flex h-11 items-center gap-2 rounded-lg border-0 `
+    + 'bg-transparent px-2 tracking-widest text-gray-900 hover:text-primary-600 '
+    + 'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-white '
+    + 'dark:hover:text-primary-400">'
     + `<span aria-hidden="true" class="text-xs">${collapsed ? '▸' : '▾'}</span>${esc(m.label)}`
     + `</button></h3><span class="px-2 ${NOTE}">`
     + `${esc(m.def.displayName)}</span></header>`;
