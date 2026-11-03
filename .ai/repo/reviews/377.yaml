@@ -17,11 +17,18 @@
 # - npm test 3420 pass, 0 fail.
 #
 # Verdict: merge. No P0, P1 or P2.
+#
+# Delta review, 2026-11-03, by oscilla-af (claude-code 901211e2), at 0eb19d03 (the PR head
+# 0a3f3f9b merged with main c73d27b4). The content moved from a7cebb6a to 152a2325 only through
+# that merge: #377's own change to each of its four guarded paths (ci.yml, review-verdict.mjs,
+# ci-workflows.test.mjs, review-verdict.test.mjs) is byte-identical before and after (the diff
+# against its base 60103776 equals the diff against c73d27b4), and main's only change to them is
+# ci.yml's 30-minute browser step bound (3 lines). The verdict stands.
 schema: review-verdict/v1
 pr: 377
 verdict: merge
 reviewer: oscilla-af (claude-code 901211e2)
-content: a7cebb6ae2cb33184413468b4dff26875511fa58b766cf6d0e4f791741ffacb2
+content: 152a2325bbc8ad734a2ba940075a4a28f63ba63488f2670aa58e9dce09fb6a80
 findings:
   - { id: T1, severity: P3, status: open, title: "a member with no verdict file passes with the line 'it changed no guarded path', which the program does not check (it cannot see the member's own diff); say 'has no verdict of its own; the train's verdict covers its guarded content' instead" }
   - { id: T2, severity: P3, status: open, title: "367.yaml judges #303 in its header only; once this lands, a re-review of #367 (or any train carrying a changes-requested member) must add the members: entry this introduces" }
