@@ -5,8 +5,11 @@
 // The plan is .ai/repo/project, and its derived state is Majordomus's: this reads
 // `majordomus plan roadmap --json` (milestones in the plan's derived order, each with its
 // status and its issue counts) and keeps every milestone whose status is neither DONE nor
-// CANCELLED, as { id, title, done, required }: its title and how many of its required issues
-// are done, the progress `majordomus plan status` prints.
+// CANCELLED, as { id, title, done, required, phase }: its title, how many of its required
+// issues are done (the progress `majordomus plan status` prints) and its phase from its
+// derived status (ACTIVE and VERIFY now, PLANNED next, BLOCKED later). About shows now and next and folds later behind its count, because a list of
+// every open milestone on the first screen shows nothing (Majordomus curated knowledge
+// a-generator-that-can-list-everything-shows-everything, 2026-10-18).
 //
 // The build reads src/ and never .ai/, so the page carries the roadmap as of the last time it
 // was written, and a plan-only commit changes neither this file nor dist. release:prepare runs
@@ -23,13 +26,17 @@ import { pathToFileURL } from 'node:url';
 import { ROOT } from './release-metadata.mjs';
 
 export const ROADMAP_REL = 'src/data/roadmap.json';
-export const SCHEMA = 'oscilla-roadmap/v1';
+export const SCHEMA = 'oscilla-roadmap/v2';
 export const CLOSED = ['DONE', 'CANCELLED'];
-export const FIELDS = ['id', 'title', 'done', 'required'];
+export const FIELDS = ['id', 'title', 'done', 'required', 'phase'];
+/** The phase of an open milestone by its derived status; a status not named here is next. */
+export const PHASE_OF = { ACTIVE: 'now', VERIFY: 'now', PLANNED: 'next', BLOCKED: 'later' };
+export const PHASES = ['now', 'next', 'later'];
 export const NOTE = 'The open milestones of the plan (.ai/repo/project) in its derived order, '
-  + 'each with how many of its required issues are done, as `majordomus plan roadmap --json` '
-  + 'gave them. Written by scripts/roadmap.mjs, which release:prepare runs before its build; '
-  + 'About renders it from the bundle. Do not edit by hand.';
+  + 'each with how many of its required issues are done and its phase (now, next, later), as '
+  + '`majordomus plan roadmap --json` gave them. Written by scripts/roadmap.mjs, which '
+  + 'release:prepare runs before its build; About renders it from the bundle. Do not edit by '
+  + 'hand.';
 
 /** The plan as Majordomus derives it: `majordomus plan roadmap --json` run in `root`. */
 export function planRoadmap(root = ROOT) {
@@ -50,6 +57,7 @@ export function planRoadmap(root = ROOT) {
 const isOpen = (m) => !CLOSED.includes(m.status);
 const doneOf = (m) => Number(m.issues?.by_status?.DONE ?? 0);
 const requiredOf = (m) => Number(m.issues?.required ?? 0);
+const phaseOf = (m) => PHASE_OF[m.status] ?? 'next';
 
 /** The roadmap of `plan`: its open milestones, in its order, with their progress. */
 export function roadmapFromPlan(plan) {
@@ -57,7 +65,7 @@ export function roadmapFromPlan(plan) {
     schema: SCHEMA,
     note: NOTE,
     milestones: plan.milestones.filter(isOpen).map((m) => ({
-      id: m.id, title: m.title, done: doneOf(m), required: requiredOf(m),
+      id: m.id, title: m.title, done: doneOf(m), required: requiredOf(m), phase: phaseOf(m),
     })),
   };
 }
@@ -76,6 +84,7 @@ export function roadmapShapeProblems(roadmap) {
       if (!Number.isInteger(m?.[k]) || m[k] < 0) problems.push(`${at}: ${k} is not a count`);
     }
     if (m?.done > m?.required) problems.push(`${at}: done ${m.done} > required ${m.required}`);
+    if (!PHASES.includes(m?.phase)) problems.push(`${at}: phase ${m?.phase} is not a phase`);
     const extra = Object.keys(m || {}).filter((k) => !FIELDS.includes(k));
     if (extra.length) problems.push(`${at}: unknown field ${extra.join(', ')}`);
   });
@@ -104,6 +113,9 @@ export function roadmapProblems(roadmap, plan) {
       if (m.done !== doneOf(p) || m.required !== requiredOf(p)) {
         problems.push(`${m.id}: the roadmap says ${m.done}/${m.required} done, the plan `
           + `${doneOf(p)}/${requiredOf(p)}`);
+      }
+      if (m.phase !== phaseOf(p)) {
+        problems.push(`${m.id}: the roadmap says ${m.phase}, the plan ${phaseOf(p)} (${p.status})`);
       }
     }
   }

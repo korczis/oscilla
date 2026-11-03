@@ -59,6 +59,9 @@
 //                               the on-screen keys light a MIDI note while it sounds (K026);
 //                               starting the sequencer stops held notes, a Note On while it plays
 //                               is refused and said once, and after it stops a note sounds again
+//   keyboard-everywhere         M086: the same A plays the Playground (a note voice), the Synth
+//                               panel and the Studio graph (its Keys node through the Studio
+//                               transport, no Playground voice), the keys docked in both
 //   keyboard-qwerty             K026, no MIDI involved (a context without the seam, so it is in
 //                               neither group and says nothing about MIDI support): the link
 //                               #m=playground&kbd=1 arms the Playground; A, D and G held play C4,
@@ -874,6 +877,58 @@ async function seamNotes(browser, b, origin, url) {
   }
 }
 
+// keyboard-everywhere (M086; the owner's report of 2026-11-03): the same computer key plays on
+// the Playground, the Synth and the Studio through the one keyboard component, and the Studio's
+// keys reach its graph (the Keys node, through the Studio transport), not the Playground voice.
+async function keyboardEverywhere(browser, b, origin, url) {
+  const leg = `${b}/${origin}`;
+  const id = 'keyboard-everywhere';
+  const { context, page, errors } = await openPage(browser, url, { also: { fn: audioProbe,
+    arg: {} } });
+  const go = async (ws) => {
+    await page.evaluate((w) => window.OSCILLA.app.setWorkspace(w), ws);
+    await until(() => page.evaluate((w) => window.OSCILLA.app.workspace === w
+      && window.OSCILLA.app.kbdView === w, ws), { ms: STEP_MS, what: `${leg}: ${ws} opens` });
+    const armed = await page.evaluate(() => window.OSCILLA.app.kbdArmedHere);
+    if (!armed) await page.locator('[data-osc="keyboard.arm"]').click();
+    await page.locator('[data-osc="keyboard.readout"]').click({ force: true });
+  };
+  const press = async (ws, pred) => {
+    await page.keyboard.down('KeyA');
+    const m = await heard(page, (x) => x.peak > 0.005 && pred(x), `${leg}: A sounds in ${ws}`);
+    const docked = await page.evaluate(() => getComputedStyle(
+      document.getElementById('osc-keyboard')).position);
+    const t = await page.evaluate(() => {
+      const tr = window.OSCILLA.studio && window.OSCILLA.studio.transport;
+      return { armed: !!(tr && tr.armed), held: window.OSCILLA.app.kbdHeld };
+    });
+    await page.keyboard.up('KeyA');
+    await heard(page, (x) => x.notes === 0, `${leg}: A released in ${ws}`);
+    return { ...m, docked, ...t };
+  };
+  try {
+    await go('playground');
+    const pg = await press('playground', (x) => x.notes === 1);
+    check(leg, id, 'A plays C4 on the Playground (a note voice of the AudioEngine)',
+      !pg.timedOut && pg.held === 'C4', JSON.stringify(pg));
+    await go('synth');
+    const sy = await press('synth', () => true);
+    check(leg, id, 'the same A plays the Synth panel through the Studio transport, the keys '
+      + 'docked', !sy.timedOut && sy.armed && sy.docked === 'fixed', JSON.stringify(sy));
+    await page.evaluate(() => window.OSCILLA.studio.store.dispatch({ type: 'BATCH',
+      label: 'Keys', steps: [{ type: 'NODE_ADD', id: 'keys-e', nodeType: 'keys',
+        position: { x: 0, y: 480 }, params: {} }] }));
+    await go('studio');
+    const st = await press('studio', (x) => x.notes === 0);
+    check(leg, id, 'the same A plays the Studio graph (its Keys node, the transport armed), not '
+      + 'the Playground voice, the keys docked as in the Synth',
+    !st.timedOut && st.armed && st.notes === 0 && st.docked === 'fixed', JSON.stringify(st));
+    check(leg, id, 'no page error', errors.length === 0, JSON.stringify(errors));
+  } finally {
+    await context.close();
+  }
+}
+
 // keyboard-qwerty (K026): the computer and on-screen keyboard play the same note voices.
 async function keyboardChecks(browser, b, origin, url) {
   const leg = `${b}/${origin}`;
@@ -1043,6 +1098,7 @@ async function main() {
             await seamChecks(browser, b, origin, url, site);
             await seamNotes(browser, b, origin, url);
             await keyboardChecks(browser, b, origin, url);
+            await keyboardEverywhere(browser, b, origin, url);
           } catch (err) {
             check(`${b}/${origin}`, 'midi-run', 'run completed', false, err && err.stack);
           }

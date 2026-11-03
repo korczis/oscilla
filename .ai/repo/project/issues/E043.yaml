@@ -25,4 +25,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-30
-updated_at: 2026-10-30
+updated_at: 2026-11-02T22:56:50Z
+started_at: 2026-11-02T22:56:28Z
+started_event: sha256:1e3177e38c8cc130d1e946da9af5aaeea279ea3b1097fd0a3f7e785abd6f0eaa
+completed_at: 2026-11-02T22:56:50Z
+completed_event: sha256:cd2917b175fed0f228aa901d4f609846ed8915f3018ee2e08d203fa716d278d3
+evidence:
+  - covers: verified
+    type: ci
+    command: "node --test tests/unit/dialog-initial-focus.test.mjs"
+    result: "landed in #367 (main merge commit 11cc9fbc47ea5f5bce48ed90904bd101455ff43a, member #325); a dialog's deferred initial focus never takes focus back (dialog-initial-focus.test.mjs); findings-delete-focus green in the three browsers; CI run 41357644373 green on the train head c2a6f6c5 (unit, npm test and the browser gate in chromium, firefox and webkit from file:// and /oscilla/), Main checks run 41372186924 green on 11cc9fbc; review verdict .ai/repo/reviews/367.yaml (merge)"
+    artifact: ".ai/repo/reviews/367.yaml"
+    commit: 743f8566e9724d0f5dd58a6fadb633b51deb0b86
+    recorded_at: 2026-11-02T22:56:43Z

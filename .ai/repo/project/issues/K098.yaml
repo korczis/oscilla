@@ -7,7 +7,7 @@ title: "XY loop recorder that overdubs in sync with the transport, and a gate ar
 slug: xy-loop-recorder-that-overdubs-in-sync-with-the-transport-an
 priority: p3
 profile: implementation
-objective: "Lands as feat(synth). Record arms a loop of N bars: the pad's x and y are written as automation lanes on the xy-pad node and its gates as an event clip, overdub merging points; the loop plays on the one transport. A gate arpeggio retriggers the gate at a tempo division from a Clock node (K023) while touched. Before: the XY pad cannot loop. After: a loop recorder and gate arpeggio. User-value tier 4 of 4 (synth-design.md section 17). Rollback: revert the pull request; no saved state depends on it."
+objective: "Lands as feat(synth). Record arms a loop of N bars: the pad's x and y are written as automation lanes on the xy-pad node and its gates as an event clip, overdub merging points; the loop plays on the one transport. A gate arpeggio retriggers the gate at a tempo division from a Clock node (K023) while touched. Before: the XY pad cannot loop. After: a loop recorder and gate arpeggio. User-value tier 4 of 4 (synth-design.md section 17). Rollback: revert the pull request; no saved state depends on it. Amended 2026-11-03 (ADR 0086; oscilla-b0 connect-the-dots audit J3; OSCILLOPAD pack phase 3): the gates and pitches record into a K099 notes clip on the one transport, not an event clip, and there is no second recorder format; the XY tab mounts the pad with onCommit (src/js/ui/synth/xy-tab.js does not today), so a gesture can be recorded into its lanes."
 why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
 scope:
   - "src/js/ui/synth"
@@ -18,9 +18,11 @@ scope:
   - "tests/README.md"
   - "dist"
 depends_on:
+  - "K099"
   - "K097"
   - "K023"
 acceptance_criteria:
+  - "A gesture on the XY tab while Record is armed commits through the pad's onCommit into the xy-pad node's x and y lanes and its notes into a K099 notes clip, as one undo entry per take, in a test that fails on the merge base (J3: xy-tab.js mounts the pad without onCommit)."
   - "tests/unit/xy-loop.test.mjs, failing on the merge base: a recorded gesture replays the same lane points on the next pass, an overdub keeps the earlier points outside its touch, and an arpeggio at 1/16 at 120 BPM gates every 125 ms within one frame offline."
   - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: an overdub outside the loop."
   - "A browser check in tests/browser/xy-pad.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: the recorded loop is the lanes and clip the Studio timeline shows. Real-time: the recorded gesture replays on the next pass (runtime pitch follows it), each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: Record and Arp work by pointer, keyboard and touch and are role=switch. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
@@ -38,4 +40,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-03

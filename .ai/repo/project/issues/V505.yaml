@@ -2,11 +2,11 @@ id: V505
 milestone: M045
 serves:
   - "midi-jam-companion#midi-jam-recorded"
-title: "Record a jam into an editable event track"
+title: "Record a jam into an editable notes clip"
 slug: midi-jam-record
 priority: p2
 profile: implementation
-objective: "Decide where a recorded jam lives (Studio timeline clips or a separate record) against project.studio-model-is-canonical, then record incoming and generated events into it so that it saves, reloads and replays identically."
+objective: "Where a recorded jam lives is decided (2026-11-03): ADR 0084 puts notes clips on the one Studio timeline and ADR 0086 makes the notes array the one truth, so a jam records into a K099 notes clip on the target's track (project.studio-model-is-canonical), not into a separate record or an event track. Record incoming and generated events into it so that it saves, reloads and replays identically. Re-scoped on 2026-11-03: it builds on K099's clip kind, so it depends on K099 and K099 no longer depends on it."
 current_state: "Updated 2026-10-18. The scope names only MIDI paths plus the one integration file the criteria need, so that majordomus intent realization does not infer unrelated earlier work as realising this intent (audit finding main-plan F9, 2026-10-18). .ai/repo/adrs holds the decision on where a recorded jam lives (critique finding event-track-needs-new-clip-kind); if that decision puts the jam into Studio timeline clips, this scope is widened to the src/js/studio paths it names by a plan change at that point. The same plan change adds the storage and UI path a saved jam needs (its store module, the save and reload controls) and the browser check that saves, reloads and replays identically; tests/browser/midi.cjs is in scope already for that check."
 scope:
   - "src/js/midi"
@@ -17,6 +17,7 @@ scope:
   - "tests/README.md"
   - "dist"
 depends_on:
+  - "K099"
   - "V503"
   - "V504"
 acceptance_criteria:
