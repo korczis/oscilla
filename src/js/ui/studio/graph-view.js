@@ -25,7 +25,9 @@
 //   firstCompatibleInput(def, sourcePort) -> port | null
 //   compiledStatus(plan) -> Map nodeId -> { status, code, reason }   (code: compiler.js)
 //   runtimeStatus(model, runtime, revision?) -> { nodes: Map, edges: Map }   what the running
-//     graph plays, judged by runtime.js studioDivergence
+//     graph plays, judged by runtime.js studioDivergence; a `not-in-runtime` status says why by
+//     the verdict's state (notInRuntimeText) and, when refused, carries the diagnostic's
+//     `cause: { node | edge, code }` (divergenceCause)
 //
 // INVARIANT: probeConnection asks the same validator the store uses (validateStudioModel on the
 // model plus the candidate edge), so the live feedback of a cable drag and the store's verdict
@@ -92,10 +94,71 @@ export function compiledEdgeStatus(plan) {
   return out;
 }
 
-/** Reason of a model node or edge the running graph does not reflect (runtimeStatus). */
-export const notInRuntimeText = (lastError) => 'Not in the running graph: the last update was '
-  + `refused${lastError && lastError.message ? ` (${lastError.message})` : ''}. The last working `
-  + 'graph keeps playing.';
+/** The node or edge a diagnostic names ({ kind, id } | null): its entity, else validation's ids. */
+const entityOfDiagnostic = (d) => (!d ? null : d.entity && d.entity.id ? d.entity
+  : d.nodeId ? { kind: 'node', id: d.nodeId } : d.edgeId ? { kind: 'edge', id: d.edgeId }
+    : null);
+
+/** "LFO 1" or "connection from LFO 1 output to Filter 1 cutoff": what `ent` names. */
+function entityText(model, ent) {
+  if (!ent) return null;
+  if (ent.kind === 'node') {
+    const n = model && nodeById(model, ent.id);
+    return n ? n.metadata.name : `node ${ent.id}`;
+  }
+  if (ent.kind === 'edge') {
+    const known = model && model.graph.edges.some((e) => e.id === ent.id);
+    const d = known ? describeEdge(model, ent.id) : `Connection ${ent.id}`;
+    return `${d[0].toLowerCase()}${d.slice(1)}`;
+  }
+  return `${ent.kind} ${ent.id}`;
+}
+
+/** A diagnostic in words: "message (LFO 1, prepare-failed)"; every part it has, none it lacks. */
+function diagnosticText(model, d) {
+  const where = [entityText(model, entityOfDiagnostic(d)), d.code].filter(Boolean).join(', ');
+  return [d.message, where ? `(${where})` : null].filter(Boolean).join(' ') || 'no reason given';
+}
+
+/**
+ * The cause a diagnostic names, for a jump (the Inspector selects it): { node | edge | clip |
+ * lane: id, code } | null.
+ */
+export function divergenceCause(d) {
+  if (!d) return null;
+  const ent = entityOfDiagnostic(d);
+  return { ...(ent ? { [ent.kind]: ent.id } : {}), code: d.code || null };
+}
+
+/**
+ * Reason of a model node or edge the running graph does not reflect (runtimeStatus), by the
+ * divergence verdict (runtime.js studioDivergence) and the model its entities are named from.
+ * Only 'refused' says refused, and names the runtime's diagnostic. 'behind' is an edit the
+ * runtime has not taken yet, which nothing refused (transport.js: while playing, its next sync,
+ * at the next edit or wake-up, applies the store's revision; once stopped, PLAY applies it).
+ * 'not-applied': the Studio graph is not running.
+ */
+export function notInRuntimeText(verdict, model = null) {
+  const v = verdict || {};
+  const a = v.applied;
+  const plays = a && a.revision != null ? `revision ${a.revision}` : 'the last applied graph';
+  if (v.state === 'refused') {
+    return 'Not in the running graph: the runtime refused this update: '
+      + `${diagnosticText(model, v.reason || {})}. The last working graph keeps playing.`;
+  }
+  if (v.state === 'behind') {
+    return `Not in the running graph: this edit is not applied yet (${plays} plays). While `
+      + 'playing, the next sync applies it; when stopped, the next Play does.';
+  }
+  if (v.state === 'not-applied') {
+    return 'Not in the running graph: the Studio graph is not running, so nothing is applied; '
+      + `Play applies it.${v.reason ? ` The last Play failed on it: ${diagnosticText(model,
+        v.reason)}.` : ''}`;
+  }
+  // in-sync or degraded: the applied revision is this one, and its plan does not hold it.
+  return `Not in the running graph: the plan of ${plays} does not hold it`
+    + `${v.reason ? ` (${diagnosticText(model, v.reason)})` : ''}.`;
+}
 
 /**
  * Node and edge status from the RUNNING Studio runtime (runtime.js: plan, nodes, edges,
@@ -105,14 +168,19 @@ export const notInRuntimeText = (lastError) => 'Not in the running graph: the la
  * for the store `revision` when given) is not in-sync, a model node or edge the runtime's plan
  * does not reflect (the node's type or parameters, or the edge, differ) is `degraded` /
  * `inactive` with code `not-in-runtime` and the reason, so a graph that is not playing never
- * looks live.
+ * looks live. The reason is the verdict's state in words (notInRuntimeText), and a refused one
+ * adds `cause` (divergenceCause: the node or edge the runtime's diagnostic names, and its code).
  */
 export function runtimeStatus(model, runtime, revision = null) {
   const plan = runtime.plan;
   const verdict = studioDivergence({ model, revision }, runtime);
   // degraded: the applied revision runs, short of a failed step (its diagnostic names it).
   const current = verdict.state === 'in-sync' || verdict.state === 'degraded';
-  const reason = notInRuntimeText(verdict.reason || runtime.lastError);
+  // The reason is the verdict's alone: an older runtime.lastError is not this state's cause.
+  const reason = notInRuntimeText(verdict, model);
+  const cause = verdict.state === 'refused' ? divergenceCause(verdict.reason) : null;
+  const notIn = (status) => ({ status, code: 'not-in-runtime', reason, ...(cause ? { cause }
+    : {}) });
   const planEdges = !current && plan.model
     ? new Map(plan.model.graph.edges.map((e) => [e.id, e])) : null;
   const nodes = new Map();
@@ -121,7 +189,7 @@ export function runtimeStatus(model, runtime, revision = null) {
     const pn = plan.nodes.get(node.id);
     if (!pn || (!current && (pn.type !== node.type || pn.params !== node.params))) {
       stale.add(node.id);
-      nodes.set(node.id, { status: 'degraded', code: 'not-in-runtime', reason });
+      nodes.set(node.id, notIn('degraded'));
       continue;
     }
     const h = runtime.nodes.get(node.id);
@@ -133,7 +201,7 @@ export function runtimeStatus(model, runtime, revision = null) {
     const pe = plan.edges.get(e.id);
     if (!pe || stale.has(e.from.node) || stale.has(e.to.node)
       || (planEdges && planEdges.get(e.id) !== e)) {
-      edges.set(e.id, { status: 'inactive', code: 'not-in-runtime', reason });
+      edges.set(e.id, notIn('inactive'));
       continue;
     }
     const eh = runtime.edges.get(e.id);

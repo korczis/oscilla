@@ -6,7 +6,10 @@
 // touches an AudioParam. A slider drag is one history entry (store gesture, §50).
 //
 //   inspectorView(model, selection, opts) -> view           pure (unit-tested)
-//     kind 'studio' (nothing selected) | 'node' | 'multi' | 'edge' | 'clip' | 'point'
+//     kind 'studio' (nothing selected) | 'node' | 'multi' | 'edge' | 'clip' | 'point'; a node
+//     or edge view's `cause` is the entity its status's cause names (graph-view.js
+//     divergenceCause: what the runtime refused), { kind, id, label, selection } | null, when
+//     it is another one than the shown entity: the status line offers to select it
 //   runtimeView(model, truth, opts) -> runtime              pure: the 'studio' view's Runtime
 //     section (ADR 0039): truth = { verdict: runtime.js studioDivergence, runtime: runtime
 //     debugInfo(), transport: transport debugInfo() }; opts: { registry, status, edgeStatus }.
@@ -325,6 +328,18 @@ function entityRef(model, ent, registry) {
   return { kind, id, label: label || id, selection };
 }
 
+/**
+ * The entity a status's `cause` names (graph-view.js divergenceCause) as entityRef links it, or
+ * null when there is none to select or it is `self`, the entity shown.
+ */
+function causeRef(model, cause, self, registry) {
+  if (!cause) return null;
+  const kind = ['node', 'edge', 'clip', 'lane'].find((k) => cause[k]);
+  if (!kind || (kind === self.kind && cause[kind] === self.id)) return null;
+  const ref = entityRef(model, { kind, id: cause[kind] }, registry);
+  return ref && ref.selection ? ref : null;
+}
+
 /** "Filter Cutoff": a { node, param } target by name. */
 function paramText(model, t, registry) {
   const n = nodeOf(model, t.node);
@@ -571,6 +586,7 @@ export function inspectorView(model, selection, opts = {}) {
       statusLabel: label,
       code: st ? st.code || null : null,
       reason,
+      cause: causeRef(model, st && st.cause, { kind: 'node', id: node.id }, registry),
       warnings: warn,
       // The status line: label (code), the structured reason, validator warnings, then the
       // runtime and transport diagnostics naming this node, each with its code.
@@ -608,6 +624,7 @@ export function inspectorView(model, selection, opts = {}) {
         routeText: route.text,
         routeCode: code,
         statusText,
+        cause: causeRef(model, est && est.cause, { kind: 'edge', id: e.id }, registry),
         id: e.id,
         title: 'Connection',
         text: describeEdge(model, e.id, { registry }),
@@ -697,7 +714,7 @@ export function inspectorRebuildKey(view) {
   // An edge's units and Mapping labels follow its mapping (octaves or the parameter's unit).
   if (view.kind === 'edge') return view.control ? `${view.props.mapping}|${view.unit}` : '';
   if (view.kind !== 'node') return '';
-  return [!!view.statusText, view.mic ? `${view.mic.action}|${view.mic.error}|${view.mic.busy}`
+  return [!!view.statusText, view.cause ? `${view.cause.kind}:${view.cause.id}` : '', view.mic ? `${view.mic.action}|${view.mic.error}|${view.mic.busy}`
     : '',
     ...view.connections.map((c) => c.text), ...view.fields.map((f) =>
       // Whether Automate is offered can change with another parameter (a filter type, R7);
@@ -995,11 +1012,21 @@ export function mountInspector(host, svc) {
     ]);
   }
 
+  /** "Select LFO 1": the entity a status's cause names (causeRef), selected on activation. */
+  function causeLink(c) {
+    return h('p', { class: 'text-sm' }, [h('button', { type: 'button',
+      class: 'font-medium text-primary-600 underline dark:text-primary-400',
+      'data-osc': 'studio.inspector.statusCause', 'data-key': `cause:${c.kind}:${c.id}`,
+      text: `Select ${c.label}`,
+      onClick: () => svc.store.dispatch({ type: 'SELECTION_CHANGE', selection: c.selection }) })]);
+  }
+
   function buildNode(view) {
     const parts = [header(view.name, `${view.typeLabel} · ${view.categoryLabel}`)];
     if (view.statusText) {
       parts.push(h('p', { class: `osc-si-status${view.statusError ? ' is-error' : ''}`,
         role: 'note', 'data-osc': 'studio.inspector.status', text: view.statusText }));
+      if (view.cause) parts.push(causeLink(view.cause));
     }
     if (view.mic) {
       parts.push(h('div', { class: 'osc-si-section', 'data-osc': 'studio.inspector.mic' }, [
@@ -1072,6 +1099,7 @@ export function mountInspector(host, svc) {
       parts.push(h('p', { class: 'osc-si-status is-inactive', role: 'note',
         'data-osc': 'studio.inspector.edgeStatus', 'data-route': view.route,
         text: view.statusText }));
+      if (view.cause) parts.push(causeLink(view.cause));
     }
     parts.push(h('dl', { class: 'osc-si-dl', 'data-osc': 'studio.inspector.edge' }, [
       h('div', {}, [h('dt', { text: 'From' }), h('dd', { text: view.fromText })]),
