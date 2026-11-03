@@ -19,8 +19,9 @@
 //   (e) the Sequencer panel of dist/index.html (file://), driven by pointer and keyboard: Tempo
 //       (BPM), Loop, the timeline selection, the Sweep's Start, End, Duration and Curve fields,
 //       Move later and earlier, Add block (pointer and keyboard) and Delete, Play from the start,
-//       Stop and Play, each judged in the editor model and in the rendered timeline or the
-//       transport's state, and the transport also by the engine's output level;
+//       Stop and Play, and Escape (a stop from outside the panel: Play is no longer pressed),
+//       each judged in the editor model and in the rendered timeline or the transport's state,
+//       and the transport also by the engine's output level;
 //   (f) seq-filter-reaches-sequence (C003), in the built dist/index.html (file://, 1536x1024):
 //       a looping 4 kHz Tone block, played with #osc-seq-play, drops by more than 20 dB once
 //       the Filter Lab's switch turns on a 200 Hz low-pass set through #osc-filter-cutoff-value;
@@ -513,6 +514,12 @@ async function panelChecks(engine, browser) {
   await step('Play sounds', (s) => s.playing && s.peak > 0.005);
   await page.click('#osc-seq-stop');
   await step('Stop again leaves no source', (s) => !s.playing && s.sources === 0);
+  // Escape stops the sequence from outside the panel (output owner): Play stops saying pressed
+  await page.click('#osc-seq-play');
+  await step('Play sounds before Escape', (s) => s.playing && s.playAria === 'true');
+  await page.keyboard.press('Escape');
+  await step('Escape stops it and Play is no longer pressed', (s) => !s.playing && !s.appPlaying
+    && s.sources === 0 && s.playAria === 'false');
   check(engine, '(e) panel: no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
   await page.close();
 }
