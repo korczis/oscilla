@@ -25,10 +25,10 @@
         "phone-engines-light 390x844",
         "phone-xy-dark 390x844",
         "phone-xy-light 390x844",
-        "desktop-bay-dark 1536x1400",
-        "desktop-bay-light 1536x1400",
-        "phone-bay-dark 390x1400",
-        "phone-bay-light 390x1400"
+        "desktop-bay-dark 1536x2100",
+        "desktop-bay-light 1536x2100",
+        "phone-bay-dark 390x2200",
+        "phone-bay-light 390x2200"
       ]
     },
     "linux-x64": {
@@ -55,10 +55,10 @@
         "phone-engines-light 390x844",
         "phone-xy-dark 390x844",
         "phone-xy-light 390x844",
-        "desktop-bay-dark 1536x1400",
-        "desktop-bay-light 1536x1400",
-        "phone-bay-dark 390x1400",
-        "phone-bay-light 390x1400"
+        "desktop-bay-dark 1536x2100",
+        "desktop-bay-light 1536x2100",
+        "phone-bay-dark 390x2200",
+        "phone-bay-light 390x2200"
       ]
     }
   },

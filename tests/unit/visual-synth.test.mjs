@@ -51,7 +51,26 @@ test('the views are desktop and phone x Panel, Engines, XY x dark, light, plus t
       'desktop-bay-dark 1536 panel dark', 'desktop-bay-light 1536 panel light',
       'phone-bay-dark 390 panel dark', 'phone-bay-light 390 panel light']);
     for (const v of bay) assert.ok(v.height > (v.width < 600 ? 844 : 1024), `${v.id} is taller`);
+    // At 1536x1400 and 390x1400 the docked keyboard covered six to eight of the 21 bay plates
+    // (FM to XY on desktop, OUTPUT to XY on the phone; review of fd4abde6): a bay view is the
+    // bay card's bottom with its six cables listed (1702 desktop, 1905 phone, measured) plus the
+    // dock (its top 357 and 259 px above the viewport's bottom) plus a margin.
+    assert.deepEqual(bay.map((v) => `${v.id} ${v.width}x${v.height}`), [
+      'desktop-bay-dark 1536x2100', 'desktop-bay-light 1536x2100',
+      'phone-bay-dark 390x2200', 'phone-bay-light 390x2200']);
     assert.equal(new Set(VIEWS.map((v) => v.id)).size, VIEWS.length, 'view ids are unique');
+  });
+
+test('a bay view fails closed unless the bay card and every plate in it sit above the dock',
+  async () => {
+    const src = read('scripts/visual-synth.mjs');
+    assert.match(src, /querySelectorAll\('\[data-plate\]'\)/);
+    assert.match(src, /bay plates not seen whole above the docked keyboard: /);
+    assert.match(src, /if \(s\.plates\.length\) problems\.push\(/);
+    // The header and the README state what the view holds, not the 12 cable ends alone.
+    assert.match(src, /every plate of the bay \(\[data-plate\]\) and the bay's card/);
+    assert.match(read('tests/README.md'), new RegExp('every bay plate \\(`\\[data-plate\\]`\\) '
+      + "and the bay's card above the docked keyboard"));
   });
 
 test('each phone tab view shows its tab content above the docked keyboard, and a knob moves it',

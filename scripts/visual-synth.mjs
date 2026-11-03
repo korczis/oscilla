@@ -20,14 +20,15 @@
 //            a knob is seen whole and turning it (End or Home) changes the picture.
 //     <tab> is panel, engines or xy (the Engines tab on its default engine, ENGINE; the XY tab
 //     with no preset, so its pad is shown disabled), <theme> is dark or light.
-//   desktop-bay-<theme>    1536x1400, the Panel tab scrolled so the bay's card is at the top of
-//   phone-bay-<theme>      the scroller (390x1400 with touch: the bay's own face, V636, shown
-//            through its PATCH BAY chip, under the sticky section nav). The six cables span
-//            about 706 px from the Keys row to the VCA row, more than the agreed heights leave
-//            above the docked keyboard, so the bay is seen whole in these taller views at the
-//            agreed widths (W1's module plates in the bay and its taller dock put the VCA row
-//            under the dock at 1536x1280); the capture fails closed unless all 12 cable ends are
-//            hit-testable (nothing covers them).
+//   desktop-bay-<theme>    1536x2100, the Panel tab scrolled so the bay's card is at the top of
+//   phone-bay-<theme>      the scroller (390x2200 with touch: the bay's own face, V636, shown
+//            through its PATCH BAY chip, 8 px under the sticky section nav). The bay's card (its
+//            21 plates and the CABLES list) is taller than the agreed heights leave above the
+//            docked keyboard (at 1536x1400 and 390x1400 the dock covered six to eight plates),
+//            so the bay is seen whole in these taller views at the agreed widths: the capture
+//            fails closed unless every plate of the bay ([data-plate]) and the bay's card sit
+//            below the section nav and above the docked keyboard (each bay view prints its
+//            spare pixels), and unless all 12 cable ends are hit-testable (nothing covers them).
 // Below xl the bay is a face of its own (V636): the cables are patched on it, through its chip,
 // and the tab views come back to the module cards through the PANEL chip.
 // Every capture fails closed unless the Synth reports the view's tab, exactly the six cables,
@@ -60,7 +61,16 @@ export const ENGINE = 'additive';
 export const CABLES = [['keys.velocity', 'vco2.tune'], ['vco1.audio', 'ring.modulator'],
   ['vco2.audio', 'mix.in4'], ['ring.audio', 'mix.in3'], ['noise.audio', 'mix.in1'],
   ['mix.audio', 'vca.audio']];
-const SIZES = [['desktop', 1536, 1024, 1400], ['phone', 390, 844, 1400]];
+/**
+ * [size, width, height, bay view height]: a bay view is as tall as the bay's card (title, the
+ * 21 plates, the CABLES list of the six cables) scrolled to the top, plus the docked keyboard
+ * below it, plus a margin, so the card and every plate in it are seen above the dock. Measured
+ * on W1b (darwin-arm64): the card spans 85-1702 desktop and 179-1905 phone; the dock's top is
+ * 357 and 259 px above the viewport's bottom. Each bay view prints its spare pixels.
+ */
+const SIZES = [['desktop', 1536, 1024, 2100], ['phone', 390, 844, 2200]];
+/** The bay's card, scrolled to the top of the scroller in a bay view. */
+export const BAY = '[data-osc="synth.bay"]';
 const TABS = ['panel', 'engines', 'xy'];
 const THEMES = ['dark', 'light'];
 /** What a phone tab view scrolls to the top of the scroller: the tab's own content. */
@@ -184,19 +194,9 @@ function resetScroll() {
   }
 }
 
-/** Scroll .osc-main so the bay's card sits at its top, under the sticky section nav if shown. */
-function scrollBayToTop() {
-  const main = document.querySelector('.osc-main');
-  const bay = document.querySelector('[data-osc="synth.bay"]');
-  const nav = document.querySelector('nav[aria-label="Synth sections"]');
-  const navH = nav && getComputedStyle(nav).display !== 'none' ? nav.offsetHeight : 0;
-  main.scrollTop = Math.round(main.scrollTop + bay.getBoundingClientRect().top
-    - main.getBoundingClientRect().top - navH);
-}
-
 /**
- * Scroll .osc-main, as scrollBayToTop does, so the first element `sel` names in the Synth view
- * (a tab's first module card, the XY pad) sits at its top. The sticky chip nav sticks inside the
+ * Scroll .osc-main so the first element `sel` names in the Synth view (a tab's first module card,
+ * the XY pad, the bay's card) sits at its top. The sticky chip nav sticks inside the
  * scroller's padding, so the element is then brought to 8 px below the nav's stuck bottom edge,
  * where a section chip places its module (gotoSection in src/js/synth/ui.js).
  */
@@ -319,13 +319,40 @@ function inspect({ pairs, bay, park, content }) {
     return `${id} (under ${by ? `${by.tagName.toLowerCase()}${by.id ? `#${by.id}` : ''}`
       + `${by.getAttribute('data-osc') ? `[${by.getAttribute('data-osc')}]` : ''}` : 'nothing'})`;
   }).filter(Boolean) : [];
+  // The bay is seen whole: its card and every plate in it below the section nav (when shown)
+  // and above the docked keyboard, so no plate is left out of every view.
+  let plates = [];
+  let fit = null;
+  if (bay) {
+    const card = document.querySelector('[data-osc="synth.bay"]');
+    const nav = document.querySelector('#osc-view-synth nav[aria-label^="Synth "]');
+    const navBottom = nav && getComputedStyle(nav).display !== 'none'
+      ? nav.getBoundingClientRect().bottom : 0;
+    const dock = document.getElementById('osc-keyboard').getBoundingClientRect();
+    const dockTop = dock.height ? dock.top : window.innerHeight;
+    const out = (el, name) => {
+      const r = el.getBoundingClientRect();
+      if (!r.width || !r.height) return `${name} (not drawn)`;
+      if (r.top < navBottom - 1 || r.bottom > dockTop) {
+        return `${name} (${Math.round(r.top)}-${Math.round(r.bottom)}, nav ${Math.round(navBottom)}`
+          + `, dock ${Math.round(dockTop)})`;
+      }
+      return null;
+    };
+    const all = card ? [...card.querySelectorAll('[data-plate]')] : [];
+    const c = card && card.getBoundingClientRect();
+    if (c) fit = { top: Math.round(c.top), bottom: Math.round(c.bottom), dock: Math.round(dockTop) };
+    plates = !card ? ['the bay card (not drawn)'] : !all.length ? ['no [data-plate] in the bay']
+      : [out(card, 'the bay card'), ...all.map((p) => out(p, p.getAttribute('data-plate')))]
+        .filter(Boolean);
+  }
   const under = document.elementFromPoint(park[0], park[1]);
   const interactive = under && under.closest('a[href], button, input, select, textarea, '
     + '[tabindex], [role=button], [role=slider], [data-knob], [data-jack]');
   return { tab: d.tab, engine: d.engine, armed: d.armed, voices: d.voices,
     cables: d.cables.map((c) => `${c.from} -> ${c.to}`).sort(),
     drawn: document.querySelectorAll('[data-osc="synth.bay.svg"] [data-cable]').length,
-    theme: document.documentElement.dataset.theme, hidden, unseen,
+    theme: document.documentElement.dataset.theme, hidden, unseen, plates, fit,
     parked: interactive ? (interactive.getAttribute('data-osc') || interactive.tagName) : null,
     alerts: app.alerts.length };
 }
@@ -381,7 +408,7 @@ async function capture(browser, view, out, target) {
     { theme: view.theme, tab: view.tab, free: FREE_JACK }, redrawState);
   await frames(page);
   await page.evaluate(resetScroll);
-  if (view.bay) await page.evaluate(scrollBayToTop);
+  if (view.bay) await page.evaluate(scrollToTop, BAY);
   else if (view.content) await page.evaluate(scrollToTop, view.content);
   // A theme switch starts colour transitions (the header's icon buttons); reduced motion does
   // not stop a CSS transition, so wait until none runs (1 in 2 light captures differed by 27 px).
@@ -401,6 +428,8 @@ async function capture(browser, view, out, target) {
   if (s.armed || s.voices) problems.push(`the engine is armed (${s.armed}) or sounds (${s.voices})`);
   if (s.theme !== view.theme) problems.push(`the page is in the ${s.theme} theme`);
   if (s.hidden.length) problems.push(`cable ends not visible: ${s.hidden.join(', ')}`);
+  if (s.plates.length) problems.push(`bay plates not seen whole above the docked keyboard: `
+    + s.plates.join(', '));
   if (s.unseen) problems.push(`the view's content ${view.content} ${s.unseen}`);
   if (s.parked) problems.push(`the parked pointer hovers ${s.parked}`);
   if (s.alerts) problems.push(`${s.alerts} notice(s) on screen`);
@@ -432,7 +461,7 @@ async function capture(browser, view, out, target) {
     }
   }
   await page.close();
-  return { file, errors, problems, probe };
+  return { file, errors, problems, probe, fit: s.fit };
 }
 
 /** The pixels two equal-sized PNG buffers differ by, with the compare settings of the gate. */
@@ -479,13 +508,17 @@ async function main(argv) {
   }
   try {
     for (const view of opts.views) {
-      const { file, errors, problems, probe } = await capture(browser, view, opts.out,
+      const { file, errors, problems, probe, fit } = await capture(browser, view, opts.out,
         opts.target);
       for (const e of errors) failures.push(`${view.id}: page error ${e}`);
       for (const e of problems) failures.push(`${view.id}: ${e}`);
       if (probe) {
         lines.push(`  ${view.id.padEnd(21)} knob ${probe.knob} ${probe.before} -> ${probe.after} `
           + `moves ${probe.pct} % (${probe.seen} knobs seen)`);
+      }
+      if (fit) {
+        lines.push(`  ${view.id.padEnd(21)} bay card ${fit.top}-${fit.bottom}, dock at ${fit.dock}`
+          + ` (${fit.dock - fit.bottom} px spare)`);
       }
       const ref = path.join(REF_DIR, `${ENV}-${view.id}.png`);
       if (opts.update) {
