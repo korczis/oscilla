@@ -36,4 +36,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-02T15:08:47Z
+started_at: 2026-11-02T15:08:23Z
+started_event: sha256:3c0f9044cb9bb4c434ea40cb07ded99213ff1f63f7da12e40695b6b97e291780
+completed_at: 2026-11-02T15:08:47Z
+completed_event: sha256:8ce641747e8c607a3c9a062453bdf9f40229555bff677af66b12c3a5f920ddad
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/route-hygiene.test.mjs tests/unit/navigation.test.mjs tests/unit/about.test.mjs; node tests/browser/link-integrity.cjs (CI run 41357644373)"
+    result: "unit 30/30 pass at main 66635acc; landed in #367 (11cc9fbc, f2a19e76 merged route hygiene and link integrity); link-integrity in the gate, green in #367's CI run 41357644373 on head c2a6f6c5; review verdict .ai/repo/reviews/367.yaml"
+    artifact: ".ai/repo/reviews/367.yaml"
+    commit: 66635acc6aa2af776a875de458b800896eecddcb
+    recorded_at: 2026-11-02T15:08:39Z
