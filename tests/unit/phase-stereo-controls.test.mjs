@@ -17,6 +17,15 @@ register(`data:text/javascript,${encodeURIComponent(
   + ' if (s === "p5") return { url: "data:text/javascript,export default function p5() {}",'
   + ' shortCircuit: true };'
   + ' return next(s, c); }')}`);
+// labs/dom.js hears 'input', 'change' and 'focusout' on the document in the capture phase to
+// know which field the user is editing (C021), so the document exists before it is imported.
+const priorDocument = globalThis.document;
+const docListeners = new Map();
+globalThis.document = { activeElement: null,
+  addEventListener: (t, fn) => docListeners.set(t, [...(docListeners.get(t) || []), fn]) };
+const docFire = (t, target) => {
+  for (const fn of docListeners.get(t) || []) fn({ type: t, target });
+};
 const { mount, PHASE_DEFAULTS } = await import('../../src/js/labs/phase-stereo.js');
 const { sliderFillPct } = await import('../../src/js/labs/dom.js');
 
@@ -57,8 +66,6 @@ function mountLab() {
   return { lab, pan: el['#osc-stereo-pan'], offset: el['[data-osc="phase.offset"]'] };
 }
 
-const priorDocument = globalThis.document;
-test.before(() => { globalThis.document = { activeElement: null }; });
 test.after(() => {
   if (priorDocument === undefined) delete globalThis.document;
   else globalThis.document = priorDocument;
@@ -107,12 +114,14 @@ test('a restored offset comes into the field\'s 0..359 domain; the field is not 
     offset.fire('change');
     assert.equal(lab.config.phaseDeg, 5);
     assert.equal(offset.value, '5');
-    // setField leaves a field the user is typing in alone.
+    // setField leaves a field the user is typing in alone (typed, not yet committed).
     globalThis.document.activeElement = offset;
     offset.value = '1';
+    docFire('input', offset);
     lab.update({ phaseDeg: 120 });
     assert.equal(lab.config.phaseDeg, 120);
     assert.equal(offset.value, '1', 'the focused field is not overwritten');
+    docFire('change', offset);
   } finally {
     globalThis.document.activeElement = null;
     lab.dispose();
