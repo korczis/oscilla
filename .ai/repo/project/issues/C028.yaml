@@ -10,12 +10,14 @@ objective: "Lands as test(cross-links), plus fix(nav) if the measurement says so
 why: "project.no-fake-science and the review practice for flakes: a failure is called a flake only with evidence. Calling it one without the observed state hides a possible focus-restore defect that a keyboard user would meet: Back leaving focus on the page body is an accessibility regression, not test noise. The same class has now held a merge train (#404 sat BLOCKED from 07:00Z) and reddened a lane base."
 scope:
   - "tests/browser/cross-links.cjs"
+  - "tests/browser/control-census.cjs"
   - "tests/README.md"
   - "src/js/ui/"
   - ".ai/repo/adrs/0045-workspace-in-history-one-hash-dispatcher-unsaved-guard.md"
   - "dist/index.html"
 acceptance_criteria:
   - "H.until in tests/browser/cross-links.cjs keeps the last state it read, and every round-trip failure message (P8 studio-back, learn-demo-back and the other Back / Forward / traverse steps) includes it: workspace, hash, focusTag, focusOsc, focusBody, headingOf. A unit or self-check proves that a forced timeout reports the last state rather than null."
+  - "The same gap in tests/browser/control-census.cjs: a row whose expectation times out reports 'last value false' and drops the snapshot it judged (#404 at 234bee2d, run 41700701066: webkit filter.type.peaking.pointer, 168 polls, while it passed at 8849bc27 on the same app and 5/5 locally). A timed-out row reports the fields its expect reads from its last snapshot (here app.filter.type and the engine's filter), so a flake and a defect can be told apart from the log."
   - "The rate is measured in the linux WebKit Playwright container (the CI image, 44.1 kHz) and on darwin: at least 20 runs each of '--only studio-back' and '--only learn-demo-back' on file and http, recorded in the PR body with the observed failing states."
   - "If any failure shows the workspace returned with focus on <body> or on no control, it is a product defect: the Back path restores focus to the control or heading the navigation contract names (fix(nav), with a fail-first browser check for keyboard Back in WebKit). Otherwise the test's predicate or deadline is corrected to what the contract promises, and the PR says which and why."
   - "The focus contract is the written one: ADR 0045's Focus paragraph (a workspace change the user did not make on a control, i.e. history Back, Forward or a link, moves focus to the workspace heading; a nav click leaves focus on the pressed control). The in-page Studio 'Back to the Sequencer' button and the demo notice's 'Back to the lesson' action are controls that disappear with their view, which that paragraph does not name: the PR either shows they fall under the heading rule or adds the case to ADR 0045 (a resolution note the owner can override), and the predicate and any fix(nav) follow that text, not the builder's judgement."
