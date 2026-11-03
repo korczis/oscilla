@@ -299,9 +299,10 @@ the browser has no offline `suspend`, Firefox), then `encode`. `opts.signal` (an
 resolves the call at once with `{ ok: false, aborted: true }`; the context finishes in the
 background and its buffer is dropped. Neither changes a sample.
 
-The UI is the Studio toolbar's **Render WAV** (`src/js/ui/studio/workspace.js`
-`studioOpenRender` / `studioRenderWav`): a dialog with the duration (`defaultRenderDuration`, or
-`RENDER_DEFAULT_S` = 2 s for a graph without a timeline), the plan's format (48 kHz stereo or a
+The UI is the Studio toolbar's **Render WAV** (`src/js/ui/studio/workspace/files.js`
+`studioOpenRender` / `studioRenderWav`, composed by `workspace.js`): a dialog with the duration
+(`defaultRenderDuration`, or `RENDER_DEFAULT_S` = 2 s for a graph without a timeline), the plan's
+format (48 kHz stereo or a
 Recorder's) and limitations; Render is disabled when the plan refuses. The render runs at the
 plan's rate, never the device's, so the same Studio gives the same bytes on every machine; the
 16-bit WAV is downloaded with the exporters' `downloadBlob`, progress and Abort in the toolbar's
