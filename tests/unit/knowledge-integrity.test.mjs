@@ -1118,6 +1118,9 @@ const ADR_NOT_A_CAPABILITY = new Map([
   ['0081', 'a proposed decision (J001): the component contract and its Majordomus projection;'
     + ' nothing implements it yet, and G001\'s claim cites it when the catalogue ships, and this'
     + ' entry then fails as stale'],
+  ['0085', 'a proposed decision (song-reconstruction critique, finding'
+    + ' lineage-and-acceptance-have-no-home): where reconstruction lineage and acceptance live;'
+    + ' nothing implements it yet, and the first issue of that intent cites it when it ships'],
 ]);
 
 /** ADR numbers (from 0011 on) that `corpus` never cites, and exemptions it does cite. */
