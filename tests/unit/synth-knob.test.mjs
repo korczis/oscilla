@@ -1,9 +1,11 @@
-// K058: the knob's value model (src/js/synth/view/knob.js): value to angle, the log domain,
-// 200 px for the full range and Shift for a tenth, the keys, typed values with units, refusals
-// with the registry's reason, formatting and enum stepping. No tween: a value is a setpoint.
+// K058: the knob's value model (src/js/synth/view/knob.js, since F013 W1b an adapter onto the
+// synth-theme core src/js/ui/synth/knob.js): value to angle, the log domain, 200 px for the full
+// range and Shift for a tenth, the keys, typed values with units, refusals with the registry's
+// reason, formatting and enum stepping, each the core's. No tween: a value is a setpoint.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DRAG_FULL_PX, knobModel, knobSvg, stepOption } from '../../src/js/synth/view/knob.js';
+import * as core from '../../src/js/ui/synth/knob.js';
 import PANEL from '../../src/js/synth/panels/semi-mono.js';
 
 const cutoff = PANEL.module('lpf').params.find((p) => p.key === 'frequency');
@@ -49,7 +51,7 @@ test('typed values: 1.2k, 1200 Hz, -3; out of range refused with the registry re
 });
 
 test('format with units; switches step their options; the drawing is a function of value', () => {
-  assert.equal(knobModel(cutoff).format(1200), '1.20 kHz');
+  assert.equal(knobModel(cutoff).format(1200), '1.2 kHz');
   assert.equal(knobModel(tune).format(-12), '-12 ct');
   assert.equal(knobModel(tune).format(702), '+702 ct');
   assert.equal(stepOption(wave, 'sawtooth', 1), 'square');
@@ -57,4 +59,34 @@ test('format with units; switches step their options; the drawing is a function 
   const t = new Proxy({}, { get: () => 'currentColor' });
   assert.equal(knobSvg({ uid: 'a', value: 5, param: tune, tokens: t }),
     knobSvg({ uid: 'a', value: 5, param: tune, tokens: t }), 'no state, no tween');
+});
+
+test('the model is the core\'s: text, typed entry, drag, keys and the drawing (F013 W1b)', () => {
+  const numbers = PANEL.modules.flatMap((m) => PANEL.faceOf(m.id)).map((c) => c.param)
+    .filter((p) => p && (p.type === 'number' || p.type === 'integer'));
+  assert.ok(numbers.length > 90);
+  assert.equal(DRAG_FULL_PX, core.DRAG_PX_PER_RANGE);
+  for (const p of numbers) {
+    const m = knobModel(p);
+    const mid = core.fromNorm(0.37, p);
+    for (const v of [p.min, p.max, mid]) {
+      assert.equal(m.format(v), core.formatValue(v, p), `${p.key} text`);
+      assert.equal(m.text(v), core.formatValue(v, p), `${p.key} aria text`);
+      assert.equal(m.norm(v), core.toNorm(v, p), `${p.key} norm`);
+      for (const key of ['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End']) {
+        for (const shiftKey of [false, true]) {
+          assert.equal(m.key(v, key, shiftKey), core.knobKey({ key, shiftKey },
+            { value: v, param: p }), `${p.key} ${key}`);
+        }
+      }
+      assert.equal(m.key(v, 'Enter'), null, 'Enter is the panel\'s typed entry, not a value');
+      assert.equal(m.drag(v, -37, true), core.dragValue(v, -37, p, { fine: true }));
+      assert.deepEqual(m.parse(core.formatValue(v, p)), core.parseValue(core.formatValue(v, p), p));
+    }
+    assert.equal(m.value(0.37), core.quantize(mid, p), `${p.key} value`);
+  }
+  assert.equal(stepOption, core.stepOption);
+  const t = new Proxy({}, { get: () => 'currentColor' });
+  assert.match(knobSvg({ uid: 'a', value: 5, param: tune, tokens: t }),
+    /^<svg [^>]*><g data-control="knob">/);
 });
