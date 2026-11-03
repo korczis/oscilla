@@ -29,6 +29,12 @@
 //   x-release-owner  (K167) a held pad is released when another workspace's player (the
 //              Pattern Sequencer) takes the audio owner: gate closed, no held note, the
 //              transport stopped; once that player stops, silent and census 0
+//   x-disabled-face  (K167) the XY tab opened with no preset, light theme: the disabled pad
+//              keeps a visible frame (a border, the face not faded) and states its reason on
+//              its face, in its accessible description (aria-describedby)
+//   x-chip-gap (K167; 390 px, touch) the Synth's sticky chip bar sticks flush under the app
+//              nav: scrolled, every point of the band between them hits the nav or the chip
+//              bar, never page content
 //   x-phone-first    (K167; 390 px, touch, mobile, the browser's gesture rule ON: Chromium
 //              --autoplay-policy=user-gesture-required, the other engines as they ship) from
 //              the Synth's own entry (#m=synth, no preset), tapping the XY tab edits nothing
@@ -72,7 +78,8 @@ const GESTURE_LAUNCH = { chromium: { args: ['--autoplay-policy=user-gesture-requ
   firefox: {}, webkit: {} };
 const SIZES = { desktop: { width: 1536, height: 1024 }, phone: { width: 390, height: 844 },
   'phone-first': { width: 390, height: 844 } };
-const LEG_OF = { 'x-touch': 'phone', 'x-phone-first': 'phone-first' };
+const LEG_OF = { 'x-touch': 'phone', 'x-chip-gap': 'phone', 'x-phone-first': 'phone-first' };
+const PRESET_OF = { 'x-disabled-face': null }; // the tab as it opens, unpatched
 const LOAD_MS = 60000;
 const SOUND_MS = 8000; // an attack, a glide and the analyser's smoothing
 const CHECK_MS = 120000;
@@ -363,6 +370,70 @@ function defineChecks() {
     return { ok: true, taken: c, after };
   });
 
+  def('x-disabled-face', async ({ page }) => {
+    await page.evaluate(() => {
+      if (window.OSCILLA.app.theme !== 'light') window.OSCILLA.app.toggleTheme();
+    });
+    let face = null;
+    await until(async () => {
+      face = await page.evaluate(() => {
+        const s = document.querySelector('[data-xy-surface]');
+        const cs = getComputedStyle(s);
+        const ids = s.getAttribute('aria-describedby').split(' ');
+        const why = document.querySelector('[data-xy-why]');
+        const r = why ? why.getBoundingClientRect() : null;
+        const box = s.getBoundingClientRect();
+        return { theme: document.documentElement.dataset.theme,
+          disabled: s.getAttribute('aria-disabled'), border: parseFloat(cs.borderTopWidth),
+          borderStyle: cs.borderTopStyle, borderColor: cs.borderTopColor, opacity: cs.opacity,
+          background: cs.backgroundColor,
+          description: ids.map((id) => (document.getElementById(id) || {}).textContent || '')
+            .join(' '),
+          why: why ? why.textContent : null,
+          onFace: !!r && r.width > 0 && r.top >= box.top && r.bottom <= box.bottom };
+      });
+      return face.theme === 'light' && face.disabled === 'true';
+    }, { ms: 10000, what: 'the light theme shows the XY tab with no preset: a disabled pad' });
+    const ok = face.border >= 1 && face.borderStyle !== 'none' && face.opacity === '1'
+      && face.borderColor !== face.background && !!face.why && face.onFace
+      && face.description.includes(face.why) && /not patched into the voice/.test(face.why);
+    return { ok, face };
+  });
+
+  def('x-chip-gap', async ({ page }) => {
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.alerts = [];
+      if (typeof a.dismissSafety === 'function') a.dismissSafety();
+    });
+    let g = null;
+    await until(async () => {
+      g = await page.evaluate(() => {
+        const main = document.getElementById('osc-main');
+        main.scrollTop = main.scrollHeight; // far enough that the chip bar is stuck
+        const chips = document.querySelector('[data-osc="synth.panel"] nav');
+        const nav = document.querySelector('[aria-label="Workspace"]');
+        const top = Math.round(nav.getBoundingClientRect().bottom);
+        const stuck = Math.round(chips.getBoundingClientRect().top);
+        const hits = [];
+        for (let y = top - 2; y <= stuck + 4; y += 1) {
+          for (const x of [12, 195, 378]) {
+            const e = document.elementFromPoint(x, y);
+            const who = !e ? 'none' : chips.contains(e) ? 'chips' : nav.contains(e)
+              || e.closest('[role="banner"]') ? 'nav' : `${e.tagName}.${String(e.className
+                .baseVal ?? e.className).slice(0, 40)}`;
+            hits.push([x, y, who]);
+          }
+        }
+        return { top, stuck, scrolled: main.scrollTop > 0, hits };
+      });
+      return g.scrolled && g.stuck <= g.top + 12;
+    }, { ms: 10000, what: 'the scrolled Synth sticks its chip bar under the app nav' });
+    const bad = g.hits.filter(([, , who]) => who !== 'nav' && who !== 'chips');
+    return { ok: !bad.length && Math.abs(g.stuck - g.top) <= 1, top: g.top, stuck: g.stuck,
+      bad: bad.slice(0, 6) };
+  });
+
   def('x-phone-first', async ({ page, browserName }) => {
     if (browserName === 'firefox') {
       RUN.skip(`${browserName}/phone-first`, 'x-phone-first',
@@ -485,7 +556,8 @@ async function runLeg(browserName, sizeName, base) {
       context.on('page', (pg) => pg.on('pageerror', (e) => errors.push(String(e))));
       const t0 = Date.now();
       try {
-        const page = await openXy(context, base, first ? { preset: null, tab: 'panel' } : {});
+        const page = await openXy(context, base, first ? { preset: null, tab: 'panel' }
+          : { preset: name in PRESET_OF ? PRESET_OF[name] : 'xy-lead' });
         const v = await bounded(fn({ page, context, base, browserName }),
           { ms: CHECK_MS, what: `${name} finishes` });
         results[name] = { ...v, ok: v.ok && errors.length === 0, errors: errors.slice(0, 4),

@@ -5,8 +5,9 @@
 // slider per axis (aria-valuetext in its unit). A drag previews live and ends in one commit;
 // the gate is open while the pad is touched (pointer, or Enter held on the surface) and closes
 // on release, blur, page hide and Escape. A second touch point sets Y only. An integer axis is
-// a row of equal cells (the pad's scale steps). No store, no audio, no timer: the consumer's
-// callbacks do the rest.
+// a row of equal cells (the pad's scale steps). A disabled pad keeps its dashed frame and its
+// grid at reduced contrast and states its reason on its face (K167). No store, no audio, no
+// timer: the consumer's callbacks do the rest.
 //
 //   createXyModel({ x, y, value, text, onPreview, onCommit, onGate }) -> model   pure
 //     x, y: parameter specs (registry.js shape); value { x, y }; text { x(v), y(v) } optional
@@ -112,6 +113,19 @@ const SLIDER = 'flex h-11 items-center justify-between gap-2 rounded-lg border b
   + 'border-gray-300 bg-gray-50 px-3 text-xs text-gray-900 focus:outline-none focus-visible:ring-2 '
   + 'focus-visible:ring-primary-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white';
 
+// The grid on the live pad, and on a disabled one: the same frame and lines at reduced contrast
+// on a light face (light theme) or a dark one (dark theme), with the reason on the face.
+const GRID = { root: 'stroke-gray-400', cell: 'stroke-gray-700' };
+const GRID_OFF = { root: 'stroke-gray-400 dark:stroke-gray-500',
+  cell: 'stroke-gray-300 dark:stroke-gray-600' };
+// The page's global [aria-disabled="true"] fade (integration.css) would wash the reason out: the
+// reduced contrast is the frame's and the grid's colours instead, the face stays legible.
+const SURFACE_OFF = '!cursor-not-allowed !opacity-100 border-2 border-dashed border-gray-400 '
+  + 'bg-gray-100 dark:border-gray-500 dark:bg-gray-800';
+const WHY = 'pointer-events-none absolute inset-x-3 top-1/2 -translate-y-1/2 rounded-lg '
+  + 'border border-solid border-gray-300 bg-white px-3 py-2 text-center text-sm font-medium '
+  + 'text-gray-900 shadow-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white';
+
 let mounted = 0;
 
 export function mountXyPad(host, opts) {
@@ -121,7 +135,8 @@ export function mountXyPad(host, opts) {
   const n = Math.max(1, cells.length);
   const lines = cells.map((c, i) => `<line x1="${(100 * i) / n}" x2="${(100 * i) / n}" y1="0" `
     + 'y2="100" vector-effect="non-scaling-stroke" '
-    + `class="${c.root ? 'stroke-gray-400' : 'stroke-gray-700'}"/>`).join('');
+    + `class="${(disabled ? GRID_OFF : GRID)[c.root ? 'root' : 'cell']}"/>`).join('');
+  const cursor = disabled ? 'stroke-gray-400 dark:stroke-gray-500' : 'stroke-primary-500';
   const slider = (axis, p) => `<div role="slider" tabindex="0" data-xy-axis="${axis}" `
     + `aria-label="${esc(`${axis.toUpperCase()}: ${p.label}`)}" class="${SLIDER}"><span>`
     + `${esc(p.label)}</span><span class="font-mono" data-xy-text="${axis}"></span></div>`;
@@ -130,19 +145,21 @@ export function mountXyPad(host, opts) {
     + `aria-label="${esc(label)}" aria-describedby="${esc([`${uid}-d`, ...(disabled
       ? [`${uid}-w`] : []), ...describedBy].join(' '))}" `
     + `aria-disabled="${disabled ? 'true' : 'false'}" class="relative h-56 w-full sm:h-72 `
-    + 'touch-none select-none overflow-hidden rounded-lg bg-gray-900 focus:outline-none '
-    + `focus-visible:ring-4 focus-visible:ring-primary-500 ${disabled ? 'opacity-50' : ''}">`
+    + 'touch-none select-none overflow-hidden rounded-lg focus:outline-none '
+    + `focus-visible:ring-4 focus-visible:ring-primary-500 ${disabled ? SURFACE_OFF
+      : 'bg-gray-900'}">`
     + '<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" '
     + `class="absolute inset-0 h-full w-full">${lines}<line data-xy-cx="" y1="0" y2="100" `
-    + 'vector-effect="non-scaling-stroke" class="stroke-primary-500" stroke-width="2"/>'
+    + `vector-effect="non-scaling-stroke" class="${cursor}" stroke-width="2"/>`
     + '<line data-xy-cy="" x1="0" x2="100" vector-effect="non-scaling-stroke" '
-    + 'class="stroke-primary-500" stroke-width="2"/></svg></div>'
+    + `class="${cursor}" stroke-width="2"/></svg>`
+    // A disabled pad says why on its own face, the reason that describes it.
+    + (disabled ? `<p id="${uid}-w" data-xy-why="" class="${WHY}">${esc(disabled)}</p>` : '')
+    + '</div>'
     + `<ol aria-hidden="true" class="mt-1 flex text-[10px] text-gray-500 dark:text-gray-400">`
     + cells.map((c) => `<li class="flex-1 text-center ${c.root ? 'font-bold' : ''}">`
       + `${n <= 29 || c.root ? esc(c.label) : ''}</li>`).join('')
     + `</ol><p id="${uid}-d" class="sr-only">${esc(description)}</p>`
-    + (disabled ? `<p id="${uid}-w" class="mt-2 text-sm text-gray-700 dark:text-gray-300" `
-      + `data-xy-why="">${esc(disabled)}</p>` : '')
     + `<div class="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">${slider('x', opts.x)}`
     + `${slider('y', opts.y)}</div></div>`;
   const surface = host.querySelector('[data-xy-surface]');
