@@ -59,6 +59,10 @@
 //                               the on-screen keys light a MIDI note while it sounds (K026);
 //                               starting the sequencer stops held notes, a Note On while it plays
 //                               is refused and said once, and after it stops a note sounds again
+//   midi-seam-sink              review of src/js/synth (S2): a stub Note On in the Playground,
+//                               then the Synth workspace, then its Note Off: the note-off frees
+//                               the Playground note (zero live oscillators, zero engine notes)
+//                               instead of reaching the Synth and leaving it sounding
 //   keyboard-qwerty             K026, no MIDI involved (a context without the seam, so it is in
 //                               neither group and says nothing about MIDI support): the link
 //                               #m=playground&kbd=1 arms the Playground; A, D and G held play C4,
@@ -874,6 +878,48 @@ async function seamNotes(browser, b, origin, url) {
   }
 }
 
+// midi-seam-sink (review of src/js/synth, S2): a note-off goes where its note-on sounded. A
+// Playground note held across a switch to the Synth workspace is released on the Playground
+// (before, the note-off was routed at release time to the Synth and the note kept sounding).
+async function seamSink(browser, b, origin, url) {
+  const leg = `${b}/${origin}`;
+  const id = 'midi-seam-sink';
+  const NAME = midiStub.STUB_NAME;
+  const { context, page, errors } = await openPage(browser, url,
+    { init: { fn: midiStub.install, arg: {} }, also: { fn: audioProbe, arg: { sr: NOTES_RATE } } });
+  try {
+    await assertGroup(leg, id, page, 'seam');
+    await openSettings(page);
+    await page.locator('[data-osc="midi.connect"]').click(); // the gesture also starts audio
+    await stateIs(page, ['pending'], `${leg}: Connect MIDI asks`);
+    await seam(page, 'resolve', 0, [NAME]);
+    await stateIs(page, ['connected'], `${leg}: the stub device connects`);
+    await page.keyboard.press('Escape'); // the dialog closes before any note sounds
+    await until(() => page.evaluate(() => !document.getElementById('osc-dlg-settings').open),
+      { ms: STEP_MS, what: `${leg}: the Settings dialog closes` });
+    const msg = (bytes) => seam(page, 'message', NAME, bytes);
+    const ws = () => page.evaluate(() => window.OSCILLA.app.workspace);
+    const from = await ws();
+    await msg([0x90, 60, 100]);
+    const on = await heard(page, (m) => m.state === 'running' && m.live === 1 && m.notes === 1,
+      `${leg}: a Playground note sounds`);
+    await page.evaluate(() => window.OSCILLA.app.setWorkspace('synth'));
+    await until(async () => (await ws()) === 'synth', { ms: STEP_MS,
+      what: `${leg}: the Synth workspace opens` });
+    const held = await heard(page, (m) => m.notes === 1 && m.live === 1,
+      `${leg}: the switch itself leaves the held note sounding`);
+    await msg([0x80, 60, 0]);
+    const off = await heard(page, (m) => m.notes === 0 && m.live === 0,
+      `${leg}: the note-off frees the Playground note`);
+    check(leg, id, 'a Playground note held across a switch to the Synth is released by its '
+      + 'Note Off on the Playground', from === 'playground' && !on.timedOut && !held.timedOut
+      && !off.timedOut && errors.length === 0,
+    JSON.stringify({ from, on: on.notes, held: held.notes, off, errors }));
+  } finally {
+    await context.close();
+  }
+}
+
 // keyboard-qwerty (K026): the computer and on-screen keyboard play the same note voices.
 async function keyboardChecks(browser, b, origin, url) {
   const leg = `${b}/${origin}`;
@@ -1042,6 +1088,7 @@ async function main() {
             await measured(browser, b, origin, url, site);
             await seamChecks(browser, b, origin, url, site);
             await seamNotes(browser, b, origin, url);
+            await seamSink(browser, b, origin, url);
             await keyboardChecks(browser, b, origin, url);
           } catch (err) {
             check(`${b}/${origin}`, 'midi-run', 'run completed', false, err && err.stack);

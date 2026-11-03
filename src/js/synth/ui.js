@@ -67,9 +67,24 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   /** The node the keys play: the one routed by the picker (K066), else the tab's module. */
   const played = () => routedNode(model(), registry) || nodes().get(playedModule());
   const handle = () => get().handle;
+  // synth.armed is the transport's own flag, never a copy kept by this panel: a Stop or a
+  // disarm made outside the Synth (Studio Stop, a measurement taking the output, an abort)
+  // emits the transport's 'state', and the Arm button follows it at once.
+  let followed = null;
+  const syncArmed = () => {
+    const t = get().transport;
+    if (cmp) cmp.synth.armed = !!(t && t.armed);
+  };
+  const follow = (t) => {
+    if (t && t !== followed && typeof t.on === 'function') {
+      followed = t;
+      t.on((type) => { if (type === 'state' || type === 'ended') syncArmed(); });
+    }
+    return t;
+  };
   const transport = () => {
     setupAudio();
-    return get().transport;
+    return follow(get().transport);
   };
   const model = () => handle().getModel();
   const nodes = () => panel.resolve(model());
@@ -398,9 +413,9 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   function refresh() {
     memory.note(model());
     dock.sync();
+    follow(get().transport);
     if (!cmp || cmp.workspace !== 'synth') return;
-    const t = get().transport;
-    cmp.synth.armed = !!(t && t.armed);
+    syncArmed();
     if (knob) updateKnob(knob.cid);
     else if (!cable) renderAll();
   }
@@ -725,7 +740,10 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
   function disarm(reason) {
     const t = get().transport;
-    if (!t || !t.armed) return Promise.resolve(null);
+    if (!t || !t.armed) {
+      syncArmed(); // a copy left armed by a stop made elsewhere is cleared, never kept
+      return Promise.resolve(null);
+    }
     const p = t.disarm();
     if (cmp) cmp.synth.armed = false;
     if (reason) say(SYNTH_TEXT.disarmed);
@@ -786,6 +804,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
     synthInit() {
       cmp = this;
+      follow(get().transport);
       memory.note(model());
       dock.sync();
       handle().subscribe(() => queueMicrotask(refresh));
@@ -805,6 +824,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
           disarm(false);
         }
         if (ws === 'synth') {
+          syncArmed();
           ensurePanel();
           requestAnimationFrame(renderAll);
         }
