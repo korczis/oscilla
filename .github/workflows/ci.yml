@@ -213,7 +213,8 @@ jobs:
     # (v31-studio-graph.cjs, v31-studio-timeline.cjs), one browser per job like the measure gate.
     name: V3.1 Studio UI (${{ matrix.browser }})
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # the sum of its step bounds (15 + 13 + 15 + 20 = 63), so a slow runner fails a named step
+    timeout-minutes: 65
     strategy:
       fail-fast: false
       matrix:
