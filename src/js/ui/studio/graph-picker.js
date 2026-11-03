@@ -9,7 +9,8 @@
 //
 //   createQuickAdd(dialog, svc) -> { open({ at, from }), close(), isOpen() }
 //   quickAddStatus(view, query) -> the quick-add status line (V272 C7)        pure
-//   createConnectDialog(dialog, svc) -> { open(nodeId), close(), isOpen() }
+//   createConnectDialog(dialog, svc) -> { open(nodeId, portId?), close(), isOpen() }   the
+//     output portId preselected when the node has it, else its first output
 //   createFindNode(dialog, svc) -> { open(), close(), isOpen() }      graph search (§251)
 //   svc: { store, registry, editor, announce, openModal(id), closeModal(id), focusFallback()? }
 
@@ -193,7 +194,7 @@ export function createConnectDialog(dialog, svc) {
   list.addEventListener('keydown', (e) => listKeys(e, list, null));
 
   return {
-    open(id) {
+    open(id, portId = null) {
       const model = svc.store.getModel();
       const n = model.graph.nodes.find((x) => x.id === id);
       const o = n ? nodeOutputs(model, id, registry) : [];
@@ -202,7 +203,7 @@ export function createConnectDialog(dialog, svc) {
         return false;
       }
       nodeId = id;
-      port = o[0].id;
+      port = o.some((x) => x.id === portId) ? portId : o[0].id;
       title.textContent = `Connect ${n.metadata.name}`;
       renderOutputs();
       renderTargets();

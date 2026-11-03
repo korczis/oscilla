@@ -83,6 +83,15 @@
 //                        focus in the visible Inspector (never the hidden graph, <body> or
 //                        main); "Show Cutoff lane" opens the Timeline subview, shows the
 //                        lane, focuses its add-point button and says so
+//   graph-summary        K168 on a 26-node patch (the owner's shape): the Inspector's summary is
+//                        an accordion (buttons with aria-expanded, Signal paths and Not
+//                        connected open), one line per path with every node and no "more";
+//                        Enter opens Modulation (8 of 11) and Show all lists all 11; a name with
+//                        markup stays text; the unconnected node's Connect… opens the connection
+//                        list of its audio output and Escape leaves the edges as they were;
+//                        Enter on a node of a path selects it in the graph and focuses it there
+//                        (the Inspector follows); at 390 x 844 the summary shows with no
+//                        horizontal scroll
 //   inactive-cables      V431 A5/X3: Osc → Recorder (no Web Audio route) and LFO → Q on a
 //                        low-pass filter (no audible effect) are drawn is-inactive with a
 //                        sparse dash and a midpoint cross, out of the running emphasis, with
@@ -1697,6 +1706,193 @@ function defineChecks() {
     } finally {
       await ctx.close();
     }
+  });
+
+  // K168: the Inspector's graph summary on a 26-node patch shaped like the owner's of
+  // 2026-11-03 (tests/unit/studio-graph-summary.test.mjs ownerPatch: four sources into a mixer
+  // chain of nine nodes to Master, an Oscillator into the ring modulator, an unconnected
+  // Oscillator, 11 modulation edges, 3 triggers, 4 analysis taps).
+  const K168_NODES = [['vco-1', 'vco'], ['vco-2', 'vco'], ['vco-3', 'vco'], ['noise-1', 'noise'],
+    ['osc-1', 'oscillator'], ['mixer-1', 'mixer'], ['filter-1', 'filter'], ['ring-1', 'ring'],
+    ['filter-2', 'filter'], ['env-1', 'envelope'], ['gain-1', 'gain'], ['pan-1', 'pan'],
+    ['master-1', 'master'], ['osc-2', 'oscillator'], ['lfo-1', 'lfo'], ['lfo-2', 'lfo'],
+    ['lfo-3', 'lfo'], ['lfo-4', 'lfo'], ['macro-1', 'macro'], ['seq-1', 'sequence'],
+    ['step-1', 'step-modulator'], ['random-1', 'random'], ['spectrum-1', 'spectrum'],
+    ['scope-1', 'scope'], ['meter-1', 'meter'], ['recorder-1', 'recorder']];
+  const K168_EDGES = ['vco-1.audio>mixer-1.in1', 'vco-2.audio>mixer-1.in2',
+    'vco-3.audio>mixer-1.in3', 'noise-1.audio>mixer-1.in4', 'mixer-1.audio>filter-1.audio',
+    'filter-1.audio>ring-1.carrier', 'ring-1.audio>filter-2.audio', 'filter-2.audio>env-1.audio',
+    'env-1.audio>gain-1.audio', 'gain-1.audio>pan-1.audio', 'pan-1.audio>master-1.audio',
+    'osc-1.audio>ring-1.modulator', 'lfo-1.control>filter-1.frequency',
+    'lfo-1.control>filter-2.frequency', 'lfo-2.control>vco-1.pitch', 'lfo-2.control>vco-2.pitch',
+    'lfo-3.control>pan-1.pan', 'lfo-3.control>gain-1.gain', 'lfo-4.control>mixer-1.level1',
+    'lfo-4.control>filter-1.Q', 'macro-1.control>osc-2.detune', 'seq-1.trigger>env-1.gate',
+    'seq-1.trigger>step-1.clock', 'seq-1.trigger>random-1.trigger',
+    'step-1.control>vco-3.tune', 'random-1.control>osc-1.frequency',
+    'filter-1.audio>spectrum-1.audio', 'pan-1.audio>scope-1.audio', 'gain-1.audio>meter-1.audio',
+    'pan-1.audio>recorder-1.audio'];
+  /** Open the 26-node patch through the real import path (Import replaces the document). */
+  const openOwnerPatch = async (page, what) => {
+    await H.fresh(page, 'basic-tone');
+    const r = await page.evaluate(({ nodes, edges }) => {
+      const doc = JSON.parse(JSON.stringify(window.OSCILLA.studio.model));
+      doc.metadata.title = 'K168 owner patch';
+      doc.graph = {
+        nodes: nodes.map(([id, type], i) => ({ id, type, params: {},
+          position: { x: (i % 6) * 240, y: Math.floor(i / 6) * 200 } })),
+        edges: edges.map((s, i) => {
+          const [[fn, fp], [tn, tp]] = s.split('>').map((x) => x.split('.'));
+          return { id: `edge-${i + 1}`, from: { node: fn, port: fp }, to: { node: tn, port: tp } };
+        }),
+      };
+      doc.timeline = { ...doc.timeline, clips: [], automation: [] };
+      const res = window.OSCILLA.app.studioImportText(JSON.stringify(doc));
+      window.OSCILLA.studio.store.dispatch({ type: 'SELECTION_CHANGE', selection: {} });
+      return res;
+    }, { nodes: K168_NODES, edges: K168_EDGES });
+    if (!r || !r.ok) throw new Error(`${what}: the patch was not imported: ${JSON.stringify(r)}`);
+    await until(() => page.evaluate(() => {
+      const m = window.OSCILLA.studio.model;
+      return m.graph.nodes.length === 26 && m.graph.edges.length === 30
+        && !!document.querySelector('[data-osc="studio.inspector.summaryGroups"]');
+    }), { ms: 10000, what: `${what}: the 26-node patch is open with the summary shown` });
+  };
+  /** The summary as shown: its groups, the lines of each open group, focus and selection. */
+  const readSummary = (page) => page.evaluate(() => {
+    const root = document.querySelector('[data-osc="studio.inspector.summary"]');
+    if (!root) return null;
+    const text = (el) => el.textContent.replace(/\s+/g, ' ').trim();
+    const groups = [...root.querySelectorAll('[data-osc="studio.inspector.summaryGroup"]')]
+      .map((b) => {
+        const body = document.getElementById(b.getAttribute('aria-controls'));
+        return { section: b.dataset.section, expanded: b.getAttribute('aria-expanded'),
+          tag: b.tagName, bodyHidden: !body || body.hidden,
+          lines: body ? [...body.querySelectorAll('li')].map(text) : [],
+          all: body ? (body.querySelector('[data-osc="studio.inspector.summaryAll"]') || {})
+            .textContent || '' : '' };
+      });
+    const a = document.activeElement;
+    const s = window.OSCILLA.studio.selection;
+    return { groups, markup: !!root.querySelector('b'), edges: window.OSCILLA.studio.model
+      .graph.edges.length, sel: [...s.nodes],
+    focus: a && a !== document.body ? a.dataset.nodeId ? `node:${a.dataset.nodeId}`
+      : a.dataset.key || a.dataset.osc || a.tagName : 'BODY' };
+  });
+  const group = (v, id) => (v && v.groups.find((g) => g.section === id)) || { lines: [] };
+
+  def('graph-summary', async ({ page, browser, baseUrl }) => {
+    await openOwnerPatch(page, 'graph-summary');
+    const chain = 'Mixer 1 to Filter 1 to Ring 1 to Filter 2 to Envelope 1 to Gain 1 to Pan 1 '
+      + 'to Master Output 1';
+    const first = await H.settle(() => readSummary(page),
+      (v) => group(v, 'signal').lines.length === 5, 'graph-summary: five signal paths listed');
+    // The modulation group, by keyboard: Enter opens it; it lists 8 of 11, Show all the rest.
+    await page.focus('[data-osc="studio.inspector.summaryGroup"][data-section="modulation"]');
+    await page.keyboard.press('Enter');
+    const opened = await H.settle(() => readSummary(page),
+      (v) => group(v, 'modulation').expanded === 'true',
+      'graph-summary: Enter opens the Modulation group');
+    await page.focus('[data-osc="studio.inspector.summaryAll"][data-section="modulation"]');
+    await page.keyboard.press('Enter');
+    const all = await H.settle(() => readSummary(page),
+      (v) => group(v, 'modulation').lines.length === 11,
+      'graph-summary: Show all lists every modulation');
+    // The unconnected node's fix opens the connection list of its output and patches nothing.
+    await page.evaluate(() => window.OSCILLA.studio.store.dispatch({ type: 'NODE_RENAME',
+      nodeId: 'osc-2', name: '<b>x</b>' }));
+    const named = await H.settle(() => readSummary(page),
+      (v) => group(v, 'unconnected').lines.some((t) => t.startsWith('<b>x</b>')),
+      'graph-summary: the renamed node is listed by its name as text');
+    await page.focus('[data-osc="studio.inspector.summaryFix"][data-node="osc-2"]');
+    await page.keyboard.press('Enter');
+    const dialog = await H.settle(() => page.evaluate(() => {
+      const d = document.querySelector('#osc-dlg-studio-connect');
+      const out = d && d.querySelector('[data-osc="studio.connect.output"][aria-checked="true"]');
+      return { open: !!(d && d.open), title: d ? d.querySelector('h2').textContent : '',
+        port: out ? out.dataset.port : 'audio',
+        targets: d ? d.querySelectorAll('[data-osc="studio.connect.target"]').length : 0,
+        edges: window.OSCILLA.studio.model.graph.edges.length };
+    }), (v) => v.open && v.targets > 0, 'graph-summary: Connect… opens the connection list');
+    await page.keyboard.press('Escape');
+    const closed = await H.settle(() => page.evaluate(() => ({
+      open: document.querySelector('#osc-dlg-studio-connect').open,
+      edges: window.OSCILLA.studio.model.graph.edges.length })), (v) => !v.open,
+    'graph-summary: Escape closes the connection list');
+    // Enter on a node of a path: the graph selects it, frames it and takes focus (Find node).
+    await page.evaluate(() => window.OSCILLA.studio.store.dispatch({ type: 'SELECTION_CHANGE',
+      selection: {} }));
+    await H.settle(() => readSummary(page), (v) => group(v, 'signal').lines.length === 5,
+      'graph-summary: the summary is back with nothing selected');
+    await page.focus('#studio-graph-summary-signal-body [data-osc="studio.inspector.summaryNode"]'
+      + '[data-node="filter-2"]');
+    await page.keyboard.press('Enter');
+    const revealed = await H.settle(() => readSummary(page).then(async (v) => ({ ...v,
+      inspector: await page.evaluate(() => {
+        const t = document.querySelector('[data-osc="studio.inspector.title"]');
+        return t ? t.textContent : '';
+      }) })), (v) => v.sel.join() === 'filter-2' && v.focus === 'node:filter-2',
+    'graph-summary: Enter on a node selects and focuses it in the graph');
+    // At 390 x 844 the groups stay readable with no horizontal scroll.
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true,
+      isMobile: false });
+    const phone = await ctx.newPage();
+    let narrow;
+    try {
+      await phone.goto(baseUrl);
+      await phone.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
+      await phone.evaluate(() => { const a = window.OSCILLA.app; a.alerts = [];
+        if (!a.safetyCollapsed) a.collapseSafety(); });
+      await openOwnerPatch(phone, 'graph-summary (phone)');
+      await phone.evaluate(() => window.OSCILLA.app.studioSetSubview('inspector'));
+      narrow = await H.settle(() => phone.evaluate(() => {
+        const root = document.querySelector('[data-osc="studio.inspector.summary"]');
+        const r = root ? root.getBoundingClientRect() : null;
+        const doc = document.documentElement;
+        const lines = root ? [...root.querySelectorAll('li, button')] : [];
+        return { shown: !!r && r.width > 0 && r.height > 0, width: r ? r.width : 0,
+          lines: root ? root.querySelectorAll('#studio-graph-summary-signal-body li').length : 0,
+          pageScroll: doc.scrollWidth - doc.clientWidth,
+          rootScroll: root ? root.scrollWidth - root.clientWidth : 0,
+          outside: lines.filter((el) => el.getBoundingClientRect().right > window.innerWidth + 1)
+            .length,
+          font: root && root.querySelector('li')
+            ? parseFloat(getComputedStyle(root.querySelector('li')).fontSize) : 0 };
+      }), (v) => v.shown && v.lines === 5, 'graph-summary: the phone Inspector shows the summary');
+    } finally {
+      await ctx.close();
+    }
+    return { ...H.verdict({
+      accordion: first.groups.map((g) => g.section).join() === 'signal,unconnected,modulation,'
+        + 'triggers,analysis' && first.groups.every((g) => g.tag === 'BUTTON'
+        && (g.expanded === 'true') === !g.bodyHidden),
+      openByDefault: group(first, 'signal').expanded === 'true'
+        && group(first, 'unconnected').expanded === 'true'
+        && group(first, 'modulation').expanded === 'false',
+      onePathPerLine: group(first, 'signal').lines.join('|') === [`VCO 1 to ${chain}`,
+        `VCO 2 to ${chain}`, `VCO 3 to ${chain}`, `Noise 1 to ${chain}`,
+        'Oscillator 1 to Ring 1 to Filter 2 to Envelope 1 to Gain 1 to Pan 1 to Master Output 1']
+        .join('|'),
+      noMore: first.groups.every((g) => g.lines.every((t) => !/\bmore\b/.test(t))),
+      unconnectedFlagged: group(first, 'unconnected').lines.join('|')
+        === 'Oscillator 2 not heard Connect…|Sequence 1 not heard Connect…',
+      groupOpens: group(opened, 'modulation').lines.length === 8
+        && group(opened, 'modulation').all === 'Show all (11)',
+      showAll: group(all, 'modulation').lines.length === 11
+        && /^summary:modulation:/.test(all.focus),
+      markupIsText: !!named && !named.markup,
+      fixOpensList: dialog.open && dialog.title === 'Connect <b>x</b>' && dialog.port === 'audio'
+        && dialog.edges === 30,
+      fixPatchesNothing: !closed.open && closed.edges === 30,
+      revealSelects: revealed.sel.join() === 'filter-2' && revealed.focus === 'node:filter-2'
+        && revealed.inspector === 'Filter 2',
+      phoneShown: !!narrow && narrow.shown && narrow.lines === 5,
+      phoneNoScroll: !!narrow && narrow.pageScroll <= 1 && narrow.rootScroll <= 1
+        && narrow.outside === 0,
+      phoneReadable: !!narrow && narrow.font >= 12,
+    }), first: group(first, 'signal').lines.slice(0, 2), unconnected: group(first, 'unconnected')
+      .lines, opened: group(opened, 'modulation').all, allFocus: all.focus, dialog, closed,
+    revealed: { sel: revealed.sel, focus: revealed.focus, inspector: revealed.inspector },
+    narrow };
   });
 
   def('inactive-cables', async ({ page }) => {

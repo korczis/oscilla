@@ -316,6 +316,15 @@ controls Filter 1 cutoff. Analysis: Spectrum 1 observes Filter 1 output."
   without a path), "Modulation:", "Triggers:", "Analysis:" (taps: observes / records /
   captures), "Measurement:" ("Transfer Analyzer 1 takes reference from Sweep 1 and observed
   from Calibration 1"). `summarizeStudio` adds one timeline sentence.
+- One derivation, two renderings (K168): `summarizeGraphModel(model)` computes the same summary
+  as data, untruncated: `{ counts, master, sections }`, one section per group (`signal`,
+  `unconnected`, `modulation`, `triggers`, `analysis`, `measurement`), each item with its nodes
+  `{ id, name }` in reading order, its edge ids, a muted flag and its words; every path whole
+  (up to `SUMMARY_PATH_LIMIT` 1000 paths, past which `omitted` counts the rest), and each
+  unheard source with the output a connection would start from. `summarizeGraph` is
+  `boundedSummary` of that model, so the sentence above is unchanged; the Inspector's Studio
+  card lists the model in full (`ui/studio/graph-summary-view.js`), each node a button that
+  selects, frames and focuses it in the graph.
 - `describeNode` → "Oscillator 1, source node, selected" (optional card summary and compiled
   status: unavailable, offline only); `describeEdge` → "Connection from Oscillator 1 audio to
   Filter 1 input" (modulation adds depth and polarity, muted edges say so);

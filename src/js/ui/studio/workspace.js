@@ -1057,7 +1057,8 @@ export function createStudioUi(svc = {}) {
       runtime: ctx.runtime && ctx.runtime.debugInfo(),
       transport: ctx.transport && ctx.transport.debugInfo() }),
       trace: () => ctx.trace.steps(true), // settled operations only
-      onConnect: (id) => ctx.connect.open(id),
+      onConnect: (id, port) => ctx.connect.open(id, port),
+      onReveal: (id) => cmp.studioReveal(id),
       onSavePatch: (ids) => ctx.patches.openSavePatch(ids),
       onDelete: () => ctx.editor.deleteSelection(),
       onDuplicate: () => ctx.editor.duplicateSelection(),
