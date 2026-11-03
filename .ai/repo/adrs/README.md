@@ -74,6 +74,9 @@ accepted` lists them. The rest stay `proposed`, each for a stated reason:
 - 0084: new and accepted on 2026-11-03 (plan issue Q062): the owner chose "(a) DAW in scope";
   it amends only ADR 0058's decision 5 (notes clips, a piano roll, instrument tracks, a session
   grid and later MIDI output on the Studio timeline).
+- 0086: new on 2026-11-03 (programs B and C): one notes array that the step grid, the piano roll
+  and the beat machine edit; proposed, because accepting it is the owner's act, and nothing
+  implements it yet (K099 builds the notes clip on it).
 
 On 2026-10-28 the owner ordered Flowbite Pro for the UI of every project; ADR 0061 records
 that order as an accepted decision (its acceptance note quotes it) and supersedes the bullet of
