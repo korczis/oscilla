@@ -54,7 +54,8 @@ V6xx        Studio completion after 3.11 (M048) and Studio boxes (M080-M081)
 E0xx        engineering integrity: structure, size and checks of the code base (M046); E030
             the definition of done (M083)
 K0xx-K1xx   playable instrument (M057-M059, M061), audio-band signal lab (M060), charts (M062),
-            connected instrument (M064-M069, M071-M072) and signal generator lab (M082)
+            connected instrument (M064-M069, M071-M072), signal generator lab (M082) and the
+            one key registry (K153, in M086)
 L0xx        Learn lessons (M049)
 P0xx        product: first run (M050), positioning, product path, public story (M051)
 C0xx        one instrument, one coherent state: controls, engine, views and saved state agree (M090)
