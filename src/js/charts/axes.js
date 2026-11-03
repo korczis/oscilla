@@ -1,6 +1,11 @@
 // Pure axis helpers shared by every OSCILLA chart: tick generation, value <-> pixel mapping and
 // the label formats used in the reference (20, 50, 100 … 1k, 10k, 20k; "0 dB", -20 …).
 // No DOM, no Web Audio: unit-tested in tests/unit/charts.test.mjs.
+//
+// The frequency grammar and the compact frequency text are core/frequency.js's (G002, the one
+// units module): parseFrequency and formatHz here are those functions under their chart names.
+
+export { parseFrequency, formatFrequencyCompact as formatHz } from '../core/frequency.js';
 
 export const LOG_MANTISSAS = Object.freeze([1, 2, 5]);
 
@@ -88,16 +93,6 @@ export function formatHzTick(f) {
   return trimNumber(f, 2);
 }
 
-/** Compact frequency with unit, 3 significant digits: "15.5 kHz", "440 Hz", "120 kHz". */
-export function formatHz(f, sigDigits = 3) {
-  if (!Number.isFinite(f)) return '—';
-  const abs = Math.abs(f);
-  const [v, unit] = abs >= 1000 ? [f / 1000, 'kHz'] : [f, 'Hz'];
-  const a = Math.abs(v);
-  const digits = a >= 100 ? 0 : a >= 10 ? Math.max(0, sigDigits - 2) : Math.max(0, sigDigits - 1);
-  return `${trimNumber(v, digits)} ${unit}`;
-}
-
 /** Hz with thousands separators: 48000 → "48,000 Hz". */
 export function formatHzGrouped(f) {
   if (!Number.isFinite(f)) return '—';
@@ -158,16 +153,6 @@ export function frequencyTicks(min, max, scale = 'log') {
   if (scale === 'log') return logTicks(min, max);
   const ticks = linearTicks(0, max, { count: 4 });
   return ticks.filter((v) => v >= min - EPS);
-}
-
-/** Parse a user frequency: "2.5 kHz", "2500", "2.5k", "880 Hz" → Hz, or null. */
-export function parseFrequency(text) {
-  const m = /^\s*([+-]?\d*[.,]?\d+(?:e[+-]?\d+)?)\s*(k|khz|hz)?\s*$/i.exec(String(text));
-  if (!m) return null;
-  const v = Number(m[1].replace(',', '.'));
-  if (!Number.isFinite(v)) return null;
-  const unit = (m[2] || '').toLowerCase();
-  return unit === 'k' || unit === 'khz' ? v * 1000 : v;
 }
 
 /** Parse a duration: "10 ms", "0.3 s", "300" (ms) → seconds, or null. */

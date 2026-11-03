@@ -6,12 +6,16 @@
 //   panels      the elements of src/index.html carrying data-osc-modes, keyed by their id
 //   subviews    every role=tab of the shell, keyed `<data-osc>:<data-value>`: static ones from
 //               the markup, templated ones from the registry their <template x-for> iterates
-//               (MEASURE_RESULT_TABS, PRESET_CATEGORIES); the Studio subviews, which are also
+//               (MEASURE_RESULT_TABS, PRESET_CATEGORIES, synth.tabs: the tabs of the Synth
+//               panel, src/js/synth/panels/semi-mono.js); the Studio subviews, which are also
 //               STUDIO_LINK_SUBVIEWS; and the regions a view switch shows
 //               (x-show="exps.panel === '<value>'", the Experiments detail and compare views)
 //   dialogs     every <dialog> of the shell, keyed by its id
-//   routes      the hash domains of src/js/ui/navigation.js HASH_DOMAINS, each registered by
-//               src/js/main.js navRegister
+//   routes      the hash domains of src/js/ui/navigation.js HASH_DOMAINS, each registered by a
+//               navRegister('<domain>', ...) call of a src/js module (main.js registers the
+//               instrument, measure, studio and records domains; the parts that own the others
+//               register them from their init, which main.js runs before navStart: keyboard in
+//               src/js/midi/keyboard-ui.js, synth in src/js/synth/ui.js)
 //
 // Each entry: id, kind, reachedFrom (workspace ids; for a panel or subview the data-osc-modes
 // of the element that holds it), purpose, state (a src/js file that exists), evidence (one of
@@ -47,6 +51,9 @@ import {
 import { RECIPE_HASH_KEY } from '../../src/js/core/url-state-measure.js';
 import { RECORD_LINK_KEYS } from '../../src/js/core/url-state-records.js';
 import { STUDIO_TEMPLATES } from '../../src/js/studio/templates/index.js';
+import SEMI_MONO from '../../src/js/synth/panels/semi-mono.js';
+import { KEYBOARD_LINK_KEY } from '../../src/js/midi/keyboard.js';
+import { SYNTH_LINK_KEYS } from '../../src/js/core/url-state-synth.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (rel) => readFileSync(path.join(ROOT, rel), 'utf8');
@@ -65,6 +72,7 @@ const FIELDS = Object.freeze(['id', 'kind', 'reachedFrom', 'purpose', 'state', '
 const TAB_REGISTRIES = Object.freeze({
   MEASURE_RESULT_TABS: MEASURE_RESULT_TABS.map((t) => t.id),
   PRESET_CATEGORIES: PRESET_CATEGORIES.map((c) => c.id),
+  'synth.tabs': SEMI_MONO.tabs.map((t) => t.id),
 });
 /**
  * View switches whose regions are navigable views of their own: the Experiments detail and
@@ -79,6 +87,8 @@ const DOMAIN_KEYS = Object.freeze({
   measure: [RECIPE_HASH_KEY],
   studio: [STUDIO_LINK_KEYS.template, STUDIO_LINK_KEYS.subview],
   records: Object.values(RECORD_LINK_KEYS),
+  keyboard: [KEYBOARD_LINK_KEY],
+  synth: Object.values(SYNTH_LINK_KEYS),
 });
 /** What a `<placeholder>` of a deep link stands for when the router reads it. */
 const PLACEHOLDER = 'u063-sample';
@@ -151,7 +161,8 @@ export function deriveShell(rawHtml) {
     // A templated tab: the nearest open <template x-for="<v> in <REGISTRY>"> holds it.
     const loop = tags.filter((x) => x.name === 'template' && x.at < t.at
       && elementEnd(html, x.at, 'template') > t.at && /\sx-for="/.test(x.tag)).pop();
-    const m = loop && attrOf(loop.tag, 'x-for').match(/^\s*\(?\s*(\w+)[^)]*?\)?\s+in\s+(\w+)\s*$/);
+    const m = loop && attrOf(loop.tag, 'x-for')
+      .match(/^\s*\(?\s*(\w+)[^)]*?\)?\s+in\s+([\w.]+)\s*$/);
     const ids = m && TAB_REGISTRIES[m[2]];
     if (osc && bound && ids && bound.trim() === `${m[1]}.id`) {
       const idExpr = attrOf(t.tag, ':id') || '';
@@ -186,8 +197,15 @@ export function deriveShell(rawHtml) {
   return { panels, tabs, switches, dialogs, problems };
 }
 
-/** The navigable surfaces of a tree: Map `${kind}:${id}` -> surface, and the problems. */
-export function deriveInventory({ html, mainJs }) {
+/** The hash domains a module's text registers (comments apart): [domain]. */
+export const registeredBy = (text) => [...text.replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/^\s*\/\/.*$/gm, '').matchAll(/\bnavRegister\(\s*'([\w-]+)'/g)].map((m) => m[1]);
+
+/**
+ * The navigable surfaces of a tree: Map `${kind}:${id}` -> surface, and the problems.
+ * `js`: { '<src/js path>': text } of the modules that may register a hash domain.
+ */
+export function deriveInventory({ html, js }) {
   const shell = deriveShell(html);
   const problems = [...shell.problems];
   const out = new Map();
@@ -212,13 +230,19 @@ export function deriveInventory({ html, mainJs }) {
     }
   }
   for (const d of shell.dialogs) add('dialog', d.id, d);
-  const registered = [...mainJs.matchAll(/\bnavRegister\(\s*'([\w-]+)'/g)].map((m) => m[1]);
+  const registrars = Object.entries(js).map(([rel, text]) => [rel, registeredBy(text)]);
+  const registered = registrars.flatMap(([, rs]) => rs);
   for (const r of HASH_DOMAINS) {
     add('route', r, { modes: [] });
-    if (!registered.includes(r)) problems.push(`hash domain "${r}" is never registered (main.js)`);
+    if (!registered.includes(r)) {
+      problems.push(`hash domain "${r}" is never registered (no navRegister('${r}', ...) `
+        + 'in src/js)');
+    }
   }
-  for (const r of registered.filter((x) => !HASH_DOMAINS.includes(x))) {
-    problems.push(`main.js registers hash domain "${r}", which HASH_DOMAINS does not name`);
+  for (const [rel, rs] of registrars) {
+    for (const r of rs.filter((x) => !HASH_DOMAINS.includes(x))) {
+      problems.push(`${rel} registers hash domain "${r}", which HASH_DOMAINS does not name`);
+    }
   }
   return { surfaces: out, problems };
 }
@@ -411,7 +435,16 @@ export const debtRaised = (count, history) => history
 const fileText = (rel) => (isFile(rel) ? read(rel) : null);
 const issueIds = () => new Set(readdirSync(path.join(ROOT, '.ai/repo/project/issues'))
   .filter((f) => f.endsWith('.yaml')).map((f) => f.replace(/\.yaml$/, '')));
-const TREE = () => ({ html: read('src/index.html'), mainJs: read('src/js/main.js') });
+/** Every module under src/js: rel -> text. */
+function srcJs(dir = 'src/js', out = {}) {
+  for (const e of readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+    const rel = `${dir}/${e.name}`;
+    if (e.isDirectory()) srcJs(rel, out);
+    else if (e.name.endsWith('.js')) out[rel] = read(rel);
+  }
+  return out;
+}
+const TREE = () => ({ html: read('src/index.html'), js: srcJs() });
 const CENSUS = () => JSON.parse(read(CENSUS_REL));
 const CTX = () => ({ fileText, issueIds: issueIds() });
 
@@ -484,9 +517,24 @@ test('mutation: a surface removed from the shell, a Studio subview or a hash dom
     'data-osc="studio.subview" data-value="inspectorx"');
   p = judge(census, deriveInventory({ ...tree, html: noInspector }), ctx);
   assert.ok(p.some((x) => /STUDIO_LINK_SUBVIEWS names "inspector"/.test(x)), p.join('\n'));
-  const unwired = tree.mainJs.replace(/cmp\.navRegister\('records'/, "cmp.navRegisterX('records'");
-  p = judge(census, deriveInventory({ ...tree, mainJs: unwired }), ctx);
-  assert.ok(p.some((x) => /hash domain "records" is never registered/.test(x)), p.join('\n'));
+  const unwire = (rel, from, to) => {
+    assert.ok(tree.js[rel].includes(from), `${rel} holds ${from}`);
+    return { ...tree, js: { ...tree.js, [rel]: tree.js[rel].replace(from, to) } };
+  };
+  for (const [rel, domain, from] of [
+    ['src/js/main.js', 'records', "cmp.navRegister('records'"],
+    ['src/js/midi/keyboard-ui.js', 'keyboard', "cmp.navRegister('keyboard'"],
+    ['src/js/synth/ui.js', 'synth', "this.navRegister('synth'"]]) {
+    for (const to of [from.replace('navRegister', 'navRegisterX'), `// ${from}`]) {
+      p = judge(census, deriveInventory(unwire(rel, from, to)), ctx);
+      assert.ok(p.some((x) => new RegExp(`hash domain "${domain}" is never registered`).test(x)),
+        `${rel} ${to}: ${p.join('\n')}`);
+    }
+  }
+  p = judge(census, deriveInventory(unwire('src/js/synth/ui.js', "this.navRegister('synth'",
+    "this.navRegister('synthx'")), ctx);
+  assert.ok(p.some((x) => /src\/js\/synth\/ui\.js registers hash domain "synthx", which/
+    .test(x)), p.join('\n'));
 });
 
 test('mutation: an entry whose test does not name it, or whose file, issue, evidence, '

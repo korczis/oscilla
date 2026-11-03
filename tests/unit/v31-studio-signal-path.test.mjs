@@ -280,12 +280,28 @@ test('the Playground voice graph is the voice the engine builds', () => {
 });
 
 test('values beyond a Studio range stay as they sound; such a model is reported invalid', () => {
-  const i = inputsOf(cfg({ pattern: 'fm', pp: { fm: { modFreq: 1000, depthHz: 100 } } }));
-  const { voice, stages } = project(i, NO_LAB);
-  assert.equal(stages[1].sub, '1000 Hz · ±100 Hz');
+  // Since K010 the AM and FM rates are inside the LFO's range (next test); the Envelope's
+  // attack still stops at 10 s, so a 20 s attack is kept as it is and reported.
+  const i = inputsOf(cfg({ pattern: 'tone' }), { attack: 20000 });
+  const { voice } = project(i, NO_LAB);
+  assert.equal(voice.model.graph.nodes.find((n) => n.id === ID.envelope).params.attack, 20);
   const v = validateStudioModel(voice.model);
   assert.equal(v.ok, false);
-  assert.deepEqual(v.errors.map((e) => [e.code, e.nodeId]), [['invalid-param', ID.lfo]]);
+  assert.deepEqual(v.errors.map((e) => [e.code, e.nodeId]), [['invalid-param', ID.envelope]]);
+});
+
+test('K010: AM and FM voices with an audio-rate modulator are valid Studio models', () => {
+  // The Playground's own maxima: FM 2 kHz, AM 500 Hz (audio/patterns.js). Before K010 the LFO
+  // stopped at 100 Hz and such a voice did not validate (the V605 obstacle).
+  const fm = inputsOf(cfg({ pattern: 'fm', pp: { fm: { modFreq: 2000, depthHz: 100 } } }));
+  const f = project(fm, NO_LAB);
+  assert.equal(f.stages[1].sub, '2000 Hz · ±100 Hz');
+  assert.deepEqual(validateStudioModel(f.voice.model).errors, []);
+  assert.equal(f.voice.model.graph.nodes.find((n) => n.id === ID.lfo).params.rate, 2000);
+  const am = inputsOf(cfg({ pattern: 'am', pp: { am: { modFreq: 500, depth: 80 } } }));
+  const a = project(am, NO_LAB);
+  assert.deepEqual(validateStudioModel(a.voice.model).errors, []);
+  assert.equal(a.voice.model.graph.nodes.find((n) => n.id === ID.lfo).params.rate, 500);
 });
 
 // ---------------------------------------------------------------- the canvas draws the projection

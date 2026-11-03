@@ -8,9 +8,39 @@ import { DISCLAIMER, HEARING_RANGES, CALL_EXAMPLES } from '../data/bioacoustics.
 import { createBioChart, citation, rangeLabel } from '../charts/bio-chart.js';
 import { onUi, setText, activeValue } from './dom.js';
 
+/** What a new-tab link says to everyone, screen readers included (the About links' wording). */
+export const NEW_TAB_HINT = '(opens in a new tab)';
+
+/**
+ * The readable text of a citation link (UX link audit B10): the resolver and the identifier
+ * instead of the raw URL, "PDF" when the link is a file, and the new-tab hint. The URL itself
+ * stays the href (and the title, for a pointer).
+ *   https://doi.org/10.1121/1.1596173      -> "DOI 10.1121/1.1596173 (opens in a new tab)"
+ *   https://pubmed.ncbi.nlm.nih.gov/17203911/ -> "PubMed 17203911 (opens in a new tab)"
+ */
+export function sourceLinkText(url) {
+  let u;
+  try {
+    u = new URL(url);
+  } catch (e) {
+    return `${url} ${NEW_TAB_HINT}`;
+  }
+  const host = u.hostname.replace(/^www\./, '');
+  const path = decodeURIComponent(u.pathname).replace(/^\/+|\/+$/g, '');
+  const last = path.split('/').pop();
+  let name;
+  if (host === 'doi.org') name = `DOI ${path}`;
+  else if (host === 'pubmed.ncbi.nlm.nih.gov') name = `PubMed ${last}`;
+  else if (host === 'researchgate.net' && /^publication\//.test(path)) name = `ResearchGate ${last}`;
+  else name = host;
+  const pdf = /\.pdf$/i.test(path) ? ', PDF' : '';
+  return `${name}${pdf} ${NEW_TAB_HINT}`;
+}
+
 /**
  * Fill the keyboard-reachable sources list (<ol id="osc-bio-source-list">) with one item per
- * bar of the dataset: label and range, basis, citation (its DOI/URL as a link).
+ * bar of the dataset: label and range, basis, citation (its DOI/URL as a link that names the
+ * resolver and the identifier and says it opens a new tab: sourceLinkText).
  */
 export function renderSources(list, dataset) {
   if (!list) return;
@@ -33,7 +63,8 @@ export function renderSources(list, dataset) {
         a.href = url;
         a.target = '_blank';
         a.rel = 'noopener noreferrer';
-        a.textContent = url;
+        a.title = url;
+        a.textContent = sourceLinkText(url);
         li.append(a);
       } else {
         li.append(text);

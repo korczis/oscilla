@@ -1,0 +1,44 @@
+id: K153
+milestone: M086
+serves:
+- "component-system#keys-one-component"
+title: One key registry and one dispatcher for every key and Space
+slug: one-key-registry-and-one-dispatcher
+priority: p1
+profile: implementation
+objective: "Add src/js/ui/keys/: registry.js (bind a binding { id, keys, scope { workspace, view?, focus? }, run, up?, when?, repeat?, label, group }; a chord is a KeyboardEvent.code with its modifiers in a fixed order; a second owner of a chord in the same scope throws at bind; the most specific scope wins, a view over its workspace over '*'; helpRows gives the shortcuts help from the registry) and dispatcher.js (the one document keydown/keyup listener: it resolves the focus context once, runs the owner once per press, swallows auto-repeat unless asked, pairs every press with one up() and releases every held key on blur or a hidden page; it passes through IME composition, text fields, a focused control's Space, Enter, arrows and paging, an open modal and every chord nobody owns). No client binds yet: the next issues move keyboard-ui.js, the shortcuts dialog and the Studio editors onto it, and new keys (the Synth's XY performance, the step sequencer) bind through it from their first commit. A ratchet counts the key listeners outside src/js/ui/keys/ (47 across 16 files on main 32b439e6) and lets them only fall."
+why: "Owner direction of 2026-11-02, relayed by af and b0 (lane coordinator): \"keyboard and shortcuts barely work, aren't reused, aren't a component\", with \"OSCILLA practically doesn't work on iPhone: verify everything\". On main 66635acc, 24 keydown listeners in 15 files each decide on their own whom a key belongs to; ui/shortcuts.js only lists the Space owners and nothing enforces them."
+scope:
+- src/js/ui/keys/registry.js
+- src/js/ui/keys/dispatcher.js
+- tests/unit/keys-registry.test.mjs
+- tests/unit/key-listener-baseline.json
+- tests/README.md
+- .ai/repo/project/intents/component-system.yaml
+- .ai/repo/project/issues/K153.yaml
+- dist
+acceptance_criteria:
+- "Before: VERIFIED: 24 keydown listeners in 15 files on main 66635acc, no registry, no conflict check."
+- "After: a binding resolves to its most specific owner; a second owner of a chord in the same scope throws; the dispatcher runs an owner once per press with one paired up(), swallows repeats unless asked and releases holds on blur; the ratchet holds the listener counts."
+- "Negative cases: IME composition, a focused text field, Space or Enter on a focused button or ARIA widget, an open modal and an unowned chord (Ctrl+Q when only Q is bound) all pass through untouched."
+- "Rollback: revert the merge commit; nothing binds to it yet."
+validation:
+- node --test tests/unit/keys-registry.test.mjs
+evidence_required:
+- verified
+created_at: '2026-11-02'
+updated_at: 2026-11-02T18:18:15Z
+started_at: 2026-11-02T18:17:32Z
+started_event: sha256:dd98386202dd3ab71771b64366db149e2a74518871084ccbf059814162774727
+verified_at: 2026-11-02T18:17:53Z
+verified_event: sha256:80a2192b5c8829e034b082e73f43eae316901308b3b17bcaaf765858cab6b1bc
+completed_at: 2026-11-02T18:18:15Z
+completed_event: sha256:c98d6096decf3f997b86f6453c54b97b8c8a7d55bacb68a1ba8457ece2eeadf9
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/keys-registry.test.mjs"
+    result: "5/5 on main e8b4d8a0 (#390 merged 2026-11-02T18:07:58Z); fails 4 of 5 on the merge base"
+    artifact: "e8b4d8a0"
+    commit: e8b4d8a00ef58847c3014babeaee16c4326eb82e
+    recorded_at: 2026-11-02T18:18:10Z

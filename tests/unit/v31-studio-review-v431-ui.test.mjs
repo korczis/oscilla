@@ -15,6 +15,7 @@ import assert from 'node:assert';
 import { AudioEngine } from '../../src/js/audio/audio-engine.js';
 import { FILTER_TYPES } from '../../src/js/audio/filters.js';
 import { createIdGenerator, createStudioStore } from '../../src/js/studio/actions.js';
+import { CLIP_TARGET_TEXT } from '../../src/js/studio/clip-targets.js';
 import { compileStudio } from '../../src/js/studio/compiler.js';
 import { NODE_REGISTRY } from '../../src/js/studio/registry.js';
 import { createStudioRuntime } from '../../src/js/studio/runtime.js';
@@ -121,7 +122,7 @@ test('V431 A5/X3 no-route: an offline-only or unavailable end is drawn without a
   for (const id of [ids.rec, ids.mic]) assert.equal(rt.get(id), routes.get(id).reason);
 });
 
-test('V431 A5/X3 Q: LFO → Q on a low-pass or high-pass filter has no audible effect', () => {
+test('V431 A5/X3 Q: LFO → Q on a low-/high-pass or shelf filter has no audible effect', () => {
   for (const type of FILTER_TYPES) {
     const { model, ids } = build(({ add, connect }) => {
       const osc = add('oscillator');
@@ -134,12 +135,14 @@ test('V431 A5/X3 Q: LFO → Q on a low-pass or high-pass filter has no audible e
         cutoff: connect(lfo, 'control', f, 'frequency'), f };
     });
     const { routes, status } = routesOf(model);
-    const notApplied = type === 'lowpass' || type === 'highpass';
+    // dB on the node (low-/high-pass, K011: and ignored by the shelves).
+    const decibels = type === 'lowpass' || type === 'highpass';
+    const notApplied = decibels || type === 'lowshelf' || type === 'highshelf';
     const q = routes.get(ids.q);
     assert.equal(q.state, notApplied ? 'no-effect' : 'live', type);
     assert.equal(routes.get(ids.cutoff).state, 'live', type);
     if (notApplied) {
-      assert.equal(q.reason, FILTER_Q_NOT_APPLIED);
+      assert.equal(q.reason, decibels ? FILTER_Q_NOT_APPLIED : CLIP_TARGET_TEXT.filterQUnused);
       assert.match(q.text, /^No audible effect: /);
       const insp = inspectorView(model, { edges: [ids.q] }, { edgeStatus: status });
       assert.equal(insp.route, 'no-effect');
@@ -154,7 +157,7 @@ test('V431 A5/X3 Q: LFO → Q on a low-pass or high-pass filter has no audible e
   }
 });
 
-test('V431 A5/X3 gain: Filter gain modulation is heard on a peaking filter only', () => {
+test('V431 A5/X3 gain: Filter gain modulation is heard on a peaking or shelf filter only', () => {
   for (const type of FILTER_TYPES) {
     const { model, ids } = build(({ add, connect }) => {
       const f = add('filter', { type });
@@ -163,11 +166,12 @@ test('V431 A5/X3 gain: Filter gain modulation is heard on a peaking filter only'
     });
     const e = model.graph.edges.find((x) => x.id === ids.g);
     const why = edgeEffectReason(model, e);
-    if (type === 'peaking') {
+    if (type === 'peaking' || type === 'lowshelf' || type === 'highshelf') {
       assert.equal(why, null);
       assert.equal(routesOf(model).routes.get(ids.g).state, 'live');
     } else {
-      assert.match(why, /^Filter gain applies to peaking only; a .+ filter ignores it\.$/);
+      assert.match(why,
+        /^Filter gain applies to peaking and the shelves only; an? .+ filter ignores it\.$/);
       assert.equal(routesOf(model).routes.get(ids.g).state, 'no-effect', type);
     }
   }

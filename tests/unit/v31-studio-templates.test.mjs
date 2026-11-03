@@ -62,10 +62,11 @@ const e = (id, from, fromPort, to, toPort, props) => ({ id, from: { node: from, 
 
 test('§195 the seven templates exist, in library order, with unique ids', () => {
   assert.deepStrictEqual(STUDIO_TEMPLATES.map((t) => t.id), ['basic-tone', 'subtractive-synth',
-    'sweep-sequence', 'stereo-beat', 'filter-automation', 'measurement-sweep', 'first-patch']);
+    'sweep-sequence', 'stereo-beat', 'filter-automation', 'measurement-sweep', 'first-patch',
+    'demo-song']);
   assert.deepStrictEqual(listTemplates().map((t) => t.title), ['Basic Tone',
     'Subtractive Synth', 'Sweep Sequence', 'Stereo Beat', 'Filter Automation',
-    'Measurement Sweep', 'First Patch']);
+    'Measurement Sweep', 'First Patch', 'Demo song: Lantern in the Slag Yard']);
   assert.strictEqual(getTemplate('nope'), null);
   assert.throws(() => templateModel('nope'), RangeError);
   assert.strictEqual(REFERENCE_TEMPLATE_ID, 'subtractive-synth');
@@ -128,6 +129,7 @@ const PINNED = {
   'filter-automation': '5c107b61379ebc01c124e73c9888679120407c3a1ad695bb519e62954e4f66c7',
   'measurement-sweep': '6b7754b60524614f71cb4d32b3dd77e0f3da793ffb6da976f36b42242e3c9a84',
   'first-patch': '847a4cfd83a66ea94bcdccff48fdcfbf2c72f2697aa7b0840bbb6d69d5cffa2c',
+  'demo-song': '6af3c386ab88fe2c98d1a11a65d2f537fafbb3cd49b4aed7ca0a234e733405b6',
 };
 
 test('V617 every template keeps its pinned hash; the hashes are distinct', () => {
