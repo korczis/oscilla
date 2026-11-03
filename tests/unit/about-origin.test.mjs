@@ -10,10 +10,14 @@
 //   the framing the project grew into, never its start. The company behind the ad is neither
 //   named nor characterised, the copy gives no frequency as the vendor's, and it tells no
 //   personal motive.
-// - "Built in one night." and its 5 h 51 min stay, qualified as wall-clock time with several
-//   AI workers in parallel, and About cites no figure the records do not measure.
+// - The 5 h 51 min of the first night stay, qualified as wall-clock time with several AI
+//   workers in parallel, and About cites no figure the records do not measure.
 //
-// If the owner overrides Q005, this test follows the owner's decision. The shell markup is read
+// The owner overrode Q005's headline on 2026-10-28 (U002, docs/ui-audit.md A14: "About at
+// #m=about is outdated"): "Built in one night." is no longer About's headline. The night is one
+// dated station of the release line, the station that carries the qualifier, and the headline
+// is the release line up to the current release (tests/unit/about-current.test.mjs holds the
+// headline). This test follows that decision. The shell markup is read
 // from src/index.html (and src/partials, should it exist) until E005's shared reader of the
 // assembled shell lands.
 //   node --test tests/unit/about-origin.test.mjs
@@ -75,14 +79,17 @@ export const UNSOURCED = [
   ['an hour count other than the measured interval', /\b(?:six|seven|6|7) hours\b/i],
 ];
 
-/** The problems of the origin and pace About tells, one string each; [] when it follows Q005. */
+/**
+ * The problems of the origin and pace About tells, one string each; [] when it follows Q005 as
+ * the owner amended it on 2026-10-28.
+ */
 export function storyProblems(markup) {
   const view = block(markup, 'id="osc-view-about"', '</main>');
   if (!view) return ['the About view is missing'];
   const origin = block(view, 'aria-labelledby="osc-about-origin"', '</section>');
-  const night = block(view, 'aria-labelledby="osc-about-night-title"', '</ol>');
+  const night = block(view, 'aria-labelledby="osc-about-line-title"', '</ol>');
   if (!origin) return ['the Origin block is missing'];
-  if (!night) return ['the one-night statement is missing'];
+  if (!night) return ['the release line is missing'];
   const problems = [];
 
   const paras = [...origin.matchAll(/<p>([\s\S]*?)<\/p>/g)].map((m) => text(m[1]));
@@ -109,11 +116,13 @@ export function storyProblems(markup) {
     problems.push('Origin tells a personal story');
   }
 
-  const pace = text(night);
-  if (!/\bBuilt in one night\. Not built as a throwaway\./.test(pace)) {
-    problems.push('the one-night statement changed');
+  const heading = text(block(night, '<h3', '</h3>') || '');
+  if (/\bBuilt in one night\b/i.test(heading)) {
+    problems.push('the one-night statement is the headline, which the owner overrode on '
+      + '2026-10-28');
   }
-  if (!QUALIFIER.test(pace)) {
+  const stations = [...night.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/g)].map((m) => text(m[1]));
+  if (!stations.some((s) => QUALIFIER.test(s))) {
     problems.push('the pace statement lacks the wall-clock and parallel-workers qualifier');
   }
 
@@ -127,7 +136,7 @@ export function storyProblems(markup) {
 
 const shell = shellMarkup();
 
-test('About tells the origin and the pace Q005 decided', () => {
+test('About tells the origin and the pace Q005 decided, as the owner amended it', () => {
   assert.deepEqual(storyProblems(shell), []);
 });
 
@@ -156,10 +165,17 @@ test('mutation: the copy before Q005, or a drift from it, is named', () => {
   assert.deepEqual(swap('15–16 kHz is audible', '15.5 kHz is audible'),
     ['the start lacks the physics point on the 15-16 kHz tone',
       'About cites a frequency as the vendor\'s: "15.5 kHz"']);
-  assert.deepEqual(swap('Not built as a throwaway.</span>',
-    'Not built as a throwaway.</span> 75 AI sessions, 35k lines of code.'),
+  assert.deepEqual(swap('several AI workers in parallel</span>',
+    'several AI workers in parallel. 75 AI sessions, 35k lines of code.</span>'),
   ['About cites the 75 captured prompts: "75 AI sessions"',
     'About cites a line count: "35k lines of code"']);
+  // The headline Q005 kept, which the owner overrode.
+  const headline = shell.match(
+    /(<h3 class="osc-about-statement" id="osc-about-line-title">)[\s\S]*?(<\/h3>)/);
+  assert.ok(headline, 'the release line has its headline');
+  assert.deepEqual(swap(headline[0], `${headline[1]}Built in one night.
+    <span>Not built as a throwaway.</span>${headline[2]}`),
+  ['the one-night statement is the headline, which the owner overrode on 2026-10-28']);
   assert.deepEqual(swap('What it grew into asks', 'It asks'),
     ['the browser-laboratory question is not framed as what the project grew into']);
   assert.deepEqual(swap('Its author\'s reply', 'My reply'), ['Origin tells a personal story']);

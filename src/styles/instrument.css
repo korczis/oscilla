@@ -225,19 +225,23 @@
 .osc-menu--grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  top: auto;
-  bottom: calc(100% + 6px);
 }
 
 .osc-menu[hidden] {
   display: none;
 }
 
-/* ================= Main grid ================= */
+/* ================= Main grid =================
+ * The Playground is the first screen (P002, Q004 option A; docs/first-screen-options.md):
+ * the positioning sentence, then Source & Pattern, Signal analysis, Microphone Analyzer and
+ * Device & Limits in one row, MEASURE's Guided measurement panel across the full width, then
+ * the Pattern Sequencer with the compact Studio beside it, on the column edges of the first
+ * row. Rows take their content height. The other workspaces re-flow the same panels
+ * (integration.css, responsive.css).
+ */
 .osc-main {
   display: grid;
   flex: 1 0 auto;
-  grid-template-rows: 654px 228px;
   grid-template-columns: minmax(0, 1fr);
   row-gap: 6px;
   padding: 7px 9px 12px 11px;
@@ -247,47 +251,92 @@
   outline: none;
 }
 
+/* The sentence (h1) on the Playground, in the brand subtitle's voice. */
+.osc-main > h1:not(.osc-sr-only) {
+  grid-column: 1 / -1;
+  color: var(--osc-text-2);
+  font-size: var(--osc-fs-md);
+  font-weight: var(--osc-fw-regular);
+}
+
 .osc-top {
   display: grid;
+  grid-template-rows: 416px;
   grid-template-columns: minmax(0, 958fr) minmax(0, 548fr);
   column-gap: 10px;
-  min-height: 0;
 }
 
-.osc-top-left {
-  display: grid;
-  grid-template-rows: 416px minmax(0, 1fr);
-  row-gap: 8px;
-  min-width: 0;
-}
-
+.osc-top-left,
 .osc-top-right {
-  display: grid;
-  grid-template-rows: 365px minmax(0, 1fr);
-  row-gap: 9px;
-  min-width: 0;
+  display: contents;
 }
 
 .osc-row1-left {
   display: grid;
   grid-template-columns: minmax(0, 314fr) minmax(0, 635fr);
   column-gap: 9px;
-  min-height: 0;
 }
 
 .osc-row1-right {
   display: grid;
   grid-template-columns: minmax(0, 371fr) minmax(0, 168fr);
   column-gap: 9px;
-  min-height: 0;
 }
 
 .osc-row3 {
   display: grid;
-  grid-template-columns:
-    minmax(0, 357fr) minmax(0, 310fr) minmax(0, 281fr) minmax(0, 258fr) minmax(0, 274fr);
-  column-gap: 9px;
-  min-height: 0;
+  grid-template-columns: minmax(0, 958fr) minmax(0, 548fr);
+  column-gap: 10px;
+}
+
+/* From 1280 px the Playground leaves to their workspaces the panels Q004 took off the first
+   screen: the Spectrogram panel (the analysis tab and Analyze > Analyzer keep it) and Filter
+   Lab, Envelope, Additive Synthesis, Phase & Stereo and Bioacoustics (Filter Lab, Synthesis,
+   Compare). Below 1280 px every panel stays (responsive.css). */
+@media (min-width: 1280px) {
+  .osc-app[data-mode="playground"] :is(.osc-p-spectrogram,
+    .osc-row3 > .osc-panel:not(.osc-p-sequencer, .osc-p-studio)) {
+    display: none;
+  }
+}
+
+/* MEASURE's view on the Playground shows its guided flow only (the row above). */
+.osc-app[data-mode="playground"] .osc-measure > .osc-panel:not(.osc-m-flow) {
+  display: none;
+}
+
+/* Below 1280 px panels are ordered (responsive.css): the measurement row follows Device &
+   Limits (order 4) and comes before the sequencer and the compact Studio. */
+@media (max-width: 1279.98px) {
+  .osc-app[data-mode="playground"] .osc-view--measure {
+    order: 5;
+  }
+}
+
+/* A phone shows the measurement steps folded to the current one (MEASURE shows all seven). */
+@media (max-width: 767.98px) {
+  .osc-app[data-mode="playground"] .osc-m-step:not(.is-current) {
+    display: none;
+  }
+}
+
+/* Source & Pattern's disclosures (the six steps, Mode): a row of their own on a phone, not
+   shown from 768 px, where they are always open (ui/app.js foldOnPhone). */
+#osc-panel-source summary {
+  color: var(--osc-text-2);
+  line-height: 28px;
+}
+
+@media (min-width: 768px) {
+  #osc-panel-source summary {
+    display: none;
+  }
+}
+
+@media (pointer: coarse) {
+  #osc-panel-source summary {
+    line-height: 44px;
+  }
 }
 
 /* Workspace-only panels and full-width views stay out of the integrated Playground. */
@@ -301,18 +350,8 @@
   gap: 9px;
 }
 
-.osc-app[data-mode="learn"] .osc-main,
-.osc-app[data-mode="presets"] .osc-main,
-.osc-app[data-mode="about"] .osc-main {
-  grid-template-rows: auto;
-}
-
-.osc-app[data-mode="learn"] .osc-top,
-.osc-app[data-mode="learn"] .osc-row3,
-.osc-app[data-mode="presets"] .osc-top,
-.osc-app[data-mode="presets"] .osc-row3,
-.osc-app[data-mode="about"] .osc-top,
-.osc-app[data-mode="about"] .osc-row3 {
+.osc-app:is([data-mode="learn"], [data-mode="presets"], [data-mode="about"]) :is(.osc-top,
+  .osc-row3) {
   display: none;
 }
 
@@ -1362,7 +1401,10 @@
   margin-top: 6px;
 }
 
-.osc-bio-source-list a {
+/* Text links: the citation links, and the cross-links between workspaces (U010) in panel
+   headers, button rows, empty states, Learn and the notices; underlined in the text's colour. */
+:is(.osc-bio-source-list, .osc-panel-header, .osc-m-btnrow, .osc-x-empty, .osc-preset-empty,
+  .osc-learn-actions, .osc-toast-text) a:not([class]) {
   color: inherit;
   overflow-wrap: anywhere;
 }

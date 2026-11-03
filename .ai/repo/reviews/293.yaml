@@ -1,0 +1,71 @@
+# Review verdict for pull request #293, plan item C010: the Phase & Stereo pan reaches the
+# sounding dual voice, its controls show the configuration, and it says where it does not apply
+# (branch fix/c010-phase-stereo-pan-live). Delta re-review at head a17d8a13 of the three commits
+# that answer dev-68's verdict at 5471d235 (e33303dd, a8211f87, a17d8a13; 86bddef8 only merged
+# origin/main fde49bd1). Independent: prismatic-majordomus-f3 did not build, merge or edit this
+# change; it wrote only this file, in a detached worktree of a17d8a13 in its scratchpad
+# (node_modules symlinked read-only from the builder's worktree, nothing installed).
+#
+# The digest: origin/main's scripts/review-verdict.mjs, run from `git archive origin/main
+# scripts` with --repo on the detached worktree and --base-branch origin/main: 94610552...f0c over
+# the one guarded path, src/js/audio/audio-engine.js. It matches the one oscilla-b0 handed over.
+# The branch is behind origin/main (f303e786, v3.14.1); git merge-tree against it conflicts only in
+# dist/index.html and tests/README.md, and audio-engine.js merges cleanly (main's one change to
+# it, a8e4908d C003, touches no start time), so a plain merge of main does not move the guarded
+# content.
+#
+# The delta, read against each earlier finding:
+# - F1 (P2) closed. pan-live-dual sets Δφ 0 before B's frequency (the order matters: the lab
+#   learns the dual's frequencies in a later Alpine effect, and a lab change emitted before that
+#   would write its stale B back) and restores it first in finally. With A = B the level of a pair
+#   is 20 log10 |cos(Δφ/2)| of one tone, so at 0° it no longer depends on whether B's start delay
+#   reached the sound: the mechanism of the 0.69 dB gap is removed by construction, not by a
+#   wider tolerance (still 0.5 dB). `lab.set` is setCfg (phase-stereo.js:249), synchronous, so
+#   `phase0` (deg0 === 0) asserts what the voice plays: main.js:178 reads the lab's phaseDeg at
+#   play. The reference level is now steady (three reads of one voice within 0.1 dB, polled every
+#   50 ms by until()); `back` is not steadiness-gated but is retried until it is within 0.5 dB,
+#   so an attack read there only delays it. The failure message now carries both levels.
+# - F2 (P3) fixed. A fresh voice starts at _rendered(ctx) + START_OFFSET_S
+#   (audio-engine.js:449-451): clock.js renderedTimeAtLeast with outputTimestamp false, the same
+#   readings _soon() uses. It is bounded: play() takes a reading first (audio-engine.js:436), so
+#   the newest reading is now and the gain over currentTime is at most CLOCK_LAG_SLACK_S (50 ms);
+#   readings are forgotten on a suspend or start (audio-engine.js:281), so a context that has
+#   just started is V1's currentTime + 20 ms exactly; without a performance clock it is
+#   currentTime. Other readers of t0 (:624 stopAt, :828 planFreqAt with max(0, ...), :999
+#   snapshot) accept a later t0. The sequencer editor keeps its own currentTime + START_OFFSET_S
+#   (editor.js:355, 391), as docs/v31/timeline.md:208 says.
+# - F5 (P3) partly closed: the comment at phase-stereo.js:184-186 now says what dom.js setSlider
+#   (labs/dom.js:38-44) does, and it is true for a drag: setCfg stores clamp(Number(input.value)),
+#   whose String is the value the range input already holds. The offsetText nit stays.
+# - F3, F4, F6 (P3) are untouched by the delta and stay open.
+#
+# Runs (darwin-arm64, 18 cores, load 5-9 from other sessions; OSC_LOAD_MAX=300):
+# - node --test tests/unit/engine.test.mjs tests/unit/dual-router-live.test.mjs: 37/37 pass.
+# - Fail-first of F2: the new test 'C010 F2: a fresh voice starts after the audio already
+#   rendered' against 86bddef8's audio-engine.js fails ('t0 0.52, expected 0.55'), passes at head.
+# - node tests/browser/app.cjs --browsers firefox --origins file --only pan-live-dual: 10/10 PASS.
+#   Control: 86bddef8's app.cjs on the same dist also passed 10/10 at this load, so these runs do
+#   not discriminate; F1 is closed by the reading above, not by a rate. The rate dev-68 and the
+#   first review measured (7 of 27 at load 30-70) was not re-measured under load.
+# - --browsers chromium|firefox|webkit, both origins, --only pan-live-dual: 3 runs each, 18/18 PASS.
+# - node scripts/build.mjs --check: dist up to date (source da8c59fbb441).
+# - npm test: 3287 tests, 3285 pass, 1 skipped, 1 fail: about.test.mjs:207 'release line 3.14
+#   (v3.14.0) has a station on the About timeline'. It reads the published tags, and v3.14.0 was
+#   released on main after this branch forked; merging origin/main brings its timeline station.
+#   Not this change.
+#
+# Verdict: merge. No P0 or P1; the P2 is closed. P3s stay open for follow-ups. Before landing,
+# merge origin/main (main is frozen until #359 in any case) and refresh the PR body (R1).
+schema: review-verdict/v1
+pr: 293
+verdict: merge
+reviewer: "prismatic-majordomus-f3 (claude-code 1f47a36e); did not build, merge or edit this change; wrote only this file"
+content: 94610552b80b5280ff37fa892225d128e606fb7a580e78939c5e45c382294f0c
+findings:
+  - { id: F1, severity: P2, status: closed, title: "GATE check pan-live-dual compared two voices' RMS at the default Δφ 45° with A = B, 0.69 dB apart when one lost B's start delay; closed at a8211f87/a17d8a13: the check runs at Δφ 0 (level independent of the start delay), restores it, and takes a steady reference level" }
+  - { id: F2, severity: P3, status: closed, title: "A fresh voice started at a stale ctx.currentTime + START_OFFSET_S; fixed at e33303dd: it starts START_OFFSET_S after what the audio already rendered (bounded by 50 ms over currentTime), with a unit test that fails first" }
+  - { id: F3, severity: P3, status: open, title: "The unit fail-first (tests/unit/dual-router-live.test.mjs) fails only with TypeError and its lab()/want() copies main.js; the main.js wiring (main.js:454-464 at 5471d235, :454-468 here) is held only by the browser check pan-live-dual" }
+  - { id: F4, severity: P3, status: open, title: "liveRouter (main.js:95) is global and dispose clears it only for its own router (main.js:153): after a centred retrigger during a routed release, labVizInputs, getStereoRouter and the correlation meter describe the fading voice" }
+  - { id: F5, severity: P3, status: open, title: "Comment fixed (phase-stereo.js:184-186 now matches setSlider); the nit stays: offsetText rounds to two decimals, so an imported -0.001° (stored 359.999) shows '360', outside the stated [0, 360)" }
+  - { id: F6, severity: P3, status: open, title: "The Pan disable rule (src/index.html:1128) ignores the sequencer: with source dual and only the sequencer sounding (its own oscillators, no router), the slider is enabled with no reason shown and moves nothing audible" }
+  - { id: R1, severity: P3, status: open, title: "The PR body still states the guarded digest 918794d7 and the fail-first at 5471d235; it does not describe the F1/F2 commits, the new engine unit test, or that every fresh voice (not only dual) now starts from the rendered-time estimate" }

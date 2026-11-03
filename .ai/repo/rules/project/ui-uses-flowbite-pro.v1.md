@@ -7,7 +7,7 @@ description: Every UI surface of OSCILLA is built from the owner's licensed Flow
 statement: A new or changed UI surface (the shell, a workspace, a panel, a dialog, and every component inside them) is adapted from the matching Flowbite Pro template or block, with its Tailwind class structure, and a surface once on Pro stays on Pro; no dependency, import or stylesheet of another UI kit, no new stylesheet the build reaches, under src/ or imported from anywhere, but the Tailwind entry (tailwind.css under src/styles, which with the Tailwind configuration defines no ad-hoc CSS) and no ad-hoc component library is added; no Flowbite Pro source file, by name, fingerprint or licence marker, is committed, because OSCILLA is public; the domain views (charts, Signal Path, the Studio graph and timeline) keep their own rendering as the content of Pro cards; and the legacy interface recorded in tests/unit/ui-flowbite-pro-baseline.json (the surfaces not yet on Pro, the occurrences of every osc-* class token, the uses of each other legacy class name, the selectors and declarations of each legacy stylesheet and of each domain view's own stylesheet, the inline styles of src/index.html, over every file the build bundles) equals the tree and never rises above its value in a commit of the base branch; a surface counts as on Pro only when the build compiles Tailwind with the flowbite plugin (ADR 0061).
 status: active
 class: blocking
-depends_on: [project.single-file-deliverable@2, project.visual-identity-lock@2]
+depends_on: [project.single-file-deliverable@2, project.visual-identity-lock@3]
 tags: [design, visual, ui, dependencies, licence]
 x-majordomus:
   tests: [tests/unit/ui-flowbite-pro.test.mjs]

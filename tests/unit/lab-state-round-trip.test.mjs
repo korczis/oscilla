@@ -15,10 +15,10 @@ import { STORAGE_KEYS } from '../../src/js/core/constants.js';
 import { serializeHash } from '../../src/js/core/url-state.js';
 import { defaultInstrumentState, defaultEditorFields } from '../../src/js/core/config.js';
 import {
-  applyLabRecord, applyLabSections, snapshotLabs,
+  applyLabRecord, applyLabSections, labImportLimits, snapshotLabs,
 } from '../../src/js/ui/lab-state.js';
 import {
-  buildConfigExport, parseConfigImport, parseLabSections,
+  buildConfigExport, limitedValues, parseConfigImport, parseLabSections,
 } from '../../src/js/ui/config-file.js';
 import {
   LAB_HASH_KEY, LAB_PARAM_MAX, decodeLabParam, encodeLabParam, withoutLabParam,
@@ -392,4 +392,27 @@ test('labLinkParam and configLinkNote: the note names what the link restores, an
   assert.equal(bare.labLinkParam(), null);
   assert.equal(bare.configLinkNote(),
     'The link restores these settings; it never starts playback.');
+});
+
+test('the config import through applyLabSections still names the lab values a lab clamped '
+  + '(main.js applyImport, #312 limitedValues, after the C018 merge)', () => {
+  const labs = fakeLabs();
+  // A filter whose limit is below the file's value: it holds 20 000 Hz, not 30 000.
+  const update = labs.filter.update;
+  labs.filter.update = (s) => update({ ...s, frequency: Math.min(s.frequency, 20000) });
+  const parsed = parseLabSections({
+    filter: { enabled: true, type: 'lowpass', frequency: 30000, Q: 4, gain: 0 },
+    envelope: { adsr: { enabled: true, a: 0.5, d: 0.1, s: 0.7, r: 0.3 } },
+    additive: { enabled: true, partials: [{ n: 1, gain: 1, phase: 0 }] },
+    phaseStereo: { phaseDeg: 90, pan: 0.5 },
+  }, []);
+  const names = applyLabSections(labs, parsed, null);
+  assert.deepEqual(names, ['envelope', 'filter', 'additive', 'phaseStereo']);
+  const { requested, applied } = labImportLimits(labs, parsed, names);
+  const limited = limitedValues(requested, applied);
+  assert.deepEqual(limited.map((l) => [l.field, l.requested, l.applied]),
+    [['filter.frequency', 30000, 20000]], 'only the clamped value is named');
+  // A section not applied (no lab mounted) asks nothing and is never reported as limited.
+  const { requested: none } = labImportLimits({}, parsed, []);
+  assert.deepEqual(none, {});
 });

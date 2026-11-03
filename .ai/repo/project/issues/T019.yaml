@@ -11,6 +11,10 @@ why: "P05 audit of origin/main b67d1e58 (v3.13.0): For a noise-free system whose
 scope:
   - "src/js/measurement/views/ir-chart.js"
   - "src/js/measurement/impulse-response.js"
+  - "src/js/measurement/stimulus.js"
+  - "src/js/ui/measure.js"
+  - "tests/browser/v3-ui.cjs"
+  - "docs/v3/algorithms.md"
   - "tests/unit/readout-labels-ir-tail.test.mjs"
   - "tests/README.md"
   - "dist"
@@ -27,4 +31,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-10-30

@@ -27,13 +27,15 @@
 // and LFO starts/stops happen only while the envelope is at the floor. Gain is never ramped to
 // or set to 0.
 //
-// Stop: only the out Gain, which carries no automation until then (its value is exactly 1),
-// is held and faded. The block schedules keep running underneath the fade and are cancelled
-// only after every source has ended. Reason: Chromium renders concurrently with the main
-// thread, and a render quantum that meets a param's timeline while the main thread is editing it
-// is rendered at the param's last value. Any edit of a ramping param (cancelAndHoldAtTime, a
-// computed hold, even a no-op event far in the future) can so freeze one quantum of a ramp: a
-// one-sample step of up to a whole edge. The out gain sits at a constant 1, so it is immune.
+// Stop: only the out Gain, which carries no automation until then (its value is exactly 1;
+// a late voice's join edge, keepGrid, is its only other schedule), is held and faded. The
+// block schedules keep running underneath the fade and are cancelled only after every source
+// has ended. Reason: Chromium renders concurrently with the main thread, and a render quantum
+// that meets a param's timeline while the main thread is editing it is rendered at the param's
+// last value. Any edit of a ramping param (cancelAndHoldAtTime, a computed hold, even a no-op
+// event far in the future) can so freeze one quantum of a ramp: a one-sample step of up to a
+// whole edge. The out gain sits at a constant 1, so it is immune (a stop inside a late voice's
+// join edge, its first EDGE_S, is the one exception).
 
 import { GAIN_FLOOR, RENDER_QUANTUM, START_OFFSET_S } from '../core/constants.js';
 import {
@@ -52,6 +54,7 @@ import {
 } from './model.js';
 import { observeClock, renderedTimeAtLeast } from '../audio/clock.js';
 import { buildStageChain } from '../audio/stage-chain.js';
+import { lfoShape } from '../audio/patterns.js';
 
 export { observeClock };
 
@@ -69,11 +72,36 @@ export const STOP_LEAD_S = 0.02;
 
 // ============================================================ V1 maths
 
-// from V1 lfoShape (index.html@95dfa81:1700)
-export function lfoShape(shape, phase) {
+// V1 lfoShape (index.html@95dfa81:1700): one owner, audio/patterns.js (E041); re-exported.
+export { lfoShape };
+
+// Harmonics of a phased triangle (phasedWaveCoefficients); its terms fall as 1/n^2.
+export const PHASED_HARMONICS = 64;
+
+/**
+ * Fourier coefficients { real, imag } (PeriodicWave convention: x = sum real[n] cos(n w t) +
+ * imag[n] sin(n w t)) of a modulator shape ('sine' | 'triangle', the shapes planFromTimeline
+ * gives a source) advanced by `phase` cycles: the waveform lfoShape(shape, phase + f t), i.e.
+ * the oscillator type as if it had started `phase` periods earlier. An OscillatorNode always
+ * starts at phase 0, and one started in the past does not catch up, so a voice continued from
+ * an offset (H001) starts each sounding modulator on this wave instead. The triangle is the Web
+ * Audio type's series (b_n = 8 sin(n pi / 2) / (n pi)^2, odd n) to PHASED_HARMONICS terms; the
+ * PeriodicWave's normalisation scales it to the peak 1 the type has. -> null for phase 0 (the
+ * type itself) or another shape.
+ */
+export function phasedWaveCoefficients(shape, phase) {
   const p = phase - Math.floor(phase);
-  if (shape === 'triangle') return p < 0.25 ? 4 * p : p < 0.75 ? 2 - 4 * p : 4 * p - 4;
-  return Math.sin(2 * Math.PI * p);
+  if (!(p > 0) || (shape !== 'sine' && shape !== 'triangle')) return null;
+  const n = shape === 'triangle' ? PHASED_HARMONICS : 1;
+  const real = new Float32Array(n + 1);
+  const imag = new Float32Array(n + 1);
+  for (let k = 1; k <= n; k += 1) {
+    // sin(k (x + phi)) = sin(k x) cos(k phi) + cos(k x) sin(k phi), phi = 2 pi p
+    const b = shape === 'sine' ? 1 : k % 2 ? (8 * (k % 4 === 1 ? 1 : -1)) / (k * Math.PI) ** 2 : 0;
+    real[k] = b * Math.sin(2 * Math.PI * k * p);
+    imag[k] = b * Math.cos(2 * Math.PI * k * p);
+  }
+  return { real, imag };
 }
 
 // derived from V1 stepsFromFrequencies (index.html@95dfa81:1748): the cap is the block length
@@ -571,14 +599,32 @@ function defaultTimers() {
  * Compile a sequence onto a (realtime or offline) context.
  *   compileSequence(model, ctx, destination, t0, opts?) -> voice
  * opts: { sampleRate (used only when ctx has none), waveform (overrides model.waveform),
+ *         offset (seconds into the sequence the voice starts at, default 0),
  *         onEnded({ stopped }), timers: { setTimeout, clearTimeout } | null,
- *         track(node), source(node) }
+ *         track(node), source(node), keepGrid }
  * track/source are the V1 engine's voice-scoped accounting hooks (index.html@95dfa81:2198):
  * track() is called with every node the voice creates (gains and oscillators), source() in
  * addition with every oscillator. Both default to the identity. The voice still cleans up
  * everything itself; the hooks only let an engine count what it owns.
  * t0 is clamped to >= ctx.currentTime and rounded up to a whole frame.
- * voice: { t0, endTime, duration, sampleRate, warnings, timeline, events, stopTime,
+ * keepGrid (realtime only): a t0 the clock has already passed is not clamped. The voice keeps
+ * every event at t0 + t, as on time (the audio thread evaluates the past ones at its own
+ * position), and joins that grid click-free: the out gain holds GAIN_FLOOR until joinAt, read
+ * once the voice is scheduled, STOP_LEAD_S (at least two quanta) after the audio rendered so far
+ * on a render-quantum boundary, as a stop is, and ramps to 1 over EDGE_S. A late voice so
+ * loses its first frames but none of its boundaries: its end, and the start of whatever follows
+ * it on the same grid, stay where they were authored (a clamped voice moves as a whole and
+ * overlaps its successor). voice.joinAt is that time, null for a voice that is on time.
+ * offset > 0 plays the rest of the sequence from `offset` at t0 (a Studio voice continued on a
+ * rebuilt node, H001): every automated parameter starts at t0 with its exact scheduled value at
+ * `offset` (automationValueAt), later events keep their times relative to t0 - offset, sources
+ * that ended before `offset` are not created, and the others start at t0, each modulator (siren,
+ * AM, FM) on the phase it has reached there (phasedWaveCoefficients). The voice then starts
+ * at its programmed level, not from the floor: the caller fades it in. voice.t0 is the start,
+ * voice.duration what remains, voice.offset the offset; freqAt and blockIndexAt stay in
+ * sequence time.
+ * voice: { t0, offset, endTime, duration, sampleRate, warnings, timeline, events, stopTime,
+ *          joinAt,
  *          stop(atTime?) -> boolean, dispose(), freqAt(ctxTime), blockIndexAt(ctxTime),
  *          ended, stopping, activeSourceCount, activeNodeCount }
  * stop(at?): from `at` (default on a realtime context: STOP_LEAD_S after the audio rendered so
@@ -586,7 +632,11 @@ function defaultTimers() {
  * held value 1 to the floor over STOP_RAMP_S without editing the sounding schedules, stops every
  * source after the fade, and cancels the automation and disconnects every node once all
  * sources have ended (a timer fallback covers browsers that drop `ended`).
- * Returns false when the voice already ended or was already stopping.
+ * stop(at, { provisional: true }) (C011: the editor's loop cap) schedules a stop ahead that a
+ * later, earlier stop replaces while its fade has not begun: the out gain is still exactly 1
+ * there, so the pending fade is withdrawn (cancelScheduledValues from the new start) and the new
+ * fade runs from 1. Any other stop is final, as before.
+ * Returns false when the voice already ended or was already stopping (by then, if provisional).
  */
 export function compileSequence(model, ctx, destination, t0, opts = {}) {
   const sr = isNum(ctx.sampleRate) && ctx.sampleRate > 0 ? ctx.sampleRate : opts.sampleRate;
@@ -597,15 +647,27 @@ export function compileSequence(model, ctx, destination, t0, opts = {}) {
   const timers = opts.timers === undefined ? (isOffline ? null : defaultTimers()) : opts.timers;
   const now = ctx.currentTime;
   if (!isOffline) observeClock(ctx);
-  const start = Math.ceil(Math.max(toNumber(t0, now), now) * tl.sampleRate - 1e-6) / tl.sampleRate;
+  const grid = Math.ceil(toNumber(t0, now) * tl.sampleRate - 1e-6) / tl.sampleRate;
+  const offset = clamp(toNumber(opts.offset, 0), 0, tl.duration);
+  // A voice continued from an offset (H001) starts at t0 >= now and is faded in by its caller:
+  // it never keeps a grid the clock has passed.
+  const keepGrid = opts.keepGrid === true && !isOffline && grid < now && !(offset > 0);
+  const start = keepGrid ? grid
+    : Math.ceil(Math.max(toNumber(t0, now), now) * tl.sampleRate - 1e-6) / tl.sampleRate;
+  const base = start - offset; // audio time of sequence time 0
+  let joinAt = null; // a late voice's join (keepGrid), chosen when its out gain is scheduled
+  // The earliest event time: `now`, or the grid start of a late voice (keepGrid), so the floor
+  // set at `now` does not override the grid events before it.
+  const initAt = Math.min(now, start);
 
   const nodes = [];
   const sources = []; // { node, startAt, stopAt, ended }
   const timerIds = [];
   let ended = false;
   let stopping = false;
+  let provisional = false; // the pending stop may give way to an earlier one (stop docs)
   let liveSources = 0;
-  let lastStop = start + tl.duration + STOP_PAD_S;
+  let lastStop = base + tl.duration + STOP_PAD_S;
   let endedCalled = false;
 
   const trackHook = typeof opts.track === 'function' ? opts.track : (n) => n;
@@ -709,13 +771,15 @@ export function compileSequence(model, ctx, destination, t0, opts = {}) {
 
   const voice = {
     t0: start,
-    endTime: start + tl.duration,
-    duration: tl.duration,
+    offset,
+    endTime: base + tl.duration,
+    duration: tl.duration - offset,
     sampleRate: tl.sampleRate,
     warnings: tl.warnings,
     timeline: tl,
     events,
     stopTime: null,
+    joinAt,
     get ended() {
       return ended;
     },
@@ -729,13 +793,13 @@ export function compileSequence(model, ctx, destination, t0, opts = {}) {
       return nodes.length;
     },
     freqAt(time) {
-      return lookupFreq(time - start);
+      return lookupFreq(time - base);
     },
     blockIndexAt(time) {
-      return isNum(time) ? blockIndexAtTime(tl.blocks, time - start) : -1;
+      return isNum(time) ? blockIndexAtTime(tl.blocks, time - base) : -1;
     },
-    stop(at) {
-      if (ended || stopping) return false;
+    stop(at, how = {}) {
+      if (ended || (stopping && !provisional)) return false;
       // Default on a realtime context: like the engine's releases (AudioEngine._soon), at least
       // STOP_LEAD_S after the audio already rendered and on a render-quantum boundary, so the
       // fade starts on frames the audio thread has not rendered yet even when the main thread is
@@ -749,13 +813,24 @@ export function compileSequence(model, ctx, destination, t0, opts = {}) {
         const lead = Math.max(STOP_LEAD_S, 2 * q);
         t = Math.ceil((renderedTimeAtLeast(ctx) + lead) / q - 1e-9) * q;
       }
+      // A late voice (keepGrid) inside its join edge: the stop starts where the edge ends, at
+      // most EDGE_S later, so no ramping segment of the out gain is edited (see the header).
+      if (joinAt !== null && t >= joinAt && t < joinAt + EDGE_S) t = joinAt + EDGE_S;
       if (t >= voice.endTime) return false; // already ending naturally
+      if (stopping && !(t < voice.stopTime)) return false; // the provisional stop comes first
+      const ahead = stopping; // the provisional fade starts after t: out gain is 1 until then
       stopping = true;
+      provisional = !!(how && how.provisional);
       voice.stopTime = t;
       try {
+        if (ahead) out.gain.cancelScheduledValues(t);
         // The envelope, frequency and AM schedules are not touched while they sound (see the
-        // header): the exact current value of the out gain is 1, held from t and faded.
-        out.gain.setValueAtTime(1, t);
+        // header): the exact current value of the out gain is 1, held from t and faded. A late
+        // voice stopped before its join is still at the floor there: its join (the floor at
+        // joinAt and the edge to 1) is cancelled, so the out gain never rises after the STOP,
+        // and the edit is safe because the gain is a constant floor up to joinAt.
+        if (joinAt !== null && t < joinAt) out.gain.cancelScheduledValues(t);
+        out.gain.setValueAtTime(joinValueAt(t), t);
         out.gain.linearRampToValueAtTime(GAIN_FLOOR, t + STOP_RAMP_S);
         const stopAt = t + STOP_RAMP_S + STOP_PAD_S;
         for (const s of sources) {
@@ -806,8 +881,15 @@ export function compileSequence(model, ctx, destination, t0, opts = {}) {
 
   let lookupFreq = () => null;
   let out = null;
+  // The out gain's scheduled value at t: 1, or before a late voice's join the floor (inside the
+  // join edge, the ramp's value: stop() moves a stop there to the edge's end).
+  const joinValueAt = (t) => {
+    if (joinAt === null || t >= joinAt + EDGE_S) return 1;
+    if (t <= joinAt) return GAIN_FLOOR;
+    return GAIN_FLOOR + ((1 - GAIN_FLOOR) * (t - joinAt)) / EDGE_S;
+  };
   const logged = [];
-  if (!tl.blocks.length || tl.duration <= 0) {
+  if (!tl.blocks.length || tl.duration <= 0 || offset >= tl.duration) {
     ended = true;
     endedCalled = true;
     return voice;
@@ -819,7 +901,11 @@ export function compileSequence(model, ctx, destination, t0, opts = {}) {
   const amp = track(ctx.createGain());
   const env = track(ctx.createGain());
   out = track(ctx.createGain());
-  out.gain.setValueAtTime(1, now); // automated from the start; constant until a stop fades it
+  if (!keepGrid) {
+    out.gain.setValueAtTime(1, now); // automated from the start; constant until a stop fades it
+  } else {
+    out.gain.setValueAtTime(GAIN_FLOOR, initAt); // a late voice: silent until it joins (below)
+  }
   carrier.connect(amp);
   amp.connect(env);
   env.connect(out);
@@ -829,12 +915,49 @@ export function compileSequence(model, ctx, destination, t0, opts = {}) {
   const ap = loggedParam(amp.gain, 1);
   logged.push(fp, ep, ap);
   // Before the first event the params sit at their floor/neutral values.
-  ep.set(GAIN_FLOOR, now);
+  ep.set(GAIN_FLOOR, initAt);
   const targets = { freq: fp, gain: ep, am: ap };
   const pending = new Map();
+  if (offset > 0) {
+    // Continued from `offset`: each parameter holds its exact scheduled value there from t0.
+    for (const [kind, lp] of Object.entries(targets)) {
+      const own = events.filter((e) => e.kind === kind)
+        .map((e) => ({ t: e.t, value: e.value, ramp: e.ramp }));
+      const v = automationValueAt(own, offset, null);
+      if (v !== null) lp.set(v, start);
+    }
+  }
+
+  // `phase`: the cycles it has run at the offset (a modulator started before it, H001).
+  const modulator = (e, at, phase = 0) => {
+    const lfo = oscillator();
+    const w = phase > 0 ? phasedWaveCoefficients(e.shape, phase) : null;
+    if (w) lfo.setPeriodicWave(ctx.createPeriodicWave(w.real, w.imag));
+    else lfo.type = e.shape;
+    lfo.frequency.setValueAtTime(e.value, now);
+    const depth = track(ctx.createGain());
+    depth.gain.setValueAtTime(e.depth, now);
+    lfo.connect(depth);
+    depth.connect(e.param === 'am-lfo' ? amp.gain : carrier.frequency);
+    pending.set(e.key, { node: lfo, at });
+  };
+  // Continued from `offset`: the sources whose stop lies after it (the others never sound).
+  const stopsAfter = new Set(offset > 0 ? events.filter((e) => e.kind === 'source'
+    && e.action !== 'start' && e.t > offset).map((e) => e.key || e.param) : []);
 
   for (const e of events) {
-    const at = start + e.t;
+    const at = base + e.t;
+    if (offset > 0 && e.t <= offset) {
+      // Before (or at) the offset: automation is in the held value above; a source still to
+      // sound starts at t0 (a modulator at the phase it has reached there, its rate being
+      // constant), one that already ended is never created.
+      if (e.kind !== 'source' || e.action !== 'start' || !stopsAfter.has(e.key || e.param)) {
+        continue;
+      }
+      if (e.param === 'carrier') pending.set('carrier', { node: carrier, at: start });
+      else modulator(e, start, e.value * (offset - e.t));
+      continue;
+    }
     if (e.kind !== 'source') {
       const lp = targets[e.kind];
       if (e.ramp === 'set') lp.set(e.value, at);
@@ -846,19 +969,12 @@ export function compileSequence(model, ctx, destination, t0, opts = {}) {
       if (e.action === 'start') pending.set('carrier', { node: carrier, at });
       else {
         const p = pending.get('carrier');
-        addSource(p.node, p.at, at);
+        if (p) addSource(p.node, p.at, at);
       }
       continue;
     }
     if (e.action === 'start') {
-      const lfo = oscillator();
-      lfo.type = e.shape;
-      lfo.frequency.setValueAtTime(e.value, now);
-      const depth = track(ctx.createGain());
-      depth.gain.setValueAtTime(e.depth, now);
-      lfo.connect(depth);
-      depth.connect(e.param === 'am-lfo' ? amp.gain : carrier.frequency);
-      pending.set(e.key, { node: lfo, at });
+      modulator(e, at);
     } else {
       const p = pending.get(e.key);
       if (p) {
@@ -866,6 +982,19 @@ export function compileSequence(model, ctx, destination, t0, opts = {}) {
         pending.delete(e.key);
       }
     }
+  }
+  if (keepGrid) {
+    // A late voice joins its grid once everything is scheduled and its sources (started in the
+    // past: they run at once) sound into a floor-held out gain. The clock is read here, after
+    // the timeline, the graph and the schedules were built, which takes time too.
+    // STOP_LEAD_S ahead, as a stop: the edge starts on frames not rendered yet even when the
+    // main thread is late or the context renders in bursts.
+    const q = RENDER_QUANTUM / tl.sampleRate;
+    const rendered = Math.max(ctx.currentTime, renderedTimeAtLeast(ctx));
+    joinAt = Math.ceil((rendered + Math.max(STOP_LEAD_S, 2 * q)) / q - 1e-9) * q;
+    voice.joinAt = joinAt;
+    out.gain.setValueAtTime(GAIN_FLOOR, joinAt);
+    out.gain.linearRampToValueAtTime(1, joinAt + EDGE_S);
   }
   const lookup = createLookupFromTimeline(tl);
   lookupFreq = (t) => lookup(t);

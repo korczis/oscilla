@@ -68,6 +68,30 @@ export function applyLabSections(labs, parsed, dual) {
 }
 
 /**
+ * What the config import asked of the labs and what they hold after applyLabSections, for
+ * config-file.js limitedValues (the values a lab clamped on the way in, #312). names: the
+ * sections applyLabSections applied. The labs' limits depend on the running sample rate, so the
+ * values are read back after applying.
+ */
+export function labImportLimits(labs, parsed, names) {
+  const requested = {};
+  const applied = {};
+  if (names.includes('envelope')) {
+    requested.envelope = parsed.envelope.adsr;
+    applied.envelope = labs.envelope.adsr;
+  }
+  if (names.includes('filter')) {
+    requested.filter = parsed.filter;
+    applied.filter = labs.filter.config;
+  }
+  if (names.includes('phaseStereo')) {
+    requested.phaseStereo = { pan: parsed.phaseStereo.pan };
+    applied.phaseStereo = labs.phase.config;
+  }
+  return { requested, applied };
+}
+
+/**
  * Validate and apply a stored lab record (a preset's or History entry's `labs`, a `lab=` link).
  * Returns { applied, issues, warnings }: issues counts the sections refused as malformed.
  */
