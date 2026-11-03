@@ -1,0 +1,50 @@
+id: P012
+milestone: M122
+serves:
+  - "first-run-experience#first-screen-built"
+title: "The live landing, slice 1: /oscilla/ opens a landing whose XY pad and keyboard sound on the first tap and whose cards are derived"
+slug: the-live-landing-slice-1-oscilla-opens-a-landing
+priority: p1
+profile: implementation
+objective: "Lands as feat(ui) on branch feat/p012-live-landing. A `landing` workspace joins WORKSPACE_REGISTRY (summary, related, phone.primary) and becomes the default route of the one hash dispatcher: /oscilla/ and an empty hash open it, #m=playground opens the Playground, and every other #m=... entry opens what it opens today (ADR 0045, with a note on the default route). Its module is src/js/ui/landing (a pure model that derives the cards, and an Alpine part composed into the ONE component); the build has no HTML partials (E005 is not landed), so its markup in src/index.html is a few lines rendered from the model with x-for, and what it adds is paid for by legacy markup it removes or carries a raises entry with the reason. Hero: the XY pad mounted only through the shared mountSynthXy(host, { model, transport, panel }) that 26 lifts out of the Synth's xy-tab (M069), on the one StudioModel, transport and AudioEngine, with the touch keyboard (src/js/midi/keyboard-ui.js) under it, its keys bound through K153's registry in scope { workspace: 'landing' }; no second pad, voice, keyboard or engine. The first tap on the pad or a key starts audio inside its own event handler (project.a-phone-sounds); opening the landing starts none. Below the hero, one card per workspace in the registry's order, each with its label, summary and the registry's related links, opening its full workspace through the dispatcher; a workspace added to the registry appears without a landing edit. A visible line names the positioning sentence Q002 records and the tagline. Built on Flowbite Pro (ADR 0061): the cards are the Pro card block, no osc-* class token, legacy selector or inline style is added, so the Flowbite record only falls."
+why: "Q089 (owner, 2026-11-03): /oscilla/ opens a new live landing, playable at once on a phone with the XY pad and keyboard, everything derived, reused and connected on one engine."
+scope:
+  - "src/js/ui/landing"
+  - "tests/unit/source-size-baseline.json"
+  - "src/js/ui/shell.js"
+  - "src/js/ui/app.js"
+  - "src/js/ui/navigation.js"
+  - "src/js/main.js"
+  - "src/index.html"
+  - ".ai/repo/adrs/0045-workspace-in-history-one-hash-dispatcher-unsaved-guard.md"
+  - "tests/unit/landing.test.mjs"
+  - "tests/browser/landing.cjs"
+  - "tests/browser/surface-census.cjs"
+  - "tests/unit/surface-census.json"
+  - "tests/README.md"
+  - "README.md"
+  - "dist"
+depends_on:
+  - "Q089"
+  - "F002"
+current_state: "Not started. Waits on Q089's evidence, on F002 (WORKSPACE_REGISTRY, lane A's #386) and on K167 (26's phone-pad slice under M069, branch feat/xy-shared-mount: mountSynthXy in src/js/synth/view/xy-wiring.js with its release paths), which joins depends_on when its record is on main. Later slices of M122 add the compact Studio and sequencer, the peeper (U067) and OSCILLOPAD's recorder (K098)."
+acceptance_criteria:
+  - "Starts only after K167's mountSynthXy and F002's WORKSPACE_REGISTRY are on main. Fail-first: tests/unit/landing.test.mjs fails on the merge base: the landing model derives one card per WORKSPACE_REGISTRY row except itself, in the registry's order, with label, summary and related links, and a fixture registry with one more row yields one more card (project.fail-first)."
+  - "Route: in every gate browser, from file:// and the /oscilla/ sub-path, an empty hash opens the landing, #m=playground opens the Playground, and every entry of the committed deep-link inventory resolves as before (tests/browser/landing.cjs; the inventory suite passes unchanged)."
+  - "No audio before a gesture: opening the landing creates no AudioContext and no audio node (surface-census no-audio), and asks for no microphone or MIDI permission."
+  - "First tap sounds on a phone: at 390x844 with touch and Chromium's user-gesture rule on, a tap on the XY pad and a tap on a keyboard key each start the one engine's output inside the tap's handler, and releasing, Stop, leaving the workspace and pagehide each return the engine's live node census to its idle value."
+  - "One of each: the landing mounts the pad only through mountSynthXy and the keyboard only through keyboard-ui.js; a unit check finds no AudioContext, createOscillator, keydown listener or second keyboard in src/js/ui/landing (the keys ratchet does not rise)."
+  - "Derived cards: every card opens its workspace through the dispatcher by pointer, keyboard and touch, and the related links resolve (link-integrity)."
+  - "Phone: at 390x844 the hero is in the first viewport, every target is at least 44 x 44 px, no text is under 12 px and nothing overlaps (ui-current#phone-whole)."
+  - "Flowbite: the record's debt does not rise (node scripts/ui-flowbite-pro-record.mjs --check) and the landing's cards are the Pro card block."
+  - "README's landing deep links and the Pages site open the landing (public-entry --live after the release)."
+validation:
+  - "node --test tests/unit/landing.test.mjs"
+  - "node tests/browser/landing.cjs"
+  - "node tests/browser/surface-census.cjs"
+  - "node tests/browser/touch-audio.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-03
+updated_at: 2026-11-03

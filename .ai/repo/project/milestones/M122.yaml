@@ -1,0 +1,20 @@
+id: M122
+title: "The live landing: /oscilla/ opens a playable, derived first workspace on the one engine"
+slug: the-live-landing-oscilla-opens-a-playable-derived-first-workspace
+order: 100
+priority: p1
+problem: "The owner found the first screen no longer represents OSCILLA and asked for a landing rebuilt from scratch that is catchy, fully functional, lets a visitor try the instruments at once on a phone, connects everything and is derived rather than written by hand (Q089, 2026-11-03). Today /oscilla/ opens the Playground generator (Q004, now superseded), and the instruments a visitor would want to touch first (the XY pad, the Synth, the keyboard, the sequencer, MIDI) sit in workspaces a newcomer has to find."
+outcome: "/oscilla/ opens the landing workspace: the XY pad and the touch keyboard on the one AudioEngine sound on the first tap on a phone, the other surfaces are compact live projections that open their full workspace, the cards and links are derived from the workspace registry and the UI catalogue, and every existing deep link resolves as before, in every gate browser, from file://, the sub-path and the live site."
+acceptance_criteria:
+  - "Q089 and P012 are done with their evidence."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "The hero calls the shared XY wiring 26 lifts out of the Synth's xy-tab under M069 (mountSynthXy, with its release paths); P012 waits for it rather than wiring a second pad."
+  - "The registry-derived cards read WORKSPACE_REGISTRY, which lands with lane A's shell (#386, F002); P012 waits for it."
+  - "src/index.html is at its source-size cap: the landing lives in its own partial and module rather than growing index.html, or carries a raises entry with the reason."
+  - "Later slices (compact Studio and sequencer, the peeper, OSCILLOPAD's recorder via K098) are added as issues of this milestone when their dependencies land, each a composition of an existing module."
+created_at: 2026-11-03
+updated_at: 2026-11-03
