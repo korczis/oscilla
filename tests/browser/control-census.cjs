@@ -1619,9 +1619,12 @@ for (const [c, by] of [['#osc-synth-pick', 'synth.cjs'],
   ['[data-osc="keyboard.octave-down"]', 'midi.cjs'],
   ['[data-osc="keyboard.octave-up"]', 'midi.cjs'],
   ['[data-osc="keyboard.velocity-down"]', 'midi.cjs'],
-  ['[data-osc="keyboard.velocity-up"]', 'midi.cjs']]) {
+  ['[data-osc="keyboard.velocity-up"]', 'midi.cjs'],
+  ['[data-osc="keyboard.more"]', 'synth.cjs']]) {
   delegated(c, by, 'the Synth dock, its patch library and the on-screen keyboard');
 }
+// About's "What comes next": its Later list folds open and shut (app.cjs drives and judges it)
+delegated('[data-osc="about.next.later-toggle"]', 'app.cjs', 'About, what comes next');
 
 // The dock's oscillator group: which VCO the waveform group edits (synth/dock.js). Its effect
 // is read from the Studio store: the waveform group then shows that oscillator's waveform.
