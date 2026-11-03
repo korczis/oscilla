@@ -1260,6 +1260,9 @@ function defineChecks() {
     await page.setViewportSize({ width: 375, height: 800 });
     await H.workspace(page, 'measure');
     await collect();
+    // V635: on a phone the Synth folds its instrument row behind the keyboard's More button.
+    await H.workspace(page, 'synth');
+    await collect();
     await H.workspace(page, 'playground');
     await sleep(200);
     await page.click('#osc-sb-actions-toggle');
