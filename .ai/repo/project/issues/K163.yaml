@@ -6,7 +6,7 @@ title: "A copy detector: a committed hash denylist of well-known riffs refuses a
 slug: a-copy-detector-refuses-an-entry-that-matches-a-known-riff
 priority: p2
 profile: implementation
-objective: "Per the owner Q083 (2026-11-03): add a committed denylist of one-way hashes of K158's 4-gram features, derived locally from named well-known riffs and never their notes, and refuse in scripts/content-rights.mjs any entry whose 4-gram hashes match the denylist at or above K158's threshold. How each denylist row was derived (title and artist named, the derivation local, the notes never committed) is recorded beside it."
+objective: "Per the owner Q083 (2026-11-03): add a committed denylist of one-way hashes of n-grams of K158's note tokens (interval, delta, length), derived locally from named well-known riffs and never their notes, and refuse in scripts/content-rights.mjs any entry whose hashed n-grams overlap a denylist row at or above a threshold this issue calibrates (an edit distance needs the notes, which the denylist never holds, so the denylist has its own measure). How each denylist row was derived (title and artist named, the derivation local, the notes never committed) is recorded beside it."
 why: "Original-only (Q079) cannot be checked by fields alone: the library's factory labels every entry original (M120 critique m120-original-only-has-no-copy-detector)."
 scope:
   - "scripts/content-rights.mjs"
@@ -20,7 +20,7 @@ depends_on:
 acceptance_criteria:
   - "Before: VERIFIED (M120 critique): no check can tell an original entry from a copied one."
   - "After: the denylist ships hashes only (no note, pitch or timing data is recoverable from it, a test asserts every row is a fixed-length hex digest); every shipped entry passes; a synthetic entry built from a denylisted riff's derivation in the test is refused."
-  - "Negative cases: a denylisted riff transposed, rotated or with one note changed is still refused (K158's invariances); a row that is not a digest is refused."
+  - "Negative cases: a denylisted riff transposed, rotated or octave-folded is still refused (K158's token invariances), and one with a single note changed is refused at the calibrated threshold; a row that is not a digest is refused."
   - "Fail-first: the denylist tests fail on the merge base."
 validation:
   - "node --test tests/unit/content-rights.test.mjs"
