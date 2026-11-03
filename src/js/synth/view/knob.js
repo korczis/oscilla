@@ -8,11 +8,14 @@
 //
 //   knobModel(param) -> { norm(v), value(t), angle(v), drag(v, dyPx, fine), key(v, key, shift),
 //                         parse(text) -> { ok, value } | { ok: false, reason }, format(v), text(v) }
+//     format is the readout (a short physical unit only), text the aria-valuetext (every unit)
+//   readoutText(v, param) -> the readout: formatValue's text less a unit not short and physical
 //   knobSvg({ uid, value, param, tokens, disabled }) -> '<svg>' of the core's knob at 64 px
 //   selectorSvg({ value, param, tokens, disabled }) -> '<svg>' of a switch (an enum of up to
 //     four options, or a boolean) or a rotary selector (the core's knob on a longer enum)
 //   panelControlTokens(t) -> the core's token set from the panel's
 //   stepOption(param, v, dir) -> the core's
+//   SWITCH_MAX -> the most options a switch draws; a longer enum is a rotary
 
 import {
   CONTROL_BOX, DRAG_PX_PER_RANGE, SWEEP_DEG, controlSvg, dragValue, formatValue, fromNorm, knobKey,
@@ -30,7 +33,7 @@ const SELECTOR_PX = 52;
 /** A switch's drawn height, px: one 44 px row beside its legends. */
 const SWITCH_PX = 44;
 /** The core draws a switch of at most this many positions; a longer enum is a rotary. */
-const SWITCH_MAX = 4;
+export const SWITCH_MAX = 4;
 
 export function knobModel(p) {
   return {
@@ -44,10 +47,25 @@ export function knobModel(p) {
       return typeof next === 'number' ? next : null;
     },
     parse: (text) => parseValue(text, p),
-    format: (v) => formatValue(v, p),
-    /** aria-valuetext: the value with its unit, as shown. */
+    /** The readout: the core's text with only a short physical unit (readoutText). */
+    format: (v) => readoutText(v, p),
+    /** aria-valuetext: the core's text, the value with its unit whatever the unit. */
     text: (v) => formatValue(v, p),
   };
+}
+
+/** The units a knob's readout writes, as the registry names them (formatValue spells cents ct
+ *  and Hz kHz above 1000): short and physical, or a ratio sign, so the value fits on one line of
+ *  its 80 px column. Any other unit ('logical gain', 'dB/oct', 'samples') is left to
+ *  aria-valuetext (knobModel text): the readout stays the value the typed entry reads. */
+const READOUT_UNITS = new Set(['Hz', 's', 'dB', 'cents', 'st', 'oct', '%', '×']);
+
+/** The readout of `v`: formatValue's text, less a unit outside READOUT_UNITS. */
+export function readoutText(v, p) {
+  const text = formatValue(v, p);
+  const suffix = ` ${p.unit}`;
+  return p.unit && !READOUT_UNITS.has(p.unit) && text.endsWith(suffix)
+    ? text.slice(0, -suffix.length) : text;
 }
 
 /**

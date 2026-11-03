@@ -61,6 +61,20 @@ test('format with units; switches step their options; the drawing is a function 
     knobSvg({ uid: 'a', value: 5, param: tune, tokens: t }), 'no state, no tween');
 });
 
+/** The units a knob's readout writes (review 2 of W1b, finding 1): short and physical. */
+const READOUT_UNITS = new Set(['', 'Hz', 's', 'dB', 'cents', 'st', 'oct', '%', '×']);
+
+test('a readout shows only a short physical unit; aria-valuetext keeps every unit', () => {
+  const level = PANEL.module('out').params.find((p) => p.key === 'level');
+  assert.equal(level.unit, 'logical gain');
+  assert.equal(knobModel(level).format(0.08), '0.080');
+  assert.equal(knobModel(level).text(0.08), '0.080 logical gain');
+  const tilt = PANEL.module('additive').params.find((p) => p.key === 'tilt');
+  assert.equal(knobModel(tilt).format(-12), '-12.0');
+  assert.equal(knobModel(tilt).text(-12), '-12.0 dB/oct');
+  assert.equal(knobModel(cutoff).format(20000), '20 kHz', 'a physical unit stays');
+});
+
 test('the model is the core\'s: text, typed entry, drag, keys and the drawing (F013 W1b)', () => {
   const numbers = PANEL.modules.flatMap((m) => PANEL.faceOf(m.id)).map((c) => c.param)
     .filter((p) => p && (p.type === 'number' || p.type === 'integer'));
@@ -70,8 +84,14 @@ test('the model is the core\'s: text, typed entry, drag, keys and the drawing (F
     const m = knobModel(p);
     const mid = core.fromNorm(0.37, p);
     for (const v of [p.min, p.max, mid]) {
-      assert.equal(m.format(v), core.formatValue(v, p), `${p.key} text`);
       assert.equal(m.text(v), core.formatValue(v, p), `${p.key} aria text`);
+      // The readout drops a unit that is not short and physical; the text keeps every unit.
+      const unit = ` ${p.unit}`;
+      assert.equal(m.format(v), READOUT_UNITS.has(p.unit || '') ? core.formatValue(v, p)
+        : core.formatValue(v, p).replace(new RegExp(`${unit.replace(/[/]/g, '\\/')}$`), ''),
+      `${p.key} readout`);
+      assert.deepEqual(m.parse(m.format(v)), m.parse(m.text(v)), `${p.key}: the typed entry `
+        + 'the readout fills reads the same value');
       assert.equal(m.norm(v), core.toNorm(v, p), `${p.key} norm`);
       for (const key of ['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End']) {
         for (const shiftKey of [false, true]) {

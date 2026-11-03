@@ -11,7 +11,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import PANEL from '../../src/js/synth/panels/semi-mono.js';
 import { controlReason, controlValue, plateHtml } from '../../src/js/synth/view/face.js';
-import { knobSvg, panelControlTokens } from '../../src/js/synth/view/knob.js';
+import { knobModel, knobSvg, panelControlTokens } from '../../src/js/synth/view/knob.js';
 import { CABLE_TOKENS, PANEL_TOKENS } from '../../src/js/synth/view/tokens.js';
 import { ariaAttrs, controlSvg, formatValue } from '../../src/js/ui/synth/knob.js';
 import { SYNTH_TOKEN_NAMES } from '../../src/js/ui/synth/tokens.js';
@@ -66,8 +66,10 @@ test('every knob is the core\'s knob, with N003 ARIA and the core\'s value text'
     assert.ok(b.includes(`aria-valuemin="0" aria-valuemax="1000" aria-valuenow="`
       + `${a['aria-valuenow']}" aria-valuetext="${esc(a['aria-valuetext'])}"`), cid);
     assert.equal(count(b, /<g data-control="knob">/g), 1, `${cid}: one core knob`);
-    assert.ok(b.includes(`data-value="${cid}">${esc(formatValue(value, c.param))}</output>`),
-      `${cid}: the readout is formatValue`);
+    assert.ok(b.includes(`data-value="${cid}">${esc(knobModel(c.param).format(value))}`
+      + '</output>'), `${cid}: the readout is the one updateKnob writes`);
+    assert.ok(formatValue(value, c.param).startsWith(knobModel(c.param).format(value)),
+      `${cid}: the readout is formatValue, at most without its unit`);
     // The panel redraws a knob in place through knobSvg (synth/ui.js updateKnob): the same SVG.
     assert.ok(b.includes(knobSvg({ uid: cid, value, param: c.param, tokens: T,
       disabled: !!reason })), `${cid}: the face and the redraw agree`);
@@ -209,13 +211,43 @@ test('every legend, selected or not, holds 4.5:1 text in both themes', () => {
   }
 });
 
-test('below sm a choice stacks its drawing above its legends, so a row never strands one', () => {
-  for (const { cid } of switches) {
+test('a knob readout is one line: a short physical unit, never over 10 characters', () => {
+  // Review 2 of W1b, finding 1: 'logical gain' wrapped Output Level's readout to three lines.
+  for (const { cid, c, value } of knobs) {
+    const out = /<output class="([^"]*)" data-value="[^"]*">([^<]*)<\/output>/.exec(block(cid));
+    assert.ok(out, `${cid}: a readout`);
+    assert.ok(out[1].split(/\s+/).includes('whitespace-nowrap'), `${cid}: ${out[1]}`);
+    const p = c.param;
+    const values = [value, p.default, p.min, p.max].filter((v) => Number.isFinite(v));
+    assert.ok(values.length >= 3, `${cid}: the default and both extremes`);
+    for (const v of values) {
+      const text = knobModel(p).format(v);
+      assert.ok(text.length <= 10, `${cid} at ${v}: "${text}" is ${text.length} characters`);
+      assert.ok(text.trim().split(/\s+/).length <= 2, `${cid} at ${v}: "${text}" is one unit`);
+    }
+  }
+  const level = /<div role="slider"[^>]*>/.exec(block('out.level'))[0];
+  assert.match(level, /aria-valuetext="[\d.]+ logical gain"/, 'the unit stays in the text');
+  assert.match(block('out.level'), /data-value="out\.level">[\d.]+<\/output>/);
+});
+
+test('a choice stacks its drawing above its legends below sm; a rotary at every width', () => {
+  // Review 2 of W1b, finding 2: beside a rotary, XY Mode's ten legends broke into a staircase.
+  for (const { cid, c } of switches) {
     const row = /<div class="([^"]*)">(?=<svg )/.exec(block(cid));
     assert.ok(row, `${cid}: the drawing's row`);
     const classes = row[1].split(/\s+/);
-    for (const k of ['flex', 'flex-col', 'sm:flex-row', 'sm:items-center']) {
+    const rotary = c.param.options.length > 4;
+    for (const k of ['flex', 'flex-col', 'items-start', 'gap-2']) {
       assert.ok(classes.includes(k), `${cid}: ${k} in ${row[1]}`);
+    }
+    if (rotary) {
+      assert.ok(!classes.some((k) => k.startsWith('sm:') || k.startsWith('md:')
+        || k.startsWith('lg:')), `${cid}: a rotary never goes beside its legends: ${row[1]}`);
+    } else {
+      for (const k of ['sm:flex-row', 'sm:items-center']) {
+        assert.ok(classes.includes(k), `${cid}: ${k} in ${row[1]}`);
+      }
     }
   }
 });

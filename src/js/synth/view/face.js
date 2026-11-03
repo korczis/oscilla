@@ -8,7 +8,7 @@
 //     modules (on Engines, the chosen one), after any module of another tab that is removed and
 //     breaks a normal (an engine gone from the shared chain silences what is before it)
 
-import { knobModel, knobSvg, selectorSvg } from './knob.js';
+import { SWITCH_MAX, knobModel, knobSvg, selectorSvg } from './knob.js';
 import { ariaAttrs } from '../../ui/synth/knob.js';
 import { amountEdges, amountReason, brokenByRemoval } from '../normals.js';
 import { CHIP, LABEL, NOTE, VALUE } from '../../ui/synth/label.js';
@@ -70,7 +70,8 @@ const disabled = (cid, reason) => (reason
   ? ` aria-disabled="true" aria-describedby="${cid}-why"` : '');
 
 /** A knob: the layer's (view/knob.js knobSvg), its ARIA N003's position 0..1000 with the value
- *  and unit as text (ariaAttrs), its focus ring the drawing's, shown on keyboard focus. */
+ *  and unit as text (ariaAttrs), its focus ring the drawing's, shown on keyboard focus. The
+ *  readout is one line: the value with a short physical unit only (knobModel format). */
 function knobHtml(cid, c, value, reason, tokens) {
   const a = ariaAttrs(value, c.param);
   return `<div class="flex w-20 flex-col items-center gap-1" data-control="${cid}">`
@@ -81,7 +82,8 @@ function knobHtml(cid, c, value, reason, tokens) {
     + `aria-orientation="vertical"${disabled(cid, reason)} `
     + 'class="group h-16 w-16 cursor-ns-resize touch-none select-none rounded-full outline-none">'
     + `${knobSvg({ uid: cid, value, param: c.param, tokens, disabled: !!reason })}</div>`
-    + `<output class="${VALUE}" data-value="${cid}">${esc(knobModel(c.param).format(value))}`
+    + `<output class="${VALUE} whitespace-nowrap" data-value="${cid}">`
+    + `${esc(knobModel(c.param).format(value))}`
     + `</output>${why(cid, reason)}</div>`;
 }
 
@@ -93,15 +95,21 @@ const SEG_ON = 'bg-primary-600 text-white';
 const SEG_OFF = 'bg-white text-gray-900 hover:bg-gray-100 dark:bg-gray-700 dark:text-gray-200 '
   + 'dark:hover:bg-gray-600';
 
+/** A rotary always above its legends: beside it, a long set wraps into a staircase. */
+const STACKED = 'flex flex-col items-start gap-2';
+/** A switch beside its legends from sm, above them below. */
+const BESIDE = `${STACKED} sm:flex-row sm:items-center`;
+
 /** A choice: the layer's switch (up to four options) or rotary selector (more), drawn at its
- *  value and hidden from assistive technology, beside its legends; each legend a radio. */
+ *  value and hidden from assistive technology, beside its legends (a switch, from sm) or above
+ *  them (a rotary, and a switch below sm); each legend a radio. */
 function switchHtml(cid, c, value, reason, tokens) {
   const opts = c.param.options.map(([v, label]) => `<button type="button" role="radio" `
     + `aria-checked="${v === value}" data-option="${cid}" data-v="${esc(v)}" `
     + `class="${SEG} ${v === value ? SEG_ON : SEG_OFF}">${esc(label)}</button>`).join('');
   return `<div class="flex flex-col gap-1" data-control="${cid}">`
     + `<span class="${LABEL}" id="${cid}-label">${esc(c.label)}</span>`
-    + '<div class="flex flex-col items-start gap-2 sm:flex-row sm:items-center">'
+    + `<div class="${c.param.options.length > SWITCH_MAX ? STACKED : BESIDE}">`
     + `${selectorSvg({ value, param: c.param, tokens, disabled: !!reason })}`
     + `<div role="radiogroup" ${named(cid)}${disabled(cid, reason)} class="flex flex-wrap">`
     + `${opts}</div></div>${why(cid, reason)}</div>`;
