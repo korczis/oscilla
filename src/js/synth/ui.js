@@ -687,7 +687,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   function onDoubleClick(e) {
     const k = e.target.closest('[data-knob]');
     const x = k && controlOf(k.dataset.knob);
-    if (!x || !x.node) return;
+    if (!x || !x.node || k.getAttribute('aria-disabled') === 'true') return;
     setControl(k.dataset.knob, x.c.kind === 'amount' ? 0 : x.c.initial);
   }
 
@@ -811,7 +811,11 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
         el.addEventListener('pointerdown', onPointerDown);
         el.addEventListener('pointermove', onPointerMove);
         el.addEventListener('pointerup', onPointerUp);
-        el.addEventListener('pointercancel', onPointerUp);
+        // A cancelled pointer (the browser took the gesture) is neither a tap nor a drop.
+        el.addEventListener('pointercancel', (e) => {
+          if (cable) { cable = null; renderBay(); }
+          onPointerUp(e);
+        });
         el.addEventListener('click', onClick);
         el.addEventListener('dblclick', onDoubleClick);
         el.addEventListener('wheel', gestures.wheel, { passive: false });

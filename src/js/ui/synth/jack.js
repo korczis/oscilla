@@ -7,7 +7,8 @@
 //   - the socket: the typed ring (data-ring, the stroke the 3:1 check reads) and its inner glyph
 //     in the state's colour;
 //   - a 44 px hit square, hidden (visibility="hidden" pointer-events="all") rather than painted
-//     transparent, and a focus ring shown only on keyboard focus.
+//     transparent, and a focus ring shown only on keyboard focus; the jack takes its touches
+//     (touch-none), so a drag from it draws a cable instead of scrolling the page.
 // Every shape sets its own stroke, so an inherited `svg { stroke }` never draws on the bay.
 //
 //   portGlyph(shape, x, y, r) -> the opening of the shape's element (the caller closes it)
@@ -60,7 +61,7 @@ export function jackSvg({ key, x, y, shape, label, pressed = false, ring, ringWi
   dashed = false, inner, text, fit = '', textSize, tokens: t }) {
   const h = JACK_HIT / 2;
   return `<g role="button" tabindex="0" data-jack="${key}" aria-label="${esc(label)}" `
-    + `aria-pressed="${pressed}" class="group cursor-pointer outline-none">`
+    + `aria-pressed="${pressed}" class="group cursor-pointer touch-none outline-none">`
     + `<rect data-hit="" x="${x - h}" y="${y - h}" width="${JACK_HIT}" height="${JACK_HIT}" `
     + 'rx="10" fill="currentColor" stroke="none" visibility="hidden" pointer-events="all"/>'
     + `<rect data-focus-ring="" x="${x - h + 1.5}" y="${y - h + 1.5}" width="${JACK_HIT - 3}" `
