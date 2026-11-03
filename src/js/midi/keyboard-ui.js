@@ -111,6 +111,11 @@ export function createKeyboardUi({ win = window } = {}) {
     get kbdView() {
       return KEYBOARD_VIEWS.includes(this.workspace) ? this.workspace : null;
     },
+    /** The keys dock over the page's bottom edge, the same component in the Synth and the
+     *  Studio (the owner's report of 2026-11-03); the Playground keeps them under its panels. */
+    get kbdDocked() {
+      return this.kbdView === 'synth' || this.kbdView === 'studio';
+    },
     get kbdArmedHere() {
       const v = this.kbdView;
       return !!v && !!this.kbdArmed[v];
