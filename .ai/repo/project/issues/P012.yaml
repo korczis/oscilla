@@ -47,6 +47,7 @@ acceptance_criteria:
   - "One of each: the landing mounts the pad only through mountSynthXy and the keyboard only through keyboard-ui.js; a unit check finds no AudioContext, createOscillator, keydown listener or second keyboard in src/js/ui/landing (the keys ratchet does not rise)."
   - "Derived cards: every card opens its workspace through the dispatcher by pointer, keyboard and touch, and the related links resolve (link-integrity)."
   - "Phone: at 390x844 the hero is in the first viewport, every target is at least 44 x 44 px, no text is under 12 px and nothing overlaps (ui-current#phone-whole)."
+  - "Playable at once on a phone: at 390x844, in Chromium and in WebKit's iPhone 13 and iPhone SE, the whole XY pad lies inside the first viewport with the keyboard visible below it, no docked keyboard or other surface covers any part of the pad, and the first tap on the pad sounds; the keyboard dock's yield rule (26's issue, derived from which surface owns the notes, found in K167's 390x844 screenshots where the dock took about 40 % of the screen) is what keeps it so."
   - "Flowbite: the record's debt does not rise (node scripts/ui-flowbite-pro-record.mjs --check) and the landing's cards are the Pro card block."
   - "README's landing deep links and the Pages site open the landing (public-entry --live after the release)."
 validation:
