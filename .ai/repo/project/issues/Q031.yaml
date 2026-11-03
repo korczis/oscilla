@@ -18,4 +18,16 @@ validation:
 evidence_required:
 - owner_decision
 created_at: '2026-10-29'
-updated_at: '2026-10-29'
+updated_at: 2026-11-02T16:01:57Z
+started_at: 2026-11-02T16:01:24Z
+started_event: sha256:a3d69f47e437d0777cf4d393fc325bfedbf3fc44279be9c9c856c3b8305c7e1f
+completed_at: 2026-11-02T16:01:57Z
+completed_event: sha256:f452e6f94b96b68ac097b3301745db67e67156ba96ddcffd4ed33449cf85bef4
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "majordomus plan show Q031"
+    result: "Answer (b), as recorded in Q031.current_state since c0a631b2 (2026-10-29), quoted: 'Answered by the owner on 2026-10-29 (relayed by the coordinator): every parameter is shown on the box face, not at most three; the plan's recommendation (a) is overridden.' Source: the owner, 2026-10-29, relayed by the coordinating session; the record holds the coordinator's relay, not the owner's own words. Recorded as evidence on 2026-11-02 by the follow-up chore(plan) pull request that record asks for (critique studio-box-system, finding landed-work-not-recorded)."
+    artifact: ".ai/repo/project/issues/Q031.yaml"
+    commit: 32b439e620c7ffc23a8fdc5b3dc55024cbc0c534
+    recorded_at: 2026-11-02T16:01:48Z

@@ -34,4 +34,12 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-02T15:59:56Z
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/studio-graph-wheel.test.mjs tests/unit/ui-flowbite-pro.test.mjs; node scripts/review-verdict.mjs --pr 268 --head e030189c3e01aa72f17f7aaf0a67f93c597b4908 --base-branch 253cd5c20867ee44513c9ff7504351d1cb566361"
+    result: "studio-graph-wheel 8/8 and ui-flowbite-pro 31/31 pass at main 32b439e6: a plain wheel pans by its deltas, Ctrl/Cmd + wheel zooms at the pointer by a bounded step. .ai/repo/features/studio.md and docs/v31/user-guide.md list the minimap and pinch as built and say Ctrl/Cmd + wheel zooms (e4ac5b1b); tests/README.md has the row. Landed with PR #268 (head e030189c, merged 2026-11-02 into the feature train as af09a8e1a3), on main through #367 (11cc9fbc, 2026-11-02), whose CI gate passed V3.1 Studio UI (v31-studio-graph.cjs) in chromium, firefox and webkit. review-verdict: PR 268, none of the 25 changed path(s) is guarded; no verdict needed. Recorded while K006 is not done (its headroom criterion is unmet), so K007 stays BLOCKED."
+    artifact: "tests/unit/studio-graph-wheel.test.mjs"
+    commit: 32b439e620c7ffc23a8fdc5b3dc55024cbc0c534
+    recorded_at: 2026-11-02T15:59:56Z
