@@ -60,12 +60,22 @@ accepted` lists them. The rest stay `proposed`, each for a stated reason:
 - 0051: the "Why trust the method?" list and its hand-written claims mirror under
   `src/js/measurement/` are not built.
 - 0053: the user-visible "run" strings its consequences list are not changed yet.
-- 0058: a proposed direction; nothing implements it.
+- 0058: implemented, and it stays `proposed` pending the owner's acceptance: the MIDI layer
+  it decides is built (V500, V501, V502 and the keyboard K026; `src/js/midi/`, documented in
+  `docs/midi.md`), and accepting it is the owner's act. (Until 2026-11-03 this line said that
+  nothing implemented it.)
 - 0059: new on 2026-10-18 (pull request #197) and `extracted`; it amends 0028.
 - 0060: new on 2026-10-18 (issue P004); a decision taken under the owner's delegation
   (Q003), which the owner may override, so its acceptance is the owner's.
+- 0062: new on 2026-10-29 (plan issue K026, intent `playable-instrument`); implemented
+  (`src/js/midi/notes.js` passes `held: true`; `tests/unit/keyboard-held-notes.test.mjs`),
+  and its own consequences say that "the status stays `proposed` until the owner accepts it".
 - 0063: new on 2026-10-29 (the G1 coherence contract); proposed, with two open questions
   for the owner, and nothing implements it yet.
+- 0080: new on 2026-10-30 (the owner's answer to Q070, "Cytoscape only"); proposed, because
+  nothing implements it yet: P010, which its consequences say carries the integration and its
+  acceptance, is not done, and Cytoscape.js is not a dependency in `package.json`; accepting it
+  is the owner's act.
 - 0081: new on 2026-10-30 (plan issue J001, the component contract and its Majordomus
   projection); proposed, because accepting it is the owner's act, and nothing implements it
   yet (G001 builds the catalogue on it).
