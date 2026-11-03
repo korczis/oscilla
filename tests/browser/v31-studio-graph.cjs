@@ -34,10 +34,11 @@
 //                        Filter in one undo entry; M mutes the clicked cable and M again
 //                        unmutes it (is-muted drawn); L tidies the graph in one undo entry and
 //                        a second L changes nothing (it says the graph is already tidy)
-//   tidy-layout          V637 (ADR 0087): L on the demo song at 1536x1024 and at 390x844 touch
-//                        moves the boxes as one undo entry to places where no two boxes
-//                        overlap (read from the drawn cards), rows on the phone; Undo
-//                        restores every position
+//   tidy-layout          V637 (ADR 0087): with every box moved into one row, L on the demo
+//                        song at 1536x1024 and 390x844 touch, and on the Subtractive Synth at
+//                        390x844, moves the boxes as one undo entry to places where no two
+//                        drawn boxes overlap; the synth wraps into rows on the phone, the demo
+//                        song stays one strip (rows would cross cables); Undo restores
 //   select-delete-cable  clicking a cable selects it (Inspector: Connection); Delete removes it
 //   multi-select         Shift-click, Shift-drag rectangle; Ctrl/Cmd C, V (new ids, offset,
 //                        internal edges kept), Ctrl/Cmd D; Delete removes nodes and their edges;
@@ -769,10 +770,18 @@ function defineChecks() {
     }), mu1, mu2, p0, p1 };
   });
 
-  /** V637: L on the demo song, then Undo, on `page`; the conditions and what was read. */
-  async function tidyDemoSong(page, size) {
-    await H.fresh(page, 'demo-song');
+  /**
+   * V637: on `template`, every box moved into one row (a user's layout, not the template's),
+   * then L, then Undo, on `page`; the conditions and what was read.
+   */
+  async function tidyDemoSong(page, size, template = 'demo-song') {
+    await H.fresh(page, template);
     await H.recordLive(page);
+    await page.evaluate(() => {
+      const s = window.OSCILLA.studio.store;
+      s.getModel().graph.nodes.forEach((n, i) => s.dispatch({ type: 'NODE_MOVE', nodeId: n.id,
+        position: { x: i * 240, y: 0 } }));
+    });
     const drawn = () => page.evaluate(() => [...document.querySelectorAll('.osc-sg-node')]
       .map((el) => {
         const m = /translate\(([-\d.]+)px, ([-\d.]+)px\)/.exec(el.style.transform) || [];
@@ -815,8 +824,9 @@ function defineChecks() {
       const c = await drawn();
       return key(c) === k0 ? c : null;
     }, { ms: 5000, what: `tidy-layout ${size}: the boxes are drawn back` });
+    const n = (await H.model(page)).nodes.length;
     return { conds: { [`${size} moved`]: k1 !== k0, [`${size} one entry`]: d1 === d0 + 1,
-      [`${size} no overlap`]: overlaps.length === 0 && cards.length === 19,
+      [`${size} no overlap`]: overlaps.length === 0 && cards.length === n && n > 1,
       [`${size} undo restores`]: kUndo === k0 && back.length === cards.length }, said, overlaps };
   }
 
@@ -831,9 +841,12 @@ function defineChecks() {
       await phonePage.evaluate(() => { const a = window.OSCILLA.app; a.alerts = [];
         if (!a.safetyCollapsed) a.collapseSafety(); });
       const phone = await tidyDemoSong(phonePage, '390x844');
-      return { ...H.verdict({ ...desk.conds, ...phone.conds,
-        '390x844 rows': / in \d+ rows$/.test(phone.said) }), desk: desk.said, phone: phone.said,
-      overlaps: [...desk.overlaps, ...phone.overlaps] };
+      const synth = await tidyDemoSong(phonePage, '390x844 synth', 'subtractive-synth');
+      return { ...H.verdict({ ...desk.conds, ...phone.conds, ...synth.conds,
+        '390x844 synth rows': / in \d+ rows$/.test(synth.said),
+        'demo song one strip': !/rows/.test(desk.said) && !/rows/.test(phone.said) }),
+      desk: desk.said, phone: phone.said, synth: synth.said,
+      overlaps: [...desk.overlaps, ...phone.overlaps, ...synth.overlaps] };
     } finally {
       await ctx.close();
     }

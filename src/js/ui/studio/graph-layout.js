@@ -86,7 +86,8 @@ export function compactLayout(model, { registry = NODE_REGISTRY } = {}) {
 //     geometry  Map id -> { h, anchors: Map 'in:<port>' | 'out:<port>' -> { y } }, the measured
 //               card (graph-editor.js); a card it lacks takes cardGeometry's default
 //     minZoom   the wrap gate: rows only when the unwrapped Frame-all zoom on `viewport` is
-//               below it (COARSE_FIT_MIN_ZOOM, about 0.92) and the rows fit it at a larger zoom
+//               below it (COARSE_FIT_MIN_ZOOM, about 0.92), the rows fit it at a larger zoom,
+//               and they cross no more cables than the strip
 //     positions Map id -> { x, y } on the grid, from the graph's current top-left corner
 //     rows      1 unwrapped, else the number of rows; zoom the Frame-all zoom on `viewport`
 //
@@ -320,6 +321,29 @@ function wrapRows(cards, { layer, L, E, at }, viewport) {
   return best;
 }
 
+/** Crossings of the straight cables from output to input anchor (the drawn Bézier's chord). */
+function cableCrossings(cards, edges, at) {
+  const idx = new Map(cards.map((c, i) => [c.id, i]));
+  const segs = [];
+  for (const e of edges) {
+    const a = idx.get(e.from.node);
+    const b = idx.get(e.to.node);
+    if (a === undefined || b === undefined) continue;
+    segs.push([at[a].x + cards[a].w, at[a].y + (cards[a].outY.get(e.from.port) ?? 0),
+      at[b].x, at[b].y + (cards[b].inY.get(e.to.port) ?? 0)]);
+  }
+  const o = (s, x, y) => Math.sign((s[2] - s[0]) * (y - s[1]) - (s[3] - s[1]) * (x - s[0]));
+  let k = 0;
+  for (let i = 0; i < segs.length; i++) {
+    for (let j = i + 1; j < segs.length; j++) {
+      const s = segs[i];
+      const t = segs[j];
+      if (o(s, t[0], t[1]) * o(s, t[2], t[3]) < 0 && o(t, s[0], s[1]) * o(t, s[2], s[3]) < 0) k++;
+    }
+  }
+  return k;
+}
+
 export function tidyLayout(model, viewport = null, { registry = NODE_REGISTRY, geometry = null,
   minZoom = COARSE_FIT_MIN_ZOOM } = {}) {
   const nodes = model.graph.nodes;
@@ -334,7 +358,11 @@ export function tidyLayout(model, viewport = null, { registry = NODE_REGISTRY, g
   if (shown && zoom < minZoom && lay.L > 1) {
     const w = wrapRows(cards, lay, viewport);
     const wz = w ? fitZoom(w.box, viewport) : 0;
-    if (wz > zoom) ({ at, rows, zoom } = { at: w.at, rows: w.rows, zoom: wz });
+    // Rows pay only when they fit larger without crossing more cables (no step back).
+    if (wz > zoom && cableCrossings(cards, model.graph.edges, w.at)
+      <= cableCrossings(cards, model.graph.edges, at)) {
+      ({ at, rows, zoom } = { at: w.at, rows: w.rows, zoom: wz });
+    }
   }
   const ox = snap(Math.min(...nodes.map((n) => n.position.x)));
   const oy = snap(Math.min(...nodes.map((n) => n.position.y)));

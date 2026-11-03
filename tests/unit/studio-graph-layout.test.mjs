@@ -198,7 +198,7 @@ test('V637 Tidy has strictly fewer crossings than today\'s tidy on 100 and 300 n
   }
 });
 
-test('V637 rows only when the unwrapped fit zoom is below 0.92, and only to fit larger', () => {
+test('V637 rows only below the 0.92 fit zoom, only to fit larger, never to cross more', () => {
   assert.ok(Math.abs(COARSE_FIT_MIN_ZOOM - 0.92) < 0.005);
   for (const t of STUDIO_TEMPLATES) {
     const m = templateModel(t.id);
@@ -209,9 +209,15 @@ test('V637 rows only when the unwrapped fit zoom is below 0.92, and only to fit 
       if (z >= COARSE_FIT_MIN_ZOOM) {
         assert.equal(lay.rows, 1, `${t.id} at ${vp.w}: fits at ${z.toFixed(2)}, no rows`);
         assert.deepEqual(lay.positions, flat, `${t.id} at ${vp.w}: the unwrapped layout`);
+      } else if (t.id === DEMO_SONG_TEMPLATE_ID) {
+        // Its rows would fit only a little larger (0.21 to 0.30 on the phone's graph viewport)
+        // and their return cables would cross 5: it stays one strip with 0 crossings.
+        assert.equal(lay.rows, 1, `${t.id} at ${vp.w}: rows would cross more, one strip`);
+        assert.equal(crossings(m, lay.positions), 0);
       } else {
         assert.ok(lay.rows > 1, `${t.id} at ${vp.w}: fit ${z.toFixed(2)} wraps`);
         assert.ok(lay.zoom > z, `${t.id} at ${vp.w}: rows fit larger (${lay.zoom} > ${z})`);
+        assert.ok(crossings(m, lay.positions) <= crossings(m, flat), `${t.id}: no more crossings`);
       }
     }
   }
@@ -273,22 +279,26 @@ test('V637 L is one NODE_MOVE history entry; undo restores; studioHash unchanged
   view: () => ({ panX: 0, panY: 0, zoom: 1 }), setView() {}, centerPoint: () => ({ x: 0, y: 0 }),
   clientToGraph: () => ({ x: 0, y: 0 }), isOverViewport: () => true, focusNode: () => true,
   isShown: () => false, nodeGeometry: () => new Map(), viewSize: () => ({ ...PHONE }) });
-  const hash0 = studioHash(store.getModel());
+  // A user's layout: every box in one row (each move its own entry, before d0).
+  m.graph.nodes.forEach((n, i) => store.dispatch({ type: 'NODE_MOVE', nodeId: n.id,
+    position: { x: i * 240, y: 0 } }));
+  const before = store.getModel();
+  const hash0 = studioHash(before);
   const d0 = store.debugInfo().undoDepth;
   assert.equal(cmd.tidy(), true);
   assert.equal(store.debugInfo().undoDepth, d0 + 1, 'one history entry');
   assert.equal(store.debugInfo().lastAction.type, 'NODE_MOVE');
   assert.equal(store.undoLabel(), 'Tidy the graph');
-  assert.match(said.at(-1), /^Tidied the graph: \d+ nodes moved, in \d+ rows$/);
+  assert.match(said.at(-1), /^Tidied the graph: \d+ nodes moved$/, 'one strip: no rows');
   const after = store.getModel();
   assert.deepEqual(new Map(after.graph.nodes.map((n) => [n.id, n.position])),
-    tidyLayout(m, PHONE).positions);
+    tidyLayout(before, PHONE).positions);
   assert.equal(studioHash(after), hash0, 'positions are presentation: the hash is unchanged');
   assert.equal(cmd.tidy(), false, 'a tidy graph does not change again');
   assert.equal(store.debugInfo().undoDepth, d0 + 1);
   store.undo();
   assert.deepEqual(store.getModel().graph.nodes.map((n) => n.position),
-    m.graph.nodes.map((n) => n.position), 'undo restores every position');
+    before.graph.nodes.map((n) => n.position), 'undo restores every position');
 });
 
 test('V637 nothing but the L command calls the layout (it never moves a box on its own)', () => {
@@ -331,3 +341,4 @@ test('V637 Tidy of 100 and 300 nodes takes at most one frame of CPU time (E029)'
     assert.ok(ms <= PERF_BUDGETS.dispatchMove, `${name}: ${ms} ms`);
   }
 });
+

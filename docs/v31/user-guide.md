@@ -108,7 +108,8 @@ and the part in view; press or drag on it to move there.
 - **L** lays the graph out in signal order, left to right, with the fewest crossing cables it
   finds, each port row where its card draws it. When the graph would not fit the viewport at a
   touch-sized zoom (a phone), it wraps into rows, cut where the fewest cables cross between
-  them, and says how many. It is one undo step, it moves boxes only when you press it, and it
+  them, and says how many; it keeps one strip when rows would not fit larger or would cross
+  more cables. It is one undo step, it moves boxes only when you press it, and it
   changes positions only, never the sound or the document's studioHash (ADR 0087).
 - **M** mutes or unmutes the selected connections.
 - With a screen reader, a node reads its name, kind, settings and how many input and output

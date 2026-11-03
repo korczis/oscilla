@@ -79,8 +79,10 @@ of 7 do.
 2. **A min-cut row wrap, gated.** Only when the unwrapped Frame-all zoom on the current graph
    viewport is below `COARSE_FIT_MIN_ZOOM` are consecutive layers cut into rows, the cuts where
    the fewest cables span them, the row count whose aspect is nearest the viewport's; and only
-   when the rows fit at a larger zoom than the strip. A graph that fits stays one strip; a
-   portrait graph (the large fixtures) stays one strip.
+   when the rows fit at a larger zoom than the strip and cross no more cables than it (the
+   chord of each drawn cable, counted as above). A graph that fits stays one strip; a portrait
+   graph (the large fixtures) stays one strip; so does the demo song, whose rows would fit only
+   a little larger (0.21 to 0.30 on a phone's 348x444 graph viewport) and cross 5 cables.
 3. **No layout library enters dist.** elkjs (450.6 KB gzip, about 175 % of the headroom, and
    no fewer anchor-to-anchor crossings), dagre (16.7 KB, no ports: 6 crossings on the
    templates), d3-dag (29.1 KB, no ports, 6 on the templates, about a second of CPU at 300
@@ -129,6 +131,10 @@ Invariants, each held by `tests/unit/studio-graph-layout.test.mjs`:
 - The layout costs about 1.4 KB gzip and one frame of CPU at 300 nodes on the main thread; it
   needs no Worker.
 - V614's tidy-selection (Shift+L) builds on this function for the selected nodes.
+- The shipped templates keep their authored positions. Storing one phone-wrapped layout in a
+  template was tried and rejected on 2026-11-03: on the desktop it turned the Subtractive Synth
+  into one tall column at 33 % Frame-all zoom (97 % before). Opening a template laid out for
+  the viewport it opens in is a separate decision (it would move boxes without an L).
 
 ## What no check decides
 
