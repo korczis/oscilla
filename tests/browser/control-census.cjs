@@ -445,7 +445,7 @@ both({ id: 'filter.gain', ws: 'filter', control: '#osc-filter-gain',
   // the master limiter caps what reaches the analyser (about +12 dB of a +24 dB boost)
   audio: { hz: 1000, expect: (a, b) => a - b > 6 } });
 
-// ---- Envelope: an edit reaches the NEXT note (a held note: control-census-3, PR #310)
+// ---- Envelope: an edit reaches the NEXT note, and a held one (control-census-3, C008)
 row({ id: 'envelope.sustain.nextNote.pointer', ws: 'synthesis', control: '#osc-env-sustain-value',
   how: 'pointer', setup: seq(S.envelope(true, { s: 0.6 }), S.latch(1000)),
   act: async (page) => {
@@ -460,8 +460,7 @@ row({ id: 'envelope.sustain.nextNote.pointer', ws: 'synthesis', control: '#osc-e
 row({ id: 'envelope.sustain.heldNote.pointer', ws: 'synthesis', control: '#osc-env-sustain-value',
   how: 'pointer', setup: seq(S.envelope(true, { s: 0.6 }), S.latch(1000)),
   act: D.type('#osc-env-sustain-value', '0.1'), expect: (s) => near(s.envelope.s, 0.1, 1e-6),
-  audio: { hz: 1000, expect: (a, b) => b - a > 12 },
-  xfail: { finding: 'control-census-3', issue: 'C008', pr: 310 } });
+  audio: { hz: 1000, expect: (a, b) => b - a > 12 } });
 row({ id: 'envelope.sustain.keyboard', ws: 'synthesis', control: '#osc-env-sustain',
   how: 'keyboard', setup: S.envelope(true, { s: 0.6 }),
   act: D.keys('#osc-env-sustain', 'ArrowLeft', 'ArrowLeft'),
@@ -596,7 +595,7 @@ row({ id: 'phase.mono.pointer', ws: 'compare', control: '#osc-stereo-mono', how:
   setup: seq(S.dual(), D.click('#osc-ptab-stereo'), D.click('#osc-stereo-split')),
   act: D.click('#osc-stereo-mono'), expect: (s) => s.phase.route === 'mono' && !s.app.dual.stereo });
 
-// ---- Sequencer (Tempo: control-census-1, PR #266). The filter reaching it (control-census-2)
+// ---- Sequencer (Tempo: control-census-1, K001-K003). The filter reaching it (control-census-2)
 // passes here since C003 (PR #295) landed, and so does journeys.cjs's sequencer-filter journey
 both({ id: 'seq.play', ws: 'sequencer', control: '#osc-seq-play',
   pointer: D.click('#osc-seq-play'), keyboard: D.keys('#osc-seq-play', 'Enter'),
@@ -623,8 +622,7 @@ row({ id: 'seq.tempo.model.keyboard', ws: 'sequencer', control: '#osc-seq-tempo'
   }, expect: (s) => s.seq.tempo === 140 });
 row({ id: 'seq.tempo.timing.pointer', ws: 'sequencer', control: '#osc-seq-tempo', how: 'pointer',
   act: D.select('#osc-seq-tempo', '60'),
-  expect: (s, b) => s.seq.tempo === 60 && s.seq.totalMs !== b.seq.totalMs,
-  xfail: { finding: 'control-census-1', issue: 'K001-K003', pr: 266 } });
+  expect: (s, b) => s.seq.tempo === 60 && s.seq.totalMs !== b.seq.totalMs });
 row({ id: 'seq.filter.reaches.pointer', ws: 'sequencer', control: '#osc-filter-enable',
   how: 'pointer',
   setup: seq(S.filterOn({ type: 'lowpass', frequency: 150 }), (page) => page.evaluate(() => {
@@ -1399,12 +1397,14 @@ family({ id: 'disclosure', control: '[data-osc$=".collapse"]',
     }
     return { members, bad };
   } });
-row({ id: 'filter.page.pointer', ws: 'playground', control: '#osc-filter-fullscreen',
-  how: 'pointer', act: D.click('#osc-filter-fullscreen'), expect: (s) => s.workspace === 'filter' });
+row({ id: 'filter.page.pointer', ws: 'filter', control: '#osc-filter-fullscreen',
+  how: 'pointer', act: D.click('#osc-filter-fullscreen'),
+  expect: (s) => s.workspace === 'playground' });
 row({ id: 'filter.page.keyboard', ws: 'filter', control: '#osc-filter-fullscreen',
   how: 'keyboard', act: D.keys('#osc-filter-fullscreen', 'Enter'),
   expect: (s) => s.workspace === 'playground' });
-// the Filter Lab's corner button opens its page (above); the others ask for fullscreen
+// the Filter Lab's corner button goes back to the Playground (above); the others ask for
+// fullscreen
 const FS = '[id$="-fullscreen"]:not(#osc-filter-fullscreen), '
   + '[data-osc$=".fullscreen"]:not([data-osc="filter.fullscreen"])';
 family({ id: 'fullscreen', control: FS,
@@ -1472,6 +1472,44 @@ family({ id: 'links.internal', control: 'a[href="#osc-main"], a[href^="mailto:"]
     }
     const mail = await page.$$eval('a[href^="mailto:"]', (a) => a.map((e) => e.href));
     return { members: links.length + mail.length, bad };
+  } });
+// The links that open another workspace: the counterparts of the microphone panel (U005), the
+// cross-links into the Studio templates, Measure and Experiments, and the Learn tools (P5).
+// Each shown member, on a page of its own, by pointer and by Enter, opens the workspace its
+// href names; tests/browser/cross-links.cjs judges the template each opens and the way back,
+// and the members shown only with a stored experiment or finding.
+const WS_LINK = 'a[data-osc][href^="#m="]:not([data-osc^="nav."])';
+family({ id: 'links.workspace', control: WS_LINK,
+  why: 'each link to another workspace opens the workspace its href names',
+  run: async (page, browser) => {
+    const bad = [];
+    let members = 0;
+    for (const ws of op.WORKSPACES) {
+      await op.navTo(page, ws);
+      const shown = await page.$$eval(WS_LINK, (a) => a.map((e, i) => ({ i, osc: e.dataset.osc,
+        href: e.getAttribute('href'), shown: e.getClientRects().length > 0 }))
+        .filter((l) => l.shown));
+      for (const l of shown) {
+        members++;
+        const m = /#m=([a-z]+)/.exec(l.href)[1];
+        for (const how of ['pointer', 'keyboard']) {
+          const fresh = await op.openApp(browser, { dist: DIST, audio: false });
+          try {
+            if (ws !== 'playground') await op.navTo(fresh.page, ws);
+            const link = fresh.page.locator(WS_LINK).nth(l.i);
+            if (how === 'pointer') await link.click();
+            else { await link.focus(); await fresh.page.keyboard.press('Enter'); }
+            const ok = await until(() => fresh.page.evaluate((w) =>
+              window.OSCILLA.app.workspace === w, m), { ms: ROW_MS,
+              what: `${l.osc} (${ws}, ${how}) opens ${m}` }).catch(() => false);
+            if (!ok) bad.push(`${ws} ${l.osc} ${how}: the workspace is not ${m}`);
+          } finally {
+            await fresh.context.close().catch(() => {});
+          }
+        }
+      }
+    }
+    return { members, bad };
   } });
 family({ id: 'dialogs.dismiss', control: 'dialog .osc-dialog-actions button:not([data-osc])',
   init: NO_CLIPBOARD,
@@ -1565,6 +1603,83 @@ for (const c of ['[data-osc="measure.setupToggle"]', '[data-osc="measure.switch"
   '#osc-fnd-run', '[data-osc="fnd.addRun"]', '[data-osc="fnd.deleteCancel"]']) {
   debt(c, 'needs a stored result, a finding, a calibration or a running task');
 }
+
+// The Synth dock, its patch library and the on-screen keyboard (K058-K066, K097, K026), shown
+// in the Playground and the Synth workspace; their suites drive and judge them by sound
+for (const [c, by] of [['#osc-synth-pick', 'synth.cjs'],
+  ['[data-osc="synth.pick.menu"] [role="menuitem"]', 'synth.cjs'],
+  ['[data-osc="synth.dock.wave"] [role="radio"]', 'synth.cjs'],
+  ['[data-osc="synth.dock.preset"] [role="radio"]', 'synth.cjs'],
+  ['#osc-synth-preset', 'synth.cjs xy-pad.cjs'], ['[data-osc="synth.arm"]', 'synth.cjs'],
+  ['[data-osc="synth.library"]', 'synth.cjs'],
+  ['[data-osc="synth.studio"]', 'synth.cjs xy-pad.cjs'],
+  ['[data-osc="synth.copy-link"]', 'synth.cjs'], ['[data-osc="library.instrument"]', 'synth.cjs'],
+  ['[data-osc="library.list"]', 'synth.cjs'],
+  ['[data-osc="keyboard.arm"]', 'midi.cjs demo-song.cjs navigation.cjs'],
+  ['[data-osc="keyboard.octave-down"]', 'midi.cjs'],
+  ['[data-osc="keyboard.octave-up"]', 'midi.cjs'],
+  ['[data-osc="keyboard.velocity-down"]', 'midi.cjs'],
+  ['[data-osc="keyboard.velocity-up"]', 'midi.cjs']]) {
+  delegated(c, by, 'the Synth dock, its patch library and the on-screen keyboard');
+}
+
+// The dock's oscillator group: which VCO the waveform group edits (synth/dock.js). Its effect
+// is read from the Studio store: the waveform group then shows that oscillator's waveform.
+const DOCK_OSC = '[data-osc="synth.dock.osc"] [role="radio"]';
+const dockRead = () => {
+  const on = (g) => {
+    const el = document.querySelector(`[data-osc="synth.dock.${g}"] [aria-checked="true"]`);
+    return el ? el.dataset.v : null;
+  };
+  const vco = (id) => {
+    const n = window.OSCILLA.studio.model.graph.nodes.find((x) => x.metadata
+      && x.metadata.panel && x.metadata.panel.module === id);
+    return n ? n.params.waveform : null;
+  };
+  return { osc: on('osc'), wave: on('wave'), vco1: vco('vco1'), vco2: vco('vco2') };
+};
+const dockOn = (id) => (s, b, x) => x.osc === id && x.wave === x[id];
+row({ id: 'synth.dock.osc.pointer', ws: 'synth', control: DOCK_OSC, how: 'pointer',
+  read: dockRead, act: D.click(`${DOCK_OSC}[data-v="vco2"]`), expect: dockOn('vco2') });
+row({ id: 'synth.dock.osc.keyboard', ws: 'synth', control: DOCK_OSC, how: 'keyboard',
+  read: dockRead, act: D.keys(`${DOCK_OSC}[aria-checked="true"]`, 'ArrowRight'),
+  expect: dockOn('vco2') });
+
+// Findings, empty: its link moves the focus to the Saved experiments list, in place
+const FND_TO_EXP = '[data-osc="fnd.toExperiments"]';
+both({ id: 'fnd.toExperiments', ws: 'experiments', control: FND_TO_EXP,
+  read: () => ({ focus: document.activeElement && document.activeElement.id,
+    hash: location.hash }),
+  setup: async (page) => {
+    await until(() => page.locator(FND_TO_EXP).first().isVisible(),
+      { ms: ROW_MS, what: 'Findings, empty, offers its link to the Saved experiments' });
+  },
+  pointer: D.click(FND_TO_EXP), keyboard: D.keys(FND_TO_EXP, 'Enter'),
+  expect: (s, b, x) => x.focus === 'osc-exp-list' && s.workspace === 'experiments'
+    && x.hash === b.x.hash });
+
+// The patch library's search and tag filters narrow its list (ui/patch-browser.js)
+const LIBRARY = '[data-osc="library.list"]';
+const libraryRead = () => [...document.querySelectorAll(
+  '[data-osc="library.list"] [role="option"]')].map((o) => o.textContent);
+const openLibrary = async (page) => {
+  await page.locator('[data-osc="synth.library"]').first().click();
+  await until(() => page.locator(LIBRARY).first().isVisible(),
+    { ms: ROW_MS, what: 'the patch library opens from the Synth' });
+};
+row({ id: 'library.search.keyboard', ws: 'synth', control: '[data-osc="library.search"]',
+  how: 'keyboard', read: libraryRead, setup: openLibrary,
+  act: D.typeKeys('[data-osc="library.search"]', 'bell'),
+  expect: (s, b, x) => x.length > 0 && x.length < b.x.length && x.every((t) => /bell/i.test(t)) });
+row({ id: 'library.tag.pointer', ws: 'synth', control: '[data-osc="library.tag"]',
+  how: 'pointer', read: libraryRead,
+  setup: async (page) => {
+    await openLibrary(page);
+    await until(async () => (await page.locator('[data-osc="library.tag"] option[value="xy"]')
+      .count()) === 1, { ms: ROW_MS, what: 'the xy tag is offered' });
+  },
+  act: D.select('[data-osc="library.tag"]', 'xy'),
+  expect: (s, b, x) => x.length > 0 && x.length < b.x.length });
 
 module.exports = { ROWS, FAMILIES, LEDGER };
 
@@ -1694,7 +1809,7 @@ async function runRow(browser, r) {
 async function runFamily(browser, f) {
   const { context, page, errors } = await op.openApp(browser, { dist: DIST, init: f.init });
   try {
-    const r = await f.run(page);
+    const r = await f.run(page, browser);
     if (errors.length) r.bad.push(`page errors: ${errors.join(' | ')}`);
     if (!r.members) r.bad.push('no member found');
     return r.bad.length ? { ok: false, error: r.bad.slice(0, 6).join('; ') }

@@ -14,8 +14,8 @@
 //   journey-1-start:*     set parameters through the UI and start: instrument, sequencer,
 //                         Studio, MEASURE
 //   journey-2-live:*      change parameters while sounding: frequency, waveform, gain, filter
-//                         type/cutoff/Q, Additive, Studio Inspector; envelope, pan, hard limit,
-//                         sequencer filter (expected failures, see below)
+//                         type/cutoff/Q, Additive, Studio Inspector, envelope, pan, hard limit,
+//                         sequencer filter; each control reached in the workspace that shows it
 //   journey-3-views:*     the status bar, the readouts, the Signal Path, the Spectrum and the
 //                         controls agree with the engine
 //   journey-4-restart:*   ten stop/restart cycles of the instrument, the sequencer and the
@@ -138,6 +138,19 @@ async function open(browser, opts = {}) {
 const sources = (page) => page.evaluate(() => (window.__oscSources
   ? window.__oscSources() : { live: -1, started: -1 }));
 
+/**
+ * A control action as a user performs it: reach the workspace that shows the control (the
+ * filter lab is in Filter; the envelope, Additive and the dual voice in Synthesis), then act.
+ */
+const act = {
+  click: async (page, sel) => { await op.reveal(page, sel); await page.click(sel); },
+  focus: async (page, sel) => { await op.reveal(page, sel); await page.focus(sel); },
+  selectOption: async (page, sel, v) => {
+    await op.reveal(page, sel);
+    return page.selectOption(sel, v);
+  },
+};
+
 /** Hold the instrument with the Space key on a non-typing focus (the global hold). */
 async function holdSpace(page) {
   await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); });
@@ -152,13 +165,14 @@ async function releaseSpace(page) {
 /** Allow continuous playback through its switch (Device & Limits, Playground). */
 async function allowContinuous(page) {
   const on = await page.evaluate(() => window.OSCILLA.app.continuousAllowed);
-  if (!on) await page.click('#osc-continuous-toggle');
+  if (!on) await act.click(page, '#osc-continuous-toggle');
   await waitSnap(page, (s) => s.app.continuous && s.aria.cont === 'true',
     'continuous playback allowed through its switch');
 }
 
 /** Commit a text field the way a user does: replace its text, then Enter. */
 async function typeField(page, sel, text) {
+  await op.reveal(page, sel);
   const l = page.locator(sel).first();
   await l.scrollIntoViewIfNeeded();
   await l.fill(text);
@@ -167,6 +181,7 @@ async function typeField(page, sel, text) {
 
 /** Turn a switch to `on` through a click when it is not already there. */
 async function setSwitch(page, sel, on) {
+  await op.reveal(page, sel);
   const cur = await page.evaluate((s) => {
     const el = document.querySelector(s);
     const v = el.getAttribute('aria-checked') || el.getAttribute('aria-pressed');
@@ -223,13 +238,13 @@ function defineChecks() {
   // ============================================================== 1. set, then start
   def('journey-1-start:instrument', async ({ page }) => {
     // waveform, frequency, gain, filter type/cutoff/Q, envelope, all through their controls
-    await page.click('#osc-wave-sine');
-    for (let i = 0; i < 2; i++) await page.click('#osc-step-st-up'); // 440 -> 493.9 Hz
-    await page.click('#osc-step-oct-up');                            // -> 987.8 Hz
-    await page.focus('#osc-gain');
+    await act.click(page, '#osc-wave-sine');
+    for (let i = 0; i < 2; i++) await act.click(page, '#osc-step-st-up'); // 440 -> 493.9 Hz
+    await act.click(page, '#osc-step-oct-up');                            // -> 987.8 Hz
+    await act.focus(page, '#osc-gain');
     for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowLeft');
     await setSwitch(page, '#osc-filter-enable', true);
-    await page.click('#osc-ftype-lowpass');
+    await act.click(page, '#osc-ftype-lowpass');
     await typeField(page, '#osc-filter-cutoff-value', '500');
     await typeField(page, '#osc-filter-q-value', '0.8');
     await setSwitch(page, '#osc-env-enable', true);
@@ -268,18 +283,18 @@ function defineChecks() {
 
   def('journey-1-start:sequencer', async ({ page }) => {
     await op.navTo(page, 'sequencer');
-    await page.click('#osc-seq-record'); // Loop
-    await page.selectOption('#osc-seq-tempo', '90');
+    await act.click(page, '#osc-seq-record'); // Loop
+    await act.selectOption(page, '#osc-seq-tempo', '90');
     const set = await waitSnap(page, (s) => s.seq.loop && s.seq.tempo === 90
       && s.aria.seqLoop === 'true', 'loop and 90 BPM reach the sequence model');
-    await page.click('#osc-seq-play');
+    await act.click(page, '#osc-seq-play');
     const s = await waitSnap(page, (x) => x.seq.playing && x.app.seqPlaying
       && x.aria.seqPlay === 'true', 'the sequencer plays and every view says so');
     const o = await until(async () => { const v = await op.output(page);
       return v.peak > 0.001 ? v : null; }, { ms: STEP_MS, what: 'the sequence is audible' });
     const live = await sources(page);
     must(live.live > 0, 'the sequence has sources on the realtime context', live);
-    await page.click('#osc-seq-stop');
+    await act.click(page, '#osc-seq-stop');
     return { loop: set.seq.loop, tempo: set.seq.tempo, peak: +o.peak.toFixed(4),
       playing: s.seq.playing };
   });
@@ -287,12 +302,12 @@ function defineChecks() {
   def('journey-1-start:sequencer-tempo', async ({ page }) => {
     await op.navTo(page, 'sequencer');
     const before = await snap(page);
-    await page.selectOption('#osc-seq-tempo', '60');
+    await act.selectOption(page, '#osc-seq-tempo', '60');
     const s = await waitSnap(page, (x) => x.seq.tempo === 60, 'Tempo 60 reaches the model');
     defect(s.seq.totalMs !== before.seq.totalMs, 'half the tempo changes the sequence timing',
       { before: before.seq.totalMs, after: s.seq.totalMs });
     return { totalMs: s.seq.totalMs };
-  }, { xfail: { finding: 'control-census-1', issue: 'K001-K003', pr: 266 } });
+  });
 
   def('journey-1-start:studio', async ({ page }) => {
     await op.navTo(page, 'studio');
@@ -328,19 +343,19 @@ function defineChecks() {
 
   // ============================================================== 2. change while active
   def('journey-2-live:instrument', async ({ page }) => {
-    await page.click('#osc-wave-sine');
+    await act.click(page, '#osc-wave-sine');
     await allowContinuous(page);
     await holdSpace(page);
     const b = await snap(page);
-    await page.click('#osc-step-oct-up');
+    await act.click(page, '#osc-step-oct-up');
     let s = await waitSnap(page, (x) => x.engine.voice && near(x.engine.voice.freq,
       b.app.frequency * 2, 1), 'octave up reaches the sounding carrier');
     must(s.text.freq !== b.text.freq && s.text.sbFreq !== b.text.sbFreq,
       'the frequency readout and the status bar follow', s.text);
-    await page.click('#osc-wave-square');
+    await act.click(page, '#osc-wave-square');
     s = await waitSnap(page, (x) => x.engine.voice && x.engine.voice.wave === 'square'
       && /squ/i.test(x.text.sbWave || ''), 'Square reaches the carrier and the status bar');
-    await page.focus('#osc-gain');
+    await act.focus(page, '#osc-gain');
     for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowLeft');
     s = await waitSnap(page, (x) => x.app.gainLevel < b.app.gainLevel
       && near(x.engine.gain, x.app.gainLevel, 1e-6) && x.text.gain !== b.text.gain,
@@ -351,11 +366,11 @@ function defineChecks() {
   });
 
   def('journey-2-live:filter', async ({ page }) => {
-    await page.click('#osc-wave-sine');
-    for (let i = 0; i < 2; i++) await page.click('#osc-step-st-up');
-    await page.click('#osc-step-oct-up');
+    await act.click(page, '#osc-wave-sine');
+    for (let i = 0; i < 2; i++) await act.click(page, '#osc-step-st-up');
+    await act.click(page, '#osc-step-oct-up');
     await setSwitch(page, '#osc-filter-enable', true);
-    await page.click('#osc-ftype-lowpass');
+    await act.click(page, '#osc-ftype-lowpass');
     await typeField(page, '#osc-filter-cutoff-value', '20000');
     await allowContinuous(page);
     const { app: { frequency: hz } } = await holdSpace(page);
@@ -370,14 +385,14 @@ function defineChecks() {
     steps.push({ cutoff: 200, r: +r.toFixed(1), d: +(db - open).toFixed(1) });
     // Q by keyboard on its slider
     const q0 = (await snap(page)).filter.Q;
-    await page.focus('#osc-filter-q');
+    await act.focus(page, '#osc-filter-q');
     for (let i = 0; i < 2; i++) await page.keyboard.press('PageUp');
     const q = await waitSnap(page, (x) => x.filter.Q > q0 * 1.2, 'the Q slider raises Q');
     r = await responseDb(page, hz);
     db = await op.steadyDb(page, hz, { what: 'journey-2: Q raised' });
     must(near(db - open, r, 2.5), 'the raised Q is the drawn response', { r, db, Q: q.filter.Q });
     // type high-pass by pointer: the tone passes again
-    await page.click('#osc-ftype-highpass');
+    await act.click(page, '#osc-ftype-highpass');
     r = await responseDb(page, hz);
     db = await op.steadyDb(page, hz, { what: 'journey-2: high-pass 200 Hz' });
     must(r > -3 && near(db - open, r, 2.5), 'high-pass below the tone lets it through', { r, db });
@@ -395,7 +410,7 @@ function defineChecks() {
     await setSwitch(page, '#osc-add-enable', true);
     const s = await waitSnap(page, (x) => x.additive.on && x.engine.voice
       && x.engine.voice.periodicWave, 'Additive on reaches the sounding carrier');
-    await page.selectOption('#osc-add-preset', 'square');
+    await act.selectOption(page, '#osc-add-preset', 'square');
     await waitSnap(page, (x) => x.engine.voice && x.engine.voice.periodicWave
       && JSON.stringify(x.additive.partials) !== JSON.stringify(s.additive.partials),
     'a harmonic preset replaces the partials while the note sounds');
@@ -407,9 +422,9 @@ function defineChecks() {
   });
 
   def('journey-2-live:envelope-held', async ({ page }) => {
-    await page.click('#osc-wave-sine');
-    for (let i = 0; i < 2; i++) await page.click('#osc-step-st-up');
-    await page.click('#osc-step-oct-up');
+    await act.click(page, '#osc-wave-sine');
+    for (let i = 0; i < 2; i++) await act.click(page, '#osc-step-st-up');
+    await act.click(page, '#osc-step-oct-up');
     await setSwitch(page, '#osc-env-enable', true);
     await typeField(page, '#osc-env-sustain-value', '0.6');
     await allowContinuous(page);
@@ -422,12 +437,12 @@ function defineChecks() {
     // 20 log10(0.1 / 0.6) = -15.6 dB
     defect(before - after > 12, 'a held note follows the sustain level', { before, after });
     return { before, after };
-  }, { xfail: { finding: 'control-census-3', issue: 'C008', pr: 310 } });
+  });
 
   def('journey-2-live:pan-dual', async ({ page }) => {
     await op.navTo(page, 'synthesis');
     await setSwitch(page, '#osc-dual-enable', true);
-    await page.click('#osc-dual-mono');
+    await act.click(page, '#osc-dual-mono');
     await op.navTo(page, 'playground');
     await allowContinuous(page);
     await holdSpace(page);
@@ -438,7 +453,7 @@ function defineChecks() {
         voice: !!window.OSCILLA.engine.voice };
     });
     await op.navTo(page, 'compare');
-    await page.click('#osc-ptab-stereo');
+    await act.click(page, '#osc-ptab-stereo');
     const pan = page.locator('#osc-stereo-pan');
     await pan.focus();
     await page.keyboard.press('End');
@@ -448,14 +463,14 @@ function defineChecks() {
         'the sounding dual voice, started centred, is panned right by the slider');
       return { pan: s.phase.pan, ...t };
     } finally { await releaseSpace(page); }
-  }, { xfail: { finding: 'engine-sync-4', issue: 'C010', pr: 293 } });
+  });
 
   def('journey-2-live:hard-limit', async ({ page }) => {
     // continuous off: Hold plays up to the hard limit; lowering the limit while it sounds
     const sel = await page.$$eval('#osc-safety-limit option', (o) => o.map((x) => x.value));
     await holdSpace(page);
     const b = await snap(page);
-    await page.selectOption('#osc-safety-limit', sel[0]);
+    await act.selectOption(page, '#osc-safety-limit', sel[0]);
     const s = await waitSnap(page, (x) => String(x.app.safetyLimit) === sel[0],
       'the lower hard limit reaches the instrument');
     const lim = Number(sel[0]);
@@ -475,15 +490,15 @@ function defineChecks() {
       `the sounding note ends at the lowered ${lim} s limit`);
       return { limit: lim, before: b.engine.voice.len, now: v };
     } finally { await releaseSpace(page); }
-  }, { xfail: { finding: 'dead-controls-4', issue: 'C011', pr: 303 } });
+  });
 
   def('journey-2-live:sequencer-filter', async ({ page }) => {
     await op.navTo(page, 'playground');
     await setSwitch(page, '#osc-filter-enable', true);
-    await page.click('#osc-ftype-lowpass');
+    await act.click(page, '#osc-ftype-lowpass');
     await typeField(page, '#osc-filter-cutoff-value', '20000');
-    await page.click('#osc-seq-record'); // loop, so the first block returns
-    await page.click('#osc-seq-play');
+    await act.click(page, '#osc-seq-record'); // loop, so the first block returns
+    await act.click(page, '#osc-seq-play');
     await waitSnap(page, (x) => x.seq.playing, 'the sequencer plays');
     // the first block is a 440 Hz tone: its loudest level over two passes of the loop (one per
     // 2.25 s), with the filter open and then at 150 Hz, the same window for both
@@ -506,7 +521,7 @@ function defineChecks() {
     await until(() => page.evaluate((t) => window.OSCILLA.engine.ctx.currentTime > t, since),
       { ms: STEP_MS, what: 'journey-2: one analyser window after the cutoff change' });
     const low = await loudest('journey-2: two passes with the low-pass at 150 Hz');
-    await page.click('#osc-seq-stop');
+    await act.click(page, '#osc-seq-stop');
     defect(open - low > 15, 'the enabled low-pass at 150 Hz attenuates the sequencer',
       { open, low });
     return { open, low };
@@ -535,8 +550,8 @@ function defineChecks() {
 
   // ============================================================== 3. synchronized views
   def('journey-3-views:instrument', async ({ page }) => {
-    await page.click('#osc-wave-triangle');
-    await page.click('#osc-step-oct-up');
+    await act.click(page, '#osc-wave-triangle');
+    await act.click(page, '#osc-step-oct-up');
     await setSwitch(page, '#osc-filter-enable', true);
     await setSwitch(page, '#osc-env-enable', true);
     await allowContinuous(page);
@@ -565,8 +580,8 @@ function defineChecks() {
 
   def('journey-3-views:sequencer-owner', async ({ page }) => {
     await op.navTo(page, 'sequencer');
-    await page.click('#osc-seq-record');
-    await page.click('#osc-seq-play');
+    await act.click(page, '#osc-seq-record');
+    await act.click(page, '#osc-seq-play');
     await waitSnap(page, (x) => x.seq.playing, 'the sequencer plays');
     try {
       return await defectUntil(() => page.evaluate(() => ({
@@ -574,7 +589,7 @@ function defineChecks() {
         label: window.OSCILLA.viz.state.labels.requested,
         plan: window.OSCILLA.viz.state.plan ? window.OSCILLA.viz.state.plan.type : null })),
       (v) => v.playing === true, 'the scope and Spectrum report the sequencer as what sounds');
-    } finally { await page.click('#osc-seq-stop'); }
+    } finally { await act.click(page, '#osc-seq-stop'); }
   }, { xfail: { finding: 'vis-divergence-1', issue: 'C013', pr: 298 } });
 
   def('journey-3-views:studio-master', async ({ page }) => {
@@ -599,7 +614,7 @@ function defineChecks() {
 
   // ============================================================== 4. stop and restart
   def('journey-4-restart:instrument', async ({ page }) => {
-    await page.click('#osc-wave-sine');
+    await act.click(page, '#osc-wave-sine');
     await allowContinuous(page);
     const census = [];
     for (let i = 0; i < CYCLES; i++) {
@@ -623,12 +638,12 @@ function defineChecks() {
     await op.navTo(page, 'sequencer');
     let started = 0;
     for (let i = 0; i < CYCLES; i++) {
-      await page.click('#osc-seq-play');
+      await act.click(page, '#osc-seq-play');
       await waitSnap(page, (x) => x.seq.playing && x.aria.seqPlay === 'true',
         `journey-4: sequencer cycle ${i + 1} plays`);
       await until(async () => (await sources(page)).live > 0,
         { ms: STEP_MS, what: `journey-4: sequencer cycle ${i + 1} has live sources` });
-      await page.click('#osc-seq-stop');
+      await act.click(page, '#osc-seq-stop');
       const c = await until(async () => {
         const s = await snap(page);
         const l = await sources(page);
@@ -670,7 +685,7 @@ function defineChecks() {
     await page.click('[data-osc="studio.stop"]');
     // Escape stops the sequencer
     await op.navTo(page, 'sequencer');
-    await page.click('#osc-seq-play');
+    await act.click(page, '#osc-seq-play');
     await waitSnap(page, (x) => x.seq.playing, 'the sequencer plays');
     await page.keyboard.press('Escape');
     s = await waitSnap(page, (x) => !x.seq.playing && !x.app.seqPlaying, 'Escape stops it');
@@ -700,7 +715,7 @@ function defineChecks() {
   def('journey-4-restart:one-owner', async ({ page }) => {
     await allowContinuous(page);
     await holdSpace(page);
-    await page.click('#osc-seq-play');
+    await act.click(page, '#osc-seq-play');
     await waitSnap(page, (x) => x.seq.playing, 'the sequencer plays');
     try {
       return await defectUntil(async () => { const x = await snap(page);
@@ -709,22 +724,22 @@ function defineChecks() {
       'one output owner: sequencer Play stops the held instrument');
     } finally {
       await releaseSpace(page);
-      await page.click('#osc-seq-stop');
+      await act.click(page, '#osc-seq-stop');
     }
-  }, { xfail: { finding: 'coupling-1', issue: 'C002', pr: 305 } });
+  });
 
   // ============================================================== 5. save, restore, compare
   const INSTRUMENT_FIELDS = ['source', 'sourceKind', 'waveform', 'frequency', 'gainLevel'];
   const same = (a, b, keys) => keys.filter((k) => JSON.stringify(a[k]) !== JSON.stringify(b[k]));
   /** Set an instrument and lab state through the controls. */
   async function shape(page) {
-    await page.click('#osc-wave-sawtooth');
-    await page.click('#osc-step-oct-up');
-    await page.click('#osc-step-st-up');
-    await page.focus('#osc-gain');
+    await act.click(page, '#osc-wave-sawtooth');
+    await act.click(page, '#osc-step-oct-up');
+    await act.click(page, '#osc-step-st-up');
+    await act.focus(page, '#osc-gain');
     for (let i = 0; i < 2; i++) await page.keyboard.press('ArrowLeft');
     await setSwitch(page, '#osc-filter-enable', true);
-    await page.click('#osc-ftype-highpass');
+    await act.click(page, '#osc-ftype-highpass');
     await typeField(page, '#osc-filter-cutoff-value', '300');
     await setSwitch(page, '#osc-env-enable', true);
     await typeField(page, '#osc-env-sustain-value', '0.4');
@@ -793,8 +808,8 @@ function defineChecks() {
   def('journey-5-persist:config-file', async ({ browser, page }) => {
     const a = await shape(page);
     await op.navTo(page, 'sequencer');
-    await page.click('#osc-seq-record');
-    await page.selectOption('#osc-seq-tempo', '140');
+    await act.click(page, '#osc-seq-record');
+    await act.selectOption(page, '#osc-seq-tempo', '140');
     const a2 = await waitSnap(page, (x) => x.seq.loop && x.seq.tempo === 140,
       'loop and tempo reach the sequence');
     await page.click('#osc-export');
@@ -877,7 +892,7 @@ function defineChecks() {
 
   // ============================================================== 6. honest refusals
   def('journey-6-refusals:pattern-field', async ({ page }) => {
-    await page.click('#osc-source-pattern');
+    await act.click(page, '#osc-source-pattern');
     const id = await until(() => page.evaluate(() => {
       const el = document.querySelector('[data-osc="pattern.param"][data-key="frequency"]');
       return el ? el.id : null;
@@ -967,7 +982,7 @@ function defineChecks() {
     await page.keyboard.press('Escape');
     defect(!r.playing, 'sequencer Play is refused while a measurement owns the output', r);
     return r;
-  }, { xfail: { finding: 'coupling-1', issue: 'C002', pr: 305 }, timeout: CHECK_MS });
+  }, { timeout: CHECK_MS });
 
   def('journey-6-refusals:studio-link', async ({ browser }) => {
     const b = await open(browser, { hash: '#m=studio&st=no-such-template', keepAlerts: true });
@@ -1059,7 +1074,7 @@ function defineChecks() {
         return { Q: s.filter.Q, alerts: s.app.alerts };
       } finally { await b.context.close(); }
     } finally { fs.rmSync(file, { force: true }); }
-  }, { xfail: { finding: 'persist-4', issue: 'C017', pr: 312 } });
+  });
 
   def('journey-6-refusals:additive-dual', async ({ page }) => {
     // Additive switched on while a dual voice sounds: it applies to neither oscillator (A only
@@ -1079,16 +1094,16 @@ function defineChecks() {
       (v) => v.carrierWave === false && v.a && v.b && v.a.wave !== 'custom',
       'Additive does not reach oscillator A of a dual voice alone');
     } finally { await releaseSpace(page); }
-  }, { xfail: { finding: 'engine-sync-6', issue: 'C007', pr: 296 } });
+  });
 
   def('journey-6-refusals:pan-stereo', async ({ page }) => {
     // Pan has no effect in Stereo output (A left, B right): the slider is disabled there and
     // says why, instead of moving a value nothing reads.
     await op.navTo(page, 'synthesis');
     await setSwitch(page, '#osc-dual-enable', true);
-    await page.click('#osc-dual-stereo');
+    await act.click(page, '#osc-dual-stereo');
     await op.navTo(page, 'compare');
-    await page.click('#osc-ptab-stereo');
+    await act.click(page, '#osc-ptab-stereo');
     const s = await waitSnap(page, (x) => x.phase.route === 'stereo' && x.app.dual.stereo,
       'Stereo output reaches the Phase & Stereo lab');
     const v = await page.evaluate(() => {
@@ -1101,7 +1116,7 @@ function defineChecks() {
     defect(v.disabled && /stereo/i.test(v.why), 'the pan slider is disabled in Stereo output '
       + 'with a visible reason', v);
     return { route: s.phase.route, ...v };
-  }, { xfail: { finding: 'dead-controls-2', issue: 'C010', pr: 293 } });
+  });
 
   return checks;
 }

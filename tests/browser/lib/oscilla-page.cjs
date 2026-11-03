@@ -86,6 +86,36 @@ async function navTo(page, ws) {
     { ms: NAV_MS, what: `workspace ${ws} shown after its navigation item` });
 }
 
+/** Workspaces searched by reveal(), the instrument's own first. */
+const REVEAL_ORDER = Object.freeze(['playground', 'synthesis', 'filter', 'sequencer',
+  'analyzer', 'compare', ...WORKSPACES.filter((w) => !['playground', 'synthesis', 'filter',
+    'sequencer', 'analyzer', 'compare'].includes(w))]);
+
+/**
+ * Show the control `sel` the way a user reaches it: nothing when it is shown already or sits
+ * in a dialog (its opener shows it), else the navigation to the first workspace that shows it
+ * (the filter lab lives in Filter, the envelope, Additive and the dual voice in Synthesis).
+ * Returns the workspace it navigated to, or null; throws when no workspace shows it.
+ */
+async function reveal(page, sel) {
+  const shown = () => page.evaluate((q) => {
+    const el = document.querySelector(q);
+    if (!el) return 'missing';
+    if (el.closest('dialog')) return 'dialog';
+    return el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden'
+      ? 'shown' : 'hidden';
+  }, sel);
+  const now = await shown();
+  if (now !== 'hidden') return null;
+  const here = await page.evaluate(() => window.OSCILLA.app.workspace);
+  for (const ws of REVEAL_ORDER) {
+    if (ws === here) continue;
+    await navTo(page, ws);
+    if (await shown() === 'shown') return ws;
+  }
+  throw new Error(`${sel} is shown in no workspace of the navigation`);
+}
+
 // ------------------------------------------------------------------------------ page side
 /**
  * Everything a check may judge, read in one evaluate: the instrument, the sounding voice and
@@ -317,5 +347,5 @@ function matchInPage(selectors) {
   return res;
 }
 
-module.exports = { LAUNCH, WORKSPACES, OPEN_MS, openApp, startAudio, navTo, snapshot,
+module.exports = { LAUNCH, WORKSPACES, OPEN_MS, openApp, startAudio, navTo, reveal, snapshot,
   toneDbInPage, outputInPage, clip, toneDb, output, steadyDb, discoverInPage, matchInPage, until };
