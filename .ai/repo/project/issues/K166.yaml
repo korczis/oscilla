@@ -1,0 +1,33 @@
+id: K166
+milestone: M080
+serves:
+- "studio-box-system#node-declaration"
+title: "Each parameter's live-update rule is shown where it is edited"
+slug: each-parameters-live-update-rule-is-shown-where-it-is-edited
+priority: p2
+profile: implementation
+objective: "Owner program B (2026-11-03), slice B3. Every place a parameter is edited (the Studio Inspector, the Synth panel's knobs and switches, the compact view) shows when an edit is heard, from the parameter's declared live rule (V619: immediate, at the next note, at the next step, at the next block, or on an explicit apply): an immediate edit says nothing extra; any other shows one short line in the control's description (aria-describedby) and its tooltip, for example 'Applies at the next note'. The text comes from one table keyed by the rule, never per parameter."
+why: "The owner's program B of 2026-11-03 asks that live-update semantics be visible where the user edits; V619 (oscilla-26) declares the rule, this slice shows it."
+depends_on:
+- "V619"
+scope:
+- src/js/synth/view/face.js
+- src/js/ui/studio/inspector.js
+- src/js/ui/synth
+- tests/unit/live-rule.test.mjs
+- tests/browser/synth.cjs
+- tests/README.md
+- dist
+acceptance_criteria:
+- "Before: VERIFIED: no control says when its edit is heard; the registry declares no live rule."
+- "After: every edit point of a parameter whose live rule is not immediate carries the rule's sentence in its description; a browser check edits one parameter of each rule present and finds the sentence beside it."
+- "Negative cases: a parameter with an unknown rule is refused by the registry (V619); an immediate parameter shows no extra line."
+- "Rollback: revert the merge commit."
+- "tests/unit/live-rule.test.mjs fails on the merge base (project.fail-first), and the browser check fails there too."
+validation:
+- node --test tests/unit/live-rule.test.mjs
+- node tests/browser/synth.cjs --only s-look
+evidence_required:
+- verified
+created_at: '2026-11-03'
+updated_at: '2026-11-03'
