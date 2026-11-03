@@ -802,7 +802,7 @@ function defineChecks() {
         env: s.envelope } });
       return { ok: true };
     } finally { await b.context.close(); }
-  }, { xfail: { finding: 'persist-3', issue: 'C018', pr: 314 } });
+  });
 
   def('journey-5-persist:preset', async ({ page, context }) => {
     const a = await shape(page);
