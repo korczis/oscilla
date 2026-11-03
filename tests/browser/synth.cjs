@@ -14,7 +14,9 @@
 //   s-feel     the knob and choice feel (p2's W1b review): during a drag the ARIA position is the
 //              0..1000 travel; Shift mid-drag moves nothing; a double-click restores the initial
 //              value; the wheel turns the knob under the pointer, a burst one undo entry;
-//              arrows, Home and End move a choice and focus stays on the checked option
+//              arrows, Home and End move a choice and focus stays on the checked option; a
+//              double-click on a disabled knob changes nothing, and a cancelled pointer on a
+//              jack is neither a tap nor a drop, the jack taking its touches (21's S13, S9)
 //   s-wave     Square on VCO 1 (VCO 2 muted): the 2nd harmonic 30 dB+ below the 3rd; Pulse with a
 //              typed width of 25 %: the 4th harmonic 30 dB+ below the 3rd
 //   s-rest     armed with no key held (Arm, no note), a cable from EG 1 into the VCA: below
@@ -417,9 +419,42 @@ function defineChecks() {
     const first = await group.locator('[data-option]').first().getAttribute('data-v');
     await until(async () => { const c = await choice(); return c.v === first
       && c.checked === 'true'; }, { ms: 5000, what: 'Home chooses the first option' });
+    // 21's S13: a double-click on a disabled knob changes nothing (the first one shown).
+    const width = page.locator('[data-osc="synth-view"] [data-knob][aria-disabled="true"]').first();
+    await width.scrollIntoViewIfNeeded();
+    const wa = await width.getAttribute('aria-valuenow');
+    const disabled = await width.getAttribute('aria-disabled');
+    await width.dispatchEvent('dblclick'); // a disabled knob may refuse the pointer itself
+    const wb = await width.getAttribute('aria-valuenow');
+    // 21's S9: a cancelled pointer on a jack is neither a tap nor a drop: a real press on a
+    // jack, then the browser's pointercancel for that pointer, then the release.
+    const jack = page.locator('[data-osc="synth.bay.svg"] [data-jack]').first();
+    await jack.scrollIntoViewIfNeeded();
+    const jb = await jack.boundingBox();
+    const cablesBefore = (await dbg(page)).cables.length;
+    await page.evaluate(() => {
+      window.__pid = null;
+      document.addEventListener('pointerdown', (e) => { window.__pid = e.pointerId; },
+        { capture: true, once: true });
+    });
+    await page.mouse.move(jb.x + jb.width / 2, jb.y + jb.height / 2);
+    await page.mouse.down();
+    await page.evaluate(() => {
+      const j = document.querySelector('[data-osc="synth.bay.svg"] [data-jack]');
+      j.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true,
+        pointerId: window.__pid }));
+    });
+    await page.mouse.move(jb.x + jb.width / 2 + 120, jb.y + jb.height / 2 + 40, { steps: 3 });
+    await page.mouse.up();
+    const cancel = await page.evaluate(() => ({
+      pending: !!document.querySelector('[data-jack][aria-pressed="true"]'),
+      touch: getComputedStyle(document.querySelector('[data-jack]')).touchAction }));
+    cancel.before = cablesBefore;
+    cancel.after = (await dbg(page)).cables.length;
     const ok = mid.max === '1000' && mid.now >= 0 && mid.now <= 1000 && mid.now !== start.now
-      && Math.abs(fine.now - mid.now) <= 20;
-    return { ok, start, mid, fine };
+      && Math.abs(fine.now - mid.now) <= 20 && disabled === 'true' && wa === wb
+      && cancel.after === cancel.before && !cancel.pending && cancel.touch === 'none';
+    return { ok, start, mid, fine, disabled, wa, wb, cancel };
   });
 
   def('s-wave', async ({ page }) => {
