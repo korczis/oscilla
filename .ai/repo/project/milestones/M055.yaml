@@ -6,7 +6,7 @@ priority: p1
 problem: "The owner ordered on 2026-10-28 that every one of their projects is built on their licensed Flowbite Pro, enforced and always used. OSCILLA's interface is plain token-based CSS (ADR 0012 dropped the V1 Tailwind and Flowbite CDN scripts), with its own header, tab bar, panels and dialogs."
 outcome: "Tailwind 3 and the MIT flowbite package are compiled at build time into the single file within the budget; the Pro admin shell replaces the header and tab bar with every deep link kept; every workspace group, the dialogs and the settings are rebuilt from Pro components with the domain visuals inside Pro cards; the legacy chrome ratchet holds only the domain views' own residual (ADR 0061 decision 3); the visual references and the live smoke are regenerated from the Pro shell; the claims are registered and the intent's criteria point at them."
 acceptance_criteria:
-  - "F001 to F012 are done with their evidence."
+  - "F001 to F013 are done with their evidence."
 validation:
   - "npm run release-gate"
 evidence_required:
@@ -24,4 +24,4 @@ risks:
   - "Governance: rule:project.ui-uses-flowbite-pro and adr:adr-0061 landed with #250 (20583503); until then naming them in the intent failed intent validate (unresolved_governance), so #251 added them to the intent's governance after the merge of main that brought #250 in, and every F issue keeps intent validate at 0 failures."
   - "M054 (ui-current) builds on this milestone: its U issues that build interface depend on F002 or on the F issue of their workspace, so the new content is built once, on Pro."
 created_at: 2026-10-28
-updated_at: 2026-10-29
+updated_at: 2026-11-02

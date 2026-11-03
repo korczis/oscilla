@@ -34,6 +34,16 @@ unchanged, so every instrument reaches the one Master Output.
 trigger that opens and closes envelopes (the Keys gate). **Ring modulation**: the product of two
 audio signals, giving their sum and difference frequencies.
 
+**Arm keys / armed.** Whether the computer keyboard plays notes in a workspace: armed, its letter
+keys play the keyboard's notes (docs/midi.md "The computer and on-screen keyboard"); disarmed,
+they keep their workspace meanings. The Playground and the Studio start disarmed, the Synth armed.
+
+**Key registry.** The one place every key the page answers is bound (`src/js/ui/keys/`, K153),
+with one dispatcher as the page's only key listener (docs/midi.md "Keys"). A **chord** is a
+physical key (`KeyboardEvent.code`) with its modifiers, written `Ctrl+Shift+KeyZ`; a key
+**scope** is where a binding applies: a workspace, a view inside it and the focus. One chord has
+one owner per scope, and the most specific scope wins.
+
 **Project.** A saved Studio document: a StudioModel of kind `oscilla-studio`, exported as a
 `.oscilla-studio.json` file ("Export project", "Import a project, patch, V2 sequence or
 configuration file") or kept in the Studio library of this browser. A **patch** is the smaller

@@ -82,6 +82,7 @@ import { createScopeView, createHarmonicBarsView } from './ui/p5-views.js';
 import {
   buildConfigExport, parseConfigImport, CONFIG_FILE_VERSION, limitedValues,
 } from './ui/config-file.js';
+import { applyLabRecord, applyLabSections, labImportLimits, snapshotLabs } from './ui/lab-state.js';
 import { renderPlanToWav, renderSequenceToWav, screenshotCanvases } from './ui/exporters.js';
 import { BUILD } from './core/build-info.js';
 import { aboutPart } from './ui/about.js';
@@ -299,6 +300,22 @@ function exportConfigDoc(cmp) {
   });
 }
 
+/** The one lab apply path (C018): import, preset, History, `lab=` link; dual A/B already set. */
+function applyLabState(cmp, parsed) {
+  const applied = applyLabSections(labs, parsed, cmp.dual);
+  syncLabFlags();
+  return applied;
+}
+
+/** A stored lab record (preset, History entry, link): validated, then applied like a file. */
+function applyLabSnapshot(cmp, record) {
+  const r = applyLabRecord(labs, record, cmp.dual);
+  syncLabFlags();
+  return r;
+}
+
+const labsMounted = () => !!(labs.envelope || labs.filter || labs.additive || labs.phase);
+
 /**
  * Apply a parsed config file. Returns { issues, notes, limited, dropped }: the count of values
  * rejected and kept, the sentences to say (C004: a sequence waveform that was not applied), the
@@ -310,29 +327,7 @@ function applyImport(cmp, parsed) {
   const restored = cmp.restoreConfig(parsed.instrument, 'import');
   let issues = restored.issues;
   const notes = [];
-  const requested = {};
-  const applied = {};
-  if (parsed.envelope && labs.envelope) {
-    labs.envelope.update({ adsr: parsed.envelope.adsr, enabled: parsed.envelope.enabled });
-    requested.envelope = parsed.envelope.adsr;
-    applied.envelope = labs.envelope.adsr;
-  }
-  if (parsed.filter && labs.filter) {
-    labs.filter.update(parsed.filter);
-    requested.filter = parsed.filter;
-    applied.filter = labs.filter.config;
-  }
-  if (parsed.additive && labs.additive) {
-    labs.additive.update({ partials: parsed.additive.partials, enabled: parsed.additive.enabled });
-  }
-  if (parsed.phaseStereo && labs.phase) {
-    // A/B frequencies and the route belong to the dual oscillator (dualOsc), already applied.
-    const { phaseDeg, pan } = parsed.phaseStereo;
-    labs.phase.update({ phaseDeg, pan, freqA: cmp.dual.a.freq, freqB: cmp.dual.b.freq,
-      route: cmp.dual.stereo ? 'stereo' : 'mono' });
-    requested.phaseStereo = { pan };
-    applied.phaseStereo = labs.phase.config;
-  }
+  const { requested, applied } = labImportLimits(labs, parsed, applyLabState(cmp, parsed));
   if (parsed.sequencer && labs.sequencer) {
     const seqIssues = labs.sequencer.editor.load(parsed.sequencer) || [];
     issues += seqIssues.length;
@@ -642,10 +637,12 @@ function integrationInit() {
   cmp.history = cmp.loadHistory();
   cmp.safetyCollapsed = sessionStore.get(STORAGE_KEYS.safetySeen) === '1';
   // ONE hash dispatcher (ui/navigation.js, ADR 0045): each domain applies its own keys, in this
-  // order, and the dispatcher alone chooses the workspace (Studio keys > m > a stored record >
+  // order (the instrument, its lab settings, the recipe, the Studio link, a stored record), and
+  // the dispatcher alone chooses the workspace (Studio keys > m > a stored record >
   // mr > Playground). It applies the hash the page opened at, new links, and Back / Forward
   // between workspaces; on Back / Forward only the stored record is opened again (ADR 0048).
   cmp.navRegister('instrument', () => cmp.restoreFromHash());
+  cmp.navRegister('labs', (hash, origin) => cmp.labsApplyLinkHash(hash, origin));
   cmp.navRegister('measure', (hash) => cmp.measureApplyRecipeHash(hash));
   cmp.navRegister('studio', (hash) => cmp.studioApplyLinkHash(hash));
   cmp.navRegister('records', (hash) => cmp.recordsApplyHash(hash));
@@ -791,6 +788,7 @@ function integrationInit() {
       host = null;
     }
     mountLabs(root);
+    cmp.labsApplyPending(); // a `lab=` link the page opened at: the labs exist only now
     cmp.measureMountCharts(root);
     cmp.experimentsMountCharts(root);
     if (labs.phase) {
@@ -859,6 +857,7 @@ function createOscillaComponent(ui) {
   const shellInit = ui.init;
   const workbench = createWorkbench({
     engine, bridge, labs, exportConfigDoc, applyImport, renderWav, screenshot,
+    labSnapshot: () => snapshotLabs(labs), applyLabSnapshot, labsMounted,
     relayout: () => { if (host) host.resize(); repairCharts(); },
     stopPlayback, sequencerPlaying,
   });

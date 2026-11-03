@@ -78,5 +78,6 @@ non_goals:
   - "Re-planning the sequencer, Studio, chart or Flowbite work of open plans (K001-K057, F001-F012); where they overlap, the issue that lands second records the shared criterion as met"
   - "Persisting configuration silently: lab settings are kept by explicit save paths, not by the unsaved-work guard or a background draft (ADR 0045)"
   - "Changing the Studio transport loop or the V1 hash format"
+  - "Naming every control by a test: that is G018's (component-system); this intent owns that each control's effect is asserted at its subsystem and at a view (C022), as the two issues record"
 created_at: 2026-10-29
 updated_at: 2026-10-29

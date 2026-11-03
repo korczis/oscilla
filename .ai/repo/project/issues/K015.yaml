@@ -26,4 +26,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-02T22:45:06Z
+started_at: 2026-11-02T22:44:33Z
+started_event: sha256:e5f5834700f50a190d766def38314abfc3fd0ca40396b9644eed789729fe18d9
+completed_at: 2026-11-02T22:45:06Z
+completed_event: sha256:a0b70ba80ce96f7f24957d0f1b6783ee131b15bb5619d46cca9ce97ca06879a0
+evidence:
+  - covers: verified
+    type: ci
+    command: "node --test --test-name-pattern='^K015 ' tests/unit/analysis-spectrogram.test.mjs"
+    result: "landed in #367 (main merge commit 11cc9fbc47ea5f5bce48ed90904bd101455ff43a, member #263); the K015 tests of tests/unit/analysis-spectrogram.test.mjs: unsmoothed feed shortens a transient's smear, readout bin within 1 bin of a synthetic tone, relative dB label; CI run 41357644373 green on the train head c2a6f6c5 (unit, npm test and the browser gate in chromium, firefox and webkit from file:// and /oscilla/), Main checks run 41372186924 green on 11cc9fbc; review verdict .ai/repo/reviews/367.yaml (merge), member verdict .ai/repo/reviews/263.yaml"
+    artifact: ".ai/repo/reviews/367.yaml"
+    commit: 743f8566e9724d0f5dd58a6fadb633b51deb0b86
+    recorded_at: 2026-11-02T22:44:52Z

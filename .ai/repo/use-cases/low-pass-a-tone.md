@@ -25,7 +25,7 @@ The behaviour is proven by the OSCILLA test named in each claim of `docs/CLAIMS.
 by:
 
 - `npm run test:browser` (tests/browser/app.cjs, check labs-basic)
-- tests/browser/labs.cjs compares the drawn response with getFrequencyResponse; not yet in the release gate
+- `npm run test:labs` (tests/browser/labs.cjs compares the drawn response with getFrequencyResponse; in the release gate)
 
 A use-case/v1 scenario can only invoke `bin/majordomus`, so the scenario below does not
 play audio. It proves the traceability instead: each claim's implementation and test are
