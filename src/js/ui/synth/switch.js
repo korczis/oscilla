@@ -6,14 +6,20 @@
 //                   LED beside it
 //   3-4    slide    a slot 4 wide, a 16 x 12 cap at the selected index, a detent per position,
 //                   legends to the right (index 0 at the bottom)
-//   5-8    rotary   a detented rotary selector: the knob face (skirt, cap with its shadow and
-//                   highlight, pointer) with a detent per position over 270°, the selected one
-//                   lit, and the legends around it at r >= 60, the radius the least that keeps
-//                   every 44 px hit box apart (searched to 240, scaled by the hit box below
-//                   zoom 1; only legends too long for that are refused, naming the zoom)
+//   5-8    rotary   a detented rotary selector: the knob's face (knob.js's: skirt, its 24-ridge
+//                   knurl, cap with its shadow and highlight) at the size of the knob beside it
+//                   (`knob`, graph units, CONTROL_BOX.knob.width by default), a pointer, a
+//                   detent per position over 270° ending inside that knob's box, the selected
+//                   one lit, and the legends around it at r >= 60, the radius the least that
+//                   keeps every 44 px hit box apart and clear of the dial (searched to 240,
+//                   scaled by the hit box below zoom 1; only legends too long for that are
+//                   refused, naming the zoom)
 //   9-12   window   the same dial with a display-window frame above it for the selected name
 //                   (the frame only: its text is the caller's, at layout.window) and a legend
 //                   grid of 44 px cells below it
+// A dial of NUMBERED_MIN (7) or more detents numbers them 1..n, each numeral at its detent
+// outside the ticks (layout option.number, option.numeral), the selected one lit; with
+// `numberLegends` each legend reads "n · label" (legend.text), as a hardware algorithm chart.
 // The drawing is aria-hidden and takes no pointer: the caller keeps each option a
 // [data-option][data-v][aria-checked] radio button (never the slider role of ariaAttrs) and
 // places it at switchLayout's hit box, at least HIT_PX screen px a side at the given zoom and
@@ -31,14 +37,17 @@
 // a control.edge ring off; both 3:1). A setpoint: nothing moves, so no reduced-motion check.
 //
 //   switchStyle(param)                       'toggle' | 'slide' | 'rotary' | 'window'
-//   switchLayout(param, { zoom, led })       frozen { style, positions, zoom, legendPx, radius,
-//                                            box, options, window, led } (graph units)
-//   switchOptions(param, { zoom, led })      layout.options: per option { index, value, label,
-//                                            legend: { x, y, anchor, size, width }, hit }
-//   switchSvg({ value, param, tokens, zoom, state, led, legends })   the drawing, an SVG <g>
-//   SWITCH_STYLES, LEGEND_PX, legendWidth
+//   switchLayout(param, { zoom, led, knob, numberLegends })   frozen { style, positions, zoom,
+//                                            knob, legendPx, radius, pitch, dial, box, options,
+//                                            window, led } (graph units)
+//   switchOptions(param, opts)               layout.options: per option { index, value, label,
+//                                            legend: { x, y, anchor, size, width, text }, hit,
+//                                            number, numeral }
+//   switchSvg({ value, param, tokens, zoom, state, led, legends, knob, numberLegends })
+//                                            the drawing, an SVG <g>
+//   SWITCH_STYLES, LEGEND_PX, NUMBERED_MIN, legendWidth
 
-import { clampValue, formatValue, HIT_PX } from './knob.js';
+import { CONTROL_BOX, clampValue, formatValue, HIT_PX } from './knob.js';
 
 /** Each style's position counts, inclusive. */
 export const SWITCH_STYLES = Object.freeze({
@@ -56,16 +65,30 @@ const TOGGLE = Object.freeze({ w: 18, h: 30, rx: 4, edgeW: 1.5, leverW: 8, lever
   bushing: 5.5, gap: 4, ledR: 3, ledGap: 3.5, shadowDy: 1, shadowDragDy: 2 });
 const SLIDE = Object.freeze({ slotW: 4, capW: 16, capH: 12, tickIn: -13, tickOut: -10,
   legendX: 14, pitchPad: 8, gripW: 2 });
-const DIAL = Object.freeze({ sweep: 270, skirt: 17, edgeW: 1.5, cap: 12, pointerIn: 3,
-  pointerOut: 15, pointerW: 2.5, tickIn: 19, tickOut: 23, tickW: 1.5, litW: 2, leaderIn: 25,
-  radius: 60, radiusStep: 2, radiusMax: 240, clear: 24, shadowDy: 1, shadowDragDy: 2 });
+/** The knob's face in its CONTROL_BOX.knob units, as knob.js draws it (its KNOB: the skirt and
+ *  its edge, the 24-ridge knurl from r 14.5 to 16, the cap, the pointer's width; the knob tests
+ *  pin each), so a dial at the knob's size is the knob's face. */
+const KNOB_FACE = Object.freeze({ skirt: 16, edgeW: 1.5, knurlIn: 14.5, knurlOut: 16, knurls: 24,
+  cap: 12, pointerW: 2.5 });
+/** A dial in the units of the knob beside it (scaled by knob / CONTROL_BOX.knob.width): the
+ *  knob's face (KNOB_FACE), a pointer from the cap's centre to the knurl, and a detent per
+ *  position from outside the skirt to r 21.75, so its butt corners stay in the knob's box. */
+const DIAL = Object.freeze({ sweep: 270, pointerIn: 3, pointerOut: 14, tickIn: 18.5,
+  tickOut: 21.75, tickW: 1.5, litW: 2, shadowDy: 1, shadowDragDy: 2, sheen: [-3.5, -4.5, 5, 3.5] });
+/** A dial's surroundings, graph units: the ring's least radius, its search step and limit, the
+ *  gap past the dial a leader starts at, and the numerals' gap past the ticks, their search step
+ *  and the space kept between two of them. */
+const RING = Object.freeze({ radius: 60, radiusStep: 2, radiusMax: 240, margin: 1, leaderGap: 3,
+  numberGap: 2, numberStep: 0.5, numberApart: 1 });
+/** A dial of this many detents or more numbers them. */
+export const NUMBERED_MIN = 7;
 const WINDOW = Object.freeze({ minW: 88, pad: 10, gap: 8, gridGap: 10, gridMaxW: 6 * HIT_PX,
   barW: 2 });
 const SHADOW_CLASS = 'opacity-hw-shadow';
 const SHEEN_CLASS = 'opacity-hw-sheen';
 const LED_CLASS = 'shadow-hw-led';
 
-const num = (x) => Number(x.toFixed(2));
+const num = (x) => Number(x.toFixed(2)) + 0; // + 0: never -0
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
   .replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const idOf = (p) => (p ? p.id ?? p.key ?? 'param' : 'param');
@@ -122,7 +145,8 @@ const overlaps = (a, b) => a.x < b.x + b.width - 1e-9 && b.x < a.x + a.width - 1
 /** The least distance from the origin to a rect. */
 const reach = (r) => Math.hypot(Math.max(r.x, Math.min(0, r.x + r.width)),
   Math.max(r.y, Math.min(0, r.y + r.height)));
-const option = (index, [value, label], legend, hit) => ({ index, value, label, legend, hit });
+const option = (index, [value, label, text], legend, hit) => ({ index, value, label,
+  legend: { ...legend, text }, hit, number: null, numeral: null });
 
 /** A legend's text box from its anchor point. */
 function textBox(lg) {
@@ -137,7 +161,7 @@ function toggleLayout(opts, H, F) {
   const reachY = Math.max(H, half + T.gap + F + 2);
   const options = opts.map((o, i) => {
     const dir = i === 1 ? -1 : 1;
-    const w = legendWidth(o[1], F);
+    const w = legendWidth(o[2], F);
     const legend = { x: 0, y: num(dir * (half + T.gap + F / 2)), anchor: 'middle', size: F,
       width: w };
     const hw = up(Math.max(H, w + 2 * PAD, T.w + 2 * PAD));
@@ -156,7 +180,7 @@ function slideLayout(opts, H, F) {
   const yAt = (i) => num(((n - 1) / 2 - i) * pitch);
   const x0 = S.tickIn - 1;
   const options = opts.map((o, i) => {
-    const w = legendWidth(o[1], F);
+    const w = legendWidth(o[2], F);
     const legend = { x: S.legendX, y: yAt(i), anchor: 'start', size: F, width: w };
     const width = up(Math.max(H, S.legendX + w + PAD - x0));
     return option(i, o, legend, rect(x0, yAt(i) - pitch / 2, width, pitch));
@@ -166,7 +190,53 @@ function slideLayout(opts, H, F) {
 }
 
 const dialAngle = (i, n) => -DIAL.sweep / 2 + (i * DIAL.sweep) / (n - 1);
-const DIAL_MECH = [-DIAL.tickOut - 1, -DIAL.tickOut - 1, DIAL.tickOut + 1, DIAL.tickOut + 1];
+
+/** The numerals 1..n round a dial at radius r, each centred on its detent's angle. */
+function numeralsAt(n, r, F) {
+  return Array.from({ length: n }, (_, i) => {
+    const [x, y] = polar(r, dialAngle(i, n));
+    return { x, y, anchor: 'middle', size: F, width: legendWidth(String(i + 1), F) };
+  });
+}
+
+/** A rect grown by d each side. */
+const grown = (r, d) => ({ x: r.x - d, y: r.y - d, width: r.width + 2 * d,
+  height: r.height + 2 * d });
+
+/**
+ * The dial of n detents beside a knob `knob` units wide, legends F units: its scale, skirt and
+ * tick radius; the numerals when n >= NUMBERED_MIN (the least radius, from the ticks outward,
+ * at which every numeral clears the ticks by RING.numberGap and its neighbours by
+ * RING.numberApart); `radius`, the circle that holds the dial and its numerals; `extent`, the
+ * half side of the square that does; and `leaderIn`, where a leader may start.
+ */
+function dialOf(n, knob, F) {
+  const k = knob / CONTROL_BOX.knob.width;
+  const tickOut = DIAL.tickOut * k;
+  const base = (CONTROL_BOX.knob.width / 2) * k + RING.margin;
+  if (n < NUMBERED_MIN) {
+    return { scale: k, skirt: num(KNOB_FACE.skirt * k), tickOut: num(tickOut), numerals: null,
+      radius: num(base), extent: num(base), leaderIn: num(base + RING.leaderGap - RING.margin) };
+  }
+  for (let r = tickOut; ; r += RING.numberStep) {
+    const ms = numeralsAt(n, r, F);
+    const boxes = ms.map(textBox);
+    const clear = boxes.every((b) => reach(b) >= tickOut + RING.numberGap);
+    const apart = boxes.every((a, i) => boxes.slice(i + 1).every((b) => !overlaps(grown(a,
+      RING.numberApart / 2), grown(b, RING.numberApart / 2))));
+    if (clear && apart) {
+      const far = Math.max(...boxes.map((b) => Math.hypot(Math.max(Math.abs(b.x),
+        Math.abs(b.x + b.width)), Math.max(Math.abs(b.y), Math.abs(b.y + b.height)))));
+      const side = Math.max(...boxes.map((b) => Math.max(Math.abs(b.x), Math.abs(b.x + b.width),
+        Math.abs(b.y), Math.abs(b.y + b.height))));
+      return { scale: k, skirt: num(KNOB_FACE.skirt * k), tickOut: num(tickOut), numerals: ms,
+        numeralR: num(r), radius: num(Math.max(base, far + RING.margin)),
+        extent: num(Math.max(base, side + RING.margin)),
+        leaderIn: num(Math.max(base, far) + RING.leaderGap) };
+    }
+  }
+}
+const dialMech = (d) => [-d.extent, -d.extent, d.extent, d.extent];
 
 /** The legends round the dial at radius R: anchored away from it, each box holding its text. */
 function ringAt(opts, R, H, F) {
@@ -174,7 +244,7 @@ function ringAt(opts, R, H, F) {
     const [x, y] = polar(R, dialAngle(i, opts.length));
     const s = Math.sin(rad(dialAngle(i, opts.length)));
     const anchor = s > 0.35 ? 'start' : (s < -0.35 ? 'end' : 'middle');
-    const legend = { x, y, anchor, size: F, width: legendWidth(o[1], F) };
+    const legend = { x, y, anchor, size: F, width: legendWidth(o[2], F) };
     const t = textBox(legend);
     const hw = up(Math.max(H, t.width + 2 * PAD));
     const hh = up(Math.max(H, F + 2 * PAD));
@@ -188,43 +258,46 @@ function ringAt(opts, R, H, F) {
  * zoom 1 the boxes and legends grow by 1 / zoom while the dial does not, so a ring that fits at
  * zoom 1 fits at any lower zoom within that limit. Only legends too long for it are refused.
  */
-function rotaryLayout(opts, H, F, id, zoom) {
-  const limit = num(DIAL.radiusMax * Math.max(1, H / HIT_PX));
-  for (let R = DIAL.radius; R <= limit; R += DIAL.radiusStep) {
+function rotaryLayout(opts, H, F, id, zoom, dial) {
+  const limit = num(RING.radiusMax * Math.max(1, H / HIT_PX));
+  const marks = (dial.numerals || []).map(textBox);
+  for (let R = RING.radius; R <= limit; R += RING.radiusStep) {
+    if (R - F / 2 - 3 <= dial.leaderIn) continue; // a leader needs room before its legend
     const options = ringAt(opts, R, H, F);
     const apart = options.every((a, i) => options.slice(i + 1).every((b) => !overlaps(a.hit,
       b.hit)));
-    if (apart && options.every((o) => reach(o.hit) > DIAL.clear)) {
-      return { options, radius: R, mech: DIAL_MECH };
+    if (apart && options.every((o) => reach(o.hit) > dial.radius - RING.margin
+      && marks.every((m) => !overlaps(o.hit, m)))) {
+      return { options, radius: R, mech: dialMech(dial) };
     }
   }
   throw new Error(`${id}: at zoom ${zoom}, the legends do not fit round a rotary selector within `
     + `radius ${limit} (${num(H)} unit hit boxes); shorten them.`);
 }
 
-function windowLayout(opts, H, F) {
+function windowLayout(opts, H, F, id, zoom, dial) {
   const n = opts.length;
-  const widest = Math.max(...opts.map((o) => legendWidth(o[1], F)));
+  const widest = Math.max(...opts.map((o) => legendWidth(o[2], F)));
   const cellW = up(Math.max(H, widest + 2 * PAD));
   const cellH = up(Math.max(H, F + 2 * PAD));
   // The grid's width limit grows with the boxes below zoom 1, so it keeps its zoom 1 columns.
   const s = Math.max(1, H / HIT_PX);
   const cols = Math.min(n, Math.max(1, Math.floor((WINDOW.gridMaxW * s) / Math.max(HIT_PX * s,
     widest + 2 * PAD) + 1e-9)));
-  const top = DIAL.tickOut + WINDOW.gridGap;
+  const top = dial.extent + WINDOW.gridGap;
   const options = opts.map((o, i) => {
     const row = Math.floor(i / cols);
     const inRow = Math.min(cols, n - row * cols);
     const x = -(inRow * cellW) / 2 + (i % cols) * cellW;
     const y = top + row * cellH;
     const legend = { x: num(x + cellW / 2), y: num(y + cellH / 2), anchor: 'middle', size: F,
-      width: legendWidth(o[1], F) };
+      width: legendWidth(o[2], F) };
     return option(i, o, legend, rect(x, y, cellW, cellH));
   });
   const ww = Math.max(WINDOW.minW, widest + 2 * WINDOW.pad);
   const wh = F + WINDOW.pad;
-  const win = rect(-ww / 2, -(DIAL.tickOut + WINDOW.gap + wh), ww, wh);
-  return { options, window: win, mech: DIAL_MECH };
+  const win = rect(-ww / 2, -(dial.extent + WINDOW.gap + wh), ww, wh);
+  return { options, window: win, mech: dialMech(dial) };
 }
 
 const LAYOUTS = Object.freeze({ toggle: toggleLayout, slide: slideLayout, rotary: rotaryLayout,
@@ -237,24 +310,46 @@ function deepFreeze(o) {
 
 /**
  * Where everything of a switch for `param` lies at `zoom`, graph units: the style, the position
- * count, the legend size (LEGEND_PX screen px), the rotary's legend radius, per option its
- * legend ({ x, y, anchor: 'start' | 'middle' | 'end', size, width }) and its hit box (at least
- * HIT_PX / zoom a side, holding the legend, never overlapping another, clear of a dial), the
- * window's frame (the caller's text goes there), the LED's circle when `led` asks for one (a
- * toggle's alone) and the box that holds all of it. Deep-frozen.
+ * count, the width of the knob a dial matches (`knob`, graph units; CONTROL_BOX.knob.width by
+ * default), the legend size (LEGEND_PX screen px), the rotary's legend radius, the slide's pitch,
+ * the dial ({ scale, skirt, tickOut, radius, extent }: the circle and the square half side that
+ * hold it and its numerals; null on a toggle or a slide), per option its legend ({ x, y,
+ * anchor: 'start' | 'middle' | 'end', size, width, text }: text the label, or "n · label" with
+ * `numberLegends` on a numbered dial) and its hit box (at least HIT_PX / zoom a side, holding the
+ * legend, never overlapping another, clear of a dial and its numerals), its detent's number
+ * (1..n on a dial of NUMBERED_MIN or more detents, else null) and that numeral's place ({ x, y,
+ * anchor: 'middle', size, width } or null), the window's frame (the caller's text goes there),
+ * the LED's circle when `led` asks for one (a toggle's alone) and the box that holds all of it.
+ * Deep-frozen.
  */
-export function switchLayout(param, { zoom = 1, led = false } = {}) {
+export function switchLayout(param, { zoom = 1, led = false, knob = CONTROL_BOX.knob.width,
+  numberLegends = false } = {}) {
   if (!(Number.isFinite(zoom) && zoom > 0)) {
     throw new RangeError(`switchLayout: zoom must be a finite number above 0, not ${zoom}.`);
   }
+  if (!(typeof knob === 'number' && Number.isFinite(knob) && knob > 0)) {
+    throw new RangeError('switchLayout: knob is the width of the knob beside the switch, graph '
+      + `units, a finite number above 0, not ${knob}.`);
+  }
   const style = switchStyle(param);
-  const opts = optionsOf(param);
+  const base = optionsOf(param);
   if (led && style !== 'toggle') {
     throw new Error(`${idOf(param)}: an LED goes on a toggle, not on a ${style} selector.`);
   }
   const H = up(HIT_PX / zoom);
   const F = up(Math.max(LEGEND_PX, LEGEND_PX / zoom));
-  const L = LAYOUTS[style](opts, H, F, idOf(param), zoom);
+  const isDial = style === 'rotary' || style === 'window';
+  const dial = isDial ? dialOf(base.length, knob, F) : null;
+  const numbered = Boolean(dial && dial.numerals);
+  const opts = base.map(([v, label], i) => [v, label, numbered && numberLegends
+    ? `${i + 1} · ${label}` : String(label)]);
+  const L = LAYOUTS[style](opts, H, F, idOf(param), zoom, dial);
+  if (numbered) {
+    L.options.forEach((o, i) => {
+      o.number = i + 1;
+      o.numeral = dial.numerals[i];
+    });
+  }
   let ledAt = null;
   const b = [...L.mech];
   if (led) {
@@ -271,12 +366,15 @@ export function switchLayout(param, { zoom = 1, led = false } = {}) {
   for (const o of L.options) {
     grow(o.hit);
     grow(textBox(o.legend));
+    if (o.numeral) grow(textBox(o.numeral));
   }
   if (L.window) grow({ x: L.window.x - 0.5, y: L.window.y - 0.5, width: L.window.width + 1,
     height: L.window.height + 1 });
-  return deepFreeze({ style, positions: opts.length, zoom, legendPx: F,
-    radius: L.radius ?? null, pitch: L.pitch ?? null, box: rect(b[0], b[1], b[2] - b[0],
-      b[3] - b[1]), options: L.options, window: L.window ?? null, led: ledAt });
+  const dialOut = dial ? { scale: dial.scale, skirt: dial.skirt, tickOut: dial.tickOut,
+    radius: dial.radius, extent: dial.extent, leaderIn: dial.leaderIn } : null;
+  return deepFreeze({ style, positions: opts.length, zoom, knob, legendPx: F,
+    radius: L.radius ?? null, pitch: L.pitch ?? null, dial: dialOut, box: rect(b[0], b[1],
+      b[2] - b[0], b[3] - b[1]), options: L.options, window: L.window ?? null, led: ledAt });
 }
 
 /** The options of switchLayout(param, opts): per option its legend and its 44 px hit box. */
@@ -327,40 +425,64 @@ function slideShapes(L, sel, t, st) {
     + `stroke="${esc(st.disabled ? c.disabled : c.pointer)}" stroke-width="${S.gripW}"/>`;
 }
 
+/** Radial strokes from r0 to r1 at each angle, as one path's 'M x y L x y' segments. */
+const radialPath = (r0, r1, angles) => angles.map((deg) => {
+  const [x0, y0] = polar(r0, deg);
+  const [x1, y1] = polar(r1, deg);
+  return `M ${x0} ${y0} L ${x1} ${y1}`;
+}).join(' ');
+
 function dialShapes(L, sel, t, st) {
   const D = DIAL;
+  const K = KNOB_FACE;
+  const k = L.dial.scale;
+  const s = (x) => num(x * k);
   const c = t.control;
   const n = L.options.length;
   let out = '';
   for (let i = 0; i < n; i++) {
     const a = dialAngle(i, n);
-    const [x0, y0] = polar(D.tickIn, a);
-    const [x1, y1] = polar(D.tickOut, a);
+    const [x0, y0] = polar(D.tickIn * k, a);
+    const [x1, y1] = polar(D.tickOut * k, a);
     out += `<line data-detent="" x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" `
       + `stroke="${esc(i === sel ? c.ring : c.track)}" `
-      + `stroke-width="${i === sel ? D.litW : D.tickW}"/>`;
+      + `stroke-width="${s(i === sel ? D.litW : D.tickW)}"/>`;
     if (L.radius) {
-      const [lx0, ly0] = polar(D.leaderIn, a);
+      const [lx0, ly0] = polar(L.dial.leaderIn, a);
       const [lx1, ly1] = polar(L.radius - L.legendPx / 2 - 3, a);
       out += `<line data-leader="" x1="${lx0}" y1="${ly0}" x2="${lx1}" y2="${ly1}" `
         + `stroke="${esc(c.track)}" stroke-width="1"/>`;
     }
   }
-  const [px0, py0] = polar(D.pointerIn, dialAngle(sel, n));
-  const [px1, py1] = polar(D.pointerOut, dialAngle(sel, n));
+  for (const o of L.options) {
+    if (!o.numeral) continue;
+    const m = o.numeral;
+    const tx = t.text;
+    out += `<text data-number="" data-index="${o.index}" x="${m.x}" y="${m.y}" `
+      + `font-size="${num(m.size)}" text-anchor="middle" dominant-baseline="central" `
+      + `font-weight="${o.index === sel ? 600 : 400}" `
+      + `fill="${esc(st.disabled ? tx.dim : (o.index === sel ? tx.value : tx.label))}" `
+      + `stroke="none">${o.number}</text>`;
+  }
+  const [px0, py0] = polar(D.pointerIn * k, dialAngle(sel, n));
+  const [px1, py1] = polar(D.pointerOut * k, dialAngle(sel, n));
+  const ridges = Array.from({ length: K.knurls }, (_, i) => (i * 360) / K.knurls);
+  const [hx, hy, hrx, hry] = D.sheen.map(s);
   const w = L.window;
   return out
-    + `<circle data-skirt="" cx="0" cy="0" r="${D.skirt}" fill="${esc(t.surface.card)}" `
-    + `stroke="${esc(st.hover ? c.pointer : c.edge)}" stroke-width="${D.edgeW}"/>`
+    + `<circle data-skirt="" cx="0" cy="0" r="${s(K.skirt)}" fill="${esc(t.surface.card)}" `
+    + `stroke="${esc(st.hover ? c.pointer : c.edge)}" stroke-width="${s(K.edgeW)}"/>`
+    + `<path d="${radialPath(K.knurlIn * k, K.knurlOut * k, ridges)}" data-knurl="" `
+    + `fill="none" stroke="${esc(c.knurl)}" stroke-width="${s(1)}"/>`
     + `<circle data-shadow="" class="${SHADOW_CLASS}" cx="0" `
-    + `cy="${st.dragging ? D.shadowDragDy : D.shadowDy}" r="${D.cap}" `
+    + `cy="${s(st.dragging ? D.shadowDragDy : D.shadowDy)}" r="${s(K.cap)}" `
     + `fill="${esc(t.surface.edge)}" stroke="none"/>`
-    + `<circle data-cap="" cx="0" cy="0" r="${D.cap}" fill="${esc(c.cap)}" `
+    + `<circle data-cap="" cx="0" cy="0" r="${s(K.cap)}" fill="${esc(c.cap)}" `
     + `stroke="${esc(t.surface.edge)}" stroke-width="1"/>`
-    + `<ellipse class="${SHEEN_CLASS}" cx="-3.5" cy="-4.5" rx="5" ry="3.5" `
+    + `<ellipse class="${SHEEN_CLASS}" cx="${hx}" cy="${hy}" rx="${hrx}" ry="${hry}" `
     + `fill="${esc(c.capHi)}" stroke="none"/>`
     + `<line data-pointer="" x1="${px0}" y1="${py0}" x2="${px1}" y2="${py1}" `
-    + `stroke="${esc(st.disabled ? c.disabled : c.pointer)}" stroke-width="${D.pointerW}" `
+    + `stroke="${esc(st.disabled ? c.disabled : c.pointer)}" stroke-width="${s(K.pointerW)}" `
     + 'stroke-linecap="round"/>'
     + (w ? `<rect data-window="" x="${w.x}" y="${w.y}" width="${w.width}" height="${w.height}" `
       + `rx="2" fill="${esc(t.surface.edge)}" stroke="${esc(c.edge)}" stroke-width="1"/>` : '');
@@ -409,15 +531,19 @@ function checkLed(led, id) {
  * (text.dim) and marks the group data-disabled (the caller's buttons carry aria-disabled and
  * the reason). The selected option's legend is text.value at weight 600; in a window grid a bar
  * in control.ring underlines it. `led` ({ source, lit }, a toggle's alone) draws the LED;
- * `legends: false` leaves the legends to the caller. A setpoint: no animation.
+ * `legends: false` leaves the legends to the caller; `knob` and `numberLegends` are
+ * switchLayout's (a dial at the size of the knob beside it; "n · label" legends on a numbered
+ * dial), and a numbered dial's numerals are drawn at their detents, the selected one lit as its
+ * legend is. A setpoint: no animation.
  */
 export function switchSvg({ value, param, tokens, zoom = 1, state = {}, led = null,
-  legends = true } = {}) {
+  legends = true, knob = CONTROL_BOX.knob.width, numberLegends = false } = {}) {
   if (!tokens || !tokens.control || !tokens.surface || !tokens.text) {
     throw new TypeError('switchSvg needs the synth tokens (synthTokens(el)).');
   }
   const id = idOf(param);
-  const L = switchLayout(param, { zoom, led: led !== null && led !== undefined });
+  const L = switchLayout(param, { zoom, led: led !== null && led !== undefined, knob,
+    numberLegends });
   if (led !== null && led !== undefined) checkLed(led, id);
   const opts = optionsOf(param);
   const v = clampValue(value, param);
@@ -435,7 +561,7 @@ export function switchSvg({ value, param, tokens, zoom = 1, state = {}, led = nu
         + `font-size="${num(lg.size)}" text-anchor="${lg.anchor}" dominant-baseline="central" `
         + `font-weight="${o.index === sel ? 600 : 400}" `
         + `fill="${esc(st.disabled ? tx.dim : (lit ? tx.value : tx.label))}" stroke="none">`
-        + `${esc(o.label)}</text>`;
+        + `${esc(lg.text)}</text>`;
       if (L.style === 'window' && o.index === sel) {
         const y = num(lg.y + lg.size / 2 + 2);
         out += `<line data-selected="" x1="${num(lg.x - lg.width / 2)}" y1="${y}" `
