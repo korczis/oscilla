@@ -14,10 +14,10 @@
 // page is hidden for every key still held, so a hold never sticks.
 //
 //   const keys = createKeyDispatcher({ registry, context: () => ({ workspace, view }) });
-//   keys.attach(document, window) -> detach;   keys.keydown(e) / keys.keyup(e) (tests)
+//   keys.attach(document, window) -> detach (keydown/keyup on the window);   keys.keydown(e) / keys.keyup(e) (tests)
 //   keys.focusOf(el, doc) -> 'none' | 'dialog' | 'text' | 'piano' | 'control'
 
-import { chordOf } from './registry.js';
+import { chordOf, codeOf } from './registry.js';
 
 const CONTROL_KEYS = new Set(['Space', 'Enter', 'NumpadEnter', 'ArrowLeft', 'ArrowRight',
   'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown']);
@@ -56,26 +56,27 @@ export function createKeyDispatcher({ registry, context = () => ({}), doc = null
 
   function keydown(e) {
     if (e.isComposing || e.key === 'Process' || e.keyCode === 229) return false;
-    if (held.has(e.code)) {
-      const b = held.get(e.code);
-      if (e.repeat && !b.repeat) { e.preventDefault(); return true; }
-      if (e.repeat) { e.preventDefault(); b.run(e); return true; }
+    if (held.has(codeOf(e))) {
+      const b = held.get(codeOf(e));
+      if (b.prevent) e.preventDefault();
+      if (!e.repeat || b.repeat) b.run(e);
+      return true;
     }
     const ctx = scopeOf(e);
-    if (ctx.focus === 'control' && CONTROL_KEYS.has(e.code)) return false;
+    if (ctx.focus === 'control' && CONTROL_KEYS.has(codeOf(e))) return false;
     const focus = ctx.focus === 'control' ? 'none' : ctx.focus;
     const b = registry.resolve(chordOf(e), { ...ctx, focus });
     if (!b) return false;
-    e.preventDefault();
-    held.set(e.code, b);
+    if (b.prevent) e.preventDefault();
+    held.set(codeOf(e), b);
     b.run(e);
     return true;
   }
 
   function keyup(e) {
-    const b = held.get(e.code);
+    const b = held.get(codeOf(e));
     if (!b) return false;
-    held.delete(e.code);
+    held.delete(codeOf(e));
     if (typeof b.up === 'function') b.up(e);
     return true;
   }
@@ -92,13 +93,13 @@ export function createKeyDispatcher({ registry, context = () => ({}), doc = null
     const up = (e) => keyup(e);
     const blur = () => releaseAll('blur');
     const vis = () => { if (d.hidden) releaseAll('hidden'); };
-    d.addEventListener('keydown', down);
-    d.addEventListener('keyup', up);
+    win.addEventListener('keydown', down); // the window: what bubbles from the document, and
+    win.addEventListener('keyup', up); //     an event dispatched on the window itself
     win.addEventListener('blur', blur);
     d.addEventListener('visibilitychange', vis);
     return () => {
-      d.removeEventListener('keydown', down);
-      d.removeEventListener('keyup', up);
+      win.removeEventListener('keydown', down);
+      win.removeEventListener('keyup', up);
       win.removeEventListener('blur', blur);
       d.removeEventListener('visibilitychange', vis);
       releaseAll('detach');
