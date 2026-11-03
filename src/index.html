@@ -2894,14 +2894,48 @@
         </section>
 
 
-        <section class="osc-about-block" aria-labelledby="osc-about-next">
+        <section class="osc-about-block" aria-labelledby="osc-about-next" data-osc="about.next">
           <h3 class="osc-about-h" id="osc-about-next"><span class="osc-num">B</span> What comes
             next</h3>
-          <p>The open milestones of OSCILLA's plan as of this release, and how many of each
-            one's required issues are done.</p>
-          <ul role="list" aria-label="Open milestones" data-osc="about.next">
-            <template x-for="m in ROADMAP.milestones" :key="m.id">
-              <li data-osc="about.next.milestone" :data-milestone="m.id"><b
+          <p>The open milestones of OSCILLA's plan as of this release and how many of each one's
+            required issues are done: now under way, next ready to start, later waiting on
+            work above.</p>
+          <h4 class="mt-4 mb-1 text-sm font-semibold text-gray-900 dark:text-white"
+            id="osc-about-next-now"
+            x-text="`${ROADMAP.phase.now.title} · ${ROADMAP.phase.now.milestones.length}`"></h4>
+          <ul role="list" aria-labelledby="osc-about-next-now" data-osc="about.next.now">
+            <template x-for="m in ROADMAP.phase.now.milestones" :key="m.id">
+              <li data-osc="about.next.milestone" :data-milestone="m.id" :data-phase="m.phase"><b
+                x-text="`${m.done} of ${m.required} done`"></b><span
+                x-text="m.title"></span></li>
+            </template>
+          </ul>
+          <h4 class="mt-4 mb-1 text-sm font-semibold text-gray-900 dark:text-white"
+            id="osc-about-next-next"
+            x-text="`${ROADMAP.phase.next.title} · ${ROADMAP.phase.next.milestones.length}`"></h4>
+          <ul role="list" aria-labelledby="osc-about-next-next" data-osc="about.next.next">
+            <template x-for="m in ROADMAP.phase.next.milestones" :key="m.id">
+              <li data-osc="about.next.milestone" :data-milestone="m.id" :data-phase="m.phase"><b
+                x-text="`${m.done} of ${m.required} done`"></b><span
+                x-text="m.title"></span></li>
+            </template>
+          </ul>
+          <h4 class="mt-4 mb-1 text-sm font-semibold text-gray-900 dark:text-white"
+            id="osc-about-next-later"
+            x-text="`${ROADMAP.phase.later.title} · ${ROADMAP.phase.later.milestones.length}`">
+          </h4>
+          <button type="button" data-osc="about.next.later-toggle"
+            aria-controls="osc-about-next-later-list"
+            :aria-expanded="aboutLaterOpen ? 'true' : 'false'"
+            @click="aboutLaterOpen = !aboutLaterOpen"
+            class="min-h-[44px] rounded-lg px-3 text-sm font-medium text-primary-700
+              hover:bg-gray-100 dark:text-primary-500 dark:hover:bg-gray-700"
+            x-text="aboutLaterOpen ? 'Hide the later milestones'
+              : `Show the ${ROADMAP.phase.later.milestones.length} later milestones`"></button>
+          <ul role="list" aria-labelledby="osc-about-next-later" data-osc="about.next.later"
+            id="osc-about-next-later-list" x-show="aboutLaterOpen" x-cloak>
+            <template x-for="m in ROADMAP.phase.later.milestones" :key="m.id">
+              <li data-osc="about.next.milestone" :data-milestone="m.id" :data-phase="m.phase"><b
                 x-text="`${m.done} of ${m.required} done`"></b><span
                 x-text="m.title"></span></li>
             </template>
