@@ -847,16 +847,24 @@ function defineChecks() {
         + '[data-jack] > :nth-child(4)')].concat([...document.querySelectorAll(
         '[data-module] > svg rect')]).filter((el) => getComputedStyle(el).stroke !== 'none')
         .length;
-      const rings = [...svg.querySelectorAll('[data-jack] > :nth-child(3)')]
+      // The layer's hooks (ui/synth/jack.js, cable.js), never child order.
+      const rings = [...svg.querySelectorAll('[data-jack] [data-ring]')]
         .map((el) => ratio(paint(el.getAttribute('stroke')), card));
-      const wires = [...svg.querySelectorAll('[data-cable] > path:last-child')]
+      const wires = [...svg.querySelectorAll('[data-cable] [data-stroke]')]
         .map((el) => ratio(paint(el.getAttribute('stroke')), card));
+      // F013 W1: a nut under every jack, a plug on each cable end, two screws on every plate.
+      const PLATE = '[data-osc="synth.panel"] section[data-module]:not([data-osc="synth.bay"])';
+      const hw = { nuts: svg.querySelectorAll('[data-nut]').length,
+        jacks: svg.querySelectorAll('[data-jack]').length,
+        plugs: svg.querySelectorAll('[data-plug]').length,
+        plates: document.querySelectorAll(PLATE).length,
+        screws: document.querySelectorAll(`${PLATE} [data-screw]`).length };
       const top = paint(getComputedStyle(document.querySelector('[data-osc="synth.panel"]'))
         .getPropertyValue('--osc-surface-3'));
       const labels = [...document.querySelectorAll('[data-module] [id$="-label"]')]
         .map((el) => ratio(hex(getComputedStyle(el).color), top));
       return { card, leaks, ring: Math.min(...rings), wire: Math.min(...wires),
-        label: Math.min(...labels), wires: wires.length };
+        label: Math.min(...labels), wires: wires.length, hw };
     });
     // One cable from each of the six source colours' modules, so every cable colour is drawn.
     for (const [a, b] of [['keys.velocity', 'vco2.tune'], ['vco1.audio', 'ring.modulator'],
@@ -874,9 +882,9 @@ function defineChecks() {
       await until(() => page.evaluate((t) => {
         const doc = document.documentElement;
         const dim = getComputedStyle(doc).getPropertyValue('--osc-text-dim').trim();
-        const ring = document.querySelector('[data-jack="out.audio:in"] > :nth-child(3)');
+        const ring = document.querySelector('[data-jack="out.audio:in"] [data-ring]');
         return doc.dataset.theme === t && ring && ring.getAttribute('stroke') !== null
-          && document.querySelector('[data-jack="mg.rate:in"] > :nth-child(3)')
+          && document.querySelector('[data-jack="mg.rate:in"] [data-ring]')
             .getAttribute('stroke') === dim;
       }, theme), { ms: 10000, what: `the ${theme} theme redraws the bay` });
       themes[theme] = await look();
@@ -901,7 +909,9 @@ function defineChecks() {
       summary: !!document.querySelector('[data-summary="lpf"]') }));
     await page.locator('[data-fold-all="open"]').click();
     const ok = Object.values(themes).every((t) => t.leaks === 0 && t.ring >= 3 && t.wire >= 3
-      && t.label >= 4.5 && t.wires === 6) && focus.on === '1' && focus.off === '0'
+      && t.label >= 4.5 && t.wires === 6 && t.hw.nuts === t.hw.jacks && t.hw.jacks > 0
+      && t.hw.plugs === 12 && t.hw.plates > 0 && t.hw.screws === 2 * t.hw.plates)
+      && focus.on === '1' && focus.off === '0'
       && fold.expanded === 'false' && fold.knobs === 0 && fold.summary;
     return { ok, themes, focus, fold };
   });
@@ -936,8 +946,15 @@ function defineChecks() {
       }).map((el) => el.getAttribute('data-knob') || el.getAttribute('data-option')
         || (el.parentNode && el.parentNode.getAttribute && el.parentNode.getAttribute('data-jack')));
       const kb = document.querySelector('[data-osc="keyboard.keys"]').getBoundingClientRect();
+      // The text floor (ui/synth/label.js, F013 W1): no plate text below 12 px.
+      const tiny = [...document.querySelectorAll('[data-osc="synth.panel"] [data-module] '
+        + 'span, [data-osc="synth.panel"] [data-module] output, '
+        + '[data-osc="synth.panel"] [data-module] p')]
+        .filter((el) => el.getBoundingClientRect().width > 0
+          && parseFloat(getComputedStyle(el).fontSize) < 12)
+        .map((el) => (el.id || el.className || el.tagName).slice(0, 40));
       return { scroll: document.documentElement.scrollWidth, inner: window.innerWidth,
-        small, kb: { top: kb.top, bottom: kb.bottom, h: window.innerHeight } };
+        small, tiny, kb: { top: kb.top, bottom: kb.bottom, h: window.innerHeight } };
     });
     // The bay face (B2): the whole width under the chip bar, its text 12 px and up, every
     // jack a 44 px target; a module chip brings the cards back.
@@ -985,7 +1002,8 @@ function defineChecks() {
     const p = await sound(page, (q) => q.rmsDb > -45, 'a press on the docked keys sounds');
     await page.mouse.up();
     await silent(page, 'releasing the key silences it');
-    return { ok: m.scroll <= m.inner && m.small.length === 0 && m.kb.bottom <= m.kb.h
+    return { ok: m.scroll <= m.inner && m.small.length === 0 && m.tiny.length === 0
+      && m.kb.bottom <= m.kb.h
       && m.kb.top > 0, ...m, bay, chip, rmsDb: p.rmsDb };
   });
   return checks;

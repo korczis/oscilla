@@ -8,7 +8,7 @@
 import { patchLayout, patchSvg, portLabel } from '../../ui/patch/patch-bay.js';
 
 export {
-  BAY_TEXT, JACK_HIT, JACK_PITCH, LABEL_MAX, ROW_PITCH, cablePath, sagOf, shortLabel,
+  BAY_TEXT, JACK_HIT, JACK_PITCH, LABEL_MAX, ROW_PITCH, cablePath, shortLabel,
 } from '../../ui/patch/patch-bay.js';
 
 const sources = new WeakMap();

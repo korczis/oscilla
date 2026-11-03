@@ -1,6 +1,8 @@
 // The patch bay (B2): one SVG with every jack of a set of modules grouped by module, and the
 // user's cables drawn inside it with sag and a soft shadow, so they stay right however the
-// modules stack on a phone. Generic over any source of typed ports: the Synth panel
+// modules stack on a phone. The jacks, cables and plugs are the synth-theme layer's
+// (ui/synth/jack.js, ui/synth/cable.js; F013 W1), so the bay carries no drawing of its own.
+// Generic over any source of typed ports: the Synth panel
 // (synth/view/bay.js) is one adapter, and a Studio node's ports can be another. Jack shapes are
 // the Studio's PORT_VISUALS (audio circle, control diamond, trigger triangle); the cable pattern
 // follows the signal type, its colour the source module (never colour alone). Pure markup and
@@ -10,17 +12,20 @@
 //     jack = { key, label, type: 'AUDIO' | 'CONTROL' | 'TRIGGER', direction: 'in' | 'out',
 //              module: groupId }
 //   patchLayout(source, width) -> { jacks: Map<jack key, { x, y, jack }>, groups, width, height }
-//   cablePath(a, b) -> SVG path of a hanging cable;  sagOf(a, b) = min(80, 0.25 · distance)
+//   cablePath(a, b) -> the layer's hanging cable (cableCurve), the live cable while dragging
 //   patchSvg({ source, layout, cables, states, pending, compatible, verdicts, tokens, selected })
 //   portLabel(source, jack, state, verdict) -> the jack's accessible name
 
 import { PORT_VISUALS } from '../../studio/ports.js';
 import { esc } from '../../synth/view/face.js';
+import { JACK_HIT, jackSvg, layerTokens, nutSvg, patchCord } from '../synth/jack.js';
+import { cableCurve } from '../synth/cable.js';
+
+export { JACK_HIT };
 
 export const JACK_PITCH = 52;
 /** Row pitch: a jack, its label below it, and air. */
 export const ROW_PITCH = 62;
-export const JACK_HIT = 44;
 const LABEL_H = 18;
 /** The bay's text in user units, drawn 1:1 (the SVG is as wide as its box): 12 px, the
  *  smallest text a phone shows (V634, criterion ui-current#phone-whole). */
@@ -42,14 +47,7 @@ const labelFit = (text) => (text.length >= LABEL_MAX
 const GAP = 12;
 const PAD = 8;
 
-export const sagOf = (a, b) => Math.min(80, 0.25 * Math.hypot(b.x - a.x, b.y - a.y));
-
-export function cablePath(a, b) {
-  const mx = (a.x + b.x) / 2;
-  const my = (a.y + b.y) / 2 + sagOf(a, b);
-  return `M ${a.x.toFixed(1)} ${a.y.toFixed(1)} Q ${mx.toFixed(1)} ${my.toFixed(1)} `
-    + `${b.x.toFixed(1)} ${b.y.toFixed(1)}`;
-}
+export const cablePath = (a, b) => cableCurve(a, b);
 
 export function patchLayout(source, width) {
   const w = Math.max(4 * JACK_PITCH + 2 * PAD, width);
@@ -82,19 +80,6 @@ export function patchLayout(source, width) {
   return { jacks, groups, width: w, height: y + rowH + PAD };
 }
 
-function glyph(shape, x, y, r) {
-  if (shape === 'diamond') {
-    return `<path d="M ${x} ${y - r} L ${x + r} ${y} L ${x} ${y + r} L ${x - r} ${y} Z"`;
-  }
-  if (shape === 'triangle') {
-    return `<path d="M ${x} ${y - r} L ${x + r * 0.95} ${y + r * 0.7} L ${x - r * 0.95} `
-      + `${y + r * 0.7} Z"`;
-  }
-  if (shape === 'square') {
-    return `<rect x="${x - r * 0.8}" y="${y - r * 0.8}" width="${r * 1.6}" height="${r * 1.6}"`;
-  }
-  return `<circle cx="${x}" cy="${y}" r="${r}"`;
-}
 
 const STATE_LABEL = { open: 'open: normal removed in Studio',
   mixed: 'patched in Studio while its normal still sounds' };
@@ -116,6 +101,9 @@ export function portLabel(source, j, st, verdict = null) {
  * Every shape sets its own stroke: an inherited `svg { stroke }` of the legacy stylesheet must
  * never draw on the panel. A jack shows keyboard focus with its own ring (group-focus-visible).
  */
+/** The cable types the layer draws with their own dash (CABLE_DASH); any other draws solid. */
+const DASHED = Object.freeze({ AUDIO: 1, CONTROL: 1, TRIGGER: 1, ANALYSIS: 1 });
+
 export function patchSvg({ source, layout, cables = [], states = new Map(), pending = null,
   compatible = new Set(), verdicts = new Map(), tokens: t, selected = null }) {
   const order = source.groups.map((m) => m.id);
@@ -123,9 +111,9 @@ export function patchSvg({ source, layout, cables = [], states = new Map(), pend
   // A patched input shows its cable's colour, the source module's (as the cable does).
   const feeders = new Map(cables.map((c) => [`${c.to}:in`, c.fromModule]));
   const feederOf = (key) => feeders.get(key) || null;
-  // Each module is a plate, the one treatment visual-identity-lock v3 allows a plate: a tonal
-  // gradient between two OSCILLA tokens (no screws, rivets, nuts or texture). Its label is the
-  // group text below.
+  // Each module is a plate, a tonal gradient between two OSCILLA tokens; its label is the group
+  // text below. Layers, bottom up: plates, labels, nuts, cables, jacks (on top of the cables'
+  // hit paths, so a tap on a jack is the jack's), plugs (no pointer).
   const plates = layout.groups.map((g) => `<rect x="${g.x - 4}" y="${g.y - 3}" `
     + `width="${g.w + 8}" height="${g.h + 4}" rx="8" fill="url(#bay-plate)" `
     + `stroke="${t.track}" stroke-width="1" data-plate="${esc(g.module)}"/>`).join('');
@@ -136,52 +124,43 @@ export function patchSvg({ source, layout, cables = [], states = new Map(), pend
     + `font-size="${BAY_TEXT}" font-weight="700" letter-spacing="1" stroke="none" `
     + `fill="${t.label}">${esc(g.label)}`
     + '</text>').join('');
+  const nuts = [...layout.jacks.values()].map(({ x, y }) => nutSvg({ x, y, tokens: t }))
+    .join('');
   const jacks = [...layout.jacks.values()].map(({ x, y, jack: j }) => {
-    const shape = PORT_VISUALS[j.type].shape;
     const st = states.get(j.key) || 'free';
     const ring = pending === j.key ? t.focus : compatible.has(j.key) ? t.accent
       : st === 'open' || st === 'mixed' ? t.refuse : t.jackRing;
-    const label = portLabel(source, j, st, pending && pending !== j.key ? verdicts.get(j.key)
-      : null);
     const src = j.direction === 'out' ? j.module : feederOf(j.key);
-    const inner = st === 'patched' || st === 'mixed' ? colourOf(src || j.module)
-      : st === 'normalled' ? t.normal : t.jack;
     const text = shortLabel(j.label, j.direction);
-    return `<g role="button" tabindex="0" data-jack="${j.key}" aria-label="${esc(label)}" `
-      + `aria-pressed="${pending === j.key}" class="group cursor-pointer outline-none">`
-      + `<rect x="${x - JACK_HIT / 2}" y="${y - JACK_HIT / 2}" width="${JACK_HIT}" `
-      + `height="${JACK_HIT}" rx="10" fill="${t.jack}" fill-opacity="0.001" stroke="none"/>`
-      + `<rect data-focus-ring="" x="${x - JACK_HIT / 2 + 1.5}" y="${y - JACK_HIT / 2 + 1.5}" `
-      + `width="${JACK_HIT - 3}" height="${JACK_HIT - 3}" rx="9" fill="none" `
-      + `stroke="${t.focus}" stroke-width="3" class="opacity-0 group-focus-visible:opacity-100"/>`
-      + `${glyph(shape, x, y, 13)} fill="${t.jack}" stroke="${ring}" stroke-width="`
-      + `${pending === j.key || compatible.has(j.key) ? 3.5 : 2}"`
-      + `${st === 'open' || st === 'mixed' ? ' stroke-dasharray="3 3"' : ''}/>`
-      + `${glyph(shape, x, y, 5)} fill="${inner}" stroke="none"/>`
-      + `<text x="${x}" y="${y + 34}" font-size="${BAY_TEXT}" text-anchor="middle" stroke="none" `
-      + `fill="${t.label}"${labelFit(text)}>${esc(text)}</text></g>`;
+    return jackSvg({ key: j.key, x, y, shape: PORT_VISUALS[j.type].shape, tokens: t,
+      label: portLabel(source, j, st, pending && pending !== j.key ? verdicts.get(j.key) : null),
+      pressed: pending === j.key, ring, dashed: st === 'open' || st === 'mixed',
+      ringWidth: pending === j.key || compatible.has(j.key) ? 3.5 : 2,
+      inner: st === 'patched' || st === 'mixed' ? colourOf(src || j.module)
+        : st === 'normalled' ? t.normal : t.jack,
+      text, fit: labelFit(text), textSize: BAY_TEXT });
   }).join('');
-  const dash = { CONTROL: ' stroke-dasharray="9 6"', TRIGGER: ' stroke-dasharray="2 6"',
-    AUDIO: '' };
+  // A cord hangs inside the bay (box) as the layer draws it, a plug on each end over its jack;
+  // the plugs take no pointer, so the jack below still does.
+  const th = layerTokens(t);
+  const box = { x: 0, y: 0, width: layout.width, height: layout.height };
+  const ends = [];
   const wires = cables.map((c) => {
     const a = layout.jacks.get(`${c.from}:out`);
     const b = layout.jacks.get(`${c.to}:in`);
     if (!a || !b) return '';
-    const d = cablePath(a, b);
-    const on = selected === c.id;
-    return `<g data-cable="${esc(c.id)}" class="group cursor-pointer">`
-      + `<path d="${d}" fill="none" stroke="${t.edge}" stroke-opacity="0.45" stroke-width="7" `
-      + 'transform="translate(0 3)" stroke-linecap="round"/>'
-      + `<path d="${d}" fill="none" stroke="${colourOf(c.fromModule)}" stroke-width="`
-      + `${on ? 7 : 4.5}" stroke-linecap="round"${dash[c.type] || ''} `
-      + 'class="group-hover:[stroke-width:7]"/></g>';
+    const cord = patchCord({ id: c.id, from: a, to: b, type: c.type in DASHED ? c.type : 'AUDIO',
+      colour: colourOf(c.fromModule), selected: selected === c.id, tokens: th, box });
+    ends.push(cord.plugs);
+    return cord.cable;
   }).join('');
   return `<svg viewBox="0 0 ${layout.width} ${layout.height}" width="100%" `
     + `height="${layout.height}" data-osc="synth.bay.svg" role="group" `
     + `aria-label="Patch bay: ${layout.jacks.size} jacks, ${cables.length} cables">`
     + `${plateFill}<g data-layer="plates" pointer-events="none">${plates}</g>`
-    + `${groups}<g data-layer="cables" pointer-events="stroke">${wires}</g>`
-    + `<g data-layer="jacks">${jacks}</g>`
+    + `${groups}<g data-layer="nuts" pointer-events="none">${nuts}</g>`
+    + `<g data-layer="cables">${wires}</g><g data-layer="jacks">${jacks}</g>`
+    + `<g data-layer="plugs" pointer-events="none">${ends.join('')}</g>`
     + '<path data-live-cable="" d="" fill="none" '
     + `stroke="${t.focus}" stroke-width="4" stroke-linecap="round" pointer-events="none"/></svg>`;
 }
