@@ -1,0 +1,26 @@
+{
+  "note": "Missing contract fields per field (scripts/patch-contract.mjs, plan K164). Only falls: lower a count in the change that fills it.",
+  "counts": {
+    "port.id": 0,
+    "port.owner": 0,
+    "port.direction": 0,
+    "port.type": 0,
+    "port.role": 0,
+    "port.cardinality": 0,
+    "port.required": 0,
+    "port.channels": 94,
+    "port.rate": 94,
+    "port.unconnected": 56,
+    "port.monitor": 94,
+    "port.compact": 94,
+    "port.version": 94,
+    "param.type": 0,
+    "param.unit": 0,
+    "param.default": 1,
+    "param.range": 0,
+    "param.mapping": 0,
+    "param.automatable": 0,
+    "param.modulatable": 0,
+    "param.live": 145
+  }
+}
