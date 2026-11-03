@@ -126,6 +126,11 @@ const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
 const { until } = require('./lib/wait.cjs');
 
+// The Studio subviews, from the workspace that defines them: a check reads a collection's size
+// from its source and never restates it (tests/unit/browser-collection-counts.test.mjs).
+const studioSubviews = async () => (await import(pathToFileURL(path.join(__dirname, '..', '..',
+  'src', 'js', 'ui', 'studio', 'workspace.js')).href)).STUDIO_SUBVIEWS;
+
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
   const i = argv.indexOf(`--${name}`);
@@ -2110,8 +2115,9 @@ function defineChecks() {
       await page.screenshot({ path: path.join(OUT, `${baseUrl.startsWith('http') ? 'http-' : ''}`
         + `${page.context().browser().browserType().name()}-phone-inspector.png`) });
       await page.tap('[data-osc="studio.subview"][data-value="graph"]');
+      const subviews = await studioSubviews();
       return { ...H.verdict({
-        tabs: tabs.length === 3 && tabs.every((hgt) => hgt >= 43.5),
+        tabs: tabs.length === subviews.length && tabs.every((hgt) => hgt >= 43.5),
         tapMode: mode.on && /^Connecting from Envelope 1 \/ Audio/.test(mode.banner)
           && mode.compat > 0,
         connected: !!edge && edge.from.node === 'env-1',
@@ -2241,11 +2247,13 @@ function defineChecks() {
     }));
     const named = (list, pressed) => list.every((b) => b && b.label === 'Play the Studio'
       && b.pressed === pressed);
+    const subviews = await studioSubviews();
     return { ...H.verdict({
       emptyHint: !withNodes.shown && empty.shown && /Empty graph/.test(empty.text || '')
         && !restored.shown,
       playName: named(idle, 'false') && named(playing, 'true'),
-      tabPanels: tabs.length === 3 && tabs.every((t) => t.id && t.role === 'tabpanel'),
+      tabPanels: tabs.length === subviews.length
+        && tabs.every((t) => t.id && t.role === 'tabpanel'),
     }), withNodes, empty, restored, idle, playing, tabs };
   });
 
