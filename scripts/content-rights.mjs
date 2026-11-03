@@ -9,7 +9,8 @@
 //   - records no method, or one outside METHODS (Q081),
 //   - carries anything but symbolic notes: a field holding a data: URI, base64 audio or a link
 //     to media (Q082), or a note that is not [step >= 0, pitch, length > 0, velocity 1..127],
-//   - has the same id, or the same notes (its fingerprint), as another entry;
+//   - has the same id, or the same notes (its fingerprint), as another entry, or is a near-
+//     duplicate of one (K158: a transposed, shifted or one-note-edited copy, riff-similarity.mjs);
 // and when dist/index.html carries audio of any kind: an <audio> element, a data:audio URI or
 // the base64 signature of a WAV, MP3, Ogg or FLAC payload (Q082: no embedded audio).
 //
@@ -19,6 +20,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { nearDuplicates } from './riff-similarity.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const LIBRARY = 'src/js/studio/riffs/library.js';
@@ -95,6 +97,8 @@ export function entryProblems(entries, methods) {
       else prints.set(fp, e.id || `#${i}`);
     }
   }
+  // K158: a near-duplicate is judged once every entry is well formed (it reads the notes)
+  if (!problems.length) problems.push(...nearDuplicates(entries));
   return problems;
 }
 

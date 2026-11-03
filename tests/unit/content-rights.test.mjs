@@ -63,6 +63,11 @@ test('an id or a set of notes is one entry\'s only', () => {
   assert.deepEqual(entryProblems([], METHODS), ['the library holds no entries']);
 });
 
+test('K158: a near-duplicate entry is refused by the rights check too', () => {
+  const copy = { ...good({ id: 'copy' }), notes: [[0, 'D3', 2, 100], [4, 'F3', 2, 90]] };
+  only([good(), copy], /entry copy is a near-duplicate of entry probe/);
+});
+
 test('Q082: a built page carrying audio is refused, whatever form the audio takes', () => {
   const clean = '<html><body>export.wav</body></html>';
   assert.deepEqual(distProblems(clean), [], 'a file name is not audio');
