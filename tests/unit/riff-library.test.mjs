@@ -42,6 +42,15 @@ test('the library holds original riffs, each named by a genre and an era', () =>
   assert.ok(new Set(lib.RIFFS.map((r) => r.genre)).size >= 12, 'twelve genres or more');
 });
 
+test('every riff\'s notes are written out literally: data, never code (K156)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../../src/js/studio/riffs/library.js', import.meta.url),
+    'utf8');
+  const body = src.slice(src.indexOf('export const RIFFS'), src.indexOf('export const ROLES'));
+  assert.ok(body.length > 1000, 'the RIFFS table');
+  assert.doesNotMatch(body, /=>|\.map\(|flatMap|Array\.from|\.\.\./, 'no code builds a riff\'s notes');
+});
+
 test('every riff is monophonic, inside its bars and in its role\'s range', () => {
   for (const r of lib.RIFFS) {
     let end = 0;
