@@ -1,8 +1,10 @@
 // F013 W1: the SYN visual reference (scripts/visual-synth.mjs, tests/visual/synth/) is the one
 // the plan agreed, held without a browser: the Synth workspace's Panel, Engines and XY tabs at
 // desktop 1536x1024 and phone 390x844, in the dark and the light theme, a patch bay of six cables
-// (one from each source colour, the s-look pairs of tests/browser/synth.cjs) seen whole, a 0.5 %
-// pixel tolerance, references per environment written only by the script, and the harness wired
+// (one from each source colour, the s-look pairs of tests/browser/synth.cjs) seen whole, a gate
+// on absolute pixel counts (a 1 px change to a plate or a knob fails; the 0.5 % tolerance of the
+// other references let it pass), references per environment written only by the script, and the
+// harness wired
 // into `npm run test:visual` and the CI visual job like scripts/visual-studio.mjs. The Synth
 // layout check (b0's G2: 44 px targets, a 12 px font floor, no overflow at the phone size) lives
 // in tests/browser/layout.cjs and is held here by its declarations, and its small-text ratchet
@@ -24,9 +26,55 @@ const load = async () => {
   return import('../../scripts/visual-synth.mjs');
 };
 
-test('the tolerance is 0.5 % of pixels, as in the other visual references', async () => {
+// An RGBA buffer `w` x `h` of one grey, with `paint(x, y)` returning another grey or undefined.
+const png = async (w, h, grey, paint = () => undefined) => {
+  const { PNG } = (await import('pngjs')).default;
+  const p = new PNG({ width: w, height: h });
+  for (let y = 0; y < h; y += 1) {
+    for (let x = 0; x < w; x += 1) {
+      const g = paint(x, y) ?? grey;
+      p.data.set([g, g, g, 255], 4 * (y * w + x));
+    }
+  }
+  return PNG.sync.write(p);
+};
+
+test('the gate counts pixels, not a percentage: a 1 px edit to a plate or knob fails', async () => {
+  // Review of fd4abde6: 0.5 % of a desktop view (~7,800 px), pixelmatch at 0.12 without the
+  // anti-aliased pixels, passed a knob pointer 1 px wider, plate screws moved 1 px and the
+  // brushed finish removed. The bounds are absolute counts set from 10 stability runs per
+  // platform, a colour difference counted at a small threshold with anti-aliased pixels, and a
+  // faint one (any change of any channel) counted at threshold 0 for a broad finish.
   const m = await load();
-  assert.equal(m.MAX_MISMATCH_PCT, 0.5);
+  assert.equal(m.MAX_MISMATCH_PCT, undefined, 'no percentage tolerance');
+  assert.equal(m.DIFF_THRESHOLD, 0.05);
+  assert.equal(m.MAX_DIFF_PX, 24);
+  assert.equal(m.MAX_FAINT_PX, 1000);
+  const src = read('scripts/visual-synth.mjs');
+  assert.match(src, /\{ threshold: DIFF_THRESHOLD, includeAA: true \}/);
+  assert.match(src, /\{ threshold: 0, includeAA: true \}/);
+  assert.doesNotMatch(src, /includeAA: false/);
+  // Judged on counts: one pixel over either bound fails, a size change always does.
+  assert.equal(m.judge({ n: 24, faint: 1000 }), null);
+  assert.match(m.judge({ n: 25, faint: 25 }), /^25 px differ \(limit 24 at threshold 0\.05\)/);
+  assert.match(m.judge({ n: 0, faint: 1001 }),
+    /^1001 px differ faintly \(limit 1000 at threshold 0\)/);
+  assert.match(m.judge({ n: null, faint: null, note: 'size 1536x2100 vs 1536x1400' }),
+    /size 1536x2100 vs 1536x1400/);
+  // The compare itself, on pictures: a 5x5 block repainted is 25 colour pixels (fails); a broad
+  // one-level shift (the brushed finish's size of change) is faint only and fails on its count.
+  const base = await png(64, 64, 128);
+  const same = m.diffPx(base, await png(64, 64, 128));
+  assert.deepEqual([same.n, same.faint], [0, 0]);
+  const block = m.diffPx(base, await png(64, 64, 128, (x, y) => (x < 5 && y < 5 ? 40 : undefined)));
+  assert.ok(block.n >= 25 && m.judge(block), `a 5x5 block fails (${block.n} px)`);
+  const shift = m.diffPx(base, await png(64, 64, 128, (x, y) => (y % 2 ? 129 : undefined)));
+  assert.equal(shift.n, 0, 'a one-level shift is under the colour threshold');
+  assert.equal(shift.faint, 64 * 32, 'and every shifted pixel is counted faintly');
+  assert.match(m.judge(shift), /px differ faintly/);
+  // The README states the bounds the script holds.
+  assert.match(read('tests/README.md'), new RegExp('≤ 24 px differing at threshold 0\\.05 with '
+    + 'anti-aliased pixels counted, and ≤ 1000 px at threshold 0'));
 });
 
 test('the views are desktop and phone x Panel, Engines, XY x dark, light, plus the whole bay',
@@ -155,15 +203,24 @@ test('every wait of the harness goes through namedWait, and the W1 signals are r
     const { CABLES, FREE_JACK } = await load();
     const src = read('scripts/visual-synth.mjs');
     // Each Playwright wait is the run callback of a namedWait: (timeout) => page.<wait>(...).
-    const waits = src.match(/page\.(waitForFunction|waitForSelector|goto)\(|\.focus\(\{ timeout/g);
-    const named = src.match(/\(timeout\) => page\.(waitForFunction|waitForSelector|goto|locator)/g);
-    assert.ok(waits.length >= 6, 'the harness waits');
-    assert.equal(named.length, waits.length, 'no Playwright wait outside namedWait');
+    // Every call that waits on the page (any waitFor*, goto, screenshot, a focus with a deadline)
+    // is on the line of a namedWait run callback and passes its deadline; no fixed sleep.
+    const waitCall = /\.(waitFor\w*|goto|screenshot)\(|\.focus\(\{ timeout/;
+    const lines = src.split('\n').filter((l) => waitCall.test(l) && !/^\s*(\/\/|\*)/.test(l));
+    assert.ok(lines.length >= 9, `the harness waits (${lines.length})`);
+    for (const l of lines) {
+      assert.match(l, /\(timeout\) => page\./, `outside namedWait: ${l.trim()}`);
+      assert.match(l, /\{ (?:[\w: ]+, )?timeout \}|, timeout \}/, `no deadline: ${l.trim()}`);
+    }
+    assert.doesNotMatch(src, /waitForTimeout/);
     assert.match(src, /throw new Error\(`SYN \$\{view\}: \$\{wait\} \$\{timedOut \? 'timed out'/);
     // The theme redraw reads the free jack's ring through its data-ring hook (W1's jack.js), not
     // a child index, and that jack is one no cable patches.
     assert.doesNotMatch(src, /nth-child/);
-    assert.match(src, /\[data-jack="\$\{free\}"\] \[data-ring\]/);
+    assert.match(src, /\[data-jack="\$\{v\.free\}"\] \[data-ring\]/);
+    // One redraw check: the wait and its observation are the same function.
+    assert.doesNotMatch(src, /function redrawn\(/);
+    assert.match(src, /return v\.observe \? state : ok;/);
     assert.equal(FREE_JACK, 'mg.rate:in');
     assert.ok(!CABLES.flat().some((p) => FREE_JACK.startsWith(`${p}:`)), 'the ring jack is free');
     // Below xl the bay is its own face (V636): patched through its chip, and a jack that cannot
@@ -174,6 +231,12 @@ test('every wait of the harness goes through namedWait, and the W1 signals are r
     // A hidden cable end names what covers it.
     assert.match(src, /return `\$\{id\} \(under /);
   });
+
+test('a view that throws is a failure of that view, and the run goes on to the next', () => {
+  const src = read('scripts/visual-synth.mjs');
+  assert.match(src, /failures\.push\(`\$\{view\.id\}: capture failed: \$\{/);
+  assert.match(src, /if \(opts\.update\) throw e;/);
+});
 
 test('an unknown view is refused before a browser starts', async () => {
   await load();

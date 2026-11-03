@@ -39,11 +39,12 @@
 // and leaves every other reference file untouched, and it is refused when this environment's
 // references were accepted with a different Chromium build (re-accept all views then).
 // Fails closed like scripts/visual-studio.mjs: a missing reference for this environment
-// (<platform>-<arch>), a page error, a capture problem, a different Chromium build or more than
-// MAX_MISMATCH_PCT differing pixels exits 1. The font is system-ui, so each OS has its own
-// references. References live in tests/visual/synth/ with their browser version; re-accept them
-// deliberately with --update-reference and state the reason in the pull request (linux-x64 in
-// the Playwright container, as tests/README.md describes for the other references).
+// (<platform>-<arch>), a page error, a capture problem, a different Chromium build, more than
+// MAX_DIFF_PX differing pixels or more than MAX_FAINT_PX faintly differing ones exits 1; a view
+// that fails to capture is reported and the run goes on to the next. The font is system-ui, so
+// each OS has its own references. References live in tests/visual/synth/ with their browser
+// version; re-accept them deliberately with --update-reference and state the reason in the pull
+// request (linux-x64 in the Playwright container, as tests/README.md describes for the others).
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -55,7 +56,21 @@ const requireHere = createRequire(import.meta.url);
 export const REF_DIR = path.join(ROOT, 'tests/visual/synth');
 const META_FILE = path.join(REF_DIR, 'references.json');
 const ENV = `${process.platform}-${process.arch}`;
-export const MAX_MISMATCH_PCT = 0.5;
+/**
+ * The gate counts pixels, not a share of the view: 0.5 % of a desktop view (~7,800 px) with
+ * pixelmatch at 0.12 and the anti-aliased pixels left out passed a knob pointer 1 px wider,
+ * plate screws moved 1 px and the brushed finish removed (review of fd4abde6). A view fails when
+ * more than MAX_DIFF_PX pixels differ at DIFF_THRESHOLD, or more than MAX_FAINT_PX at threshold
+ * 0 (a broad, faint change such as a finish), anti-aliased pixels counted in both. Set from 10
+ * stability runs per platform against the accepted references (W1b, chromium 153.0.8010.12): at
+ * DIFF_THRESHOLD repeat captures differ by at most 0 px (darwin-arm64) and 2 px (linux-x64); at
+ * threshold 0 by at most 338 px (darwin) and 92 px (linux). The review's three seeds fail on both
+ * platforms; their largest counts (desktop-bay-dark, darwin): the knob pointer 1 px wider 2198 px,
+ * the screws 1 px lower 492 px, the brushed finish removed 177901 faint px.
+ */
+export const DIFF_THRESHOLD = 0.05;
+export const MAX_DIFF_PX = 24;
+export const MAX_FAINT_PX = 1000;
 /** The Engines tab's default engine (ENGINE_IDS[0]); a reorder moves the Engines views. */
 export const ENGINE = 'additive';
 export const CABLES = [['keys.velocity', 'vco2.tune'], ['vco1.audio', 'ring.modulator'],
@@ -246,24 +261,22 @@ function turnKnob(cid) {
 /** The free jack whose ring the theme redraw is read on: no cable of CABLES patches it. */
 export const FREE_JACK = 'mg.rate:in';
 
-/** The bay redrawn for the view: theme on <html>, the free ring's stroke, the tab, 6 cables. */
-function redrawState({ theme, tab, free }) {
+/**
+ * The bay redrawn for the view: theme on <html>, the free ring's stroke = --osc-text-dim, the
+ * tab, 6 cables drawn. One check for the wait and its observation: whether it holds, or, with
+ * `observe`, what was seen.
+ */
+function redrawState(v) {
   const doc = document.documentElement;
   const dim = getComputedStyle(doc).getPropertyValue('--osc-text-dim').trim();
-  const ring = document.querySelector(`[data-jack="${free}"] [data-ring]`);
-  return { theme: doc.dataset.theme, want: theme, ring: ring ? ring.getAttribute('stroke') : null,
-    dim, tab: window.OSCILLA.app.synthDebug().tab, wantTab: tab,
+  const ring = document.querySelector(`[data-jack="${v.free}"] [data-ring]`);
+  const state = { theme: doc.dataset.theme, want: v.theme,
+    ring: ring ? ring.getAttribute('stroke') : null, dim,
+    tab: window.OSCILLA.app.synthDebug().tab, wantTab: v.tab,
     drawn: document.querySelectorAll('[data-osc="synth.bay.svg"] [data-cable]').length };
-}
-
-function redrawn(v) {
-  const { free } = v;
-  const doc = document.documentElement;
-  const dim = getComputedStyle(doc).getPropertyValue('--osc-text-dim').trim();
-  const ring = document.querySelector(`[data-jack="${free}"] [data-ring]`);
-  return doc.dataset.theme === v.theme && ring && ring.getAttribute('stroke') === dim
-    && window.OSCILLA.app.synthDebug().tab === v.tab
-    && document.querySelectorAll('[data-osc="synth.bay.svg"] [data-cable]').length === 6;
+  const ok = state.theme === v.theme && state.ring === dim && state.tab === v.tab
+    && state.drawn === 6;
+  return v.observe ? state : ok;
 }
 
 function settled() {
@@ -341,7 +354,9 @@ function inspect({ pairs, bay, park, content }) {
     };
     const all = card ? [...card.querySelectorAll('[data-plate]')] : [];
     const c = card && card.getBoundingClientRect();
-    if (c) fit = { top: Math.round(c.top), bottom: Math.round(c.bottom), dock: Math.round(dockTop) };
+    if (c) {
+      fit = { top: Math.round(c.top), bottom: Math.round(c.bottom), dock: Math.round(dockTop) };
+    }
     plates = !card ? ['the bay card (not drawn)'] : !all.length ? ['no [data-plate] in the bay']
       : [out(card, 'the bay card'), ...all.map((p) => out(p, p.getAttribute('data-plate')))]
         .filter(Boolean);
@@ -404,8 +419,10 @@ async function capture(browser, view, out, target) {
   // The bay is redrawn from the theme's tokens: a free jack's ring (its data-ring hook, the
   // stroke the 3:1 check reads) is --osc-text-dim; the tab is rendered on a frame. Wait for both,
   // and for the six cables to be drawn.
-  await wait('theme redraw (free ring = --osc-text-dim, tab, 6 cables drawn)', redrawn,
-    { theme: view.theme, tab: view.tab, free: FREE_JACK }, redrawState);
+  const redraw = { theme: view.theme, tab: view.tab, free: FREE_JACK };
+  await namedWait(page, view.id, 'theme redraw (free ring = --osc-text-dim, tab, 6 cables drawn)',
+    (timeout) => page.waitForFunction(redrawState, redraw, { timeout }),
+    { observe: redrawState, arg: { ...redraw, observe: true } });
   await frames(page);
   await page.evaluate(resetScroll);
   if (view.bay) await page.evaluate(scrollToTop, BAY);
@@ -434,7 +451,8 @@ async function capture(browser, view, out, target) {
   if (s.parked) problems.push(`the parked pointer hovers ${s.parked}`);
   if (s.alerts) problems.push(`${s.alerts} notice(s) on screen`);
   const file = path.join(out, `current-${view.id}.png`);
-  const shot = await page.screenshot({ path: file });
+  const shot = await namedWait(page, view.id, 'screenshot',
+    (timeout) => page.screenshot({ path: file, timeout }));
   // A phone view must move when a knob does: turn the first knob seen whole and capture again.
   let probe = null;
   if (view.knob) {
@@ -451,8 +469,9 @@ async function capture(browser, view, out, target) {
       await wait(`no CSS transition running after turning ${knobs[0]}`, settled, null,
         runningTransitions);
       const again = await page.evaluate(() => document.querySelector('.osc-main').scrollTop);
-      const r = diffPct(shot, await page.screenshot());
-      probe = { knob: knobs[0], seen: knobs.length, ...turn, pct: r.pct };
+      const r = diffPx(shot, await namedWait(page, view.id, `screenshot after turning ${knobs[0]}`,
+        (timeout) => page.screenshot({ timeout })));
+      probe = { knob: knobs[0], seen: knobs.length, ...turn, px: r.n };
       if (turn.before === turn.after) {
         problems.push(`turning ${knobs[0]} (${turn.key}) kept its value`);
       }
@@ -464,25 +483,44 @@ async function capture(browser, view, out, target) {
   return { file, errors, problems, probe, fit: s.fit };
 }
 
-/** The pixels two equal-sized PNG buffers differ by, with the compare settings of the gate. */
-function diffPct(a, b, diffFile) {
+/**
+ * The pixels two equal-sized PNG buffers differ by, counted as the gate counts them: `n` at
+ * DIFF_THRESHOLD and `faint` at threshold 0, both with the anti-aliased pixels (a 1 px move of
+ * an edge is mostly anti-aliased pixels). The diff image, when asked for, is the faint one.
+ */
+export function diffPx(a, b, diffFile) {
   const { PNG } = requireHere('pngjs');
   const pixelmatchMod = requireHere('pixelmatch');
   const pixelmatch = pixelmatchMod.default || pixelmatchMod;
   const x = PNG.sync.read(a);
   const y = PNG.sync.read(b);
   if (x.width !== y.width || x.height !== y.height) {
-    return { n: null, pct: 100, note: `size ${x.width}x${x.height} vs ${y.width}x${y.height}` };
+    return { n: null, faint: null, note: `size ${x.width}x${x.height} vs ${y.width}x${y.height}` };
   }
+  const n = pixelmatch(x.data, y.data, null, x.width, x.height,
+    { threshold: DIFF_THRESHOLD, includeAA: true });
   const diff = new PNG({ width: x.width, height: x.height });
-  const n = pixelmatch(x.data, y.data, diff.data, x.width, x.height,
-    { threshold: 0.12, includeAA: false });
+  const faint = pixelmatch(x.data, y.data, diff.data, x.width, x.height,
+    { threshold: 0, includeAA: true });
   if (diffFile) writeFileSync(diffFile, PNG.sync.write(diff));
-  return { n, pct: +(100 * n / (x.width * x.height)).toFixed(3) };
+  return { n, faint };
+}
+
+/** Why a compare fails the gate (null when it passes): a size change, or a count over a bound. */
+export function judge({ n, faint, note }) {
+  if (n === null || faint === null) return `the size differs (${note})`;
+  const why = [];
+  if (n > MAX_DIFF_PX) {
+    why.push(`${n} px differ (limit ${MAX_DIFF_PX} at threshold ${DIFF_THRESHOLD})`);
+  }
+  if (faint > MAX_FAINT_PX) {
+    why.push(`${faint} px differ faintly (limit ${MAX_FAINT_PX} at threshold 0)`);
+  }
+  return why.length ? why.join(', ') : null;
 }
 
 function compare(currentFile, referenceFile, diffFile) {
-  return diffPct(readFileSync(currentFile), readFileSync(referenceFile), diffFile);
+  return diffPx(readFileSync(currentFile), readFileSync(referenceFile), diffFile);
 }
 
 async function main(argv) {
@@ -508,13 +546,23 @@ async function main(argv) {
   }
   try {
     for (const view of opts.views) {
-      const { file, errors, problems, probe, fit } = await capture(browser, view, opts.out,
-        opts.target);
+      // A view that throws (a wait that timed out) fails that view; the run goes on, so one
+      // broken view does not hide the state of the others. Accepting stops at the first.
+      let shot;
+      try {
+        shot = await capture(browser, view, opts.out, opts.target);
+      } catch (e) {
+        if (opts.update) throw e;
+        failures.push(`${view.id}: capture failed: ${String(e && e.message || e).split('\n')[0]}`);
+        lines.push(`  ${view.id.padEnd(21)} capture failed`);
+        continue;
+      }
+      const { file, errors, problems, probe, fit } = shot;
       for (const e of errors) failures.push(`${view.id}: page error ${e}`);
       for (const e of problems) failures.push(`${view.id}: ${e}`);
       if (probe) {
         lines.push(`  ${view.id.padEnd(21)} knob ${probe.knob} ${probe.before} -> ${probe.after} `
-          + `moves ${probe.pct} % (${probe.seen} knobs seen)`);
+          + `moves ${probe.px} px (${probe.seen} knobs seen)`);
       }
       if (fit) {
         lines.push(`  ${view.id.padEnd(21)} bay card ${fit.top}-${fit.bottom}, dock at ${fit.dock}`
@@ -540,11 +588,10 @@ async function main(argv) {
           + `is ${version}; re-accept with --update-reference`);
       }
       const r = compare(file, ref, path.join(opts.out, `diff-${view.id}.png`));
-      const bad = r.pct > MAX_MISMATCH_PCT;
-      if (bad) failures.push(`${view.id}: ${r.pct} % of pixels differ (limit ${MAX_MISMATCH_PCT} %)`
-        + `${r.note ? `, ${r.note}` : ''}`);
-      lines.push(`  ${view.id.padEnd(21)} ${String(r.pct).padStart(7)} % differ  `
-        + `${bad ? 'FAIL' : 'ok'}`);
+      const bad = judge(r);
+      if (bad) failures.push(`${view.id}: ${bad}`);
+      lines.push(`  ${view.id.padEnd(21)} ${r.n === null ? r.note : `${String(r.n).padStart(6)} px`
+        + `${String(r.faint).padStart(8)} faint`}  ${bad ? 'FAIL' : 'ok'}`);
     }
   } finally {
     await browser.close();
