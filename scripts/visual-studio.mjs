@@ -36,6 +36,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const requireHere = createRequire(import.meta.url);
 const { chromium } = requireHere('playwright');
+const { until } = requireHere('../tests/browser/lib/wait.cjs');
 const { PNG } = requireHere('pngjs');
 const pixelmatchMod = requireHere('pixelmatch');
 const pixelmatch = pixelmatchMod.default || pixelmatchMod;
@@ -96,17 +97,21 @@ async function capture(browser, view) {
   await frames(page);
   // The docked keys settle their height a frame or two after the workspace opens (--osc-dock-h,
   // a ResizeObserver), and the graph's room with it: frame only once the dock height and the
-  // graph viewport read the same on two frames, so Frame All fits one geometry every run.
-  let last = '';
-  for (let i = 0; i < 40; i++) { // at most 40 frames
-    const now = await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => {
-      const dock = getComputedStyle(document.documentElement).getPropertyValue('--osc-dock-h');
-      const vp = document.querySelector('.osc-sg-viewport');
-      r(`${dock}|${vp ? Math.round(vp.getBoundingClientRect().height) : 0}`);
-    })));
-    if (now === last) break;
-    last = now;
-  }
+  // graph viewport read the same on two consecutive frames, so Frame All fits one geometry
+  // every run. A wall-clock deadline (tests/browser/lib/wait.cjs) that fails with the last two
+  // readings, rather than a frame count that captured an unsettled layout anyway.
+  const geometry = () => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => {
+    const dock = getComputedStyle(document.documentElement).getPropertyValue('--osc-dock-h');
+    const vp = document.querySelector('.osc-sg-viewport');
+    r(`${dock.trim()}|${vp ? Math.round(vp.getBoundingClientRect().height) : 0}`);
+  })));
+  let last = await geometry();
+  let now = last;
+  await until(async () => {
+    [last, now] = [now, await geometry()];
+    return now === last;
+  }, { ms: 5000, what: `${TEMPLATE}: the dock height and the graph viewport settle` })
+    .catch((e) => { throw new Error(`${e.message} (last readings ${last} then ${now})`); });
   await page.evaluate(() => {
     const s = window.OSCILLA.studio;
     s.editor.onShow();
