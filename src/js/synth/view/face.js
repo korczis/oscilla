@@ -12,6 +12,7 @@ import { knobModel, knobSvg } from './knob.js';
 import { amountEdges, amountReason, brokenByRemoval } from '../normals.js';
 import { CHIP, LABEL, NOTE, VALUE } from '../../ui/synth/label.js';
 import { plateSvg } from '../../ui/synth/plate.js';
+import { displayHtml } from '../../ui/synth/display.js';
 
 export function platesShown({ panel, tab, engine, resolved, model }) {
   const own = tab === 'engines' ? [panel.module(engine)].filter(Boolean) : panel.modulesOf(tab);
@@ -111,9 +112,7 @@ function toggleHtml(cid, c, value, reason) {
  */
 function factsHtml(m, node) {
   if (typeof m.def.facts !== 'function') return '';
-  return '<p class="relative px-3 pb-3 text-xs leading-snug text-gray-600 '
-    + `dark:text-gray-300" data-facts="${m.id}"><span class="font-semibold">Computed from the `
-    + `settings:</span> ${esc(m.def.facts(node.params))}</p>`;
+  return displayHtml({ id: m.id, text: m.def.facts(node.params) });
 }
 
 /**
