@@ -34,6 +34,10 @@
 //                        Filter in one undo entry; M mutes the clicked cable and M again
 //                        unmutes it (is-muted drawn); L tidies the graph in one undo entry and
 //                        a second L changes nothing (it says the graph is already tidy)
+//   tidy-layout          V637 (ADR 0087): L on the demo song at 1536x1024 and at 390x844 touch
+//                        moves the boxes as one undo entry to places where no two boxes
+//                        overlap (read from the drawn cards), rows on the phone; Undo
+//                        restores every position
 //   select-delete-cable  clicking a cable selects it (Inspector: Connection); Delete removes it
 //   multi-select         Shift-click, Shift-drag rectangle; Ctrl/Cmd C, V (new ids, offset,
 //                        internal edges kept), Ctrl/Cmd D; Delete removes nodes and their edges;
@@ -763,6 +767,76 @@ function defineChecks() {
       muted: mu1.model && mu1.drawn, unmuted: !mu2.model && !mu2.drawn, muteEntries: d2 === d1 + 2,
       tidied: p1 !== p0, tidyOneEntry: d3 === d2 + 1, tidyStable: p2 === p1 && d4 === d3,
     }), mu1, mu2, p0, p1 };
+  });
+
+  /** V637: L on the demo song, then Undo, on `page`; the conditions and what was read. */
+  async function tidyDemoSong(page, size) {
+    await H.fresh(page, 'demo-song');
+    await H.recordLive(page);
+    const drawn = () => page.evaluate(() => [...document.querySelectorAll('.osc-sg-node')]
+      .map((el) => {
+        const m = /translate\(([-\d.]+)px, ([-\d.]+)px\)/.exec(el.style.transform) || [];
+        return { id: el.dataset.nodeId, x: Number(m[1]), y: Number(m[2]), w: el.offsetWidth,
+          h: el.offsetHeight };
+      }));
+    const key = (cards) => cards.map((c) => `${c.id}@${c.x},${c.y}`).join();
+    const modelKey = async () => key((await H.model(page)).nodes);
+    const k0 = await modelKey();
+    const d0 = await H.undoDepth(page);
+    await page.focus('[data-osc="studio.graph.viewport"]');
+    await page.keyboard.press('l');
+    const k1 = await until(async () => {
+      const k = await modelKey();
+      return k !== k0 ? k : null;
+    }, { ms: 5000, what: `tidy-layout ${size}: L moved the boxes` });
+    const cards = await until(async () => {
+      const c = await drawn();
+      return key(c) === k1 && c.every((x) => x.w > 0 && x.h > 0) ? c : null;
+    }, { ms: 5000, what: `tidy-layout ${size}: the boxes are drawn where the model says` });
+    const d1 = await H.undoDepth(page);
+    const overlaps = [];
+    for (let i = 0; i < cards.length; i++) {
+      for (let j = i + 1; j < cards.length; j++) {
+        const a = cards[i];
+        const b = cards[j];
+        if (a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h) {
+          overlaps.push(`${a.id}/${b.id}`);
+        }
+      }
+    }
+    const said = await until(async () => (await H.live(page)).find((t) => t.startsWith(
+      'Tidied the graph')) || null, { ms: 5000, what: `tidy-layout ${size}: L was announced` });
+    await page.keyboard.press(`${MOD}+z`);
+    const kUndo = await until(async () => {
+      const k = await modelKey();
+      return k === k0 ? k : null;
+    }, { ms: 5000, what: `tidy-layout ${size}: Undo restored the positions` });
+    const back = await until(async () => {
+      const c = await drawn();
+      return key(c) === k0 ? c : null;
+    }, { ms: 5000, what: `tidy-layout ${size}: the boxes are drawn back` });
+    return { conds: { [`${size} moved`]: k1 !== k0, [`${size} one entry`]: d1 === d0 + 1,
+      [`${size} no overlap`]: overlaps.length === 0 && cards.length === 19,
+      [`${size} undo restores`]: kUndo === k0 && back.length === cards.length }, said, overlaps };
+  }
+
+  def('tidy-layout', async ({ page, browser, baseUrl }) => {
+    const desk = await tidyDemoSong(page, '1536x1024');
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true,
+      isMobile: false });
+    const phonePage = await ctx.newPage();
+    try {
+      await phonePage.goto(baseUrl);
+      await phonePage.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
+      await phonePage.evaluate(() => { const a = window.OSCILLA.app; a.alerts = [];
+        if (!a.safetyCollapsed) a.collapseSafety(); });
+      const phone = await tidyDemoSong(phonePage, '390x844');
+      return { ...H.verdict({ ...desk.conds, ...phone.conds,
+        '390x844 rows': / in \d+ rows$/.test(phone.said) }), desk: desk.said, phone: phone.said,
+      overlaps: [...desk.overlaps, ...phone.overlaps] };
+    } finally {
+      await ctx.close();
+    }
   });
 
   def('select-delete-cable', async ({ page }) => {
