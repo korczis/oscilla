@@ -60,9 +60,9 @@ export const filter = defineNode({
   displayName: 'Filter',
   idPrefix: 'filter',
   category: CATEGORIES.PROCESSING,
-  aliases: ['biquad', 'lowpass', 'low-pass', 'highpass', 'high-pass', 'bandpass', 'notch',
-    'peaking', 'eq', 'cutoff', 'resonance', 'vcf', 'shelf', 'low-shelf', 'high-shelf',
-    'all-pass', 'allpass', 'phase'],
+  aliases: ['biquad', 'lowpass', 'low-pass', 'lp', 'highpass', 'high-pass', 'hp', 'bandpass',
+    'bp', 'notch', 'peaking', 'eq', 'cutoff', 'resonance', 'vcf', 'shelf', 'low-shelf',
+    'high-shelf', 'all-pass', 'allpass', 'phase'],
   inputs: [audioIn],
   outputs: [audioOut],
   params: [
