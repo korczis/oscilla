@@ -13,8 +13,11 @@
 //              tab); the context resolver of the dispatcher says which view is shown
 //   focus      'none' (default: nothing that owns keys is focused), 'dialog' (a modal is open),
 //              'text' (an input, textarea, select or contenteditable has focus), 'piano'
-//              (the on-screen keyboard has focus)
-// The most specific matching binding wins: a view over its workspace, a workspace over '*'.
+//              (the on-screen keyboard has focus), or '*' for any of them (a page-wide stop
+//              such as Escape, which acts wherever the focus is)
+// The most specific matching binding wins: a view over its workspace, a workspace over '*',
+// an exact focus over focus '*'. prevent: false runs the binding and leaves the event's default
+// action alone (Escape still closes an open dialog).
 // Two bindings conflict when chord, workspace, view and focus are all equal.
 //
 //   const keys = createKeyRegistry();
@@ -25,12 +28,22 @@
 //   chordOf(event) -> chord;  keyLabel(chord) -> 'Shift+R', '[', 'Space', '←'
 
 const MODS = ['Ctrl', 'Meta', 'Alt', 'Shift'];
-export const FOCUS = Object.freeze(['none', 'dialog', 'text', 'piano']);
+export const FOCUS = Object.freeze(['none', 'dialog', 'text', 'piano', '*']);
 
 /** The chord of a keyboard event (or of { code, ctrlKey, metaKey, altKey, shiftKey }). */
 export function chordOf(e) {
   const on = [e.ctrlKey && 'Ctrl', e.metaKey && 'Meta', e.altKey && 'Alt', e.shiftKey && 'Shift'];
-  return [...on.filter(Boolean), e.code].join('+');
+  return [...on.filter(Boolean), codeOf(e)].join('+');
+}
+
+/** e.code, or for an event that carries only a key (a synthetic one) the code that key names. */
+export function codeOf(e) {
+  if (e.code) return e.code;
+  const k = e.key || '';
+  if (k === ' ' || k === 'Spacebar') return 'Space';
+  if (/^[a-z]$/i.test(k)) return `Key${k.toUpperCase()}`;
+  if (/^[0-9]$/.test(k)) return `Digit${k}`;
+  return k;
 }
 
 /** A chord written by hand, checked and put in the canonical modifier order. */
@@ -58,7 +71,7 @@ export function keyLabel(chord) {
   return [...parts, name].join('+');
 }
 
-const specificity = (s) => (s.view ? 2 : s.workspace === '*' ? 0 : 1);
+const specificity = (s) => (s.view ? 4 : s.workspace === '*' ? 0 : 2) + (s.focus === '*' ? 0 : 1);
 const same = (a, b) => a.workspace === b.workspace && (a.view || null) === (b.view || null)
   && a.focus === b.focus;
 
@@ -77,7 +90,7 @@ function checkBinding(b) {
   }
   return Object.freeze({ ...b, keys: Object.freeze(b.keys.map(normalizeChord)),
     scope: Object.freeze({ workspace: s.workspace, view: s.view || null, focus }),
-    repeat: !!b.repeat, group: b.group || 'General' });
+    repeat: !!b.repeat, prevent: b.prevent !== false, group: b.group || 'General' });
 }
 
 export function createKeyRegistry() {
@@ -111,7 +124,7 @@ export function createKeyRegistry() {
     let best = null;
     for (const b of byChord.get(chord) || []) {
       const s = b.scope;
-      if (s.focus !== focus) continue;
+      if (s.focus !== focus && s.focus !== '*') continue;
       if (s.workspace !== '*' && s.workspace !== workspace) continue;
       if (s.view && s.view !== view) continue;
       if (typeof b.when === 'function' && !b.when()) continue;
