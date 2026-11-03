@@ -2,8 +2,8 @@ schema: review-verdict/v1
 pr: 404
 verdict: merge
 reviewer: oscilla-af
-content: e0bbab61a62d4c9634edb647ec048b1f02f6e9615c4467a26f4b20c03f9a1710
+content: 80162622957d4a1743b40b5975318d6a4c2f6202f4b78cb53fa33dac5e9d6116
 findings:
   - { id: R1, severity: P2, status: open, title: the census job is not path-gated so a docs or plan only pull request still runs three census jobs and the gate skip list and the E026 comment omit it }
-  - { id: R2, severity: P3, status: open, title: the browser job bounds 50 minutes but its step limits add to 58 in ci.yml and main-checks.yml (carried from the 331 review) }
+  - { id: R2, severity: P3, status: open, title: the browser job now bounds 65 minutes but on firefox its step limits add to 73 (install 15 audio sink 13 browser 45) in ci.yml and main-checks.yml so the job should bound 75 }
   - { id: R3, severity: P3, status: open, title: the E026 header comment line about the skipped jobs exceeds 100 characters }
