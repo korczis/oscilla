@@ -14,7 +14,8 @@
 //   s-feel     the knob and choice feel (p2's W1b review): during a drag the ARIA position is the
 //              0..1000 travel; Shift mid-drag moves nothing; a double-click restores the initial
 //              value; the wheel turns the knob under the pointer, a burst one undo entry;
-//              arrows, Home and End move a choice and focus stays on the checked option; a
+//              arrows, Home and End move a choice (a rotary: its radios are in option order)
+//              and focus stays on the checked option; a
 //              double-click on a disabled knob changes nothing, and a cancelled pointer on a
 //              jack is neither a tap nor a drop, the jack taking its touches (21's S13, S9)
 //   s-wave     Square on VCO 1 (VCO 2 muted): the 2nd harmonic 30 dB+ below the 3rd; Pulse with a
@@ -59,6 +60,16 @@
 //              light themes (read from the layer's [data-ring] and [data-stroke] hooks), a nut
 //              under every jack, a plug on each cable end and two screws on every plate (F013
 //              W1), a focused jack shows its focus ring, a card folds (aria-expanded)
+//   s-choices  (desktop at 1536, 1280 and 640; phone at 320, 375 and 390) on every tab, each
+//              choice's option boxes and legends lie inside its plate's padding box, 44 px+ of
+//              every option box can be pressed, and a press on a legend's centre lands on its
+//              own option's radio, the one its text names
+//   s-choicekeys every slide and lever (11 on the tabs), from its bottom option: ArrowUp moves
+//              the checked radio's box up (a smaller y), ArrowDown moves it down, Home checks
+//              the top radio and End the bottom one, focus on the checked radio, in the drawn
+//              order its radios run in (review of W1c, finding 1). It needs choiceKey
+//              (src/js/synth/gestures.js) to read the host svg's data-style: on toggle and
+//              slide, ArrowUp +1 option, ArrowDown -1, Home and End the first and last radio
 //   s-connect  Enter on a jack opens the connection list (targets, refused ones with reasons);
 //              choosing a target patches; the jack names say which can take the cable
 //   s-dock     K066, beside the piano: the instrument picker is a menu button whose role=menu
@@ -103,7 +114,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
 const { serveDist } = require('./lib/serve.cjs');
-const { until, bounded } = require('./lib/wait.cjs');
+const { until, bounded, WaitTimeout } = require('./lib/wait.cjs');
 const midiStub = require('./lib/midi-stub.cjs');
 
 const argv = process.argv.slice(2);
@@ -125,7 +136,7 @@ const LAUNCH = {
 };
 const SIZES = { desktop: { width: 1536, height: 1024 }, phone: { width: 390, height: 844 } };
 const PHONE_CHECKS = new Set(['s-sound', 's-cable', 's-mobile', 's-look', 's-dock',
-  's-library']);
+  's-library', 's-choices']);
 const LOAD_MS = 60000;
 const SOUND_MS = 8000; // a note's attack, a knob change's glide and the analyser's smoothing
 const CHECK_MS = 120000;
@@ -399,7 +410,9 @@ function defineChecks() {
     await until(async () => (await depth()) === before + 1, { ms: 5000,
       what: 'a wheel burst is one undo entry' });
     // A choice: arrows, Home and End move the selection and focus stays on the checked option.
-    const group = page.locator('[data-osc="synth-view"] [role="radiogroup"]')
+    // A rotary, whose radios run in option order; a slide's and a lever's run as drawn, top to
+    // bottom, and s-choicekeys holds their keys to the drawing.
+    const group = page.locator('[data-osc="synth-view"] [role="radiogroup"][data-style="rotary"]')
       .filter({ has: page.locator('[data-option]') }).first();
     const checked = group.locator('[aria-checked="true"]');
     await checked.focus();
@@ -985,6 +998,185 @@ function defineChecks() {
       && out.bassKnob === '180 Hz' && out.leadScale === '8' && out.sweepKnob !== '0.00 oct'
       && /^Preset Ring bell$/.test(out.ring) && out.ringKnob !== '0.00', ...out, ref,
     bass: tilt(bass), swing };
+  });
+
+  // Every choice (W1c, the core's switch with its legends on the plate) fits its plate: on
+  // every tab at every width the leg looks at, each option's hit box and each legend lie inside
+  // the padding box of its plate's controls, at least 44 px of every hit box can be pressed,
+  // and a press on a legend's centre lands on the radio of that option (review of W1c, 1 and 3).
+  def('s-choices', async ({ context, base, size }) => {
+    const widths = size === 'phone' ? [320, 375, 390] : [1536, 1280, 640];
+    const tabs = ['panel', 'xy', ...['additive', 'fm', 'am', 'wavetable', 'sync', 'perc']
+      .map((e) => `engines&ye=${e}`)];
+    const bad = [];
+    const seen = new Set();
+    for (const tab of tabs) {
+      const page = await openSynth(context, base, `#m=synth&yt=${tab}`);
+      await face(page, 'panel');
+      for (const w of widths) {
+        await page.setViewportSize({ width: w, height: SIZES[size].height });
+        await until(() => page.evaluate((x) => window.innerWidth === x, w),
+          { ms: 5000, what: `the page is ${w} px wide` });
+        const r = await page.evaluate(() => {
+          const out = { bad: [], cids: [] };
+          const dock = document.getElementById('osc-keyboard');
+          // The band a legend is seen in: below what sticks to the top of the view (the chip
+          // bar, the engine picker), above the docked keys.
+          const sticky = [...document.querySelectorAll('#osc-view-synth *')]
+            .filter((el) => getComputedStyle(el).position === 'sticky');
+          const band = () => {
+            const lo = Math.max(0, ...sticky.map((el) => el.getBoundingClientRect())
+              .filter((q) => q.height > 0 && q.top < innerHeight / 3).map((q) => q.bottom));
+            const hi = dock && dock.getClientRects().length
+              ? Math.min(innerHeight, dock.getBoundingClientRect().top) : innerHeight;
+            return hi > lo ? (lo + hi) / 2 : innerHeight / 2;
+          };
+          for (const svg of document.querySelectorAll('[data-osc="synth.panel"] '
+            + 'svg[role="radiogroup"]')) {
+            if (!svg.getClientRects().length) continue;
+            const cid = svg.closest('[data-control]').getAttribute('data-control');
+            out.cids.push(cid);
+            const holder = svg.closest('[data-control]').parentElement;
+            const hb = holder.getBoundingClientRect();
+            const cs = getComputedStyle(holder);
+            const pad = { l: hb.left + parseFloat(cs.paddingLeft) - 0.5,
+              r: hb.right - parseFloat(cs.paddingRight) + 0.5 };
+            const sec = svg.closest('section').getBoundingClientRect();
+            const radios = [...svg.querySelectorAll('[data-option][role="radio"]')];
+            const legends = [...svg.querySelectorAll('text[data-legend]')];
+            if (legends.length !== radios.length) {
+              out.bad.push(`${cid}: ${legends.length} legends, ${radios.length} radios`);
+            }
+            for (const b of radios) {
+              const q = b.getBoundingClientRect();
+              if (q.left < pad.l || q.right > pad.r) {
+                out.bad.push(`${cid} ${b.dataset.v}: its box [${q.left.toFixed(1)}, `
+                  + `${q.right.toFixed(1)}] leaves the plate's [${pad.l.toFixed(1)}, `
+                  + `${pad.r.toFixed(1)}]`);
+              }
+              const vis = Math.min(q.right, sec.right, innerWidth) - Math.max(q.left, sec.left, 0);
+              if (vis < 43.5 || q.height < 43.5) {
+                out.bad.push(`${cid} ${b.dataset.v}: ${vis.toFixed(1)} x ${q.height.toFixed(1)} `
+                  + 'px can be pressed');
+              }
+            }
+            // The scroller: the nearest ancestor that scrolls, else the page.
+            let box = svg.parentElement;
+            while (box && !(box.scrollHeight > box.clientHeight
+              && /auto|scroll/.test(getComputedStyle(box).overflowY))) box = box.parentElement;
+            const scroller = box || document.scrollingElement;
+            for (const t of legends) {
+              const label = t.textContent;
+              // Twice: the first scroll may stick the chip bar, which moves the band.
+              for (let k = 0; k < 2; k++) {
+                const q0 = t.getBoundingClientRect();
+                scroller.scrollBy(0, q0.top + q0.height / 2 - band());
+              }
+              const q = t.getBoundingClientRect();
+              if (q.left < pad.l || q.right > pad.r) {
+                out.bad.push(`${cid} "${label}": [${q.left.toFixed(1)}, ${q.right.toFixed(1)}] `
+                  + `leaves the plate's [${pad.l.toFixed(1)}, ${pad.r.toFixed(1)}]`);
+              }
+              // Its radio: the one named by the legend (the radios run in the drawn order, not
+              // the legends' option order).
+              const want = radios.find((b) => b.textContent === label);
+              const hit = document.elementFromPoint((q.left + q.right) / 2,
+                (q.top + q.bottom) / 2);
+              const got = hit && hit.closest('[data-option][role="radio"]');
+              if (!want || got !== want) {
+                out.bad.push(`${cid} "${label}": a press lands on `
+                  + `${got ? got.dataset.v : (hit ? hit.tagName : 'nothing')}`);
+              }
+            }
+          }
+          out.scroll = document.documentElement.scrollWidth > innerWidth + 1;
+          return out;
+        });
+        r.cids.forEach((c) => seen.add(c));
+        bad.push(...r.bad.map((x) => `${w} ${tab}: ${x}`));
+        if (r.scroll) bad.push(`${w} ${tab}: the page scrolls sideways`);
+      }
+      await page.close();
+    }
+    return { ok: bad.length === 0 && seen.size === 16, choices: seen.size, widths,
+      bad: bad.slice(0, 12), more: Math.max(0, bad.length - 12) };
+  });
+
+  // Review of W1c, finding 1: a slide and a lever draw option 0 at the bottom and their radios
+  // run top to bottom, so the keys must move the selection the way the drawing moves. On every
+  // slide and lever of every tab, from its bottom option: ArrowUp moves the checked radio's box
+  // up, ArrowDown moves it back down, Home checks the top radio and End the bottom one, and
+  // focus stays on the checked radio. A key that moves nothing is read after a bounded wait.
+  def('s-choicekeys', async ({ context, base }) => {
+    const tabs = ['panel', ...['additive', 'fm', 'am', 'wavetable', 'sync', 'perc']
+      .map((e) => `engines&ye=${e}`)];
+    const bad = [];
+    const seen = new Set();
+    for (const tab of tabs) {
+      const page = await openSynth(context, base, `#m=synth&yt=${tab}`);
+      await face(page, 'panel');
+      const cids = await page.evaluate(() => [...document.querySelectorAll(
+        '[data-osc="synth.panel"] svg[role="radiogroup"]')]
+        .filter((g) => (g.dataset.style === 'slide' || g.dataset.style === 'toggle')
+          && g.getClientRects().length && g.getAttribute('aria-disabled') !== 'true')
+        .map((g) => g.closest('[data-control]').getAttribute('data-control')));
+      for (const cid of cids) {
+        seen.add(cid);
+        // The checked radio, its box's top in the drawing (y, px from the svg's top), the top
+        // and bottom radios, and whether focus is on the checked one.
+        const state = () => page.evaluate((id) => {
+          const radios = [...document.querySelectorAll(`[data-option="${id}"]`)];
+          const svg = radios[0].closest('svg');
+          const y = (r) => r.getBoundingClientRect().top - svg.getBoundingClientRect().top;
+          const byY = [...radios].sort((a, b) => y(a) - y(b));
+          const c = radios.find((r) => r.getAttribute('aria-checked') === 'true');
+          return { v: c ? c.dataset.v : null, y: c ? Math.round(y(c) * 10) / 10 : null,
+            top: byY[0].dataset.v, bottom: byY[byY.length - 1].dataset.v,
+            focus: !!c && document.activeElement === c };
+        }, cid);
+        // Press `key` and wait for the checked option to change; a key that moves nothing is
+        // the state after the deadline.
+        const press = async (key) => {
+          const from = await state();
+          await page.keyboard.press(key);
+          try {
+            return await until(async () => { const s = await state(); return s.v !== from.v
+              && s; }, { ms: 1500, what: `${cid}: ${key} moves the choice` });
+          } catch (e) {
+            if (!(e instanceof WaitTimeout)) throw e;
+            return state();
+          }
+        };
+        const s0 = await state();
+        await page.locator(`[data-option="${cid}"][data-v="${s0.bottom}"]`).click();
+        await until(async () => (await state()).v === s0.bottom,
+          { ms: 5000, what: `${cid}: a press on the bottom option checks it` });
+        await page.locator(`[data-option="${cid}"][aria-checked="true"]`).focus();
+        const a = await state();
+        const up = await press('ArrowUp');
+        if (!(up.y < a.y)) {
+          bad.push(`${cid}: ArrowUp from ${a.v} (y ${a.y}) checked ${up.v} (y ${up.y}), not one `
+            + 'drawn above');
+        }
+        const down = await press('ArrowDown');
+        if (!(down.y > up.y)) {
+          bad.push(`${cid}: ArrowDown from ${up.v} (y ${up.y}) checked ${down.v} (y ${down.y}), `
+            + 'not one drawn below');
+        }
+        const home = await press('Home');
+        if (home.v !== a.top) bad.push(`${cid}: Home checked ${home.v}, not the top ${a.top}`);
+        const end = await press('End');
+        if (end.v !== a.bottom) {
+          bad.push(`${cid}: End checked ${end.v}, not the bottom ${a.bottom}`);
+        }
+        for (const [k, s] of [['ArrowUp', up], ['ArrowDown', down], ['Home', home], ['End', end]]) {
+          if (!s.focus) bad.push(`${cid}: after ${k} focus is not on the checked radio`);
+        }
+      }
+      await page.close();
+    }
+    return { ok: bad.length === 0 && seen.size === 11, controls: seen.size, bad: bad.slice(0, 14),
+      more: Math.max(0, bad.length - 14) };
   });
 
   def('s-look', async ({ page }) => {

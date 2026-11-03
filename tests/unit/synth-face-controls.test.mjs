@@ -1,9 +1,11 @@
 // K058 with F013 W1b: every knob and switch the Synth panel draws through view/face.js is the
 // synth-theme layer's control (src/js/ui/synth/knob.js controlSvg), coloured from the panel's
 // tokens in the layer's roles, its ARIA N003's shape (ariaAttrs: aria-valuenow the position
-// 0..1000, the value and unit in aria-valuetext) and its readout the core's formatValue. An enum
-// of more than four options is not a switch (the core refuses one): it is a rotary selector, the
-// core's knob on the enum. Every option stays a radio button; the drawings are decoration.
+// 0..1000, the value and unit in aria-valuetext) and its readout the core's formatValue. A choice
+// (an enum) is ONE control since W1c (the SYN review's V8-V10): the core's switch
+// (src/js/ui/synth/switch.js switchSvg at switchLayout) by its position count, a lever, a slide,
+// a detented rotary or a rotary with a window, its legends silk-screened on the plate, and each
+// option an invisible 44 px radio button over its legend at the layout's hit box.
 //
 //   node --test tests/unit/synth-face-controls.test.mjs
 import { createRequire } from 'node:module';
@@ -11,11 +13,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import PANEL from '../../src/js/synth/panels/semi-mono.js';
 import { controlReason, controlValue, plateHtml } from '../../src/js/synth/view/face.js';
-import { knobModel, knobSvg, panelControlTokens } from '../../src/js/synth/view/knob.js';
+import {
+  CHOICE_MAX_PX, choiceLayout, choiceSvg, knobModel, knobSvg, panelControlTokens,
+} from '../../src/js/synth/view/knob.js';
 import { CABLE_TOKENS, PANEL_TOKENS } from '../../src/js/synth/view/tokens.js';
 import { ariaAttrs, controlSvg, formatValue } from '../../src/js/ui/synth/knob.js';
+import { switchLayout, switchStyle } from '../../src/js/ui/synth/switch.js';
 import { SYNTH_TOKEN_NAMES } from '../../src/js/ui/synth/tokens.js';
 import { panelStore } from './synth-fixture.mjs';
+import { contrastOf, tokenHex, tokenThemes } from './ui-synth-fixture.mjs';
 
 // The panel's tokens as var() references, so a paint that reached the markup names its token.
 const T = { ...Object.fromEntries(Object.entries(PANEL_TOKENS).map(([k, n]) => [k, `var(${n})`])),
@@ -51,9 +57,14 @@ const paints = (s) => [...s.matchAll(/(?:fill|stroke|stop-color)="([^"]*)"/g)].m
 
 test('the census: knobs, switches, rotary selectors and toggles on the panel', () => {
   assert.ok(knobs.length > 90, `${knobs.length} knobs`);
-  const rotary = switches.filter((x) => x.c.param.options.length > 4).map((x) => x.cid).sort();
-  assert.deepEqual(rotary, ['fm.algorithm', 'vco1.waveform', 'vco2.waveform', 'xy.key',
-    'xy.mode'], 'the enums the core will not draw as a switch');
+  const by = (style) => switches.filter((x) => switchStyle(x.c.param) === style)
+    .map((x) => x.cid).sort();
+  assert.deepEqual(by('toggle'), ['am.mode', 'mg.shape', 'ring.mode'], 'two positions: a lever');
+  assert.deepEqual(by('slide'), ['additive.shape', 'am.carrier', 'am.modulator', 'keys.priority',
+    'noise.color', 'vco1.scale', 'vco2.scale', 'wavetable.bank'], 'three or four: a slide');
+  assert.deepEqual(by('rotary'), ['fm.algorithm', 'vco1.waveform', 'vco2.waveform'],
+    'five to eight: a detented rotary');
+  assert.deepEqual(by('window'), ['xy.key', 'xy.mode'], 'nine to twelve: a rotary with a window');
   assert.deepEqual(toggles.map((x) => x.cid).sort(), ['perc.choke', 'sh.smooth']);
 });
 
@@ -97,6 +108,10 @@ test('the controls take the panel\'s tokens in the layer\'s roles', () => {
   assert.equal(ct.surface.plateLo, `var(${SYNTH_TOKEN_NAMES.surface.plateLo})`);
   // The skirt: the panel has no surface-2; it is the plate's top, outlined by the 3:1 edge.
   assert.equal(ct.surface.card, 'var(--osc-surface-3)');
+  // A choice's legends: the layer's text roles, read by the panel's own tokens.
+  for (const [role, name] of Object.entries(SYNTH_TOKEN_NAMES.text)) {
+    assert.equal(ct.text[role], `var(${name})`, `text.${role}`);
+  }
   for (const { cid } of controls) {
     const bad = paints(block(cid)).filter((p) => !/^var\(--osc-[\w-]+\)$|^none$/.test(p));
     assert.deepEqual(bad, [], `${cid}: tokens only`);
@@ -112,7 +127,18 @@ test('a disabled knob stays focusable, says why and draws the core\'s dashed arc
     assert.match(b, /role="slider" tabindex="0"/);
     assert.ok(b.includes(`<span class="sr-only" id="${cid}-why">`), cid);
   }
-  assert.match(block('am.depth'), /data-ring="" [^>]*stroke-dasharray="[\d.]+ [\d.]+"/);
+  // The core's disabled arc (S7): butt dashes of two widths and gaps of one, or a solid butt arc
+  // under two dashes; never the enabled arc's round cap.
+  for (const { cid } of off) {
+    for (const [ring] of block(cid).matchAll(/<path d="[^"]*" data-ring=""[^>]*>/g)) {
+      assert.match(ring, /stroke-dasharray="\d+(?:\.\d+)? \d+(?:\.\d+)?"|stroke-linecap="butt"/,
+        `${cid}: ${ring}`);
+      assert.doesNotMatch(ring, /stroke-linecap="round"/, cid);
+    }
+  }
+  const [, on, gap] = /data-ring="" [^>]*stroke-dasharray="([\d.]+) ([\d.]+)"/
+    .exec(block('am.depth'));
+  assert.ok(Math.abs(Number(on) - 2 * Number(gap)) < 0.02, `am.depth dashes ${on} ${gap}`);
   assert.doesNotMatch(block('lpf.frequency'), /stroke-dasharray/);
 });
 
@@ -129,27 +155,359 @@ test('one focus ring: the core\'s, shown only on keyboard focus', () => {
   }
 });
 
-test('an enum of up to four options is a switch, more a rotary selector; every option a radio',
-  () => {
-    for (const { cid, c, value } of switches) {
-      const b = block(cid);
-      const n = c.param.options.length;
-      const kind = n > 4 ? 'knob' : 'switch';
-      assert.equal(count(b, new RegExp(`<g data-control="${kind}">`, 'g')), 1, `${cid}: ${kind}`);
-      assert.equal(count(b, /<g data-control="/g), 1, cid);
-      assert.match(b, /<svg [^>]*aria-hidden="true" focusable="false"/);
-      assert.doesNotMatch(b, /role="slider"/, `${cid}: never a slider`);
-      assert.ok(b.includes(inert(controlSvg({ kind, value, param: c.param,
-        tokens: panelControlTokens(T), zoom: kind === 'knob' ? 52 / 44 : 44 / 36 }))),
-      `${cid}: the lever or the pointer sits at the value`);
-      assert.equal(count(b, /role="radio" /g), n, cid);
-      assert.equal(count(b, new RegExp(`data-option="${cid.replace('.', '\\.')}" data-v="`, 'g')),
-        n, cid);
-      assert.equal(count(b, /aria-checked="true"/g), 1, `${cid}: one position`);
-      assert.ok(b.includes(`aria-checked="true" data-option="${cid}" data-v="${esc(value)}"`), cid);
-      assert.match(b, /role="radiogroup" aria-labelledby="/);
+const num = (x) => Number(Number(x).toFixed(2));
+/** A choice's one drawing: its root svg, the core's switch group and its radio overlays. */
+function choiceParts(cid) {
+  const b = block(cid);
+  const svg = /<svg [^>]*>/.exec(b);
+  assert.ok(svg, `${cid}: an svg`);
+  const RADIO_RE = new RegExp(String.raw`<foreignObject x="([-\d.]+)" y="([-\d.]+)" `
+    + String.raw`width="([\d.]+)" height="([\d.]+)">(<button [^>]*>)([\s\S]*?)<\/button>`
+    + '</foreignObject>', 'g');
+  const radios = [...b.matchAll(RADIO_RE)]
+    .map((m) => ({ x: +m[1], y: +m[2], width: +m[3], height: +m[4], tag: m[5], inner: m[6] }));
+  return { b, svg: svg[0], radios };
+}
+
+test('a choice is ONE control: the core\'s switch at its value, by its position count (V8)', () => {
+  for (const { cid, c, value, reason } of switches) {
+    const { b, svg } = choiceParts(cid);
+    const L = choiceLayout(c.param);
+    assert.equal(count(b, /<svg /g), 1, `${cid}: one drawing`);
+    assert.equal(count(b, /<g data-control="/g), 1, `${cid}: one control`);
+    assert.equal(count(b, new RegExp(`<g data-control="switch" data-style="${L.style}" `
+      + 'aria-hidden="true" pointer-events="none"', 'g')), 1, `${cid}: the core's ${L.style}`);
+    assert.ok(b.includes(choiceSvg({ value, param: c.param, tokens: T, disabled: !!reason })),
+      `${cid}: the drawing is choiceSvg's, the lever, cap or pointer at the value`);
+    // Drawn at zoom 1: one graph unit is one CSS px, so the legends are 12 px on screen.
+    const box = L.box;
+    assert.ok(svg.includes(`viewBox="${box.x} ${box.y} ${box.width} ${box.height}" `
+      + `width="${box.width}" height="${box.height}"`), `${cid}: ${svg}`);
+    assert.match(svg, /role="radiogroup" aria-labelledby="/, `${cid}: the drawing is the group`);
+    assert.doesNotMatch(b, /role="slider"/, `${cid}: never a slider`);
+    // No separate segmented group any more (V8).
+    assert.doesNotMatch(b, /first:rounded-l-lg|bg-primary-600|-ml-px/, `${cid}: no segments`);
+  }
+});
+
+test('its legends are silk-screened panel text at the layout\'s positions, 12 px', () => {
+  for (const { cid, c, value } of switches) {
+    const { b } = choiceParts(cid);
+    const L = choiceLayout(c.param);
+    const texts = [...b.matchAll(new RegExp(String.raw`<text data-legend="" data-index="(\d+)" `
+      + String.raw`x="([-\d.]+)" y="([-\d.]+)" font-size="([\d.]+)"[^>]*fill="([^"]+)"[^>]*>`
+      + '([^<]*)</text>', 'g'))];
+    assert.equal(texts.length, L.options.length, `${cid}: a legend per option`);
+    for (const [, i, x, y, size, fill, label] of texts) {
+      const o = L.options[Number(i)];
+      assert.equal(num(x), num(o.legend.x), `${cid} ${label} x`);
+      assert.equal(num(y), num(o.legend.y), `${cid} ${label} y`);
+      assert.equal(Number(size), 12, `${cid} ${label}: 12 px`);
+      assert.equal(label, String(o.legend.text).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;'), cid);
+      assert.equal(fill, o.value === value ? 'var(--osc-text)' : 'var(--osc-text-muted)',
+        `${cid} ${label}: the plate's text tokens`);
     }
+  }
+});
+
+test('every legend reads 4.5:1 on the plate, top and bottom, in both themes', async () => {
+  const themes = await tokenThemes();
+  const ct = panelControlTokens(Object.fromEntries(Object.entries(PANEL_TOKENS)
+    .map(([k, n]) => [k, n])));
+  for (const [name, theme] of Object.entries(themes)) {
+    for (const plate of [ct.surface.plateHi, ct.surface.plateLo]) {
+      for (const role of ['label', 'value']) {
+        const r = contrastOf(tokenHex(theme, ct.text[role]), tokenHex(theme, plate));
+        assert.ok(r >= 4.5, `${name} text.${role} ${ct.text[role]} on ${plate}: ${r.toFixed(2)}`);
+      }
+    }
+    // A window's name: the value text on the window's frame.
+    const r = contrastOf(tokenHex(theme, ct.text.value), tokenHex(theme, ct.surface.edge));
+    assert.ok(r >= 4.5, `${name} the window's name: ${r.toFixed(2)}`);
+  }
+});
+
+test('each option is an invisible 44 px radio over its legend at the layout\'s hit box', () => {
+  for (const { cid, c, value, reason } of switches) {
+    const { radios } = choiceParts(cid);
+    const L = choiceLayout(c.param);
+    assert.equal(radios.length, L.options.length, `${cid}: a radio per option`);
+    L.options.forEach((o) => {
+      const r = radios.find((x) => x.tag.includes(` data-v="${esc(o.value)}" `));
+      assert.deepEqual([r.x, r.y, r.width, r.height].map(num),
+        [o.hit.x, o.hit.y, o.hit.width, o.hit.height].map(num), `${cid} ${o.label}: its hit box`);
+      assert.ok(r.width >= 44 && r.height >= 44, `${cid} ${o.label}: 44 px`);
+      const t = { x: o.legend.anchor === 'start' ? o.legend.x : o.legend.anchor === 'end'
+        ? o.legend.x - o.legend.width : o.legend.x - o.legend.width / 2,
+      y: o.legend.y - o.legend.size / 2 };
+      assert.ok(t.x >= r.x - 0.01 && t.x + o.legend.width <= r.x + r.width + 0.01
+        && t.y >= r.y - 0.01 && t.y + o.legend.size <= r.y + r.height + 0.01,
+      `${cid} ${o.label}: the radio covers its legend`);
+      assert.ok(r.tag.startsWith('<button type="button" role="radio" '
+        + `aria-checked="${o.value === value}" data-option="${cid}" data-v="${esc(o.value)}" `),
+      `${cid}: ${r.tag}`);
+      // Invisible: no paint of its own; its name is the legend's text, read by a screen reader.
+      const cls = /class="([^"]*)"/.exec(r.tag)[1].split(/\s+/);
+      for (const k of ['bg-transparent', 'border-0', 'h-full', 'w-full', 'text-xs',
+        'focus-visible:ring-2', 'focus-visible:ring-inset']) {
+        assert.ok(cls.includes(k), `${cid}: ${k}`);
+      }
+      assert.ok(cls.includes(reason ? 'cursor-not-allowed' : 'cursor-pointer'), cid);
+      assert.ok(!cls.some((k) => /^(?:dark:)?(?:bg|text)-(?!transparent|xs)/.test(k)),
+        `${cid}: no visible fill or text colour: ${cls.join(' ')}`);
+      assert.equal(r.inner, `<span class="sr-only">${esc(o.legend.text)}</span>`, cid);
+    });
+    for (let i = 0; i < radios.length; i++) {
+      for (let j = i + 1; j < radios.length; j++) {
+        const [a, q] = [radios[i], radios[j]];
+        assert.ok(!(a.x < q.x + q.width - 0.01 && q.x < a.x + a.width - 0.01
+          && a.y < q.y + q.height - 0.01 && q.y < a.y + a.height - 0.01),
+        `${cid}: options ${i} and ${j} overlap`);
+      }
+    }
+    assert.equal(radios.filter((r) => r.tag.includes('aria-checked="true"')).length, 1, cid);
+  }
+});
+
+/** A choice's block with its parameter set to `v` (every other parameter of the node kept). */
+function blockAt(cid, v) {
+  const [mid, key] = cid.split('.');
+  const m = PANEL.modules.find((x) => x.id === mid);
+  const node = nodes.get(mid);
+  const html = plateHtml({ panel: PANEL, module: m, node: { ...node, params: { ...node.params,
+    [key]: v } }, model, tokens: T });
+  const own = html.split(/(?=<div [^>]*data-control="[\w-]+\.[\w-]+")/)
+    .find((p) => p.startsWith('<div') && p.includes(`data-control="${cid}"`));
+  assert.ok(own, `${cid} at ${v}`);
+  return own;
+}
+const radiosOf = (b) => [...b.matchAll(new RegExp(String.raw`<foreignObject x="([-\d.]+)" `
+  + String.raw`y="([-\d.]+)" width="([\d.]+)" height="([\d.]+)">(<button [^>]*>)`, 'g'))]
+  .map((m) => ({ y: +m[2], height: +m[4], tag: m[5], v: /data-v="([^"]*)"/.exec(m[5])[1],
+    tabindex: (/\stabindex="(-?\d+)"/.exec(m[5]) || [])[1] ?? null,
+    checked: m[5].includes('aria-checked="true"') }));
+const SEG_RE = /M ([-\d.]+) ([-\d.]+) L ([-\d.]+) ([-\d.]+)/g;
+const reEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Review of W1c, finding 1: a lever's and a slide's radios ran bottom to top in the DOM (option
+// 0 is drawn at the bottom), so Tab and a screen reader met the bottom legend first. They run in
+// the drawn order now, top to bottom; a dial's run clockwise (a packed grid, row by row), its
+// option order.
+test('a lever\'s and a slide\'s radios run top to bottom in the DOM, as drawn', () => {
+  const styles = new Set();
+  for (const { cid, c } of switches) {
+    const L = choiceLayout(c.param);
+    styles.add(L.style);
+    const radios = radiosOf(block(cid));
+    const ys = radios.map((r) => r.y);
+    if (L.style === 'toggle' || L.style === 'slide') {
+      for (let i = 1; i < ys.length; i++) {
+        assert.ok(ys[i] > ys[i - 1], `${cid}: radio ${i} (${radios[i].v}) at y ${ys[i]} is `
+          + `drawn below radio ${i - 1} (${radios[i - 1].v}) at y ${ys[i - 1]}`);
+      }
+    } else {
+      assert.deepEqual(radios.map((r) => r.v), L.options.map((o) => esc(o.value)),
+        `${cid}: a dial's radios in its option order`);
+    }
+  }
+  assert.ok(styles.has('toggle') && styles.has('slide'), [...styles].join(' '));
+});
+
+// Review of W1c, finding 2: every radio was a tab stop (XY KEY had 12). A radio group is one:
+// the checked radio has tabindex 0, every other -1 (choiceKey moves focus to the newly checked
+// one), at every value of every choice.
+test('roving tabindex: the checked radio is the group\'s one tab stop, at every value', () => {
+  for (const { cid, c } of switches) {
+    for (const [v] of c.param.options) {
+      const radios = radiosOf(blockAt(cid, v));
+      assert.ok(radios.every((r) => r.tabindex !== null), `${cid} at ${v}: each sets tabindex`);
+      const stops = radios.filter((r) => r.tabindex === '0');
+      assert.equal(stops.length, 1, `${cid} at ${v}: one tab stop`);
+      assert.ok(stops[0].checked && stops[0].v === esc(v), `${cid} at ${v}: the checked one`);
+      assert.ok(radios.filter((r) => r !== stops[0]).every((r) => r.tabindex === '-1'),
+        `${cid} at ${v}: every other radio -1`);
+    }
+  }
+});
+
+// Review of W1c, finding 3: FM's algorithm (7) and the XY key (12) are packed dials whose
+// detents carried no mark. The core numbers a dial's detents from 7 (switchLayout number,
+// numeral); the panel prints a packed grid as an algorithm chart, each legend "n · label", and
+// a radio's name is the legend it covers (label in name).
+test('a packed dial numbers its detents and prints its legend grid as "n · label"', () => {
+  const packed = switches.filter(({ c }) => choiceLayout(c.param).packed);
+  assert.deepEqual(packed.map((x) => x.cid).sort(), ['fm.algorithm', 'xy.key']);
+  for (const { cid, c } of packed) {
+    const L = choiceLayout(c.param);
+    const b = block(cid);
+    const nums = [...b.matchAll(new RegExp('<text data-number="" data-index="(\\d+)" '
+      + String.raw`x="([-\d.]+)" y="([-\d.]+)"[^>]*>(\d+)</text>`, 'g'))];
+    assert.equal(nums.length, c.param.options.length, `${cid}: a numeral per detent`);
+    for (const [, i, x, y, text] of nums) {
+      assert.equal(text, String(Number(i) + 1), `${cid}: detent ${i} reads ${text}`);
+      assert.deepEqual([num(x), num(y)], [L.options[i].numeral.x, L.options[i].numeral.y]);
+    }
+    const legends = [...b.matchAll(
+      /<text data-legend="" data-index="(\d+)"[^>]*>([^<]*)<\/text>/g)];
+    assert.equal(legends.length, c.param.options.length, cid);
+    for (const [, i, text] of legends) {
+      const want = `${Number(i) + 1} · ${c.param.options[i][1]}`;
+      assert.equal(text, want.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;'), `${cid}: legend ${i}`);
+      assert.equal(L.options[i].legend.text, want, `${cid}: the layout's text`);
+    }
+    for (const r of radiosOf(b)) {
+      const o = L.options.find((x) => esc(x.value) === r.v);
+      const inner = new RegExp(`data-v="${reEsc(r.v)}"[^>]*><span class="sr-only">([^<]*)`
+        + '</span>').exec(b);
+      assert.equal(inner[1], esc(o.legend.text), `${cid} ${o.value}: its name is its legend`);
+    }
+    // No numeral lies in a cell: the grid starts below the numbered dial.
+    for (const o of L.options) {
+      const m = o.numeral;
+      for (const q of L.options) {
+        assert.ok(m.y + m.size / 2 <= q.hit.y + 0.01 || m.x + m.width / 2 <= q.hit.x
+          || m.x - m.width / 2 >= q.hit.x + q.hit.width, `${cid}: numeral ${o.number} in a cell`);
+      }
+    }
+  }
+});
+
+// Numerals go only where a grid prints the numbers: a dial whose legends lie round it or in the
+// core's window grid (the XY scale: its 10 names do not fit two 117 px columns as "n · label",
+// and its window names the selection) keeps its detents unnumbered.
+test('an unpacked dial carries no numerals: nothing on the plate would print the number', () => {
+  const unpacked = switches.filter(({ c }) => {
+    const s = switchStyle(c.param);
+    return (s === 'rotary' || s === 'window') && !choiceLayout(c.param).packed;
   });
+  assert.ok(unpacked.some((x) => x.cid === 'xy.mode'), unpacked.map((x) => x.cid).join(' '));
+  for (const { cid, c } of unpacked) {
+    assert.equal(count(block(cid), /data-number=""/g), 0, `${cid}: no numeral`);
+    assert.ok(choiceLayout(c.param).options.every((o) => o.number === null
+      && o.legend.text === o.label), `${cid}: its legends are its labels`);
+  }
+});
+
+// Review of W1c, finding 4: the WAVE dial's skirt was r 17 (34 px) beside the 64 px knobs, and
+// its knurl a dashed ring the panel drew on it. A dial is the core's knob face at the panel's
+// knob size: its skirt the knob's skirt on screen (16 x 64/44), the core's own 24-ridge knurl
+// (data-knurl), no overlay of the panel's.
+test('a rotary selector is knob-sized: the knob\'s skirt and knurl on screen', () => {
+  const knob = knobSvg({ value: 0.5, param: { key: 'k', type: 'number', min: 0, max: 1,
+    default: 0.5 }, tokens: T });
+  const z = 64 / 44;
+  const skirtOf = (s) => Number(/<circle data-skirt="" cx="0" cy="0" r="([\d.]+)"/.exec(s)[1]);
+  const knobSkirt = skirtOf(knob) * z;
+  let dials = 0;
+  for (const { cid, c } of switches) {
+    const style = switchStyle(c.param);
+    if (style !== 'rotary' && style !== 'window') continue;
+    dials += 1;
+    const b = block(cid);
+    // The choice is drawn at 1:1, so its skirt's r is its on-screen radius.
+    const r = skirtOf(b);
+    assert.ok(Math.abs(r - knobSkirt) < 0.02, `${cid}: skirt r ${r} px, a knob's ${knobSkirt}`);
+    const knurl = new RegExp('<path d="([^"]*)" data-knurl="" fill="none" stroke="([^"]*)" '
+      + String.raw`stroke-width="([\d.]+)"/>`).exec(b);
+    assert.ok(knurl, `${cid}: the core's knurl`);
+    assert.equal(knurl[2], 'var(--osc-border)', `${cid}: the knob's knurl role`);
+    assert.equal(Number(knurl[3]), num(z), `${cid}: a knob ridge's width on screen`);
+    assert.equal(count(knurl[1], /M /g), 24, `${cid}: 24 ridges`);
+    for (const [, x0, y0, x1, y1] of knurl[1].matchAll(SEG_RE)) {
+      assert.ok(Math.abs(Math.hypot(x0, y0) - 14.5 * z) < 0.03
+        && Math.abs(Math.hypot(x1, y1) - 16 * z) < 0.03, `${cid}: a knob's ridge on screen`);
+    }
+    assert.doesNotMatch(b, /data-ridges=""/, `${cid}: no knurl drawn over the core's`);
+  }
+  assert.ok(dials >= 4, `${dials} dials`);
+});
+
+test('no legend group wraps: the legends sit round the control (V9)', () => {
+  for (const { cid } of switches) {
+    const { b } = choiceParts(cid);
+    assert.doesNotMatch(b, /flex-wrap|sm:flex-row|flex-row/, `${cid}: nothing to wrap`);
+    assert.doesNotMatch(b, /role="radiogroup"[^>]*class="[^"]*flex/, cid);
+  }
+  // Every choice fits the narrowest plate (a 2xl column, 234 px inside a 258 px card at 1536;
+  // 248 at 320), so no plate spans two columns and none cuts a legend off (review of W1c, 1).
+  for (const m of PANEL.modules) {
+    assert.doesNotMatch(/^<section [^>]*>/.exec(plates.get(m.id))[0], /col-span/, m.id);
+  }
+});
+
+test('every choice fits the narrowest plate: a wide dial packs its legends below it', () => {
+  assert.equal(CHOICE_MAX_PX, 234);
+  const packed = [];
+  for (const { cid, c } of switches) {
+    // The core's at the panel's knob size (a dial is the 64 px knob's face), unnumbered.
+    const core = switchLayout(c.param, { knob: 64, numbers: false });
+    const L = choiceLayout(c.param);
+    assert.ok(L.box.width <= CHOICE_MAX_PX, `${cid}: ${L.box.width} px`);
+    if (core.box.width <= CHOICE_MAX_PX) {
+      assert.deepEqual(L, core, `${cid}: the core's own layout where it fits`);
+      continue;
+    }
+    packed.push(cid);
+    assert.equal(L.packed, true, cid);
+    assert.equal(L.style, core.style, `${cid}: still the core's ${core.style}`);
+    assert.equal(L.radius, null, `${cid}: no ring, so no leaders`);
+    // A packed dial is the core's numbered one: a window keeps that layout's frame.
+    const numbered = switchLayout(c.param, { knob: 64, numberLegends: true });
+    assert.deepEqual(L.window, numbered.window, `${cid}: a window keeps its frame`);
+    assert.ok(Object.isFrozen(L) && Object.isFrozen(L.options[0].hit), cid);
+    const top = L.options[0].hit.y;
+    assert.ok(top >= L.dial.extent, `${cid}: the grid is below the dial and its numerals`);
+    const b = block(cid);
+    assert.equal(count(b, /data-leader=""/g), 0, `${cid}: no leader points at a ring`);
+    assert.equal(count(b, /data-selected=""/g), 1, `${cid}: the selected legend's bar`);
+    L.options.forEach((o, i) => {
+      assert.equal(o.value, core.options[i].value, cid);
+      assert.equal(o.legend.anchor, 'middle', cid);
+      assert.ok(o.hit.width >= 44 && o.hit.height >= 44, `${cid} ${o.label}: 44 px`);
+      // A pad each side: the core's 6 where the grid fits with it, never under 2.
+      assert.ok(o.legend.width + 4 <= o.hit.width + 0.01, `${cid} ${o.label}: fits its cell`);
+      assert.ok(o.hit.x >= L.box.x - 0.01 && o.hit.x + o.hit.width <= L.box.x + L.box.width
+        + 0.01 && o.hit.y + o.hit.height <= L.box.y + L.box.height + 0.01, `${cid}: in its box`);
+    });
+  }
+  assert.deepEqual(packed.sort(), ['fm.algorithm', 'xy.key'],
+    'the two wider than a column: FM\'s algorithm and the XY key');
+});
+
+test('a rotary has the knobs\' knurled skirt and its detents (V10)', () => {
+  for (const { cid, c } of switches) {
+    const { b } = choiceParts(cid);
+    const style = switchStyle(c.param);
+    const knurl = /<path d="[^"]*" data-knurl="" fill="none" stroke="([^"]*)"/.exec(b);
+    if (style !== 'rotary' && style !== 'window') {
+      assert.equal(knurl, null, `${cid}: a ${style} has no skirt`);
+      continue;
+    }
+    assert.ok(knurl, `${cid}: the knurled skirt`);
+    assert.equal(knurl[1], panelControlTokens(T).control.knurl, `${cid}: the knob's knurl role`);
+    // Over the skirt, under the cap: drawn after the skirt circle and before the cap.
+    assert.ok(b.indexOf('data-skirt=""') < b.indexOf('data-knurl=""')
+      && b.indexOf('data-knurl=""') < b.indexOf('data-cap=""'), cid);
+    assert.equal(count(b, /data-detent=""/g), c.param.options.length, `${cid}: a detent each`);
+  }
+});
+
+test('a window shows the selected option\'s name in its frame', () => {
+  for (const { cid, c, value } of switches.filter((x) => switchStyle(x.c.param) === 'window')) {
+    const L = choiceLayout(c.param);
+    const w = L.window;
+    const name = c.param.options.find((o) => o[0] === value)[1];
+    const m = new RegExp(String.raw`<text data-window-text="" x="([-\d.]+)" y="([-\d.]+)" `
+      + 'font-size="12" text-anchor="middle" dominant-baseline="central" font-weight="600" '
+      + String.raw`fill="var\(--osc-text\)"[^>]*>([^<]*)</text>`).exec(block(cid));
+    assert.ok(m, cid);
+    assert.equal(num(m[1]), num(w.x + w.width / 2), cid);
+    assert.equal(num(m[2]), num(w.y + w.height / 2), cid);
+    assert.equal(m[3], esc(name), cid);
+  }
+});
 
 test('a toggle is a lever beside its On/Off button', () => {
   for (const { cid, c, value, reason } of toggles) {
@@ -161,8 +519,16 @@ test('a toggle is a lever beside its On/Off button', () => {
   }
 });
 
-test('a choice\'s drawing takes no pointer: a press on it reaches nothing', () => {
-  for (const { cid } of [...switches, ...toggles]) {
+test('a choice\'s drawing takes no pointer: a press reaches only an option', () => {
+  for (const { cid } of switches) {
+    const g = /<g data-control="switch"[\s\S]*?<\/g>(?=<foreignObject|<text data-window|<\/svg>)/
+      .exec(block(cid));
+    assert.ok(g, cid);
+    assert.match(g[0], /^<g [^>]*pointer-events="none"/, cid);
+    assert.doesNotMatch(g[0], /pointer-events="(?!none")/, `${cid}: no shape takes the pointer`);
+    assert.doesNotMatch(g[0], /<button|tabindex/, `${cid}: the drawing holds no target`);
+  }
+  for (const { cid } of toggles) {
     const svg = /<svg [^>]*>[\s\S]*?<\/svg>/.exec(block(cid))[0];
     assert.match(svg, /^<svg [^>]*class="pointer-events-none /, cid);
     assert.doesNotMatch(svg, /pointer-events="(?!none")/, `${cid}: no shape takes the pointer`);
@@ -196,8 +562,8 @@ function utility(classes, kind, dark) {
   return hex.length === 4 ? `#${[...hex.slice(1)].map((c) => c + c).join('')}` : hex;
 }
 
-test('every legend, selected or not, holds 4.5:1 text in both themes', () => {
-  for (const { cid } of [...switches, ...toggles]) {
+test('a toggle\'s On/Off button holds 4.5:1 text in both themes', () => {
+  for (const { cid } of toggles) {
     const b = block(cid);
     const legends = [...b.matchAll(/<button [^>]*class="([^"]*)"[^>]*>([^<]*)<\/button>/g)];
     assert.ok(legends.length > 0, cid);
@@ -229,25 +595,4 @@ test('a knob readout is one line: a short physical unit, never over 10 character
   const level = /<div role="slider"[^>]*>/.exec(block('out.level'))[0];
   assert.match(level, /aria-valuetext="[\d.]+ logical gain"/, 'the unit stays in the text');
   assert.match(block('out.level'), /data-value="out\.level">[\d.]+<\/output>/);
-});
-
-test('a choice stacks its drawing above its legends below sm; a rotary at every width', () => {
-  // Review 2 of W1b, finding 2: beside a rotary, XY Mode's ten legends broke into a staircase.
-  for (const { cid, c } of switches) {
-    const row = /<div class="([^"]*)">(?=<svg )/.exec(block(cid));
-    assert.ok(row, `${cid}: the drawing's row`);
-    const classes = row[1].split(/\s+/);
-    const rotary = c.param.options.length > 4;
-    for (const k of ['flex', 'flex-col', 'items-start', 'gap-2']) {
-      assert.ok(classes.includes(k), `${cid}: ${k} in ${row[1]}`);
-    }
-    if (rotary) {
-      assert.ok(!classes.some((k) => k.startsWith('sm:') || k.startsWith('md:')
-        || k.startsWith('lg:')), `${cid}: a rotary never goes beside its legends: ${row[1]}`);
-    } else {
-      for (const k of ['sm:flex-row', 'sm:items-center']) {
-        assert.ok(classes.includes(k), `${cid}: ${k} in ${row[1]}`);
-      }
-    }
-  }
 });

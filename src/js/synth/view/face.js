@@ -8,7 +8,7 @@
 //     modules (on Engines, the chosen one), after any module of another tab that is removed and
 //     breaks a normal (an engine gone from the shared chain silences what is before it)
 
-import { SWITCH_MAX, knobModel, knobSvg, selectorSvg } from './knob.js';
+import { choiceLayout, choiceSvg, knobModel, knobSvg, selectorSvg } from './knob.js';
 import { ariaAttrs } from '../../ui/synth/knob.js';
 import { amountEdges, amountReason, brokenByRemoval } from '../normals.js';
 import { CHIP, LABEL, NOTE, VALUE } from '../../ui/synth/label.js';
@@ -95,24 +95,44 @@ const SEG_ON = 'bg-primary-600 text-white';
 const SEG_OFF = 'bg-white text-gray-900 hover:bg-gray-100 dark:bg-gray-700 dark:text-gray-200 '
   + 'dark:hover:bg-gray-600';
 
-/** A rotary always above its legends: beside it, a long set wraps into a staircase. */
-const STACKED = 'flex flex-col items-start gap-2';
-/** A switch beside its legends from sm, above them below. */
-const BESIDE = `${STACKED} sm:flex-row sm:items-center`;
+/** A choice's option: an invisible 44 px radio over its legend (the legend is the drawing's
+ *  silk-screened text), its name that legend for a screen reader. It shows only its target: a
+ *  thin ring on hover and Pro's focus ring on keyboard focus, both inside its box. */
+const RADIO = 'block h-full w-full rounded-md border-0 bg-transparent p-0 text-xs '
+  + 'hover:ring-1 hover:ring-inset hover:ring-gray-400 dark:hover:ring-gray-500 '
+  + 'focus:outline-none focus-visible:ring-2 focus-visible:ring-inset '
+  + 'focus-visible:ring-primary-500';
 
-/** A choice: the layer's switch (up to four options) or rotary selector (more), drawn at its
- *  value and hidden from assistive technology, beside its legends (a switch, from sm) or above
- *  them (a rotary, and a switch below sm); each legend a radio. */
+/** A choice (V8 of the SYN review): ONE control, the layer's switch by its position count (a
+ *  lever for two, a slide for three or four, a detented rotary for five to eight, a rotary with
+ *  a window for nine to twelve), drawn at 1:1 with its legends round it as panel text, so no
+ *  legend group can wrap (V9). A dial wider than the narrowest plate (CHOICE_MAX_PX) has its
+ *  legends packed below it (view/knob.js choiceLayout), so every choice fits every plate at
+ *  every width. Each option is a radio button over its legend at the layout's 44 px hit box,
+ *  named by that legend (a packed grid's "n · label"); the drawing itself takes no press.
+ *  The radios run in the drawn order (review of W1c, finding 1): a lever's and a slide's top
+ *  to bottom (the core draws option 0 at the bottom), a dial's clockwise, a grid's row by row,
+ *  so Tab and a screen reader meet the top legend first. The group is one tab stop (finding
+ *  2): the checked radio has tabindex 0, every other -1 (or the first drawn, if none is). */
 function switchHtml(cid, c, value, reason, tokens) {
-  const opts = c.param.options.map(([v, label]) => `<button type="button" role="radio" `
-    + `aria-checked="${v === value}" data-option="${cid}" data-v="${esc(v)}" `
-    + `class="${SEG} ${v === value ? SEG_ON : SEG_OFF}">${esc(label)}</button>`).join('');
+  const L = choiceLayout(c.param);
+  const b = L.box;
+  const drawn = L.style === 'toggle' || L.style === 'slide'
+    ? [...L.options].sort((p, q) => p.legend.y - q.legend.y) : L.options;
+  const stop = drawn.find((o) => o.value === value) || drawn[0];
+  const radios = drawn.map((o) => `<foreignObject x="${o.hit.x}" y="${o.hit.y}" `
+    + `width="${o.hit.width}" height="${o.hit.height}"><button type="button" role="radio" `
+    + `aria-checked="${o.value === value}" data-option="${cid}" data-v="${esc(o.value)}" `
+    + `tabindex="${o === stop ? 0 : -1}" `
+    + `class="${RADIO} ${reason ? 'cursor-not-allowed' : 'cursor-pointer'}">`
+    + `<span class="sr-only">${esc(o.legend.text)}</span></button></foreignObject>`).join('');
   return `<div class="flex flex-col gap-1" data-control="${cid}">`
     + `<span class="${LABEL}" id="${cid}-label">${esc(c.label)}</span>`
-    + `<div class="${c.param.options.length > SWITCH_MAX ? STACKED : BESIDE}">`
-    + `${selectorSvg({ value, param: c.param, tokens, disabled: !!reason })}`
-    + `<div role="radiogroup" ${named(cid)}${disabled(cid, reason)} class="flex flex-wrap">`
-    + `${opts}</div></div>${why(cid, reason)}</div>`;
+    + `<svg viewBox="${b.x} ${b.y} ${b.width} ${b.height}" width="${b.width}" height="${b.height}" `
+    + `role="radiogroup" ${named(cid)}${disabled(cid, reason)} class="shrink-0 overflow-visible" `
+    + `data-style="${L.style}">`
+    + `${choiceSvg({ value, param: c.param, tokens, disabled: !!reason })}${radios}</svg>`
+    + `${why(cid, reason)}</div>`;
 }
 
 /** A toggle: the layer's two-position switch at its state, beside its On/Off button. */
@@ -191,7 +211,8 @@ export function plateHtml({ panel, module: m, node, model, tokens, collapsed = f
     return `<span class="${CHIP}" title="Fixed by the panel">${esc(f.label)} `
       + `${esc(shown)}</span>`;
   }).join('');
-  return `<section class="relative overflow-hidden bg-white rounded-lg shadow dark:bg-gray-800" `
+  return '<section class="relative overflow-hidden bg-white rounded-lg shadow '
+    + 'dark:bg-gray-800" '
     + `aria-labelledby="${hid}" data-module="${m.id}">${bg}${head}<div id="${bid}">`
     + `<div class="relative flex flex-wrap items-start gap-x-2 gap-y-3 px-3 pb-3 pt-2">`
     + `${controls}</div>`
