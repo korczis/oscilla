@@ -103,3 +103,43 @@ export function intensityLiterals(text) {
   }
   return found;
 }
+
+// WCAG 2.2 contrast computed from src/styles/tokens.css (the S2 method of
+// ui-synth-tokens.test.mjs): the dark theme is :root, the light one [data-theme="light"] over
+// it, and a var() reference is followed to its colour.
+const TOKENS_CSS_URL = new URL('../../src/styles/tokens.css', import.meta.url);
+
+/** Each theme's --osc-* declarations: { dark: { name: value }, light: { ... } }. */
+export async function tokenThemes() {
+  const { readFileSync } = await import('node:fs');
+  const css = readFileSync(TOKENS_CSS_URL, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const block = (sel) => {
+    const at = css.indexOf(`${sel} {`);
+    if (at < 0) throw new Error(`tokens.css has no ${sel} block`);
+    const open = css.indexOf('{', at);
+    return Object.fromEntries([...css.slice(open + 1, css.indexOf('}', open))
+      .matchAll(/(--osc-[\w-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
+  };
+  const dark = block(':root');
+  return { dark, light: { ...dark, ...block('[data-theme="light"]') } };
+}
+
+/** The opaque #rrggbb colour `name` resolves to in `theme`, var() followed. */
+export function tokenHex(theme, name) {
+  let v = theme[name];
+  for (let i = 0; i < 8 && /^var\(/.test(v || ''); i++) v = theme[/^var\((--[\w-]+)\)$/.exec(v)[1]];
+  if (!/^#[0-9a-f]{6}$/i.test(v || '')) throw new Error(`${name} is not an opaque colour: ${v}`);
+  return v;
+}
+
+const luminance = (hex) => {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+
+/** The WCAG contrast ratio of two #rrggbb colours. */
+export function contrastOf(a, b) {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}

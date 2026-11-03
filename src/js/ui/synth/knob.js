@@ -612,7 +612,7 @@ function switchPositions(p) {
   }
   if (opts.length > SWITCH_MAX_POSITIONS) {
     throw new Error(`${idOf(p)}: a switch has at most ${SWITCH_MAX_POSITIONS} positions, not `
-      + `${opts.length}; draw it as a knob (a rotary selector).`);
+      + `${opts.length}; switchSvg draws it as a rotary selector, or draw a knob.`);
   }
   return Math.max(2, opts.length);
 }
