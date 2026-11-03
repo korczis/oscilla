@@ -98,7 +98,7 @@ jobs:
   browser:
     name: Browser gate (${{ matrix.browser }})
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 50
     strategy:
       fail-fast: false
       matrix:
@@ -123,9 +123,9 @@ jobs:
           pulseaudio --start --exit-idle-time=-1
           pactl load-module module-null-sink sink_name=ci_null
           pactl set-default-sink ci_null
-      - name: dist from file:// and the /oscilla/ sub-path; layout, touch targets, stop
+      - name: dist from file:// and the /oscilla/ sub-path; layout, touch targets, stop, journeys
         # The train's browser suites (cross-links, first-screen, surface-census) take the chain
-        # past 15 min on a hosted runner (~20 min measured, run 41333897971); the job bounds 45.
+        # past 15 min on a hosted runner (~20 min measured, run 41333897971); the job bounds 50.
         run: mkdir -p logs && npm run test:browser 2>&1 | tee logs/browser-${{ matrix.browser }}.log
         timeout-minutes: 30
       - name: Upload the log on failure

@@ -17,7 +17,7 @@ export default {
     points: [
       'Multiplying by a sine moves every partial f of the note to the difference |f - 470| Hz '
         + 'and the sum f + 470 Hz (220 Hz gives 250 and 690 Hz); the note itself drops out.',
-      'The new lines are not harmonics of the note, so the result sounds metallic and its '
+      'The new lines are not harmonics of the note, so the result sounds bell-like and its '
         + 'pitch is unclear.',
       'Lower the edge depth to 0.5 and raise the Gain to 0.5 for amplitude modulation: the '
         + 'note returns between the sidebands.',

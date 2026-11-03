@@ -35,4 +35,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-03T00:16:53Z
+started_at: 2026-11-03T00:16:32Z
+started_event: sha256:821ca453de57ce66cc7dfd8241538c707b1d04aba7b26e39f8df692aa7ad1172
+completed_at: 2026-11-03T00:16:53Z
+completed_event: sha256:66cff3d195be0e82a237af1960deda57653a325569345d5afb67b5106e91a11d
+evidence:
+  - covers: verified
+    type: ci
+    command: "node --test tests/unit/v3-engine.test.mjs tests/unit/preflight-own-output.test.mjs tests/unit/output-owner.test.mjs; node tests/browser/v3-measure.cjs"
+    result: "landed in #385 (main merge commit 743f8566, the C008/C016 reconcile 10c03edc); OTHER_AUDIO from a sequencer or Studio source (v3-engine.test.mjs, preflight-own-output.test.mjs), the owner-set structural test, preflight-other-audio in tests/browser/v3-measure.cjs; CI run 41532982366 green on the train head 24b36ce2; review verdict .ai/repo/reviews/385.yaml (merge)"
+    artifact: ".ai/repo/reviews/385.yaml"
+    commit: 2931af343905d0a432bd8711f18face5d703dd3a
+    recorded_at: 2026-11-03T00:16:46Z

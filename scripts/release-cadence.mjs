@@ -23,10 +23,10 @@
 // cadence() is a pure function over (last tag, dated commits, now); the level comes from
 // release-analyze.mjs, so this script and release:analyze cannot disagree about what is
 // releasable.
-import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { analyzeCommits, lastReleaseTag, parseFlags } from './release-analyze.mjs';
+import { boundedRunner, failureReason } from './release-bounded.mjs';
 import { ROOT, gitRunner } from './release-metadata.mjs';
 
 export const MAX_AGE_HOURS = 24;
@@ -111,7 +111,10 @@ export function issueBody(c) {
 export function syncIssue({ result, sh }) {
   const must = (args) => {
     const r = sh('gh', args);
-    if (r.status !== 0) throw new Error(`gh ${args.slice(0, 2).join(' ')} failed: ${r.stderr}`);
+    if (r.status !== 0) {
+      const tries = r.attempts > 1 ? ` (${r.attempts} attempts)` : '';
+      throw new Error(`gh ${args.slice(0, 2).join(' ')} failed: ${failureReason(r)}${tries}`);
+    }
     return r.stdout;
   };
   const open = JSON.parse(must(['issue', 'list', '--state', 'open', '--search',
@@ -134,13 +137,8 @@ export function syncIssue({ result, sh }) {
   return open.length ? 'closed' : 'none';
 }
 
-function defaultSh(root) {
-  return (cmd, args) => {
-    const r = spawnSync(cmd, args, { cwd: root, encoding: 'utf8' });
-    return { status: r.error ? 127 : r.status, stdout: (r.stdout || '').trim(),
-      stderr: (r.stderr || (r.error ? r.error.message : '')).trim() };
-  };
-}
+// Every gh call bounded and retried on a transient failure (scripts/release-bounded.mjs).
+const defaultSh = (root) => boundedRunner({ cwd: root });
 
 export const USAGE = 'usage: node scripts/release-cadence.mjs [--json] [--report] [--issue] '
   + '[--max-age-hours <h>] [--help]';

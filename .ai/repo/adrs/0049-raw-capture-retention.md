@@ -145,3 +145,8 @@ Accepted by the owner (explicit instruction in the session of 2026-10-18, applie
 coordinating Claude session) — implemented as described; evidence:
 `tests/unit/raw-retention.test.mjs` (no capture referenced after `measure()` settles; no raw
 field stored, exported or imported) and `tests/unit/v3-engine.test.mjs`.
+
+### 2026-11-03: the engine test the Consequences name
+
+The Consequences' `tests/unit/v3-engine` is the unit test file `tests/unit/v3-engine.test.mjs`
+(run by `npm test`), which the acceptance note above names in full.

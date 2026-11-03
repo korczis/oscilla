@@ -45,3 +45,11 @@ image of a page that did not exist when it was drawn, and its numbers, labels an
 the image model's, never data. The rule that keeps that apart in the product is
 `project.no-fake-science`; "mockup geometry is not data" is written nowhere else, and the
 planned no-placeholder rule (issue E007) is where it would be enforced.
+
+## Note of 2026-11-03: the rule exists
+
+The text above is as of its date. The planned no-placeholder rule landed: E007 is done, and
+the rule is `project.no-inert-surfaces` (`.ai/repo/rules/project/no-inert-surfaces.v1.md`,
+active; merged in #204). It refuses placeholder copy and inert controls; whether a value shown
+as data comes from a literal rather than from state stays with the reviewer, as its statement
+says.

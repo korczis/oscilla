@@ -4,8 +4,9 @@
 // attempt alone, a job carried over by a re-run of the failed jobs, a job still failing, the
 // gate still running, a later re-run of a job that already passed), the reads against a stubbed
 // fetch (pages, retries, an API that stays down), the program as the flake-ledger job runs it,
-// and the two jobs of ci.yml themselves: the ledger is its own job, and the gate's verdict,
-// run as ci.yml states it, is the same whatever the ledger job's result.
+// and the two jobs of ci.yml themselves: the ledger is its own job, never path gated, and the
+// gate's verdict, run as ci.yml states it, drops the ledger's entry before E026's path-gated
+// rule, so it is the same whatever the ledger job's result, a skip included.
 //   node --test tests/unit/flake-ledger.test.mjs
 
 import test from 'node:test';
@@ -126,6 +127,32 @@ test('a carried-over job, one still failing and the running gate are no entry', 
     ],
   };
   assert.deepEqual(ledger({ attempts, current: 2 }), []);
+});
+
+test('a skipped job is no failure: a path-gated skip before or after a run is no entry', () => {
+  // E026 skips the path-gated jobs on a non-runtime change, and the ledger itself is skipped
+  // on a first attempt: neither skip is a failure, so neither makes a pass a flake.
+  const attempts = {
+    1: [
+      job('V1 engine (webkit)', 1, 'skipped'),
+      job('studio (firefox)', 1, 'failure', [step('Studio suite', 'failure')]),
+      job('flake ledger (checks that passed only on a re-run)', 1, 'skipped'),
+    ],
+    2: [
+      job('V1 engine (webkit)', 2, 'success'),
+      job('studio (firefox)', 2, 'skipped'),
+      job('flake ledger (checks that passed only on a re-run)', 2, null, [], 'in_progress'),
+    ],
+  };
+  assert.deepEqual(ledger({ attempts, current: 2 }), []);
+  // A skip between a failure and the pass does not hide the failure behind it either: the
+  // job's last earlier run is the skip, which is no failure, so the pass is no flake.
+  const between = {
+    1: [job('suites (webkit)', 1, 'failure', [step('DSP suite', 'failure')])],
+    2: [job('suites (webkit)', 2, 'skipped')],
+    3: [job('suites (webkit)', 3, 'success')],
+  };
+  assert.deepEqual(ledger({ attempts: between, current: 3 }), []);
 });
 
 test('a timed-out job is a failure; two failed attempts before the pass are both named', () => {
@@ -263,22 +290,29 @@ test('the program refuses a missing or malformed argument with exit 2', () => {
   assert.equal(run('--help').status, 0);
 });
 
-const CI = parseYaml(readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8'));
+const CI_TEXT = readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8');
+const CI = parseYaml(CI_TEXT);
 const GATE = CI.jobs.gate;
 const LEDGER_JOB = 'flake-ledger';
-const VERDICT = 'Every release-gate job passed';
+const VERDICT_STEP = 'Every release-gate job passed, or was skipped for a non-runtime change';
+/** E026's path-gated jobs, as the verdict lists them (tests/unit/ci-changes.test.mjs). */
+const PATH_GATED = ['engine', 'suites', 'measure', 'studio', 'browser', 'visual'];
+const LEDGER_IF = '${{ always() && fromJSON(github.run_attempt) > 1 }}';
 
 test('the ledger is its own job, after every judged job, on a re-run only (R-1, R-4)', () => {
   const fl = CI.jobs[LEDGER_JOB];
   assert.ok(fl, `ci.yml has a ${LEDGER_JOB} job`);
   // A step of the gate that fails fails the gate, whatever its verdict, and project.ci-bounded
   // forbids continue-on-error: so the gate runs its verdict and nothing else, and reads nothing.
-  assert.deepEqual(GATE.steps.map((s) => s.name ?? s.uses), [VERDICT]);
+  assert.deepEqual(GATE.steps.map((s) => s.name ?? s.uses), [VERDICT_STEP]);
   assert.equal(GATE.permissions, undefined);
   assert.ok(GATE.needs.includes(LEDGER_JOB), 'gate needs every job (project.ci-bounded)');
-  // The ledger runs when every job the gate judges has finished, whether or not they passed.
-  assert.equal(fl.if, '${{ always() && fromJSON(github.run_attempt) > 1 }}');
+  // The ledger runs when every job the gate judges has finished, whether or not they passed,
+  // and is never path gated: its condition is exactly this, whatever `changes` said.
+  assert.equal(fl.if, LEDGER_IF);
   assert.deepEqual([...fl.needs].sort(), GATE.needs.filter((j) => j !== LEDGER_JOB).sort());
+  assert.ok(fl.needs.includes('changes') && fl.needs.includes('census'),
+    'the ledger waits for every job the gate judges, changes and census included');
   assert.deepEqual(fl.permissions, { contents: 'read', actions: 'read' });
   assert.ok(Number(fl['timeout-minutes']) > 0);
   const s = fl.steps.find((x) => /scripts\/flake-ledger\.mjs/.test(x.run ?? ''));
@@ -293,27 +327,78 @@ test('the ledger is its own job, after every judged job, on a re-run only (R-1, 
   assert.equal(upload.with.path, 'flake-ledger.json');
 });
 
-/** The exit status of the gate's verdict step, run as ci.yml states it, over `needs`. */
-function verdict(needs) {
-  const step = GATE.steps.find((s) => s.name === VERDICT);
+/** The exit status of a gate's verdict step, run as ci.yml states it (its env), over `needs`. */
+function verdict(needs, gate = GATE) {
+  const step = gate.steps.find((s) => s.name === VERDICT_STEP);
   const r = spawnSync('bash', ['--noprofile', '--norc', '-eo', 'pipefail', '-c', step.run], {
-    encoding: 'utf8', env: { ...process.env, RESULTS: JSON.stringify(needs) },
+    encoding: 'utf8',
+    env: { ...process.env, ...step.env, RESULTS: JSON.stringify(needs) },
   });
   assert.equal(r.error, undefined, 'bash and jq run');
   return r.status;
 }
 
-test('the gate verdict is the same whatever the ledger job did (R-1)', () => {
-  const judged = GATE.needs.filter((j) => j !== LEDGER_JOB);
-  const all = (result) => Object.fromEntries(judged.map((j) => [j, { result }]));
-  for (const ledgerResult of ['success', 'failure', 'cancelled', 'skipped']) {
-    const needs = { ...all('success'), [LEDGER_JOB]: { result: ledgerResult } };
-    assert.equal(verdict(needs), 0, `every judged job passed, ledger ${ledgerResult}`);
-    for (const j of judged) {
-      for (const bad of ['failure', 'cancelled', 'skipped']) {
-        assert.equal(verdict({ ...needs, [j]: { result: bad } }), 1,
-          `${j} ${bad}, ledger ${ledgerResult}`);
+/**
+ * Every way a gate's verdict lets the ledger decide it: for each ledger result, on a runtime
+ * change (every job ran) and on a non-runtime one (the path-gated jobs skipped), the verdict
+ * must pass when every judged job did, and fail when any judged job failed, was cancelled or
+ * was skipped where a skip is not allowed (each judged job in turn, unless `perJob` is false).
+ * Empty when the ledger never decides.
+ */
+function ledgerDecides(gate = GATE, { perJob = true } = {}) {
+  const judged = gate.needs.filter((j) => j !== LEDGER_JOB);
+  const found = [];
+  for (const runtime of ['true', 'false']) {
+    const ok = Object.fromEntries(judged.map((j) => [j, {
+      result: runtime === 'false' && PATH_GATED.includes(j) ? 'skipped' : 'success',
+      outputs: j === 'changes' ? { runtime } : {},
+    }]));
+    for (const ledgerResult of ['success', 'failure', 'cancelled', 'skipped']) {
+      const needs = { ...ok, [LEDGER_JOB]: { result: ledgerResult, outputs: {} } };
+      const where = `runtime=${runtime}, ledger ${ledgerResult}`;
+      if (verdict(needs, gate) !== 0) found.push(`every judged job passed, ${where}: fails`);
+      for (const j of perJob ? judged : []) {
+        for (const bad of ['failure', 'cancelled', 'skipped']) {
+          // a path-gated job's skip on runtime=false is E026's, and passes
+          if (bad === 'skipped' && runtime === 'false' && PATH_GATED.includes(j)) continue;
+          const status = verdict({ ...needs, [j]: { ...needs[j], result: bad } }, gate);
+          if (status !== 1) found.push(`${j} ${bad}, ${where}: exit ${status}`);
+        }
       }
     }
   }
+  return found;
+}
+
+test('the gate verdict is the same whatever the ledger job did, skipped or not (R-1)', () => {
+  assert.deepEqual(ledgerDecides(), []);
+});
+
+/** ci.yml's gate after exact edits, re-read; each edit must apply exactly once. */
+function mutatedGate(...edits) {
+  let text = CI_TEXT;
+  for (const [from, to] of edits) {
+    const parts = text.split(from);
+    assert.equal(parts.length, 2, `the mutation target occurs once: ${from}`);
+    text = parts.join(to);
+  }
+  return parseYaml(text).jobs.gate;
+}
+
+test('mutation: a verdict that judges the ledger, or reads its skip as E026\'s, is caught', () => {
+  const exclusion = ['            | map(select(.key != "flake-ledger"))\n', ''];
+  // The ledger's entry kept: its skip on a first attempt, and any failure of it, fail the gate.
+  const kept = ledgerDecides(mutatedGate(exclusion), { perJob: false });
+  assert.ok(kept.some((f) => /runtime=true, ledger skipped: fails/.test(f)), kept.join('\n'));
+  assert.ok(kept.some((f) => /runtime=false, ledger skipped: fails/.test(f)), kept.join('\n'));
+  assert.ok(kept.some((f) => /ledger failure: fails/.test(f)), kept.join('\n'));
+  // The ledger listed among the path-gated jobs instead of dropped: its skip then counts as
+  // E026's and needs runtime=false, and its failure still fails the gate.
+  const list = '["engine", "suites", "measure", "studio", "browser", "visual"]';
+  const listed = ledgerDecides(mutatedGate(exclusion,
+    [list, list.replace(']', ', "flake-ledger"]')]), { perJob: false });
+  assert.ok(listed.some((f) => /runtime=true, ledger skipped: fails/.test(f)), listed.join('\n'));
+  assert.ok(!listed.some((f) => /runtime=false, ledger skipped: fails/.test(f)),
+    'on runtime=false the listed ledger\'s skip passes as a path-gated one');
+  assert.ok(listed.some((f) => /ledger failure: fails/.test(f)), listed.join('\n'));
 });

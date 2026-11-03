@@ -1,0 +1,8 @@
+schema: review-verdict/v1
+pr: 331
+verdict: merge
+reviewer: oscilla-af
+content: 31c176aa367a449d4d0672959919599fc51dc746e606b1e90d09c4f298d59180
+findings:
+  - { id: R1, severity: P3, status: open, title: the browser job bounds 50 minutes but its step limits add to 58 (install 15 audio sink 13 test browser 30) in ci.yml and main-checks.yml }
+  - { id: R2, severity: P3, status: open, title: measure-flow recipeKey compares numbers exactly so a setup control that round-trips a float could mark a fresh check stale }

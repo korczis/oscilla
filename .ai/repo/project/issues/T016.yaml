@@ -28,4 +28,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-02T23:00:14Z
+started_at: 2026-11-02T22:59:55Z
+started_event: sha256:c060ed0f3a806587aa184fcf45f72981abbad06b36b1309e08ed00260470b5c3
+completed_at: 2026-11-02T23:00:14Z
+completed_event: sha256:ea283b88fb2c77a940d72d15fb951d20d00bb4117d9cab48f1ea589cc38a6cc0
+evidence:
+  - covers: verified
+    type: ci
+    command: "node --test tests/unit/readout-states-quality-bar.test.mjs tests/unit/v3-views.test.mjs"
+    result: "landed in #367 (main merge commit 11cc9fbc47ea5f5bce48ed90904bd101455ff43a, member #307); a run whose peak reached the rail reads AT RAIL, not CLIPPING NONE (readout-states-quality-bar.test.mjs); CI run 41357644373 green on the train head c2a6f6c5 (unit, npm test and the browser gate in chromium, firefox and webkit from file:// and /oscilla/), Main checks run 41372186924 green on 11cc9fbc; review verdict .ai/repo/reviews/367.yaml (merge), member verdict .ai/repo/reviews/307.yaml"
+    artifact: ".ai/repo/reviews/367.yaml"
+    commit: 743f8566e9724d0f5dd58a6fadb633b51deb0b86
+    recorded_at: 2026-11-02T23:00:07Z

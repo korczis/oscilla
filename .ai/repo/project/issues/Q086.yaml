@@ -1,0 +1,21 @@
+id: Q086
+milestone: M121
+title: "Owner decision: whether musical-practice stores practice progress, locally only or not at all"
+slug: owner-decision-whether-musical-practice-stores-progress
+priority: p2
+profile: routine
+owner: "repository owner"
+objective: "Is a learner's practice progress (attempts, results, completed exercises) stored, and if so where: (a) locally only, through the existing local-first persistence (src/js/core/storage.js), never transmitted; or (b) not at all, each session starting fresh. The proposal says 'Reuse existing local-first persistence only where appropriate and accepted' and 'Do not add accounts, servers, analytics transmission, or runtime network dependencies'; it keeps 'authored lesson content distinguishable from calculated runtime feedback and user progress'."
+why: "The owner's proposal 'Interactive learning and musical practice' (pasted into the af session at 2026-11-03T01:34Z, marked 'Status: PROPOSAL') is recorded as the proposed intent musical-practice, which names no milestone and no criterion; .ai/repo/project/README.md: only the owner, or a session the owner delegated to, answers a Q issue."
+current_state: "Open on 2026-11-03. The plan offers no answer and no recommendation; the slices of musical-practice that wait on it name this issue in depends_on once the intent is planned."
+scope:
+  - ".ai/repo/project/issues/Q086.yaml"
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision), either in the owner's words with date and source, or as a decision of a coordinating session under an owner delegation it quotes with its date, stating its reasoning and that the owner may override it; a worker without such a delegation never answers it."
+  - "The answer names (a) or (b), and for (a) what is kept (every attempt, results only, or completion only) and whether the learner can clear it."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-11-03
+updated_at: 2026-11-03
