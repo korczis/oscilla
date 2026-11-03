@@ -160,8 +160,9 @@ test('the empty states lead to the next step (B12, P1)', () => {
     ['fnd.toExperiments', '#osc-exp-list'], ['presets.toPlayground', '#m=playground']]) {
     const tag = tagOf(name);
     assert.ok(tag.startsWith(`<a href="${href}"`), `${name} links ${href}`);
-    const at = PAGE.lastIndexOf('<li class="osc-', PAGE.indexOf(tag));
-    assert.match(PAGE.slice(at, PAGE.indexOf(tag)), /class="osc-(x|preset)-empty"/,
+    // a legacy empty row, or a Pro row (F003, Presets) that marks itself data-empty-row
+    const at = PAGE.lastIndexOf('<li ', PAGE.indexOf(tag));
+    assert.match(PAGE.slice(at, PAGE.indexOf(tag)), /class="osc-x-empty"|\bdata-empty-row\b/,
       `${name} is in an empty-state row`);
   }
   assert.match(PAGE, /<section class="osc-panel osc-x-list" id="osc-exp-list"/);

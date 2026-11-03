@@ -510,8 +510,8 @@
 
   /* The text links grow in their flow (the sources list scrolls), so they cannot cover each
      other. */
-  :is(.osc-bio-source-list, .osc-panel-header, .osc-m-btnrow, .osc-x-empty, .osc-preset-empty,
-    .osc-toast-text) a:not([class], [hidden]) {
+  :is(.osc-bio-source-list, .osc-panel-header, .osc-m-btnrow, .osc-x-empty, .osc-toast-text)
+    a:not([class], [hidden]) {
     display: inline-flex;
     align-items: center;
     max-width: 100%;

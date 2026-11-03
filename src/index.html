@@ -2570,23 +2570,45 @@
         </ul>
       </div>
     </section>
-    <section class="osc-view osc-view--presets" id="osc-view-presets" data-osc="presets-view"
+    <section class="px-4 pt-6 pb-6" id="osc-view-presets" data-osc="presets-view"
       data-osc-modes="presets" hidden :hidden="mode !== 'presets'"
       aria-labelledby="osc-presets-title" tabindex="-1">
-      <h2 class="osc-panel-title" id="osc-presets-title">Presets</h2>
-      <div class="osc-view-body osc-presets" data-osc="presets-content">
-        <div class="osc-tabs osc-tabs--primary osc-preset-tabs" role="tablist" aria-label="Preset categories">
+      <h2 class="mb-4 text-xl font-semibold text-gray-900 sm:text-2xl dark:text-white"
+        id="osc-presets-title">Presets</h2>
+      <div data-osc="presets-content">
+        <div class="flex flex-wrap mb-4 text-sm font-medium text-center border-b border-gray-200
+          dark:border-gray-700" role="tablist" aria-label="Preset categories">
           <template x-for="c in PRESET_CATEGORIES" :key="c.id">
-            <button type="button" class="osc-tab" role="tab" data-osc="presets.tab" :data-value="c.id"
-              :id="'osc-ptab-cat-' + c.id" :class="{ 'is-active': presetTab === c.id }"
+            <button type="button" role="tab" data-osc="presets.tab" :data-value="c.id"
+              :id="'osc-ptab-cat-' + c.id"
+              class="inline-block px-4 border-b-2 rounded-t-lg min-h-11"
+              :class="presetTab === c.id
+                ? 'text-primary-700 border-primary-700 dark:text-primary-500 dark:border-primary-500'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 '
+                  + 'dark:text-gray-400 dark:hover:text-gray-300'"
               :aria-selected="String(presetTab === c.id)" :tabindex="presetTab === c.id ? 0 : -1"
               @click="presetTab = c.id" @keydown="rovingKeydown($event)" x-text="c.label"></button>
           </template>
         </div>
-        <div class="osc-preset-toolbar">
-          <button type="button" class="osc-btn osc-btn-primary" data-osc="presets.save" @click="openSave()">Save current…</button>
-          <button type="button" class="osc-btn osc-btn-secondary" data-osc="presets.reset" @click="resetDefaults()">Reset to defaults</button>
-          <button type="button" class="osc-btn osc-btn-secondary" data-osc="presets.clearHistory"
+        <div class="flex flex-wrap items-center gap-2 mb-4">
+          <button type="button" data-osc="presets.save" @click="openSave()"
+            class="inline-flex items-center justify-center px-3 text-sm font-medium text-white
+            rounded-lg min-h-9 [@media(pointer:coarse)]:min-h-11 bg-primary-700
+            hover:bg-primary-800 focus:outline-none focus:ring-4 focus:ring-primary-300
+            disabled:cursor-not-allowed disabled:opacity-50 dark:bg-primary-700
+            dark:hover:bg-primary-800 dark:focus:ring-primary-800">Save current…</button>
+          <button type="button" data-osc="presets.reset" @click="resetDefaults()"
+            class="inline-flex items-center justify-center px-3 text-sm font-medium text-gray-900
+            bg-white border border-gray-200 rounded-lg min-h-9 [@media(pointer:coarse)]:min-h-11
+            hover:bg-gray-100 hover:text-primary-700 focus:outline-none focus:ring-4
+            focus:ring-gray-100 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600
+            dark:hover:text-white dark:hover:bg-gray-700 dark:focus:ring-gray-700">Reset to defaults</button>
+          <button type="button" data-osc="presets.clearHistory"
+            class="inline-flex items-center justify-center px-3 text-sm font-medium text-gray-900
+            bg-white border border-gray-200 rounded-lg min-h-9 [@media(pointer:coarse)]:min-h-11
+            hover:bg-gray-100 hover:text-primary-700 focus:outline-none focus:ring-4
+            focus:ring-gray-100 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600
+            dark:hover:text-white dark:hover:bg-gray-700 dark:focus:ring-gray-700"
             x-show="presetTab === 'history'" @click="clearHistory()">Clear history</button>
           <a href="#m=synth" data-osc="presets.toSynth" hidden
             class="self-center [@media(pointer:coarse)]:inline-flex [@media(pointer:coarse)]:min-h-11
@@ -2595,23 +2617,38 @@
         </div>
         <div role="tabpanel" :aria-labelledby="'osc-ptab-cat-' + presetTab">
           <template x-if="presetTab !== 'history'">
-            <ul class="osc-preset-list" role="list">
+            <ul class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" role="list">
               <template x-for="p in presetsFor(presetTab)" :key="p.id">
-                <li class="osc-preset-item" data-osc="presets.item" :data-id="p.id">
-                  <div class="osc-preset-text">
-                    <span class="osc-preset-name" x-text="p.name"></span>
-                    <span class="osc-preset-desc" x-text="p.desc"></span>
-                    <span class="osc-preset-params osc-num" x-text="presetParams(p)"></span>
-                    <span class="osc-preset-disabled" x-show="presetDisabled(p)" :id="'osc-preset-why-' + p.id" x-text="presetDisabledReason(p)"></span>
+                <li data-osc="presets.item" :data-id="p.id"
+                  class="flex flex-col justify-between gap-3 p-4 bg-white border border-gray-200 rounded-lg
+                  shadow-sm dark:bg-gray-800 dark:border-gray-700">
+                  <div class="flex flex-col gap-1">
+                    <span class="text-base font-semibold text-gray-900 dark:text-white"
+                      x-text="p.name"></span>
+                    <span class="text-sm text-gray-500 dark:text-gray-400" x-text="p.desc"></span>
+                    <span class="font-mono text-xs tabular-nums text-gray-500 dark:text-gray-400"
+                      x-text="presetParams(p)"></span>
+                    <span class="text-sm text-yellow-800 dark:text-yellow-300" x-show="presetDisabled(p)"
+                      :id="'osc-preset-why-' + p.id" x-text="presetDisabledReason(p)"></span>
                     <a href="#m=playground" data-osc="presets.altPlayground" x-show="presetDisabled(p)"
                       class="self-start text-sm font-medium text-primary-700 hover:underline [@media(pointer:coarse)]:inline-flex [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:items-center dark:text-primary-400">Set a tone within the limit in the Playground</a>
                   </div>
-                  <div class="osc-preset-actions">
-                    <button type="button" class="osc-btn osc-btn-primary" data-osc="presets.load"
+                  <div class="flex flex-wrap items-center gap-2">
+                    <button type="button" data-osc="presets.load"
+                      class="inline-flex items-center justify-center px-3 text-sm font-medium text-white
+                      rounded-lg min-h-9 [@media(pointer:coarse)]:min-h-11 bg-primary-700
+                      hover:bg-primary-800 focus:outline-none focus:ring-4 focus:ring-primary-300
+                      disabled:cursor-not-allowed disabled:opacity-50 dark:bg-primary-700
+                      dark:hover:bg-primary-800 dark:focus:ring-primary-800"
                       :disabled="presetDisabled(p)" @click="loadPresetFromView(p)"
                       :aria-describedby="presetDisabled(p) ? 'osc-preset-why-' + p.id : null"
                       :aria-label="'Load preset ' + p.name">Load</button>
-                    <button type="button" class="osc-btn osc-btn-secondary" data-osc="presets.delete"
+                    <button type="button" data-osc="presets.delete"
+                      class="inline-flex items-center justify-center px-3 text-sm font-medium text-gray-900
+                      bg-white border border-gray-200 rounded-lg min-h-9 [@media(pointer:coarse)]:min-h-11
+                      hover:bg-gray-100 hover:text-primary-700 focus:outline-none focus:ring-4
+                      focus:ring-gray-100 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600
+                      dark:hover:text-white dark:hover:bg-gray-700 dark:focus:ring-gray-700"
                       x-show="p.custom" @click="deletePresetFocus(p, $event)" @blur="cancelDelete(p.id)"
                       :aria-label="(pendingDelete === p.id ? 'Confirm delete ' : 'Delete ') + p.name"
                       x-text="pendingDelete === p.id ? 'Confirm' : 'Delete'"></button>
@@ -2632,19 +2669,33 @@
               class="inline-flex items-center justify-center px-5 text-sm font-medium text-center text-white rounded-lg min-h-11 bg-primary-700 hover:bg-primary-800 focus:outline-none focus:ring-4 focus:ring-primary-300 dark:bg-primary-700 dark:hover:bg-primary-800 dark:focus:ring-primary-800"></a>
           </div>
           <template x-if="presetTab === 'history'">
-            <ul class="osc-preset-list" role="list">
+            <ul class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" role="list">
               <template x-for="h in history" :key="h.ts + h.label">
-                <li class="osc-preset-item" data-osc="presets.history">
-                  <div class="osc-preset-text">
-                    <span class="osc-preset-name" x-text="h.label"></span>
-                    <span class="osc-preset-params osc-num" x-text="historyTime(h.ts) + ' · ' + historyFreqs(h)"></span>
+                <li data-osc="presets.history"
+                  class="flex flex-col justify-between gap-3 p-4 bg-white border border-gray-200 rounded-lg
+                  shadow-sm dark:bg-gray-800 dark:border-gray-700">
+                  <div class="flex flex-col gap-1">
+                    <span class="text-base font-semibold text-gray-900 dark:text-white"
+                      x-text="h.label"></span>
+                    <span class="font-mono text-xs tabular-nums text-gray-500 dark:text-gray-400"
+                      x-text="historyTime(h.ts) + ' · ' + historyFreqs(h)"></span>
                   </div>
-                  <div class="osc-preset-actions">
-                    <button type="button" class="osc-btn osc-btn-secondary" @click="recallHistory(h)">Recall</button>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <button type="button" @click="recallHistory(h)"
+                      class="inline-flex items-center justify-center px-3 text-sm font-medium text-gray-900
+                      bg-white border border-gray-200 rounded-lg min-h-9 [@media(pointer:coarse)]:min-h-11
+                      hover:bg-gray-100 hover:text-primary-700 focus:outline-none focus:ring-4
+                      focus:ring-gray-100 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600
+                      dark:hover:text-white dark:hover:bg-gray-700 dark:focus:ring-gray-700">Recall</button>
                   </div>
                 </li>
               </template>
-              <li class="osc-preset-empty" x-show="!history.length">Nothing played in this page view yet. <a href="#m=playground" data-osc="presets.toPlayground">Play something in the Playground</a></li>
+              <li class="p-4 text-sm text-gray-500 dark:text-gray-400" data-empty-row
+                x-show="!history.length">Nothing
+                played in this page view yet. <a href="#m=playground" data-osc="presets.toPlayground"
+                class="font-medium text-primary-700 hover:underline dark:text-primary-500
+                  [@media(pointer:coarse)]:inline-flex [@media(pointer:coarse)]:min-h-11
+                  [@media(pointer:coarse)]:items-center">Play something in the Playground</a></li>
             </ul>
           </template>
         </div>

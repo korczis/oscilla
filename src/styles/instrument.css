@@ -169,10 +169,6 @@
   background: var(--osc-surface-1);
 }
 
-.osc-view-body {
-  margin-top: 12px;
-}
-
 /* Nav focus on desktop: the focused workspace's panels get an accent ring. */
 .osc-panel.is-focused {
   border-color: var(--osc-blue-deep-border);
@@ -1209,8 +1205,8 @@
 
 /* Text links: the citation links, and the cross-links between workspaces (U010) in panel
    headers, button rows, empty states and the notices; underlined in the text's colour. */
-:is(.osc-bio-source-list, .osc-panel-header, .osc-m-btnrow, .osc-x-empty, .osc-preset-empty,
-  .osc-toast-text) a:not([class]) {
+:is(.osc-bio-source-list, .osc-panel-header, .osc-m-btnrow, .osc-x-empty, .osc-toast-text)
+  a:not([class]) {
   color: inherit;
   overflow-wrap: anywhere;
 }

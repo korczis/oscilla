@@ -25,7 +25,7 @@
     }
   },
   "caps": {
-    "src/index.html": 301000,
+    "src/index.html": 305000,
     "src/js/audio/audio-engine.js": 73000,
     "src/js/core/instrument.js": 62000,
     "src/js/experiments/validate.js": 64000,
@@ -115,6 +115,12 @@
       "cap": 301000,
       "pr": 386,
       "reason": "F007 puts Learn on Flowbite Pro inside lane A's shell: the Pro card, button and link class lists are longer than the legacy osc-learn-* names they replace, while the legacy debt falls by 28"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 305000,
+      "pr": 386,
+      "reason": "Presets (part of F003) on Flowbite Pro inside lane A's shell: Pro tabs, cards and buttons replace the osc-preset-* names with longer Tailwind class lists, while the legacy debt falls by 57"
     }
   ]
 }
