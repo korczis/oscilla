@@ -9,7 +9,10 @@
 // counts key listeners), and draws controlSvg where it wants, an HTML panel or an SVG graph box
 // at any zoom. ariaAttrs is the controlAttrs shape N003 adopts (aria-valuenow a 0..1000
 // position). Every colour is a token passed in
-// (tokens.js; project.visual-identity-lock v3), so nothing here is a colour literal.
+// (tokens.js; project.visual-identity-lock v3), so nothing here is a colour literal, and no
+// number sets an opacity, an alpha or a shadow (v4): the cap highlight's intensity is the
+// hw-sheen Tailwind key (class opacity-hw-sheen), the cap shadow's the hw-shadow key (class
+// opacity-hw-shadow).
 //
 //   clampValue, toNorm, fromNorm, quantize, defaultValue, stepOption   value mapping
 //   dragValue, pixelsPerRangeFor, wheelValue, knobKey                  gestures -> the next value
@@ -568,10 +571,22 @@ function arcPath(r, a, b) {
   return `M ${x0} ${y0} A ${r} ${r} 0 ${e - s > 180 ? 1 : 0} 1 ${x1} ${y1}`;
 }
 
-// Graph units, centred on the origin; the caller places the group.
-const KNOB = { ring: 17, cap: 12, ringW: 3, focus: 21 };
+// Graph units, centred on the origin; the caller places the group. Every knob part stays
+// inside the 44 box: the focus ring's outer edge is r 22, and the detent, at any angle, ends at
+// r 21.75 so its butt corners do too (the scale ticks reach r 22 only at their fixed angles).
+const KNOB = Object.freeze({ arc: 19, arcW: 3, skirt: 16, edgeW: 1.5, knurlIn: 14.5,
+  knurlOut: 16, knurls: 24, cap: 12, pointerIn: 4, pointerOut: 11, pointerW: 2.5,
+  tickIn: 20.5, tickOut: 22, ticks: 11, tickZoom: 1.25, detentOut: 21.75, detentW: 1.5,
+  applied: 16.5, appliedW: 1.5, appliedMinDeg: 4, focus: 21.5, focusW: 1, shadowDy: 1,
+  shadowDragDy: 2 });
+/** A disabled knob's value arc: dashed, butt-ended, so the gaps stay open. */
+const DISABLED_DASH = '2 3';
 const FADER = { travel: FADER_TRAVEL, capW: 16, capH: 8, trackW: 4 };
 const SWITCH = { w: 14, h: 28, inset: 2, leverW: 10 };
+/** The cap highlight's intensity class: the hw-sheen key of tailwind.config.cjs. */
+const SHEEN_CLASS = 'opacity-hw-sheen';
+/** The cap shadow's intensity class: the hw-shadow key, as the cable's shadow. */
+const SHADOW_CLASS = 'opacity-hw-shadow';
 
 /**
  * Each kind's extent, graph units, centred on the origin: everything controlSvg draws in any
@@ -615,36 +630,75 @@ function appliedAt(applied, value, p) {
   return Math.abs(toNorm(a, p) - toNorm(value, p)) > 1e-9 ? a : null;
 }
 
-function knobShapes(value, applied, p, t, st) {
+/** Radial strokes from r0 to r1 at each angle, as one path's 'M x y L x y' segments. */
+function radialPath(r0, r1, angles) {
+  return angles.map((deg) => {
+    const [x0, y0] = polar(r0, deg);
+    const [x1, y1] = polar(r1, deg);
+    return `M ${x0} ${y0} L ${x1} ${y1}`;
+  }).join(' ');
+}
+
+function knobShapes(value, applied, p, t, st, zoom) {
   const c = t.control;
   const dim = st.disabled;
-  const angle = (v) => -SWEEP_DEG / 2 + SWEEP_DEG * toNorm(v, p);
+  const half = SWEEP_DEG / 2;
+  const angle = (v) => -half + SWEEP_DEG * toNorm(v, p);
   const a = angle(value);
-  const zero = p.min < 0 && p.max > 0 ? angle(0) : -SWEEP_DEG / 2;
-  const ringW = st.dragging ? KNOB.ringW + 1 : KNOB.ringW;
-  const [x0, y0] = polar(3, a);
-  const [x1, y1] = polar(KNOB.cap - 2, a);
-  let mark = '';
-  if (applied !== null) {
-    const [ax0, ay0] = polar(KNOB.ring - 2.5, angle(applied));
-    const [ax1, ay1] = polar(KNOB.ring + 2.5, angle(applied));
-    mark = `<line data-applied="" x1="${ax0}" y1="${ay0}" x2="${ax1}" y2="${ay1}" `
-      + `stroke="${esc(c.pointer)}" stroke-width="1.25" stroke-linecap="round"/>`;
+  // A range across zero starts its arcs at zero (12 o'clock when the range is symmetric), with
+  // a detent tick there; any other range starts at its minimum.
+  const bipolar = p.min < 0 && p.max > 0;
+  const origin = bipolar ? angle(0) : -half;
+  let out = '';
+  if (zoom >= KNOB.tickZoom) {
+    const at = Array.from({ length: KNOB.ticks }, (_, i) => -half + (i * SWEEP_DEG)
+      / (KNOB.ticks - 1));
+    out += `<path d="${radialPath(KNOB.tickIn, KNOB.tickOut, at)}" data-ticks="" fill="none" `
+      + `stroke="${esc(c.track)}" stroke-width="1"/>`;
   }
-  return `<path d="${arcPath(KNOB.ring, -SWEEP_DEG / 2, SWEEP_DEG / 2)}" fill="none" `
-    + `stroke="${esc(c.track)}" stroke-width="${KNOB.ringW}" stroke-linecap="round"/>`
-    + (Math.abs(a - zero) > 0.01 ? `<path d="${arcPath(KNOB.ring, zero, a)}" data-ring="" `
-      + `fill="none" stroke="${esc(dim ? c.disabled : c.ring)}" stroke-width="${ringW}" `
-      + 'stroke-linecap="round"/>' : '')
-    + mark
-    + `<circle cx="0" cy="0" r="${KNOB.cap}" fill="${esc(c.cap)}" `
+  if (bipolar) {
+    const [dx0, dy0] = polar(KNOB.tickIn, origin);
+    const [dx1, dy1] = polar(KNOB.detentOut, origin);
+    out += `<line data-detent="" x1="${dx0}" y1="${dy0}" x2="${dx1}" y2="${dy1}" `
+      + `stroke="${esc(c.track)}" stroke-width="${KNOB.detentW}"/>`;
+  }
+  // Disabled, the unlit arc takes the knurl's tone, so the dashed value arc stays apart.
+  out += `<path d="${arcPath(KNOB.arc, -half, half)}" data-track="" fill="none" `
+    + `stroke="${esc(dim ? c.knurl : c.track)}" stroke-width="${KNOB.arcW}" `
+    + 'stroke-linecap="round"/>';
+  if (Math.abs(a - origin) > 0.01) {
+    out += `<path d="${arcPath(KNOB.arc, origin, a)}" data-ring="" fill="none" `
+      + `stroke="${esc(dim ? c.disabled : c.ring)}" stroke-width="${KNOB.arcW}" `
+      + (dim ? `stroke-dasharray="${DISABLED_DASH}"/>` : 'stroke-linecap="round"/>');
+  }
+  const knurl = Array.from({ length: KNOB.knurls }, (_, i) => (i * 360) / KNOB.knurls);
+  out += `<circle data-skirt="" cx="0" cy="0" r="${KNOB.skirt}" fill="${esc(t.surface.card)}" `
+    + `stroke="${esc(st.hover ? c.pointer : c.edge)}" stroke-width="${KNOB.edgeW}"/>`
+    + `<path d="${radialPath(KNOB.knurlIn, KNOB.knurlOut, knurl)}" data-knurl="" fill="none" `
+    + `stroke="${esc(c.knurl)}" stroke-width="1"/>`;
+  if (applied !== null) {
+    // From the same origin; at the origin itself a short arc, so the split is still seen.
+    const b = angle(applied);
+    const [s0, s1] = Math.abs(b - origin) < KNOB.appliedMinDeg
+      ? [b - KNOB.appliedMinDeg / 2, b + KNOB.appliedMinDeg / 2] : [origin, b];
+    out += `<path d="${arcPath(KNOB.applied, s0, s1)}" data-applied="" fill="none" `
+      + `stroke="${esc(c.applied)}" stroke-width="${KNOB.appliedW}" stroke-linecap="round"/>`;
+  }
+  const [x0, y0] = polar(KNOB.pointerIn, a);
+  const [x1, y1] = polar(KNOB.pointerOut, a);
+  return out
+    + `<circle data-shadow="" class="${SHADOW_CLASS}" cx="0" `
+    + `cy="${st.dragging ? KNOB.shadowDragDy : KNOB.shadowDy}" r="${KNOB.cap}" `
+    + `fill="${esc(t.surface.edge)}" stroke="none"/>`
+    + `<circle data-cap="" cx="0" cy="0" r="${KNOB.cap}" fill="${esc(c.cap)}" `
     + `stroke="${esc(t.surface.edge)}" stroke-width="1"/>`
-    + `<ellipse cx="-3.5" cy="-4.5" rx="5" ry="3.5" fill="${esc(c.capHi)}" fill-opacity="0.6" `
-    + 'stroke="none"/>'
-    + `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" `
-    + `stroke="${esc(dim ? c.disabled : c.pointer)}" stroke-width="2.5" stroke-linecap="round"/>`
-    + (st.focus ? `<circle cx="0" cy="0" r="${KNOB.focus}" fill="none" `
-      + `stroke="${esc(c.focus)}" stroke-width="2"/>` : '');
+    + `<ellipse class="${SHEEN_CLASS}" cx="-3.5" cy="-4.5" rx="5" ry="3.5" `
+    + `fill="${esc(c.capHi)}" stroke="none"/>`
+    + `<line data-pointer="" x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" `
+    + `stroke="${esc(dim ? c.disabled : c.pointer)}" stroke-width="${KNOB.pointerW}" `
+    + 'stroke-linecap="round"/>'
+    + (st.focus ? `<circle data-focus="" cx="0" cy="0" r="${KNOB.focus}" fill="none" `
+      + `stroke="${esc(c.focus)}" stroke-width="${KNOB.focusW}"/>` : '');
 }
 
 function faderShapes(value, applied, p, t, st) {
@@ -661,7 +715,7 @@ function faderShapes(value, applied, p, t, st) {
   const from = bipolar ? yOf(0) : half + 2;
   const [f0, f1] = y < from ? [y, from] : [from, y];
   return `<rect x="${-tw / 2}" y="${top}" width="${tw}" height="${len}" rx="${tw / 2}" `
-    + `fill="${esc(c.track)}" stroke="${esc(t.surface.edge)}" stroke-width="0.5"/>`
+    + `fill="${esc(t.surface.edge)}" stroke="${esc(c.track)}" stroke-width="1"/>`
     + (f1 - f0 > 0.01 ? `<rect x="${-tw / 2}" y="${f0}" width="${tw}" height="${num(f1 - f0)}" `
       + `rx="${tw / 2}" fill="${esc(st.disabled ? c.disabled : c.ring)}" stroke="none"/>` : '')
     + (applied !== null ? `<line data-applied="" x1="${-ax}" y1="${yOf(applied)}" x2="${ax}" `
@@ -695,7 +749,7 @@ function switchShapes(value, applied, p, t, st) {
   }
   const ay = applied !== null ? centre(index(applied)) : null;
   return `<rect x="${-x}" y="${-SWITCH.h / 2}" width="${SWITCH.w}" `
-    + `height="${SWITCH.h}" rx="3" fill="${esc(c.track)}" stroke="${esc(t.surface.edge)}" `
+    + `height="${SWITCH.h}" rx="3" fill="${esc(t.surface.edge)}" stroke="${esc(c.track)}" `
     + 'stroke-width="1"/>'
     + detents
     + (ay !== null && ay !== yc ? `<line data-applied="" x1="${-x - 5}" y1="${ay}" `
@@ -714,12 +768,17 @@ const SHAPES = Object.freeze({ knob: knobShapes, fader: faderShapes, switch: swi
 
 /**
  * One control as an SVG '<g>' string, centred on the origin inside CONTROL_BOX[kind], drawn
- * only from `tokens` (synthTokens): knob = track, value ring (control.ring), cap with one
- * highlight, pointer; fader = track, value fill (from zero on a range across zero) and cap;
+ * only from `tokens` (synthTokens): knob = unlit arc (control.track), value arc (control.ring;
+ * from zero, with a detent tick, on a range across zero; dashed while disabled), skirt with its
+ * edge (control.edge, control.pointer on hover) and knurl, cap with its shadow (1 down, 2 while
+ * dragged) and one highlight, pointer, the scale ticks from zoom 1.25, the focus ring;
+ * fader = slot outlined in control.track, value fill (from zero on a range across zero) and cap;
  * switch = one lever position per option of an enum of up to four or a boolean, with detents
  * past two (a number, or more options, is refused: draw it as a knob). `applied`, when given
- * and elsewhere than `value`, draws a second, thin marker in control.pointer where the engine's
- * applied value is (the requested and applied split). An invisible hit rect of at least
+ * and elsewhere than `value`, draws a second, thin marker where the engine's applied value is
+ * (the requested and applied split): on a knob an arc at r 16.5 in control.applied from the
+ * value arc's origin, on a fader or a switch a line in control.pointer. `state` is { focus,
+ * dragging, disabled, hover }. An invisible hit rect of at least
  * HIT_PX / zoom graph units, and never smaller than the box, takes the pointer, so the target
  * stays 44 screen px at any zoom and holds the whole drawing; the drawing takes none. Every
  * shape sets its own stroke.
@@ -743,6 +802,7 @@ export function controlSvg({ kind, value, applied, param, tokens, zoom = 1, stat
   return `<g data-control="${kind}">`
     + `<rect data-hit="" x="${num(-w / 2)}" y="${num(-h / 2)}" width="${w}" `
     + `height="${h}" fill="none" stroke="none" pointer-events="all"/>`
-    + `<g pointer-events="none">${shapes(v, appliedAt(applied, v, param), param, tokens, st)}</g>`
+    + `<g pointer-events="none">${shapes(v, appliedAt(applied, v, param), param, tokens, st,
+      zoom)}</g>`
     + '</g>';
 }

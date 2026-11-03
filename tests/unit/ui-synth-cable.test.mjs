@@ -9,10 +9,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import {
-  CABLE_DASH, CABLE_MIN_SAG, REFUSED_DASH, cableCurve, cableSvg, plugSvg,
+  CABLE_DASH, CABLE_HIT_PX, CABLE_MAX_SAG, CABLE_MIN_SAG, REFUSED_DASH, cableCurve, cableSvg,
+  plugSvg,
 } from '../../src/js/ui/synth/cable.js';
-import { TOKENS, colourLiterals, shapesWithoutStroke, paints, tokenValues } from
-  './ui-synth-fixture.mjs';
+import { TOKENS, colourLiterals, shapesWithoutStroke, paints, tokenValues, intensityLiterals }
+  from './ui-synth-fixture.mjs';
 
 const NUM = '(-?\\d+(?:\\.\\d+)?(?:e[-+]?\\d+)?)';
 const CURVE = new RegExp(`^M ${NUM} ${NUM} C ${NUM} ${NUM} ${NUM} ${NUM} ${NUM} ${NUM}$`);
@@ -78,10 +79,49 @@ test('the sag grows with horizontal distance, vertical distance and slack', () =
   assert.ok(sagOf(o, { x: 300, y: 0 }) > sagOf(o, { x: 100, y: 0 }), 'horizontal');
   assert.ok(sagOf(o, { x: 0, y: 300 }) > sagOf(o, { x: 0, y: 100 }), 'vertical');
   assert.ok(sagOf(o, { x: 100, y: 100 }) > sagOf(o, { x: 100, y: 0 }), 'both');
-  assert.ok(sagOf(o, { x: 300, y: 0 }, { slack: 0.4 }) > sagOf(o, { x: 300, y: 0 },
+  assert.ok(sagOf(o, { x: 200, y: 0 }, { slack: 0.28 }) > sagOf(o, { x: 200, y: 0 },
     { slack: 0.2 }), 'slack');
-  const s = sagOf(o, { x: 400, y: 0 }, { slack: 0.25 });
-  assert.ok(Math.abs(s - 100) < 1e-6, `slack x distance: ${s}`);
+  const s = sagOf(o, { x: 200, y: 0 }, { slack: 0.25 });
+  assert.ok(Math.abs(s - 50) < 1e-6, `slack x distance: ${s}`);
+});
+
+/** The lowest point of a cableCurve path (largest y), sampled densely. */
+const lowest = (d) => Math.max(...Array.from({ length: 2001 }, (_, i) => at(d, i / 2000).y));
+
+test('a long cable hangs at most CABLE_MAX_SAG (60) below its chord', () => {
+  assert.equal(CABLE_MAX_SAG, 60);
+  const o = { x: 0, y: 0 };
+  for (const b of [{ x: 240, y: 0 }, { x: 1800, y: 0 }, { x: 900, y: 700 }, { x: 0, y: 1200 }]) {
+    for (const slack of [0.25, 0.4, 1]) {
+      const s = sagOf(o, b, { slack });
+      assert.ok(s <= CABLE_MAX_SAG + 1e-6, `${JSON.stringify(b)} slack ${slack}: sag ${s}`);
+    }
+  }
+  const level = sagOf(o, { x: 1800, y: 0 });
+  assert.ok(Math.abs(level - CABLE_MAX_SAG) < 1e-6, `a long level cable sags the most: ${level}`);
+  assert.ok(sagOf(o, { x: 100, y: 0 }) < CABLE_MAX_SAG, 'a short one sags less');
+});
+
+test('given its viewBox, a cable never hangs below the box, however long', () => {
+  const box = { x: 0, y: 0, width: 1900, height: 400 };
+  const bottom = box.y + box.height;
+  for (const [a, b] of [[{ x: 20, y: 380 }, { x: 1880, y: 380 }], [{ x: 20, y: 390 },
+    { x: 1500, y: 300 }], [{ x: 300, y: 395 }, { x: 310, y: 395 }], [{ x: 0, y: 360 },
+    { x: 1900, y: 400 }], [{ x: 40, y: 10 }, { x: 1200, y: 20 }]]) {
+    const d = cableCurve(a, b, { box });
+    const [p0, , , p3] = points(d);
+    assert.deepEqual([p0, p3], [a, b], 'the ends do not move');
+    const low = lowest(d);
+    assert.ok(low <= bottom + 1e-6, `${JSON.stringify([a, b])}: lowest ${low} > ${bottom}`);
+    assert.ok(sagOf(a, b, { box }) >= 0, 'and it still hangs down, or lies straight');
+  }
+  const free = [{ x: 40, y: 10 }, { x: 1200, y: 20 }];
+  assert.equal(cableCurve(...free, { box }), cableCurve(...free), 'room enough: unchanged');
+  const tight = [{ x: 20, y: 380 }, { x: 1880, y: 380 }];
+  assert.ok(Math.abs(lowest(cableCurve(...tight, { box })) - bottom) < 0.01, 'it uses the room');
+  const svg = draw({ from: tight[0], to: tight[1], box });
+  assert.ok(svg.includes(`d="${cableCurve(...tight, { box })}"`), 'cableSvg passes the box on');
+  assert.throws(() => cableCurve(A, B, { box: { x: 0, y: 0, width: 10, height: NaN } }), /box/);
 });
 
 test('the sag never falls below the minimum, and a == b stays finite', () => {
@@ -181,10 +221,57 @@ test('the pointer reaches the main stroke group only', () => {
     assert.doesNotMatch(svg.replace(/<g data-main="" pointer-events="stroke">.*?<\/g>/, ''),
       /pointer-events="(?!none)/, 'nothing else takes the pointer');
   }
-  const hit = /<path data-hit=""[^>]*>/.exec(draw())[0];
-  assert.ok(width(hit) >= 20, 'a wide hit path');
-  assert.equal(width(/<path data-hit=""[^>]*>/.exec(draw({ zoom: 2 }))[0]), width(hit) / 2,
-    'the hit width is in screen px');
+  assert.equal(CABLE_HIT_PX, 44);
+  for (const zoom of [0.5, 1, 1.45, 2, 3]) {
+    const hit = /<path data-hit=""[^>]*>/.exec(draw({ zoom }))[0];
+    assert.equal(width(hit), 44, `zoom ${zoom}: 44 wide`);
+    assert.match(hit, /\svector-effect="non-scaling-stroke"/,
+      `zoom ${zoom}: the width is in screen px, whatever the zoom`);
+  }
+  for (const part of ['data-stroke', 'data-shadow']) {
+    assert.doesNotMatch(new RegExp(`<path ${part}=""[^>]*>`).exec(draw())[0], /vector-effect/,
+      `${part} scales with the drawing`);
+  }
+});
+
+test('the hit path is hidden, not transparent: it takes the stroke through visibility', () => {
+  for (const state of STATES) {
+    const svg = draw({ state });
+    const hit = /<path data-hit=""[^>]*>/.exec(svg)[0];
+    assert.match(hit, /\svisibility="hidden"/, JSON.stringify(state));
+    assert.doesNotMatch(hit, /opacity/, `${JSON.stringify(state)}: no opacity on the hit path`);
+    // pointer-events="stroke" ignores visibility, so the hidden path still takes the pointer:
+    // it sits in the main group, whose pointer-events="stroke" it inherits.
+    assert.match(svg, /<g data-main="" pointer-events="stroke"><path data-hit=""/);
+    assert.doesNotMatch(hit, /pointer-events="(?!stroke)/);
+  }
+});
+
+const shadowOf = (svg) => /<path data-shadow=""[^>]*>/.exec(svg)[0];
+const dropOf = (el) => {
+  const m = /transform="translate\(([^ ]+) ([^)]+)\)"/.exec(el);
+  return m ? [Number(m[1]), Number(m[2])] : [0, 0];
+};
+
+test('the soft shadow is the shadow token at hw-shadow: wider, 1 screen px down, 3 lifted', () => {
+  for (const state of STATES) {
+    for (const zoom of [0.5, 1, 2, 3]) {
+      const svg = draw({ state, zoom });
+      const shadow = shadowOf(svg);
+      const where = `${JSON.stringify(state)} at ${zoom}`;
+      assert.ok(shadow.includes(`stroke="${TOKENS.cable.shadow}"`), `${where}: the shadow token`);
+      assert.match(shadow, /\sclass="opacity-hw-shadow"/, `${where}: the hw-shadow intensity`);
+      assert.doesNotMatch(shadow, /opacity="|filter|style=/, `${where}: no literal intensity`);
+      assert.ok(width(shadow) > width(mainStroke(svg)), `${where}: wider than the stroke`);
+      assert.ok(svg.indexOf('data-shadow') < svg.indexOf('data-stroke'), `${where}: under it`);
+      const [dx, dy] = dropOf(shadow);
+      assert.equal(dx, 0, `${where}: straight down`);
+      assert.ok(Math.abs(dy * zoom - (state.dragging ? 3 : 1)) < 1e-5,
+        `${where}: the offset is in screen px (${dy} graph units)`);
+    }
+  }
+  assert.ok(dropOf(shadowOf(draw({ state: { dragging: true } })))[1]
+    > dropOf(shadowOf(draw()))[1], 'dragging lifts the shadow');
 });
 
 test('the signal type is shown by the dash pattern of the main stroke', () => {
@@ -276,12 +363,51 @@ test('a refused cable differs from a normal one by shape, not by colour alone', 
   assert.equal(marks.length, 2, 'two strokes in jack.refuse');
   assert.ok(lines.filter((l) => !marks.includes(l)).every((l) => l[0].includes(
     `stroke="${TOKENS.cable.shadow}"`)), 'any underlay is the shadow token');
-  const mid = at(cableCurve(A, B), 0.5);
   for (const l of lines) {
     const [x1, y1, x2, y2] = l.slice(1).map(Number);
-    assert.ok(Math.abs((x1 + x2) / 2 - mid.x) < 0.01 && Math.abs((y1 + y2) / 2 - mid.y) < 0.01,
-      'centred on the curve at t = 0.5');
     assert.ok(Math.hypot(x2 - x1, y2 - y1) >= 6, 'large enough to read');
+  }
+});
+
+/** The centre of the refused cross and how far its drawing reaches from it. */
+function crossOf(svg) {
+  const lines = [.../<g data-cross=""[^>]*>(.*?)<\/g>/.exec(svg)[1].matchAll(
+    /<line x1="([^"]+)" y1="([^"]+)" x2="([^"]+)" y2="([^"]+)"[^>]*stroke-width="([^"]+)"/g)];
+  const [x1, y1, x2, y2] = lines[0].slice(1, 5).map(Number);
+  const c = { x: (x1 + x2) / 2, y: (y1 + y2) / 2 };
+  const reach = Math.max(...lines.map((l) => {
+    const [a, b, e, f, w] = l.slice(1).map(Number);
+    assert.ok(Math.abs((a + e) / 2 - c.x) < 1e-6 && Math.abs((b + f) / 2 - c.y) < 1e-6,
+      'one centre');
+    return Math.hypot(e - a, f - b) / 2 + w / 2;
+  }));
+  return { c, reach };
+}
+
+test('the refused cross sits at the target end, on the curve, clear of the plug', () => {
+  const PLUG = 7 + 1.5 / 2; // plugSvg's sleeve and half its ring
+  for (const [from, to] of [[A, B], [B, A], [{ x: 0, y: 0 }, { x: 0, y: 200 }],
+    [{ x: 0, y: 0 }, { x: 900, y: 40 }], [{ x: 50, y: 50 }, { x: 60, y: 50 }]]) {
+    const svg = cableSvg({ id: 'r', from, to, type: 'CONTROL', colour: 'c', tokens: TOKENS,
+      state: { refused: true } });
+    const { c, reach } = crossOf(svg);
+    const where = JSON.stringify([from, to]);
+    const d = cableCurve(from, to);
+    const samples = Array.from({ length: 40001 }, (_, i) => at(d, i / 40000));
+    const onCurve = Math.min(...samples.map((p) => Math.hypot(p.x - c.x, p.y - c.y)));
+    assert.ok(onCurve < 0.05, `${where}: on the curve (${onCurve})`);
+    const toEnd = Math.hypot(c.x - to.x, c.y - to.y);
+    const farthest = Math.max(...samples.map((p) => Math.hypot(p.x - to.x, p.y - to.y)));
+    if (farthest - reach >= PLUG) {
+      assert.ok(toEnd - reach >= PLUG, `${where}: clear of the plug (${toEnd} - ${reach})`);
+    } else {
+      assert.ok(toEnd >= farthest - 0.05, `${where}: too short to clear it, so as far as it can`);
+    }
+    const chord = Math.hypot(to.x - from.x, to.y - from.y);
+    if (chord > 100) {
+      assert.ok(toEnd <= 30, `${where}: at the target end (${toEnd} from it)`);
+      assert.ok(toEnd < Math.hypot(c.x - from.x, c.y - from.y), `${where}: nearer the target`);
+    }
   }
 });
 
@@ -291,7 +417,8 @@ test('the sheen stripe is drawn only when asked, and takes no pointer', () => {
   assert.match(sheen, /pointer-events="none"/);
   assert.ok(width(sheen) < width(mainStroke(svg)));
   assert.ok(sheen.includes(`stroke="${TOKENS.cable.sheen}"`), 'the cable.sheen token');
-  assert.match(sheen, /stroke-opacity="0.3"/);
+  assert.match(sheen, /\sclass="opacity-hw-sheen"/, 'the intensity is the hw-sheen key');
+  assert.doesNotMatch(sheen, /opacity="/, 'no opacity attribute');
   assert.match(sheen, /transform="translate\(-0.7 -0.7\)"/);
   const at2 = /<path data-sheen=""[^>]*>/.exec(draw({ sheen: true, zoom: 2 }))[0];
   assert.match(at2, /transform="translate\(-0.35 -0.35\)"/, 'the offset is in screen px');
@@ -343,6 +470,37 @@ test('plugSvg is a seated plug at its point, with the cable colour, taking no po
 });
 
 // ---------------------------------------------------------------- purity and cost
+
+test('no literal opacity, alpha or shadow in any cable, plug or cable.js itself (v4)', () => {
+  for (const type of TYPES) {
+    for (const state of STATES) {
+      for (const sheen of [false, true]) {
+        for (const zoom of [0.5, 1, 2]) {
+          const svg = draw({ type, state, sheen, zoom });
+          assert.deepEqual(intensityLiterals(svg), [], `${type} ${JSON.stringify(state)}`);
+        }
+      }
+    }
+  }
+  assert.deepEqual(intensityLiterals(plugSvg({ at: B, colour: TOKENS.cable.palette[0],
+    tokens: TOKENS })), [], 'plug');
+  const src = readFileSync(new URL('../../src/js/ui/synth/cable.js', import.meta.url), 'utf8');
+  assert.deepEqual(intensityLiterals(src), [], 'cable.js source');
+});
+
+test('the intensity scan catches what it refuses', () => {
+  for (const bad of ['stroke-opacity="0.35"', 'stroke-opacity="0"', 'fill-opacity=".6"',
+    'opacity="1"', "flood-opacity='0.2'", 'stop-opacity="0.5"', 'style="opacity: 0.3"',
+    'rgba(0, 0, 0, 0.3)', 'hsla(0 0% 0% / 0.3)', '#000', '#0a0b0c80', 'class="opacity-[0.3]"',
+    'class="bg-black/50"', 'box-shadow: 0 1px 2px', 'filter: drop-shadow(0 1px 1px)',
+    'class="shadow-[0_1px_2px]"', '<feDropShadow dx="0"/>']) {
+    assert.notDeepEqual(intensityLiterals(bad), [], bad);
+  }
+  for (const ok of ['class="opacity-hw-sheen"', 'data-shadow=""', 'visibility="hidden"',
+    `stroke="${TOKENS.cable.shadow}"`, 'url(#grain)', 'tokens.cable.shadow']) {
+    assert.deepEqual(intensityLiterals(ok), [], ok);
+  }
+});
 
 test('cable.js is pure: no import from the Synth view, no DOM, no layout', () => {
   const src = readFileSync(new URL('../../src/js/ui/synth/cable.js', import.meta.url), 'utf8')

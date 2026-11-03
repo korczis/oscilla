@@ -2,19 +2,21 @@
 // token API agreed 2026-11-02): synthTokens(el) reads OSCILLA's --osc-* custom properties at
 // run time into one deep-frozen set of five groups, a missing value reads currentColor, and
 // tokensFrom(lookup) is the same mapping without a DOM. The layer's sources carry no colour
-// literal and no product name (project.visual-identity-lock v3).
+// literal and no product name (project.visual-identity-lock v3), and no role is an intensity:
+// opacity is the hw-* Tailwind keys', and the cable shadow is an opaque token (v4).
 //   node --test tests/unit/ui-synth-tokens.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { SYNTH_TOKEN_NAMES, synthTokens, tokensFrom } from '../../src/js/ui/synth/tokens.js';
-import { NAMED } from './ui-synth-fixture.mjs';
+import { NAMED, intensityLiterals } from './ui-synth-fixture.mjs';
 
 const SHAPE = {
   surface: ['plateHi', 'plateLo', 'card', 'edge'],
   text: ['label', 'value', 'dim'],
-  control: ['cap', 'capHi', 'ring', 'track', 'pointer', 'focus', 'disabled'],
+  control: ['cap', 'capHi', 'ring', 'track', 'pointer', 'focus', 'disabled', 'edge', 'knurl',
+    'applied'],
   jack: ['body', 'ring', 'normal', 'refuse'],
   cable: ['palette', 'shadow', 'sheen'],
 };
@@ -57,6 +59,11 @@ test('the names follow the Synth panel roles the lane file recorded', () => {
   assert.equal(n.control.cap, '--osc-surface-1');
   assert.equal(n.control.capHi, '--osc-surface-4');
   assert.equal(n.control.focus, '--osc-focus');
+  assert.equal(n.control.track, '--osc-text-dim', 'the unlit arc and the slot can be seen');
+  assert.equal(n.control.edge, '--osc-text-dim', 'the skirt edge can be seen');
+  assert.equal(n.control.pointer, '--osc-text');
+  assert.equal(n.control.knurl, '--osc-border', 'the knurl is decorative');
+  assert.equal(n.control.applied, '--osc-purple');
   assert.equal(n.jack.refuse, '--osc-red');
   assert.equal(n.cable.shadow, '--osc-bg');
   assert.equal(n.cable.sheen, '--osc-text', 'the sheen is its own token (dev-53, 2026-11-02)');
@@ -139,5 +146,94 @@ test('src/js/ui/synth: no colour literal, no url() but #fragment, no product nam
     assert.doesNotMatch(code, /url\((?!#)/i, `${f}: url() other than a fragment`);
     const named = NAMED_VALUE.exec(code);
     assert.equal(named, null, `${f}: named colour ${named && named[2]}`);
+  }
+});
+
+/** The value of `name` in each theme block of tokens.css that declares it. */
+function themeValues(name) {
+  const css = tokensCss.replace(/\/\*[\s\S]*?\*\//g, '');
+  return [...css.matchAll(new RegExp(`${name}\\s*:\\s*([^;]+);`, 'g'))].map((m) => m[1].trim());
+}
+
+test('no role is an intensity; the cable shadow is an opaque colour in both themes (v4)', () => {
+  for (const [group, roles] of Object.entries(SYNTH_TOKEN_NAMES)) {
+    for (const role of Object.keys(roles)) {
+      assert.doesNotMatch(role, /opacity|alpha|blur|glow|intensity/i,
+        `${group}.${role}: an intensity is a hw-* Tailwind key, not a colour token`);
+    }
+  }
+  const shadow = themeValues(SYNTH_TOKEN_NAMES.cable.shadow);
+  assert.ok(shadow.length >= 2, `${SYNTH_TOKEN_NAMES.cable.shadow} in the dark and light theme`);
+  for (const value of shadow) {
+    assert.match(value, /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i,
+      `the shadow underlay is opaque, so it needs no opacity of its own: ${value}`);
+  }
+});
+
+test('no literal opacity, alpha or shadow in tokens.js or in the set it returns (v4)', () => {
+  const src = readFileSync(new URL('../../src/js/ui/synth/tokens.js', import.meta.url), 'utf8');
+  assert.deepEqual(intensityLiterals(src), [], 'tokens.js source');
+  const set = tokensFrom((name) => `var(${name})`);
+  assert.deepEqual(intensityLiterals(JSON.stringify(set)), [], 'the token set');
+  assert.deepEqual(intensityLiterals(JSON.stringify(synthTokens(null))), [], 'with no DOM');
+});
+
+// ---------------------------------------------------------------- contrast (WCAG 2.2)
+
+/** The theme's resolved --osc-* colours: dark (:root) and light ([data-theme="light"] over it),
+ *  var() references followed. */
+function themes() {
+  const css = tokensCss.replace(/\/\*[\s\S]*?\*\//g, '');
+  const block = (sel) => {
+    const at = css.indexOf(`${sel} {`);
+    assert.ok(at >= 0, `tokens.css has ${sel}`);
+    const open = css.indexOf('{', at);
+    return Object.fromEntries([...css.slice(open + 1, css.indexOf('}', open))
+      .matchAll(/(--osc-[\w-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
+  };
+  const dark = block(':root');
+  return { dark, light: { ...dark, ...block('[data-theme="light"]') } };
+}
+
+function hexOf(theme, name) {
+  let v = theme[name];
+  for (let i = 0; i < 8 && /^var\(/.test(v || ''); i++) v = theme[/^var\((--[\w-]+)\)$/.exec(v)[1]];
+  assert.match(v || '', /^#[0-9a-f]{6}$/i, `${name} resolves to an opaque colour: ${v}`);
+  return v;
+}
+
+const luminance = (hex) => {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+const contrast = (a, b) => {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+};
+
+// The control roles that only decorate (WCAG 1.4.11 asks nothing of them): the cap and its
+// highlight, and the knurl. Every other control role marks the control or its value.
+const DECORATIVE = ['cap', 'capHi', 'knurl'];
+const PLATES = [SYNTH_TOKEN_NAMES.surface.plateHi, SYNTH_TOKEN_NAMES.surface.plateLo];
+
+test('every graphic role of the knob, fader and switch holds 3:1 on the plate, text 4.5:1', () => {
+  assert.deepEqual(PLATES, ['--osc-surface-3', '--osc-surface-1']);
+  const graphic = Object.keys(SYNTH_TOKEN_NAMES.control).filter((r) => !DECORATIVE.includes(r));
+  const want = [...graphic.map((r) => [`control.${r}`, SYNTH_TOKEN_NAMES.control[r], 3]),
+    ['text.label', SYNTH_TOKEN_NAMES.text.label, 4.5],
+    ['text.value', SYNTH_TOKEN_NAMES.text.value, 4.5]];
+  const short = [];
+  for (const [theme, t] of Object.entries(themes())) {
+    for (const plate of PLATES) {
+      for (const [role, name, min] of want) {
+        const ratio = contrast(hexOf(t, name), hexOf(t, plate));
+        if (ratio < min) short.push(`${theme} ${role} (${name}) on ${plate}: ${ratio.toFixed(2)}`);
+      }
+    }
+  }
+  assert.deepEqual(short, [], 'under 3:1 for a graphic, 4.5:1 for a label or a value');
+  for (const role of ['ring', 'track', 'edge', 'pointer', 'focus', 'disabled', 'applied']) {
+    assert.ok(graphic.includes(role), `control.${role} is a graphic role`);
   }
 });
