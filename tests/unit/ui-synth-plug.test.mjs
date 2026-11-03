@@ -1,7 +1,10 @@
 // The shared synth-theme layer's patch plug (src/js/ui/synth/plug.js, plan F013 entry 3, slice
-// S6; p2's core): plugSvg draws a sleeve of diameter 14 that fits inside a jack nut of 22 across
-// flats, a boot ring 3 wide in the cable's colour (3:1 on the jack body in both themes), a grip
-// collar of three ribs turned to the way the cable leaves, a tip and a centre, and a highlight at
+// S6; p2's core): plugSvg draws a sleeve of diameter 14 that fits inside dev-53's jack nut (NUT_R
+// 17, about 29.4 across flats) and, seated, inside the inner edge of a circle, diamond or square
+// jack's ring (the trigger triangle waits for dev-53), a boot ring 3 wide in the cable's colour
+// with a rim of the sleeve on both sides (3:1 on the sleeve for every palette colour in both
+// themes, so it never borders the plate), a grip collar of three ribs turned to the way the cable
+// leaves, a tip and a centre in the control edge, and a highlight at
 // the hw-sheen intensity; it takes no pointer, so the jack's hit wins. Held, it is 1.1 times as
 // large with its shadow lifted to 3; refused, it carries a cross inside its own sleeve, and the
 // cable's own refused cross never overlaps it (or is left out with cross: false, so one mark
@@ -10,18 +13,29 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
-import { PLUG, plugSvg } from '../../src/js/ui/synth/plug.js';
-import { cableDirections, cableSvg, plugSvg as plugFromCable }
+import { PLUG, plugState, plugSvg } from '../../src/js/ui/synth/plug.js';
+import { cableDirections, cableParts, cableSvg, plugSvg as plugFromCable }
   from '../../src/js/ui/synth/cable.js';
 import { LAYER_TOKENS, TOKENS, colourLiterals, contrastOf, intensityLiterals, paints,
   shapesWithoutStroke, tokenHex, tokenThemes, tokenValues } from './ui-synth-fixture.mjs';
 
 const AT = { x: 40.5, y: -12.25 };
 const COLOUR = TOKENS.cable.palette[2];
-/** Half the nut's across-flats width: the radius of the circle the hex nut holds. The plan's
- *  22 across flats is the bound the plug is drawn to; the jack the panel draws (jack.js, dev-53's)
- *  is checked on its own below, where this tree carries it. */
-const NUT_INNER = 22 / 2;
+/** dev-53's jack as origin/feat/synth-w1-adoption 0482138d draws it (src/js/ui/synth/jack.js,
+ *  read with git show; pinned here because this branch does not carry the file, and checked
+ *  against it below wherever the tree does): the socket ring's radius JACK_R, jackSvg's default
+ *  ring stroke, the nut's circumradius NUT_R (a hexagon: about 29.4 across flats), and the vertex
+ *  of each portGlyph shape at radius r about the centre. */
+const JACK = Object.freeze({ r: 13, ringWidth: 2, nutR: 17 });
+const GLYPH = Object.freeze({
+  circle: null,
+  diamond: (r) => [[0, -r], [r, 0], [0, r], [-r, 0]],
+  triangle: (r) => [[0, -r], [r * 0.95, r * 0.7], [-r * 0.95, r * 0.7]],
+  square: (r) => [[-r * 0.8, -r * 0.8], [r * 0.8, -r * 0.8], [r * 0.8, r * 0.8],
+    [-r * 0.8, r * 0.8]],
+});
+/** The radius of the circle a hex nut holds: its distance to a flat, NUT_R cos 30 deg. */
+const NUT_INNER = JACK.nutR * Math.cos(Math.PI / 6);
 const JACK_URL = new URL('../../src/js/ui/synth/jack.js', import.meta.url);
 const STATES = ['seated', 'held', 'refused', { held: true, refused: true }, {}];
 const DIRS = [undefined, { x: 1, y: 0 }, { x: -3, y: 4 }, { x: 0, y: -1 }, { x: 0.2, y: 1 }];
@@ -65,7 +79,8 @@ const one = (svg, attr) => elements(svg).find((e) => attr in e.attrs);
 
 test('the plug fits inside the jack nut, seated and held, within the room the cable keeps', () => {
   assert.equal(PLUG.sleeve * 2, 14, 'a sleeve of diameter 14');
-  assert.ok(PLUG.room < NUT_INNER, 'inside a nut of 22 across flats');
+  assert.ok(Math.abs(NUT_INNER * 2 - 29.44) < 0.01, 'NUT_R 17 is about 29.4 across flats');
+  assert.ok(PLUG.room < NUT_INNER, `inside the nut, ${NUT_INNER.toFixed(2)} to a flat`);
   for (const dir of DIRS) {
     for (const state of STATES) {
       const svg = draw({ state, direction: dir });
@@ -78,31 +93,49 @@ test('the plug fits inside the jack nut, seated and held, within the room the ca
   }
 });
 
+/** The ring's inner and outer edge, and the tip's outer edge, from the markup. */
+function bands(svg) {
+  const ring = one(svg, 'data-ring').attrs;
+  const tip = one(svg, 'data-tip').attrs;
+  return { inner: n(ring.r) - n(ring['stroke-width']) / 2,
+    outer: n(ring.r) + n(ring['stroke-width']) / 2,
+    tip: n(tip.r) + n(tip['stroke-width']) / 2, sleeve: n(one(svg, 'data-sleeve').attrs.r) };
+}
+
 test('sleeve, boot ring, grip collar, tip, centre and highlight, each from its token', () => {
   const svg = draw();
   const sleeve = one(svg, 'data-sleeve').attrs;
   assert.equal(n(sleeve.r), 7);
-  assert.equal(sleeve.fill, TOKENS.surface.plateHi, 'the sleeve is surface-3');
+  assert.equal(sleeve.fill, TOKENS.surface.plateLo, 'the sleeve is surface-1, the plate\'s low');
   const ring = one(svg, 'data-ring').attrs;
   assert.equal(ring.stroke, COLOUR, 'the boot ring is the cable colour');
-  assert.equal(n(ring['stroke-width']), 3, 'and 3 wide');
+  assert.equal(n(ring['stroke-width']), PLUG.ring, 'and 3 wide');
   assert.equal(ring.fill, 'none');
-  assert.equal(n(ring.r) + n(ring['stroke-width']) / 2, n(sleeve.r),
-    'its outer edge is the sleeve\'s, so it borders the jack body');
+  const b = bands(svg);
+  assert.equal(PLUG.rim, 1);
+  assert.ok(Math.abs(b.sleeve - b.outer - PLUG.rim) < 1e-9,
+    'a rim of the sleeve, 1 wide, outside the ring: the ring never borders the plate');
+  assert.ok(b.inner - b.tip >= 0.5 - 1e-9, `the sleeve between the tip and the ring (${b.tip}, `
+    + `${b.inner})`);
   const ribs = elements(svg).filter((e) => 'data-rib' in e.attrs);
   assert.equal(ribs.length, 3, 'three ribs');
-  for (const r of ribs) assert.equal(r.attrs.stroke, TOKENS.control.knurl, 'in --osc-border');
-  assert.equal(one(svg, 'data-tip').attrs.stroke, TOKENS.surface.edge, 'the tip is --osc-bg');
-  assert.equal(one(svg, 'data-centre').attrs.fill, TOKENS.surface.edge, 'the centre too');
+  for (const r of ribs) {
+    assert.equal(r.attrs.stroke, TOKENS.surface.plateLo, 'grooves cut to the sleeve');
+    for (const [x, y] of [['x1', 'y1'], ['x2', 'y2']]) {
+      const d = dist(n(r.attrs[x]), n(r.attrs[y]));
+      assert.ok(d > b.inner + 1e-6 && d < b.outer - 1e-6, `a rib lies across the ring (${d})`);
+    }
+  }
+  assert.equal(one(svg, 'data-tip').attrs.stroke, TOKENS.control.edge, 'the tip: control edge');
+  assert.equal(one(svg, 'data-centre').attrs.fill, TOKENS.control.edge, 'the centre too');
   const sheen = one(svg, 'data-sheen').attrs;
   assert.equal(sheen.class, 'opacity-hw-sheen', 'the highlight is the hw-sheen intensity');
   assert.equal(sheen.stroke, TOKENS.cable.sheen);
   const shadow = one(svg, 'data-shadow').attrs;
   assert.equal(shadow.class, 'opacity-hw-shadow');
   assert.equal(shadow.fill, TOKENS.cable.shadow);
-  assert.equal(TOKENS.surface.plateHi, 'var(--osc-surface-3)');
-  assert.equal(TOKENS.control.knurl, 'var(--osc-border)');
-  assert.equal(TOKENS.surface.edge, 'var(--osc-bg)');
+  assert.equal(TOKENS.surface.plateLo, 'var(--osc-surface-1)');
+  assert.equal(TOKENS.control.edge, 'var(--osc-text-dim)');
 });
 
 test('the boot ring holds 3:1 on the jack body for every cable colour, both themes', async () => {
@@ -118,6 +151,40 @@ test('the boot ring holds 3:1 on the jack body for every cable colour, both them
     }
   }
 });
+
+const tokenName = (paint) => /^var\((--osc-[\w-]+)\)$/.exec(paint)[1];
+
+test('every palette colour holds 3:1 on everything it borders, both themes, both token sets',
+  async () => {
+    // The ring borders only the sleeve (inside, between the ribs, and the rim outside), so the
+    // plate under a held plug (surface-1, -2, -3 or bg) or the jack body under a seated one is
+    // never next to it: on the light plate --osc-green is 2.71:1 on surface-3, 3.28:1 on the
+    // surface-1 sleeve. The tip and the centre hold 3:1 on the sleeve too.
+    const themes = await tokenThemes();
+    for (const set of [TOKENS, LAYER_TOKENS]) {
+      for (const state of STATES) {
+        const svg = plugSvg({ at: AT, colour: COLOUR, tokens: set, state });
+        const sleeve = tokenName(one(svg, 'data-sleeve').attrs.fill);
+        for (const r of elements(svg).filter((e) => 'data-rib' in e.attrs)) {
+          assert.equal(tokenName(r.attrs.stroke), sleeve, 'a groove is the sleeve showing');
+        }
+        const b = bands(svg);
+        const k = b.sleeve / PLUG.sleeve;
+        assert.ok(b.sleeve - b.outer >= PLUG.rim * k - 1e-9, 'the rim outside the ring');
+        const tip = tokenName(one(svg, 'data-tip').attrs.stroke);
+        assert.equal(tokenName(one(svg, 'data-centre').attrs.fill), tip);
+        for (const [name, theme] of Object.entries(themes)) {
+          const base = tokenHex(theme, sleeve);
+          for (const p of set.cable.palette.map(tokenName)) {
+            const ratio = contrastOf(tokenHex(theme, p), base);
+            assert.ok(ratio >= 3, `${name} ${p}: ${ratio.toFixed(2)} on the ${sleeve} sleeve`);
+          }
+          const t = contrastOf(tokenHex(theme, tip), base);
+          assert.ok(t >= 3, `${name} tip ${tip}: ${t.toFixed(2)} on the ${sleeve} sleeve`);
+        }
+      }
+    }
+  });
 
 test('the grip collar turns to the way the cable leaves; down by default', () => {
   const mid = (svg) => {
@@ -189,6 +256,24 @@ test('seated, held and refused: held is 1.1 times as large with its shadow lifte
   }
 });
 
+test('plugState refuses every object that is not a plain record of held and refused', () => {
+  const hidden = { held: true };
+  Object.defineProperty(hidden, 'hold', { value: true, enumerable: false });
+  class State { constructor() { this.held = true; } }
+  for (const [what, bad] of [['a date', new Date(0)], ['a map', new Map([['held', true]])],
+    ['an inherited key', Object.create({ hold: true })], ['a hidden key', hidden],
+    ['a symbol key', { [Symbol('held')]: true }], ['a class instance', new State()],
+    ['a function', () => {}], ['NaN', NaN], ['a symbol', Symbol('held')],
+    ['a bigint', 1n], ['true', true]]) {
+    assert.throws(() => plugState(bad), RangeError, what);
+  }
+  assert.throws(() => plugState(NaN), /not NaN\.$/, 'NaN named as NaN, not null');
+  assert.throws(() => plugState(Symbol('x')), /not Symbol\(x\)\.$/);
+  const bare = Object.assign(Object.create(null), { held: true });
+  assert.deepEqual({ ...plugState(bare) }, { held: true, refused: false }, 'a null prototype');
+  assert.throws(() => plugState({ hold: true }), /^RangeError: plugSvg: state must be /);
+});
+
 test('plugSvg({ at, colour, tokens }) works as before, from cable.js as from plug.js', () => {
   assert.equal(plugFromCable, plugSvg);
   const svg = plugFromCable({ at: { x: 12.5, y: -4 }, colour: TOKENS.cable.palette[1],
@@ -203,9 +288,9 @@ test('plugSvg({ at, colour, tokens }) works as before, from cable.js as from plu
 
 test('a panel\'s narrower token set draws from the jack roles, never currentColor', () => {
   // The patch bay's adapter (layerTokens) passes { jack, cable, surface: { edge } }: no
-  // surface.plateHi and no control group. The sleeve falls back to the jack body and the grip
-  // to the jack ring, the roles the plug used before S6, so a seated plug never turns into a
-  // disc in the page's text colour.
+  // surface.plateLo and no control group. The sleeve and its grooves fall back to the jack
+  // body and the tip to the jack ring (both --osc-text-dim's role), so a seated plug never
+  // turns into a disc in the page's text colour.
   for (const state of STATES) {
     for (const dir of DIRS) {
       const svg = plugSvg({ at: AT, colour: COLOUR, tokens: LAYER_TOKENS, state, direction: dir });
@@ -216,22 +301,76 @@ test('a panel\'s narrower token set draws from the jack roles, never currentColo
       }
       assert.equal(one(svg, 'data-sleeve').attrs.fill, TOKENS.jack.body, 'the sleeve: jack body');
       for (const r of elements(svg).filter((e) => 'data-rib' in e.attrs)) {
-        assert.equal(r.attrs.stroke, TOKENS.jack.ring, 'the grip: jack ring');
+        assert.equal(r.attrs.stroke, TOKENS.jack.body, 'the grooves: jack body');
       }
+      assert.equal(one(svg, 'data-tip').attrs.stroke, TOKENS.jack.ring, 'the tip: jack ring');
     }
   }
   const full = draw();
-  assert.equal(one(full, 'data-sleeve').attrs.fill, TOKENS.surface.plateHi, 'plateHi wins');
+  assert.equal(one(full, 'data-sleeve').attrs.fill, TOKENS.surface.plateLo, 'plateLo wins');
 });
 
-test('the plug fits inside the jack this tree draws, where it carries one', async (t) => {
+/** The inner edge of a portGlyph ring of `shape` at radius r, stroke w: the least distance from
+ *  the centre to the stroke's inside, which a seated plug must not cross. */
+function innerEdge(shape, r, w) {
+  const v = GLYPH[shape] && GLYPH[shape](r);
+  if (!v) return r - w / 2;
+  let least = Infinity;
+  for (let i = 0; i < v.length; i++) {
+    const [ax, ay] = v[i];
+    const [bx, by] = v[(i + 1) % v.length];
+    least = Math.min(least, Math.abs(ax * by - bx * ay) / Math.hypot(bx - ax, by - ay));
+  }
+  return least - w / 2;
+}
+/** A seated plug's reach over every state a seated plug takes and every direction. */
+const seatedReach = () => Math.max(...['seated', 'refused'].flatMap((state) => DIRS.map(
+  (direction) => reach(draw({ state, direction })))));
+
+for (const shape of ['circle', 'diamond', 'square']) {
+  test(`a seated plug sits inside a ${shape} jack's ring, to the inner edge of its stroke`, () => {
+    const edge = innerEdge(shape, JACK.r, JACK.ringWidth);
+    const r = seatedReach();
+    assert.ok(r <= edge, `${shape}: the plug reaches ${r}, the ring's inside ${edge.toFixed(2)}`);
+  });
+}
+
+test('a seated plug sits inside a triangle (TRIGGER) jack\'s ring, to the inner edge of its '
+  + 'stroke', { todo: 'awaiting dev-53: triangle r >= 16.4 or a smaller plug' }, () => {
+  const edge = innerEdge('triangle', JACK.r, JACK.ringWidth);
+  const r = seatedReach();
+  assert.ok(r <= edge, `triangle: the plug reaches ${r}, the ring's inside ${edge.toFixed(2)}`);
+});
+
+test('the pinned jack is the jack this tree draws, where it carries jack.js', async (t) => {
   if (!existsSync(JACK_URL)) {
-    t.skip('jack.js (dev-53\'s) is not on this branch; the plan\'s nut of 22 is checked above');
+    t.skip('jack.js (dev-53\'s) is not on this branch; JACK and GLYPH pin 0482138d');
     return;
   }
-  const { JACK_R } = await import(JACK_URL.href);
-  assert.ok(Number.isFinite(JACK_R), 'jack.js exports JACK_R');
-  assert.ok(PLUG.room < JACK_R, `the plug (${PLUG.room}) inside the socket ring (${JACK_R})`);
+  const jack = await import(JACK_URL.href);
+  assert.equal(jack.JACK_R, JACK.r, 'JACK_R');
+  const at = { x: 100, y: 200 };
+  for (const shape of Object.keys(GLYPH)) {
+    const head = jack.portGlyph(shape, at.x, at.y, JACK.r);
+    const nums = (head.match(/-?\d+(?:\.\d+)?/g) || []).map(Number);
+    if (!GLYPH[shape]) {
+      assert.deepEqual(nums, [at.x, at.y, JACK.r], 'a circle of JACK_R');
+      continue;
+    }
+    const want = GLYPH[shape](JACK.r).map(([x, y]) => [at.x + x, at.y + y]);
+    const got = shape === 'square'
+      ? (([x, y, w, h]) => [[x, y], [x + w, y], [x + w, y + h], [x, y + h]])(nums)
+      : nums.reduce((o, v, i) => (i % 2 ? o[o.length - 1].push(v) : o.push([v])) && o, []);
+    assert.equal(got.length, want.length, `${shape}: ${head}`);
+    got.forEach(([x, y], i) => assert.ok(Math.abs(x - want[i][0]) < 1e-6
+      && Math.abs(y - want[i][1]) < 1e-6, `${shape} vertex ${i}: ${head}`));
+  }
+  const ring = /data-ring="" [^>]*stroke-width="([\d.]+)"/.exec(jack.jackSvg({ key: 'k', x: 0,
+    y: 0, shape: 'circle', label: 'l', ring: 'r', inner: 'i', text: 't', tokens: {} }));
+  assert.equal(n(ring[1]), JACK.ringWidth, 'the default ring stroke');
+  const nut = jack.nutSvg({ x: 0, y: 0, tokens: {} });
+  const pts = [...nut.matchAll(/(-?[\d.]+) (-?[\d.]+)/g)].map((m) => Math.hypot(n(m[1]), n(m[2])));
+  for (const d of pts) assert.ok(Math.abs(d - JACK.nutR) < 0.01, `NUT_R ${d}`);
 });
 
 // ---------------------------------------------------------------- rules
@@ -398,7 +537,15 @@ test('one cross per refusal: told the target plug\'s state, the cable leaves its
     }
     for (const bad of ['lifted', [], { hold: true }, 3]) {
       assert.throws(() => cableSvg({ ...spec, plug: bad }), RangeError, JSON.stringify(bad));
+      assert.throws(() => cableSvg({ ...spec, plug: bad }), /^RangeError: cableSvg: plug must be /,
+        'the message names the plug option, not the cable\'s state');
+      assert.throws(() => cableParts({ ...spec, plug: bad }), /^RangeError: cableParts: plug /);
     }
+    // A cable that is not refused draws no cross, so cross: true beside a refused plug marks
+    // nothing twice: it is drawn as the same cable told nothing.
+    const fine = { ...spec, state: {} };
+    assert.equal(cableSvg({ ...fine, plug: 'refused', cross: true }), cableSvg(fine));
+    assert.equal(cableSvg({ ...fine, plug: 'refused' }), cableSvg(fine));
   });
 
 test('cross: false leaves the cable\'s cross out, so one cross shows', () => {

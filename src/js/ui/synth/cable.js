@@ -507,7 +507,8 @@ const str = (x) => String(x);
  * `plug` is the state of the plug the caller draws at the target end, as plugSvg takes it
  * (plugState; a misspelt one refused): when that plug is refused, its own cross marks the
  * refusal and the cable leaves its cross out (the dash and data-refused stay), so one refusal
- * shows one cross whatever the cable's length; `cross: true` beside it is a RangeError. `cross:
+ * shows one cross whatever the cable's length; `cross: true` beside it on a refused cable is a
+ * RangeError (a cable that is not refused draws no cross, so it is drawn as told nothing). `cross:
  * false` leaves the cross out the same way, told nothing about a plug. `zoom` turns the
  * screen-px offsets (the shadow's drop, the sheen's) into graph units; `slack`, `box`,
  * `tangents` and `sag` are cableCurve's.
@@ -525,8 +526,8 @@ export function cableParts({ id, from, to, type, colour, state = {}, tokens, sla
   if (cross !== undefined && typeof cross !== 'boolean') {
     throw new TypeError(`${who}: cross must be true or false, not ${JSON.stringify(cross)}.`);
   }
-  const plugRefused = plugState(plug, who).refused;
-  if (plugRefused && cross === true) {
+  const plugRefused = plugState(plug, who, 'plug').refused;
+  if (plugRefused && cross === true && state && state.refused) {
     throw new RangeError(`${who}: the target plug is refused and draws its own cross; a cross `
       + 'on the cable as well would mark one refusal twice (leave cross out).');
   }
