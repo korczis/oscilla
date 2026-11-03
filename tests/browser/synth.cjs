@@ -79,6 +79,7 @@
 //              presets; Enter on the first applies it in one undo entry and the pad takes its
 //              scale; a name and Save the XY pad as a preset save it, listed under 'xy' at once
 //   s-mobile   390 x 844 with touch: no horizontal page scroll, every knob and jack box 44 px+,
+//              with six cables patched every jack and cable end scrolls clear of the dock,
 //              the Patch bay chip shows the bay at the card's width with the cards hidden, its
 //              text 12 px+ and no two jack labels overlapping (V636), a section chip brings the
 //              cards back and lands its plate's heading below the sticky chip bar, the docked
@@ -987,6 +988,45 @@ function defineChecks() {
       && !bay.overlaps && bay.pressed === 'true')) {
       return { ok: false, detail: 'the bay face', bay };
     }
+    // No control may be covered (phone-whole): with six cables patched, every jack and every
+    // cable end scrolls clear of the dock (the page pads its bottom by --osc-dock-h) and below
+    // the chip bar, and a tap there lands on the jack itself (a plug takes no pointer).
+    for (const [a, b] of [['keys.velocity', 'vco2.tune'], ['vco1.audio', 'ring.modulator'],
+      ['vco2.audio', 'mix.in4'], ['ring.audio', 'mix.in3'], ['noise.audio', 'mix.in1'],
+      ['mix.audio', 'vca.audio']]) {
+      await tapJack(page, `${a}:out`);
+      await tapJack(page, `${b}:in`);
+    }
+    const reach = await page.evaluate(() => {
+      const dock = document.getElementById('osc-keyboard').getBoundingClientRect();
+      const bar = document.querySelector('nav[aria-label="Synth sections"]')
+        .getBoundingClientRect();
+      const svg = document.querySelector('[data-osc="synth.bay.svg"]');
+      const ends = [...svg.querySelectorAll('[data-jack]')].map((el) => [el, el])
+        .concat([...svg.querySelectorAll('[data-plug] circle:first-child')]
+          .map((el) => [el, null]));
+      // The scroller: the nearest ancestor that scrolls, else the page. An explicit scroll, as
+      // Firefox does not scroll an SVG <g> by scrollIntoView.
+      let box = svg.parentElement;
+      while (box && !(box.scrollHeight > box.clientHeight
+        && /auto|scroll/.test(getComputedStyle(box).overflowY))) box = box.parentElement;
+      const scroller = box || document.scrollingElement;
+      const covered = [];
+      for (const [el, self] of ends) {
+        const q = el.getBoundingClientRect();
+        scroller.scrollBy(0, q.top + q.height / 2 - (bar.bottom + dock.top) / 2);
+        const r = el.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        const jack = hit && hit.closest('[data-jack]');
+        if (r.bottom > dock.top || r.top < bar.bottom || !jack || (self && jack !== self)) {
+          covered.push((self || el.parentNode).getAttribute('data-jack') || 'plug');
+        }
+      }
+      return { ends: ends.length, covered, dock: Math.round(dock.height) };
+    });
+    if (reach.ends !== 62 + 12 || reach.covered.length) {
+      return { ok: false, detail: 'a jack or a cable end stays under the dock', reach };
+    }
     await page.locator('[data-goto="lpf"]').tap();
     const chip = await page.evaluate(() => {
       const h = document.querySelector('#synth-m-lpf').getBoundingClientRect();
@@ -1006,7 +1046,7 @@ function defineChecks() {
     await silent(page, 'releasing the key silences it');
     return { ok: m.scroll <= m.inner && m.small.length === 0 && m.tiny.length === 0
       && m.kb.bottom <= m.kb.h
-      && m.kb.top > 0, ...m, bay, chip, rmsDb: p.rmsDb };
+      && m.kb.top > 0, ...m, bay, reach, chip, rmsDb: p.rmsDb };
   });
   return checks;
 }
