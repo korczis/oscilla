@@ -59,6 +59,10 @@
 //              light themes (read from the layer's [data-ring] and [data-stroke] hooks), a nut
 //              under every jack, a plug on each cable end and two screws on every plate (F013
 //              W1), a focused jack shows its focus ring, a card folds (aria-expanded)
+//   s-choices  (desktop at 1536, 1280 and 640; phone at 320, 375 and 390) on every tab, each
+//              choice's option boxes and legends lie inside its plate's padding box, 44 px+ of
+//              every option box can be pressed, and a press on a legend's centre lands on its
+//              own option's radio
 //   s-connect  Enter on a jack opens the connection list (targets, refused ones with reasons);
 //              choosing a target patches; the jack names say which can take the cable
 //   s-dock     K066, beside the piano: the instrument picker is a menu button whose role=menu
@@ -125,7 +129,7 @@ const LAUNCH = {
 };
 const SIZES = { desktop: { width: 1536, height: 1024 }, phone: { width: 390, height: 844 } };
 const PHONE_CHECKS = new Set(['s-sound', 's-cable', 's-mobile', 's-look', 's-dock',
-  's-library']);
+  's-library', 's-choices']);
 const LOAD_MS = 60000;
 const SOUND_MS = 8000; // a note's attack, a knob change's glide and the analyser's smoothing
 const CHECK_MS = 120000;
@@ -985,6 +989,106 @@ function defineChecks() {
       && out.bassKnob === '180 Hz' && out.leadScale === '8' && out.sweepKnob !== '0.00 oct'
       && /^Preset Ring bell$/.test(out.ring) && out.ringKnob !== '0.00', ...out, ref,
     bass: tilt(bass), swing };
+  });
+
+  // Every choice (W1c, the core's switch with its legends on the plate) fits its plate: on
+  // every tab at every width the leg looks at, each option's hit box and each legend lie inside
+  // the padding box of its plate's controls, at least 44 px of every hit box can be pressed,
+  // and a press on a legend's centre lands on the radio of that option (review of W1c, 1 and 3).
+  def('s-choices', async ({ context, base, size }) => {
+    const widths = size === 'phone' ? [320, 375, 390] : [1536, 1280, 640];
+    const tabs = ['panel', 'xy', ...['additive', 'fm', 'am', 'wavetable', 'sync', 'perc']
+      .map((e) => `engines&ye=${e}`)];
+    const bad = [];
+    const seen = new Set();
+    for (const tab of tabs) {
+      const page = await openSynth(context, base, `#m=synth&yt=${tab}`);
+      await face(page, 'panel');
+      for (const w of widths) {
+        await page.setViewportSize({ width: w, height: SIZES[size].height });
+        await until(() => page.evaluate((x) => window.innerWidth === x, w),
+          { ms: 5000, what: `the page is ${w} px wide` });
+        const r = await page.evaluate(() => {
+          const out = { bad: [], cids: [] };
+          const dock = document.getElementById('osc-keyboard');
+          // The band a legend is seen in: below what sticks to the top of the view (the chip
+          // bar, the engine picker), above the docked keys.
+          const sticky = [...document.querySelectorAll('#osc-view-synth *')]
+            .filter((el) => getComputedStyle(el).position === 'sticky');
+          const band = () => {
+            const lo = Math.max(0, ...sticky.map((el) => el.getBoundingClientRect())
+              .filter((q) => q.height > 0 && q.top < innerHeight / 3).map((q) => q.bottom));
+            const hi = dock && dock.getClientRects().length
+              ? Math.min(innerHeight, dock.getBoundingClientRect().top) : innerHeight;
+            return hi > lo ? (lo + hi) / 2 : innerHeight / 2;
+          };
+          for (const svg of document.querySelectorAll('[data-osc="synth.panel"] '
+            + 'svg[role="radiogroup"]')) {
+            if (!svg.getClientRects().length) continue;
+            const cid = svg.closest('[data-control]').getAttribute('data-control');
+            out.cids.push(cid);
+            const holder = svg.closest('[data-control]').parentElement;
+            const hb = holder.getBoundingClientRect();
+            const cs = getComputedStyle(holder);
+            const pad = { l: hb.left + parseFloat(cs.paddingLeft) - 0.5,
+              r: hb.right - parseFloat(cs.paddingRight) + 0.5 };
+            const sec = svg.closest('section').getBoundingClientRect();
+            const radios = [...svg.querySelectorAll('[data-option][role="radio"]')];
+            const legends = [...svg.querySelectorAll('text[data-legend]')];
+            if (legends.length !== radios.length) {
+              out.bad.push(`${cid}: ${legends.length} legends, ${radios.length} radios`);
+            }
+            for (const b of radios) {
+              const q = b.getBoundingClientRect();
+              if (q.left < pad.l || q.right > pad.r) {
+                out.bad.push(`${cid} ${b.dataset.v}: its box [${q.left.toFixed(1)}, `
+                  + `${q.right.toFixed(1)}] leaves the plate's [${pad.l.toFixed(1)}, `
+                  + `${pad.r.toFixed(1)}]`);
+              }
+              const vis = Math.min(q.right, sec.right, innerWidth) - Math.max(q.left, sec.left, 0);
+              if (vis < 43.5 || q.height < 43.5) {
+                out.bad.push(`${cid} ${b.dataset.v}: ${vis.toFixed(1)} x ${q.height.toFixed(1)} `
+                  + 'px can be pressed');
+              }
+            }
+            // The scroller: the nearest ancestor that scrolls, else the page.
+            let box = svg.parentElement;
+            while (box && !(box.scrollHeight > box.clientHeight
+              && /auto|scroll/.test(getComputedStyle(box).overflowY))) box = box.parentElement;
+            const scroller = box || document.scrollingElement;
+            for (const t of legends) {
+              const label = t.textContent;
+              // Twice: the first scroll may stick the chip bar, which moves the band.
+              for (let k = 0; k < 2; k++) {
+                const q0 = t.getBoundingClientRect();
+                scroller.scrollBy(0, q0.top + q0.height / 2 - band());
+              }
+              const q = t.getBoundingClientRect();
+              if (q.left < pad.l || q.right > pad.r) {
+                out.bad.push(`${cid} "${label}": [${q.left.toFixed(1)}, ${q.right.toFixed(1)}] `
+                  + `leaves the plate's [${pad.l.toFixed(1)}, ${pad.r.toFixed(1)}]`);
+              }
+              const want = radios[Number(t.getAttribute('data-index'))];
+              const hit = document.elementFromPoint((q.left + q.right) / 2,
+                (q.top + q.bottom) / 2);
+              const got = hit && hit.closest('[data-option][role="radio"]');
+              if (!want || got !== want) {
+                out.bad.push(`${cid} "${label}": a press lands on `
+                  + `${got ? got.dataset.v : (hit ? hit.tagName : 'nothing')}`);
+              }
+            }
+          }
+          out.scroll = document.documentElement.scrollWidth > innerWidth + 1;
+          return out;
+        });
+        r.cids.forEach((c) => seen.add(c));
+        bad.push(...r.bad.map((x) => `${w} ${tab}: ${x}`));
+        if (r.scroll) bad.push(`${w} ${tab}: the page scrolls sideways`);
+      }
+      await page.close();
+    }
+    return { ok: bad.length === 0 && seen.size === 16, choices: seen.size, widths,
+      bad: bad.slice(0, 12), more: Math.max(0, bad.length - 12) };
   });
 
   def('s-look', async ({ page }) => {
