@@ -374,6 +374,22 @@ test('a packed dial numbers its detents and prints its legend grid as "n · labe
   }
 });
 
+// Numerals go only where a grid prints the numbers: a dial whose legends lie round it or in the
+// core's window grid (the XY scale: its 10 names do not fit two 117 px columns as "n · label",
+// and its window names the selection) keeps its detents unnumbered.
+test('an unpacked dial carries no numerals: nothing on the plate would print the number', () => {
+  const unpacked = switches.filter(({ c }) => {
+    const s = switchStyle(c.param);
+    return (s === 'rotary' || s === 'window') && !choiceLayout(c.param).packed;
+  });
+  assert.ok(unpacked.some((x) => x.cid === 'xy.mode'), unpacked.map((x) => x.cid).join(' '));
+  for (const { cid, c } of unpacked) {
+    assert.equal(count(block(cid), /data-number=""/g), 0, `${cid}: no numeral`);
+    assert.ok(choiceLayout(c.param).options.every((o) => o.number === null
+      && o.legend.text === o.label), `${cid}: its legends are its labels`);
+  }
+});
+
 // Review of W1c, finding 4: the WAVE dial's skirt was r 17 (34 px) beside the 64 px knobs, and
 // its knurl a dashed ring the panel drew on it. A dial is the core's knob face at the panel's
 // knob size: its skirt the knob's skirt on screen (16 x 64/44), the core's own 24-ridge knurl
@@ -425,8 +441,8 @@ test('every choice fits the narrowest plate: a wide dial packs its legends below
   assert.equal(CHOICE_MAX_PX, 234);
   const packed = [];
   for (const { cid, c } of switches) {
-    // The core's at the panel's knob size: a dial is the 64 px knob's face.
-    const core = switchLayout(c.param, { knob: 64 });
+    // The core's at the panel's knob size (a dial is the 64 px knob's face), unnumbered.
+    const core = switchLayout(c.param, { knob: 64, numbers: false });
     const L = choiceLayout(c.param);
     assert.ok(L.box.width <= CHOICE_MAX_PX, `${cid}: ${L.box.width} px`);
     if (core.box.width <= CHOICE_MAX_PX) {
@@ -437,7 +453,9 @@ test('every choice fits the narrowest plate: a wide dial packs its legends below
     assert.equal(L.packed, true, cid);
     assert.equal(L.style, core.style, `${cid}: still the core's ${core.style}`);
     assert.equal(L.radius, null, `${cid}: no ring, so no leaders`);
-    assert.deepEqual(L.window, core.window, `${cid}: a window keeps its frame`);
+    // A packed dial is the core's numbered one: a window keeps that layout's frame.
+    const numbered = switchLayout(c.param, { knob: 64, numberLegends: true });
+    assert.deepEqual(L.window, numbered.window, `${cid}: a window keeps its frame`);
     assert.ok(Object.isFrozen(L) && Object.isFrozen(L.options[0].hit), cid);
     const top = L.options[0].hit.y;
     assert.ok(top >= L.dial.extent, `${cid}: the grid is below the dial and its numerals`);

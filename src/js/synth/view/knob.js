@@ -137,11 +137,12 @@ export const CHOICE_MAX_PX = 234;
 /** Round a legend inside its cell, each side, graph units: the core's PAD (6) where the grid
  *  fits with it, else less, never under 2 (the numbered FM chart fits two columns at 2). */
 const CELL_PADS = Object.freeze([6, 4, 2]);
-/** The core's options for a choice: a dial at the size of the panel's knob (knobSvg). */
-const CHOICE_OPTS = Object.freeze({ knob: KNOB_PX });
-/** ... and for a packed legend grid under a dial: its legends "n · label" (a dial of 7+
- *  detents numbers them; under that the core keeps the label), an algorithm chart. */
-const GRID_OPTS = Object.freeze({ ...CHOICE_OPTS, numberLegends: true });
+/** The core's options for a choice: a dial at the size of the panel's knob (knobSvg), its
+ *  detents unnumbered, since its legends round it or in a window's grid print no number. */
+const CHOICE_OPTS = Object.freeze({ knob: KNOB_PX, numbers: false });
+/** ... and for a packed legend grid under a dial: the core's count rule (7+ detents are
+ *  numbered) and its legends "n · label", an algorithm chart under the numerals. */
+const GRID_OPTS = Object.freeze({ knob: KNOB_PX, numberLegends: true });
 const r2 = (x) => Number(x.toFixed(2));
 const up = (x) => Math.ceil(x * 50 - 1e-9) / 50;
 const rect = (x, y, width, height) => ({ x: r2(x), y: r2(y), width: r2(width),
