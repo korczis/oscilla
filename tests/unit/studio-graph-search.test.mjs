@@ -32,8 +32,10 @@ const types = (q, opts) => libraryView(synth(), q, opts).groups.flatMap((g) => g
   .map((i) => i.type);
 
 test('V610 ranking table: each query names its first node type', () => {
+  // vco names the VCO node type (K059, landed with the Synth panel after V610 was written), so
+  // its own type ranks first; the Oscillator keeps 'vco' as an alias (asserted below).
   const table = { fltr: 'filter', lp: 'filter', hp: 'filter', bp: 'filter', eq: 'filter',
-    vco: 'oscillator', vca: 'gain', osc: 'oscillator', nois: 'noise', vcf: 'filter',
+    vco: 'vco', vca: 'gain', osc: 'oscillator', nois: 'noise', vcf: 'filter',
     adsr: 'envelope', filter: 'filter', 'master output': 'master', gn: 'gain', mixr: 'mixer' };
   for (const [q, want] of Object.entries(table)) {
     assert.equal(types(q)[0], want, `"${q}" lists ${want} first, got ${types(q).join(', ')}`);
@@ -48,8 +50,15 @@ test('V610 ranking table: each query names its first node type', () => {
   }
   // "vca": the exact alias (Gain) before an alias that starts with it (VCA envelope).
   assert.deepEqual(types('vca'), ['gain', 'envelope']);
-  // "gn": the letters of a name (Gain) before a part of an alias (Noise: "random signal").
-  assert.deepEqual(types('gn'), ['gain', 'noise']);
+  // "gn": the letters of a name from its first letter (Gain), then the letters anywhere in a name
+  // (the engines: "Additive engine"), then a part of an alias (Noise: "random signal").
+  const gn = types('gn');
+  assert.equal(gn[0], 'gain');
+  assert.equal(gn.at(-1), 'noise');
+  const middle = gn.slice(1, -1);
+  assert.ok(middle.every((t) => /g.*n/i.test(NODE_REGISTRY.get(t).displayName.replace(/ /g, '')))
+    && !middle.some((t) => /^g/i.test(NODE_REGISTRY.get(t).displayName)),
+  `between Gain and Noise only names with g...n after their first letter: ${gn.join(', ')}`);
 });
 
 test('V610 "eq" ranks Filter above every type that only contains the letters', () => {

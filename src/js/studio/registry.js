@@ -201,8 +201,9 @@ const norm = (v) => String(v ?? '').toLowerCase().normalize('NFKD')
   .replace(/[\u0300-\u036f]/g, '').replace(/[^\p{L}\p{N}&]+/gu, ' ').trim();
 const CATEGORY_RANK = new Map(CATEGORY_ORDER.map((c, i) => [c.id, i]));
 // Score of a term -> its public tier: exact name, name prefix, word start, exact alias, alias
-// word start, the letters of a name in order, a part of an alias.
-const TIER = [0, 1, 2, 3, 3, 4, 4];
+// word start, the letters of a name in order from its first letter ('gn' in Gain), the letters
+// of a name in order anywhere ('gn' in Additive engine), a part of an alias.
+const TIER = [0, 1, 2, 3, 3, 4, 4, 4];
 
 function inOrder(term, text) {
   let i = 0;
@@ -216,8 +217,9 @@ function termScore(t, names, aliases) {
   if (names.some((n) => n.split(' ').some((w) => w.startsWith(t)))) return 2;
   if (aliases.includes(t)) return 3;
   if (aliases.some((a) => a.split(' ').some((w) => w.startsWith(t)))) return 4;
-  if (names.some((n) => inOrder(t, n.replace(/ /g, '')))) return 5;
-  if (aliases.some((a) => a.includes(t))) return 6;
+  if (names.some((n) => n.startsWith(t[0]) && inOrder(t, n.replace(/ /g, '')))) return 5;
+  if (names.some((n) => inOrder(t, n.replace(/ /g, '')))) return 6;
+  if (aliases.some((a) => a.includes(t))) return 7;
   return null;
 }
 
