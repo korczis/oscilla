@@ -128,10 +128,17 @@ test('quantize snaps to the step in value space, clamps, and leaves no float noi
   assert.equal(quantize(150, LIN), 100);
   assert.equal(quantize(0.1 + 0.2, FLOAT), 0.3);
   assert.equal(quantize(0.123, FLOAT), 0.12);
-  assert.equal(quantize(440.44, LOG), 440.4, 'a log range keeps four significant digits');
-  assert.equal(quantize(12345.6, LOG), 12346, 'and never more than its step');
-  assert.equal(quantize(0.0012345, TIME), 0.001235, 'the bottom of a log range is not coarse');
+  assert.equal(quantize(440.44, TIME_LOG), 440.4, 'a stepless log range: four significant digits');
+  assert.equal(quantize(12345.6, TIME_LOG), 12350);
+  // S7: a stepped log range is never finer than its step (K058's relative grid only where it is
+  // coarser), so a drag readout never shows more decimals than the step.
+  assert.equal(quantize(440.44, LOG), 440, 'a stepped log range keeps its step');
+  assert.equal(quantize(12345.6, LOG), 12350, 'and the relative grid where that is coarser');
+  assert.equal(quantize(0.0012345, TIME), 0.001, 'the bottom of a stepped log range: its step');
+  assert.equal(quantize(0.0012345, TIME, { fine: true }), 0.0012, 'fine: a tenth of it');
   assert.equal(quantize(2.34567, TIME), 2.346);
+  assert.equal(quantize(0.99312, { key: 'd', unit: '×', min: 0.25, max: 4, step: 0.01,
+    scale: 'log' }), 0.99, 'the registry\'s Decay (×): two decimals, not 0.9931');
   assert.equal(quantize(0.30000000000000004, SMOOTH), 0.3, 'no step: only the noise goes');
   assert.equal(quantize(0.123456, SMOOTH), 0.123456);
 });
@@ -294,8 +301,10 @@ test('knobKey: a log range moves 1/LOG_STEPS in norm space and never stalls on i
   near(toNorm(fine0, TIME_LOG) - toNorm(1000, TIME_LOG), 0.0005, 1e-4);
   const fine = knobKey(key('ArrowUp', { shiftKey: true }), { value: 1000, param: LOG });
   assert.ok(fine > 1000 && fine < up, `${fine} between 1000 and ${up}`);
-  assert.equal(knobKey(key('ArrowUp', { shiftKey: true }), { value: 20, param: LOG }), 20.069,
-    'a fine step at the bottom of a log range is relative, not a tenth of the step');
+  assert.equal(knobKey(key('ArrowUp', { shiftKey: true }), { value: 20, param: TIME_LOG }),
+    20.069, 'a fine step at the bottom of a stepless log range is relative');
+  assert.equal(knobKey(key('ArrowUp', { shiftKey: true }), { value: 20, param: LOG }), 20.1,
+    'a stepped one moves a tenth of its step, never finer (S7)');
   assert.ok(knobKey(key('ArrowDown'), { value: 20000, param: LOG }) < 20000);
 });
 
@@ -375,7 +384,9 @@ test('formatValue: the unit table, signed where a sign is the meaning', () => {
   assert.equal(formatValue(0.5, OCT), '+0.50 oct');
   assert.equal(formatValue(-1, OCT), '-1.00 oct');
   const DB = { key: 'min', unit: 'dB', min: -200, max: 0, step: 1 };
-  assert.equal(formatValue(-120, DB), '-120.0 dB', 'dB at 1 decimal');
+  assert.equal(formatValue(-120, DB), '-120 dB', 'a 1 dB step shows no decimal (S7)');
+  assert.equal(formatValue(3, { key: 'span', unit: 'oct', min: 1, max: 4, step: 1 }), '+3 oct',
+    'a whole-octave step shows none either');
   assert.equal(formatValue(1, { key: 'd', unit: '×', min: 0.25, max: 4, step: 0.01,
     scale: 'log' }), '1.00 ×', 'any other unit follows the number');
 });
@@ -1042,7 +1053,8 @@ test('knob: the applied value is an arc at r 13.5 in control.applied, from the o
 // 1.02:1 in the light theme), so the lit arc is told from the unlit one by width: the track is
 // at most half the value arc and lies wholly under it (review of S2, finding 1).
 test('knob: the lit arc is told from the unlit arc by width: the track is half or less', () => {
-  for (const state of [{}, { focus: true }, { dragging: true }, { hover: true }]) {
+  for (const state of [{}, { focus: true }, { dragging: true }, { hover: true },
+    { disabled: true }]) {
     for (const zoom of [1, 2, 3]) {
       for (const value of [10, 70, 100]) {
         const svg = draw('knob', { state, zoom, value });
@@ -1086,19 +1098,71 @@ test('knob: the applied arc lies on the skirt face, clear of the cap, the knurl 
     }
   });
 
-test('knob: disabled is a dashed value arc and a dim pointer, over a faint track', () => {
+test('knob: disabled is a dashed value arc and a dim pointer, over the 3:1 track', () => {
   const t = TOKENS.control;
   const off = draw('knob', { state: { disabled: true } });
   const ring = part(off, 'data-ring');
   assert.equal(attrOf(ring, 'stroke'), t.disabled);
-  assert.equal(attrOf(ring, 'stroke-dasharray'), '2 3');
-  assert.notEqual(attrOf(ring, 'stroke-linecap'), 'round', 'round ends would close a 3 gap');
+  assert.match(attrOf(ring, 'stroke-dasharray') || '', /^\d+(\.\d+)? \d+(\.\d+)?$/);
+  assert.notEqual(attrOf(ring, 'stroke-linecap'), 'round', 'round ends would close the gaps');
   assert.equal(attrOf(part(off, 'data-pointer'), 'stroke'), t.disabled);
-  assert.equal(attrOf(part(off, 'data-track'), 'stroke'), t.knurl,
-    'the dashes are not drawn over a track of their own colour');
   assert.ok(!off.includes(`stroke="${t.ring}"`));
   assert.equal(attrOf(part(draw('knob'), 'data-ring'), 'stroke-dasharray'), undefined);
 });
+
+// S7 (W1b re-review): the unlit arc took the knurl's tone while disabled, 1.10:1 (dark) and
+// 1.40:1 (light) on the plate; it is control.track (--osc-text-dim, 3:1 on both plates in both
+// themes, ui-synth-tokens.test.mjs) in every state, and the dashes are told from it by width.
+test('knob: the unlit arc is control.track in every state, disabled too (S7)', () => {
+  for (const state of [{}, { focus: true }, { dragging: true }, { hover: true },
+    { disabled: true }, { disabled: true, focus: true, hover: true }]) {
+    for (const value of [0, 10, 70, 100]) {
+      const track = part(draw('knob', { state, value }), 'data-track');
+      assert.equal(attrOf(track, 'stroke'), TOKENS.control.track,
+        `${JSON.stringify(state)} v ${value}: never the knurl's faint tone`);
+    }
+  }
+});
+
+// S7 (W1b re-review): '2 3' on a 3-unit stroke drew a chain of blobs at 64 px (a dash shorter
+// than its width). The dashes are now sized from the arc's length and the stroke's width.
+test('knob: a disabled value arc has no dash shorter than its width, at 44 and 64 px, zoom 1..3',
+  () => {
+    const BIP = { ...LIN, min: -50, max: 50, default: 0 };
+    let dashed = 0;
+    for (const px of [44, 64]) {
+      for (const zoom of [1, 1.5, 2, 2.5, 3]) {
+        const scale = (px / CONTROL_BOX.knob.width) * zoom;
+        for (const p of [LIN, BIP, LOG]) {
+          for (let i = 0; i <= 100; i++) {
+            const value = fromNorm(i / 100, p);
+            const svg = controlSvg({ kind: 'knob', value, param: p, tokens: TOKENS,
+              zoom: zoom * (px / CONTROL_BOX.knob.width), state: { disabled: true } });
+            const ring = part(svg, 'data-ring');
+            if (!ring) continue;
+            const where = `${px} px zoom ${zoom} ${p.id} n ${i / 100}`;
+            const w = numOf(ring, 'stroke-width');
+            const { from, to } = arcOf(ring);
+            const len = (19 * Math.PI * Math.abs(to - from)) / 180;
+            const dash = attrOf(ring, 'stroke-dasharray');
+            if (!dash) {
+              assert.ok(len < 4 * w, `${where}: solid only when too short for two dashes`);
+              assert.notEqual(attrOf(ring, 'stroke-linecap'), 'round', where);
+              continue;
+            }
+            dashed += 1;
+            const [d, g] = dash.split(' ').map(Number);
+            assert.ok(d * scale >= w * scale, `${where}: dash ${d * scale} px under ${w * scale}`);
+            assert.ok(g * scale >= (w * scale) / 2, `${where}: the gap stays open`);
+            const n = Math.round((len + g) / (d + g));
+            assert.ok(n >= 2, where);
+            near(n * d + (n - 1) * g, len, 0.02 * n + 0.05);
+          }
+        }
+      }
+    }
+    assert.ok(dashed > 500, `${dashed} dashed arcs checked`);
+  });
 
 test('fader and switch: the slot and the body are outlined in control.track (3:1)', () => {
   const t = TOKENS;
@@ -1273,6 +1337,59 @@ test('every finite numeric parameter of every registry node type works the whole
     assert.throws(() => controlSvg({ kind: 'switch', value: v, param: p, tokens: TOKENS }),
       /switch/, `${where}: a number is not a switch`);
   }
+});
+
+/** The decimals of a grid quantum (0.01: 2, 1e-7: 7, 0.25: 2, 10: 0). */
+function gridDecimals(q) {
+  for (let d = 0; d < 15; d++) {
+    const x = q * 10 ** d;
+    if (Math.round(x) >= 1 && Math.abs(x - Math.round(x)) < 1e-9 * x) return d;
+  }
+  return 15;
+}
+/** A readout's decimals in the parameter's own unit: '9.958 kHz' of Hz is 0, '1.2 ms' of s 4,
+ *  '-80.0 dB' 1; a whole number's trailing zeros are its magnitude ('990 ms' of s is 2), and
+ *  zero has none. */
+function readoutDecimals(text) {
+  const m = /^[+-]?(\d+)(?:\.(\d+))?(?:\s+(\S.*))?$/.exec(text);
+  assert.ok(m, `a number readout: "${text}"`);
+  const shift = { kHz: -3, ms: 3 }[m[3]] || 0;
+  if (!m[2] && Number(m[1]) === 0) return 0;
+  const whole = m[2] ? 0 : /0*$/.exec(m[1])[0].length;
+  return (m[2] ? m[2].length : 0) - whole + shift;
+}
+/** The decimals a value's step implies: the step's (an integer's 1), on a stepless log range
+ *  K058's grid there (four significant digits); fine one more. */
+function stepImplies(v, p, fine) {
+  const step = p.step > 0 ? p.step : (p.type === 'integer' ? 1 : 0);
+  const g = step || 10 ** (Math.floor(Math.log10(Math.abs(v))) - 3);
+  return gridDecimals(g) + (fine ? 1 : 0);
+}
+
+// S7 (W1b re-review): drag readouts were long (0.9931 × on a 0.01 step, 1.235 ms on a 1 ms one,
+// -80.0 dB on a 1 dB one). During a drag, coarse or fine, from anywhere on the range, a
+// readout has at most the decimals the step implies, fine one more.
+test('every registry parameter: a drag readout has at most the decimals its step implies', () => {
+  assert.ok(REGISTRY_NUMBERS.every(({ p }) => p.step > 0 || p.type === 'integer'
+    || p.scale === 'log'), 'every registry number is stepped or log');
+  const long = [];
+  for (const { where, p } of REGISTRY_NUMBERS) {
+    const starts = [p.default, ...[0, 0.1, 0.25, 0.5, 0.75, 0.9, 1].map((n) => fromNorm(n, p))]
+      .map((v) => quantize(v, p));
+    let worst = null;
+    for (const start of starts) {
+      for (let dy = -240; dy <= 240; dy += 1.5) {
+        for (const fine of [false, true]) {
+          const v = dragValue(start, dy, p, { fine });
+          const text = formatValue(v, p);
+          const over = readoutDecimals(text) - stepImplies(v, p, fine);
+          if (over > 0 && (!worst || over > worst.over)) worst = { over, text, fine };
+        }
+      }
+    }
+    if (worst) long.push(`${where} (step ${p.step}): "${worst.text}"${worst.fine ? ' fine' : ''}`);
+  }
+  assert.deepEqual(long, [], 'readouts with more decimals than the step needs');
 });
 
 test('every enum and boolean parameter of the registry works the switch and the knob', () => {
@@ -1543,10 +1660,14 @@ test('wheel: a notch is 1 % of the (norm) range, Shift 0.1 %, keeping the carrie
   for (const p of [TINY, SMOOTH, FLOAT, LOG, TIME_LOG, TIME]) {
     const v0 = fromNorm(0.5, p);
     for (const [fine, want] of [[false, 0.01], [true, 0.001]]) {
+      // A stepped log range's grid is its step (S7), so a notch lands within one grid unit.
+      const unit = p.scale === 'log' && p.step
+        ? toNorm(v0 + p.step / (fine ? 10 : 1), p) - toNorm(v0, p) : 0;
+      const eps = Math.max(want / 20, unit);
       const up = wheelValue(v0, -WHEEL_NOTCH_PX, p, { fine }).value;
-      near(toNorm(up, p) - toNorm(v0, p), want, want / 20);
+      near(toNorm(up, p) - toNorm(v0, p), want, eps);
       const down = wheelValue(v0, WHEEL_NOTCH_PX, p, { fine }).value;
-      near(toNorm(v0, p) - toNorm(down, p), want, want / 20);
+      near(toNorm(v0, p) - toNorm(down, p), want, eps);
       const half = wheelValue(v0, -WHEEL_NOTCH_PX / 2, p, { fine });
       assert.equal(half.value, v0, 'half a notch moves nothing yet');
       const whole = wheelValue(half.value, -WHEEL_NOTCH_PX / 2, p, { fine, rest: half.rest });
