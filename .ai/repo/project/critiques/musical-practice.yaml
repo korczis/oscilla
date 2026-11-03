@@ -17,8 +17,8 @@ findings:
     finding: "The microphone invariant cites src/js/analysis/peak-detector.js. Checked on main: createPitchDetector reports frequencyHz with confidence (the NSDF peak, 0..1) and uncertaintyHz, the peak reader reports uncertaintyHz, and src/js/analysis has no onset detector. So 'no microphone timing criterion is graded until a plan-backed decision adds one' is what the code supports."
     blocking: false
     resolution:
-      state: none
-      because: "No change needed: the claim matches the code at c3045229 (2026-11-03)."
+      state: rejected
+      because: "Rejected as a defect: the claim matches the code at c3045229, so nothing changes (2026-11-03)."
   - id: owner-questions-answered-bounds-open
     class: missed_requirement
     subject: "Q085"
