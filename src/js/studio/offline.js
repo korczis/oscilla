@@ -66,6 +66,8 @@ export const OFFLINE_TEXT = Object.freeze({
   liveInput: (name) => `${name} is a live input and cannot be rendered offline. Remove it to `
     + 'export audio, or record the Studio while it plays.',
   analysis: 'Analysis view: it observes the signal and is not part of the rendered audio.',
+  notes: 'Plays notes from the keys or MIDI while the Synth is armed, so a render holds none of '
+    + 'its notes; the audio at its Chain input passes through.',
   measurement: 'Measurement data: measurements run live through the measurement engine.',
   format: 'Sets the format of the rendered file.',
   noDuration: 'Give a render duration: the Studio has no timeline to measure it from.',
@@ -91,6 +93,7 @@ function nodeRole(def, node) {
     node.metadata.name) };
   if (node.type === 'recorder') return { role: 'rendered', reason: OFFLINE_TEXT.format };
   if (c.offline) return { role: 'rendered', reason: null };
+  if (c.notes) return { role: 'skipped', reason: OFFLINE_TEXT.notes };
   if (def.category === 'MEASUREMENT') return { role: 'skipped', reason: OFFLINE_TEXT.measurement };
   return { role: 'skipped', reason: OFFLINE_TEXT.analysis };
 }

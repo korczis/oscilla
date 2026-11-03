@@ -59,15 +59,16 @@ record is on main.
 
    `tests/unit/about.test.mjs` fails until the bump of step 4 names the same line.
 
-4. Prepare on the clean tree. It bumps once, rebuilds, runs the full gate and writes the
-   receipt into the common git directory; on a failure it restores what it changed. The
-   browser suites wait for the load to fall below `OSC_LOAD_MAX`, so check the load and
-   either wait or state the limit you accept:
+4. Prepare on the clean tree. It bumps once, rebuilds and runs `npm run verify` with the
+   roadmap check (ADR 0082: the gate verdict is the CI run of the release pull request, the
+   CI receipt); on a failure it restores what it changed. `--local-gate` runs the full gate
+   here instead and writes a local receipt into the common git directory; its browser suites
+   wait for the load to fall below `OSC_LOAD_MAX`, so then check the load and either wait or
+   state the limit you accept:
 
    ```bash
-   sysctl -n vm.loadavg
    npm run release:prepare -- --dry-run
-   OSC_LOAD_MAX=<limit> npm run release:prepare
+   npm run release:prepare            # or: OSC_LOAD_MAX=<limit> npm run release:prepare -- --local-gate
    git commit -am "chore(release): vX.Y.Z"
    ```
 
@@ -80,13 +81,14 @@ record is on main.
    majordomus finish --check
    git push -u origin chore/release-vX.Y.Z
    gh pr create --base main --title "chore(release): vX.Y.Z" --body-file <file>
-   gh pr merge <n> --auto --squash
+   gh pr merge <n> --auto --merge     # merge commit: the CI receipt judges the merge
    gh pr list --state open --json number,title,autoMergeRequest \
      --jq '.[] | select(.autoMergeRequest != null)'     # only this pull request
    ```
 
-6. Publish from a fresh clone of main (the primary checkout hosts the owner's trunk), with
-   the receipt copied into its git directory:
+6. Publish from a fresh clone of main (the primary checkout hosts the owner's trunk). With the
+   CI receipt nothing needs copying; with a local receipt copy it into the clone's git
+   directory:
 
    ```bash
    git clone git@github.com:korczis/oscilla.git <scratch>/oscilla-release

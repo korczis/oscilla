@@ -33,6 +33,12 @@
 //   - fake microphone (chromium and firefox, http origin, once per browser): the real capture
 //     path returns the requested number of frames, the applied-constraints read-back object, and
 //     every track is stopped and every node released by cancel() — acoustics are not asserted
+// The app leg (once per browser, dist/index.html?measure=loopback from file://; --app-only runs
+// only it):
+//   - preflight-other-audio (C016, finding coupling-5): with nothing playing the setup check
+//     raises no OTHER_AUDIO; with the instrument, the sequencer and the Studio transport each
+//     sounding (analyser peak above the floor) it ends READY with OTHER_AUDIO and leaves that
+//     source playing (the check stops nothing), then the source stops and the output is free
 // --spike adds the V307 measurements recorded in docs/v3/spike-audioworklet-worker.md: a long
 // (--long-s, default 40 s) capture with frame-integrity counts in AudioWorklet mode and a
 // ScriptProcessor comparison, loopback lag statistics, data:/blob: worklet and worker loading,
@@ -48,6 +54,7 @@ const { pathToFileURL } = require('node:url');
 const zlib = require('node:zlib');
 const esbuild = require('esbuild');
 const suite = require('./lib/suite.cjs');
+const { until, bounded } = require('./lib/wait.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -60,6 +67,8 @@ const playwright = RUN.playwright;
 const BROWSERS = RUN.browsers;
 const ORIGINS = RUN.origins;
 const SPIKE = argv.includes('--spike');
+const APP_ONLY = argv.includes('--app-only');
+const DIST = path.resolve(__dirname, '..', '..', 'dist', 'index.html');
 const LONG_S = Number(arg('long-s', '40'));
 const JSON_OUT = arg('json', '');
 const SRC = path.resolve(__dirname, '..', '..', 'src', 'js');
@@ -803,6 +812,110 @@ async function runOne(browserName, origin, url, workerSource, micDone) {
   }
 }
 
+// ------------------------------------------------------------------------------ app leg
+// The application itself (dist/index.html), TEST CONTEXT loopback: what MEASURE's setup check
+// reports while one of the app's own output owners sounds (C016).
+const APP_SOURCES = [
+  ['instrument', () => window.OSCILLA.app.play('hold'), () => !!window.OSCILLA.app.playing],
+  ['sequencer', () => window.OSCILLA.labs.sequencer.editor.play(),
+    () => !!window.OSCILLA.labs.sequencer.editor.playing],
+  ['studio', () => window.OSCILLA.app.studioPlay(), () => window.OSCILLA.app.studioOwnsOutput()],
+];
+
+async function runApp(browserName) {
+  const key = `${browserName}/app`;
+  const browser = await playwright[browserName].launch(LAUNCH[browserName]);
+  const page = await (await browser.newContext({ viewport: { width: 1536, height: 1024 } }))
+    .newPage();
+  page.setDefaultTimeout(20000);
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  console.log(`\n${key} (${browser.version()})`);
+  const peak = () => page.evaluate(() => {
+    const an = window.OSCILLA.engine.analyser;
+    if (!an) return 0;
+    const buf = new Float32Array(an.fftSize);
+    an.getFloatTimeDomainData(buf);
+    let p = 0;
+    for (let i = 0; i < buf.length; i++) p = Math.max(p, Math.abs(buf[i]));
+    return p;
+  });
+  // What the workspace shows after Check setup: the engine state and the reason codes of the
+  // guided flow (derived from the preflight report, ui/measure.js refresh).
+  const setupCheck = (what) => bounded(page.evaluate(async () => {
+    const O = window.OSCILLA;
+    await O.app.measureCheck();
+    const codes = [];
+    let noise = null;
+    for (const st of O.app.meas.flow.steps || []) {
+      for (const r of st.reasons || []) {
+        codes.push(r.code);
+        if (r.code === 'NOISE_HIGH') noise = r.text;
+      }
+    }
+    return { state: O.measure.state, codes, noise };
+  }), { ms: 60000, what: `${key} Check setup ${what} settles` });
+  const stopAll = async (what) => {
+    await page.evaluate(() => {
+      const O = window.OSCILLA;
+      O.labs.sequencer.editor.stop();
+      O.app.studioStop();
+      O.app.stopNow();
+      if (O.measure.engine) O.measure.engine.reset();
+    });
+    return until(() => page.evaluate(() => {
+      const O = window.OSCILLA;
+      return !O.labs.sequencer.editor.playing && !O.app.studioOwnsOutput() && !O.app.playing
+        && O.measure.state === 'IDLE';
+    }), { ms: 5000, what: `${key} ${what}: every output owner stopped, MEASURE idle` });
+  };
+  try {
+    await page.goto(`${pathToFileURL(DIST).href}?measure=loopback`, { waitUntil: 'load' });
+    await page.waitForSelector('html[data-ready="true"]', { timeout: 20000 });
+    await page.mouse.click(5, 300); // a user gesture for the autoplay policy (WebKit)
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.alerts = [];
+      if (!a.safetyCollapsed) a.collapseSafety();
+      a.ensureAudio();
+      a.setWorkspace('measure');
+    });
+    await until(() => page.evaluate(() => window.OSCILLA.engine.state === 'running'),
+      { ms: 10000, what: `${key} the AudioContext runs after the gesture` });
+    await until(() => page.evaluate(() => {
+      const f = window.OSCILLA.app.meas.flow;
+      return f && f.primaryAction ? f.primaryAction.id : null;
+    }).then((id) => id === 'preflight'), { ms: 10000,
+      what: `${key} MEASURE offers Check setup` });
+
+    const quiet = await setupCheck('with nothing playing');
+    check(key, 'preflight-other-audio: nothing playing, the setup check raises no OTHER_AUDIO',
+      quiet.state === 'READY' && !quiet.codes.includes('OTHER_AUDIO'), JSON.stringify(quiet));
+    await stopAll('after the quiet check');
+
+    for (const [id, start, playing] of APP_SOURCES) {
+      await page.evaluate(start);
+      await until(() => page.evaluate(playing), { ms: 5000, what: `${key} ${id} plays` });
+      const before = await until(() => peak().then((p) => (p > 0.005 ? p : 0)), { ms: 5000,
+        what: `${key} ${id} sounds into the output (analyser peak)` }).catch(() => 0);
+      const r = await setupCheck(`with the ${id} playing`);
+      const still = await page.evaluate(playing);
+      // A high input reading is the app's own output here, not the room (no-fake-science).
+      const honest = r.noise === null || /includes the app's own output/.test(r.noise);
+      check(key, `preflight-other-audio: ${id} sounding, Check setup is READY with OTHER_AUDIO `
+        + 'and leaves it playing; a noise reason names the app\'s own output', before > 0.005
+        && r.state === 'READY' && r.codes.includes('OTHER_AUDIO') && still === true && honest,
+      `peak before ${f(before, 3)}, ${JSON.stringify(r)}, still playing ${still}`);
+      await stopAll(`after ${id}`);
+    }
+    check(key, 'no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
+  } catch (e) {
+    check(key, 'preflight-other-audio', false, e.stack || e.message);
+  } finally {
+    await browser.close();
+  }
+}
+
 async function nodeSpike() {
   const stim = await import(pathToFileURL(path.join(SRC, 'measurement', 'stimulus.js')).href);
   const al = await import(pathToFileURL(path.join(SRC, 'measurement', 'align.js')).href);
@@ -873,10 +986,13 @@ window.__v3 = { engine, capture };`;
       console.log(`INFO build size ${JSON.stringify(report.size)}`);
     }
     for (const b of BROWSERS) {
-      for (const o of ORIGINS) {
-        await runOne(b, o, o === 'file' ? pathToFileURL(file).href : httpUrl, workerSource,
-          micDone);
+      if (!APP_ONLY) {
+        for (const o of ORIGINS) {
+          await runOne(b, o, o === 'file' ? pathToFileURL(file).href : httpUrl, workerSource,
+            micDone);
+        }
       }
+      await runApp(b);
     }
   } finally {
     if (server) server.close();

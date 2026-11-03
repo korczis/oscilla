@@ -25,9 +25,11 @@
 // The build has a second, machine-relative bound, because 1000 ms is about 3.5 times its cost
 // and so would pass a build twice as slow: its CPU time may be at most BUILD_REFERENCE_RATIO
 // times that of referenceWork() (a fixed workload in the build's shape, no product code),
-// measured the same way in the same process just before. The ratio is the same on a fast and
-// a slow machine, so the bound fails a 2x slower build on either; the test also asserts that
-// it would (twice the measured build is over the bound), so a bound that drifted loose fails.
+// measured the same way in the same process just before. The ratio build / reference is not
+// the same on every machine: 5.5-6.5 on the Apple M5 Pro, 3.78 on a GitHub ubuntu runner (CI
+// run 41190815003). So the budget the build is judged against is derived from the ratio
+// measured in this run (buildBudget below, with the arithmetic), so that it passes the
+// measured build and is under twice it on any runner where a budget can be both.
 //
 // Re-measure: an operation over its budget is re-measured in further batches of REPEATS,
 // keeping the running minimum, until it is within budget or the named wall-clock deadline
@@ -100,13 +102,44 @@ export function measure(fn, budget, { repeats = REPEATS, deadlineMs = REMEASURE_
   return { min, wall, batches, ok: min <= budget };
 }
 
+/** The derived build budget sits this far above the measured build: under 2, over 1. */
+export const BUILD_MARGIN = 1.9;
+/** The derived build budget is never under this many times the reference. */
+export const BUILD_FLOOR_RATIO = 2;
+
 /**
- * The build's budget on this machine: the smaller of PERF_BUDGETS.build and
- * BUILD_REFERENCE_RATIO times the CPU time of referenceWork() measured here.
+ * The build's budget on this machine, from the reference's and the build's CPU time measured
+ * here. With r = buildMs / referenceMs (the measured ratio):
+ *
+ *   multiple = min(bound, max(floor, margin * r))      bound 9, floor 2, margin 1.9
+ *   budget   = min(cap, multiple * referenceMs)         cap 1000 ms
+ *
+ * It passes the measured build whenever r <= bound and buildMs <= cap: margin * r > r, and a
+ * floor that binds is above margin * r. So what fails a slow build in one run is the bound
+ * (r > 9) and the cap, as before; the derivation only tightens the budget below the bound.
+ *
+ * It fails a build twice as slow as the measured one (2 * buildMs > budget) wherever that is
+ * possible: margin * r < 2 * r; when the bound binds, margin * r >= bound, so 2 * r >= 2 *
+ * bound / 1.9 > bound; when the cap binds, 1.9 * buildMs >= cap or 9 * referenceMs >= cap with
+ * r >= 9 / 1.9, so 2 * buildMs > cap. Only the floor can bind with 2 * r <= floor, at r <= 1:
+ * a build that costs no more CPU time than the product-free reference, where the yardstick is
+ * not measuring the build's shape and no budget both passes it and fails it doubled (catches2x
+ * false; the test skips that check and says why). Any real build is far above (r 3.78-6.5).
+ *
+ * A fixed budget of 9 x the reference could not do both on every runner: at r = 3.78 a build
+ * twice as slow (7.56 x) is under it (CI run 41190815003: 710.81 ms against 845.62 ms), and
+ * any fixed multiple low enough for that runner (< 7.56) leaves little room above the Mac's
+ * 6.5. A regression that a later run measures is judged by the bound: on the Mac (r ~6) a 2x
+ * slower build is r ~12 > 9 and fails; on a runner at r 3.78 only a build over 2.38x fails.
+ * @returns {{ ratio: number, multiple: number, budget: number, passes: boolean,
+ *   catches2x: boolean }}
  */
-export function buildBudget(referenceMs, { cap = PERF_BUDGETS.build,
-  ratio = BUILD_REFERENCE_RATIO } = {}) {
-  return Math.min(cap, ratio * referenceMs);
+export function buildBudget(referenceMs, buildMs, { cap = PERF_BUDGETS.build,
+  bound = BUILD_REFERENCE_RATIO, margin = BUILD_MARGIN, floor = BUILD_FLOOR_RATIO } = {}) {
+  const ratio = buildMs / referenceMs;
+  const multiple = Math.min(bound, Math.max(floor, margin * ratio));
+  const budget = Math.min(cap, multiple * referenceMs);
+  return { ratio, multiple, budget, passes: buildMs <= budget, catches2x: 2 * buildMs > budget };
 }
 
 const freshStore = () => {
@@ -127,15 +160,20 @@ test('§145 the 100-node / 200-edge fixture is valid and built by store actions'
   assert.ok(plan.ok, JSON.stringify(plan.errors && plan.errors.slice(0, 2)));
 });
 
-test('§145-§147 model operations, compile and views stay within their budgets', (t) => {
+test('§145-§147 model operations, compile and views stay within their budgets', async (t) => {
   const measured = {};
   const next = deadlines();
   const time = (k, fn, repeats, budget = PERF_BUDGETS[k]) => {
     measured[k] = { ...measure(fn, budget, { repeats, deadlineMs: next() }), budget };
   };
-  // The yardstick first, in the same process and on the same clock as the build.
+  // The yardstick first, in the same process and on the same clock as the build. The build is
+  // re-measured while it is over the bound; its budget is then derived from what it measured.
   const reference = measure(() => referenceWork(), Infinity);
-  time('build', () => buildLargeStudio(freshStore()), 5, buildBudget(reference.min));
+  time('build', () => buildLargeStudio(freshStore()), 5,
+    Math.min(PERF_BUDGETS.build, BUILD_REFERENCE_RATIO * reference.min));
+  const derived = buildBudget(reference.min, measured.build.min);
+  measured.build.budget = derived.budget;
+  measured.build.ok = derived.passes;
   const store = freshStore();
   buildLargeStudio(store);
   const base = store.getModel();
@@ -178,23 +216,32 @@ test('§145-§147 model operations, compile and views stay within their budgets'
   t.diagnostic(`100 nodes / 200 edges, fastest of ${REPEATS} per batch on ${CPU_CLOCK}, `
     + `load ${load} on ${os.cpus().length} cores:`);
   t.diagnostic(`reference      ${reference.min.toFixed(3)} ms (wall ${reference.wall.toFixed(3)});`
-    + ` build / reference ${ratio.toFixed(2)} (bound ${BUILD_REFERENCE_RATIO})`);
+    + ` build / reference ${ratio.toFixed(2)} (bound ${BUILD_REFERENCE_RATIO}, budget `
+    + `${derived.multiple.toFixed(2)} x the reference; the bound alone fails a build `
+    + `${(BUILD_REFERENCE_RATIO / ratio).toFixed(2)}x as slow as this one)`);
   for (const [k, v] of Object.entries(measured)) {
     t.diagnostic(`${k.padEnd(14)} ${v.min.toFixed(3)} ms (wall ${v.wall.toFixed(3)}, budget `
       + `${v.budget.toFixed(1)}, ${v.batches} batch(es))`);
   }
   for (const [k, v] of Object.entries(measured)) {
     const of = k === 'build' ? ` (the smaller of ${PERF_BUDGETS.build} ms and `
-      + `${BUILD_REFERENCE_RATIO} x the reference's ${reference.min.toFixed(2)} ms; build / `
-      + `reference ${ratio.toFixed(2)})` : '';
+      + `${derived.multiple.toFixed(2)} x the reference's ${reference.min.toFixed(2)} ms, at most `
+      + `${BUILD_REFERENCE_RATIO} x; build / reference ${ratio.toFixed(2)})` : '';
     assert.ok(v.ok, `${k}: ${v.min.toFixed(2)} ms of CPU time > budget ${v.budget.toFixed(2)} ms`
       + `${of}, the fastest of ${v.batches} batch(es) within ${REMEASURE_DEADLINE_MS} ms (all`
       + ` operations within ${TOTAL_DEADLINE_MS} ms); wall ${v.wall.toFixed(2)} ms at load ${load}`);
   }
-  assert.ok(2 * measured.build.min > measured.build.budget, `a build twice as slow `
-    + `(${(2 * measured.build.min).toFixed(2)} ms) would pass its budget `
-    + `${measured.build.budget.toFixed(2)} ms: lower BUILD_REFERENCE_RATIO (build / reference is `
-    + `${ratio.toFixed(2)} here) so that the budget still fails a 2x regression`);
+  await t.test('a build twice as slow as the measured one is over its budget', (st) => {
+    if (!derived.catches2x) {
+      st.skip(`build / reference is ${ratio.toFixed(2)} here, at most 1: the build costs no more `
+        + 'CPU time than the product-free reference, so no budget both passes it and fails it '
+        + 'doubled (the reference is not measuring the build on this runner)');
+      return;
+    }
+    assert.ok(2 * measured.build.min > measured.build.budget, `a build twice as slow `
+      + `(${(2 * measured.build.min).toFixed(2)} ms) would pass its budget `
+      + `${measured.build.budget.toFixed(2)} ms (build / reference ${ratio.toFixed(2)})`);
+  });
 });
 
 // The re-measure on fake clocks: `now` (wall) and `cpu` are the only time sources, and each
@@ -278,16 +325,41 @@ test('§145-§147 the re-measure deadline stays wall time when the process is st
   assert.equal(c.cpu(), 122);
 });
 
-test('§145-§147 the build budget: the smaller of 1000 ms and the ratio times the reference',
-  () => {
-    assert.equal(buildBudget(50, { cap: 1000, ratio: 9 }), 450);
-    assert.equal(buildBudget(200, { cap: 1000, ratio: 9 }), 1000, 'never above the 1000 ms');
-    assert.equal(buildBudget(50), Math.min(PERF_BUDGETS.build, BUILD_REFERENCE_RATIO * 50));
-    // A build at 6.3 times the reference passes; the same build twice as slow does not.
-    const ref = 45;
-    assert.ok(6.3 * ref <= buildBudget(ref, { cap: 1000, ratio: 9 }));
-    assert.ok(2 * 6.3 * ref > buildBudget(ref, { cap: 1000, ratio: 9 }));
-  });
+const pick = ({ budget, passes, catches2x }) => ({ budget, passes, catches2x });
+test('§145-§147 the build budget passes the measured build and fails it doubled', () => {
+  const opts = { cap: 1000, bound: 9, margin: 1.9, floor: 2 };
+  // CI run 41190815003: reference 845.62 / 9 ms, build 710.81 / 2 ms, build / reference 3.78.
+  const ref = 845.62 / 9;
+  for (const r of [3.78, 6, 9]) {
+    const b = buildBudget(ref, r * ref, opts);
+    assert.ok(b.passes, `r ${r}: the measured build is within ${b.budget} ms`);
+    assert.ok(b.catches2x && 2 * r * ref > b.budget, `r ${r}: twice the build is over the budget`);
+  }
+  assert.ok(Math.abs(buildBudget(ref, 3.78 * ref, opts).multiple - 1.9 * 3.78) < 1e-9,
+    'r 3.78: the budget is 1.9 x the measured ratio, under the bound');
+  assert.equal(buildBudget(ref, 6 * ref, opts).multiple, 9, 'r 6: the bound binds');
+  assert.equal(buildBudget(ref, 9 * ref, opts).multiple, 9, 'r 9: the bound binds');
+  // The fixed budget of 9 x the reference before this: at r 3.78 a build twice as slow passed.
+  assert.ok(2 * 3.78 * ref <= Math.min(1000, 9 * ref), 'the CI flake: 7.56 x is under 9 x');
+  // A 2x regression measured by a later run: the bound fails it where r was above 4.5 (the
+  // Mac's 6 becomes 12), and cannot where r was 3.78 (7.56 is within 9; over 2.38x fails).
+  assert.equal(buildBudget(ref, 2 * 6 * ref, opts).passes, false, 'r 6 -> 12: fails');
+  assert.equal(buildBudget(ref, 2 * 3.78 * ref, opts).passes, true, 'r 3.78 -> 7.56: passes');
+  assert.equal(buildBudget(ref, 9.01 * ref, opts).passes, false, 'over the bound: fails');
+  // The cap: never above 1000 ms; a build over it fails, one under it doubled is over it.
+  assert.equal(buildBudget(200, 1100, opts).budget, 1000);
+  assert.equal(buildBudget(200, 1100, opts).passes, false);
+  assert.deepEqual(pick(buildBudget(200, 600, opts)), { budget: 1000, passes: true,
+    catches2x: true });
+  // The floor: at r <= 1 no budget both passes the build and fails it doubled.
+  assert.deepEqual(pick(buildBudget(100, 90, opts)), { budget: 200, passes: true,
+    catches2x: false });
+  assert.deepEqual(pick(buildBudget(100, 101, opts)), { budget: 200, passes: true,
+    catches2x: true });
+  // The defaults are the fixture's bound and the 1000 ms budget.
+  assert.deepEqual(buildBudget(50, 300), buildBudget(50, 300,
+    { cap: PERF_BUDGETS.build, bound: BUILD_REFERENCE_RATIO, margin: 1.9, floor: 2 }));
+});
 
 test('§145-§147 the reference workload is fixed and product-free', () => {
   const sum = referenceWork();

@@ -1,0 +1,46 @@
+# Review verdict for pull request #385, the synth train of 2026-11-02 (branch
+# feat/train-2026-11-02-synth; builder oscilla-26), titled as one feat change under the
+# owner's trains-by-default order of 2026-11-01. Reviewed head 1252c9cf (re-checked at e1589ad1, main e8bb8b95 merged in, digest unchanged) against origin/main
+# 11cc9fbc. The reviewer (oscilla-af) built none of its members: #372 (K097 XY pad), #375 (K066
+# K020 K102 presets and patch library) and oscilla-b0's C008/C016 reconciliation (10c03edc).
+#
+# The digest is scripts/review-verdict.mjs from `git archive origin/main scripts`, run --content
+# --list --base-branch origin/main in a detached worktree at the head: 7b8940a3...2a18 over 20
+# guarded paths.
+#
+# What was checked:
+# - Studio (12 paths: actions, adapters/instrument, adapters/nodes, library, live-notes,
+#   node-presets, nodes/instrument, patch-catalog, patches, registry, schema, validate): the
+#   train's patch against main equals #375's head (a9762a7b) against main, line for line, so
+#   the content is what oscilla-21 judged merge in 375.yaml (b1e6d552) and 372.yaml (0ee7f642).
+# - Merges 8547625e and 1252c9cf replayed with git merge-tree: no guarded file differs from the
+#   auto-merge, so nothing guarded was resolved by hand.
+# - C008/C016 (audio-engine.js, envelope.js, voice.js, measurement/capture.js, engine.js,
+#   views/quality-bar.js, ui/measure.js, ui/measure/run.js), judged in full:
+#   - setAdsr: a sustain edit or the switch off glides the held level instead of restarting;
+#     the latest edit wins (sustainWant), a restart is still the path for attack, decay, the
+#     switch on and programmed steps. _retargetSustain edits only after ctx.currentTime has
+#     rendered the quantum holding the last ramp's end (V249), deferring through the voice's
+#     own timer otherwise, and names why clock extrapolation would be wrong (review #310 R-9).
+#   - envelope.js retargetEvents: attack kept then a decay to the new level; in a decay the
+#     ramp re-ended at t on its own curve; in sustain a SUSTAIN_GLIDE_S (20 ms) glide; a scheduled
+#     release is kept and starts from the new level; the level is capped at 1.
+#     voice.js cancelParamFrom keeps the recorded log equal to the param's schedule.
+#   - L3 (#380): C008's setAdsr changes sit before C010's setDualRouter, which is unchanged.
+#   - C016: the setup check stops nothing; the io samples the engine voices at the input
+#     window's start and after it, and the caller's output-owner probe (svc.outputBusy(cmp),
+#     wired in main.js) marks otherAudio; the NOISE_HIGH, INPUT_CLIPPING and OTHER_AUDIO reasons
+#     and the quality bar then say the reading includes the app's own output instead of blaming
+#     the room. A probe that throws never fails the check.
+# - fail-first from the base copy, as one feat change: proven by 11 of 12 files.
+# - The builder reports npm test 4088 pass, 0 fail.
+#
+# Verdict: merge. No P0, P1 or P2.
+schema: review-verdict/v1
+pr: 385
+verdict: merge
+reviewer: oscilla-af (claude-code 901211e2)
+content: 7b8940a39f26c34b6c3204f0b097eb1812c2130c0fd884f49e0b08abfbd32a18
+findings:
+  - { id: S1, severity: P3, status: open, title: "_retargetSustain defers with a 250 ms timer while the AudioContext is not running; a suspended context retries every 250 ms for as long as the voice lives. Bound it, or resume-driven retry, in a follow-up" }
+  - { id: S2, severity: P3, status: open, title: "preflight samples audibleVoiceCountAt(start / sr) before the window is awaited; correct for the window's start, but a voice started and stopped wholly inside the window is seen only by the after-sample's probe of other owners, not as an engine voice" }

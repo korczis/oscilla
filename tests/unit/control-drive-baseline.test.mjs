@@ -4,8 +4,10 @@
 // A control is a start tag of src/index.html (comments removed) that is an input, select,
 // button or textarea, or carries an interactive role (slider, switch, listbox, tab, radio,
 // checkbox, spinbutton) or tabindex="0". Its key is `#<id>` when it has a static id, else
-// its static data-osc value (one key for every element that shares it); a control with
-// neither has no key and is not judged. A control is DRIVEN when a file under tests/browser
+// its static data-osc value (one key for every element that shares it), else each value of a
+// bound data-osc that chooses between two string literals (`:data-osc="c ? 'a' : 'b'"`, one
+// field template that renders two controls, keyed `a` and `b`); a control with none of these
+// has no key and is not judged. A control is DRIVEN when a file under tests/browser
 // (fixtures and node_modules apart) performs an action (click, fill, selectOption, press,
 // check, tap, dispatchEvent, focus, hover, setInputFiles, dragTo, type, keyboard., mouse.,
 // a value assignment or a synthetic input/pointer/keyboard event) on the line that names the
@@ -81,9 +83,10 @@ export function controlsOf(html) {
     const tag = m[0];
     const id = /\sid="([^"]+)"/.exec(tag);
     const osc = /\sdata-osc="([^"]+)"/.exec(tag);
-    const key = id ? `#${id[1]}` : osc ? osc[1] : null;
-    if (key && !out.has(key)) {
-      out.set(key, { key, line: text.slice(0, m.index).split('\n').length });
+    const bound = /\s:data-osc="\s*[\w.]+\s*\?\s*'([^']+)'\s*:\s*'([^']+)'\s*"/.exec(tag);
+    const keys = id ? [`#${id[1]}`] : osc ? [osc[1]] : bound ? [bound[1], bound[2]] : [];
+    for (const key of keys) {
+      if (!out.has(key)) out.set(key, { key, line: text.slice(0, m.index).split('\n').length });
     }
   }
   return [...out.values()];
@@ -219,11 +222,14 @@ const HTML_FIX = [
   '<input :id="paramId(d)" data-osc="d.param">',
   '<span id="not-a-control">text</span>',
   '<button type="button">no key</button>',
+  '<select :id="fid(d)" :data-osc="isSweep ? \'e.sweep\' : \'e.pattern\'"></select>',
+  '<input :data-osc="kindOf(d)">',
 ].join('\n');
 
 test('mutation: the scan keys controls by id, else data-osc, and skips comments', () => {
   assert.deepEqual(controlsOf(HTML_FIX).map((c) => c.key),
-    ['#a-btn', '#b-range', 'c.knob', 'd.param']);
+    ['#a-btn', '#b-range', 'c.knob', 'd.param', 'e.sweep', 'e.pattern'],
+    'a bound data-osc of two literals keys both; any other bound expression keys nothing');
 });
 
 test('mutation: an action on the naming line or the next one drives; a name alone does not', () => {
@@ -235,10 +241,13 @@ test('mutation: an action on the naming line or the next one drives; a name alon
     "const v = await page.evaluate(() => document.querySelector('[data-osc=\"c.knob\"]').value);",
     '',
     '',
-    "await page.fill('[data-osc=\"d.param\"]', '3');"]) }];
-  assert.deepEqual(undrivenOf(HTML_FIX, files), ['c.knob']);
+    "await page.fill('[data-osc=\"d.param\"]', '3');",
+    '',
+    "await page.selectOption('[data-osc=\"e.sweep\"]', 'up');"]) }];
+  assert.deepEqual(undrivenOf(HTML_FIX, files), ['c.knob', 'e.pattern'],
+    'each value of a bound data-osc is driven on its own');
   const removed = [{ f: files[0].f, lines: files[0].lines.filter((l) => !l.includes('#a-btn')) }];
-  assert.deepEqual(undrivenOf(HTML_FIX, removed), ['#a-btn', 'c.knob'],
+  assert.deepEqual(undrivenOf(HTML_FIX, removed), ['#a-btn', 'c.knob', 'e.pattern'],
     'a deleted drive leaves its control undriven');
   const far = [{ f: files[0].f, lines: fixture("const s = '#a-btn';\n\nawait page.click(s);") }];
   assert.deepEqual(drivenBy(far, '#a-btn'), [], 'an action two lines away does not drive');

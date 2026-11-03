@@ -1,8 +1,15 @@
 #!/usr/bin/env node
 // npm run release:prepare — turn the current clean tree into a release candidate. Never tags.
 //
-//   node scripts/release-prepare.mjs [--dry-run] [--prerelease [--preid rc]]
+//   node scripts/release-prepare.mjs [--dry-run] [--local-gate] [--prerelease [--preid rc]]
 //     [--no-rc-because <ADR>] [--help]
+//
+// ADR 0082 (owner, 2026-11-02): the gate verdict of a release is, by default, the CI run of
+// its own chore(release) pull request (the CI receipt, scripts/release-ci-receipt.mjs, judged
+// by release:publish on main). release:prepare then runs only what makes the candidate and
+// what CI does not: the roadmap refresh and its check, the build, version:check and
+// npm run verify (CI_PREPARE_COMMANDS), and writes no receipt. --local-gate runs the full
+// local gate (GATE_COMMANDS) and writes the local receipt as before (step 6).
 //
 //   0. parse the arguments against that list (parseFlags of release-analyze.mjs): --help / -h
 //      prints the usage and exits 0; an unknown flag (a typo such as --dryrun) or a flag
@@ -22,10 +29,14 @@
 //        ADR, accepted or not, is refused (convention: .ai/repo/adrs/README.md).
 //   3. bump package.json + package-lock.json ONCE (npm version --no-git-tag-version), or
 //      confirm the untagged version package.json already carries
-//   4. rebuild dist/index.html, then npm run version:check, npm run release-gate and
-//      majordomus doctor
-//   5. on any failure restore package.json, package-lock.json and dist/index.html from HEAD
-//      (the tree was clean, so that is exact) and exit non-zero, loudly
+//   4. refresh src/data/roadmap.json from the plan (scripts/roadmap.mjs, U002: the open
+//      milestones About's "What comes next" shows), rebuild dist/index.html, then npm run
+//      version:check, npm run release-gate and majordomus doctor; the gate runs with
+//      OSC_ROADMAP_CHECK=1, so tests/unit/about-current.test.mjs refuses a roadmap that
+//      differs from the plan
+//   5. on any failure restore package.json, package-lock.json, src/data/roadmap.json and
+//      dist/index.html from HEAD (the tree was clean, so that is exact) and exit non-zero,
+//      loudly
 //   6. on success write the gate receipt into the git directory (never a tracked file, so the
 //      tree stays clean) for release:publish: version, source digest, dist sha256 and the gate
 //      tree (rule project.release-receipt-binds-gate) at the time the gate passed. Any later
@@ -50,10 +61,22 @@ import {
   RECORDS_DIR, hasRecordFile, missingRecords, needsRecord, parseRecord,
 } from './release-record.mjs';
 import { parseYaml } from './yaml-subset.mjs';
+import { ROADMAP_REL } from './roadmap.mjs';
 
 export const RECEIPT_NAME = 'oscilla-release-gate.json';
-export const RESTORE_PATHS = ['package.json', 'package-lock.json', 'dist/index.html'];
+export const RESTORE_PATHS = [
+  'package.json', 'package-lock.json', ROADMAP_REL, 'dist/index.html',
+];
+/** The default (ADR 0082): the candidate and the checks CI does not run; CI is the gate. */
+export const CI_PREPARE_COMMANDS = [
+  ['node', ['scripts/roadmap.mjs']],
+  ['npm', ['run', 'build']],
+  ['npm', ['run', 'version:check']],
+  ['npm', ['run', 'verify']],
+];
+/** --local-gate: the full gate on this machine, with the local receipt. */
 export const GATE_COMMANDS = [
+  ['node', ['scripts/roadmap.mjs']],
   ['npm', ['run', 'build']],
   ['npm', ['run', 'version:check']],
   ['npm', ['run', 'release-gate']],
@@ -134,9 +157,10 @@ export function gateEnvProblems(env = process.env) {
     + '(OSC_LOAD_MAX and OSC_LOAD_WAIT_MS stay allowed)');
 }
 
-/** The environment the gate commands run in: `env` with CI's skip semantics. */
+/** The environment the gate commands run in: `env` with CI's skip semantics, and the
+ *  committed roadmap judged against the plan (tests/unit/about-current.test.mjs). */
 export function gateEnv(env = process.env) {
-  const out = { ...env, OSC_STRICT_SKIPS: '1' };
+  const out = { ...env, OSC_STRICT_SKIPS: '1', OSC_ROADMAP_CHECK: '1' };
   for (const k of NARROWING_ENV) delete out[k];
   return out;
 }
@@ -370,10 +394,10 @@ function loud(lines) {
   console.error(`\n${bar}\n${lines.map((l) => `RELEASE:PREPARE FAILED  ${l}`).join('\n')}\n${bar}`);
 }
 
-export const USAGE = 'usage: node scripts/release-prepare.mjs [--dry-run] '
+export const USAGE = 'usage: node scripts/release-prepare.mjs [--dry-run] [--local-gate] '
   + '[--prerelease [--preid <id>]] [--no-rc-because <ADR>] [--help]';
 const FLAGS = {
-  '--dry-run': 'boolean', '--prerelease': 'boolean', '--preid': 'value',
+  '--dry-run': 'boolean', '--local-gate': 'boolean', '--prerelease': 'boolean', '--preid': 'value',
   '--no-rc-because': 'value',
 };
 
@@ -421,16 +445,19 @@ export function main(argv = process.argv.slice(2), root = ROOT, run = gitRunner(
     console.log('\nNothing to release.');
     return 0;
   }
+  const localGate = !!o['--local-gate'];
+  const commands = localGate ? GATE_COMMANDS : CI_PREPARE_COMMANDS;
   const plan = proposal.action === 'bump'
-    ? [['npm', ['version', proposal.version, '--no-git-tag-version']], ...GATE_COMMANDS]
-    : GATE_COMMANDS;
+    ? [['npm', ['version', proposal.version, '--no-git-tag-version']], ...commands]
+    : commands;
   if (o['--dry-run']) {
     console.log(`\nDry run: would ${proposal.action} v${proposal.version} and run:`);
     for (const [cmd, args] of plan) console.log(`  ${cmd} ${args.join(' ')}`);
     return 0;
   }
   console.log(`\n${proposal.action === 'bump' ? `Bumping ${current} -> ${proposal.version}`
-    : `Confirming the untagged v${current}`}; then the full gate.`);
+    : `Confirming the untagged v${current}`}; then ${localGate ? 'the full local gate'
+    : 'the candidate checks (the gate is the CI run of the release pull request, ADR 0082)'}.`);
   for (const [cmd, args] of plan) {
     const r = sh(cmd, args, root, gateEnv(env));
     if (!r.ok) {
@@ -445,6 +472,19 @@ export function main(argv = process.argv.slice(2), root = ROOT, run = gitRunner(
       ]);
       return 1;
     }
+  }
+  if (!localGate) {
+    const version = readVersion(root);
+    if (version !== proposal.version) {
+      loud([`package.json says ${version}, expected ${proposal.version}`]);
+      return 1;
+    }
+    console.log(`\nRelease candidate v${version} is built and verified; no local receipt is `
+      + 'written (ADR 0082). Next: commit it as "chore(release): v' + `${version}", open its `
+      + 'pull request and land it when CI\'s gate is green: that run is the gate verdict. '
+      + 'Nothing else merges until the publish. Then, on main, npm run release:publish (dry '
+      + 'run), and npm run release:publish -- --yes.');
+    return 0;
   }
   const receipt = {
     ...currentFingerprint(root, run), ...GATE_RUN, result: 'passed',

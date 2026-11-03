@@ -601,15 +601,19 @@
   .osc-app[data-mode="sequencer"] .osc-p-sequencer { grid-column: 5 / span 8; }
   .osc-app[data-mode="sequencer"] #osc-seq-timeline { height: 96px; }
 
-  /* Analyzer: analysis + mic on top, device and the spectrogram below. */
-  .osc-app[data-mode="analyzer"] .osc-p-analysis { grid-column: 1 / span 7; }
-  .osc-app[data-mode="analyzer"] .osc-p-mic { grid-column: 8 / span 5; }
+  /* Analyzer: analysis + mic on top, device and the spectrogram below. Compare: generator vs
+     microphone beside the two-signal phase, the human and animal hearing ranges full width
+     below them. Both fill the 1536x1024 viewport (U005). */
+  .osc-app[data-mode="analyzer"] .osc-p-analysis,
+  .osc-app[data-mode="compare"] .osc-p-mic { grid-column: 1 / span 7; }
+  .osc-app[data-mode="analyzer"] .osc-p-mic,
+  .osc-app[data-mode="compare"] .osc-p-phase { grid-column: 8 / span 5; }
   .osc-app[data-mode="analyzer"] .osc-p-spectrogram { grid-column: 1 / span 9; }
   .osc-app[data-mode="analyzer"] .osc-p-device { grid-column: 10 / span 3; }
-  .osc-app[data-mode="analyzer"] .osc-h-spectrum { height: 230px; }
-  .osc-app[data-mode="analyzer"] .osc-h-mic { height: 300px; }
-  .osc-app[data-mode="analyzer"] .osc-h-spectrogram { height: 320px; }
-  .osc-app[data-mode="analyzer"] .osc-h-colorbar { height: 290px; }
+  .osc-app[data-mode="analyzer"] .osc-h-spectrum { height: 251px; }
+  .osc-app:is([data-mode="analyzer"], [data-mode="compare"]) .osc-h-mic { height: 300px; }
+  .osc-app[data-mode="analyzer"] .osc-h-spectrogram { height: 302px; }
+  .osc-app[data-mode="analyzer"] .osc-h-colorbar { height: 272px; }
 
   /* Filter Lab: the filter panel, full width and tall. */
   .osc-app[data-mode="filter"] .osc-p-filter { grid-column: 1 / -1; }
@@ -628,13 +632,17 @@
   .osc-app[data-mode="synthesis"] .osc-h-additive { height: 180px; }
   .osc-app[data-mode="synthesis"] .osc-phase-view { height: 200px; }
 
-  /* Compare: generator vs microphone, human vs animal ranges, two-signal phase. */
-  .osc-app[data-mode="compare"] .osc-p-mic { grid-column: 1 / span 7; }
-  .osc-app[data-mode="compare"] .osc-p-bio { grid-column: 8 / span 5; }
-  .osc-app[data-mode="compare"] .osc-p-phase { grid-column: 1 / span 7; }
-  .osc-app[data-mode="compare"] .osc-h-mic { height: 300px; }
+  /* Compare: the hearing ranges take the default full row (see Analyzer above). */
   .osc-app[data-mode="compare"] .osc-h-bio { height: 240px; }
-  .osc-app[data-mode="compare"] .osc-phase-view { height: 220px; }
+  .osc-app[data-mode="compare"] .osc-phase-view { height: 387px; }
+}
+
+/* The microphone analyzer's links to its calibrated counterparts (ui/counterparts.js); a box,
+   so the coarse-pointer list below can give it a 44 px target. */
+.osc-p-mic a {
+  display: inline-flex;
+  align-items: center;
+  color: var(--osc-link);
 }
 
 /* Dual panel grid inside the synthesis workspace (all widths). */
@@ -777,7 +785,8 @@
   .osc-toast .osc-icon-btn,
   .osc-hints .osc-icon-btn,
   .osc-viz-pause,
-  .osc-p-dual .osc-toggle {
+  .osc-p-dual .osc-toggle,
+  .osc-p-mic a {
     min-width: 44px;
     min-height: 44px;
   }
@@ -807,14 +816,16 @@
 
 /* Between 1280 and 1535 px the lab keeps the reference arrangement, but panels are narrower than
    the 1536 px reference, so their text wraps taller than the reference's fixed row heights. Let
-   the rows follow the content there; from 1536 px the exact reference geometry applies. */
+   the rows follow the content there; from 1536 px the exact reference geometry applies. The
+   first row (.osc-top, P002) follows its content too, or the analysis foot and, under a coarse
+   pointer, HOLD TO PLAY would sit under the measurement row (responsive.css, Touch). */
 @media (min-width: 1280px) and (max-width: 1535.98px) {
   .osc-app[data-mode="playground"] .osc-main {
     grid-template-rows: max-content max-content;
   }
 
-  .osc-app[data-mode="playground"] :is(.osc-top-left, .osc-top-right) {
-    grid-template-rows: max-content max-content;
+  .osc-app[data-mode="playground"] .osc-top {
+    grid-template-rows: max-content;
   }
 }
 
