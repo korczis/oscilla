@@ -13,8 +13,9 @@
 //   tabs: every control, knob and jack box at least 44 px, no overflow out of the view or the
 //   page, and every visible text of the view at least 12 px as drawn (an SVG text by its screen
 //   scale). Small text predating the floor is listed in KNOWN_SMALL_FONTS by where it is drawn,
-//   its tag and its size; an unlisted one fails, and so does a listed one no longer seen, so the
-//   list can only shrink.
+//   its tag and its size, with how many each tab drew when it was listed; an unlisted one fails,
+//   a tab drawing more of a listed one fails, and a tab drawing fewer fails until the count is
+//   tightened (an entry at 0 on every tab is removed), so the list and its counts only shrink.
 // - Escape and page hide stop a playing sequence (project.audio-engine-discipline v2), checked
 //   with deadline polls, not fixed sleeps.
 //
@@ -64,19 +65,49 @@ const SYNTH_TABS = ['panel', 'engines', 'xy'];
 const SYNTH_TARGETS = '[data-knob], [data-jack] rect:not([data-focus-ring])';
 const FONT_MIN = 12;
 // Text below FONT_MIN in the Synth when the floor was added (F013 W1, 2026-11-03), keyed
-// '<nearest data-osc> <tag> <px>' with where it is drawn. The synth-theme layer's label module
-// (F013) is to lift them; remove an entry once it is gone (the list may only shrink).
+// '<nearest data-osc> <tag> <px>' with how many each tab drew then (the same in chromium, firefox
+// and webkit) and where it is drawn. A tab drawing more fails: a new small text of a listed kind
+// is a regression like an unlisted one. A tab drawing fewer fails until its count is lowered to
+// what it draws, and an entry at 0 on every tab is removed. The synth-theme layer's label module
+// (F013) is to lift them all (the list and its counts may only shrink).
 const KNOWN_SMALL_FONTS = new Map([
-  ['synth.bay.svg text 10px', 'synth/view/bay.js: the bay\'s row and jack labels, font-size 10'],
-  ['synth.modules span 11px', 'synth/view/face.js: card kinds, value chips and notes, text-[11px]'],
-  ['synth.modules p 11px', 'synth/view/face.js: a card\'s note paragraph, text-[11px]'],
-  ['synth.xy.pad li 10px', 'ui/kinds/xy-pad.js: the scale-step labels under the pad, text-[10px]'],
+  ['synth.bay.svg text 10px', { panel: 83, engines: 83, xy: 83,
+    where: 'synth/view/bay.js: the bay\'s row and jack labels, font-size 10' }],
+  ['synth.modules span 11px', { panel: 72, engines: 21, xy: 6,
+    where: 'synth/view/face.js: card kinds, value chips and notes, text-[11px]' }],
+  ['synth.modules p 11px', { panel: 0, engines: 1, xy: 0,
+    where: 'synth/view/face.js: a card\'s note paragraph, text-[11px]' }],
+  ['synth.xy.pad li 10px', { panel: 0, engines: 0, xy: 11,
+    where: 'ui/kinds/xy-pad.js: the scale-step labels under the pad, text-[10px]' }],
 ]);
 const SYNTH_LOAD_MS = 15000;
 // A tab is rendered on a frame after synthTab(): what only that tab's render draws.
 const SYNTH_TAB_DRAWS = { panel: '[data-module="vco1"]', engines: '[data-module="additive"]',
   xy: '[data-osc="synth.xy.pad"]' };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/** The first n of a list of failures, saying how many more were cut. */
+const firstOf = (bad, n) => `${bad.slice(0, n).join('; ')}`
+  + `${bad.length > n ? ` (+${bad.length - n} more)` : ''}`;
+
+/**
+ * Judge the small text one Synth tab draws ({ key: count } from measureFonts) against `known`
+ * (KNOWN_SMALL_FONTS): `bad` holds an unlisted key or a listed one drawn more often than its
+ * count, `fewer` a listed one drawn less often (its count is to be lowered).
+ */
+function judgeFonts(small, tab, known, min) {
+  const bad = [];
+  const fewer = [];
+  for (const [key, n] of Object.entries(small)) {
+    const k = known.get(key);
+    if (!k) bad.push(`text ${key} (${n}) < ${min} px`);
+    else if (n > k[tab]) bad.push(`text ${key} (${n}, ${k[tab]} known on this tab) < ${min} px`);
+  }
+  for (const [key, k] of known) {
+    const n = small[key] || 0;
+    if (n < k[tab]) fewer.push(`${key} ${tab}: ${k[tab]} -> ${n}`);
+  }
+  return { bad, fewer };
+}
 
 function measure() {
   const vis = (el) => {
@@ -264,7 +295,7 @@ async function runOne(name) {
           ...m.covered.map((s) => `covered ${s}`)];
         if (m.overflow) bad.push(`horizontal overflow ${m.overflow}`);
         if (!m.panels) bad.push('no visible panel');
-        if (bad.length) failures.push(`${w}x${h} ${ws}: ${bad.slice(0, 6).join('; ')}`);
+        if (bad.length) failures.push(`${w}x${h} ${ws}: ${firstOf(bad, 6)}`);
       }
       for (const ws of VIEWS) {
         await setWorkspace(page, ws);
@@ -276,7 +307,7 @@ async function runOne(name) {
           if (!m.panels) bad.push('no visible panel');
         }
         checks++;
-        if (bad.length) failures.push(`${w}x${h} ${ws}: ${bad.slice(0, 6).join('; ')}`);
+        if (bad.length) failures.push(`${w}x${h} ${ws}: ${firstOf(bad, 6)}`);
       }
       await page.close();
     }
@@ -300,7 +331,7 @@ async function runOne(name) {
           seenSmall.add(t.id);
           if (!KNOWN_SMALL_TARGETS.has(t.id)) bad.push(`target ${t.id} ${t.w}x${t.h} < ${TOUCH_MIN} px`);
         }
-        if (bad.length) failures.push(`touch ${w}x${h} ${ws}: ${bad.slice(0, 6).join('; ')}`);
+        if (bad.length) failures.push(`touch ${w}x${h} ${ws}: ${firstOf(bad, 6)}`);
       }
       await ctx.close();
     }
@@ -316,7 +347,7 @@ async function runOne(name) {
 
     // The Synth at the phone size with touch (F013 W1, G2): targets, overflow and the font floor,
     // on each tab.
-    const seenFonts = new Set();
+    const fewerFonts = [];
     {
       const [w, h] = SYNTH_PHONE;
       const ctx = await browser.newContext({ viewport: { width: w, height: h }, hasTouch: true });
@@ -347,18 +378,17 @@ async function runOne(name) {
         bad.push(...await page.evaluate(measureView, 'synth'));
         const f = await page.evaluate(measureFonts, FONT_MIN);
         if (f.tested < 20) bad.push(`only ${f.tested} texts visible`);
-        for (const [key, n] of Object.entries(f.small)) {
-          seenFonts.add(key);
-          if (!KNOWN_SMALL_FONTS.has(key)) bad.push(`text ${key} (${n}) < ${FONT_MIN} px`);
-        }
-        if (bad.length) failures.push(`synth ${w}x${h} ${tab}: ${bad.slice(0, 8).join('; ')}`);
+        const judged = judgeFonts(f.small, tab, KNOWN_SMALL_FONTS, FONT_MIN);
+        bad.push(...judged.bad);
+        fewerFonts.push(...judged.fewer);
+        if (bad.length) failures.push(`synth ${w}x${h} ${tab}: ${firstOf(bad, 8)}`);
       }
       await ctx.close();
     }
     checks++;
-    const fontsFixed = [...KNOWN_SMALL_FONTS.keys()].filter((k) => !seenFonts.has(k));
-    if (fontsFixed.length) {
-      failures.push(`KNOWN_SMALL_FONTS no longer small (fixed? remove them): ${fontsFixed.join(', ')}`);
+    if (fewerFonts.length) {
+      failures.push('KNOWN_SMALL_FONTS fell (fixed? lower these counts, remove an entry at 0 on '
+        + `every tab): ${fewerFonts.join(', ')}`);
     }
 
     // Escape and page hide stop a playing sequence: deadline polls (start within 2 s, stop

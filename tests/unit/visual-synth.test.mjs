@@ -5,7 +5,8 @@
 // pixel tolerance, references per environment written only by the script, and the harness wired
 // into `npm run test:visual` and the CI visual job like scripts/visual-studio.mjs. The Synth
 // layout check (b0's G2: 44 px targets, a 12 px font floor, no overflow at the phone size) lives
-// in tests/browser/layout.cjs and is held here by its declarations.
+// in tests/browser/layout.cjs and is held here by its declarations, and its small-text ratchet
+// and failure lines by their own functions, read out of the script (it runs a browser on load).
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
@@ -108,4 +109,58 @@ test('the layout check judges the Synth workspace at the phone size', () => {
   assert.match(src, /measureTouch, \[TOUCH_MIN, SYNTH_TARGETS\]/);
   assert.match(src, /measureView, 'synth'/);
   assert.match(src, /const KNOWN_SMALL_FONTS = new Map\(/);
+});
+
+// The layout script runs its browsers when loaded, so its pure parts are read out of it.
+const layoutPart = (re) => {
+  const m = read('tests/browser/layout.cjs').match(re);
+  assert.ok(m, `layout.cjs holds ${re}`);
+  return m[0];
+};
+const KNOWN_RE = /const KNOWN_SMALL_FONTS = new Map\([\s\S]*?\n\]\);/;
+const fontJudge = () => new Function(`${layoutPart(KNOWN_RE)}
+${layoutPart(/function judgeFonts\([\s\S]*?\n\}/)}
+return { KNOWN_SMALL_FONTS, judgeFonts };`)();
+
+test('each known small text records its count per tab, and the count is a ratchet', () => {
+  const { KNOWN_SMALL_FONTS: known, judgeFonts } = fontJudge();
+  assert.ok(known.size > 0);
+  for (const [key, k] of known) {
+    for (const tab of ['panel', 'engines', 'xy']) {
+      assert.ok(Number.isInteger(k[tab]) && k[tab] >= 0, `${key} counts the ${tab} tab`);
+    }
+    assert.ok(k.panel + k.engines + k.xy > 0, `${key} is drawn somewhere, or it is removed`);
+    assert.match(k.where, /\.js: /);
+  }
+  const today = (tab) => Object.fromEntries([...known].filter(([, k]) => k[tab] > 0)
+    .map(([key, k]) => [key, k[tab]]));
+  for (const tab of ['panel', 'engines', 'xy']) {
+    assert.deepEqual(judgeFonts(today(tab), tab, known, 12), { bad: [], fewer: [] });
+  }
+  // The review's seeded input: face.js's collapse caret from text-xs to text-[11px] adds one
+  // more 'synth.modules span 11px' per module card, a listed kind; it must fail.
+  const span = 'synth.modules span 11px';
+  const more = { ...today('panel'), [span]: known.get(span).panel + 1 };
+  assert.deepEqual(judgeFonts(more, 'panel', known, 12).bad,
+    [`text ${span} (${known.get(span).panel + 1}, ${known.get(span).panel} known on this tab) `
+      + '< 12 px']);
+  // An unlisted kind fails; a listed one drawn less often asks for its count to be lowered.
+  assert.deepEqual(judgeFonts({ ...today('xy'), 'synth.bay h3 9px': 2 }, 'xy', known, 12).bad,
+    ['text synth.bay h3 9px (2) < 12 px']);
+  const fewer = { ...today('xy') };
+  delete fewer['synth.xy.pad li 10px'];
+  assert.deepEqual(judgeFonts(fewer, 'xy', known, 12),
+    { bad: [], fewer: [`synth.xy.pad li 10px xy: ${known.get('synth.xy.pad li 10px').xy} -> 0`] });
+  const src = read('tests/browser/layout.cjs');
+  assert.match(src, /KNOWN_SMALL_FONTS fell \(fixed\? lower these counts/);
+});
+
+test('a failure line cut short says how many failures it left out', () => {
+  const firstOf = new Function(`${layoutPart(/const firstOf = [\s\S]*?;\n/)}return firstOf;`)();
+  const bad = Array.from({ length: 11 }, (_, i) => `f${i}`);
+  assert.equal(firstOf(bad, 8), 'f0; f1; f2; f3; f4; f5; f6; f7 (+3 more)');
+  assert.equal(firstOf(bad.slice(0, 8), 8), 'f0; f1; f2; f3; f4; f5; f6; f7');
+  const src = read('tests/browser/layout.cjs');
+  assert.doesNotMatch(src, /bad\.slice\(0, \d+\)\.join/, 'no failure line cuts silently');
+  assert.match(src, /failures\.push\(`synth \$\{w\}x\$\{h\} \$\{tab\}: \$\{firstOf\(bad, 8\)\}`\)/);
 });
