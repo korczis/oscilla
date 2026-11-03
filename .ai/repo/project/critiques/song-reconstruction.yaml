@@ -1,0 +1,132 @@
+intent: song-reconstruction
+reviewed_at: "710619b5090dc44196f203be4da58a408c3df9fd"
+reviewed_by: "claude-opus-5.5 (independent critic agent, 2026-11-02, dispatched by the coordinator oscilla-b0, which drafted the intent; the critic wrote neither the intent, the draft criteria, the P00 gap map nor the P01 alignment). Inputs: the intent, M119 and Q072-Q078 at 710619b5; the eight draft criteria in song-reconstruction.intent.draft.yaml (deliberately not in the intent, ADR 0144 stage declared); the owner's relayed proposal of 2026-11-02 and the RECONSTRUCT pack (MASTER_CLAUDE_CODE.md, reference/*.md). Every resolution below is the critic's; none is planned by an issue of this intent, because it has none yet"
+findings:
+  - id: lineage-and-acceptance-have-no-home
+    class: unproven_assumption
+    subject: "song-reconstruction"
+    finding: "Blocking. The intent says hypotheses, lineage and model outputs 'are not a second Studio state', but it does not say where they live, and P01 section 5 leaves the two decisions (A-1 packaging, A-2 lineage location) as undrafted ADR proposals. Each option collides with a rule. (a) Lineage and acceptance in StudioModel metadata, as PRESENTATION state outside studioHash (like K061's metadata.panel): accepting or correcting a hypothesis is a semantic user action, so project.studio-model-is-canonical.v1 requires it to be one undoable dispatch, and the action layer has no such type. The size is also bounded: STUDIO_IMPORT_LIMITS.maxBytes is 4 MiB (src/js/studio/validate.js:77), and per-note lineage for a full transcription (thousands of notes, each with producer, version, parameters and part id) may not fit. (b) A separate reconstruction document keyed by element id: this is a second persisted record that must stay consistent with the Studio document across undo, delete, save and reopen, which is the 'parallel copy that has to be kept in sync' the rule forbids, unless the relation is one-way and immutable (the artifact is never edited; the Studio document points at it by hash; acceptance lives in the model). The draft criterion lineage-and-acceptance defers its own vocabulary 'by ADR', so it cannot be written as a test today. No issue of this intent may be filed until an ADR decides where lineage and acceptance live, whether acceptance is execution, presentation or view state (and therefore whether it changes studioHash), the dispatch types it adds, and the size bound."
+    blocking: true
+    resolution:
+      state: open
+      because: "No ADR exists. It must be drafted (status proposed) and named in depends_on by the first issue of the intent; the critic recommends the one-way form: an immutable artifact referenced by hash, and acceptance as presentation state changed only through new undoable dispatch types."
+  - id: companion-boundary-is-not-decidable-here
+    class: delivery_verification
+    subject: "Q074"
+    finding: "The draft criterion companion-boundary is claim evidence with the ref 'PROPOSED; blocked on Q-B and Q-C', and it is conditional ('If the owner accepts a companion'). Q074 accepted the companion but chose neither 'own directory' nor 'own repository'. Its main clauses (writes only artifact files, declares each adapter's licence and weights hash, refuses an unpinned or unlicensed adapter) are properties of a Python tool that OSCILLA's npm test, CI and release gate never run. Its last clause ('verify-dist proves the page bundles no model and fetches nothing') overstates verify-dist. scripts/verify-dist.mjs refuses fetch, XMLHttpRequest, import(), workers from a path, WebSocket and EventSource, plus the gzip budget (1 200 000 B, scripts/build-config.mjs:86-89). It does not refuse WebAssembly or a large base64 data: payload, so a small inlined model would pass. Separately, the pack lists MuScriptor (weights CC BY-NC 4.0), SAM Audio (its own gated licence), Demucs and RoFormer checkpoints and Basic Pitch; the critic did not verify these licences. None of them may enter this MIT repository or dist. Today nothing refuses that: no test rejects a tracked audio, MIDI, model, archive or wasm file (git ls-files at 710619b5 has none of .wav .mp3 .flac .ogg .mid .onnx .pt .safetensors .zip .wasm, by convention only)."
+    blocking: false
+    resolution:
+      state: open
+      because: "Recommended: the companion lives in its own repository, so its toolchain, weights, licence checks and benchmark gates are that repository's criteria; companion-boundary leaves this intent, and the artifact contract is the only interface. On the OSCILLA side, two decidable checks replace the claim. First, a unit test refuses tracked audio, MIDI, model, archive and wasm files outside a fixture manifest that names each fixture's generator and hash (this also enforces Q073). Second, verify-dist refuses WebAssembly and inline data: payloads above a stated size. Choosing directory or repository is the owner's or the coordinator's under a delegation, not the critic's."
+  - id: evaluation-evidence-is-unfalsifiable
+    class: delivery_verification
+    subject: "song-reconstruction"
+    finding: "The draft criterion evaluation-evidence ('Every quality figure shown for an adapter comes from a recorded run ...') is claim evidence 'blocked on Q-A' with no command, and Q073 has answered Q-A since. As written, no test can fail it. Its observable half can be decided in the page: the artifact validator can refuse a quality figure that lacks its evaluation record, so the criterion becomes a negative case of reconstruction-artifact.test.mjs. The record is the run id, metric, dataset or fixture id and hashes, tolerance and producer version. A bare scalar such as 'confidence: 0.93' or 'accuracy 98%', and a figure aggregated across datasets or metrics, are refused. The pack's MODEL_EVALUATION_PROTOCOL.md asks for exactly this ('per dataset and metric, never one invented AI confidence'). The benchmark half (does adapter X reach SDR or onset-F1 Y on fixture Z) belongs to the companion's repository, because a GPU model the gate cannot run must not be recorded as a passing evaluation."
+    blocking: false
+    resolution:
+      state: open
+      because: "To be rewritten as a command criterion on the artifact validator before it enters the intent; the benchmark half moves with the companion."
+  - id: no-fake-science-does-not-cover-inference
+    class: missed_requirement
+    subject: "song-reconstruction"
+    finding: "The invariant 'no accuracy, confidence or instrument identity is shown as fact unless a recorded evaluation run measured it' cites project.no-fake-science, but that rule's v2 enforcement (tests/unit/no-fake-science.test.mjs, v3-calibration.test.mjs) scans for medical, wellness, animal, ultrasound, safety and SPL claims only. Nothing it checks concerns model scores, 'identified', 'recovered', 'exact' or a percentage beside an inferred value, so the invariant names a rule that does not enforce it. The invariant also has a loophole. A recorded benchmark run measures an adapter on a reference set, not this user's song (the pack's ARCHITECTURE_BLUEPRINT section 5: 'TESTED about a benchmark is not certainty about this particular song'). So 'unless a recorded evaluation run measured it' must never turn an inferred instrument, note or tempo into fact. An inferred part stays inferred, or becomes user-accepted, and user-accepted is a person's choice, not an identification. A raw model score may be shown only as an uncalibrated score of the named producer, never as a probability."
+    blocking: false
+    resolution:
+      state: open
+      because: "Needs either project.no-fake-science v3 or a claim of its own with a test that scans reconstruction copy and the import's labels. The invariant should be reworded so that no evaluation run upgrades an inference about the user's recording to fact. This must land before the first reconstruction view does."
+  - id: patch-hypothesis-reads-as-a-recovered-preset
+    class: missed_requirement
+    subject: "song-reconstruction"
+    finding: "A patch hypothesis lands as an ordinary OSCILLA patch (oscilla-patch, src/js/studio/patches.js; the K102 library). Once it is inserted or saved to the library, nothing in the plan keeps it distinguishable from an authored patch, and the companion may name it after the instrument or product it imitates. connected-instrument's 'no product, brand or model name ships' covers shipped copy only, not user data an import writes. The non-goal 'Claiming exact recovery of a proprietary patch' is stated but tested nowhere."
+    blocking: false
+    resolution:
+      state: open
+      because: "The import should keep each derived patch's derivation (inferred, producer, artifact hash) through PATCH_INSERT, save and the library, the way K119 carries measurement provenance, and show 'approximation' wherever the patch is listed. A unit test should prove that the label survives a round trip."
+  - id: artifact-format-and-archive-safety-unspecified
+    class: missed_requirement
+    subject: "song-reconstruction"
+    finding: "The owner's proposal names a portable '.oscilla-song.zip' (original audio, stems, MIDI, tempo map, estimates, model ids, hashes). The intent says only 'a local file the user picks', and the draft artifact-contract criterion lists JSON refusals (truncated, oversized, unknown version, hash mismatch, prototype pollution) but no archive refusal. No zip reader exists in src/js, and the runtime dependencies are alpinejs, p5 and uplot (package.json). Whoever parses an archive in the page is therefore new code under the single-file budget: DecompressionStream('deflate-raw') plus a central-directory reader, or a vendored inflater. The limits are also unstated. STUDIO_IMPORT_LIMITS.maxBytes (4 MiB) bounds the Studio document, not stems, and a few minutes of decoded multi-stem float32 PCM reaches hundreds of megabytes, which a phone cannot hold. The archive refusals the pack's ADVERSARIAL_TEST_MATRIX (SEC-01, SEC-02) asks for are not named, and each must be atomic, with no partial sample-store write: absolute, '..', backslash, duplicate and case-colliding entry names; symlink, encrypted and nested-archive entries; entry count; per-entry and total uncompressed size checked against the declared sizes and again while inflating; and a compression-ratio cap. Caps on audio duration, channels, rate and decoded bytes are needed before decodeAudioData."
+    blocking: false
+    resolution:
+      state: open
+      because: "Recommended: the first slice reads a JSON manifest only, with each audio file picked alongside it and matched by its source-byte hash, so no archive parser enters dist. An archive comes later, under an ADR that states the parser, the numeric limits and the refusal sentences, and with an adversarial unit test per limit."
+  - id: source-hash-versus-sample-store-key
+    class: unproven_assumption
+    subject: "K074"
+    finding: "The artifact identifies sources by 'the SHA-256 of every source file' (source bytes). K074, the sample store the import must reuse, keys a buffer 'by its SHA-256' without saying whether that hash covers the file bytes or the decoded PCM. decodeAudioData resamples to the AudioContext rate (44.1 kHz on the CI runners, 48 kHz on the Mac), and decoders differ per browser (MP3 priming and padding). A PCM key would make one file a different sample on different devices, and the artifact's hashes would never match the store's. Hashing is also unmeasured. The page has a pure-JS SHA-256 (src/js/calibration/sha256.js, used by studioHash), whose time over hundreds of megabytes on a phone is unknown, and the availability of crypto.subtle.digest under file:// is unproven in the three gate browsers."
+    blocking: false
+    resolution:
+      state: open
+      because: "K074 should state that the store is keyed by the hash of the source bytes, stores those bytes and decodes them on load, before K109 builds on it. Otherwise the reconstruction ADR must reconcile the two hashes, and the cost of hashing should be measured on the fixture."
+  - id: source-versus-replacement-duplicates-the-mixer
+    class: unnecessary_work
+    subject: "song-reconstruction"
+    finding: "The draft criterion source-versus-replacement makes a user-switched A/B 'through one output owner (ADR 0063)'. ADR 0063 is status: proposed, and the criterion cites it as binding. Switching between an audio track and a notes track is mute and solo on channel strips, which K107 (M071) owns. The criterion adds 'level-matched with the method stated', a derived loudness figure that needs a named method and is an estimate. The one outcome no other issue owns is the import default the pack's SEM-06 asks for: a part that has both a source stem and a replacement imports with exactly one of them audible. The import unit test can decide that without a browser."
+    blocking: false
+    resolution:
+      state: open
+      because: "Replace it with an import-default criterion (one audible layer per part, decided by the import test) and reuse K107's solo and mute for the switch. Level matching becomes a later, optional slice with a named method and an estimate label."
+  - id: first-slice-dependencies-incomplete-and-unclosable
+    class: missed_requirement
+    subject: "M072"
+    finding: "Q075 and the intent name K099, K109 and K112 as the prerequisites, but the draft criterion works-without-ai also exercises 'export WAV' (K117) and the reopen of a document with audio clips (the K074 store, K119's round trip). Either the first slice drops export and full round trip, or its depends_on names K117 and K119. The prerequisites as planned also cannot close as milestones. M071 and M072 acceptance require 'npm run test:synth', which is absent from package.json and named in 70 plan files, and tests/browser/integration-map.cjs, which is absent (K075, not done). The issues K099, K109 and K112 each name test:synth, and 60 K issues name tests/unit/instrument-wording.test.mjs, absent until K059. Waiting for 'M071/M072 done' may therefore never end, even after the clips and the tempo map work on main."
+    blocking: false
+    resolution:
+      state: open
+      because: "The first issue of this intent should depend on the issues (K099, K109, K112, plus K117 only if export stays in), not on milestone completion. The test:synth, integration-map and instrument-wording defects are connected-instrument's, already raised in P01 section 8, and still unfixed at 710619b5."
+  - id: reanalysis-merge-underplanned
+    class: insufficient_work
+    subject: "song-reconstruction"
+    finding: "The draft criterion lineage-and-acceptance requires that 'importing a reanalysis keeps the user's edits and acceptances'. That is a three-way merge of a Studio document by element identity: base artifact, user-edited document, new artifact. The plan does not define it for a reanalysis that removes, splits, merges or retimes a note the user edited, or that changes the tempo map the user corrected. It is the hardest clause of the intent and is hidden inside a lineage criterion."
+    blocking: false
+    resolution:
+      state: open
+      because: "Recommended: a reanalysis imports as a new document or as new tracks beside the old ones and never merges (the invariant 'creates a new immutable result and never overwrites' then holds trivially). A merge, if wanted, is a later slice with its own ADR and conflict rules."
+  - id: determinism-is-not-proven-by-studiohash
+    class: delivery_verification
+    subject: "song-reconstruction"
+    finding: "The draft strict-import-to-studio criterion proves determinism by 'the same artifact always yields the same studioHash'. studioHash covers execution state only (src/js/studio/schema.js:484-485: never names, positions, markers or metadata). If lineage is presentation state, as A-2 suggests, a nondeterministic lineage, track name or element id passes this check. The criterion also leaves two things unstated. Element ids must derive from the artifact's stable part ids, never from the store's id generator. And a permuted artifact (parts or notes reordered, as in the pack's G-DYNAMIC) must yield the same document."
+    blocking: false
+    resolution:
+      state: open
+      because: "The criterion should compare canonicalJson of the whole imported document, for the same artifact and for a permuted one, and keep studioHash only as the execution-state check."
+  - id: browser-criteria-share-one-suite
+    class: delivery_verification
+    subject: "song-reconstruction"
+    finding: "Three draft criteria (works-without-ai, source-versus-replacement, capability-driven-views) all name 'node tests/browser/reconstruct.cjs'. Once the suite exists for the first, the other two pass before their work lands, the problem the studio-completion critique found with test:studio (evidence-never-recorded). The criteria also leave runtime conditions unstated. The fixture codec should be PCM WAV, since compressed-codec support in the gate's WebKit build is not established. The suites must assume no sample rate (CI renders at 44.1 kHz) and run through suite.cjs and wait.cjs (project.suite-harness, project.bounded-test-timing). And under project.a-phone-sounds, decoding on import must not create or resume the live AudioContext from the file input's change event, which is not one of the rule's gestures; an OfflineAudioContext decodes without it."
+    blocking: false
+    resolution:
+      state: open
+      because: "Each browser criterion must name its own suite check id that fails before its slice lands; the fixture codec, the decode context and the no-assumed-rate condition belong in the first browser criterion."
+  - id: importer-may-escape-the-guarded-paths
+    class: missed_requirement
+    subject: "song-reconstruction"
+    finding: "The validator and mapper parse untrusted files and write StudioModels. project.review-verdict guards src/js/studio, src/js/audio, src/js/experiments, src/js/measurement, src/js/calibration and the storage modules, but a new src/js/reconstruction/ directory (the natural home of new code) is in none of them. The intent's most security-sensitive code would then merge with no reviewer verdict."
+    blocking: false
+    resolution:
+      state: open
+      because: "The first issue places the validator and mapper under src/js/studio/, or adds the new directory to the guarded list of project.review-verdict in the same change."
+  - id: q077-already-answered-by-q023
+    class: unnecessary_work
+    subject: "Q077"
+    finding: "Q077 asks what share of the 1.2 MB gzip budget the reconstruction views may take. On 2026-10-31 the owner declined a line cap for connected-instrument (Q023: 'no line cap'; each slice states its own ceiling under the global budget of scripts/build-config.mjs). Q077 asks the same kind of question again for another line. Measured at 710619b5, dist/index.html is 919 160 B gzipped of 1 200 000 B: 280 840 B of headroom shared by every open line, and M071 and M072, which come first under Q075, will take an unmeasured share of it."
+    blocking: false
+    resolution:
+      state: open
+      because: "The owner, or the coordinator under a delegation, may cancel Q077 by citing Q023's rule (each view issue states and measures its own ceiling), or keep it only if the owner wants a different rule for this line. The critic cannot cancel a Q issue."
+  - id: q078-prefix-needs-no-owner-but-the-name-does
+    class: unnecessary_work
+    subject: "Q078"
+    finding: "No other Q issue asks the owner for an issue prefix (grep -l prefix .ai/repo/project/issues/Q*.yaml finds only Q078). Every earlier intent's letter was chosen by its plan builder in the change that filed its first issue, as .ai/repo/project/README.md describes. The name, however, is rightly asked: the owner's relayed proposal calls the intent 'reconstructed-song', while the pack and the intent say 'song-reconstruction'. Q076 (inverse synthesis) is a scope decision and rightly the owner's."
+    blocking: false
+    resolution:
+      state: open
+      because: "Q078 could be narrowed to the name, leaving the prefix to the plan builder under the README's convention. Q076 stays with the owner, and the slices it gates wait on it."
+  - id: minimal-first-deliverable
+    class: unnecessary_work
+    subject: "song-reconstruction"
+    finding: "The pack spans P00-P26 and P01 proposes six milestones (artifact and import, lineage, companion, views, evaluation, inverse synthesis). Only the first two are decidable inside this repository's gate. The intent respects the owner's four answers: no third-party fixtures (Q073), no runtime network, server, model or second AudioEngine in the page (Q074), no parallel model, and no temporary clip kinds or import before K099, K109 and K112 (Q075). Planning the companion, evaluation and inverse synthesis now would file issues that this gate cannot decide. The smallest deliverable after the clips and the tempo map is: (1) the lineage ADR (blocking finding above); (2) a versioned JSON manifest kind (ADR 0023, accepted) with a pure validator that refuses the listed cases, including a bare confidence figure; (3) a pure, order-independent mapper onto notes clips, audio clips and the tempo map, with one audible layer per part and dropped parts listed with reasons; (4) one browser journey: pick a hand-written manifest and one generated PCM WAV, see the audio clip beside the notes clip, correct a note, accept a part, save, reload and reopen, with no network request. It has no archive, companion, quality figures, A/B view or reanalysis merge."
+    blocking: false
+    resolution:
+      state: open
+      because: "To be adopted, or rejected with reasons, when the coordinator plans the intent's first milestone from this critique. Views (G001 catalogue), the companion (its own repository), evaluation and inverse synthesis (Q076) are planned only after that milestone has evidence."

@@ -41,9 +41,10 @@ export function createRun(ctx, svc, ops) {
     cmp.meas.savedId = null;
     ops.rebuildAll();
     try {
+      ctx.checking = ops.recipeNow();
       // The setup check stops nothing: a probe of the output owners, read by the io where it
       // reads the input level (C016), makes a sounding sequencer or Studio OTHER_AUDIO.
-      ctx.pending = me.preflight(ops.recipeNow(), { calibration: ops.calibrationInput(),
+      ctx.pending = me.preflight(ctx.checking, { calibration: ops.calibrationInput(),
         otherAudio: () => typeof svc.outputBusy === 'function' && !!svc.outputBusy(cmp) });
       await ctx.pending;
     } catch (e) {
@@ -84,6 +85,7 @@ export function createRun(ctx, svc, ops) {
     const repeatOfAtStart = ctx.repeatOf;
     const recipe = given || ops.recipeNow();
     ctx.lastRecipe = recipe;
+    ctx.checking = given ? null : recipe; // a Studio run's recipe is not the setup's
     ctx.runDefinition = !given && ops.setupIsDefinition(recipe) ? ctx.definition : null;
     const definitionAtStart = ctx.runDefinition;
     if (!given && ctx.definition && !ctx.runDefinition) {

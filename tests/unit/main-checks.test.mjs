@@ -42,6 +42,15 @@ export const PR_ONLY_STEPS = {
       'compares with the merge base of a pull request (GITHUB_BASE_REF), which a push has not',
   },
 };
+/**
+ * E026's path gate on a mirrored ci.yml job, which main-checks.yml leaves out: a push to main
+ * runs every leg whatever changed. Only this exact pair is excused, and only when the copy has
+ * neither field.
+ */
+export const PR_ONLY_GATE = Object.freeze({
+  needs: 'changes',
+  if: "needs.changes.outputs.runtime != 'false'",
+});
 /** What a copied step may not read: it is empty or absent on a push. */
 const PULL_REQUEST_ONLY =
   /github\.event\.pull_request|GITHUB_BASE_REF|GITHUB_HEAD_REF|github\.base_ref|github\.head_ref/;
@@ -99,6 +108,13 @@ export function mainChecksProblems(ciText, mainText) {
     const fields = new Set([...Object.keys(source), ...Object.keys(copy)]);
     fields.delete('steps');
     for (const field of [...fields].sort()) {
+      if (Object.hasOwn(PR_ONLY_GATE, field)
+        && json(source[field]) === json(PR_ONLY_GATE[field])) {
+        if (copy[field] !== undefined) {
+          found.push(`mirror: ${key}.${field} carries ci.yml's pull-request-only path gate`);
+        }
+        continue;
+      }
       if (json(source[field]) !== json(copy[field])) {
         found.push(`mirror: ${key}.${field} is ${json(copy[field])} here and `
           + `${json(source[field])} in ci.yml`);
@@ -201,6 +217,22 @@ test('mutation: a browser leg is dropped', () => {
     '        browser: [chromium, firefox]\n');
   assert.notEqual(two, MAIN);
   onlyProblem(CI, two, 'mirror: browser.strategy');
+});
+
+test('mutation: the E026 path gate is copied to main, or ci.yml gates on something else', () => {
+  const gated = mutate(MAIN, '\n  browser:\n', '\n  browser:\n    needs: unit\n');
+  onlyProblem(CI, gated, 'mirror: browser.needs carries');
+  const exact = mutate(MAIN, '\n  browser:\n', '\n  browser:\n    needs: changes\n'
+    + "    if: needs.changes.outputs.runtime != 'false'\n");
+  const found = mainChecksProblems(CI, exact);
+  assert.deepEqual(found, [
+    "mirror: browser.if carries ci.yml's pull-request-only path gate",
+    "mirror: browser.needs carries ci.yml's pull-request-only path gate",
+  ]);
+  const other = CI.replaceAll("if: needs.changes.outputs.runtime != 'false'",
+    "if: needs.changes.outputs.docs != 'true'");
+  assert.notEqual(other, CI);
+  onlyProblem(other, MAIN, 'mirror: browser.if');
 });
 
 test('mutation: the pull-request-only size report is copied, or its exception goes stale', () => {

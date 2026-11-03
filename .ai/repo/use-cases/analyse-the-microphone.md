@@ -26,7 +26,7 @@ The behaviour is proven by the OSCILLA test named in each claim of `docs/CLAIMS.
 by:
 
 - `npm test` (tests/unit/engine.test.mjs microphone cases; tests/unit/analysis-misc.test.mjs compareFrequencies)
-- tests/browser/labs.cjs runs the panel against a fake capture device; it is not yet in the release gate (peer issue R007 adds test:labs)
+- `npm run test:labs` (tests/browser/labs.cjs runs the panel against a fake capture device; in the release gate)
 - `npm test` (tests/unit/analysis-peak.test.mjs: a bin-centred full-scale sine reads 0 dB relative to full scale and the peak frequency is interpolated between bins; tests/unit/analysis-spectrogram.test.mjs: relative level to colour through a monotone lookup table on a log or linear axis)
 
 A use-case/v1 scenario can only invoke `bin/majordomus`, so the scenario below does not

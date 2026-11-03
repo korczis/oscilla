@@ -37,4 +37,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-02T22:51:23Z
+started_at: 2026-11-02T22:51:02Z
+started_event: sha256:2f1717349c2ecfba0945661761f2bfd0326a64d79b4384da7cd1dd706f59d9d4
+completed_at: 2026-11-02T22:51:23Z
+completed_event: sha256:1766d35a4901d6eaa89aa9c8525c6a450921ab7d0bf44d076023a5fad8826f09
+evidence:
+  - covers: verified
+    type: ci
+    command: "node --test tests/unit/cross-links.test.mjs; node tests/browser/cross-links.cjs"
+    result: "landed in #367 (main merge commit 11cc9fbc47ea5f5bce48ed90904bd101455ff43a, member #294); cross-links unit test and tests/browser/cross-links.cjs in chromium, firefox and webkit from file:// and /oscilla/; CI run 41357644373 green on the train head c2a6f6c5 (unit, npm test and the browser gate in chromium, firefox and webkit from file:// and /oscilla/), Main checks run 41372186924 green on 11cc9fbc; review verdict .ai/repo/reviews/367.yaml (merge)"
+    artifact: ".ai/repo/reviews/367.yaml"
+    commit: 743f8566e9724d0f5dd58a6fadb633b51deb0b86
+    recorded_at: 2026-11-02T22:51:18Z

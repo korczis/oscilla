@@ -2,10 +2,12 @@
 
 MIDI is an optional input layer over the audio engine (ADR 0058,
 `.ai/repo/adrs/0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md`). This page
-describes what its first two pieces do. V501: OSCILLA detects Web MIDI and its permission at
-runtime, lists the connected inputs and states one support state. V502: the notes of the
-connected inputs sound through the audio engine (see "Playing notes" below). When MIDI is
-missing, nothing outside the MIDI surface changes.
+describes its first two pieces and the keyboard that shares their note voices. V501: OSCILLA
+detects Web MIDI and its permission at runtime, lists the connected inputs and states one support
+state. V502: the notes of the connected inputs sound through the audio engine (see "Playing
+notes" below). K026: the computer and on-screen keyboard plays the same note voices (see "The
+computer and on-screen keyboard"), and every key the page answers goes through one key registry
+(see "Keys"). When MIDI is missing, nothing outside the MIDI surface changes.
 
 ## Where it is
 
@@ -126,14 +128,16 @@ and latency is not measured.
 
 ## The computer and on-screen keyboard
 
-The Playground and the Studio each have a keyboard (plan issue K026). It plays the same note
-voices as a MIDI input, through the same engine and with the same Playground settings, limits
+The Playground, the Studio and the Synth each have a keyboard (plan issue K026). It plays the same
+note voices as a MIDI input, through the same engine and with the same Playground settings, limits
 and refusals; a refusal says "Keyboard notes do not play while …" instead of "MIDI notes".
 
 - **Arm it.** **Arm keys** under the Playground's panels (and under the Studio) arms the
   computer keyboard in that view only; a link with `kbd=1` (`#m=playground&kbd=1`,
   `#m=studio&kbd=1`) arms the view it opens. The key leaves the address with the next workspace
-  change. Elsewhere the computer keyboard plays nothing.
+  change. The Synth's keys are armed when it opens (the Synth plays from its keys; docs/synth.md),
+  and its **Disarm keys** turns them off. In any other workspace the computer keyboard plays
+  nothing.
 - **The keys**, by physical position (`KeyboardEvent.code`), so QWERTZ and AZERTY keyboards play
   from the same places: A W S E D F T G Y H U J K play C up to the next C (black keys on W E T
   Y U), O L P ; ' go on to F. Z and X move the octave down and up (C0 to C8), C and V the
@@ -155,6 +159,34 @@ and refusals; a refusal says "Keyboard notes do not play while …" instead of "
 without a browser; `tests/browser/midi.cjs` check `keyboard-qwerty` plays the keys and the
 on-screen keys in the three gate builds, and `tests/browser/navigation.cjs` check
 `keyboard-link` follows the link key.
+
+## Keys
+
+Every key the page answers, the keyboard's notes, Space, Escape and the workspaces' shortcuts,
+is bound in one key registry (`src/js/ui/keys/registry.js`, plan issue K153) and heard by one
+dispatcher (`src/js/ui/keys/dispatcher.js`), the page's only key listener; no feature adds its
+own.
+
+- **One owner per chord and scope.** A binding names its chord (a `KeyboardEvent.code` with its
+  modifiers, so a layout never moves it) and its scope: the workspace, optionally a view inside
+  it, and the focus (`none`, a text field, a control, the piano, a dialog). A second binding of
+  the same chord in the same scope throws when it is made, so a conflict cannot ship.
+- **The most specific binding wins.** A view's binding overrides its workspace's, and a
+  workspace's overrides one bound everywhere; a binding may also say when it applies.
+- **What passes through.** IME composition, typing in a text field, a focused control's own keys
+  (Space, Enter, arrows, Home, End and paging on a button, slider, tab, menu item or option), an
+  open dialog's keys and every chord nobody owns are left to the browser.
+- **Held keys.** A binding runs once per press; auto-repeat is swallowed unless the binding asks
+  for it, and its release runs on keyup, or for every key still held when the window loses focus
+  or the page is hidden, so a held note never sticks.
+- **Menus and lists.** A menu, list box or radio group walks its items through one helper
+  (`src/js/ui/keys/roving.js`: arrows, Home and End, Escape back to its button) instead of a
+  listener of its own.
+- **The help.** The shortcuts help lists the registry's bindings with their labels and scopes.
+
+`tests/unit/keys-registry.test.mjs` proves the registry and the dispatcher, and its ratchet
+fails when a key listener outside `src/js/ui/keys/` is added
+(`tests/unit/key-listener-baseline.json` only shrinks).
 
 ## How it is tested without hardware
 

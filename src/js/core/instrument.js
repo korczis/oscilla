@@ -62,6 +62,7 @@ import {
   BUILTIN_PRESETS, PRESET_CATEGORIES, describeConfig, presetMaxFrequency,
 } from '../data/presets.js';
 import { LEARN_TOPICS } from '../data/learn.js';
+import { V1_LAB_HOOKS, restoreRecordLabs } from './instrument-labs.js';
 
 let alertSeq = 0;
 
@@ -904,7 +905,8 @@ export function createInstrument(deps = {}) {
     presetsFor(cat) {
       if (cat === 'custom') {
         return this.customPresets.map((p) => ({ id: p.id, cat: 'custom', name: p.name, custom: true,
-          desc: `Saved ${new Date(p.created).toLocaleString()}`, params: this.describeConfig(p.cfg), cfg: p.cfg }));
+          desc: `Saved ${new Date(p.created).toLocaleString()}`, params: this.describeConfig(p.cfg),
+          cfg: p.cfg, ...(p.labs ? { labs: p.labs } : {}) }));
       }
       return BUILTIN_PRESETS.filter((p) => p.cat === cat);
     },
@@ -925,11 +927,15 @@ export function createInstrument(deps = {}) {
       this.applyPreset(p);
     },
     applyPreset(p, headphonesConfirmed = false) {
-      const issues = this.applyConfig(p.cfg, 'preset');
+      const cfgIssues = this.applyConfig(p.cfg, 'preset');
       if (headphonesConfirmed && p.cfg.dual?.binaural) this.dual.binaural = true;
+      const { issues, also } = restoreRecordLabs(this, p, 'preset', cfgIssues); // V2, C018
       this.loadedLabel = p.name;
-      if (issues) this.notify('warning', 'Preset partly applied', `${issues} value(s) were invalid and kept at their previous setting.`);
-      else this.notify('success', `Loaded “${p.name}”`, this.isProgrammed ? 'Press TRIGGER (or Space) to play it.' : 'Press and hold HOLD TO PLAY.');
+      const play = this.isProgrammed ? 'Press TRIGGER (or Space) to play it.' : 'Press and hold HOLD TO PLAY.';
+      if (issues) {
+        this.notify('warning', 'Preset partly applied',
+          `${issues} value(s) were invalid and kept at their previous setting.${also ? ` ${also}` : ''}`);
+      } else this.notify('success', `Loaded “${p.name}”`, also ? `${also} ${play}` : play);
     },
 
 
@@ -955,12 +961,14 @@ export function createInstrument(deps = {}) {
     savePreset() {
       const name = String(this.saveName || '').trim().slice(0, 60);
       if (!name) { this.saveError = 'Enter a name.'; return; }
-      const preset = presetRecord({ id: newPresetId(), name, created: Date.now() }, this.serializeConfig());
+      const labs = this.labSnapshot();
+      const preset = presetRecord({ id: newPresetId(), name, created: Date.now() }, this.serializeConfig(), labs);
       this.customPresets = [preset, ...this.customPresets].slice(0, 200);
       this.persistPresets();
       this.closeModal('saveModal');
       this.presetTab = 'custom';
-      this.notify('success', 'Preset saved', `“${name}” is in Presets → Custom.`);
+      const held = labs ? ` ${this.labsSavedNote()}` : '';
+      this.notify('success', 'Preset saved', `“${name}” is in Presets → Custom.${held}`);
     },
     /** Deleting is two taps: the first arms the button, the second deletes. */
     requestDelete(id) {
@@ -999,7 +1007,8 @@ export function createInstrument(deps = {}) {
     // V1: oscillaApp.loadHistory, addHistory -> storage.js (index.html@a7b7a23)
     loadHistory() { return storage.loadHistory(sessionStore); },
     addHistory(plan) {
-      const entry = storage.historyEntry(plan, this, this.serializeConfig());
+      // V2 (C018): the lab settings that shaped what was played, snapshotted at play time.
+      const entry = storage.historyEntry(plan, this, this.serializeConfig(), this.labSnapshot());
       this.history = storage.pushHistory(this.history, entry);
       if (!sessionStore.set(STORAGE_KEYS.history, JSON.stringify(this.history)) && !this._historyWarned) {
         this._historyWarned = true;
@@ -1008,9 +1017,10 @@ export function createInstrument(deps = {}) {
     },
     // V1: oscillaApp: recallHistory, clearHistory, historyTime, historyFreqs (index.html@a7b7a23)
     recallHistory(h) {
-      const issues = this.applyConfig(h.cfg, 'history');
+      const { issues, also } = restoreRecordLabs(this, h, 'history', this.applyConfig(h.cfg, 'history'));
       this.loadedLabel = h.label;
-      this.notify(issues ? 'warning' : 'success', 'Recalled', issues ? 'Some values could not be restored.' : h.label);
+      const said = issues ? 'Some values could not be restored.' : h.label;
+      this.notify(issues ? 'warning' : 'success', 'Recalled', also ? `${said} ${also}` : said);
     },
     clearHistory() {
       this.history = [];
@@ -1044,6 +1054,8 @@ export function createInstrument(deps = {}) {
      * replaces this with one that keeps the other domains' keys and names the workspace.
      */
     configLinkHash() { return this.serializeHash(); },
+    // Lab settings beside the cfg and the link note (C018): core/instrument-labs.js.
+    ...V1_LAB_HOOKS,
     // V1: oscillaApp.copyConfigLink (index.html@a7b7a23); browser APIs via deps.env
     async copyConfigLink() {
       const url = `${location.href.split('#')[0]}#${this.configLinkHash()}`;
@@ -1058,7 +1070,7 @@ export function createInstrument(deps = {}) {
           copied = true;
         }
       } catch (e) { copied = false; }
-      if (copied) this.notify('success', 'Config link copied', 'The link restores these settings; it never starts playback.');
+      if (copied) this.notify('success', 'Config link copied', this.configLinkNote());
       else this.openModal('copyModal');
     },
 
@@ -1174,7 +1186,10 @@ export function createInstrument(deps = {}) {
       this.planFreqs = res.ok ? res.plan.freqs : [this.frequency];
       this.planSummary = res.ok ? { label: res.plan.label, kind: res.plan.kind, dur: res.plan.dur } : null;
       viz.sync(this.vizInputs(res));
-      if (this.playing && res.ok) engine.updateLive(res.plan);
+      // A voice another owner started on the instrument's path (a riff audition, audition.js)
+      // is not the instrument's plan: its live update leaves it alone.
+      const other = engine.voice && engine.voice.opts && engine.voice.opts.owner;
+      if (this.playing && res.ok && !other) engine.updateLive(res.plan);
     },
     /** Plain values the visualization bridge needs (what V1 syncViz copied into viz.state). */
     vizInputs(res = this.currentPlan()) {

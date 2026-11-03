@@ -29,4 +29,16 @@ validation:
 evidence_required:
 - verified
 created_at: '2026-10-29'
-updated_at: '2026-10-29'
+updated_at: 2026-11-02T15:59:22Z
+started_at: 2026-11-02T15:58:53Z
+started_event: sha256:c25fb055c834dc4d03d2fe8db43217446b84787d74de05feb6fce1ff53afd021
+completed_at: 2026-11-02T15:59:22Z
+completed_event: sha256:a5ef6f172c790616803fe842013f2356bfed315ef9b6f8341fd1dd6ced4be6ac
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/studio-model-invariants.test.mjs; node scripts/review-verdict.mjs --pr 348 --head 1c57077073ae036c979382b23292401bed99fd0f --base-branch e872c44489bd66ecfd8a6b58a0dd868270da3cf0"
+    result: "6/6 pass at main 32b439e6: 200 seeded sequences of 50 steps (mulberry32, seed rule in docs/v31/studio-model.md) hold the invariants after every step, and the drop-cascade, silent-coercion and cycle-repair fixture mutants each fail with the seed and shortest prefix printed; test-only, no src change. Landed as 1c570770 (PR #348, merged into the train as 9a744104) and 49d86223 (generator builds K061's BATCH), both on main through the feature train #367 (11cc9fbc, 2026-11-02), whose CI gate passed in all three engines. review-verdict: PR 348, none of the 4 changed path(s) is guarded; no verdict needed."
+    artifact: "tests/unit/studio-model-invariants.test.mjs"
+    commit: 32b439e620c7ffc23a8fdc5b3dc55024cbc0c534
+    recorded_at: 2026-11-02T15:59:13Z
