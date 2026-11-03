@@ -9,8 +9,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import {
-  CABLE_DASH, CABLE_HIT_PX, CABLE_MAX_SAG, CABLE_MIN_SAG, REFUSED_DASH, cableCurve, cableParts,
-  cableSvg, plugSvg,
+  CABLE_DASH, CABLE_HIT_PX, CABLE_MAX_SAG, CABLE_MIN_SAG, CABLE_REACH, REFUSED_DASH, cableCurve,
+  cableParts, cableSvg, plugSvg,
 } from '../../src/js/ui/synth/cable.js';
 import { TOKENS, colourLiterals, shapesWithoutStroke, paints, tokenValues, intensityLiterals }
   from './ui-synth-fixture.mjs';
@@ -679,4 +679,221 @@ test('cable.js writes markup in one place only: the serialiser of the parts', ()
     .replace(/^\s*(?:\/\/|\/?\*).*$/gm, '').split('export function plugSvg')[0];
   const literals = src.match(/['`]<(?:path|line|g)\b/g) || [];
   assert.deepEqual(literals, [], 'no cable element written as a string');
+});
+
+// ---------------------------------------------------------------- port tangents (plan S4 b)
+
+const SEG = new RegExp(`C ${NUM} ${NUM} ${NUM} ${NUM} ${NUM} ${NUM}`, 'g');
+/** The cubic segments of a path 'M x y C … [C …]', each [p0, c1, c2, p3]. */
+function segments(d) {
+  const m = new RegExp(`^M ${NUM} ${NUM}((?: C ${NUM} ${NUM} ${NUM} ${NUM} ${NUM} ${NUM})+)$`)
+    .exec(d);
+  assert.ok(m, `not M x y C … : ${d}`);
+  let p0 = { x: Number(m[1]), y: Number(m[2]) };
+  return [...m[3].matchAll(SEG)].map((s) => {
+    const n = s.slice(1).map(Number);
+    const seg = [p0, { x: n[0], y: n[1] }, { x: n[2], y: n[3] }, { x: n[4], y: n[5] }];
+    [, , , p0] = seg;
+    return seg;
+  });
+}
+/** Samples of a path, n per segment, its ends included. */
+function sampled(d, n = 200) {
+  const out = [];
+  for (const [p0, p1, p2, p3] of segments(d)) {
+    for (let i = out.length ? 1 : 0; i <= n; i++) {
+      const t = i / n;
+      const u = 1 - t;
+      const f = (k) => u * u * u * p0[k] + 3 * u * u * t * p1[k] + 3 * u * t * t * p2[k]
+        + t * t * t * p3[k];
+      out.push({ x: f('x'), y: f('y') });
+    }
+  }
+  return out;
+}
+const angle = (v, w) => {
+  const c = (v.x * w.x + v.y * w.y) / (Math.hypot(v.x, v.y) * Math.hypot(w.x, w.y));
+  return (Math.acos(Math.max(-1, Math.min(1, c))) * 180) / Math.PI;
+};
+const sub = (p, q) => ({ x: p.x - q.x, y: p.y - q.y });
+/** The direction of travel leaving the start and arriving at the end. */
+function endDirections(d) {
+  const s = segments(d);
+  const first = s[0];
+  const last = s[s.length - 1];
+  const lead = [first[1], first[2], first[3]].find((p) => Math.hypot(p.x - first[0].x,
+    p.y - first[0].y) > 1e-9);
+  const tail = [last[2], last[1], last[0]].find((p) => Math.hypot(p.x - last[3].x,
+    p.y - last[3].y) > 1e-9);
+  return { leave: sub(lead, first[0]), arrive: sub(last[3], tail) };
+}
+const RIGHT = { x: 1, y: 0 };
+const LEFT = { x: -1, y: 0 };
+const EDGE = { from: RIGHT, to: LEFT }; // an output on a right edge to an input on a left edge
+
+test('tangents: a forward edge leaves along its source port and enters along its target', () => {
+  const cases = [];
+  for (const dx of [40, 120, 400, 900]) {
+    for (const dy of [-300, -40, 0, 25, 300]) {
+      cases.push([{ x: 100, y: 200 }, { x: 100 + dx, y: 200 + dy }, EDGE]);
+    }
+  }
+  cases.push([{ x: 0, y: 0 }, { x: 0, y: 200 }, { from: { x: 0, y: 2 }, to: { x: 0, y: -1 } }],
+    [{ x: 0, y: 0 }, { x: 300, y: 10 }, { from: { x: 3, y: 1 }, to: { x: -1, y: -2 } }],
+    [{ x: 0, y: 0 }, { x: -200, y: 50 }, { from: LEFT, to: RIGHT }]);
+  for (const [a, b, tangents] of cases) {
+    const d = cableCurve(a, b, { tangents });
+    const s = segments(d);
+    assert.deepEqual([s[0][0], s[s.length - 1][3]], [a, b], 'the ends are exact');
+    const { leave, arrive } = endDirections(d);
+    const where = JSON.stringify([a, b, tangents]);
+    assert.ok(angle(leave, tangents.from) < 1, `${where}: leaves ${angle(leave, tangents.from)}`);
+    const into = { x: -tangents.to.x, y: -tangents.to.y };
+    assert.ok(angle(arrive, into) < 1, `${where}: enters ${angle(arrive, into)}`);
+  }
+});
+
+test('tangents: without them the cable hangs as before (the default mode)', () => {
+  for (const [a, b] of [[A, B], [B, A], [{ x: 0, y: 0 }, { x: 0, y: 300 }]]) {
+    assert.equal(cableCurve(a, b, { tangents: undefined }), cableCurve(a, b));
+    assert.equal(segments(cableCurve(a, b)).length, 1);
+  }
+  for (const b of [{ x: 300, y: 0 }, { x: -300, y: 0 }]) {
+    assert.equal(segments(cableCurve(A, b, { tangents: EDGE })).length, 2,
+      'an edge is always two cubics, so its path keeps its shape as it moves');
+  }
+});
+
+/** Whether two segments of a polyline cross (not merely touch at a shared point). */
+function crosses(p, q, r, s) {
+  const o = (a, b, c) => Math.sign((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x));
+  return o(p, q, r) * o(p, q, s) < 0 && o(r, s, p) * o(r, s, q) < 0;
+}
+
+/** Backward edges: the target left of a rightward source, by at least one reach. */
+const BACKWARD = [];
+for (const back of [40, 60, 150, 400, 900]) {
+  for (const dy of [-400, -120, -30, 0, 15, 60, 200, 500]) {
+    BACKWARD.push([{ x: 500, y: 300 }, { x: 500 - back, y: 300 + dy }]);
+  }
+}
+
+test('tangents: a backward edge is a smooth loop, finite, that never crosses itself', () => {
+  for (const [a, b] of BACKWARD) {
+    const d = cableCurve(a, b, { tangents: EDGE });
+    const where = JSON.stringify([a, b]);
+    assert.doesNotMatch(d, /NaN|Infinity/, where);
+    const s = segments(d);
+    assert.equal(s.length, 2, `${where}: a loop of two cubics`);
+    const into = sub(s[0][3], s[0][2]);
+    const out = sub(s[1][1], s[1][0]);
+    assert.ok(angle(into, out) < 1, `${where}: smooth where the cubics meet`);
+    const { leave, arrive } = endDirections(d);
+    assert.ok(angle(leave, RIGHT) < 1 && angle(arrive, RIGHT) < 1, `${where}: along the ports`);
+    const pts = sampled(d, 120);
+    for (let i = 0; i < pts.length - 1; i++) {
+      for (let j = i + 2; j < pts.length - 1; j++) {
+        assert.ok(!crosses(pts[i], pts[i + 1], pts[j], pts[j + 1]), `${where}: crosses at ${i}`);
+      }
+    }
+  }
+});
+
+test('tangents: a backward loop stays clear of both its ends', () => {
+  const CLEAR = CABLE_MIN_SAG;
+  for (const [a, b] of BACKWARD) {
+    const d = cableCurve(a, b, { tangents: EDGE });
+    const pts = sampled(d, 400);
+    let run = 0;
+    const along = pts.map((p, i) => {
+      if (i) run += Math.hypot(p.x - pts[i - 1].x, p.y - pts[i - 1].y);
+      return run;
+    });
+    for (let i = 0; i < pts.length; i++) {
+      if (along[i] < 2 * CLEAR || run - along[i] < 2 * CLEAR) continue;
+      for (const end of [a, b]) {
+        const gap = Math.hypot(pts[i].x - end.x, pts[i].y - end.y);
+        assert.ok(gap >= CLEAR, `${JSON.stringify([a, b])}: ${gap.toFixed(2)} from an end`);
+      }
+    }
+    const low = Math.max(...pts.map((p) => p.y));
+    assert.ok(low >= Math.max(a.y, b.y) + CLEAR, 'the loop passes below both ends');
+  }
+});
+
+test('tangents: reversed ends with swapped tangents draw the same cable', () => {
+  for (const [a, b] of [...BACKWARD.slice(0, 12), [{ x: 0, y: 0 }, { x: 300, y: 80 }],
+    [{ x: 0, y: 0 }, { x: 10, y: 0 }], [{ x: 0, y: 0 }, { x: -20, y: 100 }]]) {
+    const one = sampled(cableCurve(a, b, { tangents: EDGE }), 100);
+    const two = sampled(cableCurve(b, a, { tangents: { from: LEFT, to: RIGHT } }), 100).reverse();
+    for (let i = 0; i < one.length; i++) {
+      assert.ok(Math.hypot(one[i].x - two[i].x, one[i].y - two[i].y) < 1e-6,
+        `${JSON.stringify([a, b])} at ${i}`);
+    }
+  }
+});
+
+test('tangents: moving the target across the source never jumps the cable', () => {
+  const a = { x: 500, y: 300 };
+  for (const dy of [-200, -20, 0, 40, 300]) {
+    let prev = null;
+    for (let x = 700; x >= 300; x -= 0.5) {
+      const pts = sampled(cableCurve(a, { x, y: 300 + dy }, { tangents: EDGE }), 40);
+      if (prev) {
+        const jump = Math.max(...pts.map((p, i) => Math.hypot(p.x - prev[i].x, p.y - prev[i].y)));
+        assert.ok(jump < 4, `dy ${dy}, x ${x}: a 0.5 step moves the cable ${jump.toFixed(2)}`);
+      }
+      prev = pts;
+    }
+  }
+});
+
+test('tangents: coincident ends stay finite; a missing or zero tangent is refused', () => {
+  const d = cableCurve(A, A, { tangents: EDGE });
+  assert.doesNotMatch(d, /NaN|Infinity/);
+  for (const bad of [{}, { from: RIGHT }, { from: RIGHT, to: { x: 0, y: 0 } },
+    { from: { x: NaN, y: 1 }, to: LEFT }, { from: RIGHT, to: { x: 1 } }, null, 'right']) {
+    assert.throws(() => cableCurve(A, B, { tangents: bad }), /tangent/, JSON.stringify(bad));
+  }
+});
+
+test('tangents: cableParts draws the port-tangent curve, and its cross sits on it', () => {
+  const [a, b] = BACKWARD[3];
+  const spec = { id: 't', from: a, to: b, type: 'AUDIO', tokens: TOKENS, tangents: EDGE,
+    state: { refused: true } };
+  const parts = cableParts(spec);
+  const d = cableCurve(a, b, { tangents: EDGE });
+  for (const key of ['shadow', 'hit', 'stroke']) {
+    assert.equal(parts.find((p) => p.key === key).attrs.d, d, key);
+  }
+  assert.equal(cableSvg(spec), serialise(parts));
+  const arm = parts.find((p) => p.key === 'cross-0').attrs;
+  const c = { x: (Number(arm.x1) + Number(arm.x2)) / 2, y: (Number(arm.y1) + Number(arm.y2)) / 2 };
+  const near = Math.min(...sampled(d, 400).map((p) => Math.hypot(p.x - c.x, p.y - c.y)));
+  assert.ok(near < 0.5, `the cross is on the loop (${near})`);
+  const toEnd = Math.hypot(c.x - b.x, c.y - b.y);
+  assert.ok(toEnd > 10 && toEnd < 30, `at the target end (${toEnd})`);
+});
+
+test('tangents: less than one reach behind, the cable folds only near its ends', () => {
+  assert.equal(CABLE_REACH, 40);
+  const a = { x: 0, y: 0 };
+  for (let back = 1; back < CABLE_REACH; back += 3) {
+    for (const dy of [-520, -360, -60, -10, 0, 10, 60, 360, 520]) {
+      const b = { x: -back, y: dy };
+      const d = cableCurve(a, b, { tangents: EDGE });
+      assert.doesNotMatch(d, /NaN|Infinity/);
+      const { leave, arrive } = endDirections(d);
+      assert.ok(angle(leave, RIGHT) < 1 && angle(arrive, RIGHT) < 1, `${back} ${dy}: ports`);
+      const pts = sampled(d, 100);
+      for (let i = 0; i < pts.length - 1; i++) {
+        for (let j = i + 2; j < pts.length - 1; j++) {
+          if (!crosses(pts[i], pts[i + 1], pts[j], pts[j + 1])) continue;
+          const near = Math.min(Math.hypot(pts[i].x - a.x, pts[i].y - a.y),
+            Math.hypot(pts[i].x - b.x, pts[i].y - b.y));
+          assert.ok(near < CABLE_REACH, `${back} ${dy}: a fold ${near.toFixed(1)} from the ends`);
+        }
+      }
+    }
+  }
 });

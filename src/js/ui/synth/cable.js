@@ -10,12 +10,14 @@
 // the hit path is hidden rather than transparent. Imports nothing.
 //
 //   CABLE_DASH                              the pattern of each signal type
-//   cableCurve(a, b, { slack, box })        'M … C …', a hanging cable from a to b
-//   cableParts({ id, from, to, type, colour, state, tokens, slack, box, zoom, sheen, dash,
-//     port })
+//   cableCurve(a, b, { slack, box, tangents })
+//                                           'M … C …', a hanging cable from a to b, or with
+//                                           tangents a graph edge along its two ports
+//   cableParts({ id, from, to, type, colour, state, tokens, slack, box, tangents, zoom, sheen,
+//     dash, port })
 //                                           [{ key, tag, attrs, parent }], for setAttribute
 //   partsSvg(parts)                         the markup of those records
-//   cableSvg(spec)                          '<g data-cable="id">…</g>' = partsSvg(cableParts(spec))
+//   cableSvg(spec)                          '<g data-cable="id">…</g>', partsSvg(cableParts())
 //   plugSvg({ at, colour, tokens })         a seated plug, taking no pointer
 
 /** The dash pattern per signal type (PORT_VISUALS: solid, dashed, pulse, dash-dot). */
@@ -34,6 +36,13 @@ export const CABLE_SLACK = 0.25;
 export const CABLE_HIT_PX = 44;
 /** A near-vertical cable's sideways bow (to +x) at its middle, as a part of min(sag, rise). */
 export const CABLE_BOW = 0.3;
+/** The port-tangent mode's reach, graph units: the least a cable runs straight out of a port
+ *  before it turns, and how far behind its source a target must be for the full loop. */
+export const CABLE_REACH = 40;
+/** The most a port-tangent cable runs straight out of a port, graph units. */
+const REACH_MAX = 120;
+/** A forward port-tangent cable's handle as a part of the distance between its ends. */
+const REACH_PART = 0.4;
 /** Half the arm of the refused cross, graph units, and its stroke width. */
 const CROSS = Object.freeze({ arm: 5, width: 2, under: 4.5 });
 /** How far back from the target end the refused cross sits, graph units: the plug's sleeve
@@ -112,45 +121,136 @@ function controls(a, b, slack, box) {
   ];
 }
 
-/**
- * A hanging cable from a to b as one cubic: the ends exactly a and b, both control points a
- * third of the way along the chord and lowered by 4/3 of the sag, so the middle of the curve
- * hangs `sag` below the chord's midpoint, down the screen whichever end is higher. The sag is
- * slack × the distance, never below CABLE_MIN_SAG nor above CABLE_MAX_SAG; given the drawing's
- * viewBox (`box`), it is lessened so the curve never hangs below the box's bottom edge (the box
- * wins over the minimum, down to a straight cable). A cable steeper than its sag also bows
- * sideways (CABLE_BOW), so a vertical one still hangs. Reversed ends draw the same curve, and
- * a == b is a finite droop.
- */
-export function cableCurve(a, b, { slack = CABLE_SLACK, box } = {}) {
-  const [c1, c2] = controls(a, b, slack, box);
-  return `M ${a.x} ${a.y} C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${b.x} ${b.y}`;
+const lerp = (p, q, k) => ({ x: p.x + (q.x - p.x) * k, y: p.y + (q.y - p.y) * k });
+const along = (p, v, k) => ({ x: p.x + v.x * k, y: p.y + v.y * k });
+
+/** A port's direction as a unit vector, or a TypeError naming the tangent. */
+function unit(v, end) {
+  const ok = v !== null && typeof v === 'object' && Number.isFinite(v.x) && Number.isFinite(v.y)
+    && Math.hypot(v.x, v.y) > 0;
+  if (!ok) {
+    throw new TypeError(`cableCurve: tangents.${end} must be a direction { x, y } of finite `
+      + 'numbers, not zero.');
+  }
+  const n = Math.hypot(v.x, v.y);
+  return { x: v.x / n, y: v.y / n };
+}
+
+/** de Casteljau: one cubic split at t = 1/2 into two. */
+function halves([p0, p1, p2, p3]) {
+  const a = lerp(p0, p1, 0.5);
+  const b = lerp(p1, p2, 0.5);
+  const c = lerp(p2, p3, 0.5);
+  const d = lerp(a, b, 0.5);
+  const e = lerp(b, c, 0.5);
+  const m = lerp(d, e, 0.5);
+  return [[p0, a, d, m], [m, e, c, p3]];
 }
 
 /**
- * The point of the cubic from a to b that lies CROSS_BACK from b, walking back from b: the
- * first sample (1/64 steps) that far away, refined by bisection. A cable too short to reach
- * that far takes its point farthest from b.
+ * The port-tangent cubics from a to b (see cableCurve), always two, so the path's shape is the
+ * same whatever the ends. Forward: one cubic whose handles run along each port, REACH_PART of
+ * the distance (at least 1, at most REACH_MAX), split in two at its middle. Behind (the target
+ * behind the source's direction, and the source behind the target's): a loop of two cubics,
+ * out along the source port, round below both ends (on the side of the source port's normal
+ * that points down the screen, or to +x for a vertical port, so swapping the ends keeps the
+ * side) by its reach, back across at the middle, and in along the target port; the reach is
+ * half how far behind the target is, CABLE_REACH to REACH_MAX. Between the two (behind by less than CABLE_REACH) the forward curve,
+ * split in two, is blended into the loop point by point (a smoothstep), so dragging a target
+ * across its source never jumps the cable; the blend keeps both ends' tangents and the
+ * smoothness where the cubics meet, since each is a positive mix of two curves that have them.
+ * The loop (behind by CABLE_REACH or more) never crosses itself and stays CABLE_MIN_SAG clear
+ * of both ends; within the blend it may fold, but only within CABLE_REACH of an end (a forward
+ * curve rising on one side of its port turning into a loop rising on the other has to pass the
+ * port somewhere, and the blend keeps that next to it).
  */
-function nearTarget(a, b, slack, box) {
-  const [c1, c2] = controls(a, b, slack, box);
+function tangentSegments(a, b, tangents) {
+  if (tangents === null || typeof tangents !== 'object') {
+    throw new TypeError('cableCurve: tangents must be { from, to }, the two ports\' directions.');
+  }
+  const f = unit(tangents.from, 'from');
+  const g = unit(tangents.to, 'to');
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const reach = Math.min(REACH_MAX, Math.max(1, REACH_PART * Math.hypot(dx, dy)));
+  const forward = [a, along(a, f, reach), along(b, g, reach), b];
+  const p = dx * f.x + dy * f.y;
+  const behind = Math.min(-p, dx * g.x + dy * g.y);
+  if (!(behind > 0)) return halves(forward);
+  let n = { x: -f.y, y: f.x };
+  if (n.y < 0 || (n.y === 0 && n.x < 0)) n = { x: -n.x, y: -n.y };
+  const q = dx * n.x + dy * n.y;
+  const r = Math.min(REACH_MAX, Math.max(CABLE_REACH, -p / 2));
+  const m = along(along(a, f, p / 2), n, Math.max(0, q) + r);
+  const loop = [[a, along(a, f, r), along(m, f, r), m], [m, along(m, f, -r), along(b, g, r), b]];
+  const s = Math.min(1, behind / CABLE_REACH);
+  const k = s * s * (3 - 2 * s);
+  return halves(forward).map((seg, i) => seg.map((pt, j) => lerp(pt, loop[i][j], k)));
+}
+
+/** The cubics of a cable from a to b: the hanging one, or the port-tangent ones. */
+function cubics(a, b, slack, box, tangents) {
+  if (tangents === undefined) {
+    const [c1, c2] = controls(a, b, slack, box);
+    return [[a, c1, c2, b]];
+  }
+  if (!finite(a) || !finite(b)) throw new TypeError('cableCurve: a and b need finite x and y.');
+  return tangentSegments(a, b, tangents).map((seg, i, all) => seg.map((pt, j) => (
+    (i === 0 && j === 0) || (i === all.length - 1 && j === 3) ? pt
+      : { x: num(pt.x), y: num(pt.y) })));
+}
+
+/**
+ * A cable from a to b. By default it hangs, as one cubic: the ends exactly a and b, both
+ * control points a third of the way along the chord and lowered by 4/3 of the sag, so the
+ * middle of the curve hangs `sag` below the chord's midpoint, down the screen whichever end is
+ * higher. The sag is slack × the distance, never below CABLE_MIN_SAG nor above CABLE_MAX_SAG;
+ * given the drawing's viewBox (`box`), it is lessened so the curve never hangs below the box's
+ * bottom edge (the box wins over the minimum, down to a straight cable). A cable steeper than
+ * its sag also bows sideways (CABLE_BOW), so a vertical one still hangs. Reversed ends draw the
+ * same curve, and a == b is a finite droop.
+ *
+ * With `tangents: { from, to }`, the two ports' directions (each the way its port faces out of
+ * its node, so an output on a right edge to an input on a left edge is { from: { x: 1, y: 0 },
+ * to: { x: -1, y: 0 } }; any length but zero), it is a graph's edge instead: it leaves along
+ * `from` and enters moving against `to`, and a target behind its source is a smooth loop of two
+ * cubics, round below both ends and clear of them (see tangentSegments). Reversed ends with
+ * swapped tangents draw the same curve; `slack` and `box` belong to the hanging mode alone.
+ */
+export function cableCurve(a, b, { slack = CABLE_SLACK, box, tangents } = {}) {
+  const segs = cubics(a, b, slack, box, tangents);
+  return `M ${a.x} ${a.y}`
+    + segs.map(([, c1, c2, e]) => ` C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${e.x} ${e.y}`).join('');
+}
+
+/**
+ * The point of a cable that lies CROSS_BACK from its end b, walking back from b: the first
+ * sample (1/64 steps of each cubic) that far away, refined by bisection. A cable too short to
+ * reach that far takes its point farthest from b.
+ */
+function nearTarget(a, b, slack, box, tangents) {
+  const segs = cubics(a, b, slack, box, tangents);
   const p = (t) => {
-    const u = 1 - t;
-    const f = (k) => u * u * u * a[k] + 3 * u * u * t * c1[k] + 3 * u * t * t * c2[k]
-      + t * t * t * b[k];
+    const i = Math.min(segs.length - 1, Math.floor(t));
+    const [p0, c1, c2, p3] = segs[i];
+    const s = t - i;
+    const u = 1 - s;
+    const f = (k) => u * u * u * p0[k] + 3 * u * u * s * c1[k] + 3 * u * s * s * c2[k]
+      + s * s * s * p3[k];
     return { x: f('x'), y: f('y') };
   };
   const away = (t) => {
     const q = p(t);
     return Math.hypot(q.x - b.x, q.y - b.y);
   };
-  const STEPS = 64;
-  let best = 1;
+  const STEPS = 64 * segs.length;
+  const end = segs.length;
+  let best = end;
   for (let i = STEPS - 1; i >= 0; i--) {
-    const t = i / STEPS;
+    const t = (i * end) / STEPS;
     if (away(t) >= CROSS_BACK) {
       let lo = t;
-      let hi = (i + 1) / STEPS;
+      let hi = ((i + 1) * end) / STEPS;
       for (let k = 0; k < 30; k++) {
         const m = (lo + hi) / 2;
         if (away(m) >= CROSS_BACK) lo = m; else hi = m;
@@ -237,7 +337,7 @@ const str = (x) => String(x);
  * dashed (a solid kind takes REFUSED_DASH), marks the group data-refused and draws a cross on
  * the curve at the target end, CROSS_BACK back from it so it never covers the plug there, so a
  * refusal is a shape, not a colour alone. `zoom` turns the screen-px offsets (the shadow's
- * drop, the sheen's) into graph units; `slack` and `box` are cableCurve's.
+ * drop, the sheen's) into graph units; `slack`, `box` and `tangents` are cableCurve's.
  *
  * The signal's look is an input: `dash` (a CABLE_KINDS declaration's pattern, null for solid)
  * wins over CABLE_DASH[type], which is only the default when no dash is passed, and with a dash
@@ -246,7 +346,7 @@ const str = (x) => String(x);
  * declared one. Neither passed, the parts are what they were before these inputs existed.
  */
 export function cableParts({ id, from, to, type, colour, state = {}, tokens, slack = CABLE_SLACK,
-  box, zoom = 1, sheen = false, dash, port } = {}) {
+  box, tangents, zoom = 1, sheen = false, dash, port } = {}) {
   const who = 'cableParts';
   needTokens(tokens, who);
   const pattern0 = dashOf(type, dash, who);
@@ -255,7 +355,7 @@ export function cableParts({ id, from, to, type, colour, state = {}, tokens, sla
     throw new RangeError(`${who}: zoom must be a finite number above 0, not ${zoom}.`);
   }
   const st = state || {};
-  const d = cableCurve(from, to, { slack, box });
+  const d = cableCurve(from, to, { slack, box, tangents });
   const w = st.selected ? WIDTH.selected : (st.hover ? WIDTH.hover : WIDTH.base);
   const paint = st.refused ? tokens.jack.refuse : (colour || 'currentColor');
   const pattern = st.refused ? (pattern0 || REFUSED_DASH) : pattern0;
@@ -277,7 +377,7 @@ export function cableParts({ id, from, to, type, colour, state = {}, tokens, sla
       'stroke-width': str(w), 'stroke-linecap': cap, ...dashed }),
   ];
   if (st.refused) {
-    const m = nearTarget(from, to, slack, box);
+    const m = nearTarget(from, to, slack, box, tangents);
     const r = CROSS.arm;
     const arms = [[m.x - r, m.y - r, m.x + r, m.y + r], [m.x - r, m.y + r, m.x + r, m.y - r]]
       .map((l) => l.map(num));
