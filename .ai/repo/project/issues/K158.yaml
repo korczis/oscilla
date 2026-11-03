@@ -6,7 +6,7 @@ title: "Grow the library to at least 128 distinct original entries in waves, wit
 slug: grow-the-library-to-128-distinct-entries
 priority: p2
 profile: implementation
-objective: "Add a near-duplicate guard (an interval-and-rhythm fingerprint invariant to transposition and rotation, with a stated distance threshold) and grow the library in waves of 32, 64 and 128 entries across electronic and wider styles, each wave with a recorded listening review and a stated gzip ceiling."
+objective: "Add a near-duplicate guard and grow the library to 32 entries (wave 1; the waves to 64 and 128 are filed as their own issues when wave 1 is done). The guard's features: each note as (pitch interval to the previous note folded to -6..+6 semitones, onset delta in steps, length in steps); 4-grams of those triples over the riff read cyclically; similarity = Jaccard index of two entries' 4-gram sets; refuse at or above 0.6. Calibration, held by the test: every pair of the existing entries scores below 0.6, and each of these derived from an entry scores at or above it: a transposition (any interval), an octave fold, a rotation by any number of steps, a time shift, a one-note pitch edit and a one-note length edit across electronic and wider styles, each wave with a recorded listening review and a stated gzip ceiling."
 why: "The owner's pack sets a floor of 128 genuinely distinct original entries and forbids padding with transposed or shuffled copies."
 scope:
   - "src/js/studio/riffs"
@@ -18,7 +18,7 @@ depends_on:
 acceptance_criteria:
   - "Before: VERIFIED: sixteen riffs (K149)."
   - "After: at least 128 entries pass the schema, the rights check and the near-duplicate guard; each wave's listening review is recorded as evidence; dist's gzip growth per wave is within the ceiling the wave states."
-  - "Negative cases: a transposed, rotated or time-shifted copy of an existing entry and an entry differing only in tempo are refused by the guard (mutation-proven)."
+  - "Negative cases: each calibration derivative (transposed, octave-folded, rotated, time-shifted, one note re-pitched, one note re-timed) and an entry differing only in tempo are refused by the guard; each feature of the guard is mutation-proven (dropping it lets a derivative through)."
   - "Fail-first: the near-duplicate tests fail on the merge base."
 validation:
   - "node --test tests/unit/riff-library.test.mjs"

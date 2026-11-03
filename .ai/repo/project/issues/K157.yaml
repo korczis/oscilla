@@ -15,9 +15,10 @@ scope:
 depends_on:
   - "K149"
 acceptance_criteria:
+  - "Shipped form (critique m120-content-rights-check-has-no-region-to-read, decided 2026-11-03): the check judges the evaluated library module, since dist is a clean rebuild of src (npm run build:check), and sweeps the whole of dist/index.html for audio media; no separate data region is added. Built as feat/k157-content-rights 99c71c02."
   - "Before: VERIFIED (R01): no check holds a library entry's rights."
   - "After: node scripts/content-rights.mjs passes on the built dist and names the entries it judged."
-  - "Negative cases (synthetic fixtures built in the test): an unknown licence, a non-MIT licence, a missing method, an audio data: URI or base64 blob in an entry, a reference-only entry shipped in dist, a fingerprint mismatch and a third-party entry relabelled original by author are each refused with a reason; each refusal is mutation-proven."
+  - "Negative cases (synthetic fixtures built in the test): an unknown licence, a non-MIT licence, a missing method, an audio data: URI or base64 blob in an entry, a reference-only entry shipped in dist, a fingerprint mismatch are each refused; an entry copied from a recorded song and labelled original is K163's (Q083 denylist), since author, licence and origin are set by the library's factory for every entry with a reason; each refusal is mutation-proven."
   - "Fail-first: tests/unit/content-rights.test.mjs fails on the merge base."
 validation:
   - "node --test tests/unit/content-rights.test.mjs"

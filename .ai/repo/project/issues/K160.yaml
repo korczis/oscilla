@@ -2,25 +2,26 @@ id: K160
 milestone: M120
 serves:
   - "connected-instrument#riff-library"
-title: "A bounded link to an entry and its settings, through the one hash dispatcher"
+title: "A bounded link selects a library entry with its settings, through the one hash dispatcher (Q084)"
 slug: a-bounded-link-to-an-entry-and-its-settings
 priority: p2
 profile: implementation
-objective: "Extend the one hash dispatcher with an entry id and version plus bounded overrides (tempo, transposition, voice patch, swing): opening the link selects the entry with those settings, never starts audio before a gesture, and honours the unsaved guard."
+objective: "Per the owner Q084 (2026-11-03): a link #m=synth&lib=<entry id>&lv=<library schema version>[&tempo=<60..200>][&tr=<-12..12>] opens the patch library with the entry selected and its tempo and transposition applied to Listen; nothing changes in the user document until Insert, so it needs no unsaved-changes guard; the link never starts audio (Listen still needs a gesture). The keys go through the one hash dispatcher in its existing domain order; Copy link in the entry produces it."
 why: "The owner's pack: a recipient opens the same score and parameters, on file:// and the Pages sub-path; R00 found the URL carries a template id and subview only."
 scope:
   - "src/js/ui/navigation.js"
-  - "src/js/core/url-state-studio.js"
   - "tests/unit/library-url.test.mjs"
   - "tests/browser/synth.cjs"
   - "dist/index.html"
 depends_on:
   - "K156"
+  - "Q084"
 acceptance_criteria:
-  - "Before: VERIFIED (R00): no link reproduces an entry or its settings."
-  - "After: a link round-trips: the normalised entry and settings after opening equal those encoded, across chromium, firefox and webkit and after a reload (library-url.test and synth.cjs s-riff-link); no audio starts until a gesture."
-  - "Negative cases: an unknown key, a repeated key, an oversized or out-of-range value and an unknown entry or version are refused with a reason and change nothing."
-  - "Fail-first: tests/unit/library-url.test.mjs fails on the merge base."
+  - "Before: VERIFIED (R00): the hash carries a template id and a subview only."
+  - "After: Copy link then opening it selects the same entry with the same tempo and transposition (library-url.test round trip of the normalised state; synth.cjs s-riff-link in chromium, firefox and webkit with OSC_ORIGINS=file,http so both file:// and /oscilla/ run); the user document's canonicalJson is unchanged by opening the link."
+  - "No autoplay: with Chromium's user-gesture rule on (as tests/browser/touch-audio.cjs launches it), opening the link leaves the engine with no active source until a Listen tap."
+  - "Negative cases: an unknown key, a repeated key, tempo or tr out of range or not an integer, an unknown entry id and a library version other than the current one are refused with a reason and select nothing."
+  - "Fail-first: tests/unit/library-url.test.mjs fails on the merge base (no parser)."
 validation:
   - "node --test tests/unit/library-url.test.mjs"
   - "node tests/browser/synth.cjs --only s-riff-link"

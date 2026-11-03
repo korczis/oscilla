@@ -6,7 +6,7 @@ priority: p2
 problem: "K149 lists sixteen original riffs in the patch library and inserts them, but no note's pitch can be changed from a control, entries carry no shared schema with facets or a rights check, there are no songs, nothing stops near-duplicate padding on the way to the owner's 128 entries, the library cannot be filtered by tempo, key or mood, and no link reproduces an entry with its settings."
 outcome: "Every entry, heard through K149's audition, is edited note by note afterwards, described by one schema whose rights fields a build check holds (original-only, MIT, method recorded, symbolic only: Q079-Q082), found by facets, shared by a bounded link, and grown to at least 128 distinct original riffs and songs without near-duplicates."
 acceptance_criteria:
-  - "K155, K156, K157, K158, K159, K160, K161, K162 are done with their evidence; node --test tests/unit/riff-library.test.mjs passes with at least 128 entries; node scripts/content-rights.mjs passes on the built dist."
+  - "K155, K156, K157, K158, K159, K160, K161, K162, K163 are done with their evidence; node --test tests/unit/riff-library.test.mjs passes with at least 128 entries; node scripts/content-rights.mjs passes on the built dist."
 validation:
   - "node --test tests/unit/riff-library.test.mjs"
   - "node scripts/content-rights.mjs"

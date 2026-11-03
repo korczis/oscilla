@@ -149,32 +149,36 @@ findings:
     finding: "M120 review, 2026-11-03. K157 'reads the library region of dist/index.html' and recomputes each entry's fingerprint there, as R01's design does, but R01's design rests on a delimited data region (<script type=application/json data-library>) that no issue creates. Today the riffs reach dist as minified module code, not data: the factory r() of src/js/studio/riffs/library.js adds author, licence and method at run time, so they appear once in dist and not per entry, and two riffs (neon-causeway, coldwave-pulse) build their notes with flatMap and replace, so their notes are not in dist at all (grep of dist/index.html at 91e6db61). A scanner of the shipped file can only evaluate the bundle or read src, and neither is 'what dist ships'. K156 (the schema) is where the shipped form is decided: a JSON region the build emits and the app parses, with a byte cost of its own, or an explicit decision that the check reads the evaluated modules and a separate sweep reads dist for media only."
     blocking: false
     resolution:
-      state: open
-      because: "K157 must not start until K156 states the shipped form of an entry (a build-emitted data region that the build and the check share) and K157's criterion names it. Issue-blocking, not intent-blocking: recorded as blocking false because Majordomus's blocking flag stops the whole connected-instrument intent (executing_with_open_blocker), which is already executing (Q079-Q082 done) on work this finding does not touch."
+      state: planned
+      issue: "K157"
+      because: "Decided 2026-11-03 and built (99c71c02): the check judges the evaluated library module, since dist is a clean rebuild of src (build:check), and sweeps the whole of dist for audio; K157's criteria now name that form, and copy detection moved to K163 (Q083)."
   - id: m120-notes-payload-form-contradicts-itself
     class: unproven_assumption
     subject: "K156"
     finding: "M120 review, 2026-11-03. K156's schema carries 'the notes payload (K099's agreed form)', but K099.yaml still names { notes: [{ t, dur, note, vel }] } while the agreement R00 records and K149's toNotes produce is { at, note, len, vel } in beats; the form is therefore not fixed by any record a builder can read. K156 also requires 'the sixteen riffs' notes payloads are byte-identical before and after the migration', which cannot hold if the payload becomes K099's object form: K149 stores [step, pitch, lengthSteps, velocity] arrays with note names, 16 steps a bar. The criterion is undecidable until it says which of the two is stored (compact arrays, with toNotes as the derived projection, is also the smaller one for 128 entries) and K099.yaml is amended to the agreed field names. Every later issue (K157-K162) reads this payload."
     blocking: false
     resolution:
-      state: open
-      because: "Before K156 starts: K099's objective is amended to { at, note, len, vel } (R00 collision table), and K156's criterion names the stored form and what 'byte-identical' compares. Issue-blocking, not intent-blocking: recorded as blocking false because Majordomus's blocking flag stops the whole connected-instrument intent (executing_with_open_blocker), which is already executing (Q079-Q082 done) on work this finding does not touch."
+      state: planned
+      issue: "K156"
+      because: "K156 now stores K149's compact [step, pitch, lengthSteps, velocity] arrays written out literally, with toNotes() the derived { at, note, len, vel } projection (26 aligns K099 to it); 'byte-identical' compares the stored arrays, which the migration does not change (2026-11-03)."
   - id: m120-near-duplicate-guard-is-not-defined
     class: unproven_assumption
     subject: "K158"
     finding: "M120 review, 2026-11-03. K158 asks for 'an interval-and-rhythm fingerprint invariant to transposition and rotation, with a stated distance threshold' but states neither the features, the n of the n-grams, the distance nor the threshold, so the builder of the content would also set the bar it is judged by. Undefined: rotation (cyclic over the riff's bars, in steps, which also covers 'time-shifted'); tempo (the steps grid of K149 is already tempo-free, so only the tempo field must be excluded); octave displacement (mirrorball-octaves alternates octaves, so interval n-grams treat an octave-folded copy as new); diatonic transposition and shuffles (a melody moved a third within its key changes every semitone interval, and the owner's pack names 'shuffled' copies, which interval n-grams do not catch); a one-note edit of an existing entry; songs (per track, and against the riffs they might contain); and comparison with the demo song, whose originality guard (tests/unit/demo-song.test.mjs, at most two shared intervals in a row) is the precedent to reuse. The criterion should state the representation (for example interval and inter-onset n-grams with octave folding, plus a pitch-class and onset-set similarity), the threshold, and that the threshold is calibrated so that K149's sixteen riffs and the demo song's parts pass pairwise and the mutation fixtures (transposed, rotated, octave-folded, diatonically shifted, one note changed) fail."
     blocking: false
     resolution:
-      state: open
-      because: "Wave 1 of K158 must not start until the guard's metric, n, threshold and calibration set are written into K158's criterion; the guard itself may be built first. Issue-blocking, not intent-blocking: recorded as blocking false because Majordomus's blocking flag stops the whole connected-instrument intent (executing_with_open_blocker), which is already executing (Q079-Q082 done) on work this finding does not touch."
+      state: planned
+      issue: "K158"
+      because: "K158 now defines the features (interval folded to -6..+6, onset delta, length; cyclic 4-grams), the Jaccard threshold 0.6 and its calibration set (transposition, octave fold, rotation, time shift, one-note pitch and length edits), and is wave 1 only (2026-11-03)."
   - id: m120-library-link-semantics-undecided
     class: unproven_assumption
     subject: "K160"
     finding: "M120 review, 2026-11-03. K160 does not say what opening an entry link does to the user's document. A riff's only way in is Insert (riffVoiceAction, a mutation of the current model), but the Studio link codec's policy is that a link only opens an unmodified shipped template and never carries a document (src/js/core/url-state-studio.js header, spec section 200), and Q036 (G007) limits node addresses to unmodified shipped templates for the same reason; 'honours the unsaved guard' suggests a fresh document, 'selects the entry' suggests the library. The overrides are not bounded in the criterion: no tempo range, transposition range, value length or total length is stated, so 'oversized or out-of-range' is undecidable. Swing has nothing to act on: the Studio has no swing (only src/js/sequencer/model.js has one; Studio swing is K068, blocked), so a swing key would be an inert surface (project.no-inert-surfaces). 'Version' has no definition (K156 has schemaVersion and a fingerprint, no entry version, and nothing says whether an entry is immutable once shipped). No producer is planned: nothing writes the link (a Copy link control, and the rule that an edited document is not link-shareable), which K075's integration map requires of every link producer. The key names, their place in HASH_DOMAINS (src/js/ui/navigation.js) and their precedence against st, sv, c (G007) and the synth keys are unstated."
     blocking: false
     resolution:
-      state: open
-      because: "Before K160 starts: its objective says whether a link opens a new document built from the entry (as a template, under the unsaved guard) or only preselects the entry in the library; it names the keys, their domain order and every bound; it drops swing or depends on K068; it defines version; it plans the producer. Issue-blocking, not intent-blocking: recorded as blocking false because Majordomus's blocking flag stops the whole connected-instrument intent (executing_with_open_blocker), which is already executing (Q079-Q082 done) on work this finding does not touch."
+      state: planned
+      issue: "K160"
+      because: "The owner answered Q084 on 2026-11-03: a link selects the entry in the library and changes no document; K160 now states the keys, bounds and version, drops swing (K068), and tests no-autoplay with the gesture rule on and both origins."
   - id: m120-pitch-check-cannot-resolve-a-semitone
     class: delivery_verification
     subject: "K155"

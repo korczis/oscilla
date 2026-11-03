@@ -1,0 +1,34 @@
+id: Q083
+milestone: M120
+serves:
+  - "connected-instrument#riff-library"
+title: "Owner decision: a hash denylist and a recorded review check that an entry copies no known song"
+slug: owner-decision-a-hash-denylist-and-review-check-copies
+priority: p1
+profile: routine
+owner: "repository owner"
+objective: "Asked in Claude Code session oscilla-af on 2026-11-03 through AskUserQuestion, after the M120 critique (connected-instrument.yaml, m120-*): 'The library is original-only (your Q079). Beyond human or AI review, how should the build check that an entry isn't a copy of a known song? Today nothing can detect a copied riff: every entry is labelled original by construction.' Options: Hash denylist + review (Recommended) / Review only / Hash denylist only."
+why: "The M120 critique of 2026-11-03 found the question undecided and an owner's to answer; the issue it gates is built from the answer."
+current_state: "Answered by the owner on 2026-11-03: 'Hash denylist + review (Recommended)'. One-way melody and rhythm n-gram hashes of named well-known riffs, derived locally and never the notes themselves, are committed, and the build refuses an entry that matches; each wave of entries also gets a recorded review."
+scope:
+  - ".ai/repo/project/issues/Q083.yaml"
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision), in the owner's words with date and source; a worker never answers it."
+  - "The answer names one of the options offered."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-11-03
+started_at: 2026-11-02T23:58:40Z
+started_event: sha256:550e17ad6cc09df3a9e153391cad5ef6154598231acf2634d3ff98b2a0417158
+updated_at: 2026-11-02T23:58:59Z
+completed_at: 2026-11-02T23:58:59Z
+completed_event: sha256:29159b2fb1e04e1b128ac709d67fc6338ea4be20704b1d162e75f050b0e7ab71
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "AskUserQuestion in Claude Code session oscilla-af (claude-code 901211e2), 2026-11-03, after the M120 critique"
+    result: "The owner answered: 'Hash denylist + review (Recommended)' (verbatim option label)."
+    commit: 743f8566e9724d0f5dd58a6fadb633b51deb0b86
+    recorded_at: 2026-11-02T23:58:54Z
