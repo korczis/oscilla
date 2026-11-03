@@ -1,6 +1,6 @@
 // Template: Ring Mod (plan issue K014). A Gain at 0 whose gain input takes a bipolar edge from
 // an LFO at audio rate (K010): the gain swings between -1 and 1 at 470 Hz, so the Gain multiplies
-// the note by a sine. Each partial f of the note becomes f - 470 Hz and f + 470 Hz.
+// the note by a sine. Each partial f of the note becomes |f - 470| Hz and f + 470 Hz.
 import { edge, node, noteClips, studioDoc, track } from './data.js';
 
 /** An original line, one quarter note (0.5 s at 120 BPM) per step. */
@@ -15,8 +15,8 @@ export default {
     summary: 'A triangle line multiplied by a 470 Hz sine: a Gain at 0 with a bipolar LFO edge '
       + 'of depth 1 on its gain, so the gain runs from -1 to 1.',
     points: [
-      'Multiplying by a sine moves every partial f of the note to f - 470 Hz and f + 470 Hz; '
-        + 'the note itself drops out.',
+      'Multiplying by a sine moves every partial f of the note to the difference |f - 470| Hz '
+        + 'and the sum f + 470 Hz (220 Hz gives 250 and 690 Hz); the note itself drops out.',
       'The new lines are not harmonics of the note, so the result sounds metallic and its '
         + 'pitch is unclear.',
       'Lower the edge depth to 0.5 and raise the Gain to 0.5 for amplitude modulation: the '
