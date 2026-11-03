@@ -168,15 +168,22 @@ function halves([p0, p1, p2, p3]) {
  * out along the source port, round below both ends (on the side of the source port's normal
  * that points down the screen, or to +x for a vertical port, so swapping the ends keeps the
  * side) by its reach, back across at the middle, and in along the target port; the reach is
- * half how far behind the target is, CABLE_REACH to REACH_MAX. Between the two (behind by less
- * than CABLE_REACH) the forward curve, split in two, is blended into the loop point by point
- * (a smoothstep), so dragging a target
- * across its source never jumps the cable; the blend keeps both ends' tangents and the
- * smoothness where the cubics meet, since each is a positive mix of two curves that have them.
- * The loop (behind by CABLE_REACH or more) never crosses itself and stays CABLE_MIN_SAG clear
- * of both ends; within the blend it may fold, but only within CABLE_REACH of an end (a forward
- * curve rising on one side of its port turning into a loop rising on the other has to pass the
- * port somewhere, and the blend keeps that next to it).
+ * half how far behind the target is, CABLE_REACH to REACH_MAX. The loop's handles grow with
+ * how far behind the target is (at the middle a third of it, at each end an eighth, never less
+ * than the reach), so a long return run (a feedback edge across many node columns) stays a wide
+ * U and does not hook back over its target's plug. Between the two (behind by less than
+ * CABLE_REACH) the forward curve, split in two, is blended into the loop point by point (a
+ * smoothstep), so dragging a target across its source never jumps the cable; the blend keeps
+ * both ends' tangents and the smoothness where the cubics meet, since each is a positive mix of
+ * two curves that have them.
+ *
+ * For opposite ports (to = -from: an output and an input on facing edges, Studio's case, in any
+ * direction) the loop (behind by CABLE_REACH or more) never crosses itself and stays
+ * CABLE_MIN_SAG clear of both ends; within the blend it may fold, but only within CABLE_REACH
+ * of an end (a forward curve rising on one side of its port turning into a loop rising on the
+ * other has to pass the port somewhere, and the blend keeps that next to it). For ports that
+ * are not opposite only the ends' directions are kept: the loop's side is taken from the source
+ * port alone, so it may pass close to an end, and reversed ends need not draw the same curve.
  */
 function tangentSegments(a, b, tangents) {
   if (tangents === null || typeof tangents !== 'object') {
@@ -196,7 +203,10 @@ function tangentSegments(a, b, tangents) {
   const q = dx * n.x + dy * n.y;
   const r = Math.min(REACH_MAX, Math.max(CABLE_REACH, -p / 2));
   const m = along(along(a, f, p / 2), n, Math.max(0, q) + r);
-  const loop = [[a, along(a, f, r), along(m, f, r), m], [m, along(m, f, -r), along(b, g, r), b]];
+  const hm = Math.max(r, -p / 3);
+  const he = Math.max(r, -p / 8);
+  const loop = [[a, along(a, f, he), along(m, f, hm), m],
+    [m, along(m, f, -hm), along(b, g, he), b]];
   const s = Math.min(1, behind / CABLE_REACH);
   const k = s * s * (3 - 2 * s);
   return halves(forward).map((seg, i) => seg.map((pt, j) => lerp(pt, loop[i][j], k)));
@@ -209,6 +219,10 @@ function cubics(a, b, { slack = CABLE_SLACK, box, tangents, sag } = {}) {
     return [[a, c1, c2, b]];
   }
   if (!finite(a) || !finite(b)) throw new TypeError('cableCurve: a and b need finite x and y.');
+  if (sag !== undefined || (box !== undefined && box !== null)) {
+    throw new TypeError(`cableCurve: ${sag !== undefined ? 'sag' : 'box'} belongs to the hanging `
+      + 'mode; a port-tangent edge (tangents) takes neither sag nor box.');
+  }
   return tangentSegments(a, b, tangents).map((seg, i, all) => seg.map((pt, j) => (
     (i === 0 && j === 0) || (i === all.length - 1 && j === 3) ? pt
       : { x: num(pt.x), y: num(pt.y) })));
@@ -228,9 +242,12 @@ function cubics(a, b, { slack = CABLE_SLACK, box, tangents, sag } = {}) {
  * With `tangents: { from, to }`, the two ports' directions (each the way its port faces out of
  * its node, so an output on a right edge to an input on a left edge is { from: { x: 1, y: 0 },
  * to: { x: -1, y: 0 } }; any length but zero), it is a graph's edge instead: it leaves along
- * `from` and enters moving against `to`, and a target behind its source is a smooth loop of two
- * cubics, round below both ends and clear of them (see tangentSegments). Reversed ends with
- * swapped tangents draw the same curve; `slack`, `box` and `sag` belong to the hanging mode.
+ * `from` and enters moving against `to` (within 1 degree, for any two directions), and a target
+ * behind its source is a smooth loop of two cubics. For opposite ports (to = -from, as an
+ * output and an input on facing edges always are) the loop goes round below both ends and
+ * clear of them, and reversed ends with swapped tangents draw the same curve; for other pairs
+ * only the directions hold (see tangentSegments). `box` and `sag` belong to the hanging mode
+ * and are refused beside `tangents` (a TypeError); `slack` is ignored there.
  */
 export function cableCurve(a, b, { slack = CABLE_SLACK, box, tangents, sag } = {}) {
   const segs = cubics(a, b, { slack, box, tangents, sag });
@@ -416,7 +433,11 @@ const str = (x) => String(x);
  * state ('cable', 'shadow', 'main', 'hit', 'stroke', then 'cross', 'cross-under-0',
  * 'cross-under-1', 'cross-0', 'cross-1' when refused, then 'sheen' when asked), so an editor
  * keyed by (cable id, key) updates attributes in place and adds or removes only the cross and
- * the sheen. cableSvg serialises exactly this list, so the two cannot disagree.
+ * the sheen. The list's order is the paint order: a part an update adds goes in at its list
+ * position, parent.insertBefore(node, the node of the next part in the list with the same
+ * parent that is already drawn), appended only when none is; so a cross that turns on under a
+ * sheen already drawn goes in before the sheen, not over it, as cableSvg paints it. cableSvg
+ * serialises exactly this list, so the two cannot disagree.
  *
  * The parts: a soft shadow (tokens.cable.shadow at the hw-shadow intensity, SHADOW_CLASS,
  * SHADOW_SPREAD wider than the stroke and SHADOW_PX.rest screen px down), then the main stroke

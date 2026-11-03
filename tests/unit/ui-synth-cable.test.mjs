@@ -605,6 +605,49 @@ test('cableParts: the keys are stable as the cable moves and changes state', () 
   assert.deepEqual(keys({ sheen: true }), [...base, 'sheen']);
 });
 
+test('cableParts: a keyed editor that inserts a new part before the next key paints as markup',
+  () => {
+    const src = readFileSync(new URL('../../src/js/ui/synth/cable.js', import.meta.url), 'utf8');
+    assert.match(src, /insertBefore/, 'the doc says where a new part goes');
+    // A minimal keyed editor, as the doc tells one to work: set attributes in place, remove
+    // what left, insert a new part before the node of the next part of the same parent.
+    const nodes = new Map();
+    const root = { children: [] };
+    const apply = (parts) => {
+      const keep = new Set(parts.map((p) => p.key));
+      for (const [key, n] of nodes) {
+        if (!keep.has(key)) {
+          n.up.children.splice(n.up.children.indexOf(n), 1);
+          nodes.delete(key);
+        }
+      }
+      parts.forEach((p, i) => {
+        const up = p.parent === null ? root : nodes.get(p.parent);
+        let n = nodes.get(p.key);
+        if (!n) {
+          n = { tag: p.tag, up, children: [] };
+          const next = parts.slice(i + 1).find((q) => q.parent === p.parent && nodes.has(q.key));
+          const at = next ? up.children.indexOf(nodes.get(next.key)) : up.children.length;
+          up.children.splice(at, 0, n);
+          nodes.set(p.key, n);
+        }
+        n.attrs = p.attrs;
+      });
+    };
+    const markup = (n) => {
+      const attrs = Object.entries(n.attrs).map(([k, v]) => ` ${k}="${v}"`).join('');
+      return n.children.length ? `<${n.tag}${attrs}>${n.children.map(markup).join('')}</${n.tag}>`
+        : `<${n.tag}${attrs}/>`;
+    };
+    const spec = { id: 'e', from: A, to: B, type: 'CONTROL', tokens: TOKENS, sheen: true };
+    for (const state of [{}, { refused: true }, { hover: true }, { refused: true, dragging: true },
+      {}]) {
+      apply(cableParts({ ...spec, state }));
+      assert.equal(root.children.map(markup).join(''), cableSvg({ ...spec, state }),
+        JSON.stringify(state));
+    }
+  });
+
 test('cableParts: attribute values are raw strings (setAttribute), escaped only in markup', () => {
   const parts = cableParts({ id: 'a"<b>&', from: A, to: B, type: 'AUDIO', tokens: TOKENS });
   assert.equal(parts[0].attrs['data-cable'], 'a"<b>&');
@@ -770,12 +813,18 @@ function crosses(p, q, r, s) {
   return o(p, q, r) * o(p, q, s) < 0 && o(r, s, p) * o(r, s, q) < 0;
 }
 
-/** Backward edges: the target left of a rightward source, by at least one reach. */
+/** Backward edges: the target left of a rightward source, by at least one reach, out to a
+ *  feedback edge across many node columns (a column is 168 wide), where a loop whose handles
+ *  stopped growing hooked back over its target plug. */
 const BACKWARD = [];
-for (const back of [40, 60, 150, 400, 900]) {
+for (const back of [40, 60, 150, 400, 900, 1000, 1200, 1800, 3000]) {
   for (const dy of [-400, -120, -30, 0, 15, 60, 200, 500]) {
     BACKWARD.push([{ x: 500, y: 300 }, { x: 500 - back, y: 300 + dy }]);
   }
+}
+for (const [back, dy] of [[1000, 0], [1200, 572], [1200, -572], [2000, 1000], [1790, 30],
+  [3000, -1000], [3000, 1000]]) {
+  BACKWARD.push([{ x: 500, y: 300 }, { x: 500 - back, y: 300 + dy }]);
 }
 
 test('tangents: a backward edge is a smooth loop, finite, that never crosses itself', () => {
@@ -830,6 +879,88 @@ test('tangents: reversed ends with swapped tangents draw the same cable', () => 
       assert.ok(Math.hypot(one[i].x - two[i].x, one[i].y - two[i].y) < 1e-6,
         `${JSON.stringify([a, b])} at ${i}`);
     }
+  }
+});
+
+/** A rotation of v by deg degrees, mirrored first when `mirror`. */
+const turn = (v, deg, mirror = false) => {
+  const r = (deg * Math.PI) / 180;
+  const y = mirror ? -v.y : v.y;
+  return { x: v.x * Math.cos(r) - y * Math.sin(r), y: v.x * Math.sin(r) + y * Math.cos(r) };
+};
+
+test('tangents: opposite ports in any direction keep the loop clear, uncrossed, reversible', () => {
+  const src = readFileSync(new URL('../../src/js/ui/synth/cable.js', import.meta.url), 'utf8');
+  assert.match(src, /opposite/, 'the doc limits the clearance and reversal claims to them');
+  const a = { x: 200, y: -100 };
+  for (const deg of [0, 37, 90, 135, 180, 251, 300]) {
+    for (const mirror of [false, true]) {
+      const f = turn(RIGHT, deg, mirror);
+      const tangents = { from: f, to: { x: -f.x, y: -f.y } };
+      for (const [back, side] of [[40, 0], [150, 120], [900, -300], [1790, 30], [3000, 1000]]) {
+        const off = turn({ x: -back, y: side }, deg, mirror);
+        const b = { x: a.x + off.x, y: a.y + off.y };
+        const where = JSON.stringify([deg, mirror, back, side]);
+        const d = cableCurve(a, b, { tangents });
+        const { leave, arrive } = endDirections(d);
+        assert.ok(angle(leave, f) < 1 && angle(arrive, f) < 1, `${where}: along the ports`);
+        const pts = sampled(d, 120);
+        let run = 0;
+        const along = pts.map((p, i) => {
+          if (i) run += Math.hypot(p.x - pts[i - 1].x, p.y - pts[i - 1].y);
+          return run;
+        });
+        for (let i = 0; i < pts.length - 1; i++) {
+          if (along[i] >= 2 * CABLE_MIN_SAG && run - along[i] >= 2 * CABLE_MIN_SAG) {
+            const gap = Math.min(Math.hypot(pts[i].x - a.x, pts[i].y - a.y),
+              Math.hypot(pts[i].x - b.x, pts[i].y - b.y));
+            assert.ok(gap >= CABLE_MIN_SAG, `${where}: ${gap.toFixed(2)} from an end`);
+          }
+          for (let j = i + 2; j < pts.length - 1; j++) {
+            assert.ok(!crosses(pts[i], pts[i + 1], pts[j], pts[j + 1]), `${where}: crosses`);
+          }
+        }
+        const back2 = sampled(cableCurve(b, a, { tangents: { from: tangents.to,
+          to: tangents.from } }), 120).reverse();
+        for (let i = 0; i < pts.length; i++) {
+          assert.ok(Math.hypot(pts[i].x - back2[i].x, pts[i].y - back2[i].y) < 1e-6,
+            `${where}: reversed differs at ${i}`);
+        }
+      }
+    }
+  }
+});
+
+test('tangents: any two port directions still leave and enter along them, finite', () => {
+  let seed = 7;
+  const rnd = () => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return seed / 2147483648;
+  };
+  for (let i = 0; i < 2000; i++) {
+    const a = { x: rnd() * 2000 - 1000, y: rnd() * 2000 - 1000 };
+    const b = { x: rnd() * 2000 - 1000, y: rnd() * 2000 - 1000 };
+    const tangents = { from: turn(RIGHT, rnd() * 360), to: turn(RIGHT, rnd() * 360) };
+    const d = cableCurve(a, b, { tangents });
+    const where = JSON.stringify([a, b, tangents]);
+    assert.doesNotMatch(d, /NaN|Infinity/, where);
+    const { leave, arrive } = endDirections(d);
+    assert.ok(angle(leave, tangents.from) < 1, `${where}: leaves`);
+    assert.ok(angle(arrive, { x: -tangents.to.x, y: -tangents.to.y }) < 1, `${where}: enters`);
+  }
+});
+
+test('tangents: sag and box belong to the hanging mode, refused beside tangents', () => {
+  const box = { x: 0, y: 0, width: 800, height: 400 };
+  for (const [opts, rx] of [[{ sag: -5 }, /sag/], [{ sag: 10 }, /sag/], [{ sag: 0 }, /sag/],
+    [{ box }, /box/], [{ box, sag: 3 }, /sag|box/]]) {
+    assert.throws(() => cableCurve(A, B, { tangents: EDGE, ...opts }), rx, JSON.stringify(opts));
+    assert.throws(() => cableParts({ id: 't', from: A, to: B, type: 'AUDIO', tokens: TOKENS,
+      tangents: EDGE, ...opts }), rx, `cableParts ${JSON.stringify(opts)}`);
+  }
+  for (const none of [{ sag: undefined }, { box: undefined }, { box: null }]) {
+    assert.equal(cableCurve(A, B, { tangents: EDGE, ...none }), cableCurve(A, B,
+      { tangents: EDGE }), JSON.stringify(none));
   }
 });
 
