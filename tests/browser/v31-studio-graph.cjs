@@ -784,8 +784,9 @@ function defineChecks() {
     });
     const drawn = () => page.evaluate(() => [...document.querySelectorAll('.osc-sg-node')]
       .map((el) => {
-        const m = /translate\(([-\d.]+)px, ([-\d.]+)px\)/.exec(el.style.transform) || [];
-        return { id: el.dataset.nodeId, x: Number(m[1]), y: Number(m[2]), w: el.offsetWidth,
+        // Firefox writes translate(240px) for a y of 0.
+        const m = /translate\(([-\d.]+)px(?:, ([-\d.]+)px)?\)/.exec(el.style.transform) || [];
+        return { id: el.dataset.nodeId, x: Number(m[1]), y: Number(m[2] || 0), w: el.offsetWidth,
           h: el.offsetHeight };
       }));
     const key = (cards) => cards.map((c) => `${c.id}@${c.x},${c.y}`).join();
