@@ -116,6 +116,11 @@ export function createKeyboardUi({ win = window } = {}) {
     get kbdDocked() {
       return this.kbdView === 'synth' || this.kbdView === 'studio';
     },
+    /** The on-screen keys show wherever they play; in the Studio only while armed, so the
+     *  disarmed dock is one row and the graph keeps the height (the owner's report). */
+    get kbdKeysShown() {
+      return this.kbdView !== 'studio' || this.kbdArmedHere;
+    },
     get kbdArmedHere() {
       const v = this.kbdView;
       return !!v && !!this.kbdArmed[v];
