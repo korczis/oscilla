@@ -150,8 +150,9 @@ test('Studio Import opens the sequence a configuration file holds', () => {
   assert.equal(r.source, 'config');
   assert.equal(r.model.metadata.title, 'Configuration sequence');
   assertOneTrack(r.model, seq.blocks.length, 'config');
+  // Every reference block is tempo-locked since K002 (#266): 1, 1.5, 1/2, 0.75 and 1 beat.
   assert.deepEqual(r.model.timeline.clips.filter((c) => c.musical)
-    .map((c) => c.musical.durationBeats), [1.5, 0.75]);
+    .map((c) => c.musical.durationBeats), [1, 1.5, 0.5, 0.75, 1]);
   assert.deepEqual(JSON.parse(exportSequenceFile(r.model).text), seq);
 });
 
@@ -199,7 +200,8 @@ test('a malformed or oversized file is refused with a readable reason and no mod
       'blocks'],
     ['an unknown block type', withBlocks([ref.blocks[0], { ...ref.blocks[1], type: 'laser' }]),
       /^Block 2: “laser” is not a V2 block type; the file is refused\.$/, 'blocks[1].type'],
-    ['a duration out of range', withBlocks([{ ...ref.blocks[0], durationMs: 1 }]),
+    // A millisecond block (beats null): the reference's blocks are tempo-locked since K002.
+    ['a duration out of range', withBlocks([{ ...ref.blocks[0], durationMs: 1, beats: null }]),
       /^Block 1: durationMs is 1 in the file but would open as 10; the file is refused\.$/,
       'blocks[0].durationMs'],
     ['a config sequence with damage', configText({ ...ref, blocks: 'none' }),
@@ -310,9 +312,10 @@ test('the V2 Sequencer\'s own save of a tempo-locked block opens, as the Sequenc
     // 100 ms at 20 BPM switched to beats: 0.033333 beats, which re-derive 99.999 ms.
     ['20 BPM', v2Save(20, { type: 'tone', durationMs: 100, params: { freq: 440 } }),
       [100, 0.033333], 99.999],
-    // Beats typed with more than 6 decimals.
+    // Beats typed with more than 6 decimals: 1.000001 beats are the tie 500.0005 ms, which
+    // rounds up as core/math.js rounds it (E041), so this save is a fixed point.
     ['beats typed at 120 BPM', v2Save(120, { type: 'tone', durationMs: 100 }, 1.00000103),
-      [500.001, 1.000001], 500],
+      [500.001, 1.000001], 500.001],
     ['beats typed at 30 BPM', v2Save(30, { type: 'tone', durationMs: 100 }, 0.0123456789),
       [24.691, 0.012346], 24.692],
     // The lowest beats that round to 0.033333 (round adds Number.EPSILON before rounding), typed
@@ -363,7 +366,7 @@ test('a tempo-locked durationMs outside the rounding of its beats is still refus
     [at(120, 500.001, 1), 'Block 1: durationMs is 500.001 in the file but would open as 500'],
     // 1.000001 beats at 120 BPM can be 500 or 500.001 ms, not 500.002.
     [at(120, 500.002, 1.000001),
-      'Block 1: durationMs is 500.002 in the file but would open as 500'],
+      'Block 1: durationMs is 500.002 in the file but would open as 500.001'],
     // The beats that round to 0.033333 lie in [0.0333325, 0.0333335) less the rounding's
     // Number.EPSILON, so at 20 BPM they derive 99.997 to 100 ms (review of #264, F6 and F7).
     [at(20, 100.002, 0.033333),

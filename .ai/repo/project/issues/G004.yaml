@@ -39,4 +39,23 @@ validation:
 evidence_required:
 - verified
 created_at: '2026-10-29'
-updated_at: '2026-10-29'
+updated_at: 2026-11-01T05:23:03Z
+started_at: 2026-11-01T03:54:30Z
+started_event: sha256:05e0ccb93fd50a90dfb73d8dd0576ab58892340c96b29e1659dc67a04f6e1315
+completed_at: 2026-11-01T03:54:46Z
+completed_event: sha256:65a15f4d0b3f4b23c37a11e9496d9d25fe6b49f8e23bb995db89249e9b6de378
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/studio-edge-style.test.mjs; node tests/browser/v31-studio-graph.cjs --only compact-cables"
+    result: "one edge style rule per signal type serves the full graph and the embedded Studio, and compact cables end at their ports (portAnchor); landed in #366 (60103776); the unit test fails on its merge base and compact-cables passes in chromium, firefox and webkit"
+    artifact: "tests/unit/studio-edge-style.test.mjs"
+    commit: 601037765762decdf19392fce84055bc7fa35434
+    recorded_at: 2026-11-01T03:53:41Z
+  - covers: verified
+    type: ci
+    command: "node scripts/review-verdict.mjs --content --list --head 60103776 --base 60103776^1 (base program)"
+    result: "review-verdict: #366 changes no guarded path (content e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855); no verdict needed for #366"
+    artifact: "https://github.com/korczis/oscilla/pull/366"
+    commit: 601037765762decdf19392fce84055bc7fa35434
+    recorded_at: 2026-11-01T05:23:03Z

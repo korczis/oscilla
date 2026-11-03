@@ -7,7 +7,9 @@
 //     name, description,
 //     graph: { nodes: [{ id, type, position, params, metadata: { name } }],
 //              edges: [{ id, from, to, props }] },     only edges with both ends in the patch
-//     automation: [{ id, target: { node, param }, points }] }   lanes of patch nodes only
+//     automation: [{ id, target: { node, param }, points }],   lanes of patch nodes only
+//     category?, scale? }   optional (plan K097): a library tag ('xy' for an XY preset) and a
+//                           scale { mode, key } (core/music.js SCALE_MODES, NOTE_NAMES)
 // Positions are relative to the patch's top-left node (the smallest x and y become 0). A patch
 // never holds view state (pan, zoom, selection), runtime handles, tracks, clips or markers: a
 // patch is a graph fragment, the timeline belongs to the project it is inserted into. Node
@@ -27,7 +29,18 @@
 //     new ids for every node, edge, lane and point; positions offset to `at` (§114)
 //   replaceWithPatch(model, patch, { newId, registry, at }) -> { model, created, idMap,
 //     skipped, removed }   the whole graph is replaced (explicit intent, §114)
-//   applyPatch(model, patch, { mode: 'insert' | 'replace', at, newId }) — mode is required
+//   patchTargets(model, patch, { target }) -> { onto, missing }   which model node each patch
+//     node would set (K020, K066, K102): a node of a Synth panel module is found by its
+//     metadata.panel; else a one-node patch sets `target` (the selected node) or the only node
+//     of its type; `missing` lists the patch nodes with no such node
+//   patchParams(model, patch, onto) -> { model, changed: { nodes, edges }, skipped }
+//     parameters only: each mapped node takes its patch node's parameters, each model edge on
+//     the ports of a patch edge between two mapped nodes takes the properties that edge
+//     declares (the rest of its properties stay); no node,
+//     edge, name or position is added, removed or moved (a patch edge with no such edge is
+//     `skipped`, never added). PATCH_REPLACE with `onto` reduces through it.
+//   applyPatch(model, patch, { mode: 'insert' | 'replace' | 'params', at, newId, onto }) — mode
+//     is required
 // Every function that returns a model validates it (validateStudioModel) and throws PatchError
 // with the first error's message instead of returning an invalid model. The store reducers
 // PATCH_INSERT and PATCH_REPLACE (actions.js) call insertPatch / replaceWithPatch with the
@@ -44,6 +57,7 @@ import {
 } from './schema.js';
 import { validateStudioModel, STUDIO_IMPORT_LIMITS } from './validate.js';
 import { importStudio } from './migrate.js';
+import { NOTE_NAMES, SCALE_MODES } from '../core/music.js';
 
 export const PATCH_KIND = 'oscilla-patch';
 export const PATCH_SCHEMA_VERSION = 1;
@@ -74,7 +88,8 @@ export const patchMigrations = Object.freeze({
 });
 
 const ENVELOPE = Object.freeze({ req: ['kind', 'schemaVersion', 'studioSchemaVersion', 'name',
-  'graph'], opt: ['description', 'automation'] });
+  'graph'], opt: ['description', 'automation', 'category', 'scale'] });
+const CATEGORY_PATTERN = /^[a-z][a-z0-9-]{0,31}$/;
 
 /** A patch that cannot be created, inserted or replaced; `diagnostics` from the validator. */
 export class PatchError extends RangeError {
@@ -132,6 +147,8 @@ export function createPatch(model, nodeIds, meta = {}) {
     },
     automation: meta.includeAutomation === false ? []
       : model.timeline.automation.filter((l) => ids.has(l.target.node)).map((l) => copyPlain(l)),
+    ...(meta.category ? { category: meta.category } : {}),
+    ...(meta.scale ? { scale: { mode: meta.scale.mode, key: meta.scale.key } } : {}),
   };
   const r = importPatch(patch);
   if (!r.ok) throw new PatchError(`The selection is not a valid patch: ${r.errors[0].message}`,
@@ -226,6 +243,11 @@ export function importPatch(input, opts = {}) {
     if (p.automation !== undefined && !Array.isArray(p.automation)) {
       c.add('automation', 'must be a list');
     }
+    if (p.category !== undefined) c.str(p.category, 'category', 32, { pattern: CATEGORY_PATTERN });
+    if (p.scale !== undefined && c.keys(p.scale, 'scale', ['mode', 'key'])) {
+      if (!Object.hasOwn(SCALE_MODES, p.scale.mode)) c.add('scale.mode', 'is not a scale');
+      if (!NOTE_NAMES.includes(p.scale.key)) c.add('scale.key', 'is not a key');
+    }
   }
   if (c.errors.length) {
     return { ok: false, warnings: [], errors: c.errors.map((e) => ({
@@ -249,6 +271,8 @@ export function importPatch(input, opts = {}) {
       description: typeof p.description === 'string' ? p.description.trim() : '',
       graph: { nodes: m.graph.nodes, edges: m.graph.edges },
       automation: m.timeline.automation,
+      ...(p.category !== undefined ? { category: p.category } : {}),
+      ...(p.scale !== undefined ? { scale: { mode: p.scale.mode, key: p.scale.key } } : {}),
     },
   };
 }
@@ -401,12 +425,91 @@ export function replaceWithPatch(model, patch, { newId = null, registry = NODE_R
   return { ...r, removed: gone };
 }
 
-/** Insert or replace, by explicit mode (no default: §114 "with explicit user intent"). */
-export function applyPatch(model, patch, { mode, at = null, newId = null,
+// ---------------------------------------------------------------- onto existing nodes
+
+const samePanel = (a, b) => !!a && !!b && a.id === b.id && a.module === b.module;
+
+/** Which model node each node of `patch` sets: { onto: { patchId: nodeId }, missing }. */
+export function patchTargets(model, patch, { target = null, registry = NODE_REGISTRY } = {}) {
+  const p = validPatch(patch, registry);
+  const onto = {};
+  const missing = [];
+  for (const src of p.graph.nodes) {
+    const ref = src.metadata.panel;
+    const same = model.graph.nodes.filter((n) => n.type === src.type);
+    const one = registry.get(src.type).maxInstances === 1 ? same[0] : null;
+    const hit = (ref && model.graph.nodes.find((n) => samePanel(n.metadata.panel, ref)))
+      || (p.graph.nodes.length !== 1 ? one
+        : same.find((n) => n.id === target) || (same.length === 1 ? same[0] : null));
+    if (hit) onto[src.id] = hit.id;
+    else missing.push(src.id);
+  }
+  return { onto, missing };
+}
+
+/** Set the parameters of existing nodes from `patch` (see the header); never adds an edge. */
+export function patchParams(model, patch, onto, { registry = NODE_REGISTRY } = {}) {
+  const p = validPatch(patch, registry);
+  const map = isObj(onto) ? onto : {};
+  const byId = new Map(model.graph.nodes.map((n) => [n.id, n]));
+  const params = new Map();
+  for (const src of p.graph.nodes) {
+    if (!Object.prototype.hasOwnProperty.call(map, src.id)) continue;
+    const node = byId.get(map[src.id]);
+    if (!node) throw new PatchError(`There is no node "${String(map[src.id])}".`);
+    if (node.type !== src.type) {
+      throw new PatchError(`${node.metadata.name} is a ${registry.get(node.type).displayName}; `
+        + `the patch sets a ${registry.get(src.type).displayName}.`);
+    }
+    params.set(node.id, src.params);
+  }
+  if (!params.size) {
+    throw new PatchError(`Nothing to apply: no node that "${p.name}" sets is in this Studio.`);
+  }
+  const props = new Map();
+  const skipped = { edges: [] };
+  for (const e of p.graph.edges) {
+    const a = map[e.from.node];
+    const b = map[e.to.node];
+    if (!params.has(a) || !params.has(b)) continue;
+    const hits = model.graph.edges.filter((x) => x.from.node === a && x.to.node === b
+      && x.from.port === e.from.port && x.to.port === e.to.port);
+    if (!hits.length) skipped.edges.push(e.id);
+    // Only the properties the patch declares (a preset: the depth), never the whole object.
+    const own = (((patch.graph || {}).edges || []).find((d) => d && d.id === e.id) || {}).props
+      || {};
+    const set = Object.fromEntries(Object.keys(own).map((k) => [k, e.props[k]]));
+    for (const x of hits) props.set(x.id, set);
+  }
+  const changed = { nodes: [], edges: [] };
+  const same = (x, y) => canonicalJson(x) === canonicalJson(y);
+  const nodes = model.graph.nodes.map((n) => {
+    if (!params.has(n.id)) return n;
+    const next = { ...n.params, ...params.get(n.id) };
+    if (same(next, n.params)) return n;
+    changed.nodes.push(n.id);
+    return { ...n, params: copyPlain(next) };
+  });
+  const edges = model.graph.edges.map((e) => {
+    if (!props.has(e.id)) return e;
+    const next = { ...e.props, ...props.get(e.id) };
+    if (same(next, e.props)) return e;
+    changed.edges.push(e.id);
+    return { ...e, props: copyPlain(next) };
+  });
+  if (!changed.nodes.length && !changed.edges.length) return { model, changed, skipped };
+  const next = { ...model, graph: { ...model.graph, nodes, edges } };
+  return { model: checked(next, registry), changed, skipped };
+}
+
+/** Insert, replace or set parameters, by explicit mode (no default: §114 explicit intent). */
+export function applyPatch(model, patch, { mode, at = null, newId = null, onto = null,
   registry = NODE_REGISTRY } = {}) {
+  if (mode === 'params') return patchParams(model, patch, onto, { registry });
   if (mode === 'insert') return insertPatch(model, patch, at, { newId, registry });
   if (mode === 'replace') {
     return replaceWithPatch(model, patch, { newId, registry, at: at || { x: 0, y: 0 } });
   }
-  throw new PatchError('Choose how to load the patch: mode "insert" or "replace".');
+  throw new PatchError('Choose how to load the patch: mode "insert" or "replace", or "params" '
+    + 'onto existing nodes.');
 }

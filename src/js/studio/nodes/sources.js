@@ -57,10 +57,11 @@ export const noise = defineNode({
   displayName: 'Noise',
   idPrefix: 'noise',
   category: CATEGORIES.SOURCES,
-  aliases: ['white noise', 'pink noise', 'random signal', 'hiss'],
+  aliases: ['white noise', 'pink noise', 'brown noise', 'red noise', 'random signal', 'hiss'],
   outputs: [audioOut],
   params: [
-    enumParam('color', 'Colour', [['white', 'White'], ['pink', 'Pink']], 'white'),
+    enumParam('color', 'Colour', [['white', 'White'], ['pink', 'Pink'], ['brown', 'Brown']],
+      'white'),
     levelParam('level', 'Level', 1, { automatable: true, modulatable: true, modDepth: 0.5 }),
     integerParam('seed', 'Seed', { min: 0, max: 2 ** 32 - 1, default: 1 }),
   ],
@@ -72,10 +73,11 @@ export const noise = defineNode({
   capabilities: { realtime: true, offline: true },
   compiler: 'audio/noise.js#createNoiseSource',
   help: {
-    what: 'Deterministic white or pink noise from a seeded generator.',
+    what: 'Deterministic white, pink or brown noise from a seeded generator.',
     inputs: 'Level accepts modulation.',
     outputs: 'Audio.',
-    constraints: 'The same seed produces the same noise.',
+    constraints: 'The same seed produces the same noise. Pink falls 3 dB and brown 6 dB per '
+      + 'octave.',
   },
 });
 

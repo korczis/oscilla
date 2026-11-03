@@ -10,10 +10,13 @@
 //   on branch main (a linked worktree on a detached HEAD is refused with the way out: run it
 //   from a checkout on branch main at origin/main, normally the primary checkout; FROM_MAIN),
 //   clean tree, HEAD == origin/main (Pages deploys main), tag v<version>
-//   absent locally and on origin (or, to resume, present on origin at HEAD; below), a
-//   release-gate receipt (release:prepare) matching the
-//   current version, source digest, dist bytes and gate tree (every tracked file except the
-//   release records; rule project.release-receipt-binds-gate), committed dist up to date
+//   absent locally and on origin (or, to resume, present on origin at HEAD; below), a gate
+//   verdict for exactly this tree (rule project.release-receipt-binds-gate v2): either the CI
+//   receipt (ADR 0082, release-ci-receipt.mjs: HEAD is the merge of the release pull request,
+//   its tree is the tree the newest green CI run of that pull request tested, every job ci.yml
+//   declares succeeded, and the roadmap matches the plan) or a local release-gate receipt
+//   (release:prepare --local-gate) matching the current version, source digest, dist bytes and
+//   gate tree (every tracked file except the release records), committed dist up to date
 //   (npm run build:check), gh authenticated, and no pages.yml run of which no job has started
 //   for STUCK_AFTER_MIN minutes (rule project.release-flow-complete): such a run holds the
 //   `pages` concurrency group, so the deploy this publish waits for would never start. Whether
@@ -66,6 +69,7 @@ import {
 import { boundedFetch, boundedRunner, failure } from './release-bounded.mjs';
 import { PUBLIC_URL, REPO_URL, ROOT, findRegion, gitRunner } from './release-metadata.mjs';
 import { currentFingerprint, readReceipt, receiptProblems } from './release-prepare.mjs';
+import { ciReceiptProblems, gatherCiReceipt, judgedRun } from './release-ci-receipt.mjs';
 import { DIST_PATH, channelFor, releaseAssetName } from './release-record.mjs';
 
 /**
@@ -307,8 +311,26 @@ export const USAGE = 'usage: node scripts/release-publish.mjs [--yes] '
 const FLAGS = { '--yes': 'boolean', '--pages-timeout': 'value' };
 
 /**
+ * Rule project.release-receipt-binds-gate v2: the gate verdict this tree has, if any. A local
+ * receipt that verifies is enough; otherwise the CI receipt is judged, and when neither
+ * verifies both sets of problems are reported.
+ */
+export function gateVerdict(localProblems, ci) {
+  if (!localProblems.length) return { problems: [], by: 'local release-gate receipt' };
+  if (!ci) return { problems: localProblems, by: null };
+  const ciProblems = ciReceiptProblems(ci);
+  if (!ciProblems.length) {
+    const r = judgedRun(ci);
+    return { problems: [], by: `CI receipt: run ${r.id} attempt ${r.run_attempt} on the pull `
+      + `request head ${String(ci.parents[1]).slice(0, 7)} (ADR 0082)` };
+  }
+  return { problems: [...localProblems, ...ciProblems.map((p) => `CI receipt: ${p}`)], by: null };
+}
+
+/**
  * @param {{ argv?: string[], root?: string, run?: Function, sh?: Function, log?: Function,
  *   receipt?: object|null, fingerprint?: object, sleep?: Function, clock?: () => number,
+ *   ciReceipt?: object|null,
  *   fetchPage?: (url: string) => Promise<string> }} [o]  fetchPage: the live page's text
  * @returns {Promise<number>} exit code
  */
@@ -316,7 +338,7 @@ export async function publish({
   argv = process.argv.slice(2), root = ROOT, run = gitRunner(root), sh = defaultSh(root),
   log = console.log, receipt, fingerprint, sleep = (s) => new Promise((r) => {
     setTimeout(r, s * 1000);
-  }), clock = Date.now, fetchPage = defaultFetchPage,
+  }), clock = Date.now, fetchPage = defaultFetchPage, ciReceipt,
 } = {}) {
   let o;
   try {
@@ -401,12 +423,17 @@ export async function publish({
     tagLocalCommit: localTag.status === 0 ? localTag.stdout || null : null,
     tagRemote: remoteTag.status === 0 && remoteTag.stdout !== '',
     tagRemoteCommit: remoteTag.status === 0 ? remoteTagCommit(remoteTag.stdout, tag) : null,
-    receiptProblems: receiptProblems(receipt === undefined ? readReceipt(run, root) : receipt, now),
+    receiptProblems: [],
     buildCheck: sh('npm', ['run', '--silent', 'build:check']).status === 0,
     ghAuth: ghAuth.status === 0,
     ghAuthWhy: ghAuth.status === 0 ? null : failure('gh', ['auth', 'status'], ghAuth),
     stuckRuns: diagnose(STUCK_AFTER_MIN),
   };
+  const local = receiptProblems(receipt === undefined ? readReceipt(run, root) : receipt, now);
+  // The CI receipt is gathered (gh api, a short unit test) only when the local one fails.
+  const gate = gateVerdict(local, local.length === 0 ? null
+    : ciReceipt !== undefined ? ciReceipt : gatherCiReceipt({ sh, root, head }));
+  facts.receiptProblems = gate.problems;
   const resume = resumable(facts);
   // Only a resumed publish can find its Release already made; asked only then.
   facts.releaseExists = resume && sh('gh', ['release', 'view', tag, '--json', 'tagName'])
@@ -422,6 +449,7 @@ export async function publish({
   log(`release:publish ${tag} at ${head} (${yes ? 'LIVE' : 'dry run; pass --yes to act'})`);
   log(`previous tag: ${previousTag || '(none)'}; ${commits.length} commit(s) in the notes`);
   for (const p of problems) log(`  BLOCKED ${p}`);
+  if (gate.by) log(`  gate verdict: ${gate.by}`);
   if (!problems.length) log('  OK all preconditions hold');
   if (resume) {
     log(`  RESUME ${tag} is on origin at ${head.slice(0, 7)}: the tag, its push and the deploy `

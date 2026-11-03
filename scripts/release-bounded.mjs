@@ -118,9 +118,10 @@ export function boundedRunner({
   cwd = process.cwd(), spawn = spawnSync, sleepMs = blockingSleepMs,
   echo = (t) => process.stderr.write(t), note = (l) => process.stderr.write(`${l}\n`),
 } = {}) {
-  const once = (cmd, args, { inherit, binary, timeoutMs }) => {
+  const once = (cmd, args, { inherit, binary, timeoutMs, env }) => {
     const r = spawn(cmd, args, {
       cwd, timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: 1 << 28,
+      env: env ? { ...process.env, ...env } : process.env,
       encoding: binary ? 'buffer' : 'utf8',
       stdio: inherit ? ['ignore', 'inherit', 'pipe'] : ['ignore', 'pipe', 'pipe'],
     });
@@ -140,7 +141,8 @@ export function boundedRunner({
     return { ...res, reason: status === 0 ? null : failureReason(res) };
   };
   return (cmd, args, opts = {}) => {
-    const timeoutMs = opts.timeoutMs ?? defaultTimeoutMs(cmd, args);
+    // `timeout` is the spelling of the CI receipt's callers (release-ci-receipt.mjs); same bound.
+    const timeoutMs = opts.timeoutMs ?? opts.timeout ?? defaultTimeoutMs(cmd, args);
     const max = opts.attempts ?? (isNetworkCall(cmd, args) ? NET_ATTEMPTS : 1);
     const deadline = opts.budgetMs ? Date.now() + opts.budgetMs : null;
     let r;
