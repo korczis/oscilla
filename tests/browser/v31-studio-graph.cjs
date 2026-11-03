@@ -106,14 +106,16 @@
 //   compact-cables       G004 at 1536x1024 and 390x844: the compact cables end at their ports
 //                        (the Filter's CONTROL and AUDIO ends differ) and wear the full graph's
 //                        edge style (one style table)
-//   templates            the gallery opens each template; Measurement Sweep shows the
+//   templates            the gallery lists every template of the library (V617: First Patch
+//                        among them) and opens each; Measurement Sweep shows the
 //                        Microphone as unavailable/degraded with a reason (§171)
 //   patches-files        save project locally, Open dialog lists it; export .oscilla-studio.json
 //                        and re-import it (identical semantics); save a selection as a patch,
 //                        insert it (undoable); malformed and hostile files are refused
 //   mobile-tap-connect   375 x 812 touch: GRAPH / TIMELINE / INSPECTOR subviews; tap an output,
 //                        tap a highlighted input → connected; 44 px toolbar targets
-//   review-open-ui       V431 U10-U12: the empty graph shows a hint (gone with the first node);
+//   review-open-ui       V431 U10-U12: the empty graph shows a hint naming the First Patch
+//                        template (V617; gone with the first node);
 //                        Play is "Play the Studio" in the toolbar and the compact widget and
 //                        only aria-pressed says it plays; each subview tab controls a tabpanel
 //   phone-port-targets   V431 U9, U10 at 390 x 844 touch: after Frame all every port target is
@@ -2081,12 +2083,12 @@ function defineChecks() {
     });
     const closed = await page.evaluate(() => !document.querySelector(
       '#osc-dlg-studio-templates[open]'));
-    // The library's templates in library order, read from the registry (#287 adds the seventh).
+    // The library's templates in library order, read from the registry (#287 adds the Demo song, V617 First Patch).
     const { STUDIO_TEMPLATES } = await import(pathToFileURL(path.join(__dirname, '..', '..',
       'src', 'js', 'studio', 'templates', 'index.js')).href);
     const library = STUDIO_TEMPLATES.map((t) => t.id);
     return { ...H.verdict({
-      library: ids.join() === library.join(),
+      library: ids.join() === library.join() && ids.includes('first-patch'),
       allRender: ids.every((id) => opened[id].nodes === opened[id].model && opened[id].nodes > 0
         && !opened[id].dirty && !opened[id].undo),
       micDegraded: mic.error && mic.flag === 'Unavailable' && !!mic.title, closed,
@@ -2348,6 +2350,7 @@ function defineChecks() {
     const subviews = await studioSubviews();
     return { ...H.verdict({
       emptyHint: !withNodes.shown && empty.shown && /Empty graph/.test(empty.text || '')
+        && /First Patch/.test(empty.text || '')
         && !restored.shown,
       playName: named(idle, 'false') && named(playing, 'true'),
       tabPanels: tabs.length === subviews.length

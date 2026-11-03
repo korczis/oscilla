@@ -16,8 +16,9 @@ pressure.
 1. Choose **Studio** in the navigation (after Experiments). The Playground's compact Studio
    panel has **EXPAND STUDIO**, which opens the same document.
 2. **Templates** lists the shipped documents: Basic Tone, Subtractive Synth, Sweep Sequence,
-   Stereo Beat, Filter Automation, Measurement Sweep and Demo song: Lantern in the Slag Yard.
-   **Open** replaces the current Studio; if it has unsaved changes the dialog says so first.
+   Stereo Beat, Filter Automation, Measurement Sweep, First Patch and Demo song: Lantern in the
+   Slag Yard. **Open** replaces the current Studio; if it has unsaved changes the dialog says
+   so first.
 3. **Play** (Space) plays the graph and the timeline; **Stop** (Esc) releases every node. The
    Playground voice, the Sequencer and Studio are exclusive: starting one stops the others. For a screen
    reader the button is always "Play the Studio", a toggle that reads as pressed while the
@@ -45,6 +46,16 @@ at the pointer, as do **+** and **−**. Chromium and Firefox report a trackpad 
 wheel and Safari as its own gesture events; both are handled, but the browser checks send
 these events rather than a real trackpad pinch. **Minimap** in the graph controls shows the whole graph
 and the part in view; press or drag on it to move there.
+
+## First patch
+
+**First Patch** (`#m=studio&st=first-patch`; Learn's **Signal path** card links to it, and the
+empty graph names it) starts as a sawtooth Oscillator into the Master Output. Its timeline has
+five markers whose labels are the steps: 1 Press Play; 2 Add a Filter between them (Add node,
+then rewire); 3 Move the Filter cutoff; 4 Add a Spectrum from the Filter output (cable to
+empty canvas); 5 Save it as a patch. **[** and **]** on the timeline move the playhead to
+the previous or next step, and the Inspector's **Notes** (with nothing selected) say each step
+in full. It is a template with notes, not a guided path: nothing checks or locks the steps.
 
 ## Links and fullscreen
 
