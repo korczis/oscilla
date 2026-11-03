@@ -3,12 +3,6 @@
   "note": "The open milestones of the plan (.ai/repo/project) in its derived order, each with how many of its required issues are done, as `majordomus plan roadmap --json` gave them. Written by scripts/roadmap.mjs, which release:prepare runs before its build; About renders it from the bundle. Do not edit by hand.",
   "milestones": [
     {
-      "id": "M011",
-      "title": "Release engineering, provenance and product graph",
-      "done": 19,
-      "required": 20
-    },
-    {
       "id": "M045",
       "title": "MIDI jam companion: first usable version",
       "done": 2,
@@ -53,7 +47,7 @@
     {
       "id": "M054",
       "title": "The whole interface shows the current product",
-      "done": 1,
+      "done": 4,
       "required": 27
     },
     {
@@ -71,7 +65,7 @@
     {
       "id": "M058",
       "title": "Synth voice: audio-rate modulation, drive, macros, filters, templates, presets, mod matrix and one hash epoch",
-      "done": 0,
+      "done": 1,
       "required": 9
     },
     {
@@ -89,7 +83,7 @@
     {
       "id": "M061",
       "title": "Interconnection: live analysis views, sequence exchange, workspace bridges and one keyboard",
-      "done": 0,
+      "done": 1,
       "required": 4
     },
     {
@@ -179,13 +173,13 @@
     {
       "id": "M085",
       "title": "Component system, wave 0: one contract, one registry and the proven duplicates, before Pro",
-      "done": 0,
+      "done": 1,
       "required": 7
     },
     {
       "id": "M086",
       "title": "Component system, wave 1: rendered from declarations on Pro, and the embedded Studio as a compact cockpit",
-      "done": 0,
+      "done": 1,
       "required": 7
     },
     {
@@ -233,7 +227,7 @@
     {
       "id": "M096",
       "title": "Live views on WebGL where it pays, Canvas 2D everywhere",
-      "done": 0,
+      "done": 1,
       "required": 9
     },
     {
@@ -269,7 +263,7 @@
     {
       "id": "M088",
       "title": "Owner decisions of the component-system line",
-      "done": 1,
+      "done": 2,
       "required": 4
     },
     {
