@@ -51,7 +51,7 @@ export const CABLE_HIT_PX = 44;
 /** A near-vertical cable's sideways bow (to +x) at its middle, as a part of min(sag, rise). */
 export const CABLE_BOW = 0.3;
 /** The port-tangent mode's reach, graph units: the least a cable runs straight out of a port
- *  before it turns, and how far behind its source a target must be for the full loop. */
+ *  before it turns, and the shortest blend from the forward curve into the full loop. */
 export const CABLE_REACH = 40;
 /** The most a port-tangent cable runs straight out of a port, graph units. */
 const REACH_MAX = 120;
@@ -182,19 +182,26 @@ function halves([p0, p1, p2, p3]) {
  * half how far behind the target is, CABLE_REACH to REACH_MAX. The loop's handles grow with
  * how far behind the target is (at the middle a third of it, at each end an eighth, never less
  * than the reach), so a long return run (a feedback edge across many node columns) stays a wide
- * U and does not hook back over its target's plug. Between the two (behind by less than
- * CABLE_REACH) the forward curve, split in two, is blended into the loop point by point (a
- * smoothstep), so dragging a target across its source never jumps the cable; the blend keeps
- * both ends' tangents and the smoothness where the cubics meet, since each is a positive mix of
- * two curves that have them.
+ * U and does not hook back over its target's plug. Between the two the forward curve, split in
+ * two, is blended into the loop point by point (a smoothstep of how far behind the target is),
+ * so dragging a target across its source never jumps the cable. The ramp is CABLE_REACH long or
+ * half the widest gap between the two curves' matching control points, whichever is longer: a
+ * target far above or below its source has a loop far from its forward curve, and over a ramp
+ * of a fixed length the smoothstep (steepest slope 1.5) would carry the cable that whole gap in
+ * a few units of drag; over half the gap it moves no point by much more than 3 graph units per
+ * unit of drag, at any height. The blend keeps both ends' tangents and the smoothness where the
+ * cubics meet, since each is a positive mix of two curves that have them.
  *
  * For opposite ports (to = -from: an output and an input on facing edges, Studio's case, in any
- * direction) the loop (behind by CABLE_REACH or more) never crosses itself and stays
- * CABLE_MIN_SAG clear of both ends; within the blend it may fold, but only within CABLE_REACH
- * of an end (a forward curve rising on one side of its port turning into a loop rising on the
- * other has to pass the port somewhere, and the blend keeps that next to it). For ports that
- * are not opposite only the ends' directions are kept: the loop's side is taken from the source
- * port alone, so it may pass close to an end, and reversed ends need not draw the same curve.
+ * direction) the ramp ends by CABLE_REACH plus half the target's offset across the source port
+ * (q), and the loop past it never crosses itself and stays CABLE_MIN_SAG clear of both ends.
+ * Within the ramp it does not cross itself either, except within CABLE_REACH of an end, but it
+ * may pass over an end's plug: a forward curve reaching the target from one side of its port
+ * turning into a loop reaching it from the other has to pass the port somewhere, and the longer
+ * ramp moves that pass to about 0.3 of the offset behind, at the ramp's slow speed, a move and
+ * not a jump. For ports that are not opposite only the ends' directions are kept: the loop's
+ * side is taken from the source port alone, so it may pass close to an end, and reversed ends
+ * need not draw the same curve.
  */
 function tangentSegments(a, b, tangents) {
   if (tangents === null || typeof tangents !== 'object') {
@@ -218,9 +225,14 @@ function tangentSegments(a, b, tangents) {
   const he = Math.max(r, -p / 8);
   const loop = [[a, along(a, f, he), along(m, f, hm), m],
     [m, along(m, f, -hm), along(b, g, he), b]];
-  const s = Math.min(1, behind / CABLE_REACH);
+  const near = halves(forward);
+  let gap = 0;
+  near.forEach((seg, i) => seg.forEach((pt, j) => {
+    gap = Math.max(gap, Math.hypot(loop[i][j].x - pt.x, loop[i][j].y - pt.y));
+  }));
+  const s = Math.min(1, behind / Math.max(CABLE_REACH, gap / 2));
   const k = s * s * (3 - 2 * s);
-  return halves(forward).map((seg, i) => seg.map((pt, j) => lerp(pt, loop[i][j], k)));
+  return near.map((seg, i) => seg.map((pt, j) => lerp(pt, loop[i][j], k)));
 }
 
 /** The cubics of a cable from a to b: the hanging one, or the port-tangent ones. */
@@ -255,10 +267,11 @@ function cubics(a, b, { slack = CABLE_SLACK, box, tangents, sag } = {}) {
  * to: { x: -1, y: 0 } }; any length but zero), it is a graph's edge instead: it leaves along
  * `from` and enters moving against `to` (within 1 degree, for any two directions), and a target
  * behind its source is a smooth loop of two cubics. For opposite ports (to = -from, as an
- * output and an input on facing edges always are) the loop goes round below both ends and
- * clear of them, and reversed ends with swapped tangents draw the same curve; for other pairs
- * only the directions hold (see tangentSegments). `box` and `sag` belong to the hanging mode
- * and are refused beside `tangents` (a TypeError); `slack` is ignored there.
+ * output and an input on facing edges always are) the loop, once the blend into it is done,
+ * goes round below both ends and clear of them, and reversed ends with swapped tangents draw
+ * the same curve; for other pairs only the directions hold (see tangentSegments). `box` and
+ * `sag` belong to the hanging mode and are refused beside `tangents` (a TypeError); `slack` is
+ * ignored there.
  */
 export function cableCurve(a, b, { slack = CABLE_SLACK, box, tangents, sag } = {}) {
   const segs = cubics(a, b, { slack, box, tangents, sag });
@@ -467,7 +480,11 @@ const str = (x) => String(x);
  * 'shadow', 'main', 'hit', 'stroke', then 'cross', 'cross-under-0', 'cross-under-1', 'cross-0',
  * 'cross-1' when refused unless cross is false or the target plug is refused, then 'sheen' when
  * asked), so an editor keyed by
- * (cable id, key) updates attributes in place and adds or removes only the cross and the sheen. The
+ * (cable id, key) updates attributes in place and adds or removes only the cross and the sheen.
+ * In place means attribute by attribute: setAttribute each one the new record carries (new or
+ * changed) and removeAttribute each one the part had that the new record no longer carries
+ * (un-refusing a solid AUDIO cable drops data-refused from the cable and stroke-dasharray from
+ * the stroke; an editor that only sets leaves it dashed and marked refused). The
  * list's order is the paint order: a part an update adds goes in at its list position,
  * parent.insertBefore(node, the node of the next part in the list with the same parent that is
  * already drawn), appended only when none is; so a cross that turns on under a sheen already drawn

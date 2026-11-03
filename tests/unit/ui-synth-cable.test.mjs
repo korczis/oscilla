@@ -605,48 +605,91 @@ test('cableParts: the keys are stable as the cable moves and changes state', () 
   assert.deepEqual(keys({ sheen: true }), [...base, 'sheen']);
 });
 
+/** Markup with each element's attributes in one order, so two drawings that set the same
+ *  attributes in a different order (a DOM appends a new attribute last) read the same. */
+const canon = (svg) => svg.replace(/<(\w+)((?: [\w:-]+="[^"]*")*)(\/?)>/g, (m, tag, attrs, end) =>
+  `<${tag}${(attrs.match(/ [\w:-]+="[^"]*"/g) || []).sort().join('')}${end}>`);
+
+/** A minimal keyed editor, as the doc tells one to work: per part, set every attribute the
+ *  record carries (new or changed) and remove each one it no longer carries, attribute by
+ *  attribute on the kept node; remove a part that left; insert a new part before the node of the
+ *  next part of the same parent already drawn. `remove: false` is an editor that only sets. */
+function keyedEditor({ remove = true } = {}) {
+  const nodes = new Map();
+  const root = { children: [] };
+  const apply = (parts) => {
+    const keep = new Set(parts.map((p) => p.key));
+    for (const [key, n] of nodes) {
+      if (!keep.has(key)) {
+        n.up.children.splice(n.up.children.indexOf(n), 1);
+        nodes.delete(key);
+      }
+    }
+    parts.forEach((p, i) => {
+      const up = p.parent === null ? root : nodes.get(p.parent);
+      let n = nodes.get(p.key);
+      if (!n) {
+        n = { tag: p.tag, up, children: [], attrs: {} };
+        const next = parts.slice(i + 1).find((q) => q.parent === p.parent && nodes.has(q.key));
+        const at = next ? up.children.indexOf(nodes.get(next.key)) : up.children.length;
+        up.children.splice(at, 0, n);
+        nodes.set(p.key, n);
+      }
+      if (remove) {
+        for (const k of Object.keys(n.attrs)) {
+          if (!Object.hasOwn(p.attrs, k)) delete n.attrs[k]; // removeAttribute
+        }
+      }
+      for (const [k, v] of Object.entries(p.attrs)) {
+        if (n.attrs[k] !== v) n.attrs[k] = v; // setAttribute
+      }
+    });
+  };
+  const markup = (n) => {
+    const attrs = Object.entries(n.attrs).map(([k, v]) => ` ${k}="${v}"`).join('');
+    return n.children.length ? `<${n.tag}${attrs}>${n.children.map(markup).join('')}</${n.tag}>`
+      : `<${n.tag}${attrs}/>`;
+  };
+  return { apply, svg: () => root.children.map(markup).join('') };
+}
+
+/** Each state of a cable in turn through a keyed editor, against cableSvg after each. */
+const EDITS = [
+  [{ id: 'e', from: A, to: B, type: 'CONTROL', tokens: TOKENS, sheen: true },
+    [{}, { refused: true }, { hover: true }, { refused: true, dragging: true }, {}]],
+  // AUDIO is solid: refused adds stroke-dasharray to the stroke and data-refused to the cable,
+  // and un-refusing must take both away again.
+  [{ id: 'f', from: A, to: B, type: 'AUDIO', tokens: TOKENS, colour: TOKENS.cable.palette[1] },
+    [{ refused: true }, {}, { refused: true, hover: true }, { hover: true }, { selected: true },
+      {}]],
+];
+
 test('cableParts: a keyed editor that inserts a new part before the next key paints as markup',
   () => {
     const src = readFileSync(new URL('../../src/js/ui/synth/cable.js', import.meta.url), 'utf8');
     assert.match(src, /insertBefore/, 'the doc says where a new part goes');
-    // A minimal keyed editor, as the doc tells one to work: set attributes in place, remove
-    // what left, insert a new part before the node of the next part of the same parent.
-    const nodes = new Map();
-    const root = { children: [] };
-    const apply = (parts) => {
-      const keep = new Set(parts.map((p) => p.key));
-      for (const [key, n] of nodes) {
-        if (!keep.has(key)) {
-          n.up.children.splice(n.up.children.indexOf(n), 1);
-          nodes.delete(key);
-        }
+    assert.match(src, /removeAttribute/, 'the doc says an attribute the record left is removed');
+    for (const [spec, states] of EDITS) {
+      const ed = keyedEditor();
+      for (const state of states) {
+        ed.apply(cableParts({ ...spec, state }));
+        assert.equal(canon(ed.svg()), canon(cableSvg({ ...spec, state })),
+          `${spec.type} ${JSON.stringify(state)}`);
       }
-      parts.forEach((p, i) => {
-        const up = p.parent === null ? root : nodes.get(p.parent);
-        let n = nodes.get(p.key);
-        if (!n) {
-          n = { tag: p.tag, up, children: [] };
-          const next = parts.slice(i + 1).find((q) => q.parent === p.parent && nodes.has(q.key));
-          const at = next ? up.children.indexOf(nodes.get(next.key)) : up.children.length;
-          up.children.splice(at, 0, n);
-          nodes.set(p.key, n);
-        }
-        n.attrs = p.attrs;
-      });
-    };
-    const markup = (n) => {
-      const attrs = Object.entries(n.attrs).map(([k, v]) => ` ${k}="${v}"`).join('');
-      return n.children.length ? `<${n.tag}${attrs}>${n.children.map(markup).join('')}</${n.tag}>`
-        : `<${n.tag}${attrs}/>`;
-    };
-    const spec = { id: 'e', from: A, to: B, type: 'CONTROL', tokens: TOKENS, sheen: true };
-    for (const state of [{}, { refused: true }, { hover: true }, { refused: true, dragging: true },
-      {}]) {
-      apply(cableParts({ ...spec, state }));
-      assert.equal(root.children.map(markup).join(''), cableSvg({ ...spec, state }),
-        JSON.stringify(state));
     }
   });
+
+test('cableParts: an editor that only sets attributes leaves an un-refused cable refused', () => {
+  const [spec, states] = EDITS[1];
+  const ed = keyedEditor({ remove: false });
+  ed.apply(cableParts({ ...spec, state: states[0] }));
+  ed.apply(cableParts({ ...spec, state: states[1] }));
+  const svg = ed.svg();
+  assert.notEqual(canon(svg), canon(cableSvg({ ...spec, state: states[1] })),
+    'the editor test above would catch an editor that never removes');
+  assert.match(svg, /data-refused=""/);
+  assert.match(svg, /data-stroke=""[^>]*stroke-dasharray/);
+});
 
 test('cableParts: attribute values are raw strings (setAttribute), escaped only in markup', () => {
   const parts = cableParts({ id: 'a"<b>&', from: A, to: B, type: 'AUDIO', tokens: TOKENS });
@@ -848,9 +891,18 @@ test('tangents: a backward edge is a smooth loop, finite, that never crosses its
   }
 });
 
+/** The blend into the loop ends by CABLE_REACH plus half the target's offset across the
+ *  source port (dy for a rightward one); past it the cable is the loop alone. */
+const looped = ([a, b]) => a.x - b.x >= CABLE_REACH + Math.abs(b.y - a.y) / 2;
+const LOOPED = [...BACKWARD.filter(looped)];
+for (const dy of [-2000, -1000, -600, -400, -120, -30, 0, 15, 60, 400, 600, 1000, 2000]) {
+  LOOPED.push([{ x: 500, y: 300 }, { x: 500 - CABLE_REACH - Math.abs(dy) / 2, y: 300 + dy }]);
+}
+
 test('tangents: a backward loop stays clear of both its ends', () => {
   const CLEAR = CABLE_MIN_SAG;
-  for (const [a, b] of BACKWARD) {
+  assert.ok(LOOPED.length > 70, `${LOOPED.length} looped cases`);
+  for (const [a, b] of LOOPED) {
     const d = cableCurve(a, b, { tangents: EDGE });
     const pts = sampled(d, 400);
     let run = 0;
@@ -965,17 +1017,45 @@ test('tangents: sag and box belong to the hanging mode, refused beside tangents'
 });
 
 test('tangents: moving the target across the source never jumps the cable', () => {
+  // The blend into the loop must cover a gap that grows with how far above or below the target
+  // is: a 0.5 step moves no point more than 1.5 (3 graph units per unit of drag) at any height.
   const a = { x: 500, y: 300 };
-  for (const dy of [-200, -20, 0, 40, 300]) {
+  for (const dy of [-2000, -1000, -600, -400, -200, -20, 0, 40, 300, 400, 600, 1000, 2000]) {
     let prev = null;
-    for (let x = 700; x >= 300; x -= 0.5) {
+    for (let x = 700; x >= -700; x -= 0.5) {
       const pts = sampled(cableCurve(a, { x, y: 300 + dy }, { tangents: EDGE }), 40);
       if (prev) {
         const jump = Math.max(...pts.map((p, i) => Math.hypot(p.x - prev[i].x, p.y - prev[i].y)));
-        assert.ok(jump < 4, `dy ${dy}, x ${x}: a 0.5 step moves the cable ${jump.toFixed(2)}`);
+        assert.ok(jump <= 1.5, `dy ${dy}, x ${x}: a 0.5 step moves the cable ${jump.toFixed(2)}`);
       }
       prev = pts;
     }
+  }
+});
+
+test('tangents: a small move of the target, any way, any ports, moves the cable little', () => {
+  let seed = 11;
+  const rnd = () => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return seed / 2147483648;
+  };
+  const a = { x: 0, y: 0 };
+  const H = 0.05;
+  for (let i = 0; i < 4000; i++) {
+    const from = turn(RIGHT, rnd() * 360);
+    const opposite = i % 2 === 0;
+    const tangents = { from, to: opposite ? { x: -from.x, y: -from.y } : turn(RIGHT, rnd() * 360) };
+    // Half of them in the blend, behind the source by 0..600 and 2000 to either side.
+    const off = i % 4 < 2 ? { x: -rnd() * 600, y: rnd() * 4000 - 2000 }
+      : { x: rnd() * 3000 - 1500, y: rnd() * 3000 - 1500 };
+    const b = i % 4 < 2 ? { x: from.x * off.x - from.y * off.y, y: from.y * off.x + from.x * off.y }
+      : off;
+    const th = rnd() * 2 * Math.PI;
+    const b2 = { x: b.x + H * Math.cos(th), y: b.y + H * Math.sin(th) };
+    const one = sampled(cableCurve(a, b, { tangents }), 40);
+    const two = sampled(cableCurve(a, b2, { tangents }), 40);
+    const move = Math.max(...one.map((p, k) => Math.hypot(p.x - two[k].x, p.y - two[k].y))) / H;
+    assert.ok(move <= (opposite ? 3 : 3.5), `${JSON.stringify([b, tangents])}: ${move.toFixed(2)}`);
   }
 });
 
@@ -1006,22 +1086,27 @@ test('tangents: cableParts draws the port-tangent curve, and its cross sits on i
   assert.ok(toEnd > 10 && toEnd < 30, `at the target end (${toEnd})`);
 });
 
-test('tangents: less than one reach behind, the cable folds only near its ends', () => {
+test('tangents: within the blend into the loop, the cable folds only near its ends', () => {
+  // The blend lasts CABLE_REACH, or longer for a target far above or below (its ramp grows
+  // with the gap it covers): out to CABLE_REACH plus half the height, crossing nowhere but
+  // within CABLE_REACH of an end, along both ports.
   assert.equal(CABLE_REACH, 40);
   const a = { x: 0, y: 0 };
-  for (let back = 1; back < CABLE_REACH; back += 3) {
-    for (const dy of [-520, -360, -60, -10, 0, 10, 60, 360, 520]) {
+  for (const dy of [-2000, -1000, -520, -360, -60, -10, 0, 10, 60, 360, 520, 1000, 2000]) {
+    const span = CABLE_REACH + Math.abs(dy) / 2;
+    for (let i = 0; i < 24; i++) {
+      const back = 1 + ((span - 1) * i) / 24;
       const b = { x: -back, y: dy };
       const d = cableCurve(a, b, { tangents: EDGE });
       assert.doesNotMatch(d, /NaN|Infinity/);
       const { leave, arrive } = endDirections(d);
       assert.ok(angle(leave, RIGHT) < 1 && angle(arrive, RIGHT) < 1, `${back} ${dy}: ports`);
       const pts = sampled(d, 100);
-      for (let i = 0; i < pts.length - 1; i++) {
-        for (let j = i + 2; j < pts.length - 1; j++) {
-          if (!crosses(pts[i], pts[i + 1], pts[j], pts[j + 1])) continue;
-          const near = Math.min(Math.hypot(pts[i].x - a.x, pts[i].y - a.y),
-            Math.hypot(pts[i].x - b.x, pts[i].y - b.y));
+      for (let j = 0; j < pts.length - 1; j++) {
+        for (let k = j + 2; k < pts.length - 1; k++) {
+          if (!crosses(pts[j], pts[j + 1], pts[k], pts[k + 1])) continue;
+          const near = Math.min(Math.hypot(pts[j].x - a.x, pts[j].y - a.y),
+            Math.hypot(pts[j].x - b.x, pts[j].y - b.y));
           assert.ok(near < CABLE_REACH, `${back} ${dy}: a fold ${near.toFixed(1)} from the ends`);
         }
       }
