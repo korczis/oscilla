@@ -17,7 +17,7 @@ scope:
   - "src/js/ui/studio/workspace.js"
   - "docs/v31/compiler.md"
   - "tests/unit/studio-armed-monitoring.test.mjs"
-  - "tests/browser/synth-panel.cjs"
+  - "tests/browser/synth.cjs"
   - "tests/README.md"
   - "dist"
 depends_on:
@@ -26,16 +26,16 @@ depends_on:
 acceptance_criteria:
   - "tests/unit/studio-armed-monitoring.test.mjs, failing on the merge base: arming claims the output once and starts the runtime; a note while armed and stopped schedules its gate; disarm, hide and Escape release every note and leave a node census of 0; arming while the Playground plays stops the Playground through its release path; PLAY and STOP keep one runtime."
   - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: arming while the Playground plays (it stops first); hide, Escape and leaving the workspace (disarm, census 0); PLAY while armed (one runtime)."
-  - "A browser check in tests/browser/synth-panel.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: the armed state shows in the Synth workspace and the Studio transport bar alike, and leaving the workspace disarms it. Real-time: a piano note while stopped and armed reaches the runtime gate, and the Playground voice stops when arming, each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: Arm and Disarm work by pointer, keyboard and touch and are role=switch with aria-checked; Escape disarms. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "A browser check in tests/browser/synth.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: the armed state shows in the Synth workspace and the Studio transport bar alike, and leaving the workspace disarms it. Real-time: a piano note while stopped and armed reaches the runtime gate, and the Playground voice stops when arming, each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: Arm and Disarm work by pointer, keyboard and touch and are role=switch with aria-checked; Escape disarms. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
   - "Every edit is one undoable dispatch through the one Studio store (a continuous gesture is one history entry, undo and redo restore the exact serialized model) and the model holds plain data only (project.studio-model-is-canonical); every connection goes through canConnect and full-model validation, and a refusal shows the validator's sentence and leaves model, history and runtime unchanged (project.typed-ports, project.no-silent-feedback)."
   - "Every node it plays is built by an engine adapter with track()/source() accounting, all timing is on the audio clock (no timer or rAF times audio), envelopes are click-free, frequencies stay below 0.95 x Nyquist of the running context, the peak stays at or below the output ceiling and the engine node census is 0 after stop (project.audio-engine-discipline v2)."
-  - "Every string it adds passes tests/unit/instrument-wording.test.mjs (added by K059): no product, brand or model name, no analog-modelling or vintage claim, and every approximation it makes labelled where it is shown (project.no-fake-science)."
+  - "Every string it adds passes tests/unit/synth-wording.test.mjs (added by K059): no product, brand or model name, no analog-modelling or vintage claim, and every approximation it makes labelled where it is shown (project.no-fake-science)."
   - "The pull request carries a reviewer's verdict (src/js/studio and src/js/synth is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
   - "scripts/size-report.mjs shows at most 1 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; it does not wait on Q023, and its figure joins the line's sum once Q023 records the cap, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
   - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
 validation:
   - "node --test tests/unit/studio-armed-monitoring.test.mjs"
-  - "node tests/browser/synth-panel.cjs"
+  - "node tests/browser/synth.cjs"
   - "npm test"
 evidence_required:
   - "verified"
