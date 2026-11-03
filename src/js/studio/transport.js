@@ -2,9 +2,11 @@
 // Studio runtime. It plays the store's model — graph and timeline — on the ONE AudioEngine:
 //
 //   createStudioTransport({ runtime, engine, store, onClaimOutput, onMeasurement, registry,
-//                           lookAheadS, trace })   lookAheadS: the scheduler's window (default
-//                                           TIMELINE_LOOKAHEAD_S); offline.js passes the render
-//                                           length, so one start() schedules the whole render
+//                           lookAheadS, trace, testContext })   lookAheadS: the scheduler's
+//                                           window (default TIMELINE_LOOKAHEAD_S); offline.js
+//                                           passes the render length, so one start() schedules
+//                                           the whole render; testContext() -> true while the
+//                                           page is in TEST CONTEXT (ADR 0052; default never)
 //   clipPlayReason(model, clip) -> reason | null   what the transport plays, from the model
 //   transport.start({ position }) -> result     PLAY from `position` (default: the return point)
 //   transport.stop({ fast }) -> Promise<counts>  STOP (§184): release, cancel, hold automation,
@@ -30,11 +32,12 @@
 //   transport.live(keysId, { kind, note, velocity, at }) -> result   a note on a Keys node
 //   transport.debugInfo(), transport.on(fn) -> off ('state' | 'ended' | 'warning': a
 //                                                Diagnostic), transport.dispose(), .playing
-//   transport.debugRefuseNextPlay() -> true     TEST HOOK (K169; tests/browser/
+//   transport.debugRefuseNextPlay() -> boolean  INJECT hook (ADR 0052; K169, tests/browser/
 //                                                v31-studio-workflows.cjs armed-play-refused):
-//                                                the next PLAY's output claim is refused, as
-//                                                onClaimOutput returning false refuses it
-//                                                (claim-refused); once, nothing else changes
+//                                                only in TEST CONTEXT (testContext()), the next
+//                                                PLAY's output claim is refused, as onClaimOutput
+//                                                returning false refuses it (claim-refused),
+//                                                once; outside it: false, nothing changes
 // A PLAY refused while armed (K169): the armed run is left first, so on any refusal after it
 // (claim, apply, or a throw: phase stop, claim, apply or start, code play-refused) the runtime
 // is stopped fast and 'state' { playing: false, reason: 'play-refused' } is emitted; lastError
@@ -44,6 +47,8 @@
 // empty list, and a refusal leaves it once a later model is applied. Codes: edit-refused,
 // sync-refused (the runtime refused a model: the transport keeps the last applied one; entity:
 // the runtime diagnostic's), automation-failed (entity: the lane), measurement-callback-failed,
+// stop-failed (STOP could not release the owned parameters; the runtime stopped anyway; also
+// lastError, phase 'stop', unless a refusal holds it),
 // timeline (a timeline-compiler warning, its prose as the message). One diagnostic per code and
 // entity (or code and text without an entity); a newer one replaces it. debugInfo().lastError is
 // a Diagnostic plus its `phase`: PLAY refused (start returns its code too) with disposed,
@@ -55,7 +60,8 @@
 // Operation trace (ADR 0042; `trace`: the core/trace.js port, default NO_TRACE). start, stop,
 // sync and admit are one operation each, or join the caller's. Steps, owner 'transport': `play`
 // (playing from `position` at `baseTime` | refused with the failed phase), `stop` (stopped |
-// aborted: the context closed or the runtime stopped elsewhere), `admit`
+// aborted: the context closed or the runtime stopped elsewhere | release-failed, code
+// stop-failed: the owned parameters were not released, the runtime stopped anyway), `admit`
 // (admitted | refused, code edit-refused | not-applied: stopped, PLAY applies the model) and
 // `sync` (applied | refused, code sync-refused). The timeline's wake-ups schedule clips and
 // lanes outside any operation and are not traced.
@@ -222,7 +228,7 @@ export function clipPlayReason(model, clip, registry = NODE_REGISTRY) {
 
 export function createStudioTransport({
   runtime, engine, store, onClaimOutput = null, onMeasurement = null,
-  registry = NODE_REGISTRY, lookAheadS = null, trace = NO_TRACE,
+  registry = NODE_REGISTRY, lookAheadS = null, trace = NO_TRACE, testContext = () => false,
 } = {}) {
   if (!runtime || typeof runtime.apply !== 'function') {
     throw new TypeError('createStudioTransport: a Studio runtime is required');
@@ -1731,6 +1737,21 @@ export function createStudioTransport({
     return release({ fast, reason });
   }
 
+  /**
+   * STOP could not release the owned parameters (the runtime stops below all the same): a
+   * stop-failed diagnostic, a trace step, and lastError (phase 'stop') unless a refusal holds it.
+   */
+  function stopFailed(e, reason) {
+    const message = `Stop: ${messageOf(e)}`;
+    trace.record('transport', 'stop', { revision: lastRevision, outcome: 'release-failed',
+      code: 'stop-failed', detail: { reason, error: messageOf(e) } });
+    if (!lastError) {
+      lastError = { ...studioDiagnostic('transport', 'stop-failed', message, null, 'error'),
+        phase: 'stop' };
+    }
+    warn('stop-failed', message);
+  }
+
   /** STOP once the schedule is stopped: drop the ownership, say 'state', stop the runtime. */
   function release({ fast, reason }) {
     playing = false;
@@ -1740,8 +1761,9 @@ export function createStudioTransport({
     claims.clear();
     levelTaps.clear();
     gateOwned.clear();
-    // A refused PLAY may have thrown right here (K169): the runtime's stop below ends it all.
-    try { runtime.setOwnedParams([]); } catch (e) { /* stopped below */ }
+    // A refused PLAY may have thrown right here (K169): the runtime's stop below still runs,
+    // and the failure is recorded (stop-failed), never swallowed.
+    try { runtime.setOwnedParams([]); } catch (e) { stopFailed(e, reason); }
     emit('state', { playing: false, reason });
     // This playback's voices and gates: a PLAY before the stop resolves (Space pressed again)
     // starts a new playback whose own records the cleanup below must not touch (V272 B1).
@@ -1886,6 +1908,9 @@ export function createStudioTransport({
     playhead,
     debugInfo,
     debugRefuseNextPlay() {
+      let inTest = false;
+      try { inTest = testContext() === true; } catch (e) { /* not in TEST CONTEXT */ }
+      if (!inTest) return false;
       refuseNextClaim = true;
       return true;
     },

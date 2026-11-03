@@ -1220,7 +1220,7 @@ function armedSetup() {
   const store = createStudioStore(model, { idGenerator: createIdGenerator(model),
     gate: (next, info) => transport.admit(next, info) });
   const events = [];
-  transport = createStudioTransport({ runtime, engine, store,
+  transport = createStudioTransport({ runtime, engine, store, testContext: () => true,
     onClaimOutput: () => {
       if (!faults.claim) return undefined;
       faults.claim = false; // refused once
@@ -1310,6 +1310,69 @@ test('K169: a PLAY refused while not armed is unchanged (no state event, the err
     assert.equal(s.transport.playing, false);
     assert.equal(s.runtime.state, 'idle', `${fault}: nothing started`);
     assert.deepEqual(s.events.filter(([t]) => t === 'state'), [], `${fault}: no state event`);
+  }
+});
+
+test('K169: debugRefuseNextPlay is an Inject hook: outside TEST CONTEXT it refuses and changes '
+  + 'nothing (ADR 0052)', async () => {
+  const outside = [undefined, () => false, () => 'yes', () => { throw new Error('x'); }];
+  for (const testContext of outside) {
+    const s = setup();
+    const transport = createStudioTransport({ runtime: s.runtime, engine: s.engine,
+      store: s.store, ...(testContext ? { testContext } : {}) });
+    assert.equal(transport.debugRefuseNextPlay(), false, 'refused outside TEST CONTEXT');
+    ok(transport.start()); // the next PLAY is not refused
+    const stopped = transport.stop({ fast: true });
+    s.fx.advance(0.5);
+    await stopped;
+  }
+  const s = setup();
+  const transport = createStudioTransport({ runtime: s.runtime, engine: s.engine,
+    store: s.store, testContext: () => true });
+  assert.equal(transport.debugRefuseNextPlay(), true, 'in TEST CONTEXT');
+  assert.equal(transport.start().code, 'claim-refused');
+  ok(transport.start()); // once
+  transport.stop({ fast: true });
+  s.fx.advance(0.5);
+});
+
+test('K169 review R2: a STOP whose release of the owned parameters throws still stops and says '
+  + 'so', async () => {
+  for (const held of [false, true]) {
+    const s = setup();
+    let throwNext = false;
+    const runtime = Object.create(s.runtime, { setOwnedParams: { value: (...a) => {
+      if (throwNext) {
+        throwNext = false;
+        throw new Error('injected release');
+      }
+      return s.runtime.setOwnedParams(...a);
+    } } });
+    const transport = createStudioTransport({ runtime, engine: s.engine, store: s.store });
+    ok(transport.start());
+    s.fx.advance(0.1);
+    if (held) {
+      // A refusal already in lastError (a refused sync) is kept; the stop failure is still said.
+      const apply = runtime.apply;
+      Object.defineProperty(runtime, 'apply', { value: () => ({ ok: false, phase: 'prepare',
+        errors: [{ message: 'refused edit', entity: null }] }), configurable: true });
+      dispatch(s, { type: 'NODE_PARAM_SET', nodeId: 'filter-1', key: 'frequency', value: 900 });
+      assert.equal(transport.sync().ok, false);
+      Object.defineProperty(runtime, 'apply', { value: apply, configurable: true });
+      assert.equal(transport.debugInfo().lastError.code, 'sync-refused');
+    }
+    throwNext = true;
+    const stopped = transport.stop({ fast: true });
+    assert.equal(transport.playing, false);
+    s.fx.advance(0.5);
+    const c = await stopped;
+    assert.deepEqual([c.engineNodes, c.engineSources], [0, 0], 'the runtime stopped anyway');
+    const info = transport.debugInfo();
+    assert.ok(info.diagnostics.some((d) => d.code === 'stop-failed'
+      && /injected release/.test(d.message)), 'a stop-failed diagnostic');
+    assert.equal(info.lastError.code, held ? 'sync-refused' : 'stop-failed',
+      held ? 'the earlier refusal is kept' : 'lastError says so');
+    if (!held) assert.equal(info.lastError.phase, 'stop');
   }
 });
 
