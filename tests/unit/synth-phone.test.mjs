@@ -39,10 +39,14 @@ test('no Synth text is under 12 px below the xl breakpoint', () => {
 
 test('the dock folds on a phone in the Synth and the keys and Octave stay', () => {
   const html = read('src/index.html');
-  const fold = "kbdView === 'synth' && !kbdMore && 'max-sm:hidden'";
-  for (const id of ['keyboard.arm', 'keyboard.velocity-down', 'keyboard.velocity-up']) {
+  // Velocity folds wherever the keys dock (Synth and Studio, M086); Arm only in the Synth,
+  // whose keys start armed (the Studio's start disarmed, so its Arm stays).
+  const folds = { 'keyboard.arm': "kbdView === 'synth' && !kbdMore && 'max-sm:hidden'",
+    'keyboard.velocity-down': "kbdDocked && !kbdMore && 'max-sm:hidden'",
+    'keyboard.velocity-up': "kbdDocked && !kbdMore && 'max-sm:hidden'" };
+  for (const [id, fold] of Object.entries(folds)) {
     const tag = html.match(new RegExp(`<button[^>]*data-osc="${id.replace('.', '\\.')}"[^>]*>`, 's'));
-    assert.ok(tag && tag[0].includes(fold), `${id} folds on a phone in the Synth`);
+    assert.ok(tag && tag[0].includes(fold), `${id} folds on a phone where it should`);
   }
   for (const id of ['keyboard.octave-down', 'keyboard.octave-up']) {
     const tag = html.match(new RegExp(`<button[^>]*data-osc="${id.replace('.', '\\.')}"[^>]*>`, 's'));
