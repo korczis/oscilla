@@ -106,8 +106,10 @@ const RADIO = 'block h-full w-full rounded-md border-0 bg-transparent p-0 text-x
 /** A choice (V8 of the SYN review): ONE control, the layer's switch by its position count (a
  *  lever for two, a slide for three or four, a detented rotary for five to eight, a rotary with
  *  a window for nine to twelve), drawn at 1:1 with its legends round it as panel text, so no
- *  legend group can wrap (V9). Each option is a radio button over its legend at the layout's
- *  44 px hit box; the drawing itself takes no press. */
+ *  legend group can wrap (V9). A dial wider than the narrowest plate (CHOICE_MAX_PX) has its
+ *  legends packed below it (view/knob.js choiceLayout), so every choice fits every plate at
+ *  every width. Each option is a radio button over its legend at the layout's 44 px hit box;
+ *  the drawing itself takes no press. */
 function switchHtml(cid, c, value, reason, tokens) {
   const L = choiceLayout(c.param);
   const b = L.box;
@@ -124,10 +126,6 @@ function switchHtml(cid, c, value, reason, tokens) {
     + `${choiceSvg({ value, param: c.param, tokens, disabled: !!reason })}${radios}</svg>`
     + `${why(cid, reason)}</div>`;
 }
-
-/** The widest a choice may be inside one 2xl column of the plate grid (a 258 px card at 1536,
- *  px-3 each side); a plate holding a wider one takes two columns there. */
-const COLUMN_PX = 234;
 
 /** A toggle: the layer's two-position switch at its state, beside its On/Off button. */
 function toggleHtml(cid, c, value, reason, tokens) {
@@ -198,9 +196,6 @@ export function plateHtml({ panel, module: m, node, model, tokens, collapsed = f
     }
     return knobHtml(cid, c, value, reason, tokens);
   }).join('');
-  // The Engines tab is one column; elsewhere a plate wider than a 2xl column takes two (V9).
-  const span = m.tab !== 'engines' && panel.faceOf(m.id).some((c) => c.kind === 'switch'
-    && choiceLayout(c.param).box.width > COLUMN_PX) ? ' 2xl:col-span-2' : '';
   const fixed = panel.fixedOf(m.id).map((f) => {
     const p = m.params.find((x) => x.key === f.key);
     const shown = p.type === 'enum' ? (p.options.find((o) => o[0] === f.value) || [0, f.value])[1]
@@ -209,7 +204,7 @@ export function plateHtml({ panel, module: m, node, model, tokens, collapsed = f
       + `${esc(shown)}</span>`;
   }).join('');
   return '<section class="relative overflow-hidden bg-white rounded-lg shadow '
-    + `dark:bg-gray-800${span}" `
+    + 'dark:bg-gray-800" '
     + `aria-labelledby="${hid}" data-module="${m.id}">${bg}${head}<div id="${bid}">`
     + `<div class="relative flex flex-wrap items-start gap-x-2 gap-y-3 px-3 pb-3 pt-2">`
     + `${controls}</div>`

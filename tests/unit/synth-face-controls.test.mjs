@@ -13,7 +13,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import PANEL from '../../src/js/synth/panels/semi-mono.js';
 import { controlReason, controlValue, plateHtml } from '../../src/js/synth/view/face.js';
-import { choiceSvg, knobModel, knobSvg, panelControlTokens } from '../../src/js/synth/view/knob.js';
+import {
+  CHOICE_MAX_PX, choiceLayout, choiceSvg, knobModel, knobSvg, panelControlTokens,
+} from '../../src/js/synth/view/knob.js';
 import { CABLE_TOKENS, PANEL_TOKENS } from '../../src/js/synth/view/tokens.js';
 import { ariaAttrs, controlSvg, formatValue } from '../../src/js/ui/synth/knob.js';
 import { switchLayout, switchStyle } from '../../src/js/ui/synth/switch.js';
@@ -170,7 +172,7 @@ function choiceParts(cid) {
 test('a choice is ONE control: the core\'s switch at its value, by its position count (V8)', () => {
   for (const { cid, c, value, reason } of switches) {
     const { b, svg } = choiceParts(cid);
-    const L = switchLayout(c.param);
+    const L = choiceLayout(c.param);
     assert.equal(count(b, /<svg /g), 1, `${cid}: one drawing`);
     assert.equal(count(b, /<g data-control="/g), 1, `${cid}: one control`);
     assert.equal(count(b, new RegExp(`<g data-control="switch" data-style="${L.style}" `
@@ -191,7 +193,7 @@ test('a choice is ONE control: the core\'s switch at its value, by its position 
 test('its legends are silk-screened panel text at the layout\'s positions, 12 px', () => {
   for (const { cid, c, value } of switches) {
     const { b } = choiceParts(cid);
-    const L = switchLayout(c.param);
+    const L = choiceLayout(c.param);
     const texts = [...b.matchAll(new RegExp(String.raw`<text data-legend="" data-index="(\d+)" `
       + String.raw`x="([-\d.]+)" y="([-\d.]+)" font-size="([\d.]+)"[^>]*fill="([^"]+)"[^>]*>`
       + '([^<]*)</text>', 'g'))];
@@ -229,7 +231,7 @@ test('every legend reads 4.5:1 on the plate, top and bottom, in both themes', as
 test('each option is an invisible 44 px radio over its legend at the layout\'s hit box', () => {
   for (const { cid, c, value, reason } of switches) {
     const { radios } = choiceParts(cid);
-    const L = switchLayout(c.param);
+    const L = choiceLayout(c.param);
     assert.equal(radios.length, L.options.length, `${cid}: a radio per option`);
     L.options.forEach((o, i) => {
       const r = radios[i];
@@ -274,15 +276,46 @@ test('no legend group wraps: the legends sit round the control (V9)', () => {
     assert.doesNotMatch(b, /flex-wrap|sm:flex-row|flex-row/, `${cid}: nothing to wrap`);
     assert.doesNotMatch(b, /role="radiogroup"[^>]*class="[^"]*flex/, cid);
   }
-  // A plate whose choice is wider than a 2xl column (234 px inside a 258 px card at 1536) takes
-  // two columns there; the Engines tab is one column, so its plates never span.
+  // Every choice fits the narrowest plate (a 2xl column, 234 px inside a 258 px card at 1536;
+  // 248 at 320), so no plate spans two columns and none cuts a legend off (review of W1c, 1).
   for (const m of PANEL.modules) {
-    const wide = PANEL.faceOf(m.id).some((c) => c.kind === 'switch'
-      && switchLayout(c.param).box.width > 234);
-    const section = /^<section [^>]*>/.exec(plates.get(m.id))[0];
-    assert.equal(section.includes('2xl:col-span-2'), wide && m.tab !== 'engines', m.id);
+    assert.doesNotMatch(/^<section [^>]*>/.exec(plates.get(m.id))[0], /col-span/, m.id);
   }
-  assert.ok(/^<section [^>]*2xl:col-span-2/.test(plates.get('xy')), 'the XY plate: Key is 264');
+});
+
+test('every choice fits the narrowest plate: a wide dial packs its legends below it', () => {
+  assert.equal(CHOICE_MAX_PX, 234);
+  const packed = [];
+  for (const { cid, c } of switches) {
+    const core = switchLayout(c.param);
+    const L = choiceLayout(c.param);
+    assert.ok(L.box.width <= CHOICE_MAX_PX, `${cid}: ${L.box.width} px`);
+    if (core.box.width <= CHOICE_MAX_PX) {
+      assert.deepEqual(L, core, `${cid}: the core's own layout where it fits`);
+      continue;
+    }
+    packed.push(cid);
+    assert.equal(L.packed, true, cid);
+    assert.equal(L.style, core.style, `${cid}: still the core's ${core.style}`);
+    assert.equal(L.radius, null, `${cid}: no ring, so no leaders`);
+    assert.deepEqual(L.window, core.window, `${cid}: a window keeps its frame`);
+    assert.ok(Object.isFrozen(L) && Object.isFrozen(L.options[0].hit), cid);
+    const top = L.options[0].hit.y;
+    assert.ok(top >= 33, `${cid}: the grid is below the dial's detents, as the core's window's`);
+    const b = block(cid);
+    assert.equal(count(b, /data-leader=""/g), 0, `${cid}: no leader points at a ring`);
+    assert.equal(count(b, /data-selected=""/g), 1, `${cid}: the selected legend's bar`);
+    L.options.forEach((o, i) => {
+      assert.equal(o.value, core.options[i].value, cid);
+      assert.equal(o.legend.anchor, 'middle', cid);
+      assert.ok(o.hit.width >= 44 && o.hit.height >= 44, `${cid} ${o.label}: 44 px`);
+      assert.ok(o.legend.width + 12 <= o.hit.width + 0.01, `${cid} ${o.label}: fits its cell`);
+      assert.ok(o.hit.x >= L.box.x - 0.01 && o.hit.x + o.hit.width <= L.box.x + L.box.width
+        + 0.01 && o.hit.y + o.hit.height <= L.box.y + L.box.height + 0.01, `${cid}: in its box`);
+    });
+  }
+  assert.deepEqual(packed.sort(), ['fm.algorithm', 'xy.key'],
+    'the two wider than a column: FM\'s algorithm and the XY key');
 });
 
 test('a rotary has the knobs\' ridged skirt and its detents (V10)', () => {
@@ -290,21 +323,24 @@ test('a rotary has the knobs\' ridged skirt and its detents (V10)', () => {
     const { b } = choiceParts(cid);
     const style = switchStyle(c.param);
     const ridges = new RegExp('<path d="([^"]*)" data-ridges="" fill="none" stroke="([^"]*)" '
-      + 'stroke-width="1"/>').exec(b);
+      + 'stroke-width="([\\d.]+)"/>').exec(b);
     if (style !== 'rotary' && style !== 'window') {
       assert.equal(ridges, null, `${cid}: a ${style} has no skirt`);
       continue;
     }
     assert.ok(ridges, `${cid}: the ridged skirt`);
-    assert.equal(ridges[2], 'var(--osc-border)', `${cid}: the knobs' ridge token`);
+    assert.equal(ridges[2], panelControlTokens(T).control.knurl, `${cid}: the knob's knurl role`);
+    assert.equal(ridges[2], 'var(--osc-border)', cid);
+    // As a knob's knurl on screen: 1 unit wide and 1.5 long at the knob's 64/44 zoom.
+    assert.equal(Number(ridges[3]), num(64 / 44), `${cid}: as wide as a knob's`);
     assert.equal(count(ridges[1], /M /g), 24, `${cid}: 24 ridges, as a knob's`);
     // Over the skirt, under the cap: drawn after the skirt circle and before the cap.
     assert.ok(b.indexOf('data-skirt=""') < b.indexOf('data-ridges=""')
       && b.indexOf('data-ridges=""') < b.indexOf('data-cap=""'), cid);
     const SEG_RE = /M ([-\d.]+) ([-\d.]+) L ([-\d.]+) ([-\d.]+)/g;
     for (const [, x0, y0, x1, y1] of ridges[1].matchAll(SEG_RE)) {
-      assert.ok(Math.abs(Math.hypot(x0, y0) - 15.5) < 0.02 && Math.abs(Math.hypot(x1, y1) - 17)
-        < 0.02, `${cid}: a ridge from 15.5 to the skirt's 17`);
+      assert.ok(Math.abs(Math.hypot(x0, y0) - (17 - 1.5 * 64 / 44)) < 0.02
+        && Math.abs(Math.hypot(x1, y1) - 17) < 0.02, `${cid}: a ridge as long as a knob's`);
     }
     assert.equal(count(b, /data-detent=""/g), c.param.options.length, `${cid}: a detent each`);
   }
