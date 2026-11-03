@@ -90,6 +90,16 @@ test("can't assign requested address, ECONNRESET and HTTP 5xx are retried until 
     assert.equal(transientKind({ status: 1, stderr: 'HTTP 503' }), 'transient');
   });
 
+test('the CI receipt\'s options reach the child: `timeout` bounds the call, `env` is added', () => {
+  const r = scripted([{ status: 0, stdout: '{}', stderr: '' }]);
+  r.sh('gh', ['api', 'repos/x/y'], { timeout: 1234 });
+  assert.equal(r.spawned[0].opts.timeout, 1234, '`timeout` is the bound, as `timeoutMs` is');
+  assert.equal(r.spawned[0].opts.env, process.env, 'no env option: the parent environment');
+  r.sh('node', ['scripts/roadmap.mjs'], { env: { OSC_ROADMAP_CHECK: '1' } });
+  assert.equal(r.spawned[1].opts.env.OSC_ROADMAP_CHECK, '1');
+  assert.equal(r.spawned[1].opts.env.PATH, process.env.PATH, 'added to, never replacing');
+});
+
 test('a refusal is not retried: not found, not authenticated, a local command', () => {
   for (const stderr of ['HTTP 404: Not Found', 'You are not logged into any GitHub hosts']) {
     const r = scripted([{ status: 1, stdout: '', stderr }]);
