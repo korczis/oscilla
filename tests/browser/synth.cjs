@@ -11,6 +11,10 @@
 //   s-sound    no cable: QWERTY A plays C4, VCO 1 at 16' and VCO 2 at 8' (peaks at 130.8 and
 //              261.6 Hz within one bin, RMS above -40 dB rel); key up: below -70 dB rel
 //   s-filter   LPF cutoff to its minimum by keyboard (Home): the energy above 2 kHz falls 12 dB+
+//   s-feel     the knob and choice feel (p2's W1b review): during a drag the ARIA position is the
+//              0..1000 travel; Shift mid-drag moves nothing; a double-click restores the initial
+//              value; the wheel turns the knob under the pointer, a burst one undo entry;
+//              arrows, Home and End move a choice and focus stays on the checked option
 //   s-wave     Square on VCO 1 (VCO 2 muted): the 2nd harmonic 30 dB+ below the 3rd; Pulse with a
 //              typed width of 25 %: the 4th harmonic 30 dB+ below the 3rd
 //   s-rest     armed with no key held (Arm, no note), a cable from EG 1 into the VCA: below
@@ -348,6 +352,68 @@ function defineChecks() {
       'the energy above 2 kHz falls 12 dB with the cutoff at its minimum');
     await page.keyboard.up('KeyA');
     return { ok: true, before, after: bandDb(shut, 2000, 12000) };
+  });
+
+  def('s-feel', async ({ page }) => {
+    const depth = () => page.evaluate(() => window.OSCILLA.studio.store.debugInfo().undoDepth);
+    const knob = page.locator('[data-knob="lpf.frequency"]');
+    await knob.scrollIntoViewIfNeeded();
+    const pos = () => knob.evaluate((el) => ({ now: Number(el.getAttribute('aria-valuenow')),
+      max: el.getAttribute('aria-valuemax'),
+      text: document.querySelector('[data-value="lpf.frequency"]').textContent }));
+    const start = await pos();
+    const b = await knob.boundingBox();
+    const cx = b.x + b.width / 2;
+    const cy = b.y + b.height / 2;
+    // A drag: the ARIA position stays the 0..1000 travel while it moves (N003).
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    await page.mouse.move(cx, cy + 40, { steps: 4 });
+    const mid = await pos();
+    // Shift mid-drag re-anchors: one more pixel moves the position by no more than a coarse step.
+    await page.keyboard.down('Shift');
+    await page.mouse.move(cx, cy + 41);
+    const fine = await pos();
+    await page.keyboard.up('Shift');
+    await page.mouse.up();
+    // A double-click restores the initial value: the first click leaves the knob in place.
+    await page.mouse.move(cx, cy);
+    await knob.dblclick();
+    await until(async () => (await pos()).text === start.text, { ms: 5000,
+      what: 'a double-click restores the initial value' });
+    // The wheel turns the knob under the pointer; a burst is one undo entry.
+    const before = await depth();
+    const w0 = (await pos()).now;
+    await page.mouse.move(cx, cy);
+    await page.mouse.wheel(0, -100);
+    await page.mouse.wheel(0, -100);
+    await until(async () => (await pos()).now > w0, { ms: 5000, what: 'the wheel turns it' });
+    await until(async () => (await depth()) === before + 1, { ms: 5000,
+      what: 'a wheel burst is one undo entry' });
+    // A choice: arrows, Home and End move the selection and focus stays on the checked option.
+    const group = page.locator('[data-osc="synth-view"] [role="radiogroup"]')
+      .filter({ has: page.locator('[data-option]') }).first();
+    const checked = group.locator('[aria-checked="true"]');
+    await checked.focus();
+    const v0 = await checked.getAttribute('data-v');
+    await page.keyboard.press('ArrowRight');
+    const choice = async () => page.evaluate(() => {
+      const a = document.activeElement;
+      return { v: a && a.getAttribute('data-v'), checked: a && a.getAttribute('aria-checked') };
+    });
+    await until(async () => { const c = await choice(); return c.checked === 'true'
+      && c.v !== v0; }, { ms: 5000, what: 'ArrowRight moves the choice and its focus' });
+    await page.keyboard.press('End');
+    const last = await group.locator('[data-option]').last().getAttribute('data-v');
+    await until(async () => { const c = await choice(); return c.v === last
+      && c.checked === 'true'; }, { ms: 5000, what: 'End chooses the last option' });
+    await page.keyboard.press('Home');
+    const first = await group.locator('[data-option]').first().getAttribute('data-v');
+    await until(async () => { const c = await choice(); return c.v === first
+      && c.checked === 'true'; }, { ms: 5000, what: 'Home chooses the first option' });
+    const ok = mid.max === '1000' && mid.now >= 0 && mid.now <= 1000 && mid.now !== start.now
+      && Math.abs(fine.now - mid.now) <= 20;
+    return { ok, start, mid, fine };
   });
 
   def('s-wave', async ({ page }) => {

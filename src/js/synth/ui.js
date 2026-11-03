@@ -29,7 +29,8 @@ import {
 import { linkAction, linkOf } from './link.js';
 import { splitJack } from './panel.js';
 import { esc, plateHtml, platesShown } from './view/face.js';
-import { knobModel, knobSvg, stepOption } from './view/knob.js';
+import { knobModel, knobSvg } from './view/knob.js';
+import { createGestures } from './gestures.js';
 import { bayLayout, baySvg, cablePath } from './view/bay.js';
 import { panelTokens } from './view/tokens.js';
 import { NODE_REGISTRY } from '../studio/registry.js';
@@ -140,6 +141,10 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     }
     return dispatch({ type: 'NODE_PARAM_SET', nodeId: x.node.id, key: x.key, value });
   }
+
+  // Knob drags and the wheel (gestures.js): the panel's state through these four.
+  const gestures = createGestures({ controlOf, valueOf, setControl, handle, say,
+    label: (x) => `Change ${panel.module(x.mid).label} ${x.c.label}` });
 
   // ------------------------------------------------------------------ cables
 
@@ -370,9 +375,11 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     const chosen = engines && el.querySelector('[data-engine][aria-checked="true"]');
     if (chosen) chosen.parentElement.parentElement.scrollLeft = chosen.offsetLeft - 16;
     if (keep) {
-      const sel = keep[0] === 'data-option' ? `[data-option="${keep[1]}"][data-v="${keep[2]}"]`
-        : `[${keep[0]}="${keep[1]}"]`;
-      const again = el.querySelector(sel);
+      // A choice keeps focus on its checked option (focus follows the selection).
+      const again = keep[0] === 'data-option'
+        ? el.querySelector(`[data-option="${keep[1]}"][aria-checked="true"]`)
+          || el.querySelector(`[data-option="${keep[1]}"][data-v="${keep[2]}"]`)
+        : el.querySelector(`[${keep[0]}="${keep[1]}"]`);
       if (again) again.focus({ preventScroll: true });
     }
   }
@@ -401,8 +408,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     const v = valueOf(x);
     const km = knobModel(x.c.param);
     box.innerHTML = knobSvg({ uid: cid, value: v, param: x.c.param, tokens: panelTokens(el) });
-    box.setAttribute('aria-valuenow', String(v));
-    box.setAttribute('aria-valuetext', km.text(v));
+    gestures.aria(box, v, x.c.param, km.text(v));
     const out = el.querySelector(`[data-value="${cid}"]`);
     if (out) out.textContent = km.format(v);
   }
@@ -431,7 +437,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       }
       e.preventDefault();
       k.setPointerCapture(e.pointerId);
-      knob = { cid: k.dataset.knob, y: e.clientY, v: valueOf(x), param: x.c.param, el: k };
+      knob = gestures.press(k.dataset.knob, x, e);
       handle().beginGesture(`Change ${panel.module(x.mid).label} ${x.c.label}`);
       return;
     }
@@ -452,9 +458,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
   function onPointerMove(e) {
     if (knob) {
-      const v = knobModel(knob.param).drag(knob.v, e.clientY - knob.y, e.shiftKey);
-      const x = controlOf(knob.cid);
-      if (x && v !== valueOf(x)) setControl(knob.cid, v);
+      gestures.drag(knob, e);
       return;
     }
     if (!cable) return;
@@ -466,9 +470,12 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
   function onPointerUp(e) {
     if (knob) {
+      const { moved } = knob;
       handle().endGesture();
       knob = null;
-      renderAll();
+      // A press without a move changes nothing and leaves the knob's nodes in place, so a
+      // double-click lands on the same target (Chromium needs the same node for both clicks).
+      if (moved) renderAll();
       return;
     }
     if (!cable) return;
@@ -503,6 +510,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       const b = ENGINE_BLOCKED.find((x) => x.id === d.blocked);
       if (b) say(b.reason);
     } else if (d.option) {
+      if (gestures.refused(t, d.option)) return;
       const x = controlOf(d.option);
       const o = x && x.c.param.options.find((v) => String(v[0]) === d.v);
       if (o) setControl(d.option, o[0]);
@@ -625,16 +633,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       setControl(k.dataset.knob, v);
       return;
     }
-    const o = e.target.closest && e.target.closest('[data-option]');
-    if (o && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
-      const x = controlOf(o.dataset.option);
-      e.preventDefault();
-      const dir = e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 1;
-      setControl(o.dataset.option, stepOption(x.c.param, valueOf(x), dir));
-      const again = host().querySelector(`[data-option="${o.dataset.option}"][aria-checked="true"]`);
-      if (again) again.focus({ preventScroll: true });
-      return;
-    }
+    if (gestures.choiceKey(e, host())) return;
     const j = e.target.closest && e.target.closest('[data-jack]');
     if (j && (e.key === 'Enter' || e.key === ' ')) {
       e.preventDefault();
@@ -816,6 +815,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
         el.addEventListener('pointercancel', onPointerUp);
         el.addEventListener('click', onClick);
         el.addEventListener('dblclick', onDoubleClick);
+        el.addEventListener('wheel', gestures.wheel, { passive: false });
         el.addEventListener('keydown', onKeyDown);
       }
       this.$watch('workspace', (ws, old) => {
