@@ -280,7 +280,7 @@ export function nodeName(model, id) {
 }
 
 const KIND_LABEL = Object.freeze({ pattern: 'Pattern', event: 'Event',
-  measurement: 'Measurement' });
+  measurement: 'Measurement', notes: 'Notes' });
 const TRACK_LABEL = Object.freeze({ event: 'Event', measurement: 'Measurement' });
 const MEASUREMENT_LABEL = Object.freeze({ 'noise-check': 'Noise check', 'pre-roll': 'Pre-roll',
   stimulus: 'Stimulus', capture: 'Capture', tail: 'Tail', analysis: 'Analysis' });
@@ -293,6 +293,10 @@ export function clipText(clip) {
   if (clip.kind === 'event') {
     const a = clip.payload.action || 'gate';
     return { label: a === 'trigger' ? 'Trigger' : 'Gate', detail: '' };
+  }
+  if (clip.kind === 'notes') {
+    const n = Array.isArray(clip.payload.notes) ? clip.payload.notes.length : 0;
+    return { label: 'Notes', detail: `${n} note${n === 1 ? '' : 's'}` };
   }
   return { label: MEASUREMENT_LABEL[clip.payload.action] || 'Measurement', detail: '' };
 }

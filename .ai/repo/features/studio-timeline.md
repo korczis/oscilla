@@ -24,7 +24,9 @@ tags: [v31, studio, timeline]
 The timeline (`src/js/studio/timeline.js`, `docs/v31/timeline.md`) holds tracks of clips in
 absolute seconds (ADR 0036): pattern clips whose payload is a sequencer block checked by the
 sequencer's own rules (tone, sweep, pulse, chirp and the other block types), gate events on
-an Envelope, and measurement clips (noise check, pre-roll, stimulus, capture, tail, analysis).
+an Envelope, measurement clips (noise check, pre-roll, stimulus, capture, tail, analysis) and
+notes clips (`{ notes: [{ at, note, len, vel }] }` in beats on a node that plays notes; K099
+part 1 keeps and validates them, and they are not played yet).
 Clips are created, moved, resized, split, duplicated and deleted with snapping to a time grid,
 bars and beats, or markers; a loop region and markers complete it, and V2 sequences import
 and export exactly (`src/js/studio/sequence-import.js`).
@@ -45,6 +47,7 @@ the sub-path).
 
 ## What it does not do
 
-It is not an audio-file editor and records no input. Dragging several clips at once is not
+It is not an audio-file editor and records no input. Notes clips are data only so far: the
+transport and the offline render list them as not played, and there is no piano roll. Dragging several clips at once is not
 built. Musical time never applies to measurement clips, and
 measurement clips are not rendered offline; they run live.
