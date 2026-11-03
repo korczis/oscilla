@@ -628,7 +628,17 @@ test('an SVG LED\'s halo glows within 6 screen px of its lens at every zoom, at 
         }
       }
     }
-    assert.equal(halos, zooms.length * LED_COLOURS.length * 3, 'every lit LED drew its halo');
+    // A toggle's LED is drawn through ledSvg too, and must hand it the graph's zoom.
+    const { switchSvg } = await import('../../src/js/ui/synth/switch.js');
+    const param = { key: 'enabled', label: 'Enabled', type: 'boolean', default: true };
+    for (const zoom of zooms) {
+      const svg = switchSvg({ value: true, param, tokens: TOKENS, zoom,
+        led: { source: 'node.enabled', lit: true } });
+      halos += (svg.match(/\sdata-halo=/g) || []).length;
+      assert.deepEqual(svgHalos(svg, zoom, 'toggle'), []);
+    }
+    assert.equal(halos, zooms.length * (LED_COLOURS.length * 3 + 1),
+      'every lit LED drew its halo, a toggle\'s included');
   });
 
 test('every LED and needle names its state source and binds its state', () => {

@@ -36,7 +36,7 @@ const METER = (extra = {}) => led.meterSvg({ value: 0.5, source: 'analysis.corre
   scale: 'relative', tokens: TOKENS, ...extra });
 const near = (a, b, eps = 1e-6) => Math.abs(a - b) <= eps;
 /** The zooms the graph allows, its ZOOM_MAX included (graph-geometry.js). */
-const ZOOMS = [0.5, 1, 2, ZOOM_MAX];
+const ZOOMS = [0.5, 1, 1.5, 2, ZOOM_MAX];
 /** The [start, end) span of the element whose open tag carries `attr`, from its open tag to the
  *  close tag that matches it (nested elements of its name counted), or null. */
 function elementSpan(svg, attr) {
@@ -145,6 +145,7 @@ test('a lit LED glows by an SVG halo: one circle behind the lens, its token, <= 
           assert.ok(reach > 0 && reach <= 6, `${where}: ${reach} screen px past the lens, (0, 6]`);
           assert.ok(near(reach, Math.min(led.LED.halo * zoom, led.HALO_PX), 0.01),
             `${where}: LED.halo graph units, never past HALO_PX screen px`);
+          assert.ok(reach <= led.HALO_PX + 1e-9, `${where}: ${reach} screen px, not past HALO_PX`);
           assert.equal(attrOf(halo, 'cx'), attrOf(lens, 'cx'), `${where}: centred on the lens`);
           assert.equal(attrOf(halo, 'cy'), attrOf(lens, 'cy'), `${where}: centred on the lens`);
           assert.equal(attrOf(halo, 'class'), 'opacity-hw-sheen', `${where}: the hw-sheen key`);

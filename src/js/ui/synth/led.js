@@ -132,7 +132,8 @@ function wrap(open, box, zoom, interactive, drawing) {
 
 /** The lit halo's reach past the lens at `zoom`, graph units: LED.halo, but never past HALO_PX
  *  screen px, so it spreads at most HALO_PX on screen however far the graph zooms in. */
-const haloReach = (zoom) => num(Math.min(LED.halo, HALO_PX / zoom));
+// Rounded down, so the rounding never carries the halo past HALO_PX on screen.
+const haloReach = (zoom) => Math.floor(Math.min(LED.halo, HALO_PX / zoom) * 100 + 1e-9) / 100;
 /** Half the LED's extent at `zoom`: the bezel's outer edge or the lit halo, whichever reaches
  *  further, so the box is the same lit and unlit. */
 const ledHalf = (zoom) => Math.max(LED.bezel + LED.bezelW / 2, LED.lens + haloReach(zoom));
