@@ -57,8 +57,11 @@ test('filters by instrument and by tag are exact, and the counts are the lists\'
   }
   const both = browseView(all, st.getModel(), { instrument: 'fm-voice', tag: 'engine' }).items;
   assert.deepEqual(both.map((x) => x.name), ['FM bell', 'FM keys']);
-  assert.deepEqual(browseView(all, st.getModel(), { query: 'BELL' }).items.map((x) => x.name)
-    .sort(), ['FM bell', 'Ring bell']);
+  // The query is case-insensitive; the FM Bell template (K014) matches beside the two patches.
+  const bells = browseView(all, st.getModel(), { query: 'BELL' }).items;
+  assert.deepEqual(bells.map((x) => x.name).sort(), ['FM Bell', 'FM bell', 'Ring bell']);
+  assert.deepEqual(bells.filter((x) => x.tags.includes('template')).map((x) => x.id),
+    ['template-fm-bell']);
   assert.equal(browseView(all, st.getModel(), { instrument: 'nope' }).items.length, 0);
 });
 

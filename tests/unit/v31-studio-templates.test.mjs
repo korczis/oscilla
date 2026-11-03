@@ -60,13 +60,15 @@ const e = (id, from, fromPort, to, toPort, props) => ({ id, from: { node: from, 
 
 // ---------------------------------------------------------------- templates (§195-§196)
 
-test('§195 the seven templates exist, in library order, with unique ids', () => {
+test('§195 the templates exist, in library order, with unique ids', () => {
   assert.deepStrictEqual(STUDIO_TEMPLATES.map((t) => t.id), ['basic-tone', 'subtractive-synth',
     'sweep-sequence', 'stereo-beat', 'filter-automation', 'measurement-sweep', 'first-patch',
+    'filter-envelope-synth', 'fm-bell', 'ring-mod', 'drive-lead', 'macro-pad', 'step-bass',
     'demo-song']);
   assert.deepStrictEqual(listTemplates().map((t) => t.title), ['Basic Tone',
     'Subtractive Synth', 'Sweep Sequence', 'Stereo Beat', 'Filter Automation',
-    'Measurement Sweep', 'First Patch', 'Demo song: Lantern in the Slag Yard']);
+    'Measurement Sweep', 'First Patch', 'Filter Envelope Synth', 'FM Bell', 'Ring Mod',
+    'Drive Lead', 'Macro Pad', 'Step Bass', 'Demo song: Lantern in the Slag Yard']);
   assert.strictEqual(getTemplate('nope'), null);
   assert.throws(() => templateModel('nope'), RangeError);
   assert.strictEqual(REFERENCE_TEMPLATE_ID, 'subtractive-synth');
@@ -120,7 +122,8 @@ for (const t of STUDIO_TEMPLATES) {
   });
 }
 
-// The pinned hash of every template: a template added (V617) leaves the others' unchanged.
+// The pinned hash of every template: a template added (V617, the K014 pack) leaves the others'
+// unchanged.
 const PINNED = {
   'basic-tone': 'fbfe0905d6948e9e92418623fb0d53505b89706136fe0cbe3521a92d3b7edf92',
   'subtractive-synth': '3982a31f8fe6f92f9206bca48ab19b7cfe091105fdb841143e7d1f1e892ec424',
@@ -129,6 +132,12 @@ const PINNED = {
   'filter-automation': '5c107b61379ebc01c124e73c9888679120407c3a1ad695bb519e62954e4f66c7',
   'measurement-sweep': '6b7754b60524614f71cb4d32b3dd77e0f3da793ffb6da976f36b42242e3c9a84',
   'first-patch': '847a4cfd83a66ea94bcdccff48fdcfbf2c72f2697aa7b0840bbb6d69d5cffa2c',
+  'filter-envelope-synth': '00e35c1e1c620dbe754737bf81f27138a5c6d7dbfe166948652ecaef8b8b5779',
+  'fm-bell': '769f2b8653d020e4ce0376848a097aa0216ea1c30ec18e856563b88e7aeae237',
+  'ring-mod': '8df8b92b54ca3aeec049565352b0125ab8f9d4f62fbb983e7805ee707831fede',
+  'drive-lead': '24725ac1da7d547cd57e4a68e2c955dcf5893d6a10163b4eb33bfa6ebf298521',
+  'macro-pad': '915a0e756f4a78226d903c349b6bc5e522812168f0a6d97cc8713702fcd4dbaf',
+  'step-bass': '701d7e300d2c0307da24b0c8b75610e30de59c4d6da2a0e2e9fa2439cc5079fc',
   'demo-song': '6af3c386ab88fe2c98d1a11a65d2f537fafbb3cd49b4aed7ca0a234e733405b6',
 };
 

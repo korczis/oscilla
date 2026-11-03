@@ -67,6 +67,15 @@
 //   render-wav-busy      while a render runs Render WAV is aria-disabled, still focusable, and
 //                        described by a visible reason; activating it opens nothing and says why
 //                        (PR #119 review, F10)
+//   template-pack        each template of the K014 pack (TEMPLATE_PACK_IDS, read from
+//                        src/js/studio/templates/index.js) opens clean through the Templates
+//                        dialog and through its link #m=studio&st=<id>, and Render WAV at the
+//                        dialog's default duration (the timeline) downloads a WAV whose RMS is
+//                        above -50 dBFS (it sounds) and whose sample peak is at or below
+//                        MAX_OUTPUT_GAIN (core/constants.js, 0.25 = -12.0 dBFS): the engine's
+//                        output ceiling, the Master Output level's top, which the live chain
+//                        flattens every sample beyond and the offline render (no ceiling) must
+//                        stay under on its own. The rate is the WAV header's, never assumed
 //   no-console-errors
 'use strict';
 const { serveDist } = require('./lib/serve.cjs');
@@ -172,6 +181,31 @@ const H = {
     await H.frames(page);
   },
 };
+
+/** Sample peak and RMS (dBFS) of a 16-bit PCM WAV, every channel, with its rate and length. */
+function wavLevels(buf) {
+  const b = Buffer.from(buf);
+  const fmt = b.indexOf('fmt ');
+  const data = b.indexOf('data');
+  const channels = b.readUInt16LE(fmt + 10);
+  const sampleRate = b.readUInt32LE(fmt + 12);
+  const bits = b.readUInt16LE(fmt + 22);
+  const bytes = b.readUInt32LE(data + 4);
+  const start = data + 8;
+  const end = Math.min(b.length, start + bytes);
+  let peak = 0;
+  let acc = 0;
+  let n = 0;
+  for (let o = start; o + 1 < end; o += 2) {
+    const v = Math.abs(b.readInt16LE(o)) / 32768;
+    if (v > peak) peak = v;
+    acc += v * v;
+    n += 1;
+  }
+  return { channels, sampleRate, bits, seconds: bytes / (channels * (bits / 8)) / sampleRate,
+    peak, peakDbfs: peak > 0 ? 20 * Math.log10(peak) : -Infinity,
+    rmsDbfs: n && acc > 0 ? 10 * Math.log10(acc / n) : -Infinity };
+}
 
 function wavInfo(buf) {
   const b = Buffer.from(buf);
@@ -1174,6 +1208,54 @@ function defineChecks(fx) {
     }), state, said: said.slice(-2) };
   });
 
+  def('template-pack', async ({ page }) => {
+    const { ids, titles, cap, rmsFloorDb } = fx.pack;
+    const shown = (id, what) => until(() => page.evaluate((tid) => {
+      const s = window.OSCILLA.studio;
+      return s.templateId === tid && !s.dirty ? { title: s.model.metadata.title,
+        hash: window.location.hash, workspace: window.OSCILLA.app.workspace } : null;
+    }, id), { ms: 10000, what });
+    const rows = {};
+    for (const id of ids) {
+      // 1. Templates, Open, from another document.
+      await H.fresh(page, 'basic-tone');
+      await page.click('[data-osc="studio.templates"]');
+      const open = `#osc-dlg-studio-templates[open] [data-osc="studio.template.open"]`
+        + `[data-template="${id}"]`;
+      await until(() => page.evaluate((sel) => {
+        const btn = document.querySelector(sel);
+        return !!btn && btn.getBoundingClientRect().width > 0;
+      }, open), { ms: 10000, what: `template-pack: the Templates dialog offers ${id}` });
+      await page.click(open);
+      const dialog = await shown(id, `template-pack: ${id} opens from the Templates dialog`);
+      // 2. The link, followed in the page.
+      await H.fresh(page, 'basic-tone');
+      await page.evaluate((h) => { window.location.hash = h; }, `m=studio&st=${id}`);
+      const link = await shown(id, `template-pack: ${id} opens from #m=studio&st=${id}`);
+      // 3. Render WAV at the dialog's default duration.
+      await page.click('[data-osc="studio.renderWav"]');
+      await page.waitForSelector('#osc-dlg-studio-render[open]', { timeout: 15000 });
+      const duration = await page.evaluate(() => document.querySelector(
+        '[data-osc="studio.render.duration"]').value);
+      const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 30000 }),
+        page.click('[data-osc="studio.render.start"]')]);
+      const wav = wavLevels(fs.readFileSync(await dl.path()));
+      await until(() => page.evaluate(() => !window.OSCILLA.studio.rendering),
+        { ms: 10000, what: `template-pack: the ${id} render ends` });
+      rows[id] = { dialog: dialog.title === titles[id], link: link.title === titles[id]
+          && link.workspace === 'studio', file: dl.suggestedFilename() === `${id}.wav`,
+        duration, seconds: Number(wav.seconds.toFixed(3)), sampleRate: wav.sampleRate,
+        peakDbfs: Number(wav.peakDbfs.toFixed(2)), rmsDbfs: Number(wav.rmsDbfs.toFixed(2)),
+        sounds: wav.rmsDbfs > rmsFloorDb, underCap: wav.peak > 0 && wav.peak <= cap };
+    }
+    const bad = (k) => ids.filter((id) => !rows[id][k]);
+    return { ...H.verdict({
+      dialog: bad('dialog').length === 0, link: bad('link').length === 0,
+      file: bad('file').length === 0, sounds: bad('sounds').length === 0,
+      underCap: bad('underCap').length === 0,
+    }), capDbfs: Number((20 * Math.log10(cap)).toFixed(2)), rmsFloorDb, rows };
+  });
+
   def('no-console-errors', async ({ errors }) => ({ ok: errors.length === 0,
     errors: errors.slice(0, 8) }));
   return checks;
@@ -1236,7 +1318,13 @@ async function runOne(browserName, origin, baseUrl, fx) {
   const empty = normalizeStudio({ metadata: { title: 'Large graph (100 nodes)' } });
   const store = createStudioStore(empty, { idGenerator: createIdGenerator(empty) });
   buildLargeStudio(store);
-  const fx = { largeText: exportProjectFile(store.getModel()).text, budgets: BROWSER_BUDGETS };
+  // The K014 template pack and the output ceiling its renders must stay under.
+  const { TEMPLATE_PACK_IDS, getTemplate } = await esm('src/js/studio/templates/index.js');
+  const { MAX_OUTPUT_GAIN } = await esm('src/js/core/constants.js');
+  const pack = { ids: [...TEMPLATE_PACK_IDS], cap: MAX_OUTPUT_GAIN, rmsFloorDb: -50,
+    titles: Object.fromEntries(TEMPLATE_PACK_IDS.map((id) => [id, getTemplate(id).title])) };
+  const fx = { largeText: exportProjectFile(store.getModel()).text, budgets: BROWSER_BUDGETS,
+    pack };
 
   const server = ORIGINS.includes('http') ? await serveDist(DIST, { prefix: 'oscilla-studio-wf-' }) : null;
   const all = {};
