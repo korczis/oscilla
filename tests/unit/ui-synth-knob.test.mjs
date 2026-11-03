@@ -1927,7 +1927,15 @@ test('fader: an optional travel (default FADER_TRAVEL, unchanged) sizes its box,
     }
     assert.equal(pixelsPerRangeFor('fader', 2), FADER_TRAVEL * 2, 'default unchanged');
     assert.equal(pixelsPerRangeFor('fader', 2, undefined, { travel: 128 }), 256);
-    assert.equal(pixelsPerRangeFor('knob', 2, undefined, { travel: 128 }), DRAG_PX_PER_RANGE);
+    // F013 S10 round 2: a travel on a knob or a switch is refused by both, as controlBox does.
+    for (const kind of ['knob', 'switch']) {
+      const param = kind === 'switch' ? BOOL : undefined;
+      assert.throws(() => CORE.controlBox(kind, 'vertical', { travel: 128 }),
+        new RegExp(`travel: a ${kind} has none`), `controlBox ${kind}`);
+      assert.throws(() => pixelsPerRangeFor(kind, 2, param, { travel: 128 }),
+        new RegExp(`travel: a ${kind} has none`), `pixelsPerRangeFor ${kind}`);
+      assert.ok(pixelsPerRangeFor(kind, 2, param) > 0, `${kind} without a travel`);
+    }
     // A press reads the same travel: on the cap at 70 % of 128, and a page toward the slot.
     const press = (point, travel) => CORE.faderPress({ value: 70, param: LIN, point, travel });
     assert.deepEqual(press({ x: 0, y: -(128 * 0.7 - 64) }, 128), { grab: true, value: 70 });

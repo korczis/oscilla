@@ -322,7 +322,6 @@ test('the puck: Ø28 cap, --osc-text edge, control.pointer crosshair notch, wher
     }
     const shade = part(SVG(), 'data-puck-shadow');
     assert.equal(attrOf(shade, 'class'), 'opacity-hw-shadow');
-    assert.equal(attrOf(part(SVG(), 'data-puck-sheen'), 'class'), 'opacity-hw-sheen');
   });
 
 test('the gate LED is led.js\'s, bound to the caller\'s gate and source, at the layout\'s place',
@@ -386,7 +385,7 @@ test('states: idle, touched, focus on one part, disabled', () => {
   assert.equal(dy(idle), xy.PUCK.shadow.dy);
   const touched = SVG({ gate: true, state: { touched: true } });
   assert.match(open(slice(touched, 'data-xy-pad=""')), /data-touched=""/);
-  assert.equal(dy(touched), xy.PUCK.pressed.dy, 'the puck pressed: its shadow tucks under');
+  assert.equal(dy(touched), xy.PUCK.shadow.dy, 'the shadow stays: the face sinks instead');
   assert.equal(attrOf(open(slice(touched, 'data-led=""')), 'data-lit'), 'true', 'gate lit');
   // Focus rings only the focused part, in control.focus, 2 wide.
   const pf = SVG({ state: { focus: 'pad' } });
@@ -461,7 +460,7 @@ test('contrast from tokens.css in both themes: 3:1 for every graphic, 4.5:1 for 
       // [what, foreground token, the backgrounds it sits on, the minimum]
       // The edge and the ring lie on the skirt's rim, between the skirt and the surface.
       ['the puck edge', name(svg, 'data-puck-cap', 'stroke'), [surface, cap], 3],
-      ['the pressed ring', name(pressed, 'data-puck-cap', 'stroke'), [surface, cap], 3],
+      ['the pressed rim', name(pressed, 'data-puck-cap', 'stroke'), [surface, cap], 3],
       ['the notch', name(svg, 'data-notch', 'stroke'), [face], 3],
       ['the disabled notch', name(off, 'data-notch', 'stroke'), [offFace], 3],
       ['the frame', name(svg, 'data-surface', 'stroke'), [surface, ...plates], 3],
@@ -521,7 +520,6 @@ test('the puck is a raised cap in both themes: a face 1.3:1 on the surface, the 
     const skirt = name('data-puck-cap', 'fill');
     const face = name('data-puck-face', 'fill');
     const shadow = name('data-puck-shadow', 'fill');
-    const sheen = name('data-puck-sheen', 'fill');
     assert.equal(attrOf(part(svg, 'data-puck-face'), 'stroke'), 'none');
     assert.ok(Number(attrOf(part(svg, 'data-puck-face'), 'r')) < xy.PUCK.r, 'a face in a skirt');
     const roles = [...new Set(tokenValues().map(varName).filter(Boolean))];
@@ -547,54 +545,142 @@ test('the puck is a raised cap in both themes: a face 1.3:1 on the surface, the 
       lines.push(`${theme}: shadow ${shadow} at hw-shadow ${HW['hw-shadow']} on ${surface} `
         + `${comp(shadow).toFixed(3)} (opaque ${c(shadow, surface).toFixed(2)}); `
         + `the roles darker in both themes: ${roles.filter(darker).join(', ')}`);
-      const s = over(hex(sheen), hex(face), Number(HW['hw-sheen']));
-      lines.push(`${theme}: sheen ${sheen} at hw-sheen on the face ${contrastOf(s, hex(face))
-        .toFixed(3)} (${lum(s) > lum(hex(face)) ? 'lighter' : 'darker'})`);
       assert.ok(bg);
     }
     console.log(lines.join('\n'));
-    // Dark is the reference theme (tokens.css): there the sheen lightens the face.
-    assert.ok(lum(tokenHex(themes.dark, sheen)) > lum(tokenHex(themes.dark, face)));
   });
 
-test('touched reads pressed: the cap sinks (shadow shrinks, offset smaller), the ring lights',
+// ---------------------------------------------------------------- F013 S10 review round 2
+
+const capOf = (s) => part(s, 'data-puck-cap');
+const faceR = (s) => Number(attrOf(part(s, 'data-puck-face'), 'r'));
+/** The notch's half arm: its farthest point from the cap's centre along an axis. */
+const notchArm = (s) => {
+  const cx = Number(attrOf(capOf(s), 'cx'));
+  const cy = Number(attrOf(capOf(s), 'cy'));
+  const nums = attrOf(part(s, 'data-notch'), 'd').match(/-?[\d.]+/g).map(Number);
+  return Math.max(...nums.map((v, i) => Math.abs(v - (i % 2 ? cy : cx))));
+};
+/** A role with no hue: its channels within 0x30 of each other in both themes. */
+const neutralIn = (themes) => (n) => ['dark', 'light'].every((t) => {
+  const h = tokenHex(themes[t], n);
+  const ch = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  return Math.max(...ch) - Math.min(...ch) <= 0x30;
+});
+
+test('touched reads pressed by geometry: the face sinks, more skirt shows, the rim stays',
   () => {
-    const L = xy.xyLayout();
-    const idle = SVG();
-    const down = SVG({ gate: true, state: { touched: true } });
-    const sh = (s) => part(s, 'data-puck-shadow');
-    const cap = (s) => part(s, 'data-puck-cap');
-    const dy = (s) => Number(attrOf(sh(s), 'cy')) - Number(attrOf(cap(s), 'cy'));
-    assert.ok(dy(down) < dy(idle), `offset ${dy(down)} < ${dy(idle)}`);
-    assert.ok(Number(attrOf(sh(down), 'r')) < Number(attrOf(sh(idle), 'r')), 'the shadow shrinks');
-    assert.equal(Number(attrOf(sh(idle), 'r')), xy.PUCK.shadow.r);
-    assert.equal(Number(attrOf(sh(down), 'r')), xy.PUCK.pressed.r);
-    assert.equal(attrOf(cap(idle), 'stroke'), TOKENS.text.value);
-    assert.equal(attrOf(cap(down), 'stroke'), TOKENS.control.ring, 'the ring in control.ring');
-    assert.ok(Number(attrOf(cap(down), 'stroke-width'))
-      > Number(attrOf(cap(idle), 'stroke-width')), 'a wider ring');
-    // The shadow and the ring stay inside the frame wherever the puck is.
+    for (let i = 50; i <= 250; i++) {
+      const zoom = i / 100;
+      const at = `zoom ${zoom}`;
+      const idle = SVG({ zoom });
+      const down = SVG({ zoom, gate: true, state: { touched: true } });
+      const step = faceR(idle) - faceR(down);
+      assert.equal(faceR(idle), xy.PUCK.face, `${at}: the idle face`);
+      assert.ok(step >= 1.5 - 1e-9, `${at}: the face sinks ${step} graph units`);
+      assert.ok(step * zoom >= 1.5 - 1e-9, `${at}: the face sinks ${step * zoom} screen px`);
+      // The cap keeps its size, so the skirt's annulus grows by what the face gives up.
+      const R = Number(attrOf(capOf(idle), 'r'));
+      assert.equal(Number(attrOf(capOf(down), 'r')), R, `${at}: the cap keeps its size`);
+      const skirt = (s) => Math.PI * (R ** 2 - faceR(s) ** 2);
+      assert.ok(skirt(down) > skirt(idle), `${at}: more skirt shows`);
+      // The rim is the same in both states: text.value, never cyan (the gate LED shows the gate).
+      for (const k of ['stroke', 'stroke-width']) {
+        assert.equal(attrOf(capOf(down), k), attrOf(capOf(idle), k), `${at}: the rim's ${k}`);
+      }
+      assert.equal(attrOf(capOf(down), 'stroke'), TOKENS.text.value);
+      // The notch shortens with the face and stays on it.
+      assert.ok(notchArm(down) < notchArm(idle), `${at}: the notch shortens`);
+      assert.ok(Math.abs(notchArm(down) / faceR(down) - notchArm(idle) / faceR(idle)) <= 0.01,
+        `${at}: in proportion to the face`);
+      assert.ok(notchArm(down) < faceR(down), `${at}: the notch on the face`);
+      // No pressed-shadow geometry: the shadow cannot be seen, so it does not move.
+      assert.equal(part(down, 'data-puck-shadow'), part(idle, 'data-puck-shadow'), at);
+    }
+    // At zoom 1 the face goes from Ø20 to Ø17; far out it never sinks past half of itself.
+    assert.equal(faceR(SVG({ gate: true, state: { touched: true } })), 8.5);
+    for (const zoom of [0.25, 0.1, 0.01]) {
+      const r = faceR(SVG({ zoom, gate: true, state: { touched: true } }));
+      assert.ok(r >= xy.PUCK.face / 2 && r < xy.PUCK.face, `zoom ${zoom}: face ${r}`);
+    }
+    for (const state of [{ touched: true }, { touched: true, focus: 'pad' }, {}]) {
+      const pad = slice(SVG({ gate: true, state }), 'data-xy-pad=""');
+      assert.ok(!pad.includes(TOKENS.control.ring), `${JSON.stringify(state)}: no cyan on the pad`);
+    }
+    assert.equal(xy.PUCK.pressed, undefined, 'no pressed shadow');
+    assert.equal(xy.PUCK.ringW, undefined, 'no pressed ring');
     const room = xy.XY.inset - xy.XY.frameW / 2;
-    for (const s of [xy.PUCK.shadow, xy.PUCK.pressed]) assert.ok(s.r + s.dy <= room);
-    assert.ok(xy.PUCK.r + xy.PUCK.ringW / 2 <= room);
-    assert.ok(L.travel.width > 0);
+    assert.ok(xy.PUCK.shadow.r + xy.PUCK.shadow.dy <= room, 'the shadow inside the frame');
+    assert.ok(xy.PUCK.r + xy.PUCK.edgeW / 2 <= room, 'the rim inside the frame');
   });
 
-test('the pad takes the keyboard: a focusable application surface, the gate as aria-pressed',
+test('no sheen on the puck in any state: the relief is skirt, face and rim', async () => {
+  for (const zoom of [0.25, 0.5, 1, 2.5]) {
+    for (const extra of [{}, { gate: true, state: { touched: true } },
+      { state: { disabled: true } }, { gate: true, state: { disabled: true, touched: true } },
+      { state: { focus: 'pad' } }]) {
+      const pad = slice(SVG({ zoom, ...extra }), 'data-xy-pad=""');
+      const at = `zoom ${zoom} ${JSON.stringify(extra)}`;
+      assert.ok(pad.includes('data-puck-face'), `${at}: the puck is drawn`);
+      assert.doesNotMatch(pad, /sheen|<ellipse/, `${at}: no sheen`);
+    }
+  }
+  assert.equal(xy.PUCK.sheen, undefined);
+  assert.doesNotMatch(CODE, /sheen/i, 'the code draws none');
+  // The header says why, and the reason holds in tokens.css.
+  assert.match(SRC, /no neutral role is lighter than the face in both themes/);
+  assert.match(SRC, /the palette is locked/);
+  assert.match(SRC, /relief comes from the skirt, the face and the rim/);
+  const themes = await tokenThemes();
+  const roles = [...new Set(tokenValues().map(varName).filter(Boolean))];
+  const neutral = roles.filter(neutralIn(themes));
+  assert.ok(neutral.includes('--osc-text') && neutral.includes('--osc-surface-1'), 'sanity');
+  const face = varName(attrOf(part(SVG(), 'data-puck-face'), 'fill'));
+  const lighter = neutral.filter((n) => ['dark', 'light'].every((t) => lum(tokenHex(themes[t], n))
+    > lum(tokenHex(themes[t], face))));
+  assert.deepEqual(lighter, [], 'no neutral role lighter than the face in both themes');
+});
+
+test('the face token: of the control roles, the one neutral under --osc-text at 1.3:1',
+  async () => {
+    const themes = await tokenThemes();
+    const face = varName(attrOf(part(SVG(), 'data-puck-face'), 'fill'));
+    const surface = varName(TOKENS.surface.card);
+    const control = [...new Set(Object.values(TOKENS.control).map(varName))];
+    const reach = control.filter(neutralIn(themes)).filter((n) => n !== '--osc-text')
+      .filter((n) => ['dark', 'light'].every((t) => contrastOf(tokenHex(themes[t], n),
+        tokenHex(themes[t], surface)) >= 1.3));
+    assert.deepEqual(reach, [face]);
+    assert.match(SRC, /of the control roles/);
+    assert.doesNotMatch(SRC, /of the layer's neutral roles the only one/);
+  });
+
+test('the pad takes the keyboard: a focusable application surface; the gate read from its LED',
   () => {
+    const KEYS = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp',
+      'PageDown', 'Enter', 'Escape'];
     for (const gate of [false, true]) {
-      const h = /<rect\b[^>]*\sdata-xy-hit="pad"[^>]*>/.exec(SVG({ gate }))[0];
+      const svg = SVG({ gate });
+      const h = /<rect\b[^>]*\sdata-xy-hit="pad"[^>]*>/.exec(svg)[0];
       assert.equal(attrOf(h, 'tabindex'), '0');
       assert.equal(attrOf(h, 'role'), 'application');
       assert.equal(attrOf(h, 'aria-roledescription'), 'XY pad');
       assert.equal(attrOf(h, 'aria-label'), 'XY pad: X Pitch, Y Cutoff');
-      assert.equal(attrOf(h, 'aria-pressed'), String(gate), 'the gate');
+      assert.equal(attrOf(h, 'aria-pressed'), undefined,
+        'ARIA 1.2: aria-pressed is not allowed on role="application" (axe aria-allowed-attr)');
+      assert.equal(attrOf(h, 'data-gate'), String(gate), 'the gate, for hosts');
       assert.equal(attrOf(h, 'aria-disabled'), undefined);
       const keys = attrOf(h, 'aria-keyshortcuts').split(' ');
-      for (const k of ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter']) {
-        assert.ok(keys.includes(k), `aria-keyshortcuts names ${k}`);
-      }
+      for (const k of KEYS) assert.ok(keys.includes(k), `aria-keyshortcuts names ${k}`);
+      assert.deepEqual([...keys].sort(), [...KEYS].sort(), 'and no other');
+      // The gate's accessible state: the labelled LED, outside the hidden drawing.
+      const led = open(slice(svg, 'data-led=""'));
+      assert.equal(attrOf(led, 'role'), 'img');
+      assert.equal(attrOf(led, 'aria-label'), `Gate: ${gate ? 'on' : 'off'}`);
+      assert.equal(attrOf(led, 'aria-hidden'), undefined);
+      assert.ok(!slice(svg, 'data-xy-pad=""').includes('data-led'), 'not under aria-hidden');
     }
+    assert.doesNotMatch(SVG({ gate: true, state: { touched: true } }), /aria-pressed/);
     const off = /<rect\b[^>]*\sdata-xy-hit="pad"[^>]*>/.exec(SVG({ state: { disabled: true } }))[0];
     assert.equal(attrOf(off, 'tabindex'), '-1', 'out of the tab order while disabled');
     assert.equal(attrOf(off, 'aria-disabled'), 'true');
@@ -603,9 +689,16 @@ test('the pad takes the keyboard: a focusable application surface, the gate as a
     // The host owns the keys, as src/js/ui/kinds/xy-pad.js does; the core adds no listener.
     assert.match(SRC, /arrows? move the puck/i);
     assert.match(SRC, /Enter held opens the gate/);
+    assert.match(SRC, /Escape ends the gesture/);
     assert.match(SRC, /xy-pad\.js/);
+    assert.doesNotMatch(SRC, /aria-pressed the gate/);
     assert.doesNotMatch(CODE, /\b(?:addEventListener|onkey\w*|keydown|keyup)\b/);
   });
+
+test('the box comment credits the 0.02 rounding, not the box formula', () => {
+  assert.doesNotMatch(SRC, /box from the rounded edges themselves/);
+  assert.match(SRC, /up\(\) rounds/);
+});
 
 test('every hit holds 44 screen px at every zoom 0.25 to 2.5 (step 0.01), inside the box', () => {
   for (const size of [xy.XY.min, xy.XY.size, 240]) {

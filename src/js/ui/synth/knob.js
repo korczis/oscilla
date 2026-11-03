@@ -224,8 +224,8 @@ export function dragValue(startValue, dy, p, { fine = false,
   return quantize(fromNorm(n, p), p, { fine });
 }
 
-/** The drag, screen px, over a control's whole range at `zoom`: a knob's DRAG_PX_PER_RANGE (it
- *  turns); a fader's cap (its `travel`) and a switch's lever follow the pointer: travel × zoom. */
+/** The drag, screen px, over a control's whole range at `zoom`: a knob's DRAG_PX_PER_RANGE; a
+ *  fader's cap (`travel`: faders only) and a switch's lever follow the pointer: travel × zoom. */
 export function pixelsPerRangeFor(kind, zoom = 1, param, { travel } = {}) {
   if (!Object.hasOwn(CONTROL_BOX, kind)) {
     throw new Error(`pixelsPerRangeFor: kind must be knob, fader or switch, not '${kind}'.`);
@@ -233,8 +233,9 @@ export function pixelsPerRangeFor(kind, zoom = 1, param, { travel } = {}) {
   if (!(Number.isFinite(zoom) && zoom > 0)) {
     throw new RangeError(`pixelsPerRangeFor: zoom must be a finite number above 0, not ${zoom}.`);
   }
+  const tr = travelOf(kind, travel);
   if (kind === 'knob') return DRAG_PX_PER_RANGE;
-  if (kind === 'fader') return travelOf(kind, travel) * zoom;
+  if (kind === 'fader') return tr * zoom;
   return leverOf(switchPositions(param)).travel * zoom;
 }
 
