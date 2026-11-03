@@ -37,8 +37,9 @@ code offline). Today a drum hit is one `event` clip: the demo song (K144) needs 
    gains a maximum of notes per clip and per document, and validate refuses a model over either
    with the limit in its reason, so an import at the byte limit cannot flood the compiler.
 2. **The grid is a projection.** The optional `grid: { stepBeats, steps, swing, seed }` tells the
-   step editor how to draw the array; a step that is on is a note at `at = i x stepBeats`. The
-   grid never moves notes by itself. Changing it is one action, `NOTES_GRID_SET { clipId, grid,
+   step editor how to draw the array; a step that is on is a note at `at = i x stepBeats`. A new
+   step clip gets `steps: 16, stepBeats: 0.25` (one 4/4 bar of sixteenths), one exported constant
+   the editor and the tests share. The grid never moves notes by itself. Changing it is one action, `NOTES_GRID_SET { clipId, grid,
    mode }`, one undo entry: `keep` changes the grid and leaves every note where it is (some may
    become off-grid); `map` scales every note's `at` and `len` by new over old `stepBeats` and is
    refused, model unchanged, if any note would leave the clip; `refuse` applies only when every
