@@ -1,0 +1,39 @@
+id: C024
+milestone: M090
+serves:
+  - "coherent-state#views-describe-what-sounds"
+title: "Keyboard and MIDI notes register with outputOwner, so the scope and its description match what sounds"
+slug: keyboard-and-midi-notes-register-with-outputowner
+priority: p2
+profile: implementation
+objective: "Lands as fix(visualization). After C013 the scope and Spectrum follow outputOwner (src/js/ui/workbench.js outputOwnerOf({ instrument, sequencer, studio })), but keyboard and MIDI notes are not an owner: they reach the scope only through a vizInputs override (src/js/midi/keyboard-ui.js:159-162, vizInputsWithNotes) that outputOwner does not know. Before: while a key is held and nothing else plays, the scope draws the live note while the canvas description and the status bar name no owner (or the instrument at its set frequency). After: held notes (MIDI, computer keys, on-screen keys, in every route) register with the one output-owner computation, the visualization bridge reads outputOwner alone, the vizInputs override is removed, and the drawing, the canvas description and the status bar name the same owner. The newest-action-wins and refusal rules of C002 hold for notes too. Rollback: revert; no saved state changes."
+why: "Review of the feature train #367 (oscilla-af, verdict at 5cad3dcf, finding F5 'D4', P2): keyboard and MIDI notes reach the scope through a vizInputs override that outputOwner does not know, so the canvas description contradicts the drawing. F7 (P3) is the same root: T001's ceiling indicator reads playing || seqPlaying, not the output owner."
+scope:
+  - "src/js/visualization/output-owner.js"
+  - "src/js/visualization/visualization-bridge.js"
+  - "src/js/ui/workbench.js"
+  - "src/js/midi/keyboard-ui.js"
+  - "src/js/midi/ui.js"
+  - "src/js/main.js"
+  - "tests/unit/output-owner.test.mjs"
+  - "tests/browser/midi.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "C013"
+  - "K026"
+acceptance_criteria:
+  - "Fail-first: tests/unit/output-owner.test.mjs asserts that held notes alone make outputOwnerOf name the notes' owner and that the bridge's description names it; it fails on the merge base."
+  - "A static scan finds no reassignment of cmp.vizInputs outside src/js/core/instrument.js; a mutation that restores the override fails."
+  - "tests/browser/midi.cjs holds a computer key and waits with until() (deadline 'notes own the scope', 2 s) for the scope's description and the status bar to name the same owner the drawing shows, and for both to clear after release; through tests/browser/lib/suite.cjs, no fixed sleep, no assumed sample rate, nothing added to tests/browser/timing-baseline.json (project.suite-harness, project.bounded-test-timing)."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "Not a guarded path unless its scope widens to src/js/audio/* or src/js/studio/*; then the pull request carries a reviewer-written .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+  - "Lands after the feature train #367 (K026 keys, C013 output-owner views)."
+validation:
+  - "node --test tests/unit/output-owner.test.mjs"
+  - "node tests/browser/midi.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-01
+updated_at: 2026-11-01
