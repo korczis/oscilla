@@ -20,7 +20,9 @@ without that version: `GUARDED` had no `src/js/synth`, so a pull request changin
 Synth merged with no verdict required. The verification of milestone M064 on 2026-11-03 found
 the gap. Version 2 adds `src/js/synth/*` to `GUARDED`, and
 `tests/unit/review-verdict.test.mjs` pins it and refuses a Synth change without a verdict.
-Nothing else changes. Version 1 is deprecated in favour of this file.
+The Synth's theme layer (`src/js/ui/synth/`) stays unguarded, as UI code, the way
+`src/js/ui/studio/` does: its defects are the suites' and the reviewer's of the guarded
+files it wires. Nothing else changes. Version 1 is deprecated in favour of this file.
 
 # Rationale
 
