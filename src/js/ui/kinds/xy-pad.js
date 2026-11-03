@@ -134,7 +134,7 @@ export function mountXyPad(host, opts) {
     + 'vector-effect="non-scaling-stroke" class="stroke-primary-500" stroke-width="2"/>'
     + '<line data-xy-cy="" x1="0" x2="100" vector-effect="non-scaling-stroke" '
     + 'class="stroke-primary-500" stroke-width="2"/></svg></div>'
-    + `<ol aria-hidden="true" class="mt-1 flex text-[10px] text-gray-500 dark:text-gray-400">`
+    + `<ol aria-hidden="true" class="mt-1 flex text-xs xl:text-[10px] text-gray-500 dark:text-gray-400">`
     + cells.map((c) => `<li class="flex-1 text-center ${c.root ? 'font-bold' : ''}">`
       + `${n <= 29 || c.root ? esc(c.label) : ''}</li>`).join('')
     + `</ol><p id="${uid}-d" class="sr-only">${esc(description)}</p>`

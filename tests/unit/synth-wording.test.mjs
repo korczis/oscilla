@@ -4,7 +4,7 @@
 // self-oscillate, a sample-and-hold of a seeded source.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ROOT = new URL('../../', import.meta.url).pathname;
@@ -17,7 +17,9 @@ const synthMarkup = html.slice(html.indexOf('id="osc-view-synth"'),
   html.indexOf('<!-- ================= STUDIO (V3.1)'));
 const learn = readFileSync(join(ROOT, 'src/js/data/learn.js'), 'utf8');
 const learnSynth = learn.slice(learn.indexOf("id: 'semi-modular-voice'"));
-const SOURCES = [...walk('src/js/synth'), 'src/js/studio/nodes/instrument.js',
+// The shared synth-theme layer (F013, project.visual-identity-lock v4), once it exists.
+const LAYER = existsSync(join(ROOT, 'src/js/ui/synth')) ? walk('src/js/ui/synth') : [];
+const SOURCES = [...walk('src/js/synth'), ...LAYER, 'src/js/studio/nodes/instrument.js',
   'src/js/studio/adapters/instrument.js', 'src/js/studio/live-notes.js',
   // PR B: the engines' definitions, adapters and voice host (K090-K092, K121-K123).
   'src/js/studio/nodes/engines.js', 'src/js/studio/adapters/engines.js',

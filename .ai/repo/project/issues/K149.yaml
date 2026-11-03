@@ -1,0 +1,37 @@
+id: K149
+milestone: M069
+serves:
+- "connected-instrument#riff-library"
+title: A library of original riffs in the styles of genres and eras, inserted as Studio clips
+slug: a-library-of-original-riffs-inserted-as-studio-clips
+priority: p2
+profile: implementation
+objective: "Add src/js/studio/riffs/: library.js holds sixteen short riffs written for OSCILLA on 2026-11-02, each labelled 'Original, in the style of <genre> (<era>)' (disco, synth-funk pop, French house, acid house, synthwave, Berlin school, Italo disco, Detroit techno, West Coast G-funk, drum and bass, chiptune, Detroit soul, trance, new wave, electro-funk, minimal techno), in the demo song's note format ([step, pitch, length, velocity], 16 steps a bar), monophonic, with a role (bass, lead, arp), tempo, key and the voice it was written for. expand.js turns a riff into one BATCH of tempo-linked tone pattern clips on an event track (one Undo removes it) and gives toNotes(riff), the payload of the multi-note clip kind the piano roll brings (lane C+), so the expander alone changes when that kind lands. riffVoiceAction inserts a riff with a voice of its own in the same one batch: the Oscillator and low-pass Filter it was written for, wired to the Master Output (directly, into a free input of the Mixer that feeds it, or through a new Mixer, since the Master's input takes one connection), an event track on the Oscillator and the clips; TRACK_ADD may name an unused id, as NODE_ADD and EDGE_ADD already may. source.js lists the riffs in the one patch library (K102) as the category Riffs, which the Synth and the Studio open in the same dialog: tagged with the role and the genre, the style said beside the name, Insert (riffVoiceAction) the only way in, never shown as in use. audition.js plays a riff as ONE finite steps plan of the engine's play() (the instrument's own path, behind its output guard), Listen stopping the other owners first and Stop, any load, the riff's end or closing the dialog ending it; an ephemeral audition (Q032), never written to the model. Every riff records author OSCILLA, licence MIT and its method (Q079-Q082)."
+why: "Owner direction of 2026-11-02, in Czech: \"chcu mit lib klasickejch riffu - od jacksona, pres daft punk, pres ... az po ...\". A song is somebody's work and is not transcribed or quoted; a style is a shared vocabulary, so each riff is original and names its genre and era only (agreed on the mesh with b0 and 26)."
+scope:
+- src/js/studio/riffs/library.js
+- src/js/studio/riffs/expand.js
+- src/js/studio/actions.js
+- src/js/studio/riffs/source.js
+- src/js/studio/riffs/audition.js
+- src/js/studio/patch-catalog.js
+- src/js/ui/patch-browser.js
+- src/js/ui/studio/workspace.js
+- tests/unit/riff-library.test.mjs
+- tests/browser/synth.cjs
+- dist/index.html
+- tests/README.md
+- .ai/repo/project/intents/connected-instrument.yaml
+- .ai/repo/project/issues/K149.yaml
+acceptance_criteria:
+- "Before: VERIFIED: the Studio has one original song (the demo song) and no riff library."
+- "After: sixteen original riffs in sixteen genres; Insert on an event track adds one tempo-linked tone clip per note as one undoable batch; toNotes gives beats, MIDI numbers and velocity 0..1; Insert with its voice on the reference, demo-song and subtractive-synth templates adds the voice, its path to the Master Output, the track and the clips, compiles, and two inserts take free ids; the patch library's Riffs category lists all sixteen with their style, Listen is heard (RMS above -40 dB rel) and Stop falls below -70 dB rel without an undo entry, and Enter inserts one in one undo entry (synth.cjs s-riffs, chromium, firefox and webkit)."
+- "Negative cases: Insert refuses a missing track, a track of another kind and a start before beat 0, with a reason; a Studio without a Master Output refuses the voice; nothing of the existing graph is removed but the one Master feed a new Mixer takes over."
+- "Rollback: revert the merge commit; no stored record or schema changes."
+validation:
+- node --test tests/unit/riff-library.test.mjs
+- node tests/browser/synth.cjs --only s-riffs,s-library,s-libxy
+evidence_required:
+- verified
+created_at: '2026-11-02'
+updated_at: '2026-11-02'

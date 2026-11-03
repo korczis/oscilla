@@ -30,4 +30,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-03T00:07:23Z
+started_at: 2026-11-03T00:06:39Z
+started_event: sha256:97f7741c8f33ec028d2cc41e84f39fa97c5fc4d55978e3ed29bf41d0d9e0ae94
+completed_at: 2026-11-03T00:07:23Z
+completed_event: sha256:680e5c9347825796a8622bc957d637d987f94e87f4ed5b0de8dafb94dc236deb
+evidence:
+  - covers: verified
+    type: ci
+    command: "node --test tests/unit/mic-detach-on-close.test.mjs; node tests/browser/app.cjs"
+    result: "landed in #367 (main merge commit 11cc9fbc, member #289); mic-detach-on-close unit test and browser check in tests/browser/app.cjs; CI run 41357644373 green on the train head c2a6f6c5; Main checks run 41372186924 green on 11cc9fbc; review verdict .ai/repo/reviews/367.yaml (merge), member verdict .ai/repo/reviews/289.yaml"
+    artifact: ".ai/repo/reviews/367.yaml"
+    commit: 2931af343905d0a432bd8711f18face5d703dd3a
+    recorded_at: 2026-11-03T00:07:13Z

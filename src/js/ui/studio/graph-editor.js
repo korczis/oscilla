@@ -489,9 +489,11 @@ export function createGraphEditor(host, svc) {
   // ---------------------------------------------------------------- gestures and commands
   const base = { viewport, store, registry, svc, view: () => view, setView, clientToGraph,
     isOverViewport };
-  // Unmeasured cards (a hidden graph) count 0: tidyPositions then uses TIDY_DEFAULT_HEIGHT.
+  // L reads the cards as drawn (an unmeasured card, a hidden graph, takes the default geometry).
   const commands = createGraphCommands({ ...base, centerPoint, focusNode, isShown,
-    nodeHeights: () => new Map([...nodeEls].map(([id, en]) => [id, en.el.offsetHeight || 0])) });
+    nodeGeometry: () => new Map([...nodeEls].map(([id, en]) => [id,
+      { h: en.el.offsetHeight || 0, anchors: anchors(en) }])),
+    viewSize: () => { measureSize(); return { ...size }; } });
   const isChrome = (el) => !!el && [controls, banner, minimap.el].some((c) => c.contains(el));
   gestures = createGraphGestures({ ...base, host, preview, marquee, nodeEls, edgeEls,
     banner: { el: banner, text: bannerText, cancel: bannerCancel },

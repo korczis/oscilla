@@ -30,4 +30,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-03T00:09:30Z
+started_at: 2026-11-03T00:08:55Z
+started_event: sha256:92575949d0c63d69656e98d69e2bcd69196d7c0d32d60e5cff20020fba003e69
+completed_at: 2026-11-03T00:09:30Z
+completed_event: sha256:b2f68a8ec6293d1e2b59a013b700d68024cf6bd14f728a250d78c133528a8ce6
+evidence:
+  - covers: verified
+    type: ci
+    command: "node --test tests/unit/sequencer-model.test.mjs tests/unit/control-drive-baseline.test.mjs"
+    result: "met on main 2931af34 per the coherent-state critique (2026-11-03): sequencer.cjs checks the model only, and K002's unit test (sequencer-model.test.mjs: a tempo change changes the offline render length) proves the tempo control's effect; landed with K002 through #266 in #367 (11cc9fbc); review verdict .ai/repo/reviews/367.yaml (merge)"
+    artifact: ".ai/repo/reviews/367.yaml"
+    commit: 2931af343905d0a432bd8711f18face5d703dd3a
+    recorded_at: 2026-11-03T00:09:18Z

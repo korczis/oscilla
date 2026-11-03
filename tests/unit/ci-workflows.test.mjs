@@ -193,10 +193,13 @@ test('mutation: an action on a branch, an image without a tag', () => {
   assert.deepEqual(rules(ci(untagged)), ['pinned@visual']);
 });
 
-test('the gate fails on any job that did not succeed', () => {
+test('the gate fails on any job that did not succeed, but a skip E026 path gating made', () => {
+  // The verdict itself is run with jq on every combination of results in
+  // tests/unit/ci-changes.test.mjs; here, that the gate's step applies it and fails on it.
   const gate = parse(CI).jobs.gate;
   const run = gate.steps.map((s) => s.run || '').join('\n');
-  assert.match(run, /all\(\.value\.result == "success"\)/);
+  assert.match(gate.steps.at(-1).env.VERDICT, /all\(\.value\.result == "success"/);
+  assert.match(run, /jq -e "\$VERDICT"/);
   assert.match(run, /exit 1/);
 });
 

@@ -1,0 +1,21 @@
+id: Q088
+milestone: M121
+title: "Owner decision: which content musical-practice exercises first: the riffs, the patches or the scales"
+slug: owner-decision-which-content-musical-practice-exercises-first
+priority: p2
+profile: routine
+owner: "repository owner"
+objective: "The first exercise type refers to existing OSCILLA content, and the candidates are owned elsewhere: (a) the original riffs of the music library (K149, M120), played back as notes clips; (b) the Studio patches (src/js/studio/patches.js, schema oscilla-patch), an exercise about the sound a patch or parameter makes; (c) scales, which src/js/core/music.js computes (SCALE_MODES, scaleNote) but which no library holds as content entries today. Which comes first? The proposal says 'Create guided exercises only from real, serializable, testable OSCILLA content'."
+why: "The owner's proposal 'Interactive learning and musical practice' (pasted into the af session at 2026-11-03T01:34Z, marked 'Status: PROPOSAL') is recorded as the proposed intent musical-practice, which names no milestone and no criterion; .ai/repo/project/README.md: only the owner, or a session the owner delegated to, answers a Q issue."
+current_state: "Open on 2026-11-03. The plan offers no answer and no recommendation; the slices of musical-practice that wait on it name this issue in depends_on once the intent is planned."
+scope:
+  - ".ai/repo/project/issues/Q088.yaml"
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision), either in the owner's words with date and source, or as a decision of a coordinating session under an owner delegation it quotes with its date, stating its reasoning and that the owner may override it; a worker without such a delegation never answers it."
+  - "The answer names (a), (b) or (c) as the first exercise content, and whether the others follow or are descoped."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-11-03
+updated_at: 2026-11-03

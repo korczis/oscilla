@@ -50,7 +50,9 @@
 //              850.3 Hz)
 //   s-look     the rendered panel: no legacy svg stroke on a jack or a plate, every jack ring and
 //              cable colour 3:1+ and every plate label 4.5:1+ on its background in the dark and
-//              light themes, a focused jack shows its focus ring, a card folds (aria-expanded)
+//              light themes (read from the layer's [data-ring] and [data-stroke] hooks), a nut
+//              under every jack, a plug on each cable end and two screws on every plate (F013
+//              W1), a focused jack shows its focus ring, a card folds (aria-expanded)
 //   s-connect  Enter on a jack opens the connection list (targets, refused ones with reasons);
 //              choosing a target patches; the jack names say which can take the cable
 //   s-dock     K066, beside the piano: the instrument picker is a menu button whose role=menu
@@ -76,8 +78,17 @@
 //   s-libxy    K102 with K097: the library's tag filter 'xy' lists the XY pad's four built-in
 //              presets; Enter on the first applies it in one undo entry and the pad takes its
 //              scale; a name and Save the XY pad as a preset save it, listed under 'xy' at once
+//   s-riffs    K149 with K102: the library's Riffs category lists the original riffs, each said
+//              as "Original, in the style of <genre> (<era>)", Insert its only way in; Listen
+//              is heard (RMS above -40 dB rel), Stop falls below -70 dB rel and neither adds an
+//              undo entry (an ephemeral audition, Q032); Enter
+//              inserts the first in one undo entry: an event track of its name with its clips
+//              on an Oscillator that reaches the Master Output
 //   s-mobile   390 x 844 with touch: no horizontal page scroll, every knob and jack box 44 px+,
-//              a section chip lands its plate's heading below the sticky chip bar, the docked
+//              with six cables patched every jack and cable end scrolls clear of the dock,
+//              the Patch bay chip shows the bay at the card's width with the cards hidden, its
+//              text 12 px+ and no two jack labels overlapping (V636), a section chip brings the
+//              cards back and lands its plate's heading below the sticky chip bar, the docked
 //              keys are visible and a tap on them sounds
 'use strict';
 
@@ -173,11 +184,21 @@ async function openSynth(context, base, hash = '#m=synth') {
   return page;
 }
 const knob = (page, cid) => page.locator(`[data-knob="${cid}"]`);
+/** Below xl the Synth shows one face, the cards or the bay: press its chip when it is not shown
+ *  (at xl the Panel chip is hidden and both faces show, so this does nothing). */
+async function face(page, f) {
+  const chip = page.locator(`[data-face="${f}"]`);
+  if (await chip.isVisible() && await chip.getAttribute('aria-pressed') !== 'true') {
+    await chip.click();
+  }
+}
 async function keyKnob(page, cid, key) {
+  await face(page, 'panel');
   await knob(page, cid).focus();
   await page.keyboard.press(key);
 }
 async function typeKnob(page, cid, text) {
+  await face(page, 'panel');
   await knob(page, cid).focus();
   await page.keyboard.press('Enter');
   const input = page.locator('[data-osc="synth.panel"] input[type="text"]');
@@ -186,6 +207,7 @@ async function typeKnob(page, cid, text) {
 }
 const option = (page, cid, v) => page.locator(`[data-option="${cid}"][data-v="${v}"]`).click();
 async function tapJack(page, id) {
+  await face(page, 'bay');
   await page.locator(`[data-jack="${id}"]`).focus();
   await page.keyboard.press('Enter');
 }
@@ -373,6 +395,7 @@ function defineChecks() {
       await page.keyboard.up(code);
       await silent(page, 'the note releases');
     }
+    await face(page, 'bay');
     await page.locator(`[data-remove-cable="${d.cables[0].id}"]`).click();
     await hold(page, 'KeyD');
     await sound(page, (q) => q.rmsDb > -45 && peakAt(q, C4 * 2 ** (4 / 12)),
@@ -524,6 +547,14 @@ function defineChecks() {
     // The picker: a menu button; the keyboard walks its role=menu items, Enter routes.
     const d0 = await dbg(page);
     const fm = d0.nodes.fm;
+    // V635: on a phone the instrument row is folded behind the dock's More button.
+    const more = page.locator('[data-osc="keyboard.more"]');
+    if (await more.isVisible()) {
+      await more.click();
+      await until(() => page.locator('[data-osc="synth.pick"]').isVisible(),
+        { ms: 5000, what: 'More unfolds the instrument row' });
+      out.unfolded = await more.getAttribute('aria-expanded');
+    }
     const pick = page.locator('#osc-synth-pick');
     await pick.focus();
     await page.keyboard.press('Enter');
@@ -714,6 +745,66 @@ function defineChecks() {
     return { ok: built === 4 && p.mode === 'minor-pentatonic', built, mode: p.mode };
   });
 
+  def('s-riffs', async ({ page }) => {
+    const depth = () => page.evaluate(() => window.OSCILLA.studio.store.debugInfo().undoDepth);
+    await page.locator('[data-osc="synth.library"]').click();
+    const list = page.locator('[data-osc="library.list"]');
+    await until(() => list.isVisible(), { ms: 10000, what: 'the patch library opens' });
+    const inst = page.locator('[data-osc="library.instrument"]');
+    await until(async () => (await inst.locator('option[value="riffs"]').count()) === 1,
+      { ms: 10000, what: 'the Riffs category is offered' });
+    await inst.selectOption('riffs');
+    const options = list.locator('[role="option"]');
+    const count = await options.count();
+    const name = await page.locator('[data-osc="library.name"]').textContent();
+    const style = await page.locator('[data-osc="library.detail.text"]').textContent();
+    const modes = await page.locator('[data-osc="library.detail"] [data-mode]')
+      .evaluateAll((els) => els.map((el) => el.getAttribute('data-mode')));
+    const before = await depth();
+    const listen = page.locator('[data-osc="library.listen"]');
+    await listen.click();
+    const heard = await sound(page, (q) => q.rmsDb > -40, 'Listen plays the riff');
+    // What sounds is the riff's own plan, never the instrument's tone rebuilt over it.
+    const plan = await page.evaluate(() => {
+      const v = window.OSCILLA.engine.voice;
+      return v && v.plan ? v.plan.label : null;
+    });
+    const pressed = await listen.getAttribute('aria-pressed');
+    // Stopped from outside (any other owner's stop): the button follows the sound at once.
+    await page.evaluate(() => window.OSCILLA.engine.stopAll());
+    await until(async () => (await listen.getAttribute('aria-pressed')) === 'false', { ms: 2000,
+      what: 'a stop from outside releases the Listen button' });
+    await listen.click();
+    await sound(page, (q) => q.rmsDb > -40, 'Listen plays the riff again');
+    await listen.click();
+    const hushed = await sound(page, (q) => q.rmsDb < -70, 'Stop ends the audition');
+    const unsaved = (await depth()) === before;
+    await list.focus();
+    await page.keyboard.press('Enter');
+    await until(async () => (await depth()) === before + 1, { ms: 5000,
+      what: 'Enter inserts the first riff in one undo entry' });
+    const added = await page.evaluate((title) => {
+      const m = window.OSCILLA.studio.model;
+      const track = m.timeline.tracks.find((t) => t.name === title);
+      const osc = track && m.graph.nodes.find((n) => n.id === track.target);
+      const master = m.graph.nodes.find((n) => n.type === 'master');
+      const reach = new Set(osc ? [osc.id] : []);
+      for (let grew = true; grew;) {
+        grew = false;
+        for (const e of m.graph.edges) {
+          if (reach.has(e.from.node) && !reach.has(e.to.node)) grew = !!reach.add(e.to.node);
+        }
+      }
+      return { track: !!track, osc: osc ? osc.type : null, master: !!master && reach.has(master.id),
+        clips: track ? m.timeline.clips.filter((c) => c.trackId === track.id).length : 0 };
+    }, name);
+    return { ok: count >= 12 && /^Original, in the style of /.test(style)
+      && JSON.stringify(modes) === '["insert"]' && added.track && added.osc === 'oscillator'
+      && added.master && added.clips > 0 && pressed === 'true' && unsaved
+      && plan === `Riff ${name}`, plan, count, name, style,
+    modes, added, heard: heard.rmsDb, hushed: hushed.rmsDb, pressed, unsaved };
+  });
+
   def('s-escape', async ({ page }) => {
     await hold(page, 'KeyA');
     await sound(page, (q) => q.rmsDb > -40, 'a held note sounds');
@@ -825,16 +916,24 @@ function defineChecks() {
         + '[data-jack] > :nth-child(4)')].concat([...document.querySelectorAll(
         '[data-module] > svg rect')]).filter((el) => getComputedStyle(el).stroke !== 'none')
         .length;
-      const rings = [...svg.querySelectorAll('[data-jack] > :nth-child(3)')]
+      // The layer's hooks (ui/synth/jack.js, cable.js), never child order.
+      const rings = [...svg.querySelectorAll('[data-jack] [data-ring]')]
         .map((el) => ratio(paint(el.getAttribute('stroke')), card));
-      const wires = [...svg.querySelectorAll('[data-cable] > path:last-child')]
+      const wires = [...svg.querySelectorAll('[data-cable] [data-stroke]')]
         .map((el) => ratio(paint(el.getAttribute('stroke')), card));
+      // F013 W1: a nut under every jack, a plug on each cable end, two screws on every plate.
+      const PLATE = '[data-osc="synth.panel"] section[data-module]:not([data-osc="synth.bay"])';
+      const hw = { nuts: svg.querySelectorAll('[data-nut]').length,
+        jacks: svg.querySelectorAll('[data-jack]').length,
+        plugs: svg.querySelectorAll('[data-plug]').length,
+        plates: document.querySelectorAll(PLATE).length,
+        screws: document.querySelectorAll(`${PLATE} [data-screw]`).length };
       const top = paint(getComputedStyle(document.querySelector('[data-osc="synth.panel"]'))
         .getPropertyValue('--osc-surface-3'));
       const labels = [...document.querySelectorAll('[data-module] [id$="-label"]')]
         .map((el) => ratio(hex(getComputedStyle(el).color), top));
       return { card, leaks, ring: Math.min(...rings), wire: Math.min(...wires),
-        label: Math.min(...labels), wires: wires.length };
+        label: Math.min(...labels), wires: wires.length, hw };
     });
     // One cable from each of the six source colours' modules, so every cable colour is drawn.
     for (const [a, b] of [['keys.velocity', 'vco2.tune'], ['vco1.audio', 'ring.modulator'],
@@ -852,9 +951,9 @@ function defineChecks() {
       await until(() => page.evaluate((t) => {
         const doc = document.documentElement;
         const dim = getComputedStyle(doc).getPropertyValue('--osc-text-dim').trim();
-        const ring = document.querySelector('[data-jack="out.audio:in"] > :nth-child(3)');
+        const ring = document.querySelector('[data-jack="out.audio:in"] [data-ring]');
         return doc.dataset.theme === t && ring && ring.getAttribute('stroke') !== null
-          && document.querySelector('[data-jack="mg.rate:in"] > :nth-child(3)')
+          && document.querySelector('[data-jack="mg.rate:in"] [data-ring]')
             .getAttribute('stroke') === dim;
       }, theme), { ms: 10000, what: `the ${theme} theme redraws the bay` });
       themes[theme] = await look();
@@ -871,6 +970,7 @@ function defineChecks() {
         off: other && getComputedStyle(other).opacity };
     });
     // Fold: a card header is a disclosure button.
+    await face(page, 'panel');
     await page.locator('[data-collapse="lpf"]').click();
     const fold = await page.evaluate(() => ({
       expanded: document.querySelector('[data-collapse="lpf"]').getAttribute('aria-expanded'),
@@ -878,7 +978,9 @@ function defineChecks() {
       summary: !!document.querySelector('[data-summary="lpf"]') }));
     await page.locator('[data-fold-all="open"]').click();
     const ok = Object.values(themes).every((t) => t.leaks === 0 && t.ring >= 3 && t.wire >= 3
-      && t.label >= 4.5 && t.wires === 6) && focus.on === '1' && focus.off === '0'
+      && t.label >= 4.5 && t.wires === 6 && t.hw.nuts === t.hw.jacks && t.hw.jacks > 0
+      && t.hw.plugs === 12 && t.hw.plates > 0 && t.hw.screws === 2 * t.hw.plates)
+      && focus.on === '1' && focus.off === '0'
       && fold.expanded === 'false' && fold.knobs === 0 && fold.summary;
     return { ok, themes, focus, fold };
   });
@@ -913,9 +1015,84 @@ function defineChecks() {
       }).map((el) => el.getAttribute('data-knob') || el.getAttribute('data-option')
         || (el.parentNode && el.parentNode.getAttribute && el.parentNode.getAttribute('data-jack')));
       const kb = document.querySelector('[data-osc="keyboard.keys"]').getBoundingClientRect();
+      // The text floor (ui/synth/label.js, F013 W1): no plate text below 12 px.
+      const tiny = [...document.querySelectorAll('[data-osc="synth.panel"] [data-module] '
+        + 'span, [data-osc="synth.panel"] [data-module] output, '
+        + '[data-osc="synth.panel"] [data-module] p')]
+        .filter((el) => el.getBoundingClientRect().width > 0
+          && parseFloat(getComputedStyle(el).fontSize) < 12)
+        .map((el) => (el.id || el.className || el.tagName).slice(0, 40));
       return { scroll: document.documentElement.scrollWidth, inner: window.innerWidth,
-        small, kb: { top: kb.top, bottom: kb.bottom, h: window.innerHeight } };
+        small, tiny, kb: { top: kb.top, bottom: kb.bottom, h: window.innerHeight } };
     });
+    // The bay face (B2): the whole width under the chip bar, its text 12 px and up, every
+    // jack a 44 px target; a module chip brings the cards back.
+    await page.locator('[data-face="bay"]').tap();
+    const bay = await page.evaluate(() => {
+      const svg = document.querySelector('[data-osc="synth.bay.svg"]').getBoundingClientRect();
+      const bar = document.querySelector('nav[aria-label="Synth sections"]')
+        .getBoundingClientRect();
+      const cards = document.querySelector('[data-face-of="panel"]').getBoundingClientRect();
+      const fonts = [...document.querySelectorAll('[data-osc="synth.bay.svg"] text')]
+        .map((t) => parseFloat(getComputedStyle(t).fontSize));
+      const jacks = [...document.querySelectorAll('[data-jack] > rect:first-child')]
+        .map((r) => r.getBoundingClientRect()).filter((r) => r.width < 43.5 || r.height < 43.5);
+      const labels = [...document.querySelectorAll('[data-jack] text')]
+        .map((t) => t.getBoundingClientRect());
+      const overlaps = labels.filter((a, i) => labels.some((b, k) => k > i
+        && a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5
+        && b.top < a.bottom - 0.5)).length;
+      const card = document.querySelector('[data-osc="synth.bay"]');
+      return { width: Math.round(svg.width), card: Math.round(card.clientWidth),
+        inner: window.innerWidth,
+        gap: Math.round(svg.top - bar.bottom), cardsHidden: cards.height === 0,
+        minFont: Math.min(...fonts), small: jacks.length, overlaps,
+        pressed: document.querySelector('[data-face="bay"]').getAttribute('aria-pressed') };
+    });
+    if (!(bay.cardsHidden && bay.card >= bay.inner - 56 && bay.width >= bay.card - 25
+      && bay.minFont >= 12 && !bay.small
+      && !bay.overlaps && bay.pressed === 'true')) {
+      return { ok: false, detail: 'the bay face', bay };
+    }
+    // No control may be covered (phone-whole): with six cables patched, every jack and every
+    // cable end scrolls clear of the dock (the page pads its bottom by --osc-dock-h) and below
+    // the chip bar, and a tap there lands on the jack itself (a plug takes no pointer).
+    for (const [a, b] of [['keys.velocity', 'vco2.tune'], ['vco1.audio', 'ring.modulator'],
+      ['vco2.audio', 'mix.in4'], ['ring.audio', 'mix.in3'], ['noise.audio', 'mix.in1'],
+      ['mix.audio', 'vca.audio']]) {
+      await tapJack(page, `${a}:out`);
+      await tapJack(page, `${b}:in`);
+    }
+    const reach = await page.evaluate(() => {
+      const dock = document.getElementById('osc-keyboard').getBoundingClientRect();
+      const bar = document.querySelector('nav[aria-label="Synth sections"]')
+        .getBoundingClientRect();
+      const svg = document.querySelector('[data-osc="synth.bay.svg"]');
+      const ends = [...svg.querySelectorAll('[data-jack]')].map((el) => [el, el])
+        .concat([...svg.querySelectorAll('[data-plug] circle:first-child')]
+          .map((el) => [el, null]));
+      // The scroller: the nearest ancestor that scrolls, else the page. An explicit scroll, as
+      // Firefox does not scroll an SVG <g> by scrollIntoView.
+      let box = svg.parentElement;
+      while (box && !(box.scrollHeight > box.clientHeight
+        && /auto|scroll/.test(getComputedStyle(box).overflowY))) box = box.parentElement;
+      const scroller = box || document.scrollingElement;
+      const covered = [];
+      for (const [el, self] of ends) {
+        const q = el.getBoundingClientRect();
+        scroller.scrollBy(0, q.top + q.height / 2 - (bar.bottom + dock.top) / 2);
+        const r = el.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        const jack = hit && hit.closest('[data-jack]');
+        if (r.bottom > dock.top || r.top < bar.bottom || !jack || (self && jack !== self)) {
+          covered.push((self || el.parentNode).getAttribute('data-jack') || 'plug');
+        }
+      }
+      return { ends: ends.length, covered, dock: Math.round(dock.height) };
+    });
+    if (reach.ends !== 62 + 12 || reach.covered.length) {
+      return { ok: false, detail: 'a jack or a cable end stays under the dock', reach };
+    }
     await page.locator('[data-goto="lpf"]').tap();
     const chip = await page.evaluate(() => {
       const h = document.querySelector('#synth-m-lpf').getBoundingClientRect();
@@ -933,8 +1110,9 @@ function defineChecks() {
     const p = await sound(page, (q) => q.rmsDb > -45, 'a press on the docked keys sounds');
     await page.mouse.up();
     await silent(page, 'releasing the key silences it');
-    return { ok: m.scroll <= m.inner && m.small.length === 0 && m.kb.bottom <= m.kb.h
-      && m.kb.top > 0, ...m, chip, rmsDb: p.rmsDb };
+    return { ok: m.scroll <= m.inner && m.small.length === 0 && m.tiny.length === 0
+      && m.kb.bottom <= m.kb.h
+      && m.kb.top > 0, ...m, bay, reach, chip, rmsDb: p.rmsDb };
   });
   return checks;
 }

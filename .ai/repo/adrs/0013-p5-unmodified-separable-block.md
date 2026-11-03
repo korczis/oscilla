@@ -131,3 +131,12 @@ One Mac (Apple M5 Pro, Chromium 153, Playwright 1.63.0) under a 1-minute load of
   `verify-dist`'s vendor check, the p5 notice and this decision's replaceability guarantee
   would be retired; a view that needs a p5 call outside the 45 adds it to the adapter first.
   Adopting it supersedes this decision and the first rejected alternative, the owner's call.
+
+### 2026-11-03: the Canvas2D adapter never reached main
+
+The adapter named in the 2026-10-18 cost note, `src/js/visualization/canvas2d-p5.js`, exists
+only on the spike branch `spike/p5-canvas2d` (added by b57d41b5, "Spike only: spike/p5-canvas2d
+is never opened for merge"); `git merge-base --is-ancestor b57d41b5 origin/main` is false, and
+no commit of main has ever held the file. Main still ships p5 unmodified as the vendor block
+`data-vendor="p5@1.11.3"` from `VENDOR_SCRIPTS` in `scripts/build-config.mjs`, so the decision
+above stands as accepted.

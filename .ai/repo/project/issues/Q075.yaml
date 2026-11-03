@@ -1,0 +1,32 @@
+id: Q075
+milestone: M119
+title: "Owner decision: the first slice of song-reconstruction (Q-D)"
+slug: owner-decision-the-first-slice-of-song-reconstruction-q-d
+priority: p2
+profile: routine
+owner: "repository owner"
+objective: "Wait for connected-instrument's real clip kinds and tempo map (K099 notes clips, K109 audio clips and K112 the tempo and meter map, under M069 and M072), or allow a first import cut into the existing event and pattern kinds that states what it drops? The draft recommended waiting."
+why: "The owner handed over the OSCILLA RECONSTRUCT pack (OSCILLA_RECONSTRUCT_MASTER_PROMPT.md, the owner's local copy, 2026-11-02, marked 'Status: PROPOSAL'), recorded as the proposed intent song-reconstruction; the research that mapped it onto the plan (P00 gap map and P01 alignment, measured on origin/main b938129) drafted this question; .ai/repo/project/README.md: only the owner, or a session the owner delegated to, answers a Q issue."
+current_state: "Answered by the owner on 2026-11-02 at about 22:20 UTC (owner, AskUserQuestion in the oscilla-b0 session, 2026-11-02; see evidence): \"M071/M072 first (Recommended)\". First the real audio and notes clips plus a tempo map enter the Studio schema, with a migration; the import comes after them, with no temporary kinds. The other options offered in that exchange were not relayed to this record."
+scope:
+  - ".ai/repo/project/issues/Q075.yaml"
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision), in the owner's words with date and source; a worker never answers it."
+  - "The answer says whether the import waits for the real clip kinds and the tempo map or targets the existing kinds first."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-11-02
+updated_at: 2026-11-02T22:32:00Z
+started_at: 2026-11-02T22:31:42Z
+started_event: sha256:ac9d5de74f9a3906b6f220b1322cbc6b22ab25ec1b2ba210548dafeda36aa898
+completed_at: 2026-11-02T22:32:00Z
+completed_event: sha256:9e11cf7144d8d2cbed06b58c58eaed4d514de1dd3be1d4d17e39c26868e07662
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "AskUserQuestion in Claude Code session oscilla-b0, 2026-11-02, about 22:20 UTC (owner, AskUserQuestion in the oscilla-b0 session, 2026-11-02)"
+    result: "Owner answered on 2026-11-02 (owner, AskUserQuestion in the oscilla-b0 session, 2026-11-02): \"M071/M072 first (Recommended)\". First the real audio and notes clips plus a tempo map in the Studio schema, with a migration; the import comes after them, with no temporary kinds."
+    commit: 2fe68de1c36d5a89aa1c9b336673bfdc1084bb89
+    recorded_at: 2026-11-02T22:31:54Z
