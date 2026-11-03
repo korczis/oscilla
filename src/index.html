@@ -261,7 +261,7 @@
       <span class="osc-safety-more" id="osc-safety-more" :class="{ 'is-open': safetyExpanded }">
         Perceived loudness is not a reliable measure of acoustic output. Digital signal generation
         does not guarantee that your hardware reproduces the requested frequency.</span>
-      <button type="button" class="osc-safety-toggle" aria-controls="osc-safety"
+      <button type="button" class="osc-safety-toggle [@media(pointer:coarse)]:!inline-flex [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11 [@media(pointer:coarse)]:items-center [@media(pointer:coarse)]:justify-center [@media(pointer:coarse)]:align-middle" aria-controls="osc-safety"
         aria-expanded="false" :aria-expanded="String(safetyExpanded)"
         @click="safetyExpanded = !safetyExpanded" x-text="safetyExpanded ? 'Less' : 'More'">More</button>
     </p>
@@ -1865,17 +1865,18 @@
     <!-- ---------- Keyboard (K026; ADR 0058, ADR 0062): the computer keyboard and the
          on-screen keys play the note voices of the AudioEngine (src/js/midi/keyboard-ui.js), in
          the Playground and the Studio, each armed on its own. The keys are a canvas domain view;
-         the controls are native buttons that carry only Tailwind's 44 px minimum on a coarse
-         pointer (the touch-target rule) until the keyboard moves into its Pro card (plan F001
+         the controls are Pro buttons, 44 px on a coarse pointer (the touch-target rule,
+         V634), until the keyboard moves into its Pro card (plan F001
          to F003). -->
     <div id="osc-keyboard" data-osc="keyboard" role="group" aria-labelledby="osc-kbd-title"
       x-show="kbdView" x-cloak
       :class="kbdView === 'synth' ? 'fixed inset-x-0 bottom-[var(--osc-statusbar-h)] z-30 max-h-[45vh] overflow-y-auto border-t border-solid border-gray-200 bg-white px-4 py-2 shadow dark:border-gray-700 dark:bg-gray-800' : ''">
-      <h2 id="osc-kbd-title">Keyboard</h2>
+      <h2 id="osc-kbd-title" :class="kbdView === 'synth' && 'sr-only sm:not-sr-only'">Keyboard</h2>
       <!-- K066, beside the piano in the Synth: a Pro dropdown of what the keys play, a Pro button
            group of the waveform, the quick presets (src/js/synth/picker.js, presets.js). -->
-      <div class="mb-2 flex items-center gap-2" data-osc="synth.dock"
-        x-show="kbdView === 'synth'" role="group" aria-label="Instrument">
+      <div class="mb-2 flex items-center gap-2" data-osc="synth.dock" id="osc-synth-dock"
+        x-show="kbdView === 'synth'" role="group" aria-label="Instrument"
+        :class="!kbdMore && 'max-sm:hidden'">
         <div class="relative" x-init="synthDockRoving($el, false)">
           <button type="button" id="osc-synth-pick" x-ref="pick" data-osc="synth.pick"
             @click.outside="synth.dock.open = false"
@@ -1910,27 +1911,32 @@
         </template>
         </div>
       </div>
-      <div role="group" aria-label="Keyboard controls" aria-describedby="osc-kbd-readout">
+      <div role="group" aria-label="Keyboard controls" aria-describedby="osc-kbd-readout"
+        class="mb-2 flex flex-wrap gap-2">
         <button type="button"
-          class="[@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
-          data-osc="keyboard.arm" :aria-pressed="String(kbdArmedHere)"
+          
+          data-osc="keyboard.arm" :class="[kbdBtn, kbdView === 'synth' && !kbdMore && 'max-sm:hidden']" :aria-pressed="String(kbdArmedHere)"
           @click="kbdToggle()" x-text="kbdArmedHere ? 'Disarm keys' : 'Arm keys'">Arm keys</button>
         <button type="button"
-          class="[@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
+          :class="kbdBtn"
           data-osc="keyboard.octave-down" aria-keyshortcuts="Z"
           @click="kbdControl('octave-down')">Octave −</button>
         <button type="button"
-          class="[@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
+          :class="kbdBtn"
           data-osc="keyboard.octave-up" aria-keyshortcuts="X"
           @click="kbdControl('octave-up')">Octave +</button>
         <button type="button"
-          class="[@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
-          data-osc="keyboard.velocity-down" aria-keyshortcuts="C"
+          
+          data-osc="keyboard.velocity-down" :class="[kbdBtn, kbdView === 'synth' && !kbdMore && 'max-sm:hidden']" aria-keyshortcuts="C"
           @click="kbdControl('velocity-down')">Velocity −</button>
         <button type="button"
-          class="[@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
-          data-osc="keyboard.velocity-up" aria-keyshortcuts="V"
+          
+          data-osc="keyboard.velocity-up" :class="[kbdBtn, kbdView === 'synth' && !kbdMore && 'max-sm:hidden']" aria-keyshortcuts="V"
           @click="kbdControl('velocity-up')">Velocity +</button>
+        <button type="button" data-osc="keyboard.more" x-show="kbdView === 'synth'"
+          aria-controls="osc-synth-dock" :aria-expanded="String(kbdMore)" @click="kbdMore = !kbdMore"
+          x-text="kbdMore ? 'Fewer' : 'More'"
+          class="inline-flex h-9 items-center justify-center rounded-lg border border-solid border-gray-300 bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 sm:hidden dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11">More</button>
       </div>
       <p id="osc-kbd-readout" data-osc="keyboard.readout" role="status" x-text="kbdReadout"
         :class="kbdView === 'synth' && 'sr-only sm:not-sr-only'"></p>

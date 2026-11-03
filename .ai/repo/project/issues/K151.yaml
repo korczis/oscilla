@@ -1,0 +1,30 @@
+id: K151
+milestone: M067
+serves:
+- "connected-instrument#patch-bay-generic"
+title: The patch bay's modules sit on tonal plates, as the identity lock allows
+slug: the-patch-bay-is-drawn-as-hardware
+priority: p2
+profile: implementation
+objective: "Draw each module of the generic patch bay (ui/patch/patch-bay.js) on a plate, the treatment visual-identity-lock v3 allows the Synth panel surface: a tonal gradient between two OSCILLA tokens (plateHi to plateLo), its label as text, no screws, rivets, nuts, plugs, sheen or texture. Cables keep their sag and soft shadow and thicken on hover. Plates take no pointer (the jacks and cables under them do) and every shape sets its own stroke. A first draft drew screws, hex nuts, seated plugs and a cable sheen; the lock forbids screws outright and allows no more than the plate gradient, ring jacks and sagging cables, so they were removed before review. They return only through an amendment of the lock (the owner's question, raised by prismatic-majordomus-98 on 2026-11-02)."
+why: "Owner direction of 2026-11-02, in Czech: \"patchbay ... viditelne, hezke, sexy, funkni\", \"vic visible\", \"vic visual\" and \"vylepsi patchbay\". The bay was a flat grid of glyphs on the card, its modules told apart by labels alone and its cables ending in nothing."
+scope:
+- src/js/ui/patch/patch-bay.js
+- tests/unit/patch-bay-hardware.test.mjs
+- tests/README.md
+- .ai/repo/project/issues/K151.yaml
+- dist
+depends_on:
+- K150
+acceptance_criteria:
+- "Before: VERIFIED: the bay draws glyphs and labels on the card with no module surface."
+- "After: every module sits on a tonal plate with its label; no screws, nuts, plugs, sheen or texture are drawn; cables thicken on hover; the jacks' rings, focus, labels and hit targets are unchanged."
+- "Negative cases: a tap on a plug or a plate reaches the jack or the cable under it; no shape inherits the legacy svg stroke; both themes hold the jack-ring and cable contrast of s-look."
+- "Rollback: revert the merge commit; no stored record or schema changes."
+validation:
+- node --test tests/unit/patch-bay-hardware.test.mjs
+- node tests/browser/synth.cjs
+evidence_required:
+- verified
+created_at: '2026-11-02'
+updated_at: '2026-11-02'

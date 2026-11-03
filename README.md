@@ -664,8 +664,8 @@ through the user's whole journey in Chromium, Firefox and WebKit:
 Each gap above is an expected failure of that suite, named by its plan issue. It runs every
 time, and it fails the suite once it starts passing, so its mark is removed when the work
 lands. MIDI notes sounding through the engine (V502), a Drive node for the driven tone (K012)
-and a keyboard view whose key lights and sounds (K026, V504) have landed: the suite checks
-them as steps of the journey.
+and a keyboard view whose key lights and sounds (K026) have landed: the suite checks them as
+steps of the journey. The notes beside the spectrum and waveform (V504) have not.
 
 ## Safety and measurement limits
 
