@@ -9,8 +9,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import {
-  CABLE_DASH, CABLE_HIT_PX, CABLE_MAX_SAG, CABLE_MIN_SAG, CABLE_REACH, REFUSED_DASH, cableCurve,
-  cableParts, cableSvg, plugSvg,
+  CABLE_DASH, CABLE_HIT_PX, CABLE_MAX_SAG, CABLE_MIN_SAG, CABLE_REACH, REFUSED_DASH, SETTLE_MS,
+  cableCurve, cableParts, cableSag, cableSvg, plugSvg, settle,
 } from '../../src/js/ui/synth/cable.js';
 import { TOKENS, colourLiterals, shapesWithoutStroke, paints, tokenValues, intensityLiterals }
   from './ui-synth-fixture.mjs';
@@ -896,4 +896,143 @@ test('tangents: less than one reach behind, the cable folds only near its ends',
       }
     }
   }
+});
+
+// ---------------------------------------------------------------- settle (plan S4 c)
+
+const L0 = { x: 100, y: 100 };
+const L1 = { x: 340, y: 100 };
+/** Runs settle frame by frame from `state` with fixed ends; the trajectory and the time. */
+function run(state, ends, dts, opts) {
+  const out = [];
+  let s = state;
+  let t = 0;
+  for (const dt of dts) {
+    s = settle(s, ends, dt, opts);
+    t += dt;
+    out.push({ t, ...s });
+    if (s.settled) break;
+  }
+  return out;
+}
+const frames = (dt, ms = 2000) => Array.from({ length: Math.ceil(ms / dt) }, () => dt);
+
+test('cableSag is the sag cableCurve hangs, and cableCurve draws a sag it is given', () => {
+  for (const [a, b, o] of [[L0, L1, {}], [A, B, { slack: 0.1 }], [{ x: 0, y: 380 },
+    { x: 1800, y: 380 }, { box: { x: 0, y: 0, width: 1900, height: 400 } }], [A, A, {}]]) {
+    const s = cableSag(a, b, o);
+    assert.ok(Math.abs(sagOf(a, b, o) - s) < 1e-5, `${s} vs ${sagOf(a, b, o)}`);
+    assert.equal(cableCurve(a, b, { ...o, sag: s }), cableCurve(a, b, o));
+  }
+  assert.ok(Math.abs(sagOf(L0, L1, { sag: 7 }) - 7) < 1e-5, 'below the minimum, as told');
+  assert.ok(Math.abs(sagOf(L0, L1, { sag: 0 })) < 1e-9, 'a taut cable');
+  const box = { x: 0, y: 0, width: 400, height: 120 };
+  assert.ok(lowest(cableCurve(L0, L1, { box, sag: 500 })) <= 120 + 1e-6, 'the box still wins');
+  for (const bad of [-1, NaN, Infinity, '3']) {
+    assert.throws(() => cableCurve(L0, L1, { sag: bad }), /sag/, String(bad));
+  }
+});
+
+test('settle: a dropped cable falls to its rest, overshoots at most once, within 400 ms', () => {
+  assert.equal(SETTLE_MS, 400);
+  const ends = { from: L0, to: L1 };
+  const rest = cableSag(L0, L1);
+  for (const dt of [1000 / 60, 1000 / 120, 1000 / 30, 7]) {
+    for (const sag of [0, rest / 2, rest + 30, CABLE_MAX_SAG + CABLE_MIN_SAG]) {
+      const path = run({ from: L0, to: L1, sag }, ends, frames(dt));
+      const end = path[path.length - 1];
+      const where = `dt ${dt.toFixed(2)}, from sag ${sag}`;
+      assert.ok(end.settled, `${where}: settles`);
+      assert.ok(end.t <= SETTLE_MS + dt, `${where}: within 400 ms (${end.t.toFixed(1)})`);
+      assert.equal(end.sag, rest, `${where}: exactly at rest`);
+      assert.equal(end.velocity, 0);
+      const side = Math.sign(sag - rest);
+      const far = path.map((p) => (p.sag - rest) * -side);
+      const peaks = [];
+      for (let i = 1; i < far.length - 1; i++) {
+        if (far[i] > 0.5 && far[i] >= far[i - 1] && far[i] >= far[i + 1]) peaks.push(far[i]);
+      }
+      assert.ok(peaks.length <= 1, `${where}: overshoots ${peaks.length} times`);
+      if (sag === 0) assert.equal(peaks.length, 1, `${where}: a long drop swings past once`);
+      const back = path.map((p) => (p.sag - rest) * side);
+      const crossed = far.findIndex((x) => x > 0);
+      if (crossed >= 0) {
+        assert.ok(Math.max(...back.slice(crossed)) <= 0.5, `${where}: no second swing`);
+      }
+      if (sag !== rest) assert.ok(path.length > 2, `${where}: it moves, over frames`);
+    }
+  }
+});
+
+test('settle: a moved end swings the cable (its middle lags), then it settles', () => {
+  const near = { x: 180, y: 100 };
+  const rest0 = cableSag(L0, near);
+  assert.equal(rest0, 20);
+  const still = { from: L0, to: near, sag: rest0, velocity: 0 };
+  const up = { from: { x: 100, y: 70 }, to: { x: 180, y: 70 } };
+  const first = settle(still, up, 1000 / 60);
+  assert.ok(first.sag > rest0 + 20, `lifting both ends 30 leaves the middle low (${first.sag})`);
+  assert.ok(!first.settled);
+  assert.deepEqual([first.from, first.to], [up.from, up.to], 'the state carries the new ends');
+  const path = run(first, up, frames(1000 / 60));
+  assert.ok(path[path.length - 1].settled);
+  assert.ok(path[path.length - 1].t <= SETTLE_MS, `${path[path.length - 1].t}`);
+  const far = { from: L0, to: { x: 900, y: 100 } };
+  assert.ok(Math.abs(settle(still, { from: L0, to: near }, 0).sag - rest0) < 1e-9, 'still');
+  const longer = settle(still, far, 16);
+  assert.equal(longer.rest, cableSag(L0, far.to), 'the rest follows the new ends');
+  assert.ok(Math.abs(longer.sag - longer.rest) > 1, 'and the cable moves toward it');
+});
+
+test('settle: the sag stays in [0, the room under the box], whatever the move', () => {
+  const box = { x: 0, y: 0, width: 600, height: 160 };
+  let s = { from: L0, to: L1, sag: 30 };
+  const moves = [{ x: 100, y: 10 }, { x: 100, y: 150 }, { x: 100, y: -200 }, { x: 100, y: 100 }];
+  for (const m of moves) {
+    for (let i = 0; i < 30; i++) {
+      s = settle(s, { from: m, to: L1 }, 16, { box });
+      assert.ok(s.sag >= 0, `${s.sag}`);
+      const low = lowest(cableCurve(m, L1, { box, sag: s.sag }));
+      assert.ok(low <= 160 + 1e-6, `below the box: ${low}`);
+      assert.ok(Number.isFinite(s.velocity));
+    }
+  }
+});
+
+test('settle: reduced motion lands at the rest at once', () => {
+  const rest = cableSag(L0, L1);
+  for (const sag of [0, rest + 40]) {
+    const s = settle({ from: L0, to: L1, sag, velocity: 300 }, { from: L0, to: L1 }, 16,
+      { reducedMotion: true });
+    assert.deepEqual({ sag: s.sag, velocity: s.velocity, settled: s.settled },
+      { sag: rest, velocity: 0, settled: true });
+  }
+  const moved = settle({ from: L0, to: L1, sag: rest }, { from: { x: 0, y: 0 }, to: L1 }, 0,
+    { reducedMotion: true });
+  assert.equal(moved.sag, cableSag({ x: 0, y: 0 }, L1));
+});
+
+test('settle: frame-rate independent, pure, and refuses what it cannot step', () => {
+  const ends = { from: L0, to: L1 };
+  const start = { from: L0, to: L1, sag: 0 };
+  const a = run(start, ends, frames(10, 100));
+  const b = run(start, ends, frames(5, 100));
+  assert.ok(Math.abs(a[a.length - 1].sag - b[b.length - 1].sag) < 1e-6, 'same at 100 ms');
+  const frozen = { from: L0, to: L1, sag: 3, velocity: 1 };
+  const s = settle(frozen, ends, 16);
+  assert.deepEqual(frozen, { from: L0, to: L1, sag: 3, velocity: 1 }, 'the input is untouched');
+  assert.ok(Object.isFrozen(s));
+  const none = settle(undefined, ends, 16);
+  assert.equal(none.sag, cableSag(L0, L1), 'no previous frame: at rest');
+  assert.ok(none.settled);
+  for (const dt of [-1, NaN, Infinity]) assert.throws(() => settle(start, ends, dt), /dt/);
+  assert.throws(() => settle(start, { from: L0 }, 16), /finite/);
+  assert.throws(() => settle({ from: L0, to: L1, sag: NaN }, ends, 16), /sag/);
+});
+
+test('cable.js schedules no frame and reads no media query: settle stays pure (v4 motion)', () => {
+  const src = readFileSync(new URL('../../src/js/ui/synth/cable.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(src, /\.animate\(|<animate(?:Transform|Motion)?\b|requestAnimationFrame\(/);
+  assert.doesNotMatch(src.replace(/^\s*(?:\/\/|\/?\*).*$/gm, ''),
+    /matchMedia|setTimeout|setInterval/);
 });

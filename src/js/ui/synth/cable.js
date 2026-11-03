@@ -10,11 +10,14 @@
 // the hit path is hidden rather than transparent. Imports nothing.
 //
 //   CABLE_DASH                              the pattern of each signal type
-//   cableCurve(a, b, { slack, box, tangents })
+//   cableCurve(a, b, { slack, box, tangents, sag })
 //                                           'M … C …', a hanging cable from a to b, or with
 //                                           tangents a graph edge along its two ports
-//   cableParts({ id, from, to, type, colour, state, tokens, slack, box, tangents, zoom, sheen,
-//     dash, port })
+//   cableSag(a, b, { slack, box })          the sag a hanging cable rests at
+//   settle(previous, { from, to }, dt, { slack, box, reducedMotion })
+//                                           one frame of a dropped or moved cable settling
+//   cableParts({ id, from, to, type, colour, state, tokens, slack, box, tangents, sag, zoom,
+//     sheen, dash, port })
 //                                           [{ key, tag, attrs, parent }], for setAttribute
 //   partsSvg(parts)                         the markup of those records
 //   cableSvg(spec)                          '<g data-cable="id">…</g>', partsSvg(cableParts())
@@ -95,17 +98,27 @@ function bottomOf(box) {
   return box.y + box.height;
 }
 
-/** The two control points of the hanging cubic from a to b (see cableCurve). */
-function controls(a, b, slack, box) {
+/** The sag of the hanging cable from a to b: `told` if given, else slack × the distance in
+ *  [CABLE_MIN_SAG, CABLE_MAX_SAG]; either way at most the room above the box's bottom. */
+function hangingSag(a, b, slack, box, told) {
   if (!finite(a) || !finite(b)) throw new TypeError('cableCurve: a and b need finite x and y.');
   if (!(Number.isFinite(slack) && slack >= 0)) {
     throw new RangeError(`cableCurve: slack must be a finite number of 0 or more, not ${slack}.`);
   }
-  const bottom = bottomOf(box);
+  if (told !== undefined && !(typeof told === 'number' && Number.isFinite(told) && told >= 0)) {
+    throw new RangeError(`cableCurve: sag must be a finite number of 0 or more, not ${told}.`);
+  }
+  const room = sagRoom(a, b, bottomOf(box));
+  const want = told !== undefined ? told
+    : Math.min(CABLE_MAX_SAG, Math.max(CABLE_MIN_SAG, slack * Math.hypot(b.x - a.x, b.y - a.y)));
+  return Math.max(0, Math.min(want, room));
+}
+
+/** The two control points of the hanging cubic from a to b (see cableCurve). */
+function controls(a, b, slack, box, told) {
+  const sag = hangingSag(a, b, slack, box, told);
   const dx = b.x - a.x;
   const dy = b.y - a.y;
-  const want = Math.min(CABLE_MAX_SAG, Math.max(CABLE_MIN_SAG, slack * Math.hypot(dx, dy)));
-  const sag = Math.max(0, Math.min(want, sagRoom(a, b, bottom)));
   const h = (sag * 4) / 3;
   // A near-vertical cable bows sideways, always to the right (+x), so it still reads as
   // hanging; the bow fades to nothing as the cable leans to |dx| = sag. One fixed side keeps the
@@ -155,8 +168,9 @@ function halves([p0, p1, p2, p3]) {
  * out along the source port, round below both ends (on the side of the source port's normal
  * that points down the screen, or to +x for a vertical port, so swapping the ends keeps the
  * side) by its reach, back across at the middle, and in along the target port; the reach is
- * half how far behind the target is, CABLE_REACH to REACH_MAX. Between the two (behind by less than CABLE_REACH) the forward curve,
- * split in two, is blended into the loop point by point (a smoothstep), so dragging a target
+ * half how far behind the target is, CABLE_REACH to REACH_MAX. Between the two (behind by less
+ * than CABLE_REACH) the forward curve, split in two, is blended into the loop point by point
+ * (a smoothstep), so dragging a target
  * across its source never jumps the cable; the blend keeps both ends' tangents and the
  * smoothness where the cubics meet, since each is a positive mix of two curves that have them.
  * The loop (behind by CABLE_REACH or more) never crosses itself and stays CABLE_MIN_SAG clear
@@ -189,9 +203,9 @@ function tangentSegments(a, b, tangents) {
 }
 
 /** The cubics of a cable from a to b: the hanging one, or the port-tangent ones. */
-function cubics(a, b, slack, box, tangents) {
+function cubics(a, b, { slack = CABLE_SLACK, box, tangents, sag } = {}) {
   if (tangents === undefined) {
-    const [c1, c2] = controls(a, b, slack, box);
+    const [c1, c2] = controls(a, b, slack, box, sag);
     return [[a, c1, c2, b]];
   }
   if (!finite(a) || !finite(b)) throw new TypeError('cableCurve: a and b need finite x and y.');
@@ -208,17 +222,18 @@ function cubics(a, b, slack, box, tangents) {
  * given the drawing's viewBox (`box`), it is lessened so the curve never hangs below the box's
  * bottom edge (the box wins over the minimum, down to a straight cable). A cable steeper than
  * its sag also bows sideways (CABLE_BOW), so a vertical one still hangs. Reversed ends draw the
- * same curve, and a == b is a finite droop.
+ * same curve, and a == b is a finite droop. `sag`, if given (a finite number of 0 or more),
+ * is drawn instead of the slack's (a frame of settle; the box still wins over it).
  *
  * With `tangents: { from, to }`, the two ports' directions (each the way its port faces out of
  * its node, so an output on a right edge to an input on a left edge is { from: { x: 1, y: 0 },
  * to: { x: -1, y: 0 } }; any length but zero), it is a graph's edge instead: it leaves along
  * `from` and enters moving against `to`, and a target behind its source is a smooth loop of two
  * cubics, round below both ends and clear of them (see tangentSegments). Reversed ends with
- * swapped tangents draw the same curve; `slack` and `box` belong to the hanging mode alone.
+ * swapped tangents draw the same curve; `slack`, `box` and `sag` belong to the hanging mode.
  */
-export function cableCurve(a, b, { slack = CABLE_SLACK, box, tangents } = {}) {
-  const segs = cubics(a, b, slack, box, tangents);
+export function cableCurve(a, b, { slack = CABLE_SLACK, box, tangents, sag } = {}) {
+  const segs = cubics(a, b, { slack, box, tangents, sag });
   return `M ${a.x} ${a.y}`
     + segs.map(([, c1, c2, e]) => ` C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${e.x} ${e.y}`).join('');
 }
@@ -228,8 +243,8 @@ export function cableCurve(a, b, { slack = CABLE_SLACK, box, tangents } = {}) {
  * sample (1/64 steps of each cubic) that far away, refined by bisection. A cable too short to
  * reach that far takes its point farthest from b.
  */
-function nearTarget(a, b, slack, box, tangents) {
-  const segs = cubics(a, b, slack, box, tangents);
+function nearTarget(a, b, how) {
+  const segs = cubics(a, b, how);
   const p = (t) => {
     const i = Math.min(segs.length - 1, Math.floor(t));
     const [p0, c1, c2, p3] = segs[i];
@@ -262,6 +277,84 @@ function nearTarget(a, b, slack, box, tangents) {
   }
   const q = p(best);
   return { x: num(q.x), y: num(q.y) };
+}
+
+/** The sag a hanging cable from a to b comes to rest at: the one cableCurve draws. */
+export function cableSag(a, b, { slack = CABLE_SLACK, box } = {}) {
+  return hangingSag(a, b, slack, box);
+}
+
+/** How long a dropped or moved cable takes at most to come to rest, ms. */
+export const SETTLE_MS = 400;
+/** The swing: the undamped angular frequency (rad/s) and the damping ratio. Under-damped, so a
+ *  cable swings past its rest once by 4.6 % of the drop; the next swing back is 0.2 %, under
+ *  SETTLE_EPS for any sag this module draws, and from the largest drop (72) the envelope is
+ *  under SETTLE_EPS by 306 ms, inside SETTLE_MS. */
+const SWING = Object.freeze({ omega: 24, zeta: 0.7 });
+/** At rest: within this of the rest sag (graph units), moving slower than SETTLE_SPEED. */
+const SETTLE_EPS = 0.5;
+const SETTLE_SPEED = 6;
+
+/**
+ * One frame of a cable settling, pure: from the previous frame's state { from, to, sag,
+ * velocity } (sag in graph units, velocity in units per second; undefined for none) and the
+ * ends now ({ from, to }) after dt ms, the frozen state for this frame: { from, to, sag,
+ * velocity, rest, settled }. The cable's middle keeps its place when the ends move (its sag
+ * grows by as much as the chord's middle rose), then swings toward cableSag of the new ends as a
+ * damped spring (SWING, stepped exactly, so the frame rate does not change the motion), and
+ * lands exactly on its rest once within SETTLE_EPS and slower than SETTLE_SPEED: a dropped or
+ * moved cable overshoots at most once and settles within SETTLE_MS. The sag stays in 0 to
+ * CABLE_MAX_SAG + CABLE_MIN_SAG and the room above the box's bottom (a stop there kills the
+ * velocity). With no previous frame the cable is at rest. Draw it with cableCurve(from, to,
+ * { sag }).
+ *
+ * `reducedMotion` lands at the rest at once. This module schedules no frame and reads no media
+ * query: the module that drives the frames checks prefers-reduced-motion itself, in its own
+ * file (project.visual-identity-lock v4), and passes the answer here.
+ */
+export function settle(previous, ends, dt, { slack = CABLE_SLACK, box,
+  reducedMotion = false } = {}) {
+  if (!ends || !finite(ends.from) || !finite(ends.to)) {
+    throw new TypeError('settle: the ends need { from, to } with finite x and y.');
+  }
+  if (!(typeof dt === 'number' && Number.isFinite(dt) && dt >= 0)) {
+    throw new RangeError(`settle: dt must be a finite number of ms, 0 or more, not ${dt}.`);
+  }
+  const { from, to } = ends;
+  const rest = cableSag(from, to, { slack, box });
+  const done = (sag, velocity, settled) => Object.freeze({ from, to, sag, velocity, rest,
+    settled });
+  if (previous === undefined || previous === null || reducedMotion) return done(rest, 0, true);
+  const was = previous;
+  if (!finite(was.from) || !finite(was.to)) {
+    throw new TypeError('settle: the previous frame needs { from, to } with finite x and y.');
+  }
+  const sag0 = was.sag === undefined ? cableSag(was.from, was.to, { slack, box }) : was.sag;
+  const v0 = was.velocity === undefined ? 0 : was.velocity;
+  if (!(typeof sag0 === 'number' && Number.isFinite(sag0))
+    || !(typeof v0 === 'number' && Number.isFinite(v0))) {
+    throw new RangeError('settle: the previous sag and velocity must be finite numbers.');
+  }
+  const top = Math.min(CABLE_MAX_SAG + CABLE_MIN_SAG, Math.max(0,
+    sagRoom(from, to, bottomOf(box))));
+  const rose = (was.from.y + was.to.y - from.y - to.y) / 2;
+  const x0 = Math.max(0, Math.min(top, sag0 + rose)) - rest;
+  const { omega: w, zeta: z } = SWING;
+  const wd = w * Math.sqrt(1 - z * z);
+  const t = dt / 1000;
+  const e = Math.exp(-z * w * t);
+  const c = Math.cos(wd * t);
+  const s = Math.sin(wd * t);
+  let sag = rest + e * (x0 * c + ((v0 + z * w * x0) / wd) * s);
+  let velocity = e * (v0 * c - ((z * w * v0 + w * w * x0) / wd) * s);
+  if (sag <= 0 || sag >= top) {
+    sag = Math.max(0, Math.min(top, sag));
+    velocity = 0;
+  }
+  if (Math.abs(sag - rest) < SETTLE_EPS && Math.abs(velocity) < SETTLE_SPEED) {
+    return done(rest, 0, true);
+  }
+  return done(sag, velocity, false);
 }
 
 function needTokens(tokens, who) {
@@ -337,7 +430,8 @@ const str = (x) => String(x);
  * dashed (a solid kind takes REFUSED_DASH), marks the group data-refused and draws a cross on
  * the curve at the target end, CROSS_BACK back from it so it never covers the plug there, so a
  * refusal is a shape, not a colour alone. `zoom` turns the screen-px offsets (the shadow's
- * drop, the sheen's) into graph units; `slack`, `box` and `tangents` are cableCurve's.
+ * drop, the sheen's) into graph units; `slack`, `box`, `tangents` and `sag` are
+ * cableCurve's.
  *
  * The signal's look is an input: `dash` (a CABLE_KINDS declaration's pattern, null for solid)
  * wins over CABLE_DASH[type], which is only the default when no dash is passed, and with a dash
@@ -346,7 +440,7 @@ const str = (x) => String(x);
  * declared one. Neither passed, the parts are what they were before these inputs existed.
  */
 export function cableParts({ id, from, to, type, colour, state = {}, tokens, slack = CABLE_SLACK,
-  box, tangents, zoom = 1, sheen = false, dash, port } = {}) {
+  box, tangents, sag, zoom = 1, sheen = false, dash, port } = {}) {
   const who = 'cableParts';
   needTokens(tokens, who);
   const pattern0 = dashOf(type, dash, who);
@@ -355,7 +449,7 @@ export function cableParts({ id, from, to, type, colour, state = {}, tokens, sla
     throw new RangeError(`${who}: zoom must be a finite number above 0, not ${zoom}.`);
   }
   const st = state || {};
-  const d = cableCurve(from, to, { slack, box, tangents });
+  const d = cableCurve(from, to, { slack, box, tangents, sag });
   const w = st.selected ? WIDTH.selected : (st.hover ? WIDTH.hover : WIDTH.base);
   const paint = st.refused ? tokens.jack.refuse : (colour || 'currentColor');
   const pattern = st.refused ? (pattern0 || REFUSED_DASH) : pattern0;
@@ -377,7 +471,7 @@ export function cableParts({ id, from, to, type, colour, state = {}, tokens, sla
       'stroke-width': str(w), 'stroke-linecap': cap, ...dashed }),
   ];
   if (st.refused) {
-    const m = nearTarget(from, to, slack, box, tangents);
+    const m = nearTarget(from, to, { slack, box, tangents, sag });
     const r = CROSS.arm;
     const arms = [[m.x - r, m.y - r, m.x + r, m.y + r], [m.x - r, m.y + r, m.x + r, m.y - r]]
       .map((l) => l.map(num));
