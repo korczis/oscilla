@@ -25,7 +25,7 @@
     }
   },
   "caps": {
-    "src/index.html": 299000,
+    "src/index.html": 301000,
     "src/js/audio/audio-engine.js": 73000,
     "src/js/core/instrument.js": 62000,
     "src/js/experiments/validate.js": 64000,
@@ -109,6 +109,12 @@
       "cap": 299000,
       "pr": 386,
       "reason": "merging main's synth train (#385: K066/K102 presets and patch library, the XY tab, the docked keyboard) into lane A's shell, page header and registry-driven page parts (#386)"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 301000,
+      "pr": 386,
+      "reason": "F007 puts Learn on Flowbite Pro inside lane A's shell: the Pro card, button and link class lists are longer than the legacy osc-learn-* names they replace, while the legacy debt falls by 28"
     }
   ]
 }

@@ -1094,8 +1094,8 @@ function defineChecks() {
       add(`${theme} correlation value`, await contrastOf(page, '#osc-corr-value'));
       await page.evaluate(() => window.OSCILLA.app.setWorkspace('learn'));
       await sleep(150);
-      add(`${theme} learn example`, await contrastOf(page, '.is-current .osc-learn-example'));
-      add(`${theme} learn demo`, await contrastOf(page, '.is-current [data-osc="learn.demo"]'));
+      add(`${theme} learn example`, await contrastOf(page, '#osc-view-learn [aria-current="true"] [data-learn-example]'));
+      add(`${theme} learn demo`, await contrastOf(page, '#osc-view-learn [aria-current="true"] [data-osc="learn.demo"]'));
       await context.close();
     }
     const low = Object.entries(res).filter(([, v]) => v == null || v < 4.5);

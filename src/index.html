@@ -2526,24 +2526,42 @@
         </section>
       </div>
     </section>
-    <section class="osc-view osc-view--learn" id="osc-view-learn" data-osc="learn-view"
+    <section class="px-4 pt-6 pb-6" id="osc-view-learn" data-osc="learn-view"
       data-osc-modes="learn" hidden :hidden="mode !== 'learn'" aria-labelledby="osc-learn-title"
       tabindex="-1">
-      <h2 class="osc-panel-title" id="osc-learn-title">Learn</h2>
-      <div class="osc-view-body osc-learn" data-osc="learn-content">
-        <ul class="osc-learn-list" role="list">
+      <h2 class="mb-4 text-xl font-semibold text-gray-900 sm:text-2xl dark:text-white"
+        id="osc-learn-title">Learn</h2>
+      <div data-osc="learn-content">
+        <ul class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" role="list">
           <template x-for="t in LEARN_TOPICS" :key="t.id">
-            <li class="osc-learn-item" :class="{ 'is-current': learnTopic === t.id }">
-              <h3 class="osc-learn-title" x-text="t.title"></h3>
-              <p class="osc-learn-body" x-text="t.body"></p>
-              <p class="osc-learn-example osc-num" x-show="learnTopic === t.id" x-text="topicExample"></p>
-              <div class="osc-learn-actions">
-                <button type="button" class="osc-btn osc-btn-secondary" data-osc="learn.example"
-                  @click="learnTopic = t.id" :aria-pressed="String(learnTopic === t.id)">Relate to current settings</button>
-                <button type="button" class="osc-btn osc-btn-primary" data-osc="learn.demo"
+            <li class="flex flex-col gap-3 p-4 bg-white border rounded-lg shadow-sm dark:bg-gray-800"
+              :class="learnTopic === t.id ? 'border-primary-600 dark:border-primary-500'
+                : 'border-gray-200 dark:border-gray-700'"
+              :data-topic="t.id" :aria-current="learnTopic === t.id ? 'true' : null">
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="t.title"></h3>
+              <p class="text-sm leading-relaxed text-gray-500 dark:text-gray-400" x-text="t.body"></p>
+              <p class="font-mono text-sm tabular-nums text-primary-700 dark:text-primary-400"
+                data-learn-example x-show="learnTopic === t.id" x-text="topicExample"></p>
+              <div class="flex flex-wrap items-center gap-2 mt-auto">
+                <button type="button" data-osc="learn.example"
+                  class="inline-flex items-center justify-center px-3 text-sm font-medium text-gray-900
+                    bg-white border border-gray-200 rounded-lg min-h-9 [@media(pointer:coarse)]:min-h-11
+                    hover:bg-gray-100 hover:text-primary-700 focus:outline-none focus:ring-4
+                    focus:ring-gray-100 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600
+                    dark:hover:text-white dark:hover:bg-gray-700 dark:focus:ring-gray-700"
+                  @click="learnTopic = t.id"
+                  :aria-pressed="String(learnTopic === t.id)">Relate to current settings</button>
+                <button type="button" data-osc="learn.demo"
+                  class="inline-flex items-center justify-center px-3 text-sm font-medium text-white
+                    rounded-lg min-h-9 [@media(pointer:coarse)]:min-h-11 bg-primary-700
+                    hover:bg-primary-800 focus:outline-none focus:ring-4 focus:ring-primary-300
+                    dark:bg-primary-700 dark:hover:bg-primary-800 dark:focus:ring-primary-800"
                   @click="learnTopic = t.id; runLearnDemo(t)" x-text="'Demo: ' + t.demo.label"></button>
                 <template x-if="learnToolOf(t.id)">
                   <a :href="learnToolOf(t.id).href" data-osc="learn.tool"
+                    class="inline-flex items-center text-sm font-medium min-h-9
+                      [@media(pointer:coarse)]:min-h-11 text-primary-700 hover:underline
+                      dark:text-primary-500"
                     @click="learnToolFollowed(t, $event)" x-text="learnToolOf(t.id).text"></a>
                 </template>
               </div>

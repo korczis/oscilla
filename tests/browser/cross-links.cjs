@@ -504,7 +504,7 @@ async function runLeg(name, origin) {
       const wrong = [];
       const tools = await page.evaluate(async () => {
         window.OSCILLA.app.setWorkspace('learn');
-        return [...document.querySelectorAll('#osc-view-learn .osc-learn-item')].map((li) => {
+        return [...document.querySelectorAll('#osc-view-learn li[data-topic]')].map((li) => {
           const a = li.querySelector('[data-osc="learn.tool"]');
           return { title: li.querySelector('h3').textContent.trim(),
             href: a ? a.getAttribute('href') : null, text: a ? a.textContent.trim() : null };
@@ -523,7 +523,7 @@ async function runLeg(name, origin) {
         const t = withTool.find((x) => x.title === topic);
         if (!t || t.href !== `#m=${ws}`) { wrong.push(`${topic}: ${JSON.stringify(t)}`); continue; }
         await H.setWorkspace(page, 'learn');
-        const sel = `#osc-view-learn .osc-learn-item:has(> h3:text-is("${topic}")) `
+        const sel = `#osc-view-learn li[data-topic]:has(> h3:text-is("${topic}")) `
           + '[data-osc="learn.tool"]';
         await H.activate(page, sel, input);
         const s = await H.arrived(page, ws, `${topic} (${input}) opens ${ws}`);
@@ -541,9 +541,9 @@ async function runLeg(name, origin) {
           `${topic} (${input}): the notice returns to Learn`);
         if (!back) { wrong.push(`${topic} (${input}): the notice did not return to Learn`); continue; }
         const topicId = await page.evaluate((tt) => {
-          const li = [...document.querySelectorAll('#osc-view-learn .osc-learn-item')]
+          const li = [...document.querySelectorAll('#osc-view-learn li[data-topic]')]
             .find((x) => x.querySelector('h3').textContent.trim() === tt);
-          return li && li.classList.contains('is-current');
+          return li && li.getAttribute('aria-current') === 'true';
         }, topic);
         if (!topicId) wrong.push(`${topic}: not the current lesson after the way back`);
         const gone = await until(() => page.evaluate(() =>
@@ -563,7 +563,7 @@ async function runLeg(name, origin) {
       const wrong = [];
       for (const input of INPUTS) {
         await H.setWorkspace(page, 'learn');
-        await H.activate(page, '#osc-view-learn .osc-learn-item:has(> h3:text-is("Frequency")) '
+        await H.activate(page, '#osc-view-learn li[data-topic]:has(> h3:text-is("Frequency")) '
           + '[data-osc="learn.demo"]', input);
         const s = await H.until(page, 'playground', (x) => x.workspace === 'playground',
           `Demo (${input}) opens the Playground`);
@@ -585,7 +585,7 @@ async function runLeg(name, origin) {
       // The notices are in flow: one that never closed would push the page down until
       // dismissed. Untouched (focus on Hold to Play, the pointer away), it closes on its own.
       await H.setWorkspace(page, 'learn');
-      await H.activate(page, '#osc-view-learn .osc-learn-item:has(> h3:text-is("Frequency")) '
+      await H.activate(page, '#osc-view-learn li[data-topic]:has(> h3:text-is("Frequency")) '
         + '[data-osc="learn.demo"]', 'keyboard');
       const offered = await until(() => page.evaluate(() =>
         !!document.querySelector('[data-osc="alert.action"]')),

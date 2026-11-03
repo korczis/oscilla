@@ -792,6 +792,49 @@ function defineChecks() {
     dark, absent, light };
   });
 
+  // ---------------------------------------------------------------- Learn on Pro (F007)
+  // Learn's page carries the Pro page set, each topic is a Pro card with no legacy osc-* class,
+  // its demo is a Pro primary button and its tool link opens its workspace, at both sizes.
+  def('learn-pro', async (ctx) => {
+    const res = { bad: [] };
+    for (const [w, h] of [[1536, 1024], [390, 844]]) {
+      const page = await H.open(ctx, `${ctx.baseUrl}#m=learn`);
+      await page.setViewportSize({ width: w, height: h });
+      const r = await until(() => page.evaluate(() => {
+        const view = document.getElementById('osc-view-learn');
+        if (!view || !view.getClientRects().length) return null;
+        const cards = [...view.querySelectorAll('li[data-topic]')];
+        if (!cards.length) return null;
+        const legacy = [...view.querySelectorAll('[class]')].concat(view)
+          .flatMap((el) => [...el.classList].filter((c) => /^osc-/.test(c)));
+        const min = matchMedia('(pointer: coarse)').matches ? 44 : 36;
+        const small = [...view.querySelectorAll('button, a')]
+          .filter((el) => el.getClientRects().length)
+          .map((el) => el.getBoundingClientRect()).filter((b) => b.height < min).length;
+        return { pageSet: ['px-4', 'pt-6'].every((c) => view.classList.contains(c)),
+          cards: cards.length,
+          proCards: cards.filter((li) => ['bg-white', 'rounded-lg', 'border']
+            .every((c) => li.classList.contains(c))).length,
+          demos: view.querySelectorAll('[data-osc="learn.demo"].bg-primary-700').length,
+          tools: [...view.querySelectorAll('[data-osc="learn.tool"]')]
+            .map((a) => a.getAttribute('href')),
+          legacy, small, coarse: matchMedia('(pointer: coarse)').matches };
+      }), { ms: 5000, what: `Learn rendered at ${w}` }).catch(() => null);
+      if (!r) { res.bad.push(`${w}: Learn did not render`); await page.close(); continue; }
+      res[w] = r;
+      if (!r.pageSet) res.bad.push(`${w}: the page root lacks the Pro page set`);
+      if (r.proCards !== r.cards) res.bad.push(`${w}: ${r.cards - r.proCards} topics not Pro cards`);
+      if (r.demos !== r.cards) res.bad.push(`${w}: ${r.cards - r.demos} demos not Pro primary`);
+      if (r.legacy.length) res.bad.push(`${w}: legacy classes ${r.legacy.join(' ')}`);
+      if (!r.tools.length || !r.tools.every((t) => /^#m=[a-z]+$/.test(t))) {
+        res.bad.push(`${w}: tool links ${r.tools.join(' ')}`);
+      }
+      if (r.small) res.bad.push(`${w}: ${r.small} targets under ${r.coarse ? 44 : 36} px`);
+      await page.close();
+    }
+    return { ok: res.bad.length === 0, ...res };
+  });
+
   def('no-console-errors', async (ctx) => ({ ok: ctx.errors.length === 0,
     errors: ctx.errors.slice(0, 8) }));
 

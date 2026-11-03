@@ -452,7 +452,6 @@
 }
 
 /* ---------- Learn / Presets views ---------- */
-.osc-learn-list,
 .osc-preset-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
@@ -462,7 +461,6 @@
   list-style: none;
 }
 
-.osc-learn-item,
 .osc-preset-item {
   display: flex;
   flex-direction: column;
@@ -473,29 +471,6 @@
   background: var(--osc-surface-2);
 }
 
-.osc-learn-item.is-current {
-  border-color: var(--osc-blue-deep-border);
-}
-
-.osc-learn-title {
-  margin: 0;
-  font-size: var(--osc-fs-lg);
-  font-weight: var(--osc-fw-semibold);
-}
-
-.osc-learn-body,
-.osc-learn-example {
-  margin: 0;
-  color: var(--osc-text-2);
-  font-size: var(--osc-fs-sm);
-  line-height: 1.5;
-}
-
-.osc-learn-example {
-  color: var(--osc-cyan-text);
-}
-
-.osc-learn-actions,
 .osc-preset-actions,
 .osc-preset-toolbar {
   display: flex;
@@ -503,7 +478,6 @@
   gap: 8px;
 }
 
-.osc-learn-actions .osc-btn,
 .osc-preset-actions .osc-btn,
 .osc-preset-toolbar .osc-btn {
   height: 30px;
@@ -774,7 +748,6 @@
   .osc-pp-field .osc-number,
   .osc-pp-field select,
   .osc-dialog-actions .osc-btn,
-  .osc-learn-actions .osc-btn,
   .osc-preset-actions .osc-btn,
   .osc-preset-toolbar .osc-btn,
   .osc-chip-btn,
