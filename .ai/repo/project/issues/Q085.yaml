@@ -7,7 +7,7 @@ profile: routine
 owner: "repository owner"
 objective: "An attempt grades each played event against its expected event by its onset error in milliseconds and its pitch error in cents (the intent musical-practice). What timing window and what pitch tolerance count as a match: one pair for every exercise, a pair per exercise type or per input source, or a pair each exercise declares within bounds the owner names; and may the learner change them? The proposal requires 'explicit, documented criteria, such as the expected event, timing window, tolerance, and input source' and makes tolerances configurable 'only when the underlying exercise and grading model support them'. Whatever the answer, a microphone tolerance tighter than the uncertainty the existing estimator reports for that event cannot be graded and is shown as such (the intent's input-source invariant)."
 why: "The owner's proposal 'Interactive learning and musical practice' (pasted into the af session at 2026-11-03T01:34Z, marked 'Status: PROPOSAL') is recorded as the proposed intent musical-practice, which names no milestone and no criterion; .ai/repo/project/README.md: only the owner, or a session the owner delegated to, answers a Q issue."
-current_state: "Answered by the owner on 2026-11-03 (~19:3xZ, AskUserQuestion in the oscilla-af session): 'Per exercise, bounded'. Each exercise declares its own timing window in milliseconds and pitch tolerance in cents, within bounds the owner sets once. The figures in the option text (timing 30-150 ms, pitch 10-50 cents) were af's examples, not decided: the bounds themselves stay open, to be proposed by the first exercise slice for the owner's acceptance. The owner_decision evidence is recorded once this plan is on main."
+current_state: "Partly answered by the owner on 2026-11-03 (~19:3xZ, AskUserQuestion in the oscilla-af session): 'Per exercise, bounded', recorded as owner_decision evidence. Still open, and not done: the bounds themselves (the figures in the option text were af's examples), whether they differ by input source, and whether the learner may change them. The first exercise slice proposes these for the owner's acceptance, or a follow-up question asks them."
 scope:
   - ".ai/repo/project/issues/Q085.yaml"
 acceptance_criteria:
@@ -18,4 +18,11 @@ validation:
 evidence_required:
   - "owner_decision"
 created_at: 2026-11-03
-updated_at: 2026-11-03
+updated_at: 2026-11-03T22:21:00Z
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "AskUserQuestion in Claude Code session oscilla-af, 2026-11-03 ~19:3xZ, the musical-practice owner questions"
+    result: "The owner answered: 'Per exercise, bounded'. Each exercise declares its own timing window (ms) and pitch tolerance (cents) within bounds the owner sets once. The figures in the option text (timing 30-150 ms, pitch 10-50 cents) were af's examples, not decided: the bounds stay open and the first exercise slice proposes them for the owner's acceptance."
+    commit: e006eb259da505cb40f3e95005343029e0bb77c7
+    recorded_at: 2026-11-03T22:21:00Z

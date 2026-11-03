@@ -18,4 +18,15 @@ validation:
 evidence_required:
   - "owner_decision"
 created_at: 2026-11-03
-updated_at: 2026-11-03
+updated_at: 2026-11-03T22:22:26Z
+started_at: 2026-11-03T22:22:16Z
+started_event: sha256:3301e807107834870ee3a695ad9f079cf6241c9632af2294b77e6ad26fb83f03
+completed_at: 2026-11-03T22:22:26Z
+completed_event: sha256:932d3eb0ca6e89c0dd7dda52909e721c04be19eaa31af52367da6bc4542c79c7
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "AskUserQuestion in Claude Code session oscilla-af, 2026-11-03 ~19:3xZ, the musical-practice owner questions"
+    result: "The owner answered: 'Locally, clearable'. Progress is kept only in this browser (the existing local storage), never sent anywhere, and the learner can clear it."
+    commit: e006eb259da505cb40f3e95005343029e0bb77c7
+    recorded_at: 2026-11-03T22:21:04Z
