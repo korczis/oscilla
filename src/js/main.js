@@ -83,6 +83,7 @@ import {
 import { renderPlanToWav, renderSequenceToWav, screenshotCanvases } from './ui/exporters.js';
 import { BUILD } from './core/build-info.js';
 import { aboutPart } from './ui/about.js';
+import { proClassesPart } from './ui/pro-classes.js';
 import { armAudioUnlock } from './ui/audio-unlock.js';
 
 import { mount as mountAnalysis } from './labs/analysis.js';
@@ -881,7 +882,8 @@ function createOscillaComponent(ui) {
   // Optional input (ADR 0058): reads support at load, never requests; notes sound through engine.
   const midi = createMidiUi({ engine, sequencerPlaying });
   const cmp = compose(instrument, ui, workbench, measure, experiments, findings, connections,
-    studio, navigation, midi, createCrossLinksUi(), provenancePart(), aboutPart(), TEMPLATE_HELPERS);
+    studio, navigation, midi, createCrossLinksUi(), provenancePart(), aboutPart(), proClassesPart(),
+    TEMPLATE_HELPERS);
   cmp.dismissAlert = focusSafeDismiss(cmp.dismissAlert);
   const baseRefreshDebug = cmp.refreshDebug;
   Object.defineProperty(cmp, 'refreshDebug', {

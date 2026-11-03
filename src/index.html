@@ -2529,14 +2529,11 @@
     <section class="px-4 pt-6 pb-6" id="osc-view-learn" data-osc="learn-view"
       data-osc-modes="learn" hidden :hidden="mode !== 'learn'" aria-labelledby="osc-learn-title"
       tabindex="-1">
-      <h2 class="mb-4 text-xl font-semibold text-gray-900 sm:text-2xl dark:text-white"
-        id="osc-learn-title">Learn</h2>
+      <h2 :class="PRO.pageTitle" id="osc-learn-title">Learn</h2>
       <div data-osc="learn-content">
         <ul class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" role="list">
           <template x-for="t in LEARN_TOPICS" :key="t.id">
-            <li class="flex flex-col gap-3 p-4 bg-white border rounded-lg shadow-sm dark:bg-gray-800"
-              :class="learnTopic === t.id ? 'border-primary-600 dark:border-primary-500'
-                : 'border-gray-200 dark:border-gray-700'"
+            <li :class="PRO.card + ' ' + (learnTopic === t.id ? PRO.cardCurrent : PRO.cardIdle)"
               :data-topic="t.id" :aria-current="learnTopic === t.id ? 'true' : null">
               <h3 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="t.title"></h3>
               <p class="text-sm leading-relaxed text-gray-500 dark:text-gray-400" x-text="t.body"></p>
@@ -2544,24 +2541,15 @@
                 data-learn-example x-show="learnTopic === t.id" x-text="topicExample"></p>
               <div class="flex flex-wrap items-center gap-2 mt-auto">
                 <button type="button" data-osc="learn.example"
-                  class="inline-flex items-center justify-center px-3 text-sm font-medium text-gray-900
-                    bg-white border border-gray-200 rounded-lg min-h-9 [@media(pointer:coarse)]:min-h-11
-                    hover:bg-gray-100 hover:text-primary-700 focus:outline-none focus:ring-4
-                    focus:ring-gray-100 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600
-                    dark:hover:text-white dark:hover:bg-gray-700 dark:focus:ring-gray-700"
+                  :class="PRO.btnSecondary"
                   @click="learnTopic = t.id"
                   :aria-pressed="String(learnTopic === t.id)">Relate to current settings</button>
                 <button type="button" data-osc="learn.demo"
-                  class="inline-flex items-center justify-center px-3 text-sm font-medium text-white
-                    rounded-lg min-h-9 [@media(pointer:coarse)]:min-h-11 bg-primary-700
-                    hover:bg-primary-800 focus:outline-none focus:ring-4 focus:ring-primary-300
-                    dark:bg-primary-700 dark:hover:bg-primary-800 dark:focus:ring-primary-800"
+                  :class="PRO.btnPrimary"
                   @click="learnTopic = t.id; runLearnDemo(t)" x-text="'Demo: ' + t.demo.label"></button>
                 <template x-if="learnToolOf(t.id)">
                   <a :href="learnToolOf(t.id).href" data-osc="learn.tool"
-                    class="inline-flex items-center text-sm font-medium min-h-9
-                      [@media(pointer:coarse)]:min-h-11 text-primary-700 hover:underline
-                      dark:text-primary-500"
+                    :class="PRO.link"
                     @click="learnToolFollowed(t, $event)" x-text="learnToolOf(t.id).text"></a>
                 </template>
               </div>
@@ -2573,42 +2561,25 @@
     <section class="px-4 pt-6 pb-6" id="osc-view-presets" data-osc="presets-view"
       data-osc-modes="presets" hidden :hidden="mode !== 'presets'"
       aria-labelledby="osc-presets-title" tabindex="-1">
-      <h2 class="mb-4 text-xl font-semibold text-gray-900 sm:text-2xl dark:text-white"
-        id="osc-presets-title">Presets</h2>
+      <h2 :class="PRO.pageTitle" id="osc-presets-title">Presets</h2>
       <div data-osc="presets-content">
         <div class="flex flex-wrap mb-4 text-sm font-medium text-center border-b border-gray-200
           dark:border-gray-700" role="tablist" aria-label="Preset categories">
           <template x-for="c in PRESET_CATEGORIES" :key="c.id">
             <button type="button" role="tab" data-osc="presets.tab" :data-value="c.id"
               :id="'osc-ptab-cat-' + c.id"
-              class="inline-block px-4 border-b-2 rounded-t-lg min-h-11"
-              :class="presetTab === c.id
-                ? 'text-primary-700 border-primary-700 dark:text-primary-500 dark:border-primary-500'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 '
-                  + 'dark:text-gray-400 dark:hover:text-gray-300'"
+              :class="PRO.tab + ' ' + (presetTab === c.id ? PRO.tabOn : PRO.tabOff)"
               :aria-selected="String(presetTab === c.id)" :tabindex="presetTab === c.id ? 0 : -1"
               @click="presetTab = c.id" @keydown="rovingKeydown($event)" x-text="c.label"></button>
           </template>
         </div>
         <div class="flex flex-wrap items-center gap-2 mb-4">
           <button type="button" data-osc="presets.save" @click="openSave()"
-            class="inline-flex items-center justify-center px-3 text-sm font-medium text-white
-            rounded-lg min-h-9 [@media(pointer:coarse)]:min-h-11 bg-primary-700
-            hover:bg-primary-800 focus:outline-none focus:ring-4 focus:ring-primary-300
-            disabled:cursor-not-allowed disabled:opacity-50 dark:bg-primary-700
-            dark:hover:bg-primary-800 dark:focus:ring-primary-800">Save current…</button>
+            :class="PRO.btnPrimary">Save current…</button>
           <button type="button" data-osc="presets.reset" @click="resetDefaults()"
-            class="inline-flex items-center justify-center px-3 text-sm font-medium text-gray-900
-            bg-white border border-gray-200 rounded-lg min-h-9 [@media(pointer:coarse)]:min-h-11
-            hover:bg-gray-100 hover:text-primary-700 focus:outline-none focus:ring-4
-            focus:ring-gray-100 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600
-            dark:hover:text-white dark:hover:bg-gray-700 dark:focus:ring-gray-700">Reset to defaults</button>
+            :class="PRO.btnSecondary">Reset to defaults</button>
           <button type="button" data-osc="presets.clearHistory"
-            class="inline-flex items-center justify-center px-3 text-sm font-medium text-gray-900
-            bg-white border border-gray-200 rounded-lg min-h-9 [@media(pointer:coarse)]:min-h-11
-            hover:bg-gray-100 hover:text-primary-700 focus:outline-none focus:ring-4
-            focus:ring-gray-100 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600
-            dark:hover:text-white dark:hover:bg-gray-700 dark:focus:ring-gray-700"
+            :class="PRO.btnSecondary"
             x-show="presetTab === 'history'" @click="clearHistory()">Clear history</button>
           <a href="#m=synth" data-osc="presets.toSynth" hidden
             class="self-center [@media(pointer:coarse)]:inline-flex [@media(pointer:coarse)]:min-h-11
@@ -2620,8 +2591,7 @@
             <ul class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" role="list">
               <template x-for="p in presetsFor(presetTab)" :key="p.id">
                 <li data-osc="presets.item" :data-id="p.id"
-                  class="flex flex-col justify-between gap-3 p-4 bg-white border border-gray-200 rounded-lg
-                  shadow-sm dark:bg-gray-800 dark:border-gray-700">
+                  :class="PRO.card + ' ' + PRO.cardIdle">
                   <div class="flex flex-col gap-1">
                     <span class="text-base font-semibold text-gray-900 dark:text-white"
                       x-text="p.name"></span>
@@ -2635,20 +2605,12 @@
                   </div>
                   <div class="flex flex-wrap items-center gap-2">
                     <button type="button" data-osc="presets.load"
-                      class="inline-flex items-center justify-center px-3 text-sm font-medium text-white
-                      rounded-lg min-h-9 [@media(pointer:coarse)]:min-h-11 bg-primary-700
-                      hover:bg-primary-800 focus:outline-none focus:ring-4 focus:ring-primary-300
-                      disabled:cursor-not-allowed disabled:opacity-50 dark:bg-primary-700
-                      dark:hover:bg-primary-800 dark:focus:ring-primary-800"
+                      :class="PRO.btnPrimary"
                       :disabled="presetDisabled(p)" @click="loadPresetFromView(p)"
                       :aria-describedby="presetDisabled(p) ? 'osc-preset-why-' + p.id : null"
                       :aria-label="'Load preset ' + p.name">Load</button>
                     <button type="button" data-osc="presets.delete"
-                      class="inline-flex items-center justify-center px-3 text-sm font-medium text-gray-900
-                      bg-white border border-gray-200 rounded-lg min-h-9 [@media(pointer:coarse)]:min-h-11
-                      hover:bg-gray-100 hover:text-primary-700 focus:outline-none focus:ring-4
-                      focus:ring-gray-100 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600
-                      dark:hover:text-white dark:hover:bg-gray-700 dark:focus:ring-gray-700"
+                      :class="PRO.btnSecondary"
                       x-show="p.custom" @click="deletePresetFocus(p, $event)" @blur="cancelDelete(p.id)"
                       :aria-label="(pendingDelete === p.id ? 'Confirm delete ' : 'Delete ') + p.name"
                       x-text="pendingDelete === p.id ? 'Confirm' : 'Delete'"></button>
@@ -2666,14 +2628,13 @@
             <p class="mb-4 text-sm text-gray-500 dark:text-gray-400" x-text="emptyOf('presets').body"></p>
             <a :href="'#m=' + emptyOf('presets').action.to" data-osc="page.emptyAction"
               x-bind="emptyAction('presets')" x-text="emptyOf('presets').action.label"
-              class="inline-flex items-center justify-center px-5 text-sm font-medium text-center text-white rounded-lg min-h-11 bg-primary-700 hover:bg-primary-800 focus:outline-none focus:ring-4 focus:ring-primary-300 dark:bg-primary-700 dark:hover:bg-primary-800 dark:focus:ring-primary-800"></a>
+              :class="PRO.btnPrimary"></a>
           </div>
           <template x-if="presetTab === 'history'">
             <ul class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" role="list">
               <template x-for="h in history" :key="h.ts + h.label">
                 <li data-osc="presets.history"
-                  class="flex flex-col justify-between gap-3 p-4 bg-white border border-gray-200 rounded-lg
-                  shadow-sm dark:bg-gray-800 dark:border-gray-700">
+                  :class="PRO.card + ' ' + PRO.cardIdle">
                   <div class="flex flex-col gap-1">
                     <span class="text-base font-semibold text-gray-900 dark:text-white"
                       x-text="h.label"></span>
@@ -2682,11 +2643,7 @@
                   </div>
                   <div class="flex flex-wrap items-center gap-2">
                     <button type="button" @click="recallHistory(h)"
-                      class="inline-flex items-center justify-center px-3 text-sm font-medium text-gray-900
-                      bg-white border border-gray-200 rounded-lg min-h-9 [@media(pointer:coarse)]:min-h-11
-                      hover:bg-gray-100 hover:text-primary-700 focus:outline-none focus:ring-4
-                      focus:ring-gray-100 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600
-                      dark:hover:text-white dark:hover:bg-gray-700 dark:focus:ring-gray-700">Recall</button>
+                      :class="PRO.btnSecondary">Recall</button>
                   </div>
                 </li>
               </template>
