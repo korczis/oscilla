@@ -54,6 +54,30 @@ test('the views are desktop and phone x Panel, Engines, XY x dark, light, plus t
     assert.equal(new Set(VIEWS.map((v) => v.id)).size, VIEWS.length, 'view ids are unique');
   });
 
+test('each phone tab view shows its tab content above the docked keyboard, and a knob moves it',
+  async () => {
+    // At 390x844 the docked keyboard starts at y=483, so the first screen of a tab is the header
+    // and the tab strip only: no phone tab view held a module, knob or the XY pad (F013 review).
+    const { VIEWS, CONTENT } = await load();
+    assert.deepEqual(CONTENT, { panel: '[data-module]', engines: '[data-module]',
+      xy: '[data-osc="synth.xy.pad"]' });
+    for (const v of VIEWS) {
+      const phoneTab = !v.bay && v.width < 600;
+      assert.equal(v.content, phoneTab ? CONTENT[v.tab] : null, `${v.id} scrolls to its content`);
+      assert.equal(v.knob, phoneTab && v.tab !== 'xy', `${v.id} turns a knob it shows`);
+    }
+    const src = read('scripts/visual-synth.mjs');
+    assert.match(src,
+      /else if \(view\.content\) await page\.evaluate\(scrollToTop, view\.content\);/);
+    // Fails closed: the content under the chip nav, under the dock or covered; no knob seen whole;
+    // a turned knob that keeps its value, scrolls the view or changes no pixel.
+    for (const why of [/is under the chip nav/, /is under the docked keyboard/,
+      /is covered at its top edge/, /no knob is seen whole above the docked keyboard/,
+      /kept its value/, /scrolled the view/, /changed no pixel of the view/]) {
+      assert.match(src, why);
+    }
+  });
+
 test('the bay holds the six s-look cables, one from each source colour', async () => {
   const { CABLES } = await load();
   assert.deepEqual(CABLES, [['keys.velocity', 'vco2.tune'], ['vco1.audio', 'ring.modulator'],
@@ -78,7 +102,10 @@ test('every accepted environment lists every view, and every listed reference ex
   const meta = JSON.parse(readFileSync(path.join(REF_DIR, 'references.json'), 'utf8'));
   assert.equal(meta.schema, 1);
   assert.match(meta.note, /written only by node scripts\/visual-synth\.mjs --update-reference/);
-  assert.ok(meta.environments['darwin-arm64'], 'darwin-arm64 is accepted');
+  // F013 holds both environments: the Mac and the CI container (linux-x64).
+  for (const env of ['darwin-arm64', 'linux-x64']) {
+    assert.ok(meta.environments[env], `${env} is accepted`);
+  }
   for (const [env, e] of Object.entries(meta.environments)) {
     assert.match(e.browser, /^\d+\.\d+\.\d+\.\d+$/, `${env} records its Chromium build`);
     assert.equal(e.engine, ENGINE, `${env} records the Engines tab's engine`);

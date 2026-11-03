@@ -12,7 +12,12 @@
 //
 // Views (each compared pixel by pixel with the accepted reference of this environment):
 //   desktop-<tab>-<theme>  1536x1024, the first screen of the Synth workspace on the tab
-//   phone-<tab>-<theme>    390x844 with touch, the same
+//   phone-<tab>-<theme>    390x844 with touch, the tab's content scrolled to the top of the
+//            scroller under the sticky chip nav (CONTENT: the first module card on Panel and
+//            Engines, the pad on XY): the docked keyboard covers the screen from y=483 down, so
+//            the first screen holds only the header and the tab strip. The capture fails closed
+//            unless that element is hit-testable above the dock, and on Panel and Engines unless
+//            a knob is seen whole and turning it (End or Home) changes the picture.
 //     <tab> is panel, engines or xy (the Engines tab on its default engine, ENGINE; the XY tab
 //     with no preset, so its pad is shown disabled), <theme> is dark or light.
 //   desktop-bay-<theme>    1536x1280, the Panel tab scrolled so the bay's card is at the top of
@@ -54,11 +59,17 @@ export const CABLES = [['keys.velocity', 'vco2.tune'], ['vco1.audio', 'ring.modu
 const SIZES = [['desktop', 1536, 1024, 1280], ['phone', 390, 844, 1400]];
 const TABS = ['panel', 'engines', 'xy'];
 const THEMES = ['dark', 'light'];
+/** What a phone tab view scrolls to the top of the scroller: the tab's own content. */
+export const CONTENT = { panel: '[data-module]', engines: '[data-module]',
+  xy: '[data-osc="synth.xy.pad"]' };
 export const VIEWS = [
   ...SIZES.flatMap(([size, width, height]) => TABS.flatMap((tab) => THEMES.map((theme) =>
-    ({ id: `${size}-${tab}-${theme}`, width, height, tab, theme, bay: false })))),
+    ({ id: `${size}-${tab}-${theme}`, width, height, tab, theme, bay: false,
+      content: size === 'phone' ? CONTENT[tab] : null,
+      knob: size === 'phone' && CONTENT[tab] === '[data-module]' })))),
   ...SIZES.flatMap(([size, width, , bayHeight]) => THEMES.map((theme) =>
-    ({ id: `${size}-bay-${theme}`, width, height: bayHeight, tab: 'panel', theme, bay: true }))),
+    ({ id: `${size}-bay-${theme}`, width, height: bayHeight, tab: 'panel', theme, bay: true,
+      content: null, knob: false }))),
 ];
 const LOAD_MS = 15000;
 
@@ -114,10 +125,79 @@ function scrollBayToTop() {
     - main.getBoundingClientRect().top - navH);
 }
 
+/**
+ * Scroll .osc-main, as scrollBayToTop does, so the first element `sel` names in the Synth view
+ * (a tab's first module card, the XY pad) sits at its top. The sticky chip nav sticks inside the
+ * scroller's padding, so the element is then brought to 8 px below the nav's stuck bottom edge,
+ * where a section chip places its module (gotoSection in src/js/synth/ui.js).
+ */
+function scrollToTop(sel) {
+  const main = document.querySelector('.osc-main');
+  const target = document.querySelector(`#osc-view-synth ${sel}`);
+  const nav = document.querySelector('#osc-view-synth nav[aria-label^="Synth "]');
+  const shown = nav && getComputedStyle(nav).display !== 'none';
+  if (!main || !target) return;
+  main.scrollTop = Math.round(main.scrollTop + target.getBoundingClientRect().top
+    - main.getBoundingClientRect().top - (shown ? nav.offsetHeight : 0));
+  if (shown) {
+    main.scrollTop = Math.round(main.scrollTop + target.getBoundingClientRect().top
+      - nav.getBoundingClientRect().bottom - 8);
+  }
+}
+
+// Each function below runs in the page through page.evaluate, so it holds what it needs: the
+// docked keyboard (#osc-keyboard) begins at its top, or at the viewport's bottom when hidden.
+
+/** The knobs of the Synth view seen whole: above the dock, enabled, hit at their centre. */
+function knobsSeen() {
+  const dock = document.getElementById('osc-keyboard').getBoundingClientRect();
+  const bottom = dock.height ? dock.top : window.innerHeight;
+  return [...document.querySelectorAll('#osc-view-synth [data-knob]')].filter((k) => {
+    const r = k.getBoundingClientRect();
+    if (!r.width || !r.height || r.top < 0 || r.bottom > bottom) return false;
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return Boolean(hit && k.contains(hit)) && k.getAttribute('aria-disabled') !== 'true';
+  }).map((k) => k.dataset.knob);
+}
+
+/**
+ * Turn the knob `cid` to an end of its range through its own key path (End, or Home when it is
+ * already at the top), then blur it; returns its value before and the key pressed.
+ */
+function turnKnob(cid) {
+  const k = document.querySelector(`#osc-view-synth [data-knob="${cid}"]`);
+  const before = k.getAttribute('aria-valuenow');
+  const key = Number(before) >= Number(k.getAttribute('aria-valuemax')) ? 'Home' : 'End';
+  k.focus({ preventScroll: true });
+  k.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+  if (document.activeElement) document.activeElement.blur();
+  return { key, before };
+}
+
 /** What the capture must hold before its picture is worth comparing. */
-function inspect({ pairs, bay, park }) {
+function inspect({ pairs, bay, park, content }) {
   const app = window.OSCILLA.app;
   const d = app.synthDebug();
+  // The element the view scrolled to must be seen: below the chip nav, its top edge above the
+  // docked keyboard, and hit at a point just inside that edge (nothing covers it).
+  let unseen = null;
+  if (content) {
+    const el = document.querySelector(`#osc-view-synth ${content}`);
+    const nav = document.querySelector('#osc-view-synth nav[aria-label^="Synth "]');
+    const navBottom = nav && getComputedStyle(nav).display !== 'none'
+      ? nav.getBoundingClientRect().bottom : 0;
+    const dock = document.getElementById('osc-keyboard').getBoundingClientRect();
+    const dockTop = dock.height ? dock.top : window.innerHeight;
+    const r = el && el.getBoundingClientRect();
+    const hit = r && document.elementFromPoint(r.left + r.width / 2,
+      r.top + Math.min(12, r.height / 2));
+    if (!el) unseen = 'is not drawn';
+    else if (r.top < navBottom - 1) unseen = `is under the chip nav (top ${Math.round(r.top)})`;
+    else if (r.top + 24 > dockTop) {
+      unseen = `is under the docked keyboard (top ${Math.round(r.top)}, `
+        + `dock ${Math.round(dockTop)})`;
+    } else if (!(hit && el.contains(hit))) unseen = 'is covered at its top edge';
+  }
   const ends = pairs.flatMap(([a, b]) => [`${a}:out`, `${b}:in`]);
   const hidden = bay ? ends.filter((id) => {
     const j = document.querySelector(`[data-jack="${id}"]`);
@@ -132,7 +212,7 @@ function inspect({ pairs, bay, park }) {
   return { tab: d.tab, engine: d.engine, armed: d.armed, voices: d.voices,
     cables: d.cables.map((c) => `${c.from} -> ${c.to}`).sort(),
     drawn: document.querySelectorAll('[data-osc="synth.bay.svg"] [data-cable]').length,
-    theme: document.documentElement.dataset.theme, hidden,
+    theme: document.documentElement.dataset.theme, hidden, unseen,
     parked: interactive ? (interactive.getAttribute('data-osc') || interactive.tagName) : null,
     alerts: app.alerts.length };
 }
@@ -179,6 +259,7 @@ async function capture(browser, view, out, target) {
   await frames(page);
   await page.evaluate(resetScroll);
   if (view.bay) await page.evaluate(scrollBayToTop);
+  else if (view.content) await page.evaluate(scrollToTop, view.content);
   // A theme switch starts colour transitions (the header's icon buttons); reduced motion does
   // not stop a CSS transition, so wait until none runs (1 in 2 light captures differed by 27 px).
   await page.waitForFunction(() => document.getAnimations()
@@ -188,7 +269,7 @@ async function capture(browser, view, out, target) {
   await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
   await frames(page);
   const s = await page.evaluate(inspect, { pairs: CABLES, bay: view.bay,
-    park: [0, view.height - 1] });
+    park: [0, view.height - 1], content: view.content });
   const want = CABLES.map(([a, b]) => `${a} -> ${b}`).sort();
   if (s.tab !== view.tab) problems.push(`the Synth shows the ${s.tab} tab, not ${view.tab}`);
   if (s.engine !== ENGINE) problems.push(`the Engines tab's engine is ${s.engine}, not ${ENGINE}`);
@@ -199,28 +280,60 @@ async function capture(browser, view, out, target) {
   if (s.armed || s.voices) problems.push(`the engine is armed (${s.armed}) or sounds (${s.voices})`);
   if (s.theme !== view.theme) problems.push(`the page is in the ${s.theme} theme`);
   if (s.hidden.length) problems.push(`cable ends not visible: ${s.hidden.join(', ')}`);
+  if (s.unseen) problems.push(`the view's content ${view.content} ${s.unseen}`);
   if (s.parked) problems.push(`the parked pointer hovers ${s.parked}`);
   if (s.alerts) problems.push(`${s.alerts} notice(s) on screen`);
   const file = path.join(out, `current-${view.id}.png`);
-  await page.screenshot({ path: file });
+  const shot = await page.screenshot({ path: file });
+  // A phone view must move when a knob does: turn the first knob seen whole and capture again.
+  let probe = null;
+  if (view.knob) {
+    const knobs = await page.evaluate(knobsSeen);
+    if (!knobs.length) problems.push('no knob is seen whole above the docked keyboard');
+    else {
+      const scrolled = await page.evaluate(() => document.querySelector('.osc-main').scrollTop);
+      const turn = await page.evaluate(turnKnob, knobs[0]);
+      await frames(page);
+      turn.after = await page.evaluate((cid) => {
+        const k = document.querySelector(`#osc-view-synth [data-knob="${cid}"]`);
+        return k && k.getAttribute('aria-valuenow');
+      }, knobs[0]);
+      await page.waitForFunction(() => document.getAnimations()
+        .every((a) => !(a instanceof CSSTransition) || a.playState !== 'running'), null,
+      { timeout: LOAD_MS });
+      const again = await page.evaluate(() => document.querySelector('.osc-main').scrollTop);
+      const r = diffPct(shot, await page.screenshot());
+      probe = { knob: knobs[0], seen: knobs.length, ...turn, pct: r.pct };
+      if (turn.before === turn.after) {
+        problems.push(`turning ${knobs[0]} (${turn.key}) kept its value`);
+      }
+      if (again !== scrolled) problems.push(`turning ${knobs[0]} scrolled the view`);
+      if (!(r.n > 0)) problems.push(`turning ${knobs[0]} changed no pixel of the view`);
+    }
+  }
   await page.close();
-  return { file, errors, problems };
+  return { file, errors, problems, probe };
 }
 
-function compare(currentFile, referenceFile, diffFile) {
+/** The pixels two equal-sized PNG buffers differ by, with the compare settings of the gate. */
+function diffPct(a, b, diffFile) {
   const { PNG } = requireHere('pngjs');
   const pixelmatchMod = requireHere('pixelmatch');
   const pixelmatch = pixelmatchMod.default || pixelmatchMod;
-  const a = PNG.sync.read(readFileSync(currentFile));
-  const b = PNG.sync.read(readFileSync(referenceFile));
-  if (a.width !== b.width || a.height !== b.height) {
-    return { pct: 100, note: `size ${a.width}x${a.height} vs ${b.width}x${b.height}` };
+  const x = PNG.sync.read(a);
+  const y = PNG.sync.read(b);
+  if (x.width !== y.width || x.height !== y.height) {
+    return { n: null, pct: 100, note: `size ${x.width}x${x.height} vs ${y.width}x${y.height}` };
   }
-  const diff = new PNG({ width: a.width, height: a.height });
-  const n = pixelmatch(a.data, b.data, diff.data, a.width, a.height,
+  const diff = new PNG({ width: x.width, height: x.height });
+  const n = pixelmatch(x.data, y.data, diff.data, x.width, x.height,
     { threshold: 0.12, includeAA: false });
-  writeFileSync(diffFile, PNG.sync.write(diff));
-  return { pct: +(100 * n / (a.width * a.height)).toFixed(3) };
+  if (diffFile) writeFileSync(diffFile, PNG.sync.write(diff));
+  return { n, pct: +(100 * n / (x.width * x.height)).toFixed(3) };
+}
+
+function compare(currentFile, referenceFile, diffFile) {
+  return diffPct(readFileSync(currentFile), readFileSync(referenceFile), diffFile);
 }
 
 async function main(argv) {
@@ -246,9 +359,14 @@ async function main(argv) {
   }
   try {
     for (const view of opts.views) {
-      const { file, errors, problems } = await capture(browser, view, opts.out, opts.target);
+      const { file, errors, problems, probe } = await capture(browser, view, opts.out,
+        opts.target);
       for (const e of errors) failures.push(`${view.id}: page error ${e}`);
       for (const e of problems) failures.push(`${view.id}: ${e}`);
+      if (probe) {
+        lines.push(`  ${view.id.padEnd(21)} knob ${probe.knob} ${probe.before} -> ${probe.after} `
+          + `moves ${probe.pct} % (${probe.seen} knobs seen)`);
+      }
       const ref = path.join(REF_DIR, `${ENV}-${view.id}.png`);
       if (opts.update) {
         if (errors.length) throw new Error(`page errors, refusing to accept: ${errors.join('; ')}`);
