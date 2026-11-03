@@ -14,6 +14,10 @@
 // store refuses CLIP_ADD of kind notes ('Unknown clip kind "notes".'), clipRules refuses the
 // kind on import, and STUDIO_IMPORT_LIMITS has no notes limits.
 //
+// The clip form (timeline-details.js through timeline-view.js clipFormOptions) offers a notes
+// clip no Action list (the measurement actions it fell back to would be refused, an inert
+// surface): it shows the notes read-only, and only the placement fields that work.
+//
 // Part 2 of K099 adds what this file leaves out: notes played at their frames by the timeline
 // scheduler, offline equal to live, and the one handler shared by live and scheduled notes.
 //   node --test tests/unit/studio-notes-clip.test.mjs
@@ -31,6 +35,7 @@ import * as schema from '../../src/js/studio/schema.js';
 import * as templates from '../../src/js/studio/templates/index.js';
 import * as transportModule from '../../src/js/studio/transport.js';
 import * as validate from '../../src/js/studio/validate.js';
+import * as timelineView from '../../src/js/ui/studio/timeline-view.js';
 import { createFakeAudioEnv } from './sequencer-fake-audio.mjs';
 
 const storeOf = (m) => actions.createStudioStore(m, { idGenerator: actions.createIdGenerator(m) });
@@ -246,4 +251,28 @@ test('K099 the transport and the offline render report a notes clip as not playe
   const un = transport.debugInfo().unplayed.find((u) => u.id === id);
   assert.deepEqual(un && [un.code, un.reason], ['notes-unplayed', why], 'debugInfo().unplayed');
   transport.stop({ fast: true });
+});
+
+test('K099 the clip form shows a notes clip read-only, with no Action list', () => {
+  const { store, track } = setup();
+  const id = ok(store.dispatch(addNotes(track, [note(0, 60), note(1, 62)]))).created.clips[0];
+  const m = store.getModel();
+  const clip = m.timeline.clips.find((c) => c.id === id);
+  const o = timelineView.clipFormOptions(m, clip);
+  assert.deepEqual(o.actions, [], 'no Action choices for a notes clip');
+  assert.equal(o.notes, 'Notes clip · 2 notes. The notes are kept; editing and playback arrive '
+    + 'with the piano roll.');
+  assert.equal(o.notes, timelineView.NOTES_CLIP_TEXT.line(2));
+  assert.deepEqual(o.tracks.map((t) => t.id), [track], 'its own track; it plays on no other');
+  assert.deepEqual(o.targets, [{ id: '', label: 'Track target' }], 'no target where it plays');
+  assert.deepEqual(timelineView.clipText(clip), { label: 'Notes', detail: '2 notes' });
+  // Every other kind keeps its choices and has no notes line.
+  const pattern = m.timeline.clips.find((c) => c.kind === 'pattern');
+  const po = timelineView.clipFormOptions(m, pattern);
+  assert.ok(po.actions.length > 0);
+  assert.equal(po.notes, null);
+  // The placement fields still work: a move by start is one undoable dispatch.
+  ok(store.dispatch({ type: 'CLIP_MOVE', clipId: id, start: 1 }));
+  const moved = store.getModel().timeline.clips.find((c) => c.id === id);
+  assert.deepEqual([moved.start, moved.musical.startBeats], [1, 2], 'moved, relinked to beats');
 });
