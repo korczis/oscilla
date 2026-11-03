@@ -33,14 +33,26 @@ export function createXyTab({ panel, get, host, nodes, model, dispatch, say, jac
     mounted = null;
   }
 
+  /**
+   * The first touch arms the Synth (synth/ui.js synthArm). A refusal synthArm said itself is
+   * passed on as said; one it did not say is the mount's to say.
+   */
+  function arm() {
+    const c = cmp();
+    if (!c) return false;
+    c.synth.status = ''; // what synthArm says lands here
+    if (c.synthArm()) return true;
+    const said = !!c.synth.status;
+    return { ok: false, reason: c.synth.status, said };
+  }
+
   function mount() {
     destroy();
     const body = tab() === 'xy' && host().querySelector('[data-osc="synth.xy"] [data-xy-body]');
     if (!body || !nodes().get('xy')) return;
     const c = cmp();
     mounted = mountSynthXy(body, { store: get().handle, transport: () => get().transport, panel,
-      owner: 'synth', app: c, arm: () => !!(c && c.synthArm()), say, jackName, dispatch,
-      buttonClass: BTN });
+      owner: 'synth', app: c, arm, say, jackName, dispatch, buttonClass: BTN });
   }
 
   function preset(id) {

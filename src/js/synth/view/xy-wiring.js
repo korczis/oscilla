@@ -10,11 +10,14 @@
 //     transport  the Studio transport, or a function returning it (late-bound: null before
 //                audio); the pad plays live notes on it, never the model
 //     owner      who owns the mount, default 'synth' (the Synth workspace); a later target
-//                owned by 'landing' is released by Stop like this one, never by the Synth
-//                panel's own live updates
+//                owned by 'landing' (its home: the landing) is released by Stop like this one,
+//                never by the Synth panel's own live updates
 //     app        the Alpine component: its root's `osc:ui` 'mode' event (a workspace leave)
 //                and its outputOwner (the audio owner); optional
-//     arm()      the first touch arms the instrument (synth/ui.js synthArm), true when it plays
+//     arm()      the first touch arms the instrument (synth/ui.js synthArm): true, or the
+//                reason it did not ({ ok: false, reason, said } | reason | false); the reason
+//                is said (assertively, unless `said`) and shown on the line that describes the
+//                pad, so a refused touch is never silent (project.no-silent-feedback)
 //     phone()    a coarse pointer on a narrow viewport (default: matchMedia PHONE_QUERY)
 //     mountPad   the pad kind's mount (ui/kinds/xy-pad.js mountXyPad; a seam for unit tests)
 //   view.destroy() releases and removes every subscription; a second destroy changes nothing.
@@ -23,21 +26,23 @@
 //
 // The pad talks to what it plays through one small internal interface, the target:
 //   target = { owner, output, wire(slot, ctx) -> spec | null, unwire(), live(kind, x, y),
-//              arm(), release(reason) -> released }
-//   spec   = { params, steps, deg(i), scale, target, lead, disabled }
+//              arm() -> true | refusal, release(reason) -> released }
+//   spec   = { params, steps, deg(i), scale, target, lead, disabled, offer }
 // The document's Synth panel (documentTarget) is the only implementation: its controls edit
 // the StudioModel, one BATCH and one undo entry each, and it plays the panel's xy-pad node
 // through transport.live. The four release paths are the mount's, never a target's: transport
 // Stop (its 'state' event with playing false), leaving the workspace (`osc:ui` 'mode' on the
-// app root), the audio owner moving away from the target's output (app.outputOwner) and page
+// app root), the audio owner moving away from the target's output (app.outputOwner; a change
+// to no owner at all is the Stop's, released as 'stop') and page
 // hide (the pad kind's own pagehide and visibility listeners). Each closes the pad's gate and
 // then sends the router's all-off (studio/live-notes.js through transport.live), so a lost
 // note-off never leaves a voice held. No window listener and no key binding is added here.
 //
-// Phone first open: on a coarse pointer and a narrow viewport an unpatched pad is patched into
-// the voice once per document store, with the XY lead's scale and target (the voice() BATCH,
-// one undo entry), stated in visible text with one first action, "Touch the pad to play". Nothing
-// arms and nothing sounds before that touch (project.a-phone-sounds).
+// Phone first open (a coarse pointer, a narrow viewport): opening the tab edits nothing (no
+// BATCH, no history entry, no dirty document). An unpatched pad states what its one first
+// action does, Patch the pad into the voice (the primary button there: the XY lead's scale and
+// target, one undo entry); a patched pad states its default and "Touch the pad to play".
+// Nothing arms and nothing sounds before that touch (project.a-phone-sounds).
 
 import { mountXyPad } from '../../ui/kinds/xy-pad.js';
 import { xyDegree } from '../../studio/nodes/instrument.js';
@@ -54,21 +59,22 @@ export const XY_TEXT = Object.freeze({
   missing: 'The XY pad is not in this Studio document: press Add the XY pad first.',
   voiced: "The XY pad plays the voice: its cables replace the keyboard's pitch and gate normals.",
   first: 'Touch the pad to play. Nothing sounds until you do.',
-  defaulted: "The XY pad is patched into the voice with the XY lead's scale and target. Undo "
-    + "gives the keyboard its pitch and gate back.",
+  refused: 'The instrument did not start, so the pad plays nothing.',
 });
 export const XY_LEAD = XY_RECIPES.find((r) => r.id === 'xy-lead');
 export const PHONE_QUERY = '(pointer: coarse) and (max-width: 767.98px)';
 export const XY_OWNER = 'synth';
-const HOME = Object.freeze({ synth: 'synth' }); // the workspace an owner's mount lives in
+// The workspace an owner's mount lives in: leaving it releases the pad.
+const HOME = Object.freeze({ synth: 'synth', landing: 'landing' });
 const SELECT = 'h-11 rounded-lg border border-solid border-gray-300 bg-gray-50 px-3 text-sm '
   + 'text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white';
+const PRIMARY = 'h-11 rounded-lg bg-primary-600 px-4 text-sm font-medium text-white '
+  + 'hover:bg-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300';
 const BUTTON = 'rounded-lg px-3 h-11 text-xs font-medium text-primary-700 border border-solid '
   + 'border-primary-600 hover:bg-primary-50 focus:outline-none focus-visible:ring-2 '
   + 'focus-visible:ring-primary-500 dark:text-primary-400 dark:hover:bg-gray-700';
 
 const CURSORS = new WeakMap(); // store -> the pad's cursor: performance state, never the model
-const DEFAULTED = new WeakSet(); // stores whose pad had its phone default (once, then undoable)
 const OWNER_HUBS = new WeakMap(); // app -> listeners of outputOwner: one $watch per app
 
 let mounts = 0;
@@ -127,11 +133,7 @@ function documentTarget({ store, panel, transport, owner, arm, say, jackName, di
     /** Render the controls into `slot` and return what the pad shows, or null without a pad. */
     wire(slot, { phone }) {
       if (!pad()) return null;
-      if (phone && !xyPatched(model(), panel) && !DEFAULTED.has(store)) {
-        DEFAULTED.add(store);
-        act(xyVoiceAction(model(), panel), XY_TEXT.defaulted);
-      }
-      const m = model();
+      const m = model(); // read only: opening the pad edits nothing
       const to = xyTarget(m, panel);
       const patched = xyPatched(m, panel);
       slot.innerHTML = '<label for="synth-xy-y" class="text-sm text-gray-700 dark:text-gray-300">'
@@ -139,7 +141,7 @@ function documentTarget({ store, panel, transport, owner, arm, say, jackName, di
         + `<option value="">Nothing</option>${xyTargets(panel).map((t) => `<option value=`
         + `"${t.id}"${t.id === to ? ' selected' : ''}>${esc(t.label)}</option>`).join('')}`
         + '</select>' + (patched ? '' : `<button type="button" data-xy-voice="" `
-          + `class="${buttonClass}">Patch the pad into the voice</button>`);
+          + `class="${phone ? PRIMARY : buttonClass}">Patch the pad into the voice</button>`);
       on(slot.querySelector('[data-xy-voice]'), 'click',
         () => act(xyVoiceAction(model(), panel), XY_TEXT.voiced));
       const s = slot.querySelector('[data-osc="synth.xy.target"]');
@@ -147,10 +149,18 @@ function documentTarget({ store, panel, transport, owner, arm, say, jackName, di
         s.value ? `Y drives ${s.selectedOptions[0].text}.` : 'Y drives nothing.'));
       const p = pad().params;
       steps = xyDegree(1, p).steps;
-      return { params: p, steps, deg: (i) => xyDegree((i + 0.5) / steps, p),
-        scale: `${p.key} ${SCALE_LABELS[p.mode]}`, target: to ? jackName(to) : 'nothing',
-        lead: p.mode === XY_LEAD.scale.mode && p.key === XY_LEAD.scale.key && to === XY_LEAD.y,
-        disabled: patched ? null : XY_TEXT.unpatched };
+      const next = to || XY_LEAD.y; // Y's target once the pad is patched (xyVoiceAction)
+      const scale = `${p.key} ${SCALE_LABELS[p.mode]}`;
+      const lead = p.mode === XY_LEAD.scale.mode && p.key === XY_LEAD.scale.key
+        && next === XY_LEAD.y;
+      const range = `${scale} over ${p.span} oct from ${p.key}${p.octave}`;
+      const tag = lead ? " (the XY lead's scale and target)" : '';
+      return { params: p, steps, deg: (i) => xyDegree((i + 0.5) / steps, p), scale,
+        target: to ? jackName(to) : 'nothing', lead,
+        disabled: patched ? null : XY_TEXT.unpatched,
+        stated: patched ? `${lead ? 'Default: ' : ''}${range}; Y drives ${jackName(to)}${tag}.`
+          : `Patch the pad into the voice to play it: ${range}, Y driving ${jackName(next)}`
+            + `${tag}. Its cables replace the keyboard's pitch and gate; Undo gives them back.` };
     },
     unwire() {
       while (offs.length) offs.pop()();
@@ -187,6 +197,14 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
   let heard = null; // the transport whose Stop this mount listens to
   let offHeard = () => {};
 
+  /** arm()'s answer as { ok, reason, said }. */
+  const armed = () => {
+    const r = target.arm();
+    if (r === true || (r && r.ok === true)) return { ok: true };
+    return { ok: false, reason: (typeof r === 'string' && r) || (r && r.reason)
+      || XY_TEXT.refused, said: !!(r && r.said) };
+  };
+
   /** Close the pad's gate, then the router's all-off: nothing the pad held stays held. */
   function release(reason) {
     if (destroyed) return 0;
@@ -218,7 +236,8 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
     offs.push(() => root.removeEventListener('osc:ui', leave));
   }
   offs.push(onOwner(app, (now) => { // the audio owner moves away from the target's output
-    if (now !== target.output) release('owner');
+    // No owner at all follows a Stop (which released already): it is the Stop's, never 'owner'.
+    if (now !== target.output) release(now === null ? 'stop' : 'owner');
   }));
   // Page hide: the pad kind's own pagehide and visibilitychange listeners end the gate with
   // reason 'hide', which onGate below routes through the same release.
@@ -234,15 +253,23 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
   const box = host.querySelector('[data-osc="synth.xy.pad"]');
   if (spec && box) {
     const { steps, deg, scale, target: to, params: p } = spec;
-    const stated = host.querySelector('[data-xy-default]');
-    stated.textContent = `${spec.lead ? 'Default: ' : ''}${scale} over ${p.span} oct from `
-      + `${p.key}${p.octave}; Y drives ${to}${spec.lead ? " (the XY lead's scale and target)"
-        : ''}.`;
+    host.querySelector('[data-xy-default]').textContent = spec.stated;
     const first = host.querySelector('[data-xy-first]');
     if (!spec.disabled) {
       first.textContent = XY_TEXT.first;
       first.hidden = false;
     }
+    /** A refused arm: said, and shown on the line that describes the pad, until one plays. */
+    const refused = (why) => {
+      first.textContent = why;
+      first.hidden = false;
+      first.setAttribute('data-xy-refused', '');
+    };
+    const accepted = () => {
+      if (!first.hasAttribute('data-xy-refused')) return;
+      first.removeAttribute('data-xy-refused');
+      first.textContent = XY_TEXT.first;
+    };
     const out = host.querySelector('[data-osc="synth.xy.readout"]');
     const live = (kind, v) => {
       const r = target.live(kind, v.x, v.y);
@@ -281,7 +308,16 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
         if (open) {
           const t = tp();
           // The first touch arms the instrument, as the first key does (synth/ui.js synthArm).
-          if (!(t && t.playing) && !target.arm()) return;
+          if (!(t && t.playing)) {
+            const a = armed();
+            if (!a.ok) {
+              if (!a.said) say(a.reason, true);
+              refused(a.reason);
+              view.model.end('refused'); // the touch holds nothing: the gate closes again
+              return;
+            }
+          }
+          accepted();
           listenStop(); // the transport may exist only from this touch on
           live('on', v);
           return;

@@ -30,11 +30,14 @@
 //              Pattern Sequencer) takes the audio owner: gate closed, no held note, the
 //              transport stopped; once that player stops, silent and census 0
 //   x-phone-first    (K167; 390 px, touch, mobile, the browser's gesture rule ON: Chromium
-//              --autoplay-policy=user-gesture-required, the other engines as they ship) the
-//              first open of #m=synth&yt=xy with no preset shows the stated default (the XY
-//              lead's scale and target) and one first action that describes the pad
-//              (aria-describedby); nothing sounds and nothing is armed before a touch; after a
-//              tap a held touch sounds and its release silences. Firefox has no mobile
+//              --autoplay-policy=user-gesture-required, the other engines as they ship) from
+//              the Synth's own entry (#m=synth, no preset), tapping the XY tab edits nothing
+//              (revision, undo depth, dirty and the unsaved guard as at the entry) and offers
+//              one first action, Patch the pad into the voice (the primary button), stating
+//              what it does (the XY lead's scale and target); nothing sounds and nothing is
+//              armed; tapping it is one undo entry, after which the pad states its default and
+//              "Touch the pad to play", described by aria-describedby; after a tap on the pad
+//              a held touch sounds and its release silences. Firefox has no mobile
 //              emulation (no coarse pointer): skipped there, as tests/browser/touch-audio.cjs
 //              notes; webkit holds with the pointer after the tap (no CDP touch)
 'use strict';
@@ -159,15 +162,15 @@ const padState = (page) => page.evaluate(() => {
 });
 const aria = (page, sel, name) => page.locator(sel).getAttribute(name);
 
-async function openXy(context, base, { preset = 'xy-lead' } = {}) {
-  // preset null: the tab as a first open shows it
+async function openXy(context, base, { preset = 'xy-lead', tab = 'xy' } = {}) {
+  // preset null: the tab as a first open shows it; tab 'panel': the Synth opened on its Panel
   const page = await context.newPage();
-  await page.goto(`${base}#m=synth&yt=xy`);
-  await until(() => page.evaluate(() => !!(window.OSCILLA && window.OSCILLA.app
+  await page.goto(`${base}#m=synth${tab === 'xy' ? '&yt=xy' : ''}`);
+  await until(() => page.evaluate((want) => !!(window.OSCILLA && window.OSCILLA.app
     && window.OSCILLA.app.synthDebug && window.OSCILLA.app.synthDebug().present
-    && window.OSCILLA.app.synthDebug().tab === 'xy'
-    && document.querySelector('[data-osc="synth.xy"]'))),
-  { ms: LOAD_MS, what: 'the XY tab is rendered' });
+    && window.OSCILLA.app.synthDebug().tab === want
+    && (want !== 'xy' || document.querySelector('[data-osc="synth.xy"]'))), tab),
+  { ms: LOAD_MS, what: `the Synth's ${tab} tab is rendered` });
   if (preset) {
     await page.locator('#osc-synth-preset').selectOption(preset);
     await until(() => page.evaluate(() => {
@@ -366,26 +369,43 @@ function defineChecks() {
         'Firefox has no mobile emulation: no coarse pointer');
       return { ok: true, skipped: true };
     }
-    let shown = null;
+    const doc = () => page.evaluate(() => {
+      const st = window.OSCILLA.studio;
+      return { rev: st.store.getRevision(), depth: st.store.debugInfo().undoDepth,
+        dirty: st.dirty, unsaved: window.OSCILLA.unsaved.armed };
+    });
+    const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    // The Synth's own entry (its Panel tab) is the reference: opening the XY tab adds nothing.
+    const entry = await doc();
+    await page.tap('#osc-synth-tab-xy');
+    const read = () => page.evaluate(() => {
+      const s = document.querySelector('[data-xy-surface]');
+      const first = document.querySelector('[data-xy-first]');
+      const stated = document.querySelector('[data-xy-default]');
+      const button = document.querySelector('[data-xy-voice]');
+      const seen = (el) => !!el && !el.hidden && el.getClientRects().length > 0;
+      return { first: seen(first) ? first.textContent : null,
+        stated: seen(stated) ? stated.textContent : null,
+        button: seen(button) ? { text: button.textContent,
+          primary: button.classList.contains('bg-primary-600') } : null,
+        describes: !!(s && first && s.getAttribute('aria-describedby').split(' ')
+          .includes(first.id)),
+        disabled: s ? s.getAttribute('aria-disabled') : null };
+    });
+    let offer = null;
     await until(async () => {
-      shown = await page.evaluate(() => {
-        const s = document.querySelector('[data-xy-surface]');
-        const first = document.querySelector('[data-xy-first]');
-        const stated = document.querySelector('[data-xy-default]');
-        const seen = (el) => !!el && !el.hidden && el.getClientRects().length > 0;
-        return { first: seen(first) ? first.textContent : null,
-          stated: seen(stated) ? stated.textContent : null,
-          describes: !!(s && first && s.getAttribute('aria-describedby').split(' ')
-            .includes(first.id)),
-          disabled: s ? s.getAttribute('aria-disabled') : null };
-      });
-      return shown.first && shown.stated && shown.describes && shown.disabled === 'false';
-    }, { ms: SOUND_MS,
-      what: 'the phone first open shows a playable default and its first action' });
-    if (!/^Touch the pad to play/.test(shown.first)
-      || !/^Default: C minor pentatonic .*Y drives LPF Cutoff \(the XY lead's scale and target\)/i
-        .test(shown.stated)) {
-      return { ok: false, detail: 'the default or the first action is not stated', shown };
+      offer = await read();
+      return !!(offer.stated && offer.button);
+    }, { ms: SOUND_MS, what: 'the phone first open offers its one first action' });
+    const opened = await doc();
+    if (!same(opened, entry)) {
+      return { ok: false, detail: 'opening the XY tab edited the document', entry, opened };
+    }
+    const OFFER = new RegExp('^Patch the pad into the voice to play it: C minor pentatonic .*'
+      + "Y driving LPF Cutoff \\(the XY lead's scale and target\\)", 'i');
+    if (!offer.button.primary || offer.disabled !== 'true' || offer.first
+      || !OFFER.test(offer.stated)) {
+      return { ok: false, detail: 'the first action and what it does are not stated', offer };
     }
     const quiet = await page.evaluate(() => {
       const e = window.OSCILLA.engine;
@@ -403,8 +423,24 @@ function defineChecks() {
     if ((quiet.rms !== null && quiet.rms >= -70) || quiet.armed) {
       return { ok: false, detail: 'something sounds or is armed before a touch', quiet };
     }
+    const untapped = await doc();
+    if (!same(untapped, entry)) {
+      return { ok: false, detail: 'the document changed before the tap', entry, untapped };
+    }
+    await page.tap('[data-xy-voice]'); // the first action: one undo entry
+    let shown = null;
+    await until(async () => {
+      shown = await read();
+      return !!(shown.first && shown.describes && shown.disabled === 'false');
+    }, { ms: SOUND_MS, what: 'the patched pad shows its default and Touch the pad to play' });
+    const patched = await doc();
+    if (patched.depth !== entry.depth + 1 || !/^Touch the pad to play/.test(shown.first)
+      || !/^Default: C minor pentatonic .*Y drives LPF Cutoff \(the XY lead's scale and target\)/i
+        .test(shown.stated)) {
+      return { ok: false, detail: 'the tap did not patch the pad as stated', patched, shown };
+    }
     const p = await padPoint(page, 3, 0.3);
-    await page.touchscreen.tap(p.x, p.y); // the first gesture: the page unlocks its audio
+    await page.touchscreen.tap(p.x, p.y); // a gesture on the pad: the page's audio unlocks
     await until(() => page.evaluate(() => {
       const e = window.OSCILLA.engine;
       return !!(e.ctx && e.ctx.state === 'running');
@@ -423,7 +459,8 @@ function defineChecks() {
       await page.mouse.up();
     }
     const q = await silent(page, 'lifting the touch silences');
-    return { ok: true, shown, quiet, off: Number(q.rmsDb.toFixed(1)) };
+    return { ok: true, entry, offer: offer.stated, shown: shown.stated, quiet,
+      depth: [entry.depth, patched.depth], off: Number(q.rmsDb.toFixed(1)) };
   });
   return checks;
 }
@@ -448,7 +485,7 @@ async function runLeg(browserName, sizeName, base) {
       context.on('page', (pg) => pg.on('pageerror', (e) => errors.push(String(e))));
       const t0 = Date.now();
       try {
-        const page = await openXy(context, base, first ? { preset: null } : {});
+        const page = await openXy(context, base, first ? { preset: null, tab: 'panel' } : {});
         const v = await bounded(fn({ page, context, base, browserName }),
           { ms: CHECK_MS, what: `${name} finishes` });
         results[name] = { ...v, ok: v.ok && errors.length === 0, errors: errors.slice(0, 4),

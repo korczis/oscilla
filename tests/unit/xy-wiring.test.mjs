@@ -34,7 +34,11 @@ import { panelStore } from './synth-fixture.mjs';
 function fakeEl() {
   const on = new Map();
   const kids = new Map();
+  const attrs = new Map();
   return {
+    setAttribute(k, v) { attrs.set(k, String(v)); },
+    hasAttribute: (k) => attrs.has(k),
+    removeAttribute(k) { attrs.delete(k); },
     innerHTML: '', textContent: '', hidden: false, value: '', selectedOptions: [{ text: '' }],
     addEventListener(t, fn) { if (!on.has(t)) on.set(t, new Set()); on.get(t).add(fn); },
     removeEventListener(t, fn) { if (on.has(t)) on.get(t).delete(fn); },
@@ -63,13 +67,17 @@ function fakeApp(workspace = 'synth') {
 /** The pad kind without a DOM: the real model; destroy ends a held gate as mountXyPad does. */
 function padSeam() {
   const seen = [];
+  const reasons = []; // why each gate closed, as the kind reports it to onGate
   const mountPad = (box, opts) => {
-    const model = createXyModel(opts);
+    const model = createXyModel({ ...opts, onGate: (open, v, why) => {
+      if (!open) reasons.push(why);
+      opts.onGate(open, v, why);
+    } });
     const view = { model, opts, update() {}, destroy() { model.end('hide'); } };
     seen.push(view);
     return view;
   };
-  return { mountPad, last: () => seen[seen.length - 1] };
+  return { mountPad, reasons, last: () => seen[seen.length - 1] };
 }
 
 /** A jack's friendly name, as synth/ui.js names it ('LPF Cutoff'). */
@@ -175,9 +183,14 @@ test('transport Stop releases a held gate and its notes; the pad is free for the
     assert.equal(m.view.model.gated, false, 'Stop closed the pad\'s gate');
     assert.deepEqual(r.real.heldNotes(), []);
     assert.equal(r.runtime.debugInfo().runtimeNodeCount, 0, 'runtime census 0');
+    r.app.owner(null); // the outputOwner change that follows the Stop
+    assert.deepEqual(r.pad.reasons, ['stop'], 'the Stop released it, never \'owner\'');
     assert.equal(m.view.model.down(2, 0.2, 0.5), true);
     assert.equal(r.real.playing, true, 'the next touch arms again and plays');
     assert.equal(r.real.heldNotes().length, 1);
+    r.app.owner(null); // no owner while held: released as the Stop's
+    assert.deepEqual(r.pad.reasons, ['stop', 'stop']);
+    assert.deepEqual(r.real.heldNotes(), []);
     m.destroy();
     stopNow(r);
   });
@@ -208,6 +221,7 @@ test('the audio owner moving away from the instrument releases it; the Studio ke
     r.app.owner('sequencer');
     assert.equal(m.view.model.gated, false);
     assert.deepEqual(r.real.heldNotes(), []);
+    assert.deepEqual(r.pad.reasons, ['owner'], 'released as owner');
     assert.ok(released(r, ['all-off']).length >= 1, 'through the router\'s all-off');
     m.destroy();
     const again = r.mount();
@@ -285,34 +299,76 @@ test('destroy() releases and leaves no listener; a second destroy is a no-op', (
 
 // ---------------------------------------------------------------- phone first open
 
-test('phone first open: the XY lead default, stated, one first action, nothing armed', () => {
+test('phone first open edits nothing: the button states what it does, one undo entry', () => {
   const r = rig({ patch: false });
+  const rev = r.st.getRevision();
   const depth = r.st.debugInfo().undoDepth;
+  const before = serializeStudio(r.st.getModel());
   const m = r.mount({ phone: () => true });
-  assert.equal(xyPatched(r.st.getModel(), PANEL), true, 'playable at once');
+  assert.equal(r.st.getRevision(), rev, 'opening the tab dispatches nothing');
+  assert.equal(r.st.debugInfo().undoDepth, depth, 'no history entry');
+  assert.equal(serializeStudio(r.st.getModel()), before, 'the document is unchanged');
+  assert.equal(m.view.opts.disabled, XY_TEXT.unpatched);
+  assert.deepEqual(m.view.opts.describedBy, [], 'no first action on a disabled pad');
+  assert.match(r.host.innerHTML, /data-xy-first="" hidden/, 'rendered hidden until playable');
+  const controls = r.host.querySelector('[data-xy-controls]');
+  assert.match(controls.innerHTML, /data-xy-voice="" class="h-11 rounded-lg bg-primary-600/,
+    'Patch the pad into the voice is the primary button on a phone');
+  const offer = r.host.querySelector('[data-xy-default]').textContent;
+  assert.match(offer, /^Patch the pad into the voice to play it: C Minor pentatonic over 2 oct /i);
+  assert.match(offer, /Y driving LPF Cutoff \(the XY lead's scale and target\)/);
+  assert.match(offer, /Undo gives them back/);
+  controls.querySelector('[data-xy-voice]').fire('click');
+  assert.equal(r.st.debugInfo().undoDepth, depth + 1, 'the tap: one undo entry');
+  assert.equal(xyPatched(r.st.getModel(), PANEL), true);
   assert.equal(xyTarget(r.st.getModel(), PANEL), XY_LEAD.y);
-  assert.equal(r.st.debugInfo().undoDepth, depth + 1, 'one undo entry');
-  const pad = PANEL.resolve(r.st.getModel()).get('xy').params;
-  assert.deepEqual([pad.mode, pad.key], [XY_LEAD.scale.mode, XY_LEAD.scale.key]);
-  assert.equal(m.view.opts.disabled, null);
+  m.destroy();
+  const after = r.mount({ phone: () => true }); // synth/ui.js re-mounts after the edit
+  assert.equal(after.view.opts.disabled, null);
   const stated = r.host.querySelector('[data-xy-default]').textContent;
   assert.match(stated, /^Default: C Minor pentatonic over 2 oct from C3; Y drives LPF Cutoff/i);
   assert.match(stated, /the XY lead's scale and target/);
   const first = r.host.querySelector('[data-xy-first]');
   assert.equal(first.textContent, XY_TEXT.first);
   assert.equal(first.hidden, false);
-  assert.equal(m.view.opts.describedBy.length, 1, 'the first action describes the pad');
-  assert.match(r.host.innerHTML, new RegExp(`id="${m.view.opts.describedBy[0]}"`));
+  assert.equal(after.view.opts.describedBy.length, 1, 'the first action describes the pad');
+  assert.match(r.host.innerHTML, new RegExp(`id="${after.view.opts.describedBy[0]}"`));
   assert.equal(r.real.playing, false, 'nothing armed, nothing sounds before a touch');
   assert.deepEqual(r.calls.filter((c) => c[1] !== 'move'), []);
+  after.destroy();
+});
+
+test('a refused arm is never a silent touch: said, shown on the pad\'s line, gate closed', () => {
+  const r = rig();
+  const why = 'The output belongs to the measurement: stop it (Esc) before playing.';
+  let answer = { ok: false, reason: why };
+  const m = r.mount({ arm: () => answer, say: (t, assertive) => r.said.push([t, assertive]) });
+  assert.equal(m.view.model.down(1, 0.5, 0.5), true);
+  assert.deepEqual(r.said.at(-1), [why, true], 'said assertively');
+  const first = r.host.querySelector('[data-xy-first]');
+  assert.equal(first.textContent, why, 'shown on the line that describes the pad');
+  assert.equal(first.hidden, false);
+  assert.equal(m.view.model.gated, false, 'the refused touch holds no gate');
+  assert.equal(r.real.playing, false);
+  assert.deepEqual(r.real.heldNotes(), []);
+  assert.deepEqual(r.pad.reasons, ['refused']);
+  m.view.model.up(1);
+  const n = r.said.length;
+  answer = { ok: false, reason: why, said: true }; // the arm said it itself: not twice
+  m.view.model.down(2, 0.5, 0.5);
+  assert.equal(r.said.length, n);
+  answer = false; // no reason given: the mount's own sentence
+  m.view.model.up(2);
+  m.view.model.down(3, 0.5, 0.5);
+  assert.deepEqual(r.said.at(-1), [XY_TEXT.refused, true]);
+  m.view.model.up(3);
+  answer = true;
+  r.transport.arm();
+  m.view.model.down(4, 0.5, 0.5);
+  assert.equal(first.textContent, XY_TEXT.first, 'a touch that plays restores the first action');
+  assert.equal(r.real.heldNotes().length, 1);
   m.destroy();
-  r.st.undo();
-  const again = r.mount({ phone: () => true });
-  assert.equal(xyPatched(r.st.getModel(), PANEL), false, 'once per store: an undo stays undone');
-  assert.equal(again.view.opts.disabled, XY_TEXT.unpatched);
-  assert.deepEqual(again.view.opts.describedBy, [], 'no first action on a disabled pad');
-  assert.match(r.host.innerHTML, /data-xy-first="" hidden/, 'rendered hidden until playable');
-  again.destroy();
+  stopNow(r);
 });
 
 test('desktop first open: an unpatched pad stays unpatched and says why', () => {
