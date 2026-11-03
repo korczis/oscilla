@@ -6,7 +6,10 @@
 // text on the value's own grid and the ARIA attributes, and controlSvg, the knob, fader and
 // switch drawn only from tokens inside CONTROL_BOX, with a hit area of at least 44 screen px that
 // always holds the drawing, and an applied marker. Every finite parameter of every registry node
-// type goes through all of it. The value is a setpoint: nothing tweens.
+// type goes through all of it. The value is a setpoint: nothing tweens. The feel (plan S3,
+// src/js/ui/synth/feel.js): Shift mid-drag re-anchors, so nothing jumps; one gesture per held
+// key, wheel burst (400 ms idle) or drag, so one undo entry; Escape restores the start; a wheel
+// notch of 1 % (Shift 0.1 %); a horizontal fader, a 28 x 14 cap, a slot press a page toward it.
 //   node --test tests/unit/ui-synth-knob.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -16,6 +19,8 @@ import {
   formatValue, ariaAttrs, controlSvg, parseValue, stepOption, pixelsPerRangeFor, HIT_PX,
   CONTROL_BOX, DRAG_PX_PER_RANGE, FADER_TRAVEL, LOG_STEPS, WHEEL_NOTCH_PX, WHEEL_LINE_PX,
 } from '../../src/js/ui/synth/knob.js';
+import * as KNOB_CORE from '../../src/js/ui/synth/knob.js';
+import * as FEEL from '../../src/js/ui/synth/feel.js';
 import { NODE_DEFINITIONS } from '../../src/js/studio/registry.js';
 import PANEL from '../../src/js/synth/panels/semi-mono.js';
 import { TOKENS, colourLiterals, shapesWithoutStroke, paints, tokenValues, intensityLiterals }
@@ -1347,4 +1352,310 @@ test('knob.js is a pure core: no DOM, no listener, no document', () => {
   assert.doesNotMatch(src, /addEventListener|document\.|window\.|getComputedStyle/);
   assert.doesNotMatch(src, /from '\.\.\/\.\.\/synth\//, 'nothing from src/js/synth');
   assert.doesNotMatch(src, /\bosc-|data-osc|style=/, 'no osc-* class, data-osc hook or style');
+});
+
+// ---------------------------------------------------------------- feel (plan S3)
+// Read through the namespaces, so a name the core lacks fails its own test and no other.
+const CORE = { ...KNOB_CORE, ...FEEL };
+
+const kd = (k, t, repeat = false) => ({ type: 'keydown', key: k, timeStamp: t, repeat });
+const ku = (k, t) => ({ type: 'keyup', key: k, timeStamp: t });
+const wh = (t) => ({ type: 'wheel', timeStamp: t });
+
+test('drag: changing Shift mid-drag re-anchors at the current value, so nothing jumps', () => {
+  let a = CORE.dragAnchor(50, { x: 0, y: 100 });
+  assert.ok(Object.isFrozen(a));
+  let v = CORE.dragAt(a, { x: 0, y: 80 }, LIN);
+  assert.equal(v, 60, 'up 20 of 200 px is a tenth of the range');
+  assert.equal(CORE.reanchorDrag(a, { value: v, x: 0, y: 80, fine: false }), a,
+    'the same anchor while Shift stays as it was');
+  a = CORE.reanchorDrag(a, { value: v, x: 0, y: 80, fine: true });
+  assert.equal(CORE.dragAt(a, { x: 0, y: 80 }, LIN), 60, 'pressing Shift moves nothing');
+  v = CORE.dragAt(a, { x: 0, y: 60 }, LIN);
+  assert.equal(v, 61, 'fine from where Shift was pressed: up 20 px is 1 %, not back to 51');
+  a = CORE.reanchorDrag(a, { value: v, x: 0, y: 60, fine: false });
+  assert.equal(CORE.dragAt(a, { x: 0, y: 60 }, LIN), 61, 'releasing Shift moves nothing');
+  assert.equal(CORE.dragAt(a, { x: 0, y: 40 }, LIN), 71, 'coarse again from there');
+  // A fine value, then coarse: the coarse grid never moves the value against the hand.
+  const f = CORE.dragAnchor(50.3, { x: 0, y: 0 });
+  assert.ok(CORE.dragAt(f, { x: 0, y: -0.2 }, LIN) >= 50.3, 'up never lowers it');
+  assert.ok(CORE.dragAt(f, { x: 0, y: 0.2 }, LIN) <= 50.3, 'down never raises it');
+  assert.equal(CORE.dragAt(f, { x: 0, y: -1 }, LIN), 51);
+  assert.throws(() => CORE.dragAt(a, { x: 0, y: 0 }, LIN, { pixelsPerRange: 0 }),
+    /pixelsPerRange/);
+});
+
+test('drag: a sweep with Shift pressed and released moves with the hand, never back', () => {
+  for (const p of [LIN, LOG, SMOOTH, TIME]) {
+    let value = defaultValue(p);
+    let fine = false;
+    let a = CORE.dragAnchor(value, { x: 0, y: 0 }, { fine });
+    for (let i = 1; i <= 120; i++) {
+      const y = -i * 0.75;
+      if (i % 7 === 0) {
+        fine = !fine;
+        a = CORE.reanchorDrag(a, { value, x: 0, y, fine });
+      }
+      const next = CORE.dragAt(a, { x: 0, y }, p);
+      const step = toNorm(next, p) - toNorm(value, p);
+      assert.ok(step >= -1e-12, `${p.id ?? p.key} event ${i}: moved back by ${step}`);
+      assert.ok(step <= 0.75 / DRAG_PX_PER_RANGE + 0.02, `${p.id ?? p.key} ${i}: jumped ${step}`);
+      value = next;
+    }
+  }
+});
+
+test('drag: a horizontal fader follows x, right is more, and ignores y', () => {
+  const ppr = pixelsPerRangeFor('fader', 2);
+  const a = CORE.dragAnchor(50, { x: 10, y: 5 }, { orientation: 'horizontal' });
+  near(CORE.dragAt(a, { x: 10 + ppr / 4, y: 30 }, LIN, { pixelsPerRange: ppr }), 75);
+  near(CORE.dragAt(a, { x: 10 - ppr / 4, y: -30 }, LIN, { pixelsPerRange: ppr }), 25);
+  assert.equal(CORE.dragAt(a, { x: 10, y: 99 }, LIN, { pixelsPerRange: ppr }), 50);
+  const b = CORE.reanchorDrag(a, { value: 50, x: 10, y: 5, fine: true });
+  assert.equal(b.orientation, 'horizontal', 'a re-anchor keeps the orientation');
+  assert.throws(() => CORE.dragAnchor(50, { x: 0, y: 0 }, { orientation: 'diagonal' }),
+    /orientation/);
+});
+
+test('gestureOf: a held arrow run is one gesture, from its first keydown to its keyup', () => {
+  assert.equal(CORE.GESTURE_IDLE_MS, 400);
+  let r = CORE.gestureOf(kd('ArrowUp', 0), null, { value: 50 });
+  assert.equal(r.begin.kind, 'keys');
+  assert.equal(r.begin.from, 50, 'the value at the start, for an undo entry or Escape');
+  assert.equal(r.end, null);
+  assert.equal(r.cancel, false);
+  let g = r.gesture;
+  assert.equal(g, r.begin);
+  assert.ok(Object.isFrozen(g));
+  let begins = 1;
+  let endsN = 0;
+  for (let t = 30; t < 3000; t += 30) {
+    r = CORE.gestureOf(kd('ArrowUp', t, true), g, { value: 50 + t / 30 });
+    begins += r.begin ? 1 : 0;
+    endsN += r.end ? 1 : 0;
+    g = r.gesture;
+  }
+  assert.deepEqual([begins, endsN], [1, 0], 'a long hold is still one gesture');
+  assert.equal(g.from, 50);
+  assert.equal(CORE.gestureOf(ku('Shift', 3000), g).gesture, g, 'another key\'s keyup');
+  r = CORE.gestureOf(ku('ArrowUp', 3000), g);
+  assert.equal(r.end.from, 50);
+  assert.equal(r.end.kind, 'keys');
+  assert.deepEqual([r.begin, r.gesture, r.cancel], [null, null, false]);
+  for (const k of ['PageUp', 'PageDown', 'Home', 'End', 'ArrowLeft']) {
+    assert.equal(CORE.gestureOf(kd(k, 0), null, { value: 1 }).begin.key, k, `${k} runs too`);
+  }
+  const other = CORE.gestureOf(kd('ArrowDown', 10), g, { value: 60 });
+  assert.equal(other.end, g, 'another arrow ends the run');
+  assert.equal(other.begin.from, 60, 'and begins its own');
+  for (const k of ['Enter', 'Delete', 'a', ' ']) {
+    assert.deepEqual(CORE.gestureOf(kd(k, 0), null, { value: 1 }),
+      { begin: null, end: null, cancel: false, gesture: null }, `${k} is no gesture`);
+  }
+  assert.equal(CORE.gestureOf(kd('ArrowUp', 0, false), null, { value: 1 }).begin.kind, 'keys');
+  assert.equal(CORE.gestureOf({ type: 'blur', timeStamp: 1 }, g).end, g,
+    'a lost focus ends a run whose keyup will never come');
+});
+
+test('gestureOf: a wheel burst is one gesture until 400 ms pass without a notch', () => {
+  let r = CORE.gestureOf(wh(0), null, { value: 50 });
+  assert.equal(r.begin.kind, 'wheel');
+  let g = r.gesture;
+  for (let t = 100; t <= 2000; t += 390) {
+    r = CORE.gestureOf(wh(t), g, { value: 70 });
+    assert.deepEqual([r.begin, r.end], [null, null], `${t}: still the burst`);
+    g = r.gesture;
+  }
+  assert.equal(g.from, 50);
+  assert.equal(CORE.gestureOf({ type: 'idle', timeStamp: g.at + 399 }, g).gesture, g);
+  r = CORE.gestureOf({ type: 'idle', timeStamp: g.at + 400 }, g);
+  assert.deepEqual([r.end, r.gesture, r.begin], [g, null, null], 'the host\'s timer ends it');
+  r = CORE.gestureOf(wh(g.at + 400), g, { value: 80 });
+  assert.equal(r.end, g, 'a notch after the idle ends the old burst');
+  assert.equal(r.begin.from, 80, 'and begins a new one');
+  r = CORE.gestureOf(kd('ArrowUp', g.at + 10), g, { value: 81 });
+  assert.deepEqual([r.end, r.begin.kind], [g, 'keys'], 'a key ends the burst');
+  assert.equal(CORE.gestureOf({ type: 'idle', timeStamp: 5 }, null).gesture, null);
+});
+
+test('gestureOf: a drag is one gesture from pointerdown to pointerup, owning the control', () => {
+  let r = CORE.gestureOf({ type: 'pointerdown', timeStamp: 0 }, null, { value: 20 });
+  assert.equal(r.begin.kind, 'drag');
+  const g = r.gesture;
+  for (const e of [{ type: 'pointermove', timeStamp: 5 }, wh(10), kd('ArrowUp', 20),
+    { type: 'idle', timeStamp: 5000 }, { type: 'blur', timeStamp: 5001 }]) {
+    r = CORE.gestureOf(e, g, { value: 33 });
+    assert.deepEqual([r.begin, r.end], [null, null], `${e.type} inside a drag`);
+    assert.equal(r.gesture.kind, 'drag');
+    assert.equal(r.gesture.from, 20);
+  }
+  for (const type of ['pointerup', 'pointercancel']) {
+    r = CORE.gestureOf({ type, timeStamp: 6000 }, g);
+    assert.deepEqual([r.end, r.gesture, r.cancel], [g, null, false], type);
+  }
+  const live = CORE.gestureOf(wh(0), null, { value: 1 }).gesture;
+  r = CORE.gestureOf({ type: 'pointerdown', timeStamp: 50 }, live, { value: 2 });
+  assert.deepEqual([r.end, r.begin.kind, r.begin.from], [live, 'drag', 2]);
+});
+
+test('Escape cancels a gesture: the value captured at its start comes back', () => {
+  const host = (events, start) => {
+    let g = null;
+    let value = start;
+    const undo = [];
+    // As a host does: the gesture first (it captures the value before the change), then the
+    // change the event makes (`v`), then the undo entry when a gesture ends.
+    for (const [e, v] of events) {
+      const r = CORE.gestureOf(e, g, { value });
+      if (r.end && r.cancel) value = CORE.cancelGesture(r.end);
+      else if (r.end) undo.push([r.end.from, value]);
+      if (v !== undefined) value = v;
+      g = r.gesture;
+    }
+    return { value, undo };
+  };
+  const esc = (t) => kd('Escape', t);
+  assert.deepEqual(host([[{ type: 'pointerdown', timeStamp: 0 }], [{ type: 'pointermove',
+    timeStamp: 5 }, 80], [esc(9)]], 50), { value: 50, undo: [] }, 'a drag');
+  assert.deepEqual(host([[wh(0), 51], [wh(50), 52], [esc(60)]], 50), { value: 50, undo: [] },
+    'a wheel burst');
+  assert.deepEqual(host([[kd('ArrowUp', 0), 51], [kd('ArrowUp', 30, true), 52], [esc(40)]], 50),
+    { value: 50, undo: [] }, 'a held arrow');
+  const r = CORE.gestureOf(esc(0), null, { value: 7 });
+  assert.deepEqual(r, { begin: null, end: null, cancel: false, gesture: null },
+    'no gesture: Escape stays the page\'s');
+  assert.equal(CORE.cancelGesture(null), null);
+  const g = CORE.gestureOf(wh(0), null, { value: 3 }).gesture;
+  assert.equal(CORE.cancelGesture(g), 3);
+  assert.equal(CORE.gestureOf(esc(1), g).cancel, true);
+  // One undo entry per gesture: a drag, a burst, a held run, a page key.
+  const all = host([[{ type: 'pointerdown', timeStamp: 0 }], [{ type: 'pointermove',
+    timeStamp: 1 }, 60], [{ type: 'pointerup', timeStamp: 2 }], [wh(10), 61], [wh(20), 62],
+  [{ type: 'idle', timeStamp: 420 }], [kd('ArrowUp', 500), 63], [kd('ArrowUp', 530, true), 64],
+  [ku('ArrowUp', 560)], [kd('PageUp', 600), 74], [ku('PageUp', 610)]], 50);
+  assert.deepEqual(all.undo, [[50, 60], [60, 62], [62, 64], [64, 74]]);
+});
+
+test('wheel: a notch is 1 % of the (norm) range, Shift 0.1 %, keeping the carried rest', () => {
+  assert.equal(CORE.WHEEL_STEP, 0.01);
+  const TINY = { ...LIN, step: 0.001 };
+  for (const p of [TINY, SMOOTH, FLOAT, LOG, TIME_LOG, TIME]) {
+    const v0 = fromNorm(0.5, p);
+    for (const [fine, want] of [[false, 0.01], [true, 0.001]]) {
+      const up = wheelValue(v0, -WHEEL_NOTCH_PX, p, { fine }).value;
+      near(toNorm(up, p) - toNorm(v0, p), want, want / 20);
+      const down = wheelValue(v0, WHEEL_NOTCH_PX, p, { fine }).value;
+      near(toNorm(v0, p) - toNorm(down, p), want, want / 20);
+      const half = wheelValue(v0, -WHEEL_NOTCH_PX / 2, p, { fine });
+      assert.equal(half.value, v0, 'half a notch moves nothing yet');
+      const whole = wheelValue(half.value, -WHEEL_NOTCH_PX / 2, p, { fine, rest: half.rest });
+      assert.equal(whole.value, up, 'two halves are one notch');
+    }
+  }
+});
+
+test('fader: the cap is 28 × 14 with three grip lines, its edge in control.edge', () => {
+  assert.deepEqual({ ...CORE.FADER_CAP }, { w: 28, h: 14 });
+  assert.ok(Object.isFrozen(CORE.FADER_CAP));
+  const t = TOKENS.control;
+  for (const [state, edge] of [[{}, t.edge], [{ dragging: true }, t.pointer]]) {
+    const svg = controlSvg({ kind: 'fader', value: 70, param: LIN, tokens: TOKENS, state });
+    const cap = part(svg, 'data-cap');
+    assert.deepEqual([numOf(cap, 'width'), numOf(cap, 'height')], [28, 14]);
+    assert.equal(attrOf(cap, 'stroke'), edge);
+    const [cx, cy] = [numOf(cap, 'x') + 14, numOf(cap, 'y') + 7];
+    const grips = [...svg.matchAll(/<line data-grip="[^"]*"[^>]*>/g)].map((m) => m[0]);
+    assert.equal(grips.length, 3);
+    for (const g of grips) {
+      assert.equal(numOf(g, 'y1'), numOf(g, 'y2'), 'across the travel');
+      assert.ok(Math.abs(numOf(g, 'y1') - cy) < 7 && numOf(g, 'x1') >= cx - 14
+        && numOf(g, 'x2') <= cx + 14, 'inside the cap');
+    }
+    const centre = grips.find((g) => numOf(g, 'y1') === cy);
+    assert.ok(centre, 'one grip on the value');
+    assert.equal(attrOf(centre, 'stroke'), t.pointer);
+    for (const g of grips.filter((x) => x !== centre)) assert.equal(attrOf(g, 'stroke'), t.edge);
+  }
+  const off = controlSvg({ kind: 'fader', value: 70, param: LIN, tokens: TOKENS,
+    state: { disabled: true } });
+  assert.match(off, new RegExp(`<line data-grip="centre"[^>]*stroke="${
+    t.disabled.replace(/[()]/g, '\\$&')}"`));
+});
+
+test('fader: a horizontal orientation is the same fader turned, more to the right', () => {
+  const at = (value, orientation, extra = {}) => controlSvg({ kind: 'fader', value,
+    param: LIN, tokens: TOKENS, orientation, ...extra });
+  const inner = (svg) => /<g pointer-events="none"[^>]*>(.*)<\/g><\/g>$/.exec(svg)[1];
+  assert.equal(at(70, 'vertical'), at(70, undefined), 'vertical is the default');
+  assert.deepEqual(CORE.controlBox('fader'), CONTROL_BOX.fader);
+  const box = CORE.controlBox('fader', 'horizontal');
+  assert.deepEqual({ ...box }, { x: CONTROL_BOX.fader.y, y: CONTROL_BOX.fader.x,
+    width: CONTROL_BOX.fader.height, height: CONTROL_BOX.fader.width });
+  assert.ok(Object.isFrozen(box));
+  for (const zoom of [0.5, 1, 2]) {
+    for (const state of [{}, { focus: true }, { dragging: true, focus: true }]) {
+      const h = at(70, 'horizontal', { zoom, state, applied: 10 });
+      assert.match(h, /<g pointer-events="none" transform="rotate\(90\)">/);
+      assert.equal(inner(h), inner(at(70, 'vertical', { zoom, state, applied: 10 })),
+        'the same parts');
+      const [x, y, w, hh] = hitOf(h);
+      assert.deepEqual([w, hh], [Math.max(HIT_PX / zoom, box.width),
+        Math.max(HIT_PX / zoom, box.height)]);
+      assert.deepEqual([x, y], [-w / 2, -hh / 2]);
+    }
+  }
+  // rotate(90) takes (x, y) to (-y, x): the cap at the top (max) lands on the right.
+  const capAlong = (v) => {
+    const c = part(at(v, 'horizontal'), 'data-cap');
+    return -(numOf(c, 'y') + numOf(c, 'height') / 2);
+  };
+  near(capAlong(100), FADER_TRAVEL / 2, 0.01);
+  near(capAlong(0), -FADER_TRAVEL / 2, 0.01);
+  assert.throws(() => at(70, 'diagonal'), /orientation/);
+  for (const kind of ['knob', 'switch']) {
+    assert.throws(() => controlSvg({ kind, value: kind === 'switch' ? 'hi' : 1,
+      param: paramOf(kind), tokens: TOKENS, orientation: 'horizontal' }), /orientation/);
+    assert.throws(() => CORE.controlBox(kind, 'horizontal'), /orientation/);
+  }
+});
+
+test('fader: a press on the cap grabs it where it is; on the slot, a page toward the press', () => {
+  for (const orientation of ['vertical', 'horizontal']) {
+    // A point along the travel, `d` graph units toward more, `c` across it.
+    const pt = (d, c = 0) => (orientation === 'vertical' ? { x: c, y: -d } : { x: d, y: c });
+    const press = (value, d, c, param = LIN) => CORE.faderPress({ value, param,
+      point: pt(d, c), orientation });
+    const cap = (v) => FADER_TRAVEL * toNorm(v, LIN) - FADER_TRAVEL / 2;
+    for (const v of [0, 50, 70, 100]) {
+      for (const [d, c] of [[0, 0], [6.9, 0], [-6.9, 13], [3, -20]]) {
+        assert.deepEqual(press(v, cap(v) + d, c), { grab: true, value: v },
+          `${orientation} v ${v}: on the cap (${d}, ${c})`);
+      }
+    }
+    assert.deepEqual(press(50, cap(50) + 20, 0), { grab: false, value: 60 }, 'a page up');
+    assert.deepEqual(press(50, cap(50) - 7.5, 5), { grab: false, value: 40 }, 'a page down');
+    assert.deepEqual(press(100, 31, 0), { grab: true, value: 100 });
+    assert.deepEqual(press(95, 40, 0), { grab: false, value: 100 }, 'held at the end');
+    assert.deepEqual(press(true, 30, 0, BOOL), { grab: true, value: true });
+    assert.deepEqual(press(false, 30, 0, BOOL), { grab: false, value: true }, 'one option');
+    // The grab is relative: the anchor at the press, and the value moves only with the hand.
+    const ppr = pixelsPerRangeFor('fader', 1);
+    const a = CORE.dragAnchor(70, pt(cap(70) + 5, 4), { orientation });
+    assert.equal(CORE.dragAt(a, pt(cap(70) + 5, 4), LIN, { pixelsPerRange: ppr }), 70,
+      'grabbed off centre, it does not jump to the pointer');
+    near(CORE.dragAt(a, pt(cap(70) + 5 + 6.4, 4), LIN, { pixelsPerRange: ppr }), 80, 1e-9);
+  }
+  assert.throws(() => CORE.faderPress({ value: 1, param: LIN, point: { x: NaN, y: 0 } }),
+    /point/);
+});
+
+test('feel.js is a pure core too: no DOM, no listener, only knob.js imported', () => {
+  const src = readFileSync(new URL('../../src/js/ui/synth/feel.js', import.meta.url), 'utf8')
+    .replace(/^\s*\/\/.*$/gm, '');
+  assert.doesNotMatch(src, /addEventListener|document\.|window\.|getComputedStyle|setTimeout/);
+  assert.deepEqual([...src.matchAll(/\bfrom '([^']+)'/g)].map((m) => m[1]), ['./knob.js']);
+  assert.deepEqual(intensityLiterals(src), []);
+  assert.deepEqual(colourLiterals(src), []);
+  const knob = readFileSync(new URL('../../src/js/ui/synth/knob.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(knob, /from '\.\/feel\.js'/, 'one way: knob.js never imports feel.js');
 });

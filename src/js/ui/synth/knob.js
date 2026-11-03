@@ -1,24 +1,24 @@
-// The shared synth-theme layer's control core (plan K058; the control API agreed on 2026-11-02):
-// one knob, fader and switch, as pure functions. Values come from the parameter descriptor only,
-// as the node registry writes it ({ key or id, label, unit, min, max, step, scale: 'lin' |
-// 'linear' | 'log', default, type: 'number' | 'integer' | 'enum' | 'boolean', options }); the
-// control holds no constant of any parameter. An enum or boolean is a row of positions in option
-// order (a switch draws one per option, up to four; a number is never a switch). The value is
-// a setpoint (project.no-fake-science): nothing here tweens or smooths it. The core adds no
-// listener and reads no document: a host calls knobKey from its own delegated listener (K153
-// counts key listeners), and draws controlSvg where it wants, an HTML panel or an SVG graph box
-// at any zoom. ariaAttrs is the controlAttrs shape N003 adopts (aria-valuenow a 0..1000
-// position). Every colour is a token passed in
-// (tokens.js; project.visual-identity-lock v3), so nothing here is a colour literal, and no
-// number sets an opacity, an alpha or a shadow (v4): the cap highlight's intensity is the
-// hw-sheen Tailwind key (class opacity-hw-sheen), the cap shadow's the hw-shadow key (class
-// opacity-hw-shadow).
+// The synth-theme layer's control core (plan K058; control API agreed 2026-11-02): a knob,
+// fader and switch as pure functions. Values come only from the registry's parameter descriptor
+// ({ key or id, label, unit, min, max, step, scale: 'lin' | 'linear' | 'log', default, type:
+// 'number' | 'integer' | 'enum' | 'boolean', options }); the control holds no parameter's
+// constant. An enum or boolean is a row of positions (a switch draws up to four; a number is
+// never a switch). The value is a setpoint (project.no-fake-science): nothing tweens it. No
+// listener, no document: a host calls knobKey from its own delegated listener (K153 counts key
+// listeners) and draws controlSvg in an HTML panel or an SVG graph at any zoom; ariaAttrs is
+// N003's controlAttrs shape (aria-valuenow a 0..1000 position). Colours are tokens passed in
+// (tokens.js; project.visual-identity-lock v3) and no number sets an opacity, alpha or shadow
+// (v4): the cap highlight is class opacity-hw-sheen, the cap shadow opacity-hw-shadow.
+// The feel (plan S3) is feel.js: drag anchors that re-anchor when Shift changes, the fader
+// press, one gesture (one undo entry) per held key, wheel burst or drag, and Escape's cancel.
+// Here: a wheel notch is WHEEL_STEP, 1 % of the norm range (Shift 0.1 %), with the carried
+// rest; a fader turns horizontal (orientation, controlBox) with a 28 × 14 cap (FADER_CAP).
 //
 //   clampValue, toNorm, fromNorm, quantize, defaultValue, stepOption   value mapping
 //   dragValue, pixelsPerRangeFor, wheelValue, knobKey                  gestures -> the next value
 //   parseValue                                                         typed entry (Enter)
 //   formatValue, ariaAttrs                                             the value as text, ARIA
-//   controlSvg, CONTROL_BOX                                            the drawing, an SVG <g>
+//   controlSvg, controlBox, CONTROL_BOX, FADER_CAP                     the drawing, an SVG <g>
 
 import { formatFrequencyCompact, formatMs } from '../../core/frequency.js';
 import { sig } from '../../core/math.js';
@@ -33,12 +33,8 @@ export const HIT_PX = 44;
 export const SWEEP_DEG = 270;
 /** A fader's cap travel, graph units: a drag over it at zoom z is FADER_TRAVEL × z px. */
 export const FADER_TRAVEL = 64;
-/**
- * Key steps over a log range: one key moves 1/LOG_STEPS of the norm range (0.5 %), Shift a
- * tenth of that. Kept from K058's knobModel, as dev-53 decided on 2026-11-02: the existing knob
- * checks assume it, and it is finer than a stepless linear range's 1 % because a log range spans
- * decades. No measurement argued for a change.
- */
+/** A log range's key step: 1/LOG_STEPS of the norm range (0.5 %), Shift a tenth; K058's, kept
+ *  by dev-53 on 2026-11-02 (the knob checks assume it; a log range spans decades). */
 export const LOG_STEPS = 200;
 /** One wheel notch, px; a line (deltaMode 1) is WHEEL_LINE_PX px, so a line-mode wheel's
  *  detent of 3 lines is exactly one notch; a page (2) is WHEEL_NOTCH_PX. */
@@ -49,10 +45,9 @@ const WHEEL_TURN_PX = 4;
 /** A stepless linear range moves 1/KEY_DIVS of itself per key; PageUp/PageDown PAGE_STEPS. */
 const KEY_DIVS = 100;
 const PAGE_STEPS = 10;
-/** The least a wheel notch moves, as a part of the norm range (fine: a tenth of it), except on
- *  an integer range of more than WHEEL_FLOOR_MAX_STEPS steps (a seed: an identifier, where one
- *  notch is one step). */
-const WHEEL_FLOOR = 0.01;
+/** A wheel notch: 1 % of the norm range (Shift: 0.1 %), or one step where the grid is coarser;
+ *  an integer range of over WHEEL_FLOOR_MAX_STEPS steps (a seed, an identifier) steps by one. */
+export const WHEEL_STEP = 0.01;
 const WHEEL_FLOOR_MAX_STEPS = 1e4;
 /** A switch draws at most this many positions; more options are a knob (a rotary selector). */
 const SWITCH_MAX_POSITIONS = 4;
@@ -237,12 +232,8 @@ export function dragValue(startValue, dy, p, { fine = false,
   return quantize(fromNorm(n, p), p, { fine });
 }
 
-/**
- * The drag distance, screen px, over the whole range of a control drawn at `zoom`: a knob is
- * turned, not followed, so DRAG_PX_PER_RANGE at any zoom; a fader's cap and a switch's lever
- * follow the pointer one to one, so their travel × zoom (a switch's travel depends on how many
- * positions `param` has).
- */
+/** The drag, screen px, over a control's whole range at `zoom`: a knob is turned, so
+ *  DRAG_PX_PER_RANGE; a fader's cap and a switch's lever follow the pointer, so travel × zoom. */
 export function pixelsPerRangeFor(kind, zoom = 1, param) {
   if (!Object.hasOwn(CONTROL_BOX, kind)) {
     throw new Error(`pixelsPerRangeFor: kind must be knob, fader or switch, not '${kind}'.`);
@@ -255,19 +246,24 @@ export function pixelsPerRangeFor(kind, zoom = 1, param) {
   return leverOf(switchPositions(param)).travel * zoom;
 }
 
+/** The orientation, checked: vertical (the default) or, for a fader alone, horizontal. */
+function orientationOf(o = 'vertical', kind = 'fader') {
+  if (o !== 'vertical' && (o !== 'horizontal' || kind !== 'fader')) {
+    throw new Error(`orientation: a ${kind} is vertical${kind === 'fader' ? ' or horizontal'
+      : ''}, not '${o}'.`);
+  }
+  return o;
+}
+
 /**
- * The value after a wheel event, and the px the host keeps for the next one: pixels are deltaY
- * × (deltaMode 1: WHEEL_LINE_PX, 2: WHEEL_NOTCH_PX, else 1) plus the carried `rest`, and every
- * WHEEL_NOTCH_PX of them is one notch (up, deltaY < 0, increases); a line-mode detent of 3
- * lines is one notch, and fractional lines accumulate through the rest. The rest is dropped
- * when the wheel turns back by WHEEL_TURN_PX or more (a smaller opposite delta is jitter and
- * only subtracts) and when the value is held at min or max, so the first notch back moves.
- * Under a notch the value comes back as it was, only clamped. A notch is one key step, but
- * never less than 1 % of the norm range (fine: 0.1 %), so a tiny step never makes the wheel
- * glacial; an integer range of more than 10 000 steps is exempt (a seed is an identifier: one
- * notch, one step), and a choice moves one option per notch. The arrow keys are exempt from that
- * floor: they are the precise path (one step, or 1/LOG_STEPS, per press), PageUp/PageDown the
- * coarse one.
+ * The value after a wheel event, and the px the host carries to the next: deltaY × (deltaMode
+ * 1: WHEEL_LINE_PX, 2: WHEEL_NOTCH_PX, else 1) plus `rest`; each WHEEL_NOTCH_PX is a notch (up,
+ * deltaY < 0, increases), so a 3-line detent is one and fractional lines accumulate. The rest is
+ * dropped on a turn back of WHEEL_TURN_PX or more (less is jitter and only subtracts) and at an
+ * end stop, so the first notch back moves. Under a notch the value comes back only clamped. A
+ * notch is a key step but at least WHEEL_STEP of the norm range (fine a tenth), except on an
+ * integer range of over 10 000 steps (a seed: one notch, one step); a choice moves an option.
+ * The arrow keys are exempt: the precise path, PageUp/PageDown the coarse one.
  */
 export function wheelValue(value, deltaY, p, { fine = false, deltaMode = 0, rest = 0 } = {}) {
   const scale = deltaMode === 1 ? WHEEL_LINE_PX : (deltaMode === 2 ? WHEEL_NOTCH_PX : 1);
@@ -294,7 +290,7 @@ export function wheelValue(value, deltaY, p, { fine = false, deltaMode = 0, rest
   const { min, max } = rangeOf(p);
   const identifier = p.type === 'integer'
     && (max - min) / (quantumOf(p, false) || 1) > WHEEL_FLOOR_MAX_STEPS;
-  const floor = WHEEL_FLOOR / (fine ? FINE_DIV : 1);
+  const floor = WHEEL_STEP / (fine ? FINE_DIV : 1);
   const n0 = toNorm(v0, p);
   if (!identifier && Math.abs(toNorm(next, p) - n0) < Math.abs(steps) * floor - 1e-12) {
     next = quantize(fromNorm(n0 + steps * floor, p), p, { fine });
@@ -303,15 +299,12 @@ export function wheelValue(value, deltaY, p, { fine = false, deltaMode = 0, rest
 }
 
 /**
- * The control's answer to a key event, for the host's own delegated listener:
- *   ArrowUp / ArrowRight +step, ArrowDown / ArrowLeft -step (Shift or `fine`: a tenth of the
- *   step, or an integer's smallest step; a choice: the next or previous option); PageUp /
- *   PageDown 10 steps or 10 % of the range (a choice: one option); Home min, End max (the first
- *   and last option); Enter { edit: true } on a number (the host opens a typed entry, read with
- *   parseValue), the other state of a boolean, nothing on an enum;
- *   anything else, or any key with Ctrl, Meta or Alt, null (not the control's: let it pass).
- * Delete, Backspace, Space and Escape are never the control's: the page's key registry owns
- * them (Delete unpatches the selected cable; K153 and dev-53 own the bindings).
+ * The control's answer to a key event, for the host's own delegated listener: ArrowUp/Right
+ * +step, ArrowDown/Left -step (Shift or `fine`: a tenth, an integer's smallest step; a choice:
+ * the next or previous option); PageUp/PageDown 10 % of the range (a choice: one option); Home
+ * min, End max; Enter { edit: true } on a number (the host opens a typed entry, parseValue),
+ * the other state of a boolean, nothing on an enum; anything else, or with Ctrl, Meta or Alt,
+ * null. Delete, Backspace, Space and Escape are the page's key registry's (K153, dev-53).
  */
 export function knobKey(e, { value, param, fine = false } = {}) {
   if (!e || typeof e.key !== 'string') return null;
@@ -339,12 +332,11 @@ const NUMBER_TEXT = /^([-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?)\s*(k)?\s*(.*)$/i;
 const SPACES = /[ \u00a0\u2009\u202f]+/;
 
 /**
- * Typed text made plain, or the reason it is refused: a leading minus sign (U+2212) or en dash
- * (U+2013) is '-'; a thin, narrow or normal space groups thousands only when the first group has
- * 1-3 digits and every later one exactly 3 (4 294 967 295), else the number is malformed; a
- * single comma with no dot is the decimal mark (the owner's locale writes 1,5), except where it
- * could be a thousands separator (1-3 digits not starting with 0, then exactly three): "1,000"
- * is ambiguous and refused, so neither 1000 nor 1.0 is guessed.
+ * Typed text made plain, or why it is refused: a leading minus sign (U+2212) or en dash is '-';
+ * a thin, narrow or normal space groups thousands only as 1-3 digits then groups of exactly 3
+ * (4 294 967 295), else malformed; one comma with no dot is the decimal mark (the owner's locale
+ * writes 1,5), except as a thousands separator could be (1-3 digits not led by 0, then three):
+ * "1,000" is ambiguous and refused, so neither 1000 nor 1.0 is guessed.
  */
 function plainNumber(raw) {
   const t = raw.replace(/^[\u2212\u2013]/, '-').replace(/\u2212/g, '-');
@@ -532,13 +524,11 @@ function endsWithUnit(text, unit) {
 }
 
 /**
- * The control's ARIA attributes, in the shape N003's controlAttrs adopts (dev-53, 2026-11-02):
- * role slider, aria-valuemin 0, aria-valuemax 1000 and aria-valuenow the position,
- * round(toNorm(value) × 1000), so a log parameter steps in its log domain; an enum or boolean
- * has the position of its option index. aria-valuetext carries the value with its unit and stays
- * truthful beyond the range: the position clamps to 0..1000, the text shows the real value.
- * `format(v, param)` overrides the text, and the unit is added when the text does not end in it.
- * Anything not a number reads min, never NaN.
+ * The ARIA attributes in N003's controlAttrs shape (dev-53, 2026-11-02): role slider, valuemin
+ * 0, valuemax 1000, valuenow round(toNorm(value) × 1000) (a log parameter steps in its log
+ * domain; a choice has its option index's position); valuetext the value with its unit, true
+ * beyond the range (the position clamps, the text does not). `format(v, param)` overrides the
+ * text, the unit added when it does not end in it. Anything not a number reads min, never NaN.
  */
 export function ariaAttrs(value, p, format) {
   const opts = choicesOf(p);
@@ -583,24 +573,32 @@ const KNOB = Object.freeze({ arc: 19, arcW: 3, trackW: 1.5, skirt: 16, edgeW: 1.
   shadowDragDy: 2 });
 /** A disabled knob's value arc: dashed, butt-ended, so the gaps stay open. */
 const DISABLED_DASH = '2 3';
-const FADER = { travel: FADER_TRAVEL, capW: 16, capH: 8, trackW: 4 };
+/** A fader's cap, graph units: w across the travel, h along it. */
+export const FADER_CAP = Object.freeze({ w: 28, h: 14 });
+const FADER = { travel: FADER_TRAVEL, capW: FADER_CAP.w, capH: FADER_CAP.h, trackW: 4, grip: 3 };
 const SWITCH = { w: 14, h: 28, inset: 2, leverW: 10 };
 /** The cap highlight's intensity class: the hw-sheen key of tailwind.config.cjs. */
 const SHEEN_CLASS = 'opacity-hw-sheen';
 /** The cap shadow's intensity class: the hw-shadow key, as the cable's shadow. */
 const SHADOW_CLASS = 'opacity-hw-shadow';
 
-/**
- * Each kind's extent, graph units, centred on the origin: everything controlSvg draws in any
- * state lies inside it (an SVG host can use it as the viewBox), and the hit rect is never
- * smaller than it.
- */
+/** Each kind's extent, graph units, centred on the origin: all controlSvg draws lies inside it
+ *  (an SVG host's viewBox), and the hit rect is never smaller. */
 export const CONTROL_BOX = Object.freeze({
   knob: Object.freeze({ x: -22, y: -22, width: 44, height: 44 }),
-  fader: Object.freeze({ x: -22, y: -(FADER_TRAVEL / 2 + 6), width: 44,
-    height: FADER_TRAVEL + 12 }),
+  fader: Object.freeze({ x: -22, y: -(FADER_TRAVEL / 2 + 10), width: 44,
+    height: FADER_TRAVEL + 20 }),
   switch: Object.freeze({ x: -17, y: -18, width: 34, height: 36 }),
 });
+
+const FADER_ACROSS = Object.freeze({ x: CONTROL_BOX.fader.y, y: CONTROL_BOX.fader.x,
+  width: CONTROL_BOX.fader.height, height: CONTROL_BOX.fader.width });
+
+/** A kind's extent in an orientation: CONTROL_BOX, or a horizontal fader's, turned. */
+export function controlBox(kind, orientation = 'vertical') {
+  if (!Object.hasOwn(CONTROL_BOX, kind)) throw new Error(`controlBox: no kind '${kind}'.`);
+  return orientationOf(orientation, kind) === 'vertical' ? CONTROL_BOX[kind] : FADER_ACROSS;
+}
 
 /** How many positions a switch of `p` has: one per option of an enum (at most
  *  SWITCH_MAX_POSITIONS), two for a boolean. A number is refused: a switch cannot show the
@@ -716,19 +714,24 @@ function faderShapes(value, applied, p, t, st) {
   const bipolar = p.min < 0 && p.max > 0;
   const from = bipolar ? yOf(0) : half + 2;
   const [f0, f1] = y < from ? [y, from] : [from, y];
+  const [cw, ch, g] = [FADER.capW, FADER.capH, FADER.grip];
+  const grip = (dy, role, paint, w) => `<line data-grip="${role}" x1="${-cw / 2 + 4}" `
+    + `y1="${num(y + dy)}" x2="${cw / 2 - 4}" y2="${num(y + dy)}" stroke="${esc(paint)}" `
+    + `stroke-width="${w}"/>`;
+  const reach = FADER.travel / 2 + ch / 2 + 2;
   return `<rect x="${-tw / 2}" y="${top}" width="${tw}" height="${len}" rx="${tw / 2}" `
     + `fill="${esc(t.surface.edge)}" stroke="${esc(c.track)}" stroke-width="1"/>`
     + (f1 - f0 > 0.01 ? `<rect x="${-tw / 2}" y="${f0}" width="${tw}" height="${num(f1 - f0)}" `
       + `rx="${tw / 2}" fill="${esc(st.disabled ? c.disabled : c.ring)}" stroke="none"/>` : '')
     + (applied !== null ? `<line data-applied="" x1="${-ax}" y1="${yOf(applied)}" x2="${ax}" `
       + `y2="${yOf(applied)}" stroke="${esc(c.pointer)}" stroke-width="1"/>` : '')
-    + `<rect data-cap="" x="${-FADER.capW / 2}" y="${num(y - FADER.capH / 2)}" `
-    + `width="${FADER.capW}" height="${FADER.capH}" rx="1.5" fill="${esc(c.cap)}" `
-    + `stroke="${esc(st.dragging ? c.capHi : t.surface.edge)}" stroke-width="1"/>`
-    + `<line x1="${-FADER.capW / 2 + 2}" y1="${y}" x2="${FADER.capW / 2 - 2}" y2="${y}" `
-    + `stroke="${esc(st.disabled ? c.disabled : c.pointer)}" stroke-width="1.5"/>`
-    + (st.focus ? `<rect x="${-FADER.capW / 2 - 3}" y="${top - 3}" width="${FADER.capW + 6}" `
-      + `height="${len + 6}" rx="3" fill="none" stroke="${esc(c.focus)}" stroke-width="2"/>`
+    + `<rect data-cap="" x="${-cw / 2}" y="${num(y - ch / 2)}" width="${cw}" height="${ch}" `
+    + `rx="2" fill="${esc(c.cap)}" stroke="${esc(st.dragging ? c.pointer : c.edge)}" `
+    + 'stroke-width="1"/>'
+    + grip(-g, '', c.edge, 1) + grip(0, 'centre', st.disabled ? c.disabled : c.pointer, 1.5)
+    + grip(g, '', c.edge, 1)
+    + (st.focus ? `<rect data-focus="" x="${-cw / 2 - 3}" y="${-reach}" width="${cw + 6}" `
+      + `height="${2 * reach}" rx="3" fill="none" stroke="${esc(c.focus)}" stroke-width="2"/>`
       : '');
 }
 
@@ -769,24 +772,22 @@ function switchShapes(value, applied, p, t, st) {
 const SHAPES = Object.freeze({ knob: knobShapes, fader: faderShapes, switch: switchShapes });
 
 /**
- * One control as an SVG '<g>' string, centred on the origin inside CONTROL_BOX[kind], drawn
- * only from `tokens` (synthTokens): knob = unlit arc (control.track), value arc (control.ring;
- * from zero, with a detent tick, on a range across zero; dashed while disabled), skirt with its
- * edge (control.edge, control.pointer on hover) and knurl, cap with its shadow (1 down, 2 while
- * dragged) and one highlight, pointer, the scale ticks from zoom 1.25, the focus ring;
- * fader = slot outlined in control.track, value fill (from zero on a range across zero) and cap;
- * switch = one lever position per option of an enum of up to four or a boolean, with detents
- * past two (a number, or more options, is refused: draw it as a knob). `applied`, when given
- * and elsewhere than `value`, draws a second, thin marker where the engine's applied value is
- * (the requested and applied split): on a knob an arc at r 13.5 in control.applied from the
- * value arc's origin, on a fader or a switch a line in control.pointer. `state` is { focus,
- * dragging, disabled, hover }. An invisible hit rect of at least
- * HIT_PX / zoom graph units, and never smaller than the box, takes the pointer, so the target
- * stays 44 screen px at any zoom and holds the whole drawing; the drawing takes none. Every
- * shape sets its own stroke.
- * A setpoint: no animation.
+ * One control as an SVG '<g>' string, centred inside controlBox(kind, orientation), drawn only
+ * from `tokens` (synthTokens): knob = unlit arc (control.track), value arc (control.ring; from
+ * zero with a detent tick across zero; dashed while disabled), skirt with its edge (control.edge,
+ * control.pointer on hover) and knurl, cap with its shadow (1 down, 2 dragged) and highlight,
+ * pointer, scale ticks from zoom 1.25, focus ring; fader = slot in control.track, value fill
+ * (from zero across zero), a FADER_CAP cap edged in control.edge (control.pointer dragged) with
+ * three grip lines, the centre one on the value; orientation 'horizontal' turns it (rotate(90):
+ * more to the right); switch = a lever position per option of an enum of up to four or a
+ * boolean, detents past two. `applied`, elsewhere than `value`, marks the engine's value: on a
+ * knob an arc at r 13.5 in control.applied, else a line in control.pointer. `state` is { focus,
+ * dragging, disabled, hover }. An invisible hit rect of at least HIT_PX / zoom, never under the
+ * box, takes the pointer (44 screen px at any zoom); the drawing takes none. Every shape sets
+ * its own stroke. A setpoint: no animation.
  */
-export function controlSvg({ kind, value, applied, param, tokens, zoom = 1, state = {} } = {}) {
+export function controlSvg({ kind, value, applied, param, tokens, zoom = 1, state = {},
+  orientation = 'vertical' } = {}) {
   if (!tokens || !tokens.control || !tokens.surface) {
     throw new TypeError('controlSvg needs the synth tokens (synthTokens(el)).');
   }
@@ -796,7 +797,8 @@ export function controlSvg({ kind, value, applied, param, tokens, zoom = 1, stat
   const shapes = Object.hasOwn(SHAPES, kind) ? SHAPES[kind] : null;
   if (!shapes) throw new Error(`controlSvg: kind must be knob, fader or switch, not '${kind}'.`);
   if (kind === 'switch') switchPositions(param);
-  const box = CONTROL_BOX[kind];
+  const box = controlBox(kind, orientation);
+  const turn = box === FADER_ACROSS ? ' transform="rotate(90)"' : '';
   const w = num(Math.max(HIT_PX / zoom, box.width));
   const h = num(Math.max(HIT_PX / zoom, box.height));
   const st = state || {};
@@ -804,7 +806,7 @@ export function controlSvg({ kind, value, applied, param, tokens, zoom = 1, stat
   return `<g data-control="${kind}">`
     + `<rect data-hit="" x="${num(-w / 2)}" y="${num(-h / 2)}" width="${w}" `
     + `height="${h}" fill="none" stroke="none" pointer-events="all"/>`
-    + `<g pointer-events="none">${shapes(v, appliedAt(applied, v, param), param, tokens, st,
+    + `<g pointer-events="none"${turn}>${shapes(v, appliedAt(applied, v, param), param, tokens, st,
       zoom)}</g>`
     + '</g>';
 }
