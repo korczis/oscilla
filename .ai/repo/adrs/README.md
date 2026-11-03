@@ -71,9 +71,9 @@ accepted` lists them. The rest stay `proposed`, each for a stated reason:
   yet (G001 builds the catalogue on it).
 - 0082: new and accepted on 2026-11-02 (plan issue R028): the owner chose "CI receipt for all
   releases" in the session of that day; its resolution note names the code and tests.
-- 0085: new on 2026-11-03 (the blocking finding lineage-and-acceptance-have-no-home of the
-  song-reconstruction critique); proposed, because accepting it is the owner's act, and
-  nothing implements it yet.
+- 0085: new and accepted on 2026-11-03 (the blocking finding lineage-and-acceptance-have-no-home
+  of the song-reconstruction critique): the owner chose "Accept" in the coordinator session of
+  that day; nothing implements it yet.
 
 On 2026-10-28 the owner ordered Flowbite Pro for the UI of every project; ADR 0061 records
 that order as an accepted decision (its acceptance note quotes it) and supersedes the bullet of
@@ -137,6 +137,7 @@ listed one is not accepted, or when a link, title, date or mark differs from the
 | [0049](0049-raw-capture-retention.md) | The raw capture lives only for its analysis; a run stores derived results | 2026-10-18 | yes |
 | [0061](0061-the-ui-is-built-on-flowbite-pro.md) | The UI is built on Flowbite Pro: Tailwind and Flowbite return at build time, inlined | 2026-10-28 | no |
 | [0082](0082-a-release-rests-on-the-ci-run-of-its-own-pull-request.md) | A release rests on the CI run of its own pull request: the CI receipt binds the merged tree, and the local gate becomes optional | 2026-11-02 | no |
+| [0085](0085-reconstruction-lineage-lives-in-an-immutable-artifact-referenced-by-hash.md) | Reconstruction lineage lives in an immutable artifact the Studio document references by hash; accepting a part is presentation state changed only through undoable actions | 2026-11-03 | no |
 
 ## An exemption from the release candidate
 

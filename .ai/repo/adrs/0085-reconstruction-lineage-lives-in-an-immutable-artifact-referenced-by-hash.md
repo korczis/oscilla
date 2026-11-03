@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0085
 kind: adr
 title: "Reconstruction lineage lives in an immutable artifact the Studio document references by hash; accepting a part is presentation state changed only through undoable actions"
-status: proposed
+status: accepted
 date: 2026-11-03
 tags:
   - reconstruction
@@ -85,3 +85,13 @@ point.
 - **An editable side document.** Rejected: a parallel copy that must be kept in sync.
 - **No lineage at all.** Rejected: `project.no-fake-science` requires that an inference say what it
   is and how far to trust it.
+
+## Resolution notes
+
+### 2026-11-03: accepted by the owner
+
+Accepted by the owner on 2026-11-03, through AskUserQuestion in the oscilla-b0 coordinator
+session. The owner chose "Accept (Recommended)", whose option text read: "ADR 0085 accepted;
+once M071/M072 are in place, the first RECONSTRUCT issue can be filed (it names ADR 0085 in
+depends_on)." The intent `song-reconstruction` stays proposed until its own acceptance. Nothing
+implements this decision yet.
