@@ -1,0 +1,49 @@
+id: U068
+milestone: M087
+serves:
+  - "component-system#panels-arrangeable"
+title: "Modular panels: every workspace's framed panels move, resize and reorder, per device, with Stop always visible"
+slug: modular-panels-every-workspaces-framed-panels-move-resize
+priority: p2
+profile: implementation
+objective: "Lands as feat(ui) on branch feat/u068-modular-panels, after G001 (#371) and the frame of U067 (rule project.visual-components-framed). A panel is a framed visual component of the UI catalogue that its workspace declares as arrangeable (decl: arrange: { id, defaultSlot, ownsOutput? }). In scope: Playground, Analyzer, Studio, Synth and Measure, each declaring at least two arrangeable panels. One pure model, src/js/ui/panels/layout.js (order, column span and collapsed per panel id, per workspace; validate, move, resize, reset, undoReset), and one Alpine part, src/js/ui/panels/ui.js, that applies it by moving the panel roots in the DOM (insertBefore inside the workspace's existing Pro grid, after the model commits; no x-for over panels, so Alpine keeps every moved root's bindings) and setting the column span, so Tab order and the reading order equal the visual order (WCAG 1.3.2, 2.4.3); CSS order is never used. The collapse is the panel frame's own level, distinct from K062's expanded Synth cards and V622's folded Studio boxes, which stay their own owners (params-controls.md 7.1); no Synth card is an arrangeable panel. The default layout is today's DOM order and spans, so a page never arranged renders exactly as before. Desktop and tablet: drag by the frame's header handle (pointer events with pointer capture, touch-action: none on the handle, a 4 px threshold, no HTML5 drag-and-drop) and resize by span steps (1-3 columns). Phone (the content column narrower than 640 px, a container query on <main>, whatever the pointer): one column, panels collapse and reorder only, by the handle or Move up / Move down; no free 2-D grid and no resize. Keyboard: the handle is a button; Move up / Move down / Narrower / Wider are its menu actions and the keys Alt+Shift+ArrowUp / ArrowDown / ArrowLeft / ArrowRight, bound through src/js/ui/keys (K153) in the focus scope of a panel handle only, each with one owner in the registry and none taken by the Synth's armed keys; never a listener of its own. Storage reads and writes are inside try/catch: with storage unavailable the default layout applies and every action still works for the visit. A panel whose declaration says ownsOutput (the Studio transport with Stop, the Measure run panel) moves and resizes but cannot be collapsed or hidden while its owner reports sound or a capture running: its collapse control is disabled with the reason, and starting sound or a capture expands it if it was collapsed while idle. Stop stays reachable wherever the panel sits: the status bar's Play/Stop (data-osc status.play, in view at every width) stops whatever owns output, the instrument, the Studio transport and a Measure capture, and Escape (page.escape) does the same; where status.play or page.escape does not yet stop the Studio transport or abort a capture, U068 adds it, and status.play aborts a capture through the one cmp.measureAbort with its own reason ('status-play'), announced and recorded like Escape's, never a second abort path. Each workspace's page actions gain Reset layout, which restores the declared default and offers Undo once (a Pro toast with Undo, until the next layout change or route change)."
+why: "Owner proposal relayed on the mesh (2026-11-02, modular drag-and-drop panels), then the owner's four answers to af's questions (AskUserQuestion in af's session, 2026-11-03), verbatim choices: 1 layout persistence \"Per device\"; 2 phone \"Stack + reorder\"; 3 the output-owning panel \"Move, never hide\"; 4 reset \"Per page + undo\". Today every workspace's panel order is fixed in src/index.html, so a user who works the Analyzer beside the scope or keeps the Studio transport by the graph cannot arrange it; the frame of U067 already gives every visual component one header to hang the handle on. Owner decisions recorded here: Persistence (owner, 2026-11-03): per device. The layout lives in this browser's local storage, key oscilla.layout.<workspace>, versioned and validated on read (an unknown panel id is dropped, a missing one takes its default slot); it is never written to a Studio document, the URL hash, the history or the undo stack (project.studio-model-is-canonical). A shared link opens the default layout. Phone (owner, 2026-11-03): stack and reorder. One column; collapse and reorder by the handle or Move up / Move down; no 2-D grid and no resize. Output owner (owner, 2026-11-03): move, never hide. A panel declared ownsOutput can move and resize but cannot be closed or collapsed while it owns sound or a capture, so Stop is always visible (project.no-silent-feedback). Reset (owner, 2026-11-03): per page, with undo. Each workspace has Reset layout, restoring its declared default; the reset itself can be undone once."
+depends_on:
+  - G001
+scope:
+  - "src/js/ui/panels"
+  - "src/js/ui/catalog/decl"
+  - "src/js/ui/catalog/frame.js"
+  - "src/js/ui/shell.js"
+  - "src/js/main.js"
+  - "src/index.html"
+  - "tests/unit/panels-layout.test.mjs"
+  - "tests/browser/panels.cjs"
+  - "tests/README.md"
+  - "docs/components.md"
+  - "dist"
+current_state: "Not started. Depends on G001 (#371, the catalogue) and builds on U067's frame (feat/a5-frame-peeper, the header the handle sits in), not yet an issue on main: its dependency is added when U067 lands, and U068 is not started before. K153's key registry is on main. Intent change: component-system gains the satisfaction criterion panels-arrangeable (below), landed in the same plan PR as this issue. af's critique of the draft (2026-11-03, 2 blocking, 8 non-blocking) is in critiques/component-system.yaml with its resolutions."
+acceptance_criteria:
+  - "The model is pure and total: tests/unit/panels-layout.test.mjs moves, resizes, collapses, resets and undoes a reset on a fixture workspace; a stored layout with an unknown id, a missing id, a bad version or bad JSON reads as the default plus the valid part, and never throws."
+  - "Per device, never in the document: the browser suite arranges the Analyzer, reloads and reads the same order; the hash, history.length and the Studio document's JSON are unchanged by every layout action; a second context with fresh storage opens the default."
+  - "Phone 390x844 touch: one column, no resize control rendered, Move up / Move down and the handle reorder, every handle and action at least 44 x 44 px, nothing overlaps <main>'s content."
+  - "Keyboard: the handle is reachable by Tab, its menu's Move and Wider/Narrower act and keep focus on the moved panel; the bindings resolve through src/js/ui/keys (the key-listener ratchet of tests/unit/keys-registry.test.mjs does not rise) and never inside a text field or a dialog."
+  - "Order is real: after a Move, Tab from the panel before the new position reaches the moved panel next, and the accessibility tree's panel order (Playwright ariaSnapshot) equals the visual order, in every gate browser."
+  - "Move, never hide: with the Studio playing and with a Measure capture running, the ownsOutput panel's collapse control is disabled with its reason; an ownsOutput panel collapsed while idle expands when sound or a capture starts; with that panel moved last and the page scrolled to its top, status.play reads Stop playback, is in the viewport at 390x844 and 1536x1024 and stops the Studio transport and aborts the capture, and Escape does the same; after Stop the collapse control enables."
+  - "Coverage is not vacuous: a census test derives from the catalogue that Playground, Analyzer, Studio, Synth and Measure each declare at least two arrangeable panels and exactly one ownsOutput panel where the workspace makes sound or captures."
+  - "The default layout is today's page: npm run visual and the visual gate are unchanged with no stored layout, and tests/browser/iphone.cjs's census reach does not fall."
+  - "Storage unavailable (iphone.cjs journey with denyCapabilities, and a unit fixture whose storage throws): the default layout renders, Move and Reset work for the visit, and nothing throws."
+  - "Touch drag: on a 390x844 touch context the handle reorders by a trusted touch drag without scrolling the page, and a desktop trusted mouse drag reorders and resizes (no synthetic pointer holds, the #388 lesson)."
+  - "Keys: the four Alt+Shift+Arrow bindings resolve only on a focused handle; the registry reports one owner each and no clash with the Synth's armed keys (unit, tests/unit/keys-registry.test.mjs)."
+  - "Standard: the Reset toast and the handle menu are the Pro toast and dropdown blocks with the ui-flowbite-pro ratchet not rising; the size report gives base and head figures; tests/README rows for the new unit and browser checks; the unit test and the browser check fail on the merge base (fail-first)."
+  - "Reset per page with undo: Reset layout restores the declared default of that workspace only (another workspace's arrangement survives), its toast's Undo restores the previous layout once, and a second Undo is not offered."
+  - "No layout action starts audio or changes a parameter (census of AudioNodes and the URL state before and after are equal)."
+  - "Every gate browser, file:// and the /oscilla/ sub-path (tests/browser/panels.cjs through tests/browser/lib/suite.cjs, waits through lib/wait.cjs)."
+validation:
+  - "node --test tests/unit/panels-layout.test.mjs"
+  - "node tests/browser/panels.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-03
+updated_at: 2026-11-03
