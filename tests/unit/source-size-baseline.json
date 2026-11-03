@@ -25,7 +25,7 @@
     }
   },
   "caps": {
-    "src/index.html": 282000,
+    "src/index.html": 283000,
     "src/js/audio/audio-engine.js": 73000,
     "src/js/core/instrument.js": 62000,
     "src/js/experiments/validate.js": 64000,
@@ -85,6 +85,12 @@
       "cap": 282000,
       "pr": 375,
       "reason": "the K066/K102 presets and patch library markup meets the K097 XY tab and the feature train's Synth tabs in the shell, one byte past the 281 000 cap"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 283000,
+      "pr": 404,
+      "reason": "merge train 3 combines the synth look W1 (plates, display window), the phone bay, the riff library's markup and About's phased roadmap (Now, Next, Later) in the shell; 845 bytes past the 282 000 cap"
     }
   ]
 }
