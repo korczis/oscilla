@@ -10,6 +10,9 @@
 
 import { knobModel, knobSvg } from './knob.js';
 import { amountEdges, amountReason, brokenByRemoval } from '../normals.js';
+import { CHIP, LABEL, NOTE, VALUE } from '../../ui/synth/label.js';
+import { plateSvg } from '../../ui/synth/plate.js';
+import { displayHtml } from '../../ui/synth/display.js';
 
 export function platesShown({ panel, tab, engine, resolved, model }) {
   const own = tab === 'engines' ? [panel.module(engine)].filter(Boolean) : panel.modulesOf(tab);
@@ -55,11 +58,7 @@ export function controlValue(control, node, model, panel) {
   return e ? e.props.depth : 0;
 }
 
-// Labels sit on the plate gradient (surface-3 to surface-1): gray-600 is 6.2:1 on its light top,
-// gray-400 5.8:1 or more on the dark one (4.5:1 for small text).
-const LABEL = 'text-[11px] font-semibold uppercase tracking-wide text-gray-600 '
-  + 'dark:text-gray-400';
-const VALUE = 'font-mono text-xs tabular-nums text-gray-900 dark:text-white';
+// The plate's type and plate are the synth-theme layer's (ui/synth/label.js, plate.js, F013 W1).
 
 /** The accessible name of a control: its module heading, then its own label ("LPF Cutoff"). */
 const named = (cid) => `aria-labelledby="synth-m-${cid.split('.')[0]} ${cid}-label"`;
@@ -113,9 +112,7 @@ function toggleHtml(cid, c, value, reason) {
  */
 function factsHtml(m, node) {
   if (typeof m.def.facts !== 'function') return '';
-  return '<p class="relative px-3 pb-3 text-[11px] leading-snug text-gray-600 '
-    + `dark:text-gray-300" data-facts="${m.id}"><span class="font-semibold">Computed from the `
-    + `settings:</span> ${esc(m.def.facts(node.params))}</p>`;
+  return displayHtml({ id: m.id, text: m.def.facts(node.params) });
 }
 
 /**
@@ -133,14 +130,9 @@ export function plateHtml({ panel, module: m, node, model, tokens, collapsed = f
     + `aria-controls="${bid}" class="flex h-11 items-center gap-2 rounded-lg px-2 `
     + 'tracking-widest focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500">'
     + `<span aria-hidden="true" class="text-xs">${collapsed ? '▸' : '▾'}</span>${esc(m.label)}`
-    + '</button></h3><span class="px-2 text-[11px] text-gray-600 dark:text-gray-400">'
+    + `</button></h3><span class="px-2 ${NOTE}">`
     + `${esc(m.def.displayName)}</span></header>`;
-  const bg = '<svg class="absolute inset-0 h-full w-full" preserveAspectRatio="none" '
-    + 'aria-hidden="true" focusable="false"><defs>'
-    + `<linearGradient id="pg-${m.id}" x1="0" y1="0" x2="0" y2="1">`
-    + `<stop offset="0" stop-color="${tokens.plateHi}"/>`
-    + `<stop offset="1" stop-color="${tokens.plateLo}"/></linearGradient></defs>`
-    + `<rect width="100%" height="100%" fill="url(#pg-${m.id})" stroke="none"/></svg>`;
+  const bg = plateSvg({ id: m.id, tokens });
   if (!node) {
     const row = model ? brokenByRemoval(model, panel).find((r) => r.module === m.id) : null;
     return `<section class="relative overflow-hidden bg-white rounded-lg shadow dark:bg-gray-800" `
@@ -173,8 +165,7 @@ export function plateHtml({ panel, module: m, node, model, tokens, collapsed = f
     const p = m.params.find((x) => x.key === f.key);
     const shown = p.type === 'enum' ? (p.options.find((o) => o[0] === f.value) || [0, f.value])[1]
       : knobModel(p).format(f.value);
-    return `<span class="rounded bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600 `
-      + `dark:bg-gray-700 dark:text-gray-300" title="Fixed by the panel">${esc(f.label)} `
+    return `<span class="${CHIP}" title="Fixed by the panel">${esc(f.label)} `
       + `${esc(shown)}</span>`;
   }).join('');
   return `<section class="relative overflow-hidden bg-white rounded-lg shadow dark:bg-gray-800" `
@@ -182,7 +173,7 @@ export function plateHtml({ panel, module: m, node, model, tokens, collapsed = f
     + `<div class="relative flex flex-wrap items-start gap-x-2 gap-y-3 px-3 pb-3 pt-2">`
     + `${controls}</div>`
     + (fixed || m.note ? `<div class="relative flex flex-wrap items-center gap-1 px-3 pb-3">`
-      + `${fixed}${m.note ? `<span class="text-[11px] text-gray-600 dark:text-gray-400">`
+      + `${fixed}${m.note ? `<span class="${NOTE}">`
       + `${esc(m.note)}</span>` : ''}</div>` : '')
     + factsHtml(m, node)
     + '</div></section>';

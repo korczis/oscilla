@@ -25,9 +25,9 @@
     }
   },
   "caps": {
-    "src/index.html": 282000,
+    "src/index.html": 284000,
     "src/js/audio/audio-engine.js": 73000,
-    "src/js/core/instrument.js": 62000,
+    "src/js/core/instrument.js": 63000,
     "src/js/experiments/validate.js": 64000,
     "src/js/main.js": 52000,
     "src/js/measurement/capture.js": 55000,
@@ -85,6 +85,24 @@
       "cap": 282000,
       "pr": 375,
       "reason": "the K066/K102 presets and patch library markup meets the K097 XY tab and the feature train's Synth tabs in the shell, one byte past the 281 000 cap"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 283000,
+      "pr": 404,
+      "reason": "merge train 3 combines the synth look W1 (plates, display window), the phone bay, the riff library's markup and About's phased roadmap (Now, Next, Later) in the shell; 845 bytes past the 282 000 cap"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 284000,
+      "pr": 404,
+      "reason": "merge train 3 also carries C018 (#314) and C021 (#331, the journeys and control census), whose shell markup takes src/index.html 5 bytes past the 283 000 raised earlier in this train"
+    },
+    {
+      "file": "src/js/core/instrument.js",
+      "cap": 63000,
+      "pr": 404,
+      "reason": "C018's lab restore (#314) meets the synth train's instrument hooks in the one instrument module; 230 bytes past 62 000 after instrument-labs.js took C018's V1 lab hooks"
     }
   ]
 }

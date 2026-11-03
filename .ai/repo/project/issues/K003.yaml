@@ -33,4 +33,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-02T22:47:13Z
+started_at: 2026-11-02T22:46:52Z
+started_event: sha256:0f30c84f7591830a3b63bbde149215bd22dae749162f0af0823611ff3313ec1f
+completed_at: 2026-11-02T22:47:13Z
+completed_event: sha256:7e434c15b7080190be7a35ab8cf3d5c2211a36119d1a6447cbd02d7eed79f547
+evidence:
+  - covers: verified
+    type: ci
+    command: "node --test tests/unit/sequencer-editor.test.mjs tests/unit/v4-shortcuts.test.mjs"
+    result: "landed in #367 (main merge commit 11cc9fbc47ea5f5bce48ed90904bd101455ff43a, member #266); undo restores the serialized model; Ctrl+Z, Shift+Ctrl+Z, Ctrl+C, Ctrl+V covered in sequencer-editor.test.mjs; the shortcut list shows the keys; CI run 41357644373 green on the train head c2a6f6c5 (unit, npm test and the browser gate in chromium, firefox and webkit from file:// and /oscilla/), Main checks run 41372186924 green on 11cc9fbc; review verdict .ai/repo/reviews/367.yaml (merge), member verdict .ai/repo/reviews/266.yaml"
+    artifact: ".ai/repo/reviews/367.yaml"
+    commit: 743f8566e9724d0f5dd58a6fadb633b51deb0b86
+    recorded_at: 2026-11-02T22:47:06Z

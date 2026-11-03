@@ -1,0 +1,32 @@
+id: Q074
+milestone: M119
+title: "Owner decision: where a reconstruction companion lives, and whether it breaches 'no backend' (Q-B, Q-C)"
+slug: owner-decision-where-a-reconstruction-companion-lives-and-wh
+priority: p2
+profile: routine
+owner: "repository owner"
+objective: "A local companion would run separation, transcription and tempo adapters that the single file may not bundle. Does it live in this repository outside dist/, in a separate repository, or not at all (Q-B), and does a local CLI companion breach product-direction's 'no backend' invariant (Q-C)? The draft's safe path planned everything up to the lineage milestone with no companion."
+why: "The owner handed over the OSCILLA RECONSTRUCT pack (OSCILLA_RECONSTRUCT_MASTER_PROMPT.md, the owner's local copy, 2026-11-02, marked 'Status: PROPOSAL'), recorded as the proposed intent song-reconstruction; the research that mapped it onto the plan (P00 gap map and P01 alignment, measured on origin/main b938129) drafted this question; .ai/repo/project/README.md: only the owner, or a session the owner delegated to, answers a Q issue."
+current_state: "Answered by the owner on 2026-11-02 at about 22:20 UTC (owner, AskUserQuestion in the oscilla-b0 session, 2026-11-02; see evidence): \"OK as a separate tool (Recommended)\". The companion is an optional CLI in its own directory or repository, outside dist; the page only opens its output file through the file picker, with no network and no server for the page. One answer settles both Q-B and Q-C. The other options offered in that exchange were not relayed to this record."
+scope:
+  - ".ai/repo/project/issues/Q074.yaml"
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision), in the owner's words with date and source; a worker never answers it."
+  - "The answer says where the companion lives and how the page reaches its output."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-11-02
+updated_at: 2026-11-02T22:31:28Z
+started_at: 2026-11-02T22:31:08Z
+started_event: sha256:3737869657a6511db1196d2f6ec252d1997b1f5d3f53e4e8689546f73c0f3719
+completed_at: 2026-11-02T22:31:28Z
+completed_event: sha256:f2f8d378869629bf60c6703dde0fabe42f0210b80375ad7be8aa228a17a89907
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "AskUserQuestion in Claude Code session oscilla-b0, 2026-11-02, about 22:20 UTC (owner, AskUserQuestion in the oscilla-b0 session, 2026-11-02)"
+    result: "Owner answered on 2026-11-02 (owner, AskUserQuestion in the oscilla-b0 session, 2026-11-02): \"OK as a separate tool (Recommended)\". The companion is an optional CLI in its own directory or repository, outside dist; the page only opens its output file through the file picker, with no network and no server for the page. One answer settles Q-B and Q-C."
+    commit: 2fe68de1c36d5a89aa1c9b336673bfdc1084bb89
+    recorded_at: 2026-11-02T22:31:20Z

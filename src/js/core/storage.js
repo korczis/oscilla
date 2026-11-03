@@ -6,6 +6,12 @@
 // Schema: PRESET_SCHEMA_VERSION 1 (presetRecord). V2 migration hook: registerPresetMigration(1,
 // upgradeV1toV2) plus migratePreset(p, { targetVersion: 2 }) upgrades a stored v1 cfg step by
 // step; with the defaults the behaviour is exactly V1's (v0 upgraded, v1 kept, newer rejected).
+//
+// V2 lab settings (C018): a custom preset and a History entry may carry `labs` beside cfg, the
+// Filter, Envelope, Additive and Phase & Stereo sections (ui/config-file.js buildLabSections).
+// It is an optional sibling, not part of cfg: cfg and the schema version stay V1's, a record
+// without labs is exactly a V1 record, and the sections are validated where they are applied
+// (parseLabSections), so storage keeps any plain object it finds there and nothing else.
 
 import { HISTORY_MAX, PRESET_SCHEMA_VERSION, STORAGE_KEYS, WAVEFORMS } from './constants.js';
 import { deepCopy, isNum, pick, round } from './math.js';
@@ -56,10 +62,10 @@ export function newPresetId() {
  * The stored shape of a custom preset (schema PRESET_SCHEMA_VERSION). Every descriptive field is
  * derived from cfg, the reproducible configuration, so saving and migrating produce the same record.
  */
-export function presetRecord(meta, cfg) {
+export function presetRecord(meta, cfg, labs) {
   const source = cfg.source || 'single';
   const range = cfg.range && typeof cfg.range === 'object' ? cfg.range : { mode: 'human' };
-  return {
+  const record = {
     version: PRESET_SCHEMA_VERSION, id: meta.id, name: meta.name, created: meta.created,
     mode: source, pattern: cfg.pattern || 'tone', waveform: cfg.waveform || 'sine',
     frequency: cfg.frequency, gain: cfg.gain, duration: cfg.duration,
@@ -69,6 +75,13 @@ export function presetRecord(meta, cfg) {
     dual: source === 'dual' ? deepCopy(cfg.dual || null) : null,
     cfg,
   };
+  if (isLabRecord(labs)) record.labs = deepCopy(labs);
+  return record;
+}
+
+/** A stored `labs` sibling (C018): a plain object; its sections are validated when applied. */
+export function isLabRecord(labs) {
+  return !!labs && typeof labs === 'object' && !Array.isArray(labs);
 }
 
 /** fromVersion -> upgrade(cfg, storedPreset) returning the cfg of fromVersion + 1. */
@@ -116,7 +129,7 @@ export function migratePreset(p, opts = {}) {
   const record = presetRecord({
     id: typeof p.id === 'string' ? p.id : newPresetId(),
     name, created: isNum(p.created) ? p.created : Date.now(),
-  }, cfg);
+  }, cfg, p.labs);
   if (targetVersion !== PRESET_SCHEMA_VERSION) record.version = targetVersion;
   return record;
 }
@@ -164,26 +177,31 @@ export function loadHistory(store = sessionStore) {
 }
 
 /**
- * One history entry for a played plan. state: { source, pattern }; cfg: serializeConfig(state).
+ * One history entry for a played plan. state: { source, pattern }; cfg: serializeConfig(state);
+ * labs: the lab sections at play time (C018), kept only when it is a plain object.
  * V1: oscillaApp.addHistory (index.html@a7b7a23), entry part
  */
-export function historyEntry(plan, state, cfg) {
-  return {
+export function historyEntry(plan, state, cfg, labs) {
+  const entry = {
     ts: Date.now(), mode: state.source, freqs: plan.freqs.map((f) => round(f, 2)),
     waveform: plan.type === 'dual' ? `${plan.a.wave} / ${plan.b.wave}` : plan.wave,
     pattern: state.source === 'single' ? state.pattern : state.source,
     duration: plan.kind === 'finite' ? round(plan.dur, 3) : null,
     label: plan.label, cfg,
   };
+  if (isLabRecord(labs)) entry.labs = deepCopy(labs);
+  return entry;
 }
 
 /**
- * The history with entry added: a repeat of the newest entry (same label and cfg) replaces it,
- * the list is capped at HISTORY_MAX. V1: oscillaApp.addHistory (index.html@a7b7a23), list part
+ * The history with entry added: a repeat of the newest entry (same label, cfg and labs) replaces
+ * it, the list is capped at HISTORY_MAX. V1: oscillaApp.addHistory (index.html@a7b7a23), list part
  */
 export function pushHistory(history, entry) {
   const prev = history[0];
-  const same = prev && prev.label === entry.label && JSON.stringify(prev.cfg) === JSON.stringify(entry.cfg);
+  const same = prev && prev.label === entry.label
+    && JSON.stringify(prev.cfg) === JSON.stringify(entry.cfg)
+    && JSON.stringify(prev.labs) === JSON.stringify(entry.labs);
   return same ? [entry, ...history.slice(1)] : [entry, ...history].slice(0, HISTORY_MAX);
 }
 

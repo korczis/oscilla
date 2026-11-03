@@ -90,3 +90,15 @@ has chosen none (issue Q002). Times are UTC.
   score, that technical quality "can be 9/10 and business clarity 5/10" because the two do not
   correlate (`6ac1beb8`, 2026-10-04T03:30:06Z). Nothing derived from this record presents 9/10
   and 5/10 as ratings.
+
+## Note of 2026-11-03: a sentence was chosen
+
+The title and the text above are as of 2026-10-18, before the choice. Q002 (done) adopted C1,
+adapted, on 2026-10-18, decided by the coordinating Claude session under the owner's
+delegation of that day ("tak to vse pores"), which the owner may override (Q002
+`current_state`). P003 (done; merged in #206) put it in the copy. `README.md` line 5 and
+About's lede (`src/index.html` line 2666, `data-osc="about.lede"`) now read: "A zero-install,
+scientifically honest acoustic laboratory in your browser: generate, measure and reproduce
+sound experiments, and know how far each result can be trusted." The tagline "See sound.
+Shape frequency." stays (`README.md` line 7). The candidates above stay as the record of what
+was offered.

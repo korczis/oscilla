@@ -1,0 +1,45 @@
+id: song-reconstruction
+title: "A recording the user may process becomes an ordinary, editable Studio project whose every reconstructed part says what it came from, how it was derived and whether a person accepted it, with no model present"
+statement: "A recording the user is entitled to process becomes an ordinary, editable OSCILLA Studio project whose every reconstructed part says what it came from, how it was derived and whether a person accepted it, and the whole flow works with no model present. A versioned reconstruction artifact (the SHA-256 of every source file, and per-part hypotheses for stems, notes, tempo, sections and instrument or patch, each with its producer, version, parameters and failures) is opened by the single-file page from a local file the user picks, validated strictly, and compiled by a pure, deterministic mapper into an ordinary StudioModel through the existing import pipeline and store. The player hears the original beside a replacement instrument through one output owner, corrects and accepts hypotheses, saves, reopens and exports with the instrument's existing persistence. An optional local companion CLI, in its own directory or repository and outside dist/, may write the artifact through licensed, pinned adapters; the page opens that file only through the file picker, runs no model, fetches nothing and needs no server, and every stage works from a hand-made or synthetic artifact. Source: the owner's OSCILLA RECONSTRUCT pack (2026-11-02, marked 'Status: PROPOSAL'). Its standing is the owner's answer to Q072, 'Proposed, critic first (Recommended)': the intent stays proposed, and an independent critique is recorded under .ai/repo/project/critiques/song-reconstruction.yaml before any milestone, criterion or issue of it is filed; until then it names no milestone and no criterion, so its stage is derived as declared (Majordomus ADR 0144), and nothing marks it accepted. The owner also answered Q073 ('Synthetic/own only (Recommended)'): fixtures are generated or the owner's own recordings, a user may open any local file of their own, and nothing third-party enters the repository; Q074 ('OK as a separate tool (Recommended)'): the companion is an optional CLI outside dist, and the page only opens its output file through the file picker, with no network and no server for the page; and Q075 ('M071/M072 first (Recommended)'): the real audio and notes clips and a tempo map enter the Studio schema first, with a migration (connected-instrument's K109 and K112 under M072, with K099's notes clips), and the import comes after them, with no temporary kinds. Q076 (inverse synthesis), Q077 (the share of the gzip budget) and Q078 (the name and the issue prefix) are open. Audio tracks, notes clips, the tempo map, the mixer, MIDI files and the project round trip are connected-instrument's (K074, K099, K107, K109, K112, K118, K119), and the component declarations are component-system's (G001); this intent reuses them and adds none of its own."
+invariants:
+  - "One StudioModel and one action layer: an imported reconstruction is an ordinary Studio document; hypotheses, lineage and model outputs are not a second Studio state (project.studio-model-is-canonical)"
+  - "The single file opens from file:// and the Pages sub-path, fetches nothing, needs no server and bundles no model or weights; the companion, an optional CLI, lives in its own directory or repository outside dist/, and the page opens its output file only through the file picker (project.single-file-deliverable; owner, Q074)"
+  - "No model inference in the audio or event path; a model proposes, the validator and the existing Studio compiler decide (ADR 0058, proposed; the midi-jam-companion invariant)"
+  - "A hypothesis is labelled as one: no accuracy, confidence or instrument identity is shown as fact unless a recorded evaluation run measured it, with its method named (project.no-fake-science)"
+  - "The provenance relationships are not signal edges: nothing in the lineage becomes an AUDIO, CONTROL, TRIGGER or ANALYSIS edge (project.typed-ports)"
+  - "Reanalysis creates a new immutable result with lineage and never overwrites a user's edit or acceptance"
+  - "Only files the user supplies locally are processed; a web address is stored as a reference and never fetched, streamed or ripped"
+  - "Fixtures in the repository are generated or the owner's own recordings; a user may open any local file of their own, and nothing third-party enters the repository (owner, Q073)"
+  - "The import targets only the Studio schema's real clip kinds: audio and notes clips and the tempo map land first with a migration (K099, K109, K112), and no temporary kind stands in for them (owner, Q075)"
+  - "Every pinned template studioHash and the K144 demo song stay unchanged (tests/unit/demo-song.test.mjs)"
+  - "New surfaces are Flowbite Pro and declared in the component catalogue once G001 lands; no second registry (project.ui-uses-flowbite-pro, ADR 0061, component-system)"
+  - "Audio starts only inside the gesture unlock (project.a-phone-sounds)"
+governance:
+  - "rule:project.studio-model-is-canonical"
+  - "rule:project.single-file-deliverable"
+  - "rule:project.audio-engine-discipline"
+  - "rule:project.typed-ports"
+  - "rule:project.no-silent-feedback"
+  - "rule:project.no-fake-science"
+  - "rule:project.ui-uses-flowbite-pro"
+  - "rule:project.visual-identity-lock"
+  - "rule:project.no-inert-surfaces"
+  - "rule:project.a-phone-sounds"
+  - "rule:project.suite-harness"
+  - "rule:project.bounded-test-timing"
+  - "rule:project.fail-first"
+  - "rule:project.review-verdict"
+  - "rule:project.rules-name-their-enforcement"
+milestones: []
+satisfaction: []
+non_goals:
+  - "Audio tracks, audio clips, the sample store, notes clips, the piano roll, the mixer, the tempo and meter map, the arrangement, MIDI files, stems and the project round trip: connected-instrument (M069, M071, M072) and instrument-kinds own them (K074, K099, K105-K120, W011, W014)"
+  - "A component registry, explain panel or link graph of its own: component-system owns them (G001-G019, J001-J008)"
+  - "Recording a jam as an editable event track: midi-jam-companion owns it (M045, V505)"
+  - "Running a model, loading weights, fetching anything or talking to a server from the page"
+  - "Downloading, ripping or intercepting audio from a web address"
+  - "Third-party recordings, transcriptions of copyrighted songs, samples or presets in the repository (owner, Q073; K144's originals-only stance; the connected-instrument non-goal)"
+  - "Claiming exact recovery of a proprietary patch or of the source mix"
+  - "Inverse synthesis and regeneration, until the owner answers Q076"
+created_at: 2026-11-02
+updated_at: 2026-11-02

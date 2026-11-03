@@ -197,6 +197,10 @@ async function hold(page, code) {
   await page.keyboard.down(code);
 }
 async function tapJack(page, id) {
+  const chip = page.locator('[data-face="bay"]'); // below xl the bay is a face of its own (B2)
+  if (await chip.isVisible() && await chip.getAttribute('aria-pressed') !== 'true') {
+    await chip.click();
+  }
   await page.locator(`[data-jack="${id}"]`).focus();
   await page.keyboard.press('Enter');
 }

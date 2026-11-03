@@ -224,7 +224,7 @@ function planFixture() {
   return { schema: 1, milestones: [m('M001', 'DONE', 'Instrument core', 26, 26),
     m('M011', 'ACTIVE', 'Release engineering', 17, 18), m('M036', 'DONE', 'V3.2 audit', 0, 0),
     m('M047', 'BLOCKED', 'Measurement extensions', 0, 9), m('M099', 'CANCELLED', 'Dropped', 0, 2),
-    m('M005', 'ACTIVE', 'Specification tail', 4, 13)] };
+    m('M060', 'PLANNED', 'Signal lab', 0, 3), m('M005', 'ACTIVE', 'Specification tail', 4, 13)] };
 }
 
 test('A15: What comes next renders the committed roadmap, built in and never fetched', async () => {
@@ -235,19 +235,40 @@ test('A15: What comes next renders the committed roadmap, built in and never fet
   assert.ok(roadmap.milestones.length > 0, 'the plan has open milestones');
   const at = view.indexOf('data-osc="about.next"');
   assert.ok(at > 0, 'About has a What comes next list');
-  const list = view.slice(at, view.indexOf('</ul>', at));
-  assert.match(list, /<template x-for="m in ROADMAP\.milestones" :key="m\.id">/);
-  assert.match(list, /x-text="m\.title"/);
-  assert.match(list, /m\.done/);
-  assert.match(list, /m\.required/);
+  const section = view.slice(at, view.indexOf('</section>', at));
+  for (const phase of ['now', 'next', 'later']) {
+    const from = section.indexOf(`data-osc="about.next.${phase}"`);
+    assert.ok(from > 0, `What comes next has the ${phase} list`);
+    const list = section.slice(from, section.indexOf('</ul>', from));
+    assert.match(list, new RegExp(`<template x-for="m in ROADMAP\\.phase\\.${phase}`
+      + '\\.milestones" :key="m\\.id">'));
+    assert.match(list, /x-text="m\.title"/);
+    assert.match(list, /m\.done/);
+    assert.match(list, /m\.required/);
+  }
+  // later is folded behind its count, by a button that names the list it opens
+  const later = section.slice(section.indexOf('data-osc="about.next.later-toggle"'));
+  assert.match(later, /aria-controls="osc-about-next-later-list"/);
+  assert.match(later, /:aria-expanded="aboutLaterOpen/);
+  assert.match(later, /id="osc-about-next-later-list" x-show="aboutLaterOpen"/);
   const about = read('src/js/ui/about.js');
   assert.match(about,
     /^import ROADMAP_DATA from '\.\.\/\.\.\/data\/roadmap\.json' with \{ type: 'json' \};$/m,
     'the roadmap is bundled at build time from src/data/roadmap.json');
   assert.doesNotMatch(about, /\bfetch\s*\(|XMLHttpRequest|import\s*\(/,
     'nothing is loaded at run time');
-  const { ROADMAP } = await import('../../src/js/ui/about.js');
+  const { ROADMAP, aboutPart } = await import('../../src/js/ui/about.js');
   assert.deepEqual(JSON.parse(JSON.stringify(ROADMAP.milestones)), roadmap.milestones);
+  assert.deepEqual(ROADMAP.phases.map((p) => p.id), ['now', 'next', 'later']);
+  assert.deepEqual(ROADMAP.phases.flatMap((p) => p.milestones.map((m) => m.id)).sort(),
+    roadmap.milestones.map((m) => m.id).sort(), 'every milestone is in exactly one phase');
+  for (const p of ROADMAP.phases) {
+    assert.equal(ROADMAP.phase[p.id], p);
+    assert.deepEqual(p.milestones.map((m) => m.id),
+      roadmap.milestones.filter((m) => m.phase === p.id).map((m) => m.id),
+      `${p.id} keeps the plan order`);
+  }
+  assert.equal(aboutPart().aboutLaterOpen, false, 'later opens folded');
   assert.match(read('src/js/main.js'), /\baboutPart\(\)/,
     'the About part is composed into the app');
 });
@@ -257,15 +278,16 @@ test('A15: the roadmap lists the open milestones, in the plan order, with progre
   const plan = planFixture();
   const roadmap = roadmapFromPlan(plan);
   assert.deepEqual(roadmap.milestones, [
-    { id: 'M011', title: 'Release engineering', done: 17, required: 18 },
-    { id: 'M047', title: 'Measurement extensions', done: 0, required: 9 },
-    { id: 'M005', title: 'Specification tail', done: 4, required: 13 },
+    { id: 'M011', title: 'Release engineering', done: 17, required: 18, phase: 'now' },
+    { id: 'M047', title: 'Measurement extensions', done: 0, required: 9, phase: 'later' },
+    { id: 'M060', title: 'Signal lab', done: 0, required: 3, phase: 'next' },
+    { id: 'M005', title: 'Specification tail', done: 4, required: 13, phase: 'now' },
   ]);
   assert.deepEqual(roadmapProblems(roadmap, plan), []);
   const less = { ...roadmap, milestones: roadmap.milestones.filter((m) => m.id !== 'M047') };
   assert.deepEqual(roadmapProblems(less, plan), ['the roadmap omits open milestone M047']);
   const done = { ...roadmap, milestones: [{ id: 'M001', title: 'Instrument core', done: 26,
-    required: 26 }, ...roadmap.milestones] };
+    required: 26, phase: 'now' }, ...roadmap.milestones] };
   assert.deepEqual(roadmapProblems(done, plan),
     ['the roadmap lists M001, which the plan has DONE']);
   const stale = { ...roadmap, milestones: roadmap.milestones.map((m) => (m.id === 'M011'
@@ -278,9 +300,16 @@ test('A15: the roadmap lists the open milestones, in the plan order, with progre
     ['M005: the roadmap says "Spec", the plan "Specification tail"']);
   const reordered = { ...roadmap, milestones: [...roadmap.milestones].reverse() };
   assert.deepEqual(roadmapProblems(reordered, plan),
-    ['the roadmap is not in the plan order: M005, M047, M011']);
+    ['the roadmap is not in the plan order: M005, M060, M047, M011']);
+  const moved = { ...roadmap, milestones: roadmap.milestones.map((m) => (m.id === 'M047'
+    ? { ...m, phase: 'next' } : m)) };
+  assert.deepEqual(roadmapProblems(moved, plan),
+    ['M047: the roadmap says next, the plan later (BLOCKED)']);
+  const { roadmapShapeProblems } = await import('../../scripts/roadmap.mjs');
+  assert.deepEqual(roadmapShapeProblems({ ...roadmap, milestones: [{ ...roadmap.milestones[0],
+    phase: 'someday' }] }), ['milestone 1: phase someday is not a phase']);
   const unknown = { ...roadmap, milestones: [...roadmap.milestones, { id: 'M777', title: 'x',
-    done: 0, required: 1 }] };
+    done: 0, required: 1, phase: 'next' }] };
   assert.deepEqual(roadmapProblems(unknown, plan),
     ['the roadmap lists M777, which the plan has not']);
 });

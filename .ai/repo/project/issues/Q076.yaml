@@ -1,0 +1,21 @@
+id: Q076
+milestone: M119
+title: "Owner decision: inverse synthesis in song-reconstruction (Q-E)"
+slug: owner-decision-inverse-synthesis-in-song-reconstruction-q-e
+priority: p2
+profile: routine
+owner: "repository owner"
+objective: "Inverse synthesis and MIDI-conditioned regeneration (the pack's phase F): (a) in scope as a separate, optional experimental milestone, only after the artifact, import, lineage, companion and views milestones have evidence; (b) descoped. The draft recommended (b) until those milestones have evidence."
+why: "The owner handed over the OSCILLA RECONSTRUCT pack (OSCILLA_RECONSTRUCT_MASTER_PROMPT.md, the owner's local copy, 2026-11-02, marked 'Status: PROPOSAL'), recorded as the proposed intent song-reconstruction; the research that mapped it onto the plan (P00 gap map and P01 alignment, measured on origin/main b938129) drafted this question; .ai/repo/project/README.md: only the owner, or a session the owner delegated to, answers a Q issue."
+current_state: "Open on 2026-11-02. The draft's recommendation is not an answer; the slices of song-reconstruction that wait on it name this issue in depends_on once the intent is planned."
+scope:
+  - ".ai/repo/project/issues/Q076.yaml"
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision), either in the owner's words with date and source, or as a decision of a coordinating session under an owner delegation it quotes with its date, stating its reasoning and that the owner may override it; a worker without such a delegation never answers it."
+  - "The answer names (a) or (b)."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-11-02
+updated_at: 2026-11-02

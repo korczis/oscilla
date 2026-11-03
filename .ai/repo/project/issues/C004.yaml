@@ -40,4 +40,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-03T00:11:40Z
+started_at: 2026-11-03T00:10:54Z
+started_event: sha256:bdc36b69491657be2d8de475af26d89f7ab08acffbbd4081cafd0829abef06b9
+completed_at: 2026-11-03T00:11:40Z
+completed_event: sha256:a646ec9013c36d2126989363db16e84ca3d87e2afd8a20cf166c068050f63359
+evidence:
+  - covers: verified
+    type: ci
+    command: "node --test tests/unit/qa-regressions.test.mjs tests/unit/sequencer-editor.test.mjs; node tests/browser/app.cjs; node tests/browser/qa-regressions.cjs"
+    result: "landed in #367 (main merge commit 11cc9fbc, member #302); one sequence state: seq-waveform-one-owner (app.cjs), seq-status-duration-follows-edits (qa-regressions.cjs) and their unit tests; CI run 41357644373 green on the train head c2a6f6c5; Main checks run 41372186924 green on 11cc9fbc; review verdict .ai/repo/reviews/367.yaml (merge)"
+    artifact: ".ai/repo/reviews/367.yaml"
+    commit: 2931af343905d0a432bd8711f18face5d703dd3a
+    recorded_at: 2026-11-03T00:11:26Z

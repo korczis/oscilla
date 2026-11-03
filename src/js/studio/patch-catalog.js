@@ -16,7 +16,9 @@
 //     entries and its saved patches load through `load`; `capture` saves the document's state
 //   catalogEntries({ user, model }) -> [entry]
 //     entry = { id, name, instrument, instrumentLabel, tags: [tag], source: 'factory' | 'user',
-//               modes: ['apply' | 'insert' | 'replace'], patch, load? }
+//               modes: ['apply' | 'insert' | 'replace'], patch, load?, detail? }   detail: a
+//               line said beside the name (a riff's style, K149); a patch of no nodes is
+//               never in use
 //   captureSources(model) -> [{ id, label, capture(name) -> patch }]   the sources that can
 //     save the document's state now
 //   browseView(entries, model, { instrument, tag, query, target }) -> { instruments: [{ id,
@@ -107,7 +109,8 @@ export function catalogEntries({ user = [], model = null } = {}) {
 const same = (a, b) => canonicalJson(a) === canonicalJson(b);
 
 /** Whether the model holds the patch's sound: each patch node's parameters on a node of it. */
-const inUse = (model, entry) => entry.patch.graph.nodes.every((src) => model.graph.nodes
+const inUse = (model, entry) => entry.patch.graph.nodes.length > 0
+  && entry.patch.graph.nodes.every((src) => model.graph.nodes
   .some((n) => n.type === src.type && same({ ...n.params, ...src.params }, n.params)));
 
 export function captureSources(model) {
