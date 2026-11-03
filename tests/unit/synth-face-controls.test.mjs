@@ -112,7 +112,7 @@ test('a disabled knob stays focusable, says why and draws the core\'s dashed arc
     assert.match(b, /role="slider" tabindex="0"/);
     assert.ok(b.includes(`<span class="sr-only" id="${cid}-why">`), cid);
   }
-  assert.match(block('am.depth'), /data-ring="" [^>]*stroke-dasharray="2 3"/);
+  assert.match(block('am.depth'), /data-ring="" [^>]*stroke-dasharray="[\d.]+ [\d.]+"/);
   assert.doesNotMatch(block('lpf.frequency'), /stroke-dasharray/);
 });
 

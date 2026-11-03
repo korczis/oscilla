@@ -1,16 +1,14 @@
 // The synth-theme layer's control core (plan K058; control API agreed 2026-11-02): a knob,
 // fader and switch as pure functions. Values come only from the registry's parameter descriptor
 // ({ key or id, label, unit, min, max, step, scale: 'lin' | 'linear' | 'log', default, type:
-// 'number' | 'integer' | 'enum' | 'boolean', options }); the control holds no parameter's
-// constant. An enum or boolean is a row of positions (a switch draws up to four; a number is
-// never a switch). The value is a setpoint (project.no-fake-science): nothing tweens it. No
-// listener, no document: a host calls knobKey from its own delegated listener (K153 counts key
-// listeners) and draws controlSvg in an HTML panel or an SVG graph at any zoom; ariaAttrs is
-// N003's controlAttrs shape (aria-valuenow a 0..1000 position). Colours are tokens passed in
-// (tokens.js; project.visual-identity-lock v3) and no number sets an opacity, alpha or shadow
-// (v4): the cap highlight is class opacity-hw-sheen, the cap shadow opacity-hw-shadow.
-// The feel (plan S3: drag, fader press, gestures, Escape) is feel.js; here a wheel notch is at
-// least WHEEL_STEP (1 %, Shift 0.1 %) and a fader turns horizontal with a 28 × 14 cap.
+// 'number' | 'integer' | 'enum' | 'boolean', options }). An enum or boolean is a row of
+// positions (a switch draws up to four). The value is a setpoint (project.no-fake-science):
+// nothing tweens it. No listener, no document: a host calls knobKey from its own delegated
+// listener (K153) and draws controlSvg in an HTML panel or an SVG graph at any zoom; ariaAttrs
+// is N003's controlAttrs shape. Colours are tokens passed in (tokens.js;
+// project.visual-identity-lock v3), and no number sets an opacity, alpha or shadow (v4): the
+// cap highlight is class opacity-hw-sheen, the cap shadow opacity-hw-shadow. The feel (plan S3)
+// is feel.js.
 //
 //   clampValue, toNorm, fromNorm, quantize, defaultValue, stepOption   value mapping
 //   dragValue, pixelsPerRangeFor, wheelValue, knobKey                  gestures -> the next value
@@ -108,17 +106,16 @@ function quantumOf(p, fine) {
   return integer ? Math.max(1, Math.round(step / FINE_DIV)) : step / FINE_DIV;
 }
 
-/** A log range's grid at `x`: four significant digits (five fine), as K058 kept them, so the
- *  bottom of a range spanning decades is as fine as its top. */
+/** A log range's grid at `x`: four significant digits (five fine), as K058 kept them. */
 const relQuantum = (x, fine) => 10 ** (Math.floor(Math.log10(Math.abs(x))) - (fine ? 4 : 3));
 
-/** The grid at `v`: a log range's relative grid where it is finer than the step, else the
- *  step (quantumOf); 0 for a stepless linear range. */
+/** The grid at `v`: the step (quantumOf), on a log range the relative grid where that is
+ *  coarser or there is no step (S7: never finer than the step; fine a tenth); 0 stepless lin. */
 function quantumAt(v, p, fine) {
   const q = quantumOf(p, fine);
   if (!rangeOf(p).log) return q;
   const r = relQuantum(clampValue(v, p), fine);
-  return q && q <= r ? q : r;
+  return q && q >= r ? q : r;
 }
 
 /** `v` held to [min, max]; anything not a number reads min. A choice: a known option, else the
@@ -151,15 +148,15 @@ export function fromNorm(n, p) {
   return log ? min * (max / min) ** t : min + t * (max - min);
 }
 
-/** `v` clamped and snapped to the grid in value space: the step (fine: a tenth of it), anchored
- *  at min; on a log range four significant digits (fine: five) where that is finer. */
+/** `v` clamped and snapped to the grid in value space: the step (fine: a tenth), anchored at
+ *  min; on a log range four significant digits (fine: five) where coarser or stepless (S7). */
 export function quantize(v, p, { fine = false } = {}) {
   if (choicesOf(p)) return clampValue(v, p);
   const { min, log } = rangeOf(p);
   let x = clampValue(v, p);
   const q = quantumOf(p, fine);
   const r = log ? relQuantum(x, fine) : 0;
-  if (r && !(q && q <= r)) x = clampValue(Math.round(clean(x / r)) * r, p);
+  if (r && !(q && q >= r)) x = clampValue(Math.round(clean(x / r)) * r, p);
   else if (q) x = clampValue(min + Math.round(clean((x - min) / q)) * q, p);
   return clean(x);
 }
@@ -444,12 +441,6 @@ function decimalsIn(x) {
   return dot < 0 ? 0 : s.length - dot - 1;
 }
 
-/** The least decimals `p` shows: its step's, or 2 for a stepless range. */
-function stepDecimals(p) {
-  const step = quantumOf(p, false);
-  return step ? decimalsIn(step) : 2;
-}
-
 /** The most decimals worth showing at `v`: the fine step's, or for a stepless range those that
  *  resolve one fine key step there. */
 function fineDecimals(v, p) {
@@ -484,9 +475,9 @@ function timeText(v, d) {
 /**
  * The value with its unit, as shown and announced. Frequencies and times go through the units
  * module (core/frequency.js); cents, semitones and octaves carry a sign (+5 ct, +12 st,
- * +0.50 oct), dB one decimal at least, anything else the step's decimals. The decimals follow
- * the value's own grid, capped at the fine step's, so a fine move shows (50.1 %). A choice shows
- * its label (Saw, On).
+ * +0.50 oct). The decimals are the step's, or the value's own grid's, capped at the fine
+ * step's, so a fine move shows (50.1 %) and none shows more than its step needs (S7: 1 dB steps
+ * read -80 dB). A choice shows its label (Saw, On).
  */
 export function formatValue(v, p) {
   const opts = choicesOf(p);
@@ -498,8 +489,9 @@ export function formatValue(v, p) {
   const own = ownDecimals(v, p);
   if (p.unit === 'Hz') return formatFrequencyCompact(v, digitsAt(v, own));
   if (p.unit === 's') return timeText(v, own);
-  const least = { oct: 2, dB: 1 }[p.unit] || 0;
-  const base = Math.max(stepDecimals(p), least);
+  // The least decimals: the grid's at v (the step's), at most 2 without a step.
+  const g = quantumAt(v, p, false);
+  const base = Math.min(g ? decimalsIn(clean(g)) : 2, quantumOf(p, false) ? 15 : 2);
   let d = Math.max(base, own);
   // A value that rounds to zero reads as zero itself does (0 ct, never 0.0 ct).
   if (Number(fixed(v, d)) === 0) d = base;
@@ -572,8 +564,15 @@ const KNOB = Object.freeze({ arc: 19, arcW: 3, trackW: 1.5, skirt: 16, edgeW: 1.
   tickIn: 20.5, tickOut: 22, ticks: 11, tickZoom: 1.25, detentOut: 21.75, detentW: 1.5,
   applied: 13.5, appliedW: 1.5, appliedMinDeg: 5, focus: 21, focusW: 2, shadowDy: 1,
   shadowDragDy: 2 });
-/** A disabled knob's value arc: dashed, butt-ended, so the gaps stay open. */
-const DISABLED_DASH = '2 3';
+/** A disabled value arc of `len` units: butt dashes of DASH_W widths, gaps of one, starting and
+ *  ending on a dash (S7: none under its width); null (solid) under two dashes. */
+const DASH_W = 2;
+function disabledDash(len, w) {
+  const n = Math.round((len + w) / ((DASH_W + 1) * w));
+  if (n < 2) return null;
+  const gap = len / (n * (DASH_W + 1) - 1);
+  return `${num(DASH_W * gap)} ${num(gap)}`;
+}
 /** A fader's cap, graph units: w across the travel, h along it. */
 export const FADER_CAP = Object.freeze({ w: 28, h: 14 });
 const FADER = { travel: FADER_TRAVEL, capW: FADER_CAP.w, capH: FADER_CAP.h, trackW: 4, grip: 3 };
@@ -612,7 +611,7 @@ function switchPositions(p) {
   }
   if (opts.length > SWITCH_MAX_POSITIONS) {
     throw new Error(`${idOf(p)}: a switch has at most ${SWITCH_MAX_POSITIONS} positions, not `
-      + `${opts.length}; draw it as a knob (a rotary selector).`);
+      + `${opts.length}; switchSvg draws it as a rotary selector, or draw a knob.`);
   }
   return Math.max(2, opts.length);
 }
@@ -663,14 +662,16 @@ function knobShapes(value, applied, p, t, st, zoom) {
     out += `<line data-detent="" x1="${dx0}" y1="${dy0}" x2="${dx1}" y2="${dy1}" `
       + `stroke="${esc(c.track)}" stroke-width="${KNOB.detentW}"/>`;
   }
-  // Disabled, the unlit arc takes the knurl's tone, so the dashed value arc stays apart.
+  // The unlit arc is control.track (3:1) in every state; the value arc is told by width (S7).
   out += `<path d="${arcPath(KNOB.arc, -half, half)}" data-track="" fill="none" `
-    + `stroke="${esc(dim ? c.knurl : c.track)}" stroke-width="${KNOB.trackW}" `
-    + 'stroke-linecap="round"/>';
+    + `stroke="${esc(c.track)}" stroke-width="${KNOB.trackW}" stroke-linecap="round"/>`;
   if (Math.abs(a - origin) > 0.01) {
+    const dash = dim && disabledDash((KNOB.arc * Math.PI * Math.abs(a - origin)) / 180,
+      KNOB.arcW);
     out += `<path d="${arcPath(KNOB.arc, origin, a)}" data-ring="" fill="none" `
       + `stroke="${esc(dim ? c.disabled : c.ring)}" stroke-width="${KNOB.arcW}" `
-      + (dim ? `stroke-dasharray="${DISABLED_DASH}"/>` : 'stroke-linecap="round"/>');
+      + (dim ? `${dash ? `stroke-dasharray="${dash}"` : 'stroke-linecap="butt"'}/>`
+        : 'stroke-linecap="round"/>');
   }
   const knurl = Array.from({ length: KNOB.knurls }, (_, i) => (i * 360) / KNOB.knurls);
   out += `<circle data-skirt="" cx="0" cy="0" r="${KNOB.skirt}" fill="${esc(t.surface.card)}" `
