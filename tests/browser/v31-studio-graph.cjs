@@ -1759,8 +1759,9 @@ function defineChecks() {
   };
   /** The summary as shown: its groups, the lines of each open group, focus and selection. */
   const readSummary = (page) => page.evaluate(() => {
-    const root = document.querySelector('[data-osc="studio.inspector.summary"]');
-    if (!root) return null;
+    // With a node selected the Inspector shows the node, and the summary is gone (no groups).
+    const root = document.querySelector('[data-osc="studio.inspector.summary"]')
+      || document.createElement('section');
     const text = (el) => el.textContent.replace(/\s+/g, ' ').trim();
     const groups = [...root.querySelectorAll('[data-osc="studio.inspector.summaryGroup"]')]
       .map((b) => {
@@ -1810,14 +1811,19 @@ function defineChecks() {
       const out = d && d.querySelector('[data-osc="studio.connect.output"][aria-checked="true"]');
       return { open: !!(d && d.open), title: d ? d.querySelector('h2').textContent : '',
         port: out ? out.dataset.port : 'audio',
+        // Every input of this patch is taken, so the list says none can take it now.
+        list: d ? (d.querySelector('[data-osc="studio.connect.targets"]') || {}).textContent
+          || '' : '',
         targets: d ? d.querySelectorAll('[data-osc="studio.connect.target"]').length : 0,
         edges: window.OSCILLA.studio.model.graph.edges.length };
-    }), (v) => v.open && v.targets > 0, 'graph-summary: Connect… opens the connection list');
+    }), (v) => v.open && !!v.list, 'graph-summary: Connect… opens the connection list');
+    // Escape closes it onto its node in the graph (the dialog's own contract), unpatched.
     await page.keyboard.press('Escape');
     const closed = await H.settle(() => page.evaluate(() => ({
       open: document.querySelector('#osc-dlg-studio-connect').open,
-      edges: window.OSCILLA.studio.model.graph.edges.length })), (v) => !v.open,
-    'graph-summary: Escape closes the connection list');
+      focus: document.activeElement.dataset.nodeId || '',
+      edges: window.OSCILLA.studio.model.graph.edges.length })),
+    (v) => !v.open && v.focus === 'osc-2', 'graph-summary: Escape closes the connection list');
     // Enter on a node of a path: the graph selects it, frames it and takes focus (Find node).
     await page.evaluate(() => window.OSCILLA.studio.store.dispatch({ type: 'SELECTION_CHANGE',
       selection: {} }));
@@ -1881,6 +1887,7 @@ function defineChecks() {
         && /^summary:modulation:/.test(all.focus),
       markupIsText: !!named && !named.markup,
       fixOpensList: dialog.open && dialog.title === 'Connect <b>x</b>' && dialog.port === 'audio'
+        && (dialog.targets > 0 || /No input in this graph can take this output/.test(dialog.list))
         && dialog.edges === 30,
       fixPatchesNothing: !closed.open && closed.edges === 30,
       revealSelects: revealed.sel.join() === 'filter-2' && revealed.focus === 'node:filter-2'
