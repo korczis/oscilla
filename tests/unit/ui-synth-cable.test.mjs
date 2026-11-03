@@ -9,8 +9,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import {
-  CABLE_DASH, CABLE_HIT_PX, CABLE_MAX_SAG, CABLE_MIN_SAG, REFUSED_DASH, cableCurve, cableSvg,
-  plugSvg,
+  CABLE_DASH, CABLE_HIT_PX, CABLE_MAX_SAG, CABLE_MIN_SAG, REFUSED_DASH, cableCurve, cableParts,
+  cableSvg, plugSvg,
 } from '../../src/js/ui/synth/cable.js';
 import { TOKENS, colourLiterals, shapesWithoutStroke, paints, tokenValues, intensityLiterals }
   from './ui-synth-fixture.mjs';
@@ -530,4 +530,153 @@ test('600 cables: cableCurve plus cableSvg stay under 50 ms', (t) => {
   }));
   t.diagnostic(`600 cables: best of 5 runs ${best.toFixed(2)} ms (bound 50 ms)`);
   assert.ok(best < 50, `${best.toFixed(2)} ms`);
+});
+
+// ---------------------------------------------------------------- cableParts (plan S4 a)
+
+/** An independent serialiser of a part list: the test's own, so cableSvg is checked against
+ *  the records rather than against itself. */
+function serialise(parts) {
+  const escape = (s) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  const kids = (key) => parts.filter((p) => p.parent === key);
+  const one = (p) => {
+    const attrs = Object.entries(p.attrs).map(([k, v]) => ` ${k}="${escape(v)}"`).join('');
+    const inner = kids(p.key);
+    return inner.length ? `<${p.tag}${attrs}>${inner.map(one).join('')}</${p.tag}>`
+      : `<${p.tag}${attrs}/>`;
+  };
+  return kids(null).map(one).join('');
+}
+
+const SPECS = [];
+for (const type of TYPES) {
+  for (const state of STATES) {
+    for (const sheen of [false, true]) {
+      for (const zoom of [0.5, 1, 2]) SPECS.push({ type, state, sheen, zoom });
+    }
+  }
+}
+
+test('cableParts: cableSvg is exactly the serialised parts, for every type, state and zoom', () => {
+  assert.equal(typeof cableParts, 'function');
+  const extra = [{ id: 'a"<b>&' }, { colour: undefined }, { box: { x: 0, y: 0, width: 400,
+    height: 90 } }, { from: A, to: A }, { dash: '3 2', type: 'CONTROL' },
+  { dash: null, type: 'TRIGGER', state: { refused: true } }, { port: 'diamond' },
+  { port: { from: 'circle', to: 'triangle' } }, { dash: '5 2', type: 'MIDI' }];
+  for (const s of [...SPECS, ...extra]) {
+    const spec = { id: 'c1', from: A, to: B, type: 'AUDIO', colour: TOKENS.cable.palette[2],
+      tokens: TOKENS, ...s };
+    assert.equal(cableSvg(spec), serialise(cableParts(spec)), JSON.stringify(s));
+  }
+});
+
+test('cableParts: an ordered, frozen list of { key, tag, attrs, parent }, parents first', () => {
+  const parts = cableParts({ id: 'c1', from: A, to: B, type: 'CONTROL', tokens: TOKENS,
+    colour: TOKENS.cable.palette[0], state: { refused: true }, sheen: true });
+  assert.ok(Object.isFrozen(parts));
+  const seen = new Set();
+  for (const p of parts) {
+    assert.deepEqual(Object.keys(p).sort(), ['attrs', 'key', 'parent', 'tag']);
+    assert.ok(Object.isFrozen(p) && Object.isFrozen(p.attrs), p.key);
+    assert.ok(['g', 'path', 'line'].includes(p.tag), p.tag);
+    assert.ok(p.parent === null || seen.has(p.parent), `${p.key}: its parent comes first`);
+    assert.ok(!seen.has(p.key), `${p.key} is unique`);
+    seen.add(p.key);
+    for (const v of Object.values(p.attrs)) assert.equal(typeof v, 'string', `${p.key} ${v}`);
+  }
+  assert.equal(parts[0].parent, null);
+  assert.equal(parts.filter((p) => p.parent === null).length, 1, 'one root');
+  assert.deepEqual(parts.map((p) => p.key), ['cable', 'shadow', 'main', 'hit', 'stroke', 'cross',
+    'cross-under-0', 'cross-under-1', 'cross-0', 'cross-1', 'sheen']);
+});
+
+test('cableParts: the keys are stable as the cable moves and changes state', () => {
+  const keys = (s) => cableParts({ id: 'k', type: 'AUDIO', tokens: TOKENS, from: A, to: B, ...s })
+    .map((p) => p.key);
+  const base = keys({});
+  assert.deepEqual(base, ['cable', 'shadow', 'main', 'hit', 'stroke']);
+  for (const s of [{ from: B, to: A }, { state: { hover: true } }, { state: { selected: true } },
+    { state: { dragging: true } }, { zoom: 3 }]) {
+    assert.deepEqual(keys(s), base, JSON.stringify(s));
+  }
+  const refused = keys({ state: { refused: true } });
+  assert.deepEqual(refused.slice(0, base.length), base, 'the cross adds parts, after the rest');
+  assert.deepEqual(keys({ sheen: true }), [...base, 'sheen']);
+});
+
+test('cableParts: attribute values are raw strings (setAttribute), escaped only in markup', () => {
+  const parts = cableParts({ id: 'a"<b>&', from: A, to: B, type: 'AUDIO', tokens: TOKENS });
+  assert.equal(parts[0].attrs['data-cable'], 'a"<b>&');
+  assert.match(cableSvg({ id: 'a"<b>&', from: A, to: B, type: 'AUDIO', tokens: TOKENS }),
+    /^<g data-cable="a&quot;&lt;b&gt;&amp;"/);
+  const stroke = parts.find((p) => p.key === 'stroke');
+  assert.equal(stroke.attrs.d, cableCurve(A, B));
+  assert.equal(stroke.attrs['stroke-width'], '4.5');
+});
+
+test('cableParts: the dash is an input; CABLE_DASH is only its default', () => {
+  const stroke = (s) => cableParts({ id: 'd', from: A, to: B, type: 'CONTROL', tokens: TOKENS,
+    ...s }).find((p) => p.key === 'stroke').attrs;
+  assert.equal(stroke({})['stroke-dasharray'], CABLE_DASH.CONTROL, 'the default');
+  assert.equal(stroke({ dash: '3 2' })['stroke-dasharray'], '3 2');
+  assert.equal(stroke({ dash: '3 2' })['stroke-linecap'], 'butt');
+  assert.equal(stroke({ dash: null })['stroke-dasharray'], undefined, 'null is solid');
+  assert.equal(stroke({ dash: null })['stroke-linecap'], 'round');
+  assert.equal(stroke({ dash: null, state: { refused: true } })['stroke-dasharray'],
+    REFUSED_DASH, 'a refused solid kind still shows by pattern');
+  assert.equal(stroke({ type: 'MIDI', dash: '5 2' })['stroke-dasharray'], '5 2',
+    'a kind CABLE_DASH does not know, with its dash');
+  assert.throws(() => stroke({ type: 'MIDI' }), /type|dash/, 'an unknown kind needs its dash');
+  for (const bad of ['', 'a b', '0 0', '-1 2', '1,,2', 3, {}, '1 NaN']) {
+    assert.throws(() => stroke({ dash: bad }), /dash/, JSON.stringify(bad));
+  }
+  assert.equal(stroke({ dash: '4,2.5' })['stroke-dasharray'], '4,2.5', 'commas are SVG too');
+});
+
+test('cableParts: the port shape is an input, recorded on the cable for the port glyph', () => {
+  const root = (port) => cableParts({ id: 'p', from: A, to: B, type: 'AUDIO', tokens: TOKENS,
+    port })[0].attrs;
+  assert.deepEqual(Object.keys(root(undefined)), ['data-cable', 'pointer-events'],
+    'none passed: nothing added');
+  assert.equal(root('diamond')['data-port-from'], 'diamond');
+  assert.equal(root('diamond')['data-port-to'], 'diamond', 'one shape names both ends');
+  const both = root({ from: 'circle', to: 'triangle' });
+  assert.deepEqual([both['data-port-from'], both['data-port-to']], ['circle', 'triangle']);
+  assert.deepEqual(Object.keys(both), ['data-cable', 'data-port-from', 'data-port-to',
+    'pointer-events']);
+  for (const bad of ['', 'Circle', 'a b', '"x"', 7, { from: 'circle' }, { from: 1, to: 'x' }]) {
+    assert.throws(() => root(bad), /port/, JSON.stringify(bad));
+  }
+});
+
+test('cableSvg with no new input draws what it drew before cableParts (pinned)', () => {
+  const svg = cableSvg({ id: 'g1', from: { x: 10, y: 20 }, to: { x: 210, y: 60 },
+    type: 'CONTROL', colour: TOKENS.cable.palette[1], tokens: TOKENS,
+    state: { refused: true, dragging: true }, zoom: 2, sheen: true });
+  const d = 'M 10 20 C 76.666667 101.32026 143.333333 114.653594 210 60';
+  const ln = (x1, y1, x2, y2, s, w) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" `
+    + `stroke="var(--osc-${s})" stroke-width="${w}" stroke-linecap="round"/>`;
+  const arms = (s, w) => ln('190.514998', '65.805009', '200.514998', '75.805009', s, w)
+    + ln('190.514998', '75.805009', '200.514998', '65.805009', s, w);
+  assert.equal(svg, '<g data-cable="g1" data-refused="" pointer-events="none">'
+    + `<path data-shadow="" class="opacity-hw-shadow" d="${d}" fill="none" `
+    + 'stroke="var(--osc-bg)" stroke-width="7.5" stroke-linecap="round" '
+    + 'transform="translate(0 1.5)"/>'
+    + `<g data-main="" pointer-events="stroke"><path data-hit="" d="${d}" fill="none" `
+    + 'stroke="currentColor" visibility="hidden" stroke-width="44" '
+    + 'vector-effect="non-scaling-stroke" stroke-linecap="round"/>'
+    + `<path data-stroke="" d="${d}" fill="none" stroke="var(--osc-red)" stroke-width="4.5" `
+    + 'stroke-linecap="butt" stroke-dasharray="9 6"/></g>'
+    + `<g data-cross="" pointer-events="none">${arms('bg', '4.5')}${arms('red', '2')}</g>`
+    + `<path data-sheen="" class="opacity-hw-sheen" d="${d}" fill="none" `
+    + 'stroke="var(--osc-text)" stroke-width="1.35" stroke-linecap="butt" '
+    + 'stroke-dasharray="9 6" transform="translate(-0.35 -0.35)" pointer-events="none"/></g>');
+});
+
+test('cable.js writes markup in one place only: the serialiser of the parts', () => {
+  const src = readFileSync(new URL('../../src/js/ui/synth/cable.js', import.meta.url), 'utf8')
+    .replace(/^\s*(?:\/\/|\/?\*).*$/gm, '').split('export function plugSvg')[0];
+  const literals = src.match(/['`]<(?:path|line|g)\b/g) || [];
+  assert.deepEqual(literals, [], 'no cable element written as a string');
 });

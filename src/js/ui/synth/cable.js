@@ -11,8 +11,11 @@
 //
 //   CABLE_DASH                              the pattern of each signal type
 //   cableCurve(a, b, { slack, box })        'M … C …', a hanging cable from a to b
-//   cableSvg({ id, from, to, type, colour, state, tokens, slack, box, zoom, sheen })
-//                                           '<g data-cable="id">…</g>'
+//   cableParts({ id, from, to, type, colour, state, tokens, slack, box, zoom, sheen, dash,
+//     port })
+//                                           [{ key, tag, attrs, parent }], for setAttribute
+//   partsSvg(parts)                         the markup of those records
+//   cableSvg(spec)                          '<g data-cable="id">…</g>' = partsSvg(cableParts(spec))
 //   plugSvg({ at, colour, tokens })         a seated plug, taking no pointer
 
 /** The dash pattern per signal type (PORT_VISUALS: solid, dashed, pulse, dash-dot). */
@@ -167,72 +170,160 @@ function needTokens(tokens, who) {
   }
 }
 
-/**
- * One cable as '<g data-cable="id">…</g>': a soft shadow (tokens.cable.shadow at the hw-shadow
- * intensity, SHADOW_CLASS, SHADOW_SPREAD wider than the stroke and SHADOW_PX.rest screen px
- * down), then the main stroke group, the only part that takes the pointer (a hit path
- * CABLE_HIT_PX screen px wide at every zoom through vector-effect="non-scaling-stroke",
- * visibility="hidden", which pointer-events="stroke" still hits, and the
- * visible stroke in the caller's colour, dashed by type), then an optional sheen stripe
- * (tokens.cable.sheen at the hw-sheen intensity; off by default). Hover and selection thicken
- * the stroke; a dashed stroke has butt caps, so its gaps stay open at every width (round caps
- * would close them), and a solid one round caps. Dragging lifts the shadow (SHADOW_PX.lifted
- * down). Refused paints the stroke
- * tokens.jack.refuse, dashed (a solid type takes REFUSED_DASH), marks the group data-refused and
- * draws a cross on the curve at the target end, CROSS_BACK back from it so it never covers the
- * plug there, so a refusal is a shape, not a colour alone. `zoom` turns the screen-px offsets
- * (the shadow's drop, the sheen's) into graph units; `box` is cableCurve's.
- */
-export function cableSvg({ id, from, to, type, colour, state = {}, tokens, slack = CABLE_SLACK,
-  box, zoom = 1, sheen = false } = {}) {
-  needTokens(tokens, 'cableSvg');
-  if (!Object.hasOwn(CABLE_DASH, type)) {
-    throw new Error(`cableSvg: type must be AUDIO, CONTROL, TRIGGER or ANALYSIS, not '${type}'.`);
+/** A dash pattern as SVG reads one: numbers of 0 or more, spaced or comma separated. */
+const DASH_RX = /^\d*\.?\d+(?:(?:\s*,\s*|\s+)\d*\.?\d+)*$/;
+/** A port shape's name (PORT_KINDS): a lowercase word, as the port glyph names it. */
+const PORT_RX = /^[a-z][a-z0-9-]{0,31}$/;
+
+/** The dash of a cable: the caller's (a CABLE_KINDS declaration), else CABLE_DASH[type]. */
+function dashOf(type, dash, who) {
+  if (dash === undefined) {
+    if (!Object.hasOwn(CABLE_DASH, type)) {
+      throw new Error(`${who}: type must be AUDIO, CONTROL, TRIGGER or ANALYSIS, not '${type}', `
+        + 'unless its dash is passed.');
+    }
+    return CABLE_DASH[type];
   }
+  if (typeof type !== 'string' || type === '') {
+    throw new TypeError(`${who}: type must be the signal's kind name, not '${type}'.`);
+  }
+  if (dash === null) return null;
+  const ok = typeof dash === 'string' && DASH_RX.test(dash.trim())
+    && dash.split(/[\s,]+/).filter(Boolean).reduce((a, x) => a + Number(x), 0) > 0;
+  if (!ok) {
+    throw new TypeError(`${who}: dash must be null (solid) or an SVG dash pattern of numbers `
+      + `of 0 or more, not all 0, not ${JSON.stringify(dash)}.`);
+  }
+  return dash;
+}
+
+/** The port shapes of a cable's two ends as root attributes, or none when none is passed. */
+function portAttrs(port, who) {
+  if (port === undefined) return {};
+  const pair = typeof port === 'string' ? { from: port, to: port } : port;
+  const ok = pair !== null && typeof pair === 'object'
+    && [pair.from, pair.to].every((x) => typeof x === 'string' && PORT_RX.test(x));
+  if (!ok) {
+    throw new TypeError(`${who}: port must be a shape name or { from, to } of shape names `
+      + `(a lowercase word), not ${JSON.stringify(port)}.`);
+  }
+  return { 'data-port-from': pair.from, 'data-port-to': pair.to };
+}
+
+/** One frozen part record. */
+const part = (key, tag, parent, attrs) => Object.freeze({ key, tag, parent,
+  attrs: Object.freeze(attrs) });
+const str = (x) => String(x);
+
+/**
+ * One cable as attribute records, for a keyed setAttribute editor (no markup): a frozen list
+ * of { key, tag, attrs, parent } in document order, every parent before its children, every
+ * attribute value a raw string (unescaped: setAttribute takes it as it is). `key` names the
+ * part within its cable and is the same for the same part whatever the cable's ends, zoom or
+ * state ('cable', 'shadow', 'main', 'hit', 'stroke', then 'cross', 'cross-under-0',
+ * 'cross-under-1', 'cross-0', 'cross-1' when refused, then 'sheen' when asked), so an editor
+ * keyed by (cable id, key) updates attributes in place and adds or removes only the cross and
+ * the sheen. cableSvg serialises exactly this list, so the two cannot disagree.
+ *
+ * The parts: a soft shadow (tokens.cable.shadow at the hw-shadow intensity, SHADOW_CLASS,
+ * SHADOW_SPREAD wider than the stroke and SHADOW_PX.rest screen px down), then the main stroke
+ * group, the only part that takes the pointer (a hit path CABLE_HIT_PX screen px wide at every
+ * zoom through vector-effect="non-scaling-stroke", visibility="hidden", which
+ * pointer-events="stroke" still hits, and the visible stroke in the caller's colour, dashed by
+ * kind), then an optional sheen stripe (tokens.cable.sheen at the hw-sheen intensity; off by
+ * default). Hover and selection thicken the stroke; a dashed stroke has butt caps, so its gaps
+ * stay open at every width (round caps would close them), and a solid one round caps. Dragging
+ * lifts the shadow (SHADOW_PX.lifted down). Refused paints the stroke tokens.jack.refuse,
+ * dashed (a solid kind takes REFUSED_DASH), marks the group data-refused and draws a cross on
+ * the curve at the target end, CROSS_BACK back from it so it never covers the plug there, so a
+ * refusal is a shape, not a colour alone. `zoom` turns the screen-px offsets (the shadow's
+ * drop, the sheen's) into graph units; `slack` and `box` are cableCurve's.
+ *
+ * The signal's look is an input: `dash` (a CABLE_KINDS declaration's pattern, null for solid)
+ * wins over CABLE_DASH[type], which is only the default when no dash is passed, and with a dash
+ * `type` may name any kind; `port` (a PORT_KINDS shape name, or { from, to }) is recorded on
+ * the cable as data-port-from and data-port-to, so the port glyph each end meets is the
+ * declared one. Neither passed, the parts are what they were before these inputs existed.
+ */
+export function cableParts({ id, from, to, type, colour, state = {}, tokens, slack = CABLE_SLACK,
+  box, zoom = 1, sheen = false, dash, port } = {}) {
+  const who = 'cableParts';
+  needTokens(tokens, who);
+  const pattern0 = dashOf(type, dash, who);
+  const ports = portAttrs(port, who);
   if (!(Number.isFinite(zoom) && zoom > 0)) {
-    throw new RangeError(`cableSvg: zoom must be a finite number above 0, not ${zoom}.`);
+    throw new RangeError(`${who}: zoom must be a finite number above 0, not ${zoom}.`);
   }
   const st = state || {};
   const d = cableCurve(from, to, { slack, box });
   const w = st.selected ? WIDTH.selected : (st.hover ? WIDTH.hover : WIDTH.base);
   const paint = st.refused ? tokens.jack.refuse : (colour || 'currentColor');
-  const pattern = st.refused ? (CABLE_DASH[type] || REFUSED_DASH) : CABLE_DASH[type];
-  const dash = pattern ? ` stroke-dasharray="${pattern}"` : '';
+  const pattern = st.refused ? (pattern0 || REFUSED_DASH) : pattern0;
+  const dashed = pattern ? { 'stroke-dasharray': pattern } : {};
   const cap = pattern ? 'butt' : 'round';
   const drop = num((st.dragging ? SHADOW_PX.lifted : SHADOW_PX.rest) / zoom);
-  const shine = tokens.cable.sheen || 'currentColor';
   const off = num(-SHEEN_PX / zoom);
-  let cross = '';
+  const parts = [
+    part('cable', 'g', null, { 'data-cable': str(id), ...(st.refused ? { 'data-refused': '' }
+      : {}), ...ports, 'pointer-events': 'none' }),
+    part('shadow', 'path', 'cable', { 'data-shadow': '', class: SHADOW_CLASS, d, fill: 'none',
+      stroke: tokens.cable.shadow, 'stroke-width': str(num(w + SHADOW_SPREAD)),
+      'stroke-linecap': 'round', transform: `translate(0 ${drop})` }),
+    part('main', 'g', 'cable', { 'data-main': '', 'pointer-events': 'stroke' }),
+    part('hit', 'path', 'main', { 'data-hit': '', d, fill: 'none', stroke: 'currentColor',
+      visibility: 'hidden', 'stroke-width': str(CABLE_HIT_PX),
+      'vector-effect': 'non-scaling-stroke', 'stroke-linecap': 'round' }),
+    part('stroke', 'path', 'main', { 'data-stroke': '', d, fill: 'none', stroke: paint,
+      'stroke-width': str(w), 'stroke-linecap': cap, ...dashed }),
+  ];
   if (st.refused) {
     const m = nearTarget(from, to, slack, box);
     const r = CROSS.arm;
     const arms = [[m.x - r, m.y - r, m.x + r, m.y + r], [m.x - r, m.y + r, m.x + r, m.y - r]]
       .map((l) => l.map(num));
-    const line = ([x1, y1, x2, y2], paint, w) => `<line x1="${x1}" y1="${y1}" x2="${x2}" `
-      + `y2="${y2}" stroke="${esc(paint)}" stroke-width="${w}" stroke-linecap="round"/>`;
-    cross = '<g data-cross="" pointer-events="none">'
-      + arms.map((l) => line(l, tokens.cable.shadow, CROSS.under)).join('')
-      + arms.map((l) => line(l, tokens.jack.refuse, CROSS.width)).join('')
-      + '</g>';
+    const line = (key, [x1, y1, x2, y2], stroke, width) => part(key, 'line', 'cross', {
+      x1: str(x1), y1: str(y1), x2: str(x2), y2: str(y2), stroke, 'stroke-width': str(width),
+      'stroke-linecap': 'round' });
+    parts.push(part('cross', 'g', 'cable', { 'data-cross': '', 'pointer-events': 'none' }),
+      ...arms.map((l, i) => line(`cross-under-${i}`, l, tokens.cable.shadow, CROSS.under)),
+      ...arms.map((l, i) => line(`cross-${i}`, l, tokens.jack.refuse, CROSS.width)));
   }
-  return `<g data-cable="${esc(id)}"${st.refused ? ' data-refused=""' : ''} `
-    + 'pointer-events="none">'
-    + `<path data-shadow="" class="${SHADOW_CLASS}" d="${d}" fill="none" `
-    + `stroke="${esc(tokens.cable.shadow)}" `
-    + `stroke-width="${num(w + SHADOW_SPREAD)}" stroke-linecap="round" `
-    + `transform="translate(0 ${drop})"/>`
-    + '<g data-main="" pointer-events="stroke">'
-    + `<path data-hit="" d="${d}" fill="none" stroke="currentColor" visibility="hidden" `
-    + `stroke-width="${CABLE_HIT_PX}" vector-effect="non-scaling-stroke" `
-    + 'stroke-linecap="round"/>'
-    + `<path data-stroke="" d="${d}" fill="none" stroke="${esc(paint)}" stroke-width="${w}" `
-    + `stroke-linecap="${cap}"${dash}/>`
-    + '</g>'
-    + cross
-    + (sheen ? `<path data-sheen="" class="${SHEEN_CLASS}" d="${d}" fill="none" `
-      + `stroke="${esc(shine)}" stroke-width="${num(w * 0.3)}" stroke-linecap="${cap}"${dash} `
-      + `transform="translate(${off} ${off})" pointer-events="none"/>` : '')
-    + '</g>';
+  if (sheen) {
+    parts.push(part('sheen', 'path', 'cable', { 'data-sheen': '', class: SHEEN_CLASS, d,
+      fill: 'none', stroke: tokens.cable.sheen || 'currentColor',
+      'stroke-width': str(num(w * 0.3)), 'stroke-linecap': cap, ...dashed,
+      transform: `translate(${off} ${off})`, 'pointer-events': 'none' }));
+  }
+  return Object.freeze(parts);
+}
+
+/**
+ * Markup from part records (cableParts): each part's attributes in their order, escaped; a
+ * part with children opens and closes around them, one without closes itself.
+ */
+export function partsSvg(parts) {
+  const kids = new Map();
+  for (const p of parts) {
+    if (!kids.has(p.parent)) kids.set(p.parent, []);
+    kids.get(p.parent).push(p);
+  }
+  const one = (p) => {
+    const attrs = Object.entries(p.attrs).map(([k, v]) => ` ${k}="${esc(v)}"`).join('');
+    const inner = kids.get(p.key) || [];
+    return inner.length ? `<${p.tag}${attrs}>${inner.map(one).join('')}</${p.tag}>`
+      : `<${p.tag}${attrs}/>`;
+  };
+  return (kids.get(null) || []).map(one).join('');
+}
+
+/** One cable as '<g data-cable="id">…</g>': partsSvg(cableParts(spec)), nothing more. */
+export function cableSvg(spec = {}) {
+  try {
+    return partsSvg(cableParts(spec));
+  } catch (e) {
+    e.message = e.message.replace(/^cableParts:/, 'cableSvg:');
+    throw e;
+  }
 }
 
 /** A plug seated at `at`: a sleeve (jack tokens), a boot ring in the cable's colour, a dark
