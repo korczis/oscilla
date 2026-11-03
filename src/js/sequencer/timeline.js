@@ -130,6 +130,23 @@ export function playheadPosition(opts) {
   return { t, x: scale.secToPx(t), visible: true };
 }
 
+/**
+ * Playhead x for the block a pass sounds (editor.currentPassBlock(): { id, startS, endS, t },
+ * seconds into that pass) on block rects laid out from another model (the edited one). The
+ * rect is found by block id, never by index, so a move, a duplicate or a lengthened block
+ * leaves the head on the block that sounds, at the same fraction of it. Returns null when the
+ * block is no longer in the layout (deleted during playback) or there is no pass.
+ */
+export function passPlayheadX(rects, passBlock) {
+  if (!passBlock || !Array.isArray(rects)) return null;
+  const r = rects.find((x) => x.id === passBlock.id);
+  if (!r) return null;
+  const span = passBlock.endS - passBlock.startS;
+  const k = span > 0 && isNum(passBlock.t)
+    ? clamp((passBlock.t - passBlock.startS) / span, 0, 1) : 0;
+  return r.x + r.w * k;
+}
+
 /** Index of the block rect containing (x, y), or -1. y is ignored when omitted. */
 export function hitTestBlock(rects, x, y) {
   for (const r of rects) {

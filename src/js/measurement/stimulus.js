@@ -220,6 +220,11 @@ function sampleCount(spec) {
   return Math.max(2, Math.round(spec.duration * spec.sampleRate));
 }
 
+/** stimulusFrames(spec) → the length of renderStimulus(spec).samples, without rendering it. */
+export function stimulusFrames(input) {
+  return sampleCount(normalizeStimulus(input).spec);
+}
+
 /** Raised-cosine fade of `fadeSamples` at both ends, in place (first and last sample → 0). */
 function applyFades(x, fadeSamples) {
   const n = x.length;

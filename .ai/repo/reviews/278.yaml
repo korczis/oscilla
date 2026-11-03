@@ -1,0 +1,51 @@
+# Review verdict for pull request #278, P002: the first-screen entry-path inventory and the Q004
+# first screen (branch test/p002-first-screen-inventory). Reviewer oscilla-26-review, a session
+# that built none of it.
+#
+# Delta re-review at head 8eed3192: a merge of 7cc0d904 (the first verdict, first parent) and
+# 1f35a1d8 (origin/main, v3.14.1 record). The first review was at 1468baf2 (digest e0edd5a9...93ce
+# over src/js/ui/measure.js and tests/browser/live-smoke.cjs).
+#
+# The digest: 93b68909...6f23 over src/js/ui/measure/run.js and tests/browser/live-smoke.cjs,
+# from the head's scripts/review-verdict.mjs and from the base copy (git archive origin/main
+# scripts .github/scripts at f887066f, --repo on this worktree) alike. #262 (E002) split
+# measure.js, so the guarded path of the P002 hunks is now run.js. origin/main f887066f has not
+# touched run.js, measure.js or live-smoke.cjs since 1f35a1d8, and merge-tree with it is clean.
+#
+# What the merge resolution holds, against both parents:
+# - src/js/ui/measure.js is main's byte for byte, and src/js/ differs from main only in
+#   measure/run.js (the two P002 hunks, verbatim in measureFlowPart: measureRunPrimary opens
+#   MEASURE after the disabled guard; the secondary Repeat opens MEASURE and then awaits
+#   measureRepeat; Stop and Expert stay in place) and ui/app.js (PHONE_QUERY, foldOnPhone).
+#   Nothing of E002's split is undone. With main's run.js, first-screen-layout fails its 2 tests
+#   (primary, Repeat); at the head they pass.
+# - live-smoke.cjs: the diff against main is the reviewed P002 diff, line for line.
+# - src/index.html: the sorted-line delta main -> head equals the reviewed delta b67d1e58 ->
+#   1468baf2 exactly, so main's hunks are kept and the P002 reorder is unchanged.
+# - tests/browser/app.cjs, src/styles, first-screen.cjs, first-screen-layout.test.mjs,
+#   qa-regressions.cjs, v3-ui.test.mjs, docs/CLAIMS.yaml and tests/visual: each diff against main
+#   carries the reviewed P002 lines, identical.
+# - Flowbite record: debt 3874 against main's 3875 (responsive.css 192 -> 191 selectors).
+# - npm run build:check: dist is the build of the sources (v3.14.1).
+#
+# Tests run by this review at 8eed3192 (load 16-23, 18 cores): npm test 3346 tests, 3345 pass,
+# 0 fail, 1 skipped; OSC_LOAD_MAX=40 node tests/browser/first-screen.cjs --browsers chromium:
+# ALL PASS, 209 checks (file:// and /oscilla/), every layout check included. Firefox, WebKit,
+# app.cjs and live-smoke were not run here.
+#
+# Findings: R1 (the conflicts with main) is closed by this merge. R2 to R6 stand unchanged: the
+# lines they name are the reviewed ones. None is P0 or P1.
+#
+# Verdict: merge.
+schema: review-verdict/v1
+pr: 278
+verdict: merge
+reviewer: oscilla-26-review
+content: 93b689091baca28e877da1be25baee059a445958313d05eae3b866006aaf6f23
+findings:
+  - { id: R1, severity: P2, status: closed, title: "the branch conflicted with origin/main (app.cjs, tests/README.md, the Flowbite record, dist); closed by the merge 8eed3192, re-checked against both parents" }
+  - { id: R2, severity: P3, status: open, title: "instrument.css hides every .osc-m-step that is not .is-current on the phone Playground, so a blocked step (preflight refused, its fail icon) or a saved result (all steps done, measure-flow.js:309) leaves the measurement row with no step shown; keep .is-blocked or fall back to flow.current" }
+  - { id: R3, severity: P3, status: open, title: "knowledge/curated/visual-reference-is-an-ai-render.md (status verified, derived_from file:tests/visual/reference.png) and the v2-laboratory critique and gap (15.91 % against the reference) now describe a file this PR replaced with a container capture" }
+  - { id: R4, severity: P3, status: open, title: "CLAIMS first-screen-layout note and the PR body put the measurement row after Device & Limits at 768-1279 px; it shares order 5 with the Spectrogram panel, which precedes it in the DOM, so it follows the Spectrogram" }
+  - { id: R5, severity: P3, status: open, title: "first-screen.cjs layout primary accepts focus on SECTION#osc-view-measure in every engine though the comment allows it only for WebKit" }
+  - { id: R6, severity: P3, status: open, title: "on the Playground MEASURE's sr-only Measure h2 and its two aria-live regions join the accessibility tree around the measurement row" }

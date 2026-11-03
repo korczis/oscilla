@@ -733,10 +733,6 @@
   height: 14px;
 }
 
-.osc-transport-btn--record svg {
-  color: var(--osc-red);
-}
-
 .osc-transport-btn[aria-pressed="true"] {
   border-color: var(--osc-blue);
 }

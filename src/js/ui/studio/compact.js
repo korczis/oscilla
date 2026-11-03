@@ -11,6 +11,7 @@
 //   mountCompact(host, svc) -> { render(), setTransport(t), setPlayhead(pos), destroy() }
 //     svc: { store, registry, announce, play(), stop(), toggleLoop(), expand(nodeId?) }
 
+import { formatClock as compactTime } from '../../core/frequency.js';
 import { NODE_REGISTRY } from '../../studio/registry.js';
 import {
   announceAction, announceSelection, clipLabel, describeEdge, summarizeStudio,
@@ -19,6 +20,7 @@ import { moveClipResult, nudgeClipResult } from '../../studio/timeline.js';
 import { compactLayout } from './graph-layout.js';
 import { cablePath, pastThreshold, portAnchor } from './graph-geometry.js';
 import { coarsePointer, h, replaceChildren, s, setAttr, setText } from './graph-dom.js';
+import { keepInScrollerView } from '../app.js';
 
 /** Short chip label: "Oscillator 1" → "OSCILLATOR 1"; names above 14 characters are cut. */
 export function chipLabel(name) {
@@ -29,13 +31,8 @@ export function chipLabel(name) {
 /** "Tone", "Sweep", "Noise check", ... (a11y.js: the selection announcement names it too). */
 export { clipLabel };
 
-/** "00:04.210" (minutes, seconds, milliseconds). */
-export function compactTime(seconds) {
-  const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0);
-  const m = Math.floor(t / 60);
-  const sec = t - m * 60;
-  return `${String(m).padStart(2, '0')}:${sec.toFixed(3).padStart(6, '0')}`;
-}
+/** "00:04.210": the one clock of core/frequency.js (G002), the full Studio's text too. */
+export { compactTime };
 
 /**
  * The compact view. opts: { registry, minClipPx (24 fine, 44 coarse), basePxPerSecond }.
@@ -148,6 +145,17 @@ export function mountCompact(host, svc) {
     summary,
   ]);
   host.setAttribute('aria-labelledby', 'osc-sc-title');
+  // A chip reached with Tab is brought fully into its scrolling box, as the nav strip's tabs are
+  // (keepNavTabInView): a box partly showing a chip is not scrolled by the browser (WCAG 2.4.11;
+  // the Synth voice of #329 makes the path wider than the Playground column).
+  for (const box of [path, clipsBox]) {
+    box.addEventListener('focusin', (e) => {
+      const chip = e.target && e.target.closest
+        ? e.target.closest('[data-osc="studio.compact.node"], [data-osc="studio.compact.clip"]')
+        : null;
+      if (chip) keepInScrollerView(chip, box);
+    });
+  }
 
   let view = null;
   let pxPerSecond = 48;
