@@ -6,7 +6,7 @@ priority: p1
 problem: "The owner found the first screen no longer represents OSCILLA and asked for a landing rebuilt from scratch that is catchy, fully functional, lets a visitor try the instruments at once on a phone, connects everything and is derived rather than written by hand (Q089, 2026-11-03). Today /oscilla/ opens the Playground generator (Q004, now superseded), and the instruments a visitor would want to touch first (the XY pad, the Synth, the keyboard, the sequencer, MIDI) sit in workspaces a newcomer has to find."
 outcome: "/oscilla/ opens the landing workspace: the XY pad and the touch keyboard on the one AudioEngine sound on the first tap on a phone, the other surfaces are compact live projections that open their full workspace, the cards and links are derived from the workspace registry and the UI catalogue, and every existing deep link resolves as before, in every gate browser, from file://, the sub-path and the live site."
 acceptance_criteria:
-  - "Q089 and P012 are done with their evidence."
+  - "Q089, P012 and P013 are done with their evidence."
 validation:
   - "npm run release-gate"
 evidence_required:

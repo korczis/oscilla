@@ -1,0 +1,32 @@
+id: P013
+milestone: M122
+serves:
+  - "first-run-experience#first-screen-built"
+title: "The landing hero plays an owned audition of a shipped XY preset, never an edit of the user's document"
+slug: the-landing-hero-plays-an-owned-audition-of-a-shipped-xy-preset
+priority: p1
+profile: implementation
+objective: "Lands as feat(synth) on branch feat/p013-xy-audition-target. Adds the audition target to K167's seam in src/js/synth/view/xy-wiring.js (the pad talks to a target through wire, unwire, release(reason) and owner): a target that plays a shipped XY preset of the one patch library (tag xy) as an engine plan owned by 'landing' with the engine's owner mark and a riff-id style identity (af's K149 note (b)), compiled by the one compiler on the one AudioEngine and transport, through K149's audition mechanism. It writes nothing to the StudioModel, its history, its hash or its dirty flag, and fires no unsaved-work guard; the instrument's live update of the document's own panel never touches or releases the landing's voice, and Stop releases both. 'Open in Synth' inserts the preset into the document as one undoable edit and opens the Synth on it. The four release paths (Stop, leaving the workspace, losing the audio owner, pagehide) are K167's shared mount's, not this target's."
+why: "af's critique of the live landing (B2, 2026-11-03): a hero mounted on the document would silently edit the user's saved work. 26 split it out of K167 (2026-11-03) so K167 does not wait on K149's audition mechanism."
+scope:
+  - "src/js/synth/view/xy-wiring.js"
+  - "src/js/synth/view/xy-audition.js"
+  - "tests/unit/xy-audition.test.mjs"
+  - "tests/browser/landing.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+current_state: "Not started. Starts only after K167 (the seam, 26, feat/xy-shared-mount) and K149's audition mechanism (af's music-library line) are on main; they join depends_on when their records are on main. P012's hero mounts through this target."
+acceptance_criteria:
+  - "Starts only after K167 and K149's audition mechanism are on main. Fail-first: tests/unit/xy-audition.test.mjs fails on the merge base: the audition target wires a shipped XY preset as a plan owned by 'landing', and wiring, playing and releasing it leave the document's JSON, studioHash, history length and dirty flag unchanged (project.fail-first)."
+  - "Owner separation: with the Synth's document panel also patched to the pad, a live update of the document panel leaves the landing's voice sounding, and Stop releases both (unit on the fake context, browser in every gate browser)."
+  - "Open in Synth adds exactly one undoable edit that inserts the preset, opens the Synth on it, and Undo removes it."
+  - "No second engine, compiler or voice path: the target calls the one compiler and engine; a unit check finds no AudioContext or createOscillator in xy-audition.js."
+validation:
+  - "node --test tests/unit/xy-audition.test.mjs"
+  - "node tests/browser/landing.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-03
+updated_at: 2026-11-03
