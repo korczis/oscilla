@@ -20,12 +20,16 @@
 //            a knob is seen whole and turning it (End or Home) changes the picture.
 //     <tab> is panel, engines or xy (the Engines tab on its default engine, ENGINE; the XY tab
 //     with no preset, so its pad is shown disabled), <theme> is dark or light.
-//   desktop-bay-<theme>    1536x1280, the Panel tab scrolled so the bay's card is at the top of
-//   phone-bay-<theme>      the scroller (390x1400 with touch: under the sticky section nav). The
-//            six cables span 706 px from the Keys row to the VCA row, more than the agreed
-//            heights leave above the docked keyboard, so the bay is seen whole in these taller
-//            views at the agreed widths; the capture fails closed unless all 12 cable ends are
+//   desktop-bay-<theme>    1536x1400, the Panel tab scrolled so the bay's card is at the top of
+//   phone-bay-<theme>      the scroller (390x1400 with touch: the bay's own face, V636, shown
+//            through its PATCH BAY chip, under the sticky section nav). The six cables span
+//            about 706 px from the Keys row to the VCA row, more than the agreed heights leave
+//            above the docked keyboard, so the bay is seen whole in these taller views at the
+//            agreed widths (W1's module plates in the bay and its taller dock put the VCA row
+//            under the dock at 1536x1280); the capture fails closed unless all 12 cable ends are
 //            hit-testable (nothing covers them).
+// Below xl the bay is a face of its own (V636): the cables are patched on it, through its chip,
+// and the tab views come back to the module cards through the PANEL chip.
 // Every capture fails closed unless the Synth reports the view's tab, exactly the six cables,
 // six drawn cables, no armed engine and no voice, the view's theme on <html>, and the parked
 // pointer lands on nothing interactive.
@@ -56,7 +60,7 @@ export const ENGINE = 'additive';
 export const CABLES = [['keys.velocity', 'vco2.tune'], ['vco1.audio', 'ring.modulator'],
   ['vco2.audio', 'mix.in4'], ['ring.audio', 'mix.in3'], ['noise.audio', 'mix.in1'],
   ['mix.audio', 'vca.audio']];
-const SIZES = [['desktop', 1536, 1024, 1280], ['phone', 390, 844, 1400]];
+const SIZES = [['desktop', 1536, 1024, 1400], ['phone', 390, 844, 1400]];
 const TABS = ['panel', 'engines', 'xy'];
 const THEMES = ['dark', 'light'];
 /** What a phone tab view scrolls to the top of the scroller: the tab's own content. */
@@ -72,6 +76,33 @@ export const VIEWS = [
       content: null, knob: false }))),
 ];
 const LOAD_MS = 15000;
+
+/**
+ * One named wait of a view: `run(timeout)` is the Playwright wait (waitForFunction,
+ * waitForSelector); `observe`, evaluated in the page when the wait fails, reports what was seen.
+ * A failed wait is rethrown as `SYN <view>: <wait> timed out after <N>ms (<observed>)` (or
+ * `failed after`, with the cause, when it was not a timeout), so a timeout names the view and
+ * the wait instead of Playwright's bare "Timeout 15000ms exceeded".
+ */
+export async function namedWait(page, view, wait, run, { observe, arg, timeout = LOAD_MS } = {}) {
+  try {
+    return await run(timeout);
+  } catch (e) {
+    let seen = 'nothing observed';
+    if (observe) {
+      try {
+        seen = JSON.stringify(await page.evaluate(observe, arg));
+      } catch (o) {
+        seen = `observation failed: ${String(o && o.message || o).split('\n')[0]}`;
+      }
+    }
+    const timedOut = (e && e.name === 'TimeoutError') || /Timeout \d+ms exceeded/.test(String(e
+      && e.message));
+    const cause = timedOut ? '' : `: ${String(e && e.message || e).split('\n')[0]}`;
+    throw new Error(`SYN ${view}: ${wait} ${timedOut ? 'timed out' : 'failed'} after `
+      + `${timeout}ms (${seen})${cause}`);
+  }
+}
 
 export function parseArgs(argv) {
   const option = (name) => {
@@ -101,9 +132,47 @@ const frames = (page) => page.evaluate(() => new Promise((r) => {
   requestAnimationFrame(() => requestAnimationFrame(r));
 }));
 
-async function tapJack(page, id) {
-  await page.locator(`[data-jack="${id}"]`).focus();
+/**
+ * Patch one end through the jack's keyboard path (focus, Enter). A jack that cannot take focus
+ * (inside a face hidden below xl, V636) would let Enter reach <body> and patch nothing, so the
+ * capture fails closed here, naming the view and the jack.
+ */
+async function tapJack(page, view, id) {
+  await namedWait(page, view, `focus jack ${id}`,
+    (timeout) => page.locator(`[data-jack="${id}"]`).focus({ timeout }),
+    { arg: id, observe: (j) => document.querySelectorAll(`[data-jack="${j}"]`).length
+      + ' element(s)' });
+  const focused = await page.evaluate(() => document.activeElement
+    && document.activeElement.getAttribute('data-jack'));
+  if (focused !== id) {
+    throw new Error(`SYN ${view}: jack ${id} did not take focus (focus on `
+      + `${focused || 'no jack'}): its face is hidden`);
+  }
   await page.keyboard.press('Enter');
+}
+
+/** Whether a face of the Synth view (V636: 'panel' or 'bay') is shown. */
+function faceShown(f) {
+  const el = document.querySelector(`#osc-view-synth [data-face-of="${f}"]`);
+  return Boolean(el) && getComputedStyle(el).display !== 'none';
+}
+
+/**
+ * Below xl the Synth view shows the module cards or the patch bay, one at a time (V636): show
+ * face `f` through its own chip in the sticky chip bar (focus, Enter), as a person would.
+ */
+async function showFace(page, view, f) {
+  await namedWait(page, view, `focus the ${f} face chip`,
+    (timeout) => page.locator(`#osc-view-synth nav [data-face="${f}"]`).focus({ timeout }),
+    { arg: f, observe: () => [...document.querySelectorAll('#osc-view-synth nav [data-face]')]
+      .map((b) => b.dataset.face) });
+  await page.keyboard.press('Enter');
+  await namedWait(page, view, `${f} face shown (V636 chip)`,
+    (timeout) => page.waitForFunction(faceShown, f, { timeout }), { arg: f,
+      observe: () => ['panel', 'bay'].map((x) => {
+        const el = document.querySelector(`#osc-view-synth [data-face-of="${x}"]`);
+        return `${x}: ${el ? getComputedStyle(el).display : 'absent'}`;
+      }) });
 }
 
 /** Every scroller back at 0 (the jack taps leave .osc-main scrolled to the focused jack). */
@@ -174,6 +243,47 @@ function turnKnob(cid) {
   return { key, before };
 }
 
+/** The free jack whose ring the theme redraw is read on: no cable of CABLES patches it. */
+export const FREE_JACK = 'mg.rate:in';
+
+/** The bay redrawn for the view: theme on <html>, the free ring's stroke, the tab, 6 cables. */
+function redrawState({ theme, tab, free }) {
+  const doc = document.documentElement;
+  const dim = getComputedStyle(doc).getPropertyValue('--osc-text-dim').trim();
+  const ring = document.querySelector(`[data-jack="${free}"] [data-ring]`);
+  return { theme: doc.dataset.theme, want: theme, ring: ring ? ring.getAttribute('stroke') : null,
+    dim, tab: window.OSCILLA.app.synthDebug().tab, wantTab: tab,
+    drawn: document.querySelectorAll('[data-osc="synth.bay.svg"] [data-cable]').length };
+}
+
+function redrawn(v) {
+  const { free } = v;
+  const doc = document.documentElement;
+  const dim = getComputedStyle(doc).getPropertyValue('--osc-text-dim').trim();
+  const ring = document.querySelector(`[data-jack="${free}"] [data-ring]`);
+  return doc.dataset.theme === v.theme && ring && ring.getAttribute('stroke') === dim
+    && window.OSCILLA.app.synthDebug().tab === v.tab
+    && document.querySelectorAll('[data-osc="synth.bay.svg"] [data-cable]').length === 6;
+}
+
+function settled() {
+  return document.getAnimations()
+    .every((a) => !(a instanceof CSSTransition) || a.playState !== 'running');
+}
+
+/** The CSS transitions still running: their element and property, at most eight. */
+function runningTransitions() {
+  const run = document.getAnimations().filter((a) => a instanceof CSSTransition
+    && a.playState === 'running');
+  const where = (el) => (el ? `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ''}`
+    + `${el.getAttribute && el.getAttribute('data-osc') ? `[${el.getAttribute('data-osc')}]` : ''}`
+    + `${el.getAttribute && el.getAttribute('class') ? `.${String(el.getAttribute('class'))
+      .trim().split(/\s+/).slice(0, 3).join('.')}` : ''}` : '?');
+  return { running: run.length, first: run.slice(0, 8).map((a) => `${where(a.effect
+    && a.effect.target)} ${a.transitionProperty} ${a.effect && a.effect.getTiming().duration}ms`
+    + ` ${a.effect && a.effect.getTiming().iterations}x`) };
+}
+
 /** What the capture must hold before its picture is worth comparing. */
 function inspect({ pairs, bay, park, content }) {
   const app = window.OSCILLA.app;
@@ -199,13 +309,16 @@ function inspect({ pairs, bay, park, content }) {
     } else if (!(hit && el.contains(hit))) unseen = 'is covered at its top edge';
   }
   const ends = pairs.flatMap(([a, b]) => [`${a}:out`, `${b}:in`]);
-  const hidden = bay ? ends.filter((id) => {
+  const hidden = bay ? ends.map((id) => {
     const j = document.querySelector(`[data-jack="${id}"]`);
-    if (!j) return true;
+    if (!j) return `${id} (not drawn)`;
     const r = j.getBoundingClientRect();
     const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-    return !(hit && j.contains(hit));
-  }) : [];
+    if (hit && j.contains(hit)) return null;
+    const by = hit && (hit.closest('[data-osc]') || hit);
+    return `${id} (under ${by ? `${by.tagName.toLowerCase()}${by.id ? `#${by.id}` : ''}`
+      + `${by.getAttribute('data-osc') ? `[${by.getAttribute('data-osc')}]` : ''}` : 'nothing'})`;
+  }).filter(Boolean) : [];
   const under = document.elementFromPoint(park[0], park[1]);
   const interactive = under && under.closest('a[href], button, input, select, textarea, '
     + '[tabindex], [role=button], [role=slider], [data-knob], [data-jack]');
@@ -225,46 +338,54 @@ async function capture(browser, view, out, target) {
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   // The bare URL: the #m=synth link raises a notice that dismisses itself on a timer.
-  await page.goto(targetUrl(target));
-  await page.waitForSelector('html[data-ready="true"]', { timeout: LOAD_MS });
+  await namedWait(page, view.id, `load ${target}`,
+    (timeout) => page.goto(targetUrl(target), { timeout }));
+  const wait = (name, fn, arg, observe) => namedWait(page, view.id, name,
+    (timeout) => page.waitForFunction(fn, arg, { timeout }), { observe, arg });
+  await namedWait(page, view.id, 'app ready (html[data-ready="true"])',
+    (timeout) => page.waitForSelector('html[data-ready="true"]', { timeout }),
+    { observe: () => ({ ready: document.documentElement.dataset.ready || null,
+      app: Boolean(window.OSCILLA && window.OSCILLA.app) }) });
   await page.evaluate(() => {
     const a = window.OSCILLA.app;
     if (!a.safetyCollapsed) a.collapseSafety();
     a.alerts = [];
     a.setWorkspace('synth');
   });
-  await page.waitForFunction(() => window.OSCILLA.app.synthDebug().present
+  await wait('Synth workspace shown with its bay', () => window.OSCILLA.app.synthDebug().present
     && !document.getElementById('osc-view-synth').hidden
-    && document.querySelector('[data-osc="synth.bay.svg"]'), null, { timeout: LOAD_MS });
+    && document.querySelector('[data-osc="synth.bay.svg"]'), null, () => {
+    const v = document.getElementById('osc-view-synth');
+    return { present: window.OSCILLA.app.synthDebug().present, hidden: v ? v.hidden : 'no view',
+      bay: Boolean(document.querySelector('[data-osc="synth.bay.svg"]')) };
+  });
+  // Below xl the bay is a face of its own (V636): patch on it, then come back to the module
+  // cards unless the view is the bay's.
+  const faced = !(await page.evaluate(faceShown, 'bay'));
+  if (faced) await showFace(page, view.id, 'bay');
   for (const [a, b] of CABLES) {
-    await tapJack(page, `${a}:out`);
-    await tapJack(page, `${b}:in`);
+    await tapJack(page, view.id, `${a}:out`);
+    await tapJack(page, view.id, `${b}:in`);
   }
+  if (faced && !view.bay) await showFace(page, view.id, 'panel');
   await page.evaluate((t) => window.OSCILLA.app.synthTab(t), view.tab);
   await frames(page);
   await frames(page);
   await page.evaluate((t) => {
     if (window.OSCILLA.app.theme !== t) window.OSCILLA.app.toggleTheme();
   }, view.theme);
-  // The bay is redrawn from the theme's tokens: a free jack's ring is --osc-text-dim; the tab
-  // is rendered on a frame. Wait for both, and for the six cables to be drawn.
-  await page.waitForFunction((v) => {
-    const doc = document.documentElement;
-    const dim = getComputedStyle(doc).getPropertyValue('--osc-text-dim').trim();
-    const ring = document.querySelector('[data-jack="mg.rate:in"] > :nth-child(3)');
-    return doc.dataset.theme === v.theme && ring && ring.getAttribute('stroke') === dim
-      && window.OSCILLA.app.synthDebug().tab === v.tab
-      && document.querySelectorAll('[data-osc="synth.bay.svg"] [data-cable]').length === 6;
-  }, { theme: view.theme, tab: view.tab }, { timeout: LOAD_MS });
+  // The bay is redrawn from the theme's tokens: a free jack's ring (its data-ring hook, the
+  // stroke the 3:1 check reads) is --osc-text-dim; the tab is rendered on a frame. Wait for both,
+  // and for the six cables to be drawn.
+  await wait('theme redraw (free ring = --osc-text-dim, tab, 6 cables drawn)', redrawn,
+    { theme: view.theme, tab: view.tab, free: FREE_JACK }, redrawState);
   await frames(page);
   await page.evaluate(resetScroll);
   if (view.bay) await page.evaluate(scrollBayToTop);
   else if (view.content) await page.evaluate(scrollToTop, view.content);
   // A theme switch starts colour transitions (the header's icon buttons); reduced motion does
   // not stop a CSS transition, so wait until none runs (1 in 2 light captures differed by 27 px).
-  await page.waitForFunction(() => document.getAnimations()
-    .every((a) => !(a instanceof CSSTransition) || a.playState !== 'running'), null,
-  { timeout: LOAD_MS });
+  await wait('no CSS transition running', settled, null, runningTransitions);
   await page.mouse.move(0, view.height - 1);
   await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
   await frames(page);
@@ -298,9 +419,8 @@ async function capture(browser, view, out, target) {
         const k = document.querySelector(`#osc-view-synth [data-knob="${cid}"]`);
         return k && k.getAttribute('aria-valuenow');
       }, knobs[0]);
-      await page.waitForFunction(() => document.getAnimations()
-        .every((a) => !(a instanceof CSSTransition) || a.playState !== 'running'), null,
-      { timeout: LOAD_MS });
+      await wait(`no CSS transition running after turning ${knobs[0]}`, settled, null,
+        runningTransitions);
       const again = await page.evaluate(() => document.querySelector('.osc-main').scrollTop);
       const r = diffPct(shot, await page.screenshot());
       probe = { knob: knobs[0], seen: knobs.length, ...turn, pct: r.pct };

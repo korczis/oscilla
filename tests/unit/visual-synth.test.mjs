@@ -89,6 +89,73 @@ test('the bay holds the six s-look cables, one from each source colour', async (
   }
 });
 
+// A fake page: its wait rejects as Playwright's does (a TimeoutError, or another error), and its
+// evaluate answers the observation, or throws when `seen` is an Error.
+const fakePage = (seen) => ({ evaluate: async (fn, arg) => {
+  if (seen instanceof Error) throw seen;
+  return typeof seen === 'function' ? seen(arg) : seen;
+} });
+const timeout = (ms) => Object.assign(new Error(`page.waitForFunction: Timeout ${ms}ms exceeded.`),
+  { name: 'TimeoutError' });
+
+test('a wait that times out names the view, the wait, its deadline and what it last saw',
+  async () => {
+    const { namedWait } = await load();
+    const page = fakePage({ ring: '#66798d', drawn: 0 });
+    await assert.rejects(namedWait(page, 'phone-panel-dark', 'theme redraw',
+      async (t) => { throw timeout(t); }, { observe: () => null, timeout: 15000 }),
+    { message: 'SYN phone-panel-dark: theme redraw timed out after 15000ms '
+      + '({"ring":"#66798d","drawn":0})' });
+    // The observation is evaluated with the wait's own argument.
+    await assert.rejects(namedWait(fakePage((a) => ({ wanted: a })), 'desktop-bay-light',
+      'bay face shown', async () => { throw timeout(250); }, { observe: () => null, arg: 'bay',
+        timeout: 250 }),
+    { message: 'SYN desktop-bay-light: bay face shown timed out after 250ms ({"wanted":"bay"})' });
+    // A timeout without a name (an older Playwright) is still a timeout; no observer says so.
+    await assert.rejects(namedWait(fakePage(null), 'phone-xy-light', 'app ready',
+      async () => { throw new Error('Timeout 15000ms exceeded.'); }),
+    { message: 'SYN phone-xy-light: app ready timed out after 15000ms (nothing observed)' });
+  });
+
+test('a wait that fails otherwise names the view, the wait and the cause; a broken observer too',
+  async () => {
+    const { namedWait } = await load();
+    await assert.rejects(namedWait(fakePage(new Error('Execution context was destroyed\nstack')),
+      'phone-bay-dark', 'no CSS transition running',
+      async () => { throw new Error('Target page, context or browser has been closed\nlog'); },
+      { observe: () => null, timeout: 15000 }),
+    { message: 'SYN phone-bay-dark: no CSS transition running failed after 15000ms '
+      + '(observation failed: Execution context was destroyed): Target page, context or browser '
+      + 'has been closed' });
+    // A wait that holds returns its value untouched.
+    assert.equal(await namedWait(fakePage(null), 'v', 'w', async () => 7), 7);
+  });
+
+test('every wait of the harness goes through namedWait, and the W1 signals are read by hook',
+  async () => {
+    const { CABLES, FREE_JACK } = await load();
+    const src = read('scripts/visual-synth.mjs');
+    // Each Playwright wait is the run callback of a namedWait: (timeout) => page.<wait>(...).
+    const waits = src.match(/page\.(waitForFunction|waitForSelector|goto)\(|\.focus\(\{ timeout/g);
+    const named = src.match(/\(timeout\) => page\.(waitForFunction|waitForSelector|goto|locator)/g);
+    assert.ok(waits.length >= 6, 'the harness waits');
+    assert.equal(named.length, waits.length, 'no Playwright wait outside namedWait');
+    assert.match(src, /throw new Error\(`SYN \$\{view\}: \$\{wait\} \$\{timedOut \? 'timed out'/);
+    // The theme redraw reads the free jack's ring through its data-ring hook (W1's jack.js), not
+    // a child index, and that jack is one no cable patches.
+    assert.doesNotMatch(src, /nth-child/);
+    assert.match(src, /\[data-jack="\$\{free\}"\] \[data-ring\]/);
+    assert.equal(FREE_JACK, 'mg.rate:in');
+    assert.ok(!CABLES.flat().some((p) => FREE_JACK.startsWith(`${p}:`)), 'the ring jack is free');
+    // Below xl the bay is its own face (V636): patched through its chip, and a jack that cannot
+    // take focus fails closed instead of letting Enter patch nothing.
+    assert.match(src, /if \(faced\) await showFace\(page, view\.id, 'bay'\);/);
+    assert.match(src, /if \(faced && !view\.bay\) await showFace\(page, view\.id, 'panel'\);/);
+    assert.match(src, /did not take focus/);
+    // A hidden cable end names what covers it.
+    assert.match(src, /return `\$\{id\} \(under /);
+  });
+
 test('an unknown view is refused before a browser starts', async () => {
   await load();
   const r = spawnSync(process.execPath, [SCRIPT, 'dist', '--view', 'nope'], { encoding: 'utf8',
