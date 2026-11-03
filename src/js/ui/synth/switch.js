@@ -50,11 +50,11 @@
 //   SWITCH_STYLES, LEGEND_PX, NUMBERED_MIN, legendWidth
 
 import { CONTROL_BOX, clampValue, formatValue, HIT_PX } from './knob.js';
-import { legendWidth } from './legend.js';
+import { legendWidth, LEGEND_PX } from './legend.js';
 import { LED, ledBox, ledSvg } from './led.js';
 
-/** legendWidth is legend.js's, which led.js reads too. */
-export { legendWidth };
+/** legendWidth and LEGEND_PX are legend.js's, which led.js reads too. */
+export { legendWidth, LEGEND_PX };
 
 /** Each style's position counts, inclusive. */
 export const SWITCH_STYLES = Object.freeze({
@@ -63,8 +63,6 @@ export const SWITCH_STYLES = Object.freeze({
   rotary: Object.freeze([5, 8]),
   window: Object.freeze([9, 12]),
 });
-/** A legend's size in screen px at any zoom (the 12 px font floor). */
-export const LEGEND_PX = 12;
 const MAX_POSITIONS = 12;
 /** Around a legend inside its hit box, graph units. */
 const PAD = 6;
@@ -125,7 +123,6 @@ export function switchStyle(param) {
   throw new Error(`${idOf(param)}: a switch has at most ${MAX_POSITIONS} positions, not ${n}; `
     + 'pick the value from a list.');
 }
-
 
 // ---------------------------------------------------------------- the layout
 
@@ -355,7 +352,7 @@ export function switchLayout(param, { zoom = 1, led = false, knob = CONTROL_BOX.
     const T = TOGGLE;
     // The bezel's outer edge T.ledGap past the housing; the box holds the halo (ledBox).
     ledAt = { cx: T.w / 2 + T.ledGap + LED.bezel + LED.bezelW / 2, cy: 0, r: LED.lens };
-    const lb = ledBox({ at: { x: ledAt.cx, y: ledAt.cy } });
+    const lb = ledBox({ at: { x: ledAt.cx, y: ledAt.cy }, zoom });
     b[1] = Math.min(b[1], lb.y);
     b[2] = Math.max(b[2], lb.x + lb.width);
     b[3] = Math.max(b[3], lb.y + lb.height);
@@ -502,9 +499,11 @@ function stateIndex(x, sel, opts) {
   return opts.findIndex((o) => o[0] === x.option);
 }
 
-/** The LED: led.js's, its state the caller's { source, lit }, at the layout's place. */
-function ledShape(at, led, t) {
-  return ledSvg({ source: led.source, lit: led.lit, at: { x: at.cx, y: at.cy }, tokens: t });
+/** The LED: led.js's, its state the caller's { source, lit }, at the layout's place and zoom
+ *  (its halo keeps the v4 glow bound on screen). */
+function ledShape(at, led, t, zoom) {
+  return ledSvg({ source: led.source, lit: led.lit, at: { x: at.cx, y: at.cy }, tokens: t,
+    zoom });
 }
 
 function checkLed(led, id) {
@@ -574,7 +573,7 @@ export function switchSvg({ value, param, tokens, zoom = 1, state = {}, led = nu
       + `width="${num(h.width - 2)}" height="${num(h.height - 2)}" rx="4" fill="none" `
       + `stroke="${esc(tokens.control.focus)}" stroke-width="2"/>`;
   }
-  if (L.led) out += ledShape(L.led, led, tokens);
+  if (L.led) out += ledShape(L.led, led, tokens, zoom);
   return `<g data-control="switch" data-style="${L.style}" aria-hidden="true" `
     + `pointer-events="none"${st.disabled ? ' data-disabled=""' : ''}>${out}</g>`;
 }

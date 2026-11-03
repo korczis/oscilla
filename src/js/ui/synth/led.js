@@ -16,10 +16,13 @@
 // decorates). Lit, the lens is the state token the caller chose by role (LED_COLOURS,
 // control.ring by default), seated in a surface.edge ring (every lit colour 3:1 on it in both
 // themes; light --osc-red is 2.94:1 on the bezel's body), and glows: a box-shadow paints no SVG
-// element, so the glow is an SVG halo, one circle in the lens's colour LED.halo (4, at most 6)
-// past the lens, over the bezel and under the lens, at the hw-sheen intensity by its class
+// element, so the glow is an SVG halo, one circle in the lens's colour past the lens by LED.halo
+// graph units but never past HALO_PX screen px (min(LED.halo, HALO_PX / zoom), as a label keeps
+// LABEL_PX), over the bezel and under the lens, at the hw-sheen intensity by its class
 // opacity-hw-sheen (never a literal opacity), aria-hidden and taking no pointer; never on the
-// group or on text. Unlit, there is no halo and the lens is surface.card (--osc-surface-2) with
+// group or on text. An SVG LED glow is a halo circle bounded by the v4 glow max (6 screen px,
+// measured by visual-identity-lock-v4.test.mjs at every zoom) because box-shadow does not paint
+// in SVG. Unlit, there is no halo and the lens is surface.card (--osc-surface-2) with
 // a control.edge (--osc-text-dim) ring, 3:1 on the bezel and on either plate surface in both
 // themes (ui-synth-led.test.mjs computes it from tokens.css). switch.js draws a toggle's LED
 // through ledSvg. An optional label is 12 screen px at any zoom, in text.label, and names the
@@ -46,20 +49,24 @@
 //   meterSvg({ at, value, source, scale, unit, calibrated, tokens, zoom, interactive })
 //                                                                         '<g data-needle …>…</g>'
 //   meterBox({ at, zoom, unit })                                          the meter's extent
-//   LED, LED_COLOURS, METER, METER_BOX, LABEL_PX
+//   LED, LED_COLOURS, METER, METER_BOX, LABEL_PX, HALO_PX
 
 import { HIT_PX } from './knob.js';
-import { legendWidth } from './legend.js';
+import { legendWidth, LEGEND_PX } from './legend.js';
 
 /** The LED's geometry, graph units: the lens radius (6 across), the bezel's, their strokes, the
- *  lit halo's reach past the lens (at most 6, the v4 glow bound) and the gap to the label. */
+ *  lit halo's reach past the lens at zoom 1 and below (HALO_PX caps it on screen above) and the
+ *  gap to the label. */
 export const LED = Object.freeze({ lens: 3, bezel: 4.5, ringW: 1, bezelW: 1, halo: 4,
   labelGap: 3 });
 /** The token roles an LED may light in: each holds 3:1 on the bezel and both plate surfaces in
  *  both themes (the test computes it); a role elsewhere, a literal or a raw var() is refused. */
 export const LED_COLOURS = Object.freeze(['control.ring', 'control.applied', 'jack.refuse']);
-/** A label's and a unit's size in screen px at any zoom (the 12 px font floor). */
-export const LABEL_PX = 12;
+/** A label's and a unit's size in screen px at any zoom (the 12 px font floor, legend.js's). */
+export const LABEL_PX = LEGEND_PX;
+/** The lit halo's greatest reach past the lens in screen px at any zoom, within the v4 glow
+ *  bound of 6 px. */
+export const HALO_PX = 4;
 /** The meter's geometry, graph units, around the origin: the face, the pivot below the centre,
  *  the arc's radius and sweep (0 up, clockwise), the ticks (a major one every `major`), the
  *  needle's reach, the pivot cap and the strokes. */
@@ -123,23 +130,27 @@ function wrap(open, box, zoom, interactive, drawing) {
 
 // ---------------------------------------------------------------- the LED
 
-/** Half the LED's extent: the bezel's outer edge or the lit halo, whichever reaches further, so
- *  the box is the same lit and unlit. */
-const LED_HALF = Math.max(LED.bezel + LED.bezelW / 2, LED.lens + LED.halo);
+/** The lit halo's reach past the lens at `zoom`, graph units: LED.halo, but never past HALO_PX
+ *  screen px, so it spreads at most HALO_PX on screen however far the graph zooms in. */
+const haloReach = (zoom) => num(Math.min(LED.halo, HALO_PX / zoom));
+/** Half the LED's extent at `zoom`: the bezel's outer edge or the lit halo, whichever reaches
+ *  further, so the box is the same lit and unlit. */
+const ledHalf = (zoom) => Math.max(LED.bezel + LED.bezelW / 2, LED.lens + haloReach(zoom));
 
 /** The LED's extent, graph units: the bezel and the lit halo, and the label below them when there
  *  is one. */
 export function ledBox({ at, zoom = 1, label } = {}) {
   checkZoom(zoom, 'ledBox');
   const { x, y } = pointOf(at, 'ledBox');
+  const half = ledHalf(zoom);
   if (label === undefined || label === null || label === '') {
-    return Object.freeze({ x: num(x - LED_HALF), y: num(y - LED_HALF), width: num(2 * LED_HALF),
-      height: num(2 * LED_HALF) });
+    return Object.freeze({ x: num(x - half), y: num(y - half), width: num(2 * half),
+      height: num(2 * half) });
   }
   const size = LABEL_PX / zoom;
-  const width = Math.max(2 * LED_HALF, legendWidth(label, size));
-  return Object.freeze({ x: num(x - width / 2), y: num(y - LED_HALF), width: num(width),
-    height: num(2 * LED_HALF + LED.labelGap + size * 1.2) });
+  const width = Math.max(2 * half, legendWidth(label, size));
+  return Object.freeze({ x: num(x - width / 2), y: num(y - half), width: num(width),
+    height: num(2 * half + LED.labelGap + size * 1.2) });
 }
 
 function colourOf(tokens, colour) {
@@ -171,7 +182,7 @@ export function ledSvg({ at, lit, source, tokens, colour = 'control.ring', zoom 
   const paint = lit ? colourOf(t, colour) : t.surface.card;
   const ring = lit ? t.surface.edge : t.control.edge;
   const halo = lit ? `<circle data-halo="" class="opacity-hw-sheen" aria-hidden="true" `
-    + `pointer-events="none" cx="${num(x)}" cy="${num(y)}" r="${LED.lens + LED.halo}" `
+    + `pointer-events="none" cx="${num(x)}" cy="${num(y)}" r="${num(LED.lens + haloReach(zoom))}" `
     + `fill="${esc(paint)}" stroke="none"/>` : '';
   const named = label !== undefined && label !== null && label !== '';
   const a11y = named ? ` role="img" aria-label="${esc(label)}: ${lit ? 'on' : 'off'}"`
@@ -184,7 +195,7 @@ export function ledSvg({ at, lit, source, tokens, colour = 'control.ring', zoom 
     + halo
     + `<circle data-lens="" cx="${num(x)}" cy="${num(y)}" r="${LED.lens}" `
     + `fill="${esc(paint)}" stroke="${esc(ring)}" stroke-width="${LED.ringW}"/>`
-    + (named ? `<text x="${num(x)}" y="${num(y + LED_HALF + LED.labelGap + size)}" `
+    + (named ? `<text x="${num(x)}" y="${num(y + ledHalf(zoom) + LED.labelGap + size)}" `
       + `font-size="${num(size)}" text-anchor="middle" fill="${esc(t.text.label)}" `
       + `stroke="none">${esc(label)}</text>` : '');
   return wrap(open, ledBox({ at: { x, y }, zoom, label }), zoom, interactive, drawing);

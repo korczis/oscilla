@@ -19,6 +19,7 @@ import {
 } from '../../src/js/ui/synth/switch.js';
 import { CONTROL_BOX, controlSvg, HIT_PX } from '../../src/js/ui/synth/knob.js';
 import { ledSvg, ledBox, LED } from '../../src/js/ui/synth/led.js';
+import { ZOOM_MAX } from '../../src/js/ui/studio/graph-geometry.js';
 import { NODE_REGISTRY } from '../../src/js/studio/registry.js';
 import { SYNTH_TOKEN_NAMES } from '../../src/js/ui/synth/tokens.js';
 import {
@@ -757,19 +758,24 @@ test('the LED: data-source and data-lit from the caller, the glow only its halo'
 
 test('a toggle\'s LED is led.js\'s LED: the same bezel, lens and halo, at the layout\'s place',
   () => {
-    for (const zoom of [1, 2]) {
+    for (const zoom of [0.5, 1, 2, ZOOM_MAX]) {
       for (const lit of [true, false]) {
         const L = switchLayout(BOOL, { zoom, led: true });
         const svg = draw(BOOL, { zoom, led: { source: 'node.enabled', lit } });
         const want = ledSvg({ at: { x: L.led.cx, y: L.led.cy }, lit, source: 'node.enabled',
-          tokens: TOKENS });
+          tokens: TOKENS, zoom });
         assert.ok(svg.includes(want), `zoom ${zoom} lit ${lit}: ledSvg's markup, whole`);
+        if (lit) {
+          // The halo keeps the v4 glow bound on screen at every zoom the graph allows.
+          const reach = (n(part(svg, 'data-halo'), 'r') - n(part(svg, 'data-lens'), 'r')) * zoom;
+          assert.ok(reach > 0 && reach <= 6, `zoom ${zoom}: the halo ${reach} screen px, (0, 6]`);
+        }
         assert.equal(parts(svg, 'data-bezel').length, 1, 'a bezel');
         assert.equal(parts(svg, 'data-lens').length, 1, 'a lens');
         assert.match(want, /^<g data-led=""/, 'data-led is the LED\'s group');
         const housing = part(svg, 'data-housing');
         const right = n(housing, 'x') + n(housing, 'width') + n(housing, 'stroke-width') / 2;
-        const box = ledBox({ at: { x: L.led.cx, y: L.led.cy } });
+        const box = ledBox({ at: { x: L.led.cx, y: L.led.cy }, zoom });
         assert.ok(L.led.cx - LED.bezel - LED.bezelW / 2 >= right + 2,
           'the bezel clears the housing');
         assert.ok(box.x + box.width <= L.box.x + L.box.width + 1e-6, 'the halo in the box');

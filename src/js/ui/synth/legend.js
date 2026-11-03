@@ -3,13 +3,18 @@
 // label, a meter's unit) so neither imports the other. Pure: no DOM, no font metrics.
 //
 //   legendWidth(label, size)   graph units, rounded to 0.01
+//   LEGEND_PX                  a legend's or a label's size in screen px (the 12 px font floor)
 
 const NARROW = /[ .,:;'|!()[\]/\-iIjlft]/;
 const WIDE = /[MWmw@%→←·]/;
 
-/** An estimate of a label's width at `size` (12 px, the font floor, by default): a glyph-class
- *  sum, on the generous side. */
-export function legendWidth(label, size = 12) {
+/** A legend's and a label's size in screen px at any zoom (the 12 px font floor); switch.js's
+ *  LEGEND_PX and led.js's LABEL_PX are this one. */
+export const LEGEND_PX = 12;
+
+/** An estimate of a label's width at `size` (LEGEND_PX, the font floor, by default): a
+ *  glyph-class sum, on the generous side. */
+export function legendWidth(label, size = LEGEND_PX) {
   let em = 0;
   for (const ch of String(label)) {
     if (NARROW.test(ch)) em += 0.34;

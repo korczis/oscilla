@@ -17,6 +17,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { SYNTH_TOKEN_NAMES } from '../../src/js/ui/synth/tokens.js';
 import { HIT_PX } from '../../src/js/ui/synth/knob.js';
+import { ZOOM_MAX } from '../../src/js/ui/studio/graph-geometry.js';
 import {
   TOKENS, colourLiterals, shapesWithoutStroke, paints, tokenValues, intensityLiterals,
   tokenThemes, tokenHex, contrastOf,
@@ -34,6 +35,29 @@ const LED = (extra = {}) => led.ledSvg({ lit: true, source: 'transport.armed', t
 const METER = (extra = {}) => led.meterSvg({ value: 0.5, source: 'analysis.correlation',
   scale: 'relative', tokens: TOKENS, ...extra });
 const near = (a, b, eps = 1e-6) => Math.abs(a - b) <= eps;
+/** The zooms the graph allows, its ZOOM_MAX included (graph-geometry.js). */
+const ZOOMS = [0.5, 1, 2, ZOOM_MAX];
+/** The [start, end) span of the element whose open tag carries `attr`, from its open tag to the
+ *  close tag that matches it (nested elements of its name counted), or null. */
+function elementSpan(svg, attr) {
+  const m = new RegExp(`<(\\w+)\\b[^>]*\\s${attr}=""[^>]*>`).exec(svg);
+  if (!m || m[0].endsWith('/>')) return m ? [m.index, m.index + m[0].length] : null;
+  const tag = new RegExp(`<(/?)${m[1]}\\b[^>]*?(/?)>`, 'g');
+  tag.lastIndex = m.index + m[0].length;
+  let depth = 1;
+  for (let t = tag.exec(svg); t; t = tag.exec(svg)) {
+    if (t[1]) depth -= 1;
+    else if (!t[2]) depth += 1;
+    if (depth === 0) return [m.index, t.index + t[0].length];
+  }
+  return null;
+}
+/** Whether `part` lies inside the element that carries `attr`. */
+const within = (svg, attr, inner) => {
+  const span = elementSpan(svg, attr);
+  const i = svg.indexOf(inner);
+  return Boolean(span) && i > span[0] && i + inner.length <= span[1];
+};
 
 test('the module exists and exports ledSvg, meterSvg and their geometry', () => {
   assert.equal(typeof led.ledSvg, 'function', 'ledSvg');
@@ -106,7 +130,7 @@ test('lit: the chosen state token on the lens, under its halo; unlit: surface-2,
 
 test('a lit LED glows by an SVG halo: one circle behind the lens, its token, <= 6 px past it',
   () => {
-    for (const zoom of [0.5, 1, 2]) {
+    for (const zoom of ZOOMS) {
       for (const colour of led.LED_COLOURS) {
         for (const extra of [{}, { label: 'Arm' }, { interactive: true }]) {
           const svg = LED({ colour, zoom, ...extra });
@@ -116,9 +140,11 @@ test('a lit LED glows by an SVG halo: one circle behind the lens, its token, <= 
           const [halo] = halos;
           const lens = part(svg, 'data-lens');
           assert.match(halo, /^<circle\b/, `${where}: a circle`);
-          const reach = Number(attrOf(halo, 'r')) - Number(attrOf(lens, 'r'));
-          assert.ok(reach > 0 && reach <= 6, `${where}: ${reach} past the lens, in (0, 6]`);
-          assert.equal(attrOf(halo, 'r'), String(led.LED.lens + led.LED.halo), 'graph units');
+          // Screen px: the halo's reach past the lens, scaled by the zoom, as the eye sees it.
+          const reach = (Number(attrOf(halo, 'r')) - Number(attrOf(lens, 'r'))) * zoom;
+          assert.ok(reach > 0 && reach <= 6, `${where}: ${reach} screen px past the lens, (0, 6]`);
+          assert.ok(near(reach, Math.min(led.LED.halo * zoom, led.HALO_PX), 0.01),
+            `${where}: LED.halo graph units, never past HALO_PX screen px`);
           assert.equal(attrOf(halo, 'cx'), attrOf(lens, 'cx'), `${where}: centred on the lens`);
           assert.equal(attrOf(halo, 'cy'), attrOf(lens, 'cy'), `${where}: centred on the lens`);
           assert.equal(attrOf(halo, 'class'), 'opacity-hw-sheen', `${where}: the hw-sheen key`);
@@ -130,9 +156,8 @@ test('a lit LED glows by an SVG halo: one circle behind the lens, its token, <= 
           assert.ok(svg.indexOf(halo) < svg.indexOf(lens), `${where}: behind the lens`);
           assert.ok(svg.indexOf(part(svg, 'data-bezel')) < svg.indexOf(halo),
             `${where}: over the bezel, which a lit LED lights`);
-          // Inside the data-led element: the LED's group closes after the halo.
-          assert.ok(svg.indexOf(halo) > svg.indexOf('data-led=""')
-            && svg.lastIndexOf('</g>') > svg.indexOf(halo), `${where}: inside data-led`);
+          // Inside the data-led element: between its own <g> and the </g> that closes it.
+          assert.ok(within(svg, 'data-led', halo), `${where}: inside data-led`);
           assert.doesNotMatch(svg, /\s(?:fill-|stroke-|flood-|stop-)?opacity=/,
             `${where}: no literal opacity attribute`);
         }
@@ -140,6 +165,19 @@ test('a lit LED glows by an SVG halo: one circle behind the lens, its token, <= 
       assert.doesNotMatch(LED({ lit: false, zoom }), /data-halo/, 'unlit: no halo');
     }
   });
+
+test('within() reads the data-led element\'s own span, so a halo moved out of it is caught', () => {
+  const svg = LED({ zoom: 1 });
+  const halo = part(svg, 'data-halo');
+  assert.ok(within(svg, 'data-led', halo), 'the drawn halo is inside');
+  // Moved out: after the LED's group, inside an outer group that closes later.
+  const out = `<g data-outer="">${svg.replace(halo, '')}${halo}</g>`;
+  assert.ok(!within(out, 'data-led', halo), 'after the LED\'s </g>');
+  assert.ok(!within(`${halo}${svg.replace(halo, '')}`, 'data-led', halo), 'before its <g>');
+  const nested = `<g data-led="" a=""><g>x</g>${halo}</g>`;
+  assert.ok(within(nested, 'data-led', halo), 'a nested </g> does not close it');
+  assert.ok(!within(`<g data-led="" a=""><g>x</g></g>${halo}`, 'data-led', halo), 'nested, out');
+});
 
 test('the glow is never on text and never on the group that holds the label', () => {
   for (const lit of [true, false]) {
@@ -190,7 +228,7 @@ test('an LED takes no pointer by default; interactive, a hit of 44 screen px at 
 });
 
 test('the LED and the meter draw inside their box at its place', () => {
-  for (const zoom of [0.5, 1, 2]) {
+  for (const zoom of ZOOMS) {
     for (const label of [undefined, 'Arm']) {
       const box = led.ledBox({ zoom, label });
       for (const c of LED({ zoom, label }).match(/<circle\b[^>]*>/g)) {
