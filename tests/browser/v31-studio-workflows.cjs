@@ -75,7 +75,16 @@
 //                        MAX_OUTPUT_GAIN (core/constants.js, 0.25 = -12.0 dBFS): the engine's
 //                        output ceiling, the Master Output level's top, which the live chain
 //                        flattens every sample beyond and the offline render (no ceiling) must
-//                        stay under on its own. The rate is the WAV header's, never assumed
+//                        stay under on its own. The rate is the WAV header's, never assumed.
+//                        Spectra (project.no-fake-science: the Learn texts' claims, from the
+//                        WAV): a Hann-windowed DFT at the exact line frequencies over a steady
+//                        stretch (wavLine). Ring Mod, first note A3 = 220 Hz against 470 Hz:
+//                        the 220 Hz line is at least 20 dB below 250 Hz and 690 Hz (the gain
+//                        really swings negative). FM Chime, first strike: 440 ± 616·k Hz
+//                        (176, 1056, 1672 Hz) stand 20 dB above the floor between the lines,
+//                        and the first and second upper sidebands over the carrier are
+//                        J1(1)/J0(1) and J2(1)/J0(1) within 1 dB (the text's index 1; the
+//                        lines at 440 ± 616·k do not coincide)
 //   no-console-errors
 'use strict';
 const { serveDist } = require('./lib/serve.cjs');
@@ -205,6 +214,58 @@ function wavLevels(buf) {
   return { channels, sampleRate, bits, seconds: bytes / (channels * (bits / 8)) / sampleRate,
     peak, peakDbfs: peak > 0 ? 20 * Math.log10(peak) : -Infinity,
     rmsDbfs: n && acc > 0 ? 10 * Math.log10(acc / n) : -Infinity };
+}
+
+/** The channel-mean samples of a 16-bit PCM WAV and its rate. */
+function wavMono(buf) {
+  const b = Buffer.from(buf);
+  const fmt = b.indexOf('fmt ');
+  const data = b.indexOf('data');
+  const channels = b.readUInt16LE(fmt + 10);
+  const sampleRate = b.readUInt32LE(fmt + 12);
+  const start = data + 8;
+  const frames = Math.floor(Math.min(b.length - start, b.readUInt32LE(data + 4))
+    / (2 * channels));
+  const x = new Float64Array(frames);
+  for (let i = 0; i < frames; i++) {
+    let v = 0;
+    for (let c = 0; c < channels; c++) v += b.readInt16LE(start + 2 * (i * channels + c));
+    x[i] = v / channels / 32768;
+  }
+  return { x, sampleRate };
+}
+
+/**
+ * Amplitude (dBFS) of the line at `hz` in [t0, t1) s of `wav`: a Hann-windowed DFT evaluated at
+ * that exact frequency (not at the nearest bin), scaled so a full-scale sine reads 0 dB.
+ */
+function wavLine(wav, hz, t0, t1) {
+  const i0 = Math.round(t0 * wav.sampleRate);
+  const n = Math.round((t1 - t0) * wav.sampleRate);
+  let re = 0;
+  let im = 0;
+  let wsum = 0;
+  for (let k = 0; k < n; k++) {
+    const w = 0.5 - 0.5 * Math.cos((2 * Math.PI * k) / (n - 1));
+    const ph = (2 * Math.PI * hz * k) / wav.sampleRate;
+    re += w * wav.x[i0 + k] * Math.cos(ph);
+    im -= w * wav.x[i0 + k] * Math.sin(ph);
+    wsum += w;
+  }
+  const a = (2 * Math.hypot(re, im)) / wsum;
+  return a > 0 ? 20 * Math.log10(a) : -Infinity;
+}
+
+/** Bessel function of the first kind J_n(x), by its power series (small x). */
+function besselJ(n, x) {
+  let sum = 0;
+  let term = (x / 2) ** n;
+  for (let k = 1; k <= n; k++) term /= k;
+  for (let m = 0; m < 30; m++) {
+    sum += term;
+    term *= -((x / 2) ** 2) / ((m + 1) * (m + 1 + n));
+  }
+  return sum;
 }
 
 function wavInfo(buf) {
@@ -1216,6 +1277,15 @@ function defineChecks(fx) {
         hash: window.location.hash, workspace: window.OSCILLA.app.workspace } : null;
     }, id), { ms: 10000, what });
     const rows = {};
+    // The claims the Learn texts make, judged from each WAV (see the header). Times are inside
+    // the first note or strike (0-0.5 s and 0-0.7 s of the timeline), after the fade-in.
+    const dbs = (w, list, t0, t1) => Object.fromEntries(list.map((hz) => [hz,
+      Number(wavLine(w, hz, t0, t1).toFixed(1))]));
+    const spectra = {
+      'ring-mod': { measure: (w) => dbs(w, [220, 250, 690], 0.1, 0.45) },
+      'fm-chime': { measure: (w) => dbs(w, [176, 440, 1056, 1672, 300, 620, 1300, 1500], 0.05,
+        0.45) },
+    };
     for (const id of ids) {
       // 1. Templates, Open, from another document.
       await H.fresh(page, 'basic-tone');
@@ -1239,7 +1309,9 @@ function defineChecks(fx) {
         '[data-osc="studio.render.duration"]').value);
       const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 30000 }),
         page.click('[data-osc="studio.render.start"]')]);
-      const wav = wavLevels(fs.readFileSync(await dl.path()));
+      const bytes = fs.readFileSync(await dl.path());
+      const wav = wavLevels(bytes);
+      if (spectra[id]) spectra[id].lines = spectra[id].measure(wavMono(bytes));
       await until(() => page.evaluate(() => !window.OSCILLA.studio.rendering),
         { ms: 10000, what: `template-pack: the ${id} render ends` });
       rows[id] = { dialog: dialog.title === titles[id], link: link.title === titles[id]
@@ -1249,11 +1321,22 @@ function defineChecks(fx) {
         sounds: wav.rmsDbfs > rmsFloorDb, underCap: wav.peak > 0 && wav.peak <= cap };
     }
     const bad = (k) => ids.filter((id) => !rows[id][k]);
+    const ring = spectra['ring-mod'].lines;
+    const fm = spectra['fm-chime'].lines;
+    const fmFloor = Math.max(fm[300], fm[620], fm[1300], fm[1500]);
+    const j1OverJ0Db = 20 * Math.log10(besselJ(1, 1) / besselJ(0, 1));
+    const j2OverJ0Db = 20 * Math.log10(besselJ(2, 1) / besselJ(0, 1));
     return { ...H.verdict({
       dialog: bad('dialog').length === 0, link: bad('link').length === 0,
       file: bad('file').length === 0, sounds: bad('sounds').length === 0,
       underCap: bad('underCap').length === 0,
-    }), capDbfs: Number((20 * Math.log10(cap)).toFixed(2)), rmsFloorDb, rows };
+      ringNoCarrier: ring[220] <= ring[250] - 20 && ring[220] <= ring[690] - 20,
+      fmSidebands: [176, 1056, 1672].every((hz) => fm[hz] >= fmFloor + 20),
+      fmIndex: Math.abs(fm[1056] - fm[440] - j1OverJ0Db) <= 1
+        && Math.abs(fm[1672] - fm[440] - j2OverJ0Db) <= 1,
+    }), ring, fm: { ...fm, floor: fmFloor, j1OverJ0Db: Number(j1OverJ0Db.toFixed(2)),
+      j2OverJ0Db: Number(j2OverJ0Db.toFixed(2)) },
+    capDbfs: Number((20 * Math.log10(cap)).toFixed(2)), rmsFloorDb, rows };
   });
 
   def('no-console-errors', async ({ errors }) => ({ ok: errors.length === 0,
