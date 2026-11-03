@@ -1861,3 +1861,77 @@ test('wheel: on every registry range a notch moves at least 1 % (Shift 0.1 %)', 
   }
   assert.deepEqual(short.slice(0, 8), [], `${short.length} notches under the floor`);
 });
+
+// F013 S10 review: a hit rounded to 0.01 can fall under 44 screen px (86.27 at zoom 0.51 is
+// 43.9977 px), so every side is rounded up to the next 0.02 graph units, at every zoom.
+test('every hit holds 44 screen px at every zoom 0.25 to 2.5 (step 0.01), rounded up', () => {
+  const cases = [['knob'], ['fader', 'vertical'], ['fader', 'horizontal'], ['switch'],
+    ['fader', 'vertical', 128], ['fader', 'horizontal', 128], ['fader', 'vertical', 100.5]];
+  for (const [kind, orientation = 'vertical', travel] of cases) {
+    const box = CORE.controlBox(kind, orientation, travel === undefined ? {} : { travel });
+    for (let i = 25; i <= 250; i++) {
+      const zoom = i / 100;
+      const at = `${kind} ${orientation} ${travel ?? ''} at ${zoom}`;
+      const [x, y, w, h] = hitOf(draw(kind, { zoom, orientation, travel }));
+      assert.ok(w * zoom >= HIT_PX - 1e-9 && h * zoom >= HIT_PX - 1e-9,
+        `${at}: ${w * zoom} x ${h * zoom} screen px`);
+      for (const [side, least] of [[w, Math.max(HIT_PX / zoom, box.width)],
+        [h, Math.max(HIT_PX / zoom, box.height)]]) {
+        assert.ok(side >= least - 1e-9 && side < least + 0.02 + 1e-9, `${at}: ${side} ~ ${least}`);
+        assert.equal(Math.round(side * 50) / 50, side, `${at}: on the 0.02 grid`);
+      }
+      assert.deepEqual([x, y], [-w / 2, -h / 2], `${at}: centred`);
+    }
+  }
+});
+
+test('fader: an optional travel (default FADER_TRAVEL, unchanged) sizes its box, cap and drag',
+  () => {
+    assert.equal(CORE.controlBox('fader'), CONTROL_BOX.fader, 'the default is the constant');
+    assert.equal(CORE.controlBox('fader', 'vertical', { travel: FADER_TRAVEL }),
+      CONTROL_BOX.fader);
+    assert.equal(CORE.controlBox('fader', 'horizontal', {}),
+      CORE.controlBox('fader', 'horizontal'));
+    const b = CORE.controlBox('fader', 'vertical', { travel: 128 });
+    assert.deepEqual({ ...b }, { x: -22, y: -74, width: 44, height: 148 });
+    assert.ok(Object.isFrozen(b));
+    assert.deepEqual({ ...CORE.controlBox('fader', 'horizontal', { travel: 128 }) },
+      { x: -74, y: -22, width: 148, height: 44 }, 'turned');
+    for (const travel of [0, -5, 10, Number.NaN, Infinity, '128']) {
+      assert.throws(() => CORE.controlBox('fader', 'vertical', { travel }), RangeError,
+        `travel ${travel}`);
+    }
+    assert.throws(() => CORE.controlBox('knob', 'vertical', { travel: 128 }), /travel/);
+    assert.equal(draw('fader', { travel: FADER_TRAVEL }), draw('fader'), 'default unchanged');
+    assert.throws(() => draw('knob', { travel: 128 }), /travel/);
+    const capAt = (v, travel, orientation = 'vertical') => {
+      const c = part(controlSvg({ kind: 'fader', value: v, param: LIN, tokens: TOKENS, travel,
+        orientation }), 'data-cap');
+      return numOf(c, 'y') + numOf(c, 'height') / 2;
+    };
+    for (const travel of [64, 100.5, 128, 144]) {
+      near(capAt(LIN.max, travel), -travel / 2, 0.005);
+      near(capAt(LIN.min, travel), travel / 2, 0.005);
+      near(capAt(70, travel), travel / 2 - travel * 0.7, 0.005);
+      // The horizontal fader is these parts turned (the orientation test above).
+      for (const orientation of ['vertical']) {
+        for (const state of [{}, { focus: true }, { dragging: true }]) {
+          const svg = controlSvg({ kind: 'fader', value: 70, applied: 10, param: LIN,
+            tokens: TOKENS, travel, orientation, state });
+          const [x0, y0, x1, y1] = drawingBox(svg);
+          const bx = CORE.controlBox('fader', 'vertical', { travel });
+          assert.ok(x0 >= bx.x - 1e-9 && y0 >= bx.y - 1e-9 && x1 <= bx.x + bx.width + 1e-9
+            && y1 <= bx.y + bx.height + 1e-9, `travel ${travel} ${orientation}: inside the box`);
+        }
+      }
+    }
+    assert.equal(pixelsPerRangeFor('fader', 2), FADER_TRAVEL * 2, 'default unchanged');
+    assert.equal(pixelsPerRangeFor('fader', 2, undefined, { travel: 128 }), 256);
+    assert.equal(pixelsPerRangeFor('knob', 2, undefined, { travel: 128 }), DRAG_PX_PER_RANGE);
+    // A press reads the same travel: on the cap at 70 % of 128, and a page toward the slot.
+    const press = (point, travel) => CORE.faderPress({ value: 70, param: LIN, point, travel });
+    assert.deepEqual(press({ x: 0, y: -(128 * 0.7 - 64) }, 128), { grab: true, value: 70 });
+    assert.deepEqual(press({ x: 0, y: -(64 * 0.7 - 32) }, 128), { grab: false, value: 60 });
+    assert.deepEqual(press({ x: 0, y: -(64 * 0.7 - 32) }), { grab: true, value: 70 },
+      'the default travel unchanged');
+  });

@@ -8,13 +8,25 @@
 // 3:1 on the surface and on both plates in both themes) with a recess along its top and left in
 // surface.edge at the hw-shadow intensity, and a grid in text.dim at the hw-texture intensity
 // (class opacity-hw-texture: a line per value of an integer axis of up to XY.gridMax values,
-// else XY.gridDivs divisions), with two guides in control.track through the puck. The puck is a
-// Ø28 cap (PUCK.r 14) in control.cap with a --osc-text edge (text.value; 16:1 on the surface
-// and 17:1 on the cap in both themes), a crosshair notch in control.pointer (control.disabled
-// while disabled), its highlight at hw-sheen and its shadow at hw-shadow, 1 down and 2 while
-// touched. Its centre travels over the surface inset by XY.inset, so the cap never crosses the
-// frame. The axis faders are knob.js's controlSvg (kind 'fader', orientation 'horizontal' for
-// X, 'vertical' for Y) at controlBox, so they look, feel and hit as every fader of the layer.
+// else XY.gridDivs divisions), with two guides in control.track through the puck.
+//
+// The puck is a raised Ø28 cap (PUCK.r 14): a skirt in control.cap edged in text.value
+// (--osc-text, 3:1 or more on the surface and the skirt in both themes) around a Ø20
+// face (PUCK.face) in control.edge (--osc-text-dim: of the layer's neutral roles the only one
+// 1.3:1 or more on the surface in both themes, 3.91:1 in each, and 4.2:1 / 4.4:1 on the
+// skirt), a crosshair notch in control.pointer, its sheen in text.value at hw-sheen (1.23:1
+// lighter on the face in the dark reference theme; in light it shades it, 1.19:1, as no neutral
+// role is lighter than the face in both themes) and its shadow in surface.edge at hw-shadow.
+// A shadow only darkens, and surface.edge (--osc-bg) is the one role darker than the surface in
+// both themes, so it is the strongest legal shadow, and still faint: its hw-shadow composite is
+// 1.04:1 dark and 1.01:1 light (no role reaches a visible step there; the cap's face, skirt and
+// edge carry the relief). Idle the shadow falls PUCK.shadow (1.25 down, r 14) below the cap;
+// touched the cap is pressed: the shadow tucks under it (PUCK.pressed: 0.5 down, r 13.5) and
+// the edge becomes a PUCK.ringW ring in control.ring. The centre travels over the surface
+// inset by XY.inset, so neither the cap, its ring nor its shadow crosses the frame. The axis
+// faders are knob.js's controlSvg (kind 'fader', orientation 'horizontal' for X, 'vertical' for
+// Y) at controlBox, with the puck's travel (the layout's travel), so they look, feel and hit as
+// every fader of the layer and each fader's cap sits exactly under or beside the puck's centre.
 // The gate LED is led.js's ledSvg, lit by the caller's `gate` boolean, its data-source the
 // caller's `source` (the state it shows, never a constant), labelled XY.ledLabel at the 12 px
 // font floor (LEGEND_PX screen px at any zoom). Every colour is a token passed in (synthTokens;
@@ -22,32 +34,41 @@
 // intensities are the classes opacity-hw-texture, opacity-hw-shadow and opacity-hw-sheen.
 //
 // Mapping: xyPosition and xyValue work in positions 0..1 along each axis, y up (0 at the
-// bottom, as hardware), clamped to the puck's travel, and round-trip exactly (a position held
-// to 12 significant digits and a point to 1e-9 graph units, so float noise never survives a
-// trip). A host maps a value to its
-// position with knob.js's toNorm and back with fromNorm and quantize, the faders' own mapping,
-// so the puck and both fader caps always agree (an integer axis's value sits at its grid line).
+// bottom, as hardware), clamped to the puck's travel. A position is held to 12 significant
+// digits and a point to 1e-9 graph units, so float noise never survives a trip: a round trip is
+// exact for grid values (positions k/40 and whole graph units, as the tests walk them) and
+// otherwise lands within 1e-11 of a position and 1e-9 graph units of a point. A host maps a
+// value to its position with knob.js's toNorm and back with fromNorm and quantize, the faders'
+// own mapping, so the puck and both fader caps always agree (an integer axis's value sits at its
+// grid line).
 //
-// Accessibility: the pad is role="group" with an aria-label; the surface and the puck are
-// aria-hidden and take no pointer. The puck is not a second accessible slider: the two axis
-// faders are the accessible controls, each role="slider" with tabindex 0, an aria-label, an
-// aria-orientation and N003's ariaAttrs (aria-valuenow the 0..1000 position, aria-valuetext the
-// value with its unit), so a keyboard and a screen reader move X and Y one at a time. The
-// pointer goes to the surface's hit rect (data-xy-hit="pad", the whole surface) and to each
-// fader's own hit; every hit is at least HIT_PX (44) screen px a side at any zoom and none
-// overlaps another (the surface grows below zoom 1 to keep its 44 px). States: idle; touched
-// (the puck pressed; the caller lights the gate); focus on one part ('pad' rings the surface
-// in control.focus, 2 wide, for a host that focuses the surface for an Enter-held gate; 'x' or
-// 'y' rings that fader through controlSvg); disabled (aria-disabled, the notch and the faders
-// dimmed by token, never by an opacity). A setpoint: nothing moves here, so there is no
-// reduced-motion check; a host that glides the puck does it in its own file, which checks
-// prefers-reduced-motion (the v4 motion guard). Coordination: the kind src/js/ui/kinds/xy-pad.js
-// still announces raw values; adopting these faders moves its aria-valuenow to the position,
-// which its browser checks must follow (plan entry 12).
+// Accessibility: the pad is role="group" with an aria-label; the drawing (surface, puck, grid)
+// is aria-hidden and takes no pointer. The surface's hit rect (data-xy-hit="pad", the whole
+// surface) is the keyboard's and the pointer's surface, as src/js/ui/kinds/xy-pad.js draws it:
+// tabindex 0 (-1 while disabled), role="application", aria-roledescription "XY pad", the
+// group's aria-label, aria-pressed the gate, aria-keyshortcuts the keys below, aria-disabled
+// while disabled. The host owns the keys, from its own delegated listener as xy-pad.js does
+// today (this core adds none): on the surface the arrows move the puck (Left/Right and
+// Home/End along X, Up/Down and PageUp/PageDown along Y, Shift fine, each axis through knobKey),
+// Enter held opens the gate and its keyup closes it, Escape ends the gesture. The puck is
+// not a second accessible slider: the two axis faders are the sliders, each role="slider" with
+// tabindex 0, an aria-label, an aria-orientation and N003's ariaAttrs (aria-valuenow the 0..1000
+// position, aria-valuetext the value with its unit), so a screen reader moves X and Y one at a
+// time. Every hit is at least HIT_PX (44) screen px a side at any zoom (rounded up to the next
+// 0.02 graph units), none overlaps another and the box holds every hit's rounded edges (the
+// surface grows below zoom 1 to keep its 44 px). States: idle; touched (the puck pressed; the
+// caller lights the gate); focus on one part ('pad' rings the surface in control.focus, 2 wide;
+// 'x' or 'y' rings that fader through controlSvg); disabled (aria-disabled; the puck's edge,
+// its notch and the frame in control.disabled, the frame dashed, the face blank in control.cap,
+// the faders dimmed by controlSvg; by token, never by an opacity). A setpoint: nothing moves
+// here, so there is no reduced-motion check; a host that glides the puck does it in its own
+// file, which checks prefers-reduced-motion (the v4 motion guard). Coordination: the kind
+// src/js/ui/kinds/xy-pad.js still announces raw values; adopting these faders moves its
+// aria-valuenow to the position, which its browser checks must follow (plan entry 12).
 //
 //   xyLayout({ size, zoom })           frozen { zoom, size, pad, travel, puck, faders: { x, y:
-//                                      { orientation, at, box } }, led: { at, box }, hits:
-//                                      { pad, x, y }, box } (graph units)
+//                                      { orientation, travel, at, box, hit } }, led: { at, box },
+//                                      hits: { pad, x, y }, box } (graph units)
 //   xyPosition({ x, y, layout })       positions 0..1 -> { px, py }, graph units, clamped
 //   xyValue({ px, py, layout })        graph units -> positions { x, y } 0..1, clamped
 //   xySvg({ x, y, gate, source, params: { x, y }, tokens, zoom, size, state, label, format })
@@ -57,29 +78,34 @@
 import { ariaAttrs, clampValue, controlBox, controlSvg, HIT_PX, toNorm } from './knob.js';
 import { ledBox, ledSvg } from './led.js';
 
-/** The puck, graph units: the cap's radius (Ø28), its edge, the crosshair notch's half arm and
- *  width, the shadow's drop (touched: pressed, lifted further) and the highlight. */
-export const PUCK = Object.freeze({ r: 14, edgeW: 1.5, notch: 6, notchW: 1.5, shadowDy: 1,
-  touchedDy: 2, sheen: Object.freeze({ dx: -4.5, dy: -5, rx: 6, ry: 4 }) });
+/** The puck, graph units: the cap's radius (Ø28), its face's, its edge and touched ring, the
+ *  crosshair notch's half arm and width, the shadow idle and pressed (a drop and a radius: a
+ *  pressed cap sits lower, its shadow tucked under it) and the sheen on the face. */
+export const PUCK = Object.freeze({ r: 14, face: 10, edgeW: 1.5, ringW: 2, notch: 6,
+  notchW: 1.5, shadow: Object.freeze({ dy: 1.25, r: 14 }),
+  pressed: Object.freeze({ dy: 0.5, r: 13.5 }),
+  sheen: Object.freeze({ dx: -3, dy: -3.5, rx: 4, ry: 2.5 }) });
 /** The pad, graph units: the default and least side of the surface, the puck travel's inset
- *  (the cap and its edge with 1.25 to spare), the margin that holds the focus ring, the gap to
- *  the faders, the frame's corner and width, the focus ring's offset and width, the recess's
- *  width, the grid (a line per value up to gridMax values, else gridDivs divisions), the guides'
- *  width and the gate LED's label. */
+ *  (the cap, its ring and its shadow inside the frame), the margin that holds the focus ring,
+ *  the gap to the faders, the frame's corner, width and disabled dash, the focus ring's offset
+ *  and width, the recess's width, the grid (a line per value up to gridMax values, else gridDivs
+ *  divisions), the guides' width and the gate LED's label. */
 export const XY = Object.freeze({ size: 160, min: 96, inset: 16, margin: 4, gap: 6, rx: 3,
-  frameW: 1.5, focusOut: 3, focusW: 2, recessW: 2, gridMax: 25, gridDivs: 8, guideW: 1,
-  ledLabel: 'Gate' });
+  frameW: 1.5, dash: '3 1.5', focusOut: 3, focusW: 2, recessW: 2, gridMax: 25, gridDivs: 8,
+  guideW: 1, ledLabel: 'Gate' });
 
 const AXES = Object.freeze(['x', 'y']);
 const FOCUS = Object.freeze(['pad', 'x', 'y']);
 const STATE_KEYS = Object.freeze(['touched', 'focus', 'disabled']);
 const ORIENTATION = Object.freeze({ x: 'horizontal', y: 'vertical' });
+/** The keys the host's listener answers on the surface (aria-keyshortcuts). */
+const KEYS = 'ArrowLeft ArrowRight ArrowUp ArrowDown Home End PageUp PageDown Enter';
 
 const num = (x) => Number(x.toFixed(2)) + 0; // + 0: never -0
 /** Up to the next 0.02, so a grown side never rounds under the 44 px rule. */
 const up = (x) => num(Math.ceil(x * 50 - 1e-9) / 50);
-/** Float noise off: a position at 12 significant digits, a point at 1e-9 graph units, so a
- *  trip either way lands where it started (a position's noise is under 1e-10 units). */
+/** Float noise off: a position at 12 significant digits, a point at 1e-9 graph units: a trip
+ *  is exact for grid values, else within 1e-11 of a position and 1e-9 graph units of a point. */
 const clean = (x) => Number(x.toPrecision(12)) + 0;
 const fine = (x) => Number(x.toFixed(9)) + 0;
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
@@ -93,11 +119,11 @@ function checkZoom(zoom, who) {
   }
 }
 
-/** A fader's hit at `zoom`, as controlSvg draws it: at least HIT_PX screen px, never under the
- *  box. */
-function faderHit(orientation, zoom) {
-  const b = controlBox('fader', orientation);
-  return { w: num(Math.max(HIT_PX / zoom, b.width)), h: num(Math.max(HIT_PX / zoom, b.height)) };
+/** A fader's hit at `zoom`, as controlSvg draws it: at least HIT_PX screen px (rounded up),
+ *  never under the box. */
+function faderHit(orientation, zoom, travel) {
+  const b = controlBox('fader', orientation, { travel });
+  return { w: up(Math.max(HIT_PX / zoom, b.width)), h: up(Math.max(HIT_PX / zoom, b.height)) };
 }
 
 // ---------------------------------------------------------------- the layout
@@ -118,12 +144,13 @@ export function xyLayout({ size = XY.size, zoom = 1 } = {}) {
   const G = XY.gap;
   const S = Math.max(size, up(HIT_PX / zoom));
   const pad = rect(M, M, S, S);
-  const travel = rect(M + XY.inset, M + XY.inset, S - 2 * XY.inset, S - 2 * XY.inset);
-  const hx = faderHit(ORIENTATION.x, zoom);
-  const hy = faderHit(ORIENTATION.y, zoom);
+  const T = S - 2 * XY.inset;
+  const travel = rect(M + XY.inset, M + XY.inset, T, T);
+  const hx = faderHit(ORIENTATION.x, zoom, T);
+  const hy = faderHit(ORIENTATION.y, zoom, T);
   const fader = (axis, at, hit) => {
-    const b = controlBox('fader', ORIENTATION[axis]);
-    return Object.freeze({ orientation: ORIENTATION[axis], at: Object.freeze(at),
+    const b = controlBox('fader', ORIENTATION[axis], { travel: T });
+    return Object.freeze({ orientation: ORIENTATION[axis], travel: T, at: Object.freeze(at),
       box: rect(at.x + b.x, at.y + b.y, b.width, b.height),
       hit: rect(num(at.x + num(-hit.w / 2)), num(at.y + num(-hit.h / 2)), hit.w, hit.h) });
   };
@@ -133,6 +160,10 @@ export function xyLayout({ size = XY.size, zoom = 1 } = {}) {
   const b0 = ledBox({ at: { x: 0, y: 0 }, zoom, label: XY.ledLabel });
   const ledAt = Object.freeze({ x: num(M + S + G + hy.w / 2),
     y: num(M + S + G + hx.h / 2 - (b0.y + b0.height / 2)) });
+  const led = ledBox({ at: ledAt, zoom, label: XY.ledLabel });
+  // The box from the rounded edges themselves, so no hit or the LED ends outside it.
+  const ring = M + S + XY.focusOut + XY.focusW / 2;
+  const edge = (k, d) => up(Math.max(ring, ...[fx.hit, fy.hit, led].map((r) => r[k] + r[d])));
   return Object.freeze({
     zoom,
     size: S,
@@ -140,9 +171,9 @@ export function xyLayout({ size = XY.size, zoom = 1 } = {}) {
     travel,
     puck: PUCK,
     faders: Object.freeze({ x: fx, y: fy }),
-    led: Object.freeze({ at: ledAt, box: ledBox({ at: ledAt, zoom, label: XY.ledLabel }) }),
+    led: Object.freeze({ at: ledAt, box: led }),
     hits: Object.freeze({ pad, x: fx.hit, y: fy.hit }),
-    box: rect(0, 0, num(M + S + G + hy.w), num(M + S + G + hx.h)),
+    box: rect(0, 0, edge('x', 'width'), edge('y', 'height')),
   });
 }
 
@@ -254,9 +285,13 @@ function padShapes(L, nx, ny, params, t, st) {
   const P = PUCK;
   const r0 = XY.recessW / 2 + inner;
   const f = XY.focusOut;
+  const c = t.control;
+  const edge = st.disabled ? c.disabled : (st.touched ? c.ring : t.text.value);
+  const sh = st.touched ? P.pressed : P.shadow;
   return `<rect data-surface="" x="${pad.x}" y="${pad.y}" width="${pad.width}" `
     + `height="${pad.height}" rx="${XY.rx}" fill="${esc(t.surface.card)}" `
-    + `stroke="${esc(t.control.edge)}" stroke-width="${XY.frameW}"/>`
+    + `stroke="${esc(st.disabled ? c.disabled : c.edge)}" stroke-width="${XY.frameW}"`
+    + `${st.disabled ? ` stroke-dasharray="${XY.dash}"` : ''}/>`
     + `<path data-recess="" class="opacity-hw-shadow" d="M ${num(pad.x + r0)} `
     + `${num(pad.y + pad.height - XY.rx)} V ${num(pad.y + r0)} H `
     + `${num(pad.x + pad.width - XY.rx)}" fill="none" stroke="${esc(t.surface.edge)}" `
@@ -266,16 +301,17 @@ function padShapes(L, nx, ny, params, t, st) {
     + `<path data-guide="" d="M ${cx} ${top} V ${bottom} M ${left} ${cy} H ${right}" `
     + `fill="none" stroke="${esc(t.control.track)}" stroke-width="${XY.guideW}"/>`
     + `<circle data-puck-shadow="" class="opacity-hw-shadow" cx="${cx}" `
-    + `cy="${num(cy + (st.touched ? P.touchedDy : P.shadowDy))}" r="${P.r}" `
-    + `fill="${esc(t.surface.edge)}" stroke="none"/>`
-    + `<circle data-puck-cap="" cx="${cx}" cy="${cy}" r="${P.r}" fill="${esc(t.control.cap)}" `
-    + `stroke="${esc(t.text.value)}" stroke-width="${P.edgeW}"/>`
+    + `cy="${num(cy + sh.dy)}" r="${sh.r}" fill="${esc(t.surface.edge)}" stroke="none"/>`
+    + `<circle data-puck-cap="" cx="${cx}" cy="${cy}" r="${P.r}" fill="${esc(c.cap)}" `
+    + `stroke="${esc(edge)}" stroke-width="${st.touched ? P.ringW : P.edgeW}"/>`
+    + `<circle data-puck-face="" cx="${cx}" cy="${cy}" r="${P.face}" `
+    + `fill="${esc(st.disabled ? c.cap : c.edge)}" stroke="none"/>`
     + `<ellipse data-puck-sheen="" class="opacity-hw-sheen" cx="${num(cx + P.sheen.dx)}" `
     + `cy="${num(cy + P.sheen.dy)}" rx="${P.sheen.rx}" ry="${P.sheen.ry}" `
-    + `fill="${esc(t.control.capHi)}" stroke="none"/>`
+    + `fill="${esc(t.text.value)}" stroke="none"/>`
     + `<path data-notch="" d="M ${num(cx - P.notch)} ${cy} L ${num(cx + P.notch)} ${cy} `
     + `M ${cx} ${num(cy - P.notch)} L ${cx} ${num(cy + P.notch)}" fill="none" `
-    + `stroke="${esc(st.disabled ? t.control.disabled : t.control.pointer)}" `
+    + `stroke="${esc(st.disabled ? c.disabled : c.pointer)}" `
     + `stroke-width="${P.notchW}" stroke-linecap="butt"/>`
     + (st.focus === 'pad' ? `<rect data-focus="" x="${num(pad.x - f)}" y="${num(pad.y - f)}" `
       + `width="${num(pad.width + 2 * f)}" height="${num(pad.height + 2 * f)}" `
@@ -290,7 +326,7 @@ function faderGroup(axis, value, p, L, t, zoom, st, format) {
   return `<g data-xy-axis="${axis}" transform="translate(${f.at.x} ${f.at.y})"${attrs} `
     + `tabindex="0" aria-label="${esc(`${axis.toUpperCase()}: ${labelOf(p)}`)}" `
     + `aria-orientation="${f.orientation}"${st.disabled ? ' aria-disabled="true"' : ''}>`
-    + controlSvg({ kind: 'fader', value, param: p, tokens: t, zoom,
+    + controlSvg({ kind: 'fader', value, param: p, tokens: t, zoom, travel: f.travel,
       state: { focus: st.focus === axis, disabled: st.disabled }, orientation: f.orientation })
     + '</g>';
 }
@@ -326,7 +362,10 @@ export function xySvg({ x, y, gate, source, params, tokens, zoom = 1, size = XY.
     + `<g data-xy-pad=""${st.touched ? ' data-touched=""' : ''} aria-hidden="true" `
     + `pointer-events="none">${padShapes(L, nx, ny, params, tokens, st)}</g>`
     + `<rect data-hit="" data-xy-hit="pad" x="${h.x}" y="${h.y}" width="${h.width}" `
-    + `height="${h.height}" fill="none" stroke="none" pointer-events="all"/>`
+    + `height="${h.height}" fill="none" stroke="none" pointer-events="all" `
+    + `tabindex="${st.disabled ? -1 : 0}" role="application" aria-roledescription="XY pad" `
+    + `aria-label="${esc(name)}" aria-pressed="${gate}" aria-keyshortcuts="${KEYS}"`
+    + `${st.disabled ? ' aria-disabled="true"' : ''}/>`
     + faderGroup('x', x, px, L, tokens, zoom, st, format.x)
     + faderGroup('y', y, py, L, tokens, zoom, st, format.y)
     + led
