@@ -1454,7 +1454,7 @@ test('S8 labels: clearLabels raises the slack until the cable clears a label it 
     assert.deepEqual(CABLE.clearLabels(a, b, []).clear, true, 'no labels');
   });
 
-test('S8 labels: clearLabels reports a crossing more sag cannot clear, and keeps the slack', () => {
+test('S8 labels: clearLabels reports the crossings more sag cannot clear', () => {
   const a = { x: 0, y: 0 };
   const b = { x: 200, y: 0 };
   const under = { x: -10, y: 10, width: 20, height: 10 };
@@ -1465,8 +1465,10 @@ test('S8 labels: clearLabels reports a crossing more sag cannot clear, and keeps
     { slack: 0.31 }), clear: false, crossed: [0] }, 'its own jack\'s label, right under it');
   const many = CABLE.clearLabels(a, b, [far, under, lifted]);
   assert.equal(many.clear, false);
-  assert.deepEqual([...many.crossed], [1, 2], 'every label it crosses as drawn, by index');
-  assert.equal(many.slack, CABLE.CABLE_SLACK);
+  assert.deepEqual([...many.crossed], [1], 'only the label still crossed, by index (S8 fix)');
+  assert.ok(many.slack > CABLE.CABLE_SLACK, `raised off the label it can clear: ${many.slack}`);
+  assert.ok(Math.abs(cableSag(a, b, { slack: many.slack }) - many.sag) < 1e-6, 'its slack');
+  assert.ok(!touches(a, b, { slack: many.slack }, lifted, HALF), 'the lifted label is clear');
   const box = { x: 0, y: -100, width: 300, height: 162 };
   assert.ok(cableSag(a, b, { box }) >= 60, 'room for the rest sag');
   const boxed = CABLE.clearLabels(a, b, [lifted], { box });
@@ -1476,6 +1478,76 @@ test('S8 labels: clearLabels reports a crossing more sag cannot clear, and keeps
   assert.equal(roomy.clear, true, 'with room it clears');
   assert.ok(lowest(cableCurve(a, b, { slack: roomy.slack, box: { ...box, height: 300 } }))
     <= 200 + 1e-6);
+});
+
+test('S8 fix: clearLabels clears what it can when another label cannot be cleared', () => {
+  const a = { x: 0, y: 0 };
+  const b = { x: 200, y: 0 };
+  // The review's input: a label under the cable's own jack and one in the middle.
+  const own = { x: -10, y: 2, width: 20, height: 6 };
+  const mid = { x: 95, y: 55, width: 10, height: 10 };
+  const alone = CABLE.clearLabels(a, b, [mid]);
+  assert.equal(alone.clear, true);
+  const both = CABLE.clearLabels(a, b, [own, mid]);
+  assert.deepEqual([...both.crossed], [0], 'only its own jack\'s label is reported');
+  assert.equal(both.clear, false, 'clear means nothing crossed');
+  assert.equal(both.sag, alone.sag, 'raised as far as the middle label alone asks');
+  assert.ok(!touches(a, b, { slack: both.slack }, mid, HALF), 'the middle label is clear');
+  // Modelled on the bay: a label printed under each end's jack, and a module title below the
+  // middle that a deeper hang clears (W1b prints a jack's label 25 to 37 below the jack).
+  const ends = [{ x: -23, y: 25, width: 46, height: 12 }, { x: 177, y: 25, width: 46,
+    height: 12 }];
+  const title = { x: 70, y: 52, width: 60, height: 12 };
+  const bay = CABLE.clearLabels(a, b, [ends[0], title, ends[1]]);
+  assert.deepEqual([...bay.crossed], [0, 2], 'the end labels stay reported, the title does not');
+  assert.ok(bay.sag > cableSag(a, b), `a deeper hang: ${bay.sag}`);
+  assert.ok(!touches(a, b, { slack: bay.slack }, title, HALF), 'the title is clear');
+  // `skip` names the cable's own jacks' labels: they are not judged and not reported.
+  const skipped = CABLE.clearLabels(a, b, [ends[0], title, ends[1]], { skip: [0, 2] });
+  assert.deepEqual({ ...skipped, crossed: [...skipped.crossed] }, { ...bay, clear: true,
+    crossed: [] }, 'the same hang, and nothing crossed that was judged');
+  // The fewest crossed wins and the least sag on a tie: a label nothing clears keeps the rest.
+  const stuck = CABLE.clearLabels(a, b, [{ x: 0, y: 0, width: 200, height: 200 }]);
+  assert.equal(stuck.slack, CABLE.CABLE_SLACK, 'no sag crosses fewer: the slack as given');
+  for (const bad of [[3], [-1], [0.5], 'x', [null]]) {
+    assert.throws(() => CABLE.clearLabels(a, b, [title], { skip: bad }), /clearLabels: skip/,
+      JSON.stringify(bad));
+  }
+});
+
+test('S8 fix: an error from clearLabels or cableSvg names the function called', () => {
+  const b = { x: 200, y: 0 };
+  assert.throws(() => CABLE.clearLabels(null, b, []), /^TypeError: clearLabels: a and b need/);
+  assert.throws(() => cableSvg({ id: 'c', from: null, to: b, type: 'AUDIO', tokens: TOKENS,
+    plugs: true }), /^TypeError: cableSvg: a and b need/);
+  assert.throws(() => cableSvg({ id: 'c', from: null, to: b, type: 'AUDIO', tokens: TOKENS }),
+    /^TypeError: cableSvg: a and b need/);
+});
+
+test('S8 fix: clearLabels on a bay of 200 labels stays under a millisecond a cable', (t) => {
+  // A bay-like panel: 20 columns of 10 jacks, each with its label printed under it.
+  const labels = [];
+  const jacks = [];
+  for (let c = 0; c < 20; c++) {
+    for (let r = 0; r < 10; r++) {
+      const j = { x: 30 + c * 60, y: 30 + r * 70 };
+      jacks.push(j);
+      labels.push({ x: j.x - 23, y: j.y + 25, width: 46, height: 12 });
+    }
+  }
+  const pairs = Array.from({ length: 200 }, (_, i) => [jacks[(i * 37) % 200],
+    jacks[(i * 71 + 13) % 200]]).filter(([p, q]) => p !== q);
+  pairs.push([{ x: 0, y: 0 }, { x: 600, y: 0 }]);
+  const box = { x: 0, y: 0, width: 1260, height: 760 };
+  const run = () => {
+    const t0 = performance.now();
+    for (const [p, q] of pairs) CABLE.clearLabels(p, q, labels, { box });
+    return (performance.now() - t0) / pairs.length;
+  };
+  run();
+  const best = Math.min(...Array.from({ length: 5 }, run));
+  t.diagnostic(`clearLabels: best of 5 runs ${best.toFixed(3)} ms a cable (bound 1 ms)`);
+  assert.ok(best < 1, `${best.toFixed(3)} ms a cable`);
 });
 
 test('S8 labels: clearLabels is pure and refuses what it cannot judge', () => {
