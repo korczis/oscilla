@@ -90,6 +90,9 @@ accepted` lists them. The rest stay `proposed`, each for a stated reason:
 - 0086: new on 2026-11-03 (programs B and C): one notes array that the step grid, the piano roll
   and the beat machine edit; proposed, because accepting it is the owner's act, and nothing
   implements it yet (K099 builds the notes clip on it).
+- 0087: new on 2026-11-03 (plan issue V637, the owner's order of that day on the Studio graph
+  layout); proposed, because accepting it is the owner's act; V637 implements it (the Tidy, L,
+  in `src/js/ui/studio/graph-layout.js`).
 
 On 2026-10-28 the owner ordered Flowbite Pro for the UI of every project; ADR 0061 records
 that order as an accepted decision (its acceptance note quotes it) and supersedes the bullet of

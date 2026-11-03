@@ -332,6 +332,7 @@ evidence) are what the Studio's measurement records rely on.
 | [0048](../../.ai/repo/adrs/0048-connected-records-over-stored-fields.md) | Connected records come from stored fields only, and read present only when the identity verifies | accepted |
 | [0084](../../.ai/repo/adrs/0084-the-studio-timeline-carries-notes-clips-instrument-tracks-and-a-session-grid.md) | The Studio timeline carries notes clips with a piano roll, several instrument tracks, a session grid and later MIDI output (amends ADR 0058 decision 5) | accepted |
 | [0086](../../.ai/repo/adrs/0086-one-notes-array-the-step-grid-is-a-projection-of-the-notes-clip.md) | One notes array: the step grid, the piano roll and the beat machine edit the notes clip, on the one transport and scheduler | proposed |
+| [0087](../../.ai/repo/adrs/0087-the-studio-tidy-is-a-hand-written-layered-layout-with-a-gated-row-wrap.md) | The Studio Tidy (L) is a hand-written layered layout with a gated min-cut row wrap; no layout library enters dist | proposed |
 <!-- adrs:end -->
 
 ## Not built
