@@ -56,3 +56,68 @@ findings:
       state: planned
       issue: "P002"
       because: "The criteria now cite checks that fail before the work (test -s of the analysis, plan list showing Q004 DONE, tests/browser/first-screen.cjs), and P002 swaps the last to a claim (2026-10-18)."
+  # af's critique of the live-landing plan (chore/plan-live-landing @40e3a333, 2026-11-03);
+  # resolutions by the plan builder (oscilla-21)
+  - id: default-route-migration-unplanned
+    class: missed_requirement
+    subject: "P012"
+    finding: "Moving the empty hash from the Playground to the landing breaks every browser suite and visual reference that opens dist with no hash and expects the Playground (app.cjs, layout, qa-regressions, touch-audio, first-screen, iphone.cjs and its census baseline, the visual gate and npm run visual); P012's scope named only landing.cjs and surface-census.cjs."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "P012"
+      because: "P012 migrates every such suite, helper and visual script to #m=playground through one shared tests/browser/lib/start.cjs in the same slice, with tests/browser, tests/visual and the visual scripts in scope; the Playground's references stay byte-identical, the landing gets its own reference whose acceptance is the review (visual-identity-lock v3), and the iPhone census baseline is re-recorded and only shrinks; a unit check finds no other suite opening dist with no hash (2026-11-03)."
+  - id: which-model-the-hero-writes
+    class: unproven_assumption
+    subject: "P012"
+    finding: "Mounting the hero 'on the one StudioModel' did not say whether opening or tapping the landing edits the user's document, which would fire dirty state, history and the unsaved guard."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "P012"
+      because: "Option (a): the hero plays a shipped XY preset as an engine plan owned by 'landing' (an audition), compiled by the one compiler on the one engine, writing nothing to the document; 'Open in Synth' inserts it as one undoable edit; a criterion proves the document's JSON, studioHash, history length and dirty flag unchanged by opening, tapping and playing (2026-11-03)."
+  - id: iphone-first
+    class: insufficient_work
+    subject: "P012"
+    finding: "The first-tap criterion with Chromium's gesture rule proves Android only; the owner's device is the iPhone."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "P012"
+      because: "The criterion runs the same taps in iphone.cjs's WebKit iPhone 13 and iPhone SE phones (2026-11-03)."
+  - id: size-report-missing
+    class: missed_requirement
+    subject: "P012"
+    finding: "No size-report criterion with base and head figures against the 1.2 MB budget."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "P012"
+      because: "Added as an acceptance criterion (2026-11-03)."
+  - id: release-paths-restated
+    class: regression_risk
+    subject: "P012"
+    finding: "The hero's release paths come from K167; restating them lets the two diverge."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "P012"
+      because: "P012 cites K167's release criteria and runs them on the landing's hero instead of restating them (2026-11-03)."
+  - id: adr-0045-note-append-only
+    class: regression_risk
+    subject: "P012"
+    finding: "'A note on the default route' could be read as an edit of ADR 0045's decision text."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "P012"
+      because: "P012 appends a dated note to ADR 0045 and does not edit its decision text (2026-11-03)."
+  - id: chosen-before-evidence
+    class: delivery_verification
+    subject: "Q089"
+    finding: "first-screen-chosen judges Q089 DONE; it must not count as met from the plan PR before the owner_decision evidence is on main."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "Q089"
+      because: "Q089 states it is not DONE until its evidence is on main, and the criterion's command reads the derived DONE status, which only evidence on main produces (2026-11-03)."
