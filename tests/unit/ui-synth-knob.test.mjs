@@ -1407,7 +1407,8 @@ test('drag: a sweep with Shift pressed and released moves with the hand, never b
 
 test('drag: a horizontal fader follows x, right is more, and ignores y', () => {
   const ppr = pixelsPerRangeFor('fader', 2);
-  const a = CORE.dragAnchor(50, { x: 10, y: 5 }, { orientation: 'horizontal' });
+  const a = CORE.dragAnchor(50, { x: 10, y: 5 }, { orientation: 'horizontal',
+    kind: 'fader' });
   near(CORE.dragAt(a, { x: 10 + ppr / 4, y: 30 }, LIN, { pixelsPerRange: ppr }), 75);
   near(CORE.dragAt(a, { x: 10 - ppr / 4, y: -30 }, LIN, { pixelsPerRange: ppr }), 25);
   assert.equal(CORE.dragAt(a, { x: 10, y: 99 }, LIN, { pixelsPerRange: ppr }), 50);
@@ -1640,7 +1641,7 @@ test('fader: a press on the cap grabs it where it is; on the slot, a page toward
     assert.deepEqual(press(false, 30, 0, BOOL), { grab: false, value: true }, 'one option');
     // The grab is relative: the anchor at the press, and the value moves only with the hand.
     const ppr = pixelsPerRangeFor('fader', 1);
-    const a = CORE.dragAnchor(70, pt(cap(70) + 5, 4), { orientation });
+    const a = CORE.dragAnchor(70, pt(cap(70) + 5, 4), { orientation, kind: 'fader' });
     assert.equal(CORE.dragAt(a, pt(cap(70) + 5, 4), LIN, { pixelsPerRange: ppr }), 70,
       'grabbed off centre, it does not jump to the pointer');
     near(CORE.dragAt(a, pt(cap(70) + 5 + 6.4, 4), LIN, { pixelsPerRange: ppr }), 80, 1e-9);
@@ -1658,4 +1659,84 @@ test('feel.js is a pure core too: no DOM, no listener, only knob.js imported', (
   assert.deepEqual(colourLiterals(src), []);
   const knob = readFileSync(new URL('../../src/js/ui/synth/knob.js', import.meta.url), 'utf8');
   assert.doesNotMatch(knob, /from '\.\/feel\.js'/, 'one way: knob.js never imports feel.js');
+});
+
+// ---------------------------------------------------------------- feel, review of S3
+test('gestureOf: an idle tick or a notch without a time is refused, never an endless burst', () => {
+  const g = CORE.gestureOf(wh(0), null, { value: 50 }).gesture;
+  for (const e of [{ type: 'idle' }, { type: 'idle', timeStamp: NaN }, { type: 'wheel' }]) {
+    assert.throws(() => CORE.gestureOf(e, g, { value: 50 }), /timeStamp/, JSON.stringify(e));
+  }
+  assert.throws(() => CORE.gestureOf({ type: 'wheel' }, null, { value: 50 }), /timeStamp/);
+  assert.equal(CORE.gestureOf({ type: 'idle', timeStamp: 400 }, g).end, g);
+});
+
+test('gestureOf: a gesture begins only from a value, so Escape never restores undefined', () => {
+  for (const value of [undefined, null, NaN, Infinity, {}, '']) {
+    for (const e of [{ type: 'pointerdown', timeStamp: 0 }, wh(0), kd('ArrowUp', 0)]) {
+      assert.throws(() => CORE.gestureOf(e, null, { value }), /value/,
+        `${e.type} from ${String(value)}`);
+    }
+  }
+  assert.throws(() => CORE.gestureOf(wh(0), null), /value/, 'no options at all');
+  assert.equal(CORE.gestureOf(wh(0), null, { value: 'sine' }).begin.from, 'sine', 'an enum');
+  assert.equal(CORE.gestureOf(wh(0), null, { value: false }).begin.from, false, 'a boolean');
+  assert.equal(CORE.gestureOf(wh(0), null, { value: 0 }).begin.from, 0);
+});
+
+test('gestureOf: a press inside a live drag ends it and begins another (a lost pointerup)', () => {
+  const g = CORE.gestureOf({ type: 'pointerdown', timeStamp: 0 }, null, { value: 20 }).gesture;
+  const r = CORE.gestureOf({ type: 'pointerdown', timeStamp: 900 }, g, { value: 35 });
+  assert.equal(r.end, g, 'the old drag is one entry of its own');
+  assert.deepEqual([r.begin.kind, r.begin.from, r.gesture, r.cancel], ['drag', 35, r.begin,
+    false], 'the new drag starts from the value now, not the first press');
+  const lost = CORE.gestureOf({ type: 'lostpointercapture', timeStamp: 5 }, g);
+  assert.deepEqual([lost.end, lost.gesture, lost.cancel], [g, null, false],
+    'a lost capture ends the drag as pointercancel does');
+  assert.deepEqual(CORE.gestureOf({ type: 'lostpointercapture', timeStamp: 6 }, null),
+    { begin: null, end: null, cancel: false, gesture: null }, 'after pointerup: nothing');
+});
+
+test('gestureOf: a fresh press of the same key after a lost keyup is a new gesture', () => {
+  const g = CORE.gestureOf(kd('ArrowUp', 0), null, { value: 50 }).gesture;
+  const r = CORE.gestureOf(kd('ArrowUp', 5000, false), g, { value: 58 });
+  assert.equal(r.end, g, 'the old run ends');
+  assert.deepEqual([r.begin.kind, r.begin.key, r.begin.from], ['keys', 'ArrowUp', 58]);
+  const held = CORE.gestureOf(kd('ArrowUp', 30, true), g, { value: 51 });
+  assert.deepEqual([held.begin, held.end, held.gesture.from], [null, null, 50], 'a repeat');
+});
+
+test('dragAnchor: a horizontal drag is a fader\'s alone; the anchor knows its kind', () => {
+  for (const kind of ['knob', 'switch']) {
+    assert.throws(() => CORE.dragAnchor(50, { x: 0, y: 0 }, { kind, orientation: 'horizontal' }),
+      /orientation/, kind);
+    assert.equal(CORE.dragAnchor(50, { x: 0, y: 0 }, { kind }).kind, kind);
+  }
+  assert.throws(() => CORE.dragAnchor(50, { x: 0, y: 0 }, { orientation: 'horizontal' }),
+    /orientation/, 'the kind defaults to a knob, so a turned drag names its fader');
+  assert.throws(() => CORE.dragAnchor(50, { x: 0, y: 0 }, { kind: 'slider' }), /kind/);
+  const a = CORE.dragAnchor(50, { x: 0, y: 0 }, { kind: 'fader', orientation: 'horizontal' });
+  const b = CORE.reanchorDrag(a, { value: 50, x: 0, y: 0, fine: true });
+  assert.deepEqual([b.kind, b.orientation], ['fader', 'horizontal'], 'a re-anchor keeps both');
+});
+
+test('wheel: on every registry range a notch moves at least 1 % (Shift 0.1 %)', () => {
+  const short = [];
+  for (const { where, p } of REGISTRY_NUMBERS) {
+    const identifier = p.type === 'integer' && (p.max - p.min) / (p.step || 1) > 1e4;
+    if (identifier) continue;
+    for (const fine of [false, true]) {
+      const floor = CORE.WHEEL_STEP / (fine ? 10 : 1);
+      for (let i = 1; i < 40; i++) {
+        const v0 = quantize(fromNorm(i / 40, p), p, { fine });
+        for (const [dy, dir] of [[-WHEEL_NOTCH_PX, 1], [WHEEL_NOTCH_PX, -1]]) {
+          const v = wheelValue(v0, dy, p, { fine }).value;
+          const moved = (toNorm(v, p) - toNorm(v0, p)) * dir;
+          const atEnd = toNorm(v, p) === (dir > 0 ? 1 : 0);
+          if (!atEnd && moved < floor - 1e-9) short.push(`${where} ${fine ? 'fine' : ''} ${v0}`);
+        }
+      }
+    }
+  }
+  assert.deepEqual(short.slice(0, 8), [], `${short.length} notches under the floor`);
 });

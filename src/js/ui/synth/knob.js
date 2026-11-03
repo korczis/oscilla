@@ -9,10 +9,8 @@
 // N003's controlAttrs shape (aria-valuenow a 0..1000 position). Colours are tokens passed in
 // (tokens.js; project.visual-identity-lock v3) and no number sets an opacity, alpha or shadow
 // (v4): the cap highlight is class opacity-hw-sheen, the cap shadow opacity-hw-shadow.
-// The feel (plan S3) is feel.js: drag anchors that re-anchor when Shift changes, the fader
-// press, one gesture (one undo entry) per held key, wheel burst or drag, and Escape's cancel.
-// Here: a wheel notch is WHEEL_STEP, 1 % of the norm range (Shift 0.1 %), with the carried
-// rest; a fader turns horizontal (orientation, controlBox) with a 28 × 14 cap (FADER_CAP).
+// The feel (plan S3: drag, fader press, gestures, Escape) is feel.js; here a wheel notch is at
+// least WHEEL_STEP (1 %, Shift 0.1 %) and a fader turns horizontal with a 28 × 14 cap.
 //
 //   clampValue, toNorm, fromNorm, quantize, defaultValue, stepOption   value mapping
 //   dragValue, pixelsPerRangeFor, wheelValue, knobKey                  gestures -> the next value
@@ -45,8 +43,8 @@ const WHEEL_TURN_PX = 4;
 /** A stepless linear range moves 1/KEY_DIVS of itself per key; PageUp/PageDown PAGE_STEPS. */
 const KEY_DIVS = 100;
 const PAGE_STEPS = 10;
-/** A wheel notch: 1 % of the norm range (Shift: 0.1 %), or one step where the grid is coarser;
- *  an integer range of over WHEEL_FLOOR_MAX_STEPS steps (a seed, an identifier) steps by one. */
+/** A wheel notch: at least 1 % of the norm range (Shift 0.1 %), or one step on a coarser grid
+ *  or an integer range of over WHEEL_FLOOR_MAX_STEPS steps (a seed). */
 export const WHEEL_STEP = 0.01;
 const WHEEL_FLOOR_MAX_STEPS = 1e4;
 /** A switch draws at most this many positions; more options are a knob (a rotary selector). */
@@ -261,9 +259,9 @@ function orientationOf(o = 'vertical', kind = 'fader') {
  * deltaY < 0, increases), so a 3-line detent is one and fractional lines accumulate. The rest is
  * dropped on a turn back of WHEEL_TURN_PX or more (less is jitter and only subtracts) and at an
  * end stop, so the first notch back moves. Under a notch the value comes back only clamped. A
- * notch is a key step but at least WHEEL_STEP of the norm range (fine a tenth), except on an
- * integer range of over 10 000 steps (a seed: one notch, one step); a choice moves an option.
- * The arrow keys are exempt: the precise path, PageUp/PageDown the coarse one.
+ * notch is a key step, at least WHEEL_STEP of the norm range (fine a tenth; the grid point past
+ * it if the nearest is short), but one step on an integer range of over 10 000 steps (a seed);
+ * a choice moves an option. The arrow keys are exempt: the precise path.
  */
 export function wheelValue(value, deltaY, p, { fine = false, deltaMode = 0, rest = 0 } = {}) {
   const scale = deltaMode === 1 ? WHEEL_LINE_PX : (deltaMode === 2 ? WHEEL_NOTCH_PX : 1);
@@ -273,8 +271,7 @@ export function wheelValue(value, deltaY, p, { fine = false, deltaMode = 0, rest
     carried = 0;
   }
   const px = d + carried;
-  // Fractions of a line (100/3 px) accumulate with float error: a sum within 1e-9 of a notch
-  // is that notch, and a rest within 1e-9 of nothing is nothing.
+  // Lines of 100/3 px sum with float error: within 1e-9 of a notch is one, of nothing none.
   const n = px / WHEEL_NOTCH_PX;
   const notches = Math.trunc(n + Math.sign(n) * 1e-9);
   const raw = px - notches * WHEEL_NOTCH_PX;
@@ -292,8 +289,12 @@ export function wheelValue(value, deltaY, p, { fine = false, deltaMode = 0, rest
     && (max - min) / (quantumOf(p, false) || 1) > WHEEL_FLOOR_MAX_STEPS;
   const floor = WHEEL_STEP / (fine ? FINE_DIV : 1);
   const n0 = toNorm(v0, p);
-  if (!identifier && Math.abs(toNorm(next, p) - n0) < Math.abs(steps) * floor - 1e-12) {
+  const short = (v) => Math.abs(toNorm(v, p) - n0) < Math.abs(steps) * floor - 1e-12;
+  if (!identifier && short(next)) {
     next = quantize(fromNorm(n0 + steps * floor, p), p, { fine });
+    for (let i = 0; i < 4 && short(next) && !held(next); i++) {
+      next = quantize(next + Math.sign(steps) * quantumAt(next, p, fine), p, { fine });
+    }
   }
   return out(next);
 }
