@@ -78,9 +78,18 @@ export function createGestures({ controlOf, valueOf, setControl, handle, say, la
     if (!x) return false;
     e.preventDefault();
     const opts = x.c.param.options;
-    const dir = e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 1;
-    setControl(o.dataset.option, e.key === 'Home' ? opts[0][0]
-      : e.key === 'End' ? opts[opts.length - 1][0] : stepOption(x.c.param, valueOf(x), dir));
+    // A toggle and a slide draw option 0 at the bottom and their radios run top to bottom
+    // (view/face.js), so the keys move as drawn (review of W1c, finding 1): ArrowUp +1,
+    // ArrowDown -1, Home and End the first and last radio in DOM order.
+    const style = o.closest('svg[role="radiogroup"]')?.dataset.style;
+    const drawn = style === 'toggle' || style === 'slide';
+    const radios = drawn && [...o.closest('svg').querySelectorAll(
+      `[data-option="${o.dataset.option}"]`)];
+    const at = (r) => opts.find((p) => String(p[0]) === r.dataset.v)[0];
+    const dir = e.key === 'ArrowLeft' || e.key === (drawn ? 'ArrowDown' : 'ArrowUp') ? -1 : 1;
+    setControl(o.dataset.option, e.key === 'Home' ? (drawn ? at(radios[0]) : opts[0][0])
+      : e.key === 'End' ? (drawn ? at(radios[radios.length - 1]) : opts[opts.length - 1][0])
+        : stepOption(x.c.param, valueOf(x), dir));
     const again = host && host.querySelector(`[data-option="${o.dataset.option}"]`
       + '[aria-checked="true"]');
     if (again) again.focus({ preventScroll: true });
