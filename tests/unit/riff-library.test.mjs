@@ -222,22 +222,44 @@ test('a riff auditions as one finite steps plan through the guarded engine', asy
   assert.ok(Math.abs(au.auditionPlan(riff, { tempo: riff.tempo * 2 }).dur - plan.dur / 2) < 1e-9);
   const log = [];
   let refuse = false;
-  const engine = { play: (p, o) => {
-    log.push(['play', p.type]);
-    // the engine derives each step's envelope from these: absent, it computes NaN and throws
-    assert.ok(o.attackS > 0 && o.releaseS > 0 && o.limitS >= p.dur && o.mode === 'trigger');
-    return refuse ? null : { ok: true };
-  },
+  let listener = null;
+  let seq = 0;
+  const engine = { on: (fn) => { listener = fn; return () => {}; },
+    play: (p, o) => {
+      log.push(['play', p.type]);
+      // the engine derives each step's envelope from these: absent, it computes NaN and throws
+      assert.ok(o.attackS > 0 && o.releaseS > 0 && o.limitS >= p.dur && o.mode === 'trigger');
+    assert.equal(o.owner, 'audition', 'marked, so the instrument does not rebuild it');
+      if (refuse) return null;
+      seq += 1;
+      return { id: seq };
+    },
     stopAll: () => log.push(['stopAll']) };
-  let clock = 0;
-  const a = au.createRiffAudition({ engine, stopOthers: () => log.push(['others']),
-    now: () => clock });
-  assert.deepEqual(a.start('mirrorball-octaves'), { ok: true, ms: Math.ceil(plan.dur * 1000) });
+  const a = au.createRiffAudition({ engine, stopOthers: () => log.push(['others']) });
+  let ended = 0;
+  assert.deepEqual(a.start('mirrorball-octaves', undefined, { onEnd: () => { ended++; } }),
+    { ok: true });
   assert.equal(a.playing, 'mirrorball-octaves');
-  clock = plan.dur * 1000 + 1;
-  assert.equal(a.playing, null, 'the audition ends with its plan');
+  // It lasts as long as its voice, never by the clock: another owner's stop ends it at once.
+  listener('release', { id: 99, natural: false });
+  assert.equal(a.playing, 'mirrorball-octaves', 'another voice released: still playing');
+  // The engine replaces the voice with the same plan (re-applied options): it follows it.
+  engine.voice = { id: seq + 10, plan: { label: 'Riff Mirrorball Octaves' } };
+  listener('play', { id: seq + 10 });
+  assert.equal(a.playing, 'mirrorball-octaves', 'a replacement of the same plan carries it');
+  listener('release', { id: seq, natural: false });
+  assert.equal(a.playing, 'mirrorball-octaves', 'the replaced voice no longer counts');
+  listener('release', { id: seq + 10, natural: false });
+  assert.equal(a.playing, null, 'its voice released: ended at once');
+  engine.voice = null;
+  assert.equal(ended, 1);
   assert.equal(a.stop(), false);
-  clock = 0;
+  a.start('mirrorball-octaves');
+  listener('play', { id: seq + 1 });
+  assert.equal(a.playing, null, 'another voice took the output');
+  a.start('mirrorball-octaves');
+  listener('context', 'closed');
+  assert.equal(a.playing, null, 'the context closed');
   a.start('mirrorball-octaves');
   log.length = 0;
   log.push(['others'], ['play', 'steps']);

@@ -18,8 +18,8 @@
 // CLIP_RESIZE, AUTOMATION_POINT_ADD, AUTOMATION_POINT_MOVE, AUTOMATION_POINT_REMOVE, MARKER_ADD,
 // MARKER_REMOVE, LOOP_SET, TRANSPORT_SET, METADATA_SET, PASTE, DUPLICATE, BATCH { label, steps }
 // (K061: one entry, one gate call; NODE_ADD, EDGE_ADD and TRACK_ADD (K149) may name an unused
-// id, NODE_ADD a
-// metadata.panel { id, module }, which PASTE, DUPLICATE and PATCH_INSERT drop); timeline additions
+// id, NODE_ADD a metadata.panel { id, module }, which PASTE, DUPLICATE and PATCH_INSERT drop);
+// timeline additions
 // (V416-V420): CLIP_UPDATE, CLIP_SET_TIME_BASE, MARKER_MOVE; patch additions (V426, patches.js):
 // PATCH_INSERT { patch, at?, route? } ("Insert <name>") and PATCH_REPLACE { patch, at? } ("Replace
 // graph with <name>"), the explicit insert-or-replace intent of §114; PATCH_REPLACE { patch,

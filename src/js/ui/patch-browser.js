@@ -75,11 +75,11 @@ export function mountPatchBrowser(host, svc) {
     text: all }), ...items.map((x) => h('option', { value: x.id, text: `${x.label || x.id} (${
     x.count})`, selected: x.id === value }))]);
 
-  // A riff entry auditions (studio/riffs/audition.js): Listen, then Stop; it also ends when
-  // the riff ends, on any load and when the dialog closes, and is never saved.
+  // A riff entry auditions (studio/riffs/audition.js): Listen, then Stop; it also ends when its
+  // engine voice ends (the riff's end, a stop from any owner), on any load and when the dialog
+  // closes, and is never saved.
   let heard = null;
-  let ends = 0;
-  const hush = () => { if (heard) heard.ctl.stop(); heard = null; clearTimeout(ends); };
+  const hush = () => { if (heard) heard.ctl.stop(); heard = null; };
   function listen(item) {
     const a = item.audition;
     if (a.ctl.playing === a.id) {
@@ -87,10 +87,11 @@ export function mountPatchBrowser(host, svc) {
       status.textContent = `Stopped ${item.name}.`;
     } else {
       hush();
-      const r = a.ctl.start(a.id);
+      // It ends with its engine voice (audition.js): the button follows the sound.
+      const r = a.ctl.start(a.id, undefined, { onEnd: () => { heard = null; render(); } });
       status.textContent = r.ok ? `Listening: ${item.name}.` : r.reason;
       svc.announce(status.textContent, { assertive: !r.ok });
-      if (r.ok) { heard = a; ends = setTimeout(() => { heard = null; render(); }, r.ms + 50); }
+      if (r.ok) heard = a;
     }
     render();
   }

@@ -8,17 +8,19 @@
 // a tenth of its length as a gap, so repeated pitches are heard as separate notes.
 //
 //   auditionPlan(riff, { tempo = riff.tempo, transpose = 0 }) -> the engine's steps plan
-//   createRiffAudition({ engine, stopOthers, measuring, now }) -> { start(id, opts) -> { ok, ms } |
-//     { ok: false, reason }, stop() -> bool, playing: the riff id until it ends | null }
+//   createRiffAudition({ engine, stopOthers, measuring }) -> { start(id, opts, { onEnd }) ->
+//     { ok } | { ok: false, reason }, stop() -> bool, playing: the riff id while its engine
+//     voice sounds | null }
 
 import { midiOf, noteHz } from '../templates/demo-song-score.js';
 import { BAR_STEPS, riffOf } from './library.js';
 
 const GATE = 0.9;
 /** The instrument's play options for a programmed plan (core/instrument.js): one trigger of the
- *  whole riff, a short attack and release on each step. */
+ *  whole riff, a short attack and release on each step, and the owner mark the instrument reads
+ *  so its live update never rebuilds the riff into its own plan (instrument.js syncViz). */
 export const AUDITION_OPTIONS = Object.freeze({ mode: 'trigger', attackS: 0.005,
-  releaseS: 0.02 });
+  releaseS: 0.02, owner: 'audition' });
 
 export function auditionPlan(riff, { tempo = riff.tempo, transpose = 0 } = {}) {
   const step = 60 / tempo * 4 / BAR_STEPS;
@@ -30,11 +32,41 @@ export function auditionPlan(riff, { tempo = riff.tempo, transpose = 0 } = {}) {
 }
 
 export function createRiffAudition({ engine = null, stopOthers = () => {},
-  measuring = () => false, now = () => Date.now() } = {}) {
+  measuring = () => false } = {}) {
   let playing = null;
-  let until = 0;
+  let voice = null;
+  let label = null;
+  let onEnd = null;
+  // The audition lasts as long as its engine voice, never by the clock: it ends when the engine
+  // releases or ends that voice (its natural end, a stop from any owner, a hidden page) or starts
+  // a voice of another plan over it, or the context closes. A replacement of the same plan (the
+  // engine re-applying play options) carries the audition to the new voice.
+  const current = () => (engine && engine.voice && engine.voice.plan
+    && engine.voice.plan.label === label ? engine.voice.id : null);
+  const end = () => {
+    if (!playing) return;
+    playing = null;
+    voice = null;
+    label = null;
+    const fn = onEnd;
+    onEnd = null;
+    if (fn) fn();
+  };
+  if (engine && typeof engine.on === 'function') {
+    engine.on((type, d) => {
+      if (!playing) return;
+      if (type === 'play' && d && d.id !== voice) {
+        if (current() === d.id) voice = d.id;
+        else end();
+      } else if (((type === 'release' || type === 'ended') && d && d.id === voice)
+        || (type === 'context' && d === 'closed')) {
+        end();
+      }
+    });
+  }
   return {
-    start(id, opts) {
+    /** start(id, opts, { onEnd }) -> { ok } | { ok: false, reason }; onEnd runs once it ends. */
+    start(id, opts, hooks = {}) {
       const riff = riffOf(id);
       if (!riff) return { ok: false, reason: `No riff "${String(id)}" in the library.` };
       if (!engine || typeof engine.play !== 'function') {
@@ -44,19 +76,26 @@ export function createRiffAudition({ engine = null, stopOthers = () => {},
         return { ok: false, reason: 'A measurement is running: the riff plays after it.' };
       }
       stopOthers();
+      end();
       const plan = auditionPlan(riff, opts);
-      playing = engine.play(plan, { ...AUDITION_OPTIONS, durationS: plan.dur,
-        limitS: plan.dur }) ? riff.id : null;
-      until = now() + plan.dur * 1000;
-      return playing ? { ok: true, ms: Math.ceil(plan.dur * 1000) } : { ok: false,
-        reason: 'The riff cannot play now: a measurement owns the output, or audio is off.' };
+      const info = engine.play(plan, { ...AUDITION_OPTIONS, durationS: plan.dur,
+        limitS: plan.dur });
+      if (!info) {
+        return { ok: false, reason: 'The riff cannot play now: a measurement owns the output, '
+          + 'or audio is off.' };
+      }
+      playing = riff.id;
+      label = plan.label;
+      voice = current() || info.id;
+      onEnd = typeof hooks.onEnd === 'function' ? hooks.onEnd : null;
+      return { ok: true };
     },
     stop() {
-      if (!this.playing) return false;
-      playing = null;
+      if (!playing) return false;
+      end();
       engine.stopAll();
       return true;
     },
-    get playing() { return playing && now() < until ? playing : null; },
+    get playing() { return playing; },
   };
 }
