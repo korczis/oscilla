@@ -1,0 +1,21 @@
+id: Q087
+milestone: M121
+title: "Owner decision: whether musical-practice has any game element at all"
+slug: owner-decision-whether-musical-practice-has-any-game-element
+priority: p2
+profile: routine
+owner: "repository owner"
+objective: "The proposal admits none by default: 'Do not add generic points, badges, streaks, hearts, leaderboards, or celebratory UI unless an accepted product decision defines their purpose and real data model', and the layer must not 'turn the whole product into a casual game'. Is any game element wanted: (a) none, the practice layer shows measured results and progression only; or (b) a named element, with the purpose and the real data model the owner's decision defines?"
+why: "The owner's proposal 'Interactive learning and musical practice' (pasted into the af session at 2026-11-03T01:34Z, marked 'Status: PROPOSAL') is recorded as the proposed intent musical-practice, which names no milestone and no criterion; .ai/repo/project/README.md: only the owner, or a session the owner delegated to, answers a Q issue."
+current_state: "Answered by the owner on 2026-11-03 (~19:3xZ, AskUserQuestion in the oscilla-af session): 'None'. Only measured results (timing and pitch errors, missed and extra notes) and the progression to the next exercise; no points, streaks or badges. The owner_decision evidence is recorded once this plan is on main."
+scope:
+  - ".ai/repo/project/issues/Q087.yaml"
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision), either in the owner's words with date and source, or as a decision of a coordinating session under an owner delegation it quotes with its date, stating its reasoning and that the owner may override it; a worker without such a delegation never answers it."
+  - "The answer names (a) or (b); for (b) it names each element, its purpose and the data it is derived from."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-11-03
+updated_at: 2026-11-03

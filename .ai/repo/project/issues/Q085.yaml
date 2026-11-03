@@ -1,0 +1,21 @@
+id: Q085
+milestone: M121
+title: "Owner decision: the grading tolerances of musical-practice, a timing window in milliseconds and a pitch tolerance in cents"
+slug: owner-decision-the-grading-tolerances-of-musical-practice
+priority: p2
+profile: routine
+owner: "repository owner"
+objective: "An attempt grades each played event against its expected event by its onset error in milliseconds and its pitch error in cents (the intent musical-practice). What timing window and what pitch tolerance count as a match: one pair for every exercise, a pair per exercise type or per input source, or a pair each exercise declares within bounds the owner names; and may the learner change them? The proposal requires 'explicit, documented criteria, such as the expected event, timing window, tolerance, and input source' and makes tolerances configurable 'only when the underlying exercise and grading model support them'. Whatever the answer, a microphone tolerance tighter than the uncertainty the existing estimator reports for that event cannot be graded and is shown as such (the intent's input-source invariant)."
+why: "The owner's proposal 'Interactive learning and musical practice' (pasted into the af session at 2026-11-03T01:34Z, marked 'Status: PROPOSAL') is recorded as the proposed intent musical-practice, which names no milestone and no criterion; .ai/repo/project/README.md: only the owner, or a session the owner delegated to, answers a Q issue."
+current_state: "Answered by the owner on 2026-11-03 (~19:3xZ, AskUserQuestion in the oscilla-af session): 'Per exercise, bounded'. Each exercise declares its own timing window in milliseconds and pitch tolerance in cents, within bounds the owner sets once. The figures in the option text (timing 30-150 ms, pitch 10-50 cents) were af's examples, not decided: the bounds themselves stay open, to be proposed by the first exercise slice for the owner's acceptance. The owner_decision evidence is recorded once this plan is on main."
+scope:
+  - ".ai/repo/project/issues/Q085.yaml"
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision), either in the owner's words with date and source, or as a decision of a coordinating session under an owner delegation it quotes with its date, stating its reasoning and that the owner may override it; a worker without such a delegation never answers it."
+  - "The answer names the timing window in milliseconds and the pitch tolerance in cents (or who declares them and within which bounds), whether they differ by input source, and whether the learner may change them."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-11-03
+updated_at: 2026-11-03
