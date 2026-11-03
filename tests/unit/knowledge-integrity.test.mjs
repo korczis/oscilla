@@ -1124,6 +1124,9 @@ const ADR_NOT_A_CAPABILITY = new Map([
   ['0085', 'an accepted decision (song-reconstruction critique, finding'
     + ' lineage-and-acceptance-have-no-home): where reconstruction lineage and acceptance live;'
     + ' nothing implements it yet, and the first issue of that intent cites it when it ships'],
+  ['0086', 'a proposed decision (programs B and C): one notes array edited by the step grid, the'
+    + ' piano roll and the beat machine; nothing implements it yet, and K099\'s claim cites it'
+    + ' when the notes clip kind ships, and this entry then fails as stale'],
 ]);
 
 /** ADR numbers (from 0011 on) that `corpus` never cites, and exemptions it does cite. */
