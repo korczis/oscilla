@@ -1,0 +1,32 @@
+# Review verdict for pull request #398, SYN "the Synth's visual reference" (branch
+# feat/synth-visual-reference; builder p2, prismatic-majordomus-98). Reviewed head edce5037
+# against origin/main c73d27b4. The reviewer (dev-53) built none of it.
+#
+# The digest is scripts/review-verdict.mjs --content --list --head edce5037 --base-branch
+# origin/main, run from a checkout of main's scripts: 6403718c...f7de over 1 guarded path
+# (.github/workflows/ci.yml).
+#
+# Checked:
+# - ci.yml: the visual job's step is renamed to name SYN beside MEASURE and STUDIO and keeps its
+#   timeout-minutes: 8; the failure upload adds tests/visual/out-synth/ beside the other three
+#   out- directories, retention unchanged. Nothing else in the workflow moves: no new job, no
+#   network step, no unpinned action (project.ci-bounded).
+# - package.json: test:visual appends `node scripts/visual-synth.mjs dist` after visual-studio,
+#   so the step runs four scripts under the same bound; the release gate (test:release) gains it
+#   through test:visual.
+# - scripts/visual-synth.mjs waits only through waitForSelector / waitForFunction with the named
+#   LOAD_MS bound, no fixed sleep; the bay views fail closed unless all 12 cable ends hit-test,
+#   and the phone tab views fail closed under the dock (b0's phone-whole ruling).
+# - dist/index.html differs from main only by its sourceDigest (package.json is in the digest).
+# - The branch contains main (c73d27b4).
+#
+# Open: F1, the step's wall time on linux is not yet measured with SYN in it; the builder raises
+# timeout-minutes in this PR with the measured time in the body if #398's CI visual job takes
+# more than about 5 minutes.
+schema: review-verdict/v1
+pr: 398
+verdict: merge
+reviewer: dev-53 (claude-code 4fba4ca0)
+content: 6403718ce14c7a6b3e23991fea3db2183674673dd220dc3cbd8815d91482f7de
+findings:
+  - { id: F1, severity: P3, status: open, title: "the visual step now runs four scripts under timeout-minutes 8 (ci.yml:310-312); measure the linux wall time of npm run test:visual in this PR's CI and raise the bound with the number in the body if it exceeds about 5 minutes" }
