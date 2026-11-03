@@ -25,9 +25,10 @@
 //   firstCompatibleInput(def, sourcePort) -> port | null
 //   compiledStatus(plan) -> Map nodeId -> { status, code, reason }   (code: compiler.js)
 //   runtimeStatus(model, runtime, revision?) -> { nodes: Map, edges: Map }   what the running
-//     graph plays, judged by runtime.js studioDivergence; a `not-in-runtime` status says why by
-//     the verdict's state (notInRuntimeText) and, when refused, carries the diagnostic's
-//     `cause: { node | edge, code }` (divergenceCause)
+//     graph plays, judged by runtime.js studioDivergence; a `not-in-runtime` status
+//     says why by the verdict's state (notInRuntimeText) and, when refused, carries the
+//     diagnostic's `cause: { node | edge, code }` (divergenceCause); armed and current, what the
+//     live model leaves out is `outside-live` (OUTSIDE_LIVE_TEXT), never an error
 //
 // INVARIANT: probeConnection asks the same validator the store uses (validateStudioModel on the
 // model plus the candidate edge), so the live feedback of a cable drag and the store's verdict
@@ -39,6 +40,7 @@ import { PORT_VISUALS, canConnect, validateEdgeProps } from '../../studio/ports.
 import { validateStudioModel } from '../../studio/validate.js';
 import { describeEdge, describeNode, describePortLabel } from '../../studio/a11y.js';
 import { studioDivergence } from '../../studio/runtime.js';
+import { liveModel } from '../../studio/live-notes.js';
 
 /** Short category labels on node cards (text, never colour alone, §32, §167). */
 export const CATEGORY_LABELS = Object.freeze({
@@ -54,7 +56,16 @@ export const CATEGORY_LABELS = Object.freeze({
 export const STATUS_LABELS = Object.freeze({
   degraded: 'Unavailable',
   'offline-only': 'Offline only',
+  'outside-live': 'Not in the armed chain',
 });
+
+/**
+ * Reason of a node or cable the ARMED live model leaves out (live-notes.js liveModel keeps what a
+ * cable joins to a note source, and the master): it is not broken, nothing plays it until Play.
+ */
+export const OUTSIDE_LIVE_TEXT = 'Not in the armed chain: armed, only what a cable joins to a '
+  + 'note source (Keys, MIDI, a sequencer) plays, and this is not joined to one. Play plays the '
+  + 'whole graph.';
 
 const nodeById = (model, id) => model.graph.nodes.find((n) => n.id === id) || null;
 
@@ -161,6 +172,17 @@ export function notInRuntimeText(verdict, model = null) {
 }
 
 /**
+ * True when the runtime's plan was compiled from liveModel(model) (an armed run, transport.js
+ * view) rather than the whole model: the live model is smaller and the plan holds its nodes.
+ */
+function playsLiveModel(model, plan) {
+  const ids = plan.model ? plan.model.graph.nodes : null;
+  const live = liveModel(model).graph.nodes;
+  return !!ids && live.length < model.graph.nodes.length && live.length === ids.length
+    && live.every((n, i) => n.id === ids[i].id);
+}
+
+/**
  * Node and edge status from the RUNNING Studio runtime (runtime.js: plan, nodes, edges,
  * lastError), the same shape as compiledStatus / compiledEdgeStatus (V431 review #15). A node
  * shows its live handle's status (a Microphone waiting for permission, a builder that degraded
@@ -170,6 +192,9 @@ export function notInRuntimeText(verdict, model = null) {
  * `inactive` with code `not-in-runtime` and the reason, so a graph that is not playing never
  * looks live. The reason is the verdict's state in words (notInRuntimeText), and a refused one
  * adds `cause` (divergenceCause: the node or edge the runtime's diagnostic names, and its code).
+ * Armed (transport.js plays liveModel), the plan is the live model of this one, which leaves out
+ * on purpose what no cable joins to a note source (playsLiveModel); while current, such a node
+ * is `outside-live` and its cables `inactive`, both with code `outside-live`, never `degraded`.
  */
 export function runtimeStatus(model, runtime, revision = null) {
   const plan = runtime.plan;
@@ -185,8 +210,16 @@ export function runtimeStatus(model, runtime, revision = null) {
     ? new Map(plan.model.graph.edges.map((e) => [e.id, e])) : null;
   const nodes = new Map();
   const stale = new Set();
+  const outside = new Set(); // armed and current: left out of the live model on purpose
+  let armed = null; // computed at the first node the plan lacks
+  const outsideLive = (status) => ({ status, code: 'outside-live', reason: OUTSIDE_LIVE_TEXT });
   for (const node of model.graph.nodes) {
     const pn = plan.nodes.get(node.id);
+    if (!pn && current && (armed === null ? (armed = playsLiveModel(model, plan)) : armed)) {
+      outside.add(node.id);
+      nodes.set(node.id, outsideLive('outside-live'));
+      continue;
+    }
     if (!pn || (!current && (pn.type !== node.type || pn.params !== node.params))) {
       stale.add(node.id);
       nodes.set(node.id, notIn('degraded'));
@@ -199,6 +232,10 @@ export function runtimeStatus(model, runtime, revision = null) {
   const edges = new Map();
   for (const e of model.graph.edges) {
     const pe = plan.edges.get(e.id);
+    if (!pe && (outside.has(e.from.node) || outside.has(e.to.node))) {
+      edges.set(e.id, outsideLive('inactive'));
+      continue;
+    }
     if (!pe || stale.has(e.from.node) || stale.has(e.to.node)
       || (planEdges && planEdges.get(e.id) !== e)) {
       edges.set(e.id, notIn('inactive'));

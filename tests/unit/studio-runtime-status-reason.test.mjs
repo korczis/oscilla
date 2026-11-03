@@ -4,7 +4,8 @@
 // and 'not-applied' too, quoted an old unrelated runtime.lastError for 'behind', and for
 // 'refused' dropped the diagnostic's node or edge and its code (and all of it without a
 // message). The status now names the runtime's diagnostic (message, entity, code) and carries
-// `cause: { node | edge, code }`, which the Inspector offers as a jump.
+// `cause: { node | edge, code }`, which the Inspector offers as a jump. Armed (the plan is
+// liveModel's), a node the live model leaves out on purpose is 'outside-live', not an error.
 //   node --test tests/unit/studio-runtime-status-reason.test.mjs
 // Wiring: graph-view.js runtimeStatus over a plain runtime record (state, applied(), lastError,
 // plan, unresolved()), and once over the real AudioEngine on the fake AudioContext of
@@ -22,7 +23,9 @@ import { REFERENCE_TEMPLATE_ID, templateModel } from '../../src/js/studio/templa
 import { createStudioTransport } from '../../src/js/studio/transport.js';
 import * as graphView from '../../src/js/ui/studio/graph-view.js';
 import * as inspector from '../../src/js/ui/studio/inspector.js';
+import { liveModel } from '../../src/js/studio/live-notes.js';
 import { createFakeAudioEnv } from './sequencer-fake-audio.mjs';
+import { panelStore } from './synth-fixture.mjs';
 
 const SR = 48000;
 const ADD_FILTER = { type: 'NODE_ADD', nodeType: 'filter', position: { x: 40, y: 40 } };
@@ -194,4 +197,49 @@ test('the Inspector offers the cause of another node as a selection', () => {
     edgeStatus: new Map([['edge-4', { status: 'inactive', code: 'not-in-runtime', reason,
       cause }]]) });
   assert.deepEqual(edge.cause && edge.cause.selection, { nodes: ['lfo-1'] });
+});
+
+/** The reference template with the semi-mono panel (synth-fixture.mjs) and what liveModel drops. */
+function armedFixture() {
+  const model = panelStore().getModel();
+  const kept = new Set(liveModel(model).graph.nodes.map((n) => n.id));
+  return { model, kept, missing: model.graph.nodes.filter((n) => !kept.has(n.id))
+    .map((n) => n.id) };
+}
+
+test('armed and in sync: a node the live model leaves out is outside-live, not unavailable', () => {
+  const { model, kept, missing } = armedFixture();
+  assert.ok(missing.includes('lfo-1'), 'the template LFO is joined to no note source');
+  const st = graphView.runtimeStatus(model, fakeRuntime(model, { missing }), 3);
+  const lfo = st.nodes.get('lfo-1');
+  assert.equal(lfo.status, 'outside-live');
+  assert.equal(lfo.code, 'outside-live');
+  assert.equal(lfo.reason, graphView.OUTSIDE_LIVE_TEXT);
+  assert.doesNotMatch(lfo.reason, /refused|not applied/i);
+  const cable = model.graph.edges.find((e) => e.from.node === 'lfo-1' || e.to.node === 'lfo-1');
+  assert.equal(st.edges.get(cable.id).status, 'inactive');
+  assert.equal(st.edges.get(cable.id).code, 'outside-live');
+  const played = [...kept].find((id) => !model.graph.nodes.find((n) => n.id === id)
+    .type.startsWith('master'));
+  assert.equal(st.nodes.get(played).status, 'ready', 'what the live model plays stays ready');
+  const card = graphView.nodeCard(model, model.graph.nodes.find((n) => n.id === 'lfo-1'),
+    { status: lfo });
+  assert.equal(card.flags.error, false, 'no error flag on a node left out on purpose');
+  assert.equal(card.statusLabel, 'Not in the armed chain');
+});
+
+test('armed but behind: the edit is still named as not applied yet', () => {
+  const { model, missing } = armedFixture();
+  const lfo = graphView.runtimeStatus(model, fakeRuntime(model, { missing }), 4).nodes
+    .get('lfo-1');
+  assert.equal(lfo.code, 'not-in-runtime');
+  assert.match(lfo.reason, /not applied yet/);
+});
+
+test('in sync, a plan that is not the live model: a missing node is still not-in-runtime', () => {
+  const { model } = armedFixture();
+  const lfo = graphView.runtimeStatus(model, fakeRuntime(model, { missing: ['lfo-1'] }), 3)
+    .nodes.get('lfo-1');
+  assert.equal(lfo.status, 'degraded');
+  assert.equal(lfo.code, 'not-in-runtime');
 });
