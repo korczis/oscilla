@@ -1,0 +1,35 @@
+id: K167
+milestone: M069
+serves:
+  - "connected-instrument#performance-pad"
+title: "XY pad on one shared mount: a playable default, an obvious first action, and release on Stop, workspace leave, audio-owner loss and page hide"
+slug: xy-pad-on-one-shared-mount-playable-default-first-action-and-release
+priority: p2
+profile: implementation
+objective: "Lands as feat(synth). The XY tab's node and edge wiring moves out of src/js/synth/view/xy-tab.js into one shared mount, src/js/synth/view/xy-wiring.js mountSynthXy(host, { model, transport, panel }) -> { view, destroy }, which the XY tab and the live landing (oscilla-21's landing slice 1) both call, so there is one pad wiring and no second one. The mount releases the pad's gate and every note it holds on transport Stop, on leaving the workspace, on losing the audio owner and on page hide, through the existing note-router release path (K060 D3), never a new window listener; keys go through the K153 registry. On first open on a phone the pad is playable at once with a stated default (the XY lead preset's scale and target) and one obvious first action (touch the pad), and nothing sounds before a touch (no autoplay, project.a-phone-sounds). OSCILLOPAD pack phase 2 (owner, 2026-11-03), mapped to M069 by oscilla-b0 and oscilla-af; the persisted xy-pad type and its name stay. Before: the wiring lives in the XY tab only and the gate is released on pointer up, blur, page hide and Escape only. After: one mount with every release path, used by both surfaces. Rollback: revert the pull request; documents are unchanged (no schema, parameter or hash change)."
+why: "Owner order of 2026-11-03 (the OSCILLOPAD pack, phase 2 'pad and mobile UX'; and the live landing order relayed by oscilla-21, whose hero composes this pad rather than rebuilding it); oscilla-b0's connect-the-dots audit and the check of the pack against main (src/js/ui/kinds/xy-pad.js releases on pointer up, focusout, window blur, pagehide and Escape, not on Stop, workspace leave or audio-owner loss)."
+scope:
+  - "src/js/synth/view/xy-wiring.js"
+  - "src/js/synth/view/xy-tab.js"
+  - "src/js/ui/kinds/xy-pad.js"
+  - "tests/unit/xy-wiring.test.mjs"
+  - "tests/browser/xy-pad.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K097"
+acceptance_criteria:
+  - "tests/unit/xy-wiring.test.mjs, failing on the merge base (the module does not exist): mountSynthXy wires the xy-pad node's Pitch and Gate into the voice and Y into its target as the XY tab did (the same BATCH, one undo entry), and a held gate is released, with its notes, on transport stop, on a workspace leave, on an audio-owner change away from the instrument and on page hide; destroy() releases and leaves no listener."
+  - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: a second destroy is a no-op; a Stop while nothing is held changes nothing; a release path runs through the note router's release, so a lost note-off never leaves a voice held."
+  - "Browser: tests/browser/xy-pad.cjs gains checks that a held pad is released by Stop, by leaving the Synth workspace and by another workspace taking the audio owner, each read from the engine analyser (below -70 dB rel) and the runtime census within a named until() deadline of tests/browser/lib/wait.cjs; an emulated phone context with the browser's gesture rule on (in tests/browser/xy-pad.cjs, moving into tests/browser/iphone.cjs once #388 puts that suite on main) opens the XY tab, finds the one first action and the stated default, hears nothing before a touch, and sounds after one. Browser checks run inside tests/browser/lib/suite.cjs, assume no sample rate, and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing, project.a-phone-sounds)."
+  - "One wiring: no file but xy-wiring.js builds the pad's node and edges (a unit test greps the sources), and the XY tab calls mountSynthXy."
+  - "The pull request carries a reviewer's verdict (a guarded path; project.review-verdict) and, as a feat change, a unit test that fails on the merge base (project.fail-first). It adds no osc-* class token, legacy selector, inline style or stylesheet (project.ui-uses-flowbite-pro; node --test tests/unit/ui-flowbite-pro.test.mjs); every string passes tests/unit/synth-wording.test.mjs."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/xy-wiring.test.mjs"
+  - "node tests/browser/xy-pad.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-03
+updated_at: 2026-11-03
