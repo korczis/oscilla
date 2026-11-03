@@ -6,7 +6,7 @@ priority: p2
 problem: "OSCILLA opens on the Playground generator (src/js/ui/app.js), and the owner felt the first screen no longer reflects the product (conversation 6ac1beb8, 2026-10-05T19:17:26Z)."
 outcome: "The current first screen is analysed, the owner chooses what it shows (Q004, here with the work it gates), and that layout is built in the words of the chosen positioning sentence without breaking any inventoried entry path."
 acceptance_criteria:
-  - "P001, Q004 and P002 are done with their evidence."
+  - "P001 and Q004 are done with their evidence; P002 is cancelled because Q089 superseded Q004 on 2026-11-03 and M122 builds the first screen."
 validation:
   - "npm run release-gate"
 evidence_required:
