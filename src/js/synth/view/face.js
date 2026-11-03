@@ -88,7 +88,8 @@ function knobHtml(cid, c, value, reason, tokens) {
 const SEG = 'h-11 min-w-[2.75rem] px-2 text-xs font-medium border border-solid '
   + 'border-gray-300 dark:border-gray-600 first:rounded-l-lg last:rounded-r-lg -ml-px first:ml-0 '
   + 'focus:z-10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500';
-const SEG_ON = 'bg-primary-600 text-white dark:bg-primary-500';
+// White on primary-600 is 5.2:1; on primary-500 it was 3.68:1, under the 4.5:1 text floor.
+const SEG_ON = 'bg-primary-600 text-white';
 const SEG_OFF = 'bg-white text-gray-900 hover:bg-gray-100 dark:bg-gray-700 dark:text-gray-200 '
   + 'dark:hover:bg-gray-600';
 
@@ -100,7 +101,7 @@ function switchHtml(cid, c, value, reason, tokens) {
     + `class="${SEG} ${v === value ? SEG_ON : SEG_OFF}">${esc(label)}</button>`).join('');
   return `<div class="flex flex-col gap-1" data-control="${cid}">`
     + `<span class="${LABEL}" id="${cid}-label">${esc(c.label)}</span>`
-    + '<div class="flex items-center gap-2">'
+    + '<div class="flex flex-col items-start gap-2 sm:flex-row sm:items-center">'
     + `${selectorSvg({ value, param: c.param, tokens, disabled: !!reason })}`
     + `<div role="radiogroup" ${named(cid)}${disabled(cid, reason)} class="flex flex-wrap">`
     + `${opts}</div></div>${why(cid, reason)}</div>`;

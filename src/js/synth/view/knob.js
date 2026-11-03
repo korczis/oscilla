@@ -68,8 +68,8 @@ const svgOf = (b, w, h, extra, inner) => `<svg viewBox="${box(b)}" width="${w}" 
   + `aria-hidden="true" focusable="false"${extra}>${inner}</svg>`;
 
 /** The core's focus ring drawn always and shown by its slider's keyboard focus (class group),
- *  so a redraw while focused keeps it. */
-const FOCUS_CLASS = ' class="opacity-0 group-focus-visible:opacity-100"';
+ *  so a redraw while focused keeps it; hidden by visibility, the layer's idiom, not an opacity. */
+const FOCUS_CLASS = ' class="invisible group-focus-visible:visible"';
 
 /** One knob as the panel shows it: the core's knob, 64 px. */
 export function knobSvg({ value, param, tokens, disabled = false }) {
@@ -79,7 +79,9 @@ export function knobSvg({ value, param, tokens, disabled = false }) {
     g.replace('<circle data-focus=""', `<circle data-focus=""${FOCUS_CLASS}`));
 }
 
-/** A choice's drawing beside its legends: a switch, or the core's knob on a longer enum. */
+/** A choice's drawing beside its legends: a switch, or the core's knob on a longer enum. It is
+ *  decoration (the legends are the radios): the core's hit rect sets its own pointer-events="all",
+ *  which would win over the svg's, so it is neutralised and a press reaches nothing. */
 export function selectorSvg({ value, param, tokens, disabled = false }) {
   const rotary = param.type === 'enum' && param.options.length > SWITCH_MAX;
   const b = CONTROL_BOX[rotary ? 'knob' : 'switch'];
@@ -87,5 +89,6 @@ export function selectorSvg({ value, param, tokens, disabled = false }) {
   const w = Math.round((b.width * h) / b.height);
   return svgOf(b, w, h, ' class="pointer-events-none shrink-0"', controlSvg({
     kind: rotary ? 'knob' : 'switch', value, param, tokens: panelControlTokens(tokens),
-    zoom: h / b.height, state: { disabled } }));
+    zoom: h / b.height, state: { disabled } }).replace('pointer-events="all"',
+    'pointer-events="none"'));
 }

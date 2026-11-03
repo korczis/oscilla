@@ -6,6 +6,7 @@
 // core's knob on the enum. Every option stays a radio button; the drawings are decoration.
 //
 //   node --test tests/unit/synth-face-controls.test.mjs
+import { createRequire } from 'node:module';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import PANEL from '../../src/js/synth/panels/semi-mono.js';
@@ -43,6 +44,9 @@ function block(cid) {
   return own;
 }
 const count = (s, re) => (s.match(re) || []).length;
+/** A choice's drawing takes no pointer: the core's hit rect (pointer-events="all") neutralised,
+ *  so a press on it reaches nothing (review of W1b, finding 1: elementFromPoint was the rect). */
+const inert = (svg) => svg.replace('pointer-events="all"', 'pointer-events="none"');
 const paints = (s) => [...s.matchAll(/(?:fill|stroke|stop-color)="([^"]*)"/g)].map((x) => x[1]);
 
 test('the census: knobs, switches, rotary selectors and toggles on the panel', () => {
@@ -116,8 +120,10 @@ test('one focus ring: the core\'s, shown only on keyboard focus', () => {
     const slider = /<div role="slider"[^>]*>/.exec(b)[0];
     assert.match(slider, /class="group /, `${cid}: the slider is the focus group`);
     assert.doesNotMatch(slider, /focus-visible:ring/, `${cid}: no second ring`);
-    assert.equal(count(b, /<circle data-focus="" class="opacity-0 group-focus-visible:opacity-100"/g),
+    // Hidden by visibility, the layer's idiom, never by an opacity (review of W1b, finding 9).
+    assert.equal(count(b, /<circle data-focus="" class="invisible group-focus-visible:visible"/g),
       1, cid);
+    assert.doesNotMatch(b, /opacity-0|group-focus-visible:opacity/, cid);
   }
 });
 
@@ -131,8 +137,8 @@ test('an enum of up to four options is a switch, more a rotary selector; every o
       assert.equal(count(b, /<g data-control="/g), 1, cid);
       assert.match(b, /<svg [^>]*aria-hidden="true" focusable="false"/);
       assert.doesNotMatch(b, /role="slider"/, `${cid}: never a slider`);
-      assert.ok(b.includes(controlSvg({ kind, value, param: c.param,
-        tokens: panelControlTokens(T), zoom: kind === 'knob' ? 52 / 44 : 44 / 36 })),
+      assert.ok(b.includes(inert(controlSvg({ kind, value, param: c.param,
+        tokens: panelControlTokens(T), zoom: kind === 'knob' ? 52 / 44 : 44 / 36 }))),
       `${cid}: the lever or the pointer sits at the value`);
       assert.equal(count(b, /role="radio" /g), n, cid);
       assert.equal(count(b, new RegExp(`data-option="${cid.replace('.', '\\.')}" data-v="`, 'g')),
@@ -147,8 +153,69 @@ test('a toggle is a lever beside its On/Off button', () => {
   for (const { cid, c, value, reason } of toggles) {
     const b = block(cid);
     assert.equal(count(b, /<g data-control="switch">/g), 1, cid);
-    assert.ok(b.includes(controlSvg({ kind: 'switch', value, param: c.param,
-      tokens: panelControlTokens(T), zoom: 44 / 36, state: { disabled: !!reason } })), cid);
+    assert.ok(b.includes(inert(controlSvg({ kind: 'switch', value, param: c.param,
+      tokens: panelControlTokens(T), zoom: 44 / 36, state: { disabled: !!reason } }))), cid);
     assert.ok(b.includes(`aria-pressed="${!!value}" data-toggle="${cid}"`), cid);
+  }
+});
+
+test('a choice\'s drawing takes no pointer: a press on it reaches nothing', () => {
+  for (const { cid } of [...switches, ...toggles]) {
+    const svg = /<svg [^>]*>[\s\S]*?<\/svg>/.exec(block(cid))[0];
+    assert.match(svg, /^<svg [^>]*class="pointer-events-none /, cid);
+    assert.doesNotMatch(svg, /pointer-events="(?!none")/, `${cid}: no shape takes the pointer`);
+    assert.match(svg, /<rect data-hit="" [^>]*pointer-events="none"/, `${cid}: the hit rect`);
+  }
+  for (const { cid } of knobs) {
+    assert.match(block(cid), /<rect data-hit="" [^>]*pointer-events="all"/,
+      `${cid}: a knob's hit rect still takes the press its slider handles`);
+  }
+});
+
+// WCAG contrast of two #rrggbb colours.
+const lum = (hex) => {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+const ratio = (a, b) => {
+  const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+  return (x + 0.05) / (y + 0.05);
+};
+const TW = createRequire(import.meta.url)('tailwindcss/colors');
+const PALETTE = { ...TW, primary: TW.blue };
+/** The colour a utility of `kind` (bg, text) gives in a theme: the dark: one wins in dark. */
+function utility(classes, kind, dark) {
+  const pick = (pre) => classes.map((k) => new RegExp(`^${pre}${kind}-([a-z]+)(?:-(\\d+))?$`)
+    .exec(k)).find((m) => m && PALETTE[m[1]] && (!m[2] || PALETTE[m[1]][m[2]]));
+  const m = (dark && pick('dark:')) || pick('');
+  assert.ok(m, `a ${kind} colour in ${classes.join(' ')}`);
+  const hex = m[2] ? PALETTE[m[1]][m[2]] : PALETTE[m[1]];
+  return hex.length === 4 ? `#${[...hex.slice(1)].map((c) => c + c).join('')}` : hex;
+}
+
+test('every legend, selected or not, holds 4.5:1 text in both themes', () => {
+  for (const { cid } of [...switches, ...toggles]) {
+    const b = block(cid);
+    const legends = [...b.matchAll(/<button [^>]*class="([^"]*)"[^>]*>([^<]*)<\/button>/g)];
+    assert.ok(legends.length > 0, cid);
+    for (const [, cls, label] of legends) {
+      const classes = cls.split(/\s+/);
+      for (const dark of [false, true]) {
+        const r = ratio(utility(classes, 'bg', dark), utility(classes, 'text', dark));
+        assert.ok(r >= 4.5, `${cid} ${label} ${dark ? 'dark' : 'light'}: ${r.toFixed(2)}:1`);
+      }
+    }
+  }
+});
+
+test('below sm a choice stacks its drawing above its legends, so a row never strands one', () => {
+  for (const { cid } of switches) {
+    const row = /<div class="([^"]*)">(?=<svg )/.exec(block(cid));
+    assert.ok(row, `${cid}: the drawing's row`);
+    const classes = row[1].split(/\s+/);
+    for (const k of ['flex', 'flex-col', 'sm:flex-row', 'sm:items-center']) {
+      assert.ok(classes.includes(k), `${cid}: ${k} in ${row[1]}`);
+    }
   }
 });
