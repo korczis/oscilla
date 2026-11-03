@@ -242,7 +242,8 @@ const near = (a, b, eps, what) => assert.ok(Math.abs(a - b) <= eps, `${what}: ${
 // size of the knob beside it: the knob's skirt (r 16 of its 44 box), its 24-ridge knurl from
 // r 14.5 to 16 in control.knurl, its cap, all scaled by knob / CONTROL_BOX.knob.width, and its
 // detents end inside that knob's box.
-test('a dial is the knob\'s face at the knob\'s size: skirt, knurl, cap, detents in its box', () => {
+test('a dial is the knob\'s face at the knob\'s size: skirt, knurl, cap, detents in its box',
+  () => {
   // The knob's own face, as controlSvg draws it: what a dial at the default knob width repeats.
   const KNOB_P = { key: 'k', type: 'number', min: 0, max: 1, default: 0.5 };
   const knobFace = controlSvg({ kind: 'knob', value: 0.5, param: KNOB_P, tokens: TOKENS });
@@ -354,6 +355,33 @@ test('a dial of 7 or more detents numbers them 1..n at each detent, apart, 12 px
         }
       }
     }
+  }
+});
+
+// A caller decides where numerals help: `numbers` false keeps a dial unnumbered (a window
+// already names the selection, and a grid too wide for "n · label" keeps its labels), true
+// numbers a dial of any count, and left out it is the count rule (NUMBERED_MIN).
+test('numbers: false keeps a dial unnumbered, true numbers any dial, unset is from 7', () => {
+  for (const p of [ENUM(5), ENUM(7, true), ENUM(10, true), ENUM(12)]) {
+    const off = switchLayout(p, { numbers: false, numberLegends: true, knob: 64 });
+    assert.ok(off.options.every((o) => o.number === null && o.numeral === null), p.key);
+    assert.deepEqual(off.options.map((o) => o.legend.text), p.options.map((o) => o[1]),
+      `${p.key}: no number to prefix`);
+    assert.equal(parts(draw(p, { numbers: false }), 'data-number').length, 0, p.key);
+    assert.deepEqual(off.dial.extent, switchLayout(ENUM(5), { knob: 64 }).dial.extent,
+      `${p.key}: an unnumbered dial is the knob's size alone`);
+    const on = switchLayout(p, { numbers: true });
+    assert.deepEqual(on.options.map((o) => o.number), p.options.map((o, i) => i + 1), p.key);
+    assert.equal(parts(draw(p, { numbers: true }), 'data-number').length, p.options.length);
+    const auto = switchLayout(p);
+    assert.equal(auto.options[0].number, p.options.length >= 7 ? 1 : null, `${p.key}: auto`);
+  }
+  for (const p of [BOOL, ENUM(3)]) {
+    assert.ok(switchLayout(p, { numbers: true }).options.every((o) => o.number === null),
+      `${p.key}: a toggle or a slide has no detent to number`);
+  }
+  for (const bad of [1, 'yes', null]) {
+    assert.throws(() => switchLayout(ENUM(7), { numbers: bad }), /numbers/, String(bad));
   }
 });
 
