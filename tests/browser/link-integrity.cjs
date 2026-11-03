@@ -553,8 +553,11 @@ async function runLeg(name, origin) {
       // suite walks the same rows by pointer, keyboard and touch.
       let walked = 0;
       for (const [from, href] of CENSUS) {
+        // The rows a fresh page at the source shows: a row whose source needs a setup, a menu
+        // or a phone width is the integration map suite's (its setup is a pointer gesture,
+        // which unlocks audio before the link is followed).
         const rows = [...MAP.rows, ...MAP.declared].filter((r) => r.from === from
-          && r.href === href && !r.walk);
+          && r.href === href && !r.walk && !r.setup && !r.opener && !r.viewport);
         if (!rows.length) { bad.push(`${from} ${href}: no row of the integration map`); continue; }
         for (const row of rows) {
           const obs = await walk.walkRow(context, base, row, { modes: ['script'] })
