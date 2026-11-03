@@ -29,7 +29,23 @@
       "why": "keeps ?measure=loopback (TEST CONTEXT) in step with the page; a query parameter, no route"
     }
   ],
-  "reloadDebt": [],
+  "reloadDebt": [
+    {
+      "row": "synth > page.relatedLink > studio",
+      "issue": "V604",
+      "why": "the Studio document lives in memory: a reload of #m=studio opens the default template, so the voice the Synth instantiated (or the converted pattern) is gone; V604 saves the working draft and restores it"
+    },
+    {
+      "row": "synth > synth.studio > studio",
+      "issue": "V604",
+      "why": "the Studio document lives in memory: a reload of #m=studio opens the default template, so the voice the Synth instantiated (or the converted pattern) is gone; V604 saves the working draft and restores it"
+    },
+    {
+      "row": "sequencer > seq.toStudio > studio",
+      "issue": "V604",
+      "why": "the Studio document lives in memory: a reload of #m=studio opens the default template, so the voice the Synth instantiated (or the converted pattern) is gone; V604 saves the working draft and restores it"
+    }
+  ],
   "rows": [
     {
       "kind": "jump",
@@ -803,19 +819,6 @@
     {
       "kind": "jump",
       "from": "presets",
-      "control": "page.emptyAction",
-      "selector": "[data-osc=\"page.emptyAction\"][href=\"#m=playground\"]",
-      "role": "link",
-      "to": "playground",
-      "href": "#m=playground",
-      "template": null,
-      "source": "empty",
-      "studio": "same",
-      "id": "presets > page.emptyAction > playground"
-    },
-    {
-      "kind": "jump",
-      "from": "presets",
       "control": "page.home",
       "selector": "[data-osc=\"page.home\"]",
       "role": "link",
@@ -838,32 +841,6 @@
       "source": "related",
       "studio": "same",
       "id": "presets > page.relatedLink > synthesis"
-    },
-    {
-      "kind": "jump",
-      "from": "presets",
-      "control": "presets.altPlayground",
-      "selector": "[data-osc=\"presets.altPlayground\"]",
-      "role": "link",
-      "to": "playground",
-      "href": "#m=playground",
-      "template": null,
-      "source": "panel",
-      "studio": "same",
-      "id": "presets > presets.altPlayground > playground"
-    },
-    {
-      "kind": "jump",
-      "from": "presets",
-      "control": "presets.toPlayground",
-      "selector": "[data-osc=\"presets.toPlayground\"]",
-      "role": "link",
-      "to": "playground",
-      "href": "#m=playground",
-      "template": null,
-      "source": "panel",
-      "studio": "same",
-      "id": "presets > presets.toPlayground > playground"
     },
     {
       "kind": "jump",
@@ -1545,6 +1522,66 @@
         "covered": "tests/browser/v31-studio-workflows.cjs"
       },
       "why": "a saved Studio project's connected record, built in JS (ui/studio/patches-panel.js)"
+    },
+    {
+      "kind": "jump",
+      "from": "presets",
+      "control": "page.emptyAction",
+      "selector": "[data-osc=\"page.emptyAction\"][href=\"#m=playground\"]",
+      "role": "link",
+      "to": "playground",
+      "href": "#m=playground",
+      "template": null,
+      "source": "declared",
+      "studio": "same",
+      "id": "presets > page.emptyAction > playground",
+      "setup": {
+        "open": "m=presets",
+        "click": [
+          "[data-osc=\"presets.tab\"][data-value=\"custom\"]"
+        ]
+      },
+      "why": "the registry's empty state (presets.noCustom) shows on the Custom tab only, which the registry does not name: the row opens that tab first"
+    },
+    {
+      "kind": "jump",
+      "from": "presets",
+      "control": "presets.toPlayground",
+      "selector": "[data-osc=\"presets.toPlayground\"]",
+      "role": "link",
+      "to": "playground",
+      "href": "#m=playground",
+      "template": null,
+      "source": "declared",
+      "studio": "same",
+      "id": "presets > presets.toPlayground > playground",
+      "setup": {
+        "open": "m=presets",
+        "click": [
+          "[data-osc=\"presets.tab\"][data-value=\"history\"]"
+        ]
+      },
+      "why": "the History tab's empty list links to the Playground; the link is shown on that tab only, which CONTENT_LINKS does not name"
+    },
+    {
+      "kind": "jump",
+      "from": "presets",
+      "control": "presets.altPlayground",
+      "selector": "[data-osc=\"presets.altPlayground\"]",
+      "role": "link",
+      "to": "playground",
+      "href": "#m=playground",
+      "template": null,
+      "source": "declared",
+      "studio": "same",
+      "id": "presets > presets.altPlayground > playground",
+      "setup": {
+        "open": "m=presets",
+        "click": [
+          "[data-osc=\"presets.tab\"][data-value=\"high\"]"
+        ]
+      },
+      "why": "a preset above the safety limit offers the Playground instead; such presets are on the High freq tab, which CONTENT_LINKS does not name"
     }
   ]
 }

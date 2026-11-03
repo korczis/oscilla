@@ -96,7 +96,10 @@ export function parseTags(html) {
 }
 
 // Actions that open another workspace or produce a link to a state (the component's methods).
-const NAV_CALL = /\b(setWorkspace|studioExpand|studioBack|studioOpenSequence|synthOpenStudio|experimentsShowInMeasure|experimentsRepeat|experimentsDefRun|runLearnDemo|connectionsFollow|findingsOpenRef|measureCopyRecipeLink|synthCopyLink|studioCopyLink|copyConfigUrl)\s*\(/;
+const NAV_CALL = new RegExp(`\\b(${['setWorkspace', 'studioExpand', 'studioBack',
+  'studioOpenSequence', 'synthOpenStudio', 'experimentsShowInMeasure', 'experimentsRepeat',
+  'experimentsDefRun', 'runLearnDemo', 'connectionsFollow', 'findingsOpenRef',
+  'measureCopyRecipeLink', 'synthCopyLink', 'studioCopyLink', 'copyConfigUrl'].join('|')})\\s*\\(`);
 // x-bind helpers that make a link to a workspace (ui/app.js, ui/navigation.js).
 const NAV_BIND = /\b(counterpartLink|homeLink|crumbHome|navItem|emptyAction)\s*\(/;
 
@@ -256,7 +259,9 @@ export function studioEffect(r) {
 export function deriveRows(model, producers) {
   const { shell, counterparts, cross, nav, learn } = model;
   const byControl = new Map();
-  for (const p of producers) if (p.control && !byControl.has(p.control)) byControl.set(p.control, p);
+  for (const p of producers) {
+    if (p.control && !byControl.has(p.control)) byControl.set(p.control, p);
+  }
   const lookup = (control) => byControl.get(control)
     || byControl.get(`${control.replace(/[^.]+$/, '')}*`) || null;
   const rows = new Map();
@@ -264,9 +269,10 @@ export function deriveRows(model, producers) {
     const route = r.href ? nav.routeOfHash(r.href) : null;
     const to = r.to || (route && route.workspace);
     const p = lookup(r.control);
-    const sel = `[data-osc="${r.control}"]${p && p.dynamicHref && r.href ? `[href="${r.href}"]` : ''}`;
+    const byHref = p && p.dynamicHref && r.href ? `[href="${r.href}"]` : '';
+    const sel = `[data-osc="${r.control}"]${byHref}`;
     const row = { kind: r.kind || (templateOf(r.href) ? 'open-in' : 'jump'), from: r.from,
-      control: r.control, selector: r.text ? `${sel}` : sel, role: p ? p.role : null, to,
+      control: r.control, selector: sel, role: p ? p.role : null, to,
       href: r.href || null, template: templateOf(r.href), source: r.source };
     if (r.text) row.text = r.text;
     row.studio = studioEffect(row);
@@ -290,7 +296,9 @@ export function deriveRows(model, producers) {
       if (strip.has(to)) control = 'page.relatedLink';
       else if (contentLinks.some((l) => l.to === to && l.from.includes(w.id))) continue;
       else if (w.id === 'about') control = `about.open.${to}`;
-      else if (w.id === 'learn' && Object.values(cross.LEARN_TOOLS).includes(to)) control = 'learn.tool';
+      else if (w.id === 'learn' && Object.values(cross.LEARN_TOOLS).includes(to)) {
+        control = 'learn.tool';
+      }
       else if (w.empty && w.empty.action && w.empty.action.to === to) control = 'page.emptyAction';
       else if (to === 'playground') control = 'page.home';
       else throw new Error(`integration map: ${w.id} relates to ${to}, shown by no known control`);
@@ -367,8 +375,8 @@ export function checkMap(map, { html, js }) {
   // A producer without the marker.
   for (const p of markup) {
     if (p.reason && !p.kind) {
-      problems.push(`src/index.html:${p.line}: producer ${p.control || '(no data-osc)'} (${p.reason}) `
-        + 'has no data-osc-link');
+      problems.push(`src/index.html:${p.line}: producer ${p.control || '(no data-osc)'} `
+        + `(${p.reason}) has no data-osc-link`);
     }
   }
   for (const p of jsProducers) {
@@ -383,7 +391,8 @@ export function checkMap(map, { html, js }) {
     if (!w.marker) {
       problems.push(`${w.file}:${w.line}: hash-route write without a data-osc-link marker`);
     } else if (!writers.has(w.marker) && !controls.has(w.marker)) {
-      problems.push(`${w.file}:${w.line}: marker ${w.marker} is neither a writer nor a row's control`);
+      problems.push(`${w.file}:${w.line}: marker ${w.marker} is neither a writer nor a row's `
+        + 'control');
     }
   }
   for (const id of writers) {
@@ -402,8 +411,8 @@ export function checkMap(map, { html, js }) {
     const p = marked.filter((x) => x.control && matches(r.control, x.control));
     if (!p.length) problems.push(`row ${r.id}: control ${r.control} is no marked producer`);
     else if (!p.some((x) => x.kind.split(/\s+/).includes(r.kind))) {
-      problems.push(`row ${r.id}: control ${r.control} is marked ${p.map((x) => x.kind).join(', ')}, `
-        + `the row is ${r.kind}`);
+      problems.push(`row ${r.id}: control ${r.control} is marked `
+        + `${p.map((x) => x.kind).join(', ')}, the row is ${r.kind}`);
     }
   }
   return problems;

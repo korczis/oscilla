@@ -190,7 +190,9 @@ async function findControl(page, row) {
     await page.locator(row.opener).filter({ visible: true }).first().click({ timeout: NAV_MS });
   }
   const found = await until(() => page.evaluate(({ sel, text }) => {
-    for (const x of document.querySelectorAll('[data-osc-walk]')) x.removeAttribute('data-osc-walk');
+    for (const x of document.querySelectorAll('[data-osc-walk]')) {
+      x.removeAttribute('data-osc-walk');
+    }
     const el = [...document.querySelectorAll(sel)].find((e) => e.getClientRects().length > 0
       && (!e.closest('#osc-sidebar') || /^nav\./.test(e.dataset.osc || ''))
       && (!text || e.textContent.includes(text)));
@@ -261,12 +263,16 @@ async function walkRow(context, base, row, { modes = MODES } = {}) {
   const obs = { modes: {}, back: null, forward: null, reload: null };
   let { page, source } = await openSource(context, base, row);
   try {
+    let reached = false;
     for (const mode of modes) {
       if (mode !== modes[0]) {
-        if (row.setup) {
+        // Back leads to the source only after a mode reached the target. Otherwise, where a
+        // setup made the source, and for a copy action (its link shown in a dialog that may
+        // open after the address changed), the next mode starts from a fresh source page.
+        if (row.setup || row.produces || !reached) {
           await page.close();
           ({ page, source } = await openSource(context, base, row));
-        } else if (!row.produces) {
+        } else {
           await page.evaluate(() => history.back());
           source = await until(async () => {
             const s = await readState(page);
@@ -274,17 +280,11 @@ async function walkRow(context, base, row, { modes = MODES } = {}) {
           }, { ms: NAV_MS, what: `${row.id}: Back to ${row.from} before ${mode}` })
             .catch(() => null);
           if (!source) { obs.modes[mode] = { control: null, lost: 'source' }; continue; }
-        } else {
-          // A produced link is judged from an address without it, and a cleared readout.
-          await page.evaluate((from) => {
-            history.replaceState(history.state, '', `${location.href.split('#')[0]}#m=${from}`);
-            if (window.OSCILLA.app.synth) window.OSCILLA.app.synth.link = '';
-          }, row.from);
-          source = await readState(page);
         }
       }
       const a = await activation(page, row, mode, source);
       obs.modes[mode] = a;
+      reached = !!(a.control && a.shown);
       if (mode !== modes[0] || !a.control || !a.shown) continue;
       if (!row.produces) {
         obs.back = await H.traverse(page, 'back').catch(() => null);
@@ -329,7 +329,9 @@ function judgeRow(row, obs, { reloadDebt = [] } = {}) {
     if (!a.control) { f(`${mode}: the control ${row.selector} is not shown`); continue; }
     if (mode === first) {
       const kinds = String(a.control.marker || '').split(/\s+/);
-      if (!kinds.includes(row.kind)) f(`the control is marked ${a.control.marker}, not ${row.kind}`);
+      if (!kinds.includes(row.kind)) {
+        f(`the control is marked ${a.control.marker}, not ${row.kind}`);
+      }
       if (!a.control.roleOk) f(`the control is not a ${row.role} in the accessibility tree`);
       if (a.control.disabled || a.control.name.length < 3) {
         f(`the control is disabled or unnamed (${JSON.stringify(a.control.name)})`);
@@ -353,7 +355,9 @@ function judgeRow(row, obs, { reloadDebt = [] } = {}) {
       f(`${mode}: the Studio store went back from revision ${s.revision} to ${t.revision}`);
     }
     if (t.audit && t.audit.gum) f(`${mode}: the microphone was asked for`);
-    if (mode === 'script' && t.audit && t.audit.ctx) f('following the link created an AudioContext');
+    if (mode === 'script' && t.audit && t.audit.ctx) {
+      f('following the link created an AudioContext');
+    }
     if (!row.sounds && (t.voice || t.playing)) f(`${mode}: a voice sounds`);
     // Focus as lane A's P07 census judged it: a link from the page's content (the sidebar
     // keeps focus on its item; a declared control is judged by its own suite).
@@ -382,10 +386,14 @@ function judgeRow(row, obs, { reloadDebt = [] } = {}) {
       if (STUDIO_HOSTS.includes(row.to) && r.nodes !== p.target.nodes) {
         lost.push(`Studio document of ${p.target.nodes} nodes (now ${r.nodes})`);
       }
-      if (r.audit && (r.audit.ctx || r.audit.gum)) lost.push('silence (audio or microphone at load)');
+      if (r.audit && (r.audit.ctx || r.audit.gum)) {
+        lost.push('silence (audio or microphone at load)');
+      }
     }
     const debt = reloadDebt.find((d) => d.row === row.id);
-    if (lost.length && debt) known.push(`${row.id}: a reload loses ${lost.join(', ')} (${debt.issue})`);
+    if (lost.length && debt) {
+      known.push(`${row.id}: a reload loses ${lost.join(', ')} (${debt.issue})`);
+    }
     else if (lost.length) f(`a reload loses the target state: ${lost.join(', ')}`);
     else if (debt) f(`a reload now restores the target: remove the row from reloadDebt`);
   }

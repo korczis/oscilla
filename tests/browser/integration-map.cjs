@@ -13,7 +13,8 @@
 //   control      the control is shown, enabled and named, carries data-osc-link naming the
 //                row's kind, and is a link, button or menuitem (the row's role) in the
 //                accessibility tree (Playwright getByRole);
-//   linked       activated by pointer, by keyboard (Enter) and by a synthesized touch tap, the
+//   linked       activated by pointer, by keyboard (Enter) and by a synthesized touch tap (from
+//                file://; the /oscilla/ leg walks the pointer with history and reload), the
 //                target workspace shows the row's target state, each within TARGET_MS
 //                (lib/wait.cjs until(), named per row and mode): the template a template row
 //                names, the produced key a copy-link row writes; the Studio store shows the
@@ -54,6 +55,12 @@ const playwright = RUN.playwright;
 const ONLY = arg('only', '');
 const ROWS = [...MAP.rows, ...MAP.declared].filter((r) => !ONLY || r.id.includes(ONLY));
 
+// The activation modes per origin: an address behaves per origin (file:// and the sub-path
+// differ in history, reload and the base URL), so both walk the pointer activation with Back,
+// Forward and the reload; keyboard and touch are the control's own and are walked once, from
+// file://, where the leg starts.
+const MODES_OF = { file: walk.MODES, http: ['pointer'] };
+
 let failures = 0;
 let passes = 0;
 function check(leg, name, ok, detail = '') {
@@ -86,7 +93,7 @@ async function runLeg(name, origin) {
       }
       let obs;
       try {
-        obs = await walk.walkRow(context, base, row);
+        obs = await walk.walkRow(context, base, row, { modes: MODES_OF[origin] });
       } catch (err) {
         check(leg, row.id, false, `walk failed: ${err && err.message}`);
         continue;

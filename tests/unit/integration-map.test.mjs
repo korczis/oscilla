@@ -54,7 +54,9 @@ test('the map holds lane A\'s P07 census: every related, panel and content link'
   const want = (from, href) => {
     if (!rows.some((r) => r.from === from && r.href === href)) missing.push(`${from} ${href}`);
   };
-  for (const w of shell.WORKSPACE_REGISTRY) for (const r of w.related || []) want(w.id, shell.relatedHref(r));
+  for (const w of shell.WORKSPACE_REGISTRY) {
+    for (const r of w.related || []) want(w.id, shell.relatedHref(r));
+  }
   for (const l of [...counterparts.PANEL_LINKS, ...counterparts.CONTENT_LINKS]) {
     for (const f of l.from) want(f, `#m=${l.to}`);
   }
@@ -104,7 +106,8 @@ test('mutation: a hash-route write without the marker fails the scan', () => {
   assert.ok(has(checkMap(MAP, { html: HTML, js }), 'marker fixture.nothing'));
   // A comparison is no write; a marked write passes.
   const ok = [...JS, { file: 'src/js/fixture.js',
-    text: 'if (location.hash === h) go();\n// data-osc-link: dispatcher\nhistory.pushState(1, "", u);' }];
+    text: 'if (location.hash === h) go();\n// data-osc-link: dispatcher\n'
+      + 'history.pushState(1, "", u);' }];
   assert.deepEqual(checkMap(MAP, { html: HTML, js: ok }), []);
 });
 

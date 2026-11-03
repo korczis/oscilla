@@ -27,7 +27,8 @@ const PLANNED = Object.freeze({
 /** The script names a text runs through npm: `npm run <name>`, `npm test:<name>`. */
 export function npmMentions(text) {
   const out = [];
-  for (const m of text.matchAll(/\bnpm\s+(?:run(?:-script)?\s+(?:-{1,2}[\w-]+\s+)*([\w:.-]+)|(test:[\w:.-]+))/g)) {
+  const re = /\bnpm\s+(?:run(?:-script)?\s+(?:-{1,2}[\w-]+\s+)*([\w:.-]+)|(test:[\w:.-]+))/g;
+  for (const m of text.matchAll(re)) {
     out.push((m[1] || m[2]).replace(/[:.]+$/, ''));
   }
   return out;
