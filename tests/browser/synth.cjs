@@ -739,7 +739,18 @@ function defineChecks() {
     const listen = page.locator('[data-osc="library.listen"]');
     await listen.click();
     const heard = await sound(page, (q) => q.rmsDb > -40, 'Listen plays the riff');
+    // What sounds is the riff's own plan, never the instrument's tone rebuilt over it.
+    const plan = await page.evaluate(() => {
+      const v = window.OSCILLA.engine.voice;
+      return v && v.plan ? v.plan.label : null;
+    });
     const pressed = await listen.getAttribute('aria-pressed');
+    // Stopped from outside (any other owner's stop): the button follows the sound at once.
+    await page.evaluate(() => window.OSCILLA.engine.stopAll());
+    await until(async () => (await listen.getAttribute('aria-pressed')) === 'false', { ms: 2000,
+      what: 'a stop from outside releases the Listen button' });
+    await listen.click();
+    await sound(page, (q) => q.rmsDb > -40, 'Listen plays the riff again');
     await listen.click();
     const hushed = await sound(page, (q) => q.rmsDb < -70, 'Stop ends the audition');
     const unsaved = (await depth()) === before;
@@ -764,7 +775,8 @@ function defineChecks() {
     }, name);
     return { ok: count >= 12 && /^Original, in the style of /.test(style)
       && JSON.stringify(modes) === '["insert"]' && added.track && added.osc === 'oscillator'
-      && added.master && added.clips > 0 && pressed === 'true' && unsaved, count, name, style,
+      && added.master && added.clips > 0 && pressed === 'true' && unsaved
+      && plan === `Riff ${name}`, plan, count, name, style,
     modes, added, heard: heard.rmsDb, hushed: hushed.rmsDb, pressed, unsaved };
   });
 

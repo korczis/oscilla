@@ -1174,7 +1174,10 @@ export function createInstrument(deps = {}) {
       this.planFreqs = res.ok ? res.plan.freqs : [this.frequency];
       this.planSummary = res.ok ? { label: res.plan.label, kind: res.plan.kind, dur: res.plan.dur } : null;
       viz.sync(this.vizInputs(res));
-      if (this.playing && res.ok) engine.updateLive(res.plan);
+      // A voice another owner started on the instrument's path (a riff audition, audition.js)
+      // is not the instrument's plan: its live update leaves it alone.
+      const other = engine.voice && engine.voice.opts && engine.voice.opts.owner;
+      if (this.playing && res.ok && !other) engine.updateLive(res.plan);
     },
     /** Plain values the visualization bridge needs (what V1 syncViz copied into viz.state). */
     vizInputs(res = this.currentPlan()) {
