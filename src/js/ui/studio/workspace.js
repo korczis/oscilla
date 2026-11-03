@@ -818,6 +818,7 @@ export function createStudioUi(svc = {}) {
     });
     ctx.transport = createStudioTransport({ runtime: ctx.runtime, engine: svc.engine,
       store: ctx.handle, registry, trace: ctx.trace,
+      testContext: () => !!(ctx.cmp && ctx.cmp.meas && ctx.cmp.meas.loopback), // ADR 0052
       onMeasurement: (ev) => { if (ctx.measureRun) ctx.measureRun.hook(ev); },
       onClaimOutput: () => {
         const cmp = ctx.cmp;
