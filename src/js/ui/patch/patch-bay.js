@@ -55,32 +55,41 @@ export const cablePath = (a, b) => cableCurve(a, b);
 export function patchLayout(source, width) {
   const w = Math.max(4 * JACK_PITCH + 2 * PAD, width);
   const cols = Math.max(4, Math.floor((w - 2 * PAD) / JACK_PITCH));
+  // Rows of plates as a hardware rack (p2's W1b review, V6): modules pack into rows in panel
+  // order, then each row spreads its plates to the bay's full width (the slack shared equally,
+  // the jacks centred on their plate) and every plate of a row takes the row's height.
+  const rows = [];
+  let row = null;
+  for (const m of source.groups) {
+    if (!m.jacks.length) continue;
+    const n = Math.min(cols, m.jacks.length);
+    const spec = { m, n, gw: n * JACK_PITCH,
+      gh: LABEL_H + Math.ceil(m.jacks.length / cols) * ROW_PITCH };
+    const used = row ? row.reduce((a, r) => a + r.gw + GAP, 0) : 0;
+    if (!row || used + spec.gw > w - 2 * PAD) rows.push(row = []);
+    row.push(spec);
+  }
   const jacks = new Map();
   const groups = [];
-  let x = PAD;
   let y = PAD;
-  let rowH = 0;
-  for (const m of source.groups) {
-    const list = m.jacks;
-    if (!list.length) continue;
-    const n = Math.min(cols, list.length);
-    const rows = Math.ceil(list.length / cols);
-    const gw = n * JACK_PITCH;
-    const gh = LABEL_H + rows * ROW_PITCH;
-    if (x > PAD && x + gw > w - PAD) {
-      x = PAD;
-      y += rowH + GAP;
-      rowH = 0;
+  for (const r of rows) {
+    const slack = (w - 2 * PAD) - r.reduce((a, g) => a + g.gw, 0) - GAP * (r.length - 1);
+    const extra = Math.max(0, slack) / r.length;
+    const rowH = Math.max(...r.map((g) => g.gh));
+    let x = PAD;
+    for (const { m, gw } of r) {
+      const pw = gw + extra;
+      groups.push({ module: m.id, label: m.label, x, y, w: pw, h: rowH });
+      const inset = x + (pw - gw) / 2;
+      m.jacks.forEach((jk, i) => {
+        jacks.set(jk.key, { x: inset + (i % cols) * JACK_PITCH + JACK_PITCH / 2,
+          y: y + LABEL_H + Math.floor(i / cols) * ROW_PITCH + JACK_HIT / 2 + 2, jack: jk });
+      });
+      x += pw + GAP;
     }
-    groups.push({ module: m.id, label: m.label, x, y, w: gw, h: gh });
-    list.forEach((j, i) => {
-      jacks.set(j.key, { x: x + (i % cols) * JACK_PITCH + JACK_PITCH / 2,
-        y: y + LABEL_H + Math.floor(i / cols) * ROW_PITCH + JACK_HIT / 2 + 2, jack: j });
-    });
-    x += gw + GAP;
-    rowH = Math.max(rowH, gh);
+    y += rowH + GAP;
   }
-  return { jacks, groups, width: w, height: y + rowH + PAD };
+  return { jacks, groups, width: w, height: (rows.length ? y - GAP : y) + PAD };
 }
 
 
