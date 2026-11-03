@@ -17,7 +17,7 @@ const SHAPE = {
   surface: ['plateHi', 'plateLo', 'card', 'edge'],
   text: ['label', 'value', 'dim'],
   control: ['cap', 'capHi', 'ring', 'track', 'pointer', 'focus', 'disabled', 'edge', 'knurl',
-    'applied'],
+    'applied', 'bezel'],
   jack: ['body', 'ring', 'normal', 'refuse'],
   cable: ['palette', 'shadow', 'sheen'],
 };
@@ -65,6 +65,7 @@ test('the names follow the Synth panel roles the lane file recorded', () => {
   assert.equal(n.control.pointer, '--osc-text');
   assert.equal(n.control.knurl, '--osc-border', 'the knurl is decorative');
   assert.equal(n.control.applied, '--osc-purple');
+  assert.equal(n.control.bezel, '--osc-border-strong', 'an LED bezel\'s ring, decorative');
   assert.equal(n.jack.refuse, '--osc-red');
   assert.equal(n.cable.shadow, '--osc-bg');
   assert.equal(n.cable.sheen, '--osc-text', 'the sheen is its own token (dev-53, 2026-11-02)');
@@ -214,8 +215,10 @@ const contrast = (a, b) => {
 };
 
 // The control roles that only decorate (WCAG 1.4.11 asks nothing of them): the cap and its
-// highlight, and the knurl. Every other control role marks the control or its value.
-const DECORATIVE = ['cap', 'capHi', 'knurl'];
+// highlight, the knurl and an LED bezel's ring (the lens tells the state; ui-synth-led.test.mjs
+// holds the ring to the strongest neutral the palette has). Every other control role marks the
+// control or its value.
+const DECORATIVE = ['cap', 'capHi', 'knurl', 'bezel'];
 const PLATES = [SYNTH_TOKEN_NAMES.surface.plateHi, SYNTH_TOKEN_NAMES.surface.plateLo];
 
 test('every graphic role of the knob, fader and switch holds 3:1 on the plate, text 4.5:1', () => {

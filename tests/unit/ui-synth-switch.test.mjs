@@ -7,16 +7,19 @@
 // and 3; 3:1 for the edges, lever and ticks against surface-2 and surface-3 and 4.5:1 for the
 // legends, in both themes, computed from tokens.css; 12 px legends; 44 px hit boxes that never
 // overlap for every enum and boolean of NODE_REGISTRY.list(); no literal intensity; the LED
-// rule (data-source and data-lit interpolated from the caller, the glow only shadow-hw-led);
+// rule (data-source and data-lit interpolated from the caller), the LED drawn by led.js's ledSvg
+// so a toggle's LED is the layer's LED (its bezel, its lens and, lit, its halo);
 // controlSvg's switch kept, its refusal of more than four options pointing to switchSvg.
 //   node --test tests/unit/ui-synth-switch.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  switchSvg, switchLayout, switchOptions, switchStyle, SWITCH_STYLES, LEGEND_PX,
+  switchSvg, switchLayout, switchOptions, switchStyle, SWITCH_STYLES, LEGEND_PX, legendWidth,
 } from '../../src/js/ui/synth/switch.js';
-import { controlSvg, HIT_PX } from '../../src/js/ui/synth/knob.js';
+import { CONTROL_BOX, controlSvg, HIT_PX } from '../../src/js/ui/synth/knob.js';
+import { ledSvg, ledBox, LED } from '../../src/js/ui/synth/led.js';
+import { ZOOM_MAX } from '../../src/js/ui/studio/graph-geometry.js';
 import { NODE_REGISTRY } from '../../src/js/studio/registry.js';
 import { SYNTH_TOKEN_NAMES } from '../../src/js/ui/synth/tokens.js';
 import {
@@ -51,6 +54,9 @@ const draw = (param, extra = {}) => switchSvg({ value: param.default, param, tok
   ...extra });
 const overlap = (a, b) => a.x < b.x + b.width - 1e-9 && b.x < a.x + a.width - 1e-9
   && a.y < b.y + b.height - 1e-9 && b.y < a.y + a.height - 1e-9;
+/** The least distance from the origin (a dial's centre) to a rect. */
+const reachOf = (r) => Math.hypot(Math.max(r.x, Math.min(0, r.x + r.width)),
+  Math.max(r.y, Math.min(0, r.y + r.height)));
 const inside = (r, box, eps = 1e-6) => r.x >= box.x - eps && r.y >= box.y - eps
   && r.x + r.width <= box.x + box.width + eps && r.y + r.height <= box.y + box.height + eps;
 
@@ -223,6 +229,196 @@ test('window: the dial, a display-window frame for the caller\'s text, a legend 
   }
 });
 
+// ---------------------------------------------------------------- a dial is a knob (W1c review)
+
+const DIALS = [ENUM(5), ENUM(6), ENUM(7, true), ENUM(8), ENUM(9), ENUM(10, true), ENUM(12)];
+/** The knob widths a caller draws beside a switch, graph units: the core's own (44), the Synth
+ *  panel's 64 px knob, and a smaller one. */
+const KNOB_WIDTHS = [undefined, 64, 30];
+const radialsOf = (el) => [...attrOf(el, 'd').matchAll(/M (\S+) (\S+) L (\S+) (\S+)/g)]
+  .map((m) => m.slice(1).map(Number)).map(([x0, y0, x1, y1]) => [Math.hypot(x0, y0),
+    Math.hypot(x1, y1), (Math.atan2(x1, -y1) * 180) / Math.PI]);
+const near = (a, b, eps, what) => assert.ok(Math.abs(a - b) <= eps, `${what}: ${a} vs ${b}`);
+
+// Review of W1c, finding 4: the selector's skirt was r 17 at 1:1 beside 64 px knobs, about half
+// their size, and its knurl a dashed ring the panel added. A dial is now the knob's face at the
+// size of the knob beside it: the knob's skirt (r 16 of its 44 box), its 24-ridge knurl from
+// r 14.5 to 16 in control.knurl, its cap, all scaled by knob / CONTROL_BOX.knob.width, and its
+// detents end inside that knob's box.
+test('a dial is the knob\'s face at the knob\'s size: skirt, knurl, cap, detents in its box',
+  () => {
+  // The knob's own face, as controlSvg draws it: what a dial at the default knob width repeats.
+  const KNOB_P = { key: 'k', type: 'number', min: 0, max: 1, default: 0.5 };
+  const knobFace = controlSvg({ kind: 'knob', value: 0.5, param: KNOB_P, tokens: TOKENS });
+  const dialFace = draw(ENUM(5));
+  for (const [attr, keys] of [['data-skirt', ['r', 'stroke-width']], ['data-cap', ['r']],
+    ['data-knurl', ['d', 'stroke-width', 'stroke']]]) {
+    for (const a of keys) {
+      assert.equal(attrOf(part(dialFace, attr), a), attrOf(part(knobFace, attr), a),
+        `the dial's ${attr} ${a} is the knob's`);
+    }
+  }
+  for (const p of DIALS) {
+    for (const knob of KNOB_WIDTHS) {
+      const k = (knob ?? CONTROL_BOX.knob.width) / CONTROL_BOX.knob.width;
+      const where = `${p.key} beside a ${knob ?? 44} knob`;
+      const svg = draw(p, { knob });
+      near(n(part(svg, 'data-skirt'), 'r'), 16 * k, 0.01, `${where}: the knob's skirt`);
+      near(n(part(svg, 'data-skirt'), 'stroke-width'), 1.5 * k, 0.01, `${where}: its edge`);
+      near(n(part(svg, 'data-cap'), 'r'), 12 * k, 0.01, `${where}: the knob's cap`);
+      const knurl = part(svg, 'data-knurl');
+      assert.ok(knurl, `${where}: a knurl of the core's own`);
+      assert.equal(attrOf(knurl, 'stroke'), TOKENS.control.knurl, `${where}: the knurl role`);
+      near(n(knurl, 'stroke-width'), k, 0.01, `${where}: a knob ridge's width`);
+      const ridges = radialsOf(knurl);
+      assert.equal(ridges.length, 24, `${where}: the knob's 24 ridges`);
+      for (const [i, [r0, r1, a]] of ridges.entries()) {
+        near(r0, 14.5 * k, 0.02, `${where}: ridge ${i} from`);
+        near(r1, 16 * k, 0.02, `${where}: ridge ${i} to`);
+        const want = ((i * 15 + 180) % 360) - 180;
+        near(((a + 540) % 360) - 180, want, 0.1, `${where}: ridge ${i} evenly spaced`);
+      }
+      for (const d of parts(svg, 'data-detent')) {
+        const r = Math.max(Math.hypot(n(d, 'x1'), n(d, 'y1')), Math.hypot(n(d, 'x2'), n(d, 'y2')));
+        assert.ok(r > 16 * k, `${where}: a detent outside the skirt`);
+        assert.ok(r <= (CONTROL_BOX.knob.width / 2) * k + 1e-6, `${where}: inside the knob's box`);
+      }
+      const L = switchLayout(p, { knob });
+      assert.equal(L.knob, knob ?? CONTROL_BOX.knob.width, `${where}: layout.knob`);
+      assert.ok(L.dial && L.dial.extent >= (CONTROL_BOX.knob.width / 2) * k, `${where}: extent`);
+    }
+  }
+  for (const bad of [0, -1, NaN, Infinity, '64']) {
+    assert.throws(() => switchLayout(ENUM(5), { knob: bad }), /knob/, String(bad));
+  }
+  // A toggle and a slide have no dial: the knob width changes nothing there.
+  for (const p of [BOOL, TWO, ENUM(3), WAVE]) {
+    assert.deepEqual(switchLayout(p, { knob: 64 }).options, switchLayout(p).options, p.key);
+    assert.equal(switchLayout(p).dial, null, p.key);
+  }
+});
+
+const numeralBox = (m) => ({ x: m.x - m.width / 2, y: m.y - m.size / 2, width: m.width,
+  height: m.size });
+
+// Review of W1c, finding 3: a packed dial's 7 or 12 detents carried no mark, so nothing tied the
+// pointer to a legend. A dial of NUMBERED_MIN (7) or more detents numbers them, 1 to n, each
+// numeral at its detent's angle outside the ticks, 12 px on screen, apart from every other and
+// from every hit box; the selected one is lit as its legend is.
+test('a dial of 7 or more detents numbers them 1..n at each detent, apart, 12 px, lit', () => {
+  for (const p of DIALS) {
+    for (const zoom of [1, 2, 0.25]) {
+      for (const knob of KNOB_WIDTHS) {
+        const where = `${p.key} at ${zoom} beside ${knob ?? 44}`;
+        const L = switchLayout(p, { zoom, knob });
+        const numbered = p.options.length >= 7;
+        const sel = 2;
+        const svg = draw(p, { zoom, knob, value: p.options[sel][0] });
+        const texts = parts(svg, 'data-number');
+        if (!numbered) {
+          assert.ok(L.options.every((o) => o.number === null && o.numeral === null), where);
+          assert.equal(texts.length, 0, `${where}: no numerals under 7 detents`);
+          continue;
+        }
+        const detents = parts(svg, 'data-detent');
+        const tickOut = Math.max(...detents.map((d) => Math.hypot(n(d, 'x2'), n(d, 'y2'))));
+        for (const o of L.options) {
+          assert.equal(o.number, o.index + 1, `${where}: option ${o.index}'s number`);
+          const m = o.numeral;
+          assert.ok(m.size * zoom >= LEGEND_PX - 1e-9, `${where}: ${m.size * zoom} px`);
+          const dx = n(detents[o.index], 'x2');
+          const dy = n(detents[o.index], 'y2');
+          near((Math.atan2(m.x, -m.y) * 180) / Math.PI, (Math.atan2(dx, -dy) * 180) / Math.PI, 1,
+            `${where}: numeral ${o.number} at its detent`);
+          const b = numeralBox(m);
+          assert.ok(reachOf(b) > tickOut, `${where}: numeral ${o.number} clear of the ticks`);
+          assert.ok(inside(b, L.box), `${where}: numeral ${o.number} inside the box`);
+          for (const q of L.options) {
+            if (q !== o) {
+              assert.ok(!overlap(b, numeralBox(q.numeral)), `${where}: ${o.number} on ${q.number}`);
+            }
+            assert.ok(!overlap(b, q.hit), `${where}: numeral ${o.number} in ${q.value}'s box`);
+          }
+        }
+        assert.equal(texts.length, p.options.length, `${where}: a numeral per detent`);
+        for (const t of texts) {
+          const i = Number(attrOf(t, 'data-index'));
+          const m = L.options[i].numeral;
+          assert.equal(/>([^<]*)</.exec(t + svg.slice(svg.indexOf(t) + t.length))[1],
+            String(i + 1), `${where}: the numeral's text`);
+          assert.deepEqual([n(t, 'x'), n(t, 'y'), n(t, 'font-size')], [m.x, m.y, m.size], where);
+          assert.equal(attrOf(t, 'text-anchor'), 'middle');
+          assert.equal(attrOf(t, 'stroke'), 'none');
+          assert.equal(attrOf(t, 'fill'), i === sel ? TOKENS.text.value : TOKENS.text.label,
+            `${where}: numeral ${i + 1}`);
+          assert.equal(attrOf(t, 'font-weight'), i === sel ? '600' : '400');
+        }
+        for (const t of parts(draw(p, { zoom, knob, state: { disabled: true } }), 'data-number')) {
+          assert.equal(attrOf(t, 'fill'), TOKENS.text.dim, `${where}: dimmed while disabled`);
+        }
+      }
+    }
+  }
+});
+
+// A caller decides where numerals help: `numbers` false keeps a dial unnumbered (a window
+// already names the selection, and a grid too wide for "n · label" keeps its labels), true
+// numbers a dial of any count, and left out it is the count rule (NUMBERED_MIN).
+test('numbers: false keeps a dial unnumbered, true numbers any dial, unset is from 7', () => {
+  for (const p of [ENUM(5), ENUM(7, true), ENUM(10, true), ENUM(12)]) {
+    const off = switchLayout(p, { numbers: false, numberLegends: true, knob: 64 });
+    assert.ok(off.options.every((o) => o.number === null && o.numeral === null), p.key);
+    assert.deepEqual(off.options.map((o) => o.legend.text), p.options.map((o) => o[1]),
+      `${p.key}: no number to prefix`);
+    assert.equal(parts(draw(p, { numbers: false }), 'data-number').length, 0, p.key);
+    assert.deepEqual(off.dial.extent, switchLayout(ENUM(5), { knob: 64 }).dial.extent,
+      `${p.key}: an unnumbered dial is the knob's size alone`);
+    const on = switchLayout(p, { numbers: true });
+    assert.deepEqual(on.options.map((o) => o.number), p.options.map((o, i) => i + 1), p.key);
+    assert.equal(parts(draw(p, { numbers: true }), 'data-number').length, p.options.length);
+    const auto = switchLayout(p);
+    assert.equal(auto.options[0].number, p.options.length >= 7 ? 1 : null, `${p.key}: auto`);
+  }
+  for (const p of [BOOL, ENUM(3)]) {
+    assert.ok(switchLayout(p, { numbers: true }).options.every((o) => o.number === null),
+      `${p.key}: a toggle or a slide has no detent to number`);
+  }
+  for (const bad of [1, 'yes', null]) {
+    assert.throws(() => switchLayout(ENUM(7), { numbers: bad }), /numbers/, String(bad));
+  }
+});
+
+// The caller's half of finding 3: a legend grid printed as an algorithm chart, each legend
+// prefixed with its detent's number ("1 · 2 → 1"), its width and hit box laid out for that text.
+test('numberLegends prefixes a numbered dial\'s legends "n · label" and fits their boxes', () => {
+  const FM = Object.freeze({ key: 'algorithm', type: 'enum', default: 'a1', options: [
+    ['a1', '2 → 1'], ['a2', '1 + 2'], ['a3', '3 → 2 → 1'], ['a4', '(2 + 3) → 1'],
+    ['a5', '3 → (1 + 2)'], ['a6', '1 + 2 + 3'], ['a7', '3 → 2, 1']] });
+  for (const p of [FM, ENUM(7, true), ENUM(9), ENUM(12)]) {
+    for (const zoom of [1, 0.25]) {
+      const plain = switchLayout(p, { zoom });
+      const L = switchLayout(p, { zoom, numberLegends: true, knob: 64 });
+      for (const [i, o] of L.options.entries()) {
+        const text = `${i + 1} · ${p.options[i][1]}`;
+        assert.equal(o.legend.text, text, `${p.key}: option ${i}'s legend`);
+        assert.equal(o.label, p.options[i][1], `${p.key}: the label stays the option's own`);
+        assert.equal(o.legend.width, legendWidth(text, o.legend.size), `${p.key}: its width`);
+        assert.ok(inside(legendBox(o.legend), o.hit), `${p.key} at ${zoom}: inside its hit box`);
+        assert.equal(plain.options[i].legend.text, p.options[i][1], `${p.key}: unprefixed`);
+      }
+      const svg = switchSvg({ value: p.default, param: p, tokens: TOKENS, zoom,
+        numberLegends: true, knob: 64 });
+      const drawn = [...svg.matchAll(/<text data-legend="" data-index="(\d+)"[^>]*>([^<]*)</g)]
+        .map((m) => [Number(m[1]), m[2]]);
+      assert.deepEqual(drawn, L.options.map((o) => [o.index, o.legend.text.replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;').replace(/>/g, '&gt;')]), `${p.key}: the drawn legends`);
+    }
+  }
+  // Under 7 detents there is no number to print: the legends stay the labels.
+  const five = switchLayout(ENUM(5), { numberLegends: true });
+  assert.deepEqual(five.options.map((o) => o.legend.text), ENUM(5).options.map((o) => o[1]));
+});
+
 // ---------------------------------------------------------------- geometry
 
 test('every part lies inside switchLayout\'s box at zoom 1, 2 and 3, with every state', () => {
@@ -230,10 +426,11 @@ test('every part lies inside switchLayout\'s box at zoom 1, 2 and 3, with every 
     { focus: { option: 'o0' }, hover: { option: 'o1' } }, { hover: { option: false } }];
   for (const p of SAMPLES) {
     for (const zoom of ZOOMS) {
-      for (const state of states) {
+      for (const [state, extra] of states.flatMap((s) => [[s, {}],
+        [s, { knob: 64, numberLegends: true }]])) {
         const led = switchStyle(p) === 'toggle' ? { source: 'node.enabled', lit: true } : null;
-        const L = switchLayout(p, { zoom, led: Boolean(led) });
-        const svg = draw(p, { zoom, state, led });
+        const L = switchLayout(p, { zoom, led: Boolean(led), ...extra });
+        const svg = draw(p, { zoom, state, led, ...extra });
         const b = L.box;
         for (const [x0, y0, x1, y1] of extents(svg)) {
           assert.ok(x0 >= b.x - 1e-6 && y0 >= b.y - 1e-6 && x1 <= b.x + b.width + 1e-6
@@ -405,7 +602,7 @@ test('edges, lever, ticks and LED hold 3:1 on surface-2 and surface-3, legends 4
   const svg = draw(BOOL, { led: { source: 'x', lit: false } });
   assert.equal(attrOf(part(svg, 'data-housing'), 'stroke'), TOKENS.control.edge);
   assert.equal(attrOf(part(svg, 'data-lever'), 'fill'), TOKENS.control.pointer);
-  assert.equal(attrOf(part(svg, 'data-led'), 'stroke'), TOKENS.control.edge);
+  assert.equal(attrOf(part(svg, 'data-lens'), 'stroke'), TOKENS.control.edge);
   for (const d of parts(draw(WAVE), 'data-detent')) {
     assert.ok([TOKENS.control.track, TOKENS.control.ring].includes(attrOf(d, 'stroke')));
   }
@@ -521,22 +718,24 @@ test('no literal opacity, alpha or shadow in any output or in switch.js (v4)', (
       assert.deepEqual(intensityLiterals(svg), [], `${p.key} ${JSON.stringify(state)}`);
       assert.deepEqual(colourLiterals(svg), [], p.key);
       for (const cls of svg.matchAll(/\sclass="([^"]*)"/g)) {
-        assert.match(cls[1], /^(?:opacity-hw-(?:sheen|shadow)|shadow-hw-led)$/, cls[1]);
+        assert.match(cls[1], /^opacity-hw-(?:sheen|shadow)$/, cls[1]);
       }
     }
   }
 });
 
-test('the LED: data-source and data-lit from the caller, the glow only shadow-hw-led', () => {
+test('the LED: data-source and data-lit from the caller, the glow only its halo', () => {
   for (const lit of [true, false]) {
     const svg = draw(BOOL, { led: { source: 'filter.enabled "x"', lit } });
     const led = part(svg, 'data-led');
     assert.ok(led, 'an LED');
     assert.equal(attrOf(led, 'data-source'), 'filter.enabled &quot;x&quot;', 'escaped');
     assert.equal(attrOf(led, 'data-lit'), String(lit));
-    assert.equal(attrOf(led, 'class'), lit ? 'shadow-hw-led' : undefined, 'glow only when lit');
-    assert.equal(attrOf(led, 'fill'), lit ? TOKENS.control.ring : TOKENS.surface.card);
-    assert.equal(n(led, 'r'), 3, 'Ø6');
+    const lens = part(svg, 'data-lens');
+    assert.equal(attrOf(lens, 'fill'), lit ? TOKENS.control.ring : TOKENS.surface.card);
+    assert.equal(n(lens, 'r'), 3, 'Ø6');
+    assert.equal(parts(svg, 'data-halo').length, lit ? 1 : 0, 'the glow only when lit');
+    if (lit) assert.equal(attrOf(part(svg, 'data-halo'), 'class'), 'opacity-hw-sheen');
     assert.equal(parts(svg, 'data-led').length, 1);
   }
   assert.doesNotMatch(draw(BOOL), /data-led/, 'no LED unless the caller binds one');
@@ -548,24 +747,48 @@ test('the LED: data-source and data-lit from the caller, the glow only shadow-hw
   }
   assert.throws(() => draw(WAVE, { led: { source: 'x', lit: true } }), /LED.*toggle/);
   // The source binds both, as v4's unboundIndicators reads them: no literal state anywhere.
+  // switch.js draws no LED of its own: it passes the caller's { source, lit } to ledSvg, whose
+  // source binds both (ui-synth-led.test.mjs and v4's unboundIndicators read it).
   const code = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-  const tags = [...code.matchAll(/(?<=\s)data-led(?![\w-])/g)];
-  assert.ok(tags.length >= 1, 'switch.js draws data-led');
-  for (const m of tags) {
-    const lt = code.lastIndexOf('<', m.index);
-    const tag = code.slice(lt, code.indexOf('>', m.index) + 1);
-    assert.match(tag, /\sdata-source="\$\{/, 'data-source is interpolated');
-    assert.match(tag, /\sdata-lit="\$\{/, 'data-lit is interpolated');
-  }
+  assert.doesNotMatch(code, /(?<=\s)data-led(?![\w-])/, 'no data-led markup of its own');
+  assert.match(code, /ledSvg\(\{[^}]*\bsource: led\.source\b[^}]*\blit: led\.lit\b/,
+    'the caller\'s state, passed through');
   assert.doesNotMatch(code, /box-shadow|drop-shadow|feDropShadow|text-shadow/, 'no other glow');
 });
+
+test('a toggle\'s LED is led.js\'s LED: the same bezel, lens and halo, at the layout\'s place',
+  () => {
+    for (const zoom of [0.5, 1, 2, ZOOM_MAX]) {
+      for (const lit of [true, false]) {
+        const L = switchLayout(BOOL, { zoom, led: true });
+        const svg = draw(BOOL, { zoom, led: { source: 'node.enabled', lit } });
+        const want = ledSvg({ at: { x: L.led.cx, y: L.led.cy }, lit, source: 'node.enabled',
+          tokens: TOKENS, zoom });
+        assert.ok(svg.includes(want), `zoom ${zoom} lit ${lit}: ledSvg's markup, whole`);
+        if (lit) {
+          // The halo keeps the v4 glow bound on screen at every zoom the graph allows.
+          const reach = (n(part(svg, 'data-halo'), 'r') - n(part(svg, 'data-lens'), 'r')) * zoom;
+          assert.ok(reach > 0 && reach <= 6, `zoom ${zoom}: the halo ${reach} screen px, (0, 6]`);
+        }
+        assert.equal(parts(svg, 'data-bezel').length, 1, 'a bezel');
+        assert.equal(parts(svg, 'data-lens').length, 1, 'a lens');
+        assert.match(want, /^<g data-led=""/, 'data-led is the LED\'s group');
+        const housing = part(svg, 'data-housing');
+        const right = n(housing, 'x') + n(housing, 'width') + n(housing, 'stroke-width') / 2;
+        const box = ledBox({ at: { x: L.led.cx, y: L.led.cy }, zoom });
+        assert.ok(L.led.cx - LED.bezel - LED.bezelW / 2 >= right + 2,
+          'the bezel clears the housing');
+        assert.ok(box.x + box.width <= L.box.x + L.box.width + 1e-6, 'the halo in the box');
+      }
+    }
+  });
 
 test('a setpoint: no animation, no listener, no document; it imports only the layer', () => {
   const code = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
   assert.doesNotMatch(code, /<animate|\.animate\(|requestAnimationFrame|transition|setTimeout/);
   assert.doesNotMatch(code, /addEventListener|(?<![\w.])(?:document|window)\.|getComputedStyle/);
   const imports = [...SRC.matchAll(/^import .* from '([^']+)';$/gm)].map((m) => m[1]);
-  assert.deepEqual(imports, ['./knob.js']);
+  assert.deepEqual(imports, ['./knob.js', './legend.js', './led.js']);
 });
 
 // ---------------------------------------------------------------- controlSvg, kept

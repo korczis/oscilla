@@ -98,7 +98,7 @@ jobs:
   browser:
     name: Browser gate (${{ matrix.browser }})
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 65
     strategy:
       fail-fast: false
       matrix:
@@ -125,9 +125,11 @@ jobs:
           pactl set-default-sink ci_null
       - name: dist from file:// and the /oscilla/ sub-path; layout, touch targets, stop, journeys
         # The train's browser suites (cross-links, first-screen, surface-census) take the chain
-        # past 15 min on a hosted runner (~20 min measured, run 41333897971); the job bounds 50.
+        # past 15 min on a hosted runner (~20 min measured, run 41333897971). WebKit's chain with
+        # merge train 3's journeys and suites: cross-links ends at 25.7 min (run 41582489422) and
+        # the 30-minute bound ran out in first-screen; the job bounds 65.
         run: mkdir -p logs && npm run test:browser 2>&1 | tee logs/browser-${{ matrix.browser }}.log
-        timeout-minutes: 30
+        timeout-minutes: 45
       - name: Upload the log on failure
         if: failure()
         uses: actions/upload-artifact@v7

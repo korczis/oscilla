@@ -9,7 +9,8 @@
 // the hw-sheen and hw-shadow Tailwind keys (classes opacity-hw-sheen and opacity-hw-shadow), and
 // the hit path is hidden rather than transparent. Imports only the plug (plug.js, whose
 // plugSvg and plugState it re-exports), so its refused cross keeps clear of the room a plug
-// takes, or is left to a refused plug the caller names (`plug`).
+// takes, or is left to a refused plug the caller names (`plug`). S8 (the SYN review of W1, V1
+// and V2): a cord's weight, rim, sheen and hang, its plugs (`plugs`), and clearLabels.
 //
 //   CABLE_DASH                              the pattern of each signal type
 //   cableCurve(a, b, { slack, box, tangents, sag })
@@ -24,13 +25,17 @@
 //     sheen, dash, port, cross, plug })
 //                                           [{ key, tag, attrs, parent }], for setAttribute
 //   partsSvg(parts)                         the markup of those records
-//   cableSvg(spec)                          '<g data-cable="id">…</g>', partsSvg(cableParts())
+//   cableSvg(spec)                          '<g data-cable="id">…</g>', partsSvg(cableParts()),
+//                                           and both plugs when `plugs`
+//   clearLabels(from, to, labels, { slack, box, width, skip })
+//                                           { slack, sag, clear, crossed }: the slack that
+//                                           hides the fewest labels (skip: its own jacks')
 //   plugSvg({ at, colour, tokens, state, direction })
 //                                           a plug, seated, held or refused, taking no pointer
 //                                           (plug.js)
 //   plugState(state)                        { held, refused } of a plug state (plug.js)
 
-import { PLUG, plugState } from './plug.js';
+import { PLUG, plugState, plugSvg } from './plug.js';
 
 export { PLUG, plugState, plugSvg } from './plug.js';
 
@@ -40,12 +45,17 @@ export const CABLE_DASH = Object.freeze({
 });
 /** A refused connection of a solid type still shows by pattern, not by colour alone. */
 export const REFUSED_DASH = '4 4';
-/** The least a cable hangs below its chord's midpoint, graph units, however short. */
-export const CABLE_MIN_SAG = 12;
-/** The most a cable hangs below its chord's midpoint, graph units, however long. */
-export const CABLE_MAX_SAG = 60;
-/** The default slack: the sag as a fraction of the distance between the ends. */
-export const CABLE_SLACK = 0.25;
+/** The least a cable hangs below its chord's midpoint, graph units, however short (S8: 12). */
+export const CABLE_MIN_SAG = 20;
+/** The most a cable hangs below its chord's midpoint, graph units, however long (S8: 60). */
+export const CABLE_MAX_SAG = 90;
+/** The default slack, the sag as a part of the distance: a level 300 hangs 90 (S8: 0.25). */
+export const CABLE_SLACK = 0.3;
+/** The stroke at rest (S8): in its rim 7.5, 0.29 of the jack ring (JACK_R 13) across, and in
+ *  every state narrower than its plug's 10.5, as a real cord is. */
+export const CABLE_WIDTH = 6;
+/** The darker rim on each side of the stroke (S8). */
+export const CABLE_EDGE = 0.75;
 /** The hit path's width in screen px at every zoom (vector-effect="non-scaling-stroke"). */
 export const CABLE_HIT_PX = 44;
 /** A near-vertical cable's sideways bow (to +x) at its middle, as a part of min(sag, rise). */
@@ -73,7 +83,8 @@ const SHADOW_SPREAD = 3;
 const SHEEN_CLASS = 'opacity-hw-sheen';
 /** The intensity class of the soft shadow: the hw-shadow key of tailwind.config.cjs. */
 const SHADOW_CLASS = 'opacity-hw-shadow';
-const WIDTH = Object.freeze({ base: 4.5, hover: 6, selected: 7.5 });
+/** The stroke at rest, hovered and selected: in the rim 7.5, 8.75 and 10. */
+const WIDTH = Object.freeze({ base: CABLE_WIDTH, hover: 7.25, selected: 8.5 });
 
 const finite = (p) => Boolean(p) && Number.isFinite(p.x) && Number.isFinite(p.y);
 const num = (x) => {
@@ -172,36 +183,26 @@ function halves([p0, p1, p2, p3]) {
 }
 
 /**
- * The port-tangent cubics from a to b (see cableCurve), always two, so the path's shape is the
- * same whatever the ends. Forward: one cubic whose handles run along each port, REACH_PART of
- * the distance (at least 1, at most REACH_MAX), split in two at its middle. Behind (the target
- * behind the source's direction, and the source behind the target's): a loop of two cubics,
+ * The port-tangent cubics from a to b (see cableCurve), always two. Forward: one cubic whose
+ * handles run along each port, REACH_PART of the distance (1 to REACH_MAX), split at its middle.
+ * Behind (the target behind the source's direction and the source behind the target's): a loop
  * out along the source port, round below both ends (on the side of the source port's normal
- * that points down the screen, or to +x for a vertical port, so swapping the ends keeps the
- * side) by its reach, back across at the middle, and in along the target port; the reach is
- * half how far behind the target is, CABLE_REACH to REACH_MAX. The loop's handles grow with
- * how far behind the target is (at the middle a third of it, at each end an eighth, never less
- * than the reach), so a long return run (a feedback edge across many node columns) stays a wide
- * U and does not hook back over its target's plug. Between the two the forward curve, split in
- * two, is blended into the loop point by point (a smoothstep of how far behind the target is),
- * so dragging a target across its source never jumps the cable. The ramp is CABLE_REACH long or
- * half the widest gap between the two curves' matching control points, whichever is longer: a
- * target far above or below its source has a loop far from its forward curve, and over a ramp
- * of a fixed length the smoothstep (steepest slope 1.5) would carry the cable that whole gap in
- * a few units of drag; over half the gap it moves no point by much more than 3 graph units per
- * unit of drag, at any height. The blend keeps both ends' tangents and the smoothness where the
- * cubics meet, since each is a positive mix of two curves that have them.
+ * pointing down the screen, +x for a vertical port, so swapped ends keep the side) by its reach
+ * (half how far behind, CABLE_REACH to REACH_MAX), back across at the middle and in along the
+ * target port. Its handles grow with how far behind (a third at the middle, an eighth at each
+ * end, at least the reach), so a long feedback run stays a wide U and never hooks over its
+ * target's plug. Between the two the split forward curve blends into the loop point by point (a
+ * smoothstep of how far behind) over CABLE_REACH or half the widest gap between their control
+ * points, whichever is longer, so a drag never jumps the cable and moves no point much more
+ * than 3 units per unit at any height. Each blend is a positive mix of two curves with the ends'
+ * tangents and joins, so it keeps them.
  *
- * For opposite ports (to = -from: an output and an input on facing edges, Studio's case, in any
- * direction) the ramp ends by CABLE_REACH plus half the target's offset across the source port
- * (q), and the loop past it never crosses itself and stays CABLE_MIN_SAG clear of both ends.
- * Within the ramp it does not cross itself either, except within CABLE_REACH of an end, but it
- * may pass over an end's plug: a forward curve reaching the target from one side of its port
- * turning into a loop reaching it from the other has to pass the port somewhere, and the longer
- * ramp moves that pass to about 0.3 of the offset behind, at the ramp's slow speed, a move and
- * not a jump. For ports that are not opposite only the ends' directions are kept: the loop's
- * side is taken from the source port alone, so it may pass close to an end, and reversed ends
- * need not draw the same curve.
+ * For opposite ports (to = -from, Studio's facing edges) the ramp ends by CABLE_REACH plus half
+ * the offset across the source port, and the loop past it never crosses itself and stays
+ * CABLE_MIN_SAG clear of both ends; within the ramp it may pass over an end's plug (a curve
+ * reaching the port from one side turning into one reaching it from the other), slowly, about
+ * 0.3 of the offset behind. For other pairs only the ends' directions are kept: the loop's side
+ * comes from the source port alone, and reversed ends need not draw the same curve.
  */
 function tangentSegments(a, b, tangents) {
   if (tangents === null || typeof tangents !== 'object') {
@@ -254,24 +255,19 @@ function cubics(a, b, { slack = CABLE_SLACK, box, tangents, sag } = {}) {
 /**
  * A cable from a to b. By default it hangs, as one cubic: the ends exactly a and b, both
  * control points a third of the way along the chord and lowered by 4/3 of the sag, so the
- * middle of the curve hangs `sag` below the chord's midpoint, down the screen whichever end is
- * higher. The sag is slack × the distance, never below CABLE_MIN_SAG nor above CABLE_MAX_SAG;
- * given the drawing's viewBox (`box`), it is lessened so the curve never hangs below the box's
- * bottom edge (the box wins over the minimum, down to a straight cable). A cable steeper than
- * its sag also bows sideways (CABLE_BOW), so a vertical one still hangs. Reversed ends draw the
- * same curve, and a == b is a finite droop. `sag`, if given (a finite number of 0 or more),
- * is drawn instead of the slack's (a frame of settle; the box still wins over it).
+ * curve's middle hangs `sag` below the chord's midpoint, down the screen. The sag is slack ×
+ * the distance in [CABLE_MIN_SAG, CABLE_MAX_SAG], lessened so the curve never hangs below the
+ * bottom of a viewBox `box` (the box wins over the minimum, down to straight). A cable steeper
+ * than its sag bows sideways (CABLE_BOW), so a vertical one still hangs. Reversed ends draw the
+ * same curve; a == b is a finite droop. A given `sag` (finite, 0 or more; a frame of settle) is
+ * drawn instead of the slack's, the box still winning.
  *
- * With `tangents: { from, to }`, the two ports' directions (each the way its port faces out of
- * its node, so an output on a right edge to an input on a left edge is { from: { x: 1, y: 0 },
- * to: { x: -1, y: 0 } }; any length but zero), it is a graph's edge instead: it leaves along
- * `from` and enters moving against `to` (within 1 degree, for any two directions), and a target
- * behind its source is a smooth loop of two cubics. For opposite ports (to = -from, as an
- * output and an input on facing edges always are) the loop, once the blend into it is done,
- * goes round below both ends and clear of them, and reversed ends with swapped tangents draw
- * the same curve; for other pairs only the directions hold (see tangentSegments). `box` and
- * `sag` belong to the hanging mode and are refused beside `tangents` (a TypeError); `slack` is
- * ignored there.
+ * With `tangents: { from, to }`, each the way its port faces out of its node (an output on a
+ * right edge to an input on a left edge: { from: { x: 1, y: 0 }, to: { x: -1, y: 0 } }; any
+ * length but zero), it is a graph edge: it leaves along `from` and enters against `to` within
+ * 1 degree, and a target behind its source is a smooth loop of two cubics, which for opposite
+ * ports goes round below both ends and clear of them, reversible (see tangentSegments). `box`
+ * and `sag` are refused beside `tangents` (a TypeError); `slack` is ignored there.
  */
 export function cableCurve(a, b, { slack = CABLE_SLACK, box, tangents, sag } = {}) {
   const segs = cubics(a, b, { slack, box, tangents, sag });
@@ -352,8 +348,8 @@ export function cableSag(a, b, { slack = CABLE_SLACK, box } = {}) {
 export const SETTLE_MS = 400;
 /** The swing: the undamped angular frequency (rad/s) and the damping ratio. Under-damped, so a
  *  cable swings past its rest once by 4.6 % of the drop; the next swing back is 0.2 %, under
- *  SETTLE_EPS for any sag this module draws, and from the largest drop (72) the envelope is
- *  under SETTLE_EPS by 306 ms, inside SETTLE_MS. */
+ *  SETTLE_EPS for any sag this module draws. The largest drop (90, S8: 110 to 20 or 0 to
+ *  90) rests by 334 ms (367 at 30 frames a second), inside SETTLE_MS. */
 const SWING = Object.freeze({ omega: 24, zeta: 0.7 });
 /** At rest: within this of the rest sag (graph units), moving slower than SETTLE_SPEED. */
 const SETTLE_EPS = 0.5;
@@ -421,6 +417,26 @@ export function settle(previous, ends, dt, { slack = CABLE_SLACK, box,
   return done(sag, velocity, false);
 }
 
+/** The WCAG luminance of a token value written in hex (tokens.css), else NaN (var(), …). */
+function luminanceOf(value) {
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(value).trim());
+  if (!m) return NaN;
+  const h = m[1].length === 3 ? [...m[1]].map((c) => c + c).join('') : m[1];
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255)
+    .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** The rim's ink (S8): the darker of cable.shadow and cable.sheen (dark --osc-bg, light
+ *  --osc-text; each palette colour 3:1 on it), else cable.shadow. A choice of token only. */
+function edgeInk(tokens) {
+  const { shadow, sheen } = tokens.cable;
+  const ls = luminanceOf(shadow);
+  const lt = luminanceOf(sheen);
+  if (sheen && Number.isFinite(ls) && Number.isFinite(lt) && lt < ls) return sheen;
+  return shadow || 'currentColor';
+}
+
 function needTokens(tokens, who) {
   if (!tokens || !tokens.cable || !tokens.jack || !tokens.surface) {
     throw new TypeError(`${who} needs the synth tokens (synthTokens(el)).`);
@@ -473,54 +489,39 @@ const part = (key, tag, parent, attrs) => Object.freeze({ key, tag, parent,
 const str = (x) => String(x);
 
 /**
- * One cable as attribute records, for a keyed setAttribute editor (no markup): a frozen list of
- * { key, tag, attrs, parent } in document order, every parent before its children, every attribute
- * value a raw string (unescaped: setAttribute takes it as it is). `key` names the part within its
- * cable and is the same for the same part whatever the cable's ends, zoom or state ('cable',
- * 'shadow', 'main', 'hit', 'stroke', then 'cross', 'cross-under-0', 'cross-under-1', 'cross-0',
- * 'cross-1' when refused unless cross is false or the target plug is refused, then 'sheen' when
- * asked), so an editor keyed by
- * (cable id, key) updates attributes in place and adds or removes only the cross and the sheen.
- * In place means attribute by attribute: setAttribute each one the new record carries (new or
- * changed) and removeAttribute each one the part had that the new record no longer carries
- * (un-refusing a solid AUDIO cable drops data-refused from the cable and stroke-dasharray from
- * the stroke; an editor that only sets leaves it dashed and marked refused). The
- * list's order is the paint order: a part an update adds goes in at its list position,
- * parent.insertBefore(node, the node of the next part in the list with the same parent that is
- * already drawn), appended only when none is; so a cross that turns on under a sheen already drawn
- * goes in before the sheen, not over it, as cableSvg paints it. cableSvg serialises exactly this
- * list, so the two cannot disagree.
+ * One cable as attribute records for a keyed setAttribute editor (no markup): a frozen list of
+ * { key, tag, attrs, parent } in document and paint order, parents first, values raw strings.
+ * `key` names the part whatever the ends, zoom or state ('cable', 'shadow', 'main', 'hit',
+ * 'edge', 'stroke'; then 'cross', 'cross-under-0', 'cross-under-1', 'cross-0', 'cross-1' when
+ * refused, unless cross is false or the target plug is refused; then 'sheen' unless sheen is
+ * false), so an editor keyed by (cable id, key) only adds or removes the cross and the sheen.
+ * It does setAttribute for each attribute a record carries, removeAttribute for each one it no
+ * longer carries (un-refusing a solid AUDIO cable drops data-refused and stroke-dasharray; one
+ * that only sets leaves it dashed and refused), and parent.insertBefore(new part, the next drawn
+ * part of its parent; appended when none), so a cross goes under a drawn sheen, as painted.
+ * cableSvg serialises exactly this list.
  *
- * The parts: a soft shadow (tokens.cable.shadow at the hw-shadow intensity, SHADOW_CLASS,
- * SHADOW_SPREAD wider than the stroke and SHADOW_PX.rest screen px down), then the main stroke
- * group, the only part that takes the pointer (a hit path CABLE_HIT_PX screen px wide at every
- * zoom through vector-effect="non-scaling-stroke", visibility="hidden", which
- * pointer-events="stroke" still hits, and the visible stroke in the caller's colour, dashed by
- * kind), then an optional sheen stripe (tokens.cable.sheen at the hw-sheen intensity; off by
- * default). Hover and selection thicken the stroke; a dashed stroke has butt caps, so its gaps
- * stay open at every width (round caps would close them), and a solid one round caps. Dragging
- * lifts the shadow (SHADOW_PX.lifted down). Refused paints the stroke tokens.jack.refuse,
- * dashed (a solid kind takes REFUSED_DASH), marks the group data-refused and draws a cross on
- * the curve at the target end, CROSS_BACK back from it so it never covers the plug there, so a
- * refusal is a shape, not a colour alone (clear of the plug's room at both ends of a cable between
- * two jacks, ends 44 or more apart; a shorter cable takes its point farthest from the target).
- * `plug` is the state of the plug the caller draws at the target end, as plugSvg takes it
- * (plugState; a misspelt one refused): when that plug is refused, its own cross marks the
- * refusal and the cable leaves its cross out (the dash and data-refused stay), so one refusal
- * shows one cross whatever the cable's length; `cross: true` beside it on a refused cable is a
- * RangeError (a cable that is not refused draws no cross, so it is drawn as told nothing). `cross:
- * false` leaves the cross out the same way, told nothing about a plug. `zoom` turns the
- * screen-px offsets (the shadow's drop, the sheen's) into graph units; `slack`, `box`,
- * `tangents` and `sag` are cableCurve's.
- *
- * The signal's look is an input: `dash` (a CABLE_KINDS declaration's pattern, null for solid)
- * wins over CABLE_DASH[type], which is only the default when no dash is passed, and with a dash
- * `type` may name any kind; `port` (a PORT_KINDS shape name, or { from, to }) is recorded on
- * the cable as data-port-from and data-port-to, so the port glyph each end meets is the
- * declared one. Neither passed, the parts are what they were before these inputs existed.
+ * The parts: a soft shadow (tokens.cable.shadow at hw-shadow, SHADOW_CLASS, SHADOW_SPREAD wider,
+ * SHADOW_PX.rest screen px down, .lifted while dragging); the main group, the only part taking
+ * the pointer (a hit path CABLE_HIT_PX screen px wide at every zoom by vector-effect=
+ * "non-scaling-stroke", visibility="hidden", hit through pointer-events="stroke"; the opaque rim
+ * (edgeInk), CABLE_EDGE wider each side, dashed and capped as the stroke; the stroke in the
+ * caller's colour, dashed by kind); then the sheen (tokens.cable.sheen at hw-sheen). Hover and
+ * selection thicken stroke and rim; a dashed stroke has butt caps so its gaps stay open at any
+ * width, a solid one round. Refused paints the stroke tokens.jack.refuse, dashed (a solid kind
+ * REFUSED_DASH), marks data-refused and draws a cross on the curve CROSS_BACK from the target,
+ * clear of the plug's room at both ends of a cable 44 or more long (a shorter one takes its point
+ * farthest from the target): a shape, not a colour alone. `plug` is the target plug's state
+ * (plugState; a misspelt one refused): a refused plug draws its own cross, so the cable leaves
+ * its out (dash and data-refused stay) and `cross: true` beside it is a RangeError; `cross:
+ * false` leaves it out too. `zoom` turns the screen-px offsets into graph units; `slack`, `box`,
+ * `tangents` and `sag` are cableCurve's. `dash` (a CABLE_KINDS pattern, null for solid) wins
+ * over CABLE_DASH[type], and with it `type` may name any kind; `port` (a PORT_KINDS shape name,
+ * or { from, to }) is recorded as data-port-from and data-port-to. Neither passed, the parts are
+ * as before them.
  */
 export function cableParts({ id, from, to, type, colour, state = {}, tokens, slack = CABLE_SLACK,
-  box, tangents, sag, zoom = 1, sheen = false, dash, port, cross, plug } = {}) {
+  box, tangents, sag, zoom = 1, sheen = true, dash, port, cross, plug } = {}) {
   const who = 'cableParts';
   needTokens(tokens, who);
   if (cross !== undefined && typeof cross !== 'boolean') {
@@ -556,6 +557,8 @@ export function cableParts({ id, from, to, type, colour, state = {}, tokens, sla
     part('hit', 'path', 'main', { 'data-hit': '', d, fill: 'none', stroke: 'currentColor',
       visibility: 'hidden', 'stroke-width': str(CABLE_HIT_PX),
       'vector-effect': 'non-scaling-stroke', 'stroke-linecap': 'round' }),
+    part('edge', 'path', 'main', { 'data-edge': '', d, fill: 'none', stroke: edgeInk(tokens),
+      'stroke-width': str(num(w + 2 * CABLE_EDGE)), 'stroke-linecap': cap, ...dashed }),
     part('stroke', 'path', 'main', { 'data-stroke': '', d, fill: 'none', stroke: paint,
       'stroke-width': str(w), 'stroke-linecap': cap, ...dashed }),
   ];
@@ -599,12 +602,146 @@ export function partsSvg(parts) {
   return (kids.get(null) || []).map(one).join('');
 }
 
-/** One cable as '<g data-cable="id">…</g>': partsSvg(cableParts(spec)), nothing more. */
+/**
+ * One cable as '<g data-cable="id">…</g>': partsSvg(cableParts(spec)); with `plugs: true` (S8)
+ * the group ends with both plugs (plugSvg), seated at `from` and at `to` in the `plug` state,
+ * in `colour`, each boot turned the way the cable leaves it (cableDirections). A caller drawing
+ * plugs in a layer of its own, above its jacks, leaves `plugs` out.
+ */
 export function cableSvg(spec = {}) {
+  const { plugs = false } = spec;
+  if (typeof plugs !== 'boolean') {
+    throw new TypeError(`cableSvg: plugs must be true or false, not ${JSON.stringify(plugs)}.`);
+  }
   try {
-    return partsSvg(cableParts(spec));
+    const markup = partsSvg(cableParts(spec));
+    if (!plugs) return markup;
+    const { from, to, colour, tokens, slack = CABLE_SLACK, box, tangents, sag, plug } = spec;
+    const dirs = cableDirections(from, to, { slack, box, tangents, sag });
+    const ends = plugSvg({ at: from, colour, tokens, direction: dirs.from })
+      + plugSvg({ at: to, colour, tokens, state: plug, direction: dirs.to });
+    return `${markup.slice(0, -'</g>'.length)}${ends}</g>`;
   } catch (e) {
-    e.message = e.message.replace(/^cableParts:/, 'cableSvg:');
+    // An error says the function the caller called, not the helper that found it.
+    e.message = e.message.replace(/^(cableParts|cableCurve):/, 'cableSvg:');
+    throw e;
+  }
+}
+
+/** A label box { x, y, width, height } of finite numbers, width and height 0 or more. */
+function labelRect(r) {
+  const ok = r !== null && typeof r === 'object' && r.width >= 0 && r.height >= 0
+    && ['x', 'y', 'width', 'height'].every((k) => Number.isFinite(r[k]));
+  if (!ok) {
+    throw new TypeError('clearLabels: labels must be an array of label boxes { x, y, width, '
+      + `height }, finite, width and height 0 or more, not ${JSON.stringify(r)}.`);
+  }
+  return r;
+}
+
+/** How far the polyline judged may stray from the cubic; the pad grows by it. */
+const FLAT = 0.125;
+const toBox = (x, y, r) => Math.hypot(Math.max(r.x - x, 0, x - r.x - r.width),
+  Math.max(r.y - y, 0, y - r.y - r.height));
+/** The bounds { x0, x1, y0, y1 } of points, grown by g. */
+const bounds = (ps, g = 0) => ({ x0: Math.min(...ps.map((p) => p.x)) - g, x1: Math.max(...ps
+  .map((p) => p.x)) + g, y0: Math.min(...ps.map((p) => p.y)) - g, y1: Math.max(...ps
+  .map((p) => p.y)) + g });
+const meets = (h, r) => r.x <= h.x1 && r.x + r.width >= h.x0 && r.y <= h.y1
+  && r.y + r.height >= h.y0;
+
+/** Whether the segment p–q passes nearer than `near` to the box r: it enters r (no axis of
+ *  r's or of its normal separates them), or an end is near r, or a corner of r near it. */
+function segmentNear(p, q, r, near) {
+  if (!meets(bounds([p, q], near), r)) return false;
+  const c = [[r.x, r.y], [r.x + r.width, r.y], [r.x, r.y + r.height],
+    [r.x + r.width, r.y + r.height]].map(([x, y]) => ({ x, y }));
+  const dx = q.x - p.x;
+  const dy = q.y - p.y;
+  const side = c.map((k) => Math.sign(dx * (k.y - p.y) - dy * (k.x - p.x)));
+  if (meets(bounds([p, q]), r) && Math.abs(side.reduce((s, v) => s + v, 0)) < 4) return true;
+  const l2 = dx * dx + dy * dy || 1;
+  return toBox(p.x, p.y, r) < near || toBox(q.x, q.y, r) < near || c.some((k) => {
+    const t = Math.max(0, Math.min(1, ((k.x - p.x) * dx + (k.y - p.y) * dy) / l2));
+    return Math.hypot(k.x - p.x - t * dx, k.y - p.y - t * dy) < near;
+  });
+}
+
+/** The labels (indices of `which`, in order, at most `limit`) the hanging cable from a to b at
+ *  `sag` passes nearer than `pad` to: judged on a polyline within FLAT of the cubic (h²/8 of
+ *  its largest second derivative), only where a label meets its control points' bounds. */
+function crossings(a, b, sag, box, rects, which, pad, limit) {
+  const ps = [a, ...controls(a, b, CABLE_SLACK, box, sag), b];
+  const h = bounds(ps, pad + FLAT);
+  const d2 = (k) => 6 * Math.max(...[0, 1].map((i) => Math.abs(ps[i][k] - 2 * ps[i + 1][k]
+    + ps[i + 2][k])));
+  const n = Math.max(4, Math.ceil(Math.sqrt(Math.hypot(d2('x'), d2('y')) / (8 * FLAT))));
+  let line;
+  const hit = [];
+  for (const j of which) {
+    if (hit.length >= limit) break;
+    if (!meets(h, rects[j])) continue;
+    line = line || Array.from({ length: n + 1 }, (_, i) => {
+      const t = i / n;
+      const w = [(1 - t) ** 3, 3 * (1 - t) ** 2 * t, 3 * (1 - t) * t * t, t ** 3];
+      return { x: w.reduce((s, k, m) => s + k * ps[m].x, 0),
+        y: w.reduce((s, k, m) => s + k * ps[m].y, 0) };
+    });
+    if (line.some((p, i) => i && segmentNear(line[i - 1], p, rects[j], pad + FLAT))) hit.push(j);
+  }
+  return hit;
+}
+
+/**
+ * Lifts a hanging cable off the labels it would hide (S8; pure): a cable may hang over a panel,
+ * not over a label a little more sag avoids. Judged as cableCurve hangs it (`slack`, `box`),
+ * half its `width` kept clear of each label box ({ x, y, width, height }). The sag rises a unit
+ * at a time from its rest, up to CABLE_MAX_SAG and the box, and the sag crossing the fewest
+ * labels wins, the least on a tie (the rest and its `slack` when none crosses fewer): a label
+ * more sag clears is cleared even beside one it cannot (a shallow box; coincident ends). The
+ * cable's own jacks' labels, which it leaves through at any sag, belong in `skip` (indices),
+ * neither judged nor reported. Frozen { slack, sag, clear, crossed }: the hang returned
+ * (cableSag(from, to, { slack, box }) is its sag), `crossed` the labels' indices it still
+ * crosses, `clear` when none. `tangents` is refused: an edge does not hang.
+ */
+export function clearLabels(from, to, labels, { slack = CABLE_SLACK, box, tangents,
+  width = CABLE_WIDTH + 2 * CABLE_EDGE, skip = [] } = {}) {
+  if (tangents !== undefined) {
+    throw new TypeError('clearLabels judges a hanging cable; an edge with tangents does not.');
+  }
+  const rects = Array.isArray(labels) ? labels.map(labelRect) : [labelRect(labels)];
+  if (!(Number.isFinite(width) && width > 0)) {
+    throw new RangeError(`clearLabels: width must be a finite number above 0, not ${width}.`);
+  }
+  if (!(Array.isArray(skip) && skip.every((i) => Number.isInteger(i) && i >= 0
+    && i < rects.length))) {
+    throw new TypeError(`clearLabels: skip must be an array of label indices, not ${
+      JSON.stringify(skip)}.`);
+  }
+  const done = (k, sag, crossed) => Object.freeze({ slack: k, sag, clear: !crossed.length,
+    crossed: Object.freeze(crossed) });
+  try {
+    const rest = hangingSag(from, to, slack, box);
+    const pad = width / 2;
+    const which = rects.map((_, j) => j).filter((j) => !skip.includes(j));
+    let best = { sag: rest, crossed: crossings(from, to, rest, box, rects, which, pad, 1 / 0) };
+    const span = Math.hypot(to.x - from.x, to.y - from.y);
+    if (!best.crossed.length || !(span > 0)) return done(slack, rest, best.crossed);
+    const top = Math.min(CABLE_MAX_SAG, sagRoom(from, to, bottomOf(box)));
+    // Every hang between the rest and the top has its control points inside those two hangs'
+    // bounds (the drop and the bow grow with the sag): only labels there are judged.
+    const reach = bounds([rest, top].flatMap((s) => controls(from, to, CABLE_SLACK, box, s))
+      .concat(from, to), pad + FLAT);
+    const near = which.filter((j) => meets(reach, rects[j]));
+    for (let s = rest + 1; s < top + 1 && best.crossed.length; s += 1) {
+      const sag = Math.min(s, top);
+      const crossed = crossings(from, to, sag, box, rects, near, pad, best.crossed.length);
+      if (crossed.length < best.crossed.length) best = { sag, crossed };
+    }
+    if (best.sag === rest) return done(slack, rest, best.crossed);
+    return done(best.sag / span, hangingSag(from, to, best.sag / span, box), best.crossed);
+  } catch (e) {
+    e.message = e.message.replace(/^cableCurve:/, 'clearLabels:');
     throw e;
   }
 }

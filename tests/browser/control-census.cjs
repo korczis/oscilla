@@ -409,9 +409,16 @@ both({ id: 'filter.cutoffSlider', ws: 'filter', control: '#osc-filter-cutoff',
   pointer: D.slide('#osc-filter-cutoff', 0.02), keyboard: D.keys('#osc-filter-cutoff', 'Home'),
   expect: (s, b) => s.filter.frequency < b.filter.frequency && s.text.cutoff !== b.text.cutoff,
   audio: { hz: 1000, expect: (a, b) => b - a > 20 } });
+// The setup leaves a low-pass at fc, whose gain there is its Q (RBJ biquad: |H(w0)| = Q), so
+// the tone starts 20 log10(SQRT1_2) = -3.01 dB down (FILTER_DEFAULTS.Q). Band-pass (constant
+// 0 dB peak) and peaking at 0 dB gain pass fc at 0 dB: the tone rises by 3.01 dB. Judged within
+// 1.5 dB of that (the analyser read 2.1-2.9 dB in the linux WebKit image); 'below 3' sat on the
+// expected value and failed 2 of 3 CI runs (#404 at 234bee2d, #406 at 6eb558b5).
+const LP_AT_FC_DB = 20 * Math.log10(Math.SQRT1_2);
+const passesFc = (a, b) => Math.abs(a - b + LP_AT_FC_DB) < 1.5;
 for (const [t, fc, judge] of [['highpass', 5000, (a, b) => b - a > 20],
-  ['notch', 1000, (a, b) => b - a > 40], ['bandpass', 1000, (a, b) => Math.abs(a - b) < 3],
-  ['peaking', 1000, (a, b) => Math.abs(a - b) < 3]]) {
+  ['notch', 1000, (a, b) => b - a > 40], ['bandpass', 1000, passesFc],
+  ['peaking', 1000, passesFc]]) {
   both({ id: `filter.type.${t}`, ws: 'filter', control: `#osc-ftype-${t}`,
     setup: seq(S.latch(1000), S.filterOn({ type: 'lowpass', frequency: 20000 }),
       (page) => page.evaluate((f) => window.OSCILLA.labs.filter.set({ frequency: f }), fc)),
@@ -1619,9 +1626,12 @@ for (const [c, by] of [['#osc-synth-pick', 'synth.cjs'],
   ['[data-osc="keyboard.octave-down"]', 'midi.cjs'],
   ['[data-osc="keyboard.octave-up"]', 'midi.cjs'],
   ['[data-osc="keyboard.velocity-down"]', 'midi.cjs'],
-  ['[data-osc="keyboard.velocity-up"]', 'midi.cjs']]) {
+  ['[data-osc="keyboard.velocity-up"]', 'midi.cjs'],
+  ['[data-osc="keyboard.more"]', 'synth.cjs']]) {
   delegated(c, by, 'the Synth dock, its patch library and the on-screen keyboard');
 }
+// About's "What comes next": its Later list folds open and shut (app.cjs drives and judges it)
+delegated('[data-osc="about.next.later-toggle"]', 'app.cjs', 'About, what comes next');
 
 // The dock's oscillator group: which VCO the waveform group edits (synth/dock.js). Its effect
 // is read from the Studio store: the waveform group then shows that oscillator's waveform.
@@ -1769,11 +1779,13 @@ async function runRow(browser, r) {
   const { context, page, errors } = await op.openApp(browser, { dist: DIST, viewport: r.viewport,
     init: r.noClipboard ? [FULLSCREEN_PROBE, NO_CLIPBOARD] : FULLSCREEN_PROBE,
     keepSafety: !!r.keepSafety });
+  // Hoisted so a timed-out audio row reports the levels it judged, not only "last value false".
+  let dbBefore = null;
+  let db = null;
   try {
     if (r.ws !== 'playground') await op.navTo(page, r.ws);
     const read = () => (r.read ? page.evaluate(r.read, r.readArg) : Promise.resolve({}));
     if (r.setup) await r.setup(page);
-    let dbBefore = null;
     if (r.audio) {
       // the setup's sound is steady (two readings in a row within 0.3 dB) before the "before"
       let prev = null;
@@ -1789,7 +1801,6 @@ async function runRow(browser, r) {
     const before = { ...(await page.evaluate(op.snapshot)), x: await read() };
     await r.act(page);
     let last = null;
-    let db = null;
     await until(async () => {
       last = await page.evaluate(op.snapshot);
       const x = await read();
@@ -1800,7 +1811,10 @@ async function runRow(browser, r) {
     return { ok: true, detail: r.audio ? { before: +dbBefore.toFixed(1), after: +db.toFixed(1) }
       : null };
   } catch (e) {
-    return { ok: false, error: op.clip(String(e.message).split('\n')[0], 300) };
+    const level = r.audio && dbBefore !== null && db !== null
+      ? ` [${r.audio.hz} Hz: ${dbBefore.toFixed(1)} dB before, ${db.toFixed(1)} dB at the deadline]`
+      : '';
+    return { ok: false, error: op.clip(String(e.message).split('\n')[0], 300) + level };
   } finally {
     await context.close().catch(() => {});
   }

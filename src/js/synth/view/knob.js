@@ -77,7 +77,7 @@ export function panelControlTokens(t) {
   return {
     surface: { plateHi: t.plateHi, plateLo: t.plateLo, card: t.plateHi, edge: t.edge },
     control: { cap: t.cap, capHi: t.capHi, ring: t.accent, track: t.dim, pointer: t.pointer,
-      focus: t.focus, disabled: t.dim, edge: t.dim, knurl: t.track },
+      focus: t.focus, disabled: t.dim, edge: t.dim, knurl: t.track, bezel: t.bezel },
   };
 }
 

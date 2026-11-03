@@ -348,10 +348,14 @@ function defineChecks() {
     await holdSpace(page);
     const b = await snap(page);
     await act.click(page, '#osc-step-oct-up');
+    // The status bar shows the instantaneous frequency, which the instrument polls every
+    // 100 ms (core/instrument.js instFreq): it follows the carrier a poll later, so the wait
+    // covers the readout and the status bar too (firefox read 440 Hz at the carrier's 880 on #406).
     let s = await waitSnap(page, (x) => x.engine.voice && near(x.engine.voice.freq,
-      b.app.frequency * 2, 1), 'octave up reaches the sounding carrier');
-    must(s.text.freq !== b.text.freq && s.text.sbFreq !== b.text.sbFreq,
-      'the frequency readout and the status bar follow', s.text);
+      b.app.frequency * 2, 1) && x.text.freq !== b.text.freq && x.text.sbFreq !== b.text.sbFreq,
+    'octave up reaches the sounding carrier, its readout and the status bar');
+    must(near(Number((s.text.sbFreq || '').replace(/[^\d.]/g, '')), b.app.frequency * 2, 1),
+      'the status bar shows the doubled frequency', s.text);
     await act.click(page, '#osc-wave-square');
     s = await waitSnap(page, (x) => x.engine.voice && x.engine.voice.wave === 'square'
       && /squ/i.test(x.text.sbWave || ''), 'Square reaches the carrier and the status bar');
