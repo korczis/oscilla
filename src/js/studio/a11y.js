@@ -337,7 +337,7 @@ export function boundedSummary(summary, opts = {}) {
 export function summarizeGraph(model, opts = {}) {
   const o = { ...SUMMARY_DEFAULTS, registry: NODE_REGISTRY, ...opts };
   const summary = summarizeGraphModel(model, { registry: o.registry,
-    pathLimit: Math.max(SUMMARY_PATH_LIMIT, o.maxPaths) });
+    pathLimit: o.maxPaths });
   return boundedSummary(summary, o);
 }
 
