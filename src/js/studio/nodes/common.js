@@ -7,6 +7,8 @@
 //   min, max, step, unit, scale: 'linear'|'log', options: [[value, label]], default, nullable,
 //   automatable, modulatable, modDepth /* default modulation depth, parameter unit */,
 //   softRange /* [lo, hi] Inspector display range inside [min, max] */,
+//   laneRange /* [lo, hi] automation lane range inside [min, max], where it differs from the
+//                softRange (null: the lane shows the softRange, else the range) */,
 //   minLength, maxLength /* list */, pattern /* id */ }
 // Ranges are model validity ranges, independent of any running AudioContext: frequencies may be
 // stored up to FREQUENCY_MAX_HZ and the compiler clamps them to 0.95 × Nyquist of the context it
@@ -47,14 +49,15 @@ export const CATEGORY_ORDER = Object.freeze([
 
 const BASE = {
   step: null, unit: '', scale: 'linear', options: null, nullable: false, automatable: false,
-  modulatable: false, modDepth: null, softRange: null, minLength: null, maxLength: null,
-  pattern: null,
+  modulatable: false, modDepth: null, softRange: null, laneRange: null, minLength: null,
+  maxLength: null, pattern: null,
 };
 
 function freezeParam(p) {
   const out = { ...BASE, ...p };
   if (out.options) out.options = Object.freeze(out.options.map((o) => Object.freeze([...o])));
   if (out.softRange) out.softRange = Object.freeze([...out.softRange]);
+  if (out.laneRange) out.laneRange = Object.freeze([...out.laneRange]);
   if (Array.isArray(out.default)) out.default = Object.freeze([...out.default]);
   return Object.freeze(out);
 }

@@ -10,7 +10,9 @@ import {
   applyConfig, defaultEditorFields, defaultInstrumentState, gainLevelDb, gainLevelForPct,
   gainPctFor, pickInstrumentState,
 } from '../../src/js/core/config.js';
-import { limitsFor, rangeBounds, fitRangeMode } from '../../src/js/core/frequency.js';
+import {
+  formatFrequency, limitsFor, rangeBounds, fitRangeMode,
+} from '../../src/js/core/frequency.js';
 import {
   decodeHash, restoreFromHash, serializeConfig, serializeHash,
 } from '../../src/js/core/url-state.js';
@@ -257,4 +259,28 @@ test('V2 fix: the octave preset and the hearing demo play their labelled steps',
   demo.runDemo(LEARN_TOPICS.find((t) => t.id === 'hearing'));
   assert.deepStrictEqual(steps(demo), want);
   assert.strictEqual(demo.pp.octave.gapMs, 100);
+});
+
+test('C017: Reset to defaults refreshes the Custom range fields and clears their error', () => {
+  // Finding persist-1: resetDefaults restored customMin/customMax but left the Min/Max texts
+  // (bound to #osc-set-min/#osc-set-max) and the range error of the last edit on screen.
+  const noTimer = { setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0,
+    clearInterval() {} };
+  const app = createInstrument({ engine: null, timers: noTimer });
+  app.sampleRate = 48000;
+  app.setRangeMode('custom');
+  app.setCustomBound('min', '2500');
+  app.setCustomBound('max', '4000'); // under one octave above the minimum: an error, max 5 kHz
+  assert.strictEqual(app.customMaxText, formatFrequency(5000));
+  assert.match(app.rangeError, /octave/);
+  app.resetDefaults();
+  assert.strictEqual(app.rangeMode, 'human');
+  assert.strictEqual(app.customMin, 100);
+  assert.strictEqual(app.customMax, 10000);
+  assert.strictEqual(app.customMinText, formatFrequency(app.customMin));
+  assert.strictEqual(app.customMaxText, formatFrequency(app.customMax));
+  assert.strictEqual(app.rangeError, '');
+  app.setRangeMode('custom'); // reopening Custom shows the restored bounds
+  assert.strictEqual(app.customMinText, formatFrequency(100));
+  assert.strictEqual(app.customMaxText, formatFrequency(10000));
 });

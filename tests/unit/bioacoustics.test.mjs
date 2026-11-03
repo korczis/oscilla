@@ -12,7 +12,9 @@ import { readFileSync } from 'node:fs';
 import {
   HEARING_RANGES, CALL_EXAMPLES, DISCLAIMER, rangeToLogFraction,
 } from '../../src/js/data/bioacoustics.js';
-import { mount, renderSources } from '../../src/js/labs/bioacoustics.js';
+import {
+  NEW_TAB_HINT, mount, renderSources, sourceLinkText,
+} from '../../src/js/labs/bioacoustics.js';
 import { citation } from '../../src/js/charts/bio-chart.js';
 
 const ALL = [...HEARING_RANGES, ...CALL_EXAMPLES];
@@ -182,10 +184,40 @@ test('the sources list renders one cited item per bar, for ranges and for calls'
       assert.strictEqual(list.children.length, entries.length, dataset);
       entries.forEach((e, i) => {
         const text = list.children[i].text;
+        const url = e.source.doi_or_url;
         assert.ok(text.startsWith(`${e.label}: `), `${e.id}: label`);
         assert.ok(text.includes(e.basis), `${e.id}: basis`);
-        assert.ok(text.includes(citation(e.source)), `${e.id}: citation`);
+        assert.ok(text.includes(citation(e.source).slice(0, -url.length)), `${e.id}: citation`);
+        const link = list.children[i].children.find((c) => c && c.href);
+        assert.ok(link, `${e.id}: the source is a link`);
+        assert.strictEqual(link.href, url, `${e.id}: the link goes to the cited URL`);
+        assert.strictEqual(link.title, url, `${e.id}: the URL is the link's title`);
+        assert.strictEqual(link.target, '_blank');
+        assert.strictEqual(link.rel, 'noopener noreferrer');
+        assert.strictEqual(link.textContent, sourceLinkText(url), `${e.id}: readable link text`);
       });
     }
   });
+});
+
+// UX link audit B10: a citation link names its resolver and identifier, not the raw URL, says
+// when it is a PDF, and says to everyone, screen readers included, that it opens a new tab.
+test('a citation link reads as its source and says it opens a new tab (B10)', () => {
+  assert.strictEqual(sourceLinkText('https://doi.org/10.1121/1.1596173'),
+    `DOI 10.1121/1.1596173 ${NEW_TAB_HINT}`);
+  assert.strictEqual(sourceLinkText('https://doi.org/10.1016/0378-5955(85)90100-5'),
+    `DOI 10.1016/0378-5955(85)90100-5 ${NEW_TAB_HINT}`);
+  assert.strictEqual(sourceLinkText('https://pubmed.ncbi.nlm.nih.gov/17203911/'),
+    `PubMed 17203911 ${NEW_TAB_HINT}`);
+  assert.strictEqual(sourceLinkText('https://www.researchgate.net/publication/220008865'),
+    `ResearchGate 220008865 ${NEW_TAB_HINT}`);
+  assert.strictEqual(sourceLinkText(
+    'https://acousticstoday.org/wp-content/uploads/2015/11/Dolphin-Biosonar-Research.pdf'),
+  `acousticstoday.org, PDF ${NEW_TAB_HINT}`);
+  assert.strictEqual(NEW_TAB_HINT, '(opens in a new tab)');
+  for (const e of ALL) {
+    const t = sourceLinkText(e.source.doi_or_url);
+    assert.ok(!t.includes('://'), `${e.id}: no raw URL in the link text`);
+    assert.ok(t.endsWith(NEW_TAB_HINT), `${e.id}: the new-tab hint`);
+  }
 });

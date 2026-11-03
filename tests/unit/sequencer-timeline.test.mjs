@@ -8,6 +8,7 @@ import {
   formatTick,
   layoutBlocks,
   playheadPosition,
+  passPlayheadX,
   hitTestBlock,
   dropIndexAt,
   reorderTarget,
@@ -131,4 +132,23 @@ test('scaleForModel uses the model duration', () => {
   const s = scaleForModel(referenceSequence(), 450, { minSpanS: 1 });
   assert.equal(s.spanS, 2.25);
   assert.equal(s.pxPerSecond, 200);
+});
+
+test('passPlayheadX: by block id at the fraction of the sounding block; null when gone', () => {
+  const m = referenceSequence();
+  const scale = createTimeScale({ durationS: 2.25, widthPx: 450, minSpanS: 2.25 });
+  const rects = layoutBlocks(m, scale, { gapPx: 0 });
+  // Pulse b4 sounds 1.25-1.75 s into its pass; a quarter of the way in.
+  const pb = { id: 'b4', index: 3, startS: 1.25, endS: 1.75, t: 1.375 };
+  near(passPlayheadX(rects, pb), rects[3].x + rects[3].w * 0.25);
+  // The edited lane moved b4 first: the head follows the id, not the pass index.
+  const moved = layoutBlocks(moveBlock(m, 3, 0), scale, { gapPx: 0 });
+  near(passPlayheadX(moved, pb), moved[0].x + moved[0].w * 0.25);
+  assert.equal(moved[0].id, 'b4');
+  // Clamped to the rect; null for a deleted block, no pass or no rects.
+  near(passPlayheadX(rects, { ...pb, t: 9 }), rects[3].x + rects[3].w);
+  assert.equal(passPlayheadX(rects, { ...pb, id: 'b9' }), null);
+  assert.equal(passPlayheadX(rects, null), null);
+  assert.equal(passPlayheadX(null, pb), null);
+  near(passPlayheadX(rects, { ...pb, startS: 1, endS: 1 }), rects[3].x);
 });
