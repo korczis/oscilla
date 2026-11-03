@@ -33,4 +33,4 @@ workspace zooms to the direct sound, the early part or the whole response.
 
 The time of the peak is where the sweep starts in the recording, including unknown device
 and browser delays: it is not a time of flight and not a latency. RT60, EDT, T20 and T30
-belong to V3.1 and are not computed.
+belong to the measurement extensions (milestone M047, plan issue V391) and are not computed.

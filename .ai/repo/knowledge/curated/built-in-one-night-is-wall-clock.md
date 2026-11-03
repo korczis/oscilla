@@ -68,3 +68,13 @@ session under the owner's delegation of 2026-10-18 ("tak to vse pores"); the own
 override: About keeps "Built in one night" and the 5 h 51 min derived from git, and qualifies it
 as wall-clock time with several AI workers in parallel. The qualifier rests on the PR overlap above and
 the two commits; it does not cite the 75 captures or a line count. About is unchanged until the follow-up copy issue lands.
+
+## Note of 2026-11-03: the copy landed
+
+The text above is as of 2026-10-18. The follow-up copy issue is P005 (done; f1f7ca09,
+2026-10-19, merged in #219), and U002 (7077e98d, 2026-10-29) removed the headline "Built in one
+night. Not built as a throwaway." from About; `src/index.html` no longer carries it. About now
+gives the interval with the qualifier, in the V2 station of its timeline (`src/index.html`
+lines 2719-2720): "Modular acoustic laboratory at the end of the first night: 5 h 51 min of
+wall-clock time, with several AI workers in parallel", and its Engineering block keeps "The
+speed was unusual. The constraints were deliberately not." (line 2916).
