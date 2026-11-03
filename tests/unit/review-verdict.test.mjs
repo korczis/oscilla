@@ -6,7 +6,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, readdirSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gitRepo } from './fixtures/git-repo.mjs';
@@ -373,4 +374,124 @@ test('the digest covers mode and deletion, and nothing but the guarded paths', (
   repo.commit('delete', {});
   assert.notEqual(content(repo), executable, 'a deletion is not the file');
   assert.notEqual(content(repo), digest);
+});
+
+// A train's members (#367: member #303 rode with its own verdict at `changes` and open P1/P2,
+// and nothing refused it). The train is known as scripts/fail-first.mjs knows it, by its head
+// branch or title, and, for a feature train titled as one feat, by the `| member | what |`
+// table of its body; the members are that table's rows. Each member's own verdict at the train
+// head must be merge, or the train's verdict names the member under `members:` and judges it.
+
+const TRAIN_BODY = (members) => ['## Members', '', '| member | what |', '|---|---|',
+  ...members.map((n) => `| #${n} | chore(x): member ${n} |`), ''].join('\n');
+
+/** The PR JSON the CI step writes (`gh pr view --json title,body,headRefName`), as a file. */
+function prJson(t, { title = 'Merge train 2026-11-01: #303, #304', headRefName = 'train/2026-11-01',
+  members = [303, 304], body = TRAIN_BODY(members) } = {}) {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'oscilla-review-verdict-pr-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'pr.json');
+  writeFileSync(file, JSON.stringify({ title, body, headRefName }));
+  return file;
+}
+const trainCheck = (repo, file) => script(repo, '--pr', String(PR), '--base-branch', 'main',
+  '--pr-json', file);
+
+/** A member's own verdict: `changes` with an open P1, or `merge`. */
+const memberVerdict = (n, v) => verdict({ content: 'b'.repeat(64), pr: n, verdict: v,
+  findings: v === 'merge' ? [] : [{ id: 'R-1', severity: 'P1', status: 'open' }] });
+
+/** The train's own verdict for its content, with an optional `members:` block. */
+function trainVerdict(digest, members) {
+  const text = verdict({ content: digest });
+  if (!members) return text;
+  return `${text}members:\n${members.map((m) => `  - { ${Object.entries(m)
+    .map(([k, v]) => `${k}: ${v}`).join(', ')} }`).join('\n')}\n`;
+}
+
+/** main with an engine file; a train branch that changes it and carries member verdicts. */
+function train(t, memberFiles) {
+  const repo = fixture();
+  t.after(() => repo.dispose());
+  const files = {};
+  for (const [n, v] of Object.entries(memberFiles)) {
+    files[`.ai/repo/reviews/${n}.yaml`] = memberVerdict(Number(n), v);
+  }
+  if (Object.keys(files).length) repo.commit('members\' verdicts', files);
+  const digest = content(repo);
+  return { repo, digest };
+}
+
+test('#367: a train whose member\'s own verdict is changes is refused', (t) => {
+  const { repo, digest } = train(t, { 303: 'changes' });
+  repo.commit('train verdict', { [VERDICT_FILE]: trainVerdict(digest) });
+  const r = trainCheck(repo, prJson(t));
+  assert.equal(r.status, 1, r.out);
+  assert.match(r.out, /member #303: its own verdict is "changes", not merge/);
+  assert.match(r.out, /REFUSED: train member #303/);
+  assert.match(r.out, /members:/, 'the refusal says how the train\'s verdict judges it');
+  // the same through the environment, which is how the CI step hands the PR over
+  const env = spawnSync(process.execPath, [SCRIPT, '--repo', repo.dir, '--pr', String(PR),
+    '--base-branch', 'main'], { encoding: 'utf8', env: { ...ENV, PR_JSON: prJson(t) } });
+  assert.equal(env.status, 1, `${env.stdout}${env.stderr}`);
+  assert.match(env.stdout, /REFUSED: train member #303/);
+});
+
+test('#367: the same train passes when its own verdict names and judges that member', (t) => {
+  const { repo, digest } = train(t, { 303: 'changes' });
+  repo.commit('train verdict', { [VERDICT_FILE]: trainVerdict(digest,
+    [{ pr: 303, verdict: 'merge', reason: '"R-1 and R-2 fixed in the train at 3a840b66"' }]) });
+  assert.equal(content(repo), digest, 'the members block is not guarded content');
+  const r = trainCheck(repo, prJson(t));
+  assert.equal(r.status, 0, r.out);
+  assert.match(r.out, /member #303: its own verdict is "changes"; judged merge by this train's/);
+  assert.match(r.out, /accepted: verdict merge by oscilla-25/);
+});
+
+test('a train\'s judgement of a member needs verdict merge and a reason, for that member', (t) => {
+  const { repo, digest } = train(t, { 303: 'changes' });
+  for (const [members, expected] of [
+    [[{ pr: 303, verdict: 'changes', reason: 'x' }], /REFUSED: train member #303/],
+    [[{ pr: 303, verdict: 'merge' }], /members entry 1: reason .* is missing/],
+    [[{ pr: 330, verdict: 'merge', reason: 'x' }], /REFUSED: train member #303/],
+  ]) {
+    repo.commit('train verdict', { [VERDICT_FILE]: trainVerdict(digest, members) });
+    const r = trainCheck(repo, prJson(t));
+    assert.equal(r.status, 1, r.out);
+    assert.match(r.out, expected);
+  }
+  repo.commit('train verdict', { [VERDICT_FILE]: verdict({ content: digest })
+    .concat('members: judged\n') });
+  assert.match(trainCheck(repo, prJson(t)).out, /members must be a list/);
+});
+
+test('a train member with no verdict file of its own (no guarded path) passes', (t) => {
+  const { repo, digest } = train(t, {});
+  repo.commit('train verdict', { [VERDICT_FILE]: trainVerdict(digest) });
+  const r = trainCheck(repo, prJson(t));
+  assert.equal(r.status, 0, r.out);
+  assert.match(r.out, /member #303: no verdict of its own/);
+  assert.match(r.out, /member #304: no verdict of its own/);
+});
+
+test('a train whose members\' own verdicts are all merge passes', (t) => {
+  const { repo, digest } = train(t, { 303: 'merge', 304: 'merge' });
+  repo.commit('train verdict', { [VERDICT_FILE]: trainVerdict(digest) });
+  const r = trainCheck(repo, prJson(t));
+  assert.equal(r.status, 0, r.out);
+  assert.match(r.out, /member #303: its own verdict is merge/);
+  assert.match(r.out, /member #304: its own verdict is merge/);
+});
+
+test('a feature train titled as one feat is judged by its member table too', (t) => {
+  const { repo, digest } = train(t, { 303: 'changes' });
+  repo.commit('train verdict', { [VERDICT_FILE]: trainVerdict(digest) });
+  const feature = prJson(t, { title: 'feat(instrument): feature train 2026-10-31',
+    headRefName: 'feat/train-2026-10-31-features' });
+  const r = trainCheck(repo, feature);
+  assert.equal(r.status, 1, r.out);
+  assert.match(r.out, /REFUSED: train member #303/);
+  // a pull request with no member table is no train: other PRs' verdicts are not its concern
+  const plain = prJson(t, { title: 'fix(audio): x', headRefName: 'fix/x', body: 'see #303' });
+  assert.equal(trainCheck(repo, plain).status, 0);
 });

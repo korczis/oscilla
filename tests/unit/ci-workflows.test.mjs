@@ -431,6 +431,37 @@ test('the fail-first job reads the PR\'s title, body and head branch', () => {
   assert.ok(!failFirstPrFields(without).includes('headRefName'));
 });
 
+// scripts/review-verdict.mjs knows a train, and reads its members, from the PR JSON this step
+// writes and names in PR_JSON (#303 rode #367 with its own verdict at `changes`): without the
+// file, or with the variable gone, the member check silently stops in CI.
+/** What keeps the review-verdict step from handing the PR to the program: [] when nothing. */
+function problemsOfVerdictPrJson(job) {
+  const out = [];
+  const last = job.steps.at(-1);
+  const fields = failFirstPrFields(job);
+  for (const f of ['title', 'body', 'headRefName']) {
+    if (!fields.includes(f)) out.push(`gh pr view does not ask for ${f}`);
+  }
+  if (last.env?.PR_JSON !== '${{ runner.temp }}/pr.json') out.push('PR_JSON is not the file');
+  if (!/--json[ =][\w,]+ > "\$PR_JSON"/.test(String(last.run || ''))) {
+    out.push('gh pr view does not write $PR_JSON');
+  }
+  if (job.permissions?.['pull-requests'] !== 'read') out.push('no pull-requests: read');
+  return out;
+}
+
+test('the review-verdict job hands the PR\'s title, body and head branch over in PR_JSON', () => {
+  assert.deepEqual(problemsOfVerdictPrJson(parse(CI).jobs['review-verdict']), []);
+  const edited = (from, to) => problemsOfVerdictPrJson(parse(mutate(CI, from, to))
+    .jobs['review-verdict']);
+  const env = '          PR_JSON: ${{ runner.temp }}/pr.json\n';
+  assert.deepEqual(edited(env, ''), ['PR_JSON is not the file']);
+  assert.deepEqual(edited('--json title,body,headRefName > "$PR_JSON"',
+    '--json title,headRefName > "$PR_JSON"'), ['gh pr view does not ask for body']);
+  assert.deepEqual(edited('--json title,body,headRefName > "$PR_JSON"',
+    '--json title,body,headRefName > /dev/null'), ['gh pr view does not write $PR_JSON']);
+});
+
 /** What stops a rule job from judging: [] when its last command is exactly `call`. */
 function problemsOfRuleJob(job, call) {
   const out = [];
