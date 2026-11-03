@@ -6,11 +6,13 @@
 // lock v3) and every shape sets its own stroke; no number here sets an opacity, an alpha or a
 // shadow (v4): the highlight's and the shadow's intensities are the classes opacity-hw-sheen and
 // opacity-hw-shadow. Nothing moves: a held plug is drawn again where the pointer is. Imports
-// nothing; cable.js re-exports plugSvg and keeps its refused cross clear of PLUG.room.
+// nothing; cable.js re-exports plugSvg and plugState and keeps its refused cross clear of
+// PLUG.room, or leaves it out when told the target plug is refused (cableParts' `plug`).
 //
 //   PLUG                                          the plug's geometry, graph units
 //   plugSvg({ at, colour, tokens, state, direction })
 //                                                 '<g data-plug="" pointer-events="none">…</g>'
+//   plugState(state)                              { held, refused }, a misspelt state refused
 
 /** The plug's geometry, graph units (1 = 1 CSS px at zoom 1). */
 export const PLUG = Object.freeze({
@@ -36,6 +38,9 @@ const SHEEN = Object.freeze({ r: 3.4, from: 200, to: 260, width: 0.75 });
 /** The refused cross: its half arm, its underlay and its stroke, inside the sleeve. */
 const CROSS = Object.freeze({ arm: 3.25, under: 3.5, width: 2 });
 const DOWN = Object.freeze({ x: 0, y: 1 });
+const SEATED = Object.freeze({ held: false, refused: false });
+const HELD = Object.freeze({ held: true, refused: false });
+const REFUSED = Object.freeze({ held: false, refused: true });
 /** The intensity class of the highlight: the hw-sheen key of tailwind.config.cjs. */
 const SHEEN_CLASS = 'opacity-hw-sheen';
 /** The intensity class of the soft shadow: the hw-shadow key of tailwind.config.cjs. */
@@ -49,20 +54,25 @@ const num = (x) => {
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
   .replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-/** { held, refused } from 'seated', 'held', 'refused' or an object of two booleans. */
-function stateOf(state) {
-  if (state === undefined || state === null || state === 'seated') {
-    return { held: false, refused: false };
-  }
-  if (state === 'held') return { held: true, refused: false };
-  if (state === 'refused') return { held: false, refused: true };
-  const ok = typeof state === 'object' && ['held', 'refused']
-    .every((k) => state[k] === undefined || typeof state[k] === 'boolean');
+/**
+ * A plug's state as { held, refused }, frozen: from 'seated' (or none), 'held', 'refused', or an
+ * object whose only keys are held and refused, each a boolean or absent. Anything else (another
+ * word, an array, a misspelt key such as hold) is a RangeError naming it, so a typo never draws a
+ * seated plug in silence. cableParts reads its `plug` option through it.
+ */
+export function plugState(state, who = 'plugSvg') {
+  if (state === undefined || state === null || state === 'seated') return SEATED;
+  if (state === 'held') return HELD;
+  if (state === 'refused') return REFUSED;
+  const keys = ['held', 'refused'];
+  const ok = typeof state === 'object' && !Array.isArray(state)
+    && Object.keys(state).every((k) => keys.includes(k))
+    && keys.every((k) => state[k] === undefined || typeof state[k] === 'boolean');
   if (!ok) {
-    throw new RangeError('plugSvg: state must be seated, held, refused or { held, refused } '
+    throw new RangeError(`${who}: state must be seated, held, refused or { held, refused } `
       + `of booleans, not ${JSON.stringify(state)}.`);
   }
-  return { held: Boolean(state.held), refused: Boolean(state.refused) };
+  return Object.freeze({ held: Boolean(state.held), refused: Boolean(state.refused) });
 }
 
 /** The leaving direction as a unit vector; down when none is given. */
@@ -80,30 +90,35 @@ function unitOf(direction) {
 /**
  * A plug at `at` (the jack's centre, or the pointer while held), from the front: a soft shadow
  * (tokens.cable.shadow at the hw-shadow intensity, PLUG.lift down); the sleeve, diameter 14 in
- * surface-3 (tokens.surface.plateHi); the boot ring, 3 wide in the cable's `colour` (the
- * caller's palette token; none reads currentColor), its outer edge on the sleeve's, so the plug
- * holds 3:1 on the jack body in both themes; a grip collar of three ribs across the ring in
- * --osc-border (tokens.control.knurl), turned to `direction`, the way the cable leaves the plug
- * (cableDirections(from, to) gives both ends', along the ports in the port-tangent mode; down
- * when none is given); the tip's outline and the centre in --osc-bg (tokens.surface.edge); and
- * a highlight arc on the face in tokens.cable.sheen at the hw-sheen intensity, lit from the
- * upper left whatever the direction.
+ * surface-3 (tokens.surface.plateHi; tokens.jack.body in a set without it); the boot ring, 3
+ * wide in the cable's `colour` (the caller's palette token; none reads currentColor), its outer
+ * edge on the sleeve's, so the plug holds 3:1 on the jack body in both themes; a grip collar of
+ * three ribs across the ring in --osc-border (tokens.control.knurl; tokens.jack.ring in a set
+ * without it), turned to `direction`, the way the cable leaves the plug (cableDirections(from,
+ * to) gives both ends', along the ports in the port-tangent mode; down when none is given); the
+ * tip's outline and the centre in --osc-bg (tokens.surface.edge); and a highlight arc on the
+ * face in tokens.cable.sheen at the hw-sheen intensity, lit from the upper left whatever the
+ * direction. A panel's narrower set (jack, cable, surface.edge: dev-53's layerTokens) thus
+ * draws every part from a token.
  *
- * `state` is 'seated' (the default), 'held', 'refused' or { held, refused }. Held draws the
- * plug PLUG.held (1.1) times as large about `at` with the shadow lifted to PLUG.lift.held and
- * marks the group data-held. Refused marks it data-refused and draws a cross on the sleeve in
- * tokens.jack.refuse over a tokens.cable.shadow underlay; the cross stays inside the sleeve, and
- * cableParts' own refused cross sits CROSS_BACK from the target end, outside PLUG.room, so the
- * two never overlap; a caller that draws a refused plug at the target end passes cross: false
- * to the cable, so one cross marks one refusal. The group takes no pointer and nothing in it can
- * be hit or focused: the jack under it keeps its hit and its keys.
+ * `state` is 'seated' (the default), 'held', 'refused' or { held, refused } (plugState; any
+ * other shape refused). Held draws the plug PLUG.held (1.1) times as large about `at` with the
+ * shadow lifted to PLUG.lift.held and marks the group data-held. Refused marks it data-refused
+ * and draws a cross on the sleeve in tokens.jack.refuse over a tokens.cable.shadow underlay; the
+ * cross stays inside the sleeve. One refusal shows one cross: a caller drawing a plug at a
+ * cable's target end passes the plug's state to the cable too (cableParts' `plug`), and the
+ * cable leaves its own cross out when that plug is refused (two separate calls cannot see each
+ * other: told nothing, the cable draws its cross). Otherwise the cable's cross sits CROSS_BACK
+ * from the target end, clear of PLUG.room at both ends of a cable between two jacks (ends a
+ * pitch of 44 or more apart). The group takes no pointer and nothing in it can be hit or
+ * focused: the jack under it keeps its hit and its keys.
  */
 export function plugSvg({ at, colour, tokens, state, direction } = {}) {
   if (!finite(at)) throw new TypeError('plugSvg: at needs finite x and y.');
   if (!tokens || !tokens.cable || !tokens.jack || !tokens.surface) {
     throw new TypeError('plugSvg needs the synth tokens (synthTokens(el)).');
   }
-  const st = stateOf(state);
+  const st = plugState(state);
   const d = unitOf(direction);
   const k = st.held ? PLUG.held : 1;
   const s = (x) => num(x * k);
@@ -112,7 +127,10 @@ export function plugSvg({ at, colour, tokens, state, direction } = {}) {
   const c = `cx="${num(at.x)}" cy="${num(at.y)}"`;
   const paint = (x) => esc(x || 'currentColor');
   const edge = paint(tokens.surface.edge);
-  const knurl = paint(tokens.control && tokens.control.knurl);
+  // A panel's adapter may pass the narrower set (jack, cable, surface.edge; dev-53's
+  // layerTokens): the sleeve and the grip then take the jack's roles, as the plug did before S6.
+  const sleeve = paint(tokens.surface.plateHi || tokens.jack.body);
+  const knurl = paint((tokens.control && tokens.control.knurl) || tokens.jack.ring);
   const line = (p, q, stroke, width, extra = '') => `<line${extra} x1="${p.x}" y1="${p.y}" `
     + `x2="${q.x}" y2="${q.y}" stroke="${stroke}" stroke-width="${s(width)}" `;
   const lead = Math.atan2(d.y, d.x);
@@ -137,7 +155,7 @@ export function plugSvg({ at, colour, tokens, state, direction } = {}) {
     + `<circle data-shadow="" class="${SHADOW_CLASS}" ${c} r="${s(PLUG.sleeve)}" `
     + `fill="${paint(tokens.cable.shadow)}" stroke="none" `
     + `transform="translate(0 ${st.held ? PLUG.lift.held : PLUG.lift.seated})"/>`
-    + `<circle data-sleeve="" ${c} r="${s(PLUG.sleeve)}" fill="${paint(tokens.surface.plateHi)}" `
+    + `<circle data-sleeve="" ${c} r="${s(PLUG.sleeve)}" fill="${sleeve}" `
     + 'stroke="none"/>'
     + `<circle data-ring="" ${c} r="${s(PLUG.sleeve - PLUG.ring / 2)}" fill="none" `
     + `stroke="${paint(colour)}" stroke-width="${s(PLUG.ring)}"/>`

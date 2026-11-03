@@ -9,17 +9,20 @@
 //   node --test tests/unit/ui-synth-plug.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { PLUG, plugSvg } from '../../src/js/ui/synth/plug.js';
 import { cableDirections, cableSvg, plugSvg as plugFromCable }
   from '../../src/js/ui/synth/cable.js';
-import { TOKENS, colourLiterals, contrastOf, intensityLiterals, paints, shapesWithoutStroke,
-  tokenHex, tokenThemes, tokenValues } from './ui-synth-fixture.mjs';
+import { LAYER_TOKENS, TOKENS, colourLiterals, contrastOf, intensityLiterals, paints,
+  shapesWithoutStroke, tokenHex, tokenThemes, tokenValues } from './ui-synth-fixture.mjs';
 
 const AT = { x: 40.5, y: -12.25 };
 const COLOUR = TOKENS.cable.palette[2];
-/** Half the nut's across-flats width: the radius of the circle the hex nut holds. */
+/** Half the nut's across-flats width: the radius of the circle the hex nut holds. The plan's
+ *  22 across flats is the bound the plug is drawn to; the jack the panel draws (jack.js, dev-53's)
+ *  is checked on its own below, where this tree carries it. */
 const NUT_INNER = 22 / 2;
+const JACK_URL = new URL('../../src/js/ui/synth/jack.js', import.meta.url);
 const STATES = ['seated', 'held', 'refused', { held: true, refused: true }, {}];
 const DIRS = [undefined, { x: 1, y: 0 }, { x: -3, y: 4 }, { x: 0, y: -1 }, { x: 0.2, y: 1 }];
 
@@ -180,7 +183,8 @@ test('seated, held and refused: held is 1.1 times as large with its shadow lifte
     TOKENS.jack.refuse, TOKENS.jack.refuse], 'red over its shadow');
   const both = draw({ state: { held: true, refused: true } });
   assert.match(both, /^<g data-plug="" pointer-events="none" data-held="" data-refused="">/);
-  for (const bad of ['lifted', 3, { held: 'yes' }]) {
+  for (const bad of ['lifted', 3, { held: 'yes' }, [], ['held'], { hold: true },
+    { held: true, dragging: true }]) {
     assert.throws(() => draw({ state: bad }), RangeError, JSON.stringify(bad));
   }
 });
@@ -195,6 +199,39 @@ test('plugSvg({ at, colour, tokens }) works as before, from cable.js as from plu
   assert.throws(() => plugSvg({ at: { x: 0, y: NaN }, colour: 'c', tokens: TOKENS }), /finite/);
   assert.throws(() => plugSvg({ at: AT, colour: 'c' }), /tokens/);
   assert.ok(draw({ colour: 'a"<b>' }).includes('stroke="a&quot;&lt;b&gt;"'), 'escaped');
+});
+
+test('a panel\'s narrower token set draws from the jack roles, never currentColor', () => {
+  // The patch bay's adapter (layerTokens) passes { jack, cable, surface: { edge } }: no
+  // surface.plateHi and no control group. The sleeve falls back to the jack body and the grip
+  // to the jack ring, the roles the plug used before S6, so a seated plug never turns into a
+  // disc in the page's text colour.
+  for (const state of STATES) {
+    for (const dir of DIRS) {
+      const svg = plugSvg({ at: AT, colour: COLOUR, tokens: LAYER_TOKENS, state, direction: dir });
+      const allowed = new Set(tokenValues(LAYER_TOKENS));
+      for (const p of paints(svg)) {
+        assert.ok(p !== 'currentColor' && (p === 'none' || allowed.has(p)),
+          `${JSON.stringify([state, dir])}: paint ${p}`);
+      }
+      assert.equal(one(svg, 'data-sleeve').attrs.fill, TOKENS.jack.body, 'the sleeve: jack body');
+      for (const r of elements(svg).filter((e) => 'data-rib' in e.attrs)) {
+        assert.equal(r.attrs.stroke, TOKENS.jack.ring, 'the grip: jack ring');
+      }
+    }
+  }
+  const full = draw();
+  assert.equal(one(full, 'data-sleeve').attrs.fill, TOKENS.surface.plateHi, 'plateHi wins');
+});
+
+test('the plug fits inside the jack this tree draws, where it carries one', async (t) => {
+  if (!existsSync(JACK_URL)) {
+    t.skip('jack.js (dev-53\'s) is not on this branch; the plan\'s nut of 22 is checked above');
+    return;
+  }
+  const { JACK_R } = await import(JACK_URL.href);
+  assert.ok(Number.isFinite(JACK_R), 'jack.js exports JACK_R');
+  assert.ok(PLUG.room < JACK_R, `the plug (${PLUG.room}) inside the socket ring (${JACK_R})`);
 });
 
 // ---------------------------------------------------------------- rules
@@ -243,7 +280,49 @@ function cableCross(svg) {
   return { c, r };
 }
 
-test('the refused cross: inside the plug, and the cable\'s never overlaps it', () => {
+/** Points along a cable's stroke path (M then cubics), `per` samples a cubic. */
+function samples(svg, per = 256) {
+  const d = /data-stroke=""[^>]* d="([^"]*)"/.exec(svg)?.[1]
+    ?? / d="([^"]*)"[^>]*data-stroke=""/.exec(svg)[1];
+  const nums = d.replace(/[MC]/g, ' ').trim().split(/\s+/).map(Number);
+  const pts = [];
+  let p0 = { x: nums[0], y: nums[1] };
+  for (let i = 2; i + 5 < nums.length + 1; i += 6) {
+    const [c1x, c1y, c2x, c2y, ex, ey] = nums.slice(i, i + 6);
+    for (let k = 0; k <= per; k++) {
+      const t = k / per;
+      const u = 1 - t;
+      const f = (a, b, c, e) => u * u * u * a + 3 * u * u * t * b + 3 * u * t * t * c
+        + t * t * t * e;
+      pts.push({ x: f(p0.x, c1x, c2x, ex), y: f(p0.y, c1y, c2y, ey) });
+    }
+    p0 = { x: ex, y: ey };
+  }
+  return pts;
+}
+/** cable.js's CROSS_BACK: PLUG.room, the cross's reach (arm 5 × √2, half its underlay), 1. */
+const CROSS_BACK = PLUG.room + 5 * Math.SQRT2 + 4.5 / 2 + 1;
+/** Two seated jacks are never nearer than their 44 px hit squares allow. */
+const JACK_PITCH = 44;
+const FROM = { x: 3, y: 7 };
+/** The ends at `len` from FROM in 24 directions, each hanging and with opposite ports facing
+ *  8 ways: every shape a cable between two jacks takes. */
+function* cablesAt(len) {
+  for (let k = 0; k < 24; k++) {
+    const a = (k * Math.PI) / 12;
+    const to = { x: FROM.x + len * Math.cos(a), y: FROM.y + len * Math.sin(a) };
+    yield { from: FROM, to, how: {} };
+    for (let j = 0; j < 8; j++) {
+      const b = (j * Math.PI) / 4;
+      const t = { x: Math.cos(b), y: Math.sin(b) };
+      yield { from: FROM, to, how: { tangents: { from: t, to: { x: -t.x, y: -t.y } } } };
+    }
+  }
+}
+const refusedCable = (from, to, over = {}) => cableSvg({ id: 'r', from, to, type: 'CONTROL',
+  colour: COLOUR, tokens: TOKENS, state: { refused: true, dragging: true }, ...over });
+
+test('the refused cross: the plug\'s inside its sleeve; the cable\'s clear of both plugs', () => {
   for (const state of ['refused', { held: true, refused: true }]) {
     const svg = draw({ state });
     const cross = /<g data-cross=""[^>]*>(.*?)<\/g>/.exec(svg)[1];
@@ -251,22 +330,78 @@ test('the refused cross: inside the plug, and the cable\'s never overlaps it', (
     const k = typeof state === 'object' ? PLUG.held : 1;
     assert.ok(r <= PLUG.sleeve * k, `the plug's cross stays on its sleeve (${r})`);
   }
+  // The claim holds for cables between two jacks: ends a jack pitch (44) or more apart, in every
+  // direction, hanging or along facing ports. Shorter cables are the next test's.
+  for (const len of [JACK_PITCH, 50, 64, 88, 200, 300]) {
+    for (const { from, to, how } of cablesAt(len)) {
+      const { c, r } = cableCross(refusedCable(from, to, how));
+      for (const end of [from, to]) {
+        const gap = Math.hypot(c.x - end.x, c.y - end.y) - r;
+        assert.ok(gap >= PLUG.room, `${len} ${JSON.stringify([to, how])}: the cable's cross ${gap} `
+          + `from a plug, whose room is ${PLUG.room}`);
+      }
+    }
+  }
   for (const [from, to] of [[{ x: 0, y: 0 }, AT], [{ x: 300, y: 40 }, AT],
     [{ x: 40, y: -200 }, AT], [{ x: 40.5, y: 200 }, AT]]) {
-    const svg = cableSvg({ id: 'r', from, to, type: 'CONTROL', colour: COLOUR, tokens: TOKENS,
-      state: { refused: true, dragging: true } });
-    const { c, r } = cableCross(svg);
+    const { c, r } = cableCross(refusedCable(from, to));
     const gap = Math.hypot(c.x - to.x, c.y - to.y) - r;
     for (const state of ['refused', { held: true, refused: true }]) {
       const plug = draw({ state, direction: cableDirections(from, to).to });
-      assert.ok(gap >= reach(plug), `${JSON.stringify(from)}: the cable's cross ${gap} from the `
-        + `plug, which reaches ${reach(plug)}`);
+      assert.ok(gap >= reach(plug), `${JSON.stringify(from)}: ${gap} from a plug reaching `
+        + `${reach(plug)}`);
     }
-    assert.ok(gap >= PLUG.room, 'clear of the whole room');
   }
 });
 
-test('cross: false leaves the cable\'s cross to the refused plug, so one cross shows', () => {
+test('a cable shorter than a jack pitch: its cross on its point farthest from the target', () => {
+  // Too short to set the cross clear of the target plug, the cable takes its point farthest
+  // from the target, so the cross may meet a plug here (a held plug can be anywhere under the
+  // pointer). A held refused plug is drawn with plug: 'refused' passed to the cable, which then
+  // draws no cross at any length, so the two never meet.
+  for (const len of [5, 10, 15, 20, 30]) {
+    for (const { from, to, how } of cablesAt(len)) {
+      const svg = refusedCable(from, to, how);
+      const { c } = cableCross(svg);
+      const far = Math.max(...samples(svg).map((p) => Math.hypot(p.x - to.x, p.y - to.y)));
+      const at = Math.hypot(c.x - to.x, c.y - to.y);
+      assert.ok(at <= far + 1e-3, `${len}: the cross lies on the cable`);
+      assert.ok(at >= Math.min(far, CROSS_BACK) - 0.5, `${len} ${JSON.stringify([to, how])}: `
+        + `${at} from the target, the farthest the cable reaches being ${far}`);
+      assert.equal(cableCross(refusedCable(from, to, { ...how, plug: 'refused' })), null,
+        `${len}: told its target plug is refused, the cable draws no cross`);
+    }
+  }
+});
+
+test('one cross per refusal: told the target plug\'s state, the cable leaves its cross to it',
+  () => {
+    const spec = { id: 'r', from: { x: 0, y: 0 }, to: AT, type: 'AUDIO', colour: COLOUR,
+      tokens: TOKENS, state: { refused: true } };
+    const count = (svg) => (svg.match(/data-cross=""/g) || []).length;
+    // The default path: a refused cable with no plug state draws its own cross, the one mark.
+    assert.equal(count(cableSvg(spec)), 1, 'a refused cable alone: its own cross');
+    for (const plug of ['refused', { refused: true }, { held: true, refused: true }]) {
+      const cable = cableSvg({ ...spec, plug });
+      assert.equal(cableCross(cable), null, `${JSON.stringify(plug)}: no cross on the cable`);
+      assert.match(cable, /^<g data-cable="r" data-refused=""/, 'still marked refused');
+      assert.match(cable, /stroke-dasharray="4 4"/, 'and still dashed, a shape not a colour');
+      assert.equal(cable, cableSvg({ ...spec, cross: false }), 'as cross: false draws it');
+      assert.equal(count(cable + draw({ state: plug })), 1, 'one cross for one refusal');
+      assert.throws(() => cableSvg({ ...spec, plug, cross: true }), RangeError,
+        'a cross asked for beside a refused plug: two marks refused');
+    }
+    for (const plug of ['seated', 'held', {}, { held: true }]) {
+      assert.equal(cableSvg({ ...spec, plug }), cableSvg(spec), `${JSON.stringify(plug)}: the `
+        + 'cable keeps its cross, the plug draws none');
+      assert.equal(count(draw({ state: plug })), 0);
+    }
+    for (const bad of ['lifted', [], { hold: true }, 3]) {
+      assert.throws(() => cableSvg({ ...spec, plug: bad }), RangeError, JSON.stringify(bad));
+    }
+  });
+
+test('cross: false leaves the cable\'s cross out, so one cross shows', () => {
   const spec = { id: 'r', from: { x: 0, y: 0 }, to: AT, type: 'AUDIO', colour: COLOUR,
     tokens: TOKENS, state: { refused: true } };
   const off = cableSvg({ ...spec, cross: false });

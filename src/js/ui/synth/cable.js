@@ -8,7 +8,8 @@
 // here sets an opacity, an alpha or a shadow (v4): the sheen's and the shadow's intensities are
 // the hw-sheen and hw-shadow Tailwind keys (classes opacity-hw-sheen and opacity-hw-shadow), and
 // the hit path is hidden rather than transparent. Imports only the plug (plug.js, whose
-// plugSvg it re-exports), so its refused cross keeps clear of the room a plug takes.
+// plugSvg and plugState it re-exports), so its refused cross keeps clear of the room a plug
+// takes, or is left to a refused plug the caller names (`plug`).
 //
 //   CABLE_DASH                              the pattern of each signal type
 //   cableCurve(a, b, { slack, box, tangents, sag })
@@ -20,17 +21,18 @@
 //   settle(previous, { from, to }, dt, { slack, box, reducedMotion })
 //                                           one frame of a dropped or moved cable settling
 //   cableParts({ id, from, to, type, colour, state, tokens, slack, box, tangents, sag, zoom,
-//     sheen, dash, port, cross })
+//     sheen, dash, port, cross, plug })
 //                                           [{ key, tag, attrs, parent }], for setAttribute
 //   partsSvg(parts)                         the markup of those records
 //   cableSvg(spec)                          '<g data-cable="id">…</g>', partsSvg(cableParts())
 //   plugSvg({ at, colour, tokens, state, direction })
 //                                           a plug, seated, held or refused, taking no pointer
 //                                           (plug.js)
+//   plugState(state)                        { held, refused } of a plug state (plug.js)
 
-import { PLUG } from './plug.js';
+import { PLUG, plugState } from './plug.js';
 
-export { PLUG, plugSvg } from './plug.js';
+export { PLUG, plugState, plugSvg } from './plug.js';
 
 /** The dash pattern per signal type (PORT_VISUALS: solid, dashed, pulse, dash-dot). */
 export const CABLE_DASH = Object.freeze({
@@ -463,7 +465,8 @@ const str = (x) => String(x);
  * value a raw string (unescaped: setAttribute takes it as it is). `key` names the part within its
  * cable and is the same for the same part whatever the cable's ends, zoom or state ('cable',
  * 'shadow', 'main', 'hit', 'stroke', then 'cross', 'cross-under-0', 'cross-under-1', 'cross-0',
- * 'cross-1' when refused unless cross is false, then 'sheen' when asked), so an editor keyed by
+ * 'cross-1' when refused unless cross is false or the target plug is refused, then 'sheen' when
+ * asked), so an editor keyed by
  * (cable id, key) updates attributes in place and adds or removes only the cross and the sheen. The
  * list's order is the paint order: a part an update adds goes in at its list position,
  * parent.insertBefore(node, the node of the next part in the list with the same parent that is
@@ -482,11 +485,15 @@ const str = (x) => String(x);
  * lifts the shadow (SHADOW_PX.lifted down). Refused paints the stroke tokens.jack.refuse,
  * dashed (a solid kind takes REFUSED_DASH), marks the group data-refused and draws a cross on
  * the curve at the target end, CROSS_BACK back from it so it never covers the plug there, so a
- * refusal is a shape, not a colour alone; `cross: false` leaves the cross out (the dash and
- * data-refused stay) for a caller that draws a refused plug at the target end, whose own cross
- * then marks the refusal once (plugSvg). `zoom` turns the screen-px offsets (the shadow's
- * drop, the sheen's) into graph units; `slack`, `box`, `tangents` and `sag` are
- * cableCurve's.
+ * refusal is a shape, not a colour alone (clear of the plug's room at both ends of a cable between
+ * two jacks, ends 44 or more apart; a shorter cable takes its point farthest from the target).
+ * `plug` is the state of the plug the caller draws at the target end, as plugSvg takes it
+ * (plugState; a misspelt one refused): when that plug is refused, its own cross marks the
+ * refusal and the cable leaves its cross out (the dash and data-refused stay), so one refusal
+ * shows one cross whatever the cable's length; `cross: true` beside it is a RangeError. `cross:
+ * false` leaves the cross out the same way, told nothing about a plug. `zoom` turns the
+ * screen-px offsets (the shadow's drop, the sheen's) into graph units; `slack`, `box`,
+ * `tangents` and `sag` are cableCurve's.
  *
  * The signal's look is an input: `dash` (a CABLE_KINDS declaration's pattern, null for solid)
  * wins over CABLE_DASH[type], which is only the default when no dash is passed, and with a dash
@@ -495,12 +502,18 @@ const str = (x) => String(x);
  * declared one. Neither passed, the parts are what they were before these inputs existed.
  */
 export function cableParts({ id, from, to, type, colour, state = {}, tokens, slack = CABLE_SLACK,
-  box, tangents, sag, zoom = 1, sheen = false, dash, port, cross = true } = {}) {
+  box, tangents, sag, zoom = 1, sheen = false, dash, port, cross, plug } = {}) {
   const who = 'cableParts';
   needTokens(tokens, who);
-  if (typeof cross !== 'boolean') {
+  if (cross !== undefined && typeof cross !== 'boolean') {
     throw new TypeError(`${who}: cross must be true or false, not ${JSON.stringify(cross)}.`);
   }
+  const plugRefused = plugState(plug, who).refused;
+  if (plugRefused && cross === true) {
+    throw new RangeError(`${who}: the target plug is refused and draws its own cross; a cross `
+      + 'on the cable as well would mark one refusal twice (leave cross out).');
+  }
+  const crossed = cross === undefined ? !plugRefused : cross;
   const pattern0 = dashOf(type, dash, who);
   const ports = portAttrs(port, who);
   if (!(Number.isFinite(zoom) && zoom > 0)) {
@@ -528,7 +541,7 @@ export function cableParts({ id, from, to, type, colour, state = {}, tokens, sla
     part('stroke', 'path', 'main', { 'data-stroke': '', d, fill: 'none', stroke: paint,
       'stroke-width': str(w), 'stroke-linecap': cap, ...dashed }),
   ];
-  if (st.refused && cross) {
+  if (st.refused && crossed) {
     const m = nearTarget(from, to, { slack, box, tangents, sag });
     const r = CROSS.arm;
     const arms = [[m.x - r, m.y - r, m.x + r, m.y + r], [m.x - r, m.y + r, m.x + r, m.y - r]]

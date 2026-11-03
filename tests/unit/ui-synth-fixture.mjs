@@ -20,6 +20,12 @@ export const TOKENS = Object.freeze({
     v('green'), v('purple'), v('blue')]), shadow: v('bg'), sheen: v('text') }),
 });
 
+/** The narrower token set a panel's adapter passes (the shape of dev-53's layerTokens: the jack,
+ *  the cable and the surface edge, no plateHi and no control group), so a test can show the
+ *  layer draws from it without falling to currentColor. */
+export const LAYER_TOKENS = Object.freeze({ jack: TOKENS.jack, cable: TOKENS.cable,
+  surface: Object.freeze({ edge: TOKENS.surface.edge }) });
+
 /** Every leaf of a token set, palette entries included. */
 export function tokenValues(t = TOKENS) {
   return Object.values(t).flatMap((g) => Object.values(g).flatMap((x) => (Array.isArray(x)
