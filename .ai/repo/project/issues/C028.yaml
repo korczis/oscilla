@@ -1,0 +1,28 @@
+id: C028
+milestone: M090
+serves:
+  - "coherent-state#user-journeys-hold"
+title: "The cross-links keyboard round trips say what they saw, and WebKit's focus after Back is measured before it is called a flake"
+slug: the-cross-links-keyboard-round-trips-say-what-they-saw
+priority: p2
+profile: implementation
+objective: "Lands as test(cross-links), plus fix(nav) if the measurement says so. Twice a keyboard round trip in tests/browser/cross-links.cjs failed while every other leg passed. First, merge train 3 (#404, run 41582489422 at 8849bc27): in WebKit on file:// only, 'Studio opened from the Sequencer goes back to the Sequencer (P8)' failed its keyboard leg ('Back did not return to the Sequencer', then the history Back and Forward misses that follow from it). Its pointer and touch legs and webkit/http passed, and it passed 7 of 7 locally (b0 4/4, af 3/3). Second, oscilla-21 saw 'a Learn demo leads back to its lesson (one-way link 2): keyboard: Back did not return to the demo' fail 1 in 3 on an unchanged lane-A base at load 13-33. Both waits already poll with a deadline (H.until over lib/wait.cjs until, NAV_MS), so the wait is bounded. But H.until catches the timeout and returns null, so the failure says only 'did not return' and drops the last observed state (workspace, hash, focusTag, focusOsc, focusBody, headingOf). From the log no one can tell a slow return, a return with focus left on <body> (the P8 predicate requires !focusBody), or a history entry that was not written. This issue makes the failure say what it saw, measures the rate in the CI image, and then fixes whichever side is wrong."
+why: "project.no-fake-science and the review practice for flakes: a failure is called a flake only with evidence. Calling it one without the observed state hides a possible focus-restore defect that a keyboard user would meet: Back leaving focus on the page body is an accessibility regression, not test noise. The same class has now held a merge train (#404 sat BLOCKED from 07:00Z) and reddened a lane base."
+scope:
+  - "tests/browser/cross-links.cjs"
+  - "tests/README.md"
+  - "src/js/ui/"
+  - "dist/index.html"
+acceptance_criteria:
+  - "H.until in tests/browser/cross-links.cjs keeps the last state it read, and every round-trip failure message (P8 studio-back, learn-demo-back and the other Back / Forward / traverse steps) includes it: workspace, hash, focusTag, focusOsc, focusBody, headingOf. A unit or self-check proves that a forced timeout reports the last state rather than null."
+  - "The rate is measured in the linux WebKit Playwright container (the CI image, 44.1 kHz) and on darwin: at least 20 runs each of '--only studio-back' and '--only learn-demo-back' on file and http, recorded in the PR body with the observed failing states."
+  - "If any failure shows the workspace returned with focus on <body> or on no control, it is a product defect: the Back path restores focus to the control or heading the navigation contract names (fix(nav), with a fail-first browser check for keyboard Back in WebKit). Otherwise the test's predicate or deadline is corrected to what the contract promises, and the PR says which and why."
+  - "No xfail, no retry loop and no fixed sleep is added (project.bounded-test-timing; tests/browser/timing-baseline.json does not grow)."
+  - "After the change, 20 consecutive runs of both checks pass in the linux WebKit container."
+validation:
+  - "node tests/browser/cross-links.cjs --browsers webkit --origins file,http --only studio-back,learn-demo-back"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-03
+updated_at: 2026-11-03
