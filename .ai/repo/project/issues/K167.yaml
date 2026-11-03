@@ -12,6 +12,7 @@ scope:
   - "src/js/synth/view/xy-wiring.js"
   - "src/js/synth/view/xy-tab.js"
   - "src/js/ui/kinds/xy-pad.js"
+  - "src/index.html"
   - "tests/unit/xy-wiring.test.mjs"
   - "tests/browser/xy-pad.cjs"
   - "tests/README.md"

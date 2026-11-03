@@ -154,7 +154,7 @@ export function mountXyPad(host, opts) {
     + '<line data-xy-cy="" x1="0" x2="100" vector-effect="non-scaling-stroke" '
     + `class="${cursor}" stroke-width="2"/></svg>`
     // A disabled pad says why on its own face, the reason that describes it.
-    + (disabled ? `<p id="${uid}-w" data-xy-why="" class="${WHY}">${esc(disabled)}</p>` : '')
+    + (disabled ? `<p id="${uid}-w" data-xy-why="" aria-hidden="true" class="${WHY}">${esc(disabled)}</p>` : '')
     + '</div>'
     + `<ol aria-hidden="true" class="mt-1 flex text-[10px] text-gray-500 dark:text-gray-400">`
     + cells.map((c) => `<li class="flex-1 text-center ${c.root ? 'font-bold' : ''}">`
