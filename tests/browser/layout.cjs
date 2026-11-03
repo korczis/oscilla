@@ -71,14 +71,6 @@ const FONT_MIN = 12;
 // what it draws, and an entry at 0 on every tab is removed. The synth-theme layer's label module
 // (F013) is to lift them all (the list and its counts may only shrink).
 const KNOWN_SMALL_FONTS = new Map([
-  ['synth.bay.svg text 10px', { panel: 83, engines: 83, xy: 83,
-    where: 'synth/view/bay.js: the bay\'s row and jack labels, font-size 10' }],
-  ['synth.modules span 11px', { panel: 72, engines: 21, xy: 6,
-    where: 'synth/view/face.js: card kinds, value chips and notes, text-[11px]' }],
-  ['synth.modules p 11px', { panel: 0, engines: 1, xy: 0,
-    where: 'synth/view/face.js: a card\'s note paragraph, text-[11px]' }],
-  ['synth.xy.pad li 10px', { panel: 0, engines: 0, xy: 11,
-    where: 'ui/kinds/xy-pad.js: the scale-step labels under the pad, text-[10px]' }],
 ]);
 const SYNTH_LOAD_MS = 15000;
 // A tab is rendered on a frame after synthTab(): what only that tab's render draws.
