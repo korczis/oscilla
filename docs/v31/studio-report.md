@@ -187,10 +187,10 @@ Further unit tests cover the Studio outside the `v31-studio-` prefix (`v4-*`, `v
 - `tests/browser/v31-studio-workflows.cjs`
 - `tests/browser/v31-studio-links.cjs`
 - `tests/browser/v31-studio-runtime.cjs`
-- `tests/browser/synth.cjs`
-- `tests/browser/synth-engines.cjs`
-- `tests/browser/xy-pad.cjs`
 <!-- browser-suites:end -->
+
+The Synth's suites (`tests/browser/synth.cjs`, `tests/browser/synth-engines.cjs`,
+`tests/browser/xy-pad.cjs`) run in `npm run test:synth` since K075, after the integration map.
 
 For this report only the unit tests were run (`npm run verify`); the browser suites and the
 release gate were not.

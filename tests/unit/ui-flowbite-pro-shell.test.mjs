@@ -93,8 +93,8 @@ test('the sidebar is rendered from the registry, with the hooks the suites addre
   assert.match(sidebar, /<template x-for="w in entry\.items" :key="w\.id">/);
   // No hand-written list: no static nav.<id> or nav-group.<id> hook anywhere in the page.
   assert.doesNotMatch(html, /\sdata-osc="nav(?:-group)?\.[a-z]+"/);
-  assert.match(sidebar, /:data-osc="'nav\.' \+ entry\.id" x-bind="navItem\(entry\.id\)"/);
-  assert.match(sidebar, /:data-osc="'nav\.' \+ w\.id" x-bind="navItem\(w\.id, true\)"/);
+  assert.match(sidebar, /:data-osc="'nav\.' \+ entry\.id" data-osc-link="jump" x-bind="navItem\(entry\.id\)"/);
+  assert.match(sidebar, /:data-osc="'nav\.' \+ w\.id" data-osc-link="jump" x-bind="navItem\(w\.id, true\)"/);
   assert.match(sidebar, /:data-osc="'nav-group\.' \+ entry\.id"/);
   assert.match(sidebar, /:data-osc-nav-group="entry\.kind === 'group' \? entry\.id : null"/);
   for (const hook of ['header.sidebar', 'header.menu', 'header.brand', 'header.search',

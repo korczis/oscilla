@@ -51,7 +51,7 @@ test('the About view is a full-width view keyed on the workspace, not the V1 mod
   assert.match(aboutView, /aria-labelledby="osc-about-title"/);
   assert.equal((aboutView.match(/<h2\b/g) || []).length, 1, 'one primary heading');
   assert.ok(!html.includes('osc-dlg-about'), 'the modal About dialog is retired');
-  assert.match(html, /data-osc="header\.about" @click="setWorkspace\('about'\)"/);
+  assert.match(html, /data-osc="header\.about" data-osc-link="jump" @click="setWorkspace\('about'\)"/);
 });
 
 test('external and contact links point exactly where they say', () => {

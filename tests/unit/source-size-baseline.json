@@ -25,7 +25,7 @@
     }
   },
   "caps": {
-    "src/index.html": 299000,
+    "src/index.html": 301000,
     "src/js/audio/audio-engine.js": 73000,
     "src/js/core/instrument.js": 62000,
     "src/js/experiments/validate.js": 64000,
@@ -109,6 +109,12 @@
       "cap": 299000,
       "pr": 386,
       "reason": "merging main's synth train (#385: K066/K102 presets and patch library, the XY tab, the docked keyboard) into lane A's shell, page header and registry-driven page parts (#386)"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 301000,
+      "pr": 397,
+      "reason": "K075's data-osc-link marker on the 47 controls that open or send to another workspace (the integration map's producers), which the scan and the browser suite read"
     }
   ]
 }
