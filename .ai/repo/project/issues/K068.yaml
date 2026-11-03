@@ -25,7 +25,6 @@ scope:
   - "dist"
 depends_on:
   - "K099"
-  - "K067"
   - "K060"
   - "W006"
 acceptance_criteria:
