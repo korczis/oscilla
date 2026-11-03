@@ -18,4 +18,15 @@ validation:
 evidence_required:
   - "owner_decision"
 created_at: 2026-11-03
-updated_at: 2026-11-03
+updated_at: 2026-11-03T22:23:07Z
+started_at: 2026-11-03T22:22:56Z
+started_event: sha256:0fd916012081ddee59ca68f107c677969ee786cd1088d4bca64f63f71d5ed5e4
+completed_at: 2026-11-03T22:23:07Z
+completed_event: sha256:07a11560d73d185b5ec62f12368ff71234d6a92ef034c75a823d336be4ff0e30
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "AskUserQuestion in Claude Code session oscilla-af, 2026-11-03 ~19:3xZ, the musical-practice owner questions"
+    result: "The owner answered: 'Riffs'. The first exercise type is the music library's original riffs (K149, M120), played back as notes clips and then played by the learner; it depends on K149 and K099's notes clip being on main."
+    commit: e006eb259da505cb40f3e95005343029e0bb77c7
+    recorded_at: 2026-11-03T22:21:18Z
