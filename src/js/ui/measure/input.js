@@ -75,6 +75,7 @@ export function createInput(ctx, svc, ops) {
       if ((url.searchParams.get('measure') === 'loopback') === on) return;
       if (on) url.searchParams.set('measure', 'loopback');
       else url.searchParams.delete('measure');
+      // data-osc-link: measure-loopback-param
       window.history.replaceState(window.history.state, '', url.href);
     } catch (e) { /* no window (unit tests), or an address the browser does not rewrite */ }
   }

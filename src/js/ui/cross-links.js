@@ -114,6 +114,7 @@ export function pageRelatedOf(ws) {
 export function learnToolOf(topicId) {
   const workspace = Object.hasOwn(LEARN_TOOLS, topicId) ? LEARN_TOOLS[topicId] : null;
   if (!workspace) return null;
+  // data-osc-link: learn.tool
   return { workspace, href: `#m=${workspace}`, text: `Open ${WORKSPACE_LABELS[workspace]}` };
 }
 
@@ -143,6 +144,7 @@ export function filterLabToggle(workspace) {
 
 /** The action a Learn demo's notice carries: back to the lesson it came from. */
 export function learnReturnAction(topic) {
+  // data-osc-link: alert.action
   return { href: '#m=learn', text: `Back to the lesson: ${topic.title}` };
 }
 

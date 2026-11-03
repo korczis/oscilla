@@ -154,7 +154,7 @@
         <!-- Below lg the brand gives way to the actions (it shrinks and cuts its own content,
              never drawing over a control) and drops the wordmark below 375 px, where it
              collides on wider fonts (review #330 F2); the mark always stays. -->
-        <a href="#m=playground" x-bind="homeLink()" data-osc="header.brand" title="Open the Playground"
+        <a href="#m=playground" x-bind="homeLink()" data-osc="header.brand" data-osc-link="jump" title="Open the Playground"
           aria-label="OSCILLA · Interactive Sound &amp; Frequency Lab"
           class="flex items-center min-w-0 overflow-hidden min-h-11 mr-3 rounded-lg lg:flex-none lg:mr-10 focus:outline-none focus:ring-2 focus:ring-primary-500">
           <svg class="osc-logo flex-none mr-2.5" viewBox="0 0 50 36" aria-hidden="true" focusable="false">
@@ -219,7 +219,7 @@
               :aria-checked="String(explore)" aria-checked="false" @click="explore = !explore" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Explore hints</button>
             <button type="button" role="menuitem" data-osc="header.settings" @click="openDialog('settings')" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Settings…</button>
             <button type="button" role="menuitem" data-osc="header.shortcuts" @click="openDialog('help')" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Keyboard shortcuts</button>
-            <button type="button" role="menuitem" data-osc="header.about" @click="setWorkspace('about')" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">About OSCILLA</button>
+            <button type="button" role="menuitem" data-osc="header.about" data-osc-link="jump" @click="setWorkspace('about')" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">About OSCILLA</button>
             <button type="button" role="menuitem" data-osc="safety.reopenMenu" @click="reopenSafety()" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Safety notice</button>
           </div>
         </div>
@@ -237,7 +237,7 @@
             <button type="button" role="menuitem" data-osc="export.seqWav" @click="exportAudio('sequence')" :aria-disabled="String(exportBusy)" :title="exportBusy ? 'An export is running: this one is offered again when it ends' : null" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Export sequence (WAV)<span class="ml-1 text-xs text-gray-500 dark:text-gray-300" data-osc-reason x-show="exportBusy" x-cloak>(an export is running)</span></button>
             <button type="button" role="menuitem" data-osc="export.png" @click="screenshot()" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Export graph (PNG)</button>
             <button type="button" role="menuitem" data-osc="export.config" @click="exportConfig()" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Export config (JSON)</button>
-            <button type="button" role="menuitem" data-osc="export.url" @click="copyConfigUrl()" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Copy config URL</button>
+            <button type="button" role="menuitem" data-osc="export.url" data-osc-link="jump" @click="copyConfigUrl()" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Copy config URL</button>
           </div>
         </div>
       </div>
@@ -273,7 +273,7 @@
                 <li :data-osc-nav-group="entry.kind === 'group' ? entry.id : null"
                   x-show="entry.kind === 'group' ? navGroupMatches(entry.id) : navShown(entry.id)">
                   <template x-if="entry.kind === 'item'">
-                    <a :href="'#m=' + entry.id" :data-osc="'nav.' + entry.id" x-bind="navItem(entry.id)"
+                    <a :href="'#m=' + entry.id" :data-osc="'nav.' + entry.id" data-osc-link="jump" x-bind="navItem(entry.id)"
                       :title="sidebarIcons ? entry.label : null"
                       class="flex items-center p-2 text-base font-normal text-gray-900 rounded-lg min-h-11 group hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-200 dark:hover:bg-gray-700">
                       <svg class="flex-shrink-0 w-6 h-6 text-gray-500 transition duration-75 group-hover:text-gray-900 dark:text-gray-400 dark:group-hover:text-white" aria-hidden="true"><use :href="'#' + entry.icon"/></svg>
@@ -296,7 +296,7 @@
                       x-bind="navGroupPanel(entry.id)" class="py-1 space-y-1">
                       <template x-for="w in entry.items" :key="w.id">
                         <li x-show="navShown(w.id)">
-                          <a :href="'#m=' + w.id" :data-osc="'nav.' + w.id" x-bind="navItem(w.id, true)"
+                          <a :href="'#m=' + w.id" :data-osc="'nav.' + w.id" data-osc-link="jump" x-bind="navItem(w.id, true)"
                             :title="sidebarIcons ? w.label : null"
                             class="flex items-center p-2 pl-6 text-base font-normal text-gray-900 rounded-lg min-h-11 group hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-200 dark:hover:bg-gray-700">
                             <svg class="flex-shrink-0 w-5 h-5 text-gray-500 transition duration-75 group-hover:text-gray-900 dark:text-gray-400 dark:group-hover:text-white" aria-hidden="true"><use :href="'#' + w.icon"/></svg>
@@ -331,7 +331,7 @@
           <strong x-text="a.title"></strong>
           <span x-text="a.message"></span>
           <template x-if="a.action">
-            <a :href="a.action.href" data-osc="alert.action" @click="alertActionFollowed(a.id)"
+            <a :href="a.action.href" data-osc="alert.action" data-osc-link="jump" @click="alertActionFollowed(a.id)"
               x-text="a.action.text"></a>
           </template>
         </div>
@@ -384,7 +384,7 @@
       <nav class="flex min-w-0" aria-label="Breadcrumb">
         <ol class="inline-flex items-center min-w-0 space-x-1 md:space-x-2">
           <li class="inline-flex items-center flex-none max-md:hidden">
-            <a href="#m=playground" data-osc="page.home" x-bind="crumbHome()"
+            <a href="#m=playground" data-osc="page.home" data-osc-link="jump" x-bind="crumbHome()"
               class="inline-flex items-center text-sm font-medium text-gray-700 rounded-lg min-h-8 [@media(pointer:coarse)]:min-h-11 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-300 dark:hover:text-white">
               <svg class="w-4 h-4 mr-2" aria-hidden="true"><use href="#i-ws-playground"/></svg>OSCILLA</a>
           </li>
@@ -409,7 +409,7 @@
         class="items-center flex-none hidden gap-1 ml-auto md:flex">
         <span class="mr-1 text-sm text-gray-500 dark:text-gray-400">Related</span>
         <template x-for="r in workspaceRelated()" :key="r.key">
-          <a :href="r.href" data-osc="page.relatedLink" :id="'osc-related-' + r.key.replace(':', '-')"
+          <a :href="r.href" data-osc="page.relatedLink" data-osc-link="jump open-in" :id="'osc-related-' + r.key.replace(':', '-')"
             :data-to="r.id" :title="r.why"
             x-bind="relatedLink(r)" x-text="r.text"
             class="inline-flex items-center px-2 text-sm font-medium rounded-lg text-primary-700 min-h-8 [@media(pointer:coarse)]:min-h-11 hover:underline hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-primary-400 dark:hover:bg-gray-700"></a>
@@ -427,7 +427,7 @@
           x-bind="menuPanel('related')"
           class="absolute right-0 z-50 py-1 mt-2 bg-white rounded-lg shadow-lg w-72 top-full dark:bg-gray-700">
           <template x-for="r in workspaceRelated()" :key="r.key">
-            <a role="menuitem" :href="r.href" data-osc="page.relatedItem" :data-to="r.id"
+            <a role="menuitem" :href="r.href" data-osc="page.relatedItem" data-osc-link="jump open-in" :data-to="r.id"
               :id="'osc-related-item-' + r.key.replace(':', '-')"
               x-bind="relatedLink(r)"
               class="flex flex-col justify-center w-full px-4 py-2 text-left min-h-11 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:hover:bg-gray-600">
@@ -861,9 +861,9 @@
               <p class="osc-mic-note max-md:whitespace-normal">Not a calibrated measurement. Microphone frequency response varies.</p>
             </div>
             <p data-osc="mic.counterparts" hidden :hidden="!counterpartsShown()">For a calibrated measurement:
-              <a href="#m=measure" data-osc="counterpart.measure-rta"
+              <a href="#m=measure" data-osc="counterpart.measure-rta" data-osc-link="jump"
                 x-bind="counterpartLink('measure-rta')">RTA in Measure</a> ·
-              <a href="#m=experiments" data-osc="counterpart.experiments"
+              <a href="#m=experiments" data-osc="counterpart.experiments" data-osc-link="jump"
                 x-bind="counterpartLink('experiments')">Compare saved experiments</a></p>
           </section>
 
@@ -1300,7 +1300,7 @@
           </div>
           <div class="osc-m-setup-body" id="osc-m-setup-body" :class="{ 'is-open': meas.setupOpen }">
             <div class="osc-m-btnrow osc-m-recipelink">
-              <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="measure.recipeLink"
+              <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="measure.recipeLink" data-osc-link="jump"
                 aria-describedby="osc-m-recipelink-note" @click="measureCopyRecipeLink()">Copy recipe link</button>
               <span class="osc-m-hint" id="osc-m-recipelink-note">Recipe only (sweep, level, runs, timing): no result, calibration or input device. Opening it never starts a measurement.</span>
             </div>
@@ -1410,9 +1410,9 @@
             <span class="osc-sr-only" id="osc-measure-save-why" x-text="measureSaveReason"></span>
             <button type="button" class="osc-btn osc-btn-secondary" data-osc="measure.repeat"
               :disabled="meas.state !== 'COMPLETE'" @click="measureRepeat()">Repeat (new experiment)</button>
-            <button type="button" class="osc-btn osc-btn-secondary" data-osc="measure.toExperiments"
+            <button type="button" class="osc-btn osc-btn-secondary" data-osc="measure.toExperiments" data-osc-link="jump"
               @click="setWorkspace('experiments', { focusHeading: true })">Open Experiments</button>
-            <a href="#m=studio&amp;st=measurement-sweep" data-osc="measure.toStudio">Open Measurement Sweep in Studio</a>
+            <a href="#m=studio&amp;st=measurement-sweep" data-osc="measure.toStudio" data-osc-link="open-in">Open Measurement Sweep in Studio</a>
           </div>
           <div class="osc-m-defnote" data-osc="measure.definition" x-show="meas.definition" style="display: none">
             <p class="osc-m-hint"><strong>Definition:</strong> <span x-text="meas.definition ? meas.definition.text : ''"></span><span
@@ -1465,11 +1465,11 @@
           <div class="flex min-w-0 flex-wrap items-center gap-x-3 self-center max-md:col-span-full">
             <span data-osc="seq.unsaved" hidden :hidden="!seqUnsaved"
               title="Export config keeps the sequence; a reload asks first">unsaved sequence</span>
-            <a href="#m=studio&amp;st=sweep-sequence" data-osc="seq.toStudioTemplate" hidden
+            <a href="#m=studio&amp;st=sweep-sequence" data-osc="seq.toStudioTemplate" data-osc-link="open-in" hidden
               :hidden="workspace !== 'sequencer'">Open Sweep Sequence in Studio</a>
-            <a href="#m=studio" data-osc="seq.toStudio" hidden :hidden="workspace !== 'sequencer'"
+            <a href="#m=studio" data-osc="seq.toStudio" data-osc-link="send-to" hidden :hidden="workspace !== 'sequencer'"
               @click="studioOpenSequence($event)">Open this pattern in Studio</a>
-            <a href="#m=synth" data-osc="seq.toSynth" hidden :hidden="workspace !== 'sequencer'"
+            <a href="#m=synth" data-osc="seq.toSynth" data-osc-link="jump" hidden :hidden="workspace !== 'sequencer'"
               x-bind="counterpartLink('synth')">Open the Synth</a>
             <span class="osc-spacer"></span>
           </div>
@@ -1609,13 +1609,13 @@
             <span class="osc-toggle-track" aria-hidden="true"></span>
           </button>
           <span class="osc-spacer"></span>
-          <a href="#m=studio&amp;st=filter-automation" data-osc="filter.toStudio" hidden
+          <a href="#m=studio&amp;st=filter-automation" data-osc="filter.toStudio" data-osc-link="open-in" hidden
             :hidden="workspace !== 'filter'">Open Filter Automation in Studio</a>
-          <a href="#m=synth" data-osc="filter.toSynth" hidden :hidden="workspace !== 'filter'"
+          <a href="#m=synth" data-osc="filter.toSynth" data-osc-link="jump" hidden :hidden="workspace !== 'filter'"
             x-bind="counterpartLink('synth')">Open the Synth</a>
           <button type="button" class="osc-icon-btn osc-icon-btn--sm osc-panel-fs max-md:order-first"
             id="osc-filter-fullscreen"
-            data-osc="filter.fullscreen" aria-label="Open the Filter Lab page"
+            data-osc="filter.fullscreen" data-osc-link="jump" aria-label="Open the Filter Lab page"
             title="Open the Filter Lab page" :aria-label="filterLabToggle().label"
             :title="filterLabToggle().label" @click="setWorkspace(filterLabToggle().to)">
             <svg aria-hidden="true"><use href="#i-expand" :href="filterLabToggle().icon"/></svg>
@@ -1676,7 +1676,7 @@
             data-osc="envelope.scope" hidden :hidden="workspace !== 'sequencer' && !seqPlaying"
             title="The sequence keeps its blocks' envelopes and waveform; the Filter Lab shapes it."
             > · instrument only</span></h2>
-          <a href="#m=studio&amp;st=subtractive-synth" data-osc="envelope.toStudio" hidden
+          <a href="#m=studio&amp;st=subtractive-synth" data-osc="envelope.toStudio" data-osc-link="open-in" hidden
             :hidden="workspace !== 'synthesis'">Open Subtractive Synth in Studio</a>
           <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm osc-env-power"
             id="osc-env-enable" data-osc="envelope.enable" aria-pressed="false"
@@ -1925,9 +1925,9 @@
         data-osc="dual-panel" data-osc-modes="synthesis" aria-labelledby="osc-dual-title">
         <div class="osc-panel-header max-md:flex-wrap">
           <h2 class="osc-panel-title" id="osc-dual-title">Dual Oscillator</h2>
-          <a href="#m=studio&amp;st=stereo-beat" data-osc="dual.toStudio" hidden
+          <a href="#m=studio&amp;st=stereo-beat" data-osc="dual.toStudio" data-osc-link="open-in" hidden
             :hidden="workspace !== 'synthesis'">Open Stereo Beat in Studio</a>
-          <a href="#m=synth" data-osc="dual.toSynth" hidden :hidden="workspace !== 'synthesis'"
+          <a href="#m=synth" data-osc="dual.toSynth" data-osc-link="jump" hidden :hidden="workspace !== 'synthesis'"
             x-bind="counterpartLink('synth')">Open the Synth</a>
           <span class="osc-spacer"></span>
           <output class="osc-dual-beat osc-num osc-muted max-md:basis-full" id="osc-dual-beat"
@@ -2158,7 +2158,7 @@
                   <h4 class="osc-x-name" x-text="d.name"></h4>
                   <span class="osc-x-meta osc-num" x-text="d.meta"></span>
                 </div>
-                <button type="button" class="osc-btn osc-btn-primary osc-m-small" data-osc="def.run"
+                <button type="button" class="osc-btn osc-btn-primary osc-m-small" data-osc="def.run" data-osc-link="jump"
                   :aria-label="'Run this definition: ' + d.name" @click="experimentsDefRun(d.id)">Run this definition</button>
                 <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="def.edit"
                   :aria-label="'Edit ' + d.name" @click="experimentsDefAsk(d.id)">Edit…</button>
@@ -2169,7 +2169,7 @@
                 <p class="osc-x-cn-dir">What is this connected to?</p>
                 <ul class="osc-x-ev-list osc-x-cn-list" role="list" :aria-label="'What ' + d.name + ' is connected to'">
                   <template x-for="(c, i) in (cnx.defs[d.id] ? cnx.defs[d.id].upstream : [])" :key="c.relation + '|' + (c.to.id || '') + '|' + i">
-                    <li class="osc-x-cn-item" :data-state="c.state" :data-relation="c.relation"><strong x-text="c.label"></strong> <template x-if="c.href"><a class="osc-x-cn-link" data-osc="cnx.link" :href="c.href" @click="connectionsFollow(c, $event)" x-text="c.target"></a></template><template x-if="!c.href"><span x-text="c.target"></span></template><span class="osc-x-cn-state" x-text="' — ' + c.text + '.'"></span> <span class="osc-x-cn-field" x-text="'Field: ' + c.field + ', on ' + c.fieldOf + '.'"></span></li>
+                    <li class="osc-x-cn-item" :data-state="c.state" :data-relation="c.relation"><strong x-text="c.label"></strong> <template x-if="c.href"><a class="osc-x-cn-link" data-osc="cnx.link" data-osc-link="jump" :href="c.href" @click="connectionsFollow(c, $event)" x-text="c.target"></a></template><template x-if="!c.href"><span x-text="c.target"></span></template><span class="osc-x-cn-state" x-text="' — ' + c.text + '.'"></span> <span class="osc-x-cn-field" x-text="'Field: ' + c.field + ', on ' + c.fieldOf + '.'"></span></li>
                   </template>
                   <li class="osc-x-empty" x-show="cnx.defs[d.id] && !cnx.defs[d.id].status && !cnx.defs[d.id].upstream.length" x-text="'A definition stores no reference to another record.'"></li>
                   <li class="osc-x-cn-more" x-show="cnx.defs[d.id] && cnx.defs[d.id].more.upstream" x-text="cnx.defs[d.id] ? 'And ' + cnx.defs[d.id].more.upstream + ' more, not listed' + (cnx.defs[d.id].more.upstreamNotFine ? ' (' + cnx.defs[d.id].more.upstreamNotFine + ' of them not stored here as listed)' : '') + '.' : ''"></li>
@@ -2177,7 +2177,7 @@
                 <p class="osc-x-cn-dir">What depends on it?</p>
                 <ul class="osc-x-ev-list osc-x-cn-list" role="list" :aria-label="'What depends on ' + d.name">
                   <template x-for="(c, i) in (cnx.defs[d.id] ? cnx.defs[d.id].downstream : [])" :key="c.relation + '|' + (c.to.id || '') + '|' + i">
-                    <li class="osc-x-cn-item" :data-state="c.state" :data-relation="c.relation"><strong x-text="c.label"></strong> <template x-if="c.href"><a class="osc-x-cn-link" data-osc="cnx.link" :href="c.href" @click="connectionsFollow(c, $event)" x-text="c.target"></a></template><template x-if="!c.href"><span x-text="c.target"></span></template><span class="osc-x-cn-state" x-text="' — ' + c.text + '.'"></span> <span class="osc-x-cn-field" x-text="'Field: ' + c.field + ', on ' + c.fieldOf + '.'"></span></li>
+                    <li class="osc-x-cn-item" :data-state="c.state" :data-relation="c.relation"><strong x-text="c.label"></strong> <template x-if="c.href"><a class="osc-x-cn-link" data-osc="cnx.link" data-osc-link="jump" :href="c.href" @click="connectionsFollow(c, $event)" x-text="c.target"></a></template><template x-if="!c.href"><span x-text="c.target"></span></template><span class="osc-x-cn-state" x-text="' — ' + c.text + '.'"></span> <span class="osc-x-cn-field" x-text="'Field: ' + c.field + ', on ' + c.fieldOf + '.'"></span></li>
                   </template>
                   <li class="osc-x-empty" x-show="cnx.defs[d.id] && !cnx.defs[d.id].status && !cnx.defs[d.id].downstream.length" x-text="'No stored experiment names a version of this definition.'"></li>
                   <li class="osc-x-cn-more" x-show="cnx.defs[d.id] && cnx.defs[d.id].more.downstream" x-text="cnx.defs[d.id] ? 'And ' + cnx.defs[d.id].more.downstream + ' more, not listed' + (cnx.defs[d.id].more.downstreamNotFine ? ' (' + cnx.defs[d.id].more.downstreamNotFine + ' of them not stored here as listed)' : '') + '.' : ''"></li>
@@ -2188,7 +2188,7 @@
                 </details>
               </li>
             </template>
-            <li class="osc-x-empty" x-show="exps.loaded && !exps.defs.length">No definitions yet. A definition fixes what to measure and how; every experiment started from it records its version. <a href="#m=measure" data-osc="def.toMeasure">Set up a measurement in Measure</a></li>
+            <li class="osc-x-empty" x-show="exps.loaded && !exps.defs.length">No definitions yet. A definition fixes what to measure and how; every experiment started from it records its version. <a href="#m=measure" data-osc="def.toMeasure" data-osc-link="jump">Set up a measurement in Measure</a></li>
           </ul>
         </section>
         <section class="osc-panel osc-x-list" id="osc-exp-list" aria-labelledby="osc-x-list-title">
@@ -2227,7 +2227,7 @@
               </li>
             </template>
             <li class="osc-x-empty" x-show="exps.loaded && !exps.rows.length"><span x-text="exps.empty"></span>
-              <a href="#m=measure" data-osc="exp.toMeasure">Open Measure</a></li>
+              <a href="#m=measure" data-osc="exp.toMeasure" data-osc-link="jump">Open Measure</a></li>
           </ul>
         </section>
         <!-- FINDINGS (ADR 0046): interpretations linked to the experiments they rest on; never an experiment. -->
@@ -2267,7 +2267,7 @@
                 <p class="osc-f-issue" data-osc="fnd.statusIssue" x-show="r.statusIssue" style="display: none" x-text="r.statusIssue"></p>
                 <ul class="osc-f-refs" role="list" :aria-label="'Evidence: ' + r.statement">
                   <template x-for="e in r.evidence" :key="e.key">
-                    <li class="osc-f-ref" data-osc="fnd.ref" :data-state="e.state"><span x-text="e.text"></span><template x-if="e.issue"><span class="osc-f-issue" x-text="' ' + e.issue"></span></template><template x-if="e.state === 'ok'"><button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="fnd.openRef"
+                    <li class="osc-f-ref" data-osc="fnd.ref" :data-state="e.state"><span x-text="e.text"></span><template x-if="e.issue"><span class="osc-f-issue" x-text="' ' + e.issue"></span></template><template x-if="e.state === 'ok'"><button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="fnd.openRef" data-osc-link="jump"
                         :aria-label="'Open: ' + e.text" @click="findingsOpenRef(e.ref, r.id)">Open</button></template></li>
                   </template>
                   <li class="osc-x-empty" x-show="!r.evidence.length">No evidence linked.</li>
@@ -2280,7 +2280,7 @@
                 <p class="osc-x-cn-dir">What is this connected to?</p>
                 <ul class="osc-x-ev-list osc-x-cn-list" role="list" :aria-label="'What this finding is connected to: ' + r.statement">
                   <template x-for="(c, i) in (cnx.findings[r.id] ? cnx.findings[r.id].upstream : [])" :key="c.relation + '|' + (c.to.id || '') + '|' + i">
-                    <li class="osc-x-cn-item" :data-state="c.state" :data-relation="c.relation"><strong x-text="c.label"></strong> <template x-if="c.href"><a class="osc-x-cn-link" data-osc="cnx.link" :href="c.href" @click="connectionsFollow(c, $event)" x-text="c.target"></a></template><template x-if="!c.href"><span x-text="c.target"></span></template><span class="osc-x-cn-state" x-text="' — ' + c.text + '.'"></span> <span class="osc-x-cn-field" x-text="'Field: ' + c.field + ', on ' + c.fieldOf + '.'"></span></li>
+                    <li class="osc-x-cn-item" :data-state="c.state" :data-relation="c.relation"><strong x-text="c.label"></strong> <template x-if="c.href"><a class="osc-x-cn-link" data-osc="cnx.link" data-osc-link="jump" :href="c.href" @click="connectionsFollow(c, $event)" x-text="c.target"></a></template><template x-if="!c.href"><span x-text="c.target"></span></template><span class="osc-x-cn-state" x-text="' — ' + c.text + '.'"></span> <span class="osc-x-cn-field" x-text="'Field: ' + c.field + ', on ' + c.fieldOf + '.'"></span></li>
                   </template>
                   <li class="osc-x-empty" x-show="cnx.findings[r.id] && !cnx.findings[r.id].status && !cnx.findings[r.id].upstream.length" x-text="'This finding cites no experiment.'"></li>
                   <li class="osc-x-cn-more" x-show="cnx.findings[r.id] && cnx.findings[r.id].more.upstream" x-text="cnx.findings[r.id] ? 'And ' + cnx.findings[r.id].more.upstream + ' more, not listed' + (cnx.findings[r.id].more.upstreamNotFine ? ' (' + cnx.findings[r.id].more.upstreamNotFine + ' of them not stored here as listed)' : '') + '.' : ''"></li>
@@ -2288,7 +2288,7 @@
                 <p class="osc-x-cn-dir">What depends on it?</p>
                 <ul class="osc-x-ev-list osc-x-cn-list" role="list" :aria-label="'What depends on this finding: ' + r.statement">
                   <template x-for="(c, i) in (cnx.findings[r.id] ? cnx.findings[r.id].downstream : [])" :key="c.relation + '|' + (c.to.id || '') + '|' + i">
-                    <li class="osc-x-cn-item" :data-state="c.state" :data-relation="c.relation"><strong x-text="c.label"></strong> <template x-if="c.href"><a class="osc-x-cn-link" data-osc="cnx.link" :href="c.href" @click="connectionsFollow(c, $event)" x-text="c.target"></a></template><template x-if="!c.href"><span x-text="c.target"></span></template><span class="osc-x-cn-state" x-text="' — ' + c.text + '.'"></span> <span class="osc-x-cn-field" x-text="'Field: ' + c.field + ', on ' + c.fieldOf + '.'"></span></li>
+                    <li class="osc-x-cn-item" :data-state="c.state" :data-relation="c.relation"><strong x-text="c.label"></strong> <template x-if="c.href"><a class="osc-x-cn-link" data-osc="cnx.link" data-osc-link="jump" :href="c.href" @click="connectionsFollow(c, $event)" x-text="c.target"></a></template><template x-if="!c.href"><span x-text="c.target"></span></template><span class="osc-x-cn-state" x-text="' — ' + c.text + '.'"></span> <span class="osc-x-cn-field" x-text="'Field: ' + c.field + ', on ' + c.fieldOf + '.'"></span></li>
                   </template>
                   <li class="osc-x-empty" x-show="cnx.findings[r.id] && !cnx.findings[r.id].status && !cnx.findings[r.id].downstream.length" x-text="'No record stores a reference to a finding.'"></li>
                   <li class="osc-x-cn-more" x-show="cnx.findings[r.id] && cnx.findings[r.id].more.downstream" x-text="cnx.findings[r.id] ? 'And ' + cnx.findings[r.id].more.downstream + ' more, not listed' + (cnx.findings[r.id].more.downstreamNotFine ? ' (' + cnx.findings[r.id].more.downstreamNotFine + ' of them not stored here as listed)' : '') + '.' : ''"></li>
@@ -2338,9 +2338,9 @@
                 :aria-pressed="String(!!(exps.detail && exps.detail.baseline))"
                 @click="experimentsSetBaseline(exps.detail.id, !exps.detail.baseline)"
                 x-text="exps.detail && exps.detail.baseline ? 'Clear baseline' : 'Mark as baseline'">Mark as baseline</button>
-              <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.repeat"
+              <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.repeat" data-osc-link="jump"
                 @click="experimentsRepeat(exps.detail.id)">Repeat (new experiment)</button>
-              <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.inspect"
+              <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.inspect" data-osc-link="jump"
                 @click="experimentsShowInMeasure(exps.detail.id)">Show in Measure</button>
               <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.export"
                 @click="experimentsExport(exps.detail.id)">Export .oscilla.json</button>
@@ -2410,7 +2410,7 @@
                 <p class="osc-x-cn-dir">What is this connected to?</p>
                 <ul class="osc-x-ev-list osc-x-cn-list" role="list" :aria-label="'What this experiment is connected to'">
                   <template x-for="(c, i) in (cnx.run ? cnx.run.upstream : [])" :key="c.relation + '|' + (c.to.id || '') + '|' + i">
-                    <li class="osc-x-cn-item" :data-state="c.state" :data-relation="c.relation"><strong x-text="c.label"></strong> <template x-if="c.href"><a class="osc-x-cn-link" data-osc="cnx.link" :href="c.href" @click="connectionsFollow(c, $event)" x-text="c.target"></a></template><template x-if="!c.href"><span x-text="c.target"></span></template><span class="osc-x-cn-state" x-text="' — ' + c.text + '.'"></span> <span class="osc-x-cn-field" x-text="'Field: ' + c.field + ', on ' + c.fieldOf + '.'"></span></li>
+                    <li class="osc-x-cn-item" :data-state="c.state" :data-relation="c.relation"><strong x-text="c.label"></strong> <template x-if="c.href"><a class="osc-x-cn-link" data-osc="cnx.link" data-osc-link="jump" :href="c.href" @click="connectionsFollow(c, $event)" x-text="c.target"></a></template><template x-if="!c.href"><span x-text="c.target"></span></template><span class="osc-x-cn-state" x-text="' — ' + c.text + '.'"></span> <span class="osc-x-cn-field" x-text="'Field: ' + c.field + ', on ' + c.fieldOf + '.'"></span></li>
                   </template>
                   <li class="osc-x-empty" x-show="cnx.run && !cnx.run.status && !cnx.run.upstream.length" x-text="'No stored field of this experiment names another record.'"></li>
                   <li class="osc-x-cn-more" x-show="cnx.run && cnx.run.more.upstream" x-text="cnx.run ? 'And ' + cnx.run.more.upstream + ' more, not listed' + (cnx.run.more.upstreamNotFine ? ' (' + cnx.run.more.upstreamNotFine + ' of them not stored here as listed)' : '') + '.' : ''"></li>
@@ -2418,7 +2418,7 @@
                 <p class="osc-x-cn-dir">What depends on it?</p>
                 <ul class="osc-x-ev-list osc-x-cn-list" role="list" :aria-label="'What depends on this experiment'">
                   <template x-for="(c, i) in (cnx.run ? cnx.run.downstream : [])" :key="c.relation + '|' + (c.to.id || '') + '|' + i">
-                    <li class="osc-x-cn-item" :data-state="c.state" :data-relation="c.relation"><strong x-text="c.label"></strong> <template x-if="c.href"><a class="osc-x-cn-link" data-osc="cnx.link" :href="c.href" @click="connectionsFollow(c, $event)" x-text="c.target"></a></template><template x-if="!c.href"><span x-text="c.target"></span></template><span class="osc-x-cn-state" x-text="' — ' + c.text + '.'"></span> <span class="osc-x-cn-field" x-text="'Field: ' + c.field + ', on ' + c.fieldOf + '.'"></span></li>
+                    <li class="osc-x-cn-item" :data-state="c.state" :data-relation="c.relation"><strong x-text="c.label"></strong> <template x-if="c.href"><a class="osc-x-cn-link" data-osc="cnx.link" data-osc-link="jump" :href="c.href" @click="connectionsFollow(c, $event)" x-text="c.target"></a></template><template x-if="!c.href"><span x-text="c.target"></span></template><span class="osc-x-cn-state" x-text="' — ' + c.text + '.'"></span> <span class="osc-x-cn-field" x-text="'Field: ' + c.field + ', on ' + c.fieldOf + '.'"></span></li>
                   </template>
                   <li class="osc-x-empty" x-show="cnx.run && !cnx.run.status && !cnx.run.downstream.length" x-text="'No stored record names this experiment.'"></li>
                   <li class="osc-x-cn-more" x-show="cnx.run && cnx.run.more.downstream" x-text="cnx.run ? 'And ' + cnx.run.more.downstream + ' more, not listed' + (cnx.run.more.downstreamNotFine ? ' (' + cnx.run.more.downstreamNotFine + ' of them not stored here as listed)' : '') + '.' : ''"></li>
@@ -2540,10 +2540,10 @@
               <div class="osc-learn-actions">
                 <button type="button" class="osc-btn osc-btn-secondary" data-osc="learn.example"
                   @click="learnTopic = t.id" :aria-pressed="String(learnTopic === t.id)">Relate to current settings</button>
-                <button type="button" class="osc-btn osc-btn-primary" data-osc="learn.demo"
+                <button type="button" class="osc-btn osc-btn-primary" data-osc="learn.demo" data-osc-link="jump"
                   @click="learnTopic = t.id; runLearnDemo(t)" x-text="'Demo: ' + t.demo.label"></button>
                 <template x-if="learnToolOf(t.id)">
-                  <a :href="learnToolOf(t.id).href" data-osc="learn.tool"
+                  <a :href="learnToolOf(t.id).href" data-osc="learn.tool" data-osc-link="jump"
                     @click="learnToolFollowed(t, $event)" x-text="learnToolOf(t.id).text"></a>
                 </template>
               </div>
@@ -2570,7 +2570,7 @@
           <button type="button" class="osc-btn osc-btn-secondary" data-osc="presets.reset" @click="resetDefaults()">Reset to defaults</button>
           <button type="button" class="osc-btn osc-btn-secondary" data-osc="presets.clearHistory"
             x-show="presetTab === 'history'" @click="clearHistory()">Clear history</button>
-          <a href="#m=synth" data-osc="presets.toSynth" hidden
+          <a href="#m=synth" data-osc="presets.toSynth" data-osc-link="jump" hidden
             class="self-center [@media(pointer:coarse)]:inline-flex [@media(pointer:coarse)]:min-h-11
               [@media(pointer:coarse)]:items-center"
             :hidden="workspace !== 'presets'" x-bind="counterpartLink('synth')">Open the Synth</a>
@@ -2585,7 +2585,7 @@
                     <span class="osc-preset-desc" x-text="p.desc"></span>
                     <span class="osc-preset-params osc-num" x-text="presetParams(p)"></span>
                     <span class="osc-preset-disabled" x-show="presetDisabled(p)" :id="'osc-preset-why-' + p.id" x-text="presetDisabledReason(p)"></span>
-                    <a href="#m=playground" data-osc="presets.altPlayground" x-show="presetDisabled(p)"
+                    <a href="#m=playground" data-osc="presets.altPlayground" data-osc-link="jump" x-show="presetDisabled(p)"
                       class="self-start text-sm font-medium text-primary-700 hover:underline [@media(pointer:coarse)]:inline-flex [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:items-center dark:text-primary-400">Set a tone within the limit in the Playground</a>
                   </div>
                   <div class="osc-preset-actions">
@@ -2609,7 +2609,7 @@
             <h3 class="mb-2 text-lg font-semibold text-gray-900 dark:text-white"
               x-text="emptyOf('presets').title"></h3>
             <p class="mb-4 text-sm text-gray-500 dark:text-gray-400" x-text="emptyOf('presets').body"></p>
-            <a :href="'#m=' + emptyOf('presets').action.to" data-osc="page.emptyAction"
+            <a :href="'#m=' + emptyOf('presets').action.to" data-osc="page.emptyAction" data-osc-link="jump"
               x-bind="emptyAction('presets')" x-text="emptyOf('presets').action.label"
               class="inline-flex items-center justify-center px-5 text-sm font-medium text-center text-white rounded-lg min-h-11 bg-primary-700 hover:bg-primary-800 focus:outline-none focus:ring-4 focus:ring-primary-300 dark:bg-primary-700 dark:hover:bg-primary-800 dark:focus:ring-primary-800"></a>
           </div>
@@ -2626,7 +2626,7 @@
                   </div>
                 </li>
               </template>
-              <li class="osc-preset-empty" x-show="!history.length">Nothing played in this page view yet. <a href="#m=playground" data-osc="presets.toPlayground">Play something in the Playground</a></li>
+              <li class="osc-preset-empty" x-show="!history.length">Nothing played in this page view yet. <a href="#m=playground" data-osc="presets.toPlayground" data-osc-link="jump">Play something in the Playground</a></li>
             </ul>
           </template>
         </div>
@@ -2664,9 +2664,9 @@
             class="h-11 rounded-lg bg-primary-600 px-4 text-sm font-medium text-white hover:bg-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300">Arm</button>
           <button type="button" data-osc="synth.library" @click="patchLibraryOpen()"
             class="h-11 rounded-lg border border-solid border-gray-300 bg-white px-4 text-sm font-medium text-gray-900 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700">Library</button>
-          <button type="button" data-osc="synth.studio" @click="synthOpenStudio()"
+          <button type="button" data-osc="synth.studio" data-osc-link="open-in" @click="synthOpenStudio()"
             class="h-11 rounded-lg border border-solid border-gray-300 bg-white px-4 text-sm font-medium text-gray-900 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700">Open in Studio</button>
-          <button type="button" data-osc="synth.copy-link" @click="synthCopyLink()"
+          <button type="button" data-osc="synth.copy-link" data-osc-link="jump" @click="synthCopyLink()"
             class="h-11 rounded-lg border border-solid border-gray-300 bg-white px-4 text-sm font-medium text-gray-900 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700">Copy link</button>
         </div>
       </div>
@@ -2702,7 +2702,7 @@
       <div class="osc-studio">
         <header class="osc-panel osc-st-bar" role="group" aria-label="Studio toolbar">
           <div class="osc-st-row">
-            <button type="button" class="osc-btn osc-btn-secondary osc-st-back" data-osc="studio.back"
+            <button type="button" class="osc-btn osc-btn-secondary osc-st-back" data-osc="studio.back" data-osc-link="jump"
               @click="studioBack()" aria-label="Back to the Playground" title="Back to the Playground"
               :aria-label="studioBackText()" :title="studioBackText()">
               <svg aria-hidden="true"><use href="#s-back"/></svg><span class="osc-st-lbl"
@@ -2750,7 +2750,7 @@
                 <svg aria-hidden="true"><use href="#s-frame"/></svg></button>
             </div>
             <div class="osc-st-group" role="group" aria-label="View">
-              <button type="button" class="osc-icon-btn osc-st-ico" data-osc="studio.copyLink"
+              <button type="button" class="osc-icon-btn osc-st-ico" data-osc="studio.copyLink" data-osc-link="jump"
                 aria-label="Copy link to this Studio view"
                 title="Copy link: Studio, the view and an unmodified template" @click="studioCopyLink()">
                 <svg aria-hidden="true"><use href="#i-link"/></svg></button>
@@ -3055,7 +3055,7 @@
             <template x-for="w in aboutWorkspaces()" :key="w.id">
               <li :data-osc="'about.workspace.' + w.id"><template x-if="w.id !== 'about'"><a
                 :href="'#m=' + w.id" class="inline-flex min-h-6 items-center"
-                :data-osc="'about.open.' + w.id"><b x-text="w.label"></b></a></template><template
+                :data-osc="'about.open.' + w.id" data-osc-link="jump"><b x-text="w.label"></b></a></template><template
                 x-if="w.id === 'about'"><b x-text="w.label"></b></template>
                 <span x-text="w.summary"></span></li>
             </template>
@@ -3229,7 +3229,7 @@
       </button>
       <div class="osc-sb-actions" id="osc-sb-actions" role="group" aria-label="Actions"
         :class="{ 'is-open': menus.actions }">
-        <button type="button" class="osc-sb-action" id="osc-act-url" data-osc="action.copyUrl" @click="copyConfigUrl()"
+        <button type="button" class="osc-sb-action" id="osc-act-url" data-osc="action.copyUrl" data-osc-link="jump" @click="copyConfigUrl()"
           aria-label="Copy config URL">
           <svg aria-hidden="true"><use href="#i-link"/></svg><span>URL</span>
         </button>

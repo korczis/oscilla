@@ -267,6 +267,7 @@ export function measureRecipeLinkPart(ctx, svc, ops) {
       if (!url) return null;
       ctx.lastRecipeParam = this.measureRecipeParam(); // our own link is not one to apply
       try {
+        // data-osc-link: measure.recipeLink
         window.history.replaceState(window.history.state, '', url);
       } catch (e) { /* file:// in some */ }
       this.meas.recipeLink = url;
