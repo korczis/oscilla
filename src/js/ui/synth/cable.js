@@ -7,21 +7,30 @@
 // token too (project.visual-identity-lock v3), and every shape sets its own stroke. No number
 // here sets an opacity, an alpha or a shadow (v4): the sheen's and the shadow's intensities are
 // the hw-sheen and hw-shadow Tailwind keys (classes opacity-hw-sheen and opacity-hw-shadow), and
-// the hit path is hidden rather than transparent. Imports nothing.
+// the hit path is hidden rather than transparent. Imports only the plug (plug.js, whose
+// plugSvg it re-exports), so its refused cross keeps clear of the room a plug takes.
 //
 //   CABLE_DASH                              the pattern of each signal type
 //   cableCurve(a, b, { slack, box, tangents, sag })
 //                                           'M … C …', a hanging cable from a to b, or with
 //                                           tangents a graph edge along its two ports
 //   cableSag(a, b, { slack, box })          the sag a hanging cable rests at
+//   cableDirections(a, b, { slack, box, tangents, sag })
+//                                           { from, to }: the way the cable leaves each plug
 //   settle(previous, { from, to }, dt, { slack, box, reducedMotion })
 //                                           one frame of a dropped or moved cable settling
 //   cableParts({ id, from, to, type, colour, state, tokens, slack, box, tangents, sag, zoom,
-//     sheen, dash, port })
+//     sheen, dash, port, cross })
 //                                           [{ key, tag, attrs, parent }], for setAttribute
 //   partsSvg(parts)                         the markup of those records
 //   cableSvg(spec)                          '<g data-cable="id">…</g>', partsSvg(cableParts())
-//   plugSvg({ at, colour, tokens })         a seated plug, taking no pointer
+//   plugSvg({ at, colour, tokens, state, direction })
+//                                           a plug, seated, held or refused, taking no pointer
+//                                           (plug.js)
+
+import { PLUG } from './plug.js';
+
+export { PLUG, plugSvg } from './plug.js';
 
 /** The dash pattern per signal type (PORT_VISUALS: solid, dashed, pulse, dash-dot). */
 export const CABLE_DASH = Object.freeze({
@@ -48,10 +57,10 @@ const REACH_MAX = 120;
 const REACH_PART = 0.4;
 /** Half the arm of the refused cross, graph units, and its stroke width. */
 const CROSS = Object.freeze({ arm: 5, width: 2, under: 4.5 });
-/** How far back from the target end the refused cross sits, graph units: the plug's sleeve
- *  (r 7 and half its 1.5 ring) plus the cross's reach (arm × √2 and half its underlay), so the
- *  cross never covers the plug. */
-const CROSS_BACK = 7.75 + CROSS.arm * Math.SQRT2 + CROSS.under / 2 + 1;
+/** How far back from the target end the refused cross sits, graph units: the room a plug takes
+ *  seated or held (PLUG.room, 7.75) plus the cross's reach (arm × √2 and half its underlay) and
+ *  1, so the cross never covers the plug nor the plug's own refused cross. */
+const CROSS_BACK = PLUG.room + CROSS.arm * Math.SQRT2 + CROSS.under / 2 + 1;
 /** The sheen's offset up and left, screen px. */
 const SHEEN_PX = 0.7;
 /** The shadow underlay's drop, screen px: at rest, and lifted while the cable is dragged. */
@@ -296,6 +305,29 @@ function nearTarget(a, b, how) {
   return { x: num(q.x), y: num(q.y) };
 }
 
+/** The unit vector from p toward q, or null when they coincide. */
+function toward(p, q) {
+  const l = Math.hypot(q.x - p.x, q.y - p.y);
+  return l > 1e-9 ? { x: (q.x - p.x) / l, y: (q.y - p.y) / l } : null;
+}
+
+/**
+ * The way a cable from a to b leaves each of its plugs, as unit vectors { from, to }: from a
+ * toward its curve's first control point (the next that differs from a), and from b toward its
+ * last; so along the ports with `tangents` (from, and to, each the way its port faces), and
+ * down into the sag when it hangs. Pass each to plugSvg as its direction. Coincident ends (and
+ * every control point on them) leave downward. The options are cableCurve's.
+ */
+export function cableDirections(a, b, how = {}) {
+  const segs = cubics(a, b, how);
+  const [p0, c1, c2, p3] = segs[0];
+  const [q0, d1, d2, q3] = segs[segs.length - 1];
+  const down = Object.freeze({ x: 0, y: 1 });
+  const from = toward(p0, c1) || toward(p0, c2) || toward(p0, p3) || down;
+  const to = toward(q3, d2) || toward(q3, d1) || toward(q3, q0) || down;
+  return Object.freeze({ from: Object.freeze(from), to: Object.freeze(to) });
+}
+
 /** The sag a hanging cable from a to b comes to rest at: the one cableCurve draws. */
 export function cableSag(a, b, { slack = CABLE_SLACK, box } = {}) {
   return hangingSag(a, b, slack, box);
@@ -426,18 +458,18 @@ const part = (key, tag, parent, attrs) => Object.freeze({ key, tag, parent,
 const str = (x) => String(x);
 
 /**
- * One cable as attribute records, for a keyed setAttribute editor (no markup): a frozen list
- * of { key, tag, attrs, parent } in document order, every parent before its children, every
- * attribute value a raw string (unescaped: setAttribute takes it as it is). `key` names the
- * part within its cable and is the same for the same part whatever the cable's ends, zoom or
- * state ('cable', 'shadow', 'main', 'hit', 'stroke', then 'cross', 'cross-under-0',
- * 'cross-under-1', 'cross-0', 'cross-1' when refused, then 'sheen' when asked), so an editor
- * keyed by (cable id, key) updates attributes in place and adds or removes only the cross and
- * the sheen. The list's order is the paint order: a part an update adds goes in at its list
- * position, parent.insertBefore(node, the node of the next part in the list with the same
- * parent that is already drawn), appended only when none is; so a cross that turns on under a
- * sheen already drawn goes in before the sheen, not over it, as cableSvg paints it. cableSvg
- * serialises exactly this list, so the two cannot disagree.
+ * One cable as attribute records, for a keyed setAttribute editor (no markup): a frozen list of
+ * { key, tag, attrs, parent } in document order, every parent before its children, every attribute
+ * value a raw string (unescaped: setAttribute takes it as it is). `key` names the part within its
+ * cable and is the same for the same part whatever the cable's ends, zoom or state ('cable',
+ * 'shadow', 'main', 'hit', 'stroke', then 'cross', 'cross-under-0', 'cross-under-1', 'cross-0',
+ * 'cross-1' when refused unless cross is false, then 'sheen' when asked), so an editor keyed by
+ * (cable id, key) updates attributes in place and adds or removes only the cross and the sheen. The
+ * list's order is the paint order: a part an update adds goes in at its list position,
+ * parent.insertBefore(node, the node of the next part in the list with the same parent that is
+ * already drawn), appended only when none is; so a cross that turns on under a sheen already drawn
+ * goes in before the sheen, not over it, as cableSvg paints it. cableSvg serialises exactly this
+ * list, so the two cannot disagree.
  *
  * The parts: a soft shadow (tokens.cable.shadow at the hw-shadow intensity, SHADOW_CLASS,
  * SHADOW_SPREAD wider than the stroke and SHADOW_PX.rest screen px down), then the main stroke
@@ -450,7 +482,9 @@ const str = (x) => String(x);
  * lifts the shadow (SHADOW_PX.lifted down). Refused paints the stroke tokens.jack.refuse,
  * dashed (a solid kind takes REFUSED_DASH), marks the group data-refused and draws a cross on
  * the curve at the target end, CROSS_BACK back from it so it never covers the plug there, so a
- * refusal is a shape, not a colour alone. `zoom` turns the screen-px offsets (the shadow's
+ * refusal is a shape, not a colour alone; `cross: false` leaves the cross out (the dash and
+ * data-refused stay) for a caller that draws a refused plug at the target end, whose own cross
+ * then marks the refusal once (plugSvg). `zoom` turns the screen-px offsets (the shadow's
  * drop, the sheen's) into graph units; `slack`, `box`, `tangents` and `sag` are
  * cableCurve's.
  *
@@ -461,9 +495,12 @@ const str = (x) => String(x);
  * declared one. Neither passed, the parts are what they were before these inputs existed.
  */
 export function cableParts({ id, from, to, type, colour, state = {}, tokens, slack = CABLE_SLACK,
-  box, tangents, sag, zoom = 1, sheen = false, dash, port } = {}) {
+  box, tangents, sag, zoom = 1, sheen = false, dash, port, cross = true } = {}) {
   const who = 'cableParts';
   needTokens(tokens, who);
+  if (typeof cross !== 'boolean') {
+    throw new TypeError(`${who}: cross must be true or false, not ${JSON.stringify(cross)}.`);
+  }
   const pattern0 = dashOf(type, dash, who);
   const ports = portAttrs(port, who);
   if (!(Number.isFinite(zoom) && zoom > 0)) {
@@ -491,7 +528,7 @@ export function cableParts({ id, from, to, type, colour, state = {}, tokens, sla
     part('stroke', 'path', 'main', { 'data-stroke': '', d, fill: 'none', stroke: paint,
       'stroke-width': str(w), 'stroke-linecap': cap, ...dashed }),
   ];
-  if (st.refused) {
+  if (st.refused && cross) {
     const m = nearTarget(from, to, { slack, box, tangents, sag });
     const r = CROSS.arm;
     const arms = [[m.x - r, m.y - r, m.x + r, m.y + r], [m.x - r, m.y + r, m.x + r, m.y - r]]
@@ -539,19 +576,4 @@ export function cableSvg(spec = {}) {
     e.message = e.message.replace(/^cableParts:/, 'cableSvg:');
     throw e;
   }
-}
-
-/** A plug seated at `at`: a sleeve (jack tokens), a boot ring in the cable's colour, a dark
- *  centre. It takes no pointer: the cable's main stroke and the jack do. */
-export function plugSvg({ at, colour, tokens } = {}) {
-  if (!finite(at)) throw new TypeError('plugSvg: at needs finite x and y.');
-  needTokens(tokens, 'plugSvg');
-  const c = `cx="${num(at.x)}" cy="${num(at.y)}"`;
-  return '<g data-plug="" pointer-events="none">'
-    + `<circle ${c} r="7" fill="${esc(tokens.jack.body)}" stroke="${esc(tokens.jack.ring)}" `
-    + 'stroke-width="1.5"/>'
-    + `<circle ${c} r="4.5" fill="none" stroke="${esc(colour || 'currentColor')}" `
-    + 'stroke-width="3"/>'
-    + `<circle ${c} r="1.5" fill="${esc(tokens.surface.edge)}" stroke="none"/>`
-    + '</g>';
 }
