@@ -1,0 +1,63 @@
+# Review verdict for pull request #277, E026: CI path gating (branch feat/ci-path-gating).
+# Reviewed head 1119a58c, merge base origin/main b67d1e58. Another builder wrote it (oscilla-b0).
+#
+# The digest: the base branch's scripts/review-verdict.mjs, run from `git archive origin/main
+# scripts` with --repo on this worktree: da784e59...7259 over the 3 guarded paths it names.
+#
+# How it was reviewed: three independent lenses (the classifier and its allowlist, the workflow
+# wiring and the gate, tests and mutants), read-only, with real git fixtures; every finding handed
+# to a separate skeptic (20 agents; 3 refuted).
+#
+# What holds:
+# - No gated leg (engine, suites, measure, studio, browser, visual) reads docs/**, a top-level *.md
+#   or .ai/repo/{project,reviews,releases}/** today, and any build input change moves dist, which
+#   the always-run build:check holds.
+# - unit, knowledge, fail-first and review-verdict run on every pull request.
+# - The -z parsing is structural. Symlinks, gitlinks, T/U/X, odd names and an empty diff all read
+#   as runtime, and an overflow throws.
+# - The classifier is the base's blob, run from RUNNER_TEMP, under the full ref
+#   refs/remotes/origin/<base>, which a pull request cannot write. Only the exact name main is
+#   gated.
+# - The gate accepts a skipped leg only for the six names, with changes.result success and runtime
+#   exactly "false"; cancelled, failed, skipped or mis-cased answers fail it.
+# - Main's protection is strict with merge commits only, so a gate-green docs-only head can merge
+#   only when its tree is main plus docs.
+#
+# Verdict: merge. No P0 or P1. One P2 worth fixing in this PR or the next:
+# - R1: no real-git test covers a type change, a symbolic link or a submodule, so a change to
+#   changedRecords' git flags (e.g. dropping --raw or -z) that hides one passes every test; add
+#   fixture commits for 120000, 160000 and a T status under docs/.
+#
+# Delta review, 2026-11-02, by oscilla-af (claude-code 901211e2), at head 157ed250 (local
+# 0ad8736b = d2faab61 merged with main 32b439e6, plus 157ed250). Read: the net diff against main
+# (`git diff 32b439e6..157ed250 -- .github tests/unit/main-checks.test.mjs`): ci.yml keeps main's
+# 30-minute browser step inside the 45-minute job and the alpha.9 pin; the changes job, the six
+# `needs: changes` / `if: runtime != 'false'` pairs and the gate VERDICT are as f3 reviewed them;
+# ci-changes.mjs is unchanged since d2faab61. The content digest moved from da784e59 only by the
+# merge with main; with the base copy (git archive origin/main scripts) it is 4e8acc1c...a987
+# over the 3 guarded paths.
+# New finding R11 (P2), fixed at 157ed250: main-checks.test.mjs excused PR_ONLY_GATE only when the
+# copy had neither field, but compared fields first, so the EXACT gate copied into
+# main-checks.yml (needs: changes, the same if) passed (probe: mainChecksProblems returned []),
+# and main-checks would then need a job it does not have, which GitHub rejects, silently ending
+# E044's post-merge checks. Now a copy carrying either field of the gate reports "carries ci.yml's
+# pull-request-only path gate"; the exact-copy probe reports both fields; main-checks 9/0.
+# R1-R10 are from the first review by prismatic-majordomus-f3 (claude-code 1f47a36e), carried
+# unchanged (not re-verified in this delta).
+schema: review-verdict/v1
+pr: 277
+verdict: merge
+reviewer: oscilla-af (claude-code 901211e2)
+content: 4e8acc1c86ee990327a938ae0ffed37a25b2874bee879c959c1c9d4c8c66a987
+findings:
+  - { id: R1, severity: P2, status: open, title: "ci-changes.mjs:166 no real-git test covers a type change, symlink or submodule; a change to changedRecords' git flags that hides one passes every test" }
+  - { id: R2, severity: P3, status: open, title: "ci-changes.mjs:165 the merge base is taken against freshly fetched origin/main, not HEAD^1 of the checked-out merge, so a main that moved can make the diff docs-only while HEAD^1..HEAD carries src/; not exploitable while protection is strict with merge commits only; diff HEAD^1 HEAD or pass base.sha" }
+  - { id: R3, severity: P3, status: open, title: "ci.yml:32 and ci-changes.mjs:6 say an error runs the legs, but a failed changes job skips them (implicit success()) and Actions compares strings case-insensitively; the gate still fails closed; fix the comments or add !cancelled()" }
+  - { id: R4, severity: P3, status: open, title: "ci.yml:510 (pre-existing) main's required check 'gate' accepts any source (app_id null); pin it to GitHub Actions" }
+  - { id: R5, severity: P3, status: open, title: "ci-changes.mjs:45 GATED_BASES lives only in the base's classifier; a non-main base carrying an older classifier would path-gate itself (only main is protected, so it cannot reach main without a fresh run)" }
+  - { id: R6, severity: P3, status: open, title: "gates.yaml:49 and :36 the CI model's changes command always answers runtime=true locally (origin/<base> is not recognised as main), so runtime=false cannot be reproduced locally" }
+  - { id: R7, severity: P3, status: open, title: "ci-bounded.v1.md:177 says the review verdict holds back a rewritten workflow, but review-verdict is defined in the workflow the PR carries (pre-existing overclaim)" }
+  - { id: R8, severity: P3, status: open, title: "ci-gates-model.test.mjs:116 accepts the path-gating condition on any job, not only the six; two mutants survive (checking only dstMode; diffing from HEAD's first parent)" }
+  - { id: R9, severity: P3, status: open, title: "review-verdict.mjs:81 ci-changes.test.mjs and ci-gates-model.test.mjs are not in GUARDED although base-rule.test.mjs is" }
+  - { id: R10, severity: P3, status: open, title: "ci.yml:25,32 header comment: wrong job count, ambiguous 'those six', lines over 100 columns" }
+  - { id: R11, severity: P2, status: closed, title: "main-checks.test.mjs PR_ONLY_GATE excused only a copy without the gate but never refused the exact gate copied into main-checks.yml, which would reference a missing changes job; fixed at 157ed250, with the exact copy as a mutation" }
