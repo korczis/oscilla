@@ -1,0 +1,33 @@
+# Review verdict for pull request #320, H001: a waveform edit while playing keeps the sounding
+# clip (branch fix/h001-studio-waveform-live). Reviewed heads 8ef29c6f, 78f224e4 and c1f39dd4
+# against origin/main. Another builder wrote it (oscilla-b0).
+#
+# The digest: the base branch's scripts/review-verdict.mjs, run from `git archive origin/main
+# scripts` with --repo on this worktree: 7f369768...443e over the 1 guarded path it names
+# (unchanged by the test-only c1f39dd4).
+#
+# How it was reviewed: round 1 (8ef29c6f) by two lenses, audio and tests, each in its own copy with
+# a skeptic per finding above P3; round 2 (78f224e4) re-ran each round-1 mutation; c1f39dd4 fixes
+# round 2's only blocking finding, as its author's 220 chromium and 140 webkit seam checks show.
+#
+# What holds: offset 0 gives main's schedule for every template clip, referenceSequence and all
+# 10 block types; a note mid-envelope continues from its partial value; the route sum stays at or
+# under 1 across the crossfade; a second edit, rapid edits, STOP, locate and a loop wrap behave and
+# leave nothing running; the modulators continue on their phase (siren deviation 0.59 Hz against
+# 274 Hz for the phase-0 mutation); a clip resized earlier continues to its new end; every voice
+# on the rebuilt node continues; and the fade, level, late-resume and first-voice-only mutations
+# each fail a test.
+#
+# Verdict: merge. No open P0 or P1.
+schema: review-verdict/v1
+pr: 320
+verdict: merge
+reviewer: prismatic-majordomus-f3 (claude-code 1f47a36e)
+content: 7f36976875f1f316f526573b1153f8c119bbe0fef32facb78889e4e3c85b443e
+findings:
+  - { id: R1, severity: P1, status: closed, title: "round 1 T1, T2 (P1, tests): the fade-in assertion was met by the route gain, and the browser check passed half level, double level and an 80 ms gap; fixed at 78f224e4" }
+  - { id: R2, severity: P2, status: closed, title: "round 1 A1, A2, T3: modulators restarted at phase 0; a retimed clip went silent; no two-voice test; fixed at 78f224e4" }
+  - { id: R3, severity: P1, status: closed, title: "round 2: seamCovered failed on output-tap frame holes, not audio (red in CI run 40986560460); fixed at c1f39dd4 by measuring the frames present" }
+  - { id: R4, severity: P2, status: open, title: "transport.js:1205 the continuation's start is recomputed from soon() after the runtime crossfade began, so a main-thread stall over STUDIO_XFADE_S (20 ms) between runtime.apply and applyEdit leaves a real gap; seen by the browser check in Firefox 3 of 280 at load 35 or more (resume 48 ms after xfadeAt); hold the old routes until the resume, in a follow-up issue" }
+  - { id: R5, severity: P3, status: closed, title: "the H001 unit tests counted only square carriers; fixed at c1f39dd4 (startedIn counts every waveform)" }
+  - { id: R6, severity: P3, status: open, title: "browser-suite-contract.test.mjs:632 the E042 'mutation' self-check is tautological (inherited from main)" }

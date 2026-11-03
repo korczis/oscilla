@@ -29,7 +29,7 @@ panel), **MIGRATE** (data converted by `importSequence` / `exportSequence`).
 | Block ids `b<n>`, `nextBlockId` | MIGRATE | Clip ids `clip-<blockId>` (the export recovers block ids); new clips get Studio ids from the store's generator |
 | Model `seed` | MIGRATE | Only seeds random blocks added later in the V2 editor, never playback: returned as `extras.seed` and passed back to `exportSequence`. Random blocks keep their own `params.seed` in the payload, so playback is identical |
 | `loop` flag | MIGRATE | Loop region `{ enabled, start: 0, end: total }`; exported as `loop: true` only when the active region spans exactly the sequence |
-| `waveform` | MIGRATE | The Sequence node's `waveform` parameter (the voice's carrier) |
+| `waveform` | MIGRATE | The Sequence node's `waveform` parameter (the voice's carrier). In the V2 editor it is derived, not the sequence's own control: it follows the instrument's waveform (main.js mirrors it in, and `load` and `clear` keep it, C004), so a file's differing `sequencer.waveform` is not applied there and the import says so; the file format and this migration still carry it |
 | `addBlock`, `deleteBlock`, `duplicateBlock`, `moveBlock`, `moveEarlier`, `moveLater`, `updateBlock` | SUPERSEDE | Studio actions `CLIP_ADD`, `CLIP_REMOVE`, `DUPLICATE` (with `placements`), `CLIP_MOVE`, `CLIP_RESIZE`, `CLIP_UPDATE`: clips move in time and between tracks, not in a list |
 | `seedFor` | KEEP | V2 editor only |
 | `selectBlock`, `neighbourAfterDelete` | SUPERSEDE | Store selection (`SELECTION_CHANGE`) |
@@ -59,6 +59,7 @@ panel), **MIGRATE** (data converted by `importSequence` / `exportSequence`).
 | `layoutBlocks` | REFACTOR | Clip rectangles per track row (`timeline.js timelineRows`) at absolute times |
 | `BLOCK_ACCENTS` | KEEP | Pattern clip colours |
 | `playheadPosition` | SUPERSEDE | `timeline-compiler.js positionAt(anchor, ctxTime)`: start position, loop region and pass number from the audio clock |
+| `passPlayheadX` (C006) | SUPERSEDE | The V2 panel places the head on the sounding block by id while an edit waits for the next pass; the Studio's `EDIT_POLICY` rebuilds future items, so its playhead and timeline describe the same plan |
 | `hitTestBlock` | KEEP | Clip hit testing |
 | `dropIndexAt`, `reorderTarget`, `insertionMarkerX` | SUPERSEDE | Clips are dragged in time (`moveClipResult`, snap), not reordered |
 | `scaleForModel` | REFACTOR | Scale from view state |
@@ -75,6 +76,7 @@ panel), **MIGRATE** (data converted by `importSequence` / `exportSequence`).
 | `onKeydown` (arrows, Alt+Arrow, Delete, Ctrl+D) | REFACTOR | `nudgeClipResult`, `duplicateClipPlacement`, store actions |
 | `dragStart` / `dragOver` / `drop` | SUPERSEDE | `moveClipResult` inside a store gesture (one undo entry) |
 | `playheadTime`, `currentPassTiming`, `activeBlockIndex`, `currentFrequency` | REFACTOR | `positionAt`, the active item, `voice.freqAt` |
+| `currentPassBlock`, `currentPassState` (C006: each pass record keeps its compiled layout) | SUPERSEDE | V2 panel only: the sounding pass against the edited model; the Studio has no stale pass to describe |
 | `serialize`, `load` | KEEP | V2 files; Studio files go through `importSequence` |
 | `SCHEDULE_LEAD_S` | KEEP | `SAFE_HORIZON_S`: nothing is rescheduled closer to now |
 | `TOP_UP_EVERY_MS` | KEEP | Upper bound of `nextWakeMs` |

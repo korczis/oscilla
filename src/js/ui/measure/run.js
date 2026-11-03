@@ -41,7 +41,10 @@ export function createRun(ctx, svc, ops) {
     cmp.meas.savedId = null;
     ops.rebuildAll();
     try {
-      ctx.pending = me.preflight(ops.recipeNow(), { calibration: ops.calibrationInput() });
+      // The setup check stops nothing: a probe of the output owners, read by the io where it
+      // reads the input level (C016), makes a sounding sequencer or Studio OTHER_AUDIO.
+      ctx.pending = me.preflight(ops.recipeNow(), { calibration: ops.calibrationInput(),
+        otherAudio: () => typeof svc.outputBusy === 'function' && !!svc.outputBusy(cmp) });
       await ctx.pending;
     } catch (e) {
       if (!(e && e.code === 'ABORTED')) {
@@ -128,6 +131,10 @@ export function measureFlowPart(ctx, svc, ops) {
     async measureRunPrimary() {
       const a = this.meas.flow.primaryAction;
       if (!a || !a.enabled) return;
+      // The Playground shows this flow as its measurement row (P002, Q004 option A), but the
+      // measurement runs in MEASURE: the action opens it first, in the same gesture, so the
+      // quality reasons, the result and Stop are in view (and leaving MEASURE aborts, main.js).
+      if (this.workspace !== 'measure') this.setWorkspace('measure');
       switch (a.id) {
         case 'preflight': await ops.runPreflight(this); break;
         case 'measure': await ops.runMeasure(this); break;
@@ -144,8 +151,12 @@ export function measureFlowPart(ctx, svc, ops) {
     },
     async measureRunSecondary(id) {
       if (id === 'stop') this.measureAbort('user');
-      else if (id === 'repeat') await this.measureRepeat();
-      else if (id === 'expert') this.measureSetExpert(!this.meas.expert);
+      else if (id === 'repeat') {
+        // Repeat is a measurement too: pressed on the Playground's measurement row (a COMPLETE
+        // result outlives leaving MEASURE) it opens MEASURE first, as the primary action does.
+        if (this.workspace !== 'measure') this.setWorkspace('measure');
+        await this.measureRepeat();
+      } else if (id === 'expert') this.measureSetExpert(!this.meas.expert);
     },
     measureStop() {
       this.measureAbort('user');

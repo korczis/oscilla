@@ -21,7 +21,9 @@
 //                  ("after-tag"); a production page without a release state fails.
 //                  verify-deploy, before this smoke, checks that state against git
 //   status bar     reads "OSCILLA v<label>"
-//   panels         every core panel is visible
+//   panels         every panel of the first screen is visible (Q004 option A: Source & Pattern,
+//                  Signal analysis, Microphone Analyzer, Device & Limits, the Pattern Sequencer
+//                  and MEASURE's Guided measurement row)
 //   compact Studio the Playground's Studio widget loads (V3.1 §269): it is visible, and its title,
 //                  signal path chips and clip chips are the Studio document's title, nodes and
 //                  clips (one canonical state)
@@ -74,8 +76,12 @@ const LAUNCH = {
   firefox: { firefoxUserPrefs: { 'media.autoplay.default': 0, 'media.autoplay.blocking_policy': 0 } },
   webkit: {},
 };
-const PANELS = ['source', 'analysis', 'mic', 'device', 'spectrogram', 'sequencer', 'filter',
-  'envelope', 'additive', 'phase', 'bio'].map((p) => `#osc-panel-${p}`);
+// The Playground's panels at 1536x1024: the first screen Q004 chose (option A, plan P002, claim
+// first-screen-layout) shows these and MEASURE's Guided measurement row; the Spectrogram panel,
+// Filter Lab, Envelope, Additive Synthesis, Phase & Stereo and Bioacoustics moved to their own
+// workspaces (tests/browser/first-screen.cjs checks that they are there and nowhere else).
+const PANELS = [...['source', 'analysis', 'mic', 'device', 'sequencer']
+  .map((p) => `#osc-panel-${p}`), '#osc-measure-flow'];
 // Expected graphs, taken from the template sources: node id -> [kind (the node type in the
 // template), category label its card shows (the node's registry category,
 // src/js/studio/nodes/)]; edge id -> "from>to"; the timeline's tracks and clip id -> label.
@@ -299,7 +305,7 @@ async function runOne(name) {
       const cs = getComputedStyle(el);
       return !(b.width > 0 && b.height > 0 && cs.visibility !== 'hidden' && cs.display !== 'none');
     }), PANELS);
-    check(`core panels visible (${PANELS.length})`, !hidden.length, hidden.join(', ') || 'all');
+    check(`first-screen panels visible (${PANELS.length})`, !hidden.length, hidden.join(', ') || 'all');
 
     // Compact Studio (V3.1 §269, §127-§129): the Playground's Studio widget loads and shows the
     // ONE Studio document: its signal path chips are the model's nodes, its clip chips the

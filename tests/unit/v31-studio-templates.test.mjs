@@ -55,12 +55,12 @@ const e = (id, from, fromPort, to, toPort, props) => ({ id, from: { node: from, 
 
 // ---------------------------------------------------------------- templates (§195-§196)
 
-test('§195 the six templates exist, in library order, with unique ids', () => {
+test('§195 the seven templates exist, in library order, with unique ids', () => {
   assert.deepStrictEqual(STUDIO_TEMPLATES.map((t) => t.id), ['basic-tone', 'subtractive-synth',
-    'sweep-sequence', 'stereo-beat', 'filter-automation', 'measurement-sweep']);
+    'sweep-sequence', 'stereo-beat', 'filter-automation', 'measurement-sweep', 'demo-song']);
   assert.deepStrictEqual(listTemplates().map((t) => t.title), ['Basic Tone',
     'Subtractive Synth', 'Sweep Sequence', 'Stereo Beat', 'Filter Automation',
-    'Measurement Sweep']);
+    'Measurement Sweep', 'Demo song: Lantern in the Slag Yard']);
   assert.strictEqual(getTemplate('nope'), null);
   assert.throws(() => templateModel('nope'), RangeError);
   assert.strictEqual(REFERENCE_TEMPLATE_ID, 'subtractive-synth');

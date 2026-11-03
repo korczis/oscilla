@@ -14,6 +14,7 @@ import {
   buildResponseView, buildPhaseView, normalizationAvailability, responseSource,
 } from '../../measurement/views/response-chart.js';
 import { buildIrView } from '../../measurement/views/ir-chart.js';
+import { stimulusFrames } from '../../measurement/stimulus.js';
 import { buildRtaView, RTA_MODE_LABELS } from '../../measurement/views/rta-chart.js';
 import { UNAVAILABLE } from '../../measurement/views/common.js';
 import { describeStimulus } from '../../experiments/schema.js';
@@ -153,6 +154,16 @@ export function createViews(ctx, svc, ops) {
     return view;
   }
 
+  /** The stimulus length of a result or saved experiment, for the IR noise-tail window (T019). */
+  function irStimulusFrames(src) {
+    if (src.stimulus && Number.isInteger(src.stimulus.frames)) return src.stimulus.frames;
+    try {
+      return src.recipe && src.recipe.stimulus ? stimulusFrames(src.recipe.stimulus) : null;
+    } catch {
+      return null;
+    }
+  }
+
   function rebuildIr() {
     const cmp = ctx.cmp;
     const m = cmp.meas;
@@ -165,7 +176,8 @@ export function createViews(ctx, svc, ops) {
       // rebuilds it; "Full" is the whole response (first to last sample).
       view = buildIrView(ir, { scale: m.view.irScale, normalize: m.view.irNormalize,
         window: m.view.irWindow ? IR_WINDOW_MS : null,
-        range: span.range ? [span.range[0], span.range[1]] : 'full' });
+        range: span.range ? [span.range[0], span.range[1]] : 'full',
+        stimulusFrames: irStimulusFrames(src) });
     }
     m.ir = view ? { summary: view.summary, badges: view.badges.slice(), notes: view.notes.slice(),
       yLabel: `${view.axes.y.label}`, window: view.windowRegion ? view.windowRegion.label : null }
