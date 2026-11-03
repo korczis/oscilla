@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// OSCILLA Synth XY tab (plan K097) on the built dist/index.html in chromium, firefox and webkit,
-// at 1536 x 1024 and 390 x 844 (touch). Every sound check reads the engine's analyser after the
-// safety chain or the runtime's own pad handle, never the DOM alone.
+// OSCILLA Synth XY tab (plan K097, K167) on the built dist/index.html in chromium, firefox and
+// webkit, at 1536 x 1024 and 390 x 844 (touch). Every sound check reads the engine's analyser
+// after the safety chain or the runtime's own pad handle, never the DOM alone.
 //
 //   node tests/browser/xy-pad.cjs [--browsers chromium,firefox,webkit] [--origins file,http]
 //        [--only x-link,x-pointer]
 //
-// Checks (desktop; the phone leg runs x-touch):
+// Checks (desktop; the phone leg runs x-touch, the phone-first leg x-phone-first):
 //   x-link     linked: #m=synth&yt=xy opens the XY tab; the XY lead preset chosen in the preset
 //              menu is one undo entry that sets the pad's scale on its face (C, minor
 //              pentatonic) and patches Pitch and Gate into the voice and Y into LPF Cutoff;
@@ -21,6 +21,22 @@
 //              by its axes inside a role=group with two sliders
 //   x-touch    (390 px, touch, chromium) one touch sounds; a second touch point moves Y only
 //              (X's aria-valuenow unchanged); lifting both silences; no horizontal page scroll
+//   x-release-stop   (K167) a held pad is released by the Studio transport's Stop: silent
+//              (below -70 dB rel), runtime census 0, no held note, the pad's gate closed, and
+//              the next press sounds again
+//   x-release-leave  (K167) a held pad is released by leaving the Synth workspace (the
+//              workspace switch itself, no focus move): silent, census 0, gate closed
+//   x-release-owner  (K167) a held pad is released when another workspace's player (the
+//              Pattern Sequencer) takes the audio owner: gate closed, no held note, the
+//              transport stopped; once that player stops, silent and census 0
+//   x-phone-first    (K167; 390 px, touch, mobile, the browser's gesture rule ON: Chromium
+//              --autoplay-policy=user-gesture-required, the other engines as they ship) the
+//              first open of #m=synth&yt=xy with no preset shows the stated default (the XY
+//              lead's scale and target) and one first action that describes the pad
+//              (aria-describedby); nothing sounds and nothing is armed before a touch; after a
+//              tap a held touch sounds and its release silences. Firefox has no mobile
+//              emulation (no coarse pointer): skipped there, as tests/browser/touch-audio.cjs
+//              notes; webkit holds with the pointer after the tap (no CDP touch)
 'use strict';
 
 const fs = require('node:fs');
@@ -47,8 +63,13 @@ const LAUNCH = {
     'media.autoplay.block-webaudio': false } },
   webkit: {},
 };
-const SIZES = { desktop: { width: 1536, height: 1024 }, phone: { width: 390, height: 844 } };
-const PHONE_CHECKS = new Set(['x-touch']);
+// The gesture rule on (project.a-phone-sounds): Chromium's default for a page without media
+// engagement, stated; the other engines as they ship.
+const GESTURE_LAUNCH = { chromium: { args: ['--autoplay-policy=user-gesture-required'] },
+  firefox: {}, webkit: {} };
+const SIZES = { desktop: { width: 1536, height: 1024 }, phone: { width: 390, height: 844 },
+  'phone-first': { width: 390, height: 844 } };
+const LEG_OF = { 'x-touch': 'phone', 'x-phone-first': 'phone-first' };
 const LOAD_MS = 60000;
 const SOUND_MS = 8000; // an attack, a glide and the analyser's smoothing
 const CHECK_MS = 120000;
@@ -98,6 +119,32 @@ async function sound(page, pred, what, ms = SOUND_MS) {
   return last;
 }
 const silent = (page, what) => sound(page, (p) => p.rmsDb < -70, what);
+/** The runtime census, the transport and the pad's gate (aria-pressed), in one read. */
+const census = (page) => page.evaluate(() => {
+  const st = window.OSCILLA.studio;
+  const t = st.transport;
+  const s = document.querySelector('[data-xy-surface]');
+  return { ...st.counts(), held: t ? t.heldNotes().length : 0,
+    pressed: s ? s.getAttribute('aria-pressed') : null, owner: window.OSCILLA.app.outputOwner };
+});
+/** Released: the pad's gate closed, no note held, the runtime census 0, the output silent. */
+async function releasedAll(page, what) {
+  let c = null;
+  await until(async () => {
+    c = await census(page);
+    return c.pressed === 'false' && c.held === 0 && c.runtimeNodes === 0 && !c.playing;
+  }, { ms: SOUND_MS, what: `${what}: gate closed, nothing held, runtime census 0` });
+  const q = await silent(page, `${what}: silent`);
+  return { ...c, rmsDb: Number(q.rmsDb.toFixed(1)) };
+}
+/** Hold Enter on the focused pad until it sounds (a press that no pointer or focus move ends). */
+async function holdEnter(page, what) {
+  await page.locator('[data-xy-surface]').focus();
+  await page.keyboard.down('Enter');
+  await loud(page, `Enter held sounds (${what})`);
+  await until(async () => (await census(page)).pressed === 'true', { ms: SOUND_MS,
+    what: `the pad's gate is open (${what})` });
+}
 const loud = (page, what) => sound(page, (p) => p.rmsDb > -45, what);
 
 /** The pad node, its edges and the runtime pitch of its handle (null when not running). */
@@ -113,6 +160,7 @@ const padState = (page) => page.evaluate(() => {
 const aria = (page, sel, name) => page.locator(sel).getAttribute(name);
 
 async function openXy(context, base, { preset = 'xy-lead' } = {}) {
+  // preset null: the tab as a first open shows it
   const page = await context.newPage();
   await page.goto(`${base}#m=synth&yt=xy`);
   await until(() => page.evaluate(() => !!(window.OSCILLA && window.OSCILLA.app
@@ -277,26 +325,130 @@ function defineChecks() {
       - document.documentElement.clientWidth);
     return { ok: scroll <= 1, x0, x1, scroll };
   });
+
+  def('x-release-stop', async ({ page }) => {
+    await holdEnter(page, 'stop');
+    await page.evaluate(() => window.OSCILLA.app.studioStop()); // STOP, the focus stays put
+    const after = await releasedAll(page, 'Stop releases the held pad');
+    await page.keyboard.up('Enter');
+    await holdEnter(page, 'the next press after Stop');
+    await page.keyboard.up('Enter');
+    await silent(page, 'releasing the next press silences');
+    return { ok: true, after };
+  });
+
+  def('x-release-leave', async ({ page }) => {
+    await holdEnter(page, 'leave');
+    await page.evaluate(() => window.OSCILLA.app.setWorkspace('studio'));
+    const after = await releasedAll(page, 'leaving the Synth releases the held pad');
+    await page.keyboard.up('Enter');
+    return { ok: true, after };
+  });
+
+  def('x-release-owner', async ({ page }) => {
+    await holdEnter(page, 'owner');
+    const started = await page.evaluate(() => window.OSCILLA.labs.sequencer.editor.play());
+    if (!started) return { ok: false, detail: 'the Pattern Sequencer did not start' };
+    let c = null;
+    await until(async () => {
+      c = await census(page);
+      return c.owner === 'sequencer' && c.pressed === 'false' && c.held === 0 && !c.playing;
+    }, { ms: SOUND_MS, what: 'the sequencer takes the owner: the held pad is released' });
+    await page.evaluate(() => window.OSCILLA.labs.sequencer.editor.stop());
+    const after = await releasedAll(page, 'once the sequencer stops');
+    await page.keyboard.up('Enter');
+    return { ok: true, taken: c, after };
+  });
+
+  def('x-phone-first', async ({ page, browserName }) => {
+    if (browserName === 'firefox') {
+      RUN.skip(`${browserName}/phone-first`, 'x-phone-first',
+        'Firefox has no mobile emulation: no coarse pointer');
+      return { ok: true, skipped: true };
+    }
+    let shown = null;
+    await until(async () => {
+      shown = await page.evaluate(() => {
+        const s = document.querySelector('[data-xy-surface]');
+        const first = document.querySelector('[data-xy-first]');
+        const stated = document.querySelector('[data-xy-default]');
+        const seen = (el) => !!el && !el.hidden && el.getClientRects().length > 0;
+        return { first: seen(first) ? first.textContent : null,
+          stated: seen(stated) ? stated.textContent : null,
+          describes: !!(s && first && s.getAttribute('aria-describedby').split(' ')
+            .includes(first.id)),
+          disabled: s ? s.getAttribute('aria-disabled') : null };
+      });
+      return shown.first && shown.stated && shown.describes && shown.disabled === 'false';
+    }, { ms: SOUND_MS,
+      what: 'the phone first open shows a playable default and its first action' });
+    if (!/^Touch the pad to play/.test(shown.first)
+      || !/^Default: C minor pentatonic .*Y drives LPF Cutoff \(the XY lead's scale and target\)/i
+        .test(shown.stated)) {
+      return { ok: false, detail: 'the default or the first action is not stated', shown };
+    }
+    const quiet = await page.evaluate(() => {
+      const e = window.OSCILLA.engine;
+      const t = window.OSCILLA.studio.transport;
+      let rms = null; // no running context: nothing can sound
+      if (e.ctx && e.analyser && e.ctx.state === 'running') {
+        const d = new Float32Array(e.analyser.fftSize);
+        e.analyser.getFloatTimeDomainData(d);
+        let s = 0;
+        for (const x of d) s += x * x;
+        rms = 10 * Math.log10(s / d.length + 1e-24);
+      }
+      return { rms, armed: !!(t && t.playing), ctx: e.ctx ? e.ctx.state : null };
+    });
+    if ((quiet.rms !== null && quiet.rms >= -70) || quiet.armed) {
+      return { ok: false, detail: 'something sounds or is armed before a touch', quiet };
+    }
+    const p = await padPoint(page, 3, 0.3);
+    await page.touchscreen.tap(p.x, p.y); // the first gesture: the page unlocks its audio
+    await until(() => page.evaluate(() => {
+      const e = window.OSCILLA.engine;
+      return !!(e.ctx && e.ctx.state === 'running');
+    }), { ms: SOUND_MS, what: 'a tap on the pad unlocks the audio' });
+    if (browserName === 'chromium') {
+      const cdp = await page.context().newCDPSession(page);
+      const touch = (type, points) => cdp.send('Input.dispatchTouchEvent', { type,
+        touchPoints: points.map((q, i) => ({ x: q.x, y: q.y, id: i + 1 })) });
+      await touch('touchStart', [p]);
+      await loud(page, 'a held touch sounds');
+      await touch('touchEnd', []);
+    } else {
+      await page.mouse.move(p.x, p.y);
+      await page.mouse.down();
+      await loud(page, 'a held press sounds');
+      await page.mouse.up();
+    }
+    const q = await silent(page, 'lifting the touch silences');
+    return { ok: true, shown, quiet, off: Number(q.rmsDb.toFixed(1)) };
+  });
   return checks;
 }
 
 // ------------------------------------------------------------------------------ runner
 const runsAt = (name, sizeName) => (!ONLY || ONLY.has(name))
-  && (sizeName === 'phone' ? PHONE_CHECKS.has(name) : !PHONE_CHECKS.has(name));
+  && (LEG_OF[name] || 'desktop') === sizeName;
 
 async function runLeg(browserName, sizeName, base) {
-  const browser = await playwright[browserName].launch(LAUNCH[browserName]);
+  const first = sizeName === 'phone-first';
+  const browser = await playwright[browserName].launch((first ? GESTURE_LAUNCH
+    : LAUNCH)[browserName]);
   const results = {};
   try {
     for (const { name, fn } of defineChecks()) {
       if (!runsAt(name, sizeName)) continue;
       const context = await browser.newContext({ viewport: SIZES[sizeName],
-        hasTouch: sizeName === 'phone' });
+        hasTouch: sizeName !== 'desktop',
+        // Firefox has no mobile emulation (Playwright refuses isMobile there).
+        ...(first && browserName !== 'firefox' ? { isMobile: true } : {}) });
       const errors = [];
       context.on('page', (pg) => pg.on('pageerror', (e) => errors.push(String(e))));
       const t0 = Date.now();
       try {
-        const page = await openXy(context, base);
+        const page = await openXy(context, base, first ? { preset: null } : {});
         const v = await bounded(fn({ page, context, base, browserName }),
           { ms: CHECK_MS, what: `${name} finishes` });
         results[name] = { ...v, ok: v.ok && errors.length === 0, errors: errors.slice(0, 4),

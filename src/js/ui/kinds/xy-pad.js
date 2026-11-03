@@ -13,8 +13,10 @@
 //     model.down(id, fx, fy), move(id, fx, fy), up(id), end(reason), key(key, shift, axis?),
 //       gate(on), reset() -> handled;  model.value, model.gated, model.fraction()
 //     onPreview(value), onCommit(value, reason), onGate(open, value, reason)
-//   mountXyPad(host, { label, description, cells, disabled, ...model options }) -> view
-//     view.model, view.update(), view.destroy();  cells: [{ label, root }] drawn along X
+//   mountXyPad(host, { label, description, cells, disabled, describedBy, ...model options })
+//     -> view: view.model, view.update(), view.destroy();  cells: [{ label, root }] drawn along
+//     X; describedBy: ids of the consumer's own lines that also describe the surface (K167: the
+//     first action), after the axes' description
 
 import { xyFromPoint } from '../../charts/drag-math.js';
 import { knobModel } from '../../synth/view/knob.js';
@@ -113,7 +115,7 @@ const SLIDER = 'flex h-11 items-center justify-between gap-2 rounded-lg border b
 let mounted = 0;
 
 export function mountXyPad(host, opts) {
-  const { label, description = '', cells = [], disabled = null } = opts;
+  const { label, description = '', cells = [], disabled = null, describedBy = [] } = opts;
   const model = createXyModel(opts);
   const uid = `xy-pad-${(mounted += 1)}`;
   const n = Math.max(1, cells.length);
@@ -125,7 +127,8 @@ export function mountXyPad(host, opts) {
     + `${esc(p.label)}</span><span class="font-mono" data-xy-text="${axis}"></span></div>`;
   host.innerHTML = `<div role="group" aria-label="${esc(label)}">`
     + `<div role="application" tabindex="0" data-xy-surface="pad" aria-roledescription="XY pad" `
-    + `aria-label="${esc(label)}" aria-describedby="${uid}-d${disabled ? ` ${uid}-w` : ''}" `
+    + `aria-label="${esc(label)}" aria-describedby="${esc([`${uid}-d`, ...(disabled
+      ? [`${uid}-w`] : []), ...describedBy].join(' '))}" `
     + `aria-disabled="${disabled ? 'true' : 'false'}" class="relative h-56 w-full sm:h-72 `
     + 'touch-none select-none overflow-hidden rounded-lg bg-gray-900 focus:outline-none '
     + `focus-visible:ring-4 focus-visible:ring-primary-500 ${disabled ? 'opacity-50' : ''}">`
