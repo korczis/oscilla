@@ -53,6 +53,24 @@ test('the routed note target wins; a playing transport is not armed again', () =
   assert.deepEqual(log, [['live', 'fm-1', 'on', 62]]);
 });
 
+test('a held note is released on the node it went to, even if the target changed', () => {
+  const nodes = [node('keys-1', 'keys')];
+  const { sink, log } = fixture(nodes, { playing: true });
+  sink.noteOn(60, 100);
+  nodes.unshift(node('fm-1', 'fm-voice'));
+  sink.noteOn(62, 100);
+  assert.equal(sink.noteOff(60), true);
+  assert.deepEqual(log.at(-1), ['live', 'keys-1', 'off', 60], 'the original node gets the off');
+  sink.noteOff(62);
+  assert.deepEqual(log.at(-1), ['live', 'fm-1', 'off', 62]);
+});
+
+test('an arm refused for another reason says its own code, not a measurement', () => {
+  const { sink, transport } = fixture([node('keys-1', 'keys')]);
+  transport.arm = () => ({ ok: false, code: 'disposed', reason: 'The Studio was closed.' });
+  assert.deepEqual(sink.noteOn(60, 100), { ok: false, reason: 'disposed' });
+});
+
 test('a measurement owning the output refuses the arm, said', () => {
   const { sink, log, said } = fixture([node('keys-1', 'keys')], { armOk: false });
   assert.deepEqual(sink.noteOn(60, 100), { ok: false, reason: 'measurement' });

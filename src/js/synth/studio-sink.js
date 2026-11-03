@@ -23,6 +23,9 @@ export function createStudioSink({ get, setupAudio = () => {}, ensureAudio = () 
   say = () => {}, registry = NODE_REGISTRY }) {
   const target = (m) => routedNode(m, registry)
     || m.graph.nodes.find((n) => playsNotes(n.type, registry)) || null;
+  // The node each held note went to: its off goes there, even if the target changed meanwhile
+  // (a re-route, the node removed or another notes node added), so no note hangs.
+  const held = new Map();
   const parts = () => {
     setupAudio();
     const { handle, transport } = get();
@@ -41,22 +44,25 @@ export function createStudioSink({ get, setupAudio = () => {}, ensureAudio = () 
     if (!t.playing) {
       const r = t.arm();
       if (!r || !r.ok) {
-        say(r && r.code === 'claim-refused' ? STUDIO_SINK_TEXT.refused : (r && r.reason) || '',
-          true);
-        return { ok: false, reason: 'measurement' };
+        const refusedByOwner = r && r.code === 'claim-refused';
+        say(refusedByOwner ? STUDIO_SINK_TEXT.refused : (r && r.reason) || '', true);
+        return { ok: false, reason: refusedByOwner ? 'measurement' : (r && r.code) || 'arm' };
       }
     }
+    held.set(note, n.id);
     return t.live(n.id, { kind: 'on', note, velocity });
   }
 
   function noteOff(note) {
     const { t, m } = parts();
-    const n = t && m ? target(m) : null;
-    return n ? t.live(n.id, { kind: 'off', note }).ok : false;
+    const id = held.has(note) ? held.get(note) : (t && m && (target(m) || {}).id);
+    held.delete(note);
+    return t && id ? t.live(id, { kind: 'off', note }).ok : false;
   }
 
   function allOff() {
     const { t, m } = parts();
+    held.clear();
     if (!t || !m || !t.playing) return 0;
     let count = 0;
     for (const n of m.graph.nodes.filter((x) => playsNotes(x.type, registry))) {
