@@ -30,6 +30,15 @@
 //   transport.live(keysId, { kind, note, velocity, at }) -> result   a note on a Keys node
 //   transport.debugInfo(), transport.on(fn) -> off ('state' | 'ended' | 'warning': a
 //                                                Diagnostic), transport.dispose(), .playing
+//   transport.debugRefuseNextPlay() -> true     TEST HOOK (K169; tests/browser/
+//                                                v31-studio-workflows.cjs armed-play-refused):
+//                                                the next PLAY's output claim is refused, as
+//                                                onClaimOutput returning false refuses it
+//                                                (claim-refused); once, nothing else changes
+// A PLAY refused while armed (K169): the armed run is left first, so on any refusal after it
+// (claim, apply, or a throw: phase stop, claim, apply or start, code play-refused) the runtime
+// is stopped fast and 'state' { playing: false, reason: 'play-refused' } is emitted; lastError
+// keeps the refusal. A running runtime always means a playing or armed transport.
 // Diagnostics (validate.js studioDiagnostic, owner 'transport'): debugInfo().diagnostics, and
 // debugInfo().warnings as their message text, are those of the current playback: PLAY starts an
 // empty list, and a refusal leaves it once a later model is applied. Codes: edit-refused,
@@ -261,6 +270,8 @@ export function createStudioTransport({
   let lastError = null;
   let skippedLate = 0;
   let disposed = false;
+  let step = null; // the PLAY step in progress: a throw while armed is refused in it (K169)
+  let refuseNextClaim = false; // debugRefuseNextPlay (test hook, header)
 
   const emit = (type, detail) => {
     for (const fn of listeners) {
@@ -1507,10 +1518,12 @@ export function createStudioTransport({
 
   function syncNow() {
     const rev = store.getRevision();
-    lastRevision = rev; // not retried every wake-up; the next store change tries again
     const next = view(store.getModel());
     claimFor(next);
     const r = runtime.apply(next, { revision: rev });
+    // Once apply returned: a refusal is not retried every wake-up (the next store change tries
+    // again), an apply that threw is (K169).
+    lastRevision = rev;
     if (!r.ok) {
       refusedBy(r, 'sync-refused', rev);
       return { ok: false, synced: false, revision: rev, applied: r };
@@ -1586,23 +1599,57 @@ export function createStudioTransport({
   function startNow({ position } = {}) {
     if (disposed) return fail('start', 'The Studio transport is disposed.', 'disposed');
     if (playing && !armedOnly) return { ok: true, playing: true, already: true };
-    if (playing) { // PLAY while armed: the whole document, on the same running runtime
+    if (!playing) return playNow(position);
+    // PLAY while armed: the whole document, on the same running runtime. Once the armed run is
+    // left, every way this PLAY fails (a refused claim or apply, or a throw) ends in
+    // leaveArmedRun (K169): a runtime left running under a stopped transport strands each later
+    // edit (admitted as stopped, never synced: the Inspector stays 'behind').
+    step = 'stop';
+    try {
       applyStop(scheduler.stop(ctxNow()));
       playing = false;
       armedOnly = false; // view() is the document from here (review of #329)
+      return playNow(position);
+    } catch (e) {
+      if (playing && !armedOnly) throw e; // the document plays: not a refused PLAY
+      playing = false;
+      armedOnly = false;
+      return fail(step, e, 'play-refused');
+    } finally {
+      if (!playing) leaveArmedRun();
     }
+  }
+
+  /**
+   * K169: a PLAY refused after it left the armed run. The runtime still runs the armed graph:
+   * stop it fast through STOP's own release, and say so ('state', reason 'play-refused');
+   * lastError keeps the refusal. A running runtime means a playing or armed transport again.
+   */
+  function leaveArmedRun() {
+    trace.record('transport', 'stop', { revision: lastRevision, outcome: 'stopped',
+      detail: { reason: 'play-refused', fast: true } });
+    clearTimer();
+    release({ fast: true, reason: 'play-refused' });
+  }
+
+  function playNow(position) {
     const pos = clampPosition(position);
-    if (typeof onClaimOutput === 'function') {
-      let claimed;
+    step = 'claim';
+    let claimed;
+    if (refuseNextClaim) {
+      refuseNextClaim = false;
+      claimed = false;
+    } else if (typeof onClaimOutput === 'function') {
       try {
         claimed = onClaimOutput({ owner: 'studio', position: pos });
       } catch (e) {
         return fail('claim', e, 'claim-failed');
       }
-      if (claimed === false) return fail('claim', TRANSPORT_TEXT.claimRefused, 'claim-refused');
     }
+    if (claimed === false) return fail('claim', TRANSPORT_TEXT.claimRefused, 'claim-refused');
     const m = view(store.getModel());
     const rev = store.getRevision();
+    step = 'apply';
     // `gated`: the envelopes this playback gates are built closed (review of #332, V4).
     runtime.setOwnedParams(ownedFor(m), { gated: gatedEnvelopes(m) });
     const applied = runtime.apply(m, { revision: rev });
@@ -1611,6 +1658,7 @@ export function createStudioTransport({
       return fail('apply', errorOf(applied, 'The Studio graph is invalid.'), 'play-refused',
         entityOf(applied));
     }
+    step = 'start';
     let baseTime;
     let fresh;
     if (runtime.state !== 'running') {
@@ -1680,6 +1728,11 @@ export function createStudioTransport({
     clearTimer();
     const ctx = hooks.ctx;
     if (ctx && ctx.state !== 'closed') applyStop(scheduler.stop(ctx.currentTime));
+    return release({ fast, reason });
+  }
+
+  /** STOP once the schedule is stopped: drop the ownership, say 'state', stop the runtime. */
+  function release({ fast, reason }) {
     playing = false;
     armedOnly = false;
     live.reset();
@@ -1687,7 +1740,8 @@ export function createStudioTransport({
     claims.clear();
     levelTaps.clear();
     gateOwned.clear();
-    runtime.setOwnedParams([]);
+    // A refused PLAY may have thrown right here (K169): the runtime's stop below ends it all.
+    try { runtime.setOwnedParams([]); } catch (e) { /* stopped below */ }
     emit('state', { playing: false, reason });
     // This playback's voices and gates: a PLAY before the stop resolves (Space pressed again)
     // starts a new playback whose own records the cleanup below must not touch (V272 B1).
@@ -1831,6 +1885,10 @@ export function createStudioTransport({
     escape,
     playhead,
     debugInfo,
+    debugRefuseNextPlay() {
+      refuseNextClaim = true;
+      return true;
+    },
     dispose,
     on(fn) {
       listeners.add(fn);

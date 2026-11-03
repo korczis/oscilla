@@ -67,6 +67,11 @@
 //   render-wav-busy      while a render runs Render WAV is aria-disabled, still focusable, and
 //                        described by a visible reason; activating it opens nothing and says why
 //                        (PR #119 review, F10)
+//   armed-play-refused   armed (transport.arm, as the Synth keys arm it), a PLAY refused through
+//                        the transport's test hook debugRefuseNextPlay (its output claim): Play
+//                        is released, the reason is in the alert region, the runtime census is
+//                        0, and an edit after it leaves the Inspector 'not-applied', never
+//                        'behind' (K169)
 //   no-console-errors
 'use strict';
 const { serveDist } = require('./lib/serve.cjs');
@@ -1172,6 +1177,62 @@ function defineChecks(fx) {
       saidWhy: said.some((t) => /Render WAV is unavailable/.test(t)),
       availableAfter: after === 'false',
     }), state, said: said.slice(-2) };
+  });
+
+  // K169: a PLAY refused while armed stops the armed run and says so, and the next edit is not
+  // stranded 'behind'. The refusal is forced through the transport's documented test hook
+  // (transport.debugRefuseNextPlay: the next PLAY's output claim is refused); PLAY is the
+  // compact widget's (app.studioPlay), which plays while armed.
+  def('armed-play-refused', async ({ page }) => {
+    await H.fresh(page);
+    await H.recordLive(page);
+    const view = () => page.evaluate(() => {
+      const s = window.OSCILLA.studio;
+      const c = s.counts();
+      const st = document.querySelector('[data-osc="studio.inspector.runtimeState"]');
+      const e = s.transport.debugInfo().lastError;
+      return { ...c, armed: s.transport.armed,
+        pressed: document.querySelector('[data-osc="studio.play"]').getAttribute('aria-pressed'),
+        inspector: st ? st.dataset.state : null, lastError: e ? e.code : null };
+    });
+    const armedOk = await page.evaluate(() => window.OSCILLA.studio.transport.arm().ok);
+    const armed = await until(async () => {
+      const v = await view();
+      return v.armed && v.runtimeState === 'running' && v.pressed === 'true' ? v : null;
+    }, { ms: 5000, what: 'armed-play-refused: the armed run plays and Play is pressed' });
+    const played = await page.evaluate(() => {
+      window.OSCILLA.studio.transport.debugRefuseNextPlay();
+      return window.OSCILLA.app.studioPlay();
+    });
+    // An edit after the refused PLAY; nothing selected, the Inspector shows its Runtime state.
+    const edit = await page.evaluate(() => {
+      const st = window.OSCILLA.studio.store;
+      const r = st.dispatch({ type: 'NODE_PARAM_SET', nodeId: 'filter-1', key: 'frequency',
+        value: 900 });
+      st.dispatch({ type: 'SELECTION_CHANGE', selection: { nodes: [] } });
+      return { ok: r.ok, reason: r.reason || null };
+    });
+    const said = 'Studio did not start: The audio output is in use by another program.';
+    const after = await until(async () => {
+      const v = await view();
+      const live = await H.live(page);
+      return v.pressed === 'false' && !v.playing && !v.armed && v.runtimeState === 'idle'
+        && v.runtimeNodes === 0 && v.runtimeSources === 0 && v.engineNodes === 0
+        && v.engineSources === 0 && v.inspector !== null && v.inspector !== 'behind'
+        && live.includes(said) ? { ...v, live } : null;
+    }, { ms: 5000, what: 'armed-play-refused: Play released, the reason said, census 0, '
+      + 'the Inspector not behind' });
+    return { ...H.verdict({
+      armed: armedOk && !!armed,
+      refused: played === false,
+      edited: edit.ok,
+      released: after.pressed === 'false' && !after.playing && !after.armed,
+      census0: after.runtimeNodes === 0 && after.engineNodes === 0
+        && after.engineSources === 0,
+      announced: after.live.includes(said),
+      notBehind: after.inspector === 'not-applied',
+      refusalKept: after.lastError === 'claim-refused',
+    }), armed, edit, after: { ...after, live: after.live.slice(-3) } };
   });
 
   def('no-console-errors', async ({ errors }) => ({ ok: errors.length === 0,
