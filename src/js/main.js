@@ -258,6 +258,15 @@ function labVizInputs(plan) {
 }
 bridge.labInputs = labVizInputs;
 
+/** The input the Signal Path draws the Playground voice from (the bridge's sync), V605. */
+function playgroundVoiceInput() {
+  if (!app) return null;
+  const res = app.currentPlan();
+  const plan = res.ok ? res.plan : null;
+  return { plan, waveform: app.waveform, frequency: app.frequency, gain: app.gainLevel,
+    attackMs: app.attack, releaseMs: app.release, lab: labVizInputs(plan) };
+}
+
 // One output owner at a time (C002, C016): instrument, sequencer, Studio, a measurement.
 // stopPlayback also frees the MIDI notes (V502); outputBusy is MEASURE's other-audio probe.
 const {
@@ -871,6 +880,7 @@ function createOscillaComponent(ui) {
   const studio = createStudioUi({ engine, stopPlayback,
     // The Sequencer's pattern now, for Studio's "Open this pattern in Studio" (U010, P4).
     currentSequence: () => (labs.sequencer ? serializeSequence(labs.sequencer.editor.model) : null),
+    playgroundVoice: playgroundVoiceInput, // the Signal Path's "Open in Studio" (V605)
   });
   const navigation = createNavigation();
   // Optional input (ADR 0058): reads support at load, never requests; notes sound through engine.
