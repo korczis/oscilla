@@ -14,6 +14,9 @@ scope:
   - "tests/unit/fixtures/playground-voice-configs.mjs"
   - "tests/unit/playground-voice-in-studio.test.mjs"
   - "tests/browser/v31-studio-offline.cjs"
+  - "tests/browser/fixtures/playground-voice-in-studio-entry.js"
+  - "docs/v31/signal-path.md"
+  - ".ai/repo/project/issues/V605.yaml"
   - "tests/README.md"
   - "dist"
 depends_on:
@@ -21,6 +24,7 @@ depends_on:
 acceptance_criteria:
   - "A unit test, failing on the merge base, asserts on StudioFakeContext that a modulation edge present at the first PLAY is set at its full depth at the start time, while the audio routes ramp from zero over the start crossfade, and that an edge added while playing still ramps."
   - "tests/browser/v31-studio-offline.cjs renders siren, siren with a triangle LFO, wobble and FM through the Studio and the Playground on an OfflineAudioContext in chromium, firefox and webkit at each context's own rate, with a residual at least 60 dB below the Playground render's RMS, and V605's refusal of them is removed (the fixture list moves them to covered)."
+  - "Once the start matches, V605's residual is judged from the first sample: tests/browser/fixtures/playground-voice-in-studio-entry.js compares from the voices' first sample instead of from the end of the Studio's 20 ms start crossfade (STUDIO_XFADE_S), every covered configuration stays at least 60 dB below the Playground render's RMS in chromium, firefox and webkit, and docs/v31/signal-path.md and V605 drop the excluded start window."
   - "No click is introduced: the output's first 20 ms stays below the existing start-click bound of tests/browser/v31-studio-offline.cjs (or the transport suite's), and the engine census is 0 after stop (project.audio-engine-discipline)."
   - "The pull request carries a reviewer's verdict (src/js/studio is guarded; project.review-verdict) and a unit test that fails on the merge base (project.fail-first)."
   - "tests/README.md rows are updated; dist is rebuilt and npm run build:check passes."
