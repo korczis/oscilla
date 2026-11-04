@@ -131,7 +131,7 @@ function switchHtml(cid, c, value, reason, tokens) {
     + `<svg viewBox="${b.x} ${b.y} ${b.width} ${b.height}" width="${b.width}" height="${b.height}" `
     + `role="radiogroup" ${named(cid)}${disabled(cid, reason)} class="shrink-0 overflow-visible" `
     + `data-style="${L.style}">`
-    + `${choiceSvg({ value, param: c.param, tokens, disabled: !!reason })}${radios}</svg>`
+    + `${choiceSvg({ uid: cid, value, param: c.param, tokens, disabled: !!reason })}${radios}</svg>`
     + `${why(cid, reason)}</div>`;
 }
 
@@ -140,7 +140,7 @@ function toggleHtml(cid, c, value, reason, tokens) {
   return `<div class="flex flex-col gap-1" data-control="${cid}">`
     + `<span class="${LABEL}" id="${cid}-label">${esc(c.label)}</span>`
     + '<div class="flex items-center gap-2">'
-    + `${selectorSvg({ value: !!value, param: c.param, tokens, disabled: !!reason })}`
+    + `${selectorSvg({ uid: cid, value: !!value, param: c.param, tokens, disabled: !!reason })}`
     + `<button type="button" aria-pressed="${!!value}" data-toggle="${cid}" `
     + `${named(cid)}${disabled(cid, reason)} class="${SEG} rounded-lg `
     + `${value ? SEG_ON : SEG_OFF}">${value ? 'On' : 'Off'}</button></div>`
