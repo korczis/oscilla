@@ -1,0 +1,6 @@
+schema: review-verdict/v1
+pr: 417
+verdict: merge
+reviewer: oscilla-af
+content: 49c30bf71bdff6bb039233307738384f9b95d42836eb61f62f826f03955a1d27
+findings: []
