@@ -1,0 +1,34 @@
+id: K165
+milestone: M064
+serves:
+- "connected-instrument#patch-cables"
+title: "The patch bay and the cable inspector render only from the port contract"
+slug: the-patch-bay-and-the-cable-inspector-render-only-from-the-port-contract
+priority: p1
+profile: implementation
+objective: "Owner program B (2026-11-03), slice B2. Every jack the patch bay draws (src/js/ui/patch/patch-bay.js, its Synth adapter src/js/synth/view/bay.js) and every cable the cable inspector shows takes its name, type, direction, cardinality, unconnected behaviour and refusal from the one port contract: describePort and canConnect of src/js/studio/ports.js and the port and cable kinds V619 declares (PORT_KINDS, CABLE_KINDS), never from per-module code. The Synth panel's own jack labels become the declared label the contract carries; a jack whose contract lacks a field shows the field's derived default and the matrix (K164) counts it. A refusal is canConnect's sentence, unchanged. The bay's drawing stays the synth-theme layer's (F013)."
+why: "The owner's program B of 2026-11-03 asks that the bay render only from the contract so a module needs no bay code of its own; agreed on the mesh with oscilla-26 (V619 declares, dev-53 renders)."
+depends_on:
+- "V619"
+- "K164"
+scope:
+- src/js/ui/patch
+- src/js/synth/view/bay.js
+- src/js/synth/ui.js
+- tests/unit/patch-bay-contract.test.mjs
+- tests/browser/synth.cjs
+- tests/README.md
+- dist
+acceptance_criteria:
+- "Before: VERIFIED: patch-bay.js builds a jack's accessible name with its own STATE_LABEL and PORT_VISUALS lookups, and the bay's source adapter supplies per-module labels."
+- "After: every jack's name, shape, direction and refusal on the bay come from describePort, PORT_KINDS and canConnect; a fixture source whose port changes its contract changes the bay with no bay code changed."
+- "Negative cases: a port of an unknown type, a cable of an unknown kind and a port whose contract misses its label are refused or reported by name, never drawn with a guessed shape."
+- "Rollback: revert the merge commit; nothing changes the schema or a stored record."
+- "tests/unit/patch-bay-contract.test.mjs fails on the merge base (project.fail-first); synth.cjs s-connect and s-look stay green in chromium, firefox and webkit."
+validation:
+- node --test tests/unit/patch-bay-contract.test.mjs
+- node tests/browser/synth.cjs --only s-connect,s-look,s-mobile
+evidence_required:
+- verified
+created_at: '2026-11-03'
+updated_at: '2026-11-03'
