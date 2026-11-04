@@ -97,7 +97,7 @@ test('the gate counts pixels, not a percentage: a 1 px edit to a plate or knob f
   assert.match(m.judge(shift, b), /px differ faintly/);
 });
 
-// The status bar's version label changes with every release (3.18.0 -> 3.19.0 moved 488 px of
+// The status bar's version label changes with every release (one minor bump moved 488 px of
 // desktop-panel-dark, 447 of them the tagline and readout shifted by its width): each capture
 // pins it to one text first, so a release passes SYN and the status bar around it is still
 // compared (b0, Train 6; the dist runs are in the Train 6 body).
@@ -114,7 +114,7 @@ test('the version label is pinned before each capture; nothing else in the page 
   assert.match(capture, /release texts pinned/, 'a label not found fails the capture closed');
   // pinText sets exactly the pinned elements, each one, and nothing beside them.
   const el = (text) => ({ textContent: text });
-  const version = el('v3.18.0');
+  const version = el('v1.0.0-a');
   const tagline = el('Interactive Sound & Frequency Lab');
   const doc = { querySelectorAll: (q) => (q === '[data-osc="status.version"]' ? [version] : []) };
   assert.equal(m.pinText(doc, m.PINNED_TEXT), 1);

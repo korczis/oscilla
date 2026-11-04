@@ -103,9 +103,9 @@ export const FAINT_FLOOR_PX = 96;
 export const SEED_MARGIN = 1.5;
 /**
  * Text every release changes, pinned before each capture: the status bar's version label. Its
- * pixels and its width (3.19.0 renders a fraction wider than 3.18.0 and moves the tagline and
- * the centred readout after it: 447 of desktop-panel-dark's 488 px) would fail every view at
- * each release. Pinned, the label reads the same in the reference and the capture, and the rest
+ * pixels and its width (one minor's label renders a fraction wider than the last's and moves the
+ * tagline and the centred readout after it: 447 of desktop-panel-dark's 488 px) would fail every
+ * view at each release. Pinned, the label reads the same in the reference and the capture, and the rest
  * of the status bar is compared as before.
  */
 export const PINNED_TEXT = [['[data-osc="status.version"]', 'v0.0.0']];
