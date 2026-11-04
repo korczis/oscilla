@@ -796,6 +796,7 @@ function defineChecks(fx) {
     15000);
     // Open over unsaved changes asks first: the first press changes nothing (the document; its
     // view, still fitted, follows the viewport when the dialog's status shows: K170).
+    // The view itself is asserted by v31-studio-graph view-zoom (K170).
     res.unsaved = await page.evaluate(async (row) => {
       const s = window.OSCILLA.studio.store;
       const r0 = s.dispatch({ type: 'NODE_PARAM_SET', nodeId: 'sweep-1', key: 'duration',
@@ -966,6 +967,7 @@ function defineChecks(fx) {
     // A damaged sequence is refused: the document stays as it is and the reason is shown. The
     // document is compared without its view: the warning changes the graph viewport's height,
     // and a view still in fit mode fits it again (K170; presentation only).
+    // The view itself is asserted by v31-studio-graph view-zoom (K170).
     const bad = { ...cfg, sequencer: { ...cfg.sequencer, blocks: 'none' } };
     await page.setInputFiles('#osc-studio-import-file', { name: 'damaged.json',
       mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(bad)) });

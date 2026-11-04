@@ -2439,6 +2439,7 @@ function defineChecks() {
     // Untrusted files are refused before anything changes. The document is compared without
     // its view: the refusal's alert shortens the graph viewport, and a view still in fit mode
     // fits it again (K170; presentation only, outside studioHash and history).
+    // The view itself is asserted by v31-studio-graph view-zoom (K170).
     const doc = () => page.evaluate(() => JSON.stringify({ ...window.OSCILLA.studio.model,
       view: null }));
     const m0 = await doc();
