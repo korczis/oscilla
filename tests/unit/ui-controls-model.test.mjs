@@ -16,6 +16,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { NODE_REGISTRY } from '../../src/js/studio/registry.js';
 import { ZOOM_MAX, ZOOM_MIN } from '../../src/js/ui/studio/graph-geometry.js';
+import { LABEL } from '../../src/js/ui/synth/label.js';
 import { TOKENS, intensityLiterals, colourLiterals } from './ui-synth-fixture.mjs';
 
 const ROOT = new URL('../../', import.meta.url).pathname;
@@ -412,6 +413,19 @@ test('size: label sizes per tier, never under 12 px', () => {
     [K.KNOB_SIZES[s].labelPx, K.KNOB_SIZES[s].labelClass]])),
   { lg: [14, 'text-sm'], md: [12, 'text-xs'], sm: [12, 'text-xs'] });
   for (const s of Object.values(K.KNOB_SIZES)) assert.ok(s.labelPx >= 12);
+  // The tier is data for the host that mounts a sized knob: nothing renders a label at it yet
+  // (review of S, round 3, finding 2). So each class is the Tailwind size of its px, md's is
+  // the one label.js's LABEL prints on every panel knob today, and the JSDoc says who renders.
+  const TEXT_PX = { 'text-xs': 12, 'text-sm': 14, 'text-base': 16 };
+  for (const [size, s] of Object.entries(K.KNOB_SIZES)) {
+    assert.equal(TEXT_PX[s.labelClass], s.labelPx, `${size}: ${s.labelClass} is ${s.labelPx} px`);
+  }
+  assert.ok(LABEL.split(' ').includes(K.KNOB_SIZES.md.labelClass), 'md: label.js\'s LABEL');
+  const skin = read(SKIN);
+  const head = skin.slice(0, skin.indexOf('export const KNOB_SIZES'));
+  assert.match(head.slice(head.lastIndexOf('/**')).replace(/\s*\n\s*\*\s?/g, ' '),
+    /`labelPx` and `labelClass` are data for the host that mounts a sized knob/,
+    'the JSDoc says the host renders the tier');
 });
 
 test('size: md is any kind\'s, lg and sm a knob\'s alone, and an unknown size is refused', () => {

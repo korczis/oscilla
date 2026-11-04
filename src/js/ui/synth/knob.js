@@ -64,6 +64,9 @@ export const KNOB = Object.freeze({ arc: 18.5, arcW: 2.5, trackW: 1.25, skirt: 1
  * scale's marks, drawn once the knob is KNOB.tickZoom × its md size on screen (zoom × scale);
  * `labelPx` and `labelClass` its label's type, never under 12 px (label.js's floor). The drag is
  * the knob model's at every size; the hit stays at least HIT_PX screen px at every zoom.
+ * `labelPx` and `labelClass` are data for the host that mounts a sized knob: controlSvg draws
+ * no label, and no module renders one at its tier yet (md's is label.js's LABEL, which every
+ * panel knob prints today).
  */
 export const KNOB_SIZES = Object.freeze({
   lg: Object.freeze({ scale: 1.25, px: 80, ticks: 21, labelPx: 14, labelClass: 'text-sm' }),
@@ -297,17 +300,17 @@ const SHAPES = Object.freeze({ knob: knobShapes, fader: faderShapes, switch: swi
  * One control as an SVG '<g>' string centred in controlBox(kind, orientation), drawn only from
  * `tokens` (synthTokens): knob = scale ticks once tickZoom × md's size on screen, unlit arc
  * (control.track), value arc (control.ring; from zero with a detent tick across zero), knobFace,
- * focus ring; `uid` names its gradients (else the parameter's id); `size` (KNOB_SIZES: lg, md,
- * sm; md unless given, and any kind's; lg and sm a knob's alone) scales it about its centre,
- * its box with it; fader = slot in
- * control.track, value fill (from zero across zero), a FADER_CAP cap edged in control.edge
- * (control.pointer dragged), three grip lines, the centre one on the value; 'horizontal' turns
- * it (rotate(90): more to the right), `travel` (default FADER_TRAVEL) its length; switch = a
- * lever position per option of an enum of up to four or a boolean, detents past two. `applied`,
- * elsewhere than `value`, marks the engine's value (a knob's arc at r 13.5 in control.applied,
- * else a control.pointer line). `state` is { focus, dragging, disabled, hover }. An invisible
- * hit rect of at least HIT_PX / zoom (rounded up), never under the box, takes the pointer; the
- * drawing takes none. Every shape sets its own stroke. A setpoint: no animation.
+ * focus ring; `uid` names its gradients (else the parameter's id); `size` (KNOB_SIZES: lg, md, sm;
+ * md unless given, and any kind's; lg and sm a knob's alone) scales it about its centre, its box
+ * with it; fader = slot in control.track, value fill (from zero across zero), a FADER_CAP cap edged
+ * in control.edge (control.pointer dragged), three grip lines, the centre one on the value;
+ * 'horizontal' turns it (rotate(90): more to the right), `travel` (default FADER_TRAVEL) its
+ * length; switch = a lever position per option of an enum of up to four or a boolean, detents past
+ * two. `applied`, elsewhere than `value`, marks the engine's value (a knob's arc at r 13.5 in
+ * control.applied, else a control.pointer line). `state` is { focus, dragging, disabled, hover }.
+ * An invisible hit rect of at least HIT_PX / zoom (rounded up), never under the box, takes the
+ * pointer (the outer group's first child, outside every transform); the drawing takes none. Every
+ * shape sets its own stroke. A setpoint: no animation.
  */
 export function controlSvg({ kind, value, applied, param, tokens, zoom = 1, state = {},
   orientation = 'vertical', travel, uid, size } = {}) {
