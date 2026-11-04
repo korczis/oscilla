@@ -533,10 +533,18 @@ jobs:
     # guarded files since the review is seen here. Any other PR passes without a verdict. The
     # script needs no dependency, so nothing is installed. The program that judges, and so the
     # guarded list, is the base branch's copy (.github/scripts/base-rule.sh): a pull request
-    # that edits the list is judged by the list it found.
+    # that edits the list is judged by the list it found. A train (a train/... branch, a train
+    # title, or a body with a `| member | what |` table) is also judged by its members' own
+    # verdicts: each that exists says merge, or the train's verdict judges that member under
+    # `members:` (#303 rode #367 at `changes`). Title, body and head branch are read from the PR
+    # as it is now and handed over in PR_JSON, not as an argument, so the base branch's copy is
+    # called with the same command line whichever arguments it knows.
     name: review-verdict (guarded paths need a recorded review)
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v7
         with:
@@ -545,20 +553,34 @@ jobs:
         with:
           node-version: 22
       - name: A guarded change carries a verdict for the content it changes
+        timeout-minutes: 5
         env:
+          GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
+          PR_JSON: ${{ runner.temp }}/pr.json
         run: |
           if [ -z "$PR" ]; then echo "::error::review-verdict: no pull request to judge"; exit 1; fi
+          n=0
+          until gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body,headRefName > "$PR_JSON"; do
+            n=$((n + 1)); [ "$n" -lt 3 ] || { echo "::error::could not read PR $PR"; exit 1; }
+            sleep 10
+          done
           .github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF" scripts/review-verdict.mjs \
             --pr "$PR" --head HEAD --base-branch "origin/$GITHUB_BASE_REF"
 
   gate:
-    # Every job it needs succeeded, or (E026) is one of the six path-gated jobs and was skipped
-    # while `changes` succeeded with runtime=false. A skip for any other reason, a cancelled or
-    # failed job, and a failed or silent `changes` fail it.
+    # The required check. Every job it judges succeeded, or (E026) is one of the six path-gated
+    # jobs and was skipped while `changes` succeeded with runtime=false. A skip for any other
+    # reason, a cancelled or failed job, and a failed or silent `changes` fail it. It needs
+    # flake-ledger too (gate-needs: every job), and the verdict drops that job's entry before
+    # it judges anything: the ledger reports and never decides the gate, and its skip on a
+    # first attempt is neither a path-gated skip nor tied to `changes`
+    # (tests/unit/flake-ledger.test.mjs runs the verdict below with every result of it). It
+    # runs the verdict and nothing else, because a step of this job that fails fails the check
+    # whatever the verdict, and project.ci-bounded forbids continue-on-error.
     name: gate
     if: always()
-    needs: [unit, knowledge, fail-first, review-verdict, changes, engine, suites, measure, studio, browser, census, visual]
+    needs: [unit, knowledge, fail-first, review-verdict, changes, engine, suites, measure, studio, browser, census, visual, flake-ledger]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -568,6 +590,7 @@ jobs:
           VERDICT: >-
             (.changes.result == "success" and .changes.outputs.runtime == "false") as $nonruntime
             | to_entries
+            | map(select(.key != "flake-ledger"))
             | all(.value.result == "success"
                 or ($nonruntime and .value.result == "skipped"
                     and (.key as $k
@@ -577,3 +600,39 @@ jobs:
           echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
           echo "$RESULTS" | jq -e "$VERDICT" > /dev/null \
             || { echo "::error::release gate failed: a required job did not succeed"; exit 1; }
+
+  flake-ledger:
+    # E010: on a re-run (github.run_attempt above 1), once every job the gate judges has
+    # finished, passed or not, record the flake ledger: every job whose last earlier run in
+    # this run failed and which passed on this attempt (scripts/flake-ledger.mjs, tested by
+    # tests/unit/flake-ledger.test.mjs), in the step summary and the artifact
+    # flake-ledger-<attempt>. It reads the attempts' jobs from the API (actions: read), each
+    # request bounded and retried. Its own job, so a failure here is a red non-required check
+    # and never the gate's; on a first attempt it is skipped.
+    name: flake ledger (checks that passed only on a re-run)
+    if: ${{ always() && fromJSON(github.run_attempt) > 1 }}
+    needs: [unit, knowledge, fail-first, review-verdict, changes, engine, suites, measure, studio, browser, census, visual]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Flake ledger (checks that failed on an earlier attempt and passed now)
+        timeout-minutes: 3
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node scripts/flake-ledger.mjs --repo "$GITHUB_REPOSITORY" --run "$GITHUB_RUN_ID" \
+            --attempt "$GITHUB_RUN_ATTEMPT" --out flake-ledger.json | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Upload the flake ledger
+        if: ${{ hashFiles('flake-ledger.json') != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: flake-ledger-${{ github.run_attempt }}
+          path: flake-ledger.json
+          retention-days: 90

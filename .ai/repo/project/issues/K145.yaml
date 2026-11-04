@@ -1,0 +1,38 @@
+id: K145
+milestone: M065
+serves:
+  - "connected-instrument#piano-keyboard"
+title: "In the Studio workspace the keyboard and MIDI play the document's instrument, not the Playground voice"
+slug: in-the-studio-workspace-the-keyboard-and-midi-play-the-documents-instrument
+priority: p2
+profile: implementation
+objective: "Lands as fix(midi). src/js/midi/ui.js:60 routes notes to a workspace sink only when cmp.workspace === 'synth' (synthSink); in every other workspace, the Studio included, the computer keys, the on-screen keys and MIDI play a V502 engine voice built from the Playground's tuning, waveform and envelope, while the Studio document's Keys node and Engines stay silent. Before: with a Studio document whose Keys node drives an FM engine open in the Studio workspace, pressing a key sounds a Playground sine. After: in the Studio workspace notes play the document's instrument through the same transport.live path synthSink uses (the node metadata.noteTarget names when #375 has landed, otherwise the document's Keys node), with the same refusals and owners; a document with no note-playing node says so once and plays nothing, rather than sounding the Playground voice. The Playground keeps the V502 voice. Rollback: revert; no saved state changes."
+why: "Review of the feature train #367 (oscilla-af, verdict at 5cad3dcf, finding F3 'D2', P2): in the Studio workspace keyboard and MIDI play the Playground engine voice, not the document's Keys or Engines. The piano-keyboard criterion says one piano component plays the Keys node in the Synth workspace and the Studio."
+scope:
+  - "src/js/midi/ui.js"
+  - "src/js/midi/notes.js"
+  - "src/js/midi/keyboard-ui.js"
+  - "src/js/synth/ui.js"
+  - "src/js/ui/studio"
+  - "tests/unit/midi-route.test.mjs"
+  - "tests/browser/midi.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K065"
+  - "V502"
+acceptance_criteria:
+  - "Fail-first: tests/unit/midi-route.test.mjs asserts that with workspace 'studio' and a document holding a Keys node the route returns a sink that drives that node, and that with no note-playing node the note is refused with a stated reason; it fails on the merge base (route returns null outside 'synth')."
+  - "tests/browser/midi.cjs presses a computer key in the Studio workspace with a Keys-to-FM document and waits with until() (deadline 'studio note sounds', 2 s) for the engine's census to show the document's voice and none of the V502 voices; the check runs through tests/browser/lib/suite.cjs, assumes no sample rate and adds nothing to tests/browser/timing-baseline.json (project.suite-harness, project.bounded-test-timing)."
+  - "The Playground and Synth routes are unchanged (their existing checks pass)."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "If the change reaches a guarded path (src/js/studio/*, src/js/audio/*) the pull request carries a reviewer-written .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+  - "Lands after the feature train #367 (MIDI V502, keys K026, Synth workspace)."
+validation:
+  - "node --test tests/unit/midi-route.test.mjs"
+  - "node tests/browser/midi.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-01
+updated_at: 2026-11-01

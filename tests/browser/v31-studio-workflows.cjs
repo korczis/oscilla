@@ -67,6 +67,24 @@
 //   render-wav-busy      while a render runs Render WAV is aria-disabled, still focusable, and
 //                        described by a visible reason; activating it opens nothing and says why
 //                        (PR #119 review, F10)
+//   template-pack        each template of the K014 pack (TEMPLATE_PACK_IDS, read from
+//                        src/js/studio/templates/index.js) opens clean through the Templates
+//                        dialog and through its link #m=studio&st=<id>, and Render WAV at the
+//                        dialog's default duration (the timeline) downloads a WAV whose RMS is
+//                        above -50 dBFS (it sounds) and whose sample peak is at or below
+//                        MAX_OUTPUT_GAIN (core/constants.js, 0.25 = -12.0 dBFS): the engine's
+//                        output ceiling, the Master Output level's top, which the live chain
+//                        flattens every sample beyond and the offline render (no ceiling) must
+//                        stay under on its own. The rate is the WAV header's, never assumed.
+//                        Spectra (project.no-fake-science: the Learn texts' claims, from the
+//                        WAV): a Hann-windowed DFT at the exact line frequencies over a steady
+//                        stretch (wavLine). Ring Mod, first note A3 = 220 Hz against 470 Hz:
+//                        the 220 Hz line is at least 20 dB below 250 Hz and 690 Hz (the gain
+//                        really swings negative). FM Chime, first strike: 440 ± 616·k Hz
+//                        (176, 1056, 1672 Hz) stand 20 dB above the floor between the lines,
+//                        and the first and second upper sidebands over the carrier are
+//                        J1(1)/J0(1) and J2(1)/J0(1) within 1 dB (the text's index 1; the
+//                        lines at 440 ± 616·k do not coincide)
 //   no-console-errors
 'use strict';
 const { serveDist } = require('./lib/serve.cjs');
@@ -172,6 +190,83 @@ const H = {
     await H.frames(page);
   },
 };
+
+/** Sample peak and RMS (dBFS) of a 16-bit PCM WAV, every channel, with its rate and length. */
+function wavLevels(buf) {
+  const b = Buffer.from(buf);
+  const fmt = b.indexOf('fmt ');
+  const data = b.indexOf('data');
+  const channels = b.readUInt16LE(fmt + 10);
+  const sampleRate = b.readUInt32LE(fmt + 12);
+  const bits = b.readUInt16LE(fmt + 22);
+  const bytes = b.readUInt32LE(data + 4);
+  const start = data + 8;
+  const end = Math.min(b.length, start + bytes);
+  let peak = 0;
+  let acc = 0;
+  let n = 0;
+  for (let o = start; o + 1 < end; o += 2) {
+    const v = Math.abs(b.readInt16LE(o)) / 32768;
+    if (v > peak) peak = v;
+    acc += v * v;
+    n += 1;
+  }
+  return { channels, sampleRate, bits, seconds: bytes / (channels * (bits / 8)) / sampleRate,
+    peak, peakDbfs: peak > 0 ? 20 * Math.log10(peak) : -Infinity,
+    rmsDbfs: n && acc > 0 ? 10 * Math.log10(acc / n) : -Infinity };
+}
+
+/** The channel-mean samples of a 16-bit PCM WAV and its rate. */
+function wavMono(buf) {
+  const b = Buffer.from(buf);
+  const fmt = b.indexOf('fmt ');
+  const data = b.indexOf('data');
+  const channels = b.readUInt16LE(fmt + 10);
+  const sampleRate = b.readUInt32LE(fmt + 12);
+  const start = data + 8;
+  const frames = Math.floor(Math.min(b.length - start, b.readUInt32LE(data + 4))
+    / (2 * channels));
+  const x = new Float64Array(frames);
+  for (let i = 0; i < frames; i++) {
+    let v = 0;
+    for (let c = 0; c < channels; c++) v += b.readInt16LE(start + 2 * (i * channels + c));
+    x[i] = v / channels / 32768;
+  }
+  return { x, sampleRate };
+}
+
+/**
+ * Amplitude (dBFS) of the line at `hz` in [t0, t1) s of `wav`: a Hann-windowed DFT evaluated at
+ * that exact frequency (not at the nearest bin), scaled so a full-scale sine reads 0 dB.
+ */
+function wavLine(wav, hz, t0, t1) {
+  const i0 = Math.round(t0 * wav.sampleRate);
+  const n = Math.round((t1 - t0) * wav.sampleRate);
+  let re = 0;
+  let im = 0;
+  let wsum = 0;
+  for (let k = 0; k < n; k++) {
+    const w = 0.5 - 0.5 * Math.cos((2 * Math.PI * k) / (n - 1));
+    const ph = (2 * Math.PI * hz * k) / wav.sampleRate;
+    re += w * wav.x[i0 + k] * Math.cos(ph);
+    im -= w * wav.x[i0 + k] * Math.sin(ph);
+    wsum += w;
+  }
+  const a = (2 * Math.hypot(re, im)) / wsum;
+  return a > 0 ? 20 * Math.log10(a) : -Infinity;
+}
+
+/** Bessel function of the first kind J_n(x), by its power series (small x). */
+function besselJ(n, x) {
+  let sum = 0;
+  let term = (x / 2) ** n;
+  for (let k = 1; k <= n; k++) term /= k;
+  for (let m = 0; m < 30; m++) {
+    sum += term;
+    term *= -((x / 2) ** 2) / ((m + 1) * (m + 1 + n));
+  }
+  return sum;
+}
 
 function wavInfo(buf) {
   const b = Buffer.from(buf);
@@ -1174,6 +1269,76 @@ function defineChecks(fx) {
     }), state, said: said.slice(-2) };
   });
 
+  def('template-pack', async ({ page }) => {
+    const { ids, titles, cap, rmsFloorDb } = fx.pack;
+    const shown = (id, what) => until(() => page.evaluate((tid) => {
+      const s = window.OSCILLA.studio;
+      return s.templateId === tid && !s.dirty ? { title: s.model.metadata.title,
+        hash: window.location.hash, workspace: window.OSCILLA.app.workspace } : null;
+    }, id), { ms: 10000, what });
+    const rows = {};
+    // The claims the Learn texts make, judged from each WAV (see the header). Times are inside
+    // the first note or strike (0-0.5 s and 0-0.7 s of the timeline), after the fade-in.
+    const dbs = (w, list, t0, t1) => Object.fromEntries(list.map((hz) => [hz,
+      Number(wavLine(w, hz, t0, t1).toFixed(1))]));
+    const spectra = {
+      'ring-mod': { measure: (w) => dbs(w, [220, 250, 690], 0.1, 0.45) },
+      'fm-chime': { measure: (w) => dbs(w, [176, 440, 1056, 1672, 300, 620, 1300, 1500], 0.05,
+        0.45) },
+    };
+    for (const id of ids) {
+      // 1. Templates, Open, from another document.
+      await H.fresh(page, 'basic-tone');
+      await page.click('[data-osc="studio.templates"]');
+      const open = `#osc-dlg-studio-templates[open] [data-osc="studio.template.open"]`
+        + `[data-template="${id}"]`;
+      await until(() => page.evaluate((sel) => {
+        const btn = document.querySelector(sel);
+        return !!btn && btn.getBoundingClientRect().width > 0;
+      }, open), { ms: 10000, what: `template-pack: the Templates dialog offers ${id}` });
+      await page.click(open);
+      const dialog = await shown(id, `template-pack: ${id} opens from the Templates dialog`);
+      // 2. The link, followed in the page.
+      await H.fresh(page, 'basic-tone');
+      await page.evaluate((h) => { window.location.hash = h; }, `m=studio&st=${id}`);
+      const link = await shown(id, `template-pack: ${id} opens from #m=studio&st=${id}`);
+      // 3. Render WAV at the dialog's default duration.
+      await page.click('[data-osc="studio.renderWav"]');
+      await page.waitForSelector('#osc-dlg-studio-render[open]', { timeout: 15000 });
+      const duration = await page.evaluate(() => document.querySelector(
+        '[data-osc="studio.render.duration"]').value);
+      const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 30000 }),
+        page.click('[data-osc="studio.render.start"]')]);
+      const bytes = fs.readFileSync(await dl.path());
+      const wav = wavLevels(bytes);
+      if (spectra[id]) spectra[id].lines = spectra[id].measure(wavMono(bytes));
+      await until(() => page.evaluate(() => !window.OSCILLA.studio.rendering),
+        { ms: 10000, what: `template-pack: the ${id} render ends` });
+      rows[id] = { dialog: dialog.title === titles[id], link: link.title === titles[id]
+          && link.workspace === 'studio', file: dl.suggestedFilename() === `${id}.wav`,
+        duration, seconds: Number(wav.seconds.toFixed(3)), sampleRate: wav.sampleRate,
+        peakDbfs: Number(wav.peakDbfs.toFixed(2)), rmsDbfs: Number(wav.rmsDbfs.toFixed(2)),
+        sounds: wav.rmsDbfs > rmsFloorDb, underCap: wav.peak > 0 && wav.peak <= cap };
+    }
+    const bad = (k) => ids.filter((id) => !rows[id][k]);
+    const ring = spectra['ring-mod'].lines;
+    const fm = spectra['fm-chime'].lines;
+    const fmFloor = Math.max(fm[300], fm[620], fm[1300], fm[1500]);
+    const j1OverJ0Db = 20 * Math.log10(besselJ(1, 1) / besselJ(0, 1));
+    const j2OverJ0Db = 20 * Math.log10(besselJ(2, 1) / besselJ(0, 1));
+    return { ...H.verdict({
+      dialog: bad('dialog').length === 0, link: bad('link').length === 0,
+      file: bad('file').length === 0, sounds: bad('sounds').length === 0,
+      underCap: bad('underCap').length === 0,
+      ringNoCarrier: ring[220] <= ring[250] - 20 && ring[220] <= ring[690] - 20,
+      fmSidebands: [176, 1056, 1672].every((hz) => fm[hz] >= fmFloor + 20),
+      fmIndex: Math.abs(fm[1056] - fm[440] - j1OverJ0Db) <= 1
+        && Math.abs(fm[1672] - fm[440] - j2OverJ0Db) <= 1,
+    }), ring, fm: { ...fm, floor: fmFloor, j1OverJ0Db: Number(j1OverJ0Db.toFixed(2)),
+      j2OverJ0Db: Number(j2OverJ0Db.toFixed(2)) },
+    capDbfs: Number((20 * Math.log10(cap)).toFixed(2)), rmsFloorDb, rows };
+  });
+
   def('no-console-errors', async ({ errors }) => ({ ok: errors.length === 0,
     errors: errors.slice(0, 8) }));
   return checks;
@@ -1236,7 +1401,13 @@ async function runOne(browserName, origin, baseUrl, fx) {
   const empty = normalizeStudio({ metadata: { title: 'Large graph (100 nodes)' } });
   const store = createStudioStore(empty, { idGenerator: createIdGenerator(empty) });
   buildLargeStudio(store);
-  const fx = { largeText: exportProjectFile(store.getModel()).text, budgets: BROWSER_BUDGETS };
+  // The K014 template pack and the output ceiling its renders must stay under.
+  const { TEMPLATE_PACK_IDS, getTemplate } = await esm('src/js/studio/templates/index.js');
+  const { MAX_OUTPUT_GAIN } = await esm('src/js/core/constants.js');
+  const pack = { ids: [...TEMPLATE_PACK_IDS], cap: MAX_OUTPUT_GAIN, rmsFloorDb: -50,
+    titles: Object.fromEntries(TEMPLATE_PACK_IDS.map((id) => [id, getTemplate(id).title])) };
+  const fx = { largeText: exportProjectFile(store.getModel()).text, budgets: BROWSER_BUDGETS,
+    pack };
 
   const server = ORIGINS.includes('http') ? await serveDist(DIST, { prefix: 'oscilla-studio-wf-' }) : null;
   const all = {};

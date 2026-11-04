@@ -1,0 +1,39 @@
+id: K147
+milestone: M069
+serves:
+  - "connected-instrument#session-and-midi"
+title: "One preset record and one store: the Playground and lab presets move onto the patch record of studio/patches.js"
+slug: one-preset-record-and-one-store-the-playground-and-lab-presets-move-onto-the-patch-record
+priority: p3
+profile: implementation
+objective: "Lands as refactor(presets). src/js/data/presets.js with src/js/core/instrument.js keeps the Playground and lab voice presets in localStorage 'oscilla.presets' (src/js/core/constants.js:47) as flat records, a second preset store beside the one patch record of src/js/studio/patches.js that the Synth, kits, engines and XY presets use after #375 (K102). Before: two record shapes, two stores, two browsers' worth of naming and import rules. After: one record shape and one store for every preset; the Playground voice is described as a Studio graph its patch applies to, so a Playground preset is a patch; existing 'oscilla.presets' records are migrated once on read, each named in the migration notice, and an entry that cannot be migrated is kept and said, never dropped; the one patch browser of K102 lists them. C018's guarantee holds: a preset restores the lab settings it claims. Rollback: revert; the migration leaves the old key in place until a release has shipped with the new store, so a revert still reads it."
+why: "Review of #375 (oscilla-21 reviewer, delta at 124f6ece, finding R7, P3): the Playground/labs V1 voice presets remain a second preset store with a flat record shape; acceptable as a named follow-up; K102's scope lists only the Studio-model instruments, and moving the Playground voice onto patches needs a Studio graph for it; file one under M069 so the duplication is tracked. oscilla-af's #367 review names the same duplication (F6, 'Synth presets outside the Studio Library')."
+scope:
+  - "src/js/data/presets.js"
+  - "src/js/core/instrument.js"
+  - "src/js/core/constants.js"
+  - "src/js/core/storage.js"
+  - "src/js/studio/patches.js"
+  - "src/js/ui"
+  - "tests/unit/presets-one-store.test.mjs"
+  - "tests/browser/navigation.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K102"
+  - "C018"
+acceptance_criteria:
+  - "Fail-first: tests/unit/presets-one-store.test.mjs saves a Playground preset and a Synth preset and asserts both are records of the one patch shape in the one store; it fails on the merge base."
+  - "A legacy 'oscilla.presets' fixture (every lab setting C018 restores) migrates to patch records that restore the same settings; an unmigratable entry is kept and named; a static scan finds no second writer of a preset key."
+  - "The patch browser lists the migrated Playground presets beside the instrument presets; tests/browser/navigation.cjs restores one and asserts the lab settings it claims, through tests/browser/lib/suite.cjs and tests/browser/lib/wait.cjs until() with a named deadline (project.suite-harness, project.bounded-test-timing)."
+  - "As a refactor it lands with the browser suites and the visual gate unchanged, apart from the browser listing named above."
+  - "The pull request touches a guarded path (src/js/studio/*, src/js/core/storage*) and carries a reviewer-written .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+  - "Lands after #375 (K102, the one patch library)."
+validation:
+  - "node --test tests/unit/presets-one-store.test.mjs"
+  - "node tests/browser/navigation.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-01
+updated_at: 2026-11-01

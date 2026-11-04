@@ -1,0 +1,35 @@
+id: C023
+milestone: M090
+serves:
+  - "coherent-state#every-control-reaches-its-subsystem"
+title: "One note-to-pitch law: the Synth route honours the A4 reference as the Playground route does"
+slug: one-note-to-pitch-law-the-synth-route-honours-the-a4-reference
+priority: p2
+profile: implementation
+objective: "Lands as fix(synth). Two note-to-pitch laws exist after the #367 train: the Playground route (src/js/midi/notes.js:89) plays midiToFrequency(note, s.a4 > 0 ? s.a4 : 440) and follows the A4 reference setting, while the Synth route (src/js/synth/ui.js noteOn -> transport.live -> the Keys node and the oscillator kind of src/js/studio/nodes/instrument.js, 'A4 x 2^octave, 8' = 440 Hz') ignores it. Before: with A4 set to 432 Hz, MIDI note 69 sounds 432 Hz in the Playground and 440 Hz in the Synth workspace. After: one law, in one module (src/js/core/music.js midiToFrequency), decides a note's pitch for every route, and the Synth route reads the same A4 reference, so note 69 sounds A4 on both routes within 0.1 cent; the A4 control says which routes it tunes. If tuning the Studio document by a Playground setting is judged wrong, the alternative is that the Synth workspace shows the reference it plays at and the A4 control says it does not apply there; the pull request records which and why. Rollback: revert; no saved state changes."
+why: "Review of the feature train #367 (oscilla-af, verdict at 5cad3dcf, finding F4 'D3', P2): two note-to-pitch laws, the Playground route follows A4, the Synth route ignores it. A control that reaches one route and not the other is what the coherent-state intent forbids."
+scope:
+  - "src/js/midi/notes.js"
+  - "src/js/synth/ui.js"
+  - "src/js/studio/nodes/instrument.js"
+  - "src/js/core/music.js"
+  - "tests/unit/note-pitch-law.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K060"
+  - "V502"
+acceptance_criteria:
+  - "Fail-first: tests/unit/note-pitch-law.test.mjs asserts that with A4 = 432 Hz note 69 yields 432 Hz on the Playground route and on the Synth route (within 0.1 cent), and note 81 twice that; it fails on the merge base (the Synth route gives 440 Hz)."
+  - "A static scan finds one note-to-frequency function used by both routes; a mutation that gives the Synth route its own 440 constant fails."
+  - "With A4 at its default 440 Hz, the synth-panel criterion's A4 = 440 Hz and A5 = 880 Hz within 0.1 cent still holds, and tests/unit/freeze.test.mjs passes with the golden vectors unchanged."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "The pull request touches a guarded path (src/js/studio/*) and carries a reviewer-written .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+  - "Lands after the feature train #367 (Synth workspace, Keys node)."
+validation:
+  - "node --test tests/unit/note-pitch-law.test.mjs tests/unit/freeze.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-01
+updated_at: 2026-11-01

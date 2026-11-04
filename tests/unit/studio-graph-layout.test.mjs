@@ -198,6 +198,9 @@ test('V637 Tidy has strictly fewer crossings than today\'s tidy on 100 and 300 n
   }
 });
 
+/** The templates whose rows would cross more cables than their one strip. */
+const ONE_STRIP = new Set([DEMO_SONG_TEMPLATE_ID, 'macro-pad']);
+
 test('V637 rows only below the 0.92 fit zoom, only to fit larger, never to cross more', () => {
   assert.ok(Math.abs(COARSE_FIT_MIN_ZOOM - 0.92) < 0.005);
   for (const t of STUDIO_TEMPLATES) {
@@ -209,9 +212,11 @@ test('V637 rows only below the 0.92 fit zoom, only to fit larger, never to cross
       if (z >= COARSE_FIT_MIN_ZOOM) {
         assert.equal(lay.rows, 1, `${t.id} at ${vp.w}: fits at ${z.toFixed(2)}, no rows`);
         assert.deepEqual(lay.positions, flat, `${t.id} at ${vp.w}: the unwrapped layout`);
-      } else if (t.id === DEMO_SONG_TEMPLATE_ID) {
-        // Its rows would fit only a little larger (0.21 to 0.30 on the phone's graph viewport)
-        // and their return cables would cross 5: it stays one strip with 0 crossings.
+      } else if (ONE_STRIP.has(t.id)) {
+        // The demo song's rows would fit only a little larger (0.21 to 0.30 on the phone's
+        // graph viewport) and their return cables would cross 5; K014's Macro Pad would fit at
+        // 0.80 in 4 rows on the phone but its macro's cable to the mixer would cross 1 (its
+        // strip is 0.29 there). Rows never cross more: each stays one strip with 0 crossings.
         assert.equal(lay.rows, 1, `${t.id} at ${vp.w}: rows would cross more, one strip`);
         assert.equal(crossings(m, lay.positions), 0);
       } else {

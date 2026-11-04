@@ -1,12 +1,14 @@
 // Studio node library (spec §29-§30, §63-§64, §66, §193). The library lists the canonical
 // registry (src/js/studio/registry.js), grouped by category, searchable over name, aliases and
-// category (registry.search, §30). A click inserts the type at the viewport centre; a pointer
-// drag drops it where it is released (logical coordinates, §63). Both end in ONE NODE_ADD
-// through the editor. The same view drives the quick-add picker (N, double-click, §64) and the
-// create-node-from-cable picker (filtered by compatible inputs, §66).
+// category (registry.search: rankSearch, the one ranking of every Studio search, §30, V610). A
+// click inserts the type at the viewport centre; a pointer drag drops it where it is released
+// (logical coordinates, §63). Both end in ONE NODE_ADD through the editor. The same view drives
+// the quick-add picker (N, double-click, §64) and the create-node-from-cable picker (filtered by
+// compatible inputs, §66).
 //
-//   libraryView(model, query, { registry, onlyTypes }) -> { groups: [{ id, label, items }],
-//     count, empty }                                                       pure (unit-tested)
+//   libraryView(model, query, { registry, onlyTypes, recent }) -> { groups: [{ id, label,
+//     items }], count, empty, first }                                      pure (unit-tested)
+//     recent: types listed first, in a Recent group, when the query is empty (the quick add)
 //   mountLibrary(host, svc) -> { render(), focusSearch(), destroy() }       DOM
 //     svc: { store, registry, addAtCenter(type), addAtPoint(type, clientX, clientY) -> bool,
 //            isOverGraph(clientX, clientY) -> bool }
@@ -19,7 +21,8 @@ import { DRAG_THRESHOLD_PX, pastThreshold } from './graph-geometry.js';
 /**
  * The library entries for `query` (all when empty), grouped in library order. A type at its
  * instance limit (one Master Output, §187) is listed as unavailable with the reason.
- * opts.onlyTypes: restrict to these types (create-node-from-cable).
+ * opts.onlyTypes: restrict to these types (create-node-from-cable). opts.recent: with no query,
+ * these types come first in a Recent group (and not again in their category).
  */
 export function libraryView(model, query = '', opts = {}) {
   const registry = opts.registry || NODE_REGISTRY;
@@ -48,8 +51,11 @@ export function libraryView(model, query = '', opts = {}) {
     return { groups: items.length ? [{ id: 'results', label: 'Results', items }] : [],
       count: items.length, empty: !items.length, first: items.find((i) => !i.disabled) || null };
   }
-  const groups = registry.categories().map((c) => ({ id: c.id, label: c.label,
-    items: c.types.filter((d) => ranked.has(d.type)).map(item) }))
+  const recent = (opts.recent || []).filter((t) => ranked.has(t));
+  const groups = [{ id: 'recent', label: 'Recent',
+    items: recent.map((t) => item(registry.get(t))) }, ...registry.categories().map((c) => ({
+    id: c.id, label: c.label,
+    items: c.types.filter((d) => ranked.has(d.type) && !recent.includes(d.type)).map(item) }))]
     .filter((g) => g.items.length);
   const all = groups.flatMap((g) => g.items);
   return { groups, count: all.length, empty: !all.length,
@@ -163,7 +169,8 @@ export function mountLibrary(host, svc) {
     ]));
     replaceChildren(list, view.empty ? [h('p', { class: 'osc-sl-empty',
       text: `No node matches “${query.trim()}”.` })] : groups);
-    count.textContent = query.trim() ? `${view.count} node types` : '';
+    count.textContent = query.trim() ? `${view.count} node types${view.first
+      ? `; Enter adds ${view.first.name}` : ''}` : '';
   }
 
   render();

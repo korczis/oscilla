@@ -877,10 +877,16 @@ row({ id: 'studio.tl.track-delete.pointer', ws: 'studio',
   control: '[data-key^="track-del:"]', how: 'pointer', act: async (page) => {
     await page.locator('[data-key^="track-del:"]').first().click(); },
   expect: (s, b) => s.studio.tracks === b.studio.tracks - 1 || s.dialogs.length > b.dialogs.length });
+// The editor's own zoom (applied to its world element) is the one to compare: on a fresh Studio
+// the model still holds the default 1 while the graph shows its fitted zoom, which it commits
+// only after a change, so a model-only comparison passed or failed by the viewport's height
+// (the docked keys, M086). The model must end at the editor's zoom.
 for (const [k, cmp] of [['zoomIn', (a, b) => a > b], ['zoomOut', (a, b) => a < b]]) {
   row({ id: `studio.graph.${k}.pointer`, ws: 'studio', control: `[data-osc="studio.graph.${k}"]`,
     how: 'pointer', act: D.click(`[data-osc="studio.graph.${k}"]`),
-    expect: (s, b) => cmp(s.studio.zoom, b.studio.zoom) });
+    expect: (s, b, x) => cmp(x.z, b.x.z) && s.studio.zoom === x.z,
+    read: () => ({ z: Number(document.querySelector('[data-osc="studio.graph.viewport"] '
+      + '.osc-sg-world').style.getPropertyValue('--osc-sg-z')) }) });
 }
 // The setup zooms in twice and ends when that zoom is the Studio model's: the editor commits
 // its view 250 ms after the last change (graph-editor.js VIEW_COMMIT_MS), and a "before" read
