@@ -625,16 +625,22 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     dispatch({ type: 'BATCH', label: `Restore ${m.label}`, steps });
   }
 
+  /** A knob drag abandoned (Escape, or the browser took the pointer: 21's R7): the value the
+   *  press found comes back, with no undo entry. */
+  function cancelKnob() {
+    handle().cancelGesture();
+    knob = null;
+    renderAll();
+    say('Change cancelled.');
+  }
+
   function onKeyDown(e) {
     // Escape mid-drag puts the knob back where the press found it, with no undo entry, and goes
     // no further: the page's Escape would disarm the keys (ERG-03).
     if (e.key === 'Escape' && knob) {
       e.preventDefault();
       e.stopPropagation();
-      handle().cancelGesture();
-      knob = null;
-      renderAll();
-      say('Change cancelled.');
+      cancelKnob();
       return;
     }
     const k = e.target.closest && e.target.closest('[data-knob]');
@@ -788,7 +794,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
         // A cancelled pointer (the browser took the gesture) is neither a tap nor a drop.
         el.addEventListener('pointercancel', (e) => {
           if (cable) { cable = null; renderBay(); }
-          onPointerUp(e);
+          if (knob) cancelKnob();
+          else onPointerUp(e);
         });
         el.addEventListener('click', onClick);
         el.addEventListener('dblclick', onDoubleClick);

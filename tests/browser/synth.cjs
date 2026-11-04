@@ -49,8 +49,9 @@
 //              and the MG sweeps the cutoff on both pages (the 1-3 kHz band swings 10 dB+)
 //   s-studio   Open in Studio: #m=studio, the panel's nodes selected, the same revision
 //   s-escape   Escape releases a held note; leaving the workspace disarms: runtime census 0
-//   s-knobesc  a pressed knob takes the focus (ERG-04); Escape mid-drag restores the value the
-//              press found, adds no undo entry and leaves the keys armed (ERG-03)
+//   s-knobesc  a pressed knob takes the focus (ERG-04); Escape mid-drag (ERG-03) and a
+//              pointercancel mid-drag (21's R7) restore the value the press found, add no undo
+//              entry and leave the keys armed
 //   s-touchpatch (phone) a touch from a jack is cancelled in every engine, a tap still picks a
 //              jack up, and a chromium touch drag patches a cable without scrolling (ERG-01)
 //   s-armstop  the Arm button follows the transport (review S1): Arm, then a transport Stop
@@ -664,9 +665,26 @@ function defineChecks() {
     await page.keyboard.press('Escape');
     await page.mouse.up();
     const back = await knob(page, 'lpf.frequency').getAttribute('aria-valuenow');
+    // 21's R7: the browser taking the pointer mid-drag (pointercancel, a real pointer id) also
+    // restores the value, with no undo entry; it never commits the drag.
+    await page.evaluate(() => {
+      window.__pid = null;
+      document.addEventListener('pointerdown', (e) => { window.__pid = e.pointerId; },
+        { capture: true, once: true });
+    });
+    await page.mouse.move(c.x, c.y);
+    await page.mouse.down();
+    await page.mouse.move(c.x, c.y - 40, { steps: 8 });
+    const moved2 = await k.getAttribute('aria-valuenow');
+    await page.evaluate(() => document.querySelector('[data-knob="lpf.frequency"]')
+      .dispatchEvent(new PointerEvent('pointercancel', { bubbles: true,
+        pointerId: window.__pid })));
+    await page.mouse.up();
+    const back2 = await knob(page, 'lpf.frequency').getAttribute('aria-valuenow');
     const ok = moved !== start && focused === 'lpf.frequency' && back === start
+      && moved2 !== start && back2 === start
       && (await undo()) === undoBefore && (await armed()) === true;
-    return { ok, start, moved, back, focused, undo: [undoBefore, await undo()],
+    return { ok, start, moved, back, moved2, back2, focused, undo: [undoBefore, await undo()],
       armed: await armed() };
   });
 
