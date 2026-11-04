@@ -94,3 +94,15 @@ test('leaving the Studio disarms an armed-only run and leaves a PLAYed one', () 
   transport.playing = true; // PLAY: playing, not armed
   assert.equal(sink.leave(), false, 'a PLAYed run is the user\'s');
 });
+
+// 98's R6: the same note pressed again after a re-route releases it on the first node first.
+test('a note pressed again on another node releases it on the first one', () => {
+  const nodes = [node('keys-1', 'keys')];
+  const { sink, log } = fixture(nodes, { playing: true });
+  sink.noteOn(60, 100);
+  nodes.unshift(node('fm-1', 'fm-voice'));
+  sink.noteOn(60, 100);
+  assert.deepEqual(log.slice(-2), [['live', 'keys-1', 'off', 60], ['live', 'fm-1', 'on', 60]]);
+  sink.noteOff(60);
+  assert.deepEqual(log.at(-1), ['live', 'fm-1', 'off', 60]);
+});

@@ -49,6 +49,10 @@ export function createStudioSink({ get, setupAudio = () => {}, ensureAudio = () 
         return { ok: false, reason: refusedByOwner ? 'measurement' : (r && r.code) || 'arm' };
       }
     }
+    // The same note pressed again after a re-route (98's R6): release it on the node it went
+    // to first, so that node's note never hangs when the map moves on.
+    const was = held.get(note);
+    if (was && was !== n.id) t.live(was, { kind: 'off', note });
     held.set(note, n.id);
     return t.live(n.id, { kind: 'on', note, velocity });
   }
