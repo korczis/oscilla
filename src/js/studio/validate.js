@@ -61,6 +61,7 @@ import {
   TEMPO_RANGE, TIMELINE_MAX_S, TIME_MODES, TIME_SIGNATURE_DENOMINATORS, TITLE_MAX_CHARS,
   TRACK_KINDS, CLIP_KINDS, VIEW_LIMITS, isPosition, normalizeStudio, PANEL_REF_MESSAGE, isPanelRef,
 } from './schema.js';
+import { withArticle } from '../core/article.js';
 
 export const AUDIO_FEEDBACK_MESSAGE = 'Connection rejected: This would create an unsupported '
   + 'instantaneous audio feedback loop.';
@@ -148,8 +149,8 @@ function resolveEdge(e, nodeById, registry, sink, path) {
     const side = !src ? { node: from, port: e.from.port, dir: 'in', label: 'output' }
       : { node: to, port: e.to.port, dir: 'out', label: 'input' };
     if (registry.port(side.node.type, side.port, side.dir)) {
-      sink.error('wrong-direction', `${nameOf(side.node)}.${side.port} is not an ${side.label}.`,
-        at);
+      sink.error('wrong-direction',
+        `${nameOf(side.node)}.${side.port} is not ${withArticle(side.label)}.`, at);
     } else {
       sink.error('unknown-port', `${nameOf(side.node)} has no ${side.label} "${side.port}".`, at);
     }

@@ -20,6 +20,7 @@
 import {
   DURATION_LIMITS, MIN_FREQUENCY_HZ, SAMPLE_RATE_LIMITS, STIMULUS_KINDS, safeMaxFrequency,
 } from '../measurement/stimulus.js';
+import { withArticle } from '../core/article.js';
 
 const durations = Object.values(DURATION_LIMITS);
 
@@ -280,7 +281,8 @@ function checkStimulus(c, s, path) {
       ok = c.oneOf(v, join(path, k), STIMULUS_OPTIONS[k], { nullable: true }) && ok;
       out[k] = v;
     } else if (v !== null) {
-      ok = c.add(join(path, k), `is not used by a ${s.kind} stimulus (must be null)`) && ok;
+      ok = c.add(join(path, k), `is not used by ${withArticle(s.kind)} stimulus `
+        + '(must be null)') && ok;
     }
   }
   return ok ? out : null;

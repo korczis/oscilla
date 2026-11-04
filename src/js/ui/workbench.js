@@ -38,6 +38,7 @@ import {
 import { downloadBlob, readFileText } from './exporters.js';
 import { focusSafely, isFocusable } from './dialogs.js';
 import { sessionStore } from '../core/storage.js';
+import { withArticle } from '../core/article.js';
 import { learnReturnAction, learnToolOf } from './cross-links.js';
 
 const GROUP = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
@@ -296,12 +297,14 @@ export function createWorkbench(svc) {
           ? `${Math.round(sw.ms)} ms window (the analyser buffer limit; ${this.timeWindowMs} ms `
             + 'requested)'
           : w;
-        return `Live output analyser waveform (${OUTPUT_OWNER_NAMES[owner]}) over a ${lw}, `
+        return `Live output analyser waveform (${OUTPUT_OWNER_NAMES[owner]}) over `
+          + `${withArticle(lw)}, `
           + 'relative to full scale.';
       }
       if (owner !== 'instrument') {
         const wave = this.source === 'dual' ? this.dual.a.wave : this.waveform;
-        return `Waveform, not playing: computed ${wave} at ${formatFrequency(f)} over a ${w}. `
+        return `Waveform, not playing: computed ${wave} at ${formatFrequency(f)} over `
+          + `${withArticle(w)}. `
           + 'Hold to Play shows the live output analyser trace.';
       }
       const sparse = f > 0 && sr > 0 && sr / f < 4;
@@ -310,7 +313,7 @@ export function createWorkbench(svc) {
         ? `${Math.round(shown)} ms window (the analyser buffer limit; ${this.timeWindowMs} ms `
           + 'requested)'
         : w;
-      return `Live output analyser waveform over a ${lw}, scaled to the set gain${sparse
+      return `Live output analyser waveform over ${withArticle(lw)}, scaled to the set gain${sparse
         ? `; drawn as a min/max band because ${formatFrequency(f)} has fewer than 4 samples `
           + `per cycle at ${sr} Hz` : ''}.`;
     },

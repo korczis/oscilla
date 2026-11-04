@@ -45,6 +45,7 @@
 //   importPlan(incoming, stored) -> { add: [finding], same: [id], conflicts: [id] }
 
 import { canonicalJson } from './canonical-json.js';
+import { withArticle } from '../core/article.js';
 import {
   HEX64_PATTERN, ID_PATTERN, LIMITS, VERSION_PATTERN, createChecker,
   formatErrors, toIsoTimestamp,
@@ -197,7 +198,8 @@ function checkFinding(c, v, path) {
       evidence.push(ref);
     });
     if (EVIDENCE_REQUIRED_STATUSES.includes(v.status) && !v.evidence.length) {
-      c.add(p('evidence'), `a ${v.status} finding must cite at least one reference (an `
+      c.add(p('evidence'), `${withArticle(v.status)} finding must cite at least one reference `
+        + '(an '
         + 'experiment, a comparison or a value)');
     }
   }
@@ -298,7 +300,7 @@ export function findingIssues(finding, lookup) {
       if (!got) issue('missing-experiment', `missing: experiment ${shortId(id)} is not stored `
         + 'here (deleted, or never stored in this browser)');
       else if (got.kind !== 'experiment') {
-        issue('wrong-kind', `${shortId(id)} names a ${got.kind}, not an experiment`);
+        issue('wrong-kind', `${shortId(id)} names ${withArticle(got.kind)}, not an experiment`);
       } else if (got.readable === false) {
         issue('unreadable-experiment', `experiment ${name} is stored here but cannot be read${
           got.reason ? ` (${got.reason})` : ''}; it cannot be checked`);

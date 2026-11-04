@@ -14,6 +14,7 @@
 //   riffBeats(riff) -> the riff's length in beats (bars of 4/4)
 import { midiOf, noteHz } from '../templates/demo-song-score.js';
 import { BAR_STEPS } from './library.js';
+import { withArticle } from '../../core/article.js';
 
 const STEP_BEATS = 4 / BAR_STEPS;
 const round6 = (v) => Math.round(v * 1e6) / 1e6;
@@ -29,8 +30,8 @@ export function riffAction(model, riff, { trackId, atBeats = 0 } = {}) {
   const track = model.timeline.tracks.find((t) => t.id === trackId);
   if (!track) return { reason: 'Choose an event track for the riff.' };
   if (track.kind !== 'event') {
-    return { reason: `${track.name || track.id} is a ${track.kind} track; a riff goes on an `
-      + 'event track.' };
+    return { reason: `${track.name || track.id} is ${withArticle(track.kind)} track; a riff `
+      + 'goes on an event track.' };
   }
   if (!(Number.isFinite(atBeats) && atBeats >= 0)) {
     return { reason: 'A riff starts at a beat of 0 or later.' };

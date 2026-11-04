@@ -159,8 +159,8 @@ export function clipTarget(node, use, registry = NODE_REGISTRY) {
       errors.push(err('invalid-clip', `A measurement clip action must be one of `
         + `${MEASUREMENT_ACTIONS.join(', ')}.`, 'payload.action'));
     } else if (need && (!node || !need.includes(node.type))) {
-      errors.push(err('measurement-target', `A ${action} clip needs a ${need.join(' or ')} `
-        + 'target.', 'target'));
+      errors.push(err('measurement-target', `${withArticle(action, { capital: true })} clip `
+        + `needs ${withArticle(need.join(' or '))} target.`, 'target'));
     } else if (action === 'stimulus' && node.params.curve !== 'log') {
       errors.push(err('measurement-target', 'A measurement stimulus sweep must be logarithmic.',
         'target'));

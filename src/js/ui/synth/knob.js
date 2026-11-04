@@ -20,6 +20,7 @@
 
 import { formatFrequencyCompact, formatMs } from '../../core/frequency.js';
 import { sig } from '../../core/math.js';
+import { withArticle } from '../../core/article.js';
 import { validateParamValue } from '../../studio/registry.js';
 
 /** Vertical drag over the whole range of a knob, px; fine (Shift) divides it by FINE_DIV. */
@@ -247,8 +248,8 @@ export function pixelsPerRangeFor(kind, zoom = 1, param) {
 /** The orientation, checked: vertical (the default) or, for a fader alone, horizontal. */
 function orientationOf(o = 'vertical', kind = 'fader') {
   if (o !== 'vertical' && (o !== 'horizontal' || kind !== 'fader')) {
-    throw new Error(`orientation: a ${kind} is vertical${kind === 'fader' ? ' or horizontal'
-      : ''}, not '${o}'.`);
+    const or = kind === 'fader' ? ' or horizontal' : '';
+    throw new Error(`orientation: ${withArticle(kind)} is vertical${or}, not '${o}'.`);
   }
   return o;
 }

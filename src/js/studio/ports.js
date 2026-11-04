@@ -21,6 +21,8 @@
 // `context`) only; graph-level rules (multiplicity, duplicates, cycles) live in validate.js.
 // Modulation properties belong to the edge (§35, §104), never to node parameters.
 
+import { withArticle } from '../core/article.js';
+
 export const PORT_TYPES = Object.freeze({
   AUDIO: 'AUDIO',
   CONTROL: 'CONTROL',
@@ -204,8 +206,8 @@ function roleReason(src, tgt) {
     return 'An observed capture cannot connect to a reference input. The reference must be the '
       + 'digital stimulus itself.';
   }
-  return `A ${ROLE_NOUNS[src.role] || 'analysis'} output cannot connect to a `
-    + `${ROLE_NOUNS[tgt.role] || 'analysis'} input.`;
+  return `${withArticle(ROLE_NOUNS[src.role] || 'analysis', { capital: true })} output cannot `
+    + `connect to ${withArticle(ROLE_NOUNS[tgt.role] || 'analysis')} input.`;
 }
 
 /**

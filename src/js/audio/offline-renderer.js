@@ -18,6 +18,7 @@ import { buildPeriodicWave } from './additive.js';
 import { createFilterStage } from './filters.js';
 import { encodeWav } from './wav.js';
 import { SAFE_NYQUIST_FACTOR } from '../core/constants.js';
+import { withArticle } from '../core/article.js';
 
 export const DEFAULT_RENDER = Object.freeze({ sampleRate: 48000, channels: 2, maxDuration: 120 });
 const MIN_RATE = 8000;
@@ -50,7 +51,8 @@ export function assertRenderableFrequency(f, sampleRate, label = 'Frequency') {
   if (!(f > 0)) throw new RangeError(`${label} must be positive`);
   if (f >= safe) {
     throw new RangeError(
-      `${label} ${f} Hz is at or above the safe maximum ${safe} Hz for a ${sampleRate} Hz render`,
+      `${label} ${f} Hz is at or above the safe maximum ${safe} Hz for `
+        + `${withArticle(`${sampleRate} Hz`)} render`,
     );
   }
   return f;

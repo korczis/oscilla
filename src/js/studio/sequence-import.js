@@ -46,6 +46,7 @@ import {
 import { createStudioModel } from './schema.js';
 import { studioDiagnostic, validateStudioModel } from './validate.js';
 import { CONTIGUITY_TOLERANCE_S, clipEnd } from './timeline.js';
+import { withArticle } from '../core/article.js';
 
 export const IMPORT_IDS = Object.freeze({ node: 'seq-1', master: 'master-1', edge: 'edge-1',
   track: 'track-1' });
@@ -185,7 +186,8 @@ export function exportSequence(model, { trackId, seed = DEFAULT_SEED, sampleRate
       const s = silenceBlocks(gapMs);
       for (const d of s.blocks) blocks.push({ id: null, type: 'silence', durationMs: d,
         beats: null, params: {} });
-      if (s.lostMs > 0) issues.push(`A ${s.lostMs} ms gap before clip ${c.id} is shorter than `
+      if (s.lostMs > 0) issues.push(`${withArticle(`${s.lostMs} ms`, { capital: true })} gap `
+        + `before clip ${c.id} is shorter than `
         + `${MIN_BLOCK_MS} ms and is closed.`);
     }
     if (firstStart === null) firstStart = c.start;
@@ -369,7 +371,7 @@ function firstDifference(seq, canon, rate) {
         + 'an object' };
     }
     const p = keys(raw.params, c.params, `${path}.params.`, where,
-      `a parameter of a ${c.type} block`);
+      `a parameter of ${withArticle(c.type)} block`);
     if (p) return { ...p, message: p.message.replace(`${where}: `, `${where}: params.`) };
     for (const k of Object.keys(c.params)) {
       const a = raw.params[k];

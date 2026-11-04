@@ -119,6 +119,7 @@ import { bandCenters, integrateBands } from './rta.js';
 import { SAFE_NYQUIST_FACTOR_TEXT } from '../core/constants.js';
 import { normalizePoints } from '../calibration/profile.js';
 import { applyFrequencyCorrection } from '../calibration/interpolate.js';
+import { withArticle } from '../core/article.js';
 import {
   isValidLevelCalibration, levelCalibrationApplies, levelLabel, toDisplayLevel,
 } from '../calibration/level.js';
@@ -230,8 +231,8 @@ export function measurableStimulusRefusal(kind) {
   if (MEASURABLE_STIMULUS_KINDS.includes(kind)) return null;
   const words = typeof kind === 'string' && Object.hasOwn(STIMULUS_WORDS, kind)
     ? STIMULUS_WORDS[kind] : `"${String(kind)}"`;
-  return `a ${words} stimulus, which this version of OSCILLA cannot measure (its measurement `
-    + 'engine plays log sweeps only)';
+  return `${withArticle(words)} stimulus, which this version of OSCILLA cannot measure (its `
+    + 'measurement engine plays log sweeps only)';
 }
 
 /**
@@ -420,8 +421,9 @@ export function validateRecipe(recipe, { sampleRate, limits = CONTRACT_LIMITS } 
     const longest = Math.max(0, Math.floor(((maxFft - fixed) / (2 * sampleRate)) * 10) / 10);
     const mib = (b) => (b / 2 ** 20).toFixed(0);
     const why = est.fftSize > maxFft
-      ? `a ${est.fftSize}-point analysis (the limit is ${maxFft} points; at ${sampleRate} Hz `
-        + `with this pre/post-roll the sweep can be at most ${longest.toFixed(1)} s)`
+      ? `${withArticle(`${est.fftSize}-point`)} analysis (the limit is ${maxFft} points; at `
+        + `${sampleRate} Hz with this pre/post-roll the sweep can be at most `
+        + `${longest.toFixed(1)} s)`
       : `about ${mib(est.bytes)} MiB of analysis memory (the limit is ${mib(maxBytes)} MiB)`;
     throw new MeasurementError('MEMORY_LIMIT', `This measurement would need ${why}. Shorten `
       + 'the sweep, reduce repeats or use a lower sample rate.',

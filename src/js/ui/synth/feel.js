@@ -116,7 +116,7 @@ const TIMED = new Set(['wheel', 'idle']);
 export function gestureOf(event, last, { value } = {}) {
   const e = event || {};
   if (TIMED.has(e.type) && !Number.isFinite(e.timeStamp)) {
-    throw new TypeError(`gestureOf: a ${e.type} event needs a finite timeStamp `
+    throw new TypeError(`gestureOf: every ${e.type} event needs a finite timeStamp `
       + `(performance.now()), not ${e.timeStamp}.`);
   }
   const live = last && last.kind ? last : null;
@@ -127,7 +127,7 @@ export function gestureOf(event, last, { value } = {}) {
   const cur = idle ? null : live;
   const start = (kind, key) => {
     if (!isValue(value)) {
-      throw new TypeError(`gestureOf: a ${kind} gesture begins from the value now (a finite `
+      throw new TypeError(`gestureOf: the ${kind} gesture begins from the value now (a finite `
         + `number, an option or a boolean), not ${String(value)}.`);
     }
     const g = gesture(kind, value, t, key);

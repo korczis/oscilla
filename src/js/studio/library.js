@@ -49,6 +49,7 @@ import { exportSequence, importSequenceDocument, isSequenceDocument } from './se
 import {
   PATCH_FILE_EXTENSION, PATCH_KIND, importPatch, patchHash, serializePatch,
 } from './patches.js';
+import { withArticle } from '../core/article.js';
 
 export const STUDIO_FILE_TYPE = 'application/json';
 export const SEQUENCE_FILE_EXTENSION = '.sequence.json';
@@ -68,7 +69,7 @@ export function createStudioLibrary(store) {
   async function read(id, kind) {
     const rec = await store.getStudio(id);
     if (!rec) return null;
-    if (rec.kind !== kind) throw corrupt(id, `it is a ${rec.kind} record, not ${kind}`);
+    if (rec.kind !== kind) throw corrupt(id, `it is ${withArticle(rec.kind)} record, not ${kind}`);
     const summary = { id: rec.id, kind: rec.kind, name: rec.name, savedAt: rec.savedAt,
       studioHash: rec.studioHash };
     return { rec, summary };
@@ -82,7 +83,7 @@ export function createStudioLibrary(store) {
       if (!report.ok) throw invalid('Studio project', firstMessage(report.errors));
       const existing = await store.getStudio(id).catch(() => null);
       if (existing && existing.kind !== STUDIO_KIND) {
-        throw invalid('Studio project', `"${id}" is a ${existing.kind} record`);
+        throw invalid('Studio project', `"${id}" is ${withArticle(existing.kind)} record`);
       }
       const doc = JSON.parse(serializeStudio(model));
       const record = { id, kind: STUDIO_KIND, name: model.metadata.title,
@@ -109,7 +110,7 @@ export function createStudioLibrary(store) {
       if (!checked.ok) throw invalid('Patch', firstMessage(checked.errors));
       const existing = await store.getStudio(id).catch(() => null);
       if (existing && existing.kind !== PATCH_KIND) {
-        throw invalid('Patch', `"${id}" is a ${existing.kind} record`);
+        throw invalid('Patch', `"${id}" is ${withArticle(existing.kind)} record`);
       }
       if (existing && !overwrite) {
         throw new ExperimentStoreError('exists', `A patch "${existing.name}" is already saved `

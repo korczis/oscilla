@@ -26,6 +26,7 @@ import { welch } from '../measurement/spectrum.js';
 import { bandCenters, integrateBands } from '../measurement/rta.js';
 import { CLIP_THRESHOLD } from '../measurement/capture-checks.js';
 import { LEVEL_SCALE } from './level.js';
+import { withArticle } from '../core/article.js';
 
 export const REFERENCE_FFT = 8192;
 /** Default capture length of the reference reading (s). */
@@ -59,7 +60,8 @@ export function measureReferenceLevel(capture, { referenceHz = 1000 } = {}) {
   };
   const band = referenceBand(referenceHz, sr);
   if (!band) {
-    errors.push(`${referenceHz} Hz is outside the one-third-octave bands of a ${sr} Hz input`);
+    errors.push(`${referenceHz} Hz is outside the one-third-octave bands of `
+      + `${withArticle(`${sr} Hz`)} input`);
     return out;
   }
   out.band = { nominal: band.nominal, lo: band.lo, hi: band.hi };
