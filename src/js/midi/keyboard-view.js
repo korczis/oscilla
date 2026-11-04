@@ -7,6 +7,11 @@ import { isBlack, noteName } from './keyboard.js';
 
 const BLACK_W = 0.6;   // a black key's width, as a fraction of a white key
 const BLACK_H = 0.62;  // a black key's height, as a fraction of the keys' height
+// The text printed on the keys (LXK-06, the look audit): one size at the 12 px floor of the
+// layout rule (G2), never scaled down with the key; a key narrower than KEY_LETTER_MIN_W keeps
+// no letter (a phone's keys, which no computer key plays), and C's octave name stays.
+export const KEY_TEXT_PX = 12;
+export const KEY_LETTER_MIN_W = 30;
 
 /**
  * The keys of [first, last] laid out in a box of `width` x `height` (CSS px):
@@ -80,15 +85,14 @@ export function drawKeys(ctx, state) {
     ctx.fillRect(k.x + 0.5, k.y + 0.5, k.w - 1, k.h - 1);
     ctx.strokeRect(k.x + 0.5, k.y + 0.5, k.w - 1, k.h - 1);
     const text = sources ? c.onLit : (k.black ? c.blackLabel : c.label);
-    const size = Math.max(8, Math.min(12, Math.floor(k.w * 0.42)));
     ctx.fillStyle = text;
-    const letter = state.label(k.note);
+    const letter = k.w >= KEY_LETTER_MIN_W ? state.label(k.note) : null;
     if (letter) {
-      ctx.font = `600 ${size}px ${c.font}`;
+      ctx.font = `600 ${KEY_TEXT_PX}px ${c.font}`;
       ctx.fillText(letter, k.x + k.w / 2, k.y + k.h - (k.black ? 8 : 22));
     }
     if (!k.black && k.note % 12 === 0) {
-      ctx.font = `${Math.max(8, size - 2)}px ${c.font}`;
+      ctx.font = `500 ${KEY_TEXT_PX}px ${c.font}`;
       ctx.fillText(noteName(k.note), k.x + k.w / 2, k.y + k.h - 7);
     }
   }
