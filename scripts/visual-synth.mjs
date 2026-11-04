@@ -101,6 +101,26 @@ export const NOISE_FACTOR = 3;
 export const DIFF_FLOOR_PX = 24;
 export const FAINT_FLOOR_PX = 96;
 export const SEED_MARGIN = 1.5;
+/**
+ * Text every release changes, pinned before each capture: the status bar's version label. Its
+ * pixels and its width (3.19.0 renders a fraction wider than 3.18.0 and moves the tagline and
+ * the centred readout after it: 447 of desktop-panel-dark's 488 px) would fail every view at
+ * each release. Pinned, the label reads the same in the reference and the capture, and the rest
+ * of the status bar is compared as before.
+ */
+export const PINNED_TEXT = [['[data-osc="status.version"]', 'v0.0.0']];
+
+/** Set each pinned element's text in `doc`; the count pinned (runs in the page as well). */
+export function pinText(doc, pins) {
+  let n = 0;
+  for (const [sel, text] of pins) {
+    for (const el of doc.querySelectorAll(sel)) {
+      el.textContent = text;
+      n += 1;
+    }
+  }
+  return n;
+}
 
 /** A view's bounds from its recorded noise ({ runs, px, faint }), or null without enough runs. */
 export function bounds(noise) {
@@ -596,6 +616,12 @@ async function captureOn(page, view, out, target) {
   await wait('no CSS transition running', settled, null, runningTransitions);
   await step(page, id, 'park the pointer', () => page.mouse.move(0, height - 1));
   await ev('clear the notices', () => { window.OSCILLA.app.alerts = []; });
+  // pinText runs in the page as its own source, so the page and the unit test share one body.
+  const pinned = await ev('pin the release text', new Function('pins',
+    `return (${pinText.toString()})(document, pins);`), PINNED_TEXT);
+  if (pinned !== PINNED_TEXT.length) {
+    throw new Error(`${id}: ${pinned} of ${PINNED_TEXT.length} release texts pinned`);
+  }
   await frames(page, id);
   const s = await ev('inspect the view', inspect, { pairs: CABLES, bay: view.bay,
     park: [0, height - 1], content: view.content });

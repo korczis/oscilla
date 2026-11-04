@@ -95,6 +95,32 @@ test('the gate counts pixels, not a percentage: a 1 px edit to a plate or knob f
   assert.match(m.judge(shift, b), /px differ faintly/);
 });
 
+// The status bar's version label changes with every release (3.18.0 -> 3.19.0 moved 488 px of
+// desktop-panel-dark, 447 of them the tagline and readout shifted by its width): each capture
+// pins it to one text first, so a release passes SYN and the status bar around it is still
+// compared (b0, Train 6; the dist runs are in the Train 6 body).
+test('the version label is pinned before each capture; nothing else in the page is', async () => {
+  const m = await load();
+  assert.deepEqual(m.PINNED_TEXT, [['[data-osc="status.version"]', 'v0.0.0']]);
+  assert.match(read('src/index.html'),
+    /<span class="osc-sb-version" data-osc="status\.version" x-text="'v' \+ BUILD\.label"/);
+  const src = read('scripts/visual-synth.mjs');
+  const capture = src.slice(src.indexOf("await ev('clear the notices'"),
+    src.indexOf("const s = await ev('inspect the view'"));
+  assert.match(capture, /pinText\.toString\(\)[\s\S]*PINNED_TEXT/,
+    'the capture pins the release text after the notices clear and before the inspection');
+  assert.match(capture, /release texts pinned/, 'a label not found fails the capture closed');
+  // pinText sets exactly the pinned elements, each one, and nothing beside them.
+  const el = (text) => ({ textContent: text });
+  const version = el('v3.18.0');
+  const tagline = el('Interactive Sound & Frequency Lab');
+  const doc = { querySelectorAll: (q) => (q === '[data-osc="status.version"]' ? [version] : []) };
+  assert.equal(m.pinText(doc, m.PINNED_TEXT), 1);
+  assert.equal(version.textContent, 'v0.0.0');
+  assert.equal(tagline.textContent, 'Interactive Sound & Frequency Lab');
+  assert.equal(m.pinText({ querySelectorAll: () => [] }, m.PINNED_TEXT), 0);
+});
+
 test('each view has its own bounds, derived from its own recorded noise', async () => {
   // Review of b1eb3e6d (N1): one faint bound of 1000 px, set by the 338 px one desktop view
   // showed once, let a screw cap 0.5 px narrower through every panel view.
