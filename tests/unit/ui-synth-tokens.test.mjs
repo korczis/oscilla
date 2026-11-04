@@ -272,6 +272,38 @@ test('every knob part holds 3:1 on the part it is drawn over, in both themes', (
   assert.deepEqual(short, [], 'under 3:1 against the part beneath');
 });
 
+// Slice A 8: the pointer and its skirt segment on what they are drawn over (the cap and the
+// skirt, cap-coloured since slice A; a disabled knob's flattened to plateLo), the applied arc on
+// the skirt, and the track on both plates, all read from what controlSvg draws, 3:1 in both
+// themes. Pointer contrast was the slice's risk once the skirt took the cap's colour.
+test('slice A 8: the pointer on the cap and skirt, and the track on the plates, hold 3:1', () => {
+  const param = { key: 'level', unit: '%', min: 0, max: 100, step: 1, default: 50 };
+  const tag = (svg, flag) => new RegExp(`<\\w+\\b[^>]*\\s${flag}=""[^>]*>`).exec(svg)[0];
+  const paint = (svg, flag, a) => varOf(new RegExp(`\\s${a}="([^"]*)"`).exec(tag(svg, flag))[1]);
+  const short = [];
+  let pairs = 0;
+  for (const state of [{}, { hover: true }, { dragging: true }, { disabled: true }]) {
+    const svg = controlSvg({ kind: 'knob', value: 70, applied: 30, param, tokens: TOKENS,
+      state });
+    const want = [['data-pointer', 'data-cap'], ['data-pointer-skirt', 'data-skirt'],
+      ['data-applied', 'data-skirt']].map(([fg, bg]) => [fg, paint(svg, fg, 'stroke'), bg,
+      paint(svg, bg, 'fill')]);
+    for (const plate of PLATES) {
+      want.push(['data-track', paint(svg, 'data-track', 'stroke'), 'plate', plate]);
+    }
+    for (const [theme, t] of Object.entries(themes())) {
+      for (const [fg, f, bg, b] of want) {
+        pairs += 1;
+        const ratio = contrast(hexOf(t, f), hexOf(t, b));
+        if (ratio < 3) short.push(`${JSON.stringify(state)} ${theme} ${fg} ${f} on ${bg} ${b}: `
+          + `${ratio.toFixed(2)}`);
+      }
+    }
+  }
+  assert.ok(pairs >= 40, `${pairs} pairs`);
+  assert.deepEqual(short, [], 'under 3:1 on the part beneath');
+});
+
 // S7 (W1b re-review): the unlit knob arc measured 1.10:1 (dark) and 1.40:1 (light) on the plate,
 // because a disabled knob drew it in the knurl's --osc-border. As drawn, in every state, it is
 // a token that holds 3:1 on both plates in both themes: --osc-text-dim, the strongest grey
@@ -346,8 +378,10 @@ function covers(s, [x, y]) {
 const isFace = (s) => s.a.fill && s.a.fill !== 'none' && !s.a.class
   && s.a.visibility !== 'hidden' && (s.tag === 'circle' || s.tag === 'rect');
 
-/** Every use of a depth role in `svg`: its role, class and the face drawn last under it. */
-function depthUses(svg, where) {
+/** Every use of a depth role in `svg`: its role, class and the face drawn last under it; where
+ *  the drawing has none there, `ground`, the face its host draws it on (a control on its plate,
+ *  as its token set names it; slice A's cast shadow falls there), else none. */
+function depthUses(svg, where, ground) {
   const list = shapesOf(svg);
   const out = [];
   list.forEach((s, i) => {
@@ -356,7 +390,7 @@ function depthUses(svg, where) {
       if (!DEPTH[role]) continue;
       const p = sampleOf(s);
       const under = p && list.slice(0, i).reverse().find((u) => isFace(u) && covers(u, p));
-      out.push({ role, paint, cls: s.a.class, face: under ? varOf(under.a.fill) : undefined,
+      out.push({ role, paint, cls: s.a.class, face: under ? varOf(under.a.fill) : varOf(ground),
         part: Object.keys(s.a).find((k) => k.startsWith('data-')) || s.tag, where });
     }
   });
@@ -364,7 +398,8 @@ function depthUses(svg, where) {
 }
 
 /** What the layer draws: knob.js's three controls in every state, the Synth panel's knob
- *  (its own token set, the skirt on the plate's top) and xy.js's pad in every state. */
+ *  (its own token set, the skirt on the plate's top) and xy.js's pad in every state. A control
+ *  stands on its token set's surface.card (the panel's: the plate's top, plateHi). */
 function layerUses() {
   const num = { key: 'level', unit: '%', min: 0, max: 100, step: 1, default: 50 };
   const bool = { key: 'on', type: 'boolean', default: false };
@@ -374,13 +409,13 @@ function layerUses() {
     for (const [kind, param, value] of [['knob', num, 70], ['fader', num, 70],
       ['switch', bool, true]]) {
       uses.push(...depthUses(controlSvg({ kind, value, param, tokens: TOKENS, state }),
-        `knob.js ${kind} ${JSON.stringify(state)}`));
+        `knob.js ${kind} ${JSON.stringify(state)}`, TOKENS.surface.card));
     }
   }
   const panel = Object.fromEntries(Object.entries(PANEL_TOKENS).map(([k, n]) => [k, `var(${n})`]));
   for (const disabled of [false, true]) {
     uses.push(...depthUses(knobSvg({ value: 70, param: num, tokens: panel, disabled }),
-      `the panel's knob${disabled ? ' disabled' : ''}`));
+      `the panel's knob${disabled ? ' disabled' : ''}`, panel.plateHi));
   }
   const params = { x: { key: 'x', label: 'X', type: 'integer', min: 0, max: 14, step: 1,
     default: 7 }, y: { key: 'y', label: 'Y', unit: 'Hz', type: 'number', min: 20, max: 20000,
@@ -406,20 +441,20 @@ function depthPairs() {
 test('the depth roles are drawn only through their intensity class, each over a face', () => {
   const uses = layerUses();
   const parts = new Set(uses.map((u) => `${u.role} ${u.part}`));
-  for (const want of ['--osc-hw-shade data-shadow', '--osc-hw-shade data-puck-shadow',
+  for (const want of ['--osc-hw-shade data-cast-shadow', '--osc-hw-shade data-puck-shadow',
     '--osc-hw-shade data-recess', '--osc-hw-highlight data-puck-highlight']) {
     assert.ok(parts.has(want), `drawn: ${want} (${[...parts].join(', ')})`);
   }
   // The Synth panel's knob draws the core's shadow through its own token map (PANEL_TOKENS,
-  // panelControlTokens): its cap shadow is required here on its own, filled with the depth
-  // shade at hw-shadow, enabled and disabled, so a panel map that sends shade elsewhere fails
-  // by name and not only through the shade's face count below.
+  // panelControlTokens): its cast shadow (slice A) is required here on its own, filled with the
+  // depth shade at hw-shadow, enabled and disabled, so a panel map that sends shade elsewhere
+  // fails by name and not only through the shade's face count below.
   for (const where of ['the panel\'s knob', 'the panel\'s knob disabled']) {
-    const shadow = uses.filter((u) => u.where === where && u.part === 'data-shadow');
+    const shadow = uses.filter((u) => u.where === where && u.part === 'data-cast-shadow');
     assert.deepEqual(shadow.map((u) => `${u.role} ${u.paint} ${u.cls}`),
       [`${SYNTH_TOKEN_NAMES.control.shade} fill opacity-hw-shadow`],
-      `${where}: its data-shadow is filled with ${SYNTH_TOKEN_NAMES.control.shade} at hw-shadow `
-      + `(PANEL_TOKENS.shade is ${PANEL_TOKENS.shade})`);
+      `${where}: its data-cast-shadow is filled with ${SYNTH_TOKEN_NAMES.control.shade} at `
+      + `hw-shadow (PANEL_TOKENS.shade is ${PANEL_TOKENS.shade})`);
   }
   for (const u of uses) {
     assert.equal(u.cls, `opacity-${DEPTH[u.role]}`, `${u.where} ${u.part}: ${u.role} only at `
@@ -509,9 +544,13 @@ test('the knob keeps capHi as its sheen unless the highlight shows on the cap in
     const both = Object.values(dl).every((v) => Math.abs(v) >= MIN_DL);
     const svg = controlSvg({ kind: 'knob', value: 70, tokens: TOKENS,
       param: { key: 'level', unit: '%', min: 0, max: 100, step: 1, default: 50 } });
-    const sheen = /<ellipse\b[^>]*class="opacity-hw-sheen"[^>]*>/.exec(svg)[0];
+    // Slice A (K12): the sheen is a radial gradient on the cap; its lit stop is the paint.
+    const sheen = /<circle\b[^>]*data-sheen=""[^>]*class="opacity-hw-sheen"[^>]*>/.exec(svg)[0];
+    const id = /\sfill="url\(#([^)]+)\)"/.exec(sheen)[1];
+    const grad = new RegExp(`<radialGradient\\b[^>]*id="${id}"[^>]*>(.*?)</radialGradient>`)
+      .exec(svg)[1];
     const want = both ? TOKENS.control.highlight : TOKENS.control.capHi;
-    assert.equal(/\sfill="([^"]*)"/.exec(sheen)[1], want, `the highlight on the cap: ΔL* dark `
+    assert.equal(/\sstop-color="([^"]*)"/.exec(grad)[1], want, `the highlight on the cap: ΔL* dark `
       + `${dl.dark.toFixed(2)}, light ${dl.light.toFixed(2)}`);
     console.log(`knob sheen: ${want} (highlight on ${N.cap}: dark ${dl.dark.toFixed(2)}, light `
       + `${dl.light.toFixed(2)})`);

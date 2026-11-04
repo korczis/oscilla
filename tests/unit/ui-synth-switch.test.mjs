@@ -242,22 +242,26 @@ const near = (a, b, eps, what) => assert.ok(Math.abs(a - b) <= eps, `${what}: ${
 
 // Review of W1c, finding 4: the selector's skirt was r 17 at 1:1 beside 64 px knobs, about half
 // their size, and its knurl a dashed ring the panel added. A dial is now the knob's face at the
-// size of the knob beside it: the knob's skirt (r 16 of its 44 box), its 24-ridge knurl from
-// r 14.5 to 16 in control.knurl, its cap, all scaled by knob / CONTROL_BOX.knob.width, and its
-// detents end inside that knob's box.
+// size of the knob beside it: the knob's skirt (r 16 of its 44 box), a 24-ridge knurl from
+// r 14.5 to 16 in control.knurl (the knob's own until slice A gave it a toothed skirt), its cap,
+// all scaled by knob / CONTROL_BOX.knob.width, and its detents end inside that knob's box.
 test('a dial is the knob\'s face at the knob\'s size: skirt, knurl, cap, detents in its box',
   () => {
   // The knob's own face, as controlSvg draws it: what a dial at the default knob width repeats.
   const KNOB_P = { key: 'k', type: 'number', min: 0, max: 1, default: 0.5 };
   const knobFace = controlSvg({ kind: 'knob', value: 0.5, param: KNOB_P, tokens: TOKENS });
   const dialFace = draw(ENUM(5));
-  for (const [attr, keys] of [['data-skirt', ['r', 'stroke-width']], ['data-cap', ['r']],
-    ['data-knurl', ['d', 'stroke-width', 'stroke']]]) {
+  for (const [attr, keys] of [['data-skirt', ['stroke-width']], ['data-cap', ['r']]]) {
     for (const a of keys) {
       assert.equal(attrOf(part(dialFace, attr), a), attrOf(part(knobFace, attr), a),
         `the dial's ${attr} ${a} is the knob's`);
     }
   }
+  // Since slice A the knob's skirt is a toothed outline (its tips at r 16) and it has no knurl;
+  // the dial keeps its knurled skirt of the same size until the selector face is redrawn (K14).
+  const knobSkirt = Math.max(...[...attrOf(part(knobFace, 'data-skirt'), 'd')
+    .matchAll(/[ML] (\S+) (\S+)/g)].map((m) => Math.hypot(Number(m[1]), Number(m[2]))));
+  near(n(part(dialFace, 'data-skirt'), 'r'), knobSkirt, 0.02, 'the dial\'s skirt is the knob\'s');
   for (const p of DIALS) {
     for (const knob of KNOB_WIDTHS) {
       const k = (knob ?? CONTROL_BOX.knob.width) / CONTROL_BOX.knob.width;

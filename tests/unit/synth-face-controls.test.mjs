@@ -113,12 +113,15 @@ test('the controls take the panel\'s tokens in the layer\'s roles', () => {
     assert.equal(ct.text[role], `var(${name})`, `text.${role}`);
   }
   for (const { cid } of controls) {
-    const bad = paints(block(cid)).filter((p) => !/^var\(--osc-[\w-]+\)$|^none$/.test(p));
+    // A url(#id) paint is a gradient of token stops the same block defines (the knob, slice A).
+    const b = block(cid);
+    const bad = paints(b).filter((p) => !/^var\(--osc-[\w-]+\)$|^none$/.test(p)
+      && !(/^url\(#([^)]+)\)$/.test(p) && b.includes(` id="${/^url\(#([^)]+)\)$/.exec(p)[1]}"`)));
     assert.deepEqual(bad, [], `${cid}: tokens only`);
   }
 });
 
-test('a disabled knob stays focusable, says why and draws the core\'s dashed arc', () => {
+test('a disabled knob stays focusable, says why and draws the core\'s track only (C1)', () => {
   const off = knobs.filter((x) => x.reason);
   assert.ok(off.some((x) => x.cid === 'am.depth'), 'AM depth is inactive in ring mode');
   for (const { cid } of off) {
@@ -127,18 +130,15 @@ test('a disabled knob stays focusable, says why and draws the core\'s dashed arc
     assert.match(b, /role="slider" tabindex="0"/);
     assert.ok(b.includes(`<span class="sr-only" id="${cid}-why">`), cid);
   }
-  // The core's disabled arc (S7): butt dashes of two widths and gaps of one, or a solid butt arc
-  // under two dashes; never the enabled arc's round cap.
+  // The core's one disabled language (C1, co-signed by p2 and dev-53): no value arc, the track
+  // only, a flat body; an enabled knob keeps its value arc.
   for (const { cid } of off) {
-    for (const [ring] of block(cid).matchAll(/<path d="[^"]*" data-ring=""[^>]*>/g)) {
-      assert.match(ring, /stroke-dasharray="\d+(?:\.\d+)? \d+(?:\.\d+)?"|stroke-linecap="butt"/,
-        `${cid}: ${ring}`);
-      assert.doesNotMatch(ring, /stroke-linecap="round"/, cid);
-    }
+    const knob = /<g data-control="knob">.*?<\/g><\/g>/.exec(block(cid))[0];
+    assert.doesNotMatch(knob, /data-ring=""/, `${cid}: no value arc`);
+    assert.match(knob, /data-track=""/, `${cid}: the track`);
+    assert.doesNotMatch(knob, /stroke-dasharray|data-sheen=""/, cid);
   }
-  const [, on, gap] = /data-ring="" [^>]*stroke-dasharray="([\d.]+) ([\d.]+)"/
-    .exec(block('am.depth'));
-  assert.ok(Math.abs(Number(on) - 2 * Number(gap)) < 0.02, `am.depth dashes ${on} ${gap}`);
+  assert.match(block('lpf.frequency'), /data-ring=""/);
   assert.doesNotMatch(block('lpf.frequency'), /stroke-dasharray/);
 });
 
@@ -399,7 +399,10 @@ test('a rotary selector is knob-sized: the knob\'s skirt and knurl on screen', (
     default: 0.5 }, tokens: T });
   const z = 64 / 44;
   const skirtOf = (s) => Number(/<circle data-skirt="" cx="0" cy="0" r="([\d.]+)"/.exec(s)[1]);
-  const knobSkirt = skirtOf(knob) * z;
+  // The knob's skirt is its toothed outline since slice A: its outer radius is the teeth's tips.
+  const d = /<path d="([^"]+)" data-skirt=""/.exec(knob)[1];
+  const knobSkirt = Math.max(...[...d.matchAll(/[ML] (\S+) (\S+)/g)]
+    .map((m) => Math.hypot(Number(m[1]), Number(m[2])))) * z;
   let dials = 0;
   for (const { cid, c } of switches) {
     const style = switchStyle(c.param);

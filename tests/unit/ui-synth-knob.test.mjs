@@ -731,7 +731,14 @@ function drawingBox(svg) {
     } else if (tag === 'path') {
       const arc = /\bA ([\d.]+) /.exec(el);
       const lines = [...el.matchAll(/M ([-\d.]+) ([-\d.]+) L ([-\d.]+) ([-\d.]+)/g)];
+      const polygon = /\sd="M [^"MA]* Z"/.test(el);
       assert.ok(arc || lines.length, `a path the box check knows: ${el}`);
+      if (polygon) {
+        for (const [, x, y] of el.matchAll(/[ML] ([-\d.]+) ([-\d.]+)/g)) {
+          grow(Number(x) - sw, Number(y) - sw, Number(x) + sw, Number(y) + sw);
+        }
+        continue;
+      }
       if (arc) {
         const r = Number(arc[1]) + sw;
         grow(-r, -r, r, r);
@@ -793,7 +800,11 @@ test('no colour literal in any control, in any state; every paint is a token or 
       for (const value of Object.values(ends(kind))) {
         const svg = controlSvg({ kind, value, param: paramOf(kind), tokens: TOKENS, state });
         assert.deepEqual(colourLiterals(svg), [], `${kind} ${JSON.stringify(state)}`);
-        for (const p of paints(svg)) assert.ok(allowed.has(p), `${kind}: paint ${p}`);
+        for (const p of paints(svg)) {
+          const frag = /^url\(#([^)]+)\)$/.exec(p);
+          assert.ok(allowed.has(p) || (frag && svg.includes(` id="${frag[1]}"`)),
+            `${kind}: paint ${p}`);
+        }
       }
     }
   }
@@ -809,12 +820,11 @@ test('every shape carries its own stroke attribute', () => {
   }
 });
 
-test('knob: a cap with one highlight, the value ring in control.ring, a pointer', () => {
+test('knob: a cap with one sheen, the value ring in control.ring, a pointer', () => {
   const t = TOKENS.control;
   const svg = draw('knob');
   assert.ok(svg.includes(`fill="${t.cap}"`), 'cap');
-  assert.equal([...svg.matchAll(new RegExp(`fill="${t.capHi.replace(/[()]/g, '\\$&')}"`, 'g'))]
-    .length, 1, 'one highlight');
+  assert.equal([...svg.matchAll(/\sdata-sheen=""/g)].length, 1, 'one sheen');
   assert.ok(svg.includes(`stroke="${t.ring}"`), 'value ring');
   assert.ok(svg.includes(`stroke="${t.track}"`), 'track');
   assert.ok(svg.includes(`stroke="${t.pointer}"`), 'pointer');
@@ -825,17 +835,19 @@ test('knob: a cap with one highlight, the value ring in control.ring, a pointer'
   assert.ok(!svg.includes(`stroke="${t.focus}"`), 'no focus ring unless focused');
 });
 
-test('knob: the cap highlight reads the hw-sheen intensity key, not an opacity of its own', () => {
-  const t = TOKENS.control;
-  for (const state of [{}, { focus: true }, { disabled: true }, { dragging: true }]) {
-    const svg = draw('knob', { state });
-    const hi = new RegExp(`<ellipse [^>]*fill="${t.capHi.replace(/[()]/g, '\\$&')}"[^>]*>`)
-      .exec(svg);
-    assert.ok(hi, `${JSON.stringify(state)}: a highlight`);
-    assert.match(hi[0], /\sclass="opacity-hw-sheen"/, JSON.stringify(state));
-    assert.doesNotMatch(hi[0], /opacity="/, `${JSON.stringify(state)}: no opacity attribute`);
-  }
-});
+test('knob: the cap sheen and the side wall read the hw-sheen key, not an opacity of their own',
+  () => {
+    for (const state of [{}, { focus: true }, { dragging: true }, { hover: true }]) {
+      const svg = draw('knob', { state });
+      for (const flag of ['data-sheen', 'data-side']) {
+        const hi = part(svg, flag);
+        assert.ok(hi, `${JSON.stringify(state)}: ${flag}`);
+        assert.match(hi, /\sclass="opacity-hw-sheen"/, `${JSON.stringify(state)} ${flag}`);
+        assert.match(hi, /\sfill="url\(#[^)]+\)"/, `${flag}: a gradient of token stops`);
+        assert.doesNotMatch(hi, /opacity="/, `${JSON.stringify(state)}: no opacity attribute`);
+      }
+    }
+  });
 
 test('no literal opacity, alpha or shadow in any control, in any state, or in knob.js (v4)', () => {
   for (const kind of KINDS) {
@@ -886,8 +898,74 @@ const radials = (e) => [...attrOf(e, 'd').matchAll(/M (\S+) (\S+) L (\S+) (\S+)/
     return [Math.hypot(x0, y0), Math.hypot(x1, y1), angleAt(x1, y1)];
   });
 const knobAngle = (v, p = LIN) => -135 + 270 * toNorm(v, p);
+/** Every vertex of a polygon path ('M x y L x y ... Z') as [x, y]. */
+const vertices = (e) => [...attrOf(e, 'd').matchAll(/[ML] (\S+) (\S+)/g)]
+  .map((m) => [Number(m[1]), Number(m[2])]);
 
-test('knob: the unlit arc (width 1.5) and the value arc (width 3) are r 19, over 270°; skirt Ø32',
+// ---------------------------------------------------------------- slice A: a solid part
+// Plan F013 look audit, slice A (K1, K2, K3, K12, K13, K6-core): the knob is a moulded part on the
+// plate, not a printed bullseye. Assertions 2, 4, 5 and 7 are the cast-shadow, pointer, teeth and
+// hover tests below; 8 is in ui-synth-tokens.test.mjs.
+
+test('slice A 1: the skirt is filled with the cap token, never the card or the plate', () => {
+  for (const state of [{}, { hover: true }, { dragging: true }, { focus: true }]) {
+    const skirt = part(draw('knob', { state }), 'data-skirt');
+    assert.equal(attrOf(skirt, 'fill'), TOKENS.control.cap, JSON.stringify(state));
+    for (const not of [TOKENS.surface.card, TOKENS.surface.plateHi]) {
+      assert.notEqual(attrOf(skirt, 'fill'), not);
+    }
+  }
+});
+
+test('slice A 3: a side-wall linear and a sheen radial gradient, ids from uid, no stop-opacity',
+  () => {
+    const t = TOKENS.control;
+    const gradients = (svg) => [...svg.matchAll(/<(linear|radial)Gradient\b[^>]*\sid="([^"]+)"/g)]
+      .map((m) => ({ kind: m[1], id: m[2] }));
+    const a = draw('knob', { uid: 'osc1.cutoff' });
+    const b = draw('knob', { uid: 'osc2.cutoff' });
+    for (const [svg, uid] of [[a, 'osc1.cutoff'], [b, 'osc2.cutoff']]) {
+      const g = gradients(svg);
+      assert.deepEqual(g.map((x) => x.kind).sort(), ['linear', 'radial'], uid);
+      for (const { id } of g) assert.ok(id.includes(uid), `${id} names ${uid}`);
+      assert.ok(part(svg, 'data-side').includes(`fill="url(#${g.find((x) => x.kind
+        === 'linear').id})"`), 'the side wall paints the linear gradient');
+      assert.ok(part(svg, 'data-sheen').includes(`fill="url(#${g.find((x) => x.kind
+        === 'radial').id})"`), 'the sheen paints the radial gradient');
+      const stops = [...svg.matchAll(/<stop\b[^>]*>/g)].map((m) => m[0]);
+      assert.equal(stops.length, 4, 'two stops each');
+      for (const st of stops) {
+        assert.doesNotMatch(st, /opacity/, `no stop-opacity: ${st}`);
+        assert.ok([t.cap, t.capHi].includes(attrOf(st, 'stop-color')), `a token stop: ${st}`);
+      }
+      assert.doesNotMatch(svg, /stop-opacity|fill-opacity|\sopacity=/);
+      const sheen = /<radialGradient\b[^>]*>/.exec(svg)[0];
+      assert.deepEqual(['r', 'fx', 'fy'].map((k) => numOf(sheen, k)), [12, -4, -5], 'K12');
+    }
+    const ids = [...(a + b).matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]);
+    assert.equal(new Set(ids).size, ids.length, `no duplicate id: ${ids}`);
+    // Without a uid the ids come from the parameter's id, so the markup stays a setpoint.
+    const plain = draw('knob');
+    assert.equal(plain, draw('knob'));
+    for (const { id } of gradients(plain)) assert.ok(id.includes(LIN.id), id);
+    const other = controlSvg({ kind: 'knob', value: 70, param: { ...LIN, id: 'drive' },
+      tokens: TOKENS });
+    assert.ok(gradients(other).every(({ id }) => id.includes('drive')));
+    assert.notEqual(gradients(other)[0].id, gradients(plain)[0].id);
+  });
+
+test('slice A 6: the value arc\'s outer edge plus a 0.5 gap is inside the ticks (r 20.75)', () => {
+  for (const zoom of [1.25, 2]) {
+    const svg = draw('knob', { zoom });
+    const ring = part(svg, 'data-ring');
+    const tickIn = Math.min(...radials(part(svg, 'data-ticks')).map(([r0]) => r0));
+    near(tickIn, 20.75, 0.02);
+    assert.ok(arcOf(ring).r + numOf(ring, 'stroke-width') / 2 + 0.5 <= tickIn + 1e-9,
+      `${arcOf(ring).r} + ${numOf(ring, 'stroke-width') / 2} + 0.5 > ${tickIn}`);
+  }
+});
+
+test('knob: the unlit arc (1.25) and the value arc (2.5) are r 18.5, over 270°; skirt Ø32',
   () => {
   const t = TOKENS.control;
   for (const state of [{}, { dragging: true }]) {
@@ -895,22 +973,22 @@ test('knob: the unlit arc (width 1.5) and the value arc (width 3) are r 19, over
       const svg = draw('knob', { state, zoom });
       const track = part(svg, 'data-track');
       const a = arcOf(track);
-      assert.equal(a.r, 19);
+      assert.equal(a.r, 18.5);
       near(a.from, -135, 0.05);
       near(a.to, 135, 0.05);
       assert.equal(attrOf(track, 'stroke'), t.track);
-      assert.equal(numOf(track, 'stroke-width'), 1.5);
+      assert.equal(numOf(track, 'stroke-width'), 1.25);
       const ring = part(svg, 'data-ring');
       const v = arcOf(ring);
-      assert.equal(v.r, 19);
+      assert.equal(v.r, 18.5);
       near(v.from, -135, 0.05);
       near(v.to, knobAngle(70), 0.05);
       assert.equal(attrOf(ring, 'stroke'), t.ring);
-      assert.equal(numOf(ring, 'stroke-width'), 3, `${JSON.stringify(state)}: never thicker`);
+      assert.equal(numOf(ring, 'stroke-width'), 2.5, `${JSON.stringify(state)}: never thicker`);
       const skirt = part(svg, 'data-skirt');
-      assert.match(skirt, /^<circle /);
-      assert.equal(numOf(skirt, 'r'), 16, 'Ø32');
-      assert.equal(attrOf(skirt, 'stroke'), t.edge);
+      assert.match(skirt, /^<path /);
+      near(Math.max(...vertices(skirt).map(([x, y]) => Math.hypot(x, y))), 16, 0.02);
+      assert.equal(attrOf(skirt, 'stroke'), TOKENS.surface.edge, 'K3: the edge in surface.edge');
       assert.equal(numOf(skirt, 'stroke-width'), 1.5);
       const cap = part(svg, 'data-cap');
       assert.match(cap, /^<circle /);
@@ -920,56 +998,98 @@ test('knob: the unlit arc (width 1.5) and the value arc (width 3) are r 19, over
   }
 });
 
-test('knob: 24 knurl ticks from r 14.5 to 16, evenly spaced, in the decorative knurl', () => {
-  const knurl = part(draw('knob'), 'data-knurl');
-  assert.equal(attrOf(knurl, 'stroke'), TOKENS.control.knurl);
-  const ticks = radials(knurl);
-  assert.equal(ticks.length, 24);
-  ticks.forEach(([r0, r1, deg], i) => {
-    near(r0, 14.5, 0.02);
-    near(r1, 16, 0.02);
-    near(((deg - ticks[0][2] + 360) % 360), i * 15, 0.1);
-  });
-});
-
-test('knob: the pointer runs from r 4 to r 11, 2.5 wide and round, at the value\'s angle', () => {
-  const t = TOKENS.control;
-  for (const value of [0, 25, 50, 100]) {
-    const ptr = part(draw('knob', { value }), 'data-pointer');
-    assert.match(ptr, /^<line /);
-    const [x1, y1, x2, y2] = ['x1', 'y1', 'x2', 'y2'].map((a) => numOf(ptr, a));
-    near(Math.hypot(x1, y1), 4, 0.02);
-    near(Math.hypot(x2, y2), 11, 0.02);
-    near(angleAt(x2, y2), knobAngle(value), 0.1);
-    assert.equal(attrOf(ptr, 'stroke'), t.pointer);
-    assert.equal(numOf(ptr, 'stroke-width'), 2.5);
-    assert.equal(attrOf(ptr, 'stroke-linecap'), 'round');
+// Slice A (K3): the skirt is one closed toothed outline, 40 teeth from r 16 to r 15.4, and the
+// dashed 24-stroke knurl ring that made four concentric rings a bullseye is gone.
+test('knob: the skirt is one closed path of 40 teeth, r 16 and 15.4 alternating; no knurl', () => {
+  for (const state of [{}, { disabled: true }, { hover: true }]) {
+    const svg = draw('knob', { state });
+    const skirt = part(svg, 'data-skirt');
+    assert.match(attrOf(skirt, 'd'), /^M [^MZ]+ Z$/, 'one closed path');
+    const r = vertices(skirt).map(([x, y]) => Math.hypot(x, y));
+    assert.equal(r.length, 80, '40 teeth: 80 vertices');
+    r.forEach((ri, i) => near(ri, i % 2 ? 15.4 : 16, 0.02));
+    const deg = vertices(skirt).map(([x, y]) => angleAt(x, y));
+    deg.forEach((d, i) => near(((d - deg[0] + 720) % 360), i * 4.5, 0.15));
+    assert.equal(part(svg, 'data-knurl'), null, `${JSON.stringify(state)}: no knurl layer`);
+    assert.ok(!svg.includes(`stroke="${TOKENS.control.knurl}"`), 'nothing in --osc-border');
   }
 });
 
-test('knob: hover lights the skirt edge in control.pointer', () => {
+// Slice A (K2): a butt-ended pointer from r 5 to r 12 on the cap, continued on the skirt by a
+// second segment from r 12.5 to r 16 at the same angle, as a moulded line, not a clock hand.
+test('knob: the pointer runs r 5 to 12, 2 wide and butt, and on the skirt r 12.5 to 16', () => {
   const t = TOKENS.control;
-  assert.equal(attrOf(part(draw('knob'), 'data-skirt'), 'stroke'), t.edge);
-  assert.equal(attrOf(part(draw('knob', { state: { hover: true } }), 'data-skirt'), 'stroke'),
-    t.pointer);
+  for (const value of [0, 25, 50, 100]) {
+    const svg = draw('knob', { value });
+    const ptr = part(svg, 'data-pointer');
+    assert.match(ptr, /^<line /);
+    const [x1, y1, x2, y2] = ['x1', 'y1', 'x2', 'y2'].map((a) => numOf(ptr, a));
+    near(Math.hypot(x1, y1), 5, 0.02);
+    near(Math.hypot(x2, y2), 12, 0.02);
+    near(angleAt(x2, y2), knobAngle(value), 0.1);
+    assert.equal(attrOf(ptr, 'stroke'), t.pointer);
+    assert.equal(numOf(ptr, 'stroke-width'), 2);
+    assert.equal(attrOf(ptr, 'stroke-linecap'), 'butt');
+    const sk = part(svg, 'data-pointer-skirt');
+    assert.ok(sk, `v ${value}: a pointer segment on the skirt`);
+    const [s1, t1, s2, t2] = ['x1', 'y1', 'x2', 'y2'].map((a) => numOf(sk, a));
+    near(Math.hypot(s1, t1), 12.5, 0.02);
+    near(Math.hypot(s2, t2), 16, 0.02);
+    near(angleAt(s2, t2), knobAngle(value), 0.1);
+    assert.equal(numOf(sk, 'stroke-width'), 1.5);
+    assert.equal(attrOf(sk, 'stroke'), t.pointer);
+    assert.equal(attrOf(sk, 'stroke-linecap'), 'butt');
+  }
 });
 
-test('knob: the cap shadow is hw-shadow in control.shade, 1 down, 2 while dragged', () => {
-  for (const [state, dy] of [[{}, 1], [{ dragging: true }, 2], [{ focus: true }, 1]]) {
+// Slice A (K6-core): the hover overlay is always emitted, as the panel's focus ring is, hidden
+// by visibility unless hovered, so a host can reveal it with group-hover; the skirt's own edge
+// stays surface.edge in every state but disabled.
+test('knob: a data-hover skirt-edge overlay in control.pointer is always emitted', () => {
+  const t = TOKENS.control;
+  for (const state of [{}, { focus: true }, { dragging: true }, { hover: true },
+    { disabled: true }, { disabled: true, hover: true }]) {
     const svg = draw('knob', { state });
-    const sh = part(svg, 'data-shadow');
+    const h = part(svg, 'data-hover');
+    assert.ok(h, `${JSON.stringify(state)}: the overlay`);
+    assert.equal(attrOf(h, 'd'), attrOf(part(svg, 'data-skirt'), 'd'), 'the skirt\'s outline');
+    assert.equal(attrOf(h, 'fill'), 'none');
+    assert.equal(attrOf(h, 'stroke'), t.pointer);
+    const shown = state.hover && !state.disabled;
+    assert.equal(attrOf(h, 'visibility'), shown ? undefined : 'hidden', JSON.stringify(state));
+    assert.ok(svg.indexOf(h) > svg.indexOf(part(svg, 'data-skirt')), 'over the skirt');
+  }
+});
+
+// Slice A (K1, K6-core): the knob casts a shadow on the plate, r = skirt + 0.5 offset down and
+// right, before (under) the skirt, in the depth shade at hw-shadow (the depth roles of 21's
+// amendment, ui-synth-tokens.test.mjs); a drag lifts it to shadowDragDy. The cap casts none
+// on the skirt: cap and skirt are one moulded body.
+test('knob: a cast shadow at hw-shadow in control.shade, offset down-right, under the skirt',
+  () => {
+  const rest = part(draw('knob'), 'data-cast-shadow');
+  for (const [state, drag] of [[{}, false], [{ dragging: true }, true], [{ focus: true }, false],
+    [{ disabled: true }, false]]) {
+    const svg = draw('knob', { state });
+    const sh = part(svg, 'data-cast-shadow');
     assert.ok(sh, JSON.stringify(state));
     assert.match(sh, /^<circle /);
     assert.match(sh, /\sclass="opacity-hw-shadow"/);
     assert.doesNotMatch(sh, /opacity="/);
     assert.equal(attrOf(sh, 'fill'), TOKENS.control.shade, 'the depth shade (21, amendment a-e)');
     assert.equal(attrOf(sh, 'stroke'), 'none');
-    assert.deepEqual([numOf(sh, 'cx'), numOf(sh, 'cy'), numOf(sh, 'r')], [0, dy, 12]);
-    assert.ok(svg.indexOf(sh) < svg.indexOf(part(svg, 'data-cap')), 'under the cap');
+    assert.equal(numOf(sh, 'r'), 16.5, 'skirt + 0.5');
+    assert.ok(numOf(sh, 'cx') > 0 && numOf(sh, 'cy') > 0, 'down and to the right');
+    assert.ok(svg.indexOf(sh) < svg.indexOf(part(svg, 'data-skirt')), 'under the skirt');
+    assert.equal(part(svg, 'data-shadow'), null, 'no cap shadow on the skirt');
+    if (drag) assert.ok(numOf(sh, 'cy') > numOf(rest, 'cy'), 'a drag moves it further');
+    else assert.equal(sh, rest, `${JSON.stringify(state)}: at rest`);
   }
+  assert.equal(numOf(part(draw('knob', { state: { dragging: true } }), 'data-cast-shadow'), 'cy'),
+    KNOB_CORE.KNOB.shadowDragDy, 'the drag offset is shadowDragDy');
 });
 
-test('knob: 11 scale ticks from r 20.5 to 22, only at zoom 1.25 or more', () => {
+test('knob: 11 scale ticks from r 20.75 to 22, only at zoom 1.25 or more', () => {
   for (const zoom of [0.5, 1, 1.2]) assert.equal(part(draw('knob', { zoom }), 'data-ticks'), null);
   for (const zoom of [1.25, 2, 3]) {
     const ticks = part(draw('knob', { zoom }), 'data-ticks');
@@ -979,7 +1099,7 @@ test('knob: 11 scale ticks from r 20.5 to 22, only at zoom 1.25 or more', () => 
     const r = radials(ticks);
     assert.equal(r.length, 11);
     r.forEach(([r0, r1, deg], i) => {
-      near(r0, 20.5, 0.02);
+      near(r0, 20.75, 0.02);
       near(r1, 22, 0.02);
       near(deg, -135 + i * 27, 0.1);
     });
@@ -1009,7 +1129,7 @@ test('knob: a range across zero starts its arc at 12 o\'clock, with a detent tic
     const d = part(controlSvg({ kind: 'knob', value, param: bi, tokens: TOKENS }), 'data-detent');
     assert.match(d, /^<line /);
     const [x1, y1, x2, y2] = ['x1', 'y1', 'x2', 'y2'].map((k) => numOf(d, k));
-    near(Math.hypot(x1, y1), 20.5, 0.02);
+    near(Math.hypot(x1, y1), 20.75, 0.02);
     near(Math.hypot(x2, y2), 21.75, 0.02, 'its butt corners stay inside r 22 at any angle');
     near(angleAt(x2, y2), 0, 0.05);
     assert.equal(attrOf(d, 'stroke'), t.track);
@@ -1053,8 +1173,7 @@ test('knob: the applied value is an arc at r 13.5 in control.applied, from the o
 // 1.02:1 in the light theme), so the lit arc is told from the unlit one by width: the track is
 // at most half the value arc and lies wholly under it (review of S2, finding 1).
 test('knob: the lit arc is told from the unlit arc by width: the track is half or less', () => {
-  for (const state of [{}, { focus: true }, { dragging: true }, { hover: true },
-    { disabled: true }]) {
+  for (const state of [{}, { focus: true }, { dragging: true }, { hover: true }]) {
     for (const zoom of [1, 2, 3]) {
       for (const value of [10, 70, 100]) {
         const svg = draw('knob', { state, zoom, value });
@@ -1072,9 +1191,9 @@ test('knob: the lit arc is told from the unlit arc by width: the track is half o
   }
 });
 
-// The applied arc sits on the skirt face (surface.card), between the cap's outline and the
-// knurl, so no part of it lies on the skirt edge or the knurl (review of S2, finding 2).
-test('knob: the applied arc lies on the skirt face, clear of the cap, the knurl and the edge',
+// The applied arc sits on the skirt face (the cap's colour since slice A), between the cap's
+// outline and the teeth, so no part of it lies on the skirt edge (review of S2, finding 2).
+test('knob: the applied arc lies on the skirt face, clear of the cap, the teeth and the edge',
   () => {
     for (const zoom of [1, 2, 3]) {
       for (const [value, applied] of [[70, 30], [70, 0], [10, 100]]) {
@@ -1084,30 +1203,64 @@ test('knob: the applied arc lies on the skirt face, clear of the cap, the knurl 
         const [r, w] = [arcOf(a).r, numOf(a, 'stroke-width')];
         const cap = part(svg, 'data-cap');
         const capOut = numOf(cap, 'r') + numOf(cap, 'stroke-width') / 2;
-        const knurlIn = Math.min(...radials(part(svg, 'data-knurl')).map(([r0]) => r0));
         const skirt = part(svg, 'data-skirt');
-        const edgeIn = numOf(skirt, 'r') - numOf(skirt, 'stroke-width') / 2;
+        const toothIn = Math.min(...vertices(skirt).map(([x, y]) => Math.hypot(x, y)));
+        const edgeIn = toothIn - numOf(skirt, 'stroke-width') / 2;
         const where = `zoom ${zoom} v ${value} a ${applied}: r ${r} w ${w}`;
         assert.ok(r - w / 2 >= capOut, `${where}: clear of the cap (${capOut})`);
-        assert.ok(r + w / 2 <= knurlIn, `${where}: clear of the knurl (${knurlIn})`);
-        assert.ok(r + w / 2 <= edgeIn, `${where}: clear of the skirt edge (${edgeIn})`);
-        assert.equal(attrOf(skirt, 'fill'), TOKENS.surface.card, 'drawn over the skirt face');
+        assert.ok(r + w / 2 <= edgeIn, `${where}: clear of the teeth and edge (${edgeIn})`);
+        assert.equal(attrOf(skirt, 'fill'), TOKENS.control.cap, 'drawn over the skirt face');
         assert.ok(svg.indexOf(skirt) < svg.indexOf(a), `${where}: over the skirt`);
         assert.ok(svg.indexOf(a) < svg.indexOf(cap), `${where}: under the cap`);
       }
     }
   });
 
-test('knob: disabled is a dashed value arc and a dim pointer, over the 3:1 track', () => {
-  const t = TOKENS.control;
-  const off = draw('knob', { state: { disabled: true } });
-  const ring = part(off, 'data-ring');
-  assert.equal(attrOf(ring, 'stroke'), t.disabled);
-  assert.match(attrOf(ring, 'stroke-dasharray') || '', /^\d+(\.\d+)? \d+(\.\d+)?$/);
-  assert.notEqual(attrOf(ring, 'stroke-linecap'), 'round', 'round ends would close the gaps');
-  assert.equal(attrOf(part(off, 'data-pointer'), 'stroke'), t.disabled);
-  assert.ok(!off.includes(`stroke="${t.ring}"`));
-  assert.equal(attrOf(part(draw('knob'), 'data-ring'), 'stroke-dasharray'), undefined);
+// C1 (one disabled language, co-signed by p2 and dev-53): a disabled knob draws no value arc,
+// the track only; its cap and skirt flattened to plateLo (no side wall, no sheen); its pointer
+// and its edge in control.disabled. The absent value mark is a shape cue, so S7 holds without
+// colour alone.
+test('knob: disabled (C1) is the track only, a flat plateLo body, pointer and edge disabled',
+  () => {
+    const t = TOKENS.control;
+    const BIP = { ...LIN, min: -50, max: 50, default: 0 };
+    for (const p of [LIN, BIP, LOG]) {
+      for (let i = 0; i <= 20; i++) {
+        const value = fromNorm(i / 20, p);
+        for (const state of [{ disabled: true }, { disabled: true, focus: true, hover: true,
+          dragging: true }]) {
+          const off = controlSvg({ kind: 'knob', value, param: p, tokens: TOKENS, state });
+          const where = `${p.id} n ${i / 20} ${JSON.stringify(state)}`;
+          assert.equal(part(off, 'data-ring'), null, `${where}: no value arc`);
+          assert.ok(part(off, 'data-track'), `${where}: the track`);
+          assert.doesNotMatch(off, /stroke-dasharray/, `${where}: no dashes`);
+          assert.ok(!off.includes(`stroke="${t.ring}"`), where);
+          for (const flag of ['data-skirt', 'data-cap']) {
+            assert.equal(attrOf(part(off, flag), 'fill'), TOKENS.surface.plateLo,
+              `${where} ${flag}`);
+          }
+          assert.equal(part(off, 'data-side'), null, `${where}: flat, no side wall`);
+          assert.equal(part(off, 'data-sheen'), null, `${where}: flat, no sheen`);
+          assert.equal(attrOf(part(off, 'data-skirt'), 'stroke'), t.disabled, `${where}: edge`);
+          for (const flag of ['data-pointer', 'data-pointer-skirt']) {
+            assert.equal(attrOf(part(off, flag), 'stroke'), t.disabled, `${where} ${flag}`);
+          }
+        }
+      }
+    }
+    assert.ok(part(draw('knob'), 'data-ring'), 'an enabled knob keeps its value arc');
+  });
+
+// C1 rewrote S7's comment in knob.js: no dashed disabled arc remains, and the comment says the
+// disabled language (the absent value mark is the cue, not colour alone).
+test('knob.js: no disabledDash; the S7 comment states the one disabled language (C1)', () => {
+  const src = readFileSync(new URL('../../src/js/ui/synth/knob.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(src, /disabledDash|DASH_W|stroke-dasharray/);
+  const c1 = /\/\/[^\n]*\bC1\b[^]*?(?=\n(?!\s*\/\/))/.exec(src);
+  assert.ok(c1, 'a comment naming C1');
+  for (const words of ['no value arc', 'track only', 'plateLo', 'control.disabled', 'S7']) {
+    assert.ok(c1[0].replace(/\s*\/\/\s*/g, ' ').includes(words), `the C1 comment says ${words}`);
+  }
 });
 
 // S7 (W1b re-review): the unlit arc took the knurl's tone while disabled, 1.10:1 (dark) and
@@ -1123,46 +1276,6 @@ test('knob: the unlit arc is control.track in every state, disabled too (S7)', (
     }
   }
 });
-
-// S7 (W1b re-review): '2 3' on a 3-unit stroke drew a chain of blobs at 64 px (a dash shorter
-// than its width). The dashes are now sized from the arc's length and the stroke's width.
-test('knob: a disabled value arc has no dash shorter than its width, at 44 and 64 px, zoom 1..3',
-  () => {
-    const BIP = { ...LIN, min: -50, max: 50, default: 0 };
-    let dashed = 0;
-    for (const px of [44, 64]) {
-      for (const zoom of [1, 1.5, 2, 2.5, 3]) {
-        const scale = (px / CONTROL_BOX.knob.width) * zoom;
-        for (const p of [LIN, BIP, LOG]) {
-          for (let i = 0; i <= 100; i++) {
-            const value = fromNorm(i / 100, p);
-            const svg = controlSvg({ kind: 'knob', value, param: p, tokens: TOKENS,
-              zoom: zoom * (px / CONTROL_BOX.knob.width), state: { disabled: true } });
-            const ring = part(svg, 'data-ring');
-            if (!ring) continue;
-            const where = `${px} px zoom ${zoom} ${p.id} n ${i / 100}`;
-            const w = numOf(ring, 'stroke-width');
-            const { from, to } = arcOf(ring);
-            const len = (19 * Math.PI * Math.abs(to - from)) / 180;
-            const dash = attrOf(ring, 'stroke-dasharray');
-            if (!dash) {
-              assert.ok(len < 4 * w, `${where}: solid only when too short for two dashes`);
-              assert.notEqual(attrOf(ring, 'stroke-linecap'), 'round', where);
-              continue;
-            }
-            dashed += 1;
-            const [d, g] = dash.split(' ').map(Number);
-            assert.ok(d * scale >= w * scale, `${where}: dash ${d * scale} px under ${w * scale}`);
-            assert.ok(g * scale >= (w * scale) / 2, `${where}: the gap stays open`);
-            const n = Math.round((len + g) / (d + g));
-            assert.ok(n >= 2, where);
-            near(n * d + (n - 1) * g, len, 0.02 * n + 0.05);
-          }
-        }
-      }
-    }
-    assert.ok(dashed > 500, `${dashed} dashed arcs checked`);
-  });
 
 test('fader and switch: the slot and the body are outlined in control.track (3:1)', () => {
   const t = TOKENS;
