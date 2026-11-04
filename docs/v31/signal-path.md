@@ -184,8 +184,12 @@ opening, focus is on the Studio heading and Back returns to the Playground.
 
 The copy plays as long as the Playground plays the voice. A held voice (a held tone, AM, a dual
 voice) gets one gate from 0 to the Playground's safety limit minus the release, since without
-continuous playback the Playground holds it for that limit. A finite tone longer than the limit
-opens at the limit, as the Playground plays it. With continuous playback allowed a held voice has
+continuous playback the Playground holds it for at most that limit (a short TRIGGER or a WAV
+export plays the shorter of the voice's duration and the limit). A finite tone longer than the
+limit opens at the limit, as the Playground plays it. Live, the Studio's transport still ends 10 ms
+after the last gate and fades, so a release longer than about 25 ms is cut short when played
+live (a 300 ms release measured about 22 ms); the offline render plays the full release, and
+K179 lets the live release finish. With continuous playback allowed a held voice has
 no end, so it is refused. Opening starts and stops nothing: a sounding Playground voice keeps
 sounding until Studio Play takes the output.
 

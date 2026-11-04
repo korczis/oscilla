@@ -8,13 +8,13 @@ import { announceRedo, announceUndo } from '../../../studio/a11y.js';
 import { templateModel } from '../../../studio/templates/index.js';
 import { openModal, closeModal } from '../../dialogs.js';
 
-/** First keyboard-reachable control inside a pane. */
 /** The key of studioWhatWouldBeLost's unsaved-changes entry (the voice guard selects it). */
 export const UNSAVED_CHANGES_KEY = 'unsaved-changes';
 /** That entry's label for a document titled `title`. */
 export const unsavedChangesLabel = (title) => `Unsaved changes to ${
   title || 'the Studio document'}`;
 
+/** First keyboard-reachable control inside a pane. */
 const TABBABLE = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), '
   + '[tabindex="0"]';
 

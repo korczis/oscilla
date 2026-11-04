@@ -75,11 +75,12 @@ export const VOICE_OPEN_TEXT = Object.freeze({
   continuous: 'This sweep repeats without an end, cycle after cycle, and a Studio timeline holds '
     + 'a finite list of clips. Choose a number of repeats to open it.',
   held: 'Continuous playback is allowed, so the Playground holds this voice until you release '
-    + 'it, and a Studio timeline has an end. Turn continuous playback off to open it for the '
-    + 'safety limit the Playground holds it for.',
+    + 'it, and a Studio timeline has an end. Turn continuous playback off to open it for at '
+    + 'most the safety limit the Playground holds it for.',
   short: (ms) => `A tone of ${ms} ms is shorter than its attack and release allow: the `
     + 'Playground shortens them for that tone, and the Studio Envelope has one attack and one '
-    + 'release for every note. Lengthen the tone or shorten the attack or release to open it.',
+    + 'release for every note. Lengthen the tone (for a held voice: raise the safety limit) or '
+    + 'shorten the attack or release to open it.',
   release: (ms) => `The Envelope Lab's release of ${ms} ms is shorter than the 5 ms the `
     + 'Playground releases a note with, so the Studio Envelope would end it sooner.',
   range: (msg) => `The voice has a value the Studio cannot hold: ${msg}`,
