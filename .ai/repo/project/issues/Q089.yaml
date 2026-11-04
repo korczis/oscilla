@@ -22,4 +22,16 @@ validation:
 evidence_required:
   - "owner_decision"
 created_at: 2026-11-03
-updated_at: 2026-11-03
+updated_at: 2026-11-04T18:24:25Z
+started_at: 2026-11-04T18:24:11Z
+started_event: sha256:6db1f7df4844791de65bc6734114e1d14dea62d9c078100c815e39f99192a90e
+completed_at: 2026-11-04T18:24:25Z
+completed_event: sha256:b500c59c625ac8fc16095c51506f709fd14ac653eeda7cd138da58833d68f279
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "AskUserQuestion in Claude Code session oscilla-21, 2026-11-03, after the owner linked their ChatGPT Oscilla conversation 'Kompletní redesign landing page'"
+    result: "Owner answered two questions. (1) What the plain address /oscilla/ opens: 'New live landing' — /oscilla/ opens a new 'landing' workspace in the same app on the one engine, the Playground moves to #m=playground, every existing #m=... link keeps opening its workspace, and Q004 is recorded as superseded. (2) The playable instrument at the top of the landing on a phone, sounding on the first tap: 'XY pad + keyboard' — the existing XY pad (K097) on the Synth voice with the touch keyboard under it. The ChatGPT conversation's own words are quoted in Q089's why."
+    artifact: ".ai/repo/project/issues/Q089.yaml"
+    commit: a10abde2555fdf117f37e2c336d6927c762805ce
+    recorded_at: 2026-11-04T18:24:21Z
