@@ -262,6 +262,7 @@ row({ id: 'source.hold.keyboard', ws: 'playground', control: '#osc-hold-play', h
   expect: (s) => !!s.engine.voice && s.app.playing && /PLAY/i.test(s.text.sbState || '') });
 row({ id: 'source.hold.pointer', ws: 'playground', control: '#osc-hold-play', how: 'pointer',
   act: async (page) => {
+    await page.locator('#osc-hold-play').scrollIntoViewIfNeeded();
     const b = await page.locator('#osc-hold-play').boundingBox();
     await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
     await page.mouse.down();
@@ -1338,17 +1339,21 @@ family({ id: 'nav.items', control: '[data-osc^="nav."]:not([data-osc^="nav-group
     return { members: op.WORKSPACES.length, bad };
   } });
 family({ id: 'nav.groups', control: '[id^="osc-nav-group-"], [data-osc^="nav-group."]',
-  why: 'each navigation group opens by pointer and closes on Escape',
+  why: 'each navigation group of the Pro sidebar (F002, a disclosure) toggles by pointer and '
+    + 'toggles back',
   run: async (page) => {
     const ids = await page.$$eval('[id^="osc-nav-group-"]', (e) => e.map((x) => x.id));
     const bad = [];
+    const expanded = (id) => page.evaluate((i) => document.getElementById(i)
+      .getAttribute('aria-expanded') === 'true', id);
     for (const id of ids) {
+      const was = await expanded(id);
       await page.click(`#${id}`);
-      await until(() => page.evaluate((i) => document.getElementById(i)
-        .getAttribute('aria-expanded') === 'true', id), { ms: ROW_MS, what: `${id} opens` });
-      await page.keyboard.press('Escape');
-      await until(() => page.evaluate((i) => document.getElementById(i)
-        .getAttribute('aria-expanded') !== 'true', id), { ms: ROW_MS, what: `${id} closes` });
+      await until(async () => (await expanded(id)) !== was, { ms: ROW_MS,
+        what: `${id} ${was ? 'collapses' : 'expands'}` });
+      await page.click(`#${id}`);
+      await until(async () => (await expanded(id)) === was, { ms: ROW_MS,
+        what: `${id} toggles back` });
     }
     return { members: ids.length, bad };
   } });
@@ -1458,8 +1463,9 @@ family({ id: 'links.external', control: 'a[href^="http"]',
     return { members: links.length, bad };
   } });
 // the logo goes home (H004 B6): from another workspace it opens the Playground
-both({ id: 'header.brand', ws: 'filter', control: 'a.osc-brand',
-  pointer: D.click('a.osc-brand'), keyboard: D.keys('a.osc-brand', 'Enter'),
+both({ id: 'header.brand', ws: 'filter', control: '[data-osc="header.brand"]',
+  pointer: D.click('[data-osc="header.brand"]'),
+  keyboard: D.keys('[data-osc="header.brand"]', 'Enter'),
   expect: (s) => s.workspace === 'playground' });
 family({ id: 'links.internal', control: 'a[href="#osc-main"], a[href^="mailto:"]',
   why: 'the skip link, by Enter, takes the page to the instrument; '
@@ -1638,6 +1644,18 @@ for (const [c, by] of [['#osc-synth-pick', 'synth.cjs'],
 }
 // About's "What comes next": its Later list folds open and shut (app.cjs drives and judges it)
 delegated('[data-osc="about.next.later-toggle"]', 'app.cjs', 'About, what comes next');
+// Lane A's Pro shell (F002, #386): each control's effect is proven by the suite named.
+delegated('#osc-sidebar-toggle', 'ui-flowbite-pro.cjs shell-desktop',
+  'the Pro shell: the sidebar collapses to icons and back');
+delegated('#osc-drawer-toggle', 'ui-flowbite-pro.cjs shell-phone', 'the Pro shell: the phone drawer');
+delegated('[data-osc="sidebar.backdrop"]', 'ui-flowbite-pro.cjs shell-phone app.cjs',
+  'the Pro shell: the drawer backdrop closes the drawer');
+delegated('#osc-nav-search', 'ui-flowbite-pro.cjs shell-search',
+  'the Pro shell: the workspace search filters and Enter opens');
+delegated('#osc-nav-search-drawer', 'ui-flowbite-pro.cjs shell-search',
+  'the Pro shell: the drawer\'s workspace search');
+delegated('#osc-related-menu', 'ui-current.cjs app.cjs link-integrity.cjs related-census',
+  'the page header\'s Related menu (lane A wave 3)');
 
 // The dock's oscillator group: which VCO the waveform group edits (synth/dock.js). Its effect
 // is read from the Studio store: the waveform group then shows that oscillator's waveform.
