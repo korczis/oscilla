@@ -23,8 +23,21 @@ const ARIA = ['aria-valuemin', 'aria-valuemax', 'aria-valuenow', 'aria-valuetext
 
 export function createGestures({ controlOf, valueOf, setControl, handle, say, label }) {
   let burst = null;
+  let own = false; // the wheel's own setControl: not a gesture that flushes it
+
+  /** Close an open wheel burst now (21's R3): history nests gestures and commits the outermost,
+   *  so any other edit made while a burst waits would fold into it, and its timer firing
+   *  mid-drag would commit the drag early. */
+  function flush() {
+    if (own || !burst) return;
+    clearTimeout(burst.timer);
+    burst = null;
+    handle().endGesture();
+  }
+  const wheelSet = (cid, v) => { own = true; try { setControl(cid, v); } finally { own = false; } };
 
   function press(cid, x, e) {
+    flush(); // before the drag's own gesture begins, so the burst ends at its own level
     return { cid, param: x.c.param, el: e.target.closest('[data-knob]'), moved: false,
       anchor: dragAnchor(valueOf(x), { x: e.clientX, y: e.clientY }, { fine: e.shiftKey }) };
   }
@@ -47,6 +60,8 @@ export function createGestures({ controlOf, valueOf, setControl, handle, say, la
     const cid = k ? k.dataset.knob : o && o.dataset.option;
     const x = cid && controlOf(cid);
     if (!x || !x.node || (k && k.getAttribute('aria-disabled') === 'true')) return;
+    // A pinch (Ctrl or Cmd) and a horizontal swipe stay the page's (21's R8).
+    if (e.ctrlKey || e.metaKey || Math.abs(e.deltaX || 0) > Math.abs(e.deltaY || 0)) return;
     e.preventDefault();
     if (!burst || burst.cid !== cid) {
       if (burst) { clearTimeout(burst.timer); handle().endGesture(); }
@@ -59,7 +74,7 @@ export function createGestures({ controlOf, valueOf, setControl, handle, say, la
       const r = wheelValue(valueOf(x), e.deltaY, x.c.param, { fine: e.shiftKey,
         deltaMode: e.deltaMode, rest: burst.rest });
       burst.rest = r.rest;
-      if (r.value !== valueOf(x)) setControl(cid, r.value);
+      if (r.value !== valueOf(x)) wheelSet(cid, r.value);
       return;
     }
     burst.rest += e.deltaY * (e.deltaMode === 1 ? WHEEL_LINE_PX
@@ -67,7 +82,7 @@ export function createGestures({ controlOf, valueOf, setControl, handle, say, la
     while (Math.abs(burst.rest) >= WHEEL_NOTCH_PX) {
       const dir = burst.rest > 0 ? 1 : -1;
       burst.rest -= dir * WHEEL_NOTCH_PX;
-      setControl(cid, stepOption(x.c.param, valueOf(x), -dir));
+      wheelSet(cid, stepOption(x.c.param, valueOf(x), -dir));
     }
   }
 
@@ -109,5 +124,5 @@ export function createGestures({ controlOf, valueOf, setControl, handle, say, la
     return true;
   }
 
-  return { press, drag, wheel, choiceKey, aria, refused };
+  return { press, drag, wheel, choiceKey, aria, refused, flush };
 }

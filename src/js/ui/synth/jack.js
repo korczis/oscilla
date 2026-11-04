@@ -23,7 +23,8 @@
 export const JACK_HIT = 44;
 /** The socket ring's radius and the inner glyph's, graph units. */
 export const JACK_R = 13;
-const INNER_R = 5;
+/** Inside a seated plug (cable.js plug, ≤ 5.25): no corner of any glyph shows past it. */
+const INNER_R = 4.4;
 /** The nut's circumradius: a hexagon just outside the socket ring. */
 const NUT_R = 17;
 

@@ -6,11 +6,11 @@
 //
 // Audio: keyboard, on-screen keys and MIDI play the panel through synthSink() (midi/notes.js
 // route): the first note arms the transport, transport.live drives the Keys node; the Studio's
-// keys take studioSink() (studio-sink.js), one path on any document. Leave, Escape,
-// page hide and STOP disarm; a measurement owning the output refuses arming.
+// keys take studioSink() (studio-sink.js), one path on any document. Leave, Esc,
+// page hide and STOP disarm; a measurement owning the output refuses it.
 //
-// Tabs (Q019): Panel holds the mono voice, Engines the polyphonic engines; the keys play
-// Keys or the chosen engine through the same sink; a tab change releases held notes.
+// Tabs (Q019): Panel holds the mono voice, Engines the poly engines; the keys play Keys
+// or the chosen engine via one sink; a tab change releases held notes.
 //
 //   createSynthUi({ get, setupAudio, announce }) -> the component part
 //     get() -> { handle, transport }   the workspace's store and transport (late-bound)
@@ -135,6 +135,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     : x.node.params[x.key]);
 
   function setControl(cid, value) {
+    gestures.flush();
     const x = controlOf(cid);
     if (!x || !x.node) return null;
     if (x.c.kind === 'amount') {
