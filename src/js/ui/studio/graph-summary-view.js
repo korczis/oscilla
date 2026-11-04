@@ -28,7 +28,10 @@ const HEAD = 'flex w-full items-center gap-3 border-0 bg-transparent px-3 py-3 t
   + 'dark:hover:bg-gray-700 dark:focus-visible:ring-primary-800';
 const NODE = 'max-w-full break-words rounded border-0 bg-transparent px-0.5 py-0.5 text-left '
   + 'font-medium text-primary-700 underline-offset-2 hover:underline focus:outline-none '
-  + 'focus-visible:ring-2 focus-visible:ring-primary-300 dark:text-primary-400';
+  + 'focus-visible:ring-2 focus-visible:ring-primary-300 dark:text-primary-400 '
+  // a node link is a touch target: 44 px tall on a coarse pointer (V634's touch-target rule)
+  + '[@media(pointer:coarse)]:inline-flex [@media(pointer:coarse)]:min-h-11 '
+  + '[@media(pointer:coarse)]:items-center';
 const SMALL_BTN = 'inline-flex min-h-6 items-center rounded-lg border border-solid border-gray-300 '
   + 'bg-white px-3 py-1 text-xs font-medium text-gray-900 hover:bg-gray-100 focus:outline-none '
   + 'focus-visible:ring-2 focus-visible:ring-primary-300 dark:border-gray-600 dark:bg-gray-800 '
