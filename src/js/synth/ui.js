@@ -90,6 +90,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   const studioSink = createStudioSink({ get, setupAudio, say, registry,
     ensureAudio: () => cmp && cmp.ensureAudio && cmp.ensureAudio() });
   const dispatch = (action) => {
+    gestures.flush(); // any edit, a cable too, ends a wheel burst (21's P3)
     const r = handle().dispatch(action);
     if (!r.ok) say(r.reason, true);
     else memory.note(model());
@@ -140,7 +141,6 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     : x.node.params[x.key]);
 
   function setControl(cid, value) {
-    gestures.flush();
     const x = controlOf(cid);
     if (!x || !x.node) return null;
     if (x.c.kind === 'amount') {
@@ -625,8 +625,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     dispatch({ type: 'BATCH', label: `Restore ${m.label}`, steps });
   }
 
-  /** A knob drag abandoned (Escape, or the browser took the pointer: 21's R7): the value the
-   *  press found comes back, with no undo entry. */
+  /** A knob drag abandoned (Escape; pointercancel, 21's R7): the press's value, no undo entry. */
   function cancelKnob() {
     handle().cancelGesture();
     knob = null;

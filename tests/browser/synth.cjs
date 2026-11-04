@@ -49,6 +49,7 @@
 //              and the MG sweeps the cutoff on both pages (the 1-3 kHz band swings 10 dB+)
 //   s-studio   Open in Studio: #m=studio, the panel's nodes selected, the same revision
 //   s-escape   Escape releases a held note; leaving the workspace disarms: runtime census 0
+//   s-wheelcable a cable patched inside an open wheel burst is its own undo entry (21's P3)
 //   s-knobesc  a pressed knob takes the focus (ERG-04); Escape mid-drag (ERG-03) and a
 //              pointercancel mid-drag (21's R7) restore the value the press found, add no undo
 //              entry and leave the keys armed
@@ -686,6 +687,32 @@ function defineChecks() {
       && (await undo()) === undoBefore && (await armed()) === true;
     return { ok, start, moved, back, moved2, back2, focused, undo: [undoBefore, await undo()],
       armed: await armed() };
+  });
+
+  // 21's P3 on Train 6: a cable patched while a wheel burst is still open (within
+  // GESTURE_IDLE_MS of the last notch) is its own undo entry; it never folds into the burst.
+  def('s-wheelcable', async ({ page }) => {
+    await face(page, 'panel');
+    const depth = () => page.evaluate(() => window.OSCILLA.studio.store.debugInfo().undoDepth);
+    const k = knob(page, 'lpf.frequency');
+    await k.scrollIntoViewIfNeeded();
+    const r = await k.boundingBox();
+    const d0 = await depth();
+    await page.mouse.move(r.x + r.width / 2, r.y + r.height / 2);
+    await page.mouse.wheel(0, -100);
+    await page.evaluate(() => {
+      const press = (id) => {
+        const j = document.querySelector(`[data-jack="${id}"]`);
+        j.focus();
+        j.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      };
+      press('keys.velocity:out');
+      press('vco2.pitch:in'); // in the same task: well inside the burst's idle window
+    });
+    const two = await until(async () => ((await depth()) === d0 + 2 ? true : null),
+      { ms: 3000, what: 'the wheel turn and the cable are two undo entries' }).catch(() => false);
+    const d = await dbg(page);
+    return { ok: !!two && d.cables.length === 1, depth: [d0, await depth()], cables: d.cables };
   });
 
   def('s-refuse', async ({ page }) => {
