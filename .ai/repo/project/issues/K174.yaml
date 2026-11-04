@@ -16,6 +16,7 @@ scope:
   - "tests/README.md"
   - "dist"
 depends_on: []
+current_state: "Built by 26 in 3c22d01a (fix/synth-review-armed-sink-preset, 'Arm follows the transport'), riding train 6; this issue is closed by that change, not a new build. Done with evidence once it is on main and the criteria below hold there."
 acceptance_criteria:
   - "Fail-first: a unit test on the fake transport arms the Synth, stops the transport from outside it and asserts the Synth reads armed false and that Disarm (or Arm) acts on the first press; it fails on the merge base (project.fail-first)."
   - "Browser (tests/browser/synth.cjs, every gate browser): Arm in the Synth, Studio Stop, back to the Synth: the button reads Arm and pressing it arms."

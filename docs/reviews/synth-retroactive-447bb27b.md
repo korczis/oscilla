@@ -22,18 +22,18 @@
 
 | id | severity | status | issue / owner |
 |---|---|---|---|
-| S1 | P1 | open, verified | K174 (26) |
-| S2 | P1 | open, verified; still reproduces at train 5's 2301794d (the Playground engine path records no sink) | K175 (26, with dev-53) |
-| S18 | P1 | fixed by 2124f226 (train 5, #413), pending merge | K175 |
-| S19 | P1 | fixed by 2124f226 (train 5, #413), refined by 1ef29135 (train 6), pending merge | K176 |
-| S3 | P2 | open, verified | 26, with K175 |
-| S4 | P2 | open, verified | 26 |
-| S5 | P2 | open, verified | 26 |
-| S6 | P2 | open, verified; owner confirmed it is not intended (an XY preset touches only what its recipe names) | 26, K097 |
-| S7 | P2 | open, verified | 26 |
-| S8 | P2 | open, verified by reading | 26 |
+| S1 | P1 | on main and released; fixed by 26's 3c22d01a (train 6), pending merge | K174 |
+| S2 | P1 | on main and released; still reproduces at train 5's 2301794d (dev-53's sink map skips the engine path); fixed by 26's 3c22d01a (train 6: `via` records the engine too), pending merge | K175 |
+| S18 | P1 | on main since #410 and released in v3.19.0; fixed by 26's 3c22d01a (train 6, `via`), pending merge | K175 |
+| S19 | P1 | on main since #410 and released in v3.19.0; fixed by dev-53's 2124f226 (train 5, #413), refined by 1ef29135 (train 6), pending merge | K176 |
+| S3 | P2 | open, verified; 26 fixing on fix/synth-review-p2 (after train 6) | 26 |
+| S4 | P2 | open, verified; 26 fixing on fix/synth-review-p2 (after train 6) | 26 |
+| S5 | P2 | open, verified; 26 fixing on fix/synth-review-p2 (after train 6) | 26 |
+| S6 | P2 | verified; not intended (an XY preset touches only what its recipe names); fixed by 26's 3c22d01a (train 6), pending merge | 26, K097 |
+| S7 | P2 | open, verified; 26 fixing on fix/synth-review-p2 (after train 6) | 26 |
+| S8 | P2 | open, verified by reading; 26 fixing on fix/synth-review-p2 (after train 6) | 26 |
 | S9 | P2 | open, verified code path; device behaviour unverified | 26 / dev-53 (W1b touches the bay) |
-| S10 | P2 | open, verified | 26 |
+| S10 | P2 | open, verified; 26 fixing on fix/synth-review-p2 (after train 6) | 26 |
 | S11 | P3 | reclassified: unwired until W1b (dev-53, F013 with K058); closes when W1b lands | dev-53 |
 | S12-S17 | P3 | open, first reader's, not re-verified | 26 |
 
@@ -477,3 +477,7 @@ Counts: P0 0, P1 2, P2 9, P3 6.
 - `src/js/studio/runtime.js`, `compiler.js`, `actions.js` internals (trusted for validation and
   gesture semantics).
 - The browser suites' bodies beyond the grepped checks.
+
+## Second pass (oscilla-af, 2026-11-04)
+
+af re-checked S18 and S19 at main and confirmed them. R1 (P2): K174 and K175 name 26's 3c22d01a as their build rather than planning a new one, and K175 gains a browser criterion for S18 specifically (resolved). R2, corrected by af: S19 is built (2124f226, train 5). R3 (P2): the status table states that S18 and S19 are on main since #410 and released in v3.19.0 (resolved). R4 (P3, process): #410's member verdict did not carry the already-known W1b findings R1 and R2; af routes it to b0 as the motivating case for R029. The fixes are pending the merges of trains 5 and 6; K174-K176 are done with evidence only once those are on main.
