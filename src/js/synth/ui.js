@@ -441,6 +441,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       }
       e.preventDefault();
       k.setPointerCapture(e.pointerId);
+      k.focus({ preventScroll: true }); // the keys follow a grabbed knob (ERG-04)
       knob = gestures.press(k.dataset.knob, x, e);
       handle().beginGesture(`Change ${panel.module(x.mid).label} ${x.c.label}`);
       return;
@@ -621,6 +622,17 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   }
 
   function onKeyDown(e) {
+    // Escape mid-drag puts the knob back where the press found it, with no undo entry, and goes
+    // no further: the page's Escape would disarm the keys (ERG-03).
+    if (e.key === 'Escape' && knob) {
+      e.preventDefault();
+      e.stopPropagation();
+      handle().cancelGesture();
+      knob = null;
+      renderAll();
+      say('Change cancelled.');
+      return;
+    }
     const k = e.target.closest && e.target.closest('[data-knob]');
     if (k) {
       const x = controlOf(k.dataset.knob);

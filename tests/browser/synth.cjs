@@ -49,6 +49,10 @@
 //              and the MG sweeps the cutoff on both pages (the 1-3 kHz band swings 10 dB+)
 //   s-studio   Open in Studio: #m=studio, the panel's nodes selected, the same revision
 //   s-escape   Escape releases a held note; leaving the workspace disarms: runtime census 0
+//   s-knobesc  a pressed knob takes the focus (ERG-04); Escape mid-drag restores the value the
+//              press found, adds no undo entry and leaves the keys armed (ERG-03)
+//   s-touchpatch (phone) a touch from a jack is cancelled in every engine, a tap still picks a
+//              jack up, and a chromium touch drag patches a cable without scrolling (ERG-01)
 //   s-armstop  the Arm button follows the transport (review S1): Arm, then a transport Stop
 //              made outside the Synth while it is shown (page hide; before any Studio visit):
 //              the button reads Arm and Arm arms; Arm, the Studio and its Stop, back to the
@@ -630,6 +634,36 @@ function defineChecks() {
     // re-rendered view still moves (the same after a keyboard patch: PLAN JC-10, not ERG-01).
     return { ok: patched.length === 1 && patched[0].to === 'vco1.pitch' && mid === before,
       cancelled, cables: patched, jackTop: [before, mid, after] };
+  });
+
+  // ERG-04 and ERG-03 (the Synth look audit): pressing a knob focuses it, so the keys follow a
+  // grabbed knob; Escape during the drag restores the value the press found, adds no undo entry
+  // and leaves the keys armed (the page's Escape disarms them only when no drag is open).
+  def('s-knobesc', async ({ page }) => {
+    await face(page, 'panel');
+    await page.locator('[data-osc="synth.arm"]').click();
+    const armed = () => page.evaluate(() => window.OSCILLA.app.synthDebug().armed);
+    await until(armed, { ms: 10000, what: 'Arm arms the panel' });
+    const k = knob(page, 'lpf.frequency');
+    await k.scrollIntoViewIfNeeded();
+    const start = await k.getAttribute('aria-valuenow');
+    const undo = () => page.evaluate(() => window.OSCILLA.studio.store.debugInfo().undoDepth);
+    const undoBefore = await undo();
+    const r = await k.boundingBox();
+    const c = { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    await page.mouse.move(c.x, c.y);
+    await page.mouse.down();
+    await page.mouse.move(c.x, c.y - 40, { steps: 8 });
+    const moved = await k.getAttribute('aria-valuenow');
+    const focused = await page.evaluate(() => document.activeElement
+      && document.activeElement.dataset.knob);
+    await page.keyboard.press('Escape');
+    await page.mouse.up();
+    const back = await knob(page, 'lpf.frequency').getAttribute('aria-valuenow');
+    const ok = moved !== start && focused === 'lpf.frequency' && back === start
+      && (await undo()) === undoBefore && (await armed()) === true;
+    return { ok, start, moved, back, focused, undo: [undoBefore, await undo()],
+      armed: await armed() };
   });
 
   def('s-refuse', async ({ page }) => {
