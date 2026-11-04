@@ -494,6 +494,18 @@ function layerUses() {
       .map((v) => [v, v.toUpperCase()]) };
     uses.push(...depthUses(switchSvg({ value: 'b', param: dial, tokens: TOKENS, state }),
       `switch.js dial ${JSON.stringify(state)}`, TOKENS.surface.card));
+    // Slice C: the toggle's lever and the slide's cap cast the depth shade too, and the lever's
+    // side highlight is the depth highlight where (b) holds on it.
+    const slide = { key: 'mode', type: 'enum', default: 'a', options: ['a', 'b', 'c']
+      .map((v) => [v, v.toUpperCase()]) };
+    for (const value of [false, true]) {
+      uses.push(...depthUses(switchSvg({ value, param: bool, tokens: TOKENS, state }),
+        `switch.js toggle ${value} ${JSON.stringify(state)}`, TOKENS.surface.card));
+    }
+    for (const value of ['a', 'c']) {
+      uses.push(...depthUses(switchSvg({ value, param: slide, tokens: TOKENS, state }),
+        `switch.js slide ${value} ${JSON.stringify(state)}`, TOKENS.surface.card));
+    }
   }
   const panel = Object.fromEntries(Object.entries(PANEL_TOKENS).map(([k, n]) => [k, `var(${n})`]));
   for (const disabled of [false, true]) {
@@ -526,6 +538,10 @@ test('the depth roles are drawn only through their intensity class, each over a 
   const parts = new Set(uses.map((u) => `${u.role} ${u.part}`));
   assert.ok(uses.some((u) => u.where.startsWith('switch.js dial') && u.part === 'data-cast-shadow'),
     'a dial casts the knob\'s shadow');
+  for (const style of ['toggle', 'slide']) {
+    assert.ok(uses.some((u) => u.where.startsWith(`switch.js ${style}`) && u.part === 'data-shadow'
+      && u.role === SYNTH_TOKEN_NAMES.control.shade), `a ${style} casts the depth shade`);
+  }
   for (const want of ['--osc-hw-shade data-cast-shadow', '--osc-hw-shade data-puck-shadow',
     '--osc-hw-shade data-recess', '--osc-hw-highlight data-puck-highlight']) {
     assert.ok(parts.has(want), `drawn: ${want} (${[...parts].join(', ')})`);
@@ -639,4 +655,42 @@ test('the knob keeps capHi as its sheen unless the highlight shows on the cap in
       + `${dl.dark.toFixed(2)}, light ${dl.light.toFixed(2)}`);
     console.log(`knob sheen: ${want} (highlight on ${N.cap}: dark ${dl.dark.toFixed(2)}, light `
       + `${dl.light.toFixed(2)})`);
+  });
+
+// Slice C (SW-02, SW-07): a switch's highlight follows the knob's rule (d). The toggle's lever
+// and ball (control.edge, a grey metal that does not flip with the theme) and the slide's cap
+// (control.cap) each carry a sheen at hw-sheen; it is the depth highlight where the highlight
+// shows on that face in both themes, (b) |ΔL*| >= 3 and lighter, with (c) 3:1, and capHi where
+// it does not. Computed from tokens.css, so a palette change moves the paint with it.
+test('a switch\'s sheen is the highlight where it shows on its face in both themes, else capHi',
+  () => {
+    const N = SYNTH_TOKEN_NAMES.control;
+    const a = Number(HW['hw-sheen']);
+    const shows = (face) => Object.values(themes()).every((t) => {
+      const dl = deltaL(hexOf(t, N.highlight), hexOf(t, face), a);
+      return dl >= MIN_DL && contrast(hexOf(t, N.highlight), hexOf(t, face)) >= 3;
+    });
+    const bool = { key: 'on', type: 'boolean', default: false };
+    const slide = { key: 'mode', type: 'enum', default: 'a', options: ['a', 'b', 'c']
+      .map((v) => [v, v.toUpperCase()]) };
+    const lines = [];
+    for (const [what, param, flag] of [['toggle', bool, 'data-lever'],
+      ['slide', slide, 'data-cap']]) {
+      const svg = switchSvg({ value: param.default, param, tokens: TOKENS });
+      const faceEl = new RegExp(`<\\w+\\b[^>]*\\s${flag}=""[^>]*>`).exec(svg)[0];
+      const face = varOf(/\sfill="([^"]*)"/.exec(faceEl)[1]);
+      const want = shows(face) ? TOKENS.control.highlight : TOKENS.control.capHi;
+      const sheens = [...svg.matchAll(/<\w+\b[^>]*\sdata-sheen[\w-]*=""[^>]*>/g)]
+        .map((m) => m[0]);
+      assert.ok(sheens.length >= 1, `${what}: a sheen`);
+      for (const el of sheens) {
+        assert.match(el, /\sclass="opacity-hw-sheen"/, `${what}: at hw-sheen`);
+        assert.equal(/\sfill="([^"]*)"/.exec(el)[1], want, `${what}: the sheen on ${face}`);
+      }
+      lines.push(`${what} sheen on ${face}: ${want}`);
+    }
+    // As the tokens stand: the highlight shows on the grey lever, not on the cap (light white).
+    assert.equal(shows(N.edge), true, 'the highlight shows on control.edge in both themes');
+    assert.equal(shows(N.cap), false, 'and not on control.cap (white in the light theme)');
+    console.log(lines.join('\n'));
   });
