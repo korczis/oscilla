@@ -29,8 +29,11 @@ const { runAll, suiteDeadline, DEFAULT_MS } = require(RUNNER);
 const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 
 const SUITES = ['app', 'layout', 'qa-regressions', 'navigation', 'link-integrity',
-  'ui-flowbite-pro', 'midi', 'ui-current', 'touch-audio', 'demo-song', 'cross-links',
+  'ui-flowbite-pro', 'ui-current', 'touch-audio', 'demo-song', 'cross-links',
   'first-screen', 'surface-census', 'journeys'].map((s) => `tests/browser/${s}.cjs`);
+// K075: the synth line's group, the integration map first (midi moved here from test:browser).
+const SYNTH = ['integration-map', 'synth', 'synth-engines', 'xy-pad', 'midi']
+  .map((s) => `tests/browser/${s}.cjs`);
 
 test('test:browser runs its suites through the runner, none chained with &&', () => {
   const cmd = pkg.scripts['test:browser'];
@@ -39,6 +42,17 @@ test('test:browser runs its suites through the runner, none chained with &&', ()
   for (const s of SUITES) assert.ok(existsSync(path.join(ROOT, s)), `${s} exists`);
   assert.ok(browserSuites(pkg).has('test:browser'),
     'still a browser suite to project.ci-bounded (its CI step keeps a time limit)');
+});
+
+test('test:synth runs its suites through the runner, the integration map first', () => {
+  const cmd = pkg.scripts['test:synth'];
+  assert.equal(cmd, `node tests/browser/lib/run-suites.cjs ${SYNTH.join(' ')}`);
+  for (const s of SYNTH) assert.ok(existsSync(path.join(ROOT, s)), `${s} exists`);
+  assert.ok(browserSuites(pkg).has('test:synth'), 'a browser suite to project.ci-bounded');
+  for (const s of SYNTH) {
+    assert.ok(!pkg.scripts['test:browser'].includes(s) && !pkg.scripts['test:studio'].includes(s),
+      `${s} runs once in the release gate`);
+  }
 });
 
 test('runAll runs every suite after a failure and fails when any did', () => {

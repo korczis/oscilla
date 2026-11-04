@@ -293,13 +293,14 @@ export function createNavigation(svc = {}) {
   function write(hash, how) {
     const url = hash ? `${base()}#${hash}` : base();
     try {
+      // data-osc-link: dispatcher
       win().history[how === 'push' ? 'pushState' : 'replaceState'](HISTORY_STAMP, '', url);
     } catch (e) {
       // A browser refusing history state here (file:// in old engines): a plain fragment
       // navigation still makes the entry; the dispatcher knows it as its own write.
       if (how !== 'push') return;
       nav.selfWrite = hash;
-      loc().hash = hash;
+      loc().hash = hash; // data-osc-link: dispatcher
     }
     nav.routed = { href: loc().href, workspace: nav.cmp.workspace };
     nav.lastStateHash = hash;
@@ -419,6 +420,7 @@ export function createNavigation(svc = {}) {
         if (keep !== strip(hash)) write(keep, 'replace');
         else {
           try {
+            // data-osc-link: dispatcher
             w.history.replaceState(HISTORY_STAMP, '', loc().href);
           } catch (e) { /* the entry stays unstamped: Back to it re-applies its link */ }
         }

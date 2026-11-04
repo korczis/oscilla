@@ -16,7 +16,7 @@ export function presetLoadedNotice(mode, programmed, source, coarse = false) {
     return { message: programmed ? 'Press TRIGGER (or Space) to play it.'
       : 'Press and hold HOLD TO PLAY.', action: null };
   }
-  const where = source === 'dual'
+  const where = source === 'dual' // data-osc-link: alert.action (both)
     ? { href: '#m=synthesis', text: 'Open Synthesis', name: 'Synthesis' }
     : { href: '#m=playground', text: 'Open the Playground', name: 'the Playground' };
   const control = programmed ? 'TRIGGER' : 'HOLD TO PLAY';

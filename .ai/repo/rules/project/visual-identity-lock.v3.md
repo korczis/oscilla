@@ -125,7 +125,7 @@ is a review rejection even when every functional test passes.
   `src/styles/tokens.css`.
 - `tests/unit/synth-wording.test.mjs` (in `npm test`): no product, brand or model name and no
   "analog", "vintage", "warm" or "fat" claim in the Synth's code, markup or Learn copy.
-- `tests/browser/synth.cjs` check `s-look` (in `npm run test:studio`: CI's studio job and the
+- `tests/browser/synth.cjs` check `s-look` (in `npm run test:synth`: CI's studio job and the
   release gate): on the rendered Synth panel, in the dark and the light theme, no legacy `svg`
   stroke on a jack or a plate, every jack ring and every cable colour at 3:1 or more on the
   bay card, every plate label at 4.5:1 or more on its plate, a keyboard-focused jack's ring

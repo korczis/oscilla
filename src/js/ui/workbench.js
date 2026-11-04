@@ -712,7 +712,8 @@ export function createWorkbench(svc) {
 
     // ------------------------------------------------------------------ learn / presets
     runLearnDemo(topic) {
-      if (topic.demo.href) { window.location.hash = topic.demo.href; return; } // V3 topics
+      // V3 topics. data-osc-link: learn.demo
+      if (topic.demo.href) { window.location.hash = topic.demo.href; return; }
       const fromKeyboard = document.activeElement && document.activeElement.closest('#osc-view-learn');
       // The notice carries the way back to the lesson (links.md, one-way link 2).
       this.runDemo(topic, { action: learnReturnAction(topic) });

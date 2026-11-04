@@ -492,6 +492,7 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
     emptyAction(ws) {
       const e = this.emptyOf(ws);
       const to = e && e.action ? e.action.to : null;
+      // data-osc-link: page.emptyAction
       return to ? this.relatedLink({ id: to, href: `#m=${to}` }) : {};
     },
     /**

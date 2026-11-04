@@ -44,7 +44,9 @@
 //                   every Synth link of Filter Lab, Synthesis, the Sequencer and Presets.
 //   related-census  P07 (lane A wave 3): every route of the registry's related pages and of
 //                   the panel and content links (counterparts.js PANEL_LINKS, CONTENT_LINKS),
-//                   from each workspace that shows it: the visible link is enabled and named,
+//                   from each workspace that shows it, walked as its rows of the integration map
+//                   (K075, tests/browser/integration-map.json) by the one walker
+//                   (lib/link-walk.cjs walkRow, judgeRow): the visible link is enabled and named,
 //                   activating it opens an initialized target (the workspace, ready; a Studio
 //                   template applied) with focus on its heading or inside its view, Back
 //                   returns to the source and Forward to the target, and a fresh page at the
@@ -76,6 +78,9 @@ const suite = require('./lib/suite.cjs');
 const fs = require('node:fs');
 const { serveDist } = require('./lib/serve.cjs');
 const { until } = require('./lib/wait.cjs');
+// The one walker (K075): the page helpers, the audio probe, and walkRow / judgeRow, which the
+// integration map's suite drives over every row of tests/browser/integration-map.json.
+const walk = require('./lib/link-walk.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -90,9 +95,8 @@ const playwright = RUN.playwright;
 const ONLY = arg('only', '') ? new Set(arg('only', '').split(',')) : null;
 const want = (name) => !ONLY || ONLY.has(name);
 
-const READY_MS = 30000;
-const NAV_MS = 10000;
-const TRAVERSE_MS = 5000;
+const { READY_MS, NAV_MS, H } = walk;
+const MAP = JSON.parse(fs.readFileSync(path.join(__dirname, 'integration-map.json'), 'utf8'));
 
 // The workspaces and the Studio templates are read from their sources at start (loadModel):
 // ui/app.js WORKSPACES (Synth after Studio, Q019) and studio/templates STUDIO_TEMPLATES (#287
@@ -263,108 +267,6 @@ function check(leg, name, ok, detail = '') {
   console.log(`  ${ok ? 'PASS' : 'FAIL'} [${leg}] ${name}${!ok && detail ? ` — ${detail}` : ''}`);
 }
 
-// ------------------------------------------------------------------------------ page helpers
-const H = {
-  async ready(page) {
-    await page.waitForSelector('html[data-ready="true"]', { timeout: READY_MS });
-    await until(() => page.evaluate(() => !!(window.OSCILLA.app && window.OSCILLA.app.studio
-      && window.OSCILLA.app.studio.ready)), { ms: READY_MS, what: 'Studio ready' });
-  },
-  state: (page) => page.evaluate(() => {
-    const a = window.OSCILLA.app;
-    const el = document.activeElement;
-    const cur = document.querySelector('#osc-nav [aria-current="page"]');
-    const nav = document.querySelector('#osc-nav');
-    return { workspace: a.workspace, hash: location.hash, href: location.href,
-      current: cur ? cur.dataset.osc : null, histLen: history.length,
-      navVisible: !!nav && nav.getClientRects().length > 0,
-      focusHeading: !!el && /^H[1-4]$/.test(el.tagName) };
-  }),
-  async open(context, base, hash) {
-    const page = await context.newPage();
-    await page.goto(hash ? `${base}#${hash}` : base, { waitUntil: 'load', timeout: READY_MS });
-    await H.ready(page);
-    return page;
-  },
-  async at(page, workspace, what) {
-    return until(async () => {
-      const s = await H.state(page);
-      return s.workspace === workspace ? s : null;
-    }, { ms: NAV_MS, what });
-  },
-  /** Back / Forward and the state once the address has changed. */
-  async traverse(page, dir) {
-    const before = await page.evaluate(() => location.href);
-    await page.evaluate((d) => (d === 'back' ? history.back() : history.forward()), dir);
-    await until(() => page.evaluate((b) => location.href !== b, before),
-      { ms: TRAVERSE_MS, what: `history.${dir}() changes the address` });
-    // The router answers popstate synchronously; one frame lets Alpine render it.
-    await page.evaluate(() => new Promise((r) => { requestAnimationFrame(() => r()); }));
-    return H.state(page);
-  },
-  /**
-   * The state once a refused or repaired link has been applied: the workspace `w`, none of
-   * `gone` in the address, and the address `expect` (without '#') when one is named. The poll
-   * ends on the asserted condition itself (project.bounded-test-timing). null at the deadline.
-   */
-  async settled(page, w, gone, expect, what) {
-    return until(async () => {
-      const s = await H.state(page);
-      const q = new URLSearchParams(s.hash.replace(/^#/, ''));
-      const ends = expect === null || (typeof expect === 'function' ? expect(q)
-        : s.hash === `#${expect}`);
-      return s.workspace === w && !gone.some((k) => q.has(k)) && ends ? s : null;
-    }, { ms: NAV_MS, what }).catch(() => null);
-  },
-  /** The warnings shown now (the notice stack, core/instrument.js notify). */
-  warnings: (page) => page.evaluate(() => window.OSCILLA.app.alerts
-    .filter((a) => a.level === 'warning' || a.level === 'error').map((a) => a.title)),
-  /** Let n animation frames pass (Alpine applies a change, the layout settles). */
-  frames: (page, n = 2) => page.evaluate((k) => new Promise((r) => {
-    const step = (i) => (i ? requestAnimationFrame(() => step(i - 1)) : r());
-    step(k);
-  }), n),
-  async setWorkspace(page, w) {
-    await page.evaluate((x) => window.OSCILLA.app.setWorkspace(x), w);
-    return H.at(page, w, `setWorkspace(${w})`);
-  },
-  async navTo(page, w) {
-    const item = `[data-osc="nav.${w}"]`;
-    const group = await page.evaluate((s) => {
-      const el = document.querySelector(s);
-      const g = el && el.closest('[data-osc-nav-group]');
-      return g && el.offsetParent === null ? g.dataset.oscNavGroup : null;
-    }, item);
-    if (group) await page.click(`[data-osc="nav-group.${group}"]`);
-    await page.click(item);
-    return H.at(page, w, `nav to ${w}`);
-  },
-  links: (page) => page.evaluate(() => [...document.querySelectorAll('a[href]')]
-    .filter((a) => a.getClientRects().length > 0)
-    .map((a) => ({ href: a.getAttribute('href'), target: a.getAttribute('target'),
-      rel: a.getAttribute('rel') || '', text: a.textContent.replace(/\s+/g, ' ').trim(),
-      anchorOk: a.getAttribute('href').startsWith('#') && !a.getAttribute('href').includes('=')
-        ? !!document.getElementById(decodeURIComponent(a.getAttribute('href').slice(1)))
-        : null }))),
-  /** The page header's rendered Related links, in order. */
-  related: (page) => page.evaluate(() => [...document.querySelectorAll(
-    '[data-osc="page.related"] [data-osc="page.relatedLink"]')]
-    .filter((a) => a.getClientRects().length > 0).map((a) => a.getAttribute('href'))),
-  /** The visible workspace links of the content (<main>) and the breadcrumb's root. */
-  contentLinks: (page) => page.evaluate(() => [...document.querySelectorAll(
-    'main a[href^="#m="], [data-osc="page.home"]')].filter((a) => a.getClientRects().length > 0)
-    .map((a) => a.getAttribute('href'))),
-  /** In-content controls (outside header and status bar) that name another workspace. */
-  exits: (page) => page.evaluate(() => {
-    const NAV = /setWorkspace|studioExpand|studioBack|experimentsShowInMeasure|experimentsRepeat|experimentsDefRun|runLearnDemo|connectionsFollow|findingsOpenRef|synthOpenStudio/;
-    return [...document.querySelectorAll('main button, main a[href^="#m="]')]
-      .filter((el) => el.getClientRects().length > 0)
-      .filter((el) => el.tagName === 'A' || NAV.test(el.getAttribute('@click') || '')
-        || el.dataset.osc === 'studio.compact.expand')
-      .map((el) => el.dataset.osc || el.textContent.trim());
-  }),
-};
-
 // ------------------------------------------------------------------------------ one leg
 async function runLeg(name, origin) {
   const leg = `${name}/${origin}`;
@@ -378,25 +280,7 @@ async function runLeg(name, origin) {
     p.on('console', (m) => { if (m.type() === 'error') errors.push(`console: ${m.text()}`); });
   });
   console.log(`\n${leg} (${browser.version()})`);
-  const probe = () => {
-    // Count what could start sound or the microphone (installed before the app loads).
-    window.__oscAudit = { ctx: 0, gum: 0 };
-    const wrap = (name) => {
-      const C = window[name];
-      if (!C) return;
-      window[name] = class extends C {
-        constructor(...a) { super(...a); window.__oscAudit.ctx += 1; }
-      };
-    };
-    wrap('AudioContext');
-    wrap('webkitAudioContext');
-    const md = navigator.mediaDevices;
-    if (md && md.getUserMedia) {
-      const g = md.getUserMedia.bind(md);
-      md.getUserMedia = (...a) => { window.__oscAudit.gum += 1; return g(...a); };
-    }
-  };
-  await context.addInitScript(probe);
+  await context.addInitScript(walk.probe);
 
   try {
     if (want('hrefs') || want('nav-hrefs') || want('exits')) {
@@ -664,54 +548,28 @@ async function runLeg(name, origin) {
           focusOk: !!el && (/^H[1-4]$/.test(el.tagName)
             || !!el.closest('[data-osc-modes], main section')) };
       });
-      for (const [from, href, to, tpl] of CENSUS) {
-        const page = await H.open(context, base, `m=${from}`);
-        try {
-          const link = await until(() => page.evaluate((h) => {
-            const a = [...document.querySelectorAll(`a[href="${h}"]`)].find((x) => x
-              .getClientRects().length > 0 && !x.closest('#osc-sidebar'));
-            if (!a) return null;
-            a.dataset.oscCensus = '1';
-            return { name: (a.getAttribute('aria-label') || a.textContent).trim(),
-              disabled: a.getAttribute('aria-disabled') === 'true' || a.hasAttribute('disabled') };
-          }, href), { ms: NAV_MS, what: `census: ${from} shows ${href}` }).catch(() => null);
-          if (!link) { bad.push(`${from} ${href}: no visible link`); continue; }
-          if (link.disabled || link.name.length < 3) {
-            bad.push(`${from} ${href}: ${JSON.stringify(link)}`);
-          }
-          await page.evaluate(() => document.querySelector('[data-osc-census="1"]').click());
-          const at = await until(async () => {
-            const r = await read(page);
-            return r.workspace === to && r.ready === 'true' && (!tpl || r.studio) ? r : null;
-          }, { ms: NAV_MS, what: `census: ${from} ${href} opens ${to}` }).catch(() => null);
-          if (!at) { bad.push(`${from} ${href}: did not open ${to}`); continue; }
-          const settled = await until(async () => {
-            const r = await read(page);
-            return r.focusOk ? r : null;
-          }, { ms: NAV_MS, what: `census: focus after ${href}` }).catch(() => read(page));
-          if (!settled.focusOk) bad.push(`${from} ${href}: focus on ${settled.focus}`);
-          if (settled.audit.ctx || settled.audit.gum || settled.voice || settled.playing) {
-            bad.push(`${from} ${href}: sound or microphone ${JSON.stringify(settled)}`);
-          }
-          await page.evaluate(() => history.back());
-          const back = await H.at(page, from, `census: Back to ${from}`).catch(() => null);
-          await page.evaluate(() => history.forward());
-          const fwd = back ? await H.at(page, to, `census: Forward to ${to}`).catch(() => null)
-            : null;
-          if (!back || !fwd) bad.push(`${from} ${href}: Back ${!!back} Forward ${!!fwd}`);
-        } finally {
-          await page.close();
+      // Each census route is a row of the integration map (K075), walked by the one walker
+      // (lib/link-walk.cjs walkRow) with the element's own click(): the control shown, enabled
+      // and named, its target initialized and focused, Back and Forward, a reload of the
+      // address (a deep link) at the same target state with no AudioContext or microphone at
+      // load, and no AudioContext, microphone or voice from the click. The integration map's
+      // suite walks the same rows by pointer, keyboard and touch.
+      let walked = 0;
+      for (const [from, href] of CENSUS) {
+        // The rows a fresh page at the source shows: a row whose source needs a setup, a menu
+        // or a phone width is the integration map suite's (its setup is a pointer gesture,
+        // which unlocks audio before the link is followed).
+        const rows = [...MAP.rows, ...MAP.declared].filter((r) => r.from === from
+          && r.href === href && !r.walk && !r.setup && !r.opener && !r.viewport);
+        if (!rows.length) { bad.push(`${from} ${href}: no row of the integration map`); continue; }
+        for (const row of rows) {
+          const obs = await walk.walkRow(context, base, row, { modes: ['script'] })
+            .catch((e) => ({ modes: { script: { control: null } }, error: e.message }));
+          const judged = walk.judgeRow(row, obs, { reloadDebt: MAP.reloadDebt });
+          for (const k of judged.known) console.log(`  KNOWN [${leg}] ${k}`);
+          bad.push(...judged.failures, ...(obs.error ? [`${row.id}: ${obs.error}`] : []));
+          walked += 1;
         }
-      }
-      // Deep links: a fresh page at each address opens its target.
-      for (const href of [...new Set(CENSUS.map((c) => c[1]))]) {
-        const to = CENSUS.find((c) => c[1] === href)[2];
-        const page = await H.open(context, base, href.slice(1));
-        const r = await read(page);
-        if (r.workspace !== to || r.audit.ctx || r.audit.gum) {
-          bad.push(`deep link ${href}: ${JSON.stringify(r)}`);
-        }
-        await page.close();
       }
       // Keyboard: Enter on the first strip link of the Playground.
       {
@@ -727,9 +585,9 @@ async function runLeg(name, origin) {
         }
         await page.close();
       }
-      check(leg, `related-census: ${CENSUS.length} related and panel links open an initialized `
-        + 'target, focused, '
-        + 'with Back and Forward, as deep links too, and start no sound or microphone',
+      check(leg, `related-census: ${CENSUS.length} related and panel routes (${walked} rows of `
+        + 'the integration map) open an initialized target, focused, with Back and Forward, as '
+        + 'deep links too, and start no sound or microphone',
       !bad.length, bad.slice(0, 8).join(' | '));
     }
 

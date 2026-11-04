@@ -1065,6 +1065,7 @@ export function createInstrument(deps = {}) {
     async copyConfigLink() {
       const url = `${location.href.split('#')[0]}#${this.configLinkHash()}`;
       try {
+        // data-osc-link: action.copyUrl
         host.history.replaceState(host.history.state ?? null, '', url);
       } catch (e) { /* file:// in some browsers */ }
       this.copyUrl = url;

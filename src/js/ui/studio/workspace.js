@@ -1735,6 +1735,7 @@ export function createStudioUi(svc = {}) {
       if (ctx.dirty && ctx.dirty.isDirty(ctx.handle.getModel())) {
         this.notify('warning', 'Pattern not opened', 'This Studio has unsaved changes, so the '
           + 'pattern did not replace them. Save or export them in Studio, then open the pattern '
+          // data-osc-link: alert.action
           + 'again.', { action: { href: '#m=studio', text: 'Open Studio' } });
         announce('The pattern was not opened: this Studio has unsaved changes.',
           { assertive: true });
@@ -1820,6 +1821,7 @@ export function createStudioUi(svc = {}) {
       const url = this.studioLinkUrl();
       if (!url) return null;
       try {
+        // data-osc-link: studio.copyLink
         window.history.replaceState(window.history.state, '', url);
       } catch (e) { /* file:// in some */ }
       this.studio.link = url;
