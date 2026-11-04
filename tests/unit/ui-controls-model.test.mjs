@@ -103,6 +103,31 @@ test('the skin and feel.js re-export the models: the same functions, every name 
   assert.doesNotMatch(feel, /\bfunction\b|=>/, 'feel.js is a thin re-export: no code of its own');
 });
 
+/** A module's code: its source without its block and line comments. */
+const codeOf = (p) => read(p).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+/** Which of `names` the code binds itself: a const, let, var, function or class of that name. */
+const declared = (code, names) => names.filter((n) =>
+  new RegExp(`\\b(?:const|let|var|function|class)\\s+${n}\\b`).test(code));
+
+// "The same functions, not copies" (review of S, round 3, finding 1): `===` holds for a copied
+// number, and a copy bound as an arrow or a constant passes a `function NAME` grep, so the
+// modules on top of a model bind none of its exported names themselves. The one exception is
+// the slider model's pixelsPerRangeFor, documented there: it answers every kind and asks the
+// knob model's (imported as knobPixelsPerRange) for a knob.
+test('the slider model, the skin and feel.js bind none of a model\'s names themselves', () => {
+  const knobNames = Object.keys(M);
+  const sliderNames = Object.keys(S);
+  assert.ok(KNOB_MODEL_NAMES.every((n) => knobNames.includes(n)), 'the knob model\'s names');
+  assert.ok(['FADER_TRAVEL', 'faderPress', 'switchPositions'].every((n) => sliderNames.includes(n)),
+    'the slider model\'s names');
+  assert.deepEqual(declared(codeOf(SLIDER), knobNames), ['pixelsPerRangeFor'],
+    `${SLIDER}: a knob model name bound again`);
+  for (const p of [SKIN, FEEL]) {
+    assert.deepEqual(declared(codeOf(p), [...knobNames, ...sliderNames]), [],
+      `${p}: a model's name bound again`);
+  }
+});
+
 test('the models are neutral: no hardware vocabulary, no DOM, no markup, no paint', () => {
   for (const p of [MODEL, SLIDER]) {
     const raw = read(p);
@@ -201,7 +226,16 @@ const LIN = Object.freeze({ id: 'level', label: 'Level', unit: '%', min: 0, max:
   scale: 'lin', default: 50 });
 const knob = (opts = {}) => K.controlSvg({ kind: 'knob', value: 70, applied: 30, param: LIN,
   tokens: TOKENS, ...opts });
+/**
+ * A knob's hit rect, graph units. Its own width is its size on screen (times the zoom) only
+ * while no transform applies to it (review of S, round 3, finding 3): so the hit is the
+ * control's first child, the outer group untransformed, and the rect carries none itself.
+ */
 const hitOf = (svg) => {
+  assert.match(svg, /^<g data-control="knob"(?: data-size="(?:lg|sm)")?><rect data-hit=""/,
+    'the hit is the first child of the untransformed outer group');
+  assert.doesNotMatch(/^<g[^>]*><rect data-hit=""[^>]*>/.exec(svg)[0], /transform/,
+    'the hit is not transformed');
   const r = /<rect data-hit="" x="([^"]+)" y="([^"]+)" width="([^"]+)" height="([^"]+)"/
     .exec(svg);
   return { width: Number(r[3]), height: Number(r[4]) };
