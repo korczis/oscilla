@@ -21,6 +21,8 @@ depends_on:
 acceptance_criteria:
   - "The family has one implementing module, named in its catalogue declarations; its G021 baseline entries leave and the census passes with them gone (fail-first: the census fails on the merge base with the entries removed)."
   - "Every place the family appears renders through that module with its parameters (skin, size, range, labels); no behaviour, key binding or ARIA of any place changes except where the PR lists it with its reason; the visual references change only where the PR re-accepts them with the reason."
+  - "Every place renders from the one parameter declaration (G003, N002, N003: type, unit, range, step, live rule); no family keeps a formatter or a range of its own."
+  - "Standard: the size report gives base and head figures; the Flowbite ratchet only falls; the iPhone census reach only shrinks; the family's visual references are re-accepted with the reason in review (visual-identity-lock v3); the phone holds 44 px targets under a coarse pointer."
   - "Every gate browser, file:// and the /oscilla/ sub-path; the affected browser suites pass; a non-builder's verdict where a guarded path changes (project.review-verdict v2)."
 validation:
   - "node --test tests/unit/ui-families.test.mjs"

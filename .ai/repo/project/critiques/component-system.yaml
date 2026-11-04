@@ -237,3 +237,41 @@ findings:
       state: planned
       issue: "U068"
       because: "All five are acceptance criteria of U068 (2026-11-03)."
+  # af's critique of M123 and G021-G026 (chore/plan-unified-controls @835f3937, 2026-11-04);
+  # resolutions by the plan builder (oscilla-21)
+  - id: census-cannot-see-markup-controls
+    class: unproven_assumption
+    subject: "G021"
+    finding: "A module scan by marker or 'known signature' counts none of the sliders and switches written as markup in src/index.html or built inline by inspector.js and synth/view/face.js, and a marker scan is opt-in."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "G021"
+      because: "G021's census has a rendered half (every element of a family's role signature on every workspace carries data-ui-family set only by its implementation, reusing the surface census, against the shrink-only baseline) and a source half whose signatures are written down per family; a module matching a signature without its marker fails, so the marker is not opt-in (2026-11-04)."
+  - id: native-controls-count-as-one
+    class: missed_requirement
+    subject: "G023"
+    finding: "Without saying so, a builder may hand-roll ARIA widgets to replace native range and checkbox inputs."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "G023"
+      because: "G023 states that a native element with one wrapper (label, value text, unit, validation from the parameter declaration, its skin) is one implementation, and no ARIA widget replaces a native control that does the job (2026-11-04)."
+  - id: one-parameter-source
+    class: missed_requirement
+    subject: "G022"
+    finding: "Unification could keep five ways to format a value unless every family renders from the one parameter declaration."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "G022"
+      because: "G022-G026 each require rendering from the one parameter declaration (G003, N002, N003), with no family keeping a formatter or a range of its own (2026-11-04)."
+  - id: per-slice-standard-criteria
+    class: missed_requirement
+    subject: "G022"
+    finding: "The size report, the Flowbite ratchet, the iPhone census reach, the visual re-accept and the phone's 44 px were not criteria of the slices."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "G022"
+      because: "G022-G026 each carry them as one acceptance criterion (2026-11-04)."
