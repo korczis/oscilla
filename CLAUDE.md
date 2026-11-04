@@ -43,7 +43,7 @@ limit (`OSC_LOAD_MAX`, `OSC_LOAD_WAIT_MS`; see `tests/README.md`).
 How a change reaches `main` is ruled too: `project.ci-bounded` (every workflow job and
 network step bounded, pinned, retried), `project.fail-first` (a `feat`/`fix` PR's unit tests
 fail on the merge base, or the body says `fail-first: n/a <reason>`) and
-`project.review-verdict` (a PR touching the audio, analysis, experiments, studio,
+`project.review-verdict` (a PR touching the audio, analysis, experiments, studio, synth,
 measurement, calibration, storage or safety paths, the MEASURE, Experiments and Findings
 adapters, the build, stamp, deploy-verification and release scripts and the release rules'
 tests, anything under `.github/`, or the programs and tests of these three rules needs a

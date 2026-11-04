@@ -280,10 +280,20 @@ export function nodeName(model, id) {
 }
 
 const KIND_LABEL = Object.freeze({ pattern: 'Pattern', event: 'Event',
-  measurement: 'Measurement' });
+  measurement: 'Measurement', notes: 'Notes' });
 const TRACK_LABEL = Object.freeze({ event: 'Event', measurement: 'Measurement' });
 const MEASUREMENT_LABEL = Object.freeze({ 'noise-check': 'Noise check', 'pre-roll': 'Pre-roll',
   stimulus: 'Stimulus', capture: 'Capture', tail: 'Tail', analysis: 'Analysis' });
+
+/**
+ * What the clip form says about a notes clip (K099 part 1): it shows the notes read-only, since
+ * no editor of them exists yet, and why its time base is fixed.
+ */
+export const NOTES_CLIP_TEXT = Object.freeze({
+  line: (n) => `Notes clip · ${n} note${n === 1 ? '' : 's'}. The notes are kept; editing and `
+    + 'playback arrive with the piano roll.',
+  timeBase: 'A notes clip is always tempo-linked: its notes are in beats from the clip start.',
+});
 
 /** { label, detail } of a clip (pattern: the sequencer's own block description). */
 export function clipText(clip) {
@@ -293,6 +303,10 @@ export function clipText(clip) {
   if (clip.kind === 'event') {
     const a = clip.payload.action || 'gate';
     return { label: a === 'trigger' ? 'Trigger' : 'Gate', detail: '' };
+  }
+  if (clip.kind === 'notes') {
+    const n = notesCount(clip);
+    return { label: 'Notes', detail: `${n} note${n === 1 ? '' : 's'}` };
   }
   return { label: MEASUREMENT_LABEL[clip.payload.action] || 'Measurement', detail: '' };
 }
@@ -411,16 +425,20 @@ export function compatibleTracks(model, clip, registry = NODE_REGISTRY) {
     || !clipTrackReason(model, t, clip, registry)).map((t) => ({ id: t.id, name: t.name }));
 }
 
+const notesCount = (clip) => (Array.isArray(clip.payload.notes) ? clip.payload.notes.length : 0);
+
 /**
  * The choices of the clip form (timeline-details.js) for the clip as it is now, recomputed after
  * every change (an action change changes where the clip plays): { tracks, targets, actions },
  * each [{ id, label }]. Targets: "Track target", the nodes on which the clip plays for its
  * action, and its own target even where it does not play (a file from an earlier build), so the
  * select never shows a target the clip lacks. Actions: the block types of a pattern clip, the
- * event actions offered for its action, or the measurement actions.
+ * event actions offered for its action, or the measurement actions; a notes clip has none and
+ * `notes`, the read-only line the form shows instead (NOTES_CLIP_TEXT; null for other kinds).
  */
 export function clipFormOptions(model, clip, registry = NODE_REGISTRY) {
-  const action = clip.kind === 'pattern' ? undefined : (clip.payload.action || 'gate');
+  const action = clip.kind === 'pattern' || clip.kind === 'notes' ? undefined
+    : (clip.payload.action || 'gate');
   const offered = clipTargetOptions(model, clip.kind, registry, action);
   if (clip.target && !offered.some((n) => n.id === clip.target)) {
     offered.push({ id: clip.target, name: nodeName(model, clip.target) });
@@ -429,8 +447,9 @@ export function clipFormOptions(model, clip, registry = NODE_REGISTRY) {
     tracks: compatibleTracks(model, clip, registry).map((t) => ({ id: t.id, label: t.name })),
     targets: [{ id: '', label: 'Track target' },
       ...offered.map((n) => ({ id: n.id, label: n.name }))],
-    actions: clip.kind === 'pattern' ? blockTypeOptions()
+    actions: clip.kind === 'pattern' ? blockTypeOptions() : clip.kind === 'notes' ? []
       : clip.kind === 'event' ? eventActionOptions(action) : measurementActionOptions(),
+    notes: clip.kind === 'notes' ? NOTES_CLIP_TEXT.line(notesCount(clip)) : null,
   };
 }
 

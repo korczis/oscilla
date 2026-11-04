@@ -26,7 +26,7 @@ Track kinds exist only where semantics differ (§82):
 
 | Row | Model | Holds |
 | --- | --- | --- |
-| event track | `timeline.tracks` kind `event` | pattern clips (sequencer blocks) and event clips (gate / trigger) |
+| event track | `timeline.tracks` kind `event` | pattern clips (sequencer blocks), event clips (gate / trigger) and notes clips (K099; held, not played yet) |
 | measurement track | `timeline.tracks` kind `measurement` | measurement clips (noise-check, pre-roll, stimulus, capture, tail, analysis) |
 | automation lane | `timeline.automation` | one lane per node parameter (points, not clips) |
 | markers | `timeline.markers` | annotations and anchors; never executed (§96) |
@@ -37,6 +37,18 @@ its own target or, when that is null, on its track's target. Event clip payload:
 model (an earlier V404 decision the tests depend on); they then play as separate voices and the
 editor warns (`clip-overlap`). `patternRuns` groups contiguous pattern clips, which is what a V2
 sequence is.
+
+Notes clip payload (K099 part 1, ADR 0084; `src/js/studio/notes.js`):
+`{ notes: [{ at, note, len, vel }] }`, `at` and `len` in beats from the clip start, `note` an
+integer MIDI number 0-127 and `vel` a number in (0, 1], the form the riff library's `toNotes()`
+emits. A notes clip is always tempo-linked (`notes-absolute` otherwise; `CLIP_ADD` links it by
+default), every note ends within the clip's `musical.durationBeats`, the notes are kept sorted by
+(at, note) and a clip holds one note per (at, note). A note has exactly these four fields and the
+payload only `notes`: the proposed fields of ADR 0086 (`p`, `r`, `slide`, `grid`) are refused
+until a change adds them. The import limits `notesPerClip` (4096) and `notesPerDocument` (65536)
+bound them (`limit-exceeded`). The transport and the offline render do not play a notes clip
+yet; they list it unplayed with code `notes-unplayed` and the policy's sentence. Its notes are
+execution state: `studioHash` covers them.
 
 ### Clip validation (§87)
 
@@ -58,6 +70,7 @@ gives the duration range the resize gesture clamps to.
 | measurement tail | 0.1-10 (`TIMING_LIMITS.postRollS`) | — |
 | measurement analysis | any | target Transfer Analyzer |
 | measurement, any | — | never tempo-linked (`musical-measurement`) |
+| notes | — | tempo-linked; payload `{ notes }` under the notes rules (`invalid-notes`, `invalid-note`); target a node that plays notes (Keys, the XY pad, a voice engine) |
 
 The measurement bounds come from the measurement engine's own constants, and the store refuses a
 clip outside them (and a measurement clip on the wrong target type) with the editor's sentence.
@@ -75,8 +88,8 @@ levels:
 
 | Level | Who reads it | What it is |
 | --- | --- | --- |
-| `holds` | the store (`clipRules`, the current track in `clipTrackReason`, lane validation, `AUTOMATION_POINT_ADD`) | what the registry declares: a node type's `clipKinds`, `MEASUREMENT_TARGETS` per action, a parameter's `automatable`. A model with it validates, so a file saved by an earlier build keeps loading |
-| `plays`, `how` | the transport (`clipPlayReason`, pattern-played oscillators, gated envelopes, lane parameters), the offline render plan (`planOfflineRender`, clips and lanes) and the timeline UI (track and clip target options, "add clip", the tracks a clip may move or be nudged to, the clip form's Action options, the Automate form and button) | the subset the transport plays: a pattern clip on a Sequence (`sequence`) or an Oscillator (`pattern-played`), an event clip only as a gate on an Envelope (`gate`), a measurement clip always (`measurement`, as data), a lane on a parameter with a linear AudioParam that Web Audio uses (`automation`) |
+| `holds` | the store (`clipRules`, the current track in `clipTrackReason`, lane validation, `AUTOMATION_POINT_ADD`) | what the registry declares: a node type's `clipKinds` (for a notes clip, a type that plays notes: `registry.js playsNotes`), `MEASUREMENT_TARGETS` per action, a parameter's `automatable`. A model with it validates, so a file saved by an earlier build keeps loading |
+| `plays`, `how` | the transport (`clipPlayReason`, pattern-played oscillators, gated envelopes, lane parameters), the offline render plan (`planOfflineRender`, clips and lanes) and the timeline UI (track and clip target options, "add clip", the tracks a clip may move or be nudged to, the clip form's Action options, the Automate form and button) | the subset the transport plays: a pattern clip on a Sequence (`sequence`) or an Oscillator (`pattern-played`), an event clip only as a gate on an Envelope (`gate`), a measurement clip always (`measurement`, as data), a notes clip nowhere yet (K099 part 1: `notes-unplayed`), a lane on a parameter with a linear AudioParam that Web Audio uses (`automation`) |
 
 A lane does not play on a Stereo Split pan or level (a pan law over several gains: no single
 AudioParam carries it), on a low-/high-pass Q (its AudioParam is in dB, so a linear lane would be

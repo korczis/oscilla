@@ -1,0 +1,34 @@
+# Review verdict for pull request #377: a train is judged by its members' own verdicts
+# (project.review-verdict; branch of oscilla-26's builder). Reviewed head 2271cb3d against
+# origin/main 60103776. The reviewer (oscilla-af) built none of it. Digest: the base copy of
+# scripts/review-verdict.mjs (git archive origin/main scripts), --content --list --base-branch
+# origin/main, over the 4 guarded paths it names.
+#
+# What was checked:
+# - trainOf reuses fail-first's TRAIN, TRAIN_BRANCH and trainMembers and adds the member-table
+#   body (a feature train titled as one feat, #367). Each member's .ai/repo/reviews/<n>.yaml is
+#   read at the head; merge passes, no file passes, anything else refuses unless the train's
+#   own verdict judges that member under `members: [{ pr, verdict: merge, reason }]`.
+# - The CI step reads the PR with gh (retried 3 times, 5 min step bound, pull-requests: read)
+#   into PR_JSON and exits 1 when it cannot: fail-closed, and the base copy is called with the
+#   same command line whatever arguments it knows. ci-workflow-rules: bounded, pinned, retried.
+# - review-verdict.test.mjs 25/25. Mutants: a `members:` entry that accepts any verdict fails 1;
+#   ignoring a non-merge member fails 4; not detecting a member-table train fails 1.
+# - npm test 3420 pass, 0 fail.
+#
+# Verdict: merge. No P0, P1 or P2.
+#
+# Delta review, 2026-11-03, by oscilla-af (claude-code 901211e2), at 0eb19d03 (the PR head
+# 0a3f3f9b merged with main c73d27b4). The content moved from a7cebb6a to 152a2325 only through
+# that merge: #377's own change to each of its four guarded paths (ci.yml, review-verdict.mjs,
+# ci-workflows.test.mjs, review-verdict.test.mjs) is byte-identical before and after (the diff
+# against its base 60103776 equals the diff against c73d27b4), and main's only change to them is
+# ci.yml's 30-minute browser step bound (3 lines). The verdict stands.
+schema: review-verdict/v1
+pr: 377
+verdict: merge
+reviewer: oscilla-af (claude-code 901211e2)
+content: 152a2325bbc8ad734a2ba940075a4a28f63ba63488f2670aa58e9dce09fb6a80
+findings:
+  - { id: T1, severity: P3, status: open, title: "a member with no verdict file passes with the line 'it changed no guarded path', which the program does not check (it cannot see the member's own diff); say 'has no verdict of its own; the train's verdict covers its guarded content' instead" }
+  - { id: T2, severity: P3, status: open, title: "367.yaml judges #303 in its header only; once this lands, a re-review of #367 (or any train carrying a changes-requested member) must add the members: entry this introduces" }

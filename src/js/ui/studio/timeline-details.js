@@ -19,7 +19,7 @@ import {
   automatableTargets, curveChoices, laneInfo, parseValueText,
 } from './automation-view.js';
 import {
-  clipFormOptions, clipText, clipView, parseSecondsText, trackTargetOptions,
+  NOTES_CLIP_TEXT, clipFormOptions, clipText, clipView, parseSecondsText, trackTargetOptions,
 } from './timeline-view.js';
 import { el, selectBox, setOptions, spriteIcon } from './timeline-dom.js';
 
@@ -115,9 +115,13 @@ export function createDetails(api, container) {
     const target = selectBox(opts.targets, clip.target || '');
     const timeBase = selectBox([{ id: 'absolute', label: 'Seconds (absolute)' },
       { id: 'tempo', label: 'Tempo-linked' }], clip.musical ? 'tempo' : 'absolute');
-    if (clip.kind === 'measurement') timeBase.querySelector('select').disabled = true;
-    const type = selectBox(opts.actions, clip.kind === 'pattern' ? clip.payload.blockType
-      : (clip.payload.action || 'gate'));
+    // A notes clip (K099 part 1) has no action and a fixed time base: its notes are shown
+    // read-only, since no editor of them exists yet (project.no-inert-surfaces).
+    const notes = clip.kind === 'notes';
+    if (clip.kind === 'measurement' || notes) timeBase.querySelector('select').disabled = true;
+    const type = notes ? el('output', { 'data-osc': 'studio.tl.d-notes' }, [opts.notes])
+      : selectBox(opts.actions, clip.kind === 'pattern' ? clip.payload.blockType
+        : (clip.payload.action || 'gate'));
 
     start.addEventListener('change', () => {
       const v = parseSecondsText(start.value);
@@ -141,7 +145,7 @@ export function createDetails(api, container) {
       action: { type: 'CLIP_UPDATE', clipId, target: e.target.value || null } }, e.target));
     timeBase.querySelector('select').addEventListener('change', (e) => commitFrom({ ok: true,
       action: { type: 'CLIP_SET_TIME_BASE', clipId, timeBase: e.target.value } }, e.target));
-    type.querySelector('select').addEventListener('change', (e) => {
+    if (!notes) type.querySelector('select').addEventListener('change', (e) => {
       const c = findClip(api.model(), clipId);
       const payload = c.kind === 'pattern' ? { blockType: e.target.value }
         : { ...c.payload, action: e.target.value };
@@ -160,8 +164,9 @@ export function createDetails(api, container) {
       field('target', 'Target', target),
       // Why the select is disabled, not only that it is (v4.0 audit F10).
       field('timebase', 'Time base', timeBase, clip.kind === 'measurement' ? 'A measurement '
-        + 'clip always runs in seconds: musical time never enters a measurement.' : null),
-      field('type', clip.kind === 'pattern' ? 'Block' : 'Action', type),
+        + 'clip always runs in seconds: musical time never enters a measurement.'
+        : notes ? NOTES_CLIP_TEXT.timeBase : null),
+      field('type', clip.kind === 'pattern' ? 'Block' : notes ? 'Notes' : 'Action', type),
       el('span', { class: 'osc-sr-only', id: `${uid}-unit-s` }, ['seconds']),
     ], [
       button('duplicate', 'Duplicate', () => api.clipCommand('duplicate', clipId)),
@@ -178,8 +183,11 @@ export function createDetails(api, container) {
         setOptions(track.querySelector('select'), o.tracks, c.trackId);
         setOptions(target.querySelector('select'), o.targets, c.target || '');
         timeBase.querySelector('select').value = c.musical ? 'tempo' : 'absolute';
-        setOptions(type.querySelector('select'), o.actions, c.kind === 'pattern'
-          ? c.payload.blockType : (c.payload.action || 'gate'));
+        if (notes) type.textContent = o.notes;
+        else {
+          setOptions(type.querySelector('select'), o.actions, c.kind === 'pattern'
+            ? c.payload.blockType : (c.payload.action || 'gate'));
+        }
         container.querySelector(`#${uid}-title`).textContent = title();
         if (!keepStatus) {
           const v = clipView(m, c);

@@ -111,6 +111,16 @@ export function createKeyboardUi({ win = window } = {}) {
     get kbdView() {
       return KEYBOARD_VIEWS.includes(this.workspace) ? this.workspace : null;
     },
+    /** The keys dock over the page's bottom edge, the same component in the Synth and the
+     *  Studio (the owner's report of 2026-11-03); the Playground keeps them under its panels. */
+    get kbdDocked() {
+      return this.kbdView === 'synth' || this.kbdView === 'studio';
+    },
+    /** The on-screen keys show wherever they play; in the Studio only while armed, so the
+     *  disarmed dock is one row and the graph keeps the height (the owner's report). */
+    get kbdKeysShown() {
+      return this.kbdView !== 'studio' || this.kbdArmedHere;
+    },
     get kbdArmedHere() {
       const v = this.kbdView;
       return !!v && !!this.kbdArmed[v];
@@ -286,10 +296,13 @@ function mountKeys(win, doc, kb) {
   const box = canvas.parentElement;
   // The keyboard's place in the grid of the main area and the canvas size are set here until
   // the keyboard moves into its Pro card (plan F001 to F003, ADR 0061): it follows every panel
-  // of the Playground, full width, at every width.
-  if (box && box.style) {
-    box.style.order = '14';
-    box.style.gridColumn = '1 / -1';
+  // of the Playground, full width, at every width. The grid item is the keyboard group, not
+  // the canvas's parent: since the keys show only while armed in the Studio, the canvas sits
+  // in its own x-show wrapper, and placing that wrapper left the group first in the grid.
+  const item = (canvas.closest && canvas.closest('[data-osc="keyboard"]')) || box;
+  if (item && item.style) {
+    item.style.order = '14';
+    item.style.gridColumn = '1 / -1';
   }
   const ctx = canvas.getContext('2d');
   let width = 0;

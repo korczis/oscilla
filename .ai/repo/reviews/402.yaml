@@ -1,0 +1,8 @@
+schema: review-verdict/v1
+pr: 402
+verdict: merge
+reviewer: oscilla-af
+content: be045249c2d48144799c8e27e8839b0d6bc2aa69129f6adc4435ff9d048bc7cd
+findings:
+  - { id: R1, severity: P3, status: open, title: notesTarget names Keys the XY pad and voice engines but playsNotes also admits hits types so the sentence must name the drum voices when one lands }
+  - { id: R2, severity: P3, status: open, title: a resize that ends before the last note is refused by the end rule so the clip editor should say that the notes bound the resize }

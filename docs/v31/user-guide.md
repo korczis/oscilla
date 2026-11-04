@@ -16,7 +16,8 @@ pressure.
 1. Choose **Studio** in the navigation (after Experiments). The Playground's compact Studio
    panel has **EXPAND STUDIO**, which opens the same document.
 2. **Templates** lists the shipped documents: Basic Tone, Subtractive Synth, Sweep Sequence,
-   Stereo Beat, Filter Automation, Measurement Sweep and Demo song: Lantern in the Slag Yard.
+   Stereo Beat, Filter Automation, Measurement Sweep, First Patch, Filter Envelope Synth, FM
+   Chime, Ring Mod, Drive Lead, Macro Pad, Step Bass and Demo song: Lantern in the Slag Yard.
    **Open** replaces the current Studio; if it has unsaved changes the dialog says so first.
 3. **Play** (Space) plays the graph and the timeline; **Stop** (Esc) releases every node. The
    Playground voice, the Sequencer and Studio are exclusive: starting one stops the others. For a screen
@@ -45,6 +46,16 @@ at the pointer, as do **+** and **−**. Chromium and Firefox report a trackpad 
 wheel and Safari as its own gesture events; both are handled, but the browser checks send
 these events rather than a real trackpad pinch. **Minimap** in the graph controls shows the whole graph
 and the part in view; press or drag on it to move there.
+
+## First patch
+
+**First Patch** (`#m=studio&st=first-patch`; Learn's **Signal path** card links to it, and the
+empty graph names it) starts as a sawtooth Oscillator into the Master Output. Its timeline has
+five markers whose labels are the steps: 1 Press Play; 2 Add a Filter between them (Add node,
+then rewire); 3 Move the Filter cutoff; 4 Add a Spectrum from the Filter output (cable to
+empty canvas); 5 Save it as a patch. **[** and **]** on the timeline move the playhead to
+the previous or next step, and the Inspector's **Notes** (with nothing selected) say each step
+in full. It is a template with notes, not a guided path: nothing checks or locks the steps.
 
 ## Links and fullscreen
 
@@ -84,7 +95,12 @@ and the part in view; press or drag on it to move there.
 - Click an item in the **Node library** to add it at the centre of the graph, or drag it onto
   the graph to place it.
 - Press **N** (or double-click empty canvas) for the searchable **Add node** picker; Enter adds
-  the first match. An empty graph says so on the canvas, with these ways to begin.
+  the first match, which the status line names as you type. The letters of a name in order are
+  enough ("fltr" finds Filter), and so is a short alias ("lp", "hp", "bp", "eq" for Filter,
+  "vco" for Oscillator, "vca" for Gain). Exact names come first, then names that start with
+  what you typed, then aliases, then the looser matches. With nothing typed, the types you added
+  most recently in this session are listed first (never saved). An empty graph says so on the
+  canvas, with these ways to begin.
 - A Studio has exactly one Master Output; the library says so instead of adding a second.
 
 ## Connect nodes
@@ -159,7 +175,9 @@ when the Studio first plays with the microphone.
 ## Find a node
 
 Press **/** (or the search button in the Signal graph header) and type part of a name, a type
-("filter"), a category ("modulation") or an alias ("vca"). Enter, or a click on a result,
+("filter"), a category ("modulation") or an alias ("vca"); the letters of a name in order are
+enough ("fltr"), ranked as in the Add node picker, and a node's own name comes before nodes that
+only share its type. The status line names the node Enter selects. Enter, or a click on a result,
 selects the node, frames it in the graph and moves focus to it. Esc closes the search and
 returns focus to where you were.
 
