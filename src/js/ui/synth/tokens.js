@@ -22,7 +22,11 @@
  * computes them from tokens.css): the unlit arc or slot (track) and the skirt edge are
  * --osc-text-dim, the pointer --osc-text, the applied value --osc-purple; the knurl stays the
  * faint --osc-border, and an LED bezel's ring is --osc-border-strong, the strongest neutral on
- * the plates (led.js).
+ * the plates (led.js). The two depth roles (oscilla-21's amendment (a)-(e), 11-04) are drawn only
+ * at an intensity class, never opaque: control.shade (--osc-hw-shade) at hw-shadow (the knob's
+ * cap shadow, the XY pad's recess and puck shadow) and control.highlight (--osc-hw-highlight) at
+ * hw-sheen (the XY puck's face), each visible, |ΔL*| >= 3, on the face it is drawn over in both
+ * themes (ui-synth-tokens.test.mjs).
  */
 export const SYNTH_TOKEN_NAMES = deepFreeze({
   surface: { plateHi: '--osc-surface-3', plateLo: '--osc-surface-1', card: '--osc-surface-2',
@@ -31,7 +35,8 @@ export const SYNTH_TOKEN_NAMES = deepFreeze({
   control: { cap: '--osc-surface-1', capHi: '--osc-surface-4', ring: '--osc-cyan',
     track: '--osc-text-dim', pointer: '--osc-text', focus: '--osc-focus',
     disabled: '--osc-text-dim', edge: '--osc-text-dim', knurl: '--osc-border',
-    applied: '--osc-purple', bezel: '--osc-border-strong' },
+    applied: '--osc-purple', bezel: '--osc-border-strong', shade: '--osc-hw-shade',
+    highlight: '--osc-hw-highlight' },
   jack: { body: '--osc-surface-0', ring: '--osc-text-dim', normal: '--osc-text-dim',
     refuse: '--osc-red' },
   cable: { palette: ['--osc-cyan', '--osc-red-soft', '--osc-magenta', '--osc-green',

@@ -36,11 +36,9 @@
   --osc-text-unit: #b8d4f0;        /* big readout unit ("Hz" at x=186, y=245) */
   --osc-text-on-accent: #ffffff;
   --osc-text-on-green: #04261a;    /* "Use microphone" label */
-  --osc-text-on-warm: #2a1600;     /* text on orange/green sequencer blocks */
 
   /* Blue primary */
   --osc-blue: #007afd;             /* primary buttons, Export, Oscillator segment, Log */
-  --osc-blue-hover: #1a88ff;
   --osc-blue-press: #0067d6;
   /* Blue under white text (primary buttons, Export, Oscillator segment, Log, active primary
      tabs): #007afd carries white at only 4.0:1, so text-bearing fills use a slightly deeper
@@ -156,7 +154,13 @@
   --osc-control-h-sm: 24px;
   --osc-control-h-lg: 40px;
   --osc-shadow-panel: 0 1px 0 rgb(255 255 255 / 2%) inset, 0 6px 18px rgb(0 0 0 / 22%);
-  --osc-touch: 44px;
+
+  /* Depth (the synth-theme layer's relief; oscilla-21's amendment (a)-(e), 11-04): drawn only
+     through the hw-shadow and hw-sheen intensity classes, never opaque. The shade holds 1.15:1
+     on the face it is drawn over, the highlight 1.15:1 on surface-3, surface-4 and the bg and
+     3:1 on its face, and each use shows |dL*| >= 3 (tests/unit/ui-synth-tokens.test.mjs). */
+  --osc-hw-shade: #000000;
+  --osc-hw-highlight: #ffffff;
 
   /* Layout (desktop reference geometry, px measured on reference.png) */
   --osc-header-h: 62px;
@@ -193,7 +197,6 @@
   --osc-magenta: #c2268f;
   --osc-purple: #7a45d8;
   --osc-blue: #0067d6;
-  --osc-blue-hover: #0a74e6;
   --osc-blue-press: #0057b5;
   --osc-blue-fill: #0067d6;        /* white 5.4:1 */
   --osc-blue-fill-hover: #0a74e6;  /* white 4.5:1 */
@@ -217,6 +220,10 @@
   --osc-block-silence-text: #2b3b50;
   --osc-block-sweep: #5b3fc4;
   --osc-shadow-panel: 0 1px 2px rgb(16 32 56 / 8%);
+  /* Depth: the lightest tint of --osc-text (the palette's navy ink) that passes the depth tests
+     on every face the shade is drawn over; the highlight is white, as in dark. */
+  --osc-hw-shade: #cacdd0;
+  --osc-hw-highlight: #ffffff;
 
   /* Spectrogram LUT on a light surface: floor = page white, rising through lavender, purple,
      magenta and orange to a dark amber top, so loud cells stay the most contrasted. */

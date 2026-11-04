@@ -698,7 +698,7 @@ function knobShapes(value, applied, p, t, st, zoom) {
   return out
     + `<circle data-shadow="" class="${SHADOW_CLASS}" cx="0" `
     + `cy="${st.dragging ? KNOB.shadowDragDy : KNOB.shadowDy}" r="${KNOB.cap}" `
-    + `fill="${esc(t.surface.edge)}" stroke="none"/>`
+    + `fill="${esc(c.shade)}" stroke="none"/>`
     + `<circle data-cap="" cx="0" cy="0" r="${KNOB.cap}" fill="${esc(c.cap)}" `
     + `stroke="${esc(t.surface.edge)}" stroke-width="1"/>`
     + `<ellipse class="${SHEEN_CLASS}" cx="-3.5" cy="-4.5" rx="5" ry="3.5" `

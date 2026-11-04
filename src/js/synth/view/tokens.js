@@ -16,7 +16,7 @@ export const PANEL_TOKENS = Object.freeze({
   capHi: '--osc-surface-4', edge: '--osc-bg', pointer: '--osc-text', label: '--osc-text-muted',
   text: '--osc-text', jack: '--osc-surface-0', jackRing: '--osc-text-dim',
   focus: '--osc-focus', normal: '--osc-text-dim', refuse: '--osc-red',
-  bezel: '--osc-border-strong',
+  bezel: '--osc-border-strong', shade: '--osc-hw-shade', highlight: '--osc-hw-highlight',
 });
 export const CABLE_TOKENS = Object.freeze(['--osc-cyan', '--osc-red-soft', '--osc-magenta',
   '--osc-green', '--osc-purple', '--osc-blue']);

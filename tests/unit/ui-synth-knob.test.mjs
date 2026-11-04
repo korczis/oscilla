@@ -954,7 +954,7 @@ test('knob: hover lights the skirt edge in control.pointer', () => {
     t.pointer);
 });
 
-test('knob: the cap shadow is hw-shadow in surface.edge, 1 down, 2 while dragged', () => {
+test('knob: the cap shadow is hw-shadow in control.shade, 1 down, 2 while dragged', () => {
   for (const [state, dy] of [[{}, 1], [{ dragging: true }, 2], [{ focus: true }, 1]]) {
     const svg = draw('knob', { state });
     const sh = part(svg, 'data-shadow');
@@ -962,7 +962,7 @@ test('knob: the cap shadow is hw-shadow in surface.edge, 1 down, 2 while dragged
     assert.match(sh, /^<circle /);
     assert.match(sh, /\sclass="opacity-hw-shadow"/);
     assert.doesNotMatch(sh, /opacity="/);
-    assert.equal(attrOf(sh, 'fill'), TOKENS.surface.edge);
+    assert.equal(attrOf(sh, 'fill'), TOKENS.control.shade, 'the depth shade (21, amendment a-e)');
     assert.equal(attrOf(sh, 'stroke'), 'none');
     assert.deepEqual([numOf(sh, 'cx'), numOf(sh, 'cy'), numOf(sh, 'r')], [0, dy, 12]);
     assert.ok(svg.indexOf(sh) < svg.indexOf(part(svg, 'data-cap')), 'under the cap');

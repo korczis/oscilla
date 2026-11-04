@@ -13,6 +13,12 @@
 //     - the hardware vocabulary (wood, brushed, anodis, screw, jack-nut, sheen, cheek, data-led,
 //       data-needle, data-hw) appears only in THEME_DIRS, so no surface is skinned outside the
 //       judged layer (af's review of 2026-11-02, P2-A); rivets appear nowhere, the layer included;
+//     - the depth roles --osc-hw-shade and --osc-hw-highlight (oscilla-21's amendment (a)-(e),
+//       11-04) are declared by tokens.css and named nowhere else but THEME_DIRS, so they are
+//       drawn only by the layer, which reads them only at the hw-shadow and hw-sheen classes
+//       (ui-synth-tokens.test.mjs proves the drawn markup); a token name is not a hw-* class;
+//     - tokens.css gains no declaration: its count equals the Flowbite Pro record
+//       (ui-flowbite-pro-baseline.json), which holds 193 and only falls;
 //     - the palette of tokens.css equals its reviewed snapshot (visual-identity-palette.json);
 //     - the hardware intensity keys of tailwind.config.cjs stay within their bounds;
 //   the theme layer (THEME_DIRS: src/js/synth/view now; src/js/ui/synth, the shared
@@ -435,8 +441,11 @@ export function themeSpl(files) {
 
 // --- where the hardware look may be drawn ---------------------------------------------------
 
+// `hw-` is the hw-* intensity classes (opacity-hw-sheen, w-hw-wood, shadow-hw-led); a custom
+// property --osc-hw-* is a colour token, which depthRolesOutsideLayer confines instead.
 export const HW_VOCAB = new RegExp(String.raw`wood|brushed|anodis|screw|jack-nut|sheen|cheek`
-  + String.raw`|grain|knurl|bolt|bezel|metal(?:lic)?\b|\bhw-|data-led|data-needle|data-hw`, 'i');
+  + String.raw`|grain|knurl|bolt|bezel|metal(?:lic)?\b|\b(?<!--osc-)hw-|data-led|data-needle`
+  + String.raw`|data-hw`, 'i');
 // path -> { words, why }: the words a file outside THEME_DIRS may use, and the one reason. Each
 // entry only shrinks, excuses only its words (any other match in the file still fails), and an
 // entry no longer needed fails as stale. Synonyms HW_VOCAB does not list are the reviewer's.
@@ -467,6 +476,33 @@ export function hardwareOutsideLayer(files, allow = HW_ALLOW) {
   }
   for (const p of allow.keys()) if (!seen.has(p)) out.push(`${p}: stale HW_ALLOW entry`);
   return out;
+}
+
+// The depth roles of oscilla-21's amendment (a)-(e), 11-04: declared by tokens.css, named only
+// by the theme layer (its token maps and drawings), never by a surface of its own.
+export const DEPTH_ROLES = ['--osc-hw-shade', '--osc-hw-highlight'];
+export const DEPTH_DECLARED_IN = 'src/styles/tokens.css';
+
+/** A depth role named outside tokens.css and THEME_DIRS (comments excepted). */
+export function depthRolesOutsideLayer(files) {
+  const out = [];
+  for (const [p, raw] of files) {
+    if (p === DEPTH_DECLARED_IN || inDirs(p, THEME_DIRS)) continue;
+    const text = stripComments(raw);
+    const m = new RegExp(DEPTH_ROLES.join('|')).exec(text);
+    if (m) out.push(`${p}:${lineOf(text, m.index)}: ${m[0]} outside the synth-theme layer`);
+  }
+  return out;
+}
+
+/** The declarations of a stylesheet as the Flowbite Pro record counts them: property: value
+ *  inside a block, comments removed. */
+export function declarationCount(css) {
+  let n = 0;
+  for (const b of cssBlocks(css.replace(/\/\*[\s\S]*?\*\//g, ''))) {
+    n += b.body.split(';').filter((d) => /^\s*[-\w]+\s*:/.test(d)).length;
+  }
+  return n;
 }
 
 /** Rivets are not among Q071's options and v3 banned them: nowhere, the layer included. */
@@ -690,6 +726,25 @@ test('the hardware look is drawn only in the synth-theme layer, and rivets nowhe
   assert.deepEqual(rivets(SRC), []);
 });
 
+test('the depth roles are declared in both themes and named only by the layer', () => {
+  const p = palette(TOKENS_CSS);
+  for (const role of DEPTH_ROLES) {
+    for (const sel of [':root', '[data-theme="light"]']) {
+      assert.match(p[sel]?.[role] || '', /^#[0-9a-f]{6}$/i, `${role} in ${sel}, opaque`);
+    }
+  }
+  assert.deepEqual(depthRolesOutsideLayer(SRC), []);
+  assert.deepEqual(hardwareOutsideLayer(SRC), [], 'a --osc-hw-* token is not a hw-* class');
+});
+
+test('tokens.css gains no declaration: the depth roles are net zero (193, the record)', () => {
+  const record = JSON.parse(read('tests/unit/ui-flowbite-pro-baseline.json'));
+  const recorded = record.domainViews?.['src/styles/tokens.css']?.declarations
+    ?? record.stylesheets?.['src/styles/tokens.css']?.declarations;
+  assert.ok(recorded <= 193, `the record holds ${recorded}, never above 193`);
+  assert.equal(declarationCount(TOKENS_CSS), recorded, 'tokens.css declarations = the record');
+});
+
 test('the palette of tokens.css equals its reviewed snapshot', (t) => {
   const now = palette(TOKENS_CSS);
   assert.ok(Object.keys(now[':root'] || {}).length > 20, 'the dark palette is read');
@@ -894,6 +949,23 @@ test('mutation: the hardware look outside the layer, and a rivet anywhere, are c
     '`<i class="osc-knurl shadow-hw-led"></i>`')), [], 'inside the layer');
   caught(rivets, f('src/js/ui/synth/plate.js', '`<circle class="rivet"/>`'),
     f('src/js/ui/synth/plate.js', '`<circle class="screw"/>`'));
+});
+
+test('mutation: a depth role outside the layer is caught; a token is not a hw-* class', () => {
+  caught(depthRolesOutsideLayer, f('src/js/ui/studio/graph-view.js',
+    '`<path fill="var(--osc-hw-shade)"/>`'), f('src/js/ui/studio/graph-view.js',
+    '`<path fill="var(--osc-surface-2)"/>`'));
+  caught(depthRolesOutsideLayer,
+    f('src/styles/studio.css', '.x { color: var(--osc-hw-highlight); }'),
+    f('src/styles/tokens.css', ':root { --osc-hw-highlight: #ffffff; }'));
+  assert.deepEqual(depthRolesOutsideLayer(f('src/js/ui/synth/xy.js',
+    "fill: 'var(--osc-hw-shade)'")), [], 'inside the layer');
+  const hw = (files) => hardwareOutsideLayer(files, new Map());
+  assert.deepEqual(hw(f('src/styles/tokens.css', ':root { --osc-hw-shade: #000000; }')), []);
+  caught(hw, f('src/styles/tokens.css', '.y.opacity-hw-shadow { color: var(--osc-hw-shade); }'),
+    f('src/styles/tokens.css', ':root { --osc-hw-shade: #000000; }'));
+  assert.equal(declarationCount(':root {\n  --a: #000; /* b: c; */\n  --d: 1px;\n}\n'
+    + '[data-theme="light"] { --a: #fff; }'), 3);
 });
 
 test('mutation: a palette change and an intensity beyond its bound are caught', () => {

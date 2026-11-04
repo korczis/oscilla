@@ -3,21 +3,28 @@
 // run time into one deep-frozen set of five groups, a missing value reads currentColor, and
 // tokensFrom(lookup) is the same mapping without a DOM. The layer's sources carry no colour
 // literal and no product name (project.visual-identity-lock v3), and no role is an intensity:
-// opacity is the hw-* Tailwind keys', and the cable shadow is an opaque token (v4).
+// opacity is the hw-* Tailwind keys', and the cable shadow is an opaque token (v4). The two depth
+// roles (control.shade, control.highlight: --osc-hw-shade, --osc-hw-highlight; oscilla-21's
+// amendment (a)-(e) of 11-04) hold their ratios in both themes and are visible, |ΔL*| >= 3,
+// over every face the layer draws them on, the pairs read from what knob.js and xy.js draw.
 //   node --test tests/unit/ui-synth-tokens.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { SYNTH_TOKEN_NAMES, synthTokens, tokensFrom } from '../../src/js/ui/synth/tokens.js';
 import { controlSvg } from '../../src/js/ui/synth/knob.js';
+import { xySvg } from '../../src/js/ui/synth/xy.js';
+import { knobSvg } from '../../src/js/synth/view/knob.js';
+import { PANEL_TOKENS } from '../../src/js/synth/view/tokens.js';
 import { NAMED, TOKENS, intensityLiterals } from './ui-synth-fixture.mjs';
 
 const SHAPE = {
   surface: ['plateHi', 'plateLo', 'card', 'edge'],
   text: ['label', 'value', 'dim'],
   control: ['cap', 'capHi', 'ring', 'track', 'pointer', 'focus', 'disabled', 'edge', 'knurl',
-    'applied', 'bezel'],
+    'applied', 'bezel', 'shade', 'highlight'],
   jack: ['body', 'ring', 'normal', 'refuse'],
   cable: ['palette', 'shadow', 'sheen'],
 };
@@ -66,6 +73,8 @@ test('the names follow the Synth panel roles the lane file recorded', () => {
   assert.equal(n.control.knurl, '--osc-border', 'the knurl is decorative');
   assert.equal(n.control.applied, '--osc-purple');
   assert.equal(n.control.bezel, '--osc-border-strong', 'an LED bezel\'s ring, decorative');
+  assert.equal(n.control.shade, '--osc-hw-shade', 'the depth shade (21, amendment a-e)');
+  assert.equal(n.control.highlight, '--osc-hw-highlight', 'the depth highlight (21)');
   assert.equal(n.jack.refuse, '--osc-red');
   assert.equal(n.cable.shadow, '--osc-bg');
   assert.equal(n.cable.sheen, '--osc-text', 'the sheen is its own token (dev-53, 2026-11-02)');
@@ -215,10 +224,11 @@ const contrast = (a, b) => {
 };
 
 // The control roles that only decorate (WCAG 1.4.11 asks nothing of them): the cap and its
-// highlight, the knurl and an LED bezel's ring (the lens tells the state; ui-synth-led.test.mjs
-// holds the ring to the strongest neutral the palette has). Every other control role marks the
-// control or its value.
-const DECORATIVE = ['cap', 'capHi', 'knurl', 'bezel'];
+// highlight, the knurl, an LED bezel's ring (the lens tells the state; ui-synth-led.test.mjs
+// holds the ring to the strongest neutral the palette has) and the two depth roles, drawn only
+// at an intensity and judged below by their own ratios and visibility. Every other control role
+// marks the control or its value.
+const DECORATIVE = ['cap', 'capHi', 'knurl', 'bezel', 'shade', 'highlight'];
 const PLATES = [SYNTH_TOKEN_NAMES.surface.plateHi, SYNTH_TOKEN_NAMES.surface.plateLo];
 
 test('every graphic role of the knob, fader and switch holds 3:1 on the plate, text 4.5:1', () => {
@@ -284,3 +294,214 @@ test('the unlit knob arc, as controlSvg draws it in every state, holds 3:1 on bo
   }
   assert.deepEqual(short, [], 'the unlit arc under 3:1 on a plate');
 });
+
+// ---------------------------------------------------------------- the depth roles (21, a-e)
+// Amendment approved by oscilla-21 (11-04), the palette and visual-identity-lock v4 owner: two
+// roles, --osc-hw-shade and --osc-hw-highlight, drawn only through the hw-shadow and hw-sheen
+// classes (no hw-* key changes). (a) The shade holds 1.15:1 against the face it is drawn over.
+// (b) A use is visible: |ΔL*| >= 3 between the face and the role composited over it at the
+// intensity its class reads from tailwind.config.cjs. (c) The highlight holds 1.15:1 against
+// surface-3, surface-4 and the bg, and 3:1 against every face it is drawn on. (d) The knob keeps
+// its capHi sheen unless the highlight is visible on the cap in both themes. The pairs (role,
+// intensity, face) are read from what the layer draws, never from a list written here.
+
+/** CIELAB L* of a #rrggbb colour: sRGB to relative luminance Y (WCAG's, sRGB's D65 Y), then
+ *  L* = 116 f(Y / Yn) - 16 with the D65 white Yn = 1, f(t) = cbrt(t) above (6/29)^3, else
+ *  t / (3 (6/29)^2) + 4/29. */
+const lstar = (hex) => {
+  const y = luminance(hex);
+  const d = 6 / 29;
+  return 116 * (y > d ** 3 ? Math.cbrt(y) : y / (3 * d * d) + 4 / 29) - 16;
+};
+/** `fg` at intensity `a` over `bg`, both #rrggbb, as the browser composites it (8 bits). */
+const over = (fg, bg, a) => `#${[1, 3, 5].map((i) => Math.round(parseInt(fg.slice(i, i + 2), 16)
+  * a + parseInt(bg.slice(i, i + 2), 16) * (1 - a)).toString(16).padStart(2, '0')).join('')}`;
+/** The L* step a use makes: the composite's L* less the face's (negative darkens). */
+const deltaL = (fg, bg, a) => lstar(over(fg, bg, a)) - lstar(bg);
+const HW = createRequire(import.meta.url)('../../tailwind.config.cjs').theme.extend.opacity;
+const DEPTH = { [SYNTH_TOKEN_NAMES.control.shade]: 'hw-shadow',
+  [SYNTH_TOKEN_NAMES.control.highlight]: 'hw-sheen' };
+const varOf = (v) => (/^var\((--osc-[\w-]+)\)$/.exec(v || '') || [])[1];
+const MIN_DL = 3;
+
+/** The shape elements of a drawing in paint order, each with its attributes. */
+const shapesOf = (svg) => [...svg.matchAll(/<(circle|rect|ellipse|path|line)\b([^>]*?)\/?>/g)]
+  .map((m) => ({ tag: m[1], a: Object.fromEntries([...m[2].matchAll(/\s([\w:-]+)="([^"]*)"/g)]
+    .map((x) => [x[1], x[2]])) }));
+/** Where a use shows: a circle's lowest point (a drop shadow's tip), a path's first point. */
+function sampleOf(s) {
+  if (s.tag === 'circle') return [Number(s.a.cx), Number(s.a.cy) + Number(s.a.r) - 0.01];
+  const m = /^M\s*(-?[\d.]+)[\s,]+(-?[\d.]+)/.exec(s.a.d || '');
+  return m ? [Number(m[1]), Number(m[2])] : null;
+}
+function covers(s, [x, y]) {
+  const n = (k) => Number(s.a[k]);
+  if (s.tag === 'circle') return Math.hypot(x - n('cx'), y - n('cy')) < n('r');
+  if (s.tag === 'rect') {
+    return x >= n('x') && x <= n('x') + n('width') && y >= n('y') && y <= n('y') + n('height');
+  }
+  return false;
+}
+/** An opaque face: a filled shape with no intensity class, shown. */
+const isFace = (s) => s.a.fill && s.a.fill !== 'none' && !s.a.class
+  && s.a.visibility !== 'hidden' && (s.tag === 'circle' || s.tag === 'rect');
+
+/** Every use of a depth role in `svg`: its role, class and the face drawn last under it. */
+function depthUses(svg, where) {
+  const list = shapesOf(svg);
+  const out = [];
+  list.forEach((s, i) => {
+    for (const paint of ['fill', 'stroke']) {
+      const role = varOf(s.a[paint]);
+      if (!DEPTH[role]) continue;
+      const p = sampleOf(s);
+      const under = p && list.slice(0, i).reverse().find((u) => isFace(u) && covers(u, p));
+      out.push({ role, cls: s.a.class, face: under ? varOf(under.a.fill) : undefined,
+        part: Object.keys(s.a).find((k) => k.startsWith('data-')) || s.tag, where });
+    }
+  });
+  return out;
+}
+
+/** What the layer draws: knob.js's three controls in every state, the Synth panel's knob
+ *  (its own token set, the skirt on the plate's top) and xy.js's pad in every state. */
+function layerUses() {
+  const num = { key: 'level', unit: '%', min: 0, max: 100, step: 1, default: 50 };
+  const bool = { key: 'on', type: 'boolean', default: false };
+  const uses = [];
+  for (const state of [{}, { dragging: true }, { disabled: true }, { focus: true },
+    { hover: true }]) {
+    for (const [kind, param, value] of [['knob', num, 70], ['fader', num, 70],
+      ['switch', bool, true]]) {
+      uses.push(...depthUses(controlSvg({ kind, value, param, tokens: TOKENS, state }),
+        `knob.js ${kind} ${JSON.stringify(state)}`));
+    }
+  }
+  const panel = Object.fromEntries(Object.entries(PANEL_TOKENS).map(([k, n]) => [k, `var(${n})`]));
+  for (const disabled of [false, true]) {
+    uses.push(...depthUses(knobSvg({ value: 70, param: num, tokens: panel, disabled }),
+      `the panel's knob${disabled ? ' disabled' : ''}`));
+  }
+  const params = { x: { key: 'x', label: 'X', type: 'integer', min: 0, max: 14, step: 1,
+    default: 7 }, y: { key: 'y', label: 'Y', unit: 'Hz', type: 'number', min: 20, max: 20000,
+    scale: 'log', default: 1000 } };
+  for (const state of [{}, { touched: true }, { focus: 'pad' }, { disabled: true },
+    { disabled: true, touched: true }]) {
+    uses.push(...depthUses(xySvg({ x: 3, y: 440, gate: Boolean(state.touched), source: 's',
+      params, tokens: TOKENS, state }), `xy.js ${JSON.stringify(state)}`));
+  }
+  return uses;
+}
+/** The distinct (role, class, face) pairs, each with where it is drawn. */
+function depthPairs() {
+  const pairs = new Map();
+  for (const u of layerUses()) {
+    const k = `${u.role} ${u.cls} ${u.face}`;
+    if (!pairs.has(k)) pairs.set(k, { ...u, parts: new Set() });
+    pairs.get(k).parts.add(`${u.part} (${u.where})`);
+  }
+  return [...pairs.values()];
+}
+
+test('the depth roles are drawn only through their intensity class, each over a face', () => {
+  const uses = layerUses();
+  const parts = new Set(uses.map((u) => `${u.role} ${u.part}`));
+  for (const want of ['--osc-hw-shade data-shadow', '--osc-hw-shade data-puck-shadow',
+    '--osc-hw-shade data-recess', '--osc-hw-highlight data-puck-highlight']) {
+    assert.ok(parts.has(want), `drawn: ${want} (${[...parts].join(', ')})`);
+  }
+  for (const u of uses) {
+    assert.equal(u.cls, `opacity-${DEPTH[u.role]}`, `${u.where} ${u.part}: ${u.role} only at `
+      + `${DEPTH[u.role]}, never opaque or at another intensity`);
+    assert.ok(u.face, `${u.where} ${u.part}: drawn over a face`);
+  }
+});
+
+test('the depth roles hold their ratios in both themes (amendment a and c)', () => {
+  const N = SYNTH_TOKEN_NAMES.control;
+  const pairs = depthPairs();
+  const short = [];
+  const lines = [];
+  for (const [theme, t] of Object.entries(themes())) {
+    const c = (a, b) => contrast(hexOf(t, a), hexOf(t, b));
+    for (const p of pairs) {
+      const min = p.role === N.shade ? 1.15 : 3;
+      const r = c(p.role, p.face);
+      lines.push(`${theme} ${p.role} on ${p.face}: ${r.toFixed(3)}:1 (>= ${min})`);
+      if (r < min) short.push(`${theme} ${p.role} on ${p.face}: ${r.toFixed(3)} < ${min}`);
+    }
+    for (const bg of ['--osc-surface-3', '--osc-surface-4', '--osc-bg']) {
+      const r = c(N.highlight, bg);
+      lines.push(`${theme} ${N.highlight} on ${bg}: ${r.toFixed(3)}:1 (>= 1.15)`);
+      if (r < 1.15) short.push(`${theme} ${N.highlight} on ${bg}: ${r.toFixed(3)} < 1.15`);
+    }
+  }
+  console.log(lines.join('\n'));
+  assert.deepEqual(short, []);
+});
+
+test('every use of a depth role is visible: |ΔL*| >= 3 at its intensity, in both themes (b)',
+  () => {
+    const short = [];
+    const lines = [];
+    for (const [theme, t] of Object.entries(themes())) {
+      for (const p of depthPairs()) {
+        const a = Number(HW[DEPTH[p.role]]);
+        assert.ok(a > 0 && a <= 0.4, `${DEPTH[p.role]} read from tailwind.config.cjs: ${a}`);
+        const dl = deltaL(hexOf(t, p.role), hexOf(t, p.face), a);
+        lines.push(`${theme} ${p.role} at ${DEPTH[p.role]} ${a} on ${p.face}: ΔL* `
+          + `${dl.toFixed(2)} [${[...p.parts].join('; ')}]`);
+        if (Math.abs(dl) < MIN_DL) short.push(`${theme} ${p.role} on ${p.face}: ${dl.toFixed(2)}`);
+        // A shade never lightens and a highlight never darkens what it is drawn on.
+        assert.ok(p.role === SYNTH_TOKEN_NAMES.control.shade ? dl < 0 : dl > 0,
+          `${theme} ${p.role} on ${p.face}: ΔL* ${dl.toFixed(2)} the wrong way`);
+      }
+    }
+    console.log(lines.join('\n'));
+    assert.deepEqual(short, [], `under ΔL* ${MIN_DL}`);
+  });
+
+test('the light shade is the lightest tint of the palette\'s navy ink that passes (a) and (b)',
+  () => {
+    // The tint of the light theme's --osc-text (the palette's own navy) toward white, k/255: the
+    // lightest k for which the shade still holds (a) and (b) on every face it is drawn over. No
+    // new hue enters the palette, and the shadow stays as restrained as visibility allows.
+    const { dark, light } = themes();
+    const N = SYNTH_TOKEN_NAMES.control;
+    const faces = [...new Set(depthPairs().filter((p) => p.role === N.shade).map((p) => p.face))];
+    assert.ok(faces.length >= 2, `the shade's faces: ${faces.join(', ')}`);
+    const a = Number(HW['hw-shadow']);
+    const passes = (t, hex) => faces.every((f) => contrast(hex, hexOf(t, f)) >= 1.15
+      && -deltaL(hex, hexOf(t, f), a) >= MIN_DL);
+    const ink = hexOf(light, '--osc-text');
+    let pick = null;
+    for (let k = 0; k <= 255; k++) {
+      const hex = `#${[1, 3, 5].map((i) => {
+        const v = parseInt(ink.slice(i, i + 2), 16);
+        return Math.round(v + ((255 - v) * k) / 255).toString(16).padStart(2, '0');
+      }).join('')}`;
+      if (passes(light, hex)) pick = hex;
+    }
+    assert.ok(pick, 'a tint passes');
+    assert.equal(hexOf(light, N.shade), pick, `light ${N.shade} is the test's pick (tint of `
+      + `${ink}, on ${faces.join(', ')})`);
+    assert.ok(passes(dark, hexOf(dark, N.shade)), `dark ${N.shade} passes (a) and (b)`);
+    console.log(`light ${N.shade} ${pick}: the lightest tint of ${ink} passing on ${faces}`);
+  });
+
+test('the knob keeps capHi as its sheen unless the highlight shows on the cap in both themes (d)',
+  () => {
+    const N = SYNTH_TOKEN_NAMES.control;
+    const a = Number(HW['hw-sheen']);
+    const dl = Object.fromEntries(Object.entries(themes()).map(([theme, t]) => [theme,
+      deltaL(hexOf(t, N.highlight), hexOf(t, N.cap), a)]));
+    const both = Object.values(dl).every((v) => Math.abs(v) >= MIN_DL);
+    const svg = controlSvg({ kind: 'knob', value: 70, tokens: TOKENS,
+      param: { key: 'level', unit: '%', min: 0, max: 100, step: 1, default: 50 } });
+    const sheen = /<ellipse\b[^>]*class="opacity-hw-sheen"[^>]*>/.exec(svg)[0];
+    const want = both ? TOKENS.control.highlight : TOKENS.control.capHi;
+    assert.equal(/\sfill="([^"]*)"/.exec(sheen)[1], want, `the highlight on the cap: ΔL* dark `
+      + `${dl.dark.toFixed(2)}, light ${dl.light.toFixed(2)}`);
+    console.log(`knob sheen: ${want} (highlight on ${N.cap}: dark ${dl.dark.toFixed(2)}, light `
+      + `${dl.light.toFixed(2)})`);
+  });
