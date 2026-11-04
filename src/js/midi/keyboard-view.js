@@ -7,6 +7,10 @@ import { isBlack, noteName } from './keyboard.js';
 
 const BLACK_W = 0.6;   // a black key's width, as a fraction of a white key
 const BLACK_H = 0.62;  // a black key's height, as a fraction of the keys' height
+// Where a black key sits off the boundary between its two white keys, as a fraction of a white
+// key, by pitch class (LXK-18, the look audit): C# and D# lean apart, F# and A# outwards and G#
+// stays centred, as on a real keybed, so the two- and three-key groups read at a glance.
+export const BLACK_OFFSET = Object.freeze({ 1: -0.1, 3: 0.1, 6: -0.15, 8: 0, 10: 0.15 });
 // The text printed on the keys (LXK-06, the look audit): one size at the 12 px floor of the
 // layout rule (G2), never scaled down with the key; a key narrower than KEY_LETTER_MIN_W keeps
 // no letter (a phone's keys, which no computer key plays), and C's octave name stays.
@@ -27,7 +31,8 @@ export function keyLayout(first, last, width, height) {
     const left = whites.indexOf(n - 1);
     if (left < 0) continue;
     const bw = ww * BLACK_W;
-    keys.push({ note: n, black: true, x: (left + 1) * ww - bw / 2, y: 0, w: bw, h: height * BLACK_H });
+    const x = (left + 1) * ww - bw / 2 + (BLACK_OFFSET[n % 12] || 0) * ww;
+    keys.push({ note: n, black: true, x, y: 0, w: bw, h: height * BLACK_H });
   }
   return keys;
 }

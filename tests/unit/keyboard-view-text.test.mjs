@@ -6,7 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { drawKeys } from '../../src/js/midi/keyboard-view.js';
+import { BLACK_OFFSET, drawKeys, keyLayout, noteAt } from '../../src/js/midi/keyboard-view.js';
 
 /** A 2D context that records each text drawn with the font it was drawn in. */
 function recorder() {
@@ -49,4 +49,24 @@ test('a key narrower than the letter width keeps no letter; C keeps its octave n
   const desk = draw(1536);
   assert.equal(desk.texts.filter(({ t }) => letters.includes(t)).length, letters.length,
     'on the desktop every labelled key shows its letter');
+});
+
+// LXK-18: the black keys sit off the boundary by pitch class, as on a real keybed: C# and D#
+// lean apart, F# and A# outwards, G# centred; every black key still lies over its two whites
+// and is hit first there.
+test('the black keys sit off the boundaries by pitch class, and still hit first', () => {
+  assert.deepEqual({ ...BLACK_OFFSET }, { 1: -0.1, 3: 0.1, 6: -0.15, 8: 0, 10: 0.15 });
+  const layout = keyLayout(48, 84, 660, 132);
+  const ww = 660 / 22;
+  const of = (n) => layout.find((k) => k.note === n);
+  for (const n of [61, 63, 66, 68, 70]) {
+    const k = of(n);
+    const boundary = of(n + 1).x; // the white key above starts at the boundary
+    const centre = k.x + k.w / 2;
+    assert.ok(Math.abs(centre - boundary - BLACK_OFFSET[n % 12] * ww) < 1e-9, `${n} offset`);
+    assert.ok(k.x > of(n - 1).x && k.x + k.w < of(n + 1).x + ww, `${n} over its two whites`);
+    assert.equal(noteAt(layout, centre, 10), n, `${n} is hit at its centre`);
+  }
+  assert.ok(of(61).x + of(61).w / 2 < of(62).x, 'C# leans towards C');
+  assert.ok(of(70).x + of(70).w / 2 > of(71).x, 'A# leans towards B');
 });
