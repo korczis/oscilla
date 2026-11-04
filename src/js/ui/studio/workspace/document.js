@@ -150,7 +150,8 @@ export function createWorkspaceDocument(ctx, svc, ops) {
     ctx.projectId = projectId;
     ctx.templateId = templateId;
     ctx.templateBaseline = templateId ? createDirtyTracker(ctx.handle.getModel()) : null;
-    if (ctx.editor) requestAnimationFrame(() => ctx.editor.frameAll());
+    // A document with the default view opens fitted, one with a saved view at it (K170).
+    if (ctx.editor) ctx.editor.openView();
     refreshState();
   }
 

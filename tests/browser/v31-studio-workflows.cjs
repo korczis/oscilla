@@ -794,12 +794,13 @@ function defineChecks(fx) {
         alerts: window.OSCILLA.app.alerts.map((a) => `${a.title}: ${a.message || ''}`) };
     }, { row: ROW, id: done.id }), (x) => /was not opened/.test(x.status) && x.links === 0,
     15000);
-    // Open over unsaved changes asks first: the first press changes nothing.
+    // Open over unsaved changes asks first: the first press changes nothing (the document; its
+    // view, still fitted, follows the viewport when the dialog's status shows: K170).
     res.unsaved = await page.evaluate(async (row) => {
       const s = window.OSCILLA.studio.store;
       const r0 = s.dispatch({ type: 'NODE_PARAM_SET', nodeId: 'sweep-1', key: 'duration',
         value: 2 });
-      const before = JSON.stringify(window.OSCILLA.studio.model);
+      const before = JSON.stringify({ ...window.OSCILLA.studio.model, view: null });
       document.querySelector(`${row} [data-osc="studio.saved.open"]`).click();
       return { dispatched: r0.ok, dirty: window.OSCILLA.app.studio.dirty, before };
     }, ROW);
@@ -809,7 +810,7 @@ function defineChecks(fx) {
       return { text: b ? b.textContent : '', label: b ? b.getAttribute('aria-label') : '',
         status: st && !st.hidden ? st.textContent : '',
         dialog: document.getElementById('osc-dlg-studio-library').open,
-        model: JSON.stringify(window.OSCILLA.studio.model) };
+        model: JSON.stringify({ ...window.OSCILLA.studio.model, view: null }) };
     }, ROW), (x) => x.text === 'Replace unsaved changes', 8000);
     await page.evaluate(() => window.OSCILLA.app.closeModal('osc-dlg-studio-library'));
     // Leave nothing behind: the run and the project.
@@ -960,16 +961,18 @@ function defineChecks(fx) {
         pattern: m.timeline.clips.filter((c) => c.kind === 'pattern'
           && c.trackId === track.id).length,
         tempo: m.transport.tempo, dirty: window.OSCILLA.studio.dirty,
-        model: JSON.stringify(m) };
+        model: JSON.stringify({ ...m, view: null }) };
     }), { ms: 15000, what: 'sequence-import: the saved config opens in Studio' });
-    // A damaged sequence is refused: the document stays as it is and the reason is shown.
+    // A damaged sequence is refused: the document stays as it is and the reason is shown. The
+    // document is compared without its view: the warning changes the graph viewport's height,
+    // and a view still in fit mode fits it again (K170; presentation only).
     const bad = { ...cfg, sequencer: { ...cfg.sequencer, blocks: 'none' } };
     await page.setInputFiles('#osc-studio-import-file', { name: 'damaged.json',
       mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(bad)) });
     const refusal = await until(() => page.evaluate(() => {
       const a = window.OSCILLA.app;
       return a.studio.warning.startsWith('Not imported') ? { warning: a.studio.warning,
-        model: JSON.stringify(window.OSCILLA.studio.model) } : null;
+        model: JSON.stringify({ ...window.OSCILLA.studio.model, view: null }) } : null;
     }), { ms: 15000, what: 'sequence-import: the damaged file is refused' });
     // The track goes back out as the V2 sequence the configuration held.
     const [seqDl] = await Promise.all([page.waitForEvent('download', { timeout: 20000 }),
