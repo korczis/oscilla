@@ -63,6 +63,11 @@
 //              voice says the Master feed it took and places every node it adds below the
 //              user's; A sounds and its release falls below -70 dB rel. Fails on 3c22d01a
 //              ("The keys play KEYBOARD.", the panel at the top)
+//   s-keysilent a keyboard the pad's cables silenced says why (review S8): XY lead from the
+//              Preset menu, then the Panel tab's Init: the tab shows why the keys sound nothing
+//              with Unpatch the pad; QWERTY A stays below -70 dB rel and the status says why;
+//              Unpatch the pad removes the pad's cables and the notice, and A sounds again
+//              (RMS above -40 dB rel). Fails on 3c22d01a (no notice, a silent key says nothing)
 //   s-preset   each preset, chosen in the Preset menu, is one undo entry, sets its knobs on
 //              the face and changes the sound by its own mark: Bass (LPF 180 Hz: the 1-4 kHz
 //              band 12 dB+ further below the fundamental than Init), Lead (VCO 1 at 8': no
@@ -925,6 +930,38 @@ function defineChecks() {
     const off = await silent(page, 'the key up releases the new voice');
     return { ok: placed.length > 10 && placed.every((y) => y > top), said, top,
       lowest: Math.min(...placed), on: on.rmsDb, off: off.rmsDb };
+  });
+
+  // Review of src/js/synth (oscilla-21, S8): a keyboard the pad's cables silenced says why.
+  def('s-keysilent', async ({ page }) => {
+    const status = () => page.locator('[data-osc="synth.status"]').textContent();
+    await tabTo(page, 'xy');
+    await page.locator('#osc-synth-preset').selectOption('xy-lead');
+    await until(async () => (await dbg(page)).cables.some((c) => c.from === 'xy.gate'),
+      { ms: 10000, what: 'XY lead patches the pad into the voice' });
+    await tabTo(page, 'panel');
+    await page.locator('#osc-synth-preset').selectOption('init');
+    const notice = page.locator('[data-osc="synth.keys-silent"]');
+    await until(() => notice.isVisible(), { ms: 10000,
+      what: 'the Panel tab says why the keys sound nothing' });
+    const text = (await notice.textContent()).trim();
+    await hold(page, 'KeyA');
+    const quiet = await silent(page, 'the held key sounds nothing (the pad has the gates)');
+    const said = await until(async () => {
+      const t = await status();
+      return /The keys sound nothing/.test(t) && t;
+    }, { ms: 10000, what: 'the key says why it sounds nothing' });
+    await page.keyboard.up('KeyA');
+    await notice.locator('[data-xy-unpatch]').click();
+    await until(async () => !(await dbg(page)).cables.some((c) => c.from.startsWith('xy.'))
+      && !(await notice.count()), { ms: 10000,
+      what: 'Unpatch the pad removes its cables and the notice' });
+    await hold(page, 'KeyA');
+    const on = await sound(page, (q) => q.rmsDb > -40, 'the keys play the voice again');
+    await page.keyboard.up('KeyA');
+    const off = await silent(page, 'the key up releases the voice');
+    return { ok: /Unpatch the pad/.test(text), text, said, quiet: quiet.rmsDb, on: on.rmsDb,
+      off: off.rmsDb };
   });
 
   def('s-riffs', async ({ page }) => {

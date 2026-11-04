@@ -22,6 +22,11 @@ import { templateModel, REFERENCE_TEMPLATE_ID } from '../../src/js/studio/templa
 import { createFakeAudioEnv } from './sequencer-fake-audio.mjs';
 import { panelStore } from './synth-fixture.mjs';
 import { enginePickerHtml } from '../../src/js/synth/view/engines.js';
+import { createXyTab } from '../../src/js/synth/view/xy-tab.js';
+import { xyPresetAction } from '../../src/js/synth/view/xy-wiring.js';
+import * as XY from '../../src/js/synth/xy.js';
+import { panelCables } from '../../src/js/synth/normals.js';
+import { gateTargets } from '../../src/js/studio/live-notes.js';
 
 /** The Synth part on the real transport, mounted as Alpine would; `click(dataset)` is a click
  *  on an element of the view carrying those data attributes (the part's delegated listener). */
@@ -152,3 +157,42 @@ test('S5: New Synth voice inserts as Insert does: below the user\'s nodes, with 
   assert.equal(cmp.synthDebug().played, nodeOf(st.getModel(), 'keys').id,
     'the keys play the new voice');
 });
+
+// ---------------------------------------------------------------- S8: a silent keyboard says why
+
+const keysEnvelopes = (m) => gateTargets(m, nodeOf(m, 'keys').id).envelopes.length;
+
+test('S8: after an XY preset and Panel Init, a key says why the keys sound nothing', () => {
+  const { cmp, st, sink } = synthRig();
+  assert.equal(cmp.synthPreset('xy-lead'), true);
+  cmp.synthTab('panel');
+  assert.equal(cmp.synthPreset('init'), true);
+  assert.equal(keysEnvelopes(st.getModel()), 0, 'the pad\'s cables took both EG gates');
+  sink.noteOn(60, 100);
+  assert.match(cmp.synth.status,
+    /The keys sound nothing: the XY pad's cables into EG 1 Gate and EG 2 Gate/);
+  sink.noteOff(60);
+});
+
+test('S8: the Panel tab shows the reason with Unpatch the pad, one BATCH that restores the keys',
+  () => {
+    const st = panelStore();
+    const said = [];
+    const XYTAB = createXyTab({ panel: PANEL, get: () => ({ handle: st }), host: () => null,
+      nodes: () => PANEL.resolve(st.getModel()), model: () => st.getModel(),
+      dispatch: (a) => st.dispatch(a), say: (t) => said.push(t), jackName: String,
+      tab: () => 'panel', showTab() {}, BTN: 'btn', cmp: () => null });
+    assert.equal(XYTAB.html(), '', 'a playing keyboard: no notice');
+    assert.equal(st.dispatch(xyPresetAction(st.getModel(), PANEL, 'xy-lead').action).ok, true);
+    const html = XYTAB.html();
+    assert.match(html, /data-osc="synth.keys-silent"/);
+    assert.match(html, /data-xy-unpatch=""[^>]*>Unpatch the pad</);
+    const depth = st.debugInfo().undoDepth;
+    const a = XY.xyUnpatchAction(st.getModel(), PANEL);
+    assert.equal(a.action.type, 'BATCH');
+    assert.equal(st.dispatch(a.action).ok, true);
+    assert.equal(st.debugInfo().undoDepth, depth + 1, 'one history entry');
+    assert.equal(keysEnvelopes(st.getModel()), 2, 'the keyboard gates both envelopes again');
+    assert.deepEqual(panelCables(st.getModel(), PANEL).filter((c) => c.fromModule === 'xy'), []);
+    assert.equal(XYTAB.html(), '');
+  });

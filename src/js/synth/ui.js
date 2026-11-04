@@ -338,7 +338,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       + '<div class="mb-2 flex gap-2" role="group" aria-label="Module cards">'
       + `<button type="button" class="${fold}" data-fold-all="open">Expand all</button>`
       + `<button type="button" class="${fold}" data-fold-all="closed">Collapse all</button></div>`
-      + (tab() === 'xy' ? xy.html() : '')
+      + xy.html()
       + `<div class="${engines ? 'grid grid-cols-1 gap-3' : PLATE_GRID}" `
       + `data-osc="synth.modules">${plates}</div></div>`
       + '<section class="bg-white rounded-lg shadow dark:bg-gray-800 self-start p-3 '
