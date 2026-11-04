@@ -777,6 +777,11 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
         el.addEventListener('click', onClick);
         el.addEventListener('dblclick', onDoubleClick);
         el.addEventListener('wheel', gestures.wheel, { passive: false });
+        // A touch from a jack is a cable, never a scroll (ERG-01): Chromium ignores the jack's
+        // touch-none on an SVG child, so its touchstart is cancelled here.
+        el.addEventListener('touchstart', (e) => {
+          if (e.target.closest && e.target.closest('[data-jack]')) e.preventDefault();
+        }, { passive: false });
         el.addEventListener('keydown', onKeyDown);
       }
       this.$watch('workspace', (ws, old) => {

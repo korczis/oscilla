@@ -144,7 +144,7 @@ const LAUNCH = {
 };
 const SIZES = { desktop: { width: 1536, height: 1024 }, phone: { width: 390, height: 844 } };
 const PHONE_CHECKS = new Set(['s-sound', 's-cable', 's-mobile', 's-look', 's-dock',
-  's-library', 's-choices']);
+  's-library', 's-choices', 's-touchpatch']);
 const LOAD_MS = 60000;
 const SOUND_MS = 8000; // a note's attack, a knob change's glide and the analyser's smoothing
 const CHECK_MS = 120000;
@@ -543,6 +543,93 @@ function defineChecks() {
     await page.keyboard.up('KeyD');
     const after = await dbg(page);
     return { ok: model.includes(d.cables[0].id) && after.cables.length === 0, size, fixed, peaks };
+  });
+
+  // ERG-01 (the Synth look audit): on a phone a finger dragged from one jack to another patches
+  // a cable, and the page does not scroll under it. A touch starting on a jack is the bay's: its
+  // touchstart is cancelled (Chromium ignores touch-action on SVG children). Chromium drags a
+  // real touch (CDP); every engine proves the cancel on a constructed touchstart.
+  def('s-touchpatch', async ({ page, browserName }) => {
+    await face(page, 'bay');
+    // The bay's first plate 400 px down (below the listening-safety notice, above the docked
+    // keys), and each point used proven to land on its own jack before it is touched.
+    await page.evaluate(() => {
+      const m = document.querySelector('.osc-main');
+      const j = document.querySelector('[data-jack="keys.velocity:out"]');
+      m.scrollTop += j.getBoundingClientRect().top - 400;
+    });
+    const centre = async (id) => {
+      const r = await page.locator(`[data-jack="${id}"]`).boundingBox();
+      const q = { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+      const hit = await page.evaluate(({ x, y }) => {
+        const el = document.elementFromPoint(x, y);
+        const j = el && el.closest('[data-jack]');
+        return j ? j.dataset.jack : el && el.tagName;
+      }, q);
+      if (hit !== id) throw new Error(`the point of ${id} lands on ${hit}`);
+      return q;
+    };
+    const a = await centre('keys.velocity:out');
+    const b = await centre('vco1.pitch:in');
+    const cancelled = await page.evaluate(({ x, y }) => {
+      const el = document.elementFromPoint(x, y);
+      // WebKit refuses the Touch constructor: a plain touchstart Event reaches the same listener.
+      let ev;
+      try {
+        const t = new Touch({ identifier: 9, target: el, clientX: x, clientY: y });
+        ev = new TouchEvent('touchstart', { cancelable: true, bubbles: true, touches: [t],
+          targetTouches: [t], changedTouches: [t] });
+      } catch (e) {
+        ev = new Event('touchstart', { cancelable: true, bubbles: true });
+        for (const k of ['touches', 'targetTouches', 'changedTouches']) {
+          Object.defineProperty(ev, k, { value: [] });
+        }
+      }
+      el.dispatchEvent(ev);
+      return ev.defaultPrevented;
+    }, a);
+    if (cancelled !== true) {
+      return { ok: false, detail: 'a touch on a jack is not cancelled', cancelled };
+    }
+    // A tap stays a tap (p2): the cancelled touchstart drops the synthesized click, and the jack's
+    // tap runs on pointerup, so a tap on a jack still picks it up (pressed), and a second ends it.
+    const tapped = async () => page.locator('[data-jack="vco1.tune:in"]')
+      .getAttribute('aria-pressed');
+    const t = await centre('vco1.tune:in');
+    await page.touchscreen.tap(t.x, t.y);
+    const picked = await until(async () => (await tapped()) === 'true',
+      { ms: 3000, what: 'a tap on a jack picks it up' }).catch(() => false);
+    await page.touchscreen.tap(t.x, t.y);
+    const dropped = await until(async () => (await tapped()) === 'false',
+      { ms: 3000, what: 'a second tap puts it down' }).catch(() => false);
+    if (!picked || !dropped) {
+      return { ok: false, detail: 'a tap on a jack no longer picks it up', picked, dropped };
+    }
+    if (browserName !== 'chromium') return { ok: true, cancelled, drag: 'chromium only (CDP)' };
+    // Where the dragged-from jack is on the screen: the page did not scroll under the finger if
+    // it is where it was (scrollTop alone also moves when scroll anchoring keeps the view still).
+    const top = () => page.evaluate(() => Math.round(document
+      .querySelector('[data-jack="keys.velocity:out"]').getBoundingClientRect().top));
+    const before = await top();
+    const cdp = await page.context().newCDPSession(page);
+    const touch = (type, q) => cdp.send('Input.dispatchTouchEvent', { type,
+      touchPoints: q ? [{ x: q.x, y: q.y, id: 1 }] : [] });
+    await touch('touchStart', a);
+    for (let i = 1; i <= 8; i += 1) {
+      await touch('touchMove', { x: a.x + (b.x - a.x) * i / 8, y: a.y + (b.y - a.y) * i / 8 });
+    }
+    const mid = await top();
+    await touch('touchEnd', null);
+    const patched = await until(async () => {
+      const d = await dbg(page);
+      return d.cables.length === 1 && d.cables[0].to === 'vco1.pitch' ? d.cables : null;
+    }, { ms: 5000, what: 'the touch drag patches keys.velocity to vco1.pitch' })
+      .catch(async () => (await dbg(page)).cables);
+    const after = await top();
+    // The page does not move under the finger while it drags (before = mid). After the drop the
+    // re-rendered view still moves (the same after a keyboard patch: PLAN JC-10, not ERG-01).
+    return { ok: patched.length === 1 && patched[0].to === 'vco1.pitch' && mid === before,
+      cancelled, cables: patched, jackTop: [before, mid, after] };
   });
 
   def('s-refuse', async ({ page }) => {
@@ -1511,7 +1598,8 @@ function defineChecks() {
 // ------------------------------------------------------------------------------ runner
 /** Does check `name` run at `sizeName` under the --only selection? */
 const runsAt = (name, sizeName) => (!ONLY || ONLY.has(name))
-  && (sizeName === 'phone' ? PHONE_CHECKS.has(name) : name !== 's-mobile');
+  && (sizeName === 'phone' ? PHONE_CHECKS.has(name)
+    : !['s-mobile', 's-touchpatch'].includes(name));
 
 async function runLeg(browserName, sizeName, base) {
   const browser = await playwright[browserName].launch(LAUNCH[browserName]);
@@ -1527,7 +1615,7 @@ async function runLeg(browserName, sizeName, base) {
       try {
         const own = ['s-midi', 's-link'].includes(name);
         const page = own ? null : await openSynth(context, base);
-        const v = await bounded(fn({ page, context, base, size: sizeName }),
+        const v = await bounded(fn({ page, context, base, size: sizeName, browserName }),
           { ms: CHECK_MS, what: `${name} finishes` });
         results[name] = { ...v, ok: v.ok && errors.length === 0, errors: errors.slice(0, 4),
           ms: Date.now() - t0 };
