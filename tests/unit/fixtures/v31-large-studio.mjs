@@ -86,8 +86,41 @@ export const PERF_BUDGETS = Object.freeze({
   compact: FRAME_MS,
 });
 
-/** Browser budgets: opening the fixture file and its first render; one edit or Frame All. */
-export const BROWSER_BUDGETS = Object.freeze({ importMs: 3000, editMs: 50 });
+/**
+ * Browser budgets (wall time in the browser, v31-studio-workflows.cjs check large-graph-render):
+ * opening the fixture file and its first render; one edit, node move or Frame All (median of 9);
+ * Tidy (L), the layered layout of all 100 nodes as one store action (median of 9).
+ *
+ * tidyMs is derived from measurement, not from editMs: Tidy is whole-graph work, not one
+ * gesture. Medians of 9 on the Apple M5 Pro (file://, 5 runs per browser, load 5-10 on 18
+ * cores, 2026-11-04): Chromium 8.1-8.7 ms, Firefox 12-14 ms, WebKit 13-18 ms. On a slow CI
+ * runner WebKit measured 51 ms (median of 5), about 2.8 times the local worst, and missed
+ * editMs (50). The budget is 5 times the local worst (18 ms), 1.8 times that CI value; Tidy
+ * before the store handle's hold (K009) took 614 ms, which it still fails.
+ */
+export const BROWSER_BUDGETS = Object.freeze({ importMs: 3000, editMs: 50, tidyMs: 90 });
+
+/** The BROWSER_BUDGETS key that judges each field the browser check large-graph-render measures. */
+export const BROWSER_BUDGET_FIELDS = Object.freeze({
+  importMs: 'importMs', editMs: 'editMs', moveMs: 'editMs', frameMs: 'editMs', tidyMs: 'tidyMs',
+});
+
+/**
+ * Each budgeted field of `measured` against its budget, so a miss is diagnosable from the CI
+ * log: [{ field, key, ms, budget, within, text }], text e.g.
+ * "tidyMs 51.20 ms vs tidyMs budget 90 ms: within" or "... : MISS".
+ * A field that is missing or not a finite number is never within its budget.
+ */
+export function browserBudgetReport(measured, budgets = BROWSER_BUDGETS) {
+  return Object.entries(BROWSER_BUDGET_FIELDS).map(([field, key]) => {
+    const ms = measured ? measured[field] : undefined;
+    const budget = budgets[key];
+    const within = Number.isFinite(ms) && Number.isFinite(budget) && ms <= budget;
+    const shown = Number.isFinite(ms) ? `${ms.toFixed(2)} ms` : String(ms);
+    return { field, key, ms, budget, within,
+      text: `${field} ${shown} vs ${key} budget ${budget} ms: ${within ? 'within' : 'MISS'}` };
+  });
+}
 
 /**
  * The build's machine-relative bound: its CPU time may be at most this many times that of
