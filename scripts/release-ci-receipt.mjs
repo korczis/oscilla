@@ -29,6 +29,12 @@ export const TRUNK = 'main';
 /** Each GitHub read is bounded and tried twice (review F3 of #389): a hang refuses, never waits. */
 export const GH_TIMEOUT_MS = 60_000;
 export const GH_ATTEMPTS = 2;
+/**
+ * The condition of a job that runs only on a re-run (E010's flake ledger). On a run's first
+ * attempt such a job is skipped by design, so the receipt accepts that skip there and only
+ * there; from the second attempt on it must succeed like every other job.
+ */
+export const RERUN_ONLY_IF = '${{ always() && fromJSON(github.run_attempt) > 1 }}';
 
 /** The job names a run of the workflow text shows, a matrix job once per value of its one key. */
 export function expectedJobs(ciText) {
@@ -39,12 +45,14 @@ export function expectedJobs(ciText) {
     return { name: null, jobs: [], problems: [`${CI_WORKFLOW} does not parse: ${e.message}`] };
   }
   const jobs = [];
+  const rerunOnly = [];
   const problems = [];
   for (const [id, job] of Object.entries(doc?.jobs || {})) {
     const name = typeof job.name === 'string' ? job.name : id;
     const matrix = job.strategy?.matrix;
     if (!matrix) {
       jobs.push(name);
+      if (job.if === RERUN_ONLY_IF) rerunOnly.push(name);
       continue;
     }
     const keys = Object.keys(matrix);
@@ -58,7 +66,7 @@ export function expectedJobs(ciText) {
     for (const v of matrix[key]) jobs.push(name.replace(slot, String(v)));
   }
   if (!jobs.length) problems.push(`${CI_WORKFLOW} declares no jobs`);
-  return { name: typeof doc?.name === 'string' ? doc.name : null, jobs, problems };
+  return { name: typeof doc?.name === 'string' ? doc.name : null, jobs, rerunOnly, problems };
 }
 
 /**
@@ -134,6 +142,9 @@ export function ciReceiptProblems(f) {
     else if (j.run_id !== newest.id || j.head_sha !== pr) {
       problems.push(`job "${name}" ran on ${short(j.head_sha)} in run ${j.run_id}, not on `
         + `${short(pr)} in run ${newest.id}`);
+    } else if (j.status === 'completed' && j.conclusion === 'skipped'
+      && (f.workflow.rerunOnly || []).includes(name) && Number(newest.run_attempt) === 1) {
+      // a re-run-only job is skipped on a first attempt by its own condition (E010)
     } else if (j.status !== 'completed' || j.conclusion !== 'success') {
       problems.push(`job "${name}" of run ${newest.id} is ${j.status}/${j.conclusion}`);
     }
