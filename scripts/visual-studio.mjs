@@ -94,6 +94,19 @@ async function capture(browser, view) {
     a.studioLoadTemplate(tid);
   }, TEMPLATE);
   await frames(page);
+  // The docked keys settle their height a frame or two after the workspace opens (--osc-dock-h,
+  // a ResizeObserver), and the graph's room with it: frame only once the dock height and the
+  // graph viewport read the same on two frames, so Frame All fits one geometry every run.
+  let last = '';
+  for (let i = 0; i < 40; i++) { // at most 40 frames
+    const now = await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => {
+      const dock = getComputedStyle(document.documentElement).getPropertyValue('--osc-dock-h');
+      const vp = document.querySelector('.osc-sg-viewport');
+      r(`${dock}|${vp ? Math.round(vp.getBoundingClientRect().height) : 0}`);
+    })));
+    if (now === last) break;
+    last = now;
+  }
   await page.evaluate(() => {
     const s = window.OSCILLA.studio;
     s.editor.onShow();

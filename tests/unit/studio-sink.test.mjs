@@ -77,3 +77,20 @@ test('a measurement owning the output refuses the arm, said', () => {
   assert.deepEqual(log, [['arm']]);
   assert.match(said[0], /measurement owns the output/);
 });
+
+// 21's R2: leaving the Studio disarms an armed-only run (the keys armed it), so the transport no
+// longer owns the output; a run the user started with PLAY is left alone.
+test('leaving the Studio disarms an armed-only run and leaves a PLAYed one', () => {
+  const { sink, transport, log } = fixture([node('keys-1', 'keys')]);
+  transport.armed = false;
+  const arm = transport.arm.bind(transport);
+  transport.arm = () => { const r = arm(); transport.armed = true; return r; };
+  transport.disarm = () => { log.push(['disarm']); transport.armed = false;
+    transport.playing = false; return Promise.resolve(); };
+  sink.noteOn(60, 100);
+  assert.equal(sink.leave(), true);
+  assert.deepEqual(log.slice(-2), [['live', 'keys-1', 'all-off', undefined], ['disarm']]);
+  assert.equal(transport.armed, false);
+  transport.playing = true; // PLAY: playing, not armed
+  assert.equal(sink.leave(), false, 'a PLAYed run is the user\'s');
+});
