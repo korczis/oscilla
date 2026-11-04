@@ -6,11 +6,13 @@
 // applyConfig, then audio/patterns.js buildPlan, as instrument.js currentPlan does) and the labs
 // that shape the voice, in the plain shape main.js labVizInputs hands the Signal Path.
 //
-//   VOICE_CONFIGS    [{ id, label, cfg, labs, opens, code? }]
+//   VOICE_CONFIGS    [{ id, label, cfg, labs, opens, code?, continuous?, limitS? }]
 //                    opens: true   the voice opens, and its Studio render matches the Playground's
 //                    opens: false  refused, `code` naming the reason (VOICE_OPEN_TEXT)
 //   voiceSetup(entry, { sampleRate }) -> { state, plan, warnings, labs, input, router }
-//     input   playgroundVoiceModel's input (what the Signal Path draws from)
+//     input   playgroundVoiceDocument's input (what the Signal Path draws from, with the
+//             safety limit, limitS, default the Playground's 2 s, and the continuous
+//             permission, as main.js voiceInputFrom hands it)
 //     router  the stereo router config main.js routerConfigFor gives a dual plan, or null
 //
 // labs: { filter: { type, frequency, Q, gain } (enabled), adsr: { a, d, s, r }, pan (the Phase
@@ -20,6 +22,7 @@ import { applyConfig } from '../../../src/js/core/config.js';
 import { buildPlan } from '../../../src/js/audio/patterns.js';
 import { BUILTIN_PRESETS } from '../../../src/js/data/presets.js';
 import { SAFE_NYQUIST_FACTOR } from '../../../src/js/core/constants.js';
+import { DEFAULT_SAFETY_LIMIT_S } from '../../../src/js/core/safety.js';
 
 const preset = (id) => {
   const p = BUILTIN_PRESETS.find((x) => x.id === id);
@@ -40,6 +43,10 @@ export const VOICE_CONFIGS = Object.freeze([
   { id: 'finite-tone', label: 'single source, finite tone 500 ms, triangle 261.63 Hz',
     cfg: { source: 'single', pattern: 'finite', waveform: 'triangle', frequency: 261.63,
       duration: 500 }, opens: true },
+  { id: 'finite-over-limit', label: 'single source, finite tone 5000 ms over the 2 s safety '
+    + 'limit, sine 440 Hz (the Playground plays it for the limit)',
+  cfg: { source: 'single', pattern: 'finite', waveform: 'sine', frequency: 440,
+    duration: 5000 }, limitS: 2, opens: true },
   { id: 'finite-tone-adsr', label: 'single source, finite tone 600 ms, sine 330 Hz, Envelope '
     + 'Lab ADSR', cfg: { source: 'single', pattern: 'finite', waveform: 'sine', frequency: 330,
     duration: 600 }, labs: { adsr: { a: 0.02, d: 0.1, s: 0.5, r: 0.15 } }, opens: true },
@@ -109,6 +116,9 @@ export const VOICE_CONFIGS = Object.freeze([
     + 'allowed)', cfg: { source: 'sweep', sweep: { start: 300, end: 3000, durationMs: 500,
     curve: 'log', direction: 'up', repeat: 'continuous' } }, continuous: true,
   opens: false, code: 'continuous' },
+  { id: 'held-continuous', label: 'a held tone with continuous playback allowed (no end)',
+    cfg: { source: 'single', pattern: 'tone', waveform: 'sine', frequency: 440 },
+    continuous: true, opens: false, code: 'held' },
   { id: 'short-tone', label: 'a 20 ms finite tone, shorter than its 10 ms attack and 30 ms '
     + 'release allow', cfg: { source: 'single', pattern: 'finite', frequency: 1000,
     duration: 20 }, opens: false, code: 'short' },
@@ -145,7 +155,9 @@ export function voiceSetup(entry, { sampleRate }) {
     router: router ? { ...router } : null,
     phaseDeg: dual ? Number(labs.phaseDeg) || 0 : 0,
   };
+  const limitS = entry.limitS != null ? entry.limitS : DEFAULT_SAFETY_LIMIT_S;
   const input = { plan, waveform: state.waveform, frequency: state.frequency,
-    gain: state.gainLevel, attackMs: state.attack, releaseMs: state.release, lab };
+    gain: state.gainLevel, attackMs: state.attack, releaseMs: state.release, lab, limitS,
+    continuous };
   return { state, plan, warnings: res.ok ? res.warnings : [res.error], labs, input, router };
 }

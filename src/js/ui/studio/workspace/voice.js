@@ -7,33 +7,48 @@
 // document: a copy, so the Playground keeps its voice and the Studio's unsaved-work guard
 // (studioWhatWouldBeLost, ui/unsaved.js) covers the copy until it is saved or exported. One
 // action: the workspace switches to Studio with focus on its heading; Back returns to the
-// workspace it came from (navigation.js studioBack). Nothing plays until Play.
+// workspace it came from (navigation.js studioBack). Opening starts and stops nothing: a
+// Playground voice that is sounding keeps sounding until Studio Play takes the output, and the
+// notice says which of the two it is.
 //
 // A configuration the Studio cannot sound the same is refused with its reason, shown and
 // announced (a warning notice, role=alert), and nothing changes. Unsaved Studio work is never
 // replaced silently: a modal (Flowbite Pro's pop-up modal, built here on first use) names what
-// would be lost and asks; Keep leaves everything as it was, Replace opens the copy.
+// would be lost (the unsaved-changes entry of studioWhatWouldBeLost, by its key) and asks; Keep
+// leaves everything as it was, Replace opens the copy. The dialog is one element per page; each
+// open binds it to the answers of the instance that asks (`current`).
 
 import { playgroundVoiceDocument } from '../../../studio/playground-voice-open.js';
 import { openModal, closeModal, watchDialogs } from '../../dialogs.js';
+import { UNSAVED_CHANGES_KEY, unsavedChangesLabel } from './document.js';
 
 export const VOICE_DIALOG_ID = 'studio-voice-guard';
 
 const BTN = 'rounded-lg px-5 py-2.5 text-center text-sm font-medium focus:outline-none '
   + 'focus:ring-4 [@media(pointer:coarse)]:min-h-11';
 
+/** The answers the guard dialog's buttons call: those of the last instance that opened it. */
+const current = new WeakMap(); // dialog -> { replace, keep, close }
+
 /**
- * The guard dialog, built once (Flowbite Pro pop-up modal markup on a native <dialog>); its
- * buttons call on.replace() and on.keep(), closing ends the question (on.close()).
+ * The guard dialog, built once per page (Flowbite Pro pop-up modal markup on a native
+ * <dialog>) and bound to `on` on every call: its buttons call on.replace() and on.keep(),
+ * closing ends the question (on.close()).
  */
 function guardDialog(on) {
   let dlg = document.getElementById(VOICE_DIALOG_ID);
-  if (dlg) return dlg;
+  if (dlg) {
+    current.set(dlg, on);
+    return dlg;
+  }
   dlg = document.createElement('dialog');
+  current.set(dlg, on);
+  const answer = (key) => { const a = current.get(dlg); if (a) a[key](); };
   dlg.id = VOICE_DIALOG_ID;
   dlg.setAttribute('data-oscilla-modal', '');
   dlg.setAttribute('aria-labelledby', `${VOICE_DIALOG_ID}-title`);
-  dlg.setAttribute('aria-describedby', `${VOICE_DIALOG_ID}-text`);
+  // The intro sentence ends "This would be lost:", so the list belongs to the description.
+  dlg.setAttribute('aria-describedby', `${VOICE_DIALOG_ID}-text ${VOICE_DIALOG_ID}-lost`);
   dlg.className = 'w-full max-w-md rounded-lg border-0 bg-white p-0 shadow-sm '
     + 'backdrop:bg-gray-900/50 dark:bg-gray-700';
   const box = document.createElement('div');
@@ -48,6 +63,7 @@ function guardDialog(on) {
   text.textContent = 'The Playground voice opens as a new Studio document and replaces the one '
     + 'open now. This would be lost:';
   const list = document.createElement('ul');
+  list.id = `${VOICE_DIALOG_ID}-lost`;
   list.dataset.osc = 'studio.voice.lost';
   list.className = 'mb-5 list-inside list-disc text-sm text-gray-900 dark:text-white';
   const replace = document.createElement('button');
@@ -65,10 +81,10 @@ function guardDialog(on) {
     + 'dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white '
     + 'dark:focus:ring-gray-700';
   keep.textContent = 'Keep the Studio work';
-  replace.addEventListener('click', () => on.replace());
-  keep.addEventListener('click', () => on.keep());
+  replace.addEventListener('click', () => answer('replace'));
+  keep.addEventListener('click', () => answer('keep'));
   // A close event is queued: one that arrives after the dialog opened again ends nothing.
-  dlg.addEventListener('close', () => { if (!dlg.open) on.close(); });
+  dlg.addEventListener('close', () => { if (!dlg.open) answer('close'); });
   box.append(title, text, list, keep, replace); // Keep first: the focused, safe answer
   dlg.append(box);
   const host = document.createElement('div');
@@ -108,8 +124,12 @@ export function createWorkspaceVoice(ctx, svc, ops) {
     const n = model.graph.nodes.length;
     const c = model.timeline.clips.length;
     const what = `${n} nodes${c ? `, ${c} gate clip${c === 1 ? '' : 's'}` : ''}`;
+    // Opening starts and stops nothing: say what sounds now.
+    const sounding = cmp.playing
+      ? 'The Playground voice keeps sounding until you press Play here, which takes the output.'
+      : 'Nothing plays until you press Play.';
     cmp.notify('info', 'Playground voice opened in Studio', `${what}: an unsaved copy, the `
-      + 'Playground keeps its own. Nothing plays until you press Play.');
+      + `Playground keeps its own. ${sounding}`);
     ops.announce(`Opened the Playground voice in Studio: ${what}, unsaved`);
     return { ok: true, nodes: n, clips: c };
   }
@@ -127,11 +147,12 @@ export function createWorkspaceVoice(ctx, svc, ops) {
         const dlg = guardDialog(answers);
         pending = { cmp: this, model: r.model };
         const list = dlg.querySelector('[data-osc="studio.voice.lost"]');
-        list.replaceChildren(...this.studioWhatWouldBeLost().slice(0, 1).map((x) => {
-          const li = document.createElement('li');
-          li.textContent = x.label;
-          return li;
-        }));
+        // Replacing the document loses its unsaved changes, never the memory-only library.
+        const lost = this.studioWhatWouldBeLost().find((x) => x.key === UNSAVED_CHANGES_KEY)
+          || { label: unsavedChangesLabel(this.studio.title) };
+        const li = document.createElement('li');
+        li.textContent = lost.label;
+        list.replaceChildren(li);
         openModal(VOICE_DIALOG_ID);
         return { ok: false, code: 'unsaved', asking: true };
       }

@@ -8,15 +8,18 @@
 // at 44.1 and 48 kHz: the document is a valid Studio model whose graph holds every node of the
 // drawn graph unchanged (a mono dual voice adds the engine's two centred panners), its timeline
 // gates the Envelope where the Playground voice's tones are (one gate per tone, ending where the
-// Playground's release starts), the offline render plan renders all of it (no limitation, every
-// clip and lane rendered), and the Playground's input is left unchanged.
+// Playground's release starts; an open voice and a finite tone over the limit for the safety
+// limit), the offline render plan renders all of it (no limitation, every clip and lane
+// rendered), and the Playground's input is left unchanged.
 //
 // The sample residual: node has no OfflineAudioContext, and the repository's mock contexts
 // record the calls made on them, not samples, so the render itself runs in real browsers:
 // tests/browser/v31-studio-offline.cjs renders each configuration listed here through
 // OfflineAudioContext in Chromium, Firefox and WebKit, at each browser's own rate, the
 // Playground voice through the AudioEngine and the opened document through the Studio runtime,
-// and requires a residual RMS at least 60 dB below the Playground render's RMS
+// and requires a residual RMS at least 60 dB below the Playground render's RMS, judged from the
+// end of the Studio's 20 ms start crossfade (the start is K177's; from the first sample it is
+// printed, not judged), with both voices ending together
 // (tests/browser/fixtures/playground-voice-in-studio-entry.js). The last test here holds that
 // suite to this list and that bound.
 //   node --test tests/unit/playground-voice-in-studio.test.mjs
@@ -42,7 +45,8 @@ const RATES = [44100, 48000];
 
 /** The covered configurations: they open, and their Studio render matches the Playground's. */
 const COVERED = [
-  'single-tone', 'single-tone-filter-adsr', 'finite-tone', 'finite-tone-adsr', 'am',
+  'single-tone', 'single-tone-filter-adsr', 'finite-tone', 'finite-over-limit',
+  'finite-tone-adsr', 'am',
   'am-audio-rate', 'wobble-still', 'sequence', 'sequence-adsr', 'pulse', 'octave', 'chirp',
   'pingpong', 'sweep-once', 'sweep-linear-down', 'sweep-pingpong', 'dual-mono', 'dual-stereo',
   'dual-panned',
@@ -56,11 +60,16 @@ const REFUSED = {
   fm: VOICE_OPEN_TEXT.modulation,
   'dual-phase': VOICE_OPEN_TEXT.phase(90),
   'sweep-continuous': VOICE_OPEN_TEXT.continuous,
+  'held-continuous': VOICE_OPEN_TEXT.held,
   'short-tone': VOICE_OPEN_TEXT.short(20),
   'finite-adsr-fast-release': VOICE_OPEN_TEXT.release(2),
 };
 
 const byId = (id) => VOICE_CONFIGS.find((c) => c.id === id);
+
+/** Seconds the Playground plays `plan` as one tone (audio-engine.js play, HOLD). */
+const playedFor = (plan, input) => (plan.kind !== 'finite' ? input.limitS
+  : plan.limitable && plan.dur > input.limitS && !input.continuous ? input.limitS : plan.dur);
 
 test('V605 lists every configuration once: the covered and the refused', () => {
   const ids = VOICE_CONFIGS.map((c) => c.id);
@@ -109,28 +118,26 @@ for (const id of COVERED) {
       assert.equal(m.graph.edges.length, drawn.graph.edges.length + extra.length);
       assert.deepEqual(m.timeline.automation, drawn.timeline.automation,
         `${id}: the drawn automation lanes`);
-      // The timeline: no clip for an open plan, a gate per tone for a finite one.
-      if (s.plan.kind !== 'finite') {
-        assert.deepEqual(m.timeline.clips, [], `${id}: an open voice holds its Envelope open`);
-      } else {
-        const env = m.graph.nodes.find((n) => n.id === ID.envelope).params;
-        const tones = s.plan.type === 'steps' ? s.plan.steps
-          : s.plan.type === 'ramps' && s.plan.envelope === 'segment' ? s.plan.segments
-            : [{ t: 0, dur: s.plan.dur }];
-        assert.deepEqual(m.timeline.tracks.map((t) => [t.kind, t.target]),
-          [['event', ID.envelope]]);
-        assert.equal(m.timeline.clips.length, tones.length, `${id}: one gate per tone`);
-        tones.forEach((t, i) => {
-          const c = m.timeline.clips[i];
-          assert.equal(c.kind, 'event');
-          assert.equal(c.payload.action, 'gate');
-          assert.ok(Math.abs(c.start - t.t) < 1e-9, `${id}: gate ${i} starts with its tone`);
-          assert.ok(Math.abs(c.duration - (t.dur - env.release)) < 1e-9,
-            `${id}: gate ${i} ends where the Playground's release starts`);
-        });
-      }
+      // The timeline: a gate per tone; an open voice and a limited finite tone are one tone
+      // as long as the Playground plays it (the safety limit).
+      const played = playedFor(s.plan, s.input);
+      const env = m.graph.nodes.find((n) => n.id === ID.envelope).params;
+      const tones = s.plan.type === 'steps' ? s.plan.steps
+        : s.plan.type === 'ramps' && s.plan.envelope === 'segment' ? s.plan.segments
+          : [{ t: 0, dur: played }];
+      assert.deepEqual(m.timeline.tracks.map((t) => [t.kind, t.target]),
+        [['event', ID.envelope]]);
+      assert.equal(m.timeline.clips.length, tones.length, `${id}: one gate per tone`);
+      tones.forEach((t, i) => {
+        const c = m.timeline.clips[i];
+        assert.equal(c.kind, 'event');
+        assert.equal(c.payload.action, 'gate');
+        assert.ok(Math.abs(c.start - t.t) < 1e-9, `${id}: gate ${i} starts with its tone`);
+        assert.ok(Math.abs(c.duration - (t.dur - env.release)) < 1e-9,
+          `${id}: gate ${i} ends where the Playground's release starts`);
+      });
       // Everything of it renders offline (what the browser check renders).
-      const duration = s.plan.kind === 'finite' ? s.plan.dur + 0.1 : 1;
+      const duration = played + 0.1;
       const plan = planOfflineRender(m, { duration, sampleRate });
       assert.equal(plan.ok, true, `${id}: renders offline`);
       assert.deepEqual(plan.limitations, [], `${id}: no limitation`);
@@ -165,7 +172,8 @@ test('V605 refused: no valid Playground plan, and a value outside a Studio range
 
 test('V605 the reasons name what the Studio cannot represent', () => {
   assert.match(VOICE_OPEN_TEXT.additive, /no field/);
-  assert.match(VOICE_OPEN_TEXT.phase(90), /90° .*no field for a start phase/);
+  assert.match(VOICE_OPEN_TEXT.phase(90), /90° .*no field for a start phase.*offset to 0° /);
+  assert.match(VOICE_OPEN_TEXT.held, /Turn continuous playback off/);
   assert.match(VOICE_OPEN_TEXT.modulation, /20 ms/);
 });
 
@@ -175,6 +183,8 @@ test('V605 the browser check renders this list and judges it at 60 dB', () => {
   assert.match(suite, /playground-voice-in-studio-entry\.js/);
   assert.match(suite, /PV\.render\(/);
   assert.match(suite, /VOICE_RESIDUAL_DB = -60\b/);
+  assert.match(suite, /VOICE_END_TOL_S = 0\.002\b/);
+  assert.match(entry, /from the end of the Studio's 20 ms start crossfade/);
   assert.match(entry, /from '\.\.\/\.\.\/unit\/fixtures\/playground-voice-configs\.mjs'/);
   assert.match(entry, /renderStudioOffline\(doc\.model/);
   assert.match(entry, /engine\.play\(plan/);
@@ -189,4 +199,5 @@ test('V605 the Signal Path offers the action, the Studio workspace performs it',
   assert.doesNotMatch(btn[0], /\bosc-|style=/, 'Flowbite Pro classes, no legacy token or style');
   assert.match(read('src/js/ui/studio/workspace.js'), /createWorkspaceVoice\]/);
   assert.match(read('src/js/main.js'), /playgroundVoice: playgroundVoiceInput/);
+  assert.match(read('src/js/main.js'), /return voiceInputFrom\(app, labVizInputs\);/);
 });

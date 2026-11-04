@@ -182,14 +182,27 @@ copy built from this same model (`src/js/studio/playground-voice-open.js`). With
 work, a dialog lists what would be lost and asks first (Keep the Studio work has focus). After
 opening, focus is on the Studio heading and Back returns to the Playground.
 
+The copy plays as long as the Playground plays the voice. A held voice (a held tone, AM, a dual
+voice) gets one gate from 0 to the Playground's safety limit minus the release, since without
+continuous playback the Playground holds it for that limit. A finite tone longer than the limit
+opens at the limit, as the Playground plays it. With continuous playback allowed a held voice has
+no end, so it is refused. Opening starts and stops nothing: a sounding Playground voice keeps
+sounding until Studio Play takes the output.
+
 A configuration is opened only when the Studio renders it the same: the covered list
 (`tests/unit/fixtures/playground-voice-configs.mjs`) is rendered by both on an
-OfflineAudioContext in chromium, firefox and webkit, and each residual is at least 60 dB below
-the Playground render (`tests/browser/v31-studio-offline.cjs`). Everything else is refused with
-its reason and changes nothing: the Additive lab and a dual voice with a B start phase (schema 1
-has no field for them); siren, wobble and FM, because the Studio fades a modulation edge in from
-zero at the start, which shifts a modulated carrier's phase (K177 removes that cause); a
-continuous sweep; and tones or releases too short for the Playground's own shortening to match.
+OfflineAudioContext in chromium, firefox and webkit, for as long as the Playground plays it.
+Each residual is at least 60 dB below the Playground render, and both voices end together
+(`tests/browser/v31-studio-offline.cjs`). The residual is judged from the end of the Studio's
+20 ms start crossfade (the start is K177's): the Studio fades modulation and audio routes in
+over its first 20 ms and the Playground voice does not. Measured from the first sample the
+residual is only 15.6 to 28.3 dB below, and the check prints that figure without judging it.
+When K177 makes the start match, the residual is judged from the first sample. Everything else
+is refused with its reason and changes nothing: the Additive lab and a dual voice with a B
+start phase (schema 1 has no field for them); siren, wobble and FM, because the Studio fades a
+modulation edge in from zero at the start, which shifts a modulated carrier's phase (K177
+removes that cause); a continuous sweep, and a held voice with continuous playback allowed;
+and tones or releases too short for the Playground's own shortening to match.
 
 ## Not done here
 

@@ -14,11 +14,15 @@
 // starts START_OFFSET_S later; the engine's context reports, at that one reading, the Studio's
 // start time minus START_OFFSET_S (an exact float), so every event of both lands on the same
 // sample. Before that time nothing of either voice sounds.
-// Compared span: from the end of the Studio's start crossfade (STUDIO_XFADE_S, its click-free
-// start, which a Playground voice does not have) to the start of its output fade (STUDIO_STOP_S)
+// Compared span: the residual is judged from the end of the Studio's 20 ms start crossfade
+// (STUDIO_XFADE_S: the Studio fades modulation and audio routes in at its start, which a
+// Playground voice does not; the start is K177's) to the start of its output fade (STUDIO_STOP_S)
 // at the end of the render. The residual is the RMS of the difference over both channels against
-// the RMS of the Playground render there, in dB; `wholeDb` is the same from the voices' first
-// sample, the start crossfade included (reported, not judged).
+// the RMS of the Playground render there, in dB. `wholeDb` is the same from the voices' first
+// sample, the start crossfade included: reported beside it, not judged (measured -15.6 to
+// -28.3 dB), until K177 makes the start match and the residual is judged from the first sample.
+// Each voice is rendered for as long as the Playground plays it (an open voice for the safety
+// limit, a finite tone over the limit for the limit) and TAIL_S after, so its release is judged.
 
 import { AudioEngine } from '../../../src/js/audio/audio-engine.js';
 import { labPlayOptions } from '../../../src/js/audio/lab-play-options.js';
@@ -32,10 +36,14 @@ import { STUDIO_STOP_S, STUDIO_XFADE_S } from '../../../src/js/studio/compiler.j
 import { playgroundVoiceDocument } from '../../../src/js/studio/playground-voice-open.js';
 import { VOICE_CONFIGS, voiceSetup } from '../../unit/fixtures/playground-voice-configs.mjs';
 
-/** Seconds a held (open) voice is rendered: inside the Playground's 2 s safety limit. */
-const HELD_S = 1;
-/** Seconds rendered after a finite voice's programmed end (its release is inside it). */
+/** Seconds rendered after the voice's end (its release is inside it). */
 const TAIL_S = 0.1;
+
+/** Seconds the Playground plays `plan` under `input`'s limit (audio-engine.js play, HOLD). */
+function playedFor(plan, input) {
+  if (plan.kind !== 'finite') return input.limitS;
+  return plan.limitable && plan.dur > input.limitS && !input.continuous ? input.limitS : plan.dur;
+}
 
 /** The rate this browser runs a realtime AudioContext at. */
 async function ownRate() {
@@ -104,7 +112,8 @@ async function renderPlayground(setup, duration, sampleRate, start) {
     dualRouter: () => (router ? (c, track) => createStereoRouter(c, router, { track }) : null),
     phaseDeg: labs.phaseDeg != null ? labs.phaseDeg : null,
   });
-  const info = engine.play(plan, { mode: 'hold', continuous: false, limitS: 2,
+  const info = engine.play(plan, { mode: 'hold', continuous: setup.input.continuous,
+    limitS: setup.input.limitS,
     durationS: state.duration / 1000, attackS: state.attack / 1000,
     releaseS: state.release / 1000, ...lab });
   if (!info) throw new Error(`play: ${engine.lastError && engine.lastError.message}`);
@@ -132,6 +141,26 @@ function residual(p, s, from, to) {
     db: refRms > 0 ? 20 * Math.log10(Math.max(diffRms, 1e-12) / refRms) : NaN };
 }
 
+/**
+ * Seconds after `start` of the last sample within END_DB of the buffer's peak, over both
+ * channels: where the voice stops sounding (its release crossing END_DB).
+ */
+const END_DB = -40;
+function soundEnd(buf, start) {
+  let peak = 0;
+  const chans = [];
+  for (let c = 0; c < buf.numberOfChannels; c++) chans.push(buf.getChannelData(c));
+  for (const d of chans) for (let i = 0; i < d.length; i++) peak = Math.max(peak, Math.abs(d[i]));
+  const floor = peak * 10 ** (END_DB / 20);
+  let last = 0;
+  for (const d of chans) {
+    for (let i = d.length - 1; i > last; i--) {
+      if (Math.abs(d[i]) > floor) { last = i; break; }
+    }
+  }
+  return last / buf.sampleRate - start;
+}
+
 window.PV = {
   configs: () => VOICE_CONFIGS.map((c) => ({ id: c.id, label: c.label, opens: c.opens,
     code: c.code || null })),
@@ -144,7 +173,7 @@ window.PV = {
     const doc = playgroundVoiceDocument(setup.input);
     if (!doc.ok) return { id, sampleRate, opened: false, code: doc.code, reason: doc.reason };
     const plan = setup.plan;
-    const duration = plan.kind === 'finite' ? plan.dur + TAIL_S : HELD_S;
+    const duration = playedFor(plan, setup.input) + TAIL_S;
     const st = await renderStudioOffline(doc.model, { duration, sampleRate, channels: 2 });
     if (!st.ok) {
       return { id, sampleRate, opened: true, rendered: false,
@@ -160,6 +189,8 @@ window.PV = {
       clips: doc.model.timeline.clips.length, lanes: doc.model.timeline.automation.length,
       sameStart: pg.start === st.startTime, start: st.startTime, from: from / sampleRate,
       to: to / sampleRate, refRms: span.refRms, residualDb: span.db, wholeDb: whole.db,
+      played: duration - TAIL_S, endDb: END_DB, pgEnd: soundEnd(pg.buffer, pg.start),
+      stEnd: soundEnd(st.buffer, st.startTime),
       limitations: st.plan.limitations };
   },
 };

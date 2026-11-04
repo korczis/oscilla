@@ -61,8 +61,9 @@ Not built: node groups, dragging several clips at once, autosave and crash recov
 link opens Studio, a view and a shipped template only; a saved project or an edited graph is
 shared as an exported file, never in a URL. The Playground's Signal Path view draws the
 Playground voice as a derived Studio graph (`docs/v31/signal-path.md`), read-only; its Open
-in Studio opens that voice as an unsaved Studio copy (V605) and refuses, with the reason, what
-the Studio would not sound the same: the Additive lab's partials, a dual voice's B phase, a
-frequency modulation (siren, wobble, FM), a continuous sweep.
+in Studio opens that voice as an unsaved Studio copy (V605), a held voice gated for the
+Playground's safety limit, and refuses, with the reason, what the Studio would not sound the
+same: the Additive lab's partials, a dual voice's B phase, a frequency modulation (siren,
+wobble, FM), a continuous sweep, a held voice with continuous playback allowed.
 Studio is not a DAW or an audio-file editor, adds no second audio engine, and does not
 replace the Playground or the Measure workspace; it orchestrates them.
