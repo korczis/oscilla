@@ -163,8 +163,9 @@ test('fails closed with what to do', () => {
   assert.throws(() => gatherRecord({ version: 'x', io: fakeIo('40.0.0') }), /not a semantic/);
 });
 
-test('write, --check, and a modified record is refused naming the field', () => {
+test('write, --check, and a modified record is refused naming the field', (t) => {
   const root = mkdtempSync(path.join(os.tmpdir(), 'oscilla-record-test-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
   const io = fakeIo('40.0.0');
   const out = [];
   const err = [];
@@ -309,8 +310,15 @@ test('readTagDates: tag and creation time from git for-each-ref', () => {
 const stub = (tag) => `schema: release/v1\nversion: "${tag.slice(1)}"\ntag: ${tag}\n`;
 
 /** A scratch git repository on branch `work`, with committer dates a week before `now`. */
+// Every fixture repository is removed when the test file ends (they filled TMPDIR).
+const FIXTURES = [];
+process.on('exit', () => {
+  for (const r of FIXTURES) rmSync(r, { recursive: true, force: true });
+});
+
 function fixtureRepo() {
   const root = mkdtempSync(path.join(os.tmpdir(), 'oscilla-records-'));
+  FIXTURES.push(root);
   const g = (...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t',
     '-c', 'commit.gpgsign=false', '-c', 'tag.gpgsign=false', ...args],
   { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],

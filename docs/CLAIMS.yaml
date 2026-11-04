@@ -827,6 +827,15 @@ claims:
     responsibility: product
     note: 'Issue K026 (owner decision D3, amending ADR 0005). The engine side is src/js/audio/audio-engine.js noteOn({ held: true }); the MIDI layer (src/js/midi/notes.js) and the keyboard pass it. tests/browser/midi.cjs (midi-seam-notes, keyboard-qwerty) holds MIDI and computer-keyboard notes past the limit and releases them by blur and Escape in Chromium, Firefox and WebKit from file:// and the /oscilla/ sub-path; visibilitychange and pagehide are proven on the fake context only.'
 
+  - id: phone-audio-unlocks
+    claim: 'The first gesture starts audio on a phone as on a desktop: the unlock listens in the capture phase at pointerdown, keydown, pointerup and touchend, never at a bare click, and the page asks for a playback audio session where navigator.audioSession exists, keeping the browser default without it or on a refusal.'
+    source: .ai/repo/rules/project/a-phone-sounds.v1.md
+    implementation: src/js/ui/audio-unlock.js
+    test: tests/unit/audio-unlock.test.mjs
+    status: guaranteed
+    responsibility: product
+    note: 'Owner report of 2026-11-02 ("on the phone it makes no sound"); fix #384, rule #387. tests/unit/rule-a-phone-sounds.test.mjs keeps tests/browser/touch-audio.cjs in test:browser with the gesture rule on; that suite (checks audio-session-playback and tap-unlocks-audio) runs in Chromium, Firefox and WebKit. Not machine-checked: a real iPhone ringer switch and a real touch screen.'
+
   - id: midi-response-deterministic
     claim: 'A MIDI response mode will produce the same output events for the same input events, scheduled on the audio clock, with no network call or model inference in the path.'
     source: .ai/repo/adrs/0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md

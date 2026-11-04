@@ -17,8 +17,9 @@
 // EDGE_ADD, EDGE_REMOVE, EDGE_UPDATE, TRACK_ADD, TRACK_REMOVE, CLIP_ADD, CLIP_REMOVE, CLIP_MOVE,
 // CLIP_RESIZE, AUTOMATION_POINT_ADD, AUTOMATION_POINT_MOVE, AUTOMATION_POINT_REMOVE, MARKER_ADD,
 // MARKER_REMOVE, LOOP_SET, TRANSPORT_SET, METADATA_SET, PASTE, DUPLICATE, BATCH { label, steps }
-// (K061: one entry, one gate call; NODE_ADD and EDGE_ADD may name an unused id, NODE_ADD a
-// metadata.panel { id, module }, which PASTE, DUPLICATE and PATCH_INSERT drop); timeline additions
+// (K061: one entry, one gate call; NODE_ADD, EDGE_ADD and TRACK_ADD (K149) may name an unused
+// id, NODE_ADD a metadata.panel { id, module }, which PASTE, DUPLICATE and PATCH_INSERT drop);
+// timeline additions
 // (V416-V420): CLIP_UPDATE, CLIP_SET_TIME_BASE, MARKER_MOVE; patch additions (V426, patches.js):
 // PATCH_INSERT { patch, at?, route? } ("Insert <name>") and PATCH_REPLACE { patch, at? } ("Replace
 // graph with <name>"), the explicit insert-or-replace intent of §114; PATCH_REPLACE { patch,
@@ -463,7 +464,7 @@ const REDUCERS = {
     if (!TRACK_CLIP_KINDS[kind]) reject(`Unknown track kind "${String(kind)}".`);
     if (a.target != null) requireNode(model, a.target);
     const track = {
-      id: ctx.newId('track'),
+      id: a.id != null ? ctx.claim(a.id, model) : ctx.newId('track'),
       kind,
       name: a.name != null ? checkName(a.name) : `Track ${model.timeline.tracks.length + 1}`,
       target: a.target ?? null,
@@ -491,8 +492,9 @@ const REDUCERS = {
     const kind = a.kind || TRACK_CLIP_KINDS[track.kind][0];
     if (!CLIP_KINDS.includes(kind)) reject(`Unknown clip kind "${String(kind)}".`);
     if (a.target != null) requireNode(model, a.target);
-    const timeBase = a.timeBase || (a.startBeats != null || a.durationBeats != null ? 'tempo'
-      : 'absolute');
+    // A notes clip is tempo-linked by default: its notes are beats (notes.js).
+    const timeBase = a.timeBase || (kind === 'notes' || a.startBeats != null
+      || a.durationBeats != null ? 'tempo' : 'absolute');
     if (!CLIP_TIME_BASES.includes(timeBase)) reject(`Unknown time base "${String(timeBase)}".`);
     const spb = 60 / model.transport.tempo;
     let clip = {

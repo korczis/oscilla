@@ -3,7 +3,7 @@ milestone: M090
 serves:
   - "coherent-state#live-edits-reach-the-voice"
   - "coherent-state#views-describe-what-sounds"
-title: "Envelope sustain and power reach a held note, and the Signal Path shows the envelope that sounds"
+title: "Envelope sustain and power reach a held note, so the Signal Path's envelope is the one that sounds"
 slug: envelope-sustain-and-power-reach-a-held-note-and-the-signal
 priority: p1
 profile: implementation
@@ -26,7 +26,7 @@ depends_on:
 acceptance_criteria:
   - "A unit test of retargetSustain against valueAtTime during sustain and during decay: the target is reached in at least MIN_SEGMENT_S and the value never exceeds 1; it fails on the merge base."
   - "Browser check `env-sustain-held-note` in tests/browser/app.cjs: on a latched 1 kHz note, typing 0.1 into #osc-env-sustain-value lowers the output by 14 to 17 dB within a named deadline, and #osc-env-enable off brings it to the envelope-off level within 1 dB."
-  - "Browser check `signal-path-sounding-envelope` in tests/browser/app.cjs: latch a sine with the Envelope off, switch it on and change attack while it sounds: the envelope stage still reads the voice's 'A 10 ms · R 30 ms' with a 'next note' annotation; a cutoff change while sounding does change the filter stage; after release and a new note the ADSR stage is the drawn one."
+  - "The Signal Path's envelope stage is the sounding one (amended 2026-11-03, critique coherent-state finding c008-record-names-a-check-the-train-dropped): the reconcile commit 10c03edc (#385) did not carry over the browser check `signal-path-sounding-envelope` or its 'next note' annotation, because every Envelope edit now reaches the sounding voice (a Sustain edit glides it, an attack or decay edit restarts it once, C007), so the drawn and the sounding envelope cannot differ and there is nothing to annotate. The check that holds it is `envelope-follows-held` in tests/browser/app.cjs: after a live Sustain edit, a Release edit, the Envelope switched off and on again, the view's envelope input (O.viz.labInputs(engine.voice.plan).adsr, what the Signal Path draws) equals engine.voice.adsr on the same or the restarted voice, and with the Envelope off both are null; `envelope-drag-one-restart` holds the one restart of an attack or decay drag."
   - "fail-first holds: the unit test or browser check named above fails on the merge base (project.fail-first)."
   - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named wall-clock deadline; tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
   - "engine.activeNodeCount returns to 0 after every stop in the new checks, in Chromium, Firefox and WebKit (project.audio-engine-discipline v2)."
@@ -39,4 +39,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-03T00:14:51Z
+started_at: 2026-11-03T00:14:25Z
+started_event: sha256:632efa7b78d4c63cfba48b4709746497972fb5ef847c363eae8e45384eed6627
+completed_at: 2026-11-03T00:14:51Z
+completed_event: sha256:55e02b84618341bb91d2c4775086fd80fadc9749033270742889609cc102eb27
+evidence:
+  - covers: verified
+    type: ci
+    command: "node --test tests/unit/envelope-held-note.test.mjs; node tests/browser/app.cjs --only envelope-follows-held,env-sustain-held-note,envelope-drag-one-restart"
+    result: "landed in #385 (main merge commit 743f8566, the C008/C016 reconcile 10c03edc): a Sustain edit glides the held voice and the power switch reaches it (envelope-held-note.test.mjs, env-sustain-held-note), and envelope-follows-held holds the view's envelope input (what the Signal Path draws) to engine.voice.adsr after live edits, with the criterion amended 2026-11-03 (critique coherent-state c008); CI run 41532982366 green on 24b36ce2; review verdict .ai/repo/reviews/385.yaml (merge)"
+    artifact: ".ai/repo/reviews/385.yaml"
+    commit: 2931af343905d0a432bd8711f18face5d703dd3a
+    recorded_at: 2026-11-03T00:14:42Z

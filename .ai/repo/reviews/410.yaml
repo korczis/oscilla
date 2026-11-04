@@ -1,0 +1,64 @@
+# Review verdict for pull request #410, merge train 4 (branch int/train-4b): K099 notes clip,
+# K014 template pack, V610 node search, V617 First Patch, M086 Studio keys everywhere,
+# review-verdict v2 (K060), E010 flake ledger with E026 path gating, #377 member verdicts.
+# Reviewed head 15d1bc67897750d5cbfd9bde4b86dea090613308; merge base origin/main
+# a10abde2555fdf117f37e2c336d6927c762805ce. Reviewer: seat 98 (session
+# prismatic-majordomus-98, p2), which built, merged and edited none of this train and wrote
+# only this file; an independent first pass was adversarially re-verified here.
+# Disclosure: reviewer has an unmerged proposal on src/js/synth/ui.js (feat/synth-w1b-chain),
+# not part of this PR; M086's ui.js hunks were judged on their own merits.
+#
+# The digest. CI judges with the BASE branch's copy (.github/scripts/base-rule.sh runs
+# origin/main's scripts/review-verdict.mjs), which has no src/js/synth/* guard and no train
+# member check: --content --list --base-branch origin/main with that copy gives
+# 0bd4f716...4e94 over 24 guarded paths, and CI run 41739644739 asks for exactly that value.
+# The head's own (v2) copy gives 66338b96...aaaa over 26 paths: the same 24 plus
+# src/js/synth/studio-sink.js and src/js/synth/ui.js. Both Synth files were read and are
+# judged here (M086); the base digest is recorded because it is the one that judges.
+#
+# Inputs considered: member verdict commits 0969a017 (review/402-k099, #402 merge), 5159e426
+# (review/403-k014, #403 merge at 21ef5704), 9f933b65 (#368 delta at b471b4d2, merge),
+# a462ad55 (#369 delta at a4c44c2c, merge); the v2 rule commits de35786f and d6604ec7; the
+# body of #410 and of each member (#239 #368 #369 #377 #378 #381 #402 #403). Every member
+# head on GitHub is an ancestor of the train head. #378 and #381 change no guarded path (empty
+# digest with the base copy). #403's recorded digest b6dd0eda equals 21ef5704 against train
+# base 6ea4dd2c.
+#
+# The train member check (#377) does not run in CI for #410 (the base copy lacks it); run by
+# hand with the head's copy and the PR JSON: every member with a verdict says merge.
+#
+# Members judged by name: #403's Ring Mod text changed after its verdict, by hand in the
+# Train 3 merge 1e4a0133 ("sounds metallic" to "sounds bell-like"; the other parent 9585121c
+# has no ring-mod.js). Judged correct: visual-identity-lock v4 keeps "metallic" inside the
+# synth-theme layer, and the sidebands |f - 470| and f + 470 Hz are inharmonic (R1).
+#
+# CI, checked for a red required check reported green: the gate's jq verdict was run over
+# 10 result sets (ledger failure; review-verdict, census or a path-gated job failed, cancelled
+# or skipped; changes failed with runtime=false): it is green only when every judged job
+# succeeded or one of the six path-gated jobs skipped under a successful runtime=false, and
+# the ledger never decides it. No continue-on-error, no `|| true`; `shell: bash` gives
+# pipefail; every job of ci.yml is in gate's needs; no other workflow names a job gate.
+# The one route is pre-existing and not this train's (R8).
+#
+# Tests at the head (first pass, spot-checked): unit 4473 pass, 0 fail, 1 skipped (one
+# machine-only failure passes with the pinned majordomus alpha.9); review-verdict 26/26,
+# ci-workflows 31/31, flake-ledger 17/17, studio-sink 6/6; build:check up to date; midi.cjs
+# 170/170, v31-studio-graph and v31-studio-timeline pass in chromium (file, http).
+#
+# Verdict: merge. No P0, P1 or P2 open.
+schema: review-verdict/v1
+pr: 410
+verdict: merge
+reviewer: prismatic-majordomus-98 (p2, claude-code 07a5ffde)
+content: 0bd4f7165d524e179a305efccac37d26aee43f049e04b07d0db3239b9c244e94
+members:
+  - { pr: 403, verdict: merge, reason: "ring-mod.js line 20 metallic to bell-like, hand-edited in merge 1e4a0133 after 403.yaml (21ef5704); judged correct at 15d1bc67" }
+findings:
+  - { id: R1, severity: P3, status: closed, title: "#403's Ring Mod text was changed by hand inside merge 1e4a0133 after its verdict and no record judged it; judged here by name (correct) and listed under members" }
+  - { id: R2, severity: P3, status: open, title: "memberVerdict reads only a member file's verdict field: a member file with pr 999, a wrong schema and an open P1 passes as merge (reproduced); run verdictProblems on it without the content comparison" }
+  - { id: R3, severity: P3, status: open, title: "ci.yml on pull_request keeps the default types, so an edit of the member table in the PR body starts no run; add types opened, synchronize, reopened, edited or document the rerun" }
+  - { id: R4, severity: P3, status: open, title: "review-verdict v2 says the Synth theme layer (src/js/ui/synth/) stays unguarded, but visual-identity-lock v4's layer includes src/js/synth/view/, which src/js/synth/* guards; say so in the rule" }
+  - { id: R5, severity: P3, status: open, title: "clip-targets.js notesTarget picks a or an by the first letter, so a notes clip on an LFO or RTA reads 'a LFO node' and 'a RTA node'" }
+  - { id: R6, severity: P3, status: open, title: "studio-sink.js held.set overwrites the node of a note pressed twice (keys and MIDI) across a re-route, so the first node's note-off is never sent (reproduced); a refused arm without a reason announces an empty string (the real transport always gives one)" }
+  - { id: R7, severity: P3, status: open, title: "scripts/flake-ledger.mjs and tests/unit/flake-ledger.test.mjs are not guarded; the ledger never decides gate, so only its report can change without a verdict" }
+  - { id: R8, severity: P3, status: open, title: "pre-existing, not this train's: the required gate and the review-verdict job are defined by the pull request's own ci.yml and base-rule.sh, so a change to .github/ can drop review-verdict from gate's needs; only review sees it" }

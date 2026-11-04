@@ -1,0 +1,32 @@
+id: V634
+milestone: M054
+serves:
+- "ui-current#phone-whole"
+title: The Studio's keys and text are whole on a phone
+slug: the-studios-keys-and-text-are-whole-on-a-phone
+priority: p1
+profile: implementation
+objective: "Make the Studio usable on a phone (390x844, coarse pointer). The on-screen keys show whole octaves whose white keys are 44 px targets (one octave at 390 px; the Octave buttons move it), and carry the computer keys' letters only where a fine pointer is attached; the keyboard's Arm, Octave and Velocity controls are Pro buttons, 44 px on a coarse pointer; the type tokens under 12 px (2xs, xs, sm, tab, control) are 12 px up to a 480 px viewport and keep their measured values from 1280 px, linear between, so no text outside the zoomable graph is under 12 px on a phone and the 1536x1024 reference does not move."
+why: "Owner direction of 2026-11-02, in Czech: \"musi fungovat bezchybne na mobilu i vsude\" about #m=studio, then \"tohle rozvingm fixni, udelej rock solid\" and \"musi fungovat klavesnice\". Measured on v3.14.1 under iPhone 13 emulation: 14 white keys of about 28 px at 390 px, labelled A to ' though a phone has no such keys; the keyboard controls unstyled native buttons; 57 text runs under 12 px."
+scope:
+- src/js/midi/keyboard-ui.js
+- src/js/midi/keyboard.js
+- src/styles/tokens.css
+- src/index.html
+- tests/unit/phone-whole.test.mjs
+- .ai/repo/project/intents/ui-current.yaml
+- .ai/repo/project/issues/V634.yaml
+- dist
+acceptance_criteria:
+- "Before: VERIFIED: at 390x844 under touch the keys show two octaves (about 28 px white keys) with computer-key letters, the keyboard controls are unstyled native buttons, and 57 text runs are under 12 px."
+- "After: one octave of about 46 px white keys at 390 px, no letters without a fine pointer, Pro buttons 44 px tall on a coarse pointer, and no text under 12 px outside the graph's node cards (a zoomable domain view)."
+- "Negative cases: a fine pointer keeps two octaves below 560 px and three above, and its letters; the token values at 1280 px and wider are the measured ones, so the visual reference at 1536x1024 is unchanged."
+- "Rollback: revert the merge commit; no stored record or schema changes."
+validation:
+- node --test tests/unit/phone-whole.test.mjs
+- node scripts/ui-flowbite-pro-record.mjs --check
+- node tests/browser/layout.cjs
+evidence_required:
+- verified
+created_at: '2026-11-02'
+updated_at: '2026-11-02'

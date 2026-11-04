@@ -1,0 +1,32 @@
+id: Q072
+milestone: M119
+title: "Owner decision: the standing of the song-reconstruction intent"
+slug: owner-decision-the-standing-of-the-song-reconstruction-inten
+priority: p2
+profile: routine
+owner: "repository owner"
+objective: "Whether the song-reconstruction intent drafted from the pack is accepted, or recorded as proposed with an independent critique (.ai/repo/project/critiques/song-reconstruction.yaml, written by a session that did not draft it, against the critique request's ten points) before any of its milestones, criteria or issues is filed. The draft recommended the second."
+why: "The owner handed over the OSCILLA RECONSTRUCT pack (OSCILLA_RECONSTRUCT_MASTER_PROMPT.md, the owner's local copy, 2026-11-02, marked 'Status: PROPOSAL'), recorded as the proposed intent song-reconstruction; the research that mapped it onto the plan (P00 gap map and P01 alignment, measured on origin/main b938129) drafted this question; .ai/repo/project/README.md: only the owner, or a session the owner delegated to, answers a Q issue."
+current_state: "Answered by the owner on 2026-11-02 at about 22:20 UTC (owner, AskUserQuestion in the oscilla-b0 session, 2026-11-02; see evidence): \"Proposed, critic first (Recommended)\". The intent is recorded with status proposed: it names no milestone and no criterion, so Majordomus derives its stage as declared (ADR 0144), and an independent critique is recorded before any issue is filed; nothing marks it accepted. The other options offered in that exchange were not relayed to this record. The critique is written by a session that did not draft the intent; the builder of the plan writes no verdict."
+scope:
+  - ".ai/repo/project/issues/Q072.yaml"
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision), in the owner's words with date and source; a worker never answers it."
+  - "The answer says whether the intent is accepted or proposed, and whether a critique precedes its first issue."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-11-02
+updated_at: 2026-11-02T22:30:25Z
+started_at: 2026-11-02T22:29:52Z
+started_event: sha256:39e3bd13802cf44547270d6b905829e1072b67dabe7711e2153b24451c55b874
+completed_at: 2026-11-02T22:30:25Z
+completed_event: sha256:11ccd7fc5a76c15b9deff2d0ebeee1774f3f2afe212bd382d050e5ae15511f60
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "AskUserQuestion in Claude Code session oscilla-b0, 2026-11-02, about 22:20 UTC (owner, AskUserQuestion in the oscilla-b0 session, 2026-11-02)"
+    result: "Owner answered on 2026-11-02 (owner, AskUserQuestion in the oscilla-b0 session, 2026-11-02): \"Proposed, critic first (Recommended)\". The song-reconstruction intent is recorded with status proposed (no milestone and no criterion, stage declared under Majordomus ADR 0144), with an independent critique recorded under .ai/repo/project/critiques/song-reconstruction.yaml before any issue is filed; nothing marks it accepted."
+    commit: 2fe68de1c36d5a89aa1c9b336673bfdc1084bb89
+    recorded_at: 2026-11-02T22:30:18Z

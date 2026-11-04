@@ -1,0 +1,4 @@
+{
+  "note": "Hard-coded collection counts in browser checks that predate tests/unit/browser-collection-counts.test.mjs (rule project.suite-harness), as a file and a stable key (the check, then the comparison). A finding not listed here fails npm test; an entry may be removed and never added.",
+  "entries": []
+}

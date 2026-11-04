@@ -1,0 +1,48 @@
+id: F013
+milestone: M055
+serves:
+  - "ui-flowbite-pro#visual-references-pro"
+  - "ui-flowbite-pro#pro-accessible"
+title: "One synth-theme layer: tokens, plates, labels, knob/fader/switch, jacks, cables, displays, buttons and meters as pure functions on Flowbite Pro, the only source of the app-wide old-school modular look"
+slug: one-synth-theme-layer-on-flowbite-pro
+priority: p1
+profile: implementation
+owner: "dev-53 (the layer); p2 builds knob.js, cable.js and tokens.js inside it"
+objective: "Build the shared synth-theme layer that draws the app-wide hardware look the owner chose on 2026-11-02 (Q071, 'Celá appka jako synth') under rule project.visual-identity-lock v4, from the approved design of 2026-11-02 (dev-53, approved by b0; scratchpad synth-theme-layer-design.md). It lives in one directory, src/js/ui/synth/ (the cable core at src/js/ui/synth/cable.js), plus a Tailwind theme extension in tailwind.config.cjs whose new colour keys map only to the existing --osc-* custom properties, so the dark and light themes differ only in token values; no second kit, no new osc-* class, no new legacy CSS declaration. One module per element, each with one declaration in G001's catalogue: tokens.js (synthTokens(el), read at run time), plate (plateClasses({ density }) plus a tonal gradient, wrapping Flowbite cards, never replacing them), label (silk-screen typography, 4.5:1 on its plate), knob, fader and switch (SVG with a pure knobKey() and the lin/log, step and fine value mapping; the value ring in the accent token), jack (rings in the PORT_VISUALS shapes, a 44 px hit target), cable (cableSvg and cableCurve: catenary sag, soft shadow, dashed by signal type), display (a readout window with tabular numerals, the unit always shown and a relative/calibrated badge), button (the Flowbite button with plate variants, latch or momentary as aria-pressed) and meter (W003's level meter skinned, its data only from the engine). v4 also allows the elements the design held until Q071: LEDs, plugs, jack nuts, cable sheen, wood cheeks, screws and a subtle procedural texture, each drawn from tokens and never a bitmap. Every element is a pure function returning a markup or class string plus tokens; behaviour stays with its owner (StudioModel actions; keys through K153). The first pull request lands tokens, plate, label, jack and display with wave W1 on the Synth panel and p2's knob and cable; the other surfaces adopt the layer in later waves."
+why: "The owner's decision Q071 of 2026-11-02 makes the old-school modular look app-wide and lists the hardware elements; project.visual-identity-lock v4 permits exactly what this layer draws and holds it by tests/unit/visual-identity-lock-v4.test.mjs. One layer keeps the look from forking per surface and keeps Flowbite Pro the component structure (ADR 0061)."
+current_state: "Planned on 2026-11-02 with Q071 and rule project.visual-identity-lock v4, which land in the same pull request. src/js/ui/synth/ does not exist; until it does, the v4 test's theme-layer guards judge only src/js/synth/view/ and print that the layer's directories pass vacuously. Before this starts, p2 works only on pure modules with unit tests (knobKey and the value mapping, cableCurve) on a branch from main, claimed on the mesh, with no visual adoption."
+scope:
+  - "tests/visual/synth"
+  - "scripts/visual-synth.mjs"
+  - "src/js/ui/synth"
+  - "tailwind.config.cjs"
+  - "tests/unit/synth-theme"
+  - "tests/unit/ui-synth-cable.test.mjs"
+  - "tests/unit/ui-synth-knob.test.mjs"
+  - "tests/unit/ui-synth-tokens.test.mjs"
+  - "tests/unit/ui-synth-fixture.mjs"
+  - "tests/unit/visual-identity-lock-v4.test.mjs"
+  - "tests/browser/synth.cjs"
+  - "tests/visual"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "Q071"
+acceptance_criteria:
+  - "Every element is a pure function of its arguments and tokens returning a markup or class string: a unit test calls each with fixed inputs twice and gets the same string, and the module touches no DOM, store or engine at import or call (node --test on the layer's unit tests)."
+  - "Colours come only from the --osc-* tokens through Tailwind theme keys or tokens read at run time: tests/unit/visual-identity-lock-v4.test.mjs passes and, because src/js/ui/synth/ now exists, judges it strictly (no VACUOUS line for it in the output), and every Tailwind colour key but primary is a var(--osc-*) token."
+  - "The Flowbite Pro ratchet stays flat or falls: node scripts/ui-flowbite-pro-record.mjs --check passes and node --test tests/unit/ui-flowbite-pro.test.mjs passes; no osc-* class token, legacy selector, stylesheet or inline style is added."
+  - "Contrast holds in both themes on the rendered page: every jack ring, cable, knob ring and LED at 3:1 or more on its card and every label and display text at 4.5:1 or more on its plate, in dark and light, by a browser check in the style of s-look in tests/browser/synth.cjs."
+  - "LED and meter states bind to engine data: every data-led and data-needle element names an interpolated data-source and state (the v4 test), and a browser check shows a lamp lit and a meter moving only while the engine reports the state they name, and dark and still when it does not."
+  - "Every display shows its unit and a relative/calibrated badge; dB SPL appears only under a valid level calibration (project.no-fake-science; tests/unit/no-fake-science.test.mjs and the v4 test's SPL guard pass)."
+  - "The visual references of every re-skinned view are re-accepted through the visual gate with the reason recorded in the same pull request (npm run test:visual passes)."
+  - "Wave W1 adds a SYN visual reference (scripts/visual-synth.mjs and tests/visual/synth/, in the pattern of scripts/visual*; built by p2, reviewed by dev-53): the Synth workspace's bay views at desktop 1536x2100 and phone 390x2200 (1536x1024 and 390x844 cut the bay: with six cables the card ends at y=1702 on desktop and 1905 on phone; each view asserts all 21 plates and the module cards between the navigation and the keyboard dock), the Panel, Engines and XY tabs with a bay of six cables, in the dark and the light theme, on darwin-arm64 and linux-x64 (the container), failing a view at more than 24 px differing at pixel threshold 0.05 or more than 1000 px at threshold 0 (bounds from 10 stability runs per platform: darwin max 0 and 338, linux max 2 and 92; the earlier 0.5 % tolerance let three seeded 1 px mutations pass, which these bounds fail: the knob pointer on 10 views, about 2200 px; screws 1 px lower on 4, about 490; the brushed finish removed on 6, about 176 000 faint px), with a per-view faint bound before W1b lands (amended 2026-11-03 from 98's feat/synth-w1-syn-accept, approved by b0), with every re-acceptance reasoned in the pull request body; and a layout check of the Synth workspace (b0, G2)"
+validation:
+  - "node --test tests/unit/visual-identity-lock-v4.test.mjs"
+  - "node --test tests/unit/ui-flowbite-pro.test.mjs"
+  - "npm run test:studio"
+  - "npm run test:visual"
+evidence_required:
+  - "verified"
+created_at: 2026-11-02
+updated_at: 2026-11-03

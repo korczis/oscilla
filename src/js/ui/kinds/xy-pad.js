@@ -156,7 +156,7 @@ export function mountXyPad(host, opts) {
     // A disabled pad says why on its own face, the reason that describes it.
     + (disabled ? `<p id="${uid}-w" data-xy-why="" aria-hidden="true" class="${WHY}">${esc(disabled)}</p>` : '')
     + '</div>'
-    + `<ol aria-hidden="true" class="mt-1 flex text-[10px] text-gray-500 dark:text-gray-400">`
+    + `<ol aria-hidden="true" class="mt-1 flex text-xs xl:text-[10px] text-gray-500 dark:text-gray-400">`
     + cells.map((c) => `<li class="flex-1 text-center ${c.root ? 'font-bold' : ''}">`
       + `${n <= 29 || c.root ? esc(c.label) : ''}</li>`).join('')
     + `</ol><p id="${uid}-d" class="sr-only">${esc(description)}</p>`
