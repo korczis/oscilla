@@ -8,14 +8,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 const mod = await import('../../src/js/synth/hold.js').catch(() => ({}));
+// Only the scroller scrolls; the host is laid out in it.
+globalThis.getComputedStyle = (el) => ({ overflowY: el.scrollTop !== undefined ? 'auto'
+  : 'visible' });
 
 /** A host whose jack sits at `y` (as the page lays it out), in a scroller. */
 function page(y) {
   const scroller = { scrollTop: 400 };
   const state = { y };
   const jack = { getBoundingClientRect: () => ({ top: state.y - (scroller.scrollTop - 400) }) };
-  const host = { querySelector: (q) => (q === '[data-jack="vco1.pitch:in"]' ? jack : null),
-    closest: (q) => (q === '.osc-main' ? scroller : null) };
+  // The host sits in the scroller: getComputedStyle (stubbed below) says it scrolls.
+  scroller.nodeType = 1;
+  scroller.style = {};
+  const host = { nodeType: 1, parentElement: scroller, style: {},
+    querySelector: (q) => (q === '[data-jack="vco1.pitch:in"]' ? jack : null) };
   return { host, scroller, state };
 }
 

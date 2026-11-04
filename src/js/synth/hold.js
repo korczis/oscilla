@@ -6,14 +6,21 @@
 //
 //   holdJack(host, key, change, { frame }) -> whatever change() returns
 
+/** The nearest ancestor that scrolls (the page's own scroller when none does). */
+function scrollerOf(el) {
+  for (let e = el; e && e.nodeType === 1; e = e.parentElement) {
+    if (/(auto|scroll)/.test(getComputedStyle(e).overflowY)) return e;
+  }
+  return document.scrollingElement;
+}
+
 export function holdJack(host, key, change, { frame = requestAnimationFrame } = {}) {
   const top = () => {
     const j = host && host.querySelector(`[data-jack="${key}"]`);
     return j ? j.getBoundingClientRect().top : null;
   };
   const before = top();
-  const scroller = before === null ? null
-    : (host.closest('.osc-main') || document.scrollingElement);
+  const scroller = before === null ? null : scrollerOf(host);
   // The browser's own scroll anchoring would fight the correction: off while the jack is held.
   const anchor = scroller && scroller.style ? scroller.style.overflowAnchor : null;
   if (scroller && scroller.style) scroller.style.overflowAnchor = 'none';
