@@ -629,11 +629,15 @@ function defineChecks() {
       return d.cables.length === 1 && d.cables[0].to === 'vco1.pitch' ? d.cables : null;
     }, { ms: 5000, what: 'the touch drag patches keys.velocity to vco1.pitch' })
       .catch(async () => (await dbg(page)).cables);
-    const after = await top();
-    // The page does not move under the finger while it drags (before = mid). After the drop the
-    // re-rendered view still moves (the same after a keyboard patch: PLAN JC-10, not ERG-01).
-    return { ok: patched.length === 1 && patched[0].to === 'vco1.pitch' && mid === before,
-      cancelled, cables: patched, jackTop: [before, mid, after] };
+    // The page does not move under the finger while it drags (before = mid), nor after the drop
+    // re-draws the bay (JC-10: the jack is held where it was, within a pixel).
+    const after = await until(async () => {
+      const y = await top();
+      return Math.abs(y - before) <= 1 ? y : null;
+    }, { ms: 3000, what: 'the dragged-from jack stays where it was after the drop' })
+      .catch(top);
+    return { ok: patched.length === 1 && patched[0].to === 'vco1.pitch' && mid === before
+      && Math.abs(after - before) <= 1, cancelled, cables: patched, jackTop: [before, mid, after] };
   });
 
   // ERG-04 and ERG-03 (the Synth look audit): pressing a knob focuses it, so the keys follow a

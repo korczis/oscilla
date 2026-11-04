@@ -15,6 +15,7 @@
 //   createSynthUi({ get, setupAudio, announce }) -> the component part
 //     get() -> { handle, transport }   the workspace's store and transport (late-bound)
 
+import { holdJack } from './hold.js';
 import SEMI_MONO from './panels/semi-mono.js';
 import { PRESETS, presetAction, presetOf, presetValues } from './presets.js';
 import { routedNode } from './picker.js';
@@ -215,7 +216,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     } else {
       const from = pending;
       pending = null;
-      connect(from, id);
+      holdJack(host(), id, () => { connect(from, id); renderBay(); });
+      return;
     }
     renderBay();
   }
@@ -496,8 +498,10 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       const d = Math.hypot(q.x - p.x, q.y - p.y);
       if (d < 26 && (!best || d < best.d)) best = { id, d };
     }
-    if (best && best.id !== c.from) connect(c.from, best.id);
-    renderAll();
+    holdJack(host(), c.from, () => {
+      if (best && best.id !== c.from) connect(c.from, best.id);
+      renderAll();
+    });
   }
 
   function onClick(e) {
