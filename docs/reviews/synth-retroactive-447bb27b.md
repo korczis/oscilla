@@ -32,7 +32,7 @@
 | S6 | P2 | verified; not intended (an XY preset touches only what its recipe names); fixed by 26's 3c22d01a (train 6), pending merge | 26, K097 |
 | S7 | P2 | open, verified; 26 fixing on fix/synth-review-p2 (after train 6) | 26 |
 | S8 | P2 | open, verified by reading; 26 fixing on fix/synth-review-p2 (after train 6) | 26 |
-| S9 | P2 | open, verified code path; device behaviour unverified | 26 / dev-53 (W1b touches the bay) |
+| S9 | P2 | the bay: resolved by ERG-01 (train 7 prep dc53db2c: a non-passive touchstart on a [data-jack] is cancelled, since Chromium ignores touch-none on an SVG child) and W1b (train 6: pointercancel drops the dragged cable before onPointerUp), both verified by reading at dc53db2c, pending merge; still open: a pointercancel during a knob drag runs onPointerUp and commits the drag instead of cancelling it (W1b review R7) | dev-53 |
 | S10 | P2 | open, verified; 26 fixing on fix/synth-review-p2 (after train 6) | 26 |
 | S11 | P3 | reclassified: unwired until W1b (dev-53, F013 with K058); closes when W1b lands | dev-53 |
 | S12-S17 | P3 | open, first reader's, not re-verified | 26 |
