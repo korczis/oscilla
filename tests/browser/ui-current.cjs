@@ -112,9 +112,6 @@ const PHONE_WHOLE_DEBT = new Map([
   ['studio:font', 'the Studio editor\'s graph, library and timeline labels are 9-10.5 px '
     + '(studio.css, studio-timeline.css: SMALL_FONT_DEBT of tests/unit/phone-font-floor.test.mjs); '
     + 'its node and lane geometry is sized to them: the Studio lane'],
-  ['synth:font', 'the Synth panel draws its bay labels in SVG at font-size 10 '
-    + '(src/js/synth/view/bay.js) and labels its knobs with text-[11px] (src/js/synth/view/'
-    + 'face.js: SMALL_TEXT_CLASS_DEBT of the same test): the Synth lane'],
   // The iPhone measures (sizes and the edge and overlap measures, lane A wave 3, 2026-11-02).
   ['@320:playground:share', 'at 568 px of height the navbar, the page header and the Q002 '
     + 'sentence leading <main> (P002, Q004 option A: wrapped to five lines at 320 px) leave the '
@@ -127,10 +124,6 @@ const PHONE_WHOLE_DEBT = new Map([
     + 'overlap the Synth tabs at 375 px since #385\'s train: the Synth lane, #385 and V635'],
   ['@390:synth:overlap', 'the keyboard dock\'s arm and octave buttons overlap the Synth\'s mobile '
     + 'keys toggle (synth-m-keys): the Synth lane, #385 and V635'],
-  ['firefox@375:synth:covered', 'in Firefox the docked keyboard covers the Synth bay\'s SVG '
-    + 'groups: the Synth lane, #385 and V635'],
-  ['firefox@390:synth:covered', 'in Firefox the docked keyboard covers the Synth bay\'s SVG '
-    + 'groups (CI run 41431865956: 13 covered): the Synth lane, #385 and V635'],
 ]);
 // The workspaces, read from ui/app.js at start (loadWorkspaces), so the list cannot go stale.
 const WORKSPACES = [];
