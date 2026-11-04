@@ -1,0 +1,40 @@
+id: G020
+milestone: M085
+serves:
+  - "component-system#proven-duplicates"
+title: "One value formatter for every frequency readout: the Synth knob and the three hzText copies format through core/frequency.js"
+slug: one-value-formatter-for-every-frequency-readout-the-synth-knob-and-the-three-hztext-copies
+priority: p2
+profile: implementation
+objective: "Lands as fix(ui). After G002 (#349, in the #367 train) src/js/core/frequency.js is the one units module, but four frequency formatters still sit beside it: the Synth knob's formatValue case 'Hz' (src/js/synth/view/knob.js, sig(v) to three significant digits below 1 kHz and fixed(v / 1000, 2) above) and three identical hzText bodies (src/js/experiments/evidence.js:60, src/js/experiments/findings.js:101, src/js/measurement/views/response-chart.js:111, each toPrecision(4)). Before: the same StudioModel value of 440.5 Hz reads '441 Hz' on the Synth knob and '440.50 Hz' in the Inspector. After: the knob's Hz text and the three hzText call sites format through core/frequency.js (formatFrequency, or one named sibling there when a reference label keeps its stated precision), hzText has one definition, and the knob's parse goes through parseFrequency so typed entry accepts and refuses the forms G002 froze with the same sentences. The reference labels of experiments and measurement are stated values (a profile point, a requested reference), not measured readouts; their text may change only where the pull request lists the before and after, and no scientific readout gains or loses precision (project.no-fake-science). Rollback: revert; no stored record holds formatted text."
+why: "Review of the feature train #367 (oscilla-af, verdict at 5cad3dcf, finding F2 'D1', P2): src/js/synth/view/knob.js formats and parses StudioModel params differently from the Inspector and G002's units module, and F6 names a third hzText copy. A value shown two ways is the duplication the component-system intent set out to remove."
+scope:
+  - "src/js/core/frequency.js"
+  - "src/js/synth/view/knob.js"
+  - "src/js/experiments/evidence.js"
+  - "src/js/experiments/findings.js"
+  - "src/js/measurement/views/response-chart.js"
+  - "tests/unit/units.test.mjs"
+  - "tests/visual"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "G002"
+  - "K058"
+acceptance_criteria:
+  - "Fail-first: tests/unit/units.test.mjs drives the knob's text and the Inspector's text for the same values (440.5, 999.95, 1000, 12500 Hz) and asserts they are equal; it fails on the merge base (the knob reads '441 Hz')."
+  - "A static scan of src/js (comments removed) finds one hzText body and no frequency formatter outside src/js/core/frequency.js other than the method-specific formatters G002 left out of scope (src/js/measurement/smoothing.js, src/js/experiments/schema.js); a mutation that re-adds a copy fails the scan."
+  - "tests/unit/freeze.test.mjs passes with tests/freeze/vectors.cjs and tests/freeze/golden-a7b7a23.json byte-identical to the merge base."
+  - "Every text a user saw before is listed with its after value in the pull request; a visual reference that changes is re-accepted through the visual gate with the reason."
+  - "Typed entry in a Synth Hz knob accepts '2.5k' and refuses '2,5k' and '1e3' with the sentence parseFrequency gives for each."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "The pull request touches a guarded path (src/js/experiments/*, src/js/measurement/*) and carries a reviewer-written .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+  - "Lands after the feature train #367, which introduces src/js/synth/view/knob.js and G002's units module."
+validation:
+  - "node --test tests/unit/units.test.mjs tests/unit/freeze.test.mjs"
+  - "npm test"
+  - "npm run verify"
+evidence_required:
+  - "verified"
+created_at: 2026-11-01
+updated_at: 2026-11-01

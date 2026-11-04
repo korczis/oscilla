@@ -6,7 +6,7 @@ priority: p1
 problem: "At v3.13.0 (main b67d1e58) a PACK 03 audit of the integration between the generator, the AudioEngine, the analysis, the views, the Studio, configuration and export reproduced 35 defects: controls that do not reach a sounding voice (envelope sustain and release, pan, the hard limit) or the sequencer at all (the Filter), stop and hand-over paths that decide on a 150 ms polled copy, the sequencer playing beside the instrument and during a measurement and outside the engine's census, views that describe the instrument while the sequencer or the Studio sounds, and save paths that drop the lab state or report a restore that did not happen. 64 of the 90 controls the owner named are driven by no browser test."
 outcome: "Every control reaches its subsystem and every view that reflects it, in the same event; one output owner sounds at a time and every stop is immediate; the sequencer plays through the engine's stages and census; every save path restores what it claims or says what it does not; the six user journeys and a control-drive ratchet at zero hold it in every gate browser."
 acceptance_criteria:
-  - "C001 to C022 are done with their evidence; npm run release-gate passes at the last one."
+  - "C001 to C026 are done with their evidence; npm run release-gate passes at the last one."
   - "tests/browser/journeys.cjs (J1 to J6) and the control-drive ratchet run in CI and are green in Chromium, Firefox and WebKit."
 validation:
   - "npm run release-gate"

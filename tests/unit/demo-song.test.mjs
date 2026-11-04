@@ -29,7 +29,7 @@ const byTrack = (m) => {
   return out;
 };
 
-test('K144 the demo song is the seventh template and the six before it keep their hashes', () => {
+test('K144 the demo song is the last template and the six before it keep their hashes', () => {
   assert.equal(DEMO_SONG_TEMPLATE_ID, 'demo-song');
   assert.equal(STUDIO_TEMPLATES.at(-1).id, 'demo-song');
   assert.equal(getTemplate('demo-song'), STUDIO_TEMPLATES.at(-1));

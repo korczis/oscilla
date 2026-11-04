@@ -342,15 +342,28 @@ test('the gate verdict: a path-gated skip passes only on the classifier\'s runti
       ['an unknown job skipped on runtime=false', { ...needs({ runtime: 'false',
         gated: 'skipped' }), extra: { result: 'skipped', outputs: {} } }, false],
       ['runtime spelled False', needs({ runtime: 'False', gated: 'skipped' }), false],
+      // E010: the ledger's entry is dropped before this rule, whatever it did
+      ...['success', 'failure', 'cancelled', 'skipped'].flatMap((r) => [
+        [`ledger ${r} on a runtime change`, { ...needs(),
+          'flake-ledger': { result: r, outputs: {} } }, true],
+        [`ledger ${r}, the six skipped on runtime=false`, { ...needs({ runtime: 'false',
+          gated: 'skipped' }), 'flake-ledger': { result: r, outputs: {} } }, true],
+        [`ledger ${r}, the six skipped on runtime=true`, { ...needs({ gated: 'skipped' }),
+          'flake-ledger': { result: r, outputs: {} } }, false],
+      ]),
     ];
     for (const [what, input, pass] of rows) assert.equal(gatePasses(input), pass, what);
   });
 
 test('ci.yml wiring: the six jobs wait for changes, the rest always run, gate needs both', () => {
   const jobs = CI.jobs;
-  const conditioned = Object.entries(jobs).filter(([k, j]) => k !== 'gate' && j.if !== undefined)
+  // gate's always() and the flake ledger's re-run condition (E010) are the only other ones;
+  // the ledger is never path gated (tests/unit/flake-ledger.test.mjs)
+  const OWN = new Set(['gate', 'flake-ledger']);
+  const conditioned = Object.entries(jobs).filter(([k, j]) => !OWN.has(k) && j.if !== undefined)
     .map(([k]) => k);
   assert.deepEqual(conditioned.sort(), [...GATED_JOBS].sort());
+  assert.equal(jobs['flake-ledger'].if, '${{ always() && fromJSON(github.run_attempt) > 1 }}');
   for (const k of GATED_JOBS) {
     assert.equal(jobs[k].if, RUNTIME_IF, `${k}: runs unless runtime is exactly false`);
     assert.equal(jobs[k].needs, 'changes', `${k}: needs changes`);

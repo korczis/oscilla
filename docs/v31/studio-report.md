@@ -95,7 +95,7 @@ restore earlier snapshots (`src/js/studio/actions.js`, `src/js/studio/history.js
 | Model field | Values |
 | --- | --- |
 | Track kinds | event, measurement |
-| Clip kinds | pattern, event, measurement |
+| Clip kinds | pattern, event, measurement, notes |
 | Clip time bases | absolute, tempo |
 | Event clip actions | gate, trigger |
 | Measurement clip steps | noise-check, pre-roll, stimulus, capture, tail, analysis |
@@ -143,6 +143,13 @@ restore earlier snapshots (`src/js/studio/actions.js`, `src/js/studio/history.js
 | stereo-beat | Stereo Beat | synthesis |
 | filter-automation | Filter Automation | synthesis |
 | measurement-sweep | Measurement Sweep | measurement |
+| first-patch | First Patch | synthesis |
+| filter-envelope-synth | Filter Envelope Synth | synthesis |
+| fm-chime | FM Chime | synthesis |
+| ring-mod | Ring Mod | synthesis |
+| drive-lead | Drive Lead | synthesis |
+| macro-pad | Macro Pad | synthesis |
+| step-bass | Step Bass | synthesis |
 | demo-song | Demo song: Lantern in the Slag Yard | synthesis |
 <!-- templates:end -->
 

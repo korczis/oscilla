@@ -25,7 +25,7 @@
     }
   },
   "caps": {
-    "src/index.html": 304000,
+    "src/index.html": 305000,
     "src/js/audio/audio-engine.js": 73000,
     "src/js/core/instrument.js": 63000,
     "src/js/experiments/validate.js": 64000,
@@ -151,6 +151,12 @@
       "cap": 87000,
       "pr": 386,
       "reason": "merging main's train 3 (#404) Studio changes into lane A's workspace registry and page-header wiring of the Studio workspace, 18 bytes past the 86 000 cap"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 305000,
+      "pr": 386,
+      "reason": "merging main's train 4 (#410: the Learn cards with their own links, the Studio's dock padding, K099 and K014 markup) into lane A's Pro shell, 245 bytes past the 304 000 cap"
     }
   ]
 }

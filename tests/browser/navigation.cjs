@@ -951,9 +951,12 @@ function defineChecks() {
       landed.push({ ...l, workspace: (await H.state(p)).workspace });
       await p.close();
     }
+    // One link per workspace, read from the code (ui/app.js WORKSPACES) and not restated: a
+    // hard-coded twelve broke when Synth became a workspace (#367).
+    const { WORKSPACES } = await import(pathToFileURL(path.join(__dirname, '..', '..', 'src', 'js',
+      'ui', 'app.js')).href);
     return { ...H.verdict({
-      // Synth (#329, owner Q019: top-level after Studio) is the thirteenth workspace.
-      thirteen: links.length === 13,
+      everyWorkspace: links.map((l) => l.id).sort().join() === [...WORKSPACES].sort().join(),
       hrefs: links.every((l) => l.href === `#m=${l.id}`),
       landed: landed.every((l) => l.workspace === l.id),
       modifiedLeftToBrowser: modified.prevented === false && modified.workspace === 'playground',

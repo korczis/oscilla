@@ -1,0 +1,31 @@
+id: K148
+milestone: M069
+serves:
+  - "connected-instrument#performance-pad"
+title: "A skipped XY pad check never counts as a pass: the suite harness leaves skips out of a leg's count"
+slug: a-skipped-xy-pad-check-never-counts-as-a-pass
+priority: p2
+profile: implementation
+objective: "Lands as fix(test) inside #372 (K097) by its rebase, or after it if #372 lands first. tests/browser/xy-pad.cjs (from #372, not on main at filing) counts a skip as a check, against project.suite-harness ('a skip never counts as a check'): on firefox and webkit the phone leg's only check, x-touch, calls RUN.skip and returns { ok: true, skipped: true }; runLeg keeps it in results, so reportLeg({ checks: names.length }) reports 1 and the leg prints PASS .../phone/xy-pad: 1/1 (CI run 41259978364, V3.1 Studio UI (firefox)), where it should report 0 checks and be refused. RUN.skip also names the leg '<browser>/phone' while reportLeg names '<browser>/<origin>/phone'. Fix it in the suite harness, so no suite can do this: tests/browser/lib/suite.cjs counts only executed checks (a result marked skipped, or a check RUN.skip recorded for that leg, is subtracted or refused), and RUN.skip and reportLeg use one leg key; xy-pad.cjs then either does not run the phone size outside chromium or lets the leg report 0 and be refused. This issue is closed by #372's rebase if that lands the harness fix; otherwise it is the next change to tests/browser/lib/suite.cjs."
+why: "Review of #372 (oscilla-21 reviewer, finding V1, P2): a skip is counted as a check, against project.suite-harness; also the leg key differs between RUN.skip and reportLeg. A skip counted as a pass hides that a browser checked nothing."
+scope:
+  - "tests/browser/lib/suite.cjs"
+  - "tests/browser/xy-pad.cjs"
+  - "tests/unit/browser-suite-contract.test.mjs"
+  - "tests/README.md"
+acceptance_criteria:
+  - "Fail-first: tests/unit/browser-suite-contract.test.mjs drives the harness with a leg whose only check was skipped and asserts reportLeg refuses it (0 checks), and asserts RUN.skip and reportLeg record the same leg key; it fails on the merge base."
+  - "No suite under tests/browser reports a skipped check as executed: a static or contract check over the suites' reportLeg calls fails a mutation that passes names.length with a skipped entry."
+  - "tests/browser/xy-pad.cjs on firefox and webkit prints no PASS line for a leg that checked nothing; the x-touch skip stays listed under 'Declared skips' in tests/README.md with its reason."
+  - "tests/browser/timing-baseline.json does not grow (project.bounded-test-timing)."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "Not a guarded path; no verdict is needed unless the scope widens to one (project.review-verdict)."
+  - "Filed while #372 is open: if #372's rebase lands the harness fix, the verified evidence names that main commit and this issue is done with it."
+validation:
+  - "node --test tests/unit/browser-suite-contract.test.mjs"
+  - "node tests/browser/xy-pad.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-01
+updated_at: 2026-11-01

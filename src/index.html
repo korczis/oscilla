@@ -2057,8 +2057,8 @@
          to F003). -->
     <div id="osc-keyboard" data-osc="keyboard" role="group" aria-labelledby="osc-kbd-title"
       x-show="kbdView" x-cloak
-      :class="kbdView === 'synth' ? 'fixed inset-x-0 bottom-[var(--osc-statusbar-h)] z-30 max-h-[45vh] overflow-y-auto border-t border-solid border-gray-200 bg-white px-4 py-2 shadow dark:border-gray-700 dark:bg-gray-800' : ''">
-      <h2 id="osc-kbd-title" :class="kbdView === 'synth' && 'sr-only sm:not-sr-only'">Keyboard</h2>
+      :class="kbdDocked ? 'fixed inset-x-0 bottom-[var(--osc-statusbar-h)] z-30 max-h-[45vh] overflow-y-auto border-t border-solid border-gray-200 bg-white px-4 py-2 shadow dark:border-gray-700 dark:bg-gray-800' : ''">
+      <h2 id="osc-kbd-title" :class="kbdDocked && 'sr-only sm:not-sr-only'">Keyboard</h2>
       <!-- K066, beside the piano in the Synth: a Pro dropdown of what the keys play, a Pro button
            group of the waveform, the quick presets (src/js/synth/picker.js, presets.js). -->
       <div class="mb-2 flex items-center gap-2" data-osc="synth.dock" id="osc-synth-dock"
@@ -2114,22 +2114,23 @@
           @click="kbdControl('octave-up')">Octave +</button>
         <button type="button"
           
-          data-osc="keyboard.velocity-down" :class="[kbdBtn, kbdView === 'synth' && !kbdMore && 'max-sm:hidden']" aria-keyshortcuts="C"
+          data-osc="keyboard.velocity-down" :class="[kbdBtn, kbdDocked && !kbdMore && 'max-sm:hidden']" aria-keyshortcuts="C"
           @click="kbdControl('velocity-down')">Velocity −</button>
         <button type="button"
           
-          data-osc="keyboard.velocity-up" :class="[kbdBtn, kbdView === 'synth' && !kbdMore && 'max-sm:hidden']" aria-keyshortcuts="V"
+          data-osc="keyboard.velocity-up" :class="[kbdBtn, kbdDocked && !kbdMore && 'max-sm:hidden']" aria-keyshortcuts="V"
           @click="kbdControl('velocity-up')">Velocity +</button>
-        <button type="button" data-osc="keyboard.more" x-show="kbdView === 'synth'"
+        <button type="button" data-osc="keyboard.more" x-show="kbdDocked"
           aria-controls="osc-synth-dock" :aria-expanded="String(kbdMore)" @click="kbdMore = !kbdMore"
           x-text="kbdMore ? 'Fewer' : 'More'"
           class="inline-flex h-9 items-center justify-center rounded-lg border border-solid border-gray-300 bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 sm:hidden dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11">More</button>
       </div>
       <p id="osc-kbd-readout" data-osc="keyboard.readout" role="status" x-text="kbdReadout"
-        :class="kbdView === 'synth' && 'sr-only sm:not-sr-only'"></p>
+        :class="kbdDocked && 'sr-only sm:not-sr-only'"></p>
       <p data-osc="keyboard.held" x-text="'Holding: ' + (kbdHeld || 'nothing')"
-        :class="kbdView === 'synth' && 'hidden sm:block'"></p>
-      <canvas data-osc="keyboard.keys" role="img" :aria-label="kbdLabel" height="132"></canvas>
+        :class="kbdDocked && 'hidden sm:block'"></p>
+      <div x-show="kbdKeysShown"><canvas data-osc="keyboard.keys" role="img"
+        :aria-label="kbdLabel" height="132"></canvas></div>
     </div>
 
     <!-- Studio announcements (outside the views: the compact widget announces too). A modal
@@ -2538,7 +2539,7 @@
       <h2 :class="PRO.pageTitle" id="osc-learn-title">Learn</h2>
       <div data-osc="learn-content">
         <ul class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" role="list">
-          <template x-for="t in LEARN_TOPICS" :key="t.id">
+          <template x-for="t in LEARN_CARDS" :key="t.id">
             <li :class="PRO.card + ' ' + (learnTopic === t.id ? PRO.cardCurrent : PRO.cardIdle)"
               :data-topic="t.id" :aria-current="learnTopic === t.id ? 'true' : null">
               <h3 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="t.title"></h3>
@@ -2546,13 +2547,20 @@
               <p class="font-mono text-sm tabular-nums text-primary-700 dark:text-primary-400"
                 data-learn-example x-show="learnTopic === t.id" x-text="topicExample"></p>
               <div class="flex flex-wrap items-center gap-2 mt-auto">
-                <button type="button" data-osc="learn.example"
-                  :class="PRO.btnSecondary"
-                  @click="learnTopic = t.id"
-                  :aria-pressed="String(learnTopic === t.id)">Relate to current settings</button>
-                <button type="button" data-osc="learn.demo"
-                  :class="PRO.btnPrimary"
-                  @click="learnTopic = t.id; runLearnDemo(t)" x-text="'Demo: ' + t.demo.label"></button>
+                <template x-if="t.demo">
+                  <button type="button" data-osc="learn.example" :class="PRO.btnSecondary"
+                    @click="learnTopic = t.id"
+                    :aria-pressed="String(learnTopic === t.id)">Relate to current settings</button>
+                </template>
+                <template x-if="t.demo">
+                  <button type="button" data-osc="learn.demo" :class="PRO.btnPrimary"
+                    @click="learnTopic = t.id; runLearnDemo(t)" x-text="'Demo: ' + t.demo.label">
+                  </button>
+                </template>
+                <template x-if="t.link">
+                  <a data-osc="learn.link" :data-card="t.id" :href="t.link.href" :class="PRO.link"
+                    x-text="t.link.label"></a>
+                </template>
                 <template x-if="learnToolOf(t.id)">
                   <a :href="learnToolOf(t.id).href" data-osc="learn.tool"
                     :class="PRO.link"
@@ -2727,7 +2735,7 @@
          editor, node library, Inspector and compact widget are rendered by their modules from
          the ONE Studio store; the timeline region belongs to src/js/ui/studio/timeline-editor.js
          (spec §131-§136). Below 768 px one of GRAPH / TIMELINE / INSPECTOR is shown at a time. -->
-    <section class="osc-view osc-view--studio" id="osc-view-studio" data-osc="studio-view"
+    <section class="osc-view osc-view--studio box-border !pb-[max(0px,calc(var(--osc-dock-h,0px)_-_var(--osc-statusbar-h)))]" id="osc-view-studio" data-osc="studio-view"
       data-osc-modes="studio" hidden :hidden="workspace !== 'studio'" :data-subview="studio.subview"
       aria-labelledby="osc-studio-title" tabindex="-1">
       <h2 class="osc-sr-only" id="osc-studio-title">Studio</h2>
