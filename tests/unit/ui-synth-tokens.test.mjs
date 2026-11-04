@@ -356,7 +356,7 @@ function depthUses(svg, where) {
       if (!DEPTH[role]) continue;
       const p = sampleOf(s);
       const under = p && list.slice(0, i).reverse().find((u) => isFace(u) && covers(u, p));
-      out.push({ role, cls: s.a.class, face: under ? varOf(under.a.fill) : undefined,
+      out.push({ role, paint, cls: s.a.class, face: under ? varOf(under.a.fill) : undefined,
         part: Object.keys(s.a).find((k) => k.startsWith('data-')) || s.tag, where });
     }
   });
@@ -409,6 +409,17 @@ test('the depth roles are drawn only through their intensity class, each over a 
   for (const want of ['--osc-hw-shade data-shadow', '--osc-hw-shade data-puck-shadow',
     '--osc-hw-shade data-recess', '--osc-hw-highlight data-puck-highlight']) {
     assert.ok(parts.has(want), `drawn: ${want} (${[...parts].join(', ')})`);
+  }
+  // The Synth panel's knob draws the core's shadow through its own token map (PANEL_TOKENS,
+  // panelControlTokens): its cap shadow is required here on its own, filled with the depth
+  // shade at hw-shadow, enabled and disabled, so a panel map that sends shade elsewhere fails
+  // by name and not only through the shade's face count below.
+  for (const where of ['the panel\'s knob', 'the panel\'s knob disabled']) {
+    const shadow = uses.filter((u) => u.where === where && u.part === 'data-shadow');
+    assert.deepEqual(shadow.map((u) => `${u.role} ${u.paint} ${u.cls}`),
+      [`${SYNTH_TOKEN_NAMES.control.shade} fill opacity-hw-shadow`],
+      `${where}: its data-shadow is filled with ${SYNTH_TOKEN_NAMES.control.shade} at hw-shadow `
+      + `(PANEL_TOKENS.shade is ${PANEL_TOKENS.shade})`);
   }
   for (const u of uses) {
     assert.equal(u.cls, `opacity-${DEPTH[u.role]}`, `${u.where} ${u.part}: ${u.role} only at `
