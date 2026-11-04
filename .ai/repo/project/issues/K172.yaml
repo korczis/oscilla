@@ -1,0 +1,23 @@
+id: K172
+milestone: M046
+serves:
+  - "engineering-integrity#screen-reader-pass"
+title: "Spoken Studio text chooses 'a' or 'an' by how the word is said, not its first letter"
+slug: spoken-studio-text-chooses-a-or-an-by-sound
+priority: p3
+profile: implementation
+objective: "Lands as fix(studio-ui). src/js/ui/studio/graph-view.js (line 176 at 15d1bc67) picks the article with /^[aeiou]/i, so it says 'a LFO' and 'a RTA node' where a listener hears 'an LFO' and 'an RTA' (prismatic-majordomus-98, review of #410 at 00108c87, R5). One helper decides the article for every node label the Studio speaks or shows, with the initialisms whose letter name starts with a vowel sound (F, H, L, M, N, R, S, X) handled."
+why: "Status and aria text read aloud should read correctly; the screen-reader pass criterion covers spoken labels."
+scope:
+  - "src/js/ui/studio/graph-view.js"
+  - "src/js/studio/a11y.js"
+  - "tests/unit/"
+depends_on: []
+acceptance_criteria:
+  - "One article helper is used for node labels; a unit test proves 'an LFO', 'an RTA', 'a Filter', 'an Oscillator', 'a Unison' and fails on 15d1bc67."
+validation:
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-04
+updated_at: 2026-11-04
