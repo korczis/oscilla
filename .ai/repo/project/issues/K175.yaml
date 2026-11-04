@@ -1,0 +1,31 @@
+id: K175
+milestone: M064
+serves:
+  - "connected-instrument#piano-keyboard"
+title: "A note is released through the sink that started it (retroactive review S2 and S18)"
+slug: a-note-is-released-through-the-sink-that-started-it
+priority: p1
+profile: implementation
+objective: "Lands as fix(midi). `noteOff` in src/js/midi/notes.js takes its sink from `route()` at release (src/js/midi/ui.js routes by the current workspace), so a note held across a workspace switch is released through the wrong sink: a Playground MIDI note sticks after switching to the Synth (S2), and a note held on the Studio keyboard sounds forever after leaving the Studio, since synth/studio-sink.js's held map never sees the off (S18). The sink is remembered per note key at note-on and the off goes through it; the workspace-change release (midi/keyboard-ui.js) uses the same path. Found by the retroactive review at 447bb27b (docs/reviews/synth-retroactive-447bb27b.md, S2, S18; K060)."
+why: "Owner decision K060 ('Retroactive review', 2026-11-03); a note that keeps sounding after its key is up breaks project.audio-engine-discipline."
+scope:
+  - "src/js/midi/notes.js"
+  - "src/js/midi/ui.js"
+  - "src/js/midi/keyboard-ui.js"
+  - "src/js/synth/studio-sink.js"
+  - "tests/unit/midi"
+  - "tests/browser/midi.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: a unit test holds a note through the Playground sink, switches the route to the Synth and releases it, and asserts the Playground voice is released; the same for a note held through the Studio sink; it fails on the merge base (project.fail-first)."
+  - "Browser (every gate browser): a continuous Playground MIDI note held across a switch to the Synth, and a Studio-keyboard note held across leaving the Studio, each end on release; the engine's live note census returns to idle."
+  - "src/js/synth is guarded (project.review-verdict v2): a non-builder's verdict."
+validation:
+  - "npm test"
+  - "node tests/browser/midi.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-11-04
+updated_at: 2026-11-04
