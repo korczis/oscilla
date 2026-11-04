@@ -241,22 +241,16 @@ test('tailwind.config.cjs carries the Pro theme in OSCILLA colours, preflight an
       require('flowbite/plugin')({ forms: true }).handler.toString(), 'it is flowbite/plugin');
     assert.match(read(CONFIG), /\bplugins\s*:\s*\[\s*require\('flowbite\/plugin'\)/);
 
-    // The Pro class lists read OSCILLA's palette (rule project.visual-identity-lock v2).
+    // The Pro class lists read the palette rule project.visual-identity-lock v4 (Q071) sets:
+    // primary is the Tailwind blue scale and the surfaces the Tailwind gray palette, which every
+    // other colour key may only map to an OSCILLA token (visual-identity-lock-v4.test.mjs).
     const theme = require('tailwindcss/resolveConfig')(config).theme;
+    const tw = require('tailwindcss/colors');
     const { primary, gray } = theme.colors;
-    assert.equal(primary['600'], token('--osc-blue'), 'primary-600 is the blue accent');
-    assert.equal(primary['700'], token('--osc-blue-fill'), 'primary-700 carries white text');
-    assert.equal(primary['400'], token('--osc-focus'), 'primary-400 is the focus blue');
-    assert.equal(gray['900'], token('--osc-bg'), 'gray-900 is the dark page');
-    assert.equal(gray['700'], token('--osc-surface-3'), 'gray-700 is the dark inset and hover');
-    assert.equal(gray['50'], token('--osc-bg', 'light'), 'gray-50 is the light page');
-    assert.equal(gray['100'], token('--osc-surface-3', 'light'), 'gray-100 is the light hover');
-    assert.equal(gray['200'], token('--osc-border', 'light'), 'gray-200 is the light border');
-    for (const scale of [primary, gray]) {
-      for (const shade of ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900']) {
-        assert.match(scale[shade], /^#[0-9a-f]{6}$/, `a full scale (${shade})`);
-      }
-    }
+    // flowbite's plugin writes the same gray in upper case
+    const lower = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, v.toLowerCase()]));
+    assert.deepEqual(lower(primary), lower(tw.blue), 'primary is the Tailwind blue scale');
+    assert.deepEqual(lower(gray), lower(tw.gray), 'the surfaces read the Tailwind gray palette');
     assert.equal(theme.fontFamily.sans[0], 'Inter', 'Inter leads the sans stack');
     const system = read('src/styles/tokens.css').match(/--osc-font:\s*([^;]+);/)[1]
       .split(',').map((s) => s.trim());

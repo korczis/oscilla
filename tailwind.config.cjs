@@ -3,7 +3,7 @@
 // in the one <style> of dist/index.html. Nothing is fetched at run time.
 //
 // The theme is the Flowbite Pro admin dashboard's (the flowbite-pro reference, section 0):
-//   - primary and the surface grays are OSCILLA's own scales (below), in the Pro class names;
+//   - primary is the Tailwind blue scale, surfaces use the gray palette;
 //   - transitionProperty width, which the sidebar's transition-width needs;
 //   - Inter first in the sans stack, then the system stack of src/styles/tokens.css. No font is
 //     downloaded: Inter applies only where it is installed.
@@ -17,12 +17,10 @@
 // scripts/build.mjs rewrites it to the same theme (darkThemeSelector,
 // scripts/build-config.mjs), as OSCILLA never sets class="dark".
 //
-// The colours are OSCILLA's (rule project.visual-identity-lock v2, issue F002): primary is its
-// blue interaction accent (600 is --osc-blue, 700 the deeper fill that carries white text at
-// 4.8:1, 400 the focus and link blue) and the surface greys are its cockpit: in the dark theme
-// the Pro shell's gray-800 bars are the header navy, gray-900 the page, gray-700 the borders and
-// the hover inset; in the light theme gray-50 is the page and gray-200 the borders, as in
-// src/styles/tokens.css. The Pro class lists are unchanged; only the palette they read is ours.
+// The colours follow rule project.visual-identity-lock v4 (Q071): primary is the Tailwind blue
+// scale and every other colour key maps to an OSCILLA token, so the Pro surfaces keep the
+// Tailwind gray palette the deployed site shows (F002's own navy scale was never deployed and
+// is dropped in lane A's merge of main, 2026-11-04).
 //
 // Preflight and the flowbite plugin's form base styles are on (F002): the Pro shell's borders,
 // buttons and the search field need them (the border trap of review #253, R-3). They stay out
@@ -39,16 +37,8 @@ const SYSTEM_SANS = ['system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe
   'sans-serif'];
 const SYSTEM_MONO = ['ui-monospace', '"SF Mono"', 'Menlo', 'Consolas', 'monospace'];
 
-/** OSCILLA's blue accent as the Pro primary scale. */
-const PRIMARY = {
-  50: '#eef6ff', 100: '#d9eaff', 200: '#b5d7ff', 300: '#80bcff', 400: '#4da3ff',
-  500: '#1a88ff', 600: '#007afd', 700: '#006ee6', 800: '#00468c', 900: '#002f5e', 950: '#001b38',
-};
-/** OSCILLA's cockpit surfaces as the Pro gray scale (light end: tokens.css light theme). */
-const GRAY = {
-  50: '#e9eef4', 100: '#e4eaf2', 200: '#d3dbe6', 300: '#c3cddb', 400: '#94a9bd',
-  500: '#52657a', 600: '#33465b', 700: '#142233', 800: '#061220', 900: '#020b15', 950: '#01060c',
-};
+const colors = require('tailwindcss/colors');
+
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
@@ -85,8 +75,7 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        primary: PRIMARY,
-        gray: GRAY,
+        primary: colors.blue,
       },
       fontFamily: {
         sans: ['Inter', ...SYSTEM_SANS],
