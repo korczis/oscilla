@@ -57,6 +57,15 @@ test('knob-model.js holds the model, the input and the gestures', () => {
   assert.equal(M.pixelsPerRangeFor('knob', 2), 200, 'a knob turns: 200 px at any zoom');
   assert.throws(() => M.pixelsPerRangeFor('fader', 1), /slider-model/,
     'a travel kind is the slider model\'s, named by the refusal');
+  // The model's own guards, reached by a direct importer (review of S, finding 2): the skin's
+  // re-export is the slider model's, which checks the travel and the zoom before it comes here.
+  const P = { key: 'level', min: 0, max: 100, step: 1, default: 50 };
+  assert.throws(() => M.pixelsPerRangeFor('knob', 1, P, { travel: 10 }),
+    /travel: a knob has none/, 'a knob has no travel');
+  for (const zoom of [0, -1, NaN, Infinity, '1']) {
+    assert.throws(() => M.pixelsPerRangeFor('knob', zoom, P),
+      (e) => e instanceof RangeError && /pixelsPerRangeFor: zoom/.test(e.message), String(zoom));
+  }
 });
 
 test('slider-model.js holds the fader\'s travel and press on top of the knob model', () => {
@@ -168,6 +177,82 @@ const hitOf = (svg) => {
 const PANEL_ZOOM = 64 / 44;
 const ZOOMS = [ZOOM_MIN, 0.5, 0.75, 1, PANEL_ZOOM, 2, ZOOM_MAX];
 
+const attr = (tag, name) => (new RegExp(`\\s${name}="([^"]*)"`).exec(tag) || [])[1];
+/**
+ * How far one stroked or filled shape reaches from the origin, its stroke included: a circle's
+ * centre distance plus r and half its stroke; a straight segment's end corners as its cap draws
+ * them (butt, SVG's default: the end ± half the width across it; round or square: the end plus
+ * half the width, or the width); a join where two segments meet at most the miter limit's 4
+ * half-widths past its vertex; an arc ('A rx ...') is centred on the origin, as every arc the
+ * skin draws is, so it reaches rx plus half the width.
+ */
+function reachOf(tag, kind) {
+  const paint = attr(tag, 'stroke');
+  const w = paint === undefined || paint === 'none' ? 0 : Number(attr(tag, 'stroke-width') ?? 1);
+  if (kind === 'circle') {
+    return Math.hypot(Number(attr(tag, 'cx')), Number(attr(tag, 'cy'))) + Number(attr(tag, 'r'))
+      + w / 2;
+  }
+  const cap = attr(tag, 'stroke-linecap') ?? 'butt';
+  const ends = (a, b) => {
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    const [nx, ny] = [(a[1] - b[1]) / len * (w / 2), (b[0] - a[0]) / len * (w / 2)];
+    return [a, b].map(([x, y]) => (cap === 'butt'
+      ? Math.max(Math.hypot(x + nx, y + ny), Math.hypot(x - nx, y - ny))
+      : Math.hypot(x, y) + (cap === 'round' ? w / 2 : w)));
+  };
+  if (kind === 'line') {
+    return Math.max(...ends([Number(attr(tag, 'x1')), Number(attr(tag, 'y1'))],
+      [Number(attr(tag, 'x2')), Number(attr(tag, 'y2'))]));
+  }
+  const t = attr(tag, 'd').match(/[MLAZ]|-?\d+(?:\.\d+)?(?:e-?\d+)?/g);
+  let r = 0;
+  let pts = [];
+  const flush = (closed) => {
+    for (let i = 1; i < pts.length; i++) r = Math.max(r, ...ends(pts[i - 1], pts[i]));
+    const joins = closed ? pts : pts.slice(1, -1);
+    for (const [x, y] of joins) r = Math.max(r, Math.hypot(x, y) + 2 * w);
+    pts = [];
+  };
+  for (let i = 0; i < t.length;) {
+    const c = t[i++];
+    if (c === 'M' || c === 'L') {
+      if (c === 'M') flush(false);
+      pts.push([Number(t[i]), Number(t[i + 1])]);
+      i += 2;
+    } else if (c === 'A') {
+      r = Math.max(r, Number(t[i]) + w / 2);
+      flush(false);
+      pts.push([Number(t[i + 5]), Number(t[i + 6])]);
+      i += 7;
+    } else {
+      assert.equal(c, 'Z', `a path command the parser knows: ${c}`);
+      flush(true);
+    }
+  }
+  flush(false);
+  return r;
+}
+
+/**
+ * The knob's drawing as emitted (the pointer-events="none" group): its scale, read from the
+ * group's transform (1 when it has none), and the farthest any of its circles, lines and paths
+ * reaches from the centre, stroke included, in the group's own units.
+ */
+function drawingOf(svg) {
+  const g = /<g pointer-events="none"(?: transform="scale\(([^)]+)\)")?>/.exec(svg);
+  assert.ok(g, 'the drawing group is emitted');
+  assert.doesNotMatch(svg.slice(g.index + g[0].length), /transform=/, 'no other transform');
+  const body = svg.slice(g.index + g[0].length);
+  let extent = 0;
+  for (const [tag, kind] of body.matchAll(/<(circle|line|path)\b[^>]*>/g)) {
+    const r = reachOf(tag, kind);
+    assert.ok(Number.isFinite(r), `${tag}: its extent is read`);
+    extent = Math.max(extent, r);
+  }
+  return { scale: g[1] === undefined ? 1 : Number(g[1]), extent };
+}
+
 test('size: lg, md and sm are 80, 64 and 48 px across where md is the panel\'s 64 px knob', () => {
   assert.deepEqual(Object.keys(K.KNOB_SIZES), ['lg', 'md', 'sm']);
   const md = K.controlBox('knob');
@@ -191,8 +276,16 @@ test('size: md is the default, and an md knob is byte-identical to one without a
     }
   }
   assert.doesNotMatch(knob(), /data-size|scale\(/, 'md draws as today');
-  assert.match(knob({ size: 'sm' }), /<g data-control="knob" data-size="sm">/);
-  assert.match(knob({ size: 'lg' }), /<g pointer-events="none" transform="scale\(1\.25\)">/);
+  assert.match(knob(), /<g pointer-events="none">/, 'md: the drawing is not transformed');
+  for (const size of ['lg', 'sm']) {
+    const svg = knob({ size });
+    const { scale } = K.KNOB_SIZES[size];
+    assert.match(svg, new RegExp(`<g data-control="knob" data-size="${size}">`));
+    // Each size draws at its own scale (review of S, finding 1): not md's, not another's.
+    assert.ok(svg.includes(`<g pointer-events="none" transform="scale(${scale})">`),
+      `${size}: the drawing group carries scale(${scale})`);
+    assert.equal(drawingOf(svg).scale, scale, `${size} drawn at its scale`);
+  }
 });
 
 test('size: every tier\'s hit is at least 44 screen px at every zoom and holds its drawing', () => {
@@ -205,11 +298,28 @@ test('size: every tier\'s hit is at least 44 screen px at every zoom and holds i
       assert.ok(hit.width >= box.width && hit.height >= box.height, `${size} at ${zoom}: box`);
     }
   }
-  // The outermost part (the focus ring's outer edge, r 22 in md units) stays inside the box.
-  for (const size of ['lg', 'sm']) {
-    const { scale } = K.KNOB_SIZES[size];
+  // All that is drawn stays inside the box, read from the markup (review of S, finding 1): the
+  // emitted scale times the farthest reach of every part (the ticks, the focus ring and its
+  // stroke, the cast shadow and its offset), in every state that draws the most. TOL: a scale
+  // tick's butt corner sits hypot(22, 0.5) - 22 = 0.006 past r 22 and each coordinate is rounded
+  // to 0.01 (up to 0.007 on the radius), so a part may pass the box by under 0.02 of the
+  // drawing's units (0.07 px at lg and ZOOM_MAX).
+  const TOL = 0.02;
+  const BIPOLAR = Object.freeze({ ...LIN, id: 'pan', min: -100, max: 100, default: 0 });
+  for (const size of ['lg', 'md', 'sm']) {
     const half = K.controlBox('knob', 'vertical', { size }).width / 2;
-    assert.ok((K.KNOB.focus + K.KNOB.focusW / 2) * scale <= half + 1e-9, size);
+    for (const param of [LIN, BIPOLAR]) {
+      for (const state of [{ focus: true, dragging: true, hover: true }, { focus: true }]) {
+        for (const zoom of [1, 2, ZOOM_MAX]) {
+          const svg = K.controlSvg({ kind: 'knob', value: 70, applied: -30, param, state, zoom,
+            size, tokens: TOKENS });
+          const { scale, extent } = drawingOf(svg);
+          const at = `${size} ${param.id} ${JSON.stringify(state)} at ${zoom}`;
+          assert.ok(extent >= K.KNOB.focus + K.KNOB.focusW / 2 - 1e-9, `${at}: the ring is read`);
+          assert.ok(scale * extent <= half + scale * TOL, `${at}: ${scale} × ${extent} > ${half}`);
+        }
+      }
+    }
   }
 });
 
