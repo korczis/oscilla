@@ -43,6 +43,12 @@
 // action does, Patch the pad into the voice (the primary button there: the XY lead's scale and
 // target, one undo entry); a patched pad states its default and "Touch the pad to play".
 // Nothing arms and nothing sounds before that touch (project.a-phone-sounds).
+//
+// The note owner (K171): a patched pad plays the voice (its cables replace the keyboard's
+// pitch and gate normals), so while it is mounted and patched the mount claims the notes of its
+// home workspace for 'xy-pad' (midi/dock-yield.js claimNotes) and drops the claim when it is
+// destroyed; mount.notes says which. The docked keyboard derives its state from that claim and
+// its route (midi/routes.js dockState); nothing here touches the dock.
 
 import { mountXyPad } from '../../ui/kinds/xy-pad.js';
 import { xyDegree } from '../../studio/nodes/instrument.js';
@@ -52,6 +58,7 @@ import {
   xyTargetAction, xyTargets,
 } from '../xy.js';
 import { esc } from './face.js';
+import { claimNotes } from '../../midi/dock-yield.js';
 
 export const XY_TEXT = Object.freeze({
   unpatched: 'The pad is not patched into the voice: choose an XY preset, or Patch the pad into '
@@ -194,6 +201,7 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
   const offs = [];
   let view = null;
   let destroyed = false;
+  let notes = null; // 'xy-pad' while the mounted pad is patched into the voice (K171)
   let heard = null; // the transport whose Stop this mount listens to
   let offHeard = () => {};
 
@@ -327,10 +335,17 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
       },
     });
     live('move', pos);
+    if (!spec.disabled) notes = 'xy-pad';
+  }
+  const win = host.ownerDocument && host.ownerDocument.defaultView;
+  if (notes) {
+    claimNotes(win, { id: uid, owner: notes, home: HOME[owner] || owner,
+      el: box.querySelector('[data-xy-surface]') || box });
   }
 
   return {
     get view() { return view; },
+    get notes() { return destroyed ? null : notes; },
     owner,
     release,
     destroy() {
@@ -342,6 +357,7 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
       offHeard();
       while (offs.length) offs.pop()();
       target.unwire();
+      if (notes) claimNotes(win, { id: uid, owner: null });
     },
   };
 }
