@@ -1,7 +1,8 @@
 // Declarations: the on-screen keyboard (the panel in src/index.html, its controller
 // midi/keyboard-ui.js), docked in the Playground, the Studio and the Synth. The arm switch and
 // the octave and velocity steps write the component's page-only keys (ui.kbdArmed, ui.kbdBase,
-// ui.kbdVelocity of sources.js). Trace: scripts/ui-catalog/trace/keyboard.mjs.
+// ui.kbdVelocity of sources.js), the docked keys' More switch ui.kbdMore.
+// Trace: scripts/ui-catalog/trace/keyboard.mjs.
 
 import { defineComponent } from '../define.js';
 
@@ -76,6 +77,14 @@ export default [
     docs: 'Draws the keys and plays one note per pointer; a drag glides from key to key.',
     state: { none: 'it plays notes and keeps no value' },
     effect: { command: 'play the note under each pointer on the AudioEngine' },
+    in: 'keyboard',
+  }),
+  defineComponent({
+    id: 'keyboard.more',
+    kind: 'switch',
+    label: 'More, Fewer',
+    docs: 'Shows the docked keyboard controls a phone folds away, or folds them again.',
+    state: 'ui.kbdMore',
     in: 'keyboard',
   }),
 ];

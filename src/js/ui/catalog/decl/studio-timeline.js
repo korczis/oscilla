@@ -148,4 +148,12 @@ export default [
     state: { none: 'a hint is fixed text beside its field' },
     in: 'studio.tl.details',
   }),
+  defineComponent({
+    id: 'studio.tl.d-notes',
+    kind: 'readout',
+    label: 'Notes',
+    docs: 'Shows how many notes a notes clip holds, read-only until the piano roll edits them.',
+    state: 'studio.model',
+    in: 'studio.tl.details',
+  }),
 ];

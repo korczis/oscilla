@@ -1,7 +1,7 @@
 // Declarations: the Studio Inspector's fields and buttons built by its helpers
-// (ui/studio/inspector.js).
-// Only the hooks built at run time are declared here, as patterns whose keys are the values
-// the callers pass (plan issue G001). Trace: scripts/ui-catalog/trace/studio-inspector.mjs.
+// (ui/studio/inspector.js), declared as patterns whose keys are the values the callers pass,
+// and its node preset dropdown (ui/studio/node-preset-menu.js), whose hooks are literals
+// (plan issues G001, K020). Trace: scripts/ui-catalog/trace/studio-inspector.mjs.
 
 import { defineComponent } from '../define.js';
 
@@ -71,5 +71,42 @@ export default [
     label: 'Played value limit',
     docs: 'Says which cap the Studio applies to a parameter it plays below the stored value.',
     state: 'studio.model',
+  }),
+  // ---- the node preset dropdown (ui/studio/node-preset-menu.js, K020)
+  defineComponent({
+    id: 'studio.inspector.presetsBox',
+    kind: 'panel',
+    label: 'Node presets',
+    docs: 'Holds the Presets button of the selected node and the menu it opens.',
+    state: { none: 'the box places the button and its menu' },
+  }),
+  defineComponent({
+    id: 'studio.inspector.presets',
+    kind: 'open',
+    label: 'Presets',
+    docs: 'Opens the factory and saved presets of the selected node type in a dropdown.',
+    state: { none: 'opening the menu changes nothing until a preset is chosen' },
+    effect: { dialog: 'the node preset menu (studio.inspector.presets.menu)' },
+    in: 'studio.inspector.presetsBox',
+    links: { opens: ['studio.inspector.presets.menu'] },
+  }),
+  defineComponent({
+    id: 'studio.inspector.presets.menu',
+    kind: 'choice',
+    label: 'Preset menu',
+    docs: 'Sets the parameters of the selected node to a chosen preset in one undo step.',
+    state: 'studio.model',
+    in: 'studio.inspector.presetsBox',
+    links: { openedBy: ['studio.inspector.presets'] },
+  }),
+  defineComponent({
+    id: 'studio.inspector.presets.library',
+    kind: 'open',
+    label: 'Open the patch library',
+    docs: 'Closes the preset menu and opens the one patch library of every instrument.',
+    state: { none: 'the library commits its own change when a patch loads' },
+    effect: { dialog: 'the patch library of the Projects and patches dialog' },
+    in: 'studio.inspector.presets.menu',
+    related: ['library'],
   }),
 ];

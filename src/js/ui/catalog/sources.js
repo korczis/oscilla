@@ -71,6 +71,12 @@ export const FAMILIES = Object.freeze([
     + 'navigation groups (oscilla.v2.navGroups) in local storage and the workspace in the URL '
     + 'key m; every other key lasts for the page only.',
   'ui/app.js, ui/shell.js, ui/navigation.js, ui/workbench.js and the view that owns the key'),
+  // ui/patch-browser.js mountPatchBrowser: the filters (query, instrument, tag), the active
+  // patch of the list and the name typed for a preset to save.
+  family('library', ['query', 'instrument', 'tag', 'active', 'name'],
+    'Never: the filters, the active patch and the typed name last while the page does; the '
+      + 'saved patches themselves go to the IndexedDB library.',
+    'ui/patch-browser.js (mountPatchBrowser)'),
 ]);
 
 /** The Studio paths that are one path each, not a family of keys. */

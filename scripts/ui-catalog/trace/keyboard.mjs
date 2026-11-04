@@ -27,4 +27,7 @@ export default {
   'keyboard.keys': entry({ source: 'src/index.html',
     tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/midi.cjs',
       'tests/browser/synth.cjs', 'tests/browser/demo-song.cjs'] }),
+  'keyboard.more': entry({ source: 'src/index.html', plan: ['G001', 'V635'],
+    tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/synth.cjs',
+      'tests/browser/control-census.cjs'] }),
 };

@@ -22,4 +22,13 @@ export default {
     tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/v31-studio-workflows.cjs'] }),
   'studio.inspector.limitNote': entry({ source: 'src/js/ui/studio/inspector.js',
     plan: ['G001', 'C012'], tests: ['tests/unit/ui-catalog.test.mjs'] }),
+  'studio.inspector.presetsBox': entry({ source: 'src/js/ui/studio/node-preset-menu.js',
+    plan: ['G001', 'K020'], tests: ['tests/unit/ui-catalog.test.mjs'] }),
+  'studio.inspector.presets': entry({ source: 'src/js/ui/studio/node-preset-menu.js',
+    plan: ['G001', 'K020'], tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/synth.cjs'] }),
+  'studio.inspector.presets.menu': entry({ source: 'src/js/ui/studio/node-preset-menu.js',
+    plan: ['G001', 'K020'], tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/synth.cjs'] }),
+  'studio.inspector.presets.library': entry({ source: 'src/js/ui/studio/node-preset-menu.js',
+    plan: ['G001', 'K020', 'K102'],
+    tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/synth.cjs'] }),
 };

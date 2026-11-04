@@ -1,7 +1,9 @@
 // Declarations: the Synth workspace (the view in src/index.html, its controller synth/ui.js and
 // the patch bay drawing synth/view/bay.js). The voice lives on the StudioModel, so the preset,
 // the module cards and the cables name studio.model; arming arms the Studio transport; the tab
-// is the component's page-only key ui.synthTab of sources.js.
+// is the component's page-only key ui.synthTab of sources.js. The dock beside the piano
+// (synth/dock.js) keeps its open menu and oscillator in ui.synthDock; its built radio groups are
+// patterns. The XY tab is synth/view/xy-tab.js.
 // Trace: scripts/ui-catalog/trace/synth.mjs.
 
 import { defineComponent } from '../define.js';
@@ -136,5 +138,95 @@ export default [
     docs: 'Lists the patched cables and the broken normals, each with its undo button.',
     state: 'studio.model',
     in: 'synth.bay',
+  }),
+  defineComponent({
+    id: 'synth.library',
+    kind: 'open',
+    label: 'Library',
+    docs: 'Opens the one patch library on the Synth panel instrument.',
+    state: { none: 'the library commits its own change when a patch loads' },
+    effect: { dialog: 'the patch library of the Projects and patches dialog' },
+    in: 'synth-view',
+    related: ['library'],
+  }),
+  // ---- the dock beside the piano (synth/dock.js, K066)
+  defineComponent({
+    id: 'synth.dock',
+    kind: 'panel',
+    label: 'Instrument',
+    docs: 'Holds what the keys play, the oscillator and waveform groups and the quick presets.',
+    state: { none: 'the dock lays out its groups and owns no value' },
+    in: 'keyboard',
+  }),
+  defineComponent({
+    id: 'synth.pick',
+    kind: 'open',
+    label: 'Plays',
+    docs: 'Opens the menu of the instruments the keys can play, naming the one they play now.',
+    state: 'ui.synthDock',
+    in: 'synth.dock',
+    links: { opens: ['synth.pick.menu'] },
+  }),
+  defineComponent({
+    id: 'synth.pick.menu',
+    kind: 'choice',
+    label: 'Instrument menu',
+    docs: 'Routes the keys to the chosen instrument, or inserts a new Synth voice to play.',
+    state: 'studio.model',
+    in: 'synth.dock',
+    links: { openedBy: ['synth.pick'] },
+  }),
+  defineComponent({
+    id: 'synth.dock.oscillator',
+    pattern: { template: 'synth.dock.{key}', keys: ['osc'], sites: ['src/index.html'] },
+    kind: 'choice',
+    label: 'Oscillator',
+    docs: 'Chooses which oscillator of the voice the waveform group edits.',
+    state: 'ui.synthDock',
+    in: 'synth.dock',
+  }),
+  defineComponent({
+    id: 'synth.dock.voice',
+    pattern: { template: 'synth.dock.{key}', keys: ['wave', 'preset'], sites: ['src/index.html'] },
+    kind: 'choice',
+    label: 'Waveform, Quick presets',
+    docs: 'Sets the waveform of the chosen oscillator, or loads a quick preset of the tab.',
+    state: 'studio.model',
+    in: 'synth.dock',
+    related: ['synth.preset'],
+  }),
+  // ---- the XY tab (synth/view/xy-tab.js, K097)
+  defineComponent({
+    id: 'synth.xy',
+    kind: 'panel',
+    label: 'XY pad',
+    docs: 'Holds the XY pad, the target its Y axis drives and the patch-into-voice button.',
+    state: { none: 'the card lays out the pad and owns no value' },
+    in: 'synth.panel',
+  }),
+  defineComponent({
+    id: 'synth.xy.target',
+    kind: 'choice',
+    label: 'Y drives',
+    docs: 'Chooses the parameter of the voice the Y axis of the pad drives through a cable.',
+    state: 'studio.model',
+    in: 'synth.xy',
+  }),
+  defineComponent({
+    id: 'synth.xy.pad',
+    kind: 'action',
+    label: 'Pad',
+    docs: 'Plays notes of the scale along X and sweeps the Y target while the transport runs.',
+    state: { none: 'the pad plays live notes and never edits the model' },
+    effect: { command: 'play live notes on the Studio transport' },
+    in: 'synth.xy',
+  }),
+  defineComponent({
+    id: 'synth.xy.readout',
+    kind: 'readout',
+    label: 'Pad readout',
+    docs: 'Names the note, scale degree and Y value under the pointer, and the open gate.',
+    state: { none: 'it reports the live pad position only' },
+    in: 'synth.xy',
   }),
 ];

@@ -40,4 +40,6 @@ export default {
     tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/v31-studio-graph.cjs'] }),
   'studio.timeline.details-hints': entry({ source: 'src/js/ui/studio/timeline-details.js',
     tests: ['tests/unit/ui-catalog.test.mjs'] }),
+  'studio.tl.d-notes': entry({ source: 'src/js/ui/studio/timeline-details.js',
+    plan: ['G001', 'K099'], tests: ['tests/unit/ui-catalog.test.mjs'] }),
 };
