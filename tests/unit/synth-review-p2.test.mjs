@@ -266,3 +266,59 @@ test('S10: a link carries a broken knob\'s depth; the receiver brings it back at
   assert.equal(receiver.dispatch(unpatch(receiver.getModel(), PANEL, cable.id).action).ok, true);
   assert.deepEqual(lpfFrom(receiver.getModel(), 'eg2').map((e) => e.props.depth), [3.5]);
 });
+
+// ---------------------------------------------------------------- S7: links carry cable props
+
+const edgeById = (m, id) => m.graph.edges.find((e) => e.id === id);
+const cableInto = (m, to) => panelCables(m, PANEL).find((c) => c.to === to);
+const CONTROL = ['muted', 'depth', 'polarity', 'mapping', 'offset'];
+const propsOf = (m, to) => Object.fromEntries(CONTROL.map((k) => [k,
+  edgeById(m, cableInto(m, to).id).props[k]]));
+
+test('S7: Copy link carries a cable\'s edited props; the receiver gets the same cable', () => {
+  const sender = panelStore();
+  assert.equal(sender.dispatch(patchCable(sender.getModel(), PANEL, 'mg.control',
+    'lpf.frequency').action).ok, true);
+  const plain = linkOf(sender.getModel(), PANEL, 'init');
+  assert.deepEqual(plain.cables, [['mg.control', 'lpf.frequency']],
+    'an unedited cable carries no props');
+  const id = cableInto(sender.getModel(), 'lpf.frequency').id;
+  assert.equal(sender.dispatch({ type: 'EDGE_UPDATE', edgeId: id,
+    props: { polarity: 'unipolar', offset: 0.25, muted: true } }).ok, true); // the Inspector
+  const hash = encodeSynthLink(linkOf(sender.getModel(), PANEL, 'init'));
+  const link = decodeSynthLink(hash, PANEL, PRESETS);
+  assert.equal(link.ok, true, link.reason);
+  const receiver = panelStore();
+  assert.equal(receiver.dispatch(linkAction(receiver.getModel(), PANEL, link.link)).ok, true);
+  assert.deepEqual(propsOf(receiver.getModel(), 'lpf.frequency'),
+    propsOf(sender.getModel(), 'lpf.frequency'), hash);
+});
+
+test('S7: a saved XY preset keeps the Y range of its edge (depth and offset)', () => {
+  const st = panelStore();
+  assert.equal(st.dispatch(xyPresetAction(st.getModel(), PANEL, 'xy-lead').action).ok, true);
+  const y = panelCables(st.getModel(), PANEL).find((c) => c.from === 'xy.y');
+  assert.equal(st.dispatch({ type: 'EDGE_UPDATE', edgeId: y.id,
+    props: { depth: 0.5, offset: 0.1 } }).ok, true);
+  const patch = XY.xyPatchOf(st.getModel(), PANEL, { name: 'Tuned Y' });
+  const fresh = panelStore();
+  assert.equal(fresh.dispatch(XY.xyPatchAction(fresh.getModel(), PANEL, patch).action).ok, true);
+  assert.deepEqual(propsOf(fresh.getModel(), y.to), propsOf(st.getModel(), y.to));
+});
+
+test('S7: cable props in a link are strict; a link without them decodes as before', () => {
+  const dec = (yc) => decodeSynthLink(`m=synth&yc=${encodeURIComponent(yc)}`, PANEL, PRESETS);
+  assert.deepEqual(dec('mg.control>lpf.frequency').link.cables,
+    [['mg.control', 'lpf.frequency']]);
+  assert.deepEqual(dec('mg.control>lpf.frequency@offset:0.25;polarity:unipolar').link.cables,
+    [['mg.control', 'lpf.frequency', { offset: 0.25, polarity: 'unipolar' }]]);
+  for (const bad of ['mg.control>lpf.frequency@', 'mg.control>lpf.frequency@colour:1',
+    'mg.control>lpf.frequency@depth:x', 'mg.control>lpf.frequency@muted:1',
+    'mg.control>lpf.frequency@polarity:sideways', 'mg.control>lpf.frequency@depth:1;depth:2',
+    'mg.control>lpf.frequency@depth:1@depth:2', 'mg.control>lpf.frequency@mapping:log;depth:99',
+    'vco1.audio>mix.in2@depth:1']) {
+    const r = dec(bad);
+    assert.equal(r.ok, false, bad);
+    assert.match(r.reason, /^Synth link refused: /, bad);
+  }
+});

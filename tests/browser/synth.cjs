@@ -40,6 +40,10 @@
 //   s-relink   MG patched into LPF cutoff (the jacks of a normal) is a cable: listed, in the
 //              link the Copy link button writes; the link reopens the cable at the same depth
 //              and the MG sweeps the cutoff on both pages (the 1-3 kHz band swings 10 dB+)
+//   s-linkprops Copy link carries a cable's own props (review S7): MG patched into LPF cutoff,
+//              that edge set unipolar with offset 0.25 (the Studio Inspector's EDGE_UPDATE):
+//              the copied link opened in a new page holds the cable with the same props.
+//              Fails on 3c22d01a (bipolar, offset 0 there)
 //   s-knobmemory a knob a cable broke keeps its depth in the model (review S10): LPF EG 2 ->
 //              cutoff typed 3.5, MG patched into LPF cutoff (it breaks that knob's normal): the
 //              document remembers 3.5 (metadata.synthAmounts); Copy link opened in a new page,
@@ -557,6 +561,38 @@ function defineChecks() {
     return { ok: /yc=/.test(hash) && JSON.stringify(d2.cables.map((c) => [c.from, c.to]))
       === JSON.stringify([['mg.control', 'lpf.frequency']]) && JSON.stringify(a) === '[3]'
       && JSON.stringify(b) === '[3]', hash, here, there, depths: [a, b] };
+  });
+
+  // Review of src/js/synth (oscilla-21, S7): Copy link carries a cable's own props.
+  def('s-linkprops', async ({ page, context, base }) => {
+    await tapJack(page, 'mg.control:out');
+    await tapJack(page, 'lpf.frequency:in');
+    await until(async () => (await dbg(page)).cables.some((c) => c.to === 'lpf.frequency'),
+      { ms: 10000, what: 'MG is patched into LPF cutoff' });
+    const props = (pg) => pg.evaluate(() => {
+      const c = window.OSCILLA.app.synthDebug().cables.find((x) => x.to === 'lpf.frequency');
+      const e = c && window.OSCILLA.studio.model.graph.edges.find((x) => x.id === c.id);
+      return e ? e.props : null;
+    });
+    // The Studio Inspector's edit of that edge: one EDGE_UPDATE through the one store.
+    await page.evaluate(() => {
+      const c = window.OSCILLA.app.synthDebug().cables.find((x) => x.to === 'lpf.frequency');
+      window.OSCILLA.studio.store.dispatch({ type: 'EDGE_UPDATE', edgeId: c.id,
+        props: { polarity: 'unipolar', offset: 0.25 } });
+    });
+    const here = await props(page);
+    await page.locator('[data-osc="synth.copy-link"]').click();
+    const link = await until(() => page.evaluate(() => window.OSCILLA.app.synth.link || null),
+      { ms: 10000, what: 'Copy link shows the link' });
+    const again = await openSynth(context, base, link.slice(link.indexOf('#')));
+    try {
+      const there = await until(() => props(again), { ms: 10000,
+        what: 'the reopened link holds the cable' });
+      return { ok: here.polarity === 'unipolar' && here.offset === 0.25
+        && JSON.stringify(there) === JSON.stringify(here), here, there, link };
+    } finally {
+      await again.close();
+    }
   });
 
   // Review of src/js/synth (oscilla-21, S10): a knob a cable broke keeps its depth in the
