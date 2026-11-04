@@ -35,13 +35,26 @@
 # `runtime=false`. ci.yml is started by pull_request only (project.ci-bounded, `triggers`), so
 # nothing on main is path-gated here; the classifier answers runtime for any other event.
 # Tested by tests/unit/ci-changes.test.mjs.
+#
+# R030, a body edit: fail-first and review-verdict judge the PR's title and body, so an edit of
+# either (`edited`, the base left as it was) runs the workflow again. It re-runs those two,
+# unit, knowledge, changes and gate, and skips engine, suites, measure, studio, browser,
+# census and visual, which judge the tree the edit did not change. The `body-edit` job (on
+# such an edit only) waits until every other run at the head commit has finished and names
+# each of those seven whose every leg succeeded the last time it ran there; `gate` accepts
+# their skip only when it is named, so an edit never turns a red, cancelled or unfinished
+# browser result green. An edit that changes the base branch changes the merge commit and runs
+# everything. Its own concurrency group: an edit cancels an earlier edit's run, never the run
+# of a push. Tested by tests/unit/ci-workflows.test.mjs and tests/unit/ci-body-edit.test.mjs.
 name: CI
 
 # pull_request only (project.ci-bounded, `triggers`): the fail-first and review-verdict jobs
 # judge a pull request, and a manual run on a PR's branch would have none to judge while its
-# `gate` landed on the same commit as the required check.
+# `gate` landed on the same commit as the required check. GitHub's default types and, R030,
+# `edited`.
 on:
   pull_request:
+    types: [opened, synchronize, reopened, edited]
 
 permissions:
   contents: read
@@ -52,7 +65,7 @@ defaults:
     shell: bash
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref }}${{ github.event.action == 'edited' && !github.event.changes.base && '-body' || '' }}
   cancel-in-progress: true
 
 jobs:
@@ -133,10 +146,53 @@ jobs:
             echo "runtime=true" >> "$GITHUB_OUTPUT"
           fi
 
+  body-edit:
+    # R030: on an edit of the title or body only. The program is the base branch's copy,
+    # extracted as one blob (as `changes` takes its classifier), so a pull request cannot prove
+    # its own skips; a base without it proves nothing and the gate then refuses every skip of
+    # an edit. It waits for every other run at the head commit (up to 70 minutes, the longest
+    # job's limit and a queue), then writes proven=<JSON list of job keys>.
+    name: body-edit (an edit reuses the browser results of its head commit)
+    if: github.event.action == 'edited' && !github.event.changes.base
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      proven: ${{ steps.prove.outputs.proven }}
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: The skipped jobs succeeded at this head commit, after every other run there ended
+        id: prove
+        timeout-minutes: 75
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          base="refs/remotes/origin/$GITHUB_BASE_REF"
+          prog=.github/scripts/ci-body-edit.mjs
+          judge="$RUNNER_TEMP/ci-body-edit.mjs"
+          git show-ref --verify --quiet "$base"
+          if git cat-file -e "$base:$prog" 2> /dev/null; then
+            git cat-file blob "$base:$prog" > "$judge"
+            echo "ci-body-edit: $prog of $base ($(git rev-parse --short=12 "$base")) proves"
+            node "$judge" --event-path "$GITHUB_EVENT_PATH" --repo "$GITHUB_REPOSITORY" \
+              --run "$GITHUB_RUN_ID" --wait-minutes 70 --output "$GITHUB_OUTPUT"
+          else
+            echo "::warning::ci-body-edit: $base has no $prog; nothing is proven"
+            echo "proven=[]" >> "$GITHUB_OUTPUT"
+          fi
+
   engine:
     name: V1 engine checks (${{ matrix.browser }})
     needs: changes
-    if: needs.changes.outputs.runtime != 'false'
+    if: needs.changes.outputs.runtime != 'false' && (github.event.action != 'edited' || github.event.changes.base)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
@@ -179,7 +235,7 @@ jobs:
     # while Chromium's realtime clock stalls behind that sink, so each gets its own job.
     name: DSP, labs, sequencer (${{ matrix.browser }})
     needs: changes
-    if: needs.changes.outputs.runtime != 'false'
+    if: needs.changes.outputs.runtime != 'false' && (github.event.action != 'edited' || github.event.changes.base)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
@@ -231,7 +287,7 @@ jobs:
     # EXPERIMENTS workspaces of dist (v3-ui.cjs), one browser per job like the browser gate.
     name: V3 measurement and UI (${{ matrix.browser }})
     needs: changes
-    if: needs.changes.outputs.runtime != 'false'
+    if: needs.changes.outputs.runtime != 'false' && (github.event.action != 'edited' || github.event.changes.base)
     runs-on: ubuntu-latest
     timeout-minutes: 50
     strategy:
@@ -274,7 +330,7 @@ jobs:
     # (v31-studio-graph.cjs, v31-studio-timeline.cjs), one browser per job like the measure gate.
     name: V3.1 Studio UI (${{ matrix.browser }})
     needs: changes
-    if: needs.changes.outputs.runtime != 'false'
+    if: needs.changes.outputs.runtime != 'false' && (github.event.action != 'edited' || github.event.changes.base)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
@@ -315,7 +371,7 @@ jobs:
   browser:
     name: Browser gate (${{ matrix.browser }})
     needs: changes
-    if: needs.changes.outputs.runtime != 'false'
+    if: needs.changes.outputs.runtime != 'false' && (github.event.action != 'edited' || github.event.changes.base)
     runs-on: ubuntu-latest
     timeout-minutes: 65
     strategy:
@@ -359,6 +415,8 @@ jobs:
 
   census:
     name: Control census (${{ matrix.browser }})
+    # R030: not on an edit of the title or body (the tree is the one the last run judged)
+    if: github.event.action != 'edited' || github.event.changes.base
     runs-on: ubuntu-latest
     # the sum of the step limits (15 + 13 + 35), rounded up (project.ci-bounded)
     timeout-minutes: 65
@@ -400,7 +458,7 @@ jobs:
   visual:
     name: Visual regression gate
     needs: changes
-    if: needs.changes.outputs.runtime != 'false'
+    if: needs.changes.outputs.runtime != 'false' && (github.event.action != 'edited' || github.event.changes.base)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # The accepted linux-x64 values in tests/visual/baseline.json were measured in this image
@@ -481,8 +539,8 @@ jobs:
     # adds or changes must fail on the merge base's tree and pass on the head's
     # (scripts/fail-first.mjs, tested by tests/unit/fail-first.test.mjs), unless the PR body
     # carries `fail-first: n/a <reason>`, which the step prints. Title and body are read from
-    # the PR as it is now, not from the event, so re-running the job after editing the body is
-    # enough. A train (head branch train/..., or a `train`/`Merge train` title) is judged by the
+    # the PR as it is now, not from the event, and an edit of the title or body runs it again
+    # (R030). A train (head branch train/..., or a `train`/`Merge train` title) is judged by the
     # member table of its body; any other title passes with nothing to prove. The program that
     # judges is the base branch's copy (.github/scripts/base-rule.sh), not the one this pull
     # request carries.
@@ -569,8 +627,10 @@ jobs:
 
   gate:
     # The required check. Every job it judges succeeded, or (E026) is one of the six path-gated
-    # jobs and was skipped while `changes` succeeded with runtime=false. A skip for any other
-    # reason, a cancelled or failed job, and a failed or silent `changes` fail it. It needs
+    # jobs and was skipped while `changes` succeeded with runtime=false, or (R030) is one of the
+    # seven jobs an edit of the body skips and `body-edit` succeeded naming it in `proven`;
+    # `body-edit` itself is skipped on every other event. A skip for any other reason, a
+    # cancelled or failed job, and a failed or silent `changes` or `body-edit` fail it. It needs
     # flake-ledger too (gate-needs: every job), and the verdict drops that job's entry before
     # it judges anything: the ledger reports and never decides the gate, and its skip on a
     # first attempt is neither a path-gated skip nor tied to `changes`
@@ -579,7 +639,7 @@ jobs:
     # whatever the verdict, and project.ci-bounded forbids continue-on-error.
     name: gate
     if: always()
-    needs: [unit, knowledge, fail-first, review-verdict, changes, engine, suites, measure, studio, browser, census, visual, flake-ledger]
+    needs: [unit, knowledge, fail-first, review-verdict, changes, body-edit, engine, suites, measure, studio, browser, census, visual, flake-ledger]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -588,13 +648,23 @@ jobs:
           RESULTS: ${{ toJSON(needs) }}
           VERDICT: >-
             (.changes.result == "success" and .changes.outputs.runtime == "false") as $nonruntime
+            | (if .["body-edit"].result == "success"
+               then (.["body-edit"].outputs.proven // "" | try fromjson catch [])
+               else [] end
+               | if type == "array" then . else [] end) as $proven
             | to_entries
             | map(select(.key != "flake-ledger"))
             | all(.value.result == "success"
+                or (.key == "body-edit" and .value.result == "skipped")
                 or ($nonruntime and .value.result == "skipped"
                     and (.key as $k
                          | ["engine", "suites", "measure", "studio", "browser", "visual"]
-                         | any(. == $k))))
+                         | any(. == $k)))
+                or (.value.result == "skipped"
+                    and (.key as $k
+                         | (["engine", "suites", "measure", "studio", "browser", "census", "visual"]
+                            | any(. == $k))
+                           and ($proven | any(. == $k)))))
         run: |
           echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
           echo "$RESULTS" | jq -e "$VERDICT" > /dev/null \
@@ -610,7 +680,7 @@ jobs:
     # and never the gate's; on a first attempt it is skipped.
     name: flake ledger (checks that passed only on a re-run)
     if: ${{ always() && fromJSON(github.run_attempt) > 1 }}
-    needs: [unit, knowledge, fail-first, review-verdict, changes, engine, suites, measure, studio, browser, census, visual]
+    needs: [unit, knowledge, fail-first, review-verdict, changes, body-edit, engine, suites, measure, studio, browser, census, visual]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

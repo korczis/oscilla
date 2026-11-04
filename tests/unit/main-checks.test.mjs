@@ -43,13 +43,14 @@ export const PR_ONLY_STEPS = {
   },
 };
 /**
- * E026's path gate on a mirrored ci.yml job, which main-checks.yml leaves out: a push to main
- * runs every leg whatever changed. Only this exact pair is excused, and only when the copy has
- * neither field.
+ * E026's path gate on a mirrored ci.yml job, with R030's skip on an edit of the pull request's
+ * body, which main-checks.yml leaves out: a push to main runs every leg whatever changed. Only
+ * this exact pair is excused, and only when the copy has neither field.
  */
 export const PR_ONLY_GATE = Object.freeze({
   needs: 'changes',
-  if: "needs.changes.outputs.runtime != 'false'",
+  if: "needs.changes.outputs.runtime != 'false'"
+    + " && (github.event.action != 'edited' || github.event.changes.base)",
 });
 /** What a copied step may not read: it is empty or absent on a push. */
 const PULL_REQUEST_ONLY =

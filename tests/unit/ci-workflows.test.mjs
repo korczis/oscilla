@@ -10,6 +10,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync }
   from 'node:fs';
 import os from 'node:os';
@@ -353,11 +354,12 @@ test('a job that calls a reusable workflow carries no limit of its own, but is p
 
 test('mutation: ci.yml started by anything but a pull request', () => {
   assert.deepEqual(Object.keys(parse(CI).on), ['pull_request']);
-  const manual = mutate(CI, '\non:\n  pull_request:\n',
-    '\non:\n  pull_request:\n  workflow_dispatch:\n');
+  const types = '    types: [opened, synchronize, reopened, edited]\n';
+  const manual = mutate(CI, `\non:\n  pull_request:\n${types}`,
+    `\non:\n  pull_request:\n${types}  workflow_dispatch:\n`);
   assert.deepEqual(rules(ci(manual)), ['triggers@-']);
   assert.match(ci(manual)[0].message, /not by: pull_request, workflow_dispatch/);
-  const push = mutate(CI, '\non:\n  pull_request:\n', '\non: [push]\n');
+  const push = mutate(CI, `\non:\n  pull_request:\n${types}`, '\non: [push]\n');
   assert.deepEqual(rules(ci(push)), ['triggers@-']);
   // pages.yml has no gate: it deploys main and may be started by hand
   assert.deepEqual(checkWorkflow('pages.yml', PAGES, SUITES), []);
@@ -588,4 +590,293 @@ test('lines that only name a program are not commands', (t) => {
   assert.deepEqual(rules(ci(pre)), []);
   assert.deepEqual(rules(ci(mutate(CI, 'actions/setup-node@v7', 'actions/setup-node@next'))),
     ['pinned@unit']);
+});
+
+// R030: ci.yml starts on `edited` too, so an edit of a pull request's title or body (what
+// fail-first and review-verdict read through PR_JSON) runs them, unit, knowledge, changes and
+// gate again, and runs none of the seven heavy jobs; `gate` accepts those skips only when the
+// body-edit job names them proven. The job conditions are evaluated here as GitHub evaluates
+// them (the operators ci.yml uses: property access, string literals, ==, !=, !, &&, || and
+// parentheses), for every kind of event, so the test proves which jobs run, not how the
+// condition is spelled.
+
+/** A GitHub Actions expression (the subset above) evaluated over `ctx`. */
+export function evalExpression(source, ctx) {
+  const text = source.trim().replace(/^\$\{\{([\s\S]*)\}\}$/, '$1');
+  const tokens = [...text.matchAll(/\s*('(?:[^']|'')*'|==|!=|&&|\|\||[!()]|[\w.-]+)/gy)]
+    .map((m) => m[1]);
+  assert.equal(tokens.join('').replace(/\s/g, ''), text.replace(/\s/g, ''),
+    `the expression is read whole: ${text}`);
+  let i = 0;
+  const peek = () => tokens[i];
+  const take = (want) => {
+    const t = tokens[i];
+    if (want !== undefined) assert.equal(t, want, `expression ${text}`);
+    i += 1;
+    return t;
+  };
+  const truthy = (v) => !(v === null || v === undefined || v === false || v === '' || v === 0);
+  const eq = (a, b) => (typeof a === 'string' && typeof b === 'string'
+    ? a.toLowerCase() === b.toLowerCase() : (a ?? null) === (b ?? null));
+  function primary() {
+    const t = take();
+    if (t === '(') {
+      const v = or();
+      take(')');
+      return v;
+    }
+    if (t === '!') return !truthy(primary());
+    if (t.startsWith("'")) return t.slice(1, -1).replace(/''/g, "'");
+    assert.match(t, /^[a-z][\w-]*(\.[\w-]+)*$/, `a context path: ${t}`);
+    return t.split('.').reduce((o, k) => (o === null || o === undefined ? null : o[k] ?? null),
+      ctx);
+  }
+  function comparison() {
+    const left = primary();
+    if (peek() === '==' || peek() === '!=') {
+      const op = take();
+      const right = primary();
+      return op === '==' ? eq(left, right) : !eq(left, right);
+    }
+    return left;
+  }
+  function and() {
+    let v = comparison();
+    while (peek() === '&&') {
+      take();
+      const r = comparison();
+      v = truthy(v) ? r : v;
+    }
+    return v;
+  }
+  function or() {
+    let v = and();
+    while (peek() === '||') {
+      take();
+      const r = and();
+      v = truthy(v) ? v : r;
+    }
+    return v;
+  }
+  const value = or();
+  assert.equal(i, tokens.length, `the expression is read to its end: ${text}`);
+  return value;
+}
+
+/** A string with `${{ }}` templates, as GitHub renders it. */
+const renderTemplate = (s, ctx) => s.replace(/\$\{\{([\s\S]*?)\}\}/g,
+  (_, e) => String(evalExpression(e, ctx) ?? ''));
+
+const HEAD = 'c'.repeat(40);
+/** The events a pull request sends, as their payloads carry them. */
+const EVENTS = {
+  opened: { action: 'opened' },
+  synchronize: { action: 'synchronize' },
+  reopened: { action: 'reopened' },
+  'body edit': { action: 'edited', changes: { body: { from: 'old' } } },
+  'title edit': { action: 'edited', changes: { title: { from: 'feat: x' } } },
+  'base edit': { action: 'edited', changes: { base: { ref: { from: 'train/x' },
+    sha: { from: HEAD } } } },
+};
+const BODY_EDITS = ['body edit', 'title edit'];
+/** The jobs an edit of the title or body skips, which body-edit must prove. */
+export const HEAVY_JOBS = ['engine', 'suites', 'measure', 'studio', 'browser', 'census', 'visual'];
+/** The jobs an edit of the title or body runs: the two that read it, and the cheap rest. */
+const EDIT_RUNS = ['unit', 'changes', 'knowledge', 'fail-first', 'review-verdict', 'body-edit'];
+
+/** Which jobs of a ci.yml doc run on `event` (`runtime` is the answer of `changes`). */
+function jobsRunning(doc, event, runtime = 'true') {
+  const ctx = { github: { event_name: 'pull_request', event: { ...event,
+    pull_request: { head: { sha: HEAD } } }, ref: 'refs/pull/1/merge' },
+  needs: { changes: { outputs: { runtime } } } };
+  const out = [];
+  for (const [key, job] of Object.entries(doc.jobs)) {
+    if (key === 'gate' || key === 'flake-ledger') continue; // their own exact conditions
+    if (job.if === undefined || evalExpression(String(job.if), ctx)) out.push(key);
+  }
+  return out.sort();
+}
+
+/** What keeps ci.yml from re-running the body readers, and only them, on a body edit. */
+function problemsOfBodyEdit(text) {
+  const doc = parse(text);
+  const out = [];
+  const types = doc.on?.pull_request?.types;
+  const want = ['edited', 'opened', 'reopened', 'synchronize'];
+  if (!Array.isArray(types) || [...types].sort().join() !== want.join()) {
+    out.push(`pull_request types are ${JSON.stringify(types)}, not ${want.join(', ')}`);
+  }
+  const all = Object.keys(doc.jobs).filter((k) => k !== 'gate' && k !== 'flake-ledger').sort();
+  for (const [name, event] of Object.entries(EVENTS)) {
+    for (const runtime of ['true', 'false']) {
+      const running = jobsRunning(doc, event, runtime);
+      const expected = BODY_EDITS.includes(name) ? [...EDIT_RUNS].sort()
+        : all.filter((k) => k !== 'body-edit'
+          && (runtime === 'true' || !['engine', 'suites', 'measure', 'studio', 'browser',
+            'visual'].includes(k)));
+      if (running.join() !== expected.join()) {
+        out.push(`${name} (runtime=${runtime}) runs [${running.join(', ')}], `
+          + `not [${expected.join(', ')}]`);
+      }
+    }
+  }
+  // An edit cancels an earlier edit's run and never the run of a push or of a base change.
+  const group = (event) => renderTemplate(String(doc.concurrency?.group ?? ''), {
+    github: { ref: 'refs/pull/1/merge', event } });
+  const code = new Set(['opened', 'synchronize', 'reopened', 'base edit']
+    .map((n) => group(EVENTS[n])));
+  const edits = new Set(BODY_EDITS.map((n) => group(EVENTS[n])));
+  if (code.size !== 1 || edits.size !== 1 || [...code][0] === [...edits][0]) {
+    out.push(`concurrency: a push runs in ${[...code].join('|')}, `
+      + `an edit in ${[...edits].join('|')}`);
+  }
+  if (doc.concurrency?.['cancel-in-progress'] !== true) out.push('concurrency: no cancel');
+  const be = doc.jobs['body-edit'];
+  if (!be) return [...out, 'no body-edit job'];
+  if (be.outputs?.proven !== '${{ steps.prove.outputs.proven }}') out.push('body-edit: no proven');
+  if (be.permissions?.actions !== 'read') out.push('body-edit: no actions: read');
+  const step = (be.steps ?? []).at(-1) ?? {};
+  const lines = String(step.run ?? '').trim().split('\n').map((l) => l.trim());
+  const call = [
+    'base="refs/remotes/origin/$GITHUB_BASE_REF"',
+    'prog=.github/scripts/ci-body-edit.mjs',
+    'judge="$RUNNER_TEMP/ci-body-edit.mjs"',
+    'git show-ref --verify --quiet "$base"',
+    'if git cat-file -e "$base:$prog" 2> /dev/null; then',
+    'git cat-file blob "$base:$prog" > "$judge"',
+    'echo "ci-body-edit: $prog of $base ($(git rev-parse --short=12 "$base")) proves"',
+    'node "$judge" --event-path "$GITHUB_EVENT_PATH" --repo "$GITHUB_REPOSITORY" \\',
+    '--run "$GITHUB_RUN_ID" --wait-minutes 70 --output "$GITHUB_OUTPUT"',
+    'else',
+    'echo "::warning::ci-body-edit: $base has no $prog; nothing is proven"',
+    'echo "proven=[]" >> "$GITHUB_OUTPUT"',
+    'fi',
+  ];
+  if (step.id !== 'prove' || step.if !== undefined || lines.join('\n') !== call.join('\n')) {
+    out.push('body-edit: the step does not run the base branch\'s blob, or answers otherwise');
+  }
+  if (step.env?.GH_TOKEN !== '${{ github.token }}') out.push('body-edit: no GH_TOKEN');
+  if (!Number(step['timeout-minutes'])) out.push('body-edit: the step has no limit');
+  if (!(Number(be['timeout-minutes']) > 70)) out.push('body-edit: the job ends before its wait');
+  return out;
+}
+
+/** The gate's verdict of a ci.yml text over `needs`, run with jq as the gate runs it. */
+function gateVerdict(text, needs) {
+  const v = parse(text).jobs.gate.steps.at(-1).env.VERDICT;
+  const r = spawnSync('jq', ['-e', v], { input: JSON.stringify(needs), encoding: 'utf8' });
+  if (r.status !== 0 && r.status !== 1) throw new Error(`jq: ${r.stderr}`);
+  return r.status === 0;
+}
+
+/** `needs` of a run: every job succeeded but those in `results`. */
+function needsOf(results = {}, { runtime = 'true', proven } = {}) {
+  const keys = parse(CI).jobs.gate.needs;
+  const out = {};
+  for (const k of keys) out[k] = { result: results[k] ?? 'success', outputs: {} };
+  out.changes.outputs = { runtime };
+  if (proven !== undefined) out['body-edit'].outputs = { proven };
+  return out;
+}
+const skippedHeavy = Object.fromEntries(HEAVY_JOBS.map((k) => [k, 'skipped']));
+const ALL_PROVEN = JSON.stringify(HEAVY_JOBS);
+
+test('R030: a body edit re-runs fail-first, review-verdict and gate, and no heavy job', () => {
+  assert.deepEqual(problemsOfBodyEdit(CI), []);
+  const doc = parse(CI);
+  assert.ok(doc.jobs.gate.needs.includes('body-edit'), 'gate needs body-edit');
+  for (const k of ['fail-first', 'review-verdict']) {
+    assert.ok(jobsRunning(doc, EVENTS['body edit']).includes(k), `${k} runs on a body edit`);
+  }
+  for (const k of HEAVY_JOBS) {
+    assert.ok(!jobsRunning(doc, EVENTS['body edit']).includes(k), `${k} skips a body edit`);
+    assert.ok(jobsRunning(doc, EVENTS.synchronize).includes(k), `${k} runs on a push`);
+  }
+  assert.equal(doc.jobs.gate.if, 'always()', 'gate runs on every event');
+});
+
+test('R030: the gate accepts a body edit\'s skips only as body-edit proved them',
+  { skip: spawnSync('jq', ['--version']).status !== 0 && !process.env.CI
+    ? 'jq is not installed (CI has it)' : false }, () => {
+    const rows = [
+      ['a push: every job succeeded, body-edit skipped', needsOf({ 'body-edit': 'skipped' }),
+        true],
+      ['a body edit: the seven skipped, all proven', needsOf(skippedHeavy,
+        { proven: ALL_PROVEN }), true],
+      ['a body edit on a non-runtime change: census proven, the six path-gated',
+        needsOf(skippedHeavy, { runtime: 'false', proven: '["census"]' }), true],
+      ['a body edit: one job not proven', needsOf(skippedHeavy,
+        { proven: JSON.stringify(HEAVY_JOBS.filter((k) => k !== 'census')) }), false],
+      ['a body edit: nothing proven', needsOf(skippedHeavy, { proven: '[]' }), false],
+      ['a body edit: no proven output', needsOf(skippedHeavy), false],
+      ['a body edit: proven is no list', needsOf(skippedHeavy, { proven: '"engine"' }), false],
+      ['a body edit: proven is not JSON', needsOf(skippedHeavy, { proven: 'engine' }), false],
+      ['body-edit failed', needsOf({ ...skippedHeavy, 'body-edit': 'failure' },
+        { proven: ALL_PROVEN }), false],
+      ['body-edit cancelled', needsOf({ ...skippedHeavy, 'body-edit': 'cancelled' },
+        { proven: ALL_PROVEN }), false],
+      ['body-edit skipped, the seven skipped', needsOf({ ...skippedHeavy,
+        'body-edit': 'skipped' }), false],
+      ['a proven job failed', needsOf({ ...skippedHeavy, browser: 'failure' },
+        { proven: ALL_PROVEN }), false],
+      ['fail-first failed on a body edit', needsOf({ ...skippedHeavy, 'fail-first': 'failure' },
+        { proven: ALL_PROVEN }), false],
+      ...['fail-first', 'review-verdict', 'unit', 'knowledge', 'changes'].map((k) => [
+        `${k} skipped, even if proven names it`, needsOf({ ...skippedHeavy, [k]: 'skipped' },
+          { proven: JSON.stringify([...HEAVY_JOBS, k]) }), false]),
+    ];
+    for (const [what, needs, pass] of rows) assert.equal(gateVerdict(CI, needs), pass, what);
+  });
+
+test('mutation: R030 undone, a heavy job run on an edit, a reader skipped, a looser gate', () => {
+  const types = '    types: [opened, synchronize, reopened, edited]\n';
+  const noEdit = mutate(CI, types, '    types: [opened, synchronize, reopened]\n');
+  assert.ok(problemsOfBodyEdit(noEdit).some((p) => /^pull_request types/.test(p)));
+  assert.ok(problemsOfBodyEdit(mutate(CI, types, '')).some((p) => /^pull_request types/.test(p)));
+  const clause = " && (github.event.action != 'edited' || github.event.changes.base)";
+  const browserIf = `    name: Browser gate (\${{ matrix.browser }})\n    needs: changes\n`
+    + `    if: needs.changes.outputs.runtime != 'false'${clause}\n`;
+  const heavyOnEdit = mutate(CI, browserIf, browserIf.replace(clause, ''));
+  assert.ok(problemsOfBodyEdit(heavyOnEdit).some((p) => /^body edit \(runtime=true\) runs .*browser/
+    .test(p)), problemsOfBodyEdit(heavyOnEdit).join('\n'));
+  const censusIf = "    if: github.event.action != 'edited' || github.event.changes.base\n";
+  const censusOnEdit = mutate(CI, censusIf, '');
+  assert.ok(problemsOfBodyEdit(censusOnEdit).some((p) => /^title edit .*census/.test(p)));
+  // an edit of the base is no body edit: it runs everything
+  const baseSkips = mutate(CI, browserIf, browserIf.replace(clause,
+    " && github.event.action != 'edited'"));
+  assert.ok(problemsOfBodyEdit(baseSkips).some((p) => /^base edit \(runtime=true\)/.test(p)));
+  const readerSkips = mutate(CI, '    name: fail-first (feat/fix tests fail without the change)\n',
+    '    name: fail-first (feat/fix tests fail without the change)\n'
+    + "    if: github.event.action != 'edited'\n");
+  const ran = problemsOfBodyEdit(readerSkips)
+    .map((p) => /^body edit \(runtime=true\) runs \[([^\]]*)\]/.exec(p)).filter(Boolean);
+  assert.equal(ran.length, 1);
+  assert.ok(!ran[0][1].includes('fail-first'), ran[0][1]);
+  const sharedGroup = mutate(CI, "${{ github.event.action == 'edited' && "
+    + "!github.event.changes.base && '-body' || '' }}", '');
+  assert.ok(problemsOfBodyEdit(sharedGroup).some((p) => /^concurrency/.test(p)));
+  const ownCopy = mutate(CI, 'node "$judge" --event-path', 'node "$prog" --event-path');
+  assert.ok(problemsOfBodyEdit(ownCopy).some((p) => /base branch's blob/.test(p)));
+  // the gate that takes a body edit's word for any skip
+  const verdictTail = '                           and ($proven | any(. == $k)))))';
+  const trusting = mutate(CI, verdictTail, '                           and true)))');
+  if (spawnSync('jq', ['--version']).status === 0) {
+    assert.equal(gateVerdict(trusting, needsOf(skippedHeavy, { proven: '[]' })), true);
+    assert.equal(gateVerdict(CI, needsOf(skippedHeavy, { proven: '[]' })), false);
+  }
+});
+
+test('R030: the expression reader evaluates as GitHub does', () => {
+  const ctx = { github: { event: { action: 'edited', changes: { base: { ref: {} } } } },
+    needs: { changes: { outputs: { runtime: 'false' } } } };
+  assert.equal(evalExpression("github.event.action == 'EDITED'", ctx), true);
+  assert.equal(evalExpression('!github.event.changes.base', ctx), false);
+  assert.equal(evalExpression('!github.event.changes.body', ctx), true);
+  assert.equal(evalExpression("needs.changes.outputs.runtime != 'false' || 'x'", ctx), 'x');
+  assert.equal(evalExpression("${{ github.event.action == 'edited' && '-body' || '' }}", ctx),
+    '-body');
+  assert.equal(evalExpression("(github.event.action != 'edited' || github.event.changes.base)"
+    + " && needs.changes.outputs.runtime == 'false'", ctx), true);
+  assert.throws(() => evalExpression('fromJSON(github.run_attempt) > 1', ctx));
 });

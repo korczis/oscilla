@@ -8,8 +8,9 @@
 //                   `majordomus doctor` and aggregate verdict as its job's steps, and a leg's
 //                   gate sets OSC_BROWSERS to its own browser before every npm script
 //   the selection   ci.yml has no `paths` filter, and no job-level condition but
-//                   JOB_CONDITIONS (the aggregate's `always()` and the flake ledger's exact
-//                   re-run condition, each on its own job alone) and (E026) the path-gated
+//                   JOB_CONDITIONS (the aggregate's `always()`, the flake ledger's exact
+//                   re-run condition and R030's body-edit and census conditions, each on its
+//                   own job alone) and (E026) the path-gated
 //                   jobs' exact RUNTIME_IF on `needs: changes`, which only skips them in CI
 //                   for a change the base's classifier judged non-runtime; a local task keeps
 //                   every gate, so every gate is `always: true` and no path class names a gate
@@ -45,11 +46,16 @@ const SETUP_PROGRAMS = new Set(['.github/scripts/ci-install.sh']);
 const JOB_CONDITIONS = {
   gate: 'always()',
   'flake-ledger': '${{ always() && fromJSON(github.run_attempt) > 1 }}',
+  // R030: the job that proves a body edit's skips runs on such an edit only, and census, never
+  // path gated, skips that edit alone (tests/unit/ci-workflows.test.mjs)
+  'body-edit': "github.event.action == 'edited' && !github.event.changes.base",
+  census: "github.event.action != 'edited' || github.event.changes.base",
 };
 /** The aggregate's verdict over `needs`, as ci.yml's `gate` job applies it (env VERDICT). */
 const AGGREGATE = 'jq -e "$VERDICT"';
 /** E026: the one condition a path-gated job may carry (.github/scripts/ci-changes.mjs). */
-const RUNTIME_IF = "needs.changes.outputs.runtime != 'false'";
+const RUNTIME_IF = "needs.changes.outputs.runtime != 'false'"
+  + " && (github.event.action != 'edited' || github.event.changes.base)";
 
 /**
  * What a command text runs, as a sorted set of tokens: `npm test` and `npm run <script>`
@@ -295,6 +301,11 @@ test('a path filter or a job condition in ci.yml is a disagreement, and so is a 
     // E026: a path-gated job's condition is exactly RUNTIME_IF, on `needs: changes`
     const looser = mutate(CI, `    name: Visual regression gate\n    needs: changes\n    if: ${RUNTIME_IF}\n`,
       "    name: Visual regression gate\n    needs: changes\n    if: needs.changes.outputs.runtime == 'true'\n");
+    // R030: the edit clause dropped is a condition the model does not know either
+    const visualHead = '    name: Visual regression gate\n    needs: changes\n';
+    const unedited = mutate(CI, `${visualHead}    if: ${RUNTIME_IF}\n`,
+      `${visualHead}    if: needs.changes.outputs.runtime != 'false'\n`);
+    assert.ok(has(compare(unedited, MODEL), 'job visual runs only if'));
     assert.ok(has(compare(looser, MODEL), 'job visual runs only if'));
     const unchained = mutate(CI, `    name: Visual regression gate\n    needs: changes\n`,
       '    name: Visual regression gate\n    needs: [changes, unit]\n');
@@ -311,7 +322,8 @@ test('a path filter or a job condition in ci.yml is a disagreement, and so is a 
     const gatedLedger = mutate(CI, ledgerIf, `    if: ${RUNTIME_IF}\n`);
     assert.ok(has(compare(gatedLedger, MODEL), 'job flake-ledger runs only if'));
     const gatedOnChanges = mutate(gatedLedger, '    needs: [unit, knowledge, fail-first, '
-      + 'review-verdict, changes, engine, suites, measure, studio, browser, census, visual]\n',
+      + 'review-verdict, changes, body-edit, engine, suites, measure, studio, browser, census, '
+      + 'visual]\n',
     '    needs: changes\n');
     assert.ok(has(compare(gatedOnChanges, MODEL), 'job flake-ledger runs only if'));
     const andGated = mutate(CI, ledgerIf,
@@ -326,8 +338,8 @@ test('a path filter or a job condition in ci.yml is a disagreement, and so is a 
   });
 
 test('the aggregate gate requires exactly what ci.yml gate needs', () => {
-  const needs = 'needs: [unit, knowledge, fail-first, review-verdict, changes, engine, suites, '
-    + 'measure, studio, browser, census, visual, flake-ledger]';
+  const needs = 'needs: [unit, knowledge, fail-first, review-verdict, changes, body-edit, engine, '
+    + 'suites, measure, studio, browser, census, visual, flake-ledger]';
   const fewer = mutate(CI, needs, needs.replace(', visual', ''));
   assert.ok(has(compare(fewer, MODEL), 'aggregate: gate requires'));
   const dropped = MODEL.replace(/\n {6}- visual(?=\n)/, '');

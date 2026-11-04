@@ -84,10 +84,19 @@ that is repaired where it last hurt regresses in the next job somebody adds.
   `*.md`, in a pull request into `main`; a pull request into any other base runs everything,
   because its `gate` lands on the head commit that main's required check reads too; a base
   without the classifier answers `runtime=true`, and the pull request's own copy never
-  decides). A skip of any other job or for any other reason, a cancelled or
-  failed job, and a failed or silent `changes` fail it. No other job of `ci.yml` carries a
-  condition.
-- A workflow with a `gate` job is started by `pull_request` and nothing else. Its
+  decides). The other exception is a body edit (R030): `ci.yml` starts on `edited` too, and
+  on an edit of the title or body that leaves the base as it was, those six and `census`
+  are skipped (`census` by `if: github.event.action != 'edited' || github.event.changes.base`
+  alone, the six by that clause appended to theirs) and the `body-edit` job (`if:
+  github.event.action == 'edited' && !github.event.changes.base`, so skipped on every other
+  event, which `gate` accepts) runs the base branch's `.github/scripts/ci-body-edit.mjs`;
+  `gate` accepts a skip of one of those seven only when `body-edit` succeeded and named it
+  in `proven`, which it does only when every leg of that job succeeded the last time it ran
+  at the pull request's head commit, after every other run there has ended. A skip of any
+  other job or for any other reason, a cancelled or failed job, and a failed or silent
+  `changes` or `body-edit` fail it. No other job of `ci.yml` carries a condition.
+- A workflow with a `gate` job is started by `pull_request` and nothing else (any of its
+  activity types: `ci.yml` lists GitHub's defaults and `edited`). Its
   `fail-first` and `review-verdict` jobs judge a pull request; a manual run on a pull
   request's branch would have none to judge, and its `gate` would land on the same commit as
   the required check.
@@ -148,10 +157,18 @@ and only on `runtime=false` from a successful `changes`), the classifier's fail-
 (a `.md` under `tests/`, renames into or out of the allowlist, deletions, names with spaces,
 links and submodules, an empty diff, any event but a pull request, any base but `main`), and
 the wiring: exactly
-the six jobs carry that condition, the four judge and unit jobs none, and the `changes` step
+the six jobs carry that condition (with R030's edit clause), the four judge and unit jobs
+none, and the `changes` step
 runs only the base branch's blob of the classifier, or answers `runtime=true` when the base
 has none.
 `tests/unit/ci-gates-model.test.mjs` refuses any other job condition in `ci.yml`.
+`tests/unit/ci-workflows.test.mjs` evaluates every job condition of `ci.yml` as GitHub does
+for each kind of pull-request event (R030): a body or title edit runs exactly unit, changes,
+knowledge, fail-first, review-verdict and body-edit, any other event everything but
+body-edit, an edit runs in its own concurrency group, and the gate's verdict accepts an
+edit's skips only as `body-edit` proved them; `tests/unit/ci-body-edit.test.mjs` holds the
+proof (a failed, cancelled or missing leg proves nothing, the wait, its deadline, an
+unreadable API).
 
 What the test cannot see:
 

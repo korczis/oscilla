@@ -25,7 +25,9 @@ import {
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PROGRAM = path.join(ROOT, '.github/scripts/ci-changes.mjs');
 const CI = parseYaml(readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8'));
-const RUNTIME_IF = "needs.changes.outputs.runtime != 'false'";
+/** R030: the clause that skips a heavy job on an edit of the title or body. */
+const CODE_IF = "github.event.action != 'edited' || github.event.changes.base";
+const RUNTIME_IF = `needs.changes.outputs.runtime != 'false' && (${CODE_IF})`;
 /** A pull request into main, the one base that is path-gated. */
 const INTO_MAIN = { event: 'pull_request', base: 'main' };
 
@@ -357,13 +359,16 @@ test('the gate verdict: a path-gated skip passes only on the classifier\'s runti
 
 test('ci.yml wiring: the six jobs wait for changes, the rest always run, gate needs both', () => {
   const jobs = CI.jobs;
-  // gate's always() and the flake ledger's re-run condition (E010) are the only other ones;
-  // the ledger is never path gated (tests/unit/flake-ledger.test.mjs)
-  const OWN = new Set(['gate', 'flake-ledger']);
+  // gate's always(), the flake ledger's re-run condition (E010) and R030's body-edit and
+  // census conditions are the only other ones; the ledger is never path gated
+  // (tests/unit/flake-ledger.test.mjs), and R030's are held by tests/unit/ci-workflows.test.mjs
+  const OWN = new Set(['gate', 'flake-ledger', 'body-edit', 'census']);
   const conditioned = Object.entries(jobs).filter(([k, j]) => !OWN.has(k) && j.if !== undefined)
     .map(([k]) => k);
   assert.deepEqual(conditioned.sort(), [...GATED_JOBS].sort());
   assert.equal(jobs['flake-ledger'].if, '${{ always() && fromJSON(github.run_attempt) > 1 }}');
+  assert.equal(jobs.census.if, CODE_IF, 'census is never path gated, only skipped by an edit');
+  assert.equal(jobs.census.needs, undefined, 'census waits for nothing');
   for (const k of GATED_JOBS) {
     assert.equal(jobs[k].if, RUNTIME_IF, `${k}: runs unless runtime is exactly false`);
     assert.equal(jobs[k].needs, 'changes', `${k}: needs changes`);
@@ -379,6 +384,28 @@ test('ci.yml wiring: the six jobs wait for changes, the rest always run, gate ne
   assert.deepEqual(JSON.parse(`[${listed[1]}]`), [...GATED_JOBS]);
   assert.equal(CI.on && Object.keys(CI.on).join(), 'pull_request');
 });
+
+test('the gate verdict: a body edit\'s proof never stands in for a path-gated skip',
+  { skip: !hasJq && !process.env.CI ? 'jq is not installed (CI has it)' : false }, () => {
+    // R030 adds its own way to accept a skip; E026's must judge exactly as before beside it.
+    const base = (runtime, proven) => {
+      const out = { changes: { result: 'success', outputs: { runtime } },
+        'body-edit': { result: proven === undefined ? 'skipped' : 'success',
+          outputs: proven === undefined ? {} : { proven } } };
+      for (const j of ['unit', 'knowledge', 'fail-first', 'review-verdict', 'census']) {
+        out[j] = { result: 'success', outputs: {} };
+      }
+      for (const j of GATED_JOBS) out[j] = { result: 'skipped', outputs: {} };
+      return out;
+    };
+    assert.equal(gatePasses(base('false')), true, 'path-gated skips on runtime=false');
+    assert.equal(gatePasses(base('true')), false, 'no skip on runtime=true without a proof');
+    assert.equal(gatePasses(base('true', '[]')), false, 'an empty proof proves nothing');
+    assert.equal(gatePasses(base('true', JSON.stringify(GATED_JOBS))), true,
+      'every skipped job proven');
+    assert.equal(gatePasses(base('true', JSON.stringify(GATED_JOBS.slice(1)))), false,
+      'one skipped job unproven');
+  });
 
 test('ci.yml wiring: changes runs the base branch\'s classifier and publishes its answer', () => {
   const job = CI.jobs.changes;

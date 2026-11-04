@@ -361,6 +361,9 @@ function ledgerDecides(gate = GATE, { perJob = true } = {}) {
         for (const bad of ['failure', 'cancelled', 'skipped']) {
           // a path-gated job's skip on runtime=false is E026's, and passes
           if (bad === 'skipped' && runtime === 'false' && PATH_GATED.includes(j)) continue;
+          // body-edit runs on an edit of the body only (R030): its skip on any other event
+          // passes and proves nothing (tests/unit/ci-workflows.test.mjs)
+          if (bad === 'skipped' && j === 'body-edit') continue;
           const status = verdict({ ...needs, [j]: { ...needs[j], result: bad } }, gate);
           if (status !== 1) found.push(`${j} ${bad}, ${where}: exit ${status}`);
         }

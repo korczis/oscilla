@@ -16,7 +16,9 @@
 #   - ci.yml starts on every pull request and filters no path. Its only job conditions are the
 #     aggregate's `if: always()`, the flake ledger's (E010: it runs after every job the
 #     aggregate judges, on a re-run only, and is skipped on a first attempt; it is never path
-#     gated) and (E026) the path-gated jobs' `needs.changes.outputs.runtime != 'false'`: in CI,
+#     gated), R030's (an edit of the title or body runs body-edit and skips the seven heavy
+#     jobs, census by the edit clause alone, which a local task never sees) and (E026) the
+#     path-gated jobs' `needs.changes.outputs.runtime != 'false'`: in CI,
 #     the base branch's .github/scripts/ci-changes.mjs skips the engine, suites, measure,
 #     studio, browser and visual jobs for a pull request whose every changed path is under
 #     .ai/repo/project/, .ai/repo/reviews/, .ai/repo/releases/, docs/ or a top-level *.md. A
@@ -57,6 +59,14 @@ gates:
     always: true
     runs: node .github/scripts/ci-changes.mjs --repo . --event pull_request --head HEAD --base-branch origin/<base>
     summary: whether the pull request changes a runtime path (anything outside .ai/repo/project, .ai/repo/reviews, .ai/repo/releases, docs and top-level *.md); runtime=false skips the six browser and visual jobs, anything else runs them
+
+  # R030: on an edit of the title or body only, the base branch's copy, extracted with
+  # `git cat-file blob`; <event.json>, <owner/name> and <run> are the run's.
+  - id: body-edit
+    job: body-edit
+    always: true
+    runs: node .github/scripts/ci-body-edit.mjs --event-path <event.json> --repo <owner/name> --run <run> --wait-minutes 70
+    summary: on an edit of a pull request's title or body (the base left as it was), after every other run at its head commit has ended, names each of the seven heavy jobs whose every leg succeeded there the last time it ran; the gate accepts the edit's skip of exactly those
 
   - id: engine-chromium
     job: engine
@@ -205,6 +215,7 @@ gates:
       - fail-first
       - review-verdict
       - changes
+      - body-edit
       - engine-chromium
       - engine-firefox
       - engine-webkit
@@ -226,7 +237,7 @@ gates:
       - visual
       - flake-ledger
     runs: echo "$RESULTS" | jq -e "$VERDICT"
-    summary: the required check of branch protection; with flake-ledger's entry dropped first, every job it needs succeeded, or is a path-gated job skipped while changes succeeded with runtime=false (E026); the ledger's result, a skip included, never counts
+    summary: the required check of branch protection; with flake-ledger's entry dropped first, every job it needs succeeded, or is a path-gated job skipped while changes succeeded with runtime=false (E026), or is a heavy job an edit of the body skipped and body-edit proved (R030); body-edit's own skip on any other event passes; the ledger's result, a skip included, never counts
 
   - id: flake-ledger
     job: flake-ledger
