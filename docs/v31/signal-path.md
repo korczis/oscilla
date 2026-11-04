@@ -175,9 +175,23 @@ waveform rather than "Additive".
   nodes: FILTER to the filter node, ADSR ENVELOPE to the envelope, OSC A + OSC B to the two
   oscillators, STEREO ROUTER to the stereo split.
 
+## Open in Studio (V605)
+
+The Signal Path tab's **Open in Studio** opens the current Playground voice as an unsaved Studio
+copy built from this same model (`src/js/studio/playground-voice-open.js`). With unsaved Studio
+work, a dialog lists what would be lost and asks first (Keep the Studio work has focus). After
+opening, focus is on the Studio heading and Back returns to the Playground.
+
+A configuration is opened only when the Studio renders it the same: the covered list
+(`tests/unit/fixtures/playground-voice-configs.mjs`) is rendered by both on an
+OfflineAudioContext in chromium, firefox and webkit, and each residual is at least 60 dB below
+the Playground render (`tests/browser/v31-studio-offline.cjs`). Everything else is refused with
+its reason and changes nothing: the Additive lab and a dual voice with a B start phase (schema 1
+has no field for them); siren, wobble and FM, because the Studio fades a modulation edge in from
+zero at the start, which shifts a modulated carrier's phase (K177 removes that cause); a
+continuous sweep; and tones or releases too short for the Playground's own shortening to match.
+
 ## Not done here
 
-- **No "open the Playground voice in Studio" action (§165).** The model it would dispatch exists
-  now.
 - **No node selection from the Playground Signal Path.** §128's quick Inspector belongs to the
   compact Studio widget, which has it. The Playground's projection is read-only by §165.
