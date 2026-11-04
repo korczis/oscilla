@@ -34,10 +34,12 @@ import { NODE_REGISTRY } from '../studio/registry.js';
 import { canConnect } from '../studio/ports.js';
 import { decodeSynthLink, encodeSynthLink } from '../core/url-state-synth.js';
 import { ENGINE_BLOCKED } from './panels/engines.js';
-import { CHIP, droppedText, enginePickerHtml } from './view/engines.js';
+import { CHIP, enginePickerHtml } from './view/engines.js';
 import { createXyTab } from './view/xy-tab.js';
 import { createStudioSink } from './studio-sink.js';
 import { applyFace, faceChips, faceClass } from './view/faces.js';
+import { createArmedFollow } from './armed-follow.js';
+import { createSynthNotes } from './notes-sink.js';
 
 export const SYNTH_PANEL = SEMI_MONO;
 export { SYNTH_TEXT, insertDecision };
@@ -68,21 +70,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   /** The node the keys play: the one routed by the picker (K066), else the tab's module. */
   const played = () => routedNode(model(), registry) || nodes().get(playedModule());
   const handle = () => get().handle;
-  // synth.armed is the transport's own flag, never a copy kept by this panel: a Stop or a
-  // disarm made outside the Synth (Studio Stop, a measurement taking the output, an abort)
-  // emits the transport's 'state', and the Arm button follows it at once.
-  let followed = null;
-  const syncArmed = () => {
-    const t = get().transport;
-    if (cmp) cmp.synth.armed = !!(t && t.armed);
-  };
-  const follow = (t) => {
-    if (t && t !== followed && typeof t.on === 'function') {
-      followed = t;
-      t.on((type) => { if (type === 'state' || type === 'ended') syncArmed(); });
-    }
-    return t;
-  };
+  // synth.armed follows the transport's own flag (armed-follow.js; review S1).
+  const { syncArmed, follow } = createArmedFollow(() => get().transport, () => cmp);
   const transport = () => {
     setupAudio();
     return follow(get().transport);
@@ -716,59 +705,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
   // ------------------------------------------------------------------ notes
 
-  function noteOn(note, velocity) {
-    const t = transport();
-    if (!t || !ensurePanel()) return { ok: false, reason: 'no-audio' };
-    if (cmp && typeof cmp.ensureAudio === 'function') cmp.ensureAudio();
-    if (!t.playing) {
-      const r = t.arm();
-      if (!r.ok) {
-        say(r.code === 'claim-refused' ? SYNTH_TEXT.refused : r.reason, true);
-        return { ok: false, reason: 'measurement' };
-      }
-      say(SYNTH_TEXT.armed);
-      if (cmp) cmp.synth.armed = !!t.armed;
-    }
-    const target = played();
-    if (!target) {
-      say(`${panel.module(playedModule()).label} was removed in Studio: Restore module first.`,
-        true);
-      return { ok: false, reason: 'removed' };
-    }
-    const r = t.live(target.id, { kind: 'on', note, velocity });
-    if (r && r.dropped) say(droppedText(target, r.dropped));
-    return r;
-  }
-
-  function noteOff(note) {
-    const t = get().transport;
-    const k = present() ? played() : null;
-    return t && k ? t.live(k.id, { kind: 'off', note }).ok : false;
-  }
-
-  /** Every note of every note source of the panel off (Escape, a tab change, MIDI all-off). */
-  function allOff() {
-    const t = get().transport;
-    if (!t || !present() || !t.playing) return 0;
-    let n = 0;
-    const all = ['keys', ...ENGINE_IDS, 'xy'].map((id) => nodes().get(id));
-    for (const x of new Set([...all, played()])) {
-      if (x) n += t.live(x.id, { kind: 'all-off' }).released || 0;
-    }
-    return n;
-  }
-
-  function disarm(reason) {
-    const t = get().transport;
-    if (!t || !t.armed) {
-      syncArmed(); // a copy left armed by a stop made elsewhere is cleared, never kept
-      return Promise.resolve(null);
-    }
-    const p = t.disarm();
-    if (cmp) cmp.synth.armed = false;
-    if (reason) say(SYNTH_TEXT.disarmed);
-    return p;
-  }
+  const { noteOn, noteOff, allOff, disarm } = createSynthNotes({ get, transport, ensurePanel,
+    cmp: () => cmp, say, played, playedModule, present, nodes, panel, ENGINE_IDS, syncArmed });
 
   // ------------------------------------------------------------------ links
 
